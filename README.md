@@ -1,5 +1,5 @@
 
-#[DEPRACTED]
+# [DEPRACTED]
 # Cosmos IBC
 
 Please refer to https://github.com/cosmos/cosmos-sdk/tree/master/docs/spec/ibc for the current specification.
