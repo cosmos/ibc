@@ -26,7 +26,7 @@ This repository is for standards development of Interchain Standards. Initially 
   * Identified `Champion(s)` who will advance the proposal
 - _**Acceptance Signifies**_:
   * The PR has received 2 :+1:s from members of the specification team.
-- _***Spec Quality**_:
+- _**Spec Quality**_:
   * None, this is just a proposal
 - _**Changes Expected Post-Acceptance**_:
   * Major, the entire shape of the solution may change. Proposal documents are not to be relied upon for implementation.
