@@ -1,10 +1,10 @@
 # Interchain Standards Development
 
-This repository is for standards development of Interchain Standards. Initially it will be used to solicit and integrate feedback on IBC (Inter-blockchain Communication) Protocol specification development. We will use a variant of the [TC 39](https://tc39.github.io/process-document/):
+This repository is for standards development of Interchain Standards. Initially it will be used to solicit and integrate feedback on IBC (Inter-blockchain Communication) Protocol specification development. We propose usage of an adaptation of the [TC 39](https://tc39.github.io/process-document/) process used by the ECMAScript steering committee.
 
 ## Cosmos Interchain Specification Proposal Process
 
-#### Stage 0 - Strawman
+#### Stage 0 - `Strawman`
 - _*Purpose*_: Start the specification process
 - _*Entrance Criteria*_: [Open an issue](https://github.com/cosmos/ics/issues/new) on this repository with a short outline of your proposal
 - _*Acceptance Signifies*_: N/A
@@ -12,7 +12,7 @@ This repository is for standards development of Interchain Standards. Initially 
 - _*Changes Expected Post-Acceptance*_: N/A
 - _*Implementation Types Expected*_: N/A
 
-#### Stage 1 - Proposal
+#### Stage 1 - `Proposal`
 - _*Purpose*_:
   * Make the case for the addition of this specification to the Cosmos ecosystem
   * Describe the shape of the a potential solution
@@ -33,7 +33,7 @@ This repository is for standards development of Interchain Standards. Initially 
 - _*Implementation Types Expected*_:
   * Tightly bounded demos, example repos showing reproduction steps for issues fixed by proposal
 
-#### Stage 2 - Draft
+#### Stage 2 - `Draft`
 - _*Purpose*_:
   * Precisely describe the syntax and semantics using formal spec language
 - _*Entrance Criteria*_:
@@ -48,7 +48,7 @@ This repository is for standards development of Interchain Standards. Initially 
 - _*Implementation Types Expected*_:
   * Experimental
 
-#### Stage 3 - Candidate
+#### Stage 3 - `Candidate`
 - _*Purpose*_:
   * Indicate that further refinement will require feedback from implementations and users
 - _*Entrance Criteria*_:
