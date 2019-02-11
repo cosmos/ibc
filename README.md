@@ -7,7 +7,7 @@ This repository is for standards development of Interchain Standards. Initially 
 #### Stage 0 - `Strawman`
 - _**Purpose**_: Start the specification process
 - _**Entrance Criteria**_: [Open an issue](https://github.com/cosmos/ics/issues/new) on this repository with a short outline of your proposal
-- _**Acceptance Signifies**_: N/A
+- _**Acceptance Signifies**_: No acceptance required to move to the next stage. Keep the issue around to track the specification status, and close it when the final specification is merged or the proposal abandoned.
 - _**Spec Quality**_: N/A
 - _**Changes Expected Post-Acceptance**_: N/A
 - _**Implementation Types Expected**_: N/A
