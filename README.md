@@ -38,7 +38,7 @@ This repository is for standards development of Interchain Standards. Initially 
   * Precisely describe the syntax and semantics using formal spec language
 - _**Entrance Criteria**_:
   * Everything from stage 1
-  * Initial specification text in a PR to add a `./spec/{{ .Spec.Number }}-{{ .Spec.Name }}/spec.md` file.
+  * Initial specification text in a PR to add a `./spec/{{ .Spec.Number }}-{{ .Spec.Name }}/spec.md` file
 - _**Acceptance Signifies**_:
   * The specification team expects that this proposal will be finalized and eventually included in the standard
 - _**Spec Quality**_:
