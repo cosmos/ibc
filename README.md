@@ -10,7 +10,7 @@ This repository is for standards development of Interchain Standards. Initially 
 - _**Acceptance Signifies**_: No acceptance required to move to the next stage. Keep the issue around to track the specification status, and close it when the final specification is merged or the proposal abandoned.
 - _**Spec Quality**_: Outline only. Link to any prior documentation, discussion, or reference materials.
 - _**Changes Expected Post-Acceptance**_: N/A
-- _**Implementation Types Expected**_: None required, but link to any existing.
+- _**Implementation Types Expected**_: None required, but link to any existing
 
 #### Stage 1 - `Proposal`
 - _**Purpose**_:
@@ -27,22 +27,22 @@ This repository is for standards development of Interchain Standards. Initially 
 - _**Acceptance Signifies**_:
   * The PR has received 2 approvals from members of the specification team.
 - _**Spec Quality**_:
-  * None, this is just a proposal.
+  * None, this is just a proposal
 - _**Changes Expected Post-Acceptance**_:
   * Major, the entire shape of the solution may change. Proposal documents are not to be relied upon for implementation.
 - _**Implementation Types Expected**_:
-  * Tightly bounded demos, example repos showing reproduction steps for issues fixed by proposal.
+  * Tightly bounded demos, example repos showing reproduction steps for issues fixed by proposal
 
 #### Stage 2 - `Draft`
 - _**Purpose**_:
-  * Precisely describe the syntax and semantics using formal spec language.
+  * Precisely describe the syntax and semantics using formal spec language
 - _**Entrance Criteria**_:
   * Everything from stage 1
   * Initial specification text in a PR to add a `./spec/{{ .Spec.Number }}-{{ .Spec.Name }}/spec.md` file.
 - _**Acceptance Signifies**_:
-  * The specification team expects that this proposal will be finalized and eventually included in the standard.
+  * The specification team expects that this proposal will be finalized and eventually included in the standard
 - _**Spec Quality**_:
-  * Draft: all major semantics, syntax and API are covered, but TODOs, placeholders and editorial issues are expected.
+  * Draft: all major semantics, syntax and API are covered, but TODOs, placeholders and editorial issues are expected
 - _**Changes Expected Post-Acceptance**_:
   * Incremental changes expected after spec enters draft stage. Implementors should work with the spec champions as work continues on spec development.
 - _**Implementation Types Expected**_:
@@ -65,10 +65,10 @@ This repository is for standards development of Interchain Standards. Initially 
 
 #### Stage 4 - `Finished`
 - _**Purpose**_:
-  * Indicate that the addition is included in the formal ICS system.
+  * Indicate that the addition is included in the formal ICS system
 - _**Entrance Criteria**_:
   * Everything from stages 1,2,3
-  * Acceptance tests are written and merged into the Cosmos-SDK and other relevant downstream users
+  * Acceptance tests are written and merged into the Cosmos-SDK and other relevant downstream repositories
   * At least one spec compatible implementation exists
   * All files in the `./spec/{{ .Spec.Number }}-{{ .Spec.Name}}/` directory are up to date and merged into the `cosmos/ics` repo
 - _**Acceptance Signifies**_:
