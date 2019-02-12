@@ -6,7 +6,7 @@ This repository is for standards development of Interchain Standards. Initially 
 
 #### Stage 0 - `Strawman`
 - _**Purpose**_: Start the specification process
-- _**Entrance Criteria**_: [Open an issue](https://github.com/cosmos/ics/issues/new) on this repository with a short outline of your proposal
+- _**Entrance Criteria**_: [Open an issue](https://github.com/cosmos/ics/issues/new) on this repository with a short outline of your proposal and a specification nane.
 - _**Acceptance Signifies**_: No acceptance required to move to the next stage. Keep the issue around to track the specification status, and close it when the final specification is merged or the proposal abandoned.
 - _**Spec Quality**_: Outline only. Link to any prior documentation, discussion, or reference materials.
 - _**Changes Expected Post-Acceptance**_: N/A
@@ -19,7 +19,7 @@ This repository is for standards development of Interchain Standards. Initially 
   * Identify challenges to this proposal
 - _**Entrance Criteria**_:
   * Prose outlining the problem or need and the general shape of a solution in a PR to a `./{{ .Spec.Number }}-{{ .Spec.Name }}/proposal.md` file in this repo. This file should contain:
-    1. Expected set of specification users along with their goals and requirements
+    1. List of expected projects & users within the Cosmos ecosystem who might make use of the specification along with any particular requirements they have
     1. Discussion of key algorithms, abstractions, and semantics
     1. High-level application interface outline, where applicable
     1. Identification of potential design tradeoffs and implementation challenges/complexity
