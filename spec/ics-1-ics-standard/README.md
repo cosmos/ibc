@@ -2,7 +2,7 @@
 ics: 1
 title: ICS Specification Standard
 status: Proposal
-type: Meta
+category: Meta
 author: Christopher Goes <cwgoes@tendermint.com>
 created: 2019-02-12
 ---
@@ -20,8 +20,15 @@ created: 2019-02-12
 `title` - ICS title (keep it short & sweet)
 
 `status` - Current ICS status, one of the following:
+- `Proposal`
+- `Draft`
+- `Candidate`
+- `Finalized`
 
-`type` - ICS type, one of the following:
+`category` - ICS category, one of the following:
+- `Meta` - A standard about the ICS process
+- `IBC`  - A standard about the inter-blockchain communication system
+- `Util` - A standard about utility features, e.g. message signing
 
 `author` - ICS author(s) & contact information (preferably email)
 

@@ -63,7 +63,7 @@ This repository is for standards development of Interchain Standards. Initially 
 - _**Implementation Types Expected**_:
   * Spec compliant
 
-#### Stage 4 - `Finished`
+#### Stage 4 - `Finalized`
 - _**Purpose**_:
   * Indicate that the addition is included in the formal ICS system
 - _**Entrance Criteria**_:
