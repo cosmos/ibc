@@ -18,7 +18,7 @@ This repository is for standards development of Interchain Standards. Initially 
   * Describe the shape of the a potential solution
   * Identify challenges to this proposal
 - _**Entrance Criteria**_:
-  * Prose outlining the problem or need and the general shape of a solution in a PR to a `./spec/{{ .Spec.Number }}-{{ .Spec.Name }}/proposal.md` file in this repo. This file should contain:
+  * Prose outlining the problem or need and the general shape of a solution in a PR to a `./spec/{{ .Spec.Number }}-{{ .Spec.Name }}/README.md` file in this repo. This file should contain:
     1. Illustrative examples of usage
     1. High-level API
     1. Discussion of key algorithms, abstractions and semantics
@@ -38,7 +38,8 @@ This repository is for standards development of Interchain Standards. Initially 
   * Precisely describe the syntax and semantics using formal spec language
 - _**Entrance Criteria**_:
   * Everything from stage 1
-  * Initial specification text in a PR to add a `./spec/{{ .Spec.Number }}-{{ .Spec.Name }}/spec.md` file
+  * Initial specification text in a PR to update the `./spec/{{ .Spec.Number }}-{{ .Spec.Name }}/README.md` file
+  * Any additional reference documentation or media in the `./spec/{{ .Spec.Number }}-{{ .Spec.Name }}` directory
 - _**Acceptance Signifies**_:
   * The specification team expects that this proposal will be finalized and eventually included in the standard
 - _**Spec Quality**_:
