@@ -6,11 +6,11 @@ This repository is for standards development of Interchain Standards. Initially 
 
 #### Stage 0 - `Strawman`
 - _**Purpose**_: Start the specification process
-- _**Entrance Criteria**_: [Open an issue](https://github.com/cosmos/ics/issues/new) on this repository with a short outline of your proposal
-- _**Acceptance Signifies**_: N/A
-- _**Spec Quality**_: N/A
+- _**Entrance Criteria**_: [Open an issue](https://github.com/cosmos/ics/issues/new) on this repository with a short outline of your proposal and a specification nane.
+- _**Acceptance Signifies**_: No acceptance required to move to the next stage. Keep the issue around to track the specification status, and close it when the final specification is merged or the proposal abandoned.
+- _**Spec Quality**_: Outline only. Link to any prior documentation, discussion, or reference materials.
 - _**Changes Expected Post-Acceptance**_: N/A
-- _**Implementation Types Expected**_: N/A
+- _**Implementation Types Expected**_: None required, but link to any existing
 
 #### Stage 1 - `Proposal`
 - _**Purpose**_:
@@ -18,14 +18,14 @@ This repository is for standards development of Interchain Standards. Initially 
   * Describe the shape of the a potential solution
   * Identify challenges to this proposal
 - _**Entrance Criteria**_:
-  * Prose outlining the problem or need and the general shape of a solution in a PR to a `./spec/{{ .Spec.Number }}-{{ .Spec.Name }}/proposal.md` file in this repo. This file should contain:
-    1. Illustrative examples of usage
-    1. High-level API
-    1. Discussion of key algorithms, abstractions and semantics
-    1. Identification of potential “cross-cutting” concerns and implementation challenges/complexity
+  * Prose outlining the problem or need and the general shape of a solution in a PR to a `./spec/ics-{{ .Spec.Number }}-{{ .Spec.Name }}/proposal.md` file in this repo. This file should contain:
+    1. List of expected projects & users within the Cosmos ecosystem who might make use of the specification along with any particular requirements they have
+    1. Discussion of key algorithms, abstractions, and semantics
+    1. High-level application interface outline, where applicable
+    1. Identification of potential design tradeoffs and implementation challenges/complexity
   * Identified `Champion(s)` who will advance the proposal
 - _**Acceptance Signifies**_:
-  * The PR has received 2 :+1:s from members of the specification team.
+  * The PR has received 2 approvals from members of the specification team.
 - _**Spec Quality**_:
   * None, this is just a proposal
 - _**Changes Expected Post-Acceptance**_:
@@ -68,11 +68,11 @@ This repository is for standards development of Interchain Standards. Initially 
   * Indicate that the addition is included in the formal ICS system
 - _**Entrance Criteria**_:
   * Everything from stages 1,2,3
-  * Acceptance tests are written and merged into the Cosmos-SDK
+  * Acceptance tests are written and merged into the Cosmos-SDK and other relevant downstream repositories
   * At least one spec compatible implementation exists
   * All files in the `./spec/{{ .Spec.Number }}-{{ .Spec.Name}}/` directory are up to date and merged into the `cosmos/ics` repo
 - _**Acceptance Signifies**_:
-  * The addition is now part of the ICS standards
+  * The addition is now part of the ICS standard set
 - _**Spec Quality**_:
   * Final: All changes as a result of implementation experience are integrated
 - _**Changes Expected Post-Acceptance**_:
