@@ -28,23 +28,24 @@ Definitions:
 `Block` satisfies the followings:
 
 1. Blocks have one direct child
-If a blockchain has liveness, then every block in the blockchain should have its own child. This means the blockchain is an infinite stream of blocks, starting from its genesis. When the blockchain looses its liveness, this assumption is no longer satisfied thus the connections referring this chain cannot proceed. It makes the packet never delivered on the failed chain, so for the blocks who are sending packets to this chain, **timeout** mechanism should be applied in this case.
-
+If a blockchain has liveness, then every block in the blockchain should have its own child. This means the blockchain is an infinite stream of blocks, starting from its genesis. When the blockchain looses its liveness, this assumption is no longer satisfied thus the packet sent to this chain will be lost. 
+// timeout is not for this case, since the expiration is defined by the height of receiving chain, so if the receiving chain does not produce more block then timeout does not work. 
+ 
 2. Blocks have only one direct child
 If a blockchain has deterministic safety(as opposed to probablistic safety in Nakamoto consensus), then there cannot be more than one child for each block. In tendermint, this assumption breakes when +1/3 validators are malicious, producing multiple blocks those are direct child of a single block and all of them are verifiable with the parent. It makes conflicting packets delivered from the failed chain, so for the blocks who are receiving from this chain, **fraud proof** mechanism should be applied in this case.
 
 3. If a block verifies another block then it is a descendant of the block
-Lightclient should not verify packets which is not in its chain. If the verifier returns true for a block that is not a descendent, it simply means that there is an error in the lightclient logic. However, 
-
+Lightclient should not verify packets which is not in its chain. If the verifier returns true for a block that is not a descendent, it simply means that there is an error in the lightclient logic.
 
 4. Blocks cannot validate descentants from a block that they cannot validate
 // TODO: is this needed & is this true?
 
 5. Block can have a state only if it is a valid transition from the parent's(see the next paragraph)
+Block cannot have a state which is not a transition from its parent. Since the state is only defined for IBC logic, this only means that each block are running IBC-compatible application logic(does not care about the other modules' failure, including the handlers for the packets).
 
-When a blockchain provides deterministic safety(no more than one child block for all block) and liveness(no less than one child block for all block), requirememtn 1 and 2 are satisfied. When a chain has lightclient verification method, requirement 3 is satisfied. When a chain violates this assumption(byzantine behaviour / consensus failure / lightclient failure), some of the above are no longer satisfied, so the connection must be halt.
- 
 // TODO: define subcategory of verifiers that returns false for every blocks after unbonding period
+
+We can detect and recover from the event where these assumptions are broken from the other chain(throught the timeout and fraud proof logic), but the failed chain itself also need to be recovered and run again. It will be covered in **byzantine recovery strategies**.
  
 ## State
  
@@ -57,9 +58,14 @@ When a blockchain provides deterministic safety(no more than one child block for
 `Connection` is $(b \in \mathbb{B}, q \in \mathbb{portid} \rightarrow \mathbf{channel})$ where $b$ is the last known header from the other chain and $c$ is a map from `PortID` to `Channel`. When the port is not opened, $q$ returns nil for that `PortID`. $b$ can remain $null$ if the chain wants to send messages 
 
 Requirements:
-1. Connection can be registered for an empty `ChainID`
-2. Connection can be updated if the new block is a valid descendent from the current one
+1. Connection can be registered only for an empty `ChainID`
+If a `ChainID` is not allocated to any of the connections, new connection can be registered for it. This ensures that once a connection is registered, the `ChainID` is unique to identify that chain.
+
+2. Connection can be updated if the new block is verifiable with the current referred block
 // TODO: allow update on arbitrary height, see TODO1
+When a new packet is pushed in the state, the receiving chain should update its connection to verify it. 
+
+// TODO: add connection closing
 
 // TODO: chains with connection referral & parent referral forms an DAG, so there should not be a loop
 // this will enable to add semantics for ordering without introducing global time
@@ -67,6 +73,7 @@ Requirements:
 ## Tendermint 
 
 // TODO: prove tendermint blocks satisfy `Block`
+// TODO: prove SDK IBC module satisfies `State`
 
 ## Appendix
 
@@ -81,8 +88,7 @@ Requirements:
 1. $\forall b \in \mathbb{B} : \exists b' \in \mathbb{B} : child(b, b')$
 2. $\forall b, b', b'' \in \mathbb{B} : child(b, b') \land child(b, b'') \rightarrow b'=b''$
 3. $\forall b, b' \in \mathbb{B} : b.f(b') \rightarrow descendant(b, b')$
-4. $\forall b, b', b'' \in \mathbb{B} : \lnot b.f(b') \land descendant(b', b'') \rightarrow \lnot b.f(b'')$
-5. $\forall b, b' \in \mathbb{B} : child(b, b') \rightarrow transition(b.s, b'.s)$
+4. $\forall b, b' \in \mathbb{B} : child(b, b') \rightarrow transition(b.s, b'.s)$
 
 ### Connection Requirements
 1. $\forall s \in \mathbb{S} : \forall id \in \mathbf{chainid} : \forall b \in \mathbb{B} : s(id) = null \rightarrow transition(s, \{id \mapsto (b, \{\_ \mapsto null\}), \_ \mapsto s(\_)\}$
