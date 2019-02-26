@@ -13,8 +13,6 @@ created: 2019-02-25
 
 `ChainID` can be subjective on the chains, so there is no protocol level contraint on how the `ChainID` will be formed. The chain's application logic can choose how it will allocate `ChainID` for the other chain. However, the format of `ChainID` is defined in the protocol.
  
-`ChainID` is one of the fundemental building blocks of IBC protocol, thus it has to be indepdendent from the enviornments as possible. The format of `ChainID` should be uniform, regardless of the encoding library, operating system. etc..
-
 In this proposal, we propose the **format** of the `ChainID`s, which satisfies the requirements above and is restricted by the protocol. Also we propose the **generation scheme**s of the `ChainID`s, which is not restricted by the protocol but recommended. 
 
 ## Format
