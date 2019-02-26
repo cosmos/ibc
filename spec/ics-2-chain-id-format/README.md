@@ -1,6 +1,6 @@
 ---
 ics: 2
-title: Chain Naming Convention
+title: ChainID Format
 status: Proposal
 category: IBC
 author: Juwoon Yun <joon@tendermint.com>
