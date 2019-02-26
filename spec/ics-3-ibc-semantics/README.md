@@ -1,3 +1,5 @@
+# ICS3
+
 ---
 ics: 3
 title: IBC Connection Semantics
@@ -9,59 +11,79 @@ created: 2019-02-25
 
 ## Abstract
 
-`Block` is $(p \in \mathbb{B}, f \in \mathbb{B} \rightarrow \{true, false\}, s \in \mathbb{S}, u \in mathbb{N})$ where $p$ is parent block, $f$ is lightclient verifier, $s$ is state and $u$ is unbonding period.
+In this proposal, we introduce a concept of abstract blockchain that IBC protocol can work on. Cosmos-SDK based blockchains will automatically satisfy the requirements with the help of IBC module. Tendermint based blockchains will satisfy most of the `Block` requirements, but have to implement a state machine for the protocol. The concrete implementation on the SDK for the state machine will be documented in another proposal. 
+
+`Block` describes a block forming a blockchain. 
+
+## Block
+
+`Block` is $(p \in (\mathbb{B} + null), f \in \mathbb{B} \rightarrow \{true, false\}, s \in \mathbb{S})$ where $p$ is parent block, $f$ is lightclient verifier and $s$ is state. It is ensured that the concrete implementation of block which satisfies the requirements for this `Block` is compatible with the protocol. 
 
 Definitions:
 
-1. $\forall b=(\_, f, \_, \_), b'=(p', \_, \_, \_) \in \mathbb{B} : f(b') \land b=p' \iff child(b, b')$
-If a block verifies another block and the other block has the block as its parent, the other block is the child of the block.
-
-2. $\forall b, b', b'' \in \mathbb{B} : child(b, b'') \lor child(b, b') \land descendant(b', b'') \iff descendant(b, b'')$
-Descendants are either direct child or descendants of direct child
-
-3. $\forall b, b'=(p', \_, \_, \_), b''=(p'', \_, \_, \_) \in \mathbb{B} : b=p'' \lor b=p' \land ancestor(p', p'') \iff ancestor(b, b'')$
-Ancestors are either direct parent or ancestors of direct parent
+1. If a block verifies another block and the other block has the block as its parent, the other block is the child of the block.
+2. Descendants are either direct child or descendants of direct child
+3. Ancestors are either direct parent or ancestors of direct parent
 
 `Block` satisfies the followings:
 
-1. $\forall b=(\_, f, \_, \_) \in \mathbb{B} : \exists b'=(p', \_, \_, \_) \in \mathbb{B} : child(b, b')
-Blocks have one direct child
+1. Blocks have one direct child
+If a blockchain has liveness, then every block in the blockchain should have its own child. This means the blockchain is an infinite stream of blocks, starting from its genesis. When the blockchain looses its liveness, this assumption is no longer satisfied thus the connections referring this chain cannot proceed. It makes the packet never delivered on the failed chain, so for the blocks who are sending packets to this chain, **timeout** mechanism should be applied in this case.
 
-2. $\forall b=(\_, f, \_, \_), b'=(p', \_, \_, \_), b''=(p'', \_, \_, \_) \in \mathbb{B} : child(b, b') \land child(b, b'') \rightarrow b'=b''$
-Blocks have only one direct child
+2. Blocks have only one direct child
+If a blockchain has deterministic safety(as opposed to probablistic safety in Nakamoto consensus), then there cannot be more than one child for each block. In tendermint, this assumption breakes when +1/3 validators are malicious, producing multiple blocks those are direct child of a single block and all of them are verifiable with the parent. It makes conflicting packets delivered from the failed chain, so for the blocks who are receiving from this chain, **fraud proof** mechanism should be applied in this case.
 
-3. $\forall b=(\_, f, \_, \_), b' \in \mathbb{B} : f(b') \rightarrow descendant(b, b')$
-If a block verifies another block then it is a descendant of the block
+3. If a block verifies another block then it is a descendant of the block
+Lightclient should not verify packets which is not in its chain. If the verifier returns true for a block that is not a descendent, it simply means that there is an error in the lightclient logic. However, 
 
-// TODO: is it needed?
-// This implies that the the height difference between 
-4. $\forall b=(\_, f, \_, \_), b', b'' \in \mathbb{B} : \lnot f(b') \land descendant(b
-', b'') \rightarrow \lnot f(b'')$
-Blocks cannot validate descentants from a block that they cannot validate
 
-// TODO: unbonding period is a specific term for BPoS, change it to something like max skip height?
-5. $\forall b=(\_, f, \_, u), b' \in \mathbb{B} : diff(b, b') >= u \rightarrow \lnot f(b') $
-Blocks cannot validate the block after its unbonding period
+4. Blocks cannot validate descentants from a block that they cannot validate
+// TODO: is this needed & is this true?
 
-When a blockchain satisfies deterministic safety(no more than one child block for all block) and liveness(no less than one child block for all block), All of the above are satisfied. When the chain violates this assumption(byzantine behaviour / consensus failure), some of the above are no longer satisfied, so the connection must be halt.
+5. Block can have a state only if it is a valid transition from the parent's(see the next paragraph)
+
+When a blockchain provides deterministic safety(no more than one child block for all block) and liveness(no less than one child block for all block), requirememtn 1 and 2 are satisfied. When a chain has lightclient verification method, requirement 3 is satisfied. When a chain violates this assumption(byzantine behaviour / consensus failure / lightclient failure), some of the above are no longer satisfied, so the connection must be halt.
  
-`State` is $(c \in \mathbf{chainid} \rightarrow \mathbb{C})$. $c$ is a map from `ChainID`s to connections and $p$ is a map from `PortID`s to ports. For sake of simplicity, we omit every logic excepts those are directly associated with the connection & channel.
+// TODO: define subcategory of verifiers that returns false for every blocks after unbonding period
+ 
+## State
+ 
+`State` is $(c \in \mathbf{chainid} \rightarrow (\mathbb{C} + null))$. $c$ is a map from `ChainID`s to connections. For sake of simplicity, we omit every logic excepts those are directly associated with the connection & channel.
 
-// TODO: extend $b \in mathbb{B}$ to $b \in mathbb{B}^+$ so we can access on the previous versions
-`Connection` is $(b \in \mathbb{B}, q \in \mathbb{portid} \rightarrow (\mathbf{channel} + null))$ where $b$ is the last known header from the other chain and $q$ is a map from `PortID` to `Channel`. 
+## Connection
 
-Definitions:
+// TODO1: extend $b \in \mathbb{B}$ to $b \in \mathbb{B}^+$ so we can access on the previous versions
+// it is needed if we want to prune the packets before it is received on the other chain(e.g. peggy, udp-style comm)
+`Connection` is $(b \in \mathbb{B}, q \in \mathbb{portid} \rightarrow \mathbf{channel})$ where $b$ is the last known header from the other chain and $c$ is a map from `PortID` to `Channel`. When the port is not opened, $q$ returns nil for that `PortID`. $b$ can remain $null$ if the chain wants to send messages 
 
-1. 
-Connection can be updated by inserting valid descendent of the current referring block
-// TODO: change "the current referring block" to "the latest block stored in the connection which is an ancestor of the new block" 
+Requirements:
+1. Connection can be registered for an empty `ChainID`
+2. Connection can be updated if the new block is a valid descendent from the current one
+// TODO: allow update on arbitrary height, see TODO1
 
-`Connection` satisfies the followings
+// TODO: chains with connection referral & parent referral forms an DAG, so there should not be a loop
+// this will enable to add semantics for ordering without introducing global time
 
-1. 
-Connection can be updated only if
-Connection cannot refer a block from the other chain which is referring a desecendant of its block
-// TODO: 
+## Tendermint 
 
-2. 
-Connection can only refer the same block or a descendant that the connections from the ancestors of its block are referring
+// TODO: prove tendermint blocks satisfy `Block`
+
+## Appendix
+
+### Block Definitions
+
+1. $\forall b, b' \in \mathbb{B} : b.f(b') \land b=b'.p \iff child(b, b')$
+2. $\forall b, b', b'' \in \mathbb{B} : child(b, b'') \lor child(b, b') \land descendant(b', b'') \iff descendant(b, b'')$
+3. $\forall b, b', b'' \in \mathbb{B} : b=b''.p \lor b=b'.p \land ancestor(b'.p, b''.p) \iff ancestor(b, b'')$
+
+### Block Requirements
+
+1. $\forall b \in \mathbb{B} : \exists b' \in \mathbb{B} : child(b, b')$
+2. $\forall b, b', b'' \in \mathbb{B} : child(b, b') \land child(b, b'') \rightarrow b'=b''$
+3. $\forall b, b' \in \mathbb{B} : b.f(b') \rightarrow descendant(b, b')$
+4. $\forall b, b', b'' \in \mathbb{B} : \lnot b.f(b') \land descendant(b', b'') \rightarrow \lnot b.f(b'')$
+5. $\forall b, b' \in \mathbb{B} : child(b, b') \rightarrow transition(b.s, b'.s)$
+
+### Connection Requirements
+1. $\forall s \in \mathbb{S} : \forall id \in \mathbf{chainid} : \forall b \in \mathbb{B} : s(id) = null \rightarrow transition(s, \{id \mapsto (b, \{\_ \mapsto null\}), \_ \mapsto s(\_)\}$
+2. $\forall s \in \mathbb{S} : \forall id \in \mathbf{chainid} : \forall b \in \mathbb{B} : s(id).b.f(b) \rightarrow transition(s, \{id \mapsto (b, s(id).q), \_ \mapsto s(\_)\})$
