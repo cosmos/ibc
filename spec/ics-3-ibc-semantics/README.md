@@ -17,7 +17,7 @@ In this proposal, we introduce a concept of abstract blockchain that IBC protoco
 
 ## Block
 
-`Block` is $(p \in (\mathbb{B} + null), f \in \mathbb{B} \rightarrow \{true, false\}, s \in \mathbb{S})$ where $p$ is parent block, $f$ is lightclient verifier and $s$ is state. It is ensured that the concrete implementation of block which satisfies the requirements for this `Block` is compatible with the protocol. 
+`Block` is `(p Maybe<Block>, f func(Block) bool, s State)` where `p` is parent block, `f` is lightclient verifier and `s` is state. The other parts of the protocol, such as connections and channels, are defined over `Block`s, so if a blockchain wants to establish an IBC communication with another, it is required to satisfy the properties of `Block`.
 
 Definitions:
 
@@ -32,7 +32,7 @@ If a blockchain has liveness, then every block in the blockchain should have its
 // timeout is not for this case, since the expiration is defined by the height of receiving chain, so if the receiving chain does not produce more block then timeout does not work. 
  
 2. Blocks have only one direct child
-If a blockchain has deterministic safety(as opposed to probablistic safety in Nakamoto consensus), then there cannot be more than one child for each block. In tendermint, this assumption breakes when +1/3 validators are malicious, producing multiple blocks those are direct child of a single block and all of them are verifiable with the parent. It makes conflicting packets delivered from the failed chain, so for the blocks who are receiving from this chain, **fraud proof** mechanism should be applied in this case.
+If a blockchain has deterministic safety(as opposed to probablistic safety in Nakamoto consensus), then there cannot be more than one child for each block. In tendermint, this assumption breakes when +1/3 validators are malicious, producing multiple blocks those are direct child of a single block and all of them are verifiable with the parent. It makes conflicting packets delivered from the failed chain, so for the chains who are receiving from this chain, **fraud proof** mechanism should be applied in this case. 
 
 3. If a block verifies another block then it is a descendant of the block
 Lightclient should not verify packets which is not in its chain. If the verifier returns true for a block that is not a descendent, it simply means that there is an error in the lightclient logic.
@@ -49,47 +49,43 @@ We can detect and recover from the event where these assumptions are broken from
  
 ## State
  
-`State` is $(c \in \mathbf{chainid} \rightarrow (\mathbb{C} + null))$. $c$ is a map from `ChainID`s to connections. For sake of simplicity, we omit every logic excepts those are directly associated with the connection & channel.
+`State` is `c func(ChainID) Maybe<Connection>`. `c` is a map from `ChainID`s to connections. For sake of simplicity, we omit every logic excepts those are directly associated with the connection & channel.
 
 ## Connection
 
-// TODO1: extend $b \in \mathbb{B}$ to $b \in \mathbb{B}^+$ so we can access on the previous versions
+// TODO1: extend `b Block` to `b []Block` so we can access on the previous versions
 // it is needed if we want to prune the packets before it is received on the other chain(e.g. peggy, udp-style comm)
-`Connection` is $(b \in \mathbb{B}, q \in \mathbb{portid} \rightarrow \mathbf{channel})$ where $b$ is the last known header from the other chain and $c$ is a map from `PortID` to `Channel`. When the port is not opened, $q$ returns nil for that `PortID`. $b$ can remain $null$ if the chain wants to send messages 
+`Connection` is `(b Block, c func(PortID) Channel)` where `B` is the last known header from the other chain and `c` is a map from `PortID` to `Channel`.  
 
 Requirements:
 1. Connection can be registered only for an empty `ChainID`
-If a `ChainID` is not allocated to any of the connections, new connection can be registered for it. This ensures that once a connection is registered, the `ChainID` is unique to identify that chain.
+If a `ChainID` is not allocated to any of the connections, new connection can be registered for that. This ensures that once a connection is registered, the `ChainID` is unique to identify that chain.
 
 2. Connection can be updated if the new block is verifiable with the current referred block
 // TODO: allow update on arbitrary height, see TODO1
 When a new packet is pushed in the state, the receiving chain should update its connection to verify it. 
 
 // TODO: add connection closing
+// Should we allow the ChainIDs reusable once the connections are closed?
 
 // TODO: chains with connection referral & parent referral forms an DAG, so there should not be a loop
 // this will enable to add semantics for ordering without introducing global time
-
-## Tendermint 
-
-// TODO: prove tendermint blocks satisfy `Block`
-// TODO: prove SDK IBC module satisfies `State`
 
 ## Appendix
 
 ### Block Definitions
 
-1. $\forall b, b' \in \mathbb{B} : b.f(b') \land b=b'.p \iff child(b, b')$
-2. $\forall b, b', b'' \in \mathbb{B} : child(b, b'') \lor child(b, b') \land descendant(b', b'') \iff descendant(b, b'')$
-3. $\forall b, b', b'' \in \mathbb{B} : b=b''.p \lor b=b'.p \land ancestor(b'.p, b''.p) \iff ancestor(b, b'')$
+1. `forall b, b' in B : b.f(b') && b=b'.p <=> child(b, b')`
+2. `forall b, b', b'' in B : child(b, b'') || child(b, b') && descendant(b', b'') <=> descendant(b, b'')`
+3. `forall b, b', b'' in B : b=b''.p || b=b'.p && ancestor(b'.p, b''.p) <=> ancestor(b, b'')`
 
 ### Block Requirements
 
-1. $\forall b \in \mathbb{B} : \exists b' \in \mathbb{B} : child(b, b')$
-2. $\forall b, b', b'' \in \mathbb{B} : child(b, b') \land child(b, b'') \rightarrow b'=b''$
-3. $\forall b, b' \in \mathbb{B} : b.f(b') \rightarrow descendant(b, b')$
-4. $\forall b, b' \in \mathbb{B} : child(b, b') \rightarrow transition(b.s, b'.s)$
+1. `forall b in B : exists b' in B : child(b, b')`
+2. `forall b, b', b'' in B : child(b, b') && child(b, b'') => b'=b''`
+3. `forall b, b' in B : b.f(b') => descendant(b, b')`
+4. `forall b, b' in B : child(b, b') => transition(b.s, b'.s)`
 
 ### Connection Requirements
-1. $\forall s \in \mathbb{S} : \forall id \in \mathbf{chainid} : \forall b \in \mathbb{B} : s(id) = null \rightarrow transition(s, \{id \mapsto (b, \{\_ \mapsto null\}), \_ \mapsto s(\_)\}$
-2. $\forall s \in \mathbb{S} : \forall id \in \mathbf{chainid} : \forall b \in \mathbb{B} : s(id).b.f(b) \rightarrow transition(s, \{id \mapsto (b, s(id).q), \_ \mapsto s(\_)\})$
+1. `forall s in S, id in ChainID, b in B : s(id) = nil => transition(s, {id => (b, {_ => nil}), _ => s(_)})`
+2. `forall s in S, id in ChainID, b in B : s(id).b.f(b) => transition(s, {id => (b, s(id).q), _ => s(_)})`
