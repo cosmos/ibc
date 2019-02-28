@@ -11,7 +11,7 @@ created: 2019-02-25
 
 The basis of IBC is the ability to verify in the on-chain consensus ruleset of chain `B` that a data packet received on chain `B` was correctly generated on chain `A`. This establishes a cross-chain linearity guarantee: upon validation of that packet on chain `B` we know that the packet has been executed on chain `A` and any associated logic resolved (such as assets being escrowed), and we can safely perform application logic on chain `B` (such as generating vouchers on chain `B` for the chain `A` assets which can later be redeemed with a packet in the opposite direction).
 
-In this proposal, we introduce the requirements of IBC for blockchains. Cosmos-SDK based blockchains will automatically satisfy the requirements with the help of IBC module. Tendermint based blockchains will satisfy most of the `Block` requirements, but have to implement a state machine for the protocol. The concrete implementation on the SDK for the state machine will be documented in another proposal. 
+In this proposal, we introduce the requirements of IBC for blockchains. Cosmos-SDK based blockchains will automatically satisfy the requirements with the help of IBC module. Tendermint based blockchains will satisfy most of the `Block` requirements, but have to implement a state machine as their own.
 
 ## Definitions
 
@@ -21,21 +21,19 @@ In this proposal, we introduce the requirements of IBC for blockchains. Cosmos-S
 
 ## Block
 
-`Block` is `(p Maybe<Block>, v func(Block) bool, c func(ChainID) Maybe<Connection>)` where `p` is parent block, `v` is lightclient verifier and `c` is registered connections. The other parts of the protocol, such as connections and channels, are defined over `Block`s, so if a blockchain wants to establish an IBC communication with another, it is required to satisfy the properties of `Block`.
+`Block` is `(p Maybe<Block>, v func(Block) bool, c func(ChainID, PortID) Maybe<Channel>)` where `p` is parent block, `v` is lightclient verifier and `c` is packet channels. The other parts of the protocol, such as connections and channels, are defined over `Block`s, so if a blockchain wants to establish an IBC communication with another, it is required to satisfy the properties of `Block`.
 
 Definitions:
 
-1. Direct children have their parent as `p` and parents verifies direct children.
-2. Descendants are either direct child or descendants of direct child
-3. Ancestors are either direct parent or ancestors of direct parent
-4. Height of a block is the step of referring `p` required to get to `nil`
+1. Direct children have their parent as `p` and are verifiable with their parent.
+2. Height of a block is the step of referring `p` required to get to `nil`
 
 Requirements:
 
 1. Blocks have only one direct child
-If a blockchain has deterministic safety(as opposed to probablistic safety in Nakamoto consensus), then there cannot be more than one child for each block. In tendermint, this assumption breakes when +1/3 validators are malicious, producing multiple blocks those are direct child of a single block and all of them are verifiable with the parent. It makes conflicting packets delivered from the failed chain, so for the chains who are receiving from this chain, **fraud proof** mechanism should be applied in this case. However he failed chain itself also need to be recovered and reconnected again. It will be covered in **byzantine recovery strategies**.
+If a blockchain has deterministic safety(as opposed to probablistic safety in Nakamoto consensus), then there cannot be more than one child for each block. In tendermint, this assumption breakes when +1/3 validators are malicious, producing multiple blocks those are direct child of a single block and all of them are verifiable with the parent. It makes conflicting packets delivered from the failed chain, so for the chains who are receiving from this chain, **fraud proof #10** mechanism should be applied in this case. However he failed chain itself also need to be recovered and reconnected again. It will be covered in **byzantine recovery strategies #6**.
 
-2. Blocks have one direct child
+2. Blocks have at least one direct child
 There is at least one direct child for all blocks, meaning that the lightclient logic can proceed the blocks one by one even in the worst case. If it not satisfied then there can be a point where the lightclient stops and cannot proceed, which halts IBC connection unexpectedly.
 
 3. If a block verifies another block then it is a descendant of the block
@@ -49,11 +47,11 @@ If a block is submitted to the chain(and optionally passed some challange period
 
 ## Verifier
 
-Verifiers will be covered datailed in **lightclient specification**
+Verifiers will be covered datailed in **lightclient specification #13**
 
 ### Tendermint
 
-For Tendermint consensus algorithm, each of the blocks has additional parameter `C` which is a subset of the consensus ruleset signed on the block. Verifiers returns true if the difference between the `C_current` and `C_verified` are less then `1/3`.
+For Tendermint consensus algorithm, each of the blocks has additional parameter `C` which is a subset of the consensus ruleset signed on the block. Verifiers returns true if the difference between the `C_current` and `C_next` is less then `1/3`.
  
 ### Tendermint + Cosmos BPoS
 
@@ -67,24 +65,119 @@ Nakamoto chain prefers liveness over safety, so the blocks does not satisfy the 
 
 ## Connection
 
-`Connection` is `(b []Block, c func(PortID) Channel)` where `B` is submitted headers from the other chain and `c` is a map from `PortID` to `Channel`. 
+`Connection` is `[]Block` where `B` is submitted headers from the other chain and `c` is a map from `PortID` to `Channel`. 
 
 Requirements:
 1. Connection can be registered only for an empty `ChainID`
 If a `ChainID` is not allocated to any of the connections, new connection can be registered for that. This ensures that once a connection is registered, the `ChainID` is unique to identify only that chain.
 
-2. Connection can be updated if there exists a block registered who verifies the new block
+2. Connection can be updated if the new block can be verified by any of the already registered block
 If a new block is submitted to the chain, it verifies and includes the block.
 
 3. Connection cannot refer a block that is referring it or its descendant, directly nor indirectly
 This guarantees that there is not referring loop. In other words, future blocks cannot be registered
+// XXX: do we need this? at the implementor's perspective it is obvious
 
 4. Transition can happen multiple times in a block
+// XXX: do we need this?
 
-// TODO: add connection closing
+// XXX: add connection closing
 // Should we allow the ChainIDs reusable once the connections are closed?
 
 These requirements simply describes how connection works in the state. The most important one is the first, because `ChainID`s are unique and immutable, application logics can identify the sender/receiver of the packet with the `ChainID`. The second implies that header updating follows the lightclient logic.
 
 ## Implementation
 
+The implemention is built on Cosmos-SDK for Tendermint.
+
+```go
+// Corresponds to Block 
+type FullCommit interface {
+    Height() int64
+    Verify(Header) bool 
+    Channel(ChainID, PortID) Channel
+}
+```
+
+In the implementation, we cannot store submit the whole block to another, nor we have to. IBC packets will take only a portion of the state space, so it is inefficient to relay all key-value pairs. Most of the blockchains supports Merkle tree, which enables the prover to verify that there is a data in the state within `O(log n)` time. With Merkle proof, we can treat the headers satisfying Block, because the users can prove existing data when it is needed(we are not considering about the data availability problem in the protocol).
+
+```go
+type LiteFullCommit struct {
+    lite.FullCommit
+}
+
+func (lfc LiteFullCommit) Height() int64 {
+    return lfc.SignedHeader.Height()
+}
+
+func (lfc LiteFullCommit) Verify(fc FullCommit) bool {
+    lfc2, ok := fc.(LiteFullCommit)
+    if !ok {
+        return false
+    }
+    // will be defined in lightclient speficication
+}
+
+func (lfc LiteFullCommit) Channel(cid ChainID, pid PortID) Channel {
+    // XXX
+}
+
+// XXX: interface or struct?
+type Channel interface {
+    
+}
+```
+
+`LiteFullCommit` is a struct where `lite.FullCommit` is embedded implementing `Block`. `Height()` and `Verify()` reuses the `lite` package logic.
+
+```go
+type Connection struct {
+    // TODO: "connection lifecycle #3"
+    // status store.Value
+    info store.Value // ConnectionInfo
+
+    commits store.Indexer // uint64 -> FullCommit
+}
+
+// TODO: "connection lifecycle #3"
+type ConnectionInfo struct {
+    ROT FullCommit
+    ChainID ChainID
+    StateRootKeyPath string
+}
+
+func (c Connection) Register(ctx sdk.Context, info ConnectionInfo) {
+    // c.IsEmpty() must be checked before calling this function
+    c.commits.Set(ctx, info.ROT.Height(), info.ROT)
+    c.info.Set(ctx, info)
+    // XXX: check is it safe to register ChainID and StateRootKeyPath before
+    // the other chain register this one
+}
+
+func (c Connection) updateSingle(ctx sdk.Context, fc FullCommit) error {
+    if c.Has(ctx, fc.Height()) {
+        return errors.New("fullcommit already stored")
+    }   
+
+    var last FullCommit
+    c.Range(0, fc.Height()).Last(ctx, &last)
+    if !last.Verify(fc) {
+        return errors.New("lightclient verification failed")
+    }
+
+    c.Set(ctx, fc.Height(), fc)
+    return nil
+}
+
+func (c Connection) Update(ctx sdk.Context, fcs []FullCommit) error {
+    for _, fc := range fcs {
+        err := c.updateSingle(fc)
+        if err != nil {
+            return
+        }
+    }
+    return nil
+}
+```
+
+`Connection` is mapping from `uint64` to `FullCommit` in local state. `Register()` registers new root-of-trust FullCommit in the state. `Update()` works simillar with `lite.DynamicVerifier`, but without interactive bisecting(which is impossible on chain).
