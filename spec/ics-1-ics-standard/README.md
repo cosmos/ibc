@@ -54,7 +54,7 @@ See [README.md](../../README.md) for a description of the ICS acceptance stages.
 `category` - ICS category, one of the following:
 - `meta` - A standard about the ICS process
 - `ibc`  - A standard about the inter-blockchain communication system
-- `util` - A standard about utility features, e.g. message signing
+- `misc` - A standard about miscellaneous / auxiliary features, e.g. message signing
 
 `author` - ICS author(s) & contact information (in order of preference: email, GitHub handle, Twitter handle, other contact methods).
            The first author is the primary "owner" of the ICS and is responsible for advancing it through the standardization process.
