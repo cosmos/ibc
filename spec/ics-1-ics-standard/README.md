@@ -31,6 +31,7 @@ to approve or reject inter-chain standards).
 ## Components
 
 An ICS consists of a header, synopsis, specification, history log, and copyright notice. All top-level sections are required.
+References should be included inline as links, or tabulated at the bottom of the section if necessary.
 
 ### Header
 
