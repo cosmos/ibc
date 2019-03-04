@@ -1,7 +1,7 @@
 ---
 ics: 1
 title: ICS Specification Standard
-stage: proposal
+stage: draft
 category: meta
 author: Christopher Goes <cwgoes@tendermint.com>
 created: 2019-02-12
