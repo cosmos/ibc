@@ -26,7 +26,7 @@ Inter-chain standards should *not* be used for proposing changes to a particular
 (such as the Cosmos Hub), specifying implementation particulars (such as language-specific data structures),
 or debating governance proposals on existing Cosmos blockchains (although it is possible
 that individual blockchains in the Cosmos ecosystem may utilize their governance processes
-to approve or reject interchain standards).
+to approve or reject inter-chain standards).
 
 ## Components
 
@@ -55,7 +55,7 @@ See [README.md](../../README.md) for a description of the ICS acceptance stages.
 - `ibc`  - A standard about the inter-blockchain communication system
 - `util` - A standard about utility features, e.g. message signing
 
-`author` - ICS author(s) & contact information (in order of preference: email, Github handle, Twitter handle, other contact methods).
+`author` - ICS author(s) & contact information (in order of preference: email, GitHub handle, Twitter handle, other contact methods).
            The first author is the primary "owner" of the ICS and is responsible for advancing it through the standardization process.
            Subsequent author ordering should be in order of contribution amount.
 
@@ -83,7 +83,7 @@ description of and rationale for the specification.
 The specification section is the main component of an ICS, and should contain protocol documentation, design rationale,
 required references, and technical details where appropriate.
 
-#### Subcomponents
+#### Sub-components
 
 ### History
 
@@ -99,9 +99,9 @@ An ICS should include a copyright section waiving rights via [CC0](https://creat
 
 ### General
 
-ICS specifications must be written in Github-flavored Markdown.
+ICS specifications must be written in GitHub-flavored Markdown.
 
-For a Github-flavored Markdown cheat sheet, see [here](https://github.com/adam-p/markdown-here/wiki/Markdown-Cheatsheet). For a local Markdown renderer, see [here](https://github.com/joeyespo/grip).
+For a GitHub-flavored Markdown cheat sheet, see [here](https://github.com/adam-p/markdown-here/wiki/Markdown-Cheatsheet). For a local Markdown renderer, see [here](https://github.com/joeyespo/grip).
 
 ### Language
 
