@@ -10,9 +10,15 @@ modified: 2019-03-04
 
 ## What is an ICS?
 
+An inter-chain standard (ICS)
+
 ## Components
 
+An ICS consists of a header, synopsis, specification, history log, and copyright notice. All top-level sections are required.
+
 ### Header
+
+An ICS header contains metadata relevant to the ICS.
 
 #### Required fields
 
@@ -53,10 +59,25 @@ See [README.md](../../README.md) for a description of the ICS acceptance stages.
 
 ### Synopsis
 
-Following the header, each ICS should include a brief (~200 word) synopsis providing a high-level
+Following the header, an ICS should include a brief (~200 word) synopsis providing a high-level
 description of and rationale for the specification.
 
 ### Specification
+
+The specification section is the main component of an ICS, and should contain protocol documentation, design rationale,
+required references, and technical details where appropriate.
+
+#### Subcomponents
+
+### History
+
+An ICS should include a history section, listing any inspiring documents and a plaintext log of significant changes.
+
+See an example history section [below](#history-1).
+
+### Copyright
+
+An ICS should include a copyright section waiving rights via [CC0](https://creativecommons.org/publicdomain/zero/1.0/).
 
 ## Formatting
 
