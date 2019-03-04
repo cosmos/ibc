@@ -12,7 +12,7 @@ modified: 2019-03-04
 
 An inter-chain standard (ICS) is a design document describing a particular protocol,
 standard, or feature expected to be of use to the Cosmos ecosystem.
-An ICS should list the desiderata of the standard, explain the design rationale, and
+An ICS should list the desired properties of the standard, explain the design rationale, and
 provide a concise but comprehensive technical specification. The primary ICS author
 is responsible for pushing the proposal through the standardization process, soliciting
 input and support from the community, and communicating with relevant stakeholders to
@@ -89,7 +89,7 @@ required references, and technical details where appropriate.
 The specification may have any or all of the following sub-components, as appropriate to the particular ICS. Included sub-components should be listed in the order specified here.
 
 - *Motivation* - A rationale for the existence of the proposed feature, or the proposed changes to an existing feature.
-- *Desiderata* - A list of the desired properties or characteristics of the protocol or feature specified.
+- *Desired Properties* - A list of the desired properties or characteristics of the protocol or feature specified.
 - *Technical Specification* - All technical details of the proposed protocol including syntax, semantics, sub-protocols, data structures, algorithms, and pseudocode as appropriate.
     The technical specification should be detailed enough such that separate correct implementations of the specification without knowledge of each other are compatible.
 - *Backwards Compatibility* - A discussion of compatibility (or lack thereof) with previous feature or protocol versions.
