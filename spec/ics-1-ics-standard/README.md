@@ -89,12 +89,13 @@ required references, and technical details where appropriate.
 The specification may have any or all of the following sub-components, as appropriate to the particular ICS. Included sub-components should be listed in the order specified here.
 
 - *Motivation* - A rationale for the existence of the proposed feature, or the proposed changes to an existing feature.
-- *Desired Properties* - A list of the desired properties or characteristics of the protocol or feature specified.
+- *Desired Properties* - A list of the desired properties or characteristics of the protocol or feature specified, and expected effects or failures when the properties are violated.
 - *Technical Specification* - All technical details of the proposed protocol including syntax, semantics, sub-protocols, data structures, algorithms, and pseudocode as appropriate.
     The technical specification should be detailed enough such that separate correct implementations of the specification without knowledge of each other are compatible.
 - *Backwards Compatibility* - A discussion of compatibility (or lack thereof) with previous feature or protocol versions.
 - *Forwards Compatibility* - A discussion of compatibility (or lack thereof) with future possible or expected features or protocol versions.
-- *Implementations* - A list of candidate or finalized implementations (external references, not inline).
+- *Example Implementation* - A concrete example implementation or description of an expected implementation to serve as the primary reference for implementers.
+- *Other Implementations* - A list of candidate or finalized implementations (external references, not inline).
 
 ### History
 
