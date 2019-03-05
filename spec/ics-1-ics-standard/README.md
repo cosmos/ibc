@@ -56,7 +56,7 @@ See [README.md](../../README.md) for a description of the ICS acceptance stages.
 - `ibc`  - A standard about the inter-blockchain communication system
 - `misc` - A standard about miscellaneous / auxiliary features, e.g. message signing
 
-`author` - ICS author(s) & contact information (in order of preference: email, GitHub handle, Twitter handle, other contact methods).
+`author` - ICS author(s) & contact information (in order of preference: email, GitHub handle, Twitter handle, other contact methods likely to elicit response).
            The first author is the primary "owner" of the ICS and is responsible for advancing it through the standardization process.
            Subsequent author ordering should be in order of contribution amount.
 
@@ -120,7 +120,7 @@ ICS specifications should be written in Simple English, avoiding obscure termino
 
 ### Pseudocode
 
-Pseudocode in specifications should be language-agnostic and formatted in the CS-paper standard, with line numbers, variables, simple conditional blocks, for loops, and
+Pseudocode in specifications should be language-agnostic and formatted in a simple imperative standard, with line numbers, variables, simple conditional blocks, for loops, and
 English fragments where necessary to explain further functionality such as scheduling timeouts.
 
 Example pseudocode:
