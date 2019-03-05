@@ -53,7 +53,8 @@ See [README.md](../../README.md) for a description of the ICS acceptance stages.
 
 `category` - ICS category, one of the following:
 - `meta` - A standard about the ICS process
-- `ibc`  - A standard about the inter-blockchain communication system
+- `ibc-core` - A standard about the inter-blockchain communication system core protocol.
+- `ibc-app` - A standard about the inter-blockchain communication system application layer.
 - `misc` - A standard about miscellaneous / auxiliary features, e.g. message signing
 
 `author` - ICS author(s) & contact information (in order of preference: email, GitHub handle, Twitter handle, other contact methods likely to elicit response).
