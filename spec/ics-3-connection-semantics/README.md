@@ -1,53 +1,32 @@
----
-ics: 3
-title: Connection Semantics
-stage: Proposal
-category: ibc-core
-author: Juwoon Yun <joon@tendermint.com> Christopher Goes <cwgoes@tendermint.com>
-created: 2019-02-25
-modified: 2019-03-06
----
+# ICS 3: Connection Semantics
 
-## Abstract
+// stub for handshake, merge it to main ICS3 spec later
 
-The basis of IBC is the ability to verify in the on-chain consensus ruleset of chain `B` that a data packet received on chain `B` was correctly generated on chain `A`. This establishes a cross-chain linearity guarantee: upon validation of that packet on chain `B` we know that the packet has been executed on chain `A` and any associated logic resolved (such as assets being escrowed), and we can safely perform application logic on chain `B` (such as generating vouchers on chain `B` for the chain `A` assets which can later be redeemed with a packet in the opposite direction).
+`Connection`s are categorized into multiple categories, each defined with own state machine for handshaking and expected behaviour. In the initial protocol, there will be two kinds of connection, unidirectional and bidirectional. 
 
-## Specification
+The following definitions omits parts irrelevant to the handshaking state machine.
 
-### Motivation
+### Broadcasting
 
-### Desired Properties
+A connection can be opened without setting the counterparty. The packet pushed on the channels on this connection will persist, or be pruned after predefined amount of time. There is no guarantee about the packets.
 
-`Connection` is `[]Block` where `B` is submitted headers from the other chain and `c` is a map from `PortID` to `Channel`. 
+### Unsafe Connection
 
-1. Connection can be registered only for an empty `ChainID`
-If a `ChainID` is not allocated to any of the connections, new connection can be registered for that. This ensures that once a connection is registered, the `ChainID` is unique to identify only that chain.
+// XXX: should we rename `ChainID` to `ConnID`?
+A counterparty information can be set on a broadcasting connection. Counterpaty information `CI` is defined as `(ChainID, ROT)` where the `ChainID` is the id of the connection on the counterparty that this connection will listen on, and `ROT` is the root-of-trust `Block` of the chain that this connection will listen on.
 
-2. Connection can be updated if the new block can be verified by any of the already registered block
-If a new block is submitted to the chain, it verifies and includes the block.
+There is no guarantee about the packets those are sent from this chain, however this chain can now receive packets from the counterparty, without the ability of responding with receipts or timeout. Also the connection cannot ensure that the incoming packets are intended to arrive on them.
 
-// XXX: add connection closing
-// Should we allow the ChainIDs reusable once the connections are closed?
+Pair of (Broadcasting Connection^, Unsafe Connection^) forms an unidirectional chain, where the packet is sent from the first to the second.
 
-// XXX: should ChainID be (practically) infinite(e.g. bytes32)?
+### Safe Connection
 
+An unsafe connection can check its counterparty unsafe connection's counterparty information. If the `CI.ChainID` is same with this connection's and `CI.ROT` is one of the blocks of this chain, it means that the counterparty is correctly pointing this connection. 
 
-### Technical Specification
+There is guarantee that the packet sent from this connection will arrive at the registered counterparty, and any packet coming from the counterparty is intended to arrive on this connection.
 
-// XXX: add connection handshaking
-// XXX: add broadcasting/unidirectional/bidirectional connection
+Pair of (Safe Connection, Safe Connection) forms an bidirectional chain.
 
-// XXX: add packets for ibc connection module
-// XXX: should we send handshake message in packet format?
+### Attack Vector
 
-// XXX: add handshake handling logic
-
-### Example Implementation
-
-### Other Implementations
-
-* Cosmos-SDK: [](https://github.com/cosmos/cosmos-sdk/docs/spec/ibc)
-
-### History
-
-March 6th 2019: Initial ICS 3 draft finished and submitted as a PR
+In permissionless connection registeration, an attacker can register two connections on chain `A` both pointing connection `ChainID_A` on `B`, while it is referring only one of the connections on `A`. This is possible since both connection can pass the handshaking process as the `ROT` stored in `ChainID_A` on `B` is pointing chain `A`. One way to solve this is, in any given time, make there is only one valid `ROT` for a chain. For example, 
