@@ -8,13 +8,19 @@ created: 2019-02-25
 modified: 2019-03-05
 ---
 
-The basis of IBC is the ability to verify in the on-chain consensus ruleset of chain `B` that a data packet received on chain `B` was correctly generated on chain `A`. This establishes a cross-chain linearity guarantee: upon validation of that packet on chain `B` we know that the packet has been executed on chain `A` and any associated logic resolved (such as assets being escrowed), and we can safely perform application logic on chain `B` (such as generating vouchers on chain `B` for the chain `A` assets which can later be redeemed with a packet in the opposite direction). 
+The IBC protocol creates a mechanism by which two replicated fault-tolerant state machines may pass messages to each other. These messages provide a base layer for the creation of communicating blockchain architecture that overcomes challenges in the scalability and extensibility of computing blockchain environments.
 
-In order to verify an incoming packet, the blockchain should be able to check 1. whether the block is valid and 2. whether the packet is included in the block or not. In this proposal, we introduce the generalized concept for blockchains, called `Block`. `Block` requires its consensus algorithm to satisfy some properties, including deterministic safety, lightclient compatibility and valid transition of the state machine. This makes the linearity of the packets guaranteed.
+The IBC protocol assumes that multiple applications are running on their own blockchain with their own state and own logic. Communication is achieved over an ordered message queue primitive, allowing the creation of complex inter-chain processes without trusted third parties.
+
+The message packets are not signed by one psuedonymous account, or even multiple, as in multi-signature sidechain implementations. Rather, IBC assigns authorization of the packets to the source blockchain's consensus algorithm, performing light-client style verification on the destination chain. The Byzantine-fault-tolerant properties of the underlying blockchains are preserved: a user transferring assets between two chains using IBC must trust only the consensus algorithms of both chains.
+
+In order to achive this, a blockchain should be able to check 1. whether the block is valid and 2. whether the packet is included in the block or not. In this proposal, we introduce an abstract concept of blockchains, called `Block`. `Block` requires its consensus algorithm to satisfy some properties, including deterministic safety, lightclient compatibility and valid transition of the state machine.
 
 ## Specification
 
 ### Motivation
+
+`Block` defines required properties of the blockchain on the network. The implementors can check whether the consensus that they are using is qualified to be connected to the network or not. If not, they can modify the algorithm or wrap it with additional logic to make it compatible with the specification.
 
 ### Desired Properties
 
@@ -60,16 +66,14 @@ Returns the connection for `ChainID` as defined in **connection semantics**. Can
 * `channel : Header -> ChainID -> PortID -> Channel`
 Returns the channel for `(ChainID, PortID)` pair, as defined in **channel semantics**. Can take an additional set member proof argument.
 
-### Forwards Compatibility
-
 ### Example Implementation
 
 An example blockchain `B` is run by a single operator. If a block is signed by the operator, then it is valid. `B` contains `KVStore`, which is a mapping from `[byte]` to  `[byte]`. 
 
 ```
-type B = (Maybe<B>, Height, OperatorPubKey, OperatorSig, KVStore)
+type B = (Maybe<B>, Height, OperatorPubKey, Sig, KVStore)
 height(B) = B.Height
-verify(B1, B2) = B1.OperatorPubKey == B2.OperatorPubKey && B2.OperatorSig.Verify(B2.Hash())
+verify(B1, B2) = B1.OperatorPubKey == B2.OperatorPubKey && B2.OperatorPubKey.Verify(B2.Sig, B2.Hash())
 connection(B, ChainID) = Con(B.KVStore.Prefix([0x00] + ChainID))
 channel(B, ChainID, PortID) = Ch(B.KVStore.Prefix([0x01] + ChainID + PotID))
 ```
