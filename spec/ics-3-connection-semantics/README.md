@@ -18,7 +18,7 @@ In order to verify an incoming packet, the blockchain should be able to check 1.
 
 ### Desired Properties
 
-`Block` is `(p Maybe<Block>, v func(Block) bool, s func(ChainID) Maybe<(Connection, func(PortID) Channel)>)` where `p` is parent block, `v` is lightclient verifier and `s` is state. The other parts of the protocol, such as connections and channels, are defined over `Block`s, so if a blockchain wants to establish an IBC communication with another, it is required to satisfy the properties of `Block`. 
+`Block` is `(p : Maybe<Block>, v : Block -> bool, s : ChainID -> Maybe<(Connection, PortID -> Channel))` where `p` is parent block, `v` is lightclient verifier and `s` is state. The other parts of the protocol, such as connections and channels, are defined over `Block`s, so if a blockchain wants to establish an IBC communication with another, it is required to satisfy the properties of `Block`. 
 
 Definitions:
 
@@ -42,24 +42,41 @@ Block cannot have a state which is not a transition from its parent. Since the s
 These requirements allow channels to work safely without concerning about double spending attack. 
 If a block is submitted to the chain(and optionally passed some challenge period for fraud proof), then it is assured that the packet is finalized so the application logic can process it.
 
-
 ### Technical Specification
 
-Following functions exist over `Block`s.
+In a real world, `Block`s do not have to contain the full state data; it can contain an aggregated data set identifier, for example a merkle root, where the actual data latter given can be proven that it is a member of that set. If we don't consider about the data availability problem, this partial blocks, which is be called `Header`s, still satisfies `Block`.
 
-* `height : Block -> int`
+Following functions exist over `Header`s.
+
+* `height : Header -> int`
 Returns the height of the block.
 
-* `verify : Block -> Block -> bool`
+* `verify : Header -> Header -> Maybe<LightClientProof> -> bool`
 Verifies the latter block is a descendant of the former block, as defined in **lightclient specification**. Can take an additional lightclient proof argument.
 
-* `connection : Block -> ChainID -> Connection`
-Returns the connection for `ChainID` as defined in **connection semantics**
+* `connection : Header -> ChainID -> Maybe<MemberProof> -> Connection`
+Returns the connection for `ChainID` as defined in **connection semantics**. Can take an additional set member proof argument.
 
-* `channel : Block -> ChainID -> PortID -> Channel`
-Returns the channel for `(ChainID, PortID)` pair, as defined in **channel semantics**
+* `channel : Header -> ChainID -> PortID -> Channel`
+Returns the channel for `(ChainID, PortID)` pair, as defined in **channel semantics**. Can take an additional set member proof argument.
 
-### Implementations
+### Forwards Compatibility
+
+### Example Implementation
+
+An example blockchain `B` is run by a single operator. If a block is signed by the operator, then it is valid. `B` contains `KVStore`, which is a mapping from `[byte]` to  `[byte]`. 
+
+```
+type B = (Maybe<B>, Height, OperatorPubKey, OperatorSig, KVStore)
+height(B) = B.Height
+verify(B1, B2) = B1.OperatorPubKey == B2.OperatorPubKey && B2.OperatorSig.Verify(B2.Hash())
+connection(B, ChainID) = Con(B.KVStore.Prefix([0x00] + ChainID))
+channel(B, ChainID, PortID) = Ch(B.KVStore.Prefix([0x01] + ChainID + PotID))
+```
+
+Where `Con` and `Ch` satisfies `Connection` and `Channel`.
+
+### Other Implementations
 
 * Cosmos-SDK: [](https://github.com/cosmos/cosmos-sdk/x/ibc)  
 
