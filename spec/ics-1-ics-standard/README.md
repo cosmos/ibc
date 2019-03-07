@@ -123,7 +123,8 @@ ICS specifications should be written in Simple English, avoiding obscure termino
 ### Pseudocode
 
 Pseudocode in specifications should be language-agnostic and formatted in a simple imperative standard, with line numbers, variables, simple conditional blocks, for loops, and
-English fragments where necessary to explain further functionality such as scheduling timeouts.
+English fragments where necessary to explain further functionality such as scheduling timeouts. If desired, images can be generated with LaTeX and rendered in Markdown - if this
+is done, LaTeX source code should be included.
 
 Example pseudocode:
 
@@ -148,6 +149,7 @@ was in turn derived from Bitcoin's BIP process and Python's PEP process. Anteced
 the ICS process. Please direct all comments to the ICS repository maintainers.
 
 March 4th, 2019: Initial ICS 1 draft finished and submitted as a PR
+March 7th, 2019: ICS 1 draft merged
 
 ## Copyright
 
