@@ -49,6 +49,21 @@ second pre-image attacks, as well as being
 <code>verify<sub>pk</sub>(x, H) → true|false</code> which provide digital
 signatures over a set of bytes and verification of signatures respectively.
 
+Tendermint has a well established protocol for signing messages using a canonical
+JSON representation as defined [here](https://github.com/tendermint/tendermint/blob/master/types/canonical.go). With the given canonical JSON structure, the specification requires
+that they include the meta fields `@chain_id` and `@type`, both of which are strings.
+These meta fields are **reserved** and **must** be included. In addition, the fields
+must be ordered in lexicographically ascending order.
+
+For the purposes of signing Cosmos messages, the `@chain_id` field must correspond
+to the Cosmos chain identifier. The user-agent should **refuse** signing if the
+`@chain_id` field does not match the currently active chain! The `@type` field
+corresponds to the type of structure the user will be signing in an application.
+
+Finally, the JSON representation must also include a `data` field whose value is
+specific to the application and where the type corresponds to the value defined
+by `@type`.
+
 ### Backwards Compatibility
 
 (discussion of compatibility or lack thereof with previous standards)
