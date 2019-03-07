@@ -64,10 +64,13 @@ Having the ability to support domain separation of messages is also be vital as
 just simply encoding messages is not sufficient. For example, some applications
 may produce identical messages or structures and when signed can be valid on
 both applications. Thus an optional field `domain_separator` may be provided which
-is intended to include data that is specific to the application. Finally, the
-JSON representation must also include a `data` field which is the application-specific
-user supplied message and where the type corresponds to the value defined by the
-`@type` field.
+is intended to include data that is specific to the application. In addition,
+client may provide optional replay protection data via the fields `nonce`,
+`block_height`, and `timestamp`.
+
+Finally, the JSON representation must also include a `data` field which is the
+application-specific user supplied message and where the type corresponds to the
+value defined by the `@type` field.
 
 > __Note__: For now, the specification requires that a user is only allowed to
 sign bytes of [valid](https://github.com/tendermint/tendermint/blob/master/libs/common/string.go#L61-L74) ASCII text. This requires that the `@type` field equals `"message"`.
@@ -104,9 +107,23 @@ the [JSON schema](http://json-schema.org/) specification:
     },
     "domain_separator": {
       "type": "string",
-      "description": "The application domain separator.",
+      "description": "The application unique domain separator.",
       "pattern": "^[\\x20-\\x7E]+$",
       "minLength": 1
+    },
+    "nonce": {
+      "type": "integer",
+      "description": "The account nonce.",
+      "minimum": 0
+    },
+    "block_height": {
+      "type": "integer",
+      "description": "The chain block height.",
+      "minimum": 0
+    },
+    "timestamp": {
+      "type": "integer",
+      "minimum": 0
     }
   },
   "required": [
@@ -116,14 +133,6 @@ the [JSON schema](http://json-schema.org/) specification:
   ]
 }
 ```
-
-We define the following operations in signing and verifying Cosmos messages:
-
-TODO:
-
-#### Replay Protection
-
-TODO:
 
 ### Backwards Compatibility
 
