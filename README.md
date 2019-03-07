@@ -1,6 +1,10 @@
 # Interchain Standards Development
 
-This repository is for standards development of Interchain Standards. Initially it will be used to solicit and integrate feedback on IBC (Inter-blockchain Communication) Protocol specification development. We propose usage of an adaptation of the [TC 39](https://tc39.github.io/process-document/) process used by the ECMAScript steering committee.
+This repository is the canonical location for development and documentation of inter-chain standards utilized by the Cosmos ecosystem. Initially it will be used to consolidate design documentation for the inter-blockchain communication protocol (IBC), encoding standards for Cosmos chains, and miscellaneous utilities such as off-chain message signing.
+
+Inter-chain standardization will follow an adaptation of the [TC 39](https://tc39.github.io/process-document/) process used by the ECMAScript steering committee. Please see [ICS 1](spec/ics-1-ics-standard) for a description of what a standard entails.
+
+To start a new standard document, copy the [template](spec/ics-template.md).
 
 ## Cosmos Interchain Specification Proposal Process
 
