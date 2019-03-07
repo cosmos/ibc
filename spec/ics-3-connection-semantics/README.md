@@ -120,11 +120,11 @@ Closure may be permissioned to an on-chain governance system, an identifiable pa
 
 ### Backwards Compatibility
 
-(discussion of compability or lack thereof with previous standards)
+(discussion of compatibility or lack thereof with previous standards)
 
 ### Forwards Compatibility
 
-(discussion of compability or lack thereof with expected future standards)
+(discussion of compatibility or lack thereof with expected future standards)
 
 ### Example Implementation
 
