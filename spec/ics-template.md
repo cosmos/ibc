@@ -14,6 +14,8 @@ modified: (modification date)
 
 ## Specification
 
+(main part of standard document - not all subsections are required)
+
 ### Motivation
 
 (rationale for existence of standard)
