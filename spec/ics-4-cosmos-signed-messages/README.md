@@ -26,12 +26,31 @@ implemented by the Cosmos SDK and other third-party organizations is needed.
 
 ### Desired Properties
 
-The Cosmos signed messages specification has the following desired properties:
+The Cosmos signed messages standardized protocol subscribes to the following:
 
 * Use of a secure cryptographic hash function
 * Hash and sign over human-readable and machine-parsable messages
+* Is invulnerable to chosen ciphertext attacks
 * Allow for signing over structured data
-* Have builtin support for domain separation and replay protection
+* Contains a framework for deterministic and injective encoding of structured data
+* Have builtin framework and support for domain separation and replay protection
+* Has protection against potentially signing transactions a user did not intend to
+
+### Technical Specification
+
+(detailed technical specification: syntax, semantics, sub-protocols, algorithms, data structures, etc)
+
+### Backwards Compatibility
+
+(discussion of compatibility or lack thereof with previous standards)
+
+### Forwards Compatibility
+
+(discussion of compatibility or lack thereof with expected future standards)
+
+### Example Implementation
+
+(link to or description of concrete example implementation)
 
 ## History
 
