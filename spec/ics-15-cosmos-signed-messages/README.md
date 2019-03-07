@@ -40,13 +40,13 @@ pre-image attacks)
 ### Technical Specification
 
 The Cosmos message signing protocol will be parameterized over a secure
-cryptographic hash function `H(x) → y` and a public key DSA `S → (sk, pk)`, where
+cryptographic hash function `y ← H(x)` and a public key DSA `(sk,pk) ← S`, where
 `H` satisfies the desired properties such as having resistance to collision and
 second pre-image attacks, as well as being
 [deterministic](https://en.wikipedia.org/wiki/Hash_function#Determinism) and
 [uniform](https://en.wikipedia.org/wiki/Hash_function#Uniformity) and where
-`S` contains the operations <code>sign<sub>sk</sub>(x) → y</code> and
-<code>verify<sub>pk</sub>(x, H) → true|false</code> which provide digital
+`S` contains the operations <code>sign<sub>sk</sub>(x) → z</code> and
+<code>verify<sub>pk</sub>(x,z,H) → true|false</code> which provide digital
 signatures over a set of bytes and verification of signatures respectively.
 
 Tendermint has a well established protocol for signing messages using a canonical
@@ -133,6 +133,10 @@ the [JSON schema](http://json-schema.org/) specification:
   ]
 }
 ```
+
+We can formally specify the Cosmos message signing protocol as follows.
+Given a message `m` that adheres to the JSON schema defined and `M`, the set of
+all possible valid messages: <code>∀m ∈ M, z ← sign<sub>sk</sub>(H(m))</code>.
 
 ### Backwards Compatibility
 
