@@ -60,9 +60,13 @@ to the Cosmos chain identifier. The user-agent should **refuse** signing if the
 `@chain_id` field does not match the currently active chain! The `@type` field
 corresponds to the type of structure the user will be signing in an application.
 
-Finally, the JSON representation must also include a `data` field whose value is
-specific to the application and where the type corresponds to the value defined
-by `@type`.
+Finally, the JSON representation must also include a `data` field where the type
+corresponds to the value defined by the `@type` field.
+
+> __Note__: For now, the specification requires that a user is only allowed to
+sign bytes of [valid](https://github.com/tendermint/tendermint/blob/master/libs/common/string.go#L61-L74) ASCII text. This requires that `@type` equals `"message"`.
+However, this will change and evolve to support additional application-specific
+structures that are human-readable and machine-verifiable (see below).
 
 ### Backwards Compatibility
 
