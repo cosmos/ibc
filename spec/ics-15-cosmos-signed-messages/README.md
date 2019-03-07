@@ -68,6 +68,43 @@ sign bytes of [valid](https://github.com/tendermint/tendermint/blob/master/libs/
 However, this will change and evolve to support additional application-specific
 structures that are human-readable and machine-verifiable (see below).
 
+Thus, we can have a canonical JSON structure for signing Cosmos messages using
+the [JSON schema](http://json-schema.org/) specification:
+
+```json
+{
+  "$schema": "http://json-schema.org/draft-04/schema#",
+  "$id": "cosmos/signing/typeData/schema",
+  "title": "The Cosmos signed message typed data schema.",
+  "type": "object",
+  "properties": {
+    "@chain_id": {
+      "type": "string",
+      "description": "The corresponding Cosmos chain identifier.",
+      "minLength": 1
+    },
+    "@type": {
+      "type": "string",
+      "description": "The message type. It must be 'message'.",
+      "enum": [
+        "message"
+      ]
+    },
+    "data": {
+      "type": "string",
+      "description": "The valid ASCII text to sign.",
+      "pattern": "^[\\x20-\\x7E]+$",
+      "minLength": 1
+    }
+  },
+  "required": [
+    "@chain_id",
+    "@type",
+    "data"
+  ]
+}
+```
+
 ### Backwards Compatibility
 
 (discussion of compatibility or lack thereof with previous standards)
