@@ -1,5 +1,5 @@
 ---
-ics: 4
+ics: 15
 title: Cosmos Signed Messages
 stage: draft
 category: misc
@@ -26,9 +26,10 @@ implemented by the Cosmos SDK and other third-party organizations is needed.
 
 ### Desired Properties
 
-The Cosmos signed messages standardized protocol subscribes to the following:
+The Cosmos message signing standardized protocol subscribes to the following:
 
-* Use of a secure cryptographic hash function
+* Use of a secure cryptographic hash function (e.g. resistance to collision and second
+pre-image attacks)
 * Hash and sign over human-readable and machine-parsable messages
 * Is invulnerable to chosen ciphertext attacks
 * Allow for signing over structured data
@@ -38,7 +39,15 @@ The Cosmos signed messages standardized protocol subscribes to the following:
 
 ### Technical Specification
 
-(detailed technical specification: syntax, semantics, sub-protocols, algorithms, data structures, etc)
+The Cosmos message signing protocol will be parameterized over a secure
+cryptographic hash function `H(x) → y` and a public key DSA `S → (sk, pk)`, where
+`H` satisfies the desired properties such as having resistance to collision and
+second pre-image attacks, as well as being
+[deterministic](https://en.wikipedia.org/wiki/Hash_function#Determinism) and
+[uniform](https://en.wikipedia.org/wiki/Hash_function#Uniformity) and where
+`S` contains the operations <code>sign<sub>sk</sub>(x) → y</code> and
+<code>verify<sub>pk</sub>(x, H) → true|false</code> which provide digital
+signatures over a set of bytes and verification of signatures respectively.
 
 ### Backwards Compatibility
 
@@ -53,6 +62,8 @@ The Cosmos signed messages standardized protocol subscribes to the following:
 (link to or description of concrete example implementation)
 
 ## History
+
+2019-03-07: Initial ICS 1 draft finished and submitted as a PR
 
 ## Copyright
 
