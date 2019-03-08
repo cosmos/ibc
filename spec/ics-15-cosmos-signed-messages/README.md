@@ -8,7 +8,7 @@ created: 2019-03-07
 modified: 2019-03-07
 ---
 
-## Synopsis
+# Synopsis
 
 Having the ability to sign messages off-chain has proven to be a fundamental aspect
 of nearly any blockchain. The notion of signing messages off-chain has many
@@ -22,9 +22,9 @@ having the ability to sign Cosmos messages with a Ledger or similar HSM device.
 A standardized protocol for hashing, signing, and verifying messages that can be
 implemented by the Cosmos SDK and other third-party organizations is needed.
 
-## Specification
+# Specification
 
-### Desired Properties
+## Desired Properties
 
 The Cosmos message signing standardized protocol subscribes to the following:
 
@@ -37,7 +37,7 @@ pre-image attacks)
 * Have builtin framework and support for domain separation and replay protection
 * Has protection against potentially signing transactions a user did not intend to
 
-### Technical Specification
+## Technical Specification
 
 The Cosmos message signing protocol will be parameterized over a secure
 cryptographic hash function `y ← H(x)` and a public key DSA `(sk,pk) ← S`, where
@@ -138,10 +138,10 @@ We can formally specify the Cosmos message signing protocol as follows.
 Given a message `m` that adheres to the JSON schema defined and `M`, the set of
 all possible valid messages: <code>∀m ∈ M, z ← sign<sub>sk</sub>(H(m))</code>.
 
-## History
+# History
 
 2019-03-07: Initial ICS 1 draft finished and submitted as a PR
 
-## Copyright
+# Copyright
 
 Copyright and related rights waived via [CC0](https://creativecommons.org/publicdomain/zero/1.0/).
