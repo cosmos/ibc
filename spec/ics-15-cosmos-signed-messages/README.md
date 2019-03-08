@@ -59,6 +59,9 @@ For the purposes of signing Cosmos messages, the `@chain_id` field must correspo
 to the Cosmos chain identifier. The user-agent should **refuse** signing if the
 `@chain_id` field does not match the currently active chain! The `@type` field
 corresponds to the type of structure the user will be signing in an application.
+The protocol allows for signing valid ASCII text and application-specific objects.
+In the former case, the `@type` must be `"message"` and the latter case `@type`
+must be `"object"`.
 
 Having the ability to support domain separation of messages is also be vital as
 just simply encoding messages is not sufficient. For example, some applications
@@ -70,12 +73,8 @@ client may provide optional replay protection data via the fields `nonce`,
 
 Finally, the JSON representation must also include a `data` field which is the
 application-specific user supplied message and where the type corresponds to the
-value defined by the `@type` field.
-
-> __Note__: For now, the specification requires that a user is only allowed to
-sign bytes of [valid](https://github.com/tendermint/tendermint/blob/master/libs/common/string.go#L61-L74) ASCII text. This requires that the `@type` field equals `"message"`.
-However, this will change and evolve to support additional application-specific
-structures that are human-readable and machine-verifiable (see below).
+value defined by the `@type` field. This must be valid ASCII text or
+an application-specific object.
 
 Thus, we can have a canonical JSON structure for signing Cosmos messages using
 the [JSON schema](http://json-schema.org/) specification:
@@ -94,14 +93,15 @@ the [JSON schema](http://json-schema.org/) specification:
     },
     "@type": {
       "type": "string",
-      "description": "The message type. It must be 'message'.",
+      "description": "The message type.",
       "enum": [
-        "message"
+        "message",
+        "object"
       ]
     },
     "data": {
-      "type": "string",
-      "description": "The valid ASCII text to sign.",
+      "type": ["string", "object"],
+      "description": "The application message.",
       "pattern": "^[\\x20-\\x7E]+$",
       "minLength": 1
     },
@@ -137,18 +137,6 @@ the [JSON schema](http://json-schema.org/) specification:
 We can formally specify the Cosmos message signing protocol as follows.
 Given a message `m` that adheres to the JSON schema defined and `M`, the set of
 all possible valid messages: <code>∀m ∈ M, z ← sign<sub>sk</sub>(H(m))</code>.
-
-### Backwards Compatibility
-
-(discussion of compatibility or lack thereof with previous standards)
-
-### Forwards Compatibility
-
-(discussion of compatibility or lack thereof with expected future standards)
-
-### Example Implementation
-
-(link to or description of concrete example implementation)
 
 ## History
 
