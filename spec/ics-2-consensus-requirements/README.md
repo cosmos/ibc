@@ -1,7 +1,7 @@
 ---
 ics: 2
 title: Consensus Requirements
-stage: Proposal
+stage: proposal
 category: ibc-core
 author: Juwoon Yun <joon@tendermint.com> Christopher Goes <cwgoes@tendermint.com>
 created: 2019-02-25
