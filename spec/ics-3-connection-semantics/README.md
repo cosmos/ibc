@@ -1,4 +1,5 @@
 ---
+
 ics: 3
 title: Connection Semantics & Lifecycle
 stage: proposal
@@ -18,11 +19,13 @@ This standards document outlines the abstraction of an IBC _connection_: the sta
 
 ### Motivation
 
-(rationale for existence of standard)
+- Connection = cross-chain light client state.
+- Between two chains `A` and `B`.
+- Permissionless opening / closing / updates.
 
 ### Desired Properties
 
-(desired characteristics / properties of protocol, effects if properties are violated)
+- Permissionless channel opening / channel closing / channel updates.
 
 #### Pre-Establishment
 
@@ -88,13 +91,19 @@ Establishing a bidirectional initial root-of-trust between the two blockchains (
 
 Any header may be from a malicious chain (e.g. shadowing a real chain state with a fake validator set), so a subjective decision is required before establishing a connection. This can be performed permissionlessly, in which case users later utilizing the IBC channel must check the root-of-trust themselves, or authorized by on-chain governance for additional assurance.
 
+*THREE WAY HANDSHAKE OUTLINE*
+
 ###### OPENTRY
 
 First datagram, A -> B
 
+Provided input:
+- Commitment to root-of-trust for B
+
 On A:
 - Reserve connection slot
 - Prove reserved connection slot (is this necessary?)
+- Prove commitment to root-of-trust for B
 
 Data:
 - Root-of-trust for A
@@ -135,6 +144,8 @@ Forgery: Any B' could commit ACK packet on A (unless RoT-hash is included; alter
 DoS concerns? Can just make it expensive and retry?
 
 Or maybe we just require OPENTRY start with a root-of-trust for B - then only B could commit `OPENACK`.
+Then we should just need a two-way handshake?
+... I think this makes more sense.
 
 ###### OPENCONFIRM
 
@@ -154,6 +165,10 @@ Timeout (committing on B):
 - On B: Connection timeout frees slot *OR* second datagram to prove deleted pending connection, slot on B then freed (eventually)
 
 Forgery: Only A could commit `OPENCONFIRM` since root-of-trust for A is now stored on B.
+
+*TWO WAY HANDSHAKE OUTLINE*
+
+The same thing, except `OPENTRY` provides a proof that B's root-of-trust has been stored, and the connection on B is opened after `OPENACK` is sent from B to A.
 
 ##### Following headers
 
