@@ -24,6 +24,23 @@ This standards document outlines the abstraction of an IBC _connection_: the sta
 
 (desired characteristics / properties of protocol, effects if properties are violated)
 
+#### Pre-Establishment
+
+- Guarantees that no packets can be committed on other connections?
+- No required a priori root-of-trust knowledge
+
+#### During Handshake
+
+Once a negotiation handshake has *begun* (defined as the first packet being committed):
+
+- Only the appropriate handshake packets can be committed in order
+- No chain can masquerade as one of the handshaking chains (formalize...)
+
+#### Post-Establishment
+
+- Connection provides verification of relayed packets
+- No packets other than committed by consensus of *A* / *B* on connection *C* can be relayed
+
 ### Technical Specification
 
 (detailed technical specification: syntax, semantics, sub-protocols, algorithms, data structures, etc)
@@ -41,6 +58,8 @@ This standards document outlines the abstraction of an IBC _connection_: the sta
 Note that of all these, only `H_h` defines a signature and is thus attributable.
 
 #### Requirements
+
+(reference ICS 2: consensus primitives)
 
 To facilitate an IBC connection, the two blockchains must provide the following proofs:
 
