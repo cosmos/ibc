@@ -28,6 +28,7 @@ This standards document outlines the abstraction of an IBC _connection_: the sta
 
 - Guarantees that no packets can be committed on other connections?
 - No required a priori root-of-trust knowledge
+- Only one connection "between" two chains
 
 #### During Handshake
 
@@ -86,6 +87,73 @@ All proofs require an initial `H_h` and `C_h` for some `h`, where `dt(now, H_h) 
 Establishing a bidirectional initial root-of-trust between the two blockchains (`A` to `B` and `B` to `A`) — `H_ah` and `C_ah` stored on chain `B`, and `H_bh` and `C_bh` stored on chain `A` — is necessary before any IBC packets can be sent.
 
 Any header may be from a malicious chain (e.g. shadowing a real chain state with a fake validator set), so a subjective decision is required before establishing a connection. This can be performed permissionlessly, in which case users later utilizing the IBC channel must check the root-of-trust themselves, or authorized by on-chain governance for additional assurance.
+
+###### OPENTRY
+
+First datagram, A -> B
+
+On A:
+- Reserve connection slot
+- Prove reserved connection slot (is this necessary?)
+
+Data:
+- Root-of-trust for A
+- Connection slot identifier on A
+- Desired connection slot identifier on B
+- Proof of reserved connection slot identifier on A
+
+On B:
+- Check slot identifier
+- Ensure no existing root-of-trust for A
+- Store root-of-trust for A ~= connection identifier
+
+Timeout (committing on B) = stored RoT deleted, connection slot unreserved.
+
+Forgery: Any A' could commit such a packet on B. Only guarantee: non-duplication.
+
+###### OPENACK
+
+Second datagram, B -> A
+
+On B:
+- Prove stored root-of-trust for A in desired connection slot identifier
+
+Data:
+- Root-of-trust for B
+- Proof of stored root-of-trust for A in desired connection slot identifier
+
+On A:
+- Store root-of-trust for B ~= connection identifier
+- Connection now "open" on A
+
+Timeout (committing on A)
+- On B: Slot unreserved, root-of-trust for A deleted
+- On A: Connection timeout frees slot *OR* second datagram to prove unreserved slot, termined handshake can then free slot on A (eventually)
+
+Forgery: Any B' could commit ACK packet on A (unless RoT-hash is included; alternative version). Only guarantee: non-duplication.
+
+DoS concerns? Can just make it expensive and retry?
+
+Or maybe we just require OPENTRY start with a root-of-trust for B - then only B could commit `OPENACK`.
+
+###### OPENCONFIRM
+
+Third datagram, A -> B
+
+On A:
+- Prove stored root-of-trust for B
+
+Data:
+- Proof of stored root-of-trust for B
+
+On B:
+- Connection now "open" on B
+
+Timeout (committing on B):
+- On A: Pending connection deleted.
+- On B: Connection timeout frees slot *OR* second datagram to prove deleted pending connection, slot on B then freed (eventually)
+
+Forgery: Only A could commit `OPENCONFIRM` since root-of-trust for A is now stored on B.
 
 ##### Following headers
 
