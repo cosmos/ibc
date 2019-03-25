@@ -14,8 +14,10 @@ See [PROCESS.md](PROCESS.md) for a description of the standardization process.
 
 ## Interchain Standards
 
-All standards in the "draft" stage are listed here in order of their ICS numbers.
+All standards in the "draft" stage are listed here in order of their ICS numbers, sorted by category.
 
-| Interchain Standard Number   | Standard Title             | Stage | Category |
-| ---------------------------- | -------------------------- | ----- | -------- |
-| [1](spec/ics-1-ics-standard) | ICS Specification Standard | Draft | Meta     |
+### Meta
+
+| Interchain Standard Number   | Standard Title             | Stage |
+| ---------------------------- | -------------------------- | ----- |
+| [1](spec/ics-1-ics-standard) | ICS Specification Standard | Draft |
