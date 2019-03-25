@@ -57,6 +57,7 @@ Inter-chain standardization will follow an adaptation of the [TC 39](https://tc3
   * Specification-compliant
 
 #### Stage 4 - `Finalized`
+
 - _**Purpose**_:
   * Indicate that the addition is included in the formal ICS standard set
 - _**Entrance Criteria**_:
