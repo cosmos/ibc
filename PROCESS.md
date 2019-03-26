@@ -5,7 +5,7 @@ Inter-chain standardization will follow an adaptation of the [TC 39](https://tc3
 #### Stage 1 - `Strawman`
 
 - _**Purpose**_: Start the specification process
-- _**Entrance Criteria**_: [Open an issue](https://github.com/cosmos/ics/issues/new) on this repository with a short outline of your proposal and a specification nane.
+- _**Entrance Criteria**_: [Open an issue](https://github.com/cosmos/ics/issues/new) on this repository with a short outline of your proposal and a specification name.
 - _**Acceptance Requirements**_: No acceptance required to move to the next stage. Keep the issue around to track the specification status, and close it when the final specification is merged or the proposal abandoned.
 - _**Spec Quality**_: Outline only. Link to any prior documentation, discussion, or reference materials.
 - _**Changes Expected Post-Acceptance**_: N/A
@@ -15,7 +15,7 @@ Inter-chain standardization will follow an adaptation of the [TC 39](https://tc3
 
 - _**Purpose**_:
   * Make the case for the addition of this specification to the Cosmos ecosystem
-  * Describe the shape of the a potential solution
+  * Describe the shape of a potential solution
   * Identify challenges to this proposal
 - _**Entrance Criteria**_:
   * Prose outlining the problem or need and the general shape of a solution in a PR to a `./spec/ics-{{ .Spec.Number }}-{{ .Spec.Name }}/README.md` file in this repo.
@@ -26,7 +26,7 @@ Inter-chain standardization will follow an adaptation of the [TC 39](https://tc3
     1. Identification of potential design tradeoffs and implementation challenges/complexity
     See [ICS 1](spec/ics-1-ics-standard) for a more detailed description of standard requirements.
   * Identified `author(s)` who will advance the proposal in the header of the standard file
-  * Any additional reference documentation or media in the `./spec/{{ .Spec.Number }}-{{ .Spec.Name }}` directory
+  * Any additional reference documentation or media in the `./spec/ics-{{ .Spec.Number }}-{{ .Spec.Name }}` directory
   * The specification team expects that this proposal will be finalized and eventually included in the ICS standard set.
 - _**Spec Quality**_:
   * Follows the structure laid out in ICS 1 and provides a reasonable overview of the proposed addition.
@@ -48,7 +48,7 @@ Inter-chain standardization will follow an adaptation of the [TC 39](https://tc3
   * All relevant ecosystem stakeholders have been given a chance to review and provide feedback on the standard
   * The solution is complete and no further work is possible without implementation experience, significant usage and external feedback.
 - _**Spec Quality**_:
-  * Complete: all semantics, syntax and API are completed described
+  * Complete: all semantics, syntax and API are completed as described
 - _**Acceptance Requirements**_:
   * The PR changing the stage to "candidate" has been approved by two members of the core specification team.
 - _**Changes Expected Post-Acceptance**_:
@@ -64,8 +64,8 @@ Inter-chain standardization will follow an adaptation of the [TC 39](https://tc3
   * Everything from stages 1,2,3
   * At least two specification-compatible implementations exist, and they have been tested against each other
   * All relevant ecosystem stakeholders approve the specification (any holdout can block this stage)
-  * Acceptance tests are written and merged into the Cosmos-SDK and other relevant downstream repositories
-  * All files in the `./spec/{{ .Spec.Number }}-{{ .Spec.Name}}/` directory are up to date and merged into the `cosmos/ics` repo
+  * Acceptance tests are written and merged into the relevant repositories
+  * All files in the `./spec/ics-{{ .Spec.Number }}-{{ .Spec.Name}}/` directory are up to date and merged into the `cosmos/ics` repo
 - _**Acceptance Requirements**_:
   * The PR changing the stage to "finalized" has been approved by representatives from all relevant ecosystem stakeholders, and all members of the core specification team.
 - _**Spec Quality**_:
