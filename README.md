@@ -4,6 +4,8 @@
 
 This repository is the canonical location for development and documentation of inter-chain standards utilized by the Cosmos network & interchain ecosystem. Initially it will be used to consolidate design documentation for the inter-blockchain communication protocol (IBC), encoding standards for Cosmos chains, and miscellaneous utilities such as off-chain message signing.
 
+For an overview of the motivation for and design goals of IBC, see ["Why IBC?"](WHY_IBC.md).
+
 ## Standardization
 
 Please see [ICS 1](spec/ics-1-ics-standard) for a description of what a standard entails.
