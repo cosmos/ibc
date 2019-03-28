@@ -66,10 +66,17 @@ Note that of all these, only `H_h` defines a signature and is thus attributable.
 
 Connections require the following consensus primitives with datastructures and properties as defined in ICS 2:
 
-- `RootOfTrust`
+- `TrustedCommit`
 - `Header`
-- `verifyAndUpdate : RootOfTrust -> Header -> Either Error RootOfTrust`
-- `verifySubstate : RootOfTrust -> Key -> Value -> Maybe Error`
+- `AccumulatorRoot`
+- `updateTrustedCommit :: TrustedCommit -> Header -> Either Error TrustedCommit`
+
+Connections require the following accumulator primitives with datastructures and properties as defined in ICS 23:
+
+- `AccumulatorRoot`
+- `Key :: []byte`
+- `Value :: []byte`
+- `verify :: AccumulatorRoot -> Key -> [Value] -> Bool`
 
 #### Lifecycle
 
