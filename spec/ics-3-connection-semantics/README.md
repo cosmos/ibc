@@ -1,9 +1,10 @@
 ---
-
 ics: 3
 title: Connection Semantics & Lifecycle
 stage: proposal
 category: ibc-core
+requires: 2
+required-by: 4
 author: Christopher Goes <cwgoes@tendermint.com>, Juwoon Yun <joon@tendermint.com>
 created: 2019-03-07
 modified: 2019-03-07
@@ -11,9 +12,7 @@ modified: 2019-03-07
 
 ## Synopsis
 
-The basis of IBC is the ability to verify in the on-chain consensus ruleset of chain `B` that a data packet received on chain `B` was correctly generated on chain `A`. This establishes a cross-chain linearity guarantee: upon validation of that packet on chain `B` we know that the packet has been executed on chain `A` and any associated logic resolved (such as assets being escrowed), and we can safely perform application logic on chain `B` (such as generating vouchers on chain `B` for the chain `A` assets which can later be redeemed with a packet in the opposite direction). 
-
-This standards document outlines the abstraction of an IBC _connection_: the state and consensus ruleset necessary to perform IBC packet verification.
+This standards document describes the abstraction of an IBC *connection*: two stateful objects on two separate chains, each tracking the consensus state of the other chain, to enable arbitrary cross-chain substate verification. Protocols for establishing a connection between two chains, verifying relayed updates (headers) to the consensus state tracked by a connection, and voluntarily closing a connection are described.
 
 ## Specification
 
@@ -22,6 +21,8 @@ This standards document outlines the abstraction of an IBC _connection_: the sta
 - Connection = cross-chain light client state.
 - Between two chains `A` and `B`.
 - Permissionless opening / closing / updates.
+
+The basis of IBC is the ability to verify in the on-chain consensus ruleset of chain `B` that a data packet received on chain `B` was correctly generated on chain `A`. This establishes a cross-chain linearity guarantee: upon validation of that packet on chain `B` we know that the packet has been executed on chain `A` and any associated logic resolved (such as assets being escrowed), and we can safely perform application logic on chain `B` (such as generating vouchers on chain `B` for the chain `A` assets which can later be redeemed with a packet in the opposite direction).
 
 ### Desired Properties
 
