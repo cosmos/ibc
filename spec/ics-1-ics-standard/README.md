@@ -43,11 +43,7 @@ An ICS header contains metadata relevant to the ICS.
 
 `title` - ICS title (keep it short & sweet)
 
-`stage` - Current ICS stage, one of the following:
-- `proposal` - A standard in the "proposal" stage
-- `draft` - A standard in the "draft" stage
-- `candidate` - A standard in the "candidate" stage
-- `finalized` - A standard in the "finalized" stage
+`stage` - Current ICS stage, see [PROCESS.md](../../PROCESS.md) for the list of possible stages.
 
 See [README.md](../../README.md) for a description of the ICS acceptance stages.
 
