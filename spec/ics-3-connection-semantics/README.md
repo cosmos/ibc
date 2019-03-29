@@ -1,6 +1,6 @@
 ---
 ics: 3
-title: Connection Semantics & Lifecycle
+title: Connection Semantics
 stage: draft
 category: ibc-core
 requires: 2, 6, 10, 23
@@ -106,6 +106,8 @@ This subprotocol will likely need to be permissioned to an entity who "owns" the
 ![Closing Handshake](closing_handshake.png)
 
 ##### Closing by Equivocation
+
+The equivocation closing subprotocol serves to immediately close a connection if a consensus equivocation is discovered and thus prevent further packet transmission.
 
 ![Closing Equivocation](closing_equivocation.png)
 
