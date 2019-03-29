@@ -66,10 +66,12 @@ Note that of all these, only `H_h` defines a signature and is thus attributable.
 
 Connections require the following consensus primitives with datastructures and properties as defined in ICS 2:
 
-- `TrustedCommit`
+- `RootOfTrust`
 - `Header`
 - `AccumulatorRoot`
-- `updateTrustedCommit :: TrustedCommit -> Header -> Either Error TrustedCommit`
+- `updateTrustedCommit :: RootOfTrust -> Header -> Either Error RootOfTrust`
+- `checkEquivocation :: Header -> Header -> Bool`
+- `getRoot :: RootOfTrust -> AccumulatorRoot`
 
 Connections require the following accumulator primitives with datastructures and properties as defined in ICS 23:
 
@@ -78,9 +80,9 @@ Connections require the following accumulator primitives with datastructures and
 - `Value :: []byte`
 - `verify :: AccumulatorRoot -> Key -> [Value] -> Bool`
 
-#### Lifecycle
+#### Subprotocols
 
-##### Opening a connection
+##### Opening Handshake
 
 All proofs require an initial `H_h` and `C_h` for some `h`, where `dt(now, H_h) < P`.
 
@@ -90,7 +92,7 @@ Any header may be from a malicious chain (e.g. shadowing a real chain state with
 
 *THREE WAY HANDSHAKE OUTLINE*
 
-![Handshake](handshake.png)
+![OpeningHandshake](OpeningHandshake.png)
 
 ###### OPENTRY
 
@@ -169,7 +171,9 @@ Forgery: Only A could commit `OPENCONFIRM` since root-of-trust for A is now stor
 
 The same thing, except `OPENTRY` provides a proof that B's root-of-trust has been stored, and the connection on B is opened after `OPENACK` is sent from B to A.
 
-##### Following headers
+##### Tracking Headers
+
+![TrackingHeaders](TrackingHeaders.png)
 
 We define two messages `U_h` and `X_h`, which together allow us to securely advance our trust from some known `H_n` to some future `H_h` where `h > n`. Some implementations may require that `h == n + 1` (all headers must be processed in order). IBC implemented on top of Tendermint or similar BFT algorithms requires only that `delta-vals(C_n, C_h) < ⅓` (each step must have a change of less than one-third of the validator set)[[4](./references.md#4)].
 
@@ -211,13 +215,17 @@ By induction, there must exist a set of proofs, such that `max(update…(T,...))
 
 Bisection can be used to discover this set of proofs. That is, given `max(T) == n` and `valid(T, X_h | U_h) == unknown`, we then try `update(T, X_b | U_b)`, where _`b == (h + n) / 2`. The base case is where `valid(T, X_h | U_h) == true` and is guaranteed to exist if `h == max(T) + 1`.
 
-##### Closing a connection
+##### Closing Handshake
+
+![ClosingHandshake](ClosingHandshake.png)
 
 IBC implementations may optionally include the ability to close an IBC connection and prevent further header updates, simply causing `update(T, X_h | U_h)` as defined above to always return `false`.
 
 Closing a connection may break application invariants (such as fungiblity - token vouchers on chain `B` will no longer be redeemable for tokens on chain `A`) and should only be undertaken in extreme circumstances such as Byzantine behavior of the connected chain.
 
 Closure may be permissioned to an on-chain governance system, an identifiable party on the other chain (such as a signer quorum, although this will not work in some Byzantine cases), or any user who submits an application-specific fraud proof. When a connection is closed, application-specific measures may be undertaken to recover assets held on a Byzantine chain. We defer further discussion to [Appendix D](appendices.md#appendix-d-byzantine-recovery-strategies).
+
+##### Closing by Equivocation
 
 ### Backwards Compatibility
 

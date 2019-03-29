@@ -1,0 +1,82 @@
+\documentclass[border=2pt]{standalone}
+\usepackage{amsmath}
+\usepackage{varwidth}
+\usepackage{color}
+\usepackage{algpseudocode}
+
+\algdef{SE}[SUBALG]{Indent}{EndIndent}{}{\algorithmicend\ }%
+\algtext*{Indent}
+\algtext*{EndIndent}
+
+\algnewcommand\algorithmicswitch{\textbf{switch}}
+\algnewcommand\algorithmiccase{\textbf{case}}
+\algnewcommand\algorithmicassert{\texttt{assert}}
+\algnewcommand\Assert[1]{\State \algorithmicassert(#1)}%
+\algdef{SE}[SWITCH]{Switch}{EndSwitch}[1]{\algorithmicswitch\ #1\ \algorithmicdo}{\algorithmicend\ \algorithmicswitch}%
+\algdef{SE}[CASE]{Case}{EndCase}[1]{\algorithmiccase\ #1}{\algorithmicend\ \algorithmiccase}%
+\algtext*{EndSwitch}%
+\algtext*{EndCase}%
+
+\makeatletter
+\renewcommand{\ALG@beginalgorithmic}{\tiny}
+\makeatother
+
+\begin{document}
+\begin{varwidth}{\linewidth}
+
+\begin{algorithmic}
+\State Datagram OPENINIT $\{$
+\Indent
+\State Version;
+\State RootOfTrust;
+\State Identifier;
+\EndIndent
+\State $\}$
+\end{algorithmic}
+
+\begin{algorithmic}
+\State Datagram OPENTRY $\{$
+\Indent
+\State Version;
+\State RootOfTrust;
+\State Identifier;
+\State Identifier;
+\State AccumulatorProof;
+\EndIndent
+\State $\}$
+\end{algorithmic}
+
+\begin{algorithmic}
+\State Datagram OPENACK $\{$
+\Indent
+\State Version;
+\State Identifier;
+\State AccumulatorProof;
+\EndIndent
+\State $\}$
+\end{algorithmic}
+
+\begin{algorithmic}
+\State Datagram OPENCONFIRM $\{$
+\Indent
+\EndIndent
+\State $\}$
+\end{algorithmic}
+
+\begin{algorithmic}
+\Function{handleDatagram}{datagram}
+  \Switch{$datagram$}
+    \Case{$OPENINIT$}
+    \EndCase
+    \Case{$OPENTRY$}
+    \EndCase
+    \Case{$OPENACK$}
+    \EndCase
+    \Case{$OPENCONFIRM$}
+    \EndCase
+  \EndSwitch
+\EndFunction
+\end{algorithmic}
+
+\end{varwidth}
+\end{document}
