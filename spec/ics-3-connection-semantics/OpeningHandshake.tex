@@ -8,6 +8,12 @@
 \algtext*{Indent}
 \algtext*{EndIndent}
 
+\algblockdefx[Struct]{Struct}{EndStruct}%
+    [2][Unknown]{struct \textsc{#1} \textbf{#2} \{}%
+    {\}}
+
+\algnewcommand\Field[2]{\State \textsc{#1} #2}
+
 \algnewcommand\algorithmicswitch{\textbf{switch}}
 \algnewcommand\algorithmiccase{\textbf{case}}
 \algnewcommand\algorithmicassert{\texttt{assert}}
@@ -25,42 +31,38 @@
 \begin{varwidth}{\linewidth}
 
 \begin{algorithmic}
-\State Datagram OPENINIT $\{$
-\Indent
-\State Version;
-\State RootOfTrust;
-\State Identifier;
-\EndIndent
-\State $\}$
+\Struct[Datagram]{OPENINIT}
+\Field{Version}{versionA}
+\Field{Version}{desiredVersionB}
+\Field{RootOfTrust}{rootOfTrustB}
+\Field{Identifier}{identifierA}
+\Field{Identifier}{desiredIdentifierB}
+\EndStruct
 \end{algorithmic}
 
 \begin{algorithmic}
-\State Datagram OPENTRY $\{$
-\Indent
-\State Version;
-\State RootOfTrust;
-\State Identifier;
-\State Identifier;
-\State AccumulatorProof;
-\EndIndent
-\State $\}$
+\Struct[Datagram]{OPENTRY}
+\Field{Version}{versionA}
+\Field{Version}{desiredVersionB}
+\Field{RootOfTrust}{rootOfTrustA}
+\Field{Identifier}{identifierA}
+\Field{Identifier}{desiredIdentifierB}
+\Field{AccumulatorProof}{proofInitA}
+\EndStruct
 \end{algorithmic}
 
 \begin{algorithmic}
-\State Datagram OPENACK $\{$
-\Indent
-\State Version;
-\State Identifier;
-\State AccumulatorProof;
-\EndIndent
-\State $\}$
+\Struct[Datagram]{OPENACK}
+\Field{Version}{agreedVersionB}
+\Field{Identifier}{agreedIdentifierB}
+\Field{AccumulatorProof}{proofTryB}
+\EndStruct
 \end{algorithmic}
 
 \begin{algorithmic}
-\State Datagram OPENCONFIRM $\{$
-\Indent
-\EndIndent
-\State $\}$
+\Struct[Datagram]{OPENCONFIRM}
+\Field{AccumulatorProof}{proofAckA}
+\EndStruct
 \end{algorithmic}
 
 \begin{algorithmic}
