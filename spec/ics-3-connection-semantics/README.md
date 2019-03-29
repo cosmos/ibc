@@ -90,6 +90,8 @@ Any header may be from a malicious chain (e.g. shadowing a real chain state with
 
 *THREE WAY HANDSHAKE OUTLINE*
 
+![Handshake](handshake.png)
+
 ###### OPENTRY
 
 First datagram, A -> B
