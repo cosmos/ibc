@@ -32,8 +32,7 @@
 
 \begin{algorithmic}
 \Struct[Datagram]{OPENINIT}
-\Field{Version}{versionA}
-\Field{Version}{desiredVersionB}
+\Field{Version}{desiredVersion}
 \Field{RootOfTrust}{rootOfTrustB}
 \Field{Identifier}{identifierA}
 \Field{Identifier}{desiredIdentifierB}
@@ -42,8 +41,7 @@
 
 \begin{algorithmic}
 \Struct[Datagram]{OPENTRY}
-\Field{Version}{versionA}
-\Field{Version}{desiredVersionB}
+\Field{Version}{desiredVersion}
 \Field{RootOfTrust}{rootOfTrustA}
 \Field{Identifier}{identifierA}
 \Field{Identifier}{desiredIdentifierB}
@@ -53,7 +51,7 @@
 
 \begin{algorithmic}
 \Struct[Datagram]{OPENACK}
-\Field{Version}{agreedVersionB}
+\Field{Version}{agreedVersion}
 \Field{Identifier}{agreedIdentifierB}
 \Field{AccumulatorProof}{proofTryB}
 \EndStruct
@@ -66,15 +64,41 @@
 \end{algorithmic}
 
 \begin{algorithmic}
+\Struct[Enum]{STATE}
+\Field{INIT}{}
+\Field{TRY}{}
+\Field{OPEN}{}
+\EndStruct
+\end{algorithmic}
+
+\begin{algorithmic}
 \Function{handleDatagram}{datagram}
   \Switch{$datagram$}
     \Case{$OPENINIT$}
+      \State \Call{Store}{identifierA, <desiredVersion, rootOfTrustB, desiredIdentifierB>}
+      \State $state \gets INIT$
     \EndCase
     \Case{$OPENTRY$}
+      \Assert{\Call{verify}{rootOfTrustA, proofInitA}}
+      \Assert{\Call{getRootOfTrust}{} $==$ rootOfTrustB}
+      \State $identifierB \gets $\Call{chooseIdentifier}{desiredIdentifierB}
+      \State $versionB \gets $\Call{chooseVersion}{desiredVersionB}
+      \State \Call{Store}{identifierB, <version, rootOfTrustA, identifierA>}
+      \State $state \gets TRY$
     \EndCase
     \Case{$OPENACK$}
+      \Assert{$state == INIT$}
+      \Assert{\Call{verify}{rootOfTrustB, proofTryB}}
+      \Assert{\Call{getRootOfTrust}{} $==$ rootOfTrustA}
+      \Assert{\Call{checkIdentifier}{desiredIdentifierB, identifierB}}
+      \Assert{\Call{checkVersion}{desiredVersion, version}}
+      \State \Call{Store}{identifierA, <version, rootOfTrustB, identifierB>}
+      \State $state \gets OPEN$
     \EndCase
     \Case{$OPENCONFIRM$}
+      \Assert{$state == TRY$}
+      \Assert{\Call{verify}{rootOfTrustA, proofAckA}}
+      \State $state \gets OPEN$
     \EndCase
   \EndSwitch
 \EndFunction
