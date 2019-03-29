@@ -52,45 +52,16 @@ Once a negotiation handshake has *begun* (defined as the first packet being comm
 
 #### Definitions
 
-- Chain `A` is the source blockchain from which the IBC packet is sent
-- Chain `B` is the destination blockchain on which the IBC packet is received
-- `H_h` is the signed header of chain `A` at height `h` 
-- `C_h` is a subset of the consensus ruleset of chain `A` at height `h` 
-- `V_kh` is the value stored on chain `A` under key `k` at height `h` 
-- `P` is the unbonding period of chain `P`, in units of time
-- `dt(a, b)` is the time difference between events `a` and `b` 
-
-Note that of all these, only `H_h` defines a signature and is thus attributable.
 
 #### Requirements
 
-Connections require the following consensus primitives with datastructures and properties as defined in ICS 2:
+Consensus-related primitives are as defined in [ICS 2: Consensus Requirements](../spec/ics-2-consensus-requirements).
 
-- `RootOfTrust`
-- `Header`
-- `AccumulatorRoot`
-- `updateTrustedCommit :: RootOfTrust -> Header -> Either Error RootOfTrust`
-- `checkEquivocation :: Header -> Header -> Bool`
-- `getRoot :: RootOfTrust -> AccumulatorRoot`
-
-Connections require the following accumulator primitives with datastructures and properties as defined in ICS 23:
-
-- `AccumulatorRoot`
-- `Key :: []byte`
-- `Value :: []byte`
-- `verify :: AccumulatorRoot -> Key -> [Value] -> Bool`
+Accumulator-related primitives are as defined in [ICS 23: Cryptographic Accumulator](../spec/ics-23-cryptographic-accumulator).
 
 #### Subprotocols
 
 ##### Opening Handshake
-
-All proofs require an initial `H_h` and `C_h` for some `h`, where `dt(now, H_h) < P`.
-
-Establishing a bidirectional initial root-of-trust between the two blockchains (`A` to `B` and `B` to `A`) — `H_ah` and `C_ah` stored on chain `B`, and `H_bh` and `C_bh` stored on chain `A` — is necessary before any IBC packets can be sent.
-
-Any header may be from a malicious chain (e.g. shadowing a real chain state with a fake validator set), so a subjective decision is required before establishing a connection. This can be performed permissionlessly, in which case users later utilizing the IBC channel must check the root-of-trust themselves, or authorized by on-chain governance for additional assurance.
-
-*THREE WAY HANDSHAKE OUTLINE*
 
 ![Opening Handshake](opening_handshake.png)
 
@@ -98,57 +69,19 @@ Any header may be from a malicious chain (e.g. shadowing a real chain state with
 
 ![Tracking Headers](tracking_headers.png)
 
-We define two messages `U_h` and `X_h`, which together allow us to securely advance our trust from some known `H_n` to some future `H_h` where `h > n`. Some implementations may require that `h == n + 1` (all headers must be processed in order). IBC implemented on top of Tendermint or similar BFT algorithms requires only that `delta-vals(C_n, C_h) < ⅓` (each step must have a change of less than one-third of the validator set)[[4](./references.md#4)].
-
-Either requirement is compatible with IBC. However, by supporting proofs where  `h - n > 1`, we can follow the block headers much more efficiently in situations where the majority of blocks do not include an IBC packet between chains `A` and `B`, and enable low-bandwidth connections to be implemented at very low cost. If there are packets to relay every block, these two requirements collapse to the same case (every header must be relayed).
-
-Since these messages `U_h` and `X_h` provide all knowledge of the remote blockchain, we require that they not just be provable, but also attributable. As such, any attempt to violate the finality guarantees in headers posted to chain `B` can be submitted back to chain `A` for punishment, in the same manner that chain `A` would independently punish (slash) identified Byzantine actors.
-
-More formally, given existing set of trust `T` =  `{(H_i, C_i), (H_j, C_j), …}`, we must provide:
-
-`valid(T, X_h | U_h) ⇒ true | false | unknown`
-
-`valid` must fulfill the following properties:
-
-```
-if H_h-1 ∈ T then
-  valid(T, X_h | U_h) ⇒ true | false
-  ∃ (U_h | X_h) ⇒ valid(T, X_h | U_h)
-```
-
-```
-if C_h ∉ T then
-  valid(T, U_h) ⇒ false
-```
-
-We can then process update transactions as follows:
-
-`update(T, X_h | U_h) ⇒ success | failure`
-
-```
-update(T, X_h | U_h) = match valid(T, X_h | U_h) with
-  false ⇒ fail with "invalid proof"
-  unknown ⇒ fail with "need a proof between current and h"
-  true ⇒
-    set T = T ∪ (H_h, C_h)
-```
-
-Define `max(T)` as `max(h, where H_h ∈ T)`. For any `T` with `max(T) == h-1`, there must exist some `X_h | U_h` so that `max(update(T, X_h | U_h)) == h`.
-By induction, there must exist a set of proofs, such that `max(update…(T,...)) == h + n` for any `n`.
-
-Bisection can be used to discover this set of proofs. That is, given `max(T) == n` and `valid(T, X_h | U_h) == unknown`, we then try `update(T, X_b | U_b)`, where _`b == (h + n) / 2`. The base case is where `valid(T, X_h | U_h) == true` and is guaranteed to exist if `h == max(T) + 1`.
-
 ##### Closing Handshake
+
+Connections may elect to voluntarily close a handshake cleanly on both chains via the following protocol:
 
 ![Closing Handshake](closing_handshake.png)
 
-IBC implementations may optionally include the ability to close an IBC connection and prevent further header updates, simply causing `update(T, X_h | U_h)` as defined above to always return `false`.
+Closing a connection may break application invariants and should only be undertaken in extreme circumstances such as Byzantine behavior of the connected chain.
 
-Closing a connection may break application invariants (such as fungiblity - token vouchers on chain `B` will no longer be redeemable for tokens on chain `A`) and should only be undertaken in extreme circumstances such as Byzantine behavior of the connected chain.
-
-Closure may be permissioned to an on-chain governance system, an identifiable party on the other chain (such as a signer quorum, although this will not work in some Byzantine cases), or any user who submits an application-specific fraud proof. When a connection is closed, application-specific measures may be undertaken to recover assets held on a Byzantine chain. We defer further discussion to [Appendix D](appendices.md#appendix-d-byzantine-recovery-strategies).
+Closure may be permissioned to an on-chain governance system, an identifiable party on the other chain (such as a signer quorum, although this will not work in some Byzantine cases), or any user who submits an application-specific fraud proof. When a connection is closed, application-specific measures may be undertaken to recover assets held on a Byzantine chain. Further discussion is deferred to [ICS 12: Byzantine Recovery Strategies](../ics-12-byzantine-recovery-strategies).
 
 ##### Closing by Equivocation
+
+![Closing Fraud](closing_fraud.png)
 
 ### Backwards Compatibility
 
