@@ -14,10 +14,9 @@ See [PROCESS.md](PROCESS.md) for a description of the standardization process.
 
 ## Interchain Standards
 
-All standards in the "draft" stage are listed here in order of their ICS numbers, sorted by category.
+All standards are listed here in order of their ICS numbers.
 
-### Meta
-
-| Interchain Standard Number   | Standard Title             | Stage |
-| ---------------------------- | -------------------------- | ----- |
-| [1](spec/ics-1-ics-standard) | ICS Specification Standard | Draft |
+| Interchain Standard Number            | Category   | Standard Title             | Stage |
+| ------------------------------------- | ---------- | -------------------------- | ----- |
+| [1](spec/ics-1-ics-standard)          | Meta       | ICS Specification Standard | Draft |
+| [3](spec/ics-3-connection-semantics)  | IBC (Core) | Connection Semantics       | Draft |
