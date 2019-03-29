@@ -1,75 +1,123 @@
 ---
 ics: 2
-title: Consensus Requirements
+title: Consensus Verification
 stage: proposal
 category: ibc-core
+requires: 23
+required-by: 3
 author: Juwoon Yun <joon@tendermint.com>, Christopher Goes <cwgoes@tendermint.com>
 created: 2019-02-25
 modified: 2019-03-05
 ---
 
-The IBC protocol creates a mechanism by which two replicated fault-tolerant state machines may pass messages to each other. These messages provide a base layer for the creation of communicating blockchain architecture that overcomes challenges in the scalability and extensibility of computing blockchain environments.
+## Synopsis
 
-The IBC protocol assumes that multiple applications are running on their own blockchain with their own state and own logic. Communication is achieved over an ordered message queue primitive, allowing the creation of complex inter-chain processes without trusted third parties.
-
-The message packets are not signed by one psuedonymous account, or even multiple, as in multi-signature sidechain implementations. Rather, IBC assigns authorization of the packets to the source blockchain's consensus algorithm, performing light-client style verification on the destination chain. The Byzantine-fault-tolerant properties of the underlying blockchains are preserved: a user transferring assets between two chains using IBC must trust only the consensus algorithms of both chains.
-
-In order to achive this, a blockchain should be able to check 1. whether the block is valid and 2. whether the packet is included in the block or not. In this proposal, we introduce an abstract concept of blockchains, called `Header`. `Header` requires its consensus algorithm to satisfy some properties, including deterministic safety, lightclient compatibility and valid transition of the state machine.
+Consensus verification requires the properties that the chains on the network are 
+expected to satisfy. The properties are needed for efficient and safe verification on the 
+higher level mechanics, such as connection and channel semantics. The algorithm who uses these 
+properties to verify another chain is referred as "lightclient", which is embedded on the chains.
 
 ## Specification
 
 ### Motivation
 
-`Header` defines required properties of the blockchain on the network. The implementors can check whether the consensus that they are using is qualified to be connected to the network or not. If not, they can modify the algorithm or wrap it with additional logic to make it compatible with the specification.
+`Header` defines required properties of the blockchain on the network. The implementors can 
+check whether the consensus that they are using is qualified to be connected to the network or 
+not. If not, they can modify the algorithm or wrap it with additional logic to make it 
+compatible with the specification. It also provides base layer for the protocol that the other 
+components can rely on.
 
 ### Desired Properties
 
-`Header` is `(p : Maybe<Header>, v : Header -> bool, s : []byte -> []byte)` where `p` is parent block, `v` is lightclient verifier and `s` is state. The other parts of the protocol, such as connections and channels, are defined over `Header`s, so if a blockchain wants to establish an IBC communication with another, it is required to satisfy the properties of `Header`. 
+* Blockchains, defined as an infinite list of `Commit` starting from its genesis, is linear; no 
+conflicting `Commit`s can be both validated, thus no data can be rewritten after it has been 
+committed. Two `Commit`s are conflicting when both has same height but not equal.
 
-Definitions:
+* Verifiers can verify future `Commit`s using an existing `TrustedCommit`. When the verifier 
+validates it, the verified header is in the canonical blockchain.
 
-1. Direct children have their parent as `p` and are verifiable with their parent.
-2. The height of a block is the step of referring `p` required to get to `nil`
-
-Requirements:
-
-1. Headers have only one direct child
-If a blockchain has deterministic safety(as opposed to probabilistic safety in Nakamoto consensus), then there cannot be more than one child for each block. In Tendermint, this assumption breaks when +1/3 validators are malicious, producing multiple blocks those are direct children of a single block and all of them are verifiable with the parent. It makes conflicting packets delivered from the failed chain, so for the chains who are receiving from this chain, **fraud proof #10** mechanism should be applied in this case. However, he failed chain itself also need to be recovered and reconnected again. It will be covered in **byzantine recovery strategies #6**.
-
-2. Headers have at least one direct child
-There is at least one direct child for all blocks, meaning that the lightclient logic can proceed the blocks one by one even in the worst case. If it not satisfied then there can be a point where the lightclient stops and cannot proceed, which halts IBC connection unexpectedly. This also can be violated when the blocks are restarted out of the consensus, for example in Tendermint, (1/2 < validators < 2/3) forked out the chain. This also will be covered in **byzantine recovery strategies**.
-
-3. If a block verifies another block then it is a descendant of the block
-Lightclient should not verify packets which are not in its chain. If the verifier returns true for a block that is not a descendant, it simply means that there is an error in the lightclient logic.
-
-4. Header can have a state only if it is a valid transition from the parent's(see the next paragraph)
-Header cannot have a state which is not a transition from its parent. This requires that the chain satisfies the IBC protocol and runs it honestly. In case where the validators become malicious and send invalid messages, the application logic on the destination chain should prevent further interchain infection.
- 
-These requirements allow channels to work safely without concerning about double spending attack. 
-If a block is submitted to the chain(and optionally passed some challenge period for fraud proof), then it is assured that the packet is finalized so the application logic can process it.
+* `TrustedCommit`s contains an accumulator root(ICS23) that the other logics can verify whether 
+key-value pairs exists or not with it.
 
 ### Technical Specification
 
-In a real world, `Header`s do not have to contain the full state data; it can contain an aggregated data set identifier, for example a merkle root, where the actual data latter given can be proven that it is a member of that set. If we don't consider about the data availability problem, this partial blocks, which is be called `Header`s, still satisfies `Header`.
+#### Definitions
 
-Following functions exist over `Header`s.
+* `TrustedCommit` is a blockchain commit which can be used to prove future commits, stored in
+  one blockchain to verify the state of the other.
+  Defined as 3-tuple `(v :: Commit -> (Error|TrustedCommit), r :: AccumulatorRoot)`, where
+    * `v` is the verifier, proves child `Commit.p` and returns the updated `TrustedCommit`
+    * `r` is the `AccumuatorRoot`, used to prove internal state
 
-* `height : Header -> int`
-Returns the height of the block.
+* `Commit` is a blockchain header which provides information to update `TrustedCommit`, 
+  submitted to one blockchain to update the stored `TrustedCommit`.
+  Defined as 2-tuple `(p :: CommitProof, tc :: TrustedCommit`, where
+    * `p` is the commit proof used by `TrustedCommit.v` to verify
+    * `tc` is the new `TrustedCommit` which will replace the existing one after the verification
+ 
+* `Consensus` is a blockchain consensus algorithm which generates valid `Commit`s.
+  Defined as a function `Commit -> [Transaction] -> Commit`
 
-* `verify : Header -> Header -> Maybe<LightClientProof> -> Maybe<error>`
-Verifies the latter block is a descendant of the former block, as defined in **lightclient specification**. Can take an additional lightclient proof argument.
+* `Blockchain` is a subset of `(TrustedCommit, [Commit])`, generated by a `Consensus`.
 
-* `state : Header -> [MerkleProof] -> Error | KVStore`
-Returns a `KVStore` with the state inside the header. Can take Merkle proofs for the key-value pairs proving that the pairs are part of the header state.
+#### Requirements
+
+Consensus verification requires the following accumulator primitives with datastructures and
+properties as defined in ICS23:
+
+* `AccumulatorRoot`
+
+#### Subprotocols
+
+##### Verifier
+
+Verifiers prove new `Commit` generated from a blockchain. It is expected to prove 
+a `Commit` efficiently; efficient then replaying `Consensus` logic for given parent `Commit`
+and the transactions. 
+
+##### Accumulator Root
+
+`TrustedCommit` contains an accumulator root, which identifies the whole state of the corresponding
+blockchain at the point of time that the commit is generated. It is expected that the verifying 
+inclusion or exclusion of certain data in the accumulator is done efficient. See ICS23 for the details
+about the `AccumulatorRoot`s.
+
+##### CommitProof
+
+`CommitProof` is a type dependent on concrete implementations of `Commit`. `TrustedCommit.v` uses
+the information stored in `Commit.p` to check `Commit.tc`. 
+
+##### Consensus 
+
+`Consensus` is a blockchain protocol which actually generates a list of `Commit`. 
+
+1. Headers have no more than one direct child
+ 
+* Satisfied if: deterministic safety
+* Possible violation scenario: validator double signing, miner double spend
+
+2. Headers have at least one direct child
+
+* Satisfied if: liveness, lightclient verifier continuability
+* Possible violation scenario: synchronized halt, incompatible hard fork
+
+3. Headers' accumulator root are valid transition from the parents'
+
+* Satisfied if: decentralized block generation, well implemented state machine
+* Possible violation scenario: invariant break, validator cartel
+
+If a block is submitted to the chain(and optionally passed some challenge period for fraud proof), 
+then it is assured that the packet is finalized so the application logic can process it.
+If a header is proven to violate one of the properties, the tracking chain should detect and take
+action on the event to prevent further impact. See (link for the ICS for equivocation and fraud proof) 
+for details.
 
 ### Example Implementation
 
-An example blockchain `B` is run by a single operator. If a block is signed by the operator, then it is valid. `B` contains `KVStore`, which is a associative list with type of `[([byte], [byte])]`.  
+An example blockchain `B` is run by a single operator. If a block is signed by the operator, 
+then it is valid. `B` contains `KVStore`, which is a associative list with type of `[([byte], [byte])]`.  
 
-### Other Implementations
-
-* Cosmos-SDK: [](https://github.com/cosmos/cosmos-sdk/x/ibc)  
+// TODO
 
 ## History 
 
