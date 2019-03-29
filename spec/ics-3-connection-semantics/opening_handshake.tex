@@ -25,6 +25,7 @@
 \begin{algorithmic}
 \Struct[Datagram]{CONNOPENACK}
 \Field{Version}{agreedVersion}
+\Field{Identifier}{identifierA}
 \Field{Identifier}{agreedIdentifierB}
 \Field{AccumulatorProof}{proofTryB}
 \EndStruct
@@ -32,16 +33,8 @@
 
 \begin{algorithmic}
 \Struct[Datagram]{CONNOPENCONFIRM}
+\Field{Identifier}{identifierB}
 \Field{AccumulatorProof}{proofAckA}
-\EndStruct
-\end{algorithmic}
-
-\begin{algorithmic}
-\Struct[Enum]{STATE}
-\Field{INIT}{}
-\Field{TRY}{}
-\Field{OPEN}{}
-\Field{CLOSED}{}
 \EndStruct
 \end{algorithmic}
 
@@ -49,28 +42,30 @@
 \Function{handleDatagram}{datagram}
   \Switch{$datagram$}
     \Case{$CONNOPENINIT$}
-      \State \Call{Store}{identifierA, <desiredVersion, rootOfTrustB, desiredIdentifierB>}
       \State $state \gets INIT$
+      \State \Call{Set}{identifierA, (state, desiredVersion, desiredIdentifierB, rootOfTrustB)}
     \EndCase
     \Case{$CONNOPENTRY$}
       \Assert{\Call{verify}{rootOfTrustA, proofInitA}}
-      \Assert{\Call{getRootOfTrust}{} $==$ rootOfTrustB}
-      \State $identifierB \gets $\Call{chooseIdentifier}{desiredIdentifierB}
-      \State $versionB \gets $\Call{chooseVersion}{desiredVersionB}
-      \State \Call{Store}{identifierB, <version, rootOfTrustA, identifierA>}
-      \State $state \gets TRY$
+      \Assert{\Call{getRootOfTrust}{ } $==$ rootOfTrustB}
+      \State $identifierB \gets$ \Call{chooseIdentifier}{desiredIdentifierB}
+      \State $versionB \gets$ \Call{chooseVersion}{desiredVersionB}
+      \State \Call{Set}{identifierB, (state, version, identifierA, rootOfTrustA)}
+      \State $state \gets OPENTRY$
     \EndCase
     \Case{$CONNOPENACK$}
+      \State $(state, desiredVersionB, desiredIdentifierB, rootOfTrustB) \gets $\Call{Get}{identifierA}
       \Assert{$state == INIT$}
       \Assert{\Call{verify}{rootOfTrustB, proofTryB}}
-      \Assert{\Call{getRootOfTrust}{} $==$ rootOfTrustA}
+      \Assert{\Call{getRootOfTrust}{ } $==$ rootOfTrustA}
       \Assert{\Call{checkIdentifier}{desiredIdentifierB, identifierB}}
       \Assert{\Call{checkVersion}{desiredVersion, version}}
-      \State \Call{Store}{identifierA, <version, rootOfTrustB, identifierB>}
       \State $state \gets OPEN$
+      \State \Call{Set}{identifierA, <version, rootOfTrustB, identifierB, state>}
     \EndCase
     \Case{$CONNOPENCONFIRM$}
-      \Assert{$state == TRY$}
+      \State $(state, version, identifierB, rootOfTrustB) \gets$ \Call{Get}{identifierB}
+      \Assert{$state == OPENTRY$}
       \Assert{\Call{verify}{rootOfTrustA, proofAckA}}
       \State $state \gets OPEN$
     \EndCase

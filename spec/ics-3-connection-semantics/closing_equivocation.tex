@@ -1,0 +1,29 @@
+\include{common}
+
+\begin{document}
+\begin{varwidth}{\linewidth}
+
+\begin{algorithmic}
+\Struct[Datagram]{CONNCLOSEEQUIVOCATION}
+\Field{Identifier}{identifier}
+\Field{Header}{firstHeader}
+\Field{Header}{secondHeader}
+\EndStruct
+\end{algorithmic}
+
+\begin{algorithmic}
+\Function{handleDatagram}{datagram}
+  \Switch{$datagram$}
+    \Case{$CONNCLOSEEQUIVOCATION$}
+      \State $(state, version, counterpartyIdentifier, rootOfTrust) \gets$ \Call{Get}{identifier}
+      \Assert{$state == OPEN$}
+      \Assert{\Call{checkEquivocation}{rootOfTrust, firstHeader, secondHeader}}
+      \State $state \gets CLOSED$
+      \State \Call{Set}{identifier, (state, version, counterpartyIdentifier, rootOfTrust)}
+    \EndCase
+  \EndSwitch
+\EndFunction
+\end{algorithmic}
+
+\end{varwidth}
+\end{document}

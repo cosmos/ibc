@@ -1,8 +1,8 @@
 all: $(filter-out common.png, $(addsuffix .png, $(basename $(wildcard *.tex)))) cleanup
 
-%.png : %.tex
+%.png : %.tex common.tex
 	pdflatex "\input{$<}"
-	convert -density 300 $(basename $<).pdf -quality 90 $@
+	convert -resize 50% -chop 26x0 -density 400 $(basename $<).pdf -quality 100 $@
 	mv $(basename $@)-1.png $(basename $@).png
 	rm $(basename $@)-0.png
 

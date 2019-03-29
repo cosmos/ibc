@@ -20,6 +20,7 @@
 
 \begin{algorithmic}
 \Struct[Datagram]{CONNCLOSEACK}
+\Field{Identifier}{identifier}
 \Field{AccumulatorProof}{proofTryB}
 \EndStruct
 \end{algorithmic}
@@ -28,19 +29,25 @@
 \Function{handleDatagram}{datagram}
   \Switch{$datagram$}
     \Case{$CONNCLOSEINIT$}
+      \State $(state, version, counterpartyIdentifier, rootOfTrust) \gets$ \Call{Get}{identifierA}
       \Assert{$state == OPEN$}
-      \State \Call{Store}{identifierA, <desiredVersion, rootOfTrustB, desiredIdentifierB>}
+      \Assert{$identifierB == counterpartyIdentifier$}
       \State $state \gets TRYCLOSE$
+      \State \Call{Set}{identifierA, (state, version, counterpartyIdentifier, rootOfTrust)}
     \EndCase
     \Case{$CONNCLOSETRY$}
+      \State $(state, version, counterpartyIdentifier, rootOfTrust) \gets$ \Call{Get}{identifierB}
       \Assert{$state == OPEN$}
-      \Assert{\Call{verify}{rootOfTrustA, proofInitA}}
+      \Assert{\Call{verify}{rootOfTrust, proofInitA}}
       \State $state \gets CLOSED$
+      \State \Call{Set}{identifierB, (state, version, counterpartyIdentifier, rootOfTrust)}
     \EndCase
     \Case{$CONNCLOSEACK$}
+      \State $(state, version, counterpartyIdentifier, rootOfTrust) \gets$ \Call{Get}{identifierA}
       \Assert{$state == TRYCLOSE$}
       \Assert{\Call{verify}{rootOfTrustB, proofTryB}}
       \State $state \gets CLOSED$
+      \State \Call{Set}{identifier, (state, version, counterpartyIdentifier, rootOfTrust)}
     \EndCase
   \EndSwitch
 \EndFunction

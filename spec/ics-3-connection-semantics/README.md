@@ -3,7 +3,7 @@ ics: 3
 title: Connection Semantics & Lifecycle
 stage: draft
 category: ibc-core
-requires: 2
+requires: 2, 6, 10, 23
 required-by: 4
 author: Christopher Goes <cwgoes@tendermint.com>, Juwoon Yun <joon@tendermint.com>
 created: 2019-03-07
@@ -12,49 +12,61 @@ modified: 2019-03-29
 
 ## Synopsis
 
-This standards document describes the abstraction of an IBC *connection*: two stateful objects on two separate chains, each tracking the consensus state of the other chain, facilitating cross-chain substate verification. Protocols for establishing a connection between two chains, verifying relayed updates (headers) to the consensus state tracked by a connection, cleanly closing a connection, and closing a connection due to detected equivocation are described.
+This standards document describes the abstraction of an IBC *connection*: two stateful objects on two separate chains, each tracking the consensus state of the other chain, facilitating cross-chain substate verification. Protocols for safely establishing a connection between two chains, verifying relayed updates (headers) to the consensus state tracked by a connection, cleanly closing a connection, and closing a connection due to detected equivocation are described.
 
 ## Specification
 
 ### Motivation
 
-- Connection = cross-chain light client state.
-- Between two chains `A` and `B`.
-- Permissionless opening / closing / updates.
+The core IBC protocol provides *authorization* and *ordering* semantics for packets: guarantees, respectively, that packets have been committed on the sending blockchain (and according state transitions executed, such as escrowing tokens), and that they have been committed exactly once in a particular order and can be delivered exactly once in that same order. The *connection* abstraction, specified in this standard, defines the *authorization* semantics of IBC (ordering semantics are left to [ICS 4: Channel Semantics](../spec/ics-4-channel-sematics)).
 
 ### Desired Properties
 
-- Permissionless channel opening / channel closing / channel updates.
+- Implementing blockchains should be able to safely allow untrusted users to open and update connections.
+- The two connecting blockchains should be able to negotiate a shared connection "version" (agreeing on wire encoding format, accumulator proof format, etc.)
 
 #### Pre-Establishment
 
-- Guarantees that no packets can be committed on other connections?
-- No required a priori root-of-trust knowledge
-- Only one connection "between" two chains
+Prior to connection establishment:
+
+- No further IBC subprotocols should operate, since cross-chain substates cannot be verified.
+- The initiating user (who creates the connection) must be able to specify a root-of-trust for the chain to connect to and a root of trust for the connecting chain (implicitly, e.g. by sending the transaction).
 
 #### During Handshake
 
-Once a negotiation handshake has *begun* (defined as the first packet being committed):
+Once a negotiation handshake has begun:
 
-- Only the appropriate handshake packets can be committed in order
+- Only the appropriate handshake datagrams can be executed in order.
 - No chain can masquerade as one of the handshaking chains (formalize...)
 
 #### Post-Establishment
 
-- Connection provides verification of relayed packets
-- No packets other than committed by consensus of *A* / *B* on connection *C* can be relayed
+Once a negotiation handshake has completed:
+
+- The created connection objects on both chains contain the roots of trust specified by the initiating user.
+- No other connection objects can be maliciously created on other chains by replaying datagrams.
+- The connection should be able to be voluntarily & cleanly closed by both blockchains.
+- The connection should be able to be immediately closed upon discovery of a consensus equivocation.
 
 ### Technical Specification
 
 #### Definitions
 
+This ICS defines the `Connection` type:
+
+![Datatypes](datatypes.png)
+
 Consensus-related primitives are as defined in [ICS 2: Consensus Requirements](../spec/ics-2-consensus-requirements).
 
 Accumulator-related primitives are as defined in [ICS 23: Cryptographic Accumulator](../spec/ics-23-cryptographic-accumulator).
 
+Versioning-related primitives are as defined in [ICS 6: Connection & Channel Versioning](../spec/ics-6-connection-channel-versioning).
+
+`Identifier` is an opaque value used as the key for a connection object; it must serialize to a bytestring. The identifier is not necessarily intended to be a human-readable name (and likely should not be, to discourage squatting or racing for identifiers). The opening handshake protocol allows each chain to verify the identifier used to reference the connection on the other chain, so the chains could choose to come to agreemnt on a common identifier. Further discussion is deferred to [ICS 10: Chain Naming Convention](../spec/ics-10-chain-naming-convention).
+
 #### Requirements
 
-Connection handlers and subsequent protocols reference a simple key-value store interface provided by the underlying state machine. This store must provide three functions, which behave in the way you would expect:
+Connection handlers and subsequent protocols make use of a simple key-value store interface provided by the underlying state machine. This store must provide three functions, which behave in the way you would expect:
 - `Get(Key) -> Maybe Value`
 - `Set(Key, Value)`
 - `Has(Key) -> Bool`
@@ -63,7 +75,7 @@ Connection handlers and subsequent protocols reference a simple key-value store 
 
 #### Subprotocols
 
-Subprotocols are defined as a set of datagram types and a `handleDatagram` function operating on the connection state. Datagrams must be relayed between chains by an external process. This process is assumed to behave in an arbitrary manner — no safety properties are dependent on its behavior, although progress is generally dependent on the existence of at least one correct relayer process. Further discussion is deferred to [ICS 18: Off-Chain Relayer Algorithm](../spec/ics-18-offchain-relayer-algorithm).
+Subprotocols are defined as a set of datagram types and a `handleDatagram` function which must be implemented by the state machine of the implementing blockchain. Datagrams must be relayed between chains by an external process. This process is assumed to behave in an arbitrary manner — no safety properties are dependent on its behavior, although progress is generally dependent on the existence of at least one correct relayer process. Further discussion is deferred to [ICS 18: Off-Chain Relayer Algorithm](../spec/ics-18-offchain-relayer-algorithm).
 
 IBC subprotocols are reasoned about as interactions between two chains `A` and `B` — there is no prior distinction between these two chains and they are assumed to be executing the same, correct IBC protocol. `A` is simply by convention the chain which goes first in the subprotocol and `B` the chain which goes second.
 
@@ -73,7 +85,7 @@ This ICS defines four subprotocols: opening handshake, header tracking, closing 
 
 The opening handshake subprotocol serves to initialize roots of trust for two chains on each other and negotiate an agreeable connection version.
 
-Generally, this subprotocol need not be permissioned (any user can start the protocol with `CONNOPENINIT`), modulo anti-spam measures.
+This subprotocol need not be permissioned, modulo anti-spam measures.
 
 ![Opening Handshake](opening_handshake.png)
 
@@ -83,7 +95,7 @@ The header tracking subprotocol serves to update the root of trust for an open c
 
 This subprotocol need not be permissioned, modulo anti-spam measures.
 
-![Tracking Headers](tracking_headers.png)
+![Header Tracking](header_tracking.png)
 
 ##### Closing Handshake
 
@@ -95,9 +107,9 @@ This subprotocol will likely need to be permissioned to an entity who "owns" the
 
 ##### Closing by Equivocation
 
-![Closing Fraud](closing_fraud.png)
+![Closing Equivocation](closing_equivocation.png)
 
-Further discussion is deferred to [ICS 12: Byzantine Recovery Strategies](../ics-12-byzantine-recovery-strategies).
+Implementing chains may want to allow applications to register handlers to take action upon discovery of an equivocation. Further discussion is deferred to [ICS 12: Byzantine Recovery Strategies](../ics-12-byzantine-recovery-strategies).
 
 ### Backwards Compatibility
 
@@ -105,7 +117,7 @@ Not applicable.
 
 ### Forwards Compatibility
 
-Once a connection has been established and a version negotiated, future version updates can be negotiated per [ICS 6: Connection & Channel Versioning](../spec/ics-6-connection-channel-versioning). The root of trust can only be updated per the `updateRootOfTrust` function defined by the consensus protocol chosen when the connection is established.
+Once a connection has been established and a version negotiated, future version updates can be negotiated per [ICS 6: Connection & Channel Versioning](../spec/ics-6-connection-channel-versioning). The root of trust can only be updated as allowed by the `updateRootOfTrust` function defined by the consensus protocol chosen when the connection is established.
 
 ### Example Implementation
 
