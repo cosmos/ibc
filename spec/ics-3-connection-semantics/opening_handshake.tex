@@ -1,37 +1,10 @@
-\documentclass[border=2pt]{standalone}
-\usepackage{amsmath}
-\usepackage{varwidth}
-\usepackage{color}
-\usepackage{algpseudocode}
-
-\algdef{SE}[SUBALG]{Indent}{EndIndent}{}{\algorithmicend\ }%
-\algtext*{Indent}
-\algtext*{EndIndent}
-
-\algblockdefx[Struct]{Struct}{EndStruct}%
-    [2][Unknown]{struct \textsc{#1} \textbf{#2} \{}%
-    {\}}
-
-\algnewcommand\Field[2]{\State \textsc{#1} #2}
-
-\algnewcommand\algorithmicswitch{\textbf{switch}}
-\algnewcommand\algorithmiccase{\textbf{case}}
-\algnewcommand\algorithmicassert{\texttt{assert}}
-\algnewcommand\Assert[1]{\State \algorithmicassert(#1)}%
-\algdef{SE}[SWITCH]{Switch}{EndSwitch}[1]{\algorithmicswitch\ #1\ \algorithmicdo}{\algorithmicend\ \algorithmicswitch}%
-\algdef{SE}[CASE]{Case}{EndCase}[1]{\algorithmiccase\ #1}{\algorithmicend\ \algorithmiccase}%
-\algtext*{EndSwitch}%
-\algtext*{EndCase}%
-
-\makeatletter
-\renewcommand{\ALG@beginalgorithmic}{\tiny}
-\makeatother
+\include{common}
 
 \begin{document}
 \begin{varwidth}{\linewidth}
 
 \begin{algorithmic}
-\Struct[Datagram]{OPENINIT}
+\Struct[Datagram]{CONNOPENINIT}
 \Field{Version}{desiredVersion}
 \Field{RootOfTrust}{rootOfTrustB}
 \Field{Identifier}{identifierA}
@@ -40,7 +13,7 @@
 \end{algorithmic}
 
 \begin{algorithmic}
-\Struct[Datagram]{OPENTRY}
+\Struct[Datagram]{CONNOPENTRY}
 \Field{Version}{desiredVersion}
 \Field{RootOfTrust}{rootOfTrustA}
 \Field{Identifier}{identifierA}
@@ -50,7 +23,7 @@
 \end{algorithmic}
 
 \begin{algorithmic}
-\Struct[Datagram]{OPENACK}
+\Struct[Datagram]{CONNOPENACK}
 \Field{Version}{agreedVersion}
 \Field{Identifier}{agreedIdentifierB}
 \Field{AccumulatorProof}{proofTryB}
@@ -58,7 +31,7 @@
 \end{algorithmic}
 
 \begin{algorithmic}
-\Struct[Datagram]{OPENCONFIRM}
+\Struct[Datagram]{CONNOPENCONFIRM}
 \Field{AccumulatorProof}{proofAckA}
 \EndStruct
 \end{algorithmic}
@@ -68,17 +41,18 @@
 \Field{INIT}{}
 \Field{TRY}{}
 \Field{OPEN}{}
+\Field{CLOSED}{}
 \EndStruct
 \end{algorithmic}
 
 \begin{algorithmic}
 \Function{handleDatagram}{datagram}
   \Switch{$datagram$}
-    \Case{$OPENINIT$}
+    \Case{$CONNOPENINIT$}
       \State \Call{Store}{identifierA, <desiredVersion, rootOfTrustB, desiredIdentifierB>}
       \State $state \gets INIT$
     \EndCase
-    \Case{$OPENTRY$}
+    \Case{$CONNOPENTRY$}
       \Assert{\Call{verify}{rootOfTrustA, proofInitA}}
       \Assert{\Call{getRootOfTrust}{} $==$ rootOfTrustB}
       \State $identifierB \gets $\Call{chooseIdentifier}{desiredIdentifierB}
@@ -86,7 +60,7 @@
       \State \Call{Store}{identifierB, <version, rootOfTrustA, identifierA>}
       \State $state \gets TRY$
     \EndCase
-    \Case{$OPENACK$}
+    \Case{$CONNOPENACK$}
       \Assert{$state == INIT$}
       \Assert{\Call{verify}{rootOfTrustB, proofTryB}}
       \Assert{\Call{getRootOfTrust}{} $==$ rootOfTrustA}
@@ -95,7 +69,7 @@
       \State \Call{Store}{identifierA, <version, rootOfTrustB, identifierB>}
       \State $state \gets OPEN$
     \EndCase
-    \Case{$OPENCONFIRM$}
+    \Case{$CONNOPENCONFIRM$}
       \Assert{$state == TRY$}
       \Assert{\Call{verify}{rootOfTrustA, proofAckA}}
       \State $state \gets OPEN$

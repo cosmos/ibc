@@ -92,88 +92,11 @@ Any header may be from a malicious chain (e.g. shadowing a real chain state with
 
 *THREE WAY HANDSHAKE OUTLINE*
 
-![OpeningHandshake](OpeningHandshake.png)
-
-###### OPENTRY
-
-First datagram, A -> B
-
-Provided input:
-- Commitment to root-of-trust for B
-
-On A:
-- Reserve connection slot
-- Prove reserved connection slot (is this necessary?)
-- Prove commitment to root-of-trust for B
-
-Data:
-- Root-of-trust for A
-- Connection slot identifier on A
-- Desired connection slot identifier on B
-- Proof of reserved connection slot identifier on A
-
-On B:
-- Check slot identifier
-- Ensure no existing root-of-trust for A
-- Store root-of-trust for A ~= connection identifier
-
-Timeout (committing on B) = stored RoT deleted, connection slot unreserved.
-
-Forgery: Any A' could commit such a packet on B. Only guarantee: non-duplication.
-
-###### OPENACK
-
-Second datagram, B -> A
-
-On B:
-- Prove stored root-of-trust for A in desired connection slot identifier
-
-Data:
-- Root-of-trust for B
-- Proof of stored root-of-trust for A in desired connection slot identifier
-
-On A:
-- Store root-of-trust for B ~= connection identifier
-- Connection now "open" on A
-
-Timeout (committing on A)
-- On B: Slot unreserved, root-of-trust for A deleted
-- On A: Connection timeout frees slot *OR* second datagram to prove unreserved slot, termined handshake can then free slot on A (eventually)
-
-Forgery: Any B' could commit ACK packet on A (unless RoT-hash is included; alternative version). Only guarantee: non-duplication.
-
-DoS concerns? Can just make it expensive and retry?
-
-Or maybe we just require OPENTRY start with a root-of-trust for B - then only B could commit `OPENACK`.
-Then we should just need a two-way handshake?
-... I think this makes more sense.
-
-###### OPENCONFIRM
-
-Third datagram, A -> B
-
-On A:
-- Prove stored root-of-trust for B
-
-Data:
-- Proof of stored root-of-trust for B
-
-On B:
-- Connection now "open" on B
-
-Timeout (committing on B):
-- On A: Pending connection deleted.
-- On B: Connection timeout frees slot *OR* second datagram to prove deleted pending connection, slot on B then freed (eventually)
-
-Forgery: Only A could commit `OPENCONFIRM` since root-of-trust for A is now stored on B.
-
-*TWO WAY HANDSHAKE OUTLINE*
-
-The same thing, except `OPENTRY` provides a proof that B's root-of-trust has been stored, and the connection on B is opened after `OPENACK` is sent from B to A.
+![Opening Handshake](opening_handshake.png)
 
 ##### Tracking Headers
 
-![TrackingHeaders](TrackingHeaders.png)
+![Tracking Headers](tracking_headers.png)
 
 We define two messages `U_h` and `X_h`, which together allow us to securely advance our trust from some known `H_n` to some future `H_h` where `h > n`. Some implementations may require that `h == n + 1` (all headers must be processed in order). IBC implemented on top of Tendermint or similar BFT algorithms requires only that `delta-vals(C_n, C_h) < ⅓` (each step must have a change of less than one-third of the validator set)[[4](./references.md#4)].
 
@@ -217,7 +140,7 @@ Bisection can be used to discover this set of proofs. That is, given `max(T) == 
 
 ##### Closing Handshake
 
-![ClosingHandshake](ClosingHandshake.png)
+![Closing Handshake](closing_handshake.png)
 
 IBC implementations may optionally include the ability to close an IBC connection and prevent further header updates, simply causing `update(T, X_h | U_h)` as defined above to always return `false`.
 

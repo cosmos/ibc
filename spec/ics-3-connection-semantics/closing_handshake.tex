@@ -1,0 +1,50 @@
+\include{common}
+
+\begin{document}
+\begin{varwidth}{\linewidth}
+
+\begin{algorithmic}
+\Struct[Datagram]{CONNCLOSEINIT}
+\Field{Identifier}{identifierA}
+\Field{Identifier}{identifierB}
+\EndStruct
+\end{algorithmic}
+
+\begin{algorithmic}
+\Struct[Datagram]{CONNCLOSETRY}
+\Field{Identifier}{identifierA}
+\Field{Identifier}{identifierB}
+\Field{AccumulatorProof}{proofInitA}
+\EndStruct
+\end{algorithmic}
+
+\begin{algorithmic}
+\Struct[Datagram]{CONNCLOSEACK}
+\Field{AccumulatorProof}{proofTryB}
+\EndStruct
+\end{algorithmic}
+
+\begin{algorithmic}
+\Function{handleDatagram}{datagram}
+  \Switch{$datagram$}
+    \Case{$CONNCLOSEINIT$}
+      \Assert{$state == OPEN$}
+      \State \Call{Store}{identifierA, <desiredVersion, rootOfTrustB, desiredIdentifierB>}
+      \State $state \gets TRYCLOSE$
+    \EndCase
+    \Case{$CONNCLOSETRY$}
+      \Assert{$state == OPEN$}
+      \Assert{\Call{verify}{rootOfTrustA, proofInitA}}
+      \State $state \gets CLOSED$
+    \EndCase
+    \Case{$CONNCLOSEACK$}
+      \Assert{$state == TRYCLOSE$}
+      \Assert{\Call{verify}{rootOfTrustB, proofTryB}}
+      \State $state \gets CLOSED$
+    \EndCase
+  \EndSwitch
+\EndFunction
+\end{algorithmic}
+
+\end{varwidth}
+\end{document}
