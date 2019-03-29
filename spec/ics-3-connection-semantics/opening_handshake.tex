@@ -6,35 +6,35 @@
 \begin{algorithmic}
 \Struct[Datagram]{CONNOPENINIT}
 \Field{Version}{desiredVersion}
-\Field{RootOfTrust}{rootOfTrustB}
-\Field{Identifier}{identifierA}
-\Field{Identifier}{desiredIdentifierB}
+\Field{RootOfTrust}{rootOfTrust}
+\Field{Identifier}{identifier}
+\Field{Identifier}{desiredCounterpartyIdentifier}
 \EndStruct
 \end{algorithmic}
 
 \begin{algorithmic}
 \Struct[Datagram]{CONNOPENTRY}
 \Field{Version}{desiredVersion}
-\Field{RootOfTrust}{rootOfTrustA}
-\Field{Identifier}{identifierA}
-\Field{Identifier}{desiredIdentifierB}
-\Field{AccumulatorProof}{proofInitA}
+\Field{RootOfTrust}{rootOfTrust}
+\Field{Identifier}{counterpartyIdentifier}
+\Field{Identifier}{desiredIdentifier}
+\Field{AccumulatorProof}{proofInit}
 \EndStruct
 \end{algorithmic}
 
 \begin{algorithmic}
 \Struct[Datagram]{CONNOPENACK}
+\Field{Identifier}{identifier}
 \Field{Version}{agreedVersion}
-\Field{Identifier}{identifierA}
-\Field{Identifier}{agreedIdentifierB}
-\Field{AccumulatorProof}{proofTryB}
+\Field{Identifier}{agreedCounterpartyIdentifier}
+\Field{AccumulatorProof}{proofTry}
 \EndStruct
 \end{algorithmic}
 
 \begin{algorithmic}
 \Struct[Datagram]{CONNOPENCONFIRM}
-\Field{Identifier}{identifierB}
-\Field{AccumulatorProof}{proofAckA}
+\Field{Identifier}{identifier}
+\Field{AccumulatorProof}{proofAck}
 \EndStruct
 \end{algorithmic}
 
@@ -43,31 +43,34 @@
   \Switch{$datagram$}
     \Case{$CONNOPENINIT$}
       \State $state \gets INIT$
-      \State \Call{Set}{identifierA, (state, desiredVersion, desiredIdentifierB, rootOfTrustB)}
+      \State \Call{Set}{identifier, (state, desiredVersion, desiredCounterpartyIdentifier, rootOfTrust)}
     \EndCase
     \Case{$CONNOPENTRY$}
-      \Assert{\Call{verify}{rootOfTrustA, proofInitA}}
-      \Assert{\Call{getRootOfTrust}{ } $==$ rootOfTrustB}
-      \State $identifierB \gets$ \Call{chooseIdentifier}{desiredIdentifierB}
-      \State $versionB \gets$ \Call{chooseVersion}{desiredVersionB}
-      \State \Call{Set}{identifierB, (state, version, identifierA, rootOfTrustA)}
+      \State $expectedRootOfTrust \gets$ \Call{getRootOfTrust}{ }
+      \Assert{\Call{verify}{rootOfTrust, proofInit,
+        (counterpartyIdentifier, (INIT, desiredVersion, desiredIdentifier, expectedRootOfTrust))}}
+      \State $identifier \gets$ \Call{chooseIdentifier}{desiredIdentifier}
+      \State $version \gets$ \Call{chooseVersion}{desiredVersion}
+      \State \Call{Set}{identifier, (state, version, counterpartyIdentifier, rootOfTrust)}
       \State $state \gets OPENTRY$
     \EndCase
     \Case{$CONNOPENACK$}
-      \State $(state, desiredVersionB, desiredIdentifierB, rootOfTrustB) \gets $\Call{Get}{identifierA}
+      \State $(state, desiredVersion, desiredCounterpartyIdentifier, rootOfTrust) \gets $\Call{Get}{identifier}
       \Assert{$state == INIT$}
-      \Assert{\Call{verify}{rootOfTrustB, proofTryB}}
-      \Assert{\Call{getRootOfTrust}{ } $==$ rootOfTrustA}
-      \Assert{\Call{checkIdentifier}{desiredIdentifierB, identifierB}}
-      \Assert{\Call{checkVersion}{desiredVersion, version}}
+      \State $expectedRootOfTrust \gets$ \Call{getRootOfTrust}{ }
+      \Assert{\Call{verify}{rootOfTrust, proofTry, (agreedCounterpartyIdentifier, (OPENTRY, agreedVersion, identifier, expectedRootOfTrust))}}
+      \Assert{\Call{checkIdentifier}{desiredCounterpartyIdentifier, agreedCounterpartyIdentifier}}
+      \Assert{\Call{checkVersion}{desiredVersion, agreedVersion}}
       \State $state \gets OPEN$
-      \State \Call{Set}{identifierA, <version, rootOfTrustB, identifierB, state>}
+      \State \Call{Set}{identifier, (state, agreedVersion, agreedCounterpartyIdentifier, rootOfTrust)}
     \EndCase
     \Case{$CONNOPENCONFIRM$}
-      \State $(state, version, identifierB, rootOfTrustB) \gets$ \Call{Get}{identifierB}
+      \State $(state, version, counterpartyIdentifier, rootOfTrust) \gets$ \Call{Get}{identifier}
       \Assert{$state == OPENTRY$}
-      \Assert{\Call{verify}{rootOfTrustA, proofAckA}}
+      \State $expectedRootOfTrust \gets$ \Call{getRootOfTrust}{ }
+      \Assert{\Call{verify}{rootOfTrust, proofAck, (counterpartyIdentifier, (OPEN, version, identifier, expectedRootOfTrust)}}
       \State $state \gets OPEN$
+      \State \Call{Set}{identifier, (state, version, counterpartyIdentifier, rootOfTrust)}
     \EndCase
   \EndSwitch
 \EndFunction

@@ -5,23 +5,23 @@
 
 \begin{algorithmic}
 \Struct[Datagram]{CONNCLOSEINIT}
-\Field{Identifier}{identifierA}
-\Field{Identifier}{identifierB}
+\Field{Identifier}{identifier}
+\Field{Identifier}{identifierCounterparty}
 \EndStruct
 \end{algorithmic}
 
 \begin{algorithmic}
 \Struct[Datagram]{CONNCLOSETRY}
-\Field{Identifier}{identifierA}
-\Field{Identifier}{identifierB}
-\Field{AccumulatorProof}{proofInitA}
+\Field{Identifier}{identifier}
+\Field{Identifier}{identifierCounterparty}
+\Field{AccumulatorProof}{proofInit}
 \EndStruct
 \end{algorithmic}
 
 \begin{algorithmic}
 \Struct[Datagram]{CONNCLOSEACK}
 \Field{Identifier}{identifier}
-\Field{AccumulatorProof}{proofTryB}
+\Field{AccumulatorProof}{proofTry}
 \EndStruct
 \end{algorithmic}
 
@@ -29,23 +29,24 @@
 \Function{handleDatagram}{datagram}
   \Switch{$datagram$}
     \Case{$CONNCLOSEINIT$}
-      \State $(state, version, counterpartyIdentifier, rootOfTrust) \gets$ \Call{Get}{identifierA}
+      \State $(state, version, counterpartyIdentifier, rootOfTrust) \gets$ \Call{Get}{identifier}
       \Assert{$state == OPEN$}
-      \Assert{$identifierB == counterpartyIdentifier$}
+      \Assert{$identifierCounterparty == counterpartyIdentifier$}
       \State $state \gets TRYCLOSE$
-      \State \Call{Set}{identifierA, (state, version, counterpartyIdentifier, rootOfTrust)}
+      \State \Call{Set}{identifier, (state, version, counterpartyIdentifier, rootOfTrust)}
     \EndCase
     \Case{$CONNCLOSETRY$}
-      \State $(state, version, counterpartyIdentifier, rootOfTrust) \gets$ \Call{Get}{identifierB}
+      \State $(state, version, counterpartyIdentifier, rootOfTrust) \gets$ \Call{Get}{identifier}
       \Assert{$state == OPEN$}
-      \Assert{\Call{verify}{rootOfTrust, proofInitA}}
+      \Assert{$identifierCounterparty == counterpartyIdentifier$}
+      \Assert{\Call{verify}{rootOfTrust, proofInit, (counterpartyIdentifier, TRYCLOSE)}}
       \State $state \gets CLOSED$
-      \State \Call{Set}{identifierB, (state, version, counterpartyIdentifier, rootOfTrust)}
+      \State \Call{Set}{identifier, (state, version, counterpartyIdentifier, rootOfTrust)}
     \EndCase
     \Case{$CONNCLOSEACK$}
-      \State $(state, version, counterpartyIdentifier, rootOfTrust) \gets$ \Call{Get}{identifierA}
+      \State $(state, version, counterpartyIdentifier, rootOfTrust) \gets$ \Call{Get}{identifier}
       \Assert{$state == TRYCLOSE$}
-      \Assert{\Call{verify}{rootOfTrustB, proofTryB}}
+      \Assert{\Call{verify}{rootOfTrust, proofTry, (counterpartyIdentifier, CLOSED)}}
       \State $state \gets CLOSED$
       \State \Call{Set}{identifier, (state, version, counterpartyIdentifier, rootOfTrust)}
     \EndCase
