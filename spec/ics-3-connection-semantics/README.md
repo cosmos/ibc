@@ -91,6 +91,11 @@ This subprotocol need not be permissioned, modulo anti-spam measures.
 
 ![Opening Handshake](opening_handshake.png)
 
+At the end of an opening handshake between two chains implementing the correct IBC protocol, the following properties hold:
+- Each chain has each other's correct root-of-trust as originally specified by the initiating user.
+- The chains have agreed to a shared connection version.
+- Each chain has knowledge of and has agreed to its identifier on the other chain.
+
 ##### Header Tracking
 
 The header tracking subprotocol serves to update the root of trust for an open connection.

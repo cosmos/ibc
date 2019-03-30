@@ -47,18 +47,19 @@
     \EndCase
     \Case{$CONNOPENTRY$}
       \State $expectedRootOfTrust \gets$ \Call{getRootOfTrust}{ }
-      \Assert{\Call{verify}{rootOfTrust, proofInit,
-        (counterpartyIdentifier, (INIT, desiredVersion, desiredIdentifier, expectedRootOfTrust))}}
+      \Assert{\Call{verify}{rootOfTrust, proofInit,\par
+        \hskip3em (counterpartyIdentifier, (INIT, desiredVersion, desiredIdentifier, expectedRootOfTrust))}}
       \State $identifier \gets$ \Call{chooseIdentifier}{desiredIdentifier}
       \State $version \gets$ \Call{chooseVersion}{desiredVersion}
-      \State \Call{Set}{identifier, (state, version, counterpartyIdentifier, rootOfTrust)}
       \State $state \gets OPENTRY$
+      \State \Call{Set}{identifier, (state, version, counterpartyIdentifier, rootOfTrust)}
     \EndCase
     \Case{$CONNOPENACK$}
       \State $(state, desiredVersion, desiredCounterpartyIdentifier, rootOfTrust) \gets $\Call{Get}{identifier}
       \Assert{$state == INIT$}
       \State $expectedRootOfTrust \gets$ \Call{getRootOfTrust}{ }
-      \Assert{\Call{verify}{rootOfTrust, proofTry, (agreedCounterpartyIdentifier, (OPENTRY, agreedVersion, identifier, expectedRootOfTrust))}}
+      \Assert{\Call{verify}{rootOfTrust, proofTry,\par
+        \hskip3em (agreedCounterpartyIdentifier, (OPENTRY, agreedVersion, identifier, expectedRootOfTrust))}}
       \Assert{\Call{checkIdentifier}{desiredCounterpartyIdentifier, agreedCounterpartyIdentifier}}
       \Assert{\Call{checkVersion}{desiredVersion, agreedVersion}}
       \State $state \gets OPEN$
@@ -68,7 +69,8 @@
       \State $(state, version, counterpartyIdentifier, rootOfTrust) \gets$ \Call{Get}{identifier}
       \Assert{$state == OPENTRY$}
       \State $expectedRootOfTrust \gets$ \Call{getRootOfTrust}{ }
-      \Assert{\Call{verify}{rootOfTrust, proofAck, (counterpartyIdentifier, (OPEN, version, identifier, expectedRootOfTrust)}}
+      \Assert{\Call{verify}{rootOfTrust, proofAck,\par
+        \hskip3em (counterpartyIdentifier, (OPEN, version, identifier, expectedRootOfTrust)}}
       \State $state \gets OPEN$
       \State \Call{Set}{identifier, (state, version, counterpartyIdentifier, rootOfTrust)}
     \EndCase
