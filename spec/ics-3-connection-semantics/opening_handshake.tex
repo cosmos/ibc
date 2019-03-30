@@ -5,19 +5,19 @@
 
 \begin{algorithmic}
 \Struct[Datagram]{CONNOPENINIT}
-\Field{Version}{desiredVersion}
-\Field{RootOfTrust}{rootOfTrust}
 \Field{Identifier}{identifier}
 \Field{Identifier}{desiredCounterpartyIdentifier}
+\Field{Version}{desiredVersion}
+\Field{RootOfTrust}{rootOfTrust}
 \EndStruct
 \end{algorithmic}
 
 \begin{algorithmic}
 \Struct[Datagram]{CONNOPENTRY}
+\Field{Identifier}{desiredIdentifier}
+\Field{Identifier}{counterpartyIdentifier}
 \Field{Version}{desiredVersion}
 \Field{RootOfTrust}{rootOfTrust}
-\Field{Identifier}{counterpartyIdentifier}
-\Field{Identifier}{desiredIdentifier}
 \Field{AccumulatorProof}{proofInit}
 \EndStruct
 \end{algorithmic}
@@ -25,8 +25,8 @@
 \begin{algorithmic}
 \Struct[Datagram]{CONNOPENACK}
 \Field{Identifier}{identifier}
-\Field{Version}{agreedVersion}
 \Field{Identifier}{agreedCounterpartyIdentifier}
+\Field{Version}{agreedVersion}
 \Field{AccumulatorProof}{proofTry}
 \EndStruct
 \end{algorithmic}
