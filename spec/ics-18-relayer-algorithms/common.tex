@@ -1,0 +1,34 @@
+\documentclass[margin=0pt,border=0pt]{standalone}
+\usepackage{amsmath}
+\usepackage{varwidth}
+\usepackage{color}
+\usepackage{algorithm}
+\usepackage{algpseudocode}
+
+\algdef{SE}[SUBALG]{Indent}{EndIndent}{}{\algorithmicend\ }%
+\algtext*{Indent}
+\algtext*{EndIndent}
+
+\algblockdefx[Struct]{Struct}{EndStruct}%
+    [2][Unknown]{struct \textsc{#1} \tiny{\textbf{#2}} \{}%
+    {\}}
+
+\algblockdefx[Enum]{Enum}{EndEnum}%
+    [1][Unknown]{enum \textsc{#1} \{}%
+    {\}}
+
+\algnewcommand\Field[2]{\State \textsc{#1} #2}
+\algnewcommand\Value[1]{\State \textsc{#1}}
+
+\algnewcommand\algorithmicswitch{\textbf{switch}}
+\algnewcommand\algorithmiccase{\textbf{case}}
+\algnewcommand\algorithmicassert{\texttt{assert}}
+\algnewcommand\Assert[1]{\State \algorithmicassert(#1)}%
+\algdef{SE}[SWITCH]{Switch}{EndSwitch}[1]{\algorithmicswitch\ #1\ \algorithmicdo}{\algorithmicend\ \algorithmicswitch}%
+\algdef{SE}[CASE]{Case}{EndCase}[1]{\algorithmiccase\ \tiny{#1}}{\algorithmicend\ \algorithmiccase}%
+\algtext*{EndSwitch}%
+\algtext*{EndCase}%
+
+\makeatletter
+\renewcommand{\ALG@beginalgorithmic}{\tiny}
+\makeatother

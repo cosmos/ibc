@@ -1,7 +1,7 @@
 ---
 ics: 18
 title: Relayer Algorithms
-stage: proposal
+stage: draft
 category: ibc-misc
 author: Christopher Goes <cwgoes@tendermint.com>, Juwoon Yun <joon@tendermint.com>
 created: 2019-03-07
@@ -16,8 +16,7 @@ Relayer algorithms are the "physical" connection layer of IBC — off-chain proc
 
 ### Motivation
 
-- IBC needs physical layer
-- Describe algorithm for implementors
+In the IBC protocol, a blockchain can only record the *intention* to send particular data to another chain. Physical datagram relay must be performed by off-chain infrastructure. This standard defines the concept of a *relayer* algorithm, executable by an off-chain process with the ability to query chain state, to perform this relay.
 
 ### Desired Properties
 
@@ -29,29 +28,21 @@ Relayer algorithms are the "physical" connection layer of IBC — off-chain proc
 
 ### Technical Specification
 
-(rewrite this)
+#### Relayer Algorithm
 
-The blockchain itself only records the *intention* to send the given message to the recipient chain. Physical network packet relay must be performed by off-chain infrastructure. We define the concept of a *relay* process that connects two chains by querying one for all outgoing packets & proofs, then committing those packets & proofs to the recipient chain.
+The relayer algorithm is defined over a set `C` of chains implementing the IBC protocol.
 
-The relay process must have access to accounts on both chains with sufficient balance to pay for transaction fees but needs no other permissions. Relayers may employ application-level methods to recoup these fees. Any number of *relay* processes may be safely run in parallel. However, they will consume unnecessary fees if they submit the same proof multiple times, so some minimal coordination is ideal.
+`pendingDatagrams` calculates the set of all valid datagrams to be relayed from one chain to another based on the state of both chains. Subcomponents of this function are defined in individual ICSs. The relayer must possess prior knowledge of what subset of the IBC protocol is implemented by the blockchains in the set for which they are relaying (e.g. by reading the source code).
 
-As an example, here is a naive algorithm for relaying outgoing packets from `A` to `B` and incoming receipts from `B` back to `A`. All reads of variables belonging to a chain imply queries and all function calls imply submitting a transaction to the blockchain.
+`submitDatagram` is a procedure defined per-chain (submitting a transaction of some sort).
 
-```
-while true
-   set pending = tail(outgoing_A)
-   set received = tail(incoming_B)
-   if pending > received
-       set U_h = A.latestHeader
-       if U_h /= B.knownHeaderA
-          B.updateHeader(U_h)
-       for i from received to pending
-           set P = outgoing_A[i]
-           set M_kvh = A.prove(U_h, P)
-           B.receive(P, M_kvh)
-```
+![Relayer](relayer.png)
 
-Note that updating a header is a costly transaction compared to posting a Merkle proof for a known header. Thus, a process could wait until many messages are pending, then submit one header along with multiple Merkle proofs, rather than a separate header for each message. This decreases total computation cost (and fees) at the price of additional latency and is a trade-off each relay can dynamically adjust.
+#### Incentivization
+
+The relay process must have access to accounts on both chains with sufficient balance to pay for transaction fees. Relayers may employ application-level methods to recoup these fees.
+
+Any number of relayer processes may be safely run in parallel (and indeed, it is expected that separate relayers will serve separate subsets of the interchain). However, they may consume unnecessary fees if they submit the same proof multiple times, so some minimal coordination may be ideal.
 
 ### Backwards Compatibility
 
