@@ -1,32 +1,35 @@
 ---
 ics: 18
-title: Off-chain Relayer Algorithms
+title: Relayer Algorithms
 stage: proposal
 category: ibc-misc
 author: Christopher Goes <cwgoes@tendermint.com>, Juwoon Yun <joon@tendermint.com>
 created: 2019-03-07
-modified: 2019-03-07
+modified: 2019-03-30
 ---
 
 ## Synopsis
 
-(high-level description of and rationale for specification)
+Relayer algorithms are the "physical" connection layer of IBC — off-chain processes responsible for relaying data between two chains running the IBC protocol by scanning the state of each chain, constructing appropriate datagrams, and executing them on the opposite chain as allowed by the protocol.
 
 ## Specification
 
-(main part of standard document - not all subsections are required)
-
 ### Motivation
 
-(rationale for existence of standard)
+- IBC needs physical layer
+- Describe algorithm for implementors
 
 ### Desired Properties
 
-(desired characteristics / properties of protocol, effects if properties are violated)
+- No safety properties of IBC should depend on relayer behavor (assume Byzantine relayers).
+- Liveness properties of IBC should depend only on the existence of at least one correct, live relayer.
+- Relaying should be permissionless, all requisite verification should be performed on-chain.
+- Requisite communication between the IBC user and the relayer should be minimized.
+- Provision for relayer incentivization at the application layer should be considered.
 
 ### Technical Specification
 
-(detailed technical specification: syntax, semantics, sub-protocols, algorithms, data structures, etc)
+(rewrite this)
 
 The blockchain itself only records the *intention* to send the given message to the recipient chain. Physical network packet relay must be performed by off-chain infrastructure. We define the concept of a *relay* process that connects two chains by querying one for all outgoing packets & proofs, then committing those packets & proofs to the recipient chain.
 
@@ -52,23 +55,23 @@ Note that updating a header is a costly transaction compared to posting a Merkle
 
 ### Backwards Compatibility
 
-(discussion of compatibility or lack thereof with previous standards)
+Not applicable. The relayer process is off-chain and can be upgraded or downgraded as necessary.
 
 ### Forwards Compatibility
 
-(discussion of compatibility or lack thereof with expected future standards)
+Not applicable. The relayer process is off-chain and can be upgraded or downgraded as necessary.
 
 ### Example Implementation
 
-(link to or description of concrete example implementation)
+Coming soon.
 
 ### Other Implementations
 
-(links to or descriptions of other implementations)
+Coming soon.
 
 ## History
 
-(changelog and notable inspirations / references)
+30 March 2019 - Initial draft submitted
 
 ## Copyright
 
