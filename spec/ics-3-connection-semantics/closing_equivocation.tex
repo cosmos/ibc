@@ -4,7 +4,7 @@
 \begin{varwidth}{\linewidth}
 
 \begin{algorithmic}
-\Struct[Datagram]{CONNCLOSEEQUIVOCATION}
+\Struct[Datagram]{ConnCloseEquivocation}
 \Field{Identifier}{identifier}
 \Field{Header}{firstHeader}
 \Field{Header}{secondHeader}
@@ -14,7 +14,7 @@
 \begin{algorithmic}
 \Function{handleDatagram}{datagram}
   \Switch{$datagram$}
-    \Case{$CONNCLOSEEQUIVOCATION$}
+    \Case{$ConnCloseEquivocation$}
       \State $(state, version, counterpartyIdentifier, rootOfTrust) \gets$ \Call{Get}{identifier}
       \Assert{$state == OPEN$}
       \Assert{\Call{checkEquivocation}{rootOfTrust, firstHeader, secondHeader}}

@@ -4,7 +4,7 @@
 \begin{varwidth}{\linewidth}
 
 \begin{algorithmic}
-\Struct[Datagram]{CONNOPENINIT}
+\Struct[Datagram]{ConnOpenInit}
 \Field{Identifier}{identifier}
 \Field{Identifier}{desiredCounterpartyIdentifier}
 \Field{Version}{desiredVersion}
@@ -13,7 +13,7 @@
 \end{algorithmic}
 
 \begin{algorithmic}
-\Struct[Datagram]{CONNOPENTRY}
+\Struct[Datagram]{ConnOpenTry}
 \Field{Identifier}{desiredIdentifier}
 \Field{Identifier}{counterpartyIdentifier}
 \Field{Version}{desiredVersion}
@@ -23,7 +23,7 @@
 \end{algorithmic}
 
 \begin{algorithmic}
-\Struct[Datagram]{CONNOPENACK}
+\Struct[Datagram]{ConnOpenAck}
 \Field{Identifier}{identifier}
 \Field{Identifier}{agreedCounterpartyIdentifier}
 \Field{Version}{agreedVersion}
@@ -41,11 +41,11 @@
 \begin{algorithmic}
 \Function{handleDatagram}{datagram}
   \Switch{$datagram$}
-    \Case{$CONNOPENINIT$}
+    \Case{$ConnOpenInit$}
       \State $state \gets INIT$
       \State \Call{Set}{identifier, (state, desiredVersion, desiredCounterpartyIdentifier, rootOfTrust)}
     \EndCase
-    \Case{$CONNOPENTRY$}
+    \Case{$ConnOpenTry$}
       \State $expectedRootOfTrust \gets$ \Call{getRootOfTrust}{ }
       \Assert{\Call{verify}{rootOfTrust, proofInit,\par
         \hskip3em (counterpartyIdentifier, (INIT, desiredVersion, desiredIdentifier, expectedRootOfTrust))}}
@@ -54,7 +54,7 @@
       \State $state \gets OPENTRY$
       \State \Call{Set}{identifier, (state, version, counterpartyIdentifier, rootOfTrust)}
     \EndCase
-    \Case{$CONNOPENACK$}
+    \Case{$ConnOpenAck$}
       \State $(state, desiredVersion, desiredCounterpartyIdentifier, rootOfTrust) \gets $\Call{Get}{identifier}
       \Assert{$state == INIT$}
       \State $expectedRootOfTrust \gets$ \Call{getRootOfTrust}{ }
@@ -65,7 +65,7 @@
       \State $state \gets OPEN$
       \State \Call{Set}{identifier, (state, agreedVersion, agreedCounterpartyIdentifier, rootOfTrust)}
     \EndCase
-    \Case{$CONNOPENCONFIRM$}
+    \Case{$ConnOpenConfirm$}
       \State $(state, version, counterpartyIdentifier, rootOfTrust) \gets$ \Call{Get}{identifier}
       \Assert{$state == OPENTRY$}
       \State $expectedRootOfTrust \gets$ \Call{getRootOfTrust}{ }
