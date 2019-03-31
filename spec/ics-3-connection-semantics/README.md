@@ -66,10 +66,9 @@ Versioning-related primitives are as defined in [ICS 6: Connection & Channel Ver
 
 #### Requirements
 
-Connection handlers and subsequent protocols make use of a simple key-value store interface provided by the underlying state machine. This store must provide three functions, which behave in the way you would expect:
-- `Get(Key) -> Maybe Value`
+Connection handlers and subsequent protocols make use of a simple key-value store interface provided by the underlying state machine. This store must provide two functions, which behave in the way you would expect:
+- `Get(Key) -> Value | null`
 - `Set(Key, Value)`
-- `Has(Key) -> Bool`
 
 `Key` and `Value` are assumed to be byte slices; encoding details are left to a later ICS.
 

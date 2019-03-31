@@ -42,6 +42,7 @@
 \Function{handleDatagram}{datagram}
   \Switch{$datagram$}
     \Case{$ConnOpenInit$}
+      \Assert{\Call{Get}{identifier} $== null$} 
       \State $state \gets INIT$
       \State \Call{Set}{identifier, (state, desiredVersion, desiredCounterpartyIdentifier, rootOfTrust)}
     \EndCase
