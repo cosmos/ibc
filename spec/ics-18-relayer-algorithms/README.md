@@ -24,7 +24,7 @@ In the IBC protocol, a blockchain can only record the *intention* to send partic
 - Liveness properties of IBC should depend only on the existence of at least one correct, live relayer.
 - Relaying should be permissionless, all requisite verification should be performed on-chain.
 - Requisite communication between the IBC user and the relayer should be minimized.
-- Provision for relayer incentivization at the application layer should be considered.
+- Provision for relayer incentivization should be possible at the application layer.
 
 ### Technical Specification
 
