@@ -64,6 +64,11 @@ This ICS defines the `Connection` type:
 
 `Identifier` is an opaque value used as the key for a connection object; it must serialize to a bytestring. The identifier is not necessarily intended to be a human-readable name (and likely should not be, to discourage squatting or racing for identifiers). The opening handshake protocol allows each chain to verify the identifier used to reference the connection on the other chain, so the chains could choose to come to agreement on a common identifier (via `chooseIdentifier` and `checkIdentifier`). Further discussion is deferred to [ICS 10: Chain Naming Convention](../spec/ics-10-chain-naming-convention).
 
+A *user*, as referred to in this specification, is an entity capable of executing datagrams who is paying for computation / storage (via gas or a similar mechanism) but is otherwise untrusted. Possible users include:
+- End users signing with an account key
+- On-chain smart contracts acting autonomously or in response to another transaction
+- On-chain modules acting in response to another transaction or in a scheduled manner
+
 #### Requirements
 
 Connection handlers and subsequent protocols make use of a simple key-value store interface provided by the underlying state machine. This store must provide two functions, which behave in the way you would expect:
