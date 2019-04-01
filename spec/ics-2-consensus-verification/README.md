@@ -1,4 +1,5 @@
 ---
+
 ics: 2
 title: Consensus Verification
 stage: proposal
@@ -7,15 +8,16 @@ requires: 23
 required-by: 3
 author: Juwoon Yun <joon@tendermint.com>, Christopher Goes <cwgoes@tendermint.com>
 created: 2019-02-25
-modified: 2019-03-05
+modified: 2019-04-01
+
 ---
 
 ## Synopsis
 
-Consensus verification requires the properties that the chains on the network are 
-expected to satisfy. The properties are needed for efficient and safe verification on the 
-higher level mechanics, such as connection and channel semantics. The algorithm who uses these 
-properties to verify another chain is referred as "lightclient", which is embedded on the chains.
+This standard specifies the properties that consensus algorithms of chains implementing IBC are 
+expected to satisfy. The properties are needed for efficient and safe verification in the higher
+level protocol abstractions. The algorithm who uses these properties to verify substates of 
+another chain is referred to as a "light client".
 
 ## Specification
 
@@ -29,38 +31,38 @@ components can rely on.
 
 ### Desired Properties
 
-* Blockchains, defined as an infinite list of `Commit` starting from its genesis, is linear; no 
-conflicting `Commit`s can be both validated, thus no data can be rewritten after it has been 
-committed. Two `Commit`s are conflicting when both has same height but not equal.
+* Blockchains, defined as an infinite list of `Header` starting from its genesis, is linear; no 
+conflicting `Header`s can be both validated, thus no data can be rewritten after it has been 
+committed. Two `Header`s are conflicting when both has same height but not equal.
 
-* Verifiers can verify future `Commit`s using an existing `TrustedCommit`. When the verifier 
+* Verifiers can verify future `Header`s using an existing `RootOfTrust`. When the verifier 
 validates it, the verified header is in the canonical blockchain.
 
-* `TrustedCommit`s contains an accumulator root(ICS23) that the other logics can verify whether 
+* `RootOfTrust`s contains an accumulator root(ICS23) that the other logics can verify whether 
 key-value pairs exists or not with it.
 
 ### Technical Specification
 
 #### Definitions
 
-* `TrustedCommit` is a blockchain commit which can be used to prove future commits, stored in
-  one blockchain to verify the state of the other.
-  Defined as 3-tuple `(v :: Commit -> (Error|TrustedCommit), r :: AccumulatorRoot)`, where
-    * `v` is the verifier, proves child `Commit.p` and returns the updated `TrustedCommit`
+* `RootOfTrust` is a blockchain commit which contains an accumulator root and the requisite 
+  state to verify future roots, stored in one blockchain to verify the state of the other.
+  Defined as 3-tuple `(v :: Header -> (Error|RootOfTrust), r :: AccumulatorRoot)`, where
+    * `v` is the verifier, proves child `Header.p` and returns the updated `RootOfTrust`
     * `r` is the `AccumuatorRoot`, used to prove internal state
 
-* `Commit` is a blockchain header which provides information to update `TrustedCommit`, 
-  submitted to one blockchain to update the stored `TrustedCommit`.
-  Defined as 3-tuple `(p :: CommitProof, v :: Maybe<Commit -> (Error|TrustedCommit),
-  r :: AccumulatorRoot>`, where
-    * `p` is the commit proof used by `TrustedCommit.v` to verify
+* `Header` is a blockchain header which provides information to update `RootOfTrust`, 
+  submitted to one blockchain to update the stored `RootOfTrust`.
+  Defined as 3-tuple `(p :: HeaderProof, v :: Maybe<Header -> (Error|RootOfTrust)>,
+  r :: AccumulatorRoot)`, where
+    * `p` is the commit proof used by `RootOfTrust.v` to verify
     * `v` is the new verifier, if needed to be updated
     * `r` is the new `AccumulatorRoot` which will replace the existing one
  
-* `Consensus` is a blockchain consensus algorithm which generates valid `Commit`s.
-  Defined as a function `TrustedCommit -> [Transaction] -> Commit`
+* `Consensus` is a blockchain consensus algorithm which generates valid `Header`s.
+  Defined as a function `RootOfTrust -> [Transaction] -> Header`
 
-* `Blockchain` is a subset of `(Consensus, TrustedCommit, [Commit])`, generated 
+* `Blockchain` is a subset of `(Consensus, RootOfTrust, [Header])`, generated 
 by a `Consensus`.
 
 #### Requirements
@@ -74,45 +76,45 @@ properties as defined in ICS23:
 
 ##### Verifier
 
-Verifiers prove new `Commit` generated from a blockchain. It is expected to prove a `Commit` 
-efficiently; more efficient than replaying `Consensus` logic for given parent `Commit` and the 
-transactions. `Commit.p` provides the proof that the verifier can use. Verifiers assume the
-following properties will be satisfied for the `Commit`s:
+Verifiers prove new `Header` generated from a blockchain. It is expected to prove a `Header` 
+efficiently; more efficiently than replaying `Consensus` logic for given parent `Header` and the
+transactions. `Header.p` provides the proof that the verifier can use. Verifiers assume the
+following properties will be satisfied for the `Header`s:
 
-1. `Commit`s have no more than one direct child
+1. `Header`s have no more than one direct child
  
 * Satisfied if: deterministic safety
-* Possible violation scenario: validator double signing, miner double spend
+* Possible violation scenario: validator double signing, deep chain reorg
 
-2. `Commit`s have at least one direct child
+2. `Header`s have at least one direct child
 
 * Satisfied if: liveness, lightclient verifier continuability
 * Possible violation scenario: synchronized halt, incompatible hard fork
 
-3. `Commit`s' accumulator root are valid transition from the parents'
+3. `Header`s' accumulator root are valid transition from the parents'
 
 * Satisfied if: decentralized block generation, well implemented state machine
 * Possible violation scenario: invariant break, validator cartel
 
 // XXX: should it be described on the connection spec?
-If a `Commit` is submitted to the chain(and optionally passed some challenge period for fraud 
+If a `Header` is submitted to the chain(and optionally passed some challenge period for fraud 
 proof), then it is assured that the packet is finalized so the application logic can process it.
-If a `Commit` is proven to violate one of the properties, but still can be verified, the tracking 
+If a `Header` is proven to violate one of the properties, but still can be verified, the tracking 
 chain should detect and take action on the event to prevent further impact. See (link for the ICS 
 for equivocation and fraud proof) for details.
 
 ##### Accumulator Root
 
-`TrustedCommit` contains an accumulator root, which identifies the whole state of the 
+`RootOfTrust` contains an accumulator root, which identifies the whole state of the 
 corresponding blockchain at the point of time that the commit is generated. It is expected that 
 the verifying inclusion or exclusion of certain data in the accumulator is done efficient. See 
 ICS23 for the details about the `AccumulatorRoot`s.
 
 ##### Consensus 
 
-`Consensus` is a blockchain protocol which actually generates a list of `Commit` from the latest
+`Consensus` is a blockchain protocol which actually generates a list of `Header` from the latest
 state and the incoming transactions. While the chains on the network does not directly proving the 
-consensus process, it is expected that the consensus algorithms will generate valid `Commit`s.
+consensus process, it is expected that the consensus algorithms will generate valid `Header`s.
 
 ### Example Implementation
 
@@ -149,11 +151,11 @@ Gen = H(InitialPubkey, EmptyLogStore)
 
 It is possible that the `[C]` in a `B` can be any member of set `[C]`, but when the `B` is 
 instantiated in the real world, the `[C]` can have only one form. In this example, we assume
-that it is forced by an legal authority.
+that it is enforced by an legal authority.
 
-#### TrustedCommit
+#### RootOfTrust
 
-Type `H` is defined as `(Pubkey, LogStore)`. `H` satisfies `FullCommit`:
+Type `H` is defined as `(Pubkey, LogStore)`. `H` satisfies `Header`:
 
 ```
 function H.v(c :: C) returns (Error|H) {
@@ -173,9 +175,9 @@ function H.r() returns LogStore {
 }
 ```
 
-#### Commit
+#### Header
 
-Type `C` is defined as `(Sig, Maybe<Pubkey>, LogStore)`. `C` satisfies `Commit`:
+Type `C` is defined as `(Sig, Maybe<Pubkey>, LogStore)`. `C` satisfies `Header`:
 
 ```
 function C.p() returns C.Sig
