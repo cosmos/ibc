@@ -50,7 +50,7 @@
       \State $expectedRootOfTrust \gets$ \Call{getRootOfTrust}{ }
       \Assert{\Call{verify}{rootOfTrust, proofInit,\par
         \hskip3em (counterpartyIdentifier, (INIT, desiredVersion, desiredIdentifier, expectedRootOfTrust))}}
-      \State $identifier \gets$ \Call{chooseIdentifier}{desiredIdentifier}
+      \State $identifier \gets$ \Call{chooseIdentifier}{desiredIdentifier, counterpartyIdentifier}
       \State $version \gets$ \Call{chooseVersion}{desiredVersion}
       \State $state \gets OPENTRY$
       \State \Call{Set}{identifier, (state, version, counterpartyIdentifier, rootOfTrust)}

@@ -56,13 +56,13 @@ This ICS defines the `Connection` type:
 
 ![Datatypes](datatypes.png)
 
-Consensus-related primitives are as defined in [ICS 2: Consensus Requirements](../spec/ics-2-consensus-requirements).
+`RootOfTrust`, `Header, and `updateRootOfTrust` are as defined in [ICS 2: Consensus Requirements](../spec/ics-2-consensus-requirements).
 
-Accumulator-related primitives are as defined in [ICS 23: Cryptographic Accumulator](../spec/ics-23-cryptographic-accumulator).
+`AccumulatorProof` and `verify` are as defined in [ICS 23: Cryptographic Accumulator](../spec/ics-23-cryptographic-accumulator).
 
-Versioning-related primitives are as defined in [ICS 6: Connection & Channel Versioning](../spec/ics-6-connection-channel-versioning).
+`Version` and `checkVersion` are as defined in [ICS 6: Connection & Channel Versioning](../spec/ics-6-connection-channel-versioning).
 
-`Identifier` is an opaque value used as the key for a connection object; it must serialize to a bytestring. The identifier is not necessarily intended to be a human-readable name (and likely should not be, to discourage squatting or racing for identifiers). The opening handshake protocol allows each chain to verify the identifier used to reference the connection on the other chain, so the chains could choose to come to agreemnt on a common identifier. Further discussion is deferred to [ICS 10: Chain Naming Convention](../spec/ics-10-chain-naming-convention).
+`Identifier` is an opaque value used as the key for a connection object; it must serialize to a bytestring. The identifier is not necessarily intended to be a human-readable name (and likely should not be, to discourage squatting or racing for identifiers). The opening handshake protocol allows each chain to verify the identifier used to reference the connection on the other chain, so the chains could choose to come to agreement on a common identifier (via `chooseIdentifier` and `checkIdentifier`). Further discussion is deferred to [ICS 10: Chain Naming Convention](../spec/ics-10-chain-naming-convention).
 
 #### Requirements
 
@@ -72,7 +72,7 @@ Connection handlers and subsequent protocols make use of a simple key-value stor
 
 `Key` and `Value` are assumed to be byte slices; encoding details are left to a later ICS.
 
-Blockchains need the ability to introspect their own root-of-trust (with `getRootOfTrust`) in order to confirm that the connecting chain has stored the correct one.
+Blockchains also need the ability to introspect their own root-of-trust (with `getRootOfTrust`) in order to confirm that the connecting chain has stored the correct one.
 
 #### Subprotocols
 
