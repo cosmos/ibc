@@ -23,7 +23,7 @@ The core IBC protocol provides *authorization* and *ordering* semantics for pack
 ### Desired Properties
 
 - Implementing blockchains should be able to safely allow untrusted users to open and update connections.
-- The two connecting blockchains should be able to negotiate a shared connection "version" (agreeing on wire encoding format, accumulator proof format, etc.)
+- The two connecting blockchains should be able to negotiate a shared connection "version". The version consists of syntactic format information that the chain is limited to understand, including wire encoding format, accumulator proof format, etc.
 
 #### Pre-Establishment
 
