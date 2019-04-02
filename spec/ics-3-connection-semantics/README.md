@@ -22,15 +22,15 @@ The core IBC protocol provides *authorization* and *ordering* semantics for pack
 
 ### Desired Properties
 
-- Implementing blockchains should be able to safely allow untrusted users to open and update connections.
-- The two connecting blockchains should be able to negotiate a shared connection "version". The version consists of syntactic format information that the chain is limited to understand, including wire encoding format, accumulator proof format, etc.
+- Implementing blockchains should be able to safely allow untrusted actors to open and update connections.
+- The two connecting blockchains should be able to negotiate a shared connection "version". The version consists of metadata about encoding formats that the chain is required to understand, including wire encoding format, accumulator proof format, etc.
 
 #### Pre-Establishment
 
 Prior to connection establishment:
 
 - No further IBC subprotocols should operate, since cross-chain substates cannot be verified.
-- The initiating user (who creates the connection) must be able to specify a root-of-trust for the chain to connect to and a root of trust for the connecting chain (implicitly, e.g. by sending the transaction).
+- The initiating actor (who creates the connection) must be able to specify a root-of-trust for the chain to connect to and a root of trust for the connecting chain (implicitly, e.g. by sending the transaction).
 
 #### During Handshake
 
@@ -43,7 +43,7 @@ Once a negotiation handshake has begun:
 
 Once a negotiation handshake has completed:
 
-- The created connection objects on both chains contain the roots of trust specified by the initiating user.
+- The created connection objects on both chains contain the roots of trust specified by the initiating actor.
 - No other connection objects can be maliciously created on other chains by replaying datagrams.
 - The connection should be able to be voluntarily & cleanly closed by both blockchains.
 - The connection should be able to be immediately closed upon discovery of a consensus equivocation.
@@ -64,7 +64,7 @@ This ICS defines the `Connection` type:
 
 `Identifier` is an opaque value used as the key for a connection object; it must serialize to a bytestring. The identifier is not necessarily intended to be a human-readable name (and likely should not be, to discourage squatting or racing for identifiers). The opening handshake protocol allows each chain to verify the identifier used to reference the connection on the other chain, so the chains could choose to come to agreement on a common identifier (via `chooseIdentifier` and `checkIdentifier`). Further discussion is deferred to [ICS 10: Chain Naming Convention](../spec/ics-10-chain-naming-convention).
 
-A *user*, as referred to in this specification, is an entity capable of executing datagrams who is paying for computation / storage (via gas or a similar mechanism) but is otherwise untrusted. Possible users include:
+A *actor*, as referred to in this specification, is an entity capable of executing datagrams who is paying for computation / storage (via gas or a similar mechanism) but is otherwise untrusted. Possible actors include:
 - End users signing with an account key
 - On-chain smart contracts acting autonomously or in response to another transaction
 - On-chain modules acting in response to another transaction or in a scheduled manner
@@ -96,7 +96,7 @@ This subprotocol need not be permissioned, modulo anti-spam measures.
 ![Opening Handshake](opening_handshake.png)
 
 At the end of an opening handshake between two chains implementing the subprotocol, the following properties hold:
-- Each chain has each other's correct root-of-trust as originally specified by the initiating user.
+- Each chain has each other's correct root-of-trust as originally specified by the initiating actor.
 - The chains have agreed to a shared connection version.
 - Each chain has knowledge of and has agreed to its identifier on the other chain.
 
@@ -112,7 +112,7 @@ This subprotocol need not be permissioned, modulo anti-spam measures.
 
 The closing handshake protocol serves to cleanly close a connection on two chains.
 
-This subprotocol will likely need to be permissioned to an entity who "owns" the connection on the initiating chain, such as a particular user, smart contract, or governance mechanism.
+This subprotocol will likely need to be permissioned to an entity who "owns" the connection on the initiating chain, such as a particular end user, smart contract, or governance mechanism.
 
 ![Closing Handshake](closing_handshake.png)
 
