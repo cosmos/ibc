@@ -95,6 +95,15 @@ This subprotocol need not be permissioned, modulo anti-spam measures.
 
 ![Opening Handshake](opening_handshake.png)
 
+A correct protocol execution flows as follows:
+
+| Initiator | Datagram          | Chain |
+| --------- | ----------------- | ----- |
+| Actor     | `ConnOpenInit`    | A     |
+| Relayer   | `ConnOpenTry`     | B     |
+| Relayer   | `ConnOpenAck`     | A     |
+| Relayer   | `ConnOpenConfirm` | B     |
+
 At the end of an opening handshake between two chains implementing the subprotocol, the following properties hold:
 - Each chain has each other's correct root-of-trust as originally specified by the initiating actor.
 - The chains have agreed to a shared connection version.
