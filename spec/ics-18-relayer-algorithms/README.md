@@ -3,9 +3,9 @@ ics: 18
 title: Relayer Algorithms
 stage: draft
 category: ibc-misc
-author: Christopher Goes <cwgoes@tendermint.com>, Juwoon Yun <joon@tendermint.com>
+author: Christopher Goes <cwgoes@tendermint.com>
 created: 2019-03-07
-modified: 2019-03-30
+modified: 2019-04-02
 ---
 
 ## Synopsis
