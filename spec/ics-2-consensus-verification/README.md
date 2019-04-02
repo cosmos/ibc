@@ -8,7 +8,7 @@ requires: 23
 required-by: 3
 author: Juwoon Yun <joon@tendermint.com>, Christopher Goes <cwgoes@tendermint.com>
 created: 2019-02-25
-modified: 2019-04-01
+modified: 2019-04-02
 
 ---
 
@@ -47,7 +47,7 @@ key-value pairs exists or not with it.
 
 * `RootOfTrust` is a blockchain commit which contains an accumulator root and the requisite 
   state to verify future roots, stored in one blockchain to verify the state of the other.
-  Defined as 3-tuple `(v :: Header -> (Error|RootOfTrust), r :: AccumulatorRoot)`, where
+  Defined as 2-tuple `(v :: Header -> (Error|RootOfTrust), r :: AccumulatorRoot)`, where
     * `v` is the verifier, proves child `Header.p` and returns the updated `RootOfTrust`
     * `r` is the `AccumuatorRoot`, used to prove internal state
 
@@ -119,8 +119,8 @@ consensus process, it is expected that the consensus algorithms will generate va
 ### Example Implementation
 
 An example blockchain `B` runs on a single operator consensus algorithm, called `Op`. If a 
-block is signed by the operator, then it is valid. The operator signing key can be changed while 
-the chain is running. In that case, the new header stores updated pubkey. 
+block is signed by the operator, then it is valid. The operator signing key can be changed whil 
+the chain is running. In that case, the new header stores the updated pubkey. 
 
 `H` contains `LogStore`, which is a list with type of `[bytes]`. The whole state is serialized 
 and stored as `AccumulatorRoot`.
@@ -151,38 +151,38 @@ Gen = H(InitialPubkey, EmptyLogStore)
 
 It is possible that the `[C]` in a `B` can be any member of set `[C]`, but when the `B` is 
 instantiated in the real world, the `[C]` can have only one form. In this example, we assume
-that it is enforced by an legal authority.
+that it is enforced by a legal authority.
 
 #### RootOfTrust
 
-Type `H` is defined as `(Pubkey, LogStore)`. `H` satisfies `Header`:
+Type `R` is defined as `(Pubkey, LogStore)`. `R` satisfies `RootOfTrust`:
 
 ```
-function H.v(c :: C) returns (Error|H) {
-    if c.p().VerifySignature(H.Pubkey) {
-        if c.Pubkey != Nothing {
-            return H(c.Pubkey, c.LogStore)
+function R.v(h :: H) returns (Error|R) {
+    if h.p().VerifySignature(R.Pubkey) {
+        if h.Pubkey != Nothing {
+            return R(h.Pubkey, h.LogStore)
         } else {
-            return H(H.Pubkey, c.LogStore)
+            return R(R.Pubkey, h.LogStore)
         }
     } else {
         return Error
     }
 }
 
-function H.r() returns LogStore {
-    return H.LogStore 
+function R.r() returns LogStore {
+    return R.LogStore 
 }
 ```
 
 #### Header
 
-Type `C` is defined as `(Sig, Maybe<Pubkey>, LogStore)`. `C` satisfies `Header`:
+Type `H` is defined as `(Sig, Maybe<Pubkey>, LogStore)`. `H` satisfies `Header`:
 
 ```
-function C.p() returns C.Sig
-function C.v() returns C.Pubkey
-function C.r() returns C.LogStore
+function H.p() returns H.Sig
+function H.v() returns H.Pubkey
+function H.r() returns H.LogStore
 ```
 
 ## History 
