@@ -6,35 +6,50 @@
 \begin{algorithmic}
 \Struct[Datagram]{ConnOpenInit}
 \Field{Identifier}{identifier}
+\Description{Identifier to use for connection on chain A}
 \Field{Identifier}{desiredCounterpartyIdentifier}
+\Description{Desired identifier to use for connection on chain B}
 \Field{Version}{desiredVersion}
+\Description{Desired version for connection}
 \Field{RootOfTrust}{rootOfTrust}
+\Description{Root-of-trust for chain B}
 \EndStruct
 \end{algorithmic}
 
 \begin{algorithmic}
 \Struct[Datagram]{ConnOpenTry}
 \Field{Identifier}{desiredIdentifier}
+\Description{Desired identifier to use for connection on chain B}
 \Field{Identifier}{counterpartyIdentifier}
+\Description{Identifier for connection on chain A}
 \Field{Version}{desiredVersion}
+\Description{Desired version for connection}
 \Field{RootOfTrust}{rootOfTrust}
+\Description{Root-of-trust for chain A}
 \Field{AccumulatorProof}{proofInit}
+\Description{Proof of stored INIT state on chain A}
 \EndStruct
 \end{algorithmic}
 
 \begin{algorithmic}
 \Struct[Datagram]{ConnOpenAck}
 \Field{Identifier}{identifier}
+\Description{Identifier for connection on chain A}
 \Field{Identifier}{agreedCounterpartyIdentifier}
+\Description{Identifier for connection on chain B}
 \Field{Version}{agreedVersion}
+\Description{Agreed version for connection}
 \Field{AccumulatorProof}{proofTry}
+\Description{Proof of stored TRY state on chain B}
 \EndStruct
 \end{algorithmic}
 
 \begin{algorithmic}
 \Struct[Datagram]{ConnOpenConfirm}
 \Field{Identifier}{identifier}
+\Description{Identifier for connection on chain B}
 \Field{AccumulatorProof}{proofAck}
+\Description{Proof of stored OPEN state on chain A}
 \EndStruct
 \end{algorithmic}
 
