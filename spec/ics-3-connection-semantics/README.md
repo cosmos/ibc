@@ -95,6 +95,41 @@ This subprotocol need not be permissioned, modulo anti-spam measures.
 
 ![Opening Handshake](opening_handshake.png)
 
+```golang
+type ConnOpenInit struct {
+  Identifier  identifier
+  Identifier  desiredCounterpartyIdentifier
+  Version     desiredVersion
+  RootOfTrust rootOfTrust
+}
+```
+
+```golang
+type ConnOpenTry struct {
+  Identifier        desiredIdentifier
+  Identifier        counterpartyIdentifier
+  Version           desiredVersion
+  RootOfTrust       rootOfTrust
+  AccumulatorProof  proofInit
+}
+```
+
+```golang
+type ConnOpenAck struct {
+  Identifier        identifier
+  Identifier        agreedCounterpartyIdentifier
+  Version           agreedVersion
+  AccumulatorProof  proofTry
+}
+```
+
+```golang
+type ConnOpenConfirm struct {
+  Identifier        identifier
+  AccumulatorProof  proofAck
+}
+```
+
 A correct protocol execution flows as follows:
 
 | Initiator | Datagram          | Chain |
