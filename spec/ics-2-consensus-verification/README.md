@@ -23,13 +23,28 @@ another chain is referred to as a "light client".
 
 ### Motivation
 
+`FullNode`s are procedures running a `Consensus`. Given a `([Transaction], Commit)`, a 
+`FullNode` can compute the result `RootOfTrust` that the `Consensus` is expected to commit on 
+with the same `[Transaction]`, if exists. 
+
+
+
 `Header` defines required properties of the blockchain on the network. The implementors can 
 check whether the consensus that they are using is qualified to be connected to the network or 
 not. If not, they can modify the algorithm or wrap it with additional logic to make it 
 compatible with the specification. It also provides base layer for the protocol that the other 
 components can rely on.
 
+A lightclient is an algorithm specific to each `Consensus`. 
+
 ### Desired Properties
+
+This standard specification provides secure layer to verify other chains' canonical headers, 
+using the existing `RootOfTrust`. The higher level logics can be able to verify the substate 
+with the `AccumulatorRoot` stored in the `RootOfTrust`, which is guaranteed to be committed by 
+the other chain's consensus algorithm.
+
+
 
 * Blockchains, defined as an infinite list of `Header` starting from its genesis, is linear; no 
 conflicting `Header`s can be both validated, thus no data can be rewritten after it has been 
