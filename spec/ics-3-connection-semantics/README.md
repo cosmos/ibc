@@ -54,7 +54,24 @@ Once a negotiation handshake has completed:
 
 This ICS defines the `Connection` type:
 
-![Datatypes](datatypes.png)
+```golang
+type ConnectionState enum {
+  INIT
+  TRYOPEN
+  TRYCLOSE
+  OPEN
+  CLOSED
+}
+```
+
+```golang
+type Connection struct {
+  ConnectionState state
+  Version version
+  Identifier counterpartyIdentifier
+  RootOfTrust rootOfTrust
+}
+```
 
 `RootOfTrust`, `Header, and `updateRootOfTrust` are as defined in [ICS 2: Consensus Requirements](../spec/ics-2-consensus-requirements).
 
@@ -93,39 +110,52 @@ The opening handshake subprotocol serves to initialize roots of trust for two ch
 
 This subprotocol need not be permissioned, modulo anti-spam measures.
 
-![Opening Handshake](opening_handshake.png)
-
 ```golang
 type ConnOpenInit struct {
+  // Identifier to use for connection on chain A
   Identifier  identifier
+  // Desired identifier to use for connection on chain B
   Identifier  desiredCounterpartyIdentifier
+  // Desired version for connection
   Version     desiredVersion
+  // Root-of-trust for chain B
   RootOfTrust rootOfTrust
 }
 ```
 
 ```golang
 type ConnOpenTry struct {
+  // Desired identifier to use for connection on chain B
   Identifier        desiredIdentifier
+  // Identifier for connection on chain A
   Identifier        counterpartyIdentifier
+  // Desired version for connection
   Version           desiredVersion
+  // Root-of-trust for chain A
   RootOfTrust       rootOfTrust
+  // Proof of stored INIT state on chain A
   AccumulatorProof  proofInit
 }
 ```
 
 ```golang
 type ConnOpenAck struct {
+  // Identifier for connection on chain A
   Identifier        identifier
+  // Identifier for connection on chain B
   Identifier        agreedCounterpartyIdentifier
+  // Agreed version for connection
   Version           agreedVersion
+  // Proof of stored TRY state on chain B
   AccumulatorProof  proofTry
 }
 ```
 
 ```golang
 type ConnOpenConfirm struct {
+  // Identifier for connection on chain B
   Identifier        identifier
+  // Proof of stored OPEN state on chain A
   AccumulatorProof  proofAck
 }
 ```
@@ -139,14 +169,37 @@ function handleConnOpenInit(identifier, desiredVersion, desiredCounterpartyIdent
 
 ```coffeescript
 function handleConnOpenTry()
+  expectedRootOfTrust <- getRootOfTrust()
+  assert(verify(rootOfTrust, proofInit,
+    (counterpartyIdentifier, (INIT, desiredVersion, desiredIdentifier, expectedRootOfTrust))))
+  identifier <- chooseIdentifier(desiredIdentifier, counterpartyIdentifier)
+  version <- chooseVersion(desiredVersion)
+  state <- OPENTRY
+  Set(identifier, (state, version, counterpartyIdentifier, rootOfTrust))
 ```
 
 ```coffeescript
 function handleConnOpenAck()
+  (state, desiredVersion, desiredCounterpartyIdentifier, rootOfTrust) <- Get(identifier)
+  assert(state == INIT)
+  expectedRootOfTrust <- getRootOfTrust()
+  assert(verify(rootOfTrust, proofTry,
+    (agreedCounterpartyIdentifier, (OPENTRY, agreedVersion, identifier, expectedRootOfTrust))))
+  assert(checkIdentifier(desiredCounterpartyIdentifier, agreedCounterpartyIdentifier))
+  assert(checkVersion(desiredVersion, agreedVersion))
+  state <- OPEN
+  Set(identifier, (state, agreedVersion, agreedCounterpartyIdentifier, rootOfTrust))
 ```
 
 ```coffeescript
 function handleConnOpenConfirm()
+  (state, version, counterpartyIdentifier, rootOfTrust) <- Get(identifier)
+  assert(state == OPENTRY)
+  expectedRootOfTrust <- getRootOfTrust()
+  assert(verify(rootOfTrust, proofAck,
+    (counterpartyIdentifier, (OPEN, version, identifier, expectedRootOfTrust))))
+  state <- OPEN
+  Set(identifier, (state, version, counterpartyIdentifier, rootOfTrust))
 ```
 
 A correct protocol execution flows as follows:
@@ -169,7 +222,25 @@ The header tracking subprotocol serves to update the root of trust for an open c
 
 This subprotocol need not be permissioned, modulo anti-spam measures.
 
-![Header Tracking](header_tracking.png)
+```golang
+type ConnTrack struct {
+  // Identifier of connection
+  Identifier  identifier
+  // New header with which to update root-of-trust
+  Header      header
+}
+```
+
+```coffeescript
+function handleConnTrack()
+  (state, version, counterpartyIdentifier, rootOfTrust) <- Get(identifier)
+  assert(state == OPEN)
+  case updateRootOfTrust(rootOfTrust, header) of
+    newRootOfTrust ->
+      Set(identifier, (version, counterpartyIdentifier, newRootOfTrust, state))
+    error ->
+      return error
+```
 
 ##### Closing Handshake
 
@@ -177,13 +248,76 @@ The closing handshake protocol serves to cleanly close a connection on two chain
 
 This subprotocol will likely need to be permissioned to an entity who "owns" the connection on the initiating chain, such as a particular end user, smart contract, or governance mechanism.
 
-![Closing Handshake](closing_handshake.png)
+```golang
+type ConnCloseInit struct {
+  Identifier identifier
+  Identifier identifierCounterparty
+}
+```
+
+```golang
+type ConnCloseTry struct {
+  Identifier identifier
+  Identifier identifierCounterparty
+  AccumulatorProof proofInit
+}
+```
+
+```golang
+type ConnCloseAck struct {
+  Identifier identifier
+  AccumulatorProof proofTry
+}
+```
+
+```coffeescript
+function handleConnCloseInit()
+  (state, version, counterpartyIdentifier, rootOfTrust) <- Get(identifier)
+  assert(state == OPEN)
+  assert(identifierCounterparty == counterpartyIdentifier)
+  state <- TRYCLOSE
+  Set(identifier, (state, version, counterpartyIdentifier, rootOfTrust))
+```
+
+```coffeescript
+function handleConnCloseTry()
+  (state, version, counterpartyIdentifier, rootOfTrust) <- Get(identifier)
+  assert(state == OPEN)
+  assert(identifierCounterparty == counterpartyIdentifier)
+  assert(verify(roofOfTrust, proofInit, (counterpartyIdentifier, TRYCLOSE)))
+  state <- CLOSED
+  Set(identifier, (state, version, counterpartyIdentifier, rootOfTrust))
+```
+
+```coffeescript
+function handleConnCloseAck()
+  (state, version, counterpartyIdentifier, rootOfTrust) <- Get(identifier)
+  assert(state == TRYCLOSE)
+  assert(verify(rootOfTrust, proofTry, (counterpartyIdentifier, CLOSED)))
+  state <- CLOSED
+  Set(identifier, (state, version, counterpartyIdentifier, rootOfTrust))
+```
 
 ##### Closing by Equivocation
 
 The equivocation closing subprotocol serves to immediately close a connection if a consensus equivocation is discovered and thus prevent further packet transmission.
 
-![Closing Equivocation](closing_equivocation.png)
+```golang
+type ConnCloseEquivocation struct {
+  Identifier identifier
+  Header firstHeader
+  Header secondHeader
+}
+```
+
+```coffeescript
+function handleConnCloseEquivocation()
+  (state, version, counterpartyIdentifier, rootOfTrust) <- Get(identifier)
+  assert(state == OPEN)
+  assert(checkEquivocation(rootOfTrust, firstHeader, secondHeader))
+  state <- CLOSED
+  Set(identifier, (state, version, counterpartyIdentifier, rootOfTrust))
+```
 
 Implementing chains may want to allow applications to register handlers to take action upon discovery of an equivocation. Further discussion is deferred to [ICS 12: Byzantine Recovery Strategies](../ics-12-byzantine-recovery-strategies).
 
