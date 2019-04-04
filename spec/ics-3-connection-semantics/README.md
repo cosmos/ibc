@@ -130,6 +130,25 @@ type ConnOpenConfirm struct {
 }
 ```
 
+```coffeescript
+function handleConnOpenInit(identifier, desiredVersion, desiredCounterpartyIdentifier, rootOfTrust)
+  assert(Get(identifier) == null)
+  state <- INIT
+  Set(identifier, (state, desiredVersion, desiredCounterpartyIdentifier, rootOfTrust))
+```
+
+```coffeescript
+function handleConnOpenTry()
+```
+
+```coffeescript
+function handleConnOpenAck()
+```
+
+```coffeescript
+function handleConnOpenConfirm()
+```
+
 A correct protocol execution flows as follows:
 
 | Initiator | Datagram          | Chain |
