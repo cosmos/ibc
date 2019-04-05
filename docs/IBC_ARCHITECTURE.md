@@ -4,7 +4,17 @@ In plain English, with definitions
 
 For the design rationale behind IBC, see ["Why IBC?"](./WHY_IBC.md)
 
+### Definitions
+
+#### Actor
+
 #### Chain
+
+#### Consensus
+
+#### Authorization
+
+#### Equivocation
 
 #### Handler
 
@@ -17,3 +27,9 @@ For the design rationale behind IBC, see ["Why IBC?"](./WHY_IBC.md)
 #### Channel
 
 #### Packet
+
+### Terms
+
+#### Handshake
+
+#### Trust
