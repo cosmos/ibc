@@ -16,9 +16,10 @@ See [PROCESS.md](PROCESS.md) for a description of the standardization process.
 
 All standards in the "draft" stage are listed here in order of their ICS numbers, sorted by category.
 
-If you're interested in an architectural overview of IBC (the subject of most of the initial interchain standards), see [here](./docs/IBC_ARCHITECTURE.md).
-
-Check [issue 26](https://github.com/cosmos/ics/issues/26) for a list of IBC specifications in progress.
+The subject of most initial interchain standards is the inter-blockchain communication protocol, "IBC":
+- [Design philosophy of IBC](./docs/WHY_IBC.md)
+- [Architectural overview of IBC](./docs/IBC_ARCHITECTURE.md)
+- [IBC specification progress tracking](https://github.com/cosmos/ics/issues/26)
 
 ### Meta
 
