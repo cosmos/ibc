@@ -16,7 +16,16 @@ See [PROCESS.md](PROCESS.md) for a description of the standardization process.
 
 All standards are listed here in order of their ICS numbers.
 
-| Interchain Standard Number            | Category   | Standard Title             | Stage |
-| ------------------------------------- | ---------- | -------------------------- | ----- |
-| [1](spec/ics-1-ics-standard)          | Meta       | ICS Specification Standard | Draft |
-| [3](spec/ics-3-connection-semantics)  | IBC (Core) | Connection Semantics       | Draft |
+Check [issue 26](https://github.com/cosmos/ics/issues/26) for a list of IBC specifications in progress.
+
+### Meta
+
+| Interchain Standard Number   | Standard Title             | Stage |
+| ---------------------------- | -------------------------- | ----- |
+| [1](spec/ics-1-ics-standard) | ICS Specification Standard  | Draft |
+
+### IBC (Core)
+
+| Interchain Standard Number            | Standard Title             | Stage |
+| ------------------------------------- | -------------------------- | ----- |
+| [3](spec/ics-3-connection-semantics)  | Connection Semantics       | Draft |
