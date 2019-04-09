@@ -30,7 +30,7 @@ IBC is designed to be a *modular* protocol. The protocol is constructed as a ser
 
 ## Locality
 
-IBC is designed to be a *local* protocol, meaning that only information about the two connected chains is necessary to reason about the security and correctness of a bidirectional IBC connection. Security requirements of the authentication primitives refer only to consensus algorithms and validator sets of the blockchains involved in the connection, and blockchains maintaining a set of IBC connections need only understand the state of the chains to which they are connected (no matter which other chains those chains are connected to). 
+IBC is designed to be a *local* protocol, meaning that only information about the two connected chains is necessary to reason about the security and correctness of a bidirectional IBC connection. Security requirements of the authentication primitives refer only to consensus algorithms and validator sets of the blockchains involved in the connection, and a blockchains maintaining a set of IBC connections need only understand the state of the chains to which it is connected (no matter which other chains those chains are connected to). 
 
 ### Locality of communication & information
 

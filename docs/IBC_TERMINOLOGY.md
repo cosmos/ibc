@@ -26,6 +26,14 @@ The *state machine* of a particular chain defines the structure of the state as 
 
 A *consensus* algorithm is the protocol used by the set of processes operating a distributed ledger to come to agreement on the same state, generally under the presence of a bounded number of Byzantine faults.
 
+### Consensus State
+
+The *consensus state*, or the *root-of-trust*, is the set of information about the state of a consensus algorithm required to verify proofs about the output of that consensus algorithm (e.g. accumulator roots in signed headers).
+
+### Header
+
+A *header* is an update to the consensus state of a particular blockchain that can be verified in a well-defined fashion by a "light client" algorithm defined for that particular consensus algorithm.
+
 ### Handler
 
 An IBC *handler* is the module or subcomponent within the state machine of a ledger responsible for implementing the IBC specification by "handling" datagrams, performing the appropriate checks, proof verifications, and/or storage alterations, and routing valid packets to other parts of the state machine, as defined by the application-layer semantics.
@@ -54,7 +62,7 @@ A *module* is a subcomponent of the state machine of a particular blockchain whi
 
 ### Handshake
 
-A *handshake* is a particular class of subprotocol involving multiple datagrams, generally used to initialize some state on multiple chains.
+A *handshake* is a particular class of subprotocol involving multiple datagrams, generally used to initialize some common state on the two involved chains such as roots-of-trust for each others' consensus algorithms.
 
 ### Trust
 
