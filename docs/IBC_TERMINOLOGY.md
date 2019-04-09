@@ -40,15 +40,15 @@ A *connection* is a set of persistent data structures on particular ledgers (usu
 
 #### Channel
 
-A *channel* is a set of persistent data structures on particular ledgers (usually two) that contain metadata to facilitate packet ordering, exactly-once delivery, and replay prevention. Packets sent through a channel change its internal state.
+A *channel* is a set of persistent data structures on particular ledgers (usually two) that contain metadata to facilitate packet ordering, exactly-once delivery, and replay prevention. Packets sent through a channel change its internal state. Channels are associated with connections in a many-to-one relationship — a single connection can have any number of associated channnels, and all channels must have a single associated connection.
 
 #### Packet
 
-A *packet* is a particular data structure with sequence-related metadata (defined by the IBC specification) and an opaque value field (with semantics defined by the application layer, e.g. token amount and denomination).
+A *packet* is a particular data structure with sequence-related metadata (defined by the IBC specification) and an opaque value field referred to as the packet *data* (with semantics defined by the application layer, e.g. token amount and denomination). Packets are sent through a particular channel (and by extension, through a particular connection).
 
 #### Module
 
-A *module* is a subcomponent of the state machine of a particular blockchain which interacts with the IBC handler and alters state according to particular IBC packets sent or received (minting or burning tokens, for example).
+A *module* is a subcomponent of the state machine of a particular blockchain which interacts with the IBC handler and alters state according to the *data* field of particular IBC packets sent or received (minting or burning tokens, for example).
 
 ### Auxiliary Terms
 
@@ -58,12 +58,12 @@ A *handshake* is a particular class of subprotocol involving multiple datagrams,
 
 #### Trust
 
-To *trust* a blockchain or validator set, in the context of IBC, means to expect that the validator set will behave in a particular way (such as < 1/3 Byzantine) relative to a well-defined consensus & state machine protocol.
+To *trust* a blockchain or validator set means to expect that the validator set will behave in a particular way (such as < 1/3 Byzantine) relative to a well-defined consensus & state machine protocol.
 
 #### Authorization
 
-*Authorization*, in the context of IBC, refers to the protocols used to ensure that datagrams were in fact sent by a particular chain and associated state alterations committed by it. 
+*Authorization* refers to the protocols used to ensure that datagrams were in fact sent by a particular chain and associated state alterations committed by it. 
 
 #### Equivocation
 
-*Equivocation*, in the context of IBC, refers to a particular class of consensus fault committed by a validator or validators which sign multiple different sucessors to a single block.
+*Equivocation* refers to a particular class of consensus fault committed by a validator or validators which sign multiple different sucessors to a single block.
