@@ -14,7 +14,7 @@ See [PROCESS.md](PROCESS.md) for a description of the standardization process.
 
 ## Interchain Standards
 
-All standards are listed here in order of their ICS numbers.
+All standards in the "draft" stage are listed here in order of their ICS numbers, sorted by category.
 
 Check [issue 26](https://github.com/cosmos/ics/issues/26) for a list of IBC specifications in progress.
 
