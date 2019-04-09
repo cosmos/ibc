@@ -12,10 +12,7 @@ IBC can be implemented by any consensus algorithm and state machine with a basic
 
 #### Composability
 
-Applications written on top of IBC can be composed together.
-
-- Common interfaces
-- Common standard
+Applications written on top of IBC can be composed together by both protocol developers and users. IBC defines a set of primitives for authentication, transport, and ordering, and a set of application-layer standards for asset & data semantics. Chains which support compatible standards can be connected together and transacted between by any user who elects to open a connection (or reuse a connection), and assets & data can be relayed across multiple chains both automatically ("multi-hop") and manually (by sending several IBC relay transactions in sequence).
 
 #### Automatability
 
@@ -27,36 +24,20 @@ IBC is designed to be a *modular* protocol. The protocol is constructed as a ser
 
 ### Locality
 
-- Assumptions are designed to be informationally "local"
-- Chains must only understand state of chains to which they are connected
-- No necessary single root chain, dynamic network topology, no protocol-level scaling limitations
-- Reflects local nature of underlying global commerce (frequency of transactions falls off over distance)
+IBC is designed to be a *local* protocol, meaning that only information about the two connected chains is necessary to reason about the security and correctness of a bidirectional IBC connection. Security requirements of the authentication primitives refer only to consensus algorithms and validator sets of the blockchains involved in the connection, and blockchains maintaining a set of IBC connections need only understand the state of the chains to which they are connected (no matter which other chains those chains are connected to). 
 
 #### Locality of communication & information
 
-- No global topology view required
-- Core protocol can be reasoned about as a construction between two chains, routing built on top
-- Users and chains can reason about security guarantees given what they know and trust
+IBC makes no assumptions, and relies upon no characteristics, of the topological structure of the network of blockchains in which it is operating. No view of the global network-of-blockchains topology is required: Security & correctness can be reasoned about at the level of a single connection between two chains, and by compositionn reasoned about for subgraphs in the network topology. Users and chains can reason about their assumptions and risks given information about only part of the network graph of blockchains they know and trust (to variable degrees). There is no necessary "root chain" in IBC — some subgraphs of the global network may evolve into a hub-spoke structure, others may remain tightly connected, others still may take on more exotic topologies.
 
 #### Locality of trust & security
 
-- Users of IBC choose which consensus algorithms & validator sets they trust
-- Never exposed to risk of asset inflation, application-level invariant violations due to Byzantine behavior from validator sets they didn't decide to trust
-- Contained risks in large network topology of interconnected blockchains, IBC connections can track metadata (e.g. total supply flow through a connection) and limit risk
+Users of IBC — at the blockchain level and at the human or smart contract level — choose which consensus algorithms, state machines, and validator sets they "trust" (to behave in a particular way, e.g. < 1/3 Byzantine) and in which ways they trust them. Assuming the IBC protocol is implemented correctly, users are never exposed to risks of application-level invariant violations (such as asset inflation) due to Byzantine behavior or faulty state machines transitions committed by validator sets or blockchains they did not explicitly decide to trust. This is particulary important in the expected large network topology of interconnected blockchains, where some number of blockchains and validator sets can be expected to be Byzantine occaisionally — IBC, implemented conservatively, bounds the risk and limits the possible damage incurred.
 
 #### Locality of permissioning
 
-- Connections can be opened permissionlessly between blockchains (particulars dependent on state machine, but e.g. with smart contracts contracts could open connections)
-- Users must inspect state & consensus of connection and decide whether safe
-
-#### Topological agnosticism
-
-IBC makes no assumptions, and relies upon no characteristics, of the topological structure of the network of blockchains in which it is operating.
-
-- Private chains
-- Public chains
+Actions in IBC — such as opening a connection, creating a channel, or sending a packet — are permissioned locally by the state machines and actors involved in a particular connection between two chains. Individual chains could choose to require approval from a permissioning mechanism (such as governance) for specific application-layer actions (such as delegated-security slashing), but for the base protocol, actions are permissionless (modulo gas & storage costs) — by default, connections can be opened, channels created, and packets sent without any approval process. Of course, users themselves must inspect the state & consensus of each IBC connection and decide whether it is safe to used (based e.g. on the roots-of-trust stored).
 
 ### Efficiency
 
-- Amortized cost should mostly be the cost of the underlying state transitions or operations associated with packets
-- Consensus transcript (header) update cost should scale with consensus speed regardless of packet throughput
+IBC is designed to be an *efficient* protocol: the amortized cost of interchain data & asset relay should be mostly comprised of the cost of the underlying state transitions or operations associated with packets (such as transferring tokens), plus some small constant overhead.
