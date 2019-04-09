@@ -1,8 +1,8 @@
 ### Architecture of IBC
 
-In plain English, with definitions
+> This is an overview of the architecture of IBC. For the design rationale behind the protocol, see [here](./WHY_IBC.md).
 
-For the design rationale behind IBC, see ["Why IBC?"](./WHY_IBC.md)
+In plain English, with definitions
 
 ### Definitions
 
