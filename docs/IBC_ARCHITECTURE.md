@@ -1,4 +1,4 @@
-## IBC Architecture
+# IBC Architecture
 
 > This is an overview of the high-level architecture & dataflow of the IBC protocol.
 
@@ -8,7 +8,7 @@
 
 This document outlines the architecture of the authentication, transport, and ordering layers of the IBC protocol stack.
 
-### Protocol Stack
+## Protocol Stack
 
 IBC can be conceptualized as a layered protocol stack, through which data flows top-to-bottom (when sending IBC packets) and bottom-to-top (when receiving IBC packets).
 
@@ -34,7 +34,7 @@ Dataflow on chain *B*:
 
 ---
 
-### Packet Traversal
+## Packet Traversal
 
 Consider the path of an IBC packet between two chains — call them *A* and *B*.
 
