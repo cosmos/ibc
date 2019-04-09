@@ -34,7 +34,7 @@ IBC is designed to be a *local* protocol, meaning that only information about th
 
 ##### Locality of communication & information
 
-IBC makes no assumptions, and relies upon no characteristics, of the topological structure of the network of blockchains in which it is operating. No view of the global network-of-blockchains topology is required: Security & correctness can be reasoned about at the level of a single connection between two chains, and by compositionn reasoned about for subgraphs in the network topology. Users and chains can reason about their assumptions and risks given information about only part of the network graph of blockchains they know and trust (to variable degrees). There is no necessary "root chain" in IBC — some subgraphs of the global network may evolve into a hub-spoke structure, others may remain tightly connected, others still may take on more exotic topologies.
+IBC makes no assumptions, and relies upon no characteristics, of the topological structure of the network of blockchains in which it is operating. No view of the global network-of-blockchains topology is required: security & correctness can be reasoned about at the level of a single connection between two chains, and by compositionn reasoned about for subgraphs in the network topology. Users and chains can reason about their assumptions and risks given information about only part of the network graph of blockchains they know and trust (to variable degrees). There is no necessary "root chain" in IBC — some subgraphs of the global network may evolve into a hub-spoke structure, others may remain tightly connected, others still may take on more exotic topologies.
 
 ##### Locality of trust & security
 
