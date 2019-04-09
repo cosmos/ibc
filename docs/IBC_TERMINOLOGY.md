@@ -44,11 +44,11 @@ A *datagram* is an opaque bytestring transmitted over some physical network, and
 
 ### Connection
 
-A *connection* is a set of persistent data structures on particular ledgers (usually two) that contain information about the consensus state of the other ledgers in the connection. Updates to their consensus states change the state of the connections.
+A *connection* is a set of persistent data structures on two chains that contain information about the consensus state of the other ledger in the connection. Updates to the consensus state of one chain changes the state of the connection object on the other chain.
 
 ### Channel
 
-A *channel* is a set of persistent data structures on particular ledgers (usually two) that contain metadata to facilitate packet ordering, exactly-once delivery, and replay prevention. Packets sent through a channel change its internal state. Channels are associated with connections in a many-to-one relationship — a single connection can have any number of associated channnels, and all channels must have a single associated connection.
+A *channel* is a set of persistent data structures on two chains that contain metadata to facilitate packet ordering, exactly-once delivery, and replay prevention. Packets sent through a channel change its internal state. Channels are associated with connections in a many-to-one relationship — a single connection can have any number of associated channnels, and all channels must have a single associated connection.
 
 ### Packet
 
