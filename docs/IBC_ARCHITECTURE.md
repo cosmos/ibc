@@ -51,7 +51,7 @@ Consider the path of an IBC packet between two chains — call them *A* and *B*.
 3. On chain *B*
     1. Consensus (defined in [ICS 2](../spec/ics-2-consensus-requirements))
     1. Connection (defined in [ICS 3](../spec/ics-3-connection-semantics))
-  . 1. Channel (defined in [ICS 4](../spec/ics-4-channel-semantics))
+    1. Channel (defined in [ICS 4](../spec/ics-4-channel-semantics))
     1. Packet (defined in [ICS 5](../spec/ics-5-packet-semantics))
     1. Handler (parts defined in different ICSs)
     1. Module (application-specific)
