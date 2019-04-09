@@ -12,14 +12,18 @@ To propose a new standard, [open an issue](https://github.com/cosmos/ics/issues/
 
 See [PROCESS.md](PROCESS.md) for a description of the standardization process.
 
-## Interchain Standards
+## IBC Quick References
 
-All standards in the "draft" stage are listed here in order of their ICS numbers, sorted by category.
+The subject of most initial interchain standards is the inter-blockchain communication protocol, "IBC".
 
-The subject of most initial interchain standards is the inter-blockchain communication protocol, "IBC":
+If you're diving in or planning to review specifications, the following are recommended reading:
 - [Design philosophy of IBC](./docs/WHY_IBC.md)
 - [Architectural overview of IBC](./docs/IBC_ARCHITECTURE.md)
 - [IBC specification progress tracking](https://github.com/cosmos/ics/issues/26)
+
+## Interchain Standards
+
+All standards in the "draft" stage are listed here in order of their ICS numbers, sorted by category.
 
 ### Meta
 
