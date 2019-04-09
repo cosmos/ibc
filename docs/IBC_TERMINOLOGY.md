@@ -34,6 +34,14 @@ The *consensus state*, or the *root-of-trust*, is the set of information about t
 
 A *header* is an update to the consensus state of a particular blockchain that can be verified in a well-defined fashion by a "light client" algorithm defined for that particular consensus algorithm.
 
+### Finality
+
+*Finality* is the guarantee provided by a consensus algorithm that a particular block will not be reverted, subject to certain assumptions about the behavior of the validator set. The IBC protocol requires finality.
+
+### Accumulator
+
+A cryptographic *accumulator* is a way to cheaply verify membership of a value in a set, where the set can be commited to with a short witness string. An *accumulator proof* refers to the proof structure which proves that a particular value is a member of a particular committed-to set.
+
 ### Handler
 
 An IBC *handler* is the module or subcomponent within the state machine of a ledger responsible for implementing the IBC specification by "handling" datagrams, performing the appropriate checks, proof verifications, and/or storage alterations, and routing valid packets to other parts of the state machine, as defined by the application-layer semantics.
