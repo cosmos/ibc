@@ -34,7 +34,7 @@ Actor --> Module --> Handler -> Packet --> Channel --> Connection --> Consensus 
 
 ---
 
-Off-chain:
+Off-chain (note that one relayer can handle many chains, connections, and packets):
 
 --> Relayer -->
 
