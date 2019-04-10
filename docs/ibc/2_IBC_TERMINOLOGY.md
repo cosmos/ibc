@@ -76,9 +76,9 @@ A *handshake* is a particular class of subprotocol involving multiple datagrams,
 
 To *trust* a blockchain or validator set means to expect that the validator set will behave in a particular way (such as < 1/3 Byzantine) relative to a well-defined consensus & state machine protocol.
 
-### Authorization
+### Authentication
 
-*Authorization* refers to the protocols used to ensure that datagrams were in fact sent by a particular chain and associated state alterations committed by it. 
+*Authentication* refers to the protocols used to ensure that datagrams were in fact sent by a particular chain and associated state alterations committed by it. 
 
 ### Equivocation
 
