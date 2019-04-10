@@ -40,7 +40,7 @@ A *header* is an update to the consensus state of a particular blockchain that c
 
 ### Accumulator
 
-A cryptographic *accumulator* is a way to cheaply verify membership of a value in a set, where the set can be commited to with a short witness string. An *accumulator proof* refers to the proof structure which proves that a particular value is a member of a particular committed-to set.
+A cryptographic *accumulator* is a way to cheaply verify membership of a value in a set, where the set can be commited to with a short witness string. An *accumulator proof* refers to the proof structure which proves whether a particular value is or is not a member of a particular committed-to set.
 
 ### Handler
 
