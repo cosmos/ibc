@@ -1,10 +1,10 @@
-# IBC Terminology
+# 2: IBC Terminology
 
 > This is an overview of terms used in IBC specifications.
 
-> For an architectural overview, see [here](./IBC_ARCHITECTURE.md).
+> For the design rationale behind the protocol, see [here](./1_IBC_DESIGN_RATIONALE.md).
 
-> For the design rationale behind the protocol, see [here](./IBC_DESIGN_RATIONALE.md).
+> For an architectural overview, see [here](./3_IBC_ARCHITECTURE.md).
 
 This document provides definitions in plain English of key terms used throughout the IBC specification set.
 

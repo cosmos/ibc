@@ -1,10 +1,10 @@
-# IBC Architecture
+# 3: IBC Architecture
 
 > This is an overview of the high-level architecture & dataflow of the IBC protocol.
 
-> For the design rationale behind the protocol, see [here](./IBC_DESIGN_RATIONALE.md).
+> For the design rationale behind the protocol, see [here](./1_IBC_DESIGN_RATIONALE.md).
 
-> For definitions of terms used in IBC specifications, see [here](./IBC_TERMINOLOGY.md).
+> For definitions of terms used in IBC specifications, see [here](./2_IBC_TERMINOLOGY.md).
 
 This document outlines the architecture of the authentication, transport, and ordering layers of the IBC protocol stack.
 
