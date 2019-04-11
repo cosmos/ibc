@@ -20,6 +20,16 @@ IBC is not (only) a sharding protocol: there is no single state machine being sp
 
 IBC is not (only) a layer-two scaling protocol: all chains implementing IBC exist on the same "layer", although they may occupy different points in the network topology, and there is no single root chain or single validator set.
 
+## What does IBC provide?
+
+## What does IBC assume?
+
+## Protocol Scope
+
+## Protocol Interfaces
+
+## Philosophical Basis
+
 ## Protocol Stack
 
 IBC can be conceptualized as a layered protocol stack, through which data flows top-to-bottom (when sending IBC packets) and bottom-to-top (when receiving IBC packets).
