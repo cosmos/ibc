@@ -119,23 +119,37 @@ ICS specifications should be written in Simple English, avoiding obscure termino
 ### Pseudocode
 
 Pseudocode in specifications should be language-agnostic and formatted in a simple imperative standard, with line numbers, variables, simple conditional blocks, for loops, and
-English fragments where necessary to explain further functionality such as scheduling timeouts. If desired, images can be generated with LaTeX and rendered in Markdown - if this
-is done, LaTeX source code should be included.
+English fragments where necessary to explain further functionality such as scheduling timeouts. LaTeX images should be avoided because they are difficult to review in diff form.
 
-Example pseudocode:
+Pseudocode for structs should use Golang syntax highlighting.
 
+Example pseudocode struct:
+
+```golang
+type Connection struct {
+  ConnectionState state
+  Version version
+  Identifier counterpartyIdentifier
+  RootOfTrust rootOfTrust
+}
 ```
-11: FunctionStartRound(round):
-12:   round_p ← round
-13:   step_p ← propose
-14:   if proposer(h_p, round_p) = p then
-15:     if validValue_p /= nil then
-16:       proposal ← validValue_p
-17:     else
-18:       proposal ← getValue()
-19:     broadcast <PROPOSAL, h_p, round_p, proposal, validRound>
-20:   else
-21:     scheduleOnTimeoutPropose(h_p, round_p) to be executed after timeoutPropose(round_p)
+
+Pseudocode for algorithms should use CoffeeScript syntax highlighting.
+
+Example pseudocode algorithm:
+
+```coffeescript
+function startRound(round)
+  round_p = round
+  step_p = PROPOSE
+  if proposer(h_p, round_p) == p then
+    if validValue_p /= nil then
+      proposal = validValue_p
+    else
+      proposal = getValue()
+    broadcast( {PROPOSAL, h_p, round_p, proposal, validRound} )
+  else
+    schedule(onTimeoutPropose(h_p, round_p), timeoutPropose(round_p))
 ```
 
 ## History
