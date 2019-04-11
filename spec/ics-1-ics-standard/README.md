@@ -5,7 +5,7 @@ stage: draft
 category: meta
 author: Christopher Goes <cwgoes@tendermint.com>
 created: 2019-02-12
-modified: 2019-03-28
+modified: 2019-04-11
 ---
 
 ## What is an ICS?
@@ -86,6 +86,7 @@ required references, and technical details where appropriate.
 The specification may have any or all of the following sub-components, as appropriate to the particular ICS. Included sub-components should be listed in the order specified here.
 
 - *Motivation* - A rationale for the existence of the proposed feature, or the proposed changes to an existing feature.
+- *Definitions* - A list of new terms or concepts utilized in this ICS or required to understand this ICS. Any terms not defined in the top-level "docs" folder must be defined here.
 - *Desired Properties* - A list of the desired properties or characteristics of the protocol or feature specified, and expected effects or failures when the properties are violated.
 - *Technical Specification* - All technical details of the proposed protocol including syntax, semantics, sub-protocols, data structures, algorithms, and pseudocode as appropriate.
     The technical specification should be detailed enough such that separate correct implementations of the specification without knowledge of each other are compatible.
@@ -160,6 +161,7 @@ the ICS process. Please direct all comments to the ICS repository maintainers.
 
 March 4th, 2019: Initial ICS 1 draft finished and submitted as a PR
 March 7th, 2019: ICS 1 draft merged
+April 11th, 2019: Updates to pseudocode formatting, add definitions subsection
 
 ## Copyright
 
