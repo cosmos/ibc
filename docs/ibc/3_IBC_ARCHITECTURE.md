@@ -60,23 +60,52 @@ Of the underlying consensus protocols and ledgers IBC requires a set of primitiv
 
 ## Operation
 
+(inspired by TCP RFC)
+
 ### Data relay
+
+- off-chain relayers
+- read state from one blockchain
+- write it to the other
 
 ### Reliability
 
+- underlying network can damage, lose, duplicate packets, behave arbitrarily
+- only thing assumed: eventual liveness
+- state commitments, indempotent submission
+
 ### Flow control & ordering
+
+- ordering of packets (optional)
+- application-layer flow control (e.g. value) to bound damage from Byzantine faults
 
 ### Authentication
 
+- signed by consensus
+- knowledge that other chain is implementing correct IBC protocol
+- verify accumulator proofs on other blockchains
+
 ### Connections
+
+- stateful information about consensus state of counterparty chain
+- metadata on connection, sequence number, encoding formats
 
 ### Multiplexing
 
+- channels for multiplexing
+- same consensus information, any number of concurrent datastreams
+
 ## Philosophy
+
+(inspired by TCP RFC) (do we really need this? seems redudant with a lot of the above)
 
 ### Ledger topology
 
+- assume nothing
+
 ### Host environment
+
+- ledger state machine
 
 ### Interfaces
 
