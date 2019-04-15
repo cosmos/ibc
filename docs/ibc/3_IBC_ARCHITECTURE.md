@@ -2,7 +2,7 @@
 
 > This is an overview of the high-level architecture & dataflow of the IBC protocol.
 
-> For the design rationale behind the protocol, see [here](./1_IBC_DESIGN_RATIONALE.md).
+> For the design rationale behind the protocol, see [here](./1_IBC_DESIGN_PHILOSOPHY.md).
 
 > For definitions of terms used in IBC specifications, see [here](./2_IBC_TERMINOLOGY.md).
 
@@ -24,17 +24,15 @@ IBC is not (only) a layer-two scaling protocol: all chains implementing IBC exis
 
 ## Motivation
 
-### Concurrent heterogeneous networks of ledgers
+(why sharding)
 
-### Reliable inter-module communication
+One design direction is to shard a single state machine across separate chains with concurrent execution and disjoint data storage. In order to reason about safety and liveness, and in order to correctly route data and code between shards, these designs must take a top-down approach, constructing a particular network topology, featuring a single root ledger and a star or tree of shards, and engineering protocol rules & incentives to enforce that topology. This approach possesses advantages in simplicity and predictability, but faces hard [technical](https://medium.com/nearprotocol/the-authoritative-guide-to-blockchain-sharding-part-1-1b53ed31e060) [problems](https://medium.com/nearprotocol/unsolved-problems-in-blockchain-sharding-2327d6517f43), requires the adherence of all shards to a single validator set (or randomly elected subset thereof) and a single state machine or mutually comprehensible VM, and may face future problems in social scalability due to the general necessity of reaching global consensus on alterations to the network topology.
 
-- connection-oriented, stateful, end-to-end
-- reliable inter-module communication
-- assumptions of lower layers?
-- co-resident with higher level protocols
-- cite near protocol post
+The interblockchain communication protocol takes an orthogonal approach to a slightly different problem: enabling safe, reliable interoperation of a network of heterogeneous distributed ledgers, arranged in an unknown topology, which can diversify, develop, and rearrange independently of each other or of a particular imposed topology or state machine design. In a wide, dynamic network of interoperating chains, sporadic Byzantine faults are expected, so the protocol must also detect, mitigate, and contain the potential damage of Byzantine faults in accordance with the requirements of the applications & blockchains involved. For a longer list of design principles, see [here](./1_IBC_DESIGN_PHILOSOPHY.md).
 
-IBC implementations are expected to be co-resident with higher-level modules and protocols on the host ledger. Ledgers hosting IBC must provide a certain set of functions for consensus transcript verification and accumulator proof generation, and IBC packet relayers (off-chain processes) are expected to have access to network protocols and physical datalinks as required to read the state of one ledger and submit data to another.
+To faciliate this heterogeneous interoperation, the interblockchain communication protocol takes a "bottom-up" approach, specifying the set of requirements, functions, and properties necessary to implement interoperation between two ledgers, and then specifying different ways in which multiple interoperating ledgers might be composed which preserve the requirements of higher-level protocols and occupy different points in the safety/speed tradeoff space. IBC thus presumes nothing about the overall network topology, and of the implementing ledgers only that a known, minimal set of functions are available and properties fulfilled.
+
+IBC is an end-to-end, connection-oriented, stateful protocol for reliable, ordered, authenticated communication between modules on separate distributed ledgers. IBC implementations are expected to be co-resident with higher-level modules and protocols on the host ledger. Ledgers hosting IBC must provide a certain set of functions for consensus transcript verification and accumulator proof generation, and IBC packet relayers (off-chain processes) are expected to have access to network protocols and physical datalinks as required to read the state of one ledger and submit data to another.
 
 ### Dataflow layers
 

@@ -2,7 +2,7 @@
 
 > This is an overview of terms used in IBC specifications.
 
-> For the design rationale behind the protocol, see [here](./1_IBC_DESIGN_RATIONALE.md).
+> For the design rationale behind the protocol, see [here](./1_IBC_DESIGN_PHILOSOPHY.md).
 
 > For an architectural overview, see [here](./3_IBC_ARCHITECTURE.md).
 
