@@ -24,7 +24,10 @@ IBC is not (only) a layer-two scaling protocol: all chains implementing IBC exis
 
 ## Motivation
 
-- blockchains are useful
+### Concurrent heterogeneous networks of ledgers
+
+### Reliable inter-module communication
+
 - connection-oriented, stateful, end-to-end
 - reliable inter-module communication
 - assumptions of lower layers?
@@ -45,22 +48,29 @@ Of the underlying consensus protocols and ledgers IBC requires a set of primitiv
 
 ## Operation
 
-- data relay
-- reliability
-- flow control & ordering
-- authentication
-- multiplexing
-- connections
+### Data relay
 
-(explain each)
+### Reliability
+
+### Flow control & ordering
+
+### Authentication
+
+### Connections
+
+### Multiplexing
 
 ## Philosophy
 
-- elements of the ledger topology
-- host environment
-- interfaces
-- relation to other protocols
-- reliable communication
+### Ledger topology
+
+### Host environment
+
+### Interfaces
+
+### Relation to other protocols
+
+### Reliable communication
 
 ## Dataflow
 
