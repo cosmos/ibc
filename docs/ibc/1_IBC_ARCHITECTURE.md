@@ -2,9 +2,9 @@
 
 > This is an overview of the high-level architecture & dataflow of the IBC protocol.
 
-> For the design rationale behind the protocol, see [here](./1_IBC_DESIGN_PHILOSOPHY.md).
+> For a broad set of protocol design principles, see [here](./2_IBC_DESIGN_PRINCIPLES.md).
 
-> For definitions of terms used in IBC specifications, see [here](./2_IBC_TERMINOLOGY.md).
+> For definitions of terms used in IBC specifications, see [here](./3_IBC_TERMINOLOGY.md).
 
 This document outlines the architecture of the authentication, transport, and ordering layers of the IBC protocol stack. This document does not describe specific protocol details — those are contained in individual ICSs.
 
@@ -28,7 +28,7 @@ The two predominant blockchains, Bitcoin and Ethereum, support about seven and a
 
 One design direction is to shard a single programmable state machine across separate chains, referred to as "shards", which execute concurrently and store disjoint partitions of the state. In order to reason about safety and liveness, and in order to correctly route data and code between shards, these designs must take a "top-down approach" — constructing a particular network topology, featuring a single root ledger and a star or tree of shards, and engineering protocol rules & incentives to enforce that topology. This approach possesses advantages in simplicity and predictability, but faces hard [technical](https://medium.com/nearprotocol/the-authoritative-guide-to-blockchain-sharding-part-1-1b53ed31e060) [problems](https://medium.com/nearprotocol/unsolved-problems-in-blockchain-sharding-2327d6517f43), requires the adherence of all shards to a single validator set (or randomly elected subset thereof) and a single state machine or mutually comprehensible VM, and may face future problems in social scalability due to the general necessity of reaching global consensus on alterations to the network topology.
 
-The *interblockchain communication protocol* takes an orthogonal approach to a differently formulated version of the problem: enabling safe, reliable interoperation of a network of heterogeneous distributed ledgers, arranged in an unknown topology, which can diversify, develop, and rearrange independently of each other or of a particular imposed topology or state machine design. In a wide, dynamic network of interoperating chains, sporadic Byzantine faults are expected, so the protocol must also detect, mitigate, and contain the potential damage of Byzantine faults in accordance with the requirements of the applications & blockchains involved. For a longer list of design principles, see [here](./1_IBC_DESIGN_PHILOSOPHY.md).
+The *interblockchain communication protocol* takes an orthogonal approach to a differently formulated version of the problem: enabling safe, reliable interoperation of a network of heterogeneous distributed ledgers, arranged in an unknown topology, which can diversify, develop, and rearrange independently of each other or of a particular imposed topology or state machine design. In a wide, dynamic network of interoperating chains, sporadic Byzantine faults are expected, so the protocol must also detect, mitigate, and contain the potential damage of Byzantine faults in accordance with the requirements of the applications & blockchains involved. For a longer list of design principles, see [here](./2_IBC_DESIGN_PRINCIPLES.md).
 
 To faciliate this heterogeneous interoperation, the interblockchain communication protocol takes a "bottom-up" approach, specifying the set of requirements, functions, and properties necessary to implement interoperation between two ledgers, and then specifying different ways in which multiple interoperating ledgers might be composed which preserve the requirements of higher-level protocols and occupy different points in the safety/speed tradeoff space. IBC thus presumes nothing about and requires nothing of the overall network topology, and of the implementing ledgers requires only that a known, minimal set of functions are available and properties fulfilled.
 
