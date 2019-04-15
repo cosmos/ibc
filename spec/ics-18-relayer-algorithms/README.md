@@ -5,7 +5,7 @@ stage: draft
 category: ibc-misc
 author: Christopher Goes <cwgoes@tendermint.com>
 created: 2019-03-07
-modified: 2019-04-02
+modified: 2019-04-15
 ---
 
 ## Synopsis
@@ -17,6 +17,10 @@ Relayer algorithms are the "physical" connection layer of IBC — off-chain proc
 ### Motivation
 
 In the IBC protocol, a blockchain can only record the *intention* to send particular data to another chain. Physical datagram relay must be performed by off-chain infrastructure. This standard defines the concept of a *relayer* algorithm, executable by an off-chain process with the ability to query chain state, to perform this relay.
+
+### Definitions
+
+A *relayer* is an off-chain process with the ability to read the state of and submit transactions to some set of ledgers utilizing the IBC protocol.
 
 ### Desired Properties
 
@@ -36,7 +40,14 @@ The relayer algorithm is defined over a set `C` of chains implementing the IBC p
 
 `submitDatagram` is a procedure defined per-chain (submitting a transaction of some sort).
 
-![Relayer](relayer.png)
+```coffeescript
+function relay(C)
+  for chain in C
+    for counterparty in C if counterparty != chain
+      datagrams = pendingDatagrams(chain, counterparty)
+      for datagram in datagrams
+        submitDatagram(counterparty, datagram)
+```
 
 #### Incentivization
 
@@ -63,6 +74,7 @@ Coming soon.
 ## History
 
 30 March 2019 - Initial draft submitted
+15 April 2019 - Revisions for formatting and clarity
 
 ## Copyright
 
