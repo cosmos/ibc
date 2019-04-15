@@ -1,4 +1,4 @@
-# 3: IBC Architecture
+# 1: IBC Architecture
 
 > This is an overview of the high-level architecture & dataflow of the IBC protocol.
 

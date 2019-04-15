@@ -1,6 +1,6 @@
-# 1: IBC Design Philosophy
+# 2: IBC Design Principles
 
-> This is an explanation of the "design philosophy" of IBC.
+> This is an explanation of the "design principles" of IBC.
 
 > For an architectural overview, see [here](./1_IBC_ARCHITECTURE.md).
 
