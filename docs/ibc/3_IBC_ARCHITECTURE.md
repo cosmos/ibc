@@ -90,31 +90,31 @@ Of the underlying consensus protocols and ledgers IBC requires a set of primitiv
 
 IBC can be conceptualized as a layered protocol stack, through which data flows top-to-bottom (when sending IBC packets) and bottom-to-top (when receiving IBC packets).
 
+---
+
 Consider the path of an IBC packet between two chains — call them *A* and *B*:
 
----
+### Diagram
 
-Dataflow on chain *A*:
+```
++----------------------------------------------------------------------------------+
+| Chain A                                                                          |
+|                                                                                  |
+| Actor --> Module --> Handler --> Packet --> Channel --> Connection --> Consensus |
++----------------------------------------------------------------------------------+
 
-Actor --> Module --> Handler -> Packet --> Channel --> Connection --> Consensus -->
+    +---------+
+==> | Relayer | ==>
+    +---------+
 
----
++----------------------------------------------------------------------------------+
+| Chain B                                                                          |
+|                                                                                  |
+| --> Consensus --> Connection --> Channel --> Packet --> Handler --> Module       |
++----------------------------------------------------------------------------------+
+```
 
-Off-chain (note that one relayer can handle many chains, connections, and packets):
-
---> Relayer -->
-
----
-
-Dataflow on chain *B*:
-
---> Consensus --> Connection --> Channel --> Packet --> Handler --> Module
-
----
-
-## Packet Traversal
-
-Consider the path of an IBC packet between two chains — call them *A* and *B*.
+### Steps
 
 1. On chain *A*
     1. Actor (application-specific)
