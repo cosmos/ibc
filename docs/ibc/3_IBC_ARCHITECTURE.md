@@ -10,9 +10,11 @@ This document outlines the architecture of the authentication, transport, and or
 
 ## What is IBC?
 
-IBC is an application-agnostic layered protocol stack for *inter-blockchain communication* which handles authentication, transport, and ordering of structured data packets relayed between two blockchains.
+The *inter-blockchain communication protocol* is designed for use as a reliable module-to-module protocol between modules running on independent distributed ledgers across an untrusted network layer. The protocol handles authentication, transport, and ordering of structured data packets relayed between modules on separate ledgers.
 
 ## What is IBC not?
+
+IBC is not (only) an atomic-swap protocol: arbitrary cross-chain data transfer and computation is supported.
 
 IBC is not (only) a token transfer protocol: token transfer is a possible application-layer use of the IBC protocol.
 
@@ -20,15 +22,37 @@ IBC is not (only) a sharding protocol: there is no single state machine being sp
 
 IBC is not (only) a layer-two scaling protocol: all chains implementing IBC exist on the same "layer", although they may occupy different points in the network topology, and there is no single root chain or single validator set.
 
-## What does IBC provide?
+## Motivation
 
-## What does IBC assume?
+- blockchains are useful
+- connection-oriented, stateful, end-to-end
+- reliable inter-module communication
+- assumptions of lower layers?
+- co-resident with higher level protocols
+- cite near protocol post
 
-## Protocol Scope
+## Scope
 
-## Protocol Interfaces
+## Interfaces
 
-## Philosophical Basis
+## Operation
+
+- data relay
+- reliability
+- flow control & ordering
+- authentication
+- multiplexing
+- connections
+
+(explain each)
+
+## Philosophy
+
+- elements of the ledger topology
+- host environment
+- interfaces
+- relation to other protocols
+- reliable communication
 
 ## Protocol Stack
 
