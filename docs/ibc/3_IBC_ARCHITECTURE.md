@@ -56,7 +56,7 @@ IBC sits between modules — smart contracts, state machine components, or other
 
 To modules IBC provides a set of functions much like the functions which might be provided to a module for interacting with another module on the same ledger: sending data packets and receiving data packets on an established connection & channel — in addition to calls to manage the protocol state: opening and closing connections and channels, choosing connection, channel, and packet delivery options. Considerable flexibility is provided to ledger developers as to which of these functions to expose to which modules, and how to restrict parameter choices — if at all — the protocol generally assumes the most permissionless setting possible, and implementers can choose to restrict usage according to their application's requirements.
 
-Of the underlying consensus protocols and ledgers IBC requires a set of primitive functions and properties as defined in [ICS 2](../spec/ics-2-consensus-requirements), primarily finality, cheaply-verifiable consensus transcripts, and simple key-value store functionality. Of the network infrastructure protocol layer (and physical network layer) IBC requires only eventual data delivery — no authentication, synchrony, or ordering properties are assumed.
+Of the underlying consensus protocols and ledgers IBC requires a set of primitive functions and properties as defined in [ICS 2](../../spec/ics-2-consensus-requirements), primarily finality, cheaply-verifiable consensus transcripts, and simple key-value store functionality. Of the network infrastructure protocol layer (and physical network layer) IBC requires only eventual data delivery — no authentication, synchrony, or ordering properties are assumed.
 
 ## Operation
 
@@ -147,16 +147,16 @@ Consider the path of an IBC packet between two chains — call them *A* and *B*:
     1. Actor (application-specific)
     1. Module (application-specific)
     1. Handler (parts defined in different ICSs)
-    1. Packet (defined in [ICS 5](../spec/ics-5-packet-semantics))
-    1. Channel (defined in [ICS 4](../spec/ics-4-channel-semantics))
-    1. Connection (defined in [ICS 3](../spec/ics-3-connection-semantics))
-    1. Consensus (defined in [ICS 2](../spec/ics-2-consensus-requirements))
+    1. Packet (defined in [ICS 5](../../spec/ics-5-packet-semantics))
+    1. Channel (defined in [ICS 4](../../spec/ics-4-channel-semantics))
+    1. Connection (defined in [ICS 3](../../spec/ics-3-connection-semantics))
+    1. Consensus (defined in [ICS 2](../../spec/ics-2-consensus-requirements))
 2. Off-chain
-    1. Relayer (defined in [ICS 18](../spec/ics-18-offchain-relayer))
+    1. Relayer (defined in [ICS 18](../../spec/ics-18-offchain-relayer))
 3. On chain *B*
-    1. Consensus (defined in [ICS 2](../spec/ics-2-consensus-requirements))
-    1. Connection (defined in [ICS 3](../spec/ics-3-connection-semantics))
-    1. Channel (defined in [ICS 4](../spec/ics-4-channel-semantics))
-    1. Packet (defined in [ICS 5](../spec/ics-5-packet-semantics))
+    1. Consensus (defined in [ICS 2](../../spec/ics-2-consensus-requirements))
+    1. Connection (defined in [ICS 3](../../spec/ics-3-connection-semantics))
+    1. Channel (defined in [ICS 4](../../spec/ics-4-channel-semantics))
+    1. Packet (defined in [ICS 5](../../spec/ics-5-packet-semantics))
     1. Handler (parts defined in different ICSs)
     1. Module (application-specific)
