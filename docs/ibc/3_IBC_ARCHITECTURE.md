@@ -34,6 +34,20 @@ IBC is not (only) a layer-two scaling protocol: all chains implementing IBC exis
 - co-resident with higher level protocols
 - cite near protocol post
 
+IBC implementations are expected to be co-resident with higher-level modules and protocols on the host ledger. Ledgers hosting IBC must provide a certain set of functions for consensus transcript verification and accumulator proof generation, and IBC packet relayers (off-chain processes) are expected to have access to network protocols and physical datalinks as required to read the state of one ledger and submit data to another.
+
+### Dataflow layers
+
+```
++--------------------------+                           +--------------------------+
+| Distributed Ledger A     |                           | Distributed Ledger B     |
+|                          |                           |                          |
+| +----------+     +-----+ |        +---------+        | +-----+     +----------+ |
+| | Module A | <-> | IBC | | <----> | Relayer | <----> | | IBC | <-> | Module B | |
+| +----------+     +-----+ |        +---------+        | +-----+     +----------+ |
++--------------------------+                           +--------------------------+
+```
+
 ## Scope
 
 IBC handles authentication, transport, and ordering of structured data packets relayed between modules on separate ledgers. The protocol is intended to be in simultaneous use between any number of modules on any number of ledgers over arbitrarily structured underlying networks.
