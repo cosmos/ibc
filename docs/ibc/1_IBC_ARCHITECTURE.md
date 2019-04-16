@@ -84,14 +84,11 @@ IBC does not require specific provision for computation-level flow control since
 
 ### Authentication
 
-- signed by consensus
-- knowledge that other chain is implementing correct IBC protocol
-- verify accumulator proofs on other blockchains
+All datagrams in IBC are authenticated: a block finalized by the consensus algorithm of the sending blockchain must commit to the outgoing datagram via a cryptographic accumulator, and the receiving chain must verify both the consensus transcript and the accumulator proof that the datagram was sent (and associated actions executed) before acting upon it. For correct execution semantics, both chains must implement the correct IBC protocol — of course, since IBC is permissionless, any chain could connect to another chain and provide a correct accumulator proof but incorrectly implement IBC such that its IBC handler did not behave according to protocol, so modules utilizing IBC connections (or end-users using those modules) must inspect the state of the connections and ledgers they plan to use to ensure correct implementation.
 
 ### Connections
 
-- stateful information about consensus state of counterparty chain
-- metadata on connection, sequence number, encoding formats
+Reliability, flow control, and authentication as described above require that IBC initializes and maintains certain status information for each datastream. This information is called a connection. Each connection object contains information about the consensus state of the connected ledger, negotiated encoding & multiplexing options, and state & sequence numbers. When two modules wish to communicate, they must locate an existing connection between their two ledgers, or initialize a new connection if none yet exists. Initializing a connection requires a multi-step handshake which, once complete, ensures that only the two intended ledgers are connected and future datagrams relayed will be authenticated, encoded, and sequenced as desired.
 
 ### Multiplexing
 
