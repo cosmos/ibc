@@ -10,7 +10,7 @@ This document outlines the architecture of the authentication, transport, and or
 
 ## What is IBC?
 
-The *inter-blockchain communication protocol* is designed for use as a reliable module-to-module protocol between modules running on independent distributed ledgers across an untrusted network layer.
+The *inter-blockchain communication protocol* is designed for use as a reliable, authenticated module-to-module communication protocol between modules running on independent distributed ledgers across an untrusted network layer.
 
 ## What is IBC not?
 
@@ -60,24 +60,27 @@ Of the underlying consensus protocols and ledgers IBC requires a set of primitiv
 
 ## Operation
 
-(inspired by TCP RFC)
+The primary purpose of IBC is to provide reliable, authenticated, ordered communication between modules running on independent host distributed ledgers. This requires protocol logic in the following areas:
+- Data relay
+- Reliability
+- Flow control
+- Authentication
+- Connections
+- Multiplexing
+
+The following paragraphs outline the protocol logic within IBC for each area.
 
 ### Data relay
 
-- off-chain relayers
-- read state from one blockchain
-- write it to the other
+IBC assumes the existence of a set of relayer processes with access to an underlying network protocol stack (likely TCP/IP, UDP/IP, or QUIC/IP) and physical interconnect infrastructure. These relayer processes monitor a set of ledgers implementing the IBC protocol, continuously scanning the state of each ledger and executing transactions on another ledger when outgoing datagrams have been committed. For correct operation and progress in a connection between two ledgers, IBC requires only that at least one correct and live relayer process exists which can relay between the ledgers.
 
 ### Reliability
 
-- underlying network can damage, lose, duplicate packets, behave arbitrarily
-- only thing assumed: eventual liveness
-- state commitments, indempotent submission
+The network layer and relayer processes may behave in arbitrary ways, dropping, reordering, or duplicating packets, purposely attempting to send invalid transactions, or otherwise acting Byzantine. This must not compromise the safety or liveness of IBC. This is achieved by assigning a sequence number to each packet sent over an IBC connection, which is checked by the IBC handler on the receiving ledger, and providing a method for the sending ledger to check that the receiving ledger has in fact received and handled a packet before sending more packets or taking further action. Cryptographic commitments are used to prevent datagram forgery: the sending ledger commits to outgoing datagrams, and the receiving ledger checks these commitments, so datagrams altered in transit by a relayer will be rejected.
 
-### Flow control & ordering
+### Flow control
 
-- ordering of packets (optional)
-- application-layer flow control (e.g. value) to bound damage from Byzantine faults
+IBC does not require specific provision for computation-level flow control since the underlying ledgers will have throughput limitations and flow control mechanisms of their own (such as "gas" markets). Application-level flow control — limiting the rate of particular packets according to their content — may be useful to ensure security properties (limiting the value on a single ledger) and contain damage from Byzantine faults (allowing a challenge period to prove an equivocation, then closing a connection). IBC provides facilities for modules to reject packets and leaves particulars up to the higher-level application protocols.
 
 ### Authentication
 
@@ -92,26 +95,7 @@ Of the underlying consensus protocols and ledgers IBC requires a set of primitiv
 
 ### Multiplexing
 
-- channels for multiplexing
-- same consensus information, any number of concurrent datastreams
-
-## Philosophy
-
-(inspired by TCP RFC) (do we really need this? seems redudant with a lot of the above)
-
-### Ledger topology
-
-- assume nothing
-
-### Host environment
-
-- ledger state machine
-
-### Interfaces
-
-### Relation to other protocols
-
-### Reliable communication
+To allow for many modules within a single host ledger to use an IBC connection simultaneously, IBC provides a set of channels within each connection, which each uniquely identify a linear datapipe over which packets can be sent in order to a destination module on the receiving ledger. Channels are usually expected to be associated with a single module on each ledger, but one-to-many and many-to-one channels are also possible. The number of channels is unbounded, facilitating concurrent throughput limited only by the throughput of the underyling ledgers with only a single connection necessary to track consensus information (and consensus transcript verification cost thus amortized across all channels using the connection).
 
 ## Dataflow
 
