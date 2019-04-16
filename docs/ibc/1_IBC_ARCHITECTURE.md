@@ -98,8 +98,6 @@ To allow for many modules within a single host ledger to use an IBC connection s
 
 IBC can be conceptualized as a layered protocol stack, through which data flows top-to-bottom (when sending IBC packets) and bottom-to-top (when receiving IBC packets).
 
----
-
 Consider the path of an IBC packet between two chains — call them *A* and *B*:
 
 ### Diagram
