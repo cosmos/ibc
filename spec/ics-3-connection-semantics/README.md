@@ -163,42 +163,42 @@ type ConnOpenConfirm struct {
 ```coffeescript
 function handleConnOpenInit(identifier, desiredVersion, desiredCounterpartyIdentifier, rootOfTrust)
   assert(Get(identifier) == null)
-  state <- INIT
+  state = INIT
   Set(identifier, (state, desiredVersion, desiredCounterpartyIdentifier, rootOfTrust))
 ```
 
 ```coffeescript
 function handleConnOpenTry()
-  expectedRootOfTrust <- getRootOfTrust()
+  expectedRootOfTrust = getRootOfTrust()
   assert(verify(rootOfTrust, proofInit,
     (counterpartyIdentifier, (INIT, desiredVersion, desiredIdentifier, expectedRootOfTrust))))
-  identifier <- chooseIdentifier(desiredIdentifier, counterpartyIdentifier)
-  version <- chooseVersion(desiredVersion)
-  state <- OPENTRY
+  identifier = chooseIdentifier(desiredIdentifier, counterpartyIdentifier)
+  version = chooseVersion(desiredVersion)
+  state = OPENTRY
   Set(identifier, (state, version, counterpartyIdentifier, rootOfTrust))
 ```
 
 ```coffeescript
 function handleConnOpenAck()
-  (state, desiredVersion, desiredCounterpartyIdentifier, rootOfTrust) <- Get(identifier)
+  (state, desiredVersion, desiredCounterpartyIdentifier, rootOfTrust) = Get(identifier)
   assert(state == INIT)
-  expectedRootOfTrust <- getRootOfTrust()
+  expectedRootOfTrust = getRootOfTrust()
   assert(verify(rootOfTrust, proofTry,
     (agreedCounterpartyIdentifier, (OPENTRY, agreedVersion, identifier, expectedRootOfTrust))))
   assert(checkIdentifier(desiredCounterpartyIdentifier, agreedCounterpartyIdentifier))
   assert(checkVersion(desiredVersion, agreedVersion))
-  state <- OPEN
+  state = OPEN
   Set(identifier, (state, agreedVersion, agreedCounterpartyIdentifier, rootOfTrust))
 ```
 
 ```coffeescript
 function handleConnOpenConfirm()
-  (state, version, counterpartyIdentifier, rootOfTrust) <- Get(identifier)
+  (state, version, counterpartyIdentifier, rootOfTrust) = Get(identifier)
   assert(state == OPENTRY)
-  expectedRootOfTrust <- getRootOfTrust()
+  expectedRootOfTrust = getRootOfTrust()
   assert(verify(rootOfTrust, proofAck,
     (counterpartyIdentifier, (OPEN, version, identifier, expectedRootOfTrust))))
-  state <- OPEN
+  state = OPEN
   Set(identifier, (state, version, counterpartyIdentifier, rootOfTrust))
 ```
 
@@ -233,7 +233,7 @@ type ConnTrack struct {
 
 ```coffeescript
 function handleConnTrack()
-  (state, version, counterpartyIdentifier, rootOfTrust) <- Get(identifier)
+  (state, version, counterpartyIdentifier, rootOfTrust) = Get(identifier)
   assert(state == OPEN)
   case updateRootOfTrust(rootOfTrust, header) of
     newRootOfTrust ->
@@ -272,29 +272,29 @@ type ConnCloseAck struct {
 
 ```coffeescript
 function handleConnCloseInit()
-  (state, version, counterpartyIdentifier, rootOfTrust) <- Get(identifier)
+  (state, version, counterpartyIdentifier, rootOfTrust) = Get(identifier)
   assert(state == OPEN)
   assert(identifierCounterparty == counterpartyIdentifier)
-  state <- TRYCLOSE
+  state = TRYCLOSE
   Set(identifier, (state, version, counterpartyIdentifier, rootOfTrust))
 ```
 
 ```coffeescript
 function handleConnCloseTry()
-  (state, version, counterpartyIdentifier, rootOfTrust) <- Get(identifier)
+  (state, version, counterpartyIdentifier, rootOfTrust) = Get(identifier)
   assert(state == OPEN)
   assert(identifierCounterparty == counterpartyIdentifier)
   assert(verify(roofOfTrust, proofInit, (counterpartyIdentifier, TRYCLOSE)))
-  state <- CLOSED
+  state = CLOSED
   Set(identifier, (state, version, counterpartyIdentifier, rootOfTrust))
 ```
 
 ```coffeescript
 function handleConnCloseAck()
-  (state, version, counterpartyIdentifier, rootOfTrust) <- Get(identifier)
+  (state, version, counterpartyIdentifier, rootOfTrust) = Get(identifier)
   assert(state == TRYCLOSE)
   assert(verify(rootOfTrust, proofTry, (counterpartyIdentifier, CLOSED)))
-  state <- CLOSED
+  state = CLOSED
   Set(identifier, (state, version, counterpartyIdentifier, rootOfTrust))
 ```
 
@@ -312,10 +312,10 @@ type ConnCloseEquivocation struct {
 
 ```coffeescript
 function handleConnCloseEquivocation()
-  (state, version, counterpartyIdentifier, rootOfTrust) <- Get(identifier)
+  (state, version, counterpartyIdentifier, rootOfTrust) = Get(identifier)
   assert(state == OPEN)
   assert(checkEquivocation(rootOfTrust, firstHeader, secondHeader))
-  state <- CLOSED
+  state = CLOSED
   Set(identifier, (state, version, counterpartyIdentifier, rootOfTrust))
 ```
 
