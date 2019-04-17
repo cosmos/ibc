@@ -106,6 +106,8 @@ To allow for many modules within a single host ledger to use an IBC connection s
 
 IBC can be conceptualized as a layered protocol stack, through which data flows top-to-bottom (when sending IBC packets) and bottom-to-top (when receiving IBC packets).
 
+The "handler" is the part of the state machine implementing the IBC protocol, which is responsible for translating calls from modules to and from packets and routing them appropriately to and from channels & connections.
+
 Consider the path of an IBC packet between two chains — call them *A* and *B*:
 
 ### Diagram
