@@ -1,4 +1,4 @@
-# 1: IBC Architecture
+# 1: Inter-blockchain Communication Protocol Architecture
 
 **This is an overview of the high-level architecture & dataflow of the IBC protocol.**
 
