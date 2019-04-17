@@ -1,16 +1,16 @@
 # 1: IBC Architecture
 
-> This is an overview of the high-level architecture & dataflow of the IBC protocol.
+**This is an overview of the high-level architecture & dataflow of the IBC protocol.**
 
-> For a broad set of protocol design principles, see [here](./2_IBC_DESIGN_PRINCIPLES.md).
+**For a broad set of protocol design principles, see [here](./2_IBC_DESIGN_PRINCIPLES.md).**
 
-> For definitions of terms used in IBC specifications, see [here](./3_IBC_TERMINOLOGY.md).
+**For definitions of terms used in IBC specifications, see [here](./3_IBC_TERMINOLOGY.md).**
 
 This document outlines the architecture of the authentication, transport, and ordering layers of the IBC protocol stack. This document does not describe specific protocol details — those are contained in individual ICSs.
 
 ## What is IBC?
 
-The *inter-blockchain communication protocol* is designed for use as a reliable, authenticated module-to-module communication protocol between modules running on independent distributed ledgers across an untrusted network layer.
+The *inter-blockchain communication protocol* is a reliable & secure inter-module communication protocol, where modules are deterministic process that run on independent distributed ledgers.
 
 ## What is IBC not?
 
@@ -34,18 +34,6 @@ To faciliate this heterogeneous interoperation, the interblockchain communicatio
 
 IBC is an end-to-end, connection-oriented, stateful protocol for reliable, ordered, authenticated communication between modules on separate distributed ledgers. IBC implementations are expected to be co-resident with higher-level modules and protocols on the host ledger. Ledgers hosting IBC must provide a certain set of functions for consensus transcript verification and accumulator proof generation, and IBC packet relayers (off-chain processes) are expected to have access to network protocols and physical datalinks as required to read the state of one ledger and submit data to another.
 
-### Dataflow layers
-
-```
-+--------------------------+                           +--------------------------+
-| Distributed Ledger A     |                           | Distributed Ledger B     |
-|                          |                           |                          |
-| +----------+     +-----+ |        +---------+        | +-----+     +----------+ |
-| | Module A | <-> | IBC | | <----> | Relayer | <----> | | IBC | <-> | Module B | |
-| +----------+     +-----+ |        +---------+        | +-----+     +----------+ |
-+--------------------------+                           +--------------------------+
-```
-
 ## Scope
 
 IBC handles authentication, transport, and ordering of structured data packets relayed between modules on separate ledgers. The protocol is intended to be in simultaneous use between any number of modules on any number of ledgers over arbitrarily structured underlying networks.
@@ -57,6 +45,18 @@ IBC sits between modules — smart contracts, state machine components, or other
 To modules IBC provides a set of functions much like the functions which might be provided to a module for interacting with another module on the same ledger: sending data packets and receiving data packets on an established connection & channel — in addition to calls to manage the protocol state: opening and closing connections and channels, choosing connection, channel, and packet delivery options. Considerable flexibility is provided to ledger developers as to which of these functions to expose to which modules, and how to restrict parameter choices — if at all — the protocol generally assumes the most permissionless setting possible, and implementers can choose to restrict usage according to their application's requirements.
 
 Of the underlying consensus protocols and ledgers IBC requires a set of primitive functions and properties as defined in [ICS 2](../../spec/ics-2-consensus-requirements), primarily finality, cheaply-verifiable consensus transcripts, and simple key-value store functionality. Of the network infrastructure protocol layer (and physical network layer) IBC requires only eventual data delivery — no authentication, synchrony, or ordering properties are assumed.
+
+### Protocol relations
+
+```
++--------------------------+                           +--------------------------+
+| Distributed Ledger A     |                           | Distributed Ledger B     |
+|                          |                           |                          |
+| +----------+     +-----+ |        +---------+        | +-----+     +----------+ |
+| | Module A | <-> | IBC | | <----> | Relayer | <----> | | IBC | <-> | Module B | |
+| +----------+     +-----+ |        +---------+        | +-----+     +----------+ |
++--------------------------+                           +--------------------------+
+```
 
 ## Operation
 

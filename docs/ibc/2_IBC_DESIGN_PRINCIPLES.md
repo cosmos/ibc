@@ -1,10 +1,10 @@
 # 2: IBC Design Principles
 
-> This is an explanation of the "design principles" of IBC.
+**This is an explanation of the "design principles" of IBC.**
 
-> For an architectural overview, see [here](./1_IBC_ARCHITECTURE.md).
+**For an architectural overview, see [here](./1_IBC_ARCHITECTURE.md).**
 
-> For definitions of terms used in IBC specifications, see [here](./3_IBC_TERMINOLOGY.md).
+**For definitions of terms used in IBC specifications, see [here](./3_IBC_TERMINOLOGY.md).**
 
 The design space of "interblockchain communication protocols" is wide, and the term itself has become a bit too all-encompassing. The "Interblockchain Communication Protocol" (IBC) is a very particular point in that design space, chosen to provide specific versatility, locality, modularity, and efficiency properties for the expected interchain ecosystem of interoperable blockchains. This document outlines the "why" of IBC and enumerates the primary high-level design goals.
 
