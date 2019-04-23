@@ -5,7 +5,7 @@ stage: draft
 category: ibc-misc
 author: Christopher Goes <cwgoes@tendermint.com>
 created: 2019-03-07
-modified: 2019-04-15
+modified: 2019-04-23
 ---
 
 ## Synopsis
@@ -75,6 +75,7 @@ Coming soon.
 
 30 March 2019 - Initial draft submitted
 15 April 2019 - Revisions for formatting and clarity
+23 April 2019 - Revisions from comments; draft merged
 
 ## Copyright
 
