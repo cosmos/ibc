@@ -16,7 +16,7 @@ Relayer algorithms are the "physical" connection layer of IBC — off-chain proc
 
 ### Motivation
 
-In the IBC protocol, a blockchain can only record the *intention* to send particular data to another chain. Physical datagram relay must be performed by off-chain infrastructure. This standard defines the concept of a *relayer* algorithm, executable by an off-chain process with the ability to query chain state, to perform this relay.
+In the IBC protocol, a blockchain can only record the *intention* to send particular data to another chain — it does not have direct access to a network transport layer. Physical datagram relay must be performed by off-chain infrastructure with access to a transport layer such as TCP/IP. This standard defines the concept of a *relayer* algorithm, executable by an off-chain process with the ability to query chain state, to perform this relay.
 
 ### Definitions
 
@@ -24,7 +24,7 @@ A *relayer* is an off-chain process with the ability to read the state of and su
 
 ### Desired Properties
 
-- No safety properties of IBC should depend on relayer behavor (assume Byzantine relayers).
+- No safety properties of IBC should depend on relayer behaviour (assume Byzantine relayers).
 - Liveness properties of IBC should depend only on the existence of at least one correct, live relayer.
 - Relaying should be permissionless, all requisite verification should be performed on-chain.
 - Requisite communication between the IBC user and the relayer should be minimized.
@@ -34,7 +34,7 @@ A *relayer* is an off-chain process with the ability to read the state of and su
 
 #### Relayer Algorithm
 
-The relayer algorithm is defined over a set `C` of chains implementing the IBC protocol.
+The relayer algorithm is defined over a set `C` of chains implementing the IBC protocol. Each relayer may not necessarily have access to read state from and write datagrams to all chains in the interchain network (especially in the case of permissioned or private chains) — different relayers may relay between different subsets.
 
 `pendingDatagrams` calculates the set of all valid datagrams to be relayed from one chain to another based on the state of both chains. Subcomponents of this function are defined in individual ICSs. The relayer must possess prior knowledge of what subset of the IBC protocol is implemented by the blockchains in the set for which they are relaying (e.g. by reading the source code).
 
