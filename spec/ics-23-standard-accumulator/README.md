@@ -10,7 +10,7 @@ modified: 2019-04-16
 
 # Synopsis
 
-(high-level description of and rationale for specification)
+An *accumulator*, or *cryptographic accumulator*, is a construction that produces a succinct, binding commitment to a set or indexed vector of elements and short membership and/or non-membership proofs for any element in the set or vector.
 
 # Specification
 
@@ -58,6 +58,19 @@ optional
 
 - BatchVerifyMem(a_t, {x}, w_xt) -> {0, 1}
 - BatchVerifyNonMem(a_t, {x}, w_xt) -> {0, 1}
+
+(vector commitments)
+
+- Gen() -> v_0
+- Com(v_t, m) -> v_t+1
+- Update(v_t, m, i) -> v_t+1
+- Open(v_t, m, i) -> pi
+- Verify(v_t, pi) -> {0, 1}
+
+optional
+
+- BatchOpen
+- BatchVerify
 
 (detailed technical specification: syntax, semantics, sub-protocols, algorithms, data structures, etc)
 
