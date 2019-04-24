@@ -42,7 +42,7 @@ IBC is an end-to-end, connection-oriented, stateful protocol for reliable, order
 
 ## Scope
 
-IBC handles authentication, transport, and ordering of structured data packets relayed between modules on separate ledgers. The protocol is intended to be in simultaneous use between any number of modules on any number of ledgers over arbitrarily structured underlying networks.
+IBC handles authentication, transport, and ordering of structured data packets relayed between modules on separate ledgers. The protocol is defined between modules on two ledgers, but designed for safe simultaneous use between any number of modules on any number of ledgers connected in arbitrarily topologies.
 
 ## Interfaces
 
