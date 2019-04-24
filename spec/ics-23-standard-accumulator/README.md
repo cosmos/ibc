@@ -30,6 +30,35 @@ modified: 2019-04-16
 
 ## Technical Specification
 
+Two parties:
+- Accumulator manager (initializes, adds / removes elements)
+- Third-party verifier
+
+Functions
+
+### Algorithms
+
+required
+
+- Gen(S_0) -> a_0
+- Add(a_t, x) -> (a_t+1)
+- Del(a_t, x) -> (a_t+1)
+
+- MemWitCreate(a_t, x) -> w_xt
+- NonMemWitCreate(a_t, x) -> w_xt
+
+- VerMem(a_t, x, w_xt) -> {0, 1}
+- VerNonMem(a_t, x, w_xt) -> {0, 1}
+
+must be
+- correct: for an element in the accumulator, vermem(element) => 1, vernonmem(element) => 0
+- sound: for an element not in the accumulator, vernonmem(element) => 1, vermem(element) => 0
+
+optional
+
+- BatchVerifyMem(a_t, {x}, w_xt) -> {0, 1}
+- BatchVerifyNonMem(a_t, {x}, w_xt) -> {0, 1}
+
 (detailed technical specification: syntax, semantics, sub-protocols, algorithms, data structures, etc)
 
 ## Backwards Compatibility
@@ -49,6 +78,9 @@ modified: 2019-04-16
 (links to or descriptions of other implementations)
 
 # History
+
+Security definitions are mostly sources from https://eprint.iacr.org/2017/043.pdf
+Also from https://eprint.iacr.org/2018/1188.pdf
 
 (changelog and notable inspirations / references)
 
