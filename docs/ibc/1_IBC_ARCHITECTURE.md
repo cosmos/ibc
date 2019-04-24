@@ -8,9 +8,11 @@
 
 This document outlines the architecture of the authentication, transport, and ordering layers of the inter-blockchain communication (IBC) protocol stack. This document does not describe specific protocol details — those are contained in individual ICSs.
 
+> Note: *Ledger*, *chain*, and *blockchain* are used interchangeably throughout this document, in accordance with their colloquial usage.
+
 ## What is IBC?
 
-The *inter-blockchain communication protocol* is a reliable & secure inter-module communication protocol, where modules are deterministic process that run on independent distributed ledgers (also referred to as blockchains).
+The *inter-blockchain communication protocol* is a reliable & secure inter-module communication protocol, where modules are deterministic processes that run on independent distributed ledgers (also referred to as blockchains).
 
 IBC can be used by any application which builds on top of reliable & secure interchain communication. Example applications include cross-chain asset transfer, atomic swaps, multi-chain smart contracts (with or without mutually comprehensible VMs), and data & code sharding of various kinds.
 
@@ -28,7 +30,7 @@ IBC is not (only) a layer-two scaling protocol: all chains implementing IBC exis
 
 ## Motivation
 
-The two predominant blockchains by market capitalization, Bitcoin and Ethereum, currently support about seven and about twenty transactions per second respectively. Both have been operating at capacity in recent past despite still being utilized primarily by a userbase of early-adopter enthusiasts. Throughput is a limitation for most blockchain use cases, and throughput limitations are a fundamental limitation of distributed state machines, since every (validating) node in the network must process every transaction and store all state. Faster consensus algorithms, such as [Tendermint](https://github.com/tendermint/tendermint), may increase throughput by a large constant factor but will be unable to scale indefinitely for this reason. In order to support the transaction throughput, application diversity, and cost efficiency required to facilitate wide deployment of distributed ledger applications, execution and storage must be split across many independent consensus instances which can run concurrently.
+The two predominant blockchains by market capitalization, Bitcoin and Ethereum, currently support about seven and about twenty transactions per second respectively. Both have been operating at capacity in recent past despite still being utilized primarily by a userbase of early-adopter enthusiasts. Throughput is a limitation for most blockchain use cases, and throughput limitations are a fundamental limitation of distributed state machines, since every (validating) node in the network must process every transaction, store all state, and communicate with other validating nodes. Faster consensus algorithms, such as [Tendermint](https://github.com/tendermint/tendermint), may increase throughput by a large constant factor but will be unable to scale indefinitely for this reason. In order to support the transaction throughput, application diversity, and cost efficiency required to facilitate wide deployment of distributed ledger applications, execution and storage must be split across many independent consensus instances which can run concurrently.
 
 One design direction is to shard a single programmable state machine across separate chains, referred to as "shards", which execute concurrently and store disjoint partitions of the state. In order to reason about safety and liveness, and in order to correctly route data and code between shards, these designs must take a "top-down approach" — constructing a particular network topology, featuring a single root ledger and a star or tree of shards, and engineering protocol rules & incentives to enforce that topology. This approach possesses advantages in simplicity and predictability, but faces hard [technical](https://medium.com/nearprotocol/the-authoritative-guide-to-blockchain-sharding-part-1-1b53ed31e060) [problems](https://medium.com/nearprotocol/unsolved-problems-in-blockchain-sharding-2327d6517f43), requires the adherence of all shards to a single validator set (or randomly elected subset thereof) and a single state machine or mutually comprehensible VM, and may face future problems in social scalability due to the general necessity of reaching global consensus on alterations to the network topology.
 
@@ -48,9 +50,9 @@ IBC handles authentication, transport, and ordering of structured data packets r
 
 IBC sits between modules — smart contracts, other state machine components, or otherwise independent pieces of application logic on ledgers — on one side, and underlying consensus protocols, ledgers, and network infrastructure (e.g. TCP/IP), on the other side.
 
-To modules IBC provides a set of functions much like the functions which might be provided to a module for interacting with another module on the same ledger: sending data packets and receiving data packets on an established connection & channel — in addition to calls to manage the protocol state: opening and closing connections and channels, choosing connection, channel, and packet delivery options. Considerable flexibility is provided to ledger developers as to which of these functions to expose to which modules, and how to restrict parameter choices — if at all — the protocol generally assumes the most permissionless setting possible, and implementers can choose to restrict usage according to their application's requirements.
+IBC provides to modules a set of functions much like the functions which might be provided to a module for interacting with another module on the same ledger: sending data packets and receiving data packets on an established connection & channel (primitives for authentication & ordering, see [definitions](./3_IBC_TERMINOLOGY.md)) — in addition to calls to manage the protocol state: opening and closing connections and channels, choosing connection, channel, and packet delivery options, and inspecting connection & channel status.
 
-Of the underlying consensus protocols and ledgers IBC requires a set of primitive functions and properties as defined in [ICS 2](../../spec/ics-2-consensus-requirements), primarily finality, cheaply-verifiable consensus transcripts, and simple key-value store functionality. Of the network infrastructure protocol layer (and physical network layer) IBC requires only eventual data delivery — no authentication, synchrony, or ordering properties are assumed.
+IBC assumes functionalities and properties of the underlying consensus protocols and ledgers as defined in [ICS 2](../../spec/ics-2-consensus-requirements), primarily finality, cheaply-verifiable consensus transcripts, and simple key-value store functionality. On the network side, IBC requires only eventual data delivery — no authentication, synchrony, or ordering properties are assumed.
 
 ### Protocol relations
 
@@ -82,11 +84,11 @@ The following paragraphs outline the protocol logic within IBC for each area.
 
 ### Data relay
 
-IBC assumes the existence of a set of relayer processes with access to an underlying network protocol stack (likely TCP/IP, UDP/IP, or QUIC/IP) and physical interconnect infrastructure. These relayer processes monitor a set of ledgers implementing the IBC protocol, continuously scanning the state of each ledger and executing transactions on another ledger when outgoing datagrams have been committed. For correct operation and progress in a connection between two ledgers, IBC requires only that at least one correct and live relayer process exists which can relay between the ledgers.
+In the IBC architecture, modules are not directly sending messages to each other over networking infrastructure, but rather creating messages to be sent which are then physically relayed by monitoring "relayer processes". IBC assumes the existence of a set of relayer processes with access to an underlying network protocol stack (likely TCP/IP, UDP/IP, or QUIC/IP) and physical interconnect infrastructure. These relayer processes monitor a set of ledgers implementing the IBC protocol, continuously scanning the state of each ledger and executing transactions on another ledger when outgoing datagrams have been committed. For correct operation and progress in a connection between two ledgers, IBC requires only that at least one correct and live relayer process exists which can relay between the ledgers.
 
 ### Reliability
 
-The network layer and relayer processes may behave in arbitrary ways, dropping, reordering, or duplicating packets, purposely attempting to send invalid transactions, or otherwise acting Byzantine. This must not compromise the safety or liveness of IBC. This is achieved by assigning a sequence number to each packet sent over an IBC connection, which is checked by the IBC handler on the receiving ledger, and providing a method for the sending ledger to check that the receiving ledger has in fact received and handled a packet before sending more packets or taking further action. Cryptographic commitments are used to prevent datagram forgery: the sending ledger commits to outgoing datagrams, and the receiving ledger checks these commitments, so datagrams altered in transit by a relayer will be rejected.
+The network layer and relayer processes may behave in arbitrary ways, dropping, reordering, or duplicating packets, purposely attempting to send invalid transactions, or otherwise acting Byzantine. This must not compromise the safety or liveness of IBC. This is achieved by assigning a sequence number to each packet sent over an IBC connection, which is checked by the IBC handler (the part of the state machine implementing the IBC protocol) on the receiving ledger, and providing a method for the sending ledger to check that the receiving ledger has in fact received and handled a packet before sending more packets or taking further action. Cryptographic commitments are used to prevent datagram forgery: the sending ledger commits to outgoing datagrams, and the receiving ledger checks these commitments, so datagrams altered in transit by a relayer will be rejected.
 
 ### Flow control
 
@@ -94,7 +96,7 @@ IBC does not require specific provision for computation-level flow control since
 
 ### Authentication
 
-All datagrams in IBC are authenticated: a block finalized by the consensus algorithm of the sending ledger must commit to the outgoing datagram via a cryptographic accumulator, and the receiving chain's IBC handler must verify both the consensus transcript and the cryptographic accumulator proof that the datagram was sent (and associated actions executed) before acting upon it. For correct execution semantics, both chains must implement the correct IBC protocol — of course, since IBC is permissionless, any chain could connect to another chain and provide a correct cryptographic accumulator proof but incorrectly implement IBC such that its IBC handler did not behave according to protocol, so modules utilizing IBC connections (or end-users using those modules) must inspect the state of the connections and ledgers they plan to use to ensure correct implementation.
+All datagrams in IBC are authenticated: a block finalized by the consensus algorithm of the sending ledger must commit to the outgoing datagram via a cryptographic accumulator, and the receiving chain's IBC handler must verify both the consensus transcript and the cryptographic accumulator proof that the datagram was sent (and associated actions executed) before acting upon it.
 
 ### Statefulness
 
@@ -115,27 +117,26 @@ Consider the path of an IBC packet between two chains — call them *A* and *B*:
 ### Diagram
 
 ```
-+----------------------------------------------------------------------------------+
-| Chain A                                                                          |
-|                                                                                  |
-| Actor --> Module --> Handler --> Packet --> Channel --> Connection --> Consensus |
-+----------------------------------------------------------------------------------+
++------------------------------------------------------------------------------+
+| Chain A                                                                      |
+|                                                                              |
+| Module --> Handler --> Packet --> Channel --> Connection --> Consensus       |
++------------------------------------------------------------------------------+
 
     +---------+
 ==> | Relayer | ==>
     +---------+
 
-+----------------------------------------------------------------------------------+
-| Chain B                                                                          |
-|                                                                                  |
-| --> Consensus --> Connection --> Channel --> Packet --> Handler --> Module       |
-+----------------------------------------------------------------------------------+
++------------------------------------------------------------------------------+
+| Chain B                                                                      |
+|                                                                              |
+| --> Consensus --> Connection --> Channel --> Packet --> Handler --> Module   |
++------------------------------------------------------------------------------+
 ```
 
 ### Steps
 
 1. On chain *A*
-    1. Actor (application-specific)
     1. Module (application-specific)
     1. Handler (parts defined in different ICSs)
     1. Packet (defined in [ICS 5](../../spec/ics-5-packet-semantics))
