@@ -89,15 +89,6 @@ where
   * `Base` is the new verify, if needed to be updated
   * `Root` is the new `AccumulatorRoot` which will replace the existing one
 
-##### Commit
-
-`Commit` is a `Header` generating function which takes the previous `Header` with the messages
-and returns the result. 
-
-```go
-type Commit func(ConsensusState, [Message]) Header
-```
-
 ##### Verifier
 
 `Verifier` is a light client verifier proving `Header` depending on the `Commit`.
@@ -109,13 +100,24 @@ Defined as
 type Verifier func(ConsensusState, Header) (Error|ConsensusState)
 ```
 
+##### Commit
+
+*// Commit and Blockchain is not used inside the protocol, but for the understanding
+of how does verifiers, cstates, headers work & generated. I think we should move these
+to another paragraph, as the other types and functions are actually used by other icss*
+
+`Commit` is a `Header` generating function which takes the previous `Header` with the messages
+and returns the result.
+
+```go
+type Commit func(ConsensusState, [Message]) Header
+```
+
 ##### Blockchain
 
-// XXX: is it okay to be placed in the protocol spec?
-
 Defined as blockchain consensus algorithm which generates valid `Header`s.
-It generatess a unique list of headers starting from a genesis `ConsensusState` with arbitrary 
-messages. 
+It generatess a unique list of headers starting from a genesis `ConsensusState` with arbitrary
+messages.
 
 `Blockchain` is defined as
 ```go
@@ -151,7 +153,7 @@ In these cases it is ensured that the `Verifier` works as intended.
 
 ##### LightClient
 
-LightClient is defined as 
+LightClient is defined as
 ```go
 type LightClient struct {
   Verifier Verifier
@@ -178,18 +180,26 @@ properties as defined in ICS23:
 
 #### Subprotocols
 
-##### Register
+##### Getter/Setter
 
-Each lightclient has an identifier to access on them. The identifiers are given to the
-lightclients by the blockchain's logic, which the protocol does not define. However the way
-to register lightclients is expected to work permissionless.
+Identifiers are used to point the LightClients.
+
+```go
+function getLightClient(id :: Identifier) LightClient { /*impl specific*/ }
+
+function setLightClient(id :: Identifier, lc :: LightClient) { /*impl specific*/ }
+```
+
+##### Register
+The method that the identifiers are given to the lightclients(`newLightClientID`)
+is not defined by the protocol, rather depending on the implementation. Registering
+a new LightClient is expected to be permissionless.
 
 ```go
 type RegisterLightClient LightClient
 
 function register(register :: RegisterLightClient) Identifier {
-  // getNewLightClientID() logic is dependent on the implementation
-  id := getNewLightClientID()
+  id := newLightClientID()
   setLightClient(id, register)
   return id
 }
@@ -212,7 +222,7 @@ function update(update :: UpdateLightClient) returns Maybe<Error> {
   state := stored.ConsensusState
   verifier := stored.Verifier
   header := update.Header
-  
+
   err := verifier(state, header)
   if err != nil
     return err
