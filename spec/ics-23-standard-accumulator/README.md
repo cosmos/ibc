@@ -162,7 +162,7 @@ If batch verification is possible and more efficient than individual verificatio
 
 ### Properties
 
-Accumulators must be *complete*, *sound*, and *position binding*.
+Accumulators must be *complete*, *sound*, and *position binding*. These properties are defined with respect to a security parameter `λ`, which must be agreed upon by the manager, prover, and verifier (and often will be constant for the accumulator algorithm).
 
 #### Completeness
 
