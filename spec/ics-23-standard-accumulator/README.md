@@ -33,11 +33,11 @@ This document only defines desired properties, not a concrete implementation —
 
 ## Technical Specification
 
-Two parties:
-- Accumulator manager (initializes, adds / removes elements)
-- Third-party verifier
+An accumulator MUST provide the following functions:
 
-Functions
+```coffeescript
+
+```
 
 ### Algorithms
 
