@@ -172,7 +172,7 @@ For any key `key` last set to a value `value` in the accumulator `acc`,
 
 ```coffeescript
 root = getRoot(acc)
-proof = createMembershipWitness(acc, key, value)
+proof = createMembershipProof(acc, key, value)
 verifyMembership(root, proof, key, value) == true
 ```
 
@@ -196,7 +196,7 @@ and, likewise, non-membership can be verified,
 
 ```coffeescript
 root = getRoot(acc)
-proof = createNonMembershipWitness(acc, key)
+proof = createNonMembershipProof(acc, key)
 verifyNonMembership(root, proof, key) == true
 ```
 
@@ -208,7 +208,7 @@ For any key `key` set in the accumulator `acc`, there is only one `value` for wh
 
 ```coffeescript
 root = getRoot(acc)
-proof = createMembershipWitness(acc, key, value)
+proof = createMembershipProof(acc, key, value)
 verifyMembership(root, proof, key, value) == true
 ```
 
