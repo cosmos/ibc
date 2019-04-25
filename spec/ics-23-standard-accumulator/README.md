@@ -5,7 +5,7 @@ stage: draft
 category: ibc-core
 author: Christopher Goes <cwgoes@tendermint.com>
 created: 2019-04-16
-modified: 2019-04-16
+modified: 2019-04-25
 ---
 
 # Synopsis
@@ -27,53 +27,149 @@ The *prover* is the actor responsible for generating accumulator proofs of inclu
 
 The *verifier* is the actor who checks accumulator proofs in order to verify that the manager of the accumulator did or did not add a particular element. Generally this will be an IBC handler running on another chain.
 
+Accumulators are instantiated with a particular *element* type, which is assumed to be arbitrary serializable data.
+
 ## Desired Properties
 
 This document only defines desired properties, not a concrete implementation — see "algorithms" below.
 
 ## Technical Specification
 
-An accumulator MUST provide the following functions:
+### Datatypes
 
-```coffeescript
+An accumulator construction MUST specify the following datatypes, which are otherwise opaque (need not be introspected) but must be serializable:
 
+#### State
+
+```golang
+type AccumulatorState struct
 ```
 
-### Algorithms
+#### Root
 
-required
+```golang
+type AccumulatorRoot struct
+```
 
-- Gen(S_0) -> a_0
-- Add(a_t, x) -> (a_t+1)
-- Del(a_t, x) -> (a_t+1)
+#### Proof
 
-- MemWitCreate(a_t, x) -> w_xt
-- NonMemWitCreate(a_t, x) -> w_xt
+```golang
+type AccumulatorProof struct
+```
 
-- VerMem(a_t, x, w_xt) -> {0, 1}
-- VerNonMem(a_t, x, w_xt) -> {0, 1}
+### Required functions
 
-must be
-- correct: for an element in the accumulator, vermem(element) => 1, vernonmem(element) => 0
-- sound: for an element not in the accumulator, vernonmem(element) => 1, vermem(element) => 0
+An accumulator construction MUST provide the following functions:
 
-optional
+#### Initialization
 
-- BatchVerifyMem(a_t, {x}, w_xt) -> {0, 1}
-- BatchVerifyNonMem(a_t, {x}, w_xt) -> {0, 1}
+```coffeescript
+generate(Set<Element> initial) -> AccumulatorState
+```
 
-(vector commitments)
+#### Root calculation
 
-- Gen() -> v_0
-- Com(v_t, m) -> v_t+1
-- Update(v_t, m, i) -> v_t+1
-- Open(v_t, m, i) -> pi
-- Verify(v_t, pi) -> {0, 1}
+```coffeescript
+calculateRoot(AccumulatorState state) -> AccumulatorRoot
+```
 
-optional
+#### Adding & removing elements
 
-- BatchOpen
-- BatchVerify
+```coffeescript
+add(AccumulatorState state, Element elem) -> AccumulatorState
+```
+
+```coffeescript
+remove(AccumulatorState state, Element elem) -> AccumulatorState
+```
+
+#### Proof generation
+
+```coffeescript
+createMembershipWitness(AccumulatorState state, Element elem) -> AccumulatorProof
+```
+
+```coffeescript
+createNonMembersipWitness(AccumulatorState state, Element elem) -> AccumulatorProof
+```
+
+#### Proof verification
+
+```coffeescript
+verifyMembership(AccumulatorRoot root, AccumulatorProof proof, Element elem) -> boolean
+```
+
+```coffeescript
+verifyNonMembership(AccumulatorRoot root, AccumulatorProof proof, Element elem) -> boolean
+```
+
+### Optional functions
+
+An accumulator construction MAY provide the following functions:
+
+```coffeescript
+batchVerifyMembership(AccumulatorRoot root, AccumulatorProof proof, Set<Element> elems) -> boolean
+```
+
+```coffeescript
+batchVerifyNonMembership(AccumulatorRoot root, AccumulatorProof proof, Set<Element> elems) -> boolean
+```
+
+If defined, these functions MUST be computationally equivalent to the conjunctive union of `verifyMembership` and `verifyNonMembership` respectively (`proof` may vary):
+
+```coffeescript
+batchVerifyMembership(root, proof, elems) ==
+  verifyMembership(root, proof, elems[0]) &&
+  verifyMembership(root, proof, elems[1]) && ...
+```
+
+```coffeescript
+batchVerifyMembership(root, proof, elems) ==
+  verifyNonMembership(root, proof, elems[0]) &&
+  verifyNonMembership(root, proof, elems[1]) && ...
+```
+
+If batch verification is possible and more efficient than individual verification of one proof per element, an accumulator construction SHOULD define batch verification functions.
+
+### Properties
+
+Accumulators must be *correct* and *sound*. In practice, violations of these properties by computationally-bounded adversaries may be negligible in some security parameter, which is sufficient for use in IBC.
+
+#### Correctness
+
+Accumulator proofs must be *correct*: elements which have been added to the accumulator can always be proved to have been included, but cannot be proved to be excluded.
+
+For an element `elem` in the accumulator `acc`,
+
+```coffeescript
+root = getRoot(acc)
+proof = createMembershipWitness(acc, elem)
+verifyMembership(root, proof, elem) == true
+```
+
+and, likewise, for all values of `proof`,
+
+```coffeescript
+verifyNonMembership(root, proof, elem) == false
+```
+
+#### Soundness
+
+Accumulator proofs must be *sound*: elements which have not been added to the accumulator can never be proved to have been included, but can always be proved to have been excluded.
+
+For an element `elem` not in the accumulator `acc`, for all values of `proof`,
+
+```coffeescript
+verifyMembership(root, proof, elem) == false
+```
+
+and, likewise, non-membership can be verified,
+
+```coffeescript
+root = getRoot(acc)
+proof = createNonMembershipWitness(acc, elem)
+verifyNonMembership(root, proof, elem) == true
+```
 
 ## Backwards Compatibility
 
@@ -93,9 +189,9 @@ Coming soon.
 
 # History
 
-Security definitions are mostly sourced from these papers:
+Security definitions are mostly sourced from these papers (and simplified somewhat):
 - [Accumulators with Applications to Anonymity-Preserving Revocation](https://eprint.iacr.org/2017/043.pdf)
-- [Batching Techniques for Accumulatorswith Applications to IOPs andStateless Blockchains](https://eprint.iacr.org/2018/1188.pdf)
+- [Batching Techniques for Accumulators with Applications to IOPs and Stateless Blockchains](https://eprint.iacr.org/2018/1188.pdf)
 
 25 April 2019 - Draft submitted
 
