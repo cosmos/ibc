@@ -10,14 +10,15 @@ modified: 2019-04-25
 
 # Synopsis
 
-An *accumulator*, or *cryptographic accumulator*, is a construction that produces a succinct, binding commitment to a set or indexed vector of elements and short membership and/or non-membership proofs for any element in the set or vector.
-This specification enumerates the functions and properties required of accumulator constructions used in the IBC protocol.
+An *accumulator*, or *cryptographic accumulator*, is a construction that produces a succinct, binding commitment to an indexed vector of elements and short membership and/or non-membership proofs for any indicies & elements in the vector.
+This specification enumerates the functions and properties required of accumulator constructions used in the IBC protocol. In particular, accumulators utilized in IBC are required to be *vector commitments*, which can prove existence or
+nonexistence of values at specific positions (indices).
 
 # Specification
 
 ## Motivation
 
-In order to provide a guarantee of a particular state transition having occurred on one chain which can be verified on another chain, IBC requires an efficient cryptographic construction to prove inclusion or non-inclusion of particular values in state.
+In order to provide a guarantee of a particular state transition having occurred on one chain which can be verified on another chain, IBC requires an efficient cryptographic construction to prove inclusion or non-inclusion of particular values at particular keys in state.
 
 ## Definitions
 
@@ -71,10 +72,10 @@ An accumulator construction MUST provide the following functions:
 
 #### Initialization
 
-The `generate` function initializes the state of the accumulator from an initial (possibly empty) set of elements.
+The `generate` function initializes the state of the accumulator from an initial (possibly empty) map of keys to values.
 
 ```coffeescript
-generate(Set<Element> initial) -> AccumulatorState
+generate(Map<Key, Value> initial) -> AccumulatorState
 ```
 
 #### Root calculation
@@ -87,74 +88,74 @@ calculateRoot(AccumulatorState state) -> AccumulatorRoot
 
 #### Adding & removing elements
 
-The `add` function adds an element to an accumulator.
+The `set` function sets a key to a value in the accumulator.
 
 ```coffeescript
-add(AccumulatorState state, Element elem) -> AccumulatorState
+set(AccumulatorState state, Key key, Value value) -> AccumulatorState
 ```
 
-The `remove` function removes an element from an accumulator.
+The `remove` function removes a key and associated value from an accumulator.
 
 ```coffeescript
-remove(AccumulatorState state, Element elem) -> AccumulatorState
+remove(AccumulatorState state, Key key) -> AccumulatorState
 ```
 
 #### Proof generation
 
-The `createMembershipWitness` function generates a proof that an element has been added to an accumulator.
+The `createMembershipProof` function generates a proof that a particular key has been set to a particular value in an accumulator.
 
 ```coffeescript
-createMembershipWitness(AccumulatorState state, Element elem) -> AccumulatorProof
+createMembershipProof(AccumulatorState state, Key key, Value value) -> AccumulatorProof
 ```
 
-The `createNonMembershipWitness` function generates a proof that an element has not been added to an accumulator.
+The `createNonMembershipProof` function generates a proof that a key has not been set to any value in an accumulator.
 
 ```coffeescript
-createNonMembersipWitness(AccumulatorState state, Element elem) -> AccumulatorProof
+createNonMembersipProof(AccumulatorState state, Key key) -> AccumulatorProof
 ```
 
 #### Proof verification
 
-The `verifyMembership` function verifies a proof that an element has been added to an accumulator.
+The `verifyMembership` function verifies a proof that a key has been set to a particular value in an accumulator.
 
 ```coffeescript
-verifyMembership(AccumulatorRoot root, AccumulatorProof proof, Element elem) -> boolean
+verifyMembership(AccumulatorRoot root, AccumulatorProof proof, Key key, Value value) -> boolean
 ```
 
-The `verifyNonMembership` function verifies a proof that an element has not been added to an accumulator.
+The `verifyNonMembership` function verifies a proof that a key has not been set to any value in an accumulator.
 
 ```coffeescript
-verifyNonMembership(AccumulatorRoot root, AccumulatorProof proof, Element elem) -> boolean
+verifyNonMembership(AccumulatorRoot root, AccumulatorProof proof, Key key) -> boolean
 ```
 
 ### Optional functions
 
 An accumulator construction MAY provide the following functions:
 
-The `batchVerifyMembership` function verifies a proof that many elements have been added to an accumulator.
+The `batchVerifyMembership` function verifies a proof that many keys have been set to specific values in an accumulator.
 
 ```coffeescript
-batchVerifyMembership(AccumulatorRoot root, AccumulatorProof proof, Set<Element> elems) -> boolean
+batchVerifyMembership(AccumulatorRoot root, AccumulatorProof proof, Map<Key, Value> items) -> boolean
 ```
 
-The `batchVerifyNonMembership` function verifies a proof that many elements have not been added to an accumulator.
+The `batchVerifyNonMembership` function verifies a proof that many keys have not been set to any value in an accumulator.
 
 ```coffeescript
-batchVerifyNonMembership(AccumulatorRoot root, AccumulatorProof proof, Set<Element> elems) -> boolean
+batchVerifyNonMembership(AccumulatorRoot root, AccumulatorProof proof, Set<Key> keys) -> boolean
 ```
 
 If defined, these functions MUST be computationally equivalent to the conjunctive union of `verifyMembership` and `verifyNonMembership` respectively (`proof` may vary):
 
 ```coffeescript
-batchVerifyMembership(root, proof, elems) ==
-  verifyMembership(root, proof, elems[0]) &&
-  verifyMembership(root, proof, elems[1]) && ...
+batchVerifyMembership(root, proof, items) ==
+  verifyMembership(root, proof, items[0].Key, items[0].Value) &&
+  verifyMembership(root, proof, items[1].Key, items[1].Value) && ...
 ```
 
 ```coffeescript
-batchVerifyMembership(root, proof, elems) ==
-  verifyNonMembership(root, proof, elems[0]) &&
-  verifyNonMembership(root, proof, elems[1]) && ...
+batchVerifyMembership(root, proof, keys) ==
+  verifyNonMembership(root, proof, keys[0]) &&
+  verifyNonMembership(root, proof, keys[1]) && ...
 ```
 
 If batch verification is possible and more efficient than individual verification of one proof per element, an accumulator construction SHOULD define batch verification functions.
@@ -167,36 +168,36 @@ Accumulators must be *correct* and *sound*. In practice, violations of these pro
 
 Accumulator proofs must be *correct*: elements which have been added to the accumulator can always be proved to have been included, but cannot be proved to be excluded.
 
-For an element `elem` in the accumulator `acc`,
+For a key `key` set to a value `value` in the accumulator `acc`,
 
 ```coffeescript
 root = getRoot(acc)
-proof = createMembershipWitness(acc, elem)
-verifyMembership(root, proof, elem) == true
+proof = createMembershipWitness(acc, key, value)
+verifyMembership(root, proof, key, value) == true
 ```
 
 and, likewise, for all values of `proof`,
 
 ```coffeescript
-verifyNonMembership(root, proof, elem) == false
+verifyNonMembership(root, proof, key) == false
 ```
 
 #### Soundness
 
 Accumulator proofs must be *sound*: elements which have not been added to the accumulator can never be proved to have been included, but can always be proved to have been excluded.
 
-For an element `elem` not in the accumulator `acc`, for all values of `proof`,
+For an key `key` not set in the accumulator `acc`, for all values of `proof` and all values of `value`,
 
 ```coffeescript
-verifyMembership(root, proof, elem) == false
+verifyMembership(root, proof, key, value) == false
 ```
 
 and, likewise, non-membership can be verified,
 
 ```coffeescript
 root = getRoot(acc)
-proof = createNonMembershipWitness(acc, elem)
-verifyNonMembership(root, proof, elem) == true
+proof = createNonMembershipWitness(acc, key)
+verifyNonMembership(root, proof, key) == true
 ```
 
 ## Backwards Compatibility
@@ -218,6 +219,7 @@ Coming soon.
 # History
 
 Security definitions are mostly sourced from these papers (and simplified somewhat):
+- [Vector Commitments and their Applications](https://eprint.iacr.org/2011/495.pdf)
 - [Accumulators with Applications to Anonymity-Preserving Revocation](https://eprint.iacr.org/2017/043.pdf)
 - [Batching Techniques for Accumulators with Applications to IOPs and Stateless Blockchains](https://eprint.iacr.org/2018/1188.pdf)
 
