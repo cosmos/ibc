@@ -20,6 +20,10 @@ modified: (modification date)
 
 (rationale for existence of standard)
 
+## Definitions
+
+(definitions of any new terms not defined in common documentation)
+
 ## Desired Properties
 
 (desired characteristics / properties of protocol, effects if properties are violated)
