@@ -31,7 +31,7 @@ Accumulators are instantiated with a particular *element* type, which is assumed
 
 ## Desired Properties
 
-This document only defines desired properties, not a concrete implementation — see "algorithms" below.
+This document only defines desired properties, not a concrete implementation — see "Properties" below.
 
 ## Technical Specification
 
@@ -41,17 +41,25 @@ An accumulator construction MUST specify the following datatypes, which are othe
 
 #### State
 
+An `AccumulatorState` is the full state of the accumulator, which will be stored by the manager.
+
 ```golang
 type AccumulatorState struct
 ```
 
 #### Root
 
+An `AccumulatorRoot` commits to a particular accumulator state and should be succinct.
+
+In certain accumulator constructions with succinct states, `AccumulatorState` and `AccumulatorRoot` may be the same type.
+
 ```golang
 type AccumulatorRoot struct
 ```
 
 #### Proof
+
+An `AccumulatorProof` demonstrates membership or non-membership for an element or set of elements, verifiable in conjunction with a known accumulator root. Proofs should be succinct.
 
 ```golang
 type AccumulatorProof struct
@@ -63,11 +71,15 @@ An accumulator construction MUST provide the following functions:
 
 #### Initialization
 
+The `generate` function initializes the state of the accumulator from an initial (possibly empty) set of elements.
+
 ```coffeescript
 generate(Set<Element> initial) -> AccumulatorState
 ```
 
 #### Root calculation
+
+The `calculateRoot` function calculates a succinct commitment to the accumulator state which can be used to verify proofs.
 
 ```coffeescript
 calculateRoot(AccumulatorState state) -> AccumulatorRoot
@@ -75,9 +87,13 @@ calculateRoot(AccumulatorState state) -> AccumulatorRoot
 
 #### Adding & removing elements
 
+The `add` function adds an element to an accumulator.
+
 ```coffeescript
 add(AccumulatorState state, Element elem) -> AccumulatorState
 ```
+
+The `remove` function removes an element from an accumulator.
 
 ```coffeescript
 remove(AccumulatorState state, Element elem) -> AccumulatorState
@@ -85,9 +101,13 @@ remove(AccumulatorState state, Element elem) -> AccumulatorState
 
 #### Proof generation
 
+The `createMembershipWitness` function generates a proof that an element has been added to an accumulator.
+
 ```coffeescript
 createMembershipWitness(AccumulatorState state, Element elem) -> AccumulatorProof
 ```
+
+The `createNonMembershipWitness` function generates a proof that an element has not been added to an accumulator.
 
 ```coffeescript
 createNonMembersipWitness(AccumulatorState state, Element elem) -> AccumulatorProof
@@ -95,9 +115,13 @@ createNonMembersipWitness(AccumulatorState state, Element elem) -> AccumulatorPr
 
 #### Proof verification
 
+The `verifyMembership` function verifies a proof that an element has been added to an accumulator.
+
 ```coffeescript
 verifyMembership(AccumulatorRoot root, AccumulatorProof proof, Element elem) -> boolean
 ```
+
+The `verifyNonMembership` function verifies a proof that an element has not been added to an accumulator.
 
 ```coffeescript
 verifyNonMembership(AccumulatorRoot root, AccumulatorProof proof, Element elem) -> boolean
@@ -107,9 +131,13 @@ verifyNonMembership(AccumulatorRoot root, AccumulatorProof proof, Element elem) 
 
 An accumulator construction MAY provide the following functions:
 
+The `batchVerifyMembership` function verifies a proof that many elements have been added to an accumulator.
+
 ```coffeescript
 batchVerifyMembership(AccumulatorRoot root, AccumulatorProof proof, Set<Element> elems) -> boolean
 ```
+
+The `batchVerifyNonMembership` function verifies a proof that many elements have not been added to an accumulator.
 
 ```coffeescript
 batchVerifyNonMembership(AccumulatorRoot root, AccumulatorProof proof, Set<Element> elems) -> boolean
