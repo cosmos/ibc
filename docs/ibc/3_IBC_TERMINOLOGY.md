@@ -1,10 +1,10 @@
-# 2: IBC Terminology
+# 3: IBC Terminology
 
-> This is an overview of terms used in IBC specifications.
+**This is an overview of terms used in IBC specifications.**
 
-> For the design rationale behind the protocol, see [here](./1_IBC_DESIGN_RATIONALE.md).
+**For an architectural overview, see [here](./1_IBC_ARCHITECTURE.md).**
 
-> For an architectural overview, see [here](./3_IBC_ARCHITECTURE.md).
+**For a broad set of protocol design principles, see [here](./2_IBC_DESIGN_PRINCIPLES.md).**
 
 This document provides definitions in plain English of key terms used throughout the IBC specification set.
 
@@ -14,9 +14,9 @@ This document provides definitions in plain English of key terms used throughout
 
 An *actor*, or a *user* (used interchangeably), is an entity interacting with the IBC protocol. An actor can be a human end-user, a module or smart contract running on a blockchain, or an off-chain relayer process capable of signing transactions.
 
-### Chain
+### Chain / Ledger
 
-A *chain*, or *ledger* (used interchangeably), is a distributed ledger (or "blockchain", although a strict chain of blocks may not be required) implementing part or all of the IBC specification as a component or module within its state machine.
+A *chain*, *blockchain*, or *ledger* (used interchangeably), is a distributed ledger (or "blockchain", although a strict chain of blocks may not be required) implementing part or all of the IBC specification as a component or module within its state machine.
 
 ### State Machine
 
