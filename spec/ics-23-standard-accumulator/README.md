@@ -11,22 +11,25 @@ modified: 2019-04-16
 # Synopsis
 
 An *accumulator*, or *cryptographic accumulator*, is a construction that produces a succinct, binding commitment to a set or indexed vector of elements and short membership and/or non-membership proofs for any element in the set or vector.
+This specification enumerates the functions and properties required of accumulator constructions used in the IBC protocol.
 
 # Specification
 
-(main part of standard document - not all subsections are required)
-
 ## Motivation
 
-(rationale for existence of standard)
+In order to provide a guarantee of a particular state transition having occurred on one chain which can be verified on another chain, IBC requires an efficient cryptographic construction to prove inclusion or non-inclusion of particular values in state.
 
 ## Definitions
 
-(definitions of any new terms not defined in common documentation)
+The *manager* of an accumulator is the actor with the ability and responsibility to add or remove items from the accumulator. Generally this will be the state machine of a blockchain.
+
+The *prover* is the actor responsible for generating accumulator proofs of inclusion or non-inclusion of particular elements. Generally this will be a relayer (see [ICS 18](../ics-18-relayer-algorithms)).
+
+The *verifier* is the actor who checks accumulator proofs in order to verify that the manager of the accumulator did or did not add a particular element. Generally this will be an IBC handler running on another chain.
 
 ## Desired Properties
 
-(desired characteristics / properties of protocol, effects if properties are violated)
+This document only defines desired properties, not a concrete implementation — see "algorithms" below.
 
 ## Technical Specification
 
@@ -72,30 +75,29 @@ optional
 - BatchOpen
 - BatchVerify
 
-(detailed technical specification: syntax, semantics, sub-protocols, algorithms, data structures, etc)
-
 ## Backwards Compatibility
 
-(discussion of compatibility or lack thereof with previous standards)
+Not applicable.
 
 ## Forwards Compatibility
 
-(discussion of compatibility or lack thereof with expected future standards)
+Accumulator algorithms are expected to be fixed. New algorithms can be introduced by versioning connections and channels.
 
 ## Example Implementation
 
-(link to or description of concrete example implementation)
+Coming soon.
 
 ## Other Implementations
 
-(links to or descriptions of other implementations)
+Coming soon.
 
 # History
 
-Security definitions are mostly sources from https://eprint.iacr.org/2017/043.pdf
-Also from https://eprint.iacr.org/2018/1188.pdf
+Security definitions are mostly sourced from these papers:
+- [Accumulators with Applications to Anonymity-Preserving Revocation](https://eprint.iacr.org/2017/043.pdf)
+- [Batching Techniques for Accumulatorswith Applications to IOPs andStateless Blockchains](https://eprint.iacr.org/2018/1188.pdf)
 
-(changelog and notable inspirations / references)
+25 April 2019 - Draft submitted
 
 # Copyright
 
