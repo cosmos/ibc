@@ -166,14 +166,14 @@ Accumulators must be *complete*, *sound*, and *position binding*. These properti
 
 #### Completeness
 
-Accumulator proofs must be *complete*: key => value mappings which have been added to the accumulator can always be proved to have been included, and keys which have not been included can always be proved to have been excluded.
+Accumulator proofs must be *complete*: key => value mappings which have been added to the accumulator can always be proved to have been included, and keys which have not been included can always be proved to have been excluded, except with probability negligible in `λ`.
 
 For any key `key` last set to a value `value` in the accumulator `acc`,
 
 ```coffeescript
 root = getRoot(acc)
 proof = createMembershipProof(acc, key, value)
-verifyMembership(root, proof, key, value) == true
+P(verifyMembership(root, proof, key, value) == false) negligible in λ
 ```
 
 For any key `key` not set in the accumulator `acc`, for all values of `proof` and all values of `value`,
@@ -181,12 +181,12 @@ For any key `key` not set in the accumulator `acc`, for all values of `proof` an
 ```coffeescript
 root = getRoot(acc)
 proof = createNonMembershipProof(acc, key)
-verifyNonMembership(root, proof, key) == true
+P(verifyNonMembership(root, proof, key) == false) negligible in λ
 ```
 
 #### Soundness
 
-Accumulator proofs must be *sound*: key => value mappings which have not been added to the accumulator can only be proved to have been included, or keys which have been added to the accumulator excluded, with probability negligible in a configurable security parameter `λ`.
+Accumulator proofs must be *sound*: key => value mappings which have not been added to the accumulator cannot be proved to have been included, or keys which have been added to the accumulator excluded, except with probability negligible in a configurable security parameter `λ`.
 
 For any key `key` last set to a value `value` in the accumulator `acc`, for all values of `proof`,
 
