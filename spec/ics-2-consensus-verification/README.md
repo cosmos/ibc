@@ -8,7 +8,7 @@ requires: 23
 required-by: 3
 author: Juwoon Yun <joon@tendermint.com>, Christopher Goes <cwgoes@tendermint.com>
 created: 2019-02-25
-modified: 2019-04-02
+modified: 2019-04-25
 
 ---
 
@@ -116,7 +116,7 @@ type Commit func(ConsensusState, [Message]) Header
 ##### Blockchain
 
 Defined as blockchain consensus algorithm which generates valid `Header`s.
-It generatess a unique list of headers starting from a genesis `ConsensusState` with arbitrary
+It generates a unique list of headers starting from a genesis `ConsensusState` with arbitrary
 messages.
 
 `Blockchain` is defined as
@@ -132,7 +132,7 @@ where
   * `Genesis` is the genesis `ConsensusState`
   * `Commit` is the header generating function
 
-The headers generated from the `Blockchain` is expected to satisfy the followings:
+The headers generated from the `Blockchain` are expected to satisfy the followings:
 
 1. The `Header`s have no more than one direct child
 
