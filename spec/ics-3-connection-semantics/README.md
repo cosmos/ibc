@@ -7,7 +7,7 @@ requires: 2, 6, 10, 23
 required-by: 4
 author: Christopher Goes <cwgoes@tendermint.com>, Juwoon Yun <joon@tendermint.com>
 created: 2019-03-07
-modified: 2019-03-29
+modified: 2019-04-25
 ---
 
 ## Synopsis
@@ -340,6 +340,7 @@ Coming soon.
 ## History
 
 29 March 2019 - Initial draft version submitted
+25 April 2019 - Draft finalized
 
 ## Copyright
 
