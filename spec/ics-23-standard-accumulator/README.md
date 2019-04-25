@@ -166,9 +166,9 @@ Accumulators must be *correct* and *sound*. In practice, violations of these pro
 
 #### Correctness
 
-Accumulator proofs must be *correct*: elements which have been added to the accumulator can always be proved to have been included, but cannot be proved to be excluded.
+Accumulator proofs must be *correct*: key => value mappings which have been added to the accumulator can always be proved to have been included, but cannot be proved to be excluded.
 
-For a key `key` set to a value `value` in the accumulator `acc`,
+For any key `key` last set to a value `value` in the accumulator `acc`,
 
 ```coffeescript
 root = getRoot(acc)
@@ -184,9 +184,9 @@ verifyNonMembership(root, proof, key) == false
 
 #### Soundness
 
-Accumulator proofs must be *sound*: elements which have not been added to the accumulator can never be proved to have been included, but can always be proved to have been excluded.
+Accumulator proofs must be *sound*: key => value mappings which have not been added to the accumulator can never be proved to have been included, but can always be proved to have been excluded.
 
-For an key `key` not set in the accumulator `acc`, for all values of `proof` and all values of `value`,
+For any key `key` not set in the accumulator `acc`, for all values of `proof` and all values of `value`,
 
 ```coffeescript
 verifyMembership(root, proof, key, value) == false
@@ -198,6 +198,24 @@ and, likewise, non-membership can be verified,
 root = getRoot(acc)
 proof = createNonMembershipWitness(acc, key)
 verifyNonMembership(root, proof, key) == true
+```
+
+#### Position binding
+
+Accumulator proofs must be *position binding*: a given key can only map to one value, and an accumulator proof can prove only that that key opens to that value.
+
+For any key `key` set in the accumulator `acc`, there is only one `value` for which:
+
+```coffeescript
+root = getRoot(acc)
+proof = createMembershipWitness(acc, key, value)
+verifyMembership(root, proof, key, value) == true
+```
+
+For all other values `otherValue` where `value /= otherValue`, for all values of `proof`,
+
+```coffeescript
+verifyMembership(root, proof, key, value) == false
 ```
 
 ## Backwards Compatibility
