@@ -162,11 +162,11 @@ If batch verification is possible and more efficient than individual verificatio
 
 ### Properties
 
-Accumulators must be *complete*, *sound*, and *position binding*. In practice, violations of these properties by computationally-bounded adversaries may be negligible in some security parameter, which is sufficient for use in IBC.
+Accumulators must be *complete*, *sound*, and *position binding*.
 
 #### Completeness
 
-Accumulator proofs must be *complete*: key => value mappings which have been added to the accumulator can always be proved to have been included, but cannot be proved to be excluded.
+Accumulator proofs must be *complete*: key => value mappings which have been added to the accumulator can always be proved to have been included, and keys which have not been included can always be proved to have been excluded.
 
 For any key `key` last set to a value `value` in the accumulator `acc`,
 
@@ -176,23 +176,7 @@ proof = createMembershipProof(acc, key, value)
 verifyMembership(root, proof, key, value) == true
 ```
 
-and, likewise, for all values of `proof`,
-
-```coffeescript
-verifyNonMembership(root, proof, key) == false
-```
-
-#### Soundness
-
-Accumulator proofs must be *sound*: key => value mappings which have not been added to the accumulator can never be proved to have been included, but can always be proved to have been excluded.
-
 For any key `key` not set in the accumulator `acc`, for all values of `proof` and all values of `value`,
-
-```coffeescript
-verifyMembership(root, proof, key, value) == false
-```
-
-and, likewise, non-membership can be verified,
 
 ```coffeescript
 root = getRoot(acc)
@@ -200,11 +184,27 @@ proof = createNonMembershipProof(acc, key)
 verifyNonMembership(root, proof, key) == true
 ```
 
+#### Soundness
+
+Accumulator proofs must be *sound*: key => value mappings which have not been added to the accumulator can only be proved to have been included, or keys which have been added to the accumulator excluded, with probability negligible in a configurable security parameter `λ`.
+
+For any key `key` last set to a value `value` in the accumulator `acc`, for all values of `proof`,
+
+```coffeescript
+P(verifyNonMembership(root, proof, key) == true) negligible in λ
+```
+
+For any key `key` not set in the accumulator `acc`, for all values of `proof` and all values of `value`,
+
+```coffeescript
+P(verifyMembership(root, proof, key, value) == true) negligible in λ
+```
+
 #### Position binding
 
-Accumulator proofs must be *position binding*: a given key can only map to one value, and an accumulator proof can prove only that that key opens to that value.
+Accumulator proofs must be *position binding*: a given key can only map to one value, and an accumulator proof cannot prove that the same key opens to a different value except with probability negligible in λ.
 
-For any key `key` set in the accumulator `acc`, there is only one `value` for which:
+For any key `key` set in the accumulator `acc`, there is one `value` for which:
 
 ```coffeescript
 root = getRoot(acc)
@@ -215,7 +215,7 @@ verifyMembership(root, proof, key, value) == true
 For all other values `otherValue` where `value /= otherValue`, for all values of `proof`,
 
 ```coffeescript
-verifyMembership(root, proof, key, value) == false
+P(verifyMembership(root, proof, key, otherValue) == true) negligible in λ
 ```
 
 ## Backwards Compatibility
