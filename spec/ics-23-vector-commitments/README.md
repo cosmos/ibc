@@ -241,6 +241,8 @@ Security definitions are mostly sourced from these papers (and simplified somewh
 - [commitments with Applications to Anonymity-Preserving Revocation](https://eprint.iacr.org/2017/043.pdf)
 - [Batching Techniques for Commitments with Applications to IOPs and Stateless Blockchains](https://eprint.iacr.org/2018/1188.pdf)
 
+Thanks to Dev Ojha for extensive comments on this specification.
+
 25 April 2019 - Draft submitted
 
 # Copyright
