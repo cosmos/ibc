@@ -162,11 +162,11 @@ If batch verification is possible and more efficient than individual verificatio
 
 ### Properties
 
-Accumulators must be *correct* and *sound*. In practice, violations of these properties by computationally-bounded adversaries may be negligible in some security parameter, which is sufficient for use in IBC.
+Accumulators must be *complete*, *sound*, and *position binding*. In practice, violations of these properties by computationally-bounded adversaries may be negligible in some security parameter, which is sufficient for use in IBC.
 
-#### Correctness
+#### Completeness
 
-Accumulator proofs must be *correct*: key => value mappings which have been added to the accumulator can always be proved to have been included, but cannot be proved to be excluded.
+Accumulator proofs must be *complete*: key => value mappings which have been added to the accumulator can always be proved to have been included, but cannot be proved to be excluded.
 
 For any key `key` last set to a value `value` in the accumulator `acc`,
 
