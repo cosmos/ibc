@@ -40,7 +40,7 @@ A *header* is an update to the consensus state of a particular blockchain that c
 
 ### Commitment 
 
-A cryptographic *commitment* is a way to cheaply verify membership of a key => value pair in a mapping, where the mapping can be commited to with a short witness string. An *vector commitment proof* refers to the proof structure which proves whether a particular key maps to a particular value in a committed-to set or not.
+A cryptographic *commitment* is a way to cheaply verify membership of a key => value pair in a mapping, where the mapping can be committed to with a short witness string. An *vector commitment proof* refers to the proof structure which proves whether a particular key maps to a particular value in a committed-to set or not.
 
 ### Handler
 
@@ -56,7 +56,7 @@ A *connection* is a set of persistent data structures on two chains that contain
 
 ### Channel
 
-A *channel* is a set of persistent data structures on two chains that contain metadata to facilitate packet ordering, exactly-once delivery, and replay prevention. Packets sent through a channel change its internal state. Channels are associated with connections in a many-to-one relationship — a single connection can have any number of associated channnels, and all channels must have a single associated connection, which must be open in order for the channel to be used.
+A *channel* is a set of persistent data structures on two chains that contain metadata to facilitate packet ordering, exactly-once delivery, and replay prevention. Packets sent through a channel change its internal state. Channels are associated with connections in a many-to-one relationship — a single connection can have any number of associated channels, and all channels must have a single associated connection, which must be open in order for the channel to be used.
 
 ### Packet
 
@@ -78,7 +78,7 @@ To *trust* a blockchain or validator set means to expect that the validator set 
 
 ### Authentication
 
-*Authentication* refers to the protocols used to ensure that datagrams were in fact sent by a particular chain and associated state alterations committed by it. 
+*Authentication* refers to the protocols used to ensure that datagrams were in fact sent by a particular chain and associated state alterations committed by it.
 
 ### Equivocation
 
