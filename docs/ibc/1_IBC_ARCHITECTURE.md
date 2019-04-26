@@ -6,6 +6,8 @@
 
 **For definitions of terms used in IBC specifications, see [here](./3_IBC_TERMINOLOGY.md).**
 
+**For a set of example use cases, see [here](./4_IBC_USECASES.md).**
+
 This document outlines the architecture of the authentication, transport, and ordering layers of the inter-blockchain communication (IBC) protocol stack. This document does not describe specific protocol details — those are contained in individual ICSs.
 
 > Note: *Ledger*, *chain*, and *blockchain* are used interchangeably throughout this document, in accordance with their colloquial usage.

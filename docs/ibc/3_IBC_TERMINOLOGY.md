@@ -6,6 +6,8 @@
 
 **For a broad set of protocol design principles, see [here](./2_IBC_DESIGN_PRINCIPLES.md).**
 
+**For a set of example use cases, see [here](./4_IBC_USECASES.md).**
+
 This document provides definitions in plain English of key terms used throughout the IBC specification set.
 
 ## Definitions

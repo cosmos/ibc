@@ -20,6 +20,7 @@ If you are diving in or planning to review specifications, the following are rec
 - [IBC Architecture](./docs/ibc/1_IBC_ARCHITECTURE.md)
 - [IBC Design Principles](./docs/ibc/2_IBC_DESIGN_PRINCIPLES.md)
 - [IBC Terminology](./docs/ibc/3_IBC_TERMINOLOGY.md)
+- [IBC Usecases](./docs/ibc/4_IBC_USECASES.md)
 - [IBC specification progress tracking](https://github.com/cosmos/ics/issues/26)
 
 ## Interchain Standards
