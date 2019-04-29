@@ -30,6 +30,8 @@ The *verifier* is the actor who checks proofs in order to verify that the manage
 
 Commitments are instantiated with particular *key* and *value* types, which are assumed to be arbitrary serializable data.
 
+A *negligible function* is a function that grows more slowly than the reciprocal of every positive polynomial, as defined [here](https://en.wikipedia.org/wiki/Negligible_function).
+
 ## Desired Properties
 
 This document only defines desired properties, not a concrete implementation — see "Properties" below.
