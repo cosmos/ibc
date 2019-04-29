@@ -12,7 +12,7 @@ modified: 2019-04-29
 
 # Synopsis
 
-This specification defines the minimal set of interfaces which must be provided and properties which must be fulfilled by a blockchain & state machine hosting an IBC handler (implementation of the interblockchain communication protocol).
+This specification defines the minimal set of interfaces which must be provided and properties which must be fulfilled by a blockchain & state machine hosting an IBC handler (implementation of the interblockchain communication protocol; see [the architecture document](../../docs/ibc/1_IBC_ARCHITECTURE.md) for details).
 
 # Specification
 
@@ -30,7 +30,7 @@ IBC should require as simple an interface from the underlying state machine as p
 
 ## Technical Specification
 
-### Keys, identifiers, separators
+### Keys, Identifiers, Separators
 
 A `Key` is a bytestring used as the key for an object stored in state. Keys MUST contain only alphanumeric characters and the separator `/`.
 
@@ -42,7 +42,7 @@ The separator `/` is used to separate and concatenate two identifiers or an iden
 
 Variable interpolation, denoted by curly braces, MAY be used as shorthand to define key formats, e.g. `client/{clientIdentifier}/rootOfTrust`.
 
-### Key/value store
+### Key/value Store
 
 Host chains MUST provide a simple key-value store interface, with two functions which behave in the way you would expect:
 
@@ -56,7 +56,7 @@ function set(Key key, Value value)
 
 `Key` is as defined above. `Value` is an arbitrary bytestring encoding of a particular data structure. Encoding details are left to separate ICSs.
 
-### Root-of-trust introspection
+### Root-of-trust Introspection
 
 Host chains MUST provide the ability to introspect their own root-of-trust, with `getRootOfTrust`:
 
@@ -66,7 +66,7 @@ function getRootOfTrust() -> RootOfTrust
 
 `getRootOfTrust` MUST return the current root-of-trust for the consensus algorithm of the host chain.
 
-### Datagram submission
+### Datagram Submission
 
 Host chains MUST define a unique `submitDatagram` function:
 
