@@ -26,9 +26,9 @@ The *manager* of a vector commitment is the actor with the ability and responsib
 
 The *prover* is the actor responsible for generating proofs of inclusion or non-inclusion of particular elements. Generally this will be a relayer (see [ICS 18](../ics-18-relayer-algorithms)).
 
-The *verifier* is the actor who checks proofs in order to verify that the manager of the commitment did or did not add a particular element. Generally this will be an IBC handler running on another chain.
+The *verifier* is the actor who checks proofs in order to verify that the manager of the commitment did or did not add a particular element. Generally this will be an IBC handler (module implementing IBC) running on another chain.
 
-Commitments are instantiated with particular *key* and *value* types, which is assumed to be arbitrary serializable data.
+Commitments are instantiated with particular *key* and *value* types, which are assumed to be arbitrary serializable data.
 
 ## Desired Properties
 
@@ -38,7 +38,7 @@ This document only defines desired properties, not a concrete implementation —
 
 ### Datatypes
 
-An commitment construction MUST specify the following datatypes, which are otherwise opaque (need not be introspected) but must be serializable:
+An commitment construction MUST specify the following datatypes, which are otherwise opaque (need not be introspected) but MUST be serializable:
 
 #### State
 
@@ -162,11 +162,11 @@ If batch verification is possible and more efficient than individual verificatio
 
 ### Properties
 
-Commitments must be *complete*, *sound*, and *position binding*. These properties are defined with respect to a security parameter `λ`, which must be agreed upon by the manager, prover, and verifier (and often will be constant for the commitment algorithm).
+Commitments MUST be *complete*, *sound*, and *position binding*. These properties are defined with respect to a security parameter `λ`, which MUST be agreed upon by the manager, prover, and verifier (and often will be constant for the commitment algorithm).
 
 #### Completeness
 
-Commitment proofs must be *complete*: key => value mappings which have been added to the commitment can always be proved to have been included, and keys which have not been included can always be proved to have been excluded, except with probability negligible in `λ`.
+Commitment proofs MUST be *complete*: key => value mappings which have been added to the commitment can always be proved to have been included, and keys which have not been included can always be proved to have been excluded, except with probability negligible in `λ`.
 
 For any key `key` last set to a value `value` in the commitment `acc`,
 
@@ -186,7 +186,7 @@ P(verifyNonMembership(root, proof, key) == false) negligible in λ
 
 #### Soundness
 
-Commitment proofs must be *sound*: key => value mappings which have not been added to the commitment cannot be proved to have been included, or keys which have been added to the commitment excluded, except with probability negligible in a configurable security parameter `λ`.
+Commitment proofs MUST be *sound*: key => value mappings which have not been added to the commitment cannot be proved to have been included, or keys which have been added to the commitment excluded, except with probability negligible in a configurable security parameter `λ`.
 
 For any key `key` last set to a value `value` in the commitment `acc`, for all values of `proof`,
 
@@ -202,7 +202,7 @@ P(verifyMembership(root, proof, key, value) == true) negligible in λ
 
 #### Position binding
 
-Commitment proofs must be *position binding*: a given key can only map to one value, and an commitment proof cannot prove that the same key opens to a different value except with probability negligible in λ.
+Commitment proofs MUST be *position binding*: a given key can only map to one value, and an commitment proof cannot prove that the same key opens to a different value except with probability negligible in λ.
 
 For any key `key` set in the commitment `acc`, there is one `value` for which:
 
