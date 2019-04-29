@@ -71,7 +71,7 @@ function getRootOfTrust() -> RootOfTrust
 Host chains MUST define a unique `submitDatagram` function:
 
 ```coffeescript
-submitDatagram(Datagram datagram)
+function submitDatagram(Datagram datagram)
 ```
 
 `submitDatagram` allows relayers to relay IBC datagrams to the host chain. Host chains MAY require that the relayer submitting the datagram has an account to pay transaction fees, signs over the datagram in a larger transaction structure, etc - `submitDatagram` MUST define any such packaging required.
@@ -84,7 +84,7 @@ Not applicable.
 
 Key-value store functionality and root of trust type are unlikely to change during operation of a single host chain.
 
-`submitDatagram` can change over time as relayer should be able to update their processes.
+`submitDatagram` can change over time as relayers should be able to update their processes.
 
 ## Example Implementation
 
