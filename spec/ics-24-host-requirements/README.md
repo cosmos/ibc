@@ -1,6 +1,6 @@
 ---
 ics: 24
-title: State Machine Requirements
+title: Host State Machine Requirements
 stage: draft
 category: ibc-core
 requires: 2
@@ -28,6 +28,10 @@ IBC is designed to be a common standard which will be hosted by a variety of blo
 IBC should require as simple an interface from the underlying state machine as possible to maximize the ease of correct implementation.
 
 ## Technical Specification
+
+### Identifiers
+
+Identifier` is an opaque value used as the key for a connection object; it must serialize to a bytestring.
 
 ### Key/value store
 
