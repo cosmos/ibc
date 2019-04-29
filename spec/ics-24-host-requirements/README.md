@@ -4,6 +4,7 @@ title: Host State Machine Requirements
 stage: draft
 category: ibc-core
 requires: 2
+required-by: 2, 3, 4, 5, 18
 author: Christopher Goes <cwgoes@tendermint.com>
 created: 2019-04-16
 modified: 2019-04-29
