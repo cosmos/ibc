@@ -69,7 +69,7 @@ type Connection struct {
   ConnectionState state
   Version version
   Identifier counterpartyIdentifier
-  RootOfTrust rootOfTrust
+  Identifier lightClientIdentifier
 }
 ```
 
@@ -118,8 +118,8 @@ type ConnOpenInit struct {
   Identifier  desiredCounterpartyIdentifier
   // Desired version for connection
   Version     desiredVersion
-  // Root-of-trust for chain B
-  RootOfTrust rootOfTrust
+  // Light client identifier for chain B
+  Identifier lightClientIdentifier
 }
 ```
 
@@ -131,8 +131,10 @@ type ConnOpenTry struct {
   Identifier        counterpartyIdentifier
   // Desired version for connection
   Version           desiredVersion
-  // Root-of-trust for chain A
-  RootOfTrust       rootOfTrust
+  // Light client identifier for chain B on A
+  Identifier        counterpartyLightClientIdentifier
+  // Light client identifier for chain A on B
+  Identifier        lightClientIdentifier
   // Proof of stored INIT state on chain A
   AccumulatorProof  proofInit
 }
@@ -161,17 +163,20 @@ type ConnOpenConfirm struct {
 ```
 
 ```coffeescript
-function handleConnOpenInit(identifier, desiredVersion, desiredCounterpartyIdentifier, rootOfTrust)
+function handleConnOpenInit(identifier, desiredVersion, desiredCounterpartyIdentifier, lightClientIdentifier)
   assert(Get(identifier) == null)
   state = INIT
-  Set(identifier, (state, desiredVersion, desiredCounterpartyIdentifier, rootOfTrust))
+  Set(identifier, (state, desiredVersion, desiredCounterpartyIdentifier, lightClientIdentifier))
 ```
 
 ```coffeescript
-function handleConnOpenTry()
+function handleConnOpenTry(desiredIdentifier, counterpartyIdentifier, desiredVersion, counterpartyLightClientIdentifier, lightClientIdentifier, proofInit)
+  rootOfTrust = Get(lightClientIdentifier)
   expectedRootOfTrust = getRootOfTrust()
   assert(verify(rootOfTrust, proofInit,
-    (counterpartyIdentifier, (INIT, desiredVersion, desiredIdentifier, expectedRootOfTrust))))
+    (counterpartyIdentifier, (INIT, desiredVersion, desiredIdentifier, counterpartyLightClientIdentifier))))
+  assert(verify(rootOfTrust, proofInit,
+    (counterpartyLightClientIdentifier, expectedRootOfTrust)))
   identifier = chooseIdentifier(desiredIdentifier, counterpartyIdentifier)
   version = chooseVersion(desiredVersion)
   state = OPENTRY
@@ -180,27 +185,33 @@ function handleConnOpenTry()
 
 ```coffeescript
 function handleConnOpenAck()
-  (state, desiredVersion, desiredCounterpartyIdentifier, rootOfTrust) = Get(identifier)
+  (state, desiredVersion, desiredCounterpartyIdentifier, lightClientIdentifier) = Get(identifier)
   assert(state == INIT)
+  rootOfTrust = Get(lightClientIdentifier)
   expectedRootOfTrust = getRootOfTrust()
   assert(verify(rootOfTrust, proofTry,
-    (agreedCounterpartyIdentifier, (OPENTRY, agreedVersion, identifier, expectedRootOfTrust))))
+    (agreedCounterpartyIdentifier, (OPENTRY, agreedVersion, identifier, counterpartyLightClientIdentifier))))
+  assert(verify(rootOfTrust, proofTry,
+    (counterpartyLightClientIdentifier, expectedRootOfTrust)))
   assert(checkIdentifier(desiredCounterpartyIdentifier, agreedCounterpartyIdentifier))
   assert(checkVersion(desiredVersion, agreedVersion))
   state = OPEN
-  Set(identifier, (state, agreedVersion, agreedCounterpartyIdentifier, rootOfTrust))
+  Set(identifier, (state, agreedVersion, agreedCounterpartyIdentifier, lightClientIdentifier))
 ```
 
 ```coffeescript
 function handleConnOpenConfirm()
-  (state, version, counterpartyIdentifier, rootOfTrust) = Get(identifier)
+  (state, version, counterpartyIdentifier, lightClientIdentifier) = Get(identifier)
   assert(state == OPENTRY)
+  rootOfTrust = Get(lightClientIdentifier)
   expectedRootOfTrust = getRootOfTrust()
   assert(verify(rootOfTrust, proofAck,
-    (counterpartyIdentifier, (OPEN, version, identifier, expectedRootOfTrust))))
+    (counterpartyIdentifier, (OPEN, version, identifier, counterpartyLightClientIdentifier))))
   state = OPEN
   Set(identifier, (state, version, counterpartyIdentifier, rootOfTrust))
 ```
+
+(could simplify the verification a bit)
 
 A correct protocol execution flows as follows:
 
@@ -218,29 +229,7 @@ At the end of an opening handshake between two chains implementing the subprotoc
 
 ##### Header Tracking
 
-The header tracking subprotocol serves to update the root of trust for an open connection.
-
-This subprotocol need not be permissioned, modulo anti-spam measures.
-
-```golang
-type ConnTrack struct {
-  // Identifier of connection
-  Identifier  identifier
-  // New header with which to update root-of-trust
-  Header      header
-}
-```
-
-```coffeescript
-function handleConnTrack()
-  (state, version, counterpartyIdentifier, rootOfTrust) = Get(identifier)
-  assert(state == OPEN)
-  case updateRootOfTrust(rootOfTrust, header) of
-    newRootOfTrust ->
-      Set(identifier, (version, counterpartyIdentifier, newRootOfTrust, state))
-    error ->
-      return error
-```
+Headers are tracked at the light client level. See [ICS 2](../ics-2-consensus-requirements).
 
 ##### Closing Handshake
 

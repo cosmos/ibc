@@ -34,7 +34,7 @@ All standards in the "draft" stage are listed here in order of their ICS numbers
 
 ### IBC (Core)
 
-| Interchain Standard Number            | Standard Title             | Stage |
-| ------------------------------------- | -------------------------- | ----- |
-| [3](spec/ics-3-connection-semantics)  | Connection Semantics       | Draft |
-| [18](spec/ics-18-relayer-algorithms)  | Relayer Algorithms         | Draft |
+| Interchain Standard Number                          | Standard Title                     | Stage |
+| --------------------------------------------------- | ---------------------------------- | ----- |
+| [3](spec/ics-3-bidirectional-connection-semantics)  | Bidirectional Connection Semantics | Draft |
+| [18](spec/ics-18-relayer-algorithms)                | Relayer Algorithms                 | Draft |
