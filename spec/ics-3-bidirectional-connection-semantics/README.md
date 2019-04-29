@@ -79,7 +79,9 @@ type Connection struct {
 
 `Version` and `checkVersion` are as defined in [ICS 6: Connection & Channel Versioning](../spec/ics-6-connection-channel-versioning).
 
-`Identifier` is an opaque value used as the key for a connection object; it must serialize to a bytestring. The identifier is not necessarily intended to be a human-readable name (and likely should not be, to discourage squatting or racing for identifiers). The opening handshake protocol allows each chain to verify the identifier used to reference the connection on the other chain, so the chains could choose to come to agreement on a common identifier (via `chooseIdentifier` and `checkIdentifier`). Further discussion is deferred to [ICS 10: Chain Naming Convention](../spec/ics-10-chain-naming-convention).
+`Identifier` is as defined in [ICS 24](../spec/ics-24-host-requirements). The identifier is not necessarily intended to be a human-readable name (and likely should not be, to discourage squatting or racing for identifiers).
+
+The opening handshake protocol allows each chain to verify the identifier used to reference the connection on the other chain, so the chains could choose to come to agreement on a common identifier (via `chooseIdentifier` and `checkIdentifier`). Further discussion is deferred to [ICS 10: Chain Naming Convention](../spec/ics-10-chain-naming-convention).
 
 A *actor*, as referred to in this specification, is an entity capable of executing datagrams who is paying for computation / storage (via gas or a similar mechanism) but is otherwise untrusted. Possible actors include:
 - End users signing with an account key
@@ -88,13 +90,7 @@ A *actor*, as referred to in this specification, is an entity capable of executi
 
 #### Requirements
 
-Connection handlers and subsequent protocols make use of a simple key-value store interface provided by the underlying state machine. This store must provide two functions, which behave in the way you would expect:
-- `Get(Key) -> Value | null`
-- `Set(Key, Value)`
-
-`Key` and `Value` are assumed to be byte slices; encoding details are left to a later ICS.
-
-Blockchains also need the ability to introspect their own root-of-trust (with `getRootOfTrust`) in order to confirm that the connecting chain has stored the correct one.
+Host state machine requirements are as defined in [ICS 24](../ics-24-host-requirements).
 
 #### Subprotocols
 
