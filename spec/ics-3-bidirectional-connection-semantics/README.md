@@ -45,7 +45,7 @@ Once a negotiation handshake has completed:
 
 - The created connection objects on both chains contain the roots of trust specified by the initiating actor.
 - No other connection objects can be maliciously created on other chains by replaying datagrams.
-- The connection should be able to be voluntarily & cleanly closed by both blockchains.
+- The connection should be able to be voluntarily & cleanly closed by either blockchain.
 - The connection should be able to be immediately closed upon discovery of a consensus equivocation.
 
 ### Technical Specification
