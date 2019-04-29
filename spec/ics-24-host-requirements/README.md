@@ -11,13 +11,13 @@ modified: 2019-04-29
 
 # Synopsis
 
-This specification defines the minimal set of interfaces which must be provided and properties which must be fulfilled by a state machine hosting an IBC handler (implementation of the interblockchain communication protocol).
+This specification defines the minimal set of interfaces which must be provided and properties which must be fulfilled by a blockchain & state machine hosting an IBC handler (implementation of the interblockchain communication protocol).
 
 # Specification
 
 ## Motivation
 
-IBC is designed to be a common standard which will be hosted by a variety of blockchains & state machines and must clearly define the requirements of the host state machine.
+IBC is designed to be a common standard which will be hosted by a variety of blockchains & state machines and must clearly define the requirements of the host.
 
 ## Definitions
 
@@ -31,13 +31,15 @@ IBC should require as simple an interface from the underlying state machine as p
 
 ### Keys, identifiers, separators
 
-A `Key` is a bytestring used as the key for an object stored in state. Keys contain only alphanumeric characters and the separator `/`.
+A `Key` is a bytestring used as the key for an object stored in state. Keys MUST contain only alphanumeric characters and the separator `/`.
 
-An `Identifier` is a bytestring used as a key for an object stored in state, such as a connection, channel, or light client. Identifiers MUST consist of alphanumeric characters only. Identifiers are not intended to be valuable resources — to prevent name squatting, minimum length requirements or pseudorandom generation may be implemented.
+An `Identifier` is a bytestring used as a key for an object stored in state, such as a connection, channel, or light client. Identifiers MUST consist of alphanumeric characters only.
 
-The separator `/` is used to separate and concatenate two identifiers or an identifier and a constant bytestring. Identifiers cannot contain the `/` character, which prevents ambiguity.
+Identifiers are not intended to be valuable resources — to prevent name squatting, minimum length requirements or pseudorandom generation MAY be implemented.
 
-Variable interpolation, denoted by curly braces, may be used in shorthand to define key formats, e.g. `client/{clientIdentifier}/rootOfTrust`.
+The separator `/` is used to separate and concatenate two identifiers or an identifier and a constant bytestring. Identifiers MUST NOT contain the `/` character, which prevents ambiguity.
+
+Variable interpolation, denoted by curly braces, MAY be used as shorthand to define key formats, e.g. `client/{clientIdentifier}/rootOfTrust`.
 
 ### Key/value store
 
@@ -55,17 +57,31 @@ function set(Key key, Value value)
 
 ### Root-of-trust introspection
 
-Host chains MUST provide the ability to introspect their own root-of-trust, with `getRootOfTrust`.
+Host chains MUST provide the ability to introspect their own root-of-trust, with `getRootOfTrust`:
+
+```coffeescript
+function getRootOfTrust() -> RootOfTrust
+```
+
+`getRootOfTrust` MUST return the current root-of-trust for the consensus algorithm of the host chain.
 
 ### Datagram submission
 
-Host chains MUST define a unique `submitDatagram` function.
+Host chains MUST define a unique `submitDatagram` function:
+
+```coffeescript
+submitDatagram(Datagram datagram)
+```
+
+`submitDatagram` allows relayers to relay IBC datagrams to the host chain. Host chains MAY require that the relayer submitting the datagram has an account to pay transaction fees, signs over the datagram in a larger transaction structure, etc - `submitDatagram` MUST define any such packaging required.
 
 ## Backwards Compatibility
 
 Not applicable.
 
 ## Forwards Compatibility
+
+Key-value store functionality and root of trust type are unlikely to change during operation of a single host chain.
 
 `submitDatagram` can change over time as relayer should be able to update their processes.
 
