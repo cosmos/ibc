@@ -8,7 +8,7 @@ requires: 23, 24
 required-by: 3
 author: Juwoon Yun <joon@tendermint.com>, Christopher Goes <cwgoes@tendermint.com>
 created: 2019-02-25
-modified: 2019-04-02
+modified: 2019-04-29
 
 ---
 
@@ -29,48 +29,42 @@ blockchain. The stored lightclient instances will be able to be verified by a th
 
 Light clients are the verification method of IBC protocol. One chain can track another chain's
 updating state with a light client pointing to that chain. This standard formalises the common
-model of light client to minimise the dependency on consensus algorithms, so the protocol can 
-easily connect with new chains which are running new consensus algorithms, without need to 
+model of light client to minimise the dependency on consensus algorithms, so the protocol can
+easily connect with new chains which are running new consensus algorithms, without need to
 upgrade the light client protocol itself.
 
 <!--
 `FullNode`s are procedures running a `Consensus`. Given a `([Transaction], Commit)`, a
 `FullNode` can compute the result `ConsensusState` that the `Consensus` is expected to commit on
 with the same `[Transaction]`, if exists.
-
-`Blockchain` defines required properties of the blockchain on the network. The implementors can
-check whether the consensus that they are using is qualified to be connected to the network or
-not. If not, they can modify the algorithm or wrap it with additional logic to make it
-compatible with the specification. It also provides base layer for the protocol that the other
-components can rely on.
--->
-
+--->
 ### Desired Properties
 
 This standard specification provides secure layer to verify other chains' canonical headers,
 using the existing `ConsensusState`. The higher level logics can be able to verify the substate
-with the `AccumulatorRoot` stored in the `ConsensusState`, which is guaranteed to be committed by
+with the `CommitmentRoot` stored in the `ConsensusState`, which is guaranteed to be committed by
 the other chain's consensus algorithm.
 
 * `Verifier`s are expected to reflect the behaviour of the full node which is running on the  
-corresponding consensus algorithm. Given a `ConsensusState` and `[Message]`, if a full node 
-accepts the new `Header` generated with `Commit`, then the light client should also accept it,
-and if a full node rejects, then the light client should also reject. The consensus algorithm
+corresponding consensus algorithm. Given a `ConsensusState` and `[Message]`, if a full node
+accepts the new `Header` generated with `Commit`, then the light client MUST also accept it,
+and if a full node rejects, then the light client MUST also reject. The consensus algorithm
 ensures this correspondence. However light clients are not replaying the whole messages, so it
 is possible that the light clients' behaviour differs from the full nodes'. In this case, the
-equivocation proof which proves the divergence between the `Verifier` and the full node will be 
-generated and submitted to the chain, as defined in 
-[ICS ?](https://github.com/cosmos/ics/issues/53), so it can safely deactivate the light client.
+equivocation proof which proves the divergence between the `Verifier` and the full node will be
+generated and submitted to the chain, as defined in
+[ICS ?](https://github.com/cosmos/ics/issues/53), so the chain can safely deactivate the
+light client.
 
 ### Technical Specification
 
 #### Requirements
 
 * `get`, `set`, `Key`, `Identifier`, as defined in [ICS24](https://github.com/cosmos/ics/pull/75),
-are used by the datagram handler. 
+are used by the datagram handler.
 
-* `CommitmentRoot`, as defined in [ICS23](https://github.com/cosmos/ics/pull/74), is used by 
-`ConsensusState`. The downstream logic can use it to verify whether key-value pairs are present 
+* `CommitmentRoot`, as defined in [ICS23](https://github.com/cosmos/ics/pull/74), is used by
+`ConsensusState`. The downstream logic can use it to verify whether key-value pairs are present
 in the state or not.
 
 #### Definitions
@@ -120,56 +114,7 @@ Defined as
 type Verifier func(ConsensusState, Header) (Error|ConsensusState)
 ```
 
-##### Commit
-
-*// Commit and Blockchain is not used inside the protocol, but for the understanding
-of how does verifiers, cstates, headers work & generated. I think we should move these
-to another paragraph, as the other types and functions are actually used by other icss*
-
-`Commit` is a `Header` generating function which takes the previous `Header` with the messages
-and returns the result.
-
-```go
-type Commit func(ConsensusState, [Message]) Header
-```
-
-##### Blockchain
-
-Defined as blockchain consensus algorithm which generates valid `Header`s.
-It generates a unique list of headers starting from a genesis `ConsensusState` with arbitrary
-messages.
-
-`Blockchain` is defined as
-```go
-type Blockchain struct {
-  Verifier Verifier
-  Genesis ConsensusState
-  Commit Commit
-}
-```
-where
-  * `Verifier` is the lightclient verifier
-  * `Genesis` is the genesis `ConsensusState`
-  * `Commit` is the header generating function
-
-The headers generated from the `Blockchain` is expected to satisfy the followings:
-
-1. The `Header`s have no more than one direct child
-
-* Satisfied if: deterministic safety
-* Possible violation scenario: validator double signing, chain reorganization (Nakamoto consensus)
-
-2. The `Header`s eventually have at least one direct child
-
-* Satisfied if: liveness, light-client verifier continuity
-* Possible violation scenario: synchronised halt, incompatible hard fork
-
-3. The `Header`s are generated from the `Commit`, which ensures valid transition of the state
-
-* Satisfied if: correct block generation & state machine
-* Possible violation scenario: invariant break, validator cartel
-
-In these cases it is ensured that the `Verifier` works as intended.
+The detailed specification of `Verifier` is defined in [VERIFIER.md](./VERIFIER.md)
 
 ##### LightClient
 
@@ -182,25 +127,25 @@ type LightClient struct {
 ```
 where
   * `ConsensusState` is the root of trust providing the `VerifierBase`
-  * `Verifier` is the ligntclient verification logic
+  * `Verifier` is the lightclient verification logic
 
 The exact type of each fields are depending on the type of the actual consensus logic.
 
 #### Subprotocols
 
 The chains MUST implement function `register` and `update`, as they form the `handleDatagram`.
-Calling both functions MAY be permissionless. 
+Calling both functions MAY be permissionless.
 
 ##### Preliminaries
 
-`newID` is a function which generates a new `Identifier` for a `LightClient`, which MAY depending 
+`newID` is a function which generates a new `Identifier` for a `LightClient`, which MAY depending
 on the `Header`. The behaviour of `newID` is implementation specific. Possible implementations are:
 
 * Random bytestring
 * Hash of the `Header`
 * Incrementing integer index, bigendian encoded
 
-`newID` MUST NOT return an `Identifier` which has already been generated, so it can be stateful to check 
+`newID` MUST NOT return an `Identifier` which has already been generated, so it can be stateful to check
 the `Identifier`
 
 `storekey` takes an `Identifier` and returns a `KVStore` compatible `Key`.
@@ -227,8 +172,8 @@ register = (lightclient) ->
 
 Updating `LightClient` is done by submitting a new `Header`. The `Identifier` is used to point the
 stored `LightClient` that the logic will update. When the new `Header` is verifiable with
-the stored `LightClient`'s `Verifier` and `ConsensusState`, then it SHOULD update the 
-`LightClient` unless an additional logic intentionally blocks the updating process, for example, 
+the stored `LightClient`'s `Verifier` and `ConsensusState`, then it SHOULD update the
+`LightClient` unless an additional logic intentionally blocks the updating process, for example,
 waiting for the equivocation proof period.
 
 ```coffee
