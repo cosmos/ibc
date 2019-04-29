@@ -11,13 +11,13 @@ modified: 2019-04-29
 
 # Synopsis
 
-This specification defines the minimal set of properties and interfaces which must be provided by a state machine hosting an implementation of the interblockchain communication protocol (IBC handler).
+This specification defines the minimal set of interfaces which must be provided and properties which must be fulfilled by a state machine hosting an IBC handler (implementation of the interblockchain communication protocol).
 
 # Specification
 
 ## Motivation
 
-IBC is designed to be a common standard which will be hosted by a variety of blockchains & state machines and must clearly define the requirements of the host.
+IBC is designed to be a common standard which will be hosted by a variety of blockchains & state machines and must clearly define the requirements of the host state machine.
 
 ## Definitions
 
@@ -29,25 +29,37 @@ IBC should require as simple an interface from the underlying state machine as p
 
 ## Technical Specification
 
-### Identifiers
+### Keys, identifiers, separators
 
-Identifier` is an opaque value used as the key for a connection object; it must serialize to a bytestring.
+A `Key` is a bytestring used as the key for an object stored in state. Keys contain only alphanumeric characters and the separator `/`.
+
+An `Identifier` is a bytestring used as a key for an object stored in state, such as a connection, channel, or light client. Identifiers MUST consist of alphanumeric characters only. Identifiers are not intended to be valuable resources — to prevent name squatting, minimum length requirements or pseudorandom generation may be implemented.
+
+The separator `/` is used to separate and concatenate two identifiers or an identifier and a constant bytestring. Identifiers cannot contain the `/` character, which prevents ambiguity.
+
+Variable interpolation, denoted by curly braces, may be used in shorthand to define key formats, e.g. `client/{clientIdentifier}/rootOfTrust`.
 
 ### Key/value store
 
-Connection handlers and subsequent protocols make use of a simple key-value store interface provided by the underlying state machine. This store must provide two functions, which behave in the way you would expect:
-- `Get(Key) -> Value | null`
-- `Set(Key, Value)`
+Host chains MUST provide a simple key-value store interface, with two functions which behave in the way you would expect:
 
-`Key` and `Value` are assumed to be byte slices; encoding details are left to a later ICS.
+```coffeescript
+function get(Key key) -> Value | null
+```
+
+```coffeescript
+function set(Key key, Value value)
+```
+
+`Key` is as defined above. `Value` is an arbitrary bytestring encoding of a particular data structure. Encoding details are left to separate ICSs.
 
 ### Root-of-trust introspection
 
-Blockchains also need the ability to introspect their own root-of-trust (with `getRootOfTrust`) in order to confirm that the connecting chain has stored the correct one.
+Host chains MUST provide the ability to introspect their own root-of-trust, with `getRootOfTrust`.
 
 ### Datagram submission
 
-Must define `submitDatagram` function.
+Host chains MUST define a unique `submitDatagram` function.
 
 ## Backwards Compatibility
 
