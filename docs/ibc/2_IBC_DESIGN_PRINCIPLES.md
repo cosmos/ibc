@@ -1,10 +1,10 @@
-# 1: IBC Design Philosophy
+# 2: IBC Design Principles
 
-> This is an explanation of the "design philosophy" of IBC.
+**This is an explanation of the "design principles" of IBC.**
 
-> For definitions of terms used in IBC specifications, see [here](./2_IBC_TERMINOLOGY.md).
+**For an architectural overview, see [here](./1_IBC_ARCHITECTURE.md).**
 
-> For an architectural overview, see [here](./3_IBC_ARCHITECTURE.md).
+**For definitions of terms used in IBC specifications, see [here](./3_IBC_TERMINOLOGY.md).**
 
 The design space of "interblockchain communication protocols" is wide, and the term itself has become a bit too all-encompassing. The "Interblockchain Communication Protocol" (IBC) is a very particular point in that design space, chosen to provide specific versatility, locality, modularity, and efficiency properties for the expected interchain ecosystem of interoperable blockchains. This document outlines the "why" of IBC and enumerates the primary high-level design goals.
 
@@ -38,7 +38,7 @@ IBC makes no assumptions, and relies upon no characteristics, of the topological
 
 ### Locality of trust & security
 
-Users of IBC — at the blockchain level and at the human or smart contract level — choose which consensus algorithms, state machines, and validator sets they "trust" (to behave in a particular way, e.g. < 1/3 Byzantine) and in which ways they trust them. Assuming the IBC protocol is implemented correctly, users are never exposed to risks of application-level invariant violations (such as asset inflation) due to Byzantine behavior or faulty state machines transitions committed by validator sets or blockchains they did not explicitly decide to trust. This is particulary important in the expected large network topology of interconnected blockchains, where some number of blockchains and validator sets can be expected to be Byzantine occaisionally — IBC, implemented conservatively, bounds the risk and limits the possible damage incurred.
+Users of IBC — at the blockchain level and at the human or smart contract level — choose which consensus algorithms, state machines, and validator sets they "trust" (to behave in a particular way, e.g. < 1/3 Byzantine) and in which ways they trust them. Assuming the IBC protocol is implemented correctly, users are never exposed to risks of application-level invariant violations (such as asset inflation) due to Byzantine behavior or faulty state machines transitions committed by validator sets or blockchains they did not explicitly decide to trust. This is particularly important in the expected large network topology of interconnected blockchains, where some number of blockchains and validator sets can be expected to be Byzantine occasionally — IBC, implemented conservatively, bounds the risk and limits the possible damage incurred.
 
 ### Locality of permissioning
 
