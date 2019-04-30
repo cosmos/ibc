@@ -40,11 +40,15 @@ IBC is an inter-module communication protocol, designed to faciliate reliable, a
 
 By default, clients are unowned: any module can create a new client, query any existing client, and update any existing client.
 
+`ClientKind` enumerates the list of light client algorithms supported by the handler implementation.
+
 ```golang
 type ClientKind enum {
   Tendermint
 }
 ```
+
+`ClientOptions` contains all the parameter choices required to create a client.
 
 ```golang
 type ClientOptions struct {
@@ -53,13 +57,28 @@ type ClientOptions struct {
 }
 ```
 
+`ClientInfo` contains information about an existing client.
+
+```golang
+type ClientInfo struct {
+  ClientKind  kind
+  RootOfTrust rootOfTrust
+}
+```
+
+`createClient` creates a new client and returns an automatically allocated identifier.
+
 ```coffeescript
 function createClient(ClientOptions options) -> string
 ```
 
+`queryClient` queries a client by a known identifier, returning the associated metadata and root of trust if found.
+
 ```coffeescript
-function queryClient(string id) -> Maybe<RoofOfTrust>
+function queryClient(string id) -> Maybe<ClientInfo>
 ```
+
+`updateClient` updates an existing client with a new header, returning an error if the client was not found or the header was not a valid update.
 
 ```coffeescript
 function updateClient(string id, Header header) -> Maybe<Err>
@@ -70,6 +89,8 @@ function updateClient(string id, Header header) -> Maybe<Err>
 
 By default, connections are unowned, but closure is permissioned to the module which created the connection.
 
+`ConnectionKind` enumerates the connection types supported by the handler implementation.
+
 ```golang
 type ConnectionKind enum {
   Transit
@@ -79,12 +100,16 @@ type ConnectionKind enum {
 }
 ```
 
+`ConnectionOptions` contains all the parameter choices required to create a new connection.
+
 ```golang
 type ConnectionOptions struct {
   string          clientIdentifier
   ConnectionKind  kind
 }
 ```
+
+`ConnectionInfo` contains metadata about & state of an existing connection.
 
 ```golang
 type ConnectionInfo struct {
@@ -93,31 +118,40 @@ type ConnectionInfo struct {
 }
 ```
 
+`createConnection` tries to create a new connection with the provided options, failing if the client is not found or the options are invalid, returning a unique allocated identifier if successful.
+
 ```coffeescript
-function createConnection(ConnectionOptions options) -> string
+function createConnection(ConnectionOptions options) -> Maybe<string>
 ```
+
+`queryConnection` queries an existing connection by known identifier, returning the associated metadata if found.
 
 ```coffeescript
 function queryConnection(string id) -> Maybe<ConnectionInfo>
 ```
 
+`closeConnection` initiates the graceful connection closing process as defined in ICS 3.
+
 ```coffeescript
 function closeConnection(string id) -> Maybe<Err>
 ```
 
-
 ### Channels
 
 By default, channels are owned by the creating module, meaning only the creating module can inspect, close, or send on the channel.
+
+`ChannelOptions` contains all the parameter choices required to create a new channel.
 
 ```golang
 type ChannelOptions struct {
   string          connectionIdentifier
   bool            ordered
   recvHandler     Packet -> ()
-  timeoutHandler  Maybe<Packet -> ()>
+  timeoutHandler  Maybe<(Packet, string) -> ()>
 }
 ```
+
+`ChannelInfo` contains metadata about an existing channel.
 
 ```golang
 type ChannelInfo struct {
@@ -125,13 +159,19 @@ type ChannelInfo struct {
 }
 ```
 
+`createChannel` tries to create a new channel with the provided options, failing if the connection is not found or the options are invalid, returning a unique allocated identifier if successful.
+
 ```coffeescript
 function createChannel(ChannelOptions options) -> string
 ```
 
+`queryChannel` queries an existing channel by known identifier, returning the associated metadata if found.
+
 ```coffeescript
 function queryChannel(string id) -> Maybe<ChannelInfo>
 ```
+
+`closeChannel` initiates the graceful channel closing process as defined in ICS 4.
 
 ```coffeescript
 function closeChannel(string id) -> Future<Maybe<Err>>
@@ -141,12 +181,12 @@ function closeChannel(string id) -> Future<Maybe<Err>>
 
 Packets are permissioned by channel (only a module which owns a channel can send on it).
 
-```coffeescript
-function sendPacket(Packet packet) -> Future<Maybe<Timeout>>
-```
+`sendPacket` attempts to send a packet, returning an error if the packet cannot be sent (perhaps because the sending module does not own the channel in question), and returning a unique identifier if successful.
+
+The returned identifier will be the same as that sent by the timeout handler, so it can be used by the sending module to associate a specific action with a specific packet timeout.
 
 ```coffeescript
-function queryPacket(Packet packet) -> Maybe<PacketInfo>
+function sendPacket(Packet packet) -> string | Err
 ```
 
 #### Example
