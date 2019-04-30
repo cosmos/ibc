@@ -10,7 +10,7 @@ modified: 2019-04-30
 
 # Synopsis
 
-This document describes the interface exposed by the standard IBC implementation (referred to as the IBC handler) to modules within the same state machine.
+This document describes the interface exposed by the standard IBC implementation (referred to as the IBC handler) to modules within the same state machine, and the implementation of that interface by the IBC handler.
 
 # Specification
 
@@ -20,9 +20,9 @@ IBC is an inter-module communication protocol, designed to faciliate reliable, a
 
 ## Definitions
 
-`Client` is as defined in ICS 2.
+`Client` and `RootOfTrust` are as defined in ICS 2.
 
-`Connection` is as defined in ICS 3.
+`Connection` and `ConnectionState` are as defined in ICS 3.
 
 `Channel` is as defined in ICS 4.
 
@@ -30,13 +30,15 @@ IBC is an inter-module communication protocol, designed to faciliate reliable, a
 
 ## Desired Properties
 
-- Client, connection, channel creation permissionless
+- Client, connection, channel creation as permissionless as possible
 - Dynamic module set
 - Modules can write their own more complex abstractions on top of IBC
 
 ## Technical Specification
 
 ### Clients
+
+By default, clients are unowned: any module can create a new client, query any existing client, and update any existing client.
 
 ```golang
 type ClientKind enum {
@@ -63,9 +65,10 @@ function queryClient(string id) -> Maybe<RoofOfTrust>
 function updateClient(string id, Header header) -> Maybe<Err>
 ```
 
-By default, clients are unowned.
 
 ### Connections
+
+By default, connections are unowned, but closure is permissioned to the module which created the connection.
 
 ```golang
 type ConnectionKind enum {
@@ -102,9 +105,10 @@ function queryConnection(string id) -> Maybe<ConnectionInfo>
 function closeConnection(string id) -> Maybe<Err>
 ```
 
-By default, connections are unowned, but closure is permissioned.
 
 ### Channels
+
+By default, channels are owned by the creating module, meaning only the creating module can inspect, close, or send on the channel.
 
 ```golang
 type ChannelOptions struct {
@@ -133,9 +137,9 @@ function queryChannel(string id) -> Maybe<ChannelInfo>
 function closeChannel(string id) -> Future<Maybe<Err>>
 ```
 
-By default, channels are owned by the creating module.
-
 ### Packets
+
+Packets are permissioned by channel (only a module which owns a channel can send on it).
 
 ```coffeescript
 function sendPacket(Packet packet) -> Future<Maybe<Timeout>>
@@ -145,11 +149,9 @@ function sendPacket(Packet packet) -> Future<Maybe<Timeout>>
 function queryPacket(Packet packet) -> Maybe<PacketInfo>
 ```
 
-Packets are permissioned by channel (only a module which owns a channel can send on it).
-
 #### Example
 
-Simple module for native asset send/receive.
+As a demonstration of interface usage, a simple module handling send/receive of a native asset could be implemented as follows:
 
 ```golang
 type State struct {
