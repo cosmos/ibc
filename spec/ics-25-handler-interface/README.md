@@ -5,28 +5,34 @@ stage: draft
 category: ibc-core
 author: Christopher Goes <cwgoes@tendermint.com>
 created: 2019-04-23
-modified: 2019-04-23
+modified: 2019-04-30
 ---
 
 # Synopsis
 
-(high-level description of and rationale for specification)
+This document describes the interface exposed by the standard IBC implementation (referred to as the IBC handler) to modules within the same state machine.
 
 # Specification
 
-(main part of standard document - not all subsections are required)
-
 ## Motivation
 
-(rationale for existence of standard)
+IBC is an inter-module communication protocol, designed to faciliate reliable, authentication message passing between modules on separate blockchains. Modules should be able to reason about the interface they interact with and the requirements they must adhere to in order to utilize it safely.
 
 ## Definitions
 
-(definitions of any new terms not defined in common documentation)
+`Client` is as defined in ICS 2.
+
+`Connection` is as defined in ICS 3.
+
+`Channel` is as defined in ICS 4.
+
+`Packet` is as defined in ICS 5.
 
 ## Desired Properties
 
-(desired characteristics / properties of protocol, effects if properties are violated)
+- Client, connection, channel creation permissionless
+- Dynamic module set
+- Modules can write their own more complex abstractions on top of IBC
 
 ## Technical Specification
 
@@ -194,27 +200,25 @@ function myModuleTimeout(Packet packet)
   increaseBalance(packet.source, packet.asset, packet.amount)
 ```
 
-(detailed technical specification: syntax, semantics, sub-protocols, algorithms, data structures, etc)
-
 ## Backwards Compatibility
 
-(discussion of compatibility or lack thereof with previous standards)
+Not applicable.
 
 ## Forwards Compatibility
 
-(discussion of compatibility or lack thereof with expected future standards)
+The interface can change on new chains, as long as the semantics remain the same.
 
 ## Example Implementation
 
-(link to or description of concrete example implementation)
+Coming soon.
 
 ## Other Implementations
 
-(links to or descriptions of other implementations)
+Coming soon.
 
 # History
 
-(changelog and notable inspirations / references)
+30 April 2019 - Draft written
 
 # Copyright
 
