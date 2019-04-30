@@ -1,12 +1,12 @@
 # Verifier
 
-Full nodes are procedures who run the all `[Message]` according to the
-`Consensus`. The lightclient `Verifier` does not runs all `[Message]`, but
-it uses the `Consensus`'s security assumption to fast-forward the verification
-process. The `Verifier` MUST work identical with a full node while the
-security assumptions of `Consensus` are preserved. Which means, if and only
+Full nodes are procedures which process a list of messages, `[Message]`, according to the
+`Consensus` algorithm. The lightclient `Verifier` does not process all messages, but
+it uses artifacts produced by execution of the `Consensus` algorithm, along with well-forumated security assumptions, to verify parts of a consensus execution transcript
+process. The `Verifier` MUST work identically to a full node, given that the
+security assumptions of `Consensus` are preserved. This means that if and only
 if a full node accepts the new `Header` given a `ConsensusState` and
-`[Message]`, then the `Verifier` also accepts it.
+`[Message]`, will the `Verifier` then also accept it.
 
 ## Definitions
 
