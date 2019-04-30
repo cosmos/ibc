@@ -7,7 +7,7 @@ requires: 2, 6, 10, 23
 required-by: 4
 author: Christopher Goes <cwgoes@tendermint.com>, Juwoon Yun <joon@tendermint.com>
 created: 2019-03-07
-modified: 2019-04-25
+modified: 2019-04-30
 ---
 
 ## Synopsis
@@ -104,7 +104,25 @@ This ICS defines four subprotocols: opening handshake, header tracking, closing 
 
 The opening handshake subprotocol serves to initialize roots of trust for two chains on each other and negotiate an agreeable connection version.
 
+The opening handshake defines four datagrams: *ConnOpenInit*, *ConnOpenTry*, *ConnOpenAck*, and *ConnOpenConfirm*.
+
+A correct protocol execution flows as follows:
+
+| Initiator | Datagram          | Chain |
+| --------- | ----------------- | ----- |
+| Actor     | `ConnOpenInit`    | A     |
+| Relayer   | `ConnOpenTry`     | B     |
+| Relayer   | `ConnOpenAck`     | A     |
+| Relayer   | `ConnOpenConfirm` | B     |
+
+At the end of an opening handshake between two chains implementing the subprotocol, the following properties hold:
+- Each chain has each other's correct root-of-trust as originally specified by the initiating actor.
+- The chains have agreed to a shared connection version.
+- Each chain has knowledge of and has agreed to its identifier on the other chain.
+
 This subprotocol need not be permissioned, modulo anti-spam measures.
+
+*ConnOpenInit* initializes a connection attempt on chain A.
 
 ```golang
 type ConnOpenInit struct {
@@ -118,6 +136,15 @@ type ConnOpenInit struct {
   Identifier lightClientIdentifier
 }
 ```
+
+```coffeescript
+function handleConnOpenInit(identifier, desiredVersion, desiredCounterpartyIdentifier, lightClientIdentifier)
+  assert(Get(identifier) == null)
+  state = INIT
+  Set(identifier, (state, desiredVersion, desiredCounterpartyIdentifier, lightClientIdentifier))
+```
+
+*ConnOpenTry* relays notice of a connection attempt on chain A to chain B.
 
 ```golang
 type ConnOpenTry struct {
@@ -136,33 +163,6 @@ type ConnOpenTry struct {
 }
 ```
 
-```golang
-type ConnOpenAck struct {
-  // Identifier for connection on chain A
-  Identifier        identifier
-  // Agreed version for connection
-  Version           agreedVersion
-  // Proof of stored TRY state on chain B
-  AccumulatorProof  proofTry
-}
-```
-
-```golang
-type ConnOpenConfirm struct {
-  // Identifier for connection on chain B
-  Identifier        identifier
-  // Proof of stored OPEN state on chain A
-  AccumulatorProof  proofAck
-}
-```
-
-```coffeescript
-function handleConnOpenInit(identifier, desiredVersion, desiredCounterpartyIdentifier, lightClientIdentifier)
-  assert(Get(identifier) == null)
-  state = INIT
-  Set(identifier, (state, desiredVersion, desiredCounterpartyIdentifier, lightClientIdentifier))
-```
-
 ```coffeescript
 function handleConnOpenTry(desiredIdentifier, counterpartyIdentifier, desiredVersion, counterpartyLightClientIdentifier, lightClientIdentifier, proofInit)
   rootOfTrust = Get(lightClientIdentifier)
@@ -178,8 +178,21 @@ function handleConnOpenTry(desiredIdentifier, counterpartyIdentifier, desiredVer
   Set(identifier, (state, version, counterpartyIdentifier, rootOfTrust))
 ```
 
+*ConnOpenAck* relays acceptance of a connection open attempt from chain B back to chain A.
+
+```golang
+type ConnOpenAck struct {
+  // Identifier for connection on chain A
+  Identifier        identifier
+  // Agreed version for connection
+  Version           agreedVersion
+  // Proof of stored TRY state on chain B
+  AccumulatorProof  proofTry
+}
+```
+
 ```coffeescript
-function handleConnOpenAck()
+function handleConnOpenAck(identifier, agreedVersion, proofTry)
   (state, desiredVersion, desiredCounterpartyIdentifier, lightClientIdentifier) = Get(identifier)
   assert(state == INIT)
   rootOfTrust = Get(lightClientIdentifier)
@@ -193,8 +206,19 @@ function handleConnOpenAck()
   Set(identifier, (state, agreedVersion, desiredCounterpartyIdentifier, lightClientIdentifier))
 ```
 
+*ConnOpenConfirm* confirms opening of a connection on chain A to chain B, after which the connection is open on both chains.
+
+```golang
+type ConnOpenConfirm struct {
+  // Identifier for connection on chain B
+  Identifier        identifier
+  // Proof of stored OPEN state on chain A
+  AccumulatorProof  proofAck
+}
+```
+
 ```coffeescript
-function handleConnOpenConfirm()
+function handleConnOpenConfirm(identifier, proofAck)
   (state, version, counterpartyIdentifier, lightClientIdentifier) = Get(identifier)
   assert(state == OPENTRY)
   rootOfTrust = Get(lightClientIdentifier)
@@ -204,22 +228,6 @@ function handleConnOpenConfirm()
   state = OPEN
   Set(identifier, (state, version, counterpartyIdentifier, rootOfTrust))
 ```
-
-(could simplify the verification a bit)
-
-A correct protocol execution flows as follows:
-
-| Initiator | Datagram          | Chain |
-| --------- | ----------------- | ----- |
-| Actor     | `ConnOpenInit`    | A     |
-| Relayer   | `ConnOpenTry`     | B     |
-| Relayer   | `ConnOpenAck`     | A     |
-| Relayer   | `ConnOpenConfirm` | B     |
-
-At the end of an opening handshake between two chains implementing the subprotocol, the following properties hold:
-- Each chain has each other's correct root-of-trust as originally specified by the initiating actor.
-- The chains have agreed to a shared connection version.
-- Each chain has knowledge of and has agreed to its identifier on the other chain.
 
 ##### Header Tracking
 
@@ -231,12 +239,35 @@ The closing handshake protocol serves to cleanly close a connection on two chain
 
 This subprotocol will likely need to be permissioned to an entity who "owns" the connection on the initiating chain, such as a particular end user, smart contract, or governance mechanism.
 
+The closing handshake subprotocol defines three datagrams: *ConnCloseInit*, *ConnCloseTry*, and *ConnCloseAck*.
+
+A correct protocol execution flows as follows:
+
+| Initiator | Datagram          | Chain |
+| --------- | ----------------- | ----- |
+| Actor     | `ConnCloseInit`   | A     |
+| Relayer   | `ConnCloseTry`    | B     |
+| Relayer   | `ConnCloseAck`    | A     |
+
+*ConnCloseInit* initializes a close attempt on chain A.
+
 ```golang
 type ConnCloseInit struct {
   Identifier identifier
   Identifier identifierCounterparty
 }
 ```
+
+```coffeescript
+function handleConnCloseInit(identifier, identifierCounterparty)
+  (state, version, counterpartyIdentifier, rootOfTrust) = Get(identifier)
+  assert(state == OPEN)
+  assert(identifierCounterparty == counterpartyIdentifier)
+  state = TRYCLOSE
+  Set(identifier, (state, version, counterpartyIdentifier, rootOfTrust))
+```
+
+*ConnCloseTry* relays the intent to close a connection from chain A to chain B.
 
 ```golang
 type ConnCloseTry struct {
@@ -246,24 +277,8 @@ type ConnCloseTry struct {
 }
 ```
 
-```golang
-type ConnCloseAck struct {
-  Identifier identifier
-  AccumulatorProof proofTry
-}
-```
-
 ```coffeescript
-function handleConnCloseInit()
-  (state, version, counterpartyIdentifier, rootOfTrust) = Get(identifier)
-  assert(state == OPEN)
-  assert(identifierCounterparty == counterpartyIdentifier)
-  state = TRYCLOSE
-  Set(identifier, (state, version, counterpartyIdentifier, rootOfTrust))
-```
-
-```coffeescript
-function handleConnCloseTry()
+function handleConnCloseTry(identifier, identifierCounterparty, proofInit)
   (state, version, counterpartyIdentifier, rootOfTrust) = Get(identifier)
   assert(state == OPEN)
   assert(identifierCounterparty == counterpartyIdentifier)
@@ -272,8 +287,17 @@ function handleConnCloseTry()
   Set(identifier, (state, version, counterpartyIdentifier, rootOfTrust))
 ```
 
+*ConnCloseAck* acknowledges a connection closure on chain B.
+
+```golang
+type ConnCloseAck struct {
+  Identifier identifier
+  AccumulatorProof proofTry
+}
+```
+
 ```coffeescript
-function handleConnCloseAck()
+function handleConnCloseAck(identifier, proofTry)
   (state, version, counterpartyIdentifier, rootOfTrust) = Get(identifier)
   assert(state == TRYCLOSE)
   assert(verify(rootOfTrust, proofTry, (counterpartyIdentifier, CLOSED)))
@@ -285,6 +309,8 @@ function handleConnCloseAck()
 
 The equivocation closing subprotocol serves to immediately close a connection if a consensus equivocation is discovered and thus prevent further packet transmission.
 
+The equivocation closing subprotocol defines only one datagram, *ConnCloseEquivocation*:
+
 ```golang
 type ConnCloseEquivocation struct {
   Identifier identifier
@@ -294,7 +320,7 @@ type ConnCloseEquivocation struct {
 ```
 
 ```coffeescript
-function handleConnCloseEquivocation()
+function handleConnCloseEquivocation(identifier, firstHeader, secondHeader)
   (state, version, counterpartyIdentifier, rootOfTrust) = Get(identifier)
   assert(state == OPEN)
   assert(checkEquivocation(rootOfTrust, firstHeader, secondHeader))
@@ -323,7 +349,7 @@ Coming soon.
 ## History
 
 29 March 2019 - Initial draft version submitted
-25 April 2019 - Draft finalized
+30 April 2019 - Draft finalized
 
 ## Copyright
 
