@@ -52,6 +52,14 @@ Once a negotiation handshake has completed:
 
 #### Definitions
 
+`RootOfTrust`, `Header, and `updateRootOfTrust` are as defined in [ICS 2: Consensus Requirements](../spec/ics-2-consensus-requirements).
+
+`AccumulatorProof` and `verify` are as defined in [ICS 23: Cryptographic Accumulator](../spec/ics-23-cryptographic-accumulator).
+
+`Version` and `checkVersion` are as defined in [ICS 6: Connection & Channel Versioning](../spec/ics-6-connection-channel-versioning).
+
+`Identifier` is as defined in [ICS 24](../spec/ics-24-host-requirements). The identifier is not necessarily intended to be a human-readable name (and likely should not be, to discourage squatting or racing for identifiers).
+
 This ICS defines the `Connection` type:
 
 ```golang
@@ -73,15 +81,7 @@ type Connection struct {
 }
 ```
 
-`RootOfTrust`, `Header, and `updateRootOfTrust` are as defined in [ICS 2: Consensus Requirements](../spec/ics-2-consensus-requirements).
-
-`AccumulatorProof` and `verify` are as defined in [ICS 23: Cryptographic Accumulator](../spec/ics-23-cryptographic-accumulator).
-
-`Version` and `checkVersion` are as defined in [ICS 6: Connection & Channel Versioning](../spec/ics-6-connection-channel-versioning).
-
-`Identifier` is as defined in [ICS 24](../spec/ics-24-host-requirements). The identifier is not necessarily intended to be a human-readable name (and likely should not be, to discourage squatting or racing for identifiers).
-
-The opening handshake protocol allows each chain to verify the identifier used to reference the connection on the other chain, so the chains could choose to come to agreement on a common identifier (via `chooseIdentifier` and `checkIdentifier`). Further discussion is deferred to [ICS 10: Chain Naming Convention](../spec/ics-10-chain-naming-convention).
+The opening handshake protocol allows each chain to verify the identifier used to reference the connection on the other chain, enabling modules on each chain to reason about the reference on the other chain.
 
 A *actor*, as referred to in this specification, is an entity capable of executing datagrams who is paying for computation / storage (via gas or a similar mechanism) but is otherwise untrusted. Possible actors include:
 - End users signing with an account key
@@ -140,8 +140,6 @@ type ConnOpenTry struct {
 type ConnOpenAck struct {
   // Identifier for connection on chain A
   Identifier        identifier
-  // Identifier for connection on chain B
-  Identifier        agreedCounterpartyIdentifier
   // Agreed version for connection
   Version           agreedVersion
   // Proof of stored TRY state on chain B
@@ -173,7 +171,8 @@ function handleConnOpenTry(desiredIdentifier, counterpartyIdentifier, desiredVer
     (counterpartyIdentifier, (INIT, desiredVersion, desiredIdentifier, counterpartyLightClientIdentifier))))
   assert(verify(rootOfTrust, proofInit,
     (counterpartyLightClientIdentifier, expectedRootOfTrust)))
-  identifier = chooseIdentifier(desiredIdentifier, counterpartyIdentifier)
+  assert(get(desiredIdentifier) == nil)
+  identifier = desiredIdentifier
   version = chooseVersion(desiredVersion)
   state = OPENTRY
   Set(identifier, (state, version, counterpartyIdentifier, rootOfTrust))
@@ -186,13 +185,12 @@ function handleConnOpenAck()
   rootOfTrust = Get(lightClientIdentifier)
   expectedRootOfTrust = getRootOfTrust()
   assert(verify(rootOfTrust, proofTry,
-    (agreedCounterpartyIdentifier, (OPENTRY, agreedVersion, identifier, counterpartyLightClientIdentifier))))
+    (desiredCounterpartyIdentifier, (OPENTRY, agreedVersion, identifier, counterpartyLightClientIdentifier))))
   assert(verify(rootOfTrust, proofTry,
     (counterpartyLightClientIdentifier, expectedRootOfTrust)))
-  assert(checkIdentifier(desiredCounterpartyIdentifier, agreedCounterpartyIdentifier))
   assert(checkVersion(desiredVersion, agreedVersion))
   state = OPEN
-  Set(identifier, (state, agreedVersion, agreedCounterpartyIdentifier, lightClientIdentifier))
+  Set(identifier, (state, agreedVersion, desiredCounterpartyIdentifier, lightClientIdentifier))
 ```
 
 ```coffeescript
