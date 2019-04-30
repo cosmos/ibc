@@ -39,12 +39,20 @@ IBC is an inter-module communication protocol, designed to faciliate reliable, a
 ### Clients
 
 ```golang
+type ClientKind enum {
+  Tendermint
+}
+```
+
+```golang
 type ClientOptions struct {
+  ClientKind  kind
+  RootOfTrust rootOfTrust
 }
 ```
 
 ```coffeescript
-function createClient(ClientOptions options, RootOfTrust rootOfTrust) -> string
+function createClient(ClientOptions options) -> string
 ```
 
 ```coffeescript
@@ -70,8 +78,8 @@ type ConnectionKind enum {
 
 ```golang
 type ConnectionOptions struct {
-  string          client
-  ConnectionKind  kind 
+  string          clientIdentifier
+  ConnectionKind  kind
 }
 ```
 
@@ -100,8 +108,8 @@ By default, connections are unowned, but closure is permissioned.
 
 ```golang
 type ChannelOptions struct {
-  string      connection
-  bool        ordered
+  string          connectionIdentifier
+  bool            ordered
   recvHandler     Packet -> ()
   timeoutHandler  Maybe<Packet -> ()>
 }
@@ -134,14 +142,10 @@ function sendPacket(Packet packet) -> Future<Maybe<Timeout>>
 ```
 
 ```coffeescript
-funtion queryPacket(Packet packet) -> Maybe<PacketInfo>
+function queryPacket(Packet packet) -> Maybe<PacketInfo>
 ```
 
-```coffeescript
-function recvPacket(string chanId) -> Future<Packet>
-```
-
-Packets are permissioned by channel.
+Packets are permissioned by channel (only a module which owns a channel can send on it).
 
 #### Example
 
@@ -206,7 +210,7 @@ Not applicable.
 
 ## Forwards Compatibility
 
-The interface can change on new chains, as long as the semantics remain the same.
+The interface can change when implemented on new chains (or upgrades to an existing chain) as long as the semantics remain the same.
 
 ## Example Implementation
 
