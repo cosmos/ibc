@@ -15,7 +15,7 @@ of nearly any blockchain. The notion of signing messages off-chain has many
 added benefits such as saving on computational costs and reducing transaction
 throughput and overhead. Within the context of the Cosmos, some of the major
 applications of signing such data includes, but is not limited to, providing a
-cryptographic secure and verifiable means of proving validator identity and
+cryptographically secure and verifiable means of proving validator identity and
 possibly associating it with some other framework or organization. In addition,
 having the ability to sign Cosmos messages with a Ledger or similar HSM device.
 
