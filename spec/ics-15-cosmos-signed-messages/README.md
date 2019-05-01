@@ -56,7 +56,7 @@ These meta fields are **reserved** and **must** be included. In addition, the fi
 must be ordered in lexicographically ascending order.
 
 For the purposes of signing Cosmos messages, the `@chain_id` field must correspond
-to the Cosmos chain identifier. The user-agent should **refuse** signing if the
+to the Cosmos chain identifier, as specified in the root-of-trust or genesis file. The user-agent should **refuse** signing if the
 `@chain_id` field does not match the currently active chain! The `@type` field
 corresponds to the type of structure the user will be signing in an application.
 The protocol allows for signing valid ASCII text and application-specific objects.
