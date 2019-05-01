@@ -26,7 +26,7 @@ implemented by the Cosmos SDK and other third-party organizations is needed.
 
 ## Desired Properties
 
-The Cosmos message signing standardized protocol subscribes to the following:
+The Cosmos message signing standardized protocol should fulfill the following requirements:
 
 * Use of a secure cryptographic hash function (e.g. resistance to collision and second
 pre-image attacks)
