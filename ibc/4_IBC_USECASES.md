@@ -1,6 +1,6 @@
 # 4: IBC Usecases
 
-**This is a set of possible use cases for the IBC protocol.**
+**This is a set of possible application-level use cases for the inter-blockchain communication protocol.**
 
 **For an architectural overview, see [here](./1_IBC_ARCHITECTURE.md).**
 
@@ -8,57 +8,83 @@
 
 **For definitions of terms used in IBC specifications, see [here](./3_IBC_TERMINOLOGY.md).**
 
-This is a list of possible concrete application use-cases for the inter-blockchain communication protocol.
+This is a far-from-comprehensive list of possible concrete application use-cases for the inter-blockchain communication protocol (IBC), listed here for inspiration & with the intent of providing inspiration and a set of viewpoints from which to evaluate the design of the protocol.
 
 For each use case, we define the requirements of the involved chains, the high-level packet handling logic, the application properties maintained across a combined-state view of the involved chains, and a list of potential involved zones with different comparative advantages or other application features.
 
-## Asset Transfer
+## Asset transfer
 
 Wherever compatible native asset representations exist, IBC can be used to transfer assets between two chains.
 
-### Asset Types
-
-#### Fungible Tokens
+### Fungible tokens
 
 IBC can be used to transfer fungible tokens between chains.
 
-Example representations: Bitcoin, ERC20, Cosmos SDK Coins.
+#### Representations
 
-The "source zone", which originally held all of the tokens balances, escrows and unescrows.
+Bitcoin `UTXO`, Ethereum `ERC20`, Cosmos SDK `sdk.Coins`.
 
-The "target zone", which originally held zero balance, mints & burns vouchers.
+#### Implementation
 
-(note: could hybridize)
+Two chains elect to "peg" two semantically compatible fungible token denominations to each other, escrowing, unescrowing, minting, and burning as necessary when sending & handling IBC packets.
 
-(better to hybridize totally & track supply throughput?)
+There may be a starting "source zone", which starts with the entire token balance, and "target zone", which starts with zero token balance, or two zones may both start off with nonzero balances of a token (perhaps originated on a third zone), or two zones may elect to combine the supply and render fungible two previously disparate tokens.
 
-#### Nonfungible Tokens
+#### Invariants
+
+Fungibility of any amount across all pegged representations, constant (or formulaic, in the case of a inflationary asset) total supply cumulative across chains.
+
+### Nonfungible tokens
 
 IBC can be used to transfer nonfungible tokens between chains.
 
-Example representations: ERC721, Cosmos SDK NFT.
+#### Representations
 
-### Involved Zones
+Ethereum `ERC721`, Cosmos SDK `sdk.NFT`.
 
-#### Vanilla Payments
+#### Implementation
 
-A "vanilla payments" zone, such as the Cosmos Hub, may allow incoming & outgoing token transfers through IBC. Users might elect to keep assets on such a zone due to high security or high connectivity.
+Two chains elect to "peg" two semantically compatible nonfungible token namespaces to each other, escrowing, unescrowing, creating, and destroying as necessary when sending & handling IBC packets.
 
-#### Shielded Payments
+There may be a starting "source zone" which starts with particular tokens and contains token-associated logic (e.g. breeding CryptoKitties, redeeming digital ticket), or the associated logic may be packaged along with the NFT in a format which all involved chains can understand.
 
-A "shielded payments" zone, such as the Zcash blockchain (pending [UITs](https://github.com/zcash/zcash/issues/830)), may allow incoming & outgoing token transfers through IBC. Tokens which are transferred to such a zone could then be shielded through the zero-knowledge circuit and held, transferred, traded, etc. Once users had accomplished their anonymity-requiring purposes, they could be transferred out and back over IBC to other zones.
+#### Invariants
 
-#### Decentralized Exchange
+Any given nonfungible token exists uniquely on one chain, owned by a particular account, at any point in time, and can always be transferred back to the "source" zone to perform associated actions (e.g. breeding a CryptoKitty) if applicable.
 
-A "decentralized exchange" zone may allow incoming & outgoing token transfers through IBC.
+### Involved zones
 
-#### Decentralized Finance
+#### Vanilla payments
 
-A "decentralized finance" zone, such as the Ethereum blockchain, may allow incoming & outgoing token transfers though IBC.
+A "vanilla payments" zone, such as the Cosmos Hub, may allow incoming & outgoing fungible and/or nonfungible token transfers through IBC. Users might elect to keep assets on such a zone due to high security or high connectivity.
 
-## Multichain Contracts
+#### Shielded payments
 
-IBC can be used to implement cross-chain contract calls.
+A "shielded payments" zone, such as the Zcash blockchain (pending [UITs](https://github.com/zcash/zcash/issues/830)), may allow incoming & outgoing fungible and/or nonfungible token transfers through IBC. Tokens which are transferred to such a zone could then be shielded through the zero-knowledge circuit and held, transferred, traded, etc. Once users had accomplished their anonymity-requiring purposes, they could be transferred out and back over IBC to other zones.
+
+#### Decentralized exchange
+
+A "decentralized exchange" zone may allow incoming & outgoing fungible and/or nonfungible token transfers through IBC.
+
+#### Decentralized finance
+
+A "decentralized finance" zone, such as the Ethereum blockchain, may allow incoming & outgoing fungible and/or nonfungible token transfers though IBC.
+
+## Multichain contracts
+
+IBC can be used to pass messages & data between contracts with logic split across several chains.
+
+### Cross-chain contract calls
+
+#### Representations
+
+#### Implementation
+
+Serialize call, return result, like a channel.
+
+#### Invariants
+
+Contract-dependent.
 
 ### Decentralized data oracles
 
@@ -72,12 +98,14 @@ An account holding assets on one chain can require signatures relayed over IBC f
 
 An account holding assets on one chain can be used to pay fees on another chain by sending tokens to an account on the first chain controlled by the validator set of the second chain. The funds can be periodically send back over the IBC connection from the first chain to the second chain for fee disbursement.
 
-## Interchain Collateralization
+### Involved zones
+
+## Interchain collateralization
 
 A subset of the validator set on one chain can elect to validate another chain and be held accountable for equivocation faults commited on that chain submitted over an IBC connection, and the second chain can delegate its' validator update logic to the first chain through the same IBC connection.
 
 ## Sharding
 
-### Code Migration
+### Code migration
 
 IBC can be used to migrate smart contracts between blockchains with mutually comprehensible virtual machines.
