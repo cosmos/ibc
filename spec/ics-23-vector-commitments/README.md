@@ -175,7 +175,7 @@ For any key `key` last set to a value `value` in the commitment `acc`,
 ```coffeescript
 root = getRoot(acc)
 proof = createMembershipProof(acc, key, value)
-P(verifyMembership(root, proof, key, value) == false) negligible in λ
+Pr(verifyMembership(root, proof, key, value) == false) negligible in λ
 ```
 
 For any key `key` not set in the commitment `acc`, for all values of `proof` and all values of `value`,
@@ -183,7 +183,7 @@ For any key `key` not set in the commitment `acc`, for all values of `proof` and
 ```coffeescript
 root = getRoot(acc)
 proof = createNonMembershipProof(acc, key)
-P(verifyNonMembership(root, proof, key) == false) negligible in λ
+Pr(verifyNonMembership(root, proof, key) == false) negligible in λ
 ```
 
 #### Soundness
@@ -193,13 +193,13 @@ Commitment proofs MUST be *sound*: key => value mappings which have not been add
 For any key `key` last set to a value `value` in the commitment `acc`, for all values of `proof`,
 
 ```coffeescript
-P(verifyNonMembership(root, proof, key) == true) negligible in λ
+Pr(verifyNonMembership(root, proof, key) == true) negligible in λ
 ```
 
 For any key `key` not set in the commitment `acc`, for all values of `proof` and all values of `value`,
 
 ```coffeescript
-P(verifyMembership(root, proof, key, value) == true) negligible in λ
+Pr(verifyMembership(root, proof, key, value) == true) negligible in λ
 ```
 
 #### Position binding
@@ -211,13 +211,13 @@ For any key `key` set in the commitment `acc`, there is one `value` for which:
 ```coffeescript
 root = getRoot(acc)
 proof = createMembershipProof(acc, key, value)
-P(verifyMembership(root, proof, key, value) == false) negligible in λ
+Pr(verifyMembership(root, proof, key, value) == false) negligible in λ
 ```
 
 For all other values `otherValue` where `value /= otherValue`, for all values of `proof`,
 
 ```coffeescript
-P(verifyMembership(root, proof, key, otherValue) == true) negligible in λ
+Pr(verifyMembership(root, proof, key, otherValue) == true) negligible in λ
 ```
 
 ## Backwards Compatibility
