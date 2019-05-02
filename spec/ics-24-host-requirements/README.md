@@ -68,13 +68,13 @@ function getRootOfTrust() -> RootOfTrust
 
 ### Datagram Submission
 
-Host chains MUST define a unique `submitDatagram` function:
+Host chains MAY define a unique `submitDatagram` function to submit [datagrams](../../docs/ibc/2_IBC_TERMINOLOGY.md) directly:
 
 ```coffeescript
 function submitDatagram(Datagram datagram)
 ```
 
-`submitDatagram` allows relayers to relay IBC datagrams to the host chain. Host chains MAY require that the relayer submitting the datagram has an account to pay transaction fees, signs over the datagram in a larger transaction structure, etc - `submitDatagram` MUST define any such packaging required.
+`submitDatagram` allows relayers to relay IBC datagrams directly to the host chain. Host chains MAY require that the relayer submitting the datagram has an account to pay transaction fees, signs over the datagram in a larger transaction structure, etc - `submitDatagram` MUST define any such packaging required.
 
 ## Backwards Compatibility
 
