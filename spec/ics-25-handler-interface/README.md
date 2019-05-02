@@ -5,7 +5,7 @@ stage: draft
 category: ibc-core
 author: Christopher Goes <cwgoes@tendermint.com>
 created: 2019-04-23
-modified: 2019-04-30
+modified: 2019-05-03
 ---
 
 # Synopsis
@@ -84,6 +84,8 @@ function queryClient(string id) -> Maybe<ClientInfo>
 function updateClient(string id, Header header) -> Maybe<Err>
 ```
 
+Implementations of `createClient`, `queryClient`, and `updateClient` are defined in ICS 2.
+
 
 ### Connections
 
@@ -136,6 +138,8 @@ function queryConnection(string id) -> Maybe<ConnectionInfo>
 function closeConnection(string id) -> Maybe<Err>
 ```
 
+Implementations of `createConnection`, `queryConnection`, and `closeConnection` are defined in ICS 3.
+
 ### Channels
 
 By default, channels are owned by the creating module, meaning only the creating module can inspect, close, or send on the channel.
@@ -146,8 +150,6 @@ By default, channels are owned by the creating module, meaning only the creating
 type ChannelOptions struct {
   string          connectionIdentifier
   bool            ordered
-  recvHandler     Packet -> ()
-  timeoutHandler  Maybe<(Packet, string) -> ()>
 }
 ```
 
@@ -177,6 +179,8 @@ function queryChannel(string id) -> Maybe<ChannelInfo>
 function closeChannel(string id) -> Future<Maybe<Err>>
 ```
 
+Implementations of `createChannel`, `queryChannel`, and `closeChannel` are defined in ICS 4.
+
 ### Packets
 
 Packets are permissioned by channel (only a module which owns a channel can send on it).
@@ -188,6 +192,16 @@ The returned identifier will be the same as that sent by the timeout handler, so
 ```coffeescript
 function sendPacket(Packet packet) -> string | Err
 ```
+
+```coffeescript
+function recvPacket(Packet packet) -> string | Err
+```
+
+```coffeescript
+function timeoutPacket(Packet packet) -> string | Err
+```
+
+Implementations of `sendPacket`, `recvPacket`, and `timeoutPacket` are defined in ICS 5.
 
 #### Example
 
@@ -233,6 +247,7 @@ function myModuleSend(string asset, integer amount, address source, address dest
 
 ```coffeescript
 function myModuleRecv(Packet packet)
+  recvPacket(packet)
   assert(packet.channel == channel)
   data = packet.data
   unescrow(data.asset, data.amount)
@@ -241,6 +256,7 @@ function myModuleRecv(Packet packet)
 
 ```coffeescript
 function myModuleTimeout(Packet packet)
+  timeoutPacket(packet)
   data = packet.data
   unescrow(packet.asset, packet.amount)
   increaseBalance(packet.source, packet.asset, packet.amount)
