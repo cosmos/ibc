@@ -5,7 +5,7 @@ stage: draft
 category: meta
 author: Christopher Goes <cwgoes@tendermint.com>
 created: 2019-02-12
-modified: 2019-03-04
+modified: 2019-04-11
 ---
 
 ## What is an ICS?
@@ -43,11 +43,7 @@ An ICS header contains metadata relevant to the ICS.
 
 `title` - ICS title (keep it short & sweet)
 
-`stage` - Current ICS stage, one of the following:
-- `proposal` - A standard in the "proposal" stage
-- `draft` - A standard in the "draft" stage
-- `candidate` - A standard in the "candidate" stage
-- `finalized` - A standard in the "finalized" stage
+`stage` - Current ICS stage, see [PROCESS.md](../../PROCESS.md) for the list of possible stages.
 
 See [README.md](../../README.md) for a description of the ICS acceptance stages.
 
@@ -90,6 +86,7 @@ required references, and technical details where appropriate.
 The specification may have any or all of the following sub-components, as appropriate to the particular ICS. Included sub-components should be listed in the order specified here.
 
 - *Motivation* - A rationale for the existence of the proposed feature, or the proposed changes to an existing feature.
+- *Definitions* - A list of new terms or concepts utilized in this ICS or required to understand this ICS. Any terms not defined in the top-level "docs" folder must be defined here.
 - *Desired Properties* - A list of the desired properties or characteristics of the protocol or feature specified, and expected effects or failures when the properties are violated.
 - *Technical Specification* - All technical details of the proposed protocol including syntax, semantics, sub-protocols, data structures, algorithms, and pseudocode as appropriate.
     The technical specification should be detailed enough such that separate correct implementations of the specification without knowledge of each other are compatible.
@@ -120,26 +117,42 @@ For a GitHub-flavored Markdown cheat sheet, see [here](https://github.com/adam-p
 
 ICS specifications should be written in Simple English, avoiding obscure terminology and unnecessary jargon. For excellent examples of Simple English, please see the [Simple English Wikipedia](https://simple.wikipedia.org/wiki/Main_Page).
 
+The key words "MUST", "MUST NOT", "REQUIRED", "SHALL", "SHALL NOT", "SHOULD", "SHOULD NOT", "RECOMMENDED", "MAY", and "OPTIONAL" in specifications are to be interpreted as described in [RFC 2119](https://tools.ietf.org/html/rfc2119).
+
 ### Pseudocode
 
 Pseudocode in specifications should be language-agnostic and formatted in a simple imperative standard, with line numbers, variables, simple conditional blocks, for loops, and
-English fragments where necessary to explain further functionality such as scheduling timeouts. If desired, images can be generated with LaTeX and rendered in Markdown - if this
-is done, LaTeX source code should be included.
+English fragments where necessary to explain further functionality such as scheduling timeouts. LaTeX images should be avoided because they are difficult to review in diff form.
 
-Example pseudocode:
+Pseudocode for structs should use Golang syntax highlighting.
 
+Example pseudocode struct:
+
+```golang
+type Connection struct {
+  ConnectionState state
+  Version version
+  Identifier counterpartyIdentifier
+  RootOfTrust rootOfTrust
+}
 ```
-11: FunctionStartRound(round):
-12:   round_p ← round
-13:   step_p ← propose
-14:   if proposer(h_p, round_p) = p then
-15:     if validValue_p /= nil then
-16:       proposal ← validValue_p
-17:     else
-18:       proposal ← getValue()
-19:     broadcast <PROPOSAL, h_p, round_p, proposal, validRound>
-20:   else
-21:     scheduleOnTimeoutPropose(h_p, round_p) to be executed after timeoutPropose(round_p)
+
+Pseudocode for algorithms should use CoffeeScript syntax highlighting.
+
+Example pseudocode algorithm:
+
+```coffeescript
+function startRound(round)
+  round_p = round
+  step_p = PROPOSE
+  if proposer(h_p, round_p) == p then
+    if validValue_p /= nil then
+      proposal = validValue_p
+    else
+      proposal = getValue()
+    broadcast( {PROPOSAL, h_p, round_p, proposal, validRound} )
+  else
+    schedule(onTimeoutPropose(h_p, round_p), timeoutPropose(round_p))
 ```
 
 ## History
@@ -150,6 +163,7 @@ the ICS process. Please direct all comments to the ICS repository maintainers.
 
 March 4th, 2019: Initial ICS 1 draft finished and submitted as a PR
 March 7th, 2019: ICS 1 draft merged
+April 11th, 2019: Updates to pseudocode formatting, add definitions subsection
 
 ## Copyright
 
