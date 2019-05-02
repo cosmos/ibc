@@ -76,11 +76,19 @@ IBC can be used to pass messages & data between contracts with logic split acros
 
 ### Cross-chain contract calls
 
+IBC can be used to execute arbitrary contract-to-contract calls between separate smart contract platform chains, with calldata and return data.
+
 #### Representations
+
+Contracts: Ethereum `EVM`, `WASM` (various), Tezos `Michelson`, Agoric `Jessie`.
+
+Calldata: Ethereum `ABI`, generic serialization formats such as RLP, Protobuf, or JSON.
 
 #### Implementation
 
-Serialize call, return result, like a channel.
+A contract on one zone which intends to call a contract on another zone must serialize the calldata and address of the destination contract in an IBC packet, which can be relayed through an IBC connection to the IBC handler on the destination chain, which will call the specified contract, executing any associated logic, and return the result of the call (if applicable) back in a second IBC packet to the calling contract, which will need to handle it asynchronously.
+
+Implementing chains may elect to provide a "channel" object to contract developers, with a send end, receive end, configurable buffer size, etc. much like channels in multiprocess concurrent programming in languages such as Go or Haskell.
 
 #### Invariants
 
@@ -88,7 +96,15 @@ Contract-dependent.
 
 ### Decentralized data oracles
 
+#### Representations
+
+#### Implementation
+
 An oracle with an arbitrary authentication procedure (such as a multi-signature) can send on a unidirectional connection directly.
+
+#### Invariants
+
+Various, generally that data commited over the connection was authenticated in some specific way by the sender.
 
 ### Cross-chain multisignature accounts
 
@@ -96,9 +112,19 @@ An account holding assets on one chain can require signatures relayed over IBC f
 
 ### Cross-chain fee payment
 
-An account holding assets on one chain can be used to pay fees on another chain by sending tokens to an account on the first chain controlled by the validator set of the second chain. The funds can be periodically send back over the IBC connection from the first chain to the second chain for fee disbursement.
+#### Represenations
 
-### Involved zones
+Same as "fungible tokens" as above.
+
+#### Implementation
+
+An account holding assets on one chain can be used to pay fees on another chain by sending tokens to an account on the first chain controlled by the validator set of the second chain and including a proof that tokens were so sent (on the first chain) in the transaction submitted to the second chain.
+
+The funds can be periodically send back over the IBC connection from the first chain to the second chain for fee disbursement.
+
+#### Invariants
+
+Correct fees paid on one of two chains but not both.
 
 ## Interchain collateralization
 
@@ -106,6 +132,22 @@ A subset of the validator set on one chain can elect to validate another chain a
 
 ## Sharding
 
+IBC can be used to migrate smart contracts & data between blockchains with mutually comprehensible virtual machines & data formats, respectively.
+
 ### Code migration
 
-IBC can be used to migrate smart contracts between blockchains with mutually comprehensible virtual machines.
+#### Representations
+
+Same as "cross-chain contract calls" above, with the additional requirement that all involved code be serializable and mutually comprehensible (executable) by the involved chains.
+
+#### Implementation
+
+A routing system on top of core IBC will be required to correctly route cross-chain contract calls between contracts which may frequently switch chains.
+
+#### Invariants
+
+Semantics of code preserved, namespacing preserved by some sort of routing system.
+
+### Data migration
+
+IBC can be used to implement an arbitrary-depth multi-chain "cache" system where storage cost can be traded for access cost.
