@@ -44,7 +44,7 @@ Variable interpolation, denoted by curly braces, MAY be used as shorthand to def
 
 ### Key/value Store
 
-Host chains MUST provide a simple key-value store interface, with two functions which behave in the way you would expect:
+Host chains MUST provide a simple key-value store interface, with two functions which behave in the standard way:
 
 ```coffeescript
 function get(Key key) -> Value | null
