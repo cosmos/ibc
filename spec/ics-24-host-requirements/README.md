@@ -66,6 +66,14 @@ function getRootOfTrust() -> RootOfTrust
 
 `getRootOfTrust` MUST return the current root-of-trust for the consensus algorithm of the host chain.
 
+### Module system
+
+Host chains MUST implement a module system, where each module has a unique serializable identifier, which:
+- can be read by the IBC handler in an authenticated manner when the module calls the IBC handler, e.g. to send a packet
+- can be used by the IBC handler to look up a module, which it can then call into (e.g. to handle a received packet addressed to that module)
+
+Modules which wish to make use of particular IBC features MAY implement certain handler functions, e.g. to add additional logic to a channel handshake with an associated module on another chain.
+
 ### Datagram Submission
 
 Host chains MAY define a unique `submitDatagram` function to submit [datagrams](../../docs/ibc/2_IBC_TERMINOLOGY.md) directly:
