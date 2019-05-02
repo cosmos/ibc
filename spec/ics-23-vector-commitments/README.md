@@ -10,7 +10,7 @@ modified: 2019-04-25
 
 # Synopsis
 
-A *vector commitment* is a construction that produces a succinct, binding commitment to an indexed vector of elements and short membership and/or non-membership proofs for any indicies & elements in the vector.
+A *vector commitment* is a construction that produces a succinct, binding commitment to an indexed vector of elements and short membership and/or non-membership proofs for any indices & elements in the vector.
 This specification enumerates the functions and properties required of commitment constructions used in the IBC protocol. In particular, commitments utilized in IBC are required to be *positionally binding*: they must be able to prove existence or
 nonexistence of values at specific positions (indices).
 
@@ -113,7 +113,7 @@ createMembershipProof(CommitmentState state, Key key, Value value) -> Commitment
 The `createNonMembershipProof` function generates a proof that a key has not been set to any value in an commitment.
 
 ```coffeescript
-createNonMembersipProof(CommitmentState state, Key key) -> CommitmentProof
+createNonMembershipProof(CommitmentState state, Key key) -> CommitmentProof
 ```
 
 #### Proof verification
@@ -155,7 +155,7 @@ batchVerifyMembership(root, proof, items) ==
 ```
 
 ```coffeescript
-batchVerifyMembership(root, proof, keys) ==
+batchVerifyNonMembership(root, proof, keys) ==
   verifyNonMembership(root, proof, keys[0]) &&
   verifyNonMembership(root, proof, keys[1]) && ...
 ```
@@ -211,7 +211,7 @@ For any key `key` set in the commitment `acc`, there is one `value` for which:
 ```coffeescript
 root = getRoot(acc)
 proof = createMembershipProof(acc, key, value)
-verifyMembership(root, proof, key, value) == true
+P(verifyMembership(root, proof, key, value) == false) negligible in λ
 ```
 
 For all other values `otherValue` where `value /= otherValue`, for all values of `proof`,
@@ -240,7 +240,7 @@ Coming soon.
 
 Security definitions are mostly sourced from these papers (and simplified somewhat):
 - [Vector Commitments and their Applications](https://eprint.iacr.org/2011/495.pdf)
-- [commitments with Applications to Anonymity-Preserving Revocation](https://eprint.iacr.org/2017/043.pdf)
+- [Commitments with Applications to Anonymity-Preserving Revocation](https://eprint.iacr.org/2017/043.pdf)
 - [Batching Techniques for Commitments with Applications to IOPs and Stateless Blockchains](https://eprint.iacr.org/2018/1188.pdf)
 
 Thanks to Dev Ojha for extensive comments on this specification.
