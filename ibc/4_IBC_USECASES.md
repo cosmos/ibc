@@ -62,12 +62,22 @@ IBC can be used to implement cross-chain contract calls.
 
 ### Decentralized data oracles
 
+An oracle with an arbitrary authentication procedure (such as a multi-signature) can send on a unidirectional connection directly.
+
 ### Cross-chain multisignature accounts
+
+An account holding assets on one chain can require signatures relayed over IBC from any number of other chains.
 
 ### Cross-chain fee payment
 
+An account holding assets on one chain can be used to pay fees on another chain by sending tokens to an account on the first chain controlled by the validator set of the second chain. The funds can be periodically send back over the IBC connection from the first chain to the second chain for fee disbursement.
+
 ## Interchain Collateralization
+
+A subset of the validator set on one chain can elect to validate another chain and be held accountable for equivocation faults commited on that chain submitted over an IBC connection, and the second chain can delegate its' validator update logic to the first chain through the same IBC connection.
 
 ## Sharding
 
 ### Code Migration
+
+IBC can be used to migrate smart contracts between blockchains with mutually comprehensible virtual machines.
