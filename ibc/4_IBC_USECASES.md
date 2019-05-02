@@ -64,11 +64,11 @@ A "shielded payments" zone, such as the Zcash blockchain (pending [UITs](https:/
 
 #### Decentralized exchange
 
-A "decentralized exchange" zone may allow incoming & outgoing fungible and/or nonfungible token transfers through IBC.
+A "decentralized exchange" zone may allow incoming & outgoing fungible and/or nonfungible token transfers through IBC, and allow tokens stored on that zone to be traded with each other through a decentralized exchange protocol in the style of Uniswap or 0x (or future such protocols).
 
 #### Decentralized finance
 
-A "decentralized finance" zone, such as the Ethereum blockchain, may allow incoming & outgoing fungible and/or nonfungible token transfers though IBC.
+A "decentralized finance" zone, such as the Ethereum blockchain, may allow incoming & outgoing fungible and/or nonfungible token transfers though IBC, and allow tokens stored on that zone to interact with a variety of decentralized financial products: synthetic stablecoins, collateralized loans, liquidity pools, etc.
 
 ## Multichain contracts
 
@@ -94,22 +94,6 @@ Implementing chains may elect to provide a "channel" object to contract develope
 
 Contract-dependent.
 
-### Decentralized data oracles
-
-#### Representations
-
-#### Implementation
-
-An oracle with an arbitrary authentication procedure (such as a multi-signature) can send on a unidirectional connection directly.
-
-#### Invariants
-
-Various, generally that data commited over the connection was authenticated in some specific way by the sender.
-
-### Cross-chain multisignature accounts
-
-An account holding assets on one chain can require signatures relayed over IBC from any number of other chains.
-
 ### Cross-chain fee payment
 
 #### Represenations
@@ -126,9 +110,23 @@ The funds can be periodically send back over the IBC connection from the first c
 
 Correct fees paid on one of two chains but not both.
 
-## Interchain collateralization
+### Interchain collateralization
 
 A subset of the validator set on one chain can elect to validate another chain and be held accountable for equivocation faults commited on that chain submitted over an IBC connection, and the second chain can delegate its' validator update logic to the first chain through the same IBC connection.
+
+#### Representations
+
+ABCI `Evidence` and `ValidatorUpdate`.
+
+#### Implementation
+
+`ValidatorUpdate`s for a participating subset of the primary (collateralizing) chain's validator set are relayed in IBC packets to the collaralized chain, which uses them directly to set its own validator set.
+
+`Evidence` of any equivocations is relayed back from the collateralized chain to the primary chain so that the equivocating validator(s) can be slashed.
+
+#### Invariants
+
+Validators which commit an equivocation fault are slashable on at least one chain, and possibly the validator set of a collateralized chain is bound to the validator set of a primary (collateralizing) chain.
 
 ## Sharding
 
@@ -142,6 +140,8 @@ Same as "cross-chain contract calls" above, with the additional requirement that
 
 #### Implementation
 
+Participating chains migrate contracts, which they can all execute, between themselves according to a known balancing ("sharding") algorithm, perhaps designed to equalize load or acheive efficient locality for frequently-interacting contracts.
+
 A routing system on top of core IBC will be required to correctly route cross-chain contract calls between contracts which may frequently switch chains.
 
 #### Invariants
@@ -151,3 +151,15 @@ Semantics of code preserved, namespacing preserved by some sort of routing syste
 ### Data migration
 
 IBC can be used to implement an arbitrary-depth multi-chain "cache" system where storage cost can be traded for access cost.
+
+#### Representations
+
+Generic serialization formats, such as Amino, RLP, Protobuf, JSON.
+
+#### Implementation
+
+An arbitrary-depth IBC-connection-linked-list of chains, with the first chain optimized for compute and later chains optimized for cheaper storage, can implement a hierarchical cache, where data unused for a period of time on any chain is migrated to the next chain in the list. When data is necessary (e.g. for a contract call or storage access), if it not stored on the chain looking it up, it must be relayed over an IBC packet back to that chain (which can then re-cache it for some period).
+
+#### Invariants
+
+All data can be accessed on the primary (compute) chain when requested, with a known bound of necessary IBC hops.
