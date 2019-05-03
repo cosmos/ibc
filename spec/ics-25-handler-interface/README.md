@@ -102,15 +102,6 @@ type ConnectionKind enum {
 }
 ```
 
-`ConnectionOptions` contains all the parameter choices required to create a new connection.
-
-```golang
-type ConnectionOptions struct {
-  string          clientIdentifier
-  ConnectionKind  kind
-}
-```
-
 `ConnectionInfo` contains metadata about & state of an existing connection.
 
 ```golang
@@ -120,10 +111,28 @@ type ConnectionInfo struct {
 }
 ```
 
-`createConnection` tries to create a new connection with the provided options, failing if the client is not found or the options are invalid, returning a unique allocated identifier if successful.
+`initConnection` tries to create a new connection with the provided options, failing if the client is not found or the options are invalid.
 
 ```coffeescript
-function createConnection(ConnectionOptions options) -> Maybe<string>
+function initConnection(identifier, desiredVersion, desiredCounterpartyIdentifier, lightClientIdentifier) -> Maybe<err>
+```
+
+`tryConnection` tries to initialize a connection based on an initialization attempt on another chain (part one of the three-way connection handshake).
+
+```coffeescript
+function tryConnection(desiredIdentifier, counterpartyIdentifier, desiredVersion, counterpartyLightClientIdentifier, lightClientIdentifier, proofInit) -> Maybe<err>
+```
+
+`ackConnection` acknowledges a connection in progress on another chain (part two of the three-way connection handshake).
+
+```coffeescript
+function ackConnection(identifier, agreedVersion, proofTry)
+```
+
+`confirmConnection` finalizes a connection (part three of the three-way connection handshake).
+
+```coffeescript
+function confirmConnection(identifier, proofAck)
 ```
 
 `queryConnection` queries an existing connection by known identifier, returning the associated metadata if found.
@@ -132,13 +141,31 @@ function createConnection(ConnectionOptions options) -> Maybe<string>
 function queryConnection(string id) -> Maybe<ConnectionInfo>
 ```
 
-`closeConnection` initiates the graceful connection closing process as defined in ICS 3.
+`initCloseConnection` initiates the graceful connection closing process. It will fail if there are any open channels using the connection.
 
 ```coffeescript
-function closeConnection(string id) -> Maybe<Err>
+function initCloseConnection(string id) -> Maybe<Err>
 ```
 
-Implementations of `createConnection`, `queryConnection`, and `closeConnection` are defined in ICS 3.
+`tryCloseConnection` continues the graceful connection closing process. It will fail if there are any open channels using the connection.
+
+```coffeescript
+function tryCloseConnection(identifier, proofInit) -> Maybe<Err>
+```
+
+`ackCloseConnection` finalizes the graceful connection closing process.
+
+```coffeescript
+function ackCloseConnection(identifier, proofTry) -> Maybe<Err>
+```
+
+`equivocationCloseConnection` force-closes a connection upon discovery of an equivocation. The equivocation must first be submitted to the associated client.
+
+```coffeescript
+function equivocationCloseConnection(identifier) -> Maybe<Err>
+```
+
+Implementations of `initConnection`, `tryConnection`, `ackConnection`, `confirmConnection`, `queryConnection`, `initCloseConnection`, `tryCloseConnection`, `ackCloseConnection`, and `equivocationCloseConnection` are defined in ICS 3.
 
 ### Channels
 
