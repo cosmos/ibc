@@ -6,6 +6,8 @@
 
 **For definitions of terms used in IBC specifications, see [here](./3_IBC_TERMINOLOGY.md).**
 
+**For a set of example use cases, see [here](./4_IBC_USECASES.md).**
+
 This document outlines the architecture of the authentication, transport, and ordering layers of the inter-blockchain communication (IBC) protocol stack. This document does not describe specific protocol details — those are contained in individual ICSs.
 
 > Note: *Ledger*, *chain*, and *blockchain* are used interchangeably throughout this document, in accordance with their colloquial usage.
@@ -40,7 +42,7 @@ The *interblockchain communication protocol* takes an orthogonal approach to a d
 
 To facilitate this heterogeneous interoperation, the interblockchain communication protocol takes a "bottom-up" approach, specifying the set of requirements, functions, and properties necessary to implement interoperation between two ledgers, and then specifying different ways in which multiple interoperating ledgers might be composed which preserve the requirements of higher-level protocols and occupy different points in the safety/speed tradeoff space. IBC thus presumes nothing about and requires nothing of the overall network topology, and of the implementing ledgers requires only that a known, minimal set of functions are available and properties fulfilled.
 
-IBC is an end-to-end, connection-oriented, stateful protocol for reliable, ordered, authenticated communication between modules on separate distributed ledgers. IBC implementations are expected to be co-resident with higher-level modules and protocols on the host ledger. Ledgers hosting IBC must provide a certain set of functions for consensus transcript verification and cryptographic accumulator proof generation, and IBC packet relayers (off-chain processes) are expected to have access to network protocols and physical datalinks as required to read the state of one ledger and submit data to another.
+IBC is an end-to-end, connection-oriented, stateful protocol for reliable, ordered, authenticated communication between modules on separate distributed ledgers. IBC implementations are expected to be co-resident with higher-level modules and protocols on the host ledger. Ledgers hosting IBC must provide a certain set of functions for consensus transcript verification and cryptographic commitment proof generation, and IBC packet relayers (off-chain processes) are expected to have access to network protocols and physical datalinks as required to read the state of one ledger and submit data to another.
 
 ## Scope
 
@@ -97,7 +99,7 @@ IBC does not require specific provision for computation-level flow control since
 
 ### Authentication
 
-All datagrams in IBC are authenticated: a block finalized by the consensus algorithm of the sending ledger must commit to the outgoing datagram via a cryptographic accumulator, and the receiving chain's IBC handler must verify both the consensus transcript and the cryptographic accumulator proof that the datagram was sent (and associated actions executed) before acting upon it.
+All datagrams in IBC are authenticated: a block finalized by the consensus algorithm of the sending ledger must commit to the outgoing datagram via a cryptographic commitment, and the receiving chain's IBC handler must verify both the consensus transcript and the cryptographic commitment proof that the datagram was sent (and associated actions executed) before acting upon it.
 
 ### Statefulness
 
