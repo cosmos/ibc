@@ -3,34 +3,39 @@ ics: 19
 title: Standard Queue
 stage: proposal
 category: ibc-misc
+requires: 23, 24
 author: Christopher Goes <cwgoes@tendermint.com>, Juwoon Yun <joon@tendermint.com>
 created: 2019-03-07
-modified: 2019-03-07
+modified: 2019-05-05
 ---
 
 ## Synopsis
 
-(high-level description of and rationale for specification)
+Queues are used to enforce and prove ordering of packets within IBC channels.
 
 ## Specification
 
-(main part of standard document - not all subsections are required)
-
 ### Motivation
 
-(rationale for existence of standard)
+- ordering things, proving that things were ordered
 
 ### Desired Properties
 
-(desired characteristics / properties of protocol, effects if properties are violated)
+- proofs of elements at positions in queue
+- proofs of current position in queue (e.g. things processed)
 
 ### Technical Specification
 
-(detailed technical specification: syntax, semantics, sub-protocols, algorithms, data structures, etc)
+- note specific key prefix for queue elements
+- note specific key prefix for queue position
+- note usage in commitment proofs
 
 To implement strict message ordering, we introduce an ordered *queue*. A queue can be conceptualized as a slice of an infinite array. Two numerical indices - `q_head` and `q_tail` - bound the slice, such that for every `index` where `q_head <= index < q_tail`, there is a queue element `q[index]`. Elements can be appended to the tail (end) and removed from the head (beginning). We introduce one further method, `advance`, to facilitate efficient queue cleanup.
 
 Each IBC-supporting blockchain must provide a queue abstraction with the following functionality:
+
+- do we actually need all of these functions?
+- also we should just provide implementation using `Get` / `Set`, this isn't a primitive that needs to be defined (yet)
 
 `init`
 
@@ -94,23 +99,23 @@ return q_tail
 
 ### Backwards Compatibility
 
-(discussion of compatibility or lack thereof with previous standards)
+Not applicable.
 
 ### Forwards Compatibility
 
-(discussion of compatibility or lack thereof with expected future standards)
+Channel versioning can upgrade the queue structure and keyspaces.
 
 ### Example Implementation
 
-(link to or description of concrete example implementation)
+Coming soon.
 
 ### Other Implementations
 
-(links to or descriptions of other implementations)
+Coming soon.
 
 ## History
 
-(changelog and notable inspirations / references)
+5 May 2019 - Draft submitted
 
 ## Copyright
 
