@@ -17,9 +17,10 @@ See [PROCESS.md](PROCESS.md) for a description of the standardization process.
 The subject of most initial interchain standards is the inter-blockchain communication protocol, "IBC".
 
 If you are diving in or planning to review specifications, the following are recommended reading:
-- [IBC Design Philosophy](./docs/ibc/1_IBC_DESIGN_PHILOSOPHY.md)
-- [IBC Terminology](./docs/ibc/2_IBC_TERMINOLOGY.md)
-- [IBC Architecture](./docs/ibc/3_IBC_ARCHITECTURE.md)
+- [IBC Architecture](./ibc/1_IBC_ARCHITECTURE.md)
+- [IBC Design Principles](./ibc/2_IBC_DESIGN_PRINCIPLES.md)
+- [IBC Terminology](./ibc/3_IBC_TERMINOLOGY.md)
+- [IBC Usecases](./ibc/4_IBC_USECASES.md)
 - [IBC specification progress tracking](https://github.com/cosmos/ics/issues/26)
 
 ## Interchain Standards

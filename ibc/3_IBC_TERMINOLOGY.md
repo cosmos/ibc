@@ -1,10 +1,12 @@
-# 2: IBC Terminology
+# 3: IBC Terminology
 
-> This is an overview of terms used in IBC specifications.
+**This is an overview of terms used in IBC specifications.**
 
-> For the design rationale behind the protocol, see [here](./1_IBC_DESIGN_RATIONALE.md).
+**For an architectural overview, see [here](./1_IBC_ARCHITECTURE.md).**
 
-> For an architectural overview, see [here](./3_IBC_ARCHITECTURE.md).
+**For a broad set of protocol design principles, see [here](./2_IBC_DESIGN_PRINCIPLES.md).**
+
+**For a set of example use cases, see [here](./4_IBC_USECASES.md).**
 
 This document provides definitions in plain English of key terms used throughout the IBC specification set.
 
@@ -14,9 +16,9 @@ This document provides definitions in plain English of key terms used throughout
 
 An *actor*, or a *user* (used interchangeably), is an entity interacting with the IBC protocol. An actor can be a human end-user, a module or smart contract running on a blockchain, or an off-chain relayer process capable of signing transactions.
 
-### Chain
+### Chain / Ledger
 
-A *chain*, or *ledger* (used interchangeably), is a distributed ledger (or "blockchain", although a strict chain of blocks may not be required) implementing part or all of the IBC specification as a component or module within its state machine.
+A *chain*, *blockchain*, or *ledger* (used interchangeably), is a distributed ledger (or "blockchain", although a strict chain of blocks may not be required) implementing part or all of the IBC specification as a component or module within its state machine.
 
 ### State Machine
 
@@ -28,7 +30,7 @@ A *consensus* algorithm is the protocol used by the set of processes operating a
 
 ### Consensus State
 
-The *consensus state*, or the *root-of-trust*, is the set of information about the state of a consensus algorithm required to verify proofs about the output of that consensus algorithm (e.g. accumulator roots in signed headers).
+The *consensus state*, or the *root-of-trust*, is the set of information about the state of a consensus algorithm required to verify proofs about the output of that consensus algorithm (e.g. commitment roots in signed headers).
 
 ### Header
 
@@ -38,9 +40,9 @@ A *header* is an update to the consensus state of a particular blockchain that c
 
 *Finality* is the guarantee provided by a consensus algorithm that a particular block will not be reverted, subject to certain assumptions about the behavior of the validator set. The IBC protocol requires finality.
 
-### Accumulator
+### Commitment 
 
-A cryptographic *accumulator* is a way to cheaply verify membership of a value in a set, where the set can be commited to with a short witness string. An *accumulator proof* refers to the proof structure which proves whether a particular value is or is not a member of a particular committed-to set.
+A cryptographic *commitment* is a way to cheaply verify membership of a key => value pair in a mapping, where the mapping can be committed to with a short witness string. An *vector commitment proof* refers to the proof structure which proves whether a particular key maps to a particular value in a committed-to set or not.
 
 ### Handler
 
@@ -56,7 +58,7 @@ A *connection* is a set of persistent data structures on two chains that contain
 
 ### Channel
 
-A *channel* is a set of persistent data structures on two chains that contain metadata to facilitate packet ordering, exactly-once delivery, and replay prevention. Packets sent through a channel change its internal state. Channels are associated with connections in a many-to-one relationship — a single connection can have any number of associated channnels, and all channels must have a single associated connection, which must be open in order for the channel to be used.
+A *channel* is a set of persistent data structures on two chains that contain metadata to facilitate packet ordering, exactly-once delivery, and replay prevention. Packets sent through a channel change its internal state. Channels are associated with connections in a many-to-one relationship — a single connection can have any number of associated channels, and all channels must have a single associated connection, which must be open in order for the channel to be used.
 
 ### Packet
 
@@ -78,7 +80,7 @@ To *trust* a blockchain or validator set means to expect that the validator set 
 
 ### Authentication
 
-*Authentication* refers to the protocols used to ensure that datagrams were in fact sent by a particular chain and associated state alterations committed by it. 
+*Authentication* refers to the protocols used to ensure that datagrams were in fact sent by a particular chain and associated state alterations committed by it.
 
 ### Equivocation
 
