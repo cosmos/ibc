@@ -3,30 +3,26 @@ ics: 11
 title: State Optimizations & Pruning
 stage: proposal
 category: ibc-core
-author: Christopher Goes <cwgoes@tendermint.com>, Juwoon Yun <joon@tendermint.com>
+author: Christopher Goes <cwgoes@tendermint.com>
 created: 2019-03-07
-modified: 2019-03-07
+modified: 2019-05-05
 ---
 
 ## Synopsis
 
-(high-level description of and rationale for specification)
+State is expensive, and we should avoid using it unless absolutely necessary.
 
 ## Specification
 
-(main part of standard document - not all subsections are required)
-
 ### Motivation
 
-(rationale for existence of standard)
+Cleanup the state.
 
 ### Desired Properties
 
-(desired characteristics / properties of protocol, effects if properties are violated)
+No state is stored which will never be required.
 
 ### Technical Specification
-
-(detailed technical specification: syntax, semantics, sub-protocols, algorithms, data structures, etc)
 
 While we clean up the _send queue_ upon getting a receipt, if left to run indefinitely, the _receipt queues_ could grow without limit and create a major storage cost for the chains. However, we must not delete receipts until they have been proven to be processed by the sending chain, or we lose important information and sacrifice reliability.
 
@@ -56,23 +52,23 @@ This allows us to invoke the `cleanup` function to resolve all outstanding messa
 
 ### Backwards Compatibility
 
-(discussion of compatibility or lack thereof with previous standards)
+Not applicable.
 
 ### Forwards Compatibility
 
-(discussion of compatibility or lack thereof with expected future standards)
+Not applicable, does not affect state on other chain.
 
 ### Example Implementation
 
-(link to or description of concrete example implementation)
+Coming soon.
 
 ### Other Implementations
 
-(links to or descriptions of other implementations)
+Coming soon.
 
 ## History
 
-(changelog and notable inspirations / references)
+May 5 2019 - Draft submitted
 
 ## Copyright
 
