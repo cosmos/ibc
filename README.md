@@ -31,11 +31,15 @@ All standards in the "draft" stage are listed here in order of their ICS numbers
 
 | Interchain Standard Number   | Standard Title             | Stage |
 | ---------------------------- | -------------------------- | ----- |
-| [1](spec/ics-1-ics-standard) | ICS Specification Standard  | Draft |
+| [1](spec/ics-1-ics-standard) | ICS Specification Standard | Draft |
 
 ### IBC (Core)
 
 | Interchain Standard Number                          | Standard Title                     | Stage |
 | --------------------------------------------------- | ---------------------------------- | ----- |
+| [2](spec/ics-2-consensus-verification)              | Consensus Verification             | Draft |
 | [3](spec/ics-3-bidirectional-connection-semantics)  | Bidirectional Connection Semantics | Draft |
+| [4](spec/ics-4-channel-semantics)                   | Channel Semantics                  | Draft |
+| [5](spec/ics-5-packet-semantics)                    | Packet Semantics                   | Draft |
 | [18](spec/ics-18-relayer-algorithms)                | Relayer Algorithms                 | Draft |
+| [23](spec/ics-23-vector-commitments)                | Vector Commitments                 | Draft |
