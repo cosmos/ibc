@@ -348,6 +348,8 @@ Coming soon.
 
 ## History
 
+Parts of this document were inspired by the [previous IBC specification](https://github.com/cosmos/cosmos-sdk/tree/master/docs/spec/ibc).
+
 29 March 2019 - Initial draft version submitted
 30 April 2019 - Draft finalized
 
