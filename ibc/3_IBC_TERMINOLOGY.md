@@ -30,7 +30,7 @@ A *consensus* algorithm is the protocol used by the set of processes operating a
 
 ### Consensus State
 
-The *consensus state*, or the *root-of-trust*, is the set of information about the state of a consensus algorithm required to verify proofs about the output of that consensus algorithm (e.g. accumulator roots in signed headers).
+The *consensus state*, or the *root-of-trust*, is the set of information about the state of a consensus algorithm required to verify proofs about the output of that consensus algorithm (e.g. commitment roots in signed headers).
 
 ### Header
 
@@ -40,9 +40,9 @@ A *header* is an update to the consensus state of a particular blockchain that c
 
 *Finality* is the guarantee provided by a consensus algorithm that a particular block will not be reverted, subject to certain assumptions about the behavior of the validator set. The IBC protocol requires finality.
 
-### Accumulator
+### Commitment 
 
-A cryptographic *accumulator* is a way to cheaply verify membership of a value in a set, where the set can be committed to with a short witness string. An *accumulator proof* refers to the proof structure which proves whether a particular value is or is not a member of a particular committed-to set.
+A cryptographic *commitment* is a way to cheaply verify membership of a key => value pair in a mapping, where the mapping can be committed to with a short witness string. An *vector commitment proof* refers to the proof structure which proves whether a particular key maps to a particular value in a committed-to set or not.
 
 ### Handler
 
