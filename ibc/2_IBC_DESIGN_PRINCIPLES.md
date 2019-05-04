@@ -6,6 +6,8 @@
 
 **For definitions of terms used in IBC specifications, see [here](./3_IBC_TERMINOLOGY.md).**
 
+**For a set of example use cases, see [here](./4_IBC_USECASES.md).**
+
 The design space of "interblockchain communication protocols" is wide, and the term itself has become a bit too all-encompassing. The "Interblockchain Communication Protocol" (IBC) is a very particular point in that design space, chosen to provide specific versatility, locality, modularity, and efficiency properties for the expected interchain ecosystem of interoperable blockchains. This document outlines the "why" of IBC and enumerates the primary high-level design goals.
 
 ## Versatility
@@ -14,7 +16,7 @@ IBC is designed to be a *versatile* protocol. The protocol supports *heterogeneo
 
 ### Heterogeneity
 
-IBC can be implemented by any consensus algorithm and state machine with a basic set of requirements (fast finality & accumulator proofs). The protocol handles data authentication, transport, and ordering — common requirements of any multi-chain application — but is agnostic to the semantics of the application itself. Heterogeneous chains connected over IBC must understand a compatible application-layer "interface" (such as for transferring tokens), but once across the IBC interface handler, the state machines can support arbitrary bespoke functionality (such as shielded transactions).
+IBC can be implemented by any consensus algorithm and state machine with a basic set of requirements (fast finality & succinct state commitments). The protocol handles data authentication, transport, and ordering — common requirements of any multi-chain application — but is agnostic to the semantics of the application itself. Heterogeneous chains connected over IBC must understand a compatible application-layer "interface" (such as for transferring tokens), but once across the IBC interface handler, the state machines can support arbitrary bespoke functionality (such as shielded transactions).
 
 ### Composability
 
