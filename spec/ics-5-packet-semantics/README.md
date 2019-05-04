@@ -3,32 +3,30 @@ ics: 5
 title: Packet Semantics & Handling
 stage: proposal
 category: ibc-core
+requires: 3, 4, 19
 author: Christopher Goes <cwgoes@tendermint.com>
 created: 2019-03-07
-modified: 2019-05-02
+modified: 2019-05-05
 ---
 
 # Synopsis
 
-(high-level description of and rationale for specification)
+Packets contain the data transmitted between modules.
 
 # Specification
 
-(main part of standard document - not all subsections are required)
-
 ## Motivation
 
-(rationale for existence of standard)
+Transmit packets between modules.
 
 ## Definitions
 
 ## Desired Properties
 
-(desired characteristics / properties of protocol, effects if properties are violated)
+- ordering (if selected)
+- exactly-once delivery
 
 ## Technical Specification
-
-(detailed technical specification: syntax, semantics, sub-protocols, algorithms, data structures, etc)
 
 ### Definitions
 
@@ -171,23 +169,23 @@ Additionally, if timestamp-based timeouts are used instead of height-based timeo
 
 ## Backwards Compatibility
 
-(discussion of compatibility or lack thereof with previous standards)
+Not applicable.
 
 ## Forwards Compatibility
 
-(discussion of compatibility or lack thereof with expected future standards)
+Can be versioned at the channel level.
 
 ## Example Implementation
 
-(link to or description of concrete example implementation)
+Coming soon.
 
 ## Other Implementations
 
-(links to or descriptions of other implementations)
+Coming soon.
 
 # History
 
-(changelog and notable inspirations / references)
+5 May 2019 - Draft submitted
 
 # Copyright
 
