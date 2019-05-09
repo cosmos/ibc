@@ -30,7 +30,7 @@ The core IBC protocol provides *authorization* and *ordering* semantics for pack
 Prior to connection establishment:
 
 - No further IBC subprotocols should operate, since cross-chain substates cannot be verified.
-- The initiating actor (who creates the connection) must be able to specify a root-of-trust for the chain to connect to and a root of trust for the connecting chain (implicitly, e.g. by sending the transaction).
+- The initiating actor (who creates the connection) must be able to specify an initial consensus state for the chain to connect to and an initial consensus state for the connecting chain (implicitly, e.g. by sending the transaction).
 
 #### During Handshake
 
@@ -43,7 +43,7 @@ Once a negotiation handshake has begun:
 
 Once a negotiation handshake has completed:
 
-- The created connection objects on both chains contain the roots of trust specified by the initiating actor.
+- The created connection objects on both chains contain the consensus states specified by the initiating actor.
 - No other connection objects can be maliciously created on other chains by replaying datagrams.
 - The connection should be able to be voluntarily & cleanly closed by either blockchain.
 - The connection should be able to be immediately closed upon discovery of a consensus equivocation.
@@ -52,7 +52,7 @@ Once a negotiation handshake has completed:
 
 #### Definitions
 
-`RootOfTrust`, `Header, and `updateRootOfTrust` are as defined in [ICS 2: Consensus Requirements](../spec/ics-2-consensus-requirements).
+`ConsensusState`, `Header, and `updateConsensusState` are as defined in [ICS 2: Consensus Requirements](../spec/ics-2-consensus-requirements).
 
 `AccumulatorProof` and `verify` are as defined in [ICS 23: Cryptographic Accumulator](../spec/ics-23-cryptographic-accumulator).
 
@@ -102,7 +102,7 @@ This ICS defines four subprotocols: opening handshake, header tracking, closing 
 
 ##### Opening Handshake
 
-The opening handshake subprotocol serves to initialize roots of trust for two chains on each other and negotiate an agreeable connection version.
+The opening handshake subprotocol serves to initialize consensus states for two chains on each other and negotiate an agreeable connection version.
 
 The opening handshake defines four datagrams: *ConnOpenInit*, *ConnOpenTry*, *ConnOpenAck*, and *ConnOpenConfirm*.
 
@@ -116,7 +116,7 @@ A correct protocol execution flows as follows:
 | Relayer   | `ConnOpenConfirm` | B     |
 
 At the end of an opening handshake between two chains implementing the subprotocol, the following properties hold:
-- Each chain has each other's correct root-of-trust as originally specified by the initiating actor.
+- Each chain has each other's correct consensus state as originally specified by the initiating actor.
 - The chains have agreed to a shared connection version.
 - Each chain has knowledge of and has agreed to its identifier on the other chain.
 
@@ -165,17 +165,17 @@ type ConnOpenTry struct {
 
 ```coffeescript
 function handleConnOpenTry(desiredIdentifier, counterpartyIdentifier, desiredVersion, counterpartyLightClientIdentifier, lightClientIdentifier, proofInit)
-  rootOfTrust = Get(lightClientIdentifier)
-  expectedRootOfTrust = getRootOfTrust()
-  assert(verify(rootOfTrust, proofInit,
+  consensusState = Get(lightClientIdentifier)
+  expectedConsensusState = getConsensusState()
+  assert(verify(consensusState, proofInit,
     (counterpartyIdentifier, (INIT, desiredVersion, desiredIdentifier, counterpartyLightClientIdentifier))))
-  assert(verify(rootOfTrust, proofInit,
-    (counterpartyLightClientIdentifier, expectedRootOfTrust)))
+  assert(verify(consensusState, proofInit,
+    (counterpartyLightClientIdentifier, expectedConsensusState)))
   assert(get(desiredIdentifier) == nil)
   identifier = desiredIdentifier
   version = chooseVersion(desiredVersion)
   state = OPENTRY
-  Set(identifier, (state, version, counterpartyIdentifier, rootOfTrust))
+  Set(identifier, (state, version, counterpartyIdentifier, consensusState))
 ```
 
 *ConnOpenAck* relays acceptance of a connection open attempt from chain B back to chain A.
@@ -195,12 +195,12 @@ type ConnOpenAck struct {
 function handleConnOpenAck(identifier, agreedVersion, proofTry)
   (state, desiredVersion, desiredCounterpartyIdentifier, lightClientIdentifier) = Get(identifier)
   assert(state == INIT)
-  rootOfTrust = Get(lightClientIdentifier)
-  expectedRootOfTrust = getRootOfTrust()
-  assert(verify(rootOfTrust, proofTry,
+  consensusState = Get(lightClientIdentifier)
+  expectedConsensusState = getConsensusState()
+  assert(verify(consensusState, proofTry,
     (desiredCounterpartyIdentifier, (OPENTRY, agreedVersion, identifier, counterpartyLightClientIdentifier))))
-  assert(verify(rootOfTrust, proofTry,
-    (counterpartyLightClientIdentifier, expectedRootOfTrust)))
+  assert(verify(consensusState, proofTry,
+    (counterpartyLightClientIdentifier, expectedConsensusState)))
   assert(checkVersion(desiredVersion, agreedVersion))
   state = OPEN
   Set(identifier, (state, agreedVersion, desiredCounterpartyIdentifier, lightClientIdentifier))
@@ -221,12 +221,12 @@ type ConnOpenConfirm struct {
 function handleConnOpenConfirm(identifier, proofAck)
   (state, version, counterpartyIdentifier, lightClientIdentifier) = Get(identifier)
   assert(state == OPENTRY)
-  rootOfTrust = Get(lightClientIdentifier)
-  expectedRootOfTrust = getRootOfTrust()
-  assert(verify(rootOfTrust, proofAck,
+  consensusState = Get(lightClientIdentifier)
+  expectedConsensusState = getConsensusState()
+  assert(verify(consensusState, proofAck,
     (counterpartyIdentifier, (OPEN, version, identifier, counterpartyLightClientIdentifier))))
   state = OPEN
-  Set(identifier, (state, version, counterpartyIdentifier, rootOfTrust))
+  Set(identifier, (state, version, counterpartyIdentifier, consensusState))
 ```
 
 ##### Header Tracking
@@ -260,11 +260,11 @@ type ConnCloseInit struct {
 
 ```coffeescript
 function handleConnCloseInit(identifier, identifierCounterparty)
-  (state, version, counterpartyIdentifier, rootOfTrust) = Get(identifier)
+  (state, version, counterpartyIdentifier, consensusState) = Get(identifier)
   assert(state == OPEN)
   assert(identifierCounterparty == counterpartyIdentifier)
   state = TRYCLOSE
-  Set(identifier, (state, version, counterpartyIdentifier, rootOfTrust))
+  Set(identifier, (state, version, counterpartyIdentifier, consensusState))
 ```
 
 *ConnCloseTry* relays the intent to close a connection from chain A to chain B.
@@ -279,12 +279,12 @@ type ConnCloseTry struct {
 
 ```coffeescript
 function handleConnCloseTry(identifier, identifierCounterparty, proofInit)
-  (state, version, counterpartyIdentifier, rootOfTrust) = Get(identifier)
+  (state, version, counterpartyIdentifier, consensusState) = Get(identifier)
   assert(state == OPEN)
   assert(identifierCounterparty == counterpartyIdentifier)
-  assert(verify(roofOfTrust, proofInit, (counterpartyIdentifier, TRYCLOSE)))
+  assert(verify(consensusState, proofInit, (counterpartyIdentifier, TRYCLOSE)))
   state = CLOSED
-  Set(identifier, (state, version, counterpartyIdentifier, rootOfTrust))
+  Set(identifier, (state, version, counterpartyIdentifier, consensusState))
 ```
 
 *ConnCloseAck* acknowledges a connection closure on chain B.
@@ -298,11 +298,11 @@ type ConnCloseAck struct {
 
 ```coffeescript
 function handleConnCloseAck(identifier, proofTry)
-  (state, version, counterpartyIdentifier, rootOfTrust) = Get(identifier)
+  (state, version, counterpartyIdentifier, consensusState) = Get(identifier)
   assert(state == TRYCLOSE)
-  assert(verify(rootOfTrust, proofTry, (counterpartyIdentifier, CLOSED)))
+  assert(verify(consensusState, proofTry, (counterpartyIdentifier, CLOSED)))
   state = CLOSED
-  Set(identifier, (state, version, counterpartyIdentifier, rootOfTrust))
+  Set(identifier, (state, version, counterpartyIdentifier, consensusState))
 ```
 
 ##### Closing by Equivocation
@@ -321,11 +321,11 @@ type ConnCloseEquivocation struct {
 
 ```coffeescript
 function handleConnCloseEquivocation(identifier, firstHeader, secondHeader)
-  (state, version, counterpartyIdentifier, rootOfTrust) = Get(identifier)
+  (state, version, counterpartyIdentifier, consensusState) = Get(identifier)
   assert(state == OPEN)
-  assert(checkEquivocation(rootOfTrust, firstHeader, secondHeader))
+  assert(checkEquivocation(consensusState, firstHeader, secondHeader))
   state = CLOSED
-  Set(identifier, (state, version, counterpartyIdentifier, rootOfTrust))
+  Set(identifier, (state, version, counterpartyIdentifier, consensusState))
 ```
 
 Implementing chains may want to allow applications to register handlers to take action upon discovery of an equivocation. Further discussion is deferred to [ICS 12: Byzantine Recovery Strategies](../ics-12-byzantine-recovery-strategies).
@@ -336,7 +336,7 @@ Not applicable.
 
 ### Forwards Compatibility
 
-Once a connection has been established and a version negotiated, future version updates can be negotiated per [ICS 6: Connection & Channel Versioning](../spec/ics-6-connection-channel-versioning). The root of trust can only be updated as allowed by the `updateRootOfTrust` function defined by the consensus protocol chosen when the connection is established.
+Once a connection has been established and a version negotiated, future version updates can be negotiated per [ICS 6: Connection & Channel Versioning](../spec/ics-6-connection-channel-versioning). The consensus state can only be updated as allowed by the `updateConsensusState` function defined by the consensus protocol chosen when the connection is established.
 
 ### Example Implementation
 
