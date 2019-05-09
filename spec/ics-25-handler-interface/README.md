@@ -3,9 +3,10 @@ ics: 25
 title: Handler Interface
 stage: draft
 category: ibc-core
+requires: 2, 3, 4, 5, 23, 24
 author: Christopher Goes <cwgoes@tendermint.com>
 created: 2019-04-23
-modified: 2019-05-03
+modified: 2019-05-09
 ---
 
 # Synopsis
@@ -27,6 +28,10 @@ IBC is an inter-module communication protocol, designed to faciliate reliable, a
 `Channel` is as defined in ICS 4.
 
 `Packet` is as defined in ICS 5.
+
+`CommitmentProof` is as defined in ICS 23.
+
+`Identifier`s must conform to the schema defined in ICS 24.
 
 ## Desired Properties
 
@@ -75,13 +80,13 @@ function createClient(ClientOptions options) -> string
 `queryClient` queries a client by a known identifier, returning the associated metadata and root of trust if found.
 
 ```coffeescript
-function queryClient(string id) -> Maybe<ClientInfo>
+function queryClient(string identifier) -> Maybe<ClientInfo>
 ```
 
 `updateClient` updates an existing client with a new header, returning an error if the client was not found or the header was not a valid update.
 
 ```coffeescript
-function updateClient(string id, Header header) -> Maybe<Err>
+function updateClient(string identifier, Header header) -> Maybe<Err>
 ```
 
 Implementations of `createClient`, `queryClient`, and `updateClient` are defined in ICS 2.
@@ -89,13 +94,13 @@ Implementations of `createClient`, `queryClient`, and `updateClient` are defined
 
 ### Connections
 
-By default, connections are unowned, but closure is permissioned to the module which created the connection.
+By default, connections are unowned. Connections can be closed by any module, but only when all channels associated with the connection have been closed by the modules which opened them and a timeout has passed since the connection was opened.
 
 `ConnectionKind` enumerates the connection types supported by the handler implementation.
 
 ```golang
 type ConnectionKind enum {
-  Transit
+  Transmit
   Receive
   Broadcast
   Bidirectional
@@ -114,62 +119,64 @@ type ConnectionInfo struct {
 `initConnection` tries to create a new connection with the provided options, failing if the client is not found or the options are invalid.
 
 ```coffeescript
-function initConnection(identifier, desiredVersion, desiredCounterpartyIdentifier, lightClientIdentifier) -> Maybe<err>
+function initConnection(string identifier, string desiredVersion,
+  string desiredCounterpartyIdentifier, string lightClientIdentifier) -> Maybe<err>
 ```
 
-`tryConnection` tries to initialize a connection based on an initialization attempt on another chain (part one of the three-way connection handshake).
+`tryConnection` tries to initialize a connection based on an initialization attempt on another chain (part one of the three-way connection handshake), returning an error if the proof was invalid or the requested identifier cannot be reserved.
 
 ```coffeescript
-function tryConnection(desiredIdentifier, counterpartyIdentifier, desiredVersion, counterpartyLightClientIdentifier, lightClientIdentifier, proofInit) -> Maybe<err>
+function tryConnection(string desiredIdentifier, string counterpartyIdentifier, string desiredVersion,
+  string counterpartyLightClientIdentifier, string lightClientIdentifier, CommitmentProof proofInit) -> Maybe<err>
 ```
 
 `ackConnection` acknowledges a connection in progress on another chain (part two of the three-way connection handshake).
 
 ```coffeescript
-function ackConnection(identifier, agreedVersion, proofTry)
+function ackConnection(string identifier, string agreedVersion, CommitmentProof proofTry)
 ```
 
 `confirmConnection` finalizes a connection (part three of the three-way connection handshake).
 
 ```coffeescript
-function confirmConnection(identifier, proofAck)
+function confirmConnection(string identifier, CommitmentProof proofAck)
 ```
 
 `queryConnection` queries an existing connection by known identifier, returning the associated metadata if found.
 
 ```coffeescript
-function queryConnection(string id) -> Maybe<ConnectionInfo>
+function queryConnection(string identifier) -> Maybe<ConnectionInfo>
 ```
 
-`initCloseConnection` initiates the graceful connection closing process. It will fail if there are any open channels using the connection.
+`initCloseConnection` initiates the graceful connection closing process. It will fail if there are any open channels using the connection or if the identifier is invalid.
 
 ```coffeescript
-function initCloseConnection(string id) -> Maybe<Err>
+function initCloseConnection(string identifier) -> Maybe<Err>
 ```
 
-`tryCloseConnection` continues the graceful connection closing process. It will fail if there are any open channels using the connection.
+`tryCloseConnection` continues the graceful connection closing process. It will fail if there are any open channels using the connection, if the proof is invalid, or if the identifier is invalid.
 
 ```coffeescript
-function tryCloseConnection(identifier, proofInit) -> Maybe<Err>
+function tryCloseConnection(string identifier, proofInit) -> Maybe<Err>
 ```
 
-`ackCloseConnection` finalizes the graceful connection closing process.
+`ackCloseConnection` finalizes the graceful connection closing process. It will fail if the proof is invalid or if the identifier is invalid.
 
 ```coffeescript
-function ackCloseConnection(identifier, proofTry) -> Maybe<Err>
+function ackCloseConnection(string identifier, proofTry) -> Maybe<Err>
 ```
 
 `equivocationCloseConnection` force-closes a connection upon discovery of an equivocation. The equivocation must first be submitted to the associated client.
 
 ```coffeescript
-function equivocationCloseConnection(identifier) -> Maybe<Err>
+function equivocationCloseConnection(string identifier) -> Maybe<Err>
 ```
 
 Implementations of `initConnection`, `tryConnection`, `ackConnection`, `confirmConnection`, `queryConnection`, `initCloseConnection`, `tryCloseConnection`, `ackCloseConnection`, and `equivocationCloseConnection` are defined in ICS 3.
 
 ### Channels
 
-By default, channels are owned by the creating module, meaning only the creating module can inspect, close, or send on the channel.
+By default, channels are owned by the creating module, meaning only the creating module can inspect, close, or send on the channel. A module can create any number of channels.
 
 `ChannelOptions` contains all the parameter choices required to create a new channel.
 
@@ -184,26 +191,27 @@ type ChannelOptions struct {
 
 ```golang
 type ChannelInfo struct {
+  string         channelIdentifier
   ChannelOptions options
 }
 ```
 
-`createChannel` tries to create a new channel with the provided options, failing if the connection is not found or the options are invalid, returning a unique allocated identifier if successful.
+`createChannel` tries to create a new channel with the provided options, failing if the connection is not found or the options are invalid.
 
 ```coffeescript
-function createChannel(ChannelOptions options) -> string
+function createChannel(ChannelOptions options) -> Maybe<err>
 ```
 
 `queryChannel` queries an existing channel by known identifier, returning the associated metadata if found.
 
 ```coffeescript
-function queryChannel(string id) -> Maybe<ChannelInfo>
+function queryChannel(string identifier) -> Maybe<ChannelInfo>
 ```
 
 `closeChannel` initiates the graceful channel closing process as defined in ICS 4.
 
 ```coffeescript
-function closeChannel(string id) -> Future<Maybe<Err>>
+function closeChannel(string identifier) -> Future<Maybe<Err>>
 ```
 
 Implementations of `createChannel`, `queryChannel`, and `closeChannel` are defined in ICS 4.
@@ -214,7 +222,7 @@ Packets are permissioned by channel (only a module which owns a channel can send
 
 `sendPacket` attempts to send a packet, returning an error if the packet cannot be sent (perhaps because the sending module does not own the channel in question), and returning a unique identifier if successful.
 
-The returned identifier will be the same as that sent by the timeout handler, so it can be used by the sending module to associate a specific action with a specific packet timeout.
+The returned identifier will be the same as that sent by the timeout handler `timeoutPacket`, so it can be used by the sending module to associate a specific action with a specific packet timeout.
 
 ```coffeescript
 function sendPacket(Packet packet) -> string | Err
