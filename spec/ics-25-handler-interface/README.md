@@ -4,6 +4,7 @@ title: Handler Interface
 stage: draft
 category: ibc-core
 requires: 2, 3, 4, 5, 23, 24
+required-by: 26
 author: Christopher Goes <cwgoes@tendermint.com>
 created: 2019-04-23
 modified: 2019-05-09
@@ -21,7 +22,7 @@ IBC is an inter-module communication protocol, designed to faciliate reliable, a
 
 ## Definitions
 
-`Client` and `RootOfTrust` are as defined in ICS 2.
+`Client` and `ConsensusState` are as defined in ICS 2.
 
 `Connection` and `ConnectionState` are as defined in ICS 3.
 
@@ -57,8 +58,8 @@ type ClientKind enum {
 
 ```golang
 type ClientOptions struct {
-  ClientKind  kind
-  RootOfTrust rootOfTrust
+  ClientKind      kind
+  ConsensusState  consensusState
 }
 ```
 
@@ -66,8 +67,8 @@ type ClientOptions struct {
 
 ```golang
 type ClientInfo struct {
-  ClientKind  kind
-  RootOfTrust rootOfTrust
+  ClientKind      kind
+  ConsensusState  consensusState
 }
 ```
 
@@ -77,7 +78,7 @@ type ClientInfo struct {
 function createClient(ClientOptions options) -> string
 ```
 
-`queryClient` queries a client by a known identifier, returning the associated metadata and root of trust if found.
+`queryClient` queries a client by a known identifier, returning the associated metadata and consensus state if found.
 
 ```coffeescript
 function queryClient(string identifier) -> Maybe<ClientInfo>
@@ -265,7 +266,7 @@ type PacketData struct {
 
 ```coffeescript
 function myModuleInit()
-  client = createClient(rootOfTrust)
+  client = createClient(consensusState)
   connection = createConnection(nil, client)
   state.channel = createChannel(nil, connection, myModuleRecv, myModuleTimeout)
 ```
