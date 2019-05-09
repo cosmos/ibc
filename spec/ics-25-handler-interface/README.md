@@ -217,10 +217,28 @@ type ChannelInfo struct {
 }
 ```
 
-`createChannel` tries to create a new channel with the provided options, failing if the connection is not found or the options are invalid.
+`initChannel` tries to start the handshake to create a new channel with the provided options, failing if the connection is not found or the options are invalid.
 
 ```coffeescript
-function createChannel(ChannelOptions options) -> Maybe<err>
+function initChannel(ChannelOptions options) -> Maybe<err>
+```
+
+`tryChannel` tries to initialize a channel based on proof of an initialization attempt on the counterparty chain, failing if the channel identifier is unavailable, the proof is invalid, or the calling module is not authorized.
+
+```coffeescript
+function tryChannel() -> Maybe<Err>
+```
+
+`ackChannel` acknowledges a channel creation in progress on another chain, failing if the channel identifier is not found, the proof is invalid, or the calling module is not authorized.
+
+```coffeescript
+function ackChannel() -> Maybe<Err>
+```
+
+`confirmChannel` finalizes the channel opening handshake, failing if the channel identifier is not found, the proof is invalid, or the calling module is not authorized.
+
+```coffeescript
+function confirmChannel() -> Maybe<Err>
 ```
 
 `queryChannel` queries an existing channel by known identifier, returning the associated metadata if found.
