@@ -35,15 +35,15 @@ IBC is an inter-module communication protocol, designed to faciliate reliable, a
 
 ## Desired Properties
 
-- Client, connection, channel creation as permissionless as possible
-- Dynamic module set
-- Modules can write their own more complex abstractions on top of IBC
+- Creation of clients, connections, and channels should be as permissionless as possible.
+- The module set should be dynamic: chains should be able to add and destroy modules at will with a persistent IBC handler.
+- Modules should be able to write their own more complex abstractions on top of IBC to provide additional semantics or guarantees.
 
 ## Technical Specification
 
 ### Clients
 
-By default, clients are unowned: any module can create a new client, query any existing client, and update any existing client.
+By default, clients are unowned: any module can create a new client, query any existing client, update any existing client, and delete any existing client not in use.
 
 `ClientKind` enumerates the list of light client algorithms supported by the handler implementation.
 
@@ -89,7 +89,19 @@ function queryClient(string identifier) -> Maybe<ClientInfo>
 function updateClient(string identifier, Header header) -> Maybe<Err>
 ```
 
-Implementations of `createClient`, `queryClient`, and `updateClient` are defined in ICS 2.
+`freezeClient` freezes an existing client by providing proof-of-equivocation, automatically freezing any associated connections & channels.
+
+```coffeescript
+function freezeClient(string identifier, Header headerOne, Header headerTwo) -> Maybe<Err>
+```
+
+`deleteClient` deletes an existing client, returning an error if the identifier is not found or if the associated client was just created or is still in use by any connection.
+
+```coffeescript
+function deleteClient(string identifier) -> Maybe<Err>
+```
+
+Implementations of `createClient`, `queryClient`, `updateClient`, `freezeClient`, and `deleteClient` are defined in ICS 2.
 
 
 ### Connections
@@ -166,13 +178,7 @@ function tryCloseConnection(string identifier, proofInit) -> Maybe<Err>
 function ackCloseConnection(string identifier, proofTry) -> Maybe<Err>
 ```
 
-`equivocationCloseConnection` force-closes a connection upon discovery of an equivocation. The equivocation must first be submitted to the associated client.
-
-```coffeescript
-function equivocationCloseConnection(string identifier) -> Maybe<Err>
-```
-
-Implementations of `initConnection`, `tryConnection`, `ackConnection`, `confirmConnection`, `queryConnection`, `initCloseConnection`, `tryCloseConnection`, `ackCloseConnection`, and `equivocationCloseConnection` are defined in ICS 3.
+Implementations of `initConnection`, `tryConnection`, `ackConnection`, `confirmConnection`, `queryConnection`, `initCloseConnection`, `tryCloseConnection`, and `ackCloseConnection` are defined in ICS 3.
 
 ### Channels
 
@@ -220,7 +226,7 @@ Implementations of `createChannel`, `queryChannel`, and `closeChannel` are defin
 
 Packets are permissioned by channel (only a module which owns a channel can send on it).
 
-`sendPacket` attempts to send a packet, returning an error if the packet cannot be sent (perhaps because the sending module does not own the channel in question), and returning a unique identifier if successful.
+`sendPacket` attempts to send a packet, returning an error if the packet cannot be sent (perhaps because the sending module does not own the channel in question or because the channel is frozen), and returning a unique identifier if successful.
 
 The returned identifier will be the same as that sent by the timeout handler `timeoutPacket`, so it can be used by the sending module to associate a specific action with a specific packet timeout.
 
