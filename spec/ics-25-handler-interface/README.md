@@ -86,11 +86,15 @@ function queryClient(string identifier) -> Maybe<ClientInfo>
 
 `updateClient` updates an existing client with a new header, returning an error if the client was not found or the header was not a valid update.
 
+The default IBC relayer module will allow external calls to `updateClient`.
+
 ```coffeescript
 function updateClient(string identifier, Header header) -> Maybe<Err>
 ```
 
 `freezeClient` freezes an existing client by providing proof-of-equivocation, automatically freezing any associated connections & channels.
+
+The default IBC relayer module will allow external calls to `freezeClient`.
 
 ```coffeescript
 function freezeClient(string identifier, Header headerOne, Header headerTwo) -> Maybe<Err>
@@ -138,6 +142,8 @@ function initConnection(string identifier, string desiredVersion,
 
 `tryConnection` tries to initialize a connection based on an initialization attempt on another chain (part one of the three-way connection handshake), returning an error if the proof was invalid or the requested identifier cannot be reserved.
 
+The default IBC relayer module will allow external calls to `tryConnection`.
+
 ```coffeescript
 function tryConnection(string desiredIdentifier, string counterpartyIdentifier, string desiredVersion,
   string counterpartyLightClientIdentifier, string lightClientIdentifier, CommitmentProof proofInit) -> Maybe<err>
@@ -145,11 +151,15 @@ function tryConnection(string desiredIdentifier, string counterpartyIdentifier, 
 
 `ackConnection` acknowledges a connection in progress on another chain (part two of the three-way connection handshake).
 
+The default IBC relayer module will allow external calls to `ackConnection`.
+
 ```coffeescript
 function ackConnection(string identifier, string agreedVersion, CommitmentProof proofTry)
 ```
 
 `confirmConnection` finalizes a connection (part three of the three-way connection handshake).
+
+The default IBC relayer module will allow external calls to `confirmConnection`.
 
 ```coffeescript
 function confirmConnection(string identifier, CommitmentProof proofAck)
@@ -169,11 +179,15 @@ function initCloseConnection(string identifier) -> Maybe<Err>
 
 `tryCloseConnection` continues the graceful connection closing process. It will fail if there are any open channels using the connection, if the proof is invalid, or if the identifier is invalid.
 
+The default IBC relayer module will allow external calls to `tryCloseConnection`.
+
 ```coffeescript
 function tryCloseConnection(string identifier, proofInit) -> Maybe<Err>
 ```
 
 `ackCloseConnection` finalizes the graceful connection closing process. It will fail if the proof is invalid or if the identifier is invalid.
+
+The default IBC relayer module will allow external calls to `ackCloseConnection`.
 
 ```coffeescript
 function ackCloseConnection(string identifier, proofTry) -> Maybe<Err>
@@ -235,9 +249,13 @@ The returned identifier will be the same as that sent by the timeout handler `ti
 function sendPacket(Packet packet) -> string | Err
 ```
 
+`recvPacket` attempts to receive a packet, returning an error if the calling module is not authorized to handle the packet, or if the packet does not exist or has been already handled.
+
 ```coffeescript
 function recvPacket(Packet packet) -> string | Err
 ```
+
+`timeoutPacket` attemps to handle a packet timeout, returning an error if the calling module is not authorized to handle the packet timeout, or if the packet does not exist, has not timed out, or has already been handled.
 
 ```coffeescript
 function timeoutPacket(Packet packet) -> string | Err
