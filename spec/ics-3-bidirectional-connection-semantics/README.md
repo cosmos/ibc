@@ -307,26 +307,7 @@ function handleConnCloseAck(identifier, proofTry)
 
 ##### Closing by Equivocation
 
-The equivocation closing subprotocol serves to immediately close a connection if a consensus equivocation is discovered and thus prevent further packet transmission.
-
-The equivocation closing subprotocol defines only one datagram, *ConnCloseEquivocation*:
-
-```golang
-type ConnCloseEquivocation struct {
-  Identifier identifier
-  Header firstHeader
-  Header secondHeader
-}
-```
-
-```coffeescript
-function handleConnCloseEquivocation(identifier, firstHeader, secondHeader)
-  (state, version, counterpartyIdentifier, consensusState) = Get(identifier)
-  assert(state == OPEN)
-  assert(checkEquivocation(consensusState, firstHeader, secondHeader))
-  state = CLOSED
-  Set(identifier, (state, version, counterpartyIdentifier, consensusState))
-```
+The equivocation closing subprotocol is defined in ICS 2. If a client is closed by equivocation, all associated connections are immediately closed as well.
 
 Implementing chains may want to allow applications to register handlers to take action upon discovery of an equivocation. Further discussion is deferred to [ICS 12: Byzantine Recovery Strategies](../ics-12-byzantine-recovery-strategies).
 
