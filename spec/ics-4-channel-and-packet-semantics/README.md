@@ -1,11 +1,11 @@
 ---
 ics: 4
-title: Channel Semantics
-stage: proposal
+title: Channel & Packet Semantics
+stage: draft
 category: ibc-core
 author: Christopher Goes <cwgoes@tendermint.com>
 created: 2019-03-07
-modified: 2019-05-02
+modified: 2019-05-11
 ---
 
 # Synopsis
