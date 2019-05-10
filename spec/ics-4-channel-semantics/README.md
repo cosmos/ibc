@@ -20,9 +20,16 @@ IBC uses a cross-chain message passing model that makes no assumptions about net
 
 The IBC protocol as defined here is payload-agnostic. The packet receiver on chain `B` decides how to act upon the incoming message, and may add its own application logic to determine which state transactions to apply according to what data the packet contains. Both chains must only agree that the packet has been received.
 
-To facilitate useful application logic, we introduce an IBC *channel*: a set of reliable messaging queues that allows us to guarantee a cross-chain causal ordering[[5](./references.md#5)] of IBC packets. Causal ordering means that if packet *x* is processed before packet *y* on chain `A`, packet *x* must also be processed before packet *y* on chain `B`.
+- salient semantics: exactly once, ordering, ownership
+
+To facilitate useful application logic, we introduce an IBC *channel*: a set of reliable messaging queues that allows us to guarantee a cross-chain causal ordering of IBC packets. Causal ordering means that if packet *x* is processed before packet *y* on chain `A`, packet *x* must also be processed before packet *y* on chain `B`.
 
 ## Definitions
+
+- Bidirectional channel
+- Unidirectional channel
+- Ordered channel
+- Exactly-once channel (always, for now)
 
 ## Desired Properties
 
