@@ -18,6 +18,23 @@ This standards document describes the abstraction of an IBC *connection*: two st
 
 The core IBC protocol provides *authorization* and *ordering* semantics for packets: guarantees, respectively, that packets have been committed on the sending blockchain (and according state transitions executed, such as escrowing tokens), and that they have been committed exactly once in a particular order and can be delivered exactly once in that same order. The *connection* abstraction, specified in this standard, defines the *authorization* semantics of IBC (ordering semantics are left to [ICS 4: Channel Semantics](../spec/ics-4-channel-semantics)).
 
+### Definitions
+
+`ConsensusState`, `Header, and `updateConsensusState` are as defined in [ICS 2: Consensus Requirements](../spec/ics-2-consensus-requirements).
+
+`AccumulatorProof` and `verify` are as defined in [ICS 23: Cryptographic Accumulator](../spec/ics-23-cryptographic-accumulator).
+
+`Version` and `checkVersion` are as defined in [ICS 6: Connection & Channel Versioning](../spec/ics-6-connection-channel-versioning).
+
+`Identifier` is as defined in [ICS 24](../spec/ics-24-host-requirements). The identifier is not necessarily intended to be a human-readable name (and likely should not be, to discourage squatting or racing for identifiers).
+
+The opening handshake protocol allows each chain to verify the identifier used to reference the connection on the other chain, enabling modules on each chain to reason about the reference on the other chain.
+
+A *actor*, as referred to in this specification, is an entity capable of executing datagrams who is paying for computation / storage (via gas or a similar mechanism) but is otherwise untrusted. Possible actors include:
+- End users signing with an account key
+- On-chain smart contracts acting autonomously or in response to another transaction
+- On-chain modules acting in response to another transaction or in a scheduled manner
+
 ### Desired Properties
 
 - Implementing blockchains should be able to safely allow untrusted actors to open and update connections.
@@ -48,15 +65,7 @@ Once a negotiation handshake has completed:
 
 ## Technical Specification
 
-### Definitions
-
-`ConsensusState`, `Header, and `updateConsensusState` are as defined in [ICS 2: Consensus Requirements](../spec/ics-2-consensus-requirements).
-
-`AccumulatorProof` and `verify` are as defined in [ICS 23: Cryptographic Accumulator](../spec/ics-23-cryptographic-accumulator).
-
-`Version` and `checkVersion` are as defined in [ICS 6: Connection & Channel Versioning](../spec/ics-6-connection-channel-versioning).
-
-`Identifier` is as defined in [ICS 24](../spec/ics-24-host-requirements). The identifier is not necessarily intended to be a human-readable name (and likely should not be, to discourage squatting or racing for identifiers).
+### Data Structures
 
 This ICS defines the `Connection` type:
 
@@ -78,13 +87,6 @@ type Connection struct {
   Identifier lightClientIdentifier
 }
 ```
-
-The opening handshake protocol allows each chain to verify the identifier used to reference the connection on the other chain, enabling modules on each chain to reason about the reference on the other chain.
-
-A *actor*, as referred to in this specification, is an entity capable of executing datagrams who is paying for computation / storage (via gas or a similar mechanism) but is otherwise untrusted. Possible actors include:
-- End users signing with an account key
-- On-chain smart contracts acting autonomously or in response to another transaction
-- On-chain modules acting in response to another transaction or in a scheduled manner
 
 ### Requirements
 
