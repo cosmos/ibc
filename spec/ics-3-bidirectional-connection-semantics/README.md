@@ -7,14 +7,12 @@ requires: 2, 6, 10, 23
 required-by: 4
 author: Christopher Goes <cwgoes@tendermint.com>, Juwoon Yun <joon@tendermint.com>
 created: 2019-03-07
-modified: 2019-04-30
+modified: 2019-05-11
 ---
 
 ## Synopsis
 
 This standards document describes the abstraction of an IBC *connection*: two stateful objects on two separate chains, each tracking the consensus state of the other chain, facilitating cross-chain substate verification. Protocols for safely establishing a connection between two chains, verifying relayed updates (headers) to the consensus state tracked by a connection, cleanly closing a connection, and closing a connection due to detected equivocation are described.
-
-## Specification
 
 ### Motivation
 
@@ -48,9 +46,9 @@ Once a negotiation handshake has completed:
 - The connection should be able to be voluntarily & cleanly closed by either blockchain.
 - The connection should be able to be immediately closed upon discovery of a consensus equivocation.
 
-### Technical Specification
+## Technical Specification
 
-#### Definitions
+### Definitions
 
 `ConsensusState`, `Header, and `updateConsensusState` are as defined in [ICS 2: Consensus Requirements](../spec/ics-2-consensus-requirements).
 
@@ -88,11 +86,11 @@ A *actor*, as referred to in this specification, is an entity capable of executi
 - On-chain smart contracts acting autonomously or in response to another transaction
 - On-chain modules acting in response to another transaction or in a scheduled manner
 
-#### Requirements
+### Requirements
 
 Host state machine requirements are as defined in [ICS 24](../ics-24-host-requirements).
 
-#### Subprotocols
+### Subprotocols
 
 Subprotocols are defined as a set of datagram types and a `handleDatagram` function which must be implemented by the state machine of the implementing blockchain. Datagrams must be relayed between chains by an external process. This process is assumed to behave in an arbitrary manner — no safety properties are dependent on its behavior, although progress is generally dependent on the existence of at least one correct relayer process. Further discussion is deferred to [ICS 18: Relayer Algorithms](../spec/ics-18-relayer-algorithms).
 
@@ -100,7 +98,7 @@ IBC subprotocols are reasoned about as interactions between two chains `A` and `
 
 This ICS defines four subprotocols: opening handshake, header tracking, closing handshake, and closing by equivocation.
 
-##### Opening Handshake
+#### Opening Handshake
 
 The opening handshake subprotocol serves to initialize consensus states for two chains on each other and negotiate an agreeable connection version.
 
@@ -229,11 +227,11 @@ function handleConnOpenConfirm(identifier, proofAck)
   Set(identifier, (state, version, counterpartyIdentifier, consensusState))
 ```
 
-##### Header Tracking
+#### Header Tracking
 
 Headers are tracked at the light client level. See [ICS 2](../ics-2-consensus-requirements).
 
-##### Closing Handshake
+#### Closing Handshake
 
 The closing handshake protocol serves to cleanly close a connection on two chains.
 
@@ -305,25 +303,25 @@ function handleConnCloseAck(identifier, proofTry)
   Set(identifier, (state, version, counterpartyIdentifier, consensusState))
 ```
 
-##### Closing by Equivocation
+#### Closing by Equivocation
 
 The equivocation closing subprotocol is defined in ICS 2. If a client is closed by equivocation, all associated connections are immediately closed as well.
 
 Implementing chains may want to allow applications to register handlers to take action upon discovery of an equivocation. Further discussion is deferred to [ICS 12: Byzantine Recovery Strategies](../ics-12-byzantine-recovery-strategies).
 
-### Backwards Compatibility
+## Backwards Compatibility
 
 Not applicable.
 
-### Forwards Compatibility
+## Forwards Compatibility
 
 Once a connection has been established and a version negotiated, future version updates can be negotiated per [ICS 6: Connection & Channel Versioning](../spec/ics-6-connection-channel-versioning). The consensus state can only be updated as allowed by the `updateConsensusState` function defined by the consensus protocol chosen when the connection is established.
 
-### Example Implementation
+## Example Implementation
 
 Coming soon.
 
-### Other Implementations
+## Other Implementations
 
 Coming soon.
 
