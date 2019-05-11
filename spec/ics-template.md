@@ -8,27 +8,25 @@ created: (creation date)
 modified: (modification date)
 ---
 
-# Synopsis
+## Synopsis
 
 (high-level description of and rationale for specification)
 
-# Specification
-
-(main part of standard document - not all subsections are required)
-
-## Motivation
+### Motivation
 
 (rationale for existence of standard)
 
-## Definitions
+### Definitions
 
 (definitions of any new terms not defined in common documentation)
 
-## Desired Properties
+### Desired Properties
 
 (desired characteristics / properties of protocol, effects if properties are violated)
 
 ## Technical Specification
+
+(main part of standard document - not all subsections are required)
 
 (detailed technical specification: syntax, semantics, sub-protocols, algorithms, data structures, etc)
 
@@ -48,10 +46,10 @@ modified: (modification date)
 
 (links to or descriptions of other implementations)
 
-# History
+## History
 
 (changelog and notable inspirations / references)
 
-# Copyright
+## Copyright
 
 Copyright and related rights waived via [CC0](https://creativecommons.org/publicdomain/zero/1.0/).

@@ -10,21 +10,19 @@ created: 2019-04-16
 modified: 2019-05-11
 ---
 
-# Synopsis
+## Synopsis
 
 This specification defines the minimal set of interfaces which must be provided and properties which must be fulfilled by a blockchain & state machine hosting an IBC handler (implementation of the interblockchain communication protocol; see [the architecture document](../../docs/ibc/1_IBC_ARCHITECTURE.md) for details).
 
-# Specification
-
-## Motivation
+### Motivation
 
 IBC is designed to be a common standard which will be hosted by a variety of blockchains & state machines and must clearly define the requirements of the host.
 
-## Definitions
+### Definitions
 
 `ConsensusState` is as defined in [ICS 2](../ics-2-consensus-requirements).
 
-## Desired Properties
+### Desired Properties
 
 IBC should require as simple an interface from the underlying state machine as possible to maximize the ease of correct implementation.
 
@@ -102,11 +100,11 @@ Coming soon.
 
 Coming soon.
 
-# History
+## History
 
 29 April 2019 - Initial draft
 11 May 2019 - Rename "RootOfTrust" to "ConsensusState"
 
-# Copyright
+## Copyright
 
 Copyright and related rights waived via [CC0](https://creativecommons.org/publicdomain/zero/1.0/).
