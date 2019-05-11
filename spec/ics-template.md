@@ -30,6 +30,14 @@ modified: (modification date)
 
 (detailed technical specification: syntax, semantics, sub-protocols, algorithms, data structures, etc)
 
+### Data Structures
+
+(new data structures, if applicable)
+
+### Subprotocols
+
+(subprotocols, if applicable)
+
 ## Backwards Compatibility
 
 (discussion of compatibility or lack thereof with previous standards)
