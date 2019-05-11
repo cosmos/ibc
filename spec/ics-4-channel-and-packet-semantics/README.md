@@ -12,40 +12,52 @@ modified: 2019-05-11
 
 The "channel" abstraction provides message delivery semantics to the interblockchain communication protocol, in three categories: ordering, exactly-once delivery, and module permissioning. A channel serves as a conduit for packets passing between a module on one chain and a module on another, ensuring that packets are executed only once, delivered in the order in which they were sent (if necessary), and delivered only to the corresponding module owning the other end of the channel on the destination chain. Each channel is associated with a particular connection, and a connection may have any number of associated channels, allowing the use of common identifiers and amortizing the cost of header verification across all the channels utilizing a connection & light client.
 
+Channels are payload-agnostic. The module which receives an IBC packet on chain `B` decides how to act upon the incoming data, and must utilize its own application logic to determine which state transactions to apply according to what data the packet contains. Both chains must only agree that the packet has been received.
+
 # Specification
 
 ## Motivation
 
-IBC uses a cross-chain message passing model that makes no assumptions about network synchrony. IBC *data packets* (hereafter just *packets*) are relayed from one blockchain to the other by external infrastructure. Chain `A` and chain `B` confirm new blocks independently, and packets from one chain to the other may be delayed or censored arbitrarily. The speed of packet transmission and confirmation is limited only by the speed of the underlying chains.
-
-The IBC protocol as defined here is payload-agnostic. The packet receiver on chain `B` decides how to act upon the incoming message, and may add its own application logic to determine which state transactions to apply according to what data the packet contains. Both chains must only agree that the packet has been received.
-
-- salient semantics: exactly once, ordering, ownership
-
-To facilitate useful application logic, we introduce an IBC *channel*: a set of reliable messaging queues that allows us to guarantee a cross-chain causal ordering of IBC packets. Causal ordering means that if packet *x* is processed before packet *y* on chain `A`, packet *x* must also be processed before packet *y* on chain `B`.
+The interblockchain communication protocol uses a cross-chain message passing model which makes no assumptions about network synchrony. IBC *packets* are relayed from one blockchain to the other by external relayer processes. Chain `A` and chain `B` confirm new blocks independently, and packets from one chain to the other may be delayed, censored, or re-ordered arbitrarily. Packets are public and can be read from a blockchain by any relayer and submitted to any other blockchain. In order to provide the desired ordering, exactly-once delivery, and module permissioning semantics to the application layer, the interblockchain communication protocol must implement an abstraction to enforce these semantics — channels are this abstraction.
 
 ## Definitions
 
-- Bidirectional channel
-- Unidirectional channel
-- Ordered channel
-- Exactly-once channel (always, for now)
+`Connection` is as defined in ICS 3.
 
-We define an IBC *packet* `P` as the five-tuple `(type, sequence, source, destination, data)`, where:
+A *channel* is a pipeline for exactly-once packet delivery between specific modules on separate blockchains, which has at least one send and one receive end.
 
-`type` is an opaque routing field
+A *bidirectional* channel is a channel where packets can flow in both directions: from `A` to `B` and from `B` to `A`.
 
-`sequence` is an unsigned, arbitrary-precision integer
+A *unidirectional* channel is a channel where packets can only flow in one direction: from `A` to `B`.
 
-`source` is a string uniquely identifying the chain, connection, and channel from which this packet was sent
+An *ordered* channel is a channel where packets are delivered exactly in the order which they were sent.
 
-`destination` is a string uniquely identifying the chain, connection, and channel which should receive this packet
+An *unordered* channel is a channel where packets can be delivered in any order, which may differ from the order in which they were sent.
 
-`data` is an opaque application payload
+Directionality and ordering are independent, so one can speak of a bidirectional unordered channel, a unidirectional ordered channel, etc.
+
+All channels provide exactly-once packet delivery.
+
+An IBC *packet* is a particular datagram, defined as follows:
+
+```golang
+struct Packet {
+  sequence      uint64
+  sourceChannel string
+  destChannel   string
+  data          bytes
+}
+```
 
 ## Desired Properties
 
+- The speed of packet transmission and confirmation should be limited only by the speed of the underlying chains.
+- Exactly-once packet delivery, without assumptions of network synchrony and even if one or both of the chains should halt (no-more-than-once delivery in that case).
+- Ordering, for ordered channels, whereby if packet *x* is sent before packet *y* on chain `A`, packet *x* must be received before packet *y* on chain `B`.
+
 ### Exactly-once delivery
+
+either ordering or accumulator
 
 ### Ordering
 
@@ -70,8 +82,6 @@ For example, an application may wish to allow a single tokenized asset to be tra
 ### Permissioning
 
 ## Technical Specification
-
-(detailed technical specification: syntax, semantics, sub-protocols, algorithms, data structures, etc)
 
 We introduce the abstraction of an IBC *channel*: a set of the required packet queues to facilitate ordered bidirectional communication between two blockchains `A` and `B`. An IBC connection, as defined earlier, can have any number of associated channels. IBC connections handle header initialization & updates. All IBC channels use the same connection, but implement independent queues and thus independent ordering guarantees.
 
@@ -124,29 +134,6 @@ case
   otherwise ⇒
     set result = f_type(data)
     push(incoming_B, R{tail(incoming_B), (B, connection, channel), (A, connection, channel), result})
-    success
-```
-
-### Handling receipts
-
-When we wish to create a transaction that atomically commits or rolls back across two chains, we must look at the execution result returned in the IBC receipt. For example, if I want to send tokens from Alice on chain `A` to Bob on chain `B`, chain `A` must decrement Alice's account *if and only if* Bob's account was incremented on chain `B`. We can achieve that by storing a protected intermediate state on chain `A` (escrowing the assets in question), which is then committed or rolled back based on the result of executing the transaction on chain `B`.
-
-To do this requires that we not only provably send a packet from chain `A` to chain `B`, but provably return the result of executing that packet (the receipt `data`) from chain `B` to chain `A`. If a valid IBC packet was sent from `A` to `B`, then the result of executing it is stored in `incoming_B`. Since the receipts are stored in a queue with the same key construction as the sending queue, we can generate the same set of proofs for them, and perform a similar sequence of steps to handle a receipt coming back to `A` for a message previously sent to `B`. Receipts, like packets, are processed in order.
-
-To handle an IBC receipt on blockchain `A` received from blockchain `B`, with a Merkle proof `M_kvh` and the current set of trusted headers for that chain `T_B`:
-
-`handle_receipt(R{sequence, source, destination, data}, M_kvh)`
-
-```
-case
-  outgoing_A == nil ⇒ fail with "unregistered sender"
-  destination /= (A, connection, channel) ⇒ fail with "wrong destination"
-  sequence /= head(incoming_A) ⇒ fail with "out of order" 
-  H_h not in T_B ⇒ fail with "must submit header for height h"
-  valid(H_h, M_kvh) == false ⇒ fail with "invalid Merkle proof" 
-  otherwise ⇒
-    set P{type, _, _, _, _} = pop(outgoing_A)
-    f_type(result)
     success
 ```
 
@@ -212,23 +199,23 @@ Additionally, if timestamp-based timeouts are used instead of height-based timeo
 
 ## Backwards Compatibility
 
-(discussion of compatibility or lack thereof with previous standards)
+Not applicable.
 
 ## Forwards Compatibility
 
-(discussion of compatibility or lack thereof with expected future standards)
+Data structures & encoding can be versioned at the connection or channel level.
 
 ## Example Implementation
 
-(link to or description of concrete example implementation)
+Coming soon.
 
 ## Other Implementations
 
-(links to or descriptions of other implementations)
+Coming soon.
 
 # History
 
-(changelog and notable inspirations / references)
+11 May 2019 - Draft submitted
 
 # Copyright
 
