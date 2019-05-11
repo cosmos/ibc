@@ -7,7 +7,7 @@ requires: 2
 required-by: 2, 3, 4, 5, 18
 author: Christopher Goes <cwgoes@tendermint.com>
 created: 2019-04-16
-modified: 2019-04-29
+modified: 2019-05-11
 ---
 
 # Synopsis
@@ -22,7 +22,7 @@ IBC is designed to be a common standard which will be hosted by a variety of blo
 
 ## Definitions
 
-`RootOfTrust` is as defined in [ICS 2](../ics-2-consensus-requirements).
+`ConsensusState` is as defined in [ICS 2](../ics-2-consensus-requirements).
 
 ## Desired Properties
 
@@ -40,7 +40,7 @@ Identifiers are not intended to be valuable resources — to prevent name squatt
 
 The separator `/` is used to separate and concatenate two identifiers or an identifier and a constant bytestring. Identifiers MUST NOT contain the `/` character, which prevents ambiguity.
 
-Variable interpolation, denoted by curly braces, MAY be used as shorthand to define key formats, e.g. `client/{clientIdentifier}/rootOfTrust`.
+Variable interpolation, denoted by curly braces, MAY be used as shorthand to define key formats, e.g. `client/{clientIdentifier}/consensusState`.
 
 ### Key/value Store
 
@@ -56,15 +56,15 @@ function set(Key key, Value value)
 
 `Key` is as defined above. `Value` is an arbitrary bytestring encoding of a particular data structure. Encoding details are left to separate ICSs.
 
-### Root-of-trust Introspection
+### Consensus State Introspection
 
-Host chains MUST provide the ability to introspect their own root-of-trust, with `getRootOfTrust`:
+Host chains MUST provide the ability to introspect their own consensus state, with `getConsensusState`:
 
 ```coffeescript
-function getRootOfTrust() -> RootOfTrust
+function getConsensusState() -> ConsensusState
 ```
 
-`getRootOfTrust` MUST return the current root-of-trust for the consensus algorithm of the host chain.
+`getConsensusState` MUST return the current consensus state for the consensus algorithm of the host chain.
 
 ### Module system
 
@@ -90,7 +90,7 @@ Not applicable.
 
 ## Forwards Compatibility
 
-Key-value store functionality and root of trust type are unlikely to change during operation of a single host chain.
+Key-value store functionality and consensus state type are unlikely to change during operation of a single host chain.
 
 `submitDatagram` can change over time as relayers should be able to update their processes.
 
@@ -104,7 +104,8 @@ Coming soon.
 
 # History
 
-April 29 2019 - Initial draft
+29 April 2019 - Initial draft
+11 May 2019 - Rename "RootOfTrust" to "ConsensusState"
 
 # Copyright
 
