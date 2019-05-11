@@ -5,7 +5,7 @@ stage: draft
 category: ibc-core
 author: Christopher Goes <cwgoes@tendermint.com>
 created: 2019-03-07
-modified: 2019-05-11
+modified: 2019-05-12
 ---
 
 # Synopsis
@@ -24,11 +24,37 @@ The interblockchain communication protocol uses a cross-chain message passing mo
 
 `Connection` is as defined in ICS 3.
 
+`Commitment`, `CommitmentProof`, and `CommitmentRoot` are as defined in ICS 23.
+
+`Get`, `Set`, and module-system related primitives are as defined in ICS 24.
+
 A *channel* is a pipeline for exactly-once packet delivery between specific modules on separate blockchains, which has at least one send and one receive end.
 
 A *bidirectional* channel is a channel where packets can flow in both directions: from `A` to `B` and from `B` to `A`.
 
 A *unidirectional* channel is a channel where packets can only flow in one direction: from `A` to `B`.
+
+```golang
+enum Direction {
+  Tx
+  Rx
+  TxRx
+}
+```
+
+An *end* of a channel is a data structure on one chain storing channel metadata:
+
+```golang
+struct ChannelEnd {
+  name            string
+  direction       Direction
+  lastTxSequence  uint64
+  lastRxSequence  uint64
+  rxCommitment    CommitmentRoot
+}
+```
+
+Certain fields may be omitted depending on the direction of the end.
 
 An *ordered* channel is a channel where packets are delivered exactly in the order which they were sent.
 
@@ -174,23 +200,6 @@ case
     push(incoming_B, R{tail(incoming_B), (B, connection, channel), (A, connection, channel), result})
 ```
 
-The `receipt_handler` function on chain `A` can now verify timeouts and pass valid timeout receipts to the application handler (which can revert state changes such as escrowing assets):
-
-`receipt_handler`
-
-```
-case
-  ... 
-  result == TimeoutError ⇒ case
-    not expired(H_h, P) ⇒ fail with "message timeout not yet reached"
-    otherwise ⇒ f_type(R, TimeoutError)
-  ... 
-```
-
-This adds one more guarantee:
-
-`A:M_kvh == ∅` if message i was sent and timeout proven before height h (and the receipts for all messages j < i were also handled).
-
 Now chain `A` can rollback all transactions that were blocked by this flood of unrelayed packets - since they can never confirm - without waiting for chain `B` to process them and return a receipt. Adding reasonable timeouts to all packets allows us to gracefully handle any errors with the IBC relay processes or a flood of unrelayed "spam" IBC packets. If a blockchain requires a timeout on all messages and imposes some reasonable upper limit, we can guarantee that if a packet is not processed by the upper limit of the timeout period, then all previous packets must also have either been processed or reached the timeout period. 
 
 Note that in order to avoid any possible "double-spend" attacks, the timeout algorithm requires that the destination chain is running and reachable. One can prove nothing in a complete network partition, and must wait to connect; the timeout must be proven on the recipient chain, not simply the absence of a response on the sending chain.
@@ -215,7 +224,7 @@ Coming soon.
 
 # History
 
-11 May 2019 - Draft submitted
+12 May 2019 - Draft submitted
 
 # Copyright
 
