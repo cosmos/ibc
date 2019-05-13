@@ -18,8 +18,8 @@
 	\draw[->, blue, bend right](empty) edge node[yshift=3mm, xshift=1mm] {\tiny{\textsc{ConnInit}}} (init);
  	\draw[->, blue](init) edge node {\tiny{\textsc{ConnOpenTry}}} (tryopen);
 	\draw[->, blue](tryopen) edge node {\tiny{\textsc{ConnOpenAck, ConnOpenConfirm}}} (open);
-  \draw[->, yellow, bend right](open) edge node[yshift=3mm, xshift=1mm] {\tiny{\textsc{ConnCloseTry}}} (tryclose);
-  \draw[->, yellow](tryclose) edge node {\tiny{\textsc{ConnCloseAck, ConnCloseConfirm}}} (closed);
+  \draw[->, green, bend right](open) edge node[yshift=3mm, xshift=1mm] {\tiny{\textsc{ConnCloseTry}}} (tryclose);
+  \draw[->, green](tryclose) edge node {\tiny{\textsc{ConnCloseAck, ConnCloseConfirm}}} (closed);
   \draw[->, red, bend right](init) edge node {\tiny{\textsc{ConnOpenTimeout}}} (empty);
   \draw[->, red](tryopen) edge node {\tiny{\textsc{ConnOpenTimeout}}} (empty);
   \draw[->, red](open) edge node {\tiny{\textsc{ConnOpenTimeout}}} (empty);
