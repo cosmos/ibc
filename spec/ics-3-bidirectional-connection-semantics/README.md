@@ -93,6 +93,8 @@ type Connection struct {
 
 This ICS defines three subprotocols: opening handshake, header tracking, closing handshake. Datagrams defined herein are handled as external messages by the IBC relayer module defined in [ICS 26](../spec/ics-26-relayer-module).
 
+![State Machine Diagram](state.png)
+
 #### Opening Handshake
 
 The opening handshake subprotocol serves to initialize consensus states for two chains on each other and negotiate an agreeable connection version.

@@ -1,0 +1,34 @@
+\documentclass[tikz,10pt,border=10pt]{standalone}
+\usepackage{textcomp}
+\usetikzlibrary{shapes,arrows}
+\begin{document}
+\tikzset{%
+  state/.style    = {draw, thick, rectangle, node distance = 6cm}
+}
+
+\begin{tikzpicture}[auto, thick, node distance=2cm, >=triangle 45]
+\draw
+	node [state, name=empty, right = 0.5mm] {UNINITIALIZED} 
+  node [state, below of=empty] (init) {INIT}
+  node [state, right of=init] (tryopen) {TRYOPEN}
+  node [state, right of=tryopen] (open) {OPEN}
+  node [state, below of=open] (tryclose) {TRYCLOSE}
+  node [state, left of=tryclose] (closed) {CLOSED};
+
+	\draw[->, blue, bend right](empty) edge node[yshift=3mm, xshift=1mm] {\tiny{\textsc{ConnInit}}} (init);
+ 	\draw[->, blue](init) edge node {\tiny{\textsc{ConnOpenTry}}} (tryopen);
+	\draw[->, blue](tryopen) edge node {\tiny{\textsc{ConnOpenAck, ConnOpenConfirm}}} (open);
+  \draw[->, yellow, bend right](open) edge node[yshift=3mm, xshift=1mm] {\tiny{\textsc{ConnCloseTry}}} (tryclose);
+  \draw[->, yellow](tryclose) edge node {\tiny{\textsc{ConnCloseAck, ConnCloseConfirm}}} (closed);
+  \draw[->, red, bend right](init) edge node {\tiny{\textsc{ConnOpenTimeout}}} (empty);
+  \draw[->, red](tryopen) edge node {\tiny{\textsc{ConnOpenTimeout}}} (empty);
+  \draw[->, red](open) edge node {\tiny{\textsc{ConnOpenTimeout}}} (empty);
+  \draw[->, red, bend right](tryclose) edge node {\tiny{\textsc{ConnCloseTimeout}}} (open);
+  \draw[->, red](closed) edge node {\tiny{\textsc{ConnCloseTimeout}}} (open);
+
+	\draw[color=black,thick](-0.5,-14) rectangle (15.2,2.8);
+
+	\node at (-0.5,1.5) [above=0.5mm, right=5mm] {\textsc{Connection State Machine}};
+
+\end{tikzpicture}
+\end{document}
