@@ -5,22 +5,20 @@ stage: draft
 category: ibc-core
 author: Christopher Goes <cwgoes@tendermint.com>
 created: 2019-04-16
-modified: 2019-04-25
+modified: 2019-05-11
 ---
 
-# Synopsis
+## Synopsis
 
 A *vector commitment* is a construction that produces a succinct, binding commitment to an indexed vector of elements and short membership and/or non-membership proofs for any indices & elements in the vector.
 This specification enumerates the functions and properties required of commitment constructions used in the IBC protocol. In particular, commitments utilized in IBC are required to be *positionally binding*: they must be able to prove existence or
 nonexistence of values at specific positions (indices).
 
-# Specification
-
-## Motivation
+### Motivation
 
 In order to provide a guarantee of a particular state transition having occurred on one chain which can be verified on another chain, IBC requires an efficient cryptographic construction to prove inclusion or non-inclusion of particular values at particular keys in state.
 
-## Definitions
+### Definitions
 
 The *manager* of a vector commitment is the actor with the ability and responsibility to add or remove items from the commitment. Generally this will be the state machine of a blockchain.
 
@@ -32,7 +30,7 @@ Commitments are instantiated with particular *key* and *value* types, which are 
 
 A *negligible function* is a function that grows more slowly than the reciprocal of every positive polynomial, as defined [here](https://en.wikipedia.org/wiki/Negligible_function).
 
-## Desired Properties
+### Desired Properties
 
 This document only defines desired properties, not a concrete implementation — see "Properties" below.
 
@@ -236,7 +234,7 @@ Coming soon.
 
 Coming soon.
 
-# History
+## History
 
 Security definitions are mostly sourced from these papers (and simplified somewhat):
 - [Vector Commitments and their Applications](https://eprint.iacr.org/2011/495.pdf)
@@ -247,6 +245,6 @@ Thanks to Dev Ojha for extensive comments on this specification.
 
 25 April 2019 - Draft submitted
 
-# Copyright
+## Copyright
 
 Copyright and related rights waived via [CC0](https://creativecommons.org/publicdomain/zero/1.0/).
