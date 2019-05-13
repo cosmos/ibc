@@ -4,7 +4,7 @@ title: Connection Semantics
 stage: draft
 category: ibc-core
 requires: 2, 6, 10, 23
-required-by: 4, 25
+required-by: 4, 25, 26
 author: Christopher Goes <cwgoes@tendermint.com>, Juwoon Yun <joon@tendermint.com>
 created: 2019-03-07
 modified: 2019-05-13
@@ -91,11 +91,7 @@ type Connection struct {
 
 ### Subprotocols
 
-Subprotocols are defined as a set of datagram types and a `handleDatagram` function which must be implemented by the state machine of the implementing blockchain. Datagrams must be relayed between chains by an external process. This process is assumed to behave in an arbitrary manner — no safety properties are dependent on its behavior, although progress is generally dependent on the existence of at least one correct relayer process. Further discussion is deferred to [ICS 18: Relayer Algorithms](../spec/ics-18-relayer-algorithms).
-
-IBC subprotocols are reasoned about as interactions between two chains `A` and `B` — there is no prior distinction between these two chains and they are assumed to be executing the same, correct IBC protocol. `A` is simply by convention the chain which goes first in the subprotocol and `B` the chain which goes second. Protocol definitions should generally avoid including `A` and `B` in variable names to avoid confusion (as the chains themselves do not know whether they are `A` or `B` in the protocol).
-
-This ICS defines four subprotocols: opening handshake, header tracking, closing handshake, and closing by equivocation.
+This ICS defines three subprotocols: opening handshake, header tracking, closing handshake. Datagrams defined herein are handled as external messages by the IBC relayer module defined in [ICS 26](../spec/ics-26-relayer-module).
 
 #### Opening Handshake
 
