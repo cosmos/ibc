@@ -7,7 +7,7 @@ requires: 2, 6, 10, 23
 required-by: 4
 author: Christopher Goes <cwgoes@tendermint.com>, Juwoon Yun <joon@tendermint.com>
 created: 2019-03-07
-modified: 2019-05-11
+modified: 2019-05-13
 ---
 
 ## Synopsis
@@ -160,11 +160,14 @@ type ConnOpenTry struct {
   Identifier        lightClientIdentifier
   // Proof of stored INIT state on chain A
   AccumulatorProof  proofInit
+  // Height after which this datagram can no longer be executed
+  uint64            timeoutHeight
 }
 ```
 
 ```coffeescript
-function handleConnOpenTry(desiredIdentifier, counterpartyIdentifier, desiredVersion, counterpartyLightClientIdentifier, lightClientIdentifier, proofInit)
+function handleConnOpenTry(desiredIdentifier, counterpartyIdentifier, desiredVersion, counterpartyLightClientIdentifier, lightClientIdentifier, proofInit, timeoutHeight)
+  assert(getConsensusState().getHeight() <= timeoutHeight)
   consensusState = Get(lightClientIdentifier)
   expectedConsensusState = getConsensusState()
   assert(verify(consensusState, proofInit,
@@ -188,11 +191,14 @@ type ConnOpenAck struct {
   Version           agreedVersion
   // Proof of stored TRY state on chain B
   AccumulatorProof  proofTry
+  // Height after which this datagram can no longer be executed
+  uint64            timeoutHeight
 }
 ```
 
 ```coffeescript
-function handleConnOpenAck(identifier, agreedVersion, proofTry)
+function handleConnOpenAck(identifier, agreedVersion, proofTry, timeoutHeight)
+  assert(getConsensusState().getHeight() <= timeoutHeight)
   (state, desiredVersion, desiredCounterpartyIdentifier, lightClientIdentifier) = Get(identifier)
   assert(state == INIT)
   consensusState = Get(lightClientIdentifier)
@@ -214,11 +220,14 @@ type ConnOpenConfirm struct {
   Identifier        identifier
   // Proof of stored OPEN state on chain A
   AccumulatorProof  proofAck
+  // Height after which this datagram can no longer be executed
+  uint64            timeoutHeight
 }
 ```
 
 ```coffeescript
-function handleConnOpenConfirm(identifier, proofAck)
+function handleConnOpenConfirm(identifier, proofAck, timeoutHeight)
+  assert(getConsensusState().getHeight() <= timeoutHeight)
   (state, version, counterpartyIdentifier, lightClientIdentifier) = Get(identifier)
   assert(state == OPENTRY)
   consensusState = Get(lightClientIdentifier)
@@ -253,7 +262,9 @@ A correct protocol execution flows as follows:
 
 ```golang
 type ConnCloseInit struct {
+  // Identifier of connection
   Identifier identifier
+  // Identifier of connection on counterparty chain
   Identifier identifierCounterparty
 }
 ```
@@ -271,14 +282,20 @@ function handleConnCloseInit(identifier, identifierCounterparty)
 
 ```golang
 type ConnCloseTry struct {
-  Identifier identifier
-  Identifier identifierCounterparty
-  AccumulatorProof proofInit
+  // Identifier of connection
+  Identifier        identifier
+  // Identifier of connection on counterparty chain
+  Identifier        identifierCounterparty
+  // Proof of intermediary state on counterparty chain
+  AccumulatorProof  proofInit
+  // Height after which this datagram can no longer be executed
+  uint64            timeoutHeight
 }
 ```
 
 ```coffeescript
-function handleConnCloseTry(identifier, identifierCounterparty, proofInit)
+function handleConnCloseTry(identifier, identifierCounterparty, proofInit, timeoutHeight)
+  assert(getConsensusState().getHeight() <= timeoutHeight)
   (state, version, counterpartyIdentifier, consensusState) = Get(identifier)
   assert(state == OPEN)
   assert(identifierCounterparty == counterpartyIdentifier)
@@ -291,13 +308,18 @@ function handleConnCloseTry(identifier, identifierCounterparty, proofInit)
 
 ```golang
 type ConnCloseAck struct {
-  Identifier identifier
-  AccumulatorProof proofTry
+  // Identifier of connection
+  Identifier        identifier
+  // Proof of intermediary state on counterparty chain
+  AccumulatorProof  proofTry
+  // Height after which this datagram can no longer be executed
+  uint64            timeoutHeight
 }
 ```
 
 ```coffeescript
-function handleConnCloseAck(identifier, proofTry)
+function handleConnCloseAck(identifier, proofTry, timeoutHeight)
+  assert(getConsensusState().getHeight() <= timeoutHeight)
   (state, version, counterpartyIdentifier, consensusState) = Get(identifier)
   assert(state == TRYCLOSE)
   assert(verify(consensusState, proofTry, (counterpartyIdentifier, CLOSED)))
@@ -332,7 +354,7 @@ Coming soon.
 Parts of this document were inspired by the [previous IBC specification](https://github.com/cosmos/cosmos-sdk/tree/master/docs/spec/ibc).
 
 29 March 2019 - Initial draft version submitted
-30 April 2019 - Draft finalized
+13 May 2019 - Draft finalized
 
 ## Copyright
 
