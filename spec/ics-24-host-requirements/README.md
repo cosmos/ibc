@@ -54,6 +54,8 @@ function set(Key key, Value value)
 
 `Key` is as defined above. `Value` is an arbitrary bytestring encoding of a particular data structure. Encoding details are left to separate ICSs.
 
+These functions MUST be permissioned to the IBC handler module (the implementation of which is described in separate standards) only, so only the IBC handler module can `set` the keys which can be read by `get`. This can possibly be implemented as a sub-store (prefixed keyspace) of a larger key-value store used by the entire state machine.
+
 ### Consensus State Introspection
 
 Host chains MUST provide the ability to introspect their own consensus state, with `getConsensusState`:
