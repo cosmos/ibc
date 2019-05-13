@@ -242,6 +242,39 @@ function handleConnOpenConfirm(identifier, proofAck, timeoutHeight)
   set("connections/{identifier}", (state, version, counterpartyIdentifier, consensusState, 0))
 ```
 
+*ConnOpenTimeout* aborts a connection opening attempt due to a timeout on the other side.
+
+```golang
+type ConnOpenTimeout struct {
+  // Identifier for connection on this chain
+  Identifier      identifier
+  // Identifier for connection on other chain
+  Identifier      counterpartyIdentifier
+  // State of connection on other chain
+  ConnectionState counterpartyState
+  // Proof of not-progressed state past the timeout height
+  CommitmentProof proofTimeout
+}
+
+```coffeescript
+function handleConnOpenTimeout(identifier, counterpartyIdentifier, proofTimeout)
+  (state, version, counterpartyIdentifier, clientIdentifier, timeoutHeight) = get("connections/{identifier}")
+  consensusState = get("clients/{clientIdentifier}")
+  assert(consensusState.getHeight() > timeoutHeight)
+  switch state {
+    case INIT:
+      assert(verifyNonMembership(consensusState, proofTimeout,
+        "connections/{counterpartyIdentifier}"))
+    case TRYOPEN:
+      assert(verifyMembership(consensusState, proofTimeout,
+        "connections/{counterpartyIdentifier}", (INIT, version, identifier, _, _)))
+    case OPEN:
+      assert(verifyMembership(consensusState, proofTimeout,
+        "connections/{counterpartyIdentifier}", (TRYOPEN, version, identifier, _, _)))
+  }
+  delete("connections/{identifier}")
+```
+
 #### Header Tracking
 
 Headers are tracked at the light client level. See [ICS 2](../ics-2-consensus-requirements).
