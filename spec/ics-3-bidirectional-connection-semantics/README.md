@@ -248,16 +248,13 @@ function handleConnOpenConfirm(identifier, proofAck, timeoutHeight)
 type ConnOpenTimeout struct {
   // Identifier for connection on this chain
   Identifier      identifier
-  // Identifier for connection on other chain
-  Identifier      counterpartyIdentifier
-  // State of connection on other chain
-  ConnectionState counterpartyState
   // Proof of not-progressed state past the timeout height
   CommitmentProof proofTimeout
 }
+```
 
 ```coffeescript
-function handleConnOpenTimeout(identifier, counterpartyIdentifier, proofTimeout)
+function handleConnOpenTimeout(identifier, proofTimeout)
   (state, version, counterpartyIdentifier, clientIdentifier, timeoutHeight) = get("connections/{identifier}")
   consensusState = get("clients/{clientIdentifier}")
   assert(consensusState.getHeight() > timeoutHeight)
@@ -371,6 +368,34 @@ function handleConnCloseAck(identifier, proofTry, timeoutHeight)
     (CLOSED, version, identifier, counterpartyLightClientIdentifier, timeoutHeight)))
   state = CLOSED
   set("connections/{identifier}", (state, version, counterpartyIdentifier, consensusState, 0))
+```
+
+*ConnCloseTimeout* aborts a connection closing attempt due to a timeout on the other side and reopens the connection.
+
+```golang
+type ConnCloseTimeout struct {
+  // Identifier for connection on this chain
+  Identifier      identifier
+  // Proof of not-progressed state past the timeout height
+  CommitmentProof proofTimeout
+}
+```
+
+```coffeescript
+function handleConnOpenTimeout(identifier, proofTimeout)
+  (state, version, counterpartyIdentifier, clientIdentifier, timeoutHeight) = get("connections/{identifier}")
+  consensusState = get("clients/{clientIdentifier}")
+  assert(consensusState.getHeight() > timeoutHeight)
+  switch state {
+    case TRYCLOSE:
+      assert(verifyMembership(consensusState, proofTimeout,
+        "connections/{counterpartyIdentifier}", (OPEN, version, identifier, _, _)))
+      set("connections/{identifier}", (OPEN, version, counterpartyIdentifier, clientIdentifier, 0))
+    case CLOSED:
+      assert(verifyMembership(consensusState, proofTimeout,
+        "connections/{counterpartyIdentifier}", (TRYCLOSE, version, identifier, _, _)))
+      set("connections/{identifier}", (OPEN, version, counterpartyIdentifier, clientIdentifier, 0))
+  }
 ```
 
 #### Freezing by Equivocation
