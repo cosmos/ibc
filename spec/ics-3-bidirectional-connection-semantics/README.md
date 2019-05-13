@@ -12,21 +12,21 @@ modified: 2019-05-13
 
 ## Synopsis
 
-This standards document describes the abstraction of an IBC *connection*: two stateful objects on two separate chains, each tracking the consensus state of the other chain, facilitating cross-chain substate verification. Protocols for safely establishing a connection between two chains, verifying relayed updates (headers) to the consensus state tracked by a connection, cleanly closing a connection, and closing a connection due to detected equivocation are described.
+This standards document describes the abstraction of an IBC *connection*: two stateful objects on two separate chains, each associated with a light client of the other chain, which faciliate cross-chain substate verification and datagram association. Protocols for safely establishing a connection between two chains, cleanly closing a connection, and closing a connection due to detected equivocation are described.
 
 ### Motivation
 
-The core IBC protocol provides *authorization* and *ordering* semantics for packets: guarantees, respectively, that packets have been committed on the sending blockchain (and according state transitions executed, such as escrowing tokens), and that they have been committed exactly once in a particular order and can be delivered exactly once in that same order. The *connection* abstraction, specified in this standard, defines the *authorization* semantics of IBC (ordering semantics are left to [ICS 4: Channel & Packet Semantics](../spec/ics-4-channel-packet-semantics)).
+The core IBC protocol provides *authorization* and *ordering* semantics for packets: guarantees, respectively, that packets have been committed on the sending blockchain (and according state transitions executed, such as escrowing tokens), and that they have been committed exactly once in a particular order and can be delivered exactly once in that same order. The *connection* abstraction specified in this standard, in conjunction with the *client* abstraction specified in [ICS 2](../spec/ics-2-consensus-verification), defines the *authorization* semantics of IBC. Ordering semantics are described in [ICS 4](../spec/ics-4-channel-packet-semantics)).
 
 ### Definitions
 
-`ConsensusState`, `Header, and `updateConsensusState` are as defined in [ICS 2: Consensus Requirements](../spec/ics-2-consensus-requirements).
+`ConsensusState`, `Header, and `updateConsensusState` are as defined in [ICS 2: Consensus Verification](../spec/ics-2-consensus-verification).
 
 `CommitmentProof`, `verifyMembership`, and `verifyNonMembership` are as defined in [ICS 23: Vector Commitments](../spec/ics-23-vector-commitments).
 
 `Version` and `checkVersion` are as defined in [ICS 6: Connection & Channel Versioning](../spec/ics-6-connection-channel-versioning).
 
-`Identifier` is as defined in [ICS 24](../spec/ics-24-host-requirements). The identifier is not necessarily intended to be a human-readable name (and likely should not be, to discourage squatting or racing for identifiers).
+`Identifier` and other host state machine requirements are as defined in [ICS 24](../spec/ics-24-host-requirements). The identifier is not necessarily intended to be a human-readable name (and likely should not be, to discourage squatting or racing for identifiers).
 
 The opening handshake protocol allows each chain to verify the identifier used to reference the connection on the other chain, enabling modules on each chain to reason about the reference on the other chain.
 
@@ -52,7 +52,7 @@ Prior to connection establishment:
 Once a negotiation handshake has begun:
 
 - Only the appropriate handshake datagrams can be executed in order.
-- No chain can masquerade as one of the handshaking chains (formalize...)
+- No third chain can masquerade as one of the two handshaking chains
 
 #### Post-Establishment
 
@@ -88,10 +88,6 @@ type Connection struct {
   uint64          nextTimeoutHeight
 }
 ```
-
-### Requirements
-
-Host state machine requirements are as defined in [ICS 24](../ics-24-host-requirements).
 
 ### Subprotocols
 
@@ -346,9 +342,9 @@ function handleConnCloseAck(identifier, proofTry, timeoutHeight)
   set("connections/{identifier}", (state, version, counterpartyIdentifier, consensusState, 0))
 ```
 
-#### Closing by Equivocation
+#### Freezing by Equivocation
 
-The equivocation closing subprotocol is defined in ICS 2. If a client is closed by equivocation, all associated connections are immediately closed as well.
+The equivocation detection subprotocol is defined in ICS 2. If a client is frozen by equivocation, all associated connections are immediately frozen as well.
 
 Implementing chains may want to allow applications to register handlers to take action upon discovery of an equivocation. Further discussion is deferred to [ICS 12: Byzantine Recovery Strategies](../ics-12-byzantine-recovery-strategies).
 
@@ -358,7 +354,8 @@ Not applicable.
 
 ## Forwards Compatibility
 
-Once a connection has been established and a version negotiated, future version updates can be negotiated per [ICS 6: Connection & Channel Versioning](../spec/ics-6-connection-channel-versioning). The consensus state can only be updated as allowed by the `updateConsensusState` function defined by the consensus protocol chosen when the connection is established.
+Once a connection has been established and a version negotiated, future version updates can be negotiated per [ICS 6](../spec/ics-6-connection-channel-versioning).
+The consensus state can only be updated as allowed by the `updateConsensusState` function defined by the consensus protocol chosen when the connection is established.
 
 ## Example Implementation
 
