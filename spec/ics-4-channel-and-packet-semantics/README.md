@@ -87,19 +87,7 @@ either ordering or accumulator
 
 ### Ordering
 
-IBC channels implement a vector clock[[2](references.md#2)] for the restricted case of two processes (in our case, blockchains). Given *x* → *y* means *x* is causally before *y*, chains `A` and `B`, and *a* ⇒ *b* means *a* implies *b*:
-
-*A:send(msg<sub>i </sub>)* → *B:receive(msg<sub>i </sub>)*
-
-*B:receive(msg<sub>i </sub>)* → *A:receipt(msg<sub>i </sub>)*
-
-*A:send(msg<sub>i </sub>)* → *A:send(msg<sub>i+1 </sub>)*
-
-*x* → *A:send(msg<sub>i </sub>)* ⇒
-*x* → *B:receive(msg<sub>i </sub>)*
-
-*y* → *B:receive(msg<sub>i </sub>)* ⇒
-*y* → *A:receipt(msg<sub>i </sub>)*
+IBC channels implement a vector clock for the restricted case of two processes (in our case, blockchains). Given *x* → *y* means *x* is causally before *y*, chains `A` and `B`, and *a* ⇒ *b* means *a* implies *b*:
 
 Every transaction on the same chain already has a well-defined causality relation (order in history). IBC provides an ordering guarantee across two chains which can be used to reason about the combined state of both chains as a whole.
 
@@ -109,96 +97,27 @@ For example, an application may wish to allow a single tokenized asset to be tra
 
 ## Technical Specification
 
-We introduce the abstraction of an IBC *channel*: a set of the required packet queues to facilitate ordered bidirectional communication between two blockchains `A` and `B`. An IBC connection, as defined earlier, can have any number of associated channels. IBC connections handle header initialization & updates. All IBC channels use the same connection, but implement independent queues and thus independent ordering guarantees.
-
-An IBC channel consists of four distinct queues, two on each chain:
-
-`outgoing_A`: Outgoing IBC packets from chain `A` to chain `B`, stored on chain `A`
-
-`incoming_A`: IBC receipts for incoming IBC packets from chain `B`, stored on chain `A`
-
-`outgoing_B`: Outgoing IBC packets from chain `B` to chain `A`, stored on chain `B`
-
-`incoming_B`: IBC receipts for incoming IBC packets from chain `A`, stored on chain `B`
-
 ### Sending Packets
 
-To send an IBC packet, an application module on the source chain must call the send method of the IBC module, providing a packet as defined above. The IBC module must ensure that the destination chain was already properly registered and that the calling module has permission to write this packet. If all is in order, the IBC module simply pushes the packet to the tail of `outgoing_a`, which enables all the proofs described above.
-
-The packet must provide routing information in the `type` field, so that different modules can write different kinds of packets and maintain any application-level invariants related to this area. For example, a "coin" module can ensure a fixed supply, or a "NFT" module can ensure token uniqueness. The IBC module on the destination chain must associate every supported packet type with a particular handler (`f_type`).
-
-To send an IBC packet from blockchain `A` to blockchain `B`:
-
-`send(P{type, sequence, source, destination, data}) ⇒ success | failure`
-
+```coffeescript
+function sendPacket(Packet packet)
 ```
-case
-  source /= (A, connection, channel) ⇒ fail with "wrong sender"
-  sequence /= tail(outgoing_A) ⇒ fail with "wrong sequence"
-  otherwise ⇒
-    push(outgoing_A, P)
-    success
-```
-
-Note that the `sequence`, `source`, and `destination` can all be encoded in the Merkle tree key for the channel and do not need to be stored individually in each packet.
 
 ### Receiving Packets
 
-Upon packet receipt, chain `B` must check that the packet is valid, that it was intended for the destination, and that all previous packets have been processed. `receive` must write the receipt queue upon accepting a valid packet regardless of the result of handler execution so that future packets can be processed.
-
-To receive an IBC packet on blockchain `B` from a source chain `A`, with a Merkle proof `M_kvh` and the current set of trusted headers for that chain `T_A`:
-
-`receive(P{type, sequence, source, destination, data}, M_kvh) ⇒ success | failure`
-
-```
-case
-  incoming_B == nil ⇒ fail with "unregistered sender"
-  destination /= (B, connection, channel) ⇒ fail with "wrong destination"
-  sequence /= head(Incoming_B) ⇒ fail with "out of order"
-  H_h not in T_A ⇒ fail with "must submit header for height h"
-  valid(H_h, M_kvh) == false ⇒ fail with "invalid Merkle proof"
-  otherwise ⇒
-    set result = f_type(data)
-    push(incoming_B, R{tail(incoming_B), (B, connection, channel), (A, connection, channel), result})
-    success
+```coffeescript
+function recvPacket(Packet packet)
 ```
 
 ### Timeouts
 
+```coffeescript
+function timeoutPacket(Packet packet)
+```
+
 Application semantics may require some timeout: an upper limit to how long the chain will wait for a transaction to be processed before considering it an error. Since the two chains have different local clocks, this is an obvious attack vector for a double spend - an attacker may delay the relay of the receipt or wait to send the packet until right after the timeout - so applications cannot safely implement naive timeout logic themselves. 
 
 One solution is to include a timeout in the IBC packet itself.  When sending a packet, one can specify a block height or timestamp on chain `B` after which the packet is no longer valid. If the packet is posted before the cutoff, it will be processed normally. If it is posted after the cutoff, it will be a guaranteed error. In order to provide the necessary guarantees, the timeout must be specified relative to a condition on the receiving chain, and the sending chain must have proof of this condition after the cutoff. 
-
-For a sending chain `A` and a receiving chain `B`, with an IBC packet `P={_, i, _, _, _}` and some height `h` on chain `B`, the base IBC protocol provides the following guarantees:
-
-`A:M_kvh == ∅` if message `i` was not sent before height `h` 
-
-`A:M_kvh == ∅` if message `i` was sent and the corresponding receipt received before height `h` (and the receipts for all messages j < i were also handled)
-
-`A:M_kvh /= ∅` otherwise, if message `i` was sent but the receipt has not yet been processed
-
-`B:M_kvh == ∅` if message `i` was not received before height `h` 
-
-`B:M_kvh /= ∅` if message `i` was received before height `h` 
-
-We can make a few modifications of the above protocol to allow us to prove timeouts, by adding some fields to the messages in the send queue and defining an expired function that returns true iff `h > maxHeight` or `timestamp(H_h) > maxTime`.
-
-`P = (type, sequence, source, destination, data, maxHeight, maxTime)`
-
-`expired(H_h, P) ⇒ true | false`
-
-We then update message handling in `receive`, so that chain `B` doesn't even call the handler function if the timeout was reached but instead directly writes an error in the receipt queue:
-
-`receive`
-
-```
-case 
-  ... 
-  expired(latestHeader, v) ⇒ push(incoming_b, R{..., TimeoutError})
-  otherwise ⇒
-    set result = f_type(data)
-    push(incoming_B, R{tail(incoming_B), (B, connection, channel), (A, connection, channel), result})
-```
 
 Now chain `A` can rollback all transactions that were blocked by this flood of unrelayed packets - since they can never confirm - without waiting for chain `B` to process them and return a receipt. Adding reasonable timeouts to all packets allows us to gracefully handle any errors with the IBC relay processes or a flood of unrelayed "spam" IBC packets. If a blockchain requires a timeout on all messages and imposes some reasonable upper limit, we can guarantee that if a packet is not processed by the upper limit of the timeout period, then all previous packets must also have either been processed or reached the timeout period. 
 
