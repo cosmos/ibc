@@ -3,11 +3,11 @@ ics: 25
 title: Handler Interface
 stage: draft
 category: ibc-core
-requires: 2, 3, 4, 5, 23, 24
+requires: 2, 3, 4, 23, 24
 required-by: 26
 author: Christopher Goes <cwgoes@tendermint.com>
 created: 2019-04-23
-modified: 2019-05-09
+modified: 2019-05-14
 ---
 
 ## Synopsis
