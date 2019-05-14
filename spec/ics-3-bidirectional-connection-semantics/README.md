@@ -7,7 +7,7 @@ requires: 2, 6, 10, 23
 required-by: 4, 25, 26
 author: Christopher Goes <cwgoes@tendermint.com>, Juwoon Yun <joon@tendermint.com>
 created: 2019-03-07
-modified: 2019-05-13
+modified: 2019-05-15
 ---
 
 ## Synopsis
@@ -20,7 +20,7 @@ The core IBC protocol provides *authorization* and *ordering* semantics for pack
 
 ### Definitions
 
-`ConsensusState`, `Header, and `updateConsensusState` are as defined in [ICS 2: Consensus Verification](../spec/ics-2-consensus-verification).
+`ConsensusState`, `Header`, and `updateConsensusState` are as defined in [ICS 2: Consensus Verification](../spec/ics-2-consensus-verification).
 
 `CommitmentProof`, `verifyMembership`, and `verifyNonMembership` are as defined in [ICS 23: Vector Commitments](../spec/ics-23-vector-commitments).
 
@@ -429,7 +429,7 @@ Coming soon.
 Parts of this document were inspired by the [previous IBC specification](https://github.com/cosmos/cosmos-sdk/tree/master/docs/spec/ibc).
 
 29 March 2019 - Initial draft version submitted
-13 May 2019 - Draft finalized
+15 May 2019 - Draft finalized
 
 ## Copyright
 

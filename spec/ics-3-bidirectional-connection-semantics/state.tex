@@ -1,32 +1,46 @@
 \documentclass[tikz,10pt,border=10pt]{standalone}
 \usepackage{textcomp}
+\usepackage{xcolor}
 \usetikzlibrary{shapes,arrows}
 \begin{document}
 \tikzset{%
   state/.style    = {draw, thick, rectangle, node distance = 6cm}
 }
+\newcommand{\CA}[1]{\it{A} \textcolor{black}{\textsc{#1}}}
+\newcommand{\CB}[1]{\it{B} \textcolor{black}{\textsc{#1}}}
+\newcommand{\CS}[2]{\begin{tabular}{l}
+\CA{#1} \\
+\CB{#2}
+\end{tabular}}
 
 \begin{tikzpicture}[auto, thick, node distance=2cm, >=triangle 45]
 \draw
-	node [state, name=empty, right = 0.5mm] {UNINITIALIZED} 
-  node [state, below of=empty] (init) {INIT}
-  node [state, right of=init] (tryopen) {TRYOPEN}
-  node [state, right of=tryopen] (open) {OPEN}
-  node [state, below of=open] (tryclose) {TRYCLOSE}
-  node [state, left of=tryclose] (closed) {CLOSED};
+	node [state, name=empty, right = 0.5mm] {\CS{Uninitialized}{Uninitialized}}
+  node [state, below of=empty] (init) {\CS{Init}{Uninitialized}}
+  node [state, right of=init] (tryopen) {\CS{Init}{TryOpen}}
+  node [state, right of=tryopen] (tryopen1) {\CS{Open}{TryOpen}}
+  node [state, right of=tryopen1] (open) {\CS{Open}{Open}}
+  node [state, below of=open] (tryclose) {\CS{TryClose}{Open}}
+  node [state, left of=tryclose] (tryclose1) {\CS{TryClose}{Closed}}
+  node [state, left of=tryclose1] (closed) {\CS{Closed}{Closed}};
 
 	\draw[->, blue, bend right](empty) edge node[yshift=3mm, xshift=1mm] {\tiny{\textsc{ConnInit}}} (init);
  	\draw[->, blue](init) edge node {\tiny{\textsc{ConnOpenTry}}} (tryopen);
-	\draw[->, blue](tryopen) edge node {\tiny{\textsc{ConnOpenAck, ConnOpenConfirm}}} (open);
+	\draw[->, blue](tryopen) edge node {\tiny{\textsc{ConnOpenAck}}} (tryopen1);
+	\draw[->, blue](tryopen1) edge node {\tiny{\textsc{ConnOpenConfirm}}} (open);
+
   \draw[->, green, bend right](open) edge node[yshift=3mm, xshift=1mm] {\tiny{\textsc{ConnCloseTry}}} (tryclose);
-  \draw[->, green](tryclose) edge node {\tiny{\textsc{ConnCloseAck, ConnCloseConfirm}}} (closed);
+  \draw[->, green](tryclose) edge node {\tiny{\textsc{ConnCloseAck}}} (tryclose1);
+  \draw[->, green](tryclose1) edge node {\tiny{\textsc{ConnCloseConfirm}}} (closed);
+
   \draw[->, red, bend right](init) edge node {\tiny{\textsc{ConnOpenTimeout}}} (empty);
   \draw[->, red](tryopen) edge node {\tiny{\textsc{ConnOpenTimeout}}} (empty);
-  \draw[->, red](open) edge node {\tiny{\textsc{ConnOpenTimeout}}} (empty);
-  \draw[->, red, bend right](tryclose) edge node {\tiny{\textsc{ConnCloseTimeout}}} (open);
-  \draw[->, red](closed) edge node {\tiny{\textsc{ConnCloseTimeout}}} (open);
+  \draw[->, red](tryopen1) edge node {\tiny{\textsc{ConnOpenTimeout}}} (empty);
 
-	\draw[color=black,thick](-0.5,-14) rectangle (15.2,2.8);
+  \draw[->, red, bend right](tryclose) edge node {\tiny{\textsc{ConnCloseTimeout}}} (open);
+  \draw[->, red](tryclose1) edge node {\tiny{\textsc{ConnCloseTimeout}}} (open);
+
+	\draw[color=black,thick](-0.5,-14) rectangle (22,2.8);
 
 	\node at (-0.5,1.5) [above=0.5mm, right=5mm] {\textsc{Connection State Machine}};
 
