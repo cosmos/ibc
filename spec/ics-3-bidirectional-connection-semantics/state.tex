@@ -24,6 +24,13 @@
   node [state, left of=tryclose] (tryclose1) {\CS{TryClose}{Closed}}
   node [state, left of=tryclose1] (closed) {\CS{Closed}{Closed}};
 
+  \draw node [state, name = key, right = 18cm, above = 2mm] {\begin{tabular}{l}
+  \it{Key} \\
+  \textcolor{blue}{Opening Handshake} \\
+  \textcolor{green}{Closing Handshake} \\
+  \textcolor{red}{Timeouts} \\
+  \end{tabular}};
+
 	\draw[->, blue, bend right](empty) edge node[yshift=3mm, xshift=1mm] {\tiny{\textsc{ConnInit}}} (init);
  	\draw[->, blue](init) edge node {\tiny{\textsc{ConnOpenTry}}} (tryopen);
 	\draw[->, blue](tryopen) edge node {\tiny{\textsc{ConnOpenAck}}} (tryopen1);
@@ -42,7 +49,7 @@
 
 	\draw[color=black,thick](-0.5,-14) rectangle (22,2.8);
 
-	\node at (-0.5,1.5) [above=0.5mm, right=5mm] {\textsc{Connection State Machine}};
+	\node at (-0.5,1.5) [above=0.5mm, right=5mm] {\huge{\textsc{Connection State Machine}}};
 
 \end{tikzpicture}
 \end{document}
