@@ -10,37 +10,33 @@ created: 2019-04-23
 modified: 2019-05-09
 ---
 
-# Synopsis
+## Synopsis
 
 This document describes the interface exposed by the standard IBC implementation (referred to as the IBC handler) to modules within the same state machine, and the implementation of that interface by the IBC handler.
 
-# Specification
-
-## Motivation
+### Motivation
 
 IBC is an inter-module communication protocol, designed to faciliate reliable, authentication message passing between modules on separate blockchains. Modules should be able to reason about the interface they interact with and the requirements they must adhere to in order to utilize it safely.
 
-## Definitions
+### Definitions
 
 `Client` and `ConsensusState` are as defined in ICS 2.
 
 `Connection` and `ConnectionState` are as defined in ICS 3.
 
-`Channel` is as defined in ICS 4.
-
-`Packet` is as defined in ICS 5.
+`Channel` and `Packet` are as defined in ICS 4.
 
 `CommitmentProof` is as defined in ICS 23.
 
 `Identifier`s must conform to the schema defined in ICS 24.
 
-## Desired Properties
+### Desired Properties
 
 - Creation of clients, connections, and channels should be as permissionless as possible.
 - The module set should be dynamic: chains should be able to add and destroy modules at will with a persistent IBC handler.
 - Modules should be able to write their own more complex abstractions on top of IBC to provide additional semantics or guarantees.
 
-## Technical Specification
+## Specification
 
 ### Clients
 
@@ -108,7 +104,6 @@ function deleteClient(string identifier) -> Maybe<Err>
 
 Implementations of `createClient`, `queryClient`, `updateClient`, `freezeClient`, and `deleteClient` are defined in ICS 2.
 
-
 ### Connections
 
 By default, connections are unowned. Connections can be closed by any module, but only when all channels associated with the connection have been closed by the modules which opened them and a timeout has passed since the connection was opened.
@@ -163,6 +158,12 @@ The default IBC relayer module will allow external calls to `confirmConnection`.
 
 ```coffeescript
 function confirmConnection(string identifier, CommitmentProof proofAck)
+```
+
+`timeoutConnection` handles a timeout in a connection opening handshake.
+
+```coffeescript
+function timeoutConnection(string identifier, CommitmentProof proofTimeout)
 ```
 
 `queryConnection` queries an existing connection by known identifier, returning the associated metadata if found.
@@ -356,10 +357,10 @@ Coming soon.
 
 Coming soon.
 
-# History
+## History
 
 30 April 2019 - Draft written
 
-# Copyright
+## Copyright
 
 Copyright and related rights waived via [CC0](https://creativecommons.org/publicdomain/zero/1.0/).
