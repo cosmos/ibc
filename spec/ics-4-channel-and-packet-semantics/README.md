@@ -236,6 +236,7 @@ function sendPacket(Packet packet)
   assert(connectionState == OPEN)
   sequence = oldSequence + 1
   // set stored send sequence
+  // or add to send commitment
   set("channels/{channelIdentifier}/packets/{sequence}", commit(packet.data))
 ```
 
@@ -247,7 +248,8 @@ function recvPacket(Packet packet)
   assert(state == OPEN)
   assert(getCallingModule() == moduleIdentifier)
   assert(direction == Rx || direction == TxRx)
-  // check sequence depending on ordering
+  // assert timeout not passed
+  // check sequence or check send commitment depending on ordering
   assert(verifyMembership(
     consensusState.getRoot(),
     proof,
@@ -268,6 +270,13 @@ function timeoutPacket(Packet packet)
   assert(verifyNonMembership(...))
   // set stored recv sequence, clear, etc.
 ```
+
+questions
+- increment sequence on packet timeout (require ordering there) too?
+- worth doing unordered connections? have to store hashes of processed packets
+- reverse mappings for client => connection, connection => channel (for safe closure)?
+- is txrx / tx / rx worthwhile? could also do at module layer presumably
+- clarify the module calling pattern
 
 Application semantics may require some timeout: an upper limit to how long the chain will wait for a transaction to be processed before considering it an error. Since the two chains have different local clocks, this is an obvious attack vector for a double spend - an attacker may delay the relay of the receipt or wait to send the packet until right after the timeout - so applications cannot safely implement naive timeout logic themselves. 
 
