@@ -71,6 +71,18 @@ Directionality and ordering are independent, so one can speak of a bidirectional
 
 All channels provide exactly-once packet delivery.
 
+Channels also have a *state*:
+
+```golang
+type ChannelState struct {
+  INIT
+  TRYOPEN
+  OPEN
+  TRYCLOSE
+  CLOSED
+}
+```
+
 An IBC *packet* is a particular datagram, defined as follows:
 
 ```golang
@@ -109,7 +121,6 @@ For example, an application may wish to allow a single tokenized asset to be tra
 ```golang
 type ChanOpenInit struct {
   Identifier        connectionIdentifier
-  Identifier        counterpartyConnectionIdentifier
   Identifier        channelIdentifier
   Identifier        counterpartyChannelIdentifier
   Identifier        counterpartyModuleIdentifier
@@ -121,16 +132,16 @@ type ChanOpenInit struct {
 
 ```coffeescript
 function chanOpenInit()
-  owner = callingModule()
+  moduleIdentifier = getCallingModule()
   assert(get("channels/{channelIdentifier}") == null)
-  assert(get("connections/{connectionIdentifier}") != null)
-  set("channels/{channelIdentifier}", (owner, counterpartyChannelIdentifier, connectionIdentifier, counterpartyConnectionIdentifier, direction, ordering, version))
+  (state, _, counterpartyConnectionIdentifier, _, _, _) = get("connections/{connectionIdentifier}")
+  assert(state == OPEN)
+  set("channels/{channelIdentifier}", (INIT, moduleIdentifier, counterpartyModuleIdentifier, counterpartyChannelIdentifier, connectionIdentifier, counterpartyConnectionIdentifier, direction, ordering, version))
 ```
 
 ```golang
 type ChanOpenTry struct {
   Identifier        connectionIdentifier
-  Identifier        counterpartyConnectionIdentifier
   Identifier        channelIdentifier
   Identifier        counterpartyChannelIdentifier
   Identifier        moduleIdentifier
@@ -138,36 +149,73 @@ type ChanOpenTry struct {
   ChannelDirection  direction
   ChannelOrdering   ordering
   Version           version
+  CommitmentProof   proofInit
 }
 ```
 
 ```coffeescript
 function chanOpenTry()
   assert(get("channels/{channelIdentifier}") == null)
+  assert(getCallingModule() == moduleIdentifier)
+  (connectionState, _, counterpartyConnectionIdentifier, clientIdentifier, _, _) = get("connections/{connectionIdentifier}")
+  assert(connectionState == OPEN)
+  consensusState = get("clients/{clientIdentifier}")
+  assert(verifyMembership(
+    consensusState,
+    proofInit,
+    "channels/{counterpartyChannelIdentifier}",
+    (INIT, counterpartyModuleIdentifier, moduleIdentifier, channelIdentifier, counterpartyConnectionIdentifier, connectionIdentifier, direction, ordering, version)
+  ))
+  set("channels/{channelIdentifier}", (TRYOPEN, moduleIdentifier, counterpartyModuleIdentifier, counterpartyChannelIdentifier, connectionIdentifier, counterpartyConnectionIdentifier, direction, ordering, version))
 ```
 
 ```golang
 type ChanOpenAck struct {
   Identifier        channelIdentifier
-  Identifier        counterpartyChannelIdentifier
   Version           version
+  CommitmentProof   proofTry
 }
 ```
 
 ```coffeescript
 function chanOpenAck()
+  (state, moduleIdentifier, counterpartyModuleIdentifier, counterpartyChannelIdentifier, connectionIdentifier, counterpartyConnectionIdentifier, direction, ordering, version) = get("channels/{channelIdentifier}")
+  assert(getCallingModule() == moduleIdentifier)
+  (connectionState, _, _, clientIdentifier, _, _) = get("connections/{connectionIdentifier}")
+  assert(connectionState == OPEN)
+  assert(verifyMembership(
+    consensusState,
+    proofTry,
+    "channels/{counterpartyChannelIdentifier}",
+    (TRYOPEN, counterpartyModuleIdentifier, moduleIdentifier, channelIdentifier, counterpartyConnectionIdentifier, connectionIdentifier, direction, ordering, version) 
+  ))
+  set("channels/{channelIdentifier}", (OPEN, moduleIdentifier, counterpartyModuleIdentifier, counterpartyChannelIdentifier, connectionIdentifier, counterpartyConnectionIdentifier, direction, ordering, version)) 
 ```
 
 ```golang
 type ChanOpenConfirm struct {
   Identifier        channelIdentifier
-  Identifier        counterpartyChannelIdentifier
+  Version           version
+  CommitmentProof   proofAck
 }
 ```
 
 ```coffeescript
 function chanOpenConfirm()
+  (state, moduleIdentifier, counterpartyModuleIdentifier, counterpartyChannelIdentifier, connectionIdentifier, counterpartyConnectionIdentifier, direction, ordering, version) = get("channels/{channelIdentifier}")
+  assert(getCallingModule() == moduleIdentifier)
+  (connectionState, _, _, clientIdentifier, _, _) = get("connections/{connectionIdentifier}")
+  assert(connectionState == OPEN)
+  assert(verifyMembership(
+    consensusState.getRoot(),
+    proofAck,
+    "channels/{counterpartyChannelIdentifier}",
+    (OPEN, counterpartyModuleIdentifier, moduleIdentifier, channelIdentifier, counterpartyConnectionIdentifier, connectionIdentifier, direction, ordering, version)
+  ))
+  set("channels/{channelIdentifier}", (OPEN, moduleIdentifier, counterpartyModuleIdentifier, counterpartyChannelIdentifier, connectionIdentifier, counterpartyConnectionIdentifier, direction, ordering, version)) 
 ```
+
+(modulo version negotation, direction alteration)
 
 ### Sending packets
 
