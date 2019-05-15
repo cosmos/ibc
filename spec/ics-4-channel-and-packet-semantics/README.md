@@ -230,6 +230,13 @@ function chanOpenConfirm()
 function sendPacket(Packet packet)
   (state, moduleIdentifier, _, _, _, _, direction, ordering, _) = get("channels/{channelIdentifier}")
   assert(state == OPEN)
+  assert(getCallingModule() == moduleIdentifier)
+  assert(direction == Tx || direction == TxRx)
+  (connectionState, _, _, _, _, _) = get("connections/{connectionIdentifier}")
+  assert(connectionState == OPEN)
+  sequence = oldSequence + 1
+  // set stored send sequence
+  set("channels/{channelIdentifier}/packets/{sequence}", commit(packet.data))
 ```
 
 ### Receiving packets
@@ -238,6 +245,16 @@ function sendPacket(Packet packet)
 function recvPacket(Packet packet)
   (state, moduleIdentifier, _, _, _, _, direction, ordering, _) = get("channels/{channelIdentifier}")
   assert(state == OPEN)
+  assert(getCallingModule() == moduleIdentifier)
+  assert(direction == Rx || direction == TxRx)
+  // check sequence depending on ordering
+  assert(verifyMembership(
+    consensusState.getRoot(),
+    proof,
+    "channels/{channelIdentifier}/packets/{sequence}",
+    commit(packet.data)
+  ))
+  // set stored recv sequence depending on ordering
 ```
 
 ### Timeouts
@@ -246,6 +263,10 @@ function recvPacket(Packet packet)
 function timeoutPacket(Packet packet)
   (state, moduleIdentifier, _, _, _, _, direction, ordering, _) = get("channels/{channelIdentifier}")
   assert(state == OPEN)
+  assert(getCallingModule() == moduleIdentifier)
+  assert(direction == Rx || direction == TxRx)
+  assert(verifyNonMembership(...))
+  // set stored recv sequence, clear, etc.
 ```
 
 Application semantics may require some timeout: an upper limit to how long the chain will wait for a transaction to be processed before considering it an error. Since the two chains have different local clocks, this is an obvious attack vector for a double spend - an attacker may delay the relay of the receipt or wait to send the packet until right after the timeout - so applications cannot safely implement naive timeout logic themselves. 
