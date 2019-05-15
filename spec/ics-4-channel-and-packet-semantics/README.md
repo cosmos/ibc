@@ -180,6 +180,7 @@ type ChanOpenAck struct {
 ```coffeescript
 function chanOpenAck()
   (state, moduleIdentifier, counterpartyModuleIdentifier, counterpartyChannelIdentifier, connectionIdentifier, counterpartyConnectionIdentifier, direction, ordering, version) = get("channels/{channelIdentifier}")
+  assert(state == INIT)
   assert(getCallingModule() == moduleIdentifier)
   (connectionState, _, _, clientIdentifier, _, _) = get("connections/{connectionIdentifier}")
   assert(connectionState == OPEN)
@@ -203,6 +204,7 @@ type ChanOpenConfirm struct {
 ```coffeescript
 function chanOpenConfirm()
   (state, moduleIdentifier, counterpartyModuleIdentifier, counterpartyChannelIdentifier, connectionIdentifier, counterpartyConnectionIdentifier, direction, ordering, version) = get("channels/{channelIdentifier}")
+  assert(state == TRYOPEN)
   assert(getCallingModule() == moduleIdentifier)
   (connectionState, _, _, clientIdentifier, _, _) = get("connections/{connectionIdentifier}")
   assert(connectionState == OPEN)
@@ -221,18 +223,24 @@ function chanOpenConfirm()
 
 ```coffeescript
 function sendPacket(Packet packet)
+  (state, moduleIdentifier, _, _, _, _, direction, ordering, _) <- get("channels/{channelIdentifier}")
+  assert(state == OPEN)
 ```
 
 ### Receiving packets
 
 ```coffeescript
 function recvPacket(Packet packet)
+  (state, moduleIdentifier, _, _, _, _, direction, ordering, _) <- get("channels/{channelIdentifier}")
+  assert(state == OPEN)
 ```
 
 ### Timeouts
 
 ```coffeescript
 function timeoutPacket(Packet packet)
+  (state, moduleIdentifier, _, _, _, _, direction, ordering, _) <- get("channels/{channelIdentifier}")
+  assert(state == OPEN)
 ```
 
 Application semantics may require some timeout: an upper limit to how long the chain will wait for a transaction to be processed before considering it an error. Since the two chains have different local clocks, this is an obvious attack vector for a double spend - an attacker may delay the relay of the receipt or wait to send the packet until right after the timeout - so applications cannot safely implement naive timeout logic themselves. 
