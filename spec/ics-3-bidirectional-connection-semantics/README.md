@@ -81,12 +81,12 @@ type ConnectionState enum {
 
 ```golang
 type Connection struct {
-  ConnectionState state
-  Version         version
-  Identifier      counterpartyIdentifier
-  Identifier      clientIdentifier
-  Identifier      counterpartyClientIdentifier
-  uint64          nextTimeoutHeight
+  state                         ConnectionState
+  version                       Version
+  counterpartyIdentifier        Identifier
+  clientIdentifier              Identifier
+  counterpartyClientIdentifier  Identifier
+  nextTimeoutHeight             uint64
 }
 ```
 
@@ -122,18 +122,12 @@ This subprotocol need not be permissioned, modulo anti-spam measures.
 
 ```golang
 type ConnOpenInit struct {
-  // Identifier to use for connection on chain A
-  Identifier  identifier
-  // Desired identifier to use for connection on chain B
-  Identifier  desiredCounterpartyIdentifier
-  // Desired version for connection
-  Version     desiredVersion
-  // Client identifier for chain B
-  Identifier  clientIdentifier
-  // Client identifier of chain A on chain B
-  Identifier  counterpartyClientIdentifier
-  // Height for timeout of ConnOpenTry datagram
-  uint64      nextTimeoutHeight
+  identifier                    Identifier
+  desiredCounterpartyIdentifier Identifier
+  desiredVersion                Version
+  clientIdentifier              Identifier
+  counterpartyClientIdentifier  Identifier
+  nextTimeoutHeight             uint64
 }
 ```
 
@@ -149,22 +143,14 @@ function connOpenInit(identifier, desiredVersion, desiredCounterpartyIdentifier,
 
 ```golang
 type ConnOpenTry struct {
-  // Desired identifier to use for connection on chain B
-  Identifier        desiredIdentifier
-  // Identifier for connection on chain A
-  Identifier        counterpartyIdentifier
-  // Desired version for connection
-  Version           desiredVersion
-  // Client identifier for chain B on A
-  Identifier        counterpartyClientIdentifier
-  // Client identifier for chain A on B
-  Identifier        clientIdentifier
-  // Proof of stored INIT state on chain A
-  CommitmentProof   proofInit
-  // Height after which this datagram can no longer be executed
-  uint64            timeoutHeight
-  // Height after which the ConnOpenAck datagram can no longer be executed
-  uint64            nextTimeoutHeight
+  desiredIdentifier             Identifier
+  counterpartyIdentifier        Identifier
+  desiredVersion                Version
+  counterpartyClientIdentifier  Identifier
+  clientIdentifier              Identifier
+  proofInit                     CommitmentProof
+  timeoutHeight                 uint64
+  nextTimeoutHeight             uint64
 }
 ```
 
@@ -189,16 +175,11 @@ function connOpenTry(desiredIdentifier, counterpartyIdentifier, desiredVersion, 
 
 ```golang
 type ConnOpenAck struct {
-  // Identifier for connection on chain A
-  Identifier        identifier
-  // Agreed version for connection
-  Version           agreedVersion
-  // Proof of stored TRY state on chain B
-  CommitmentProof   proofTry
-  // Height after which this datagram can no longer be executed
-  uint64            timeoutHeight
-  // Height after which the ConnOpenConfirm datagram can no longer be executed
-  uint64            nextTimeoutHeight
+  identifier        Identifier
+  agreedVersion     Version
+  proofTry          CommitmentProof
+  timeoutHeight     uint64
+  nextTimeoutHeight uint64
 }
 ```
 
@@ -223,12 +204,9 @@ function connOpenAck(identifier, agreedVersion, proofTry, timeoutHeight, nextTim
 
 ```golang
 type ConnOpenConfirm struct {
-  // Identifier for connection on chain B
-  Identifier        identifier
-  // Proof of stored OPEN state on chain A
-  CommitmentProof   proofAck
-  // Height after which this datagram can no longer be executed
-  uint64            timeoutHeight
+  identifier    Identifier
+  proofAck      CommitmentProof
+  timeoutHeight uint64
 }
 ```
 
@@ -249,10 +227,8 @@ function connOpenConfirm(identifier, proofAck, timeoutHeight)
 
 ```golang
 type ConnOpenTimeout struct {
-  // Identifier for connection on this chain
-  Identifier      identifier
-  // Proof of not-progressed state past the timeout height
-  CommitmentProof proofTimeout
+  identifier    Identifier
+  proofTimeout  CommitmentProof
 }
 ```
 
@@ -304,12 +280,9 @@ A correct protocol execution flows as follows:
 
 ```golang
 type ConnCloseInit struct {
-  // Identifier of connection
-  Identifier identifier
-  // Identifier of connection on counterparty chain
-  Identifier identifierCounterparty
-  // Timeout height for ConnCloseTry datagram
-  uint64     nextTimeoutHeight
+  identifier             Identifier
+  identifierCounterparty Identifier
+  nextTimeoutHeight      uint64
 }
 ```
 
@@ -326,16 +299,11 @@ function connCloseInit(identifier, identifierCounterparty, nextTimeoutHeight)
 
 ```golang
 type ConnCloseTry struct {
-  // Identifier of connection
-  Identifier        identifier
-  // Identifier of connection on counterparty chain
-  Identifier        identifierCounterparty
-  // Proof of intermediary state on counterparty chain
-  CommitmentProof   proofInit
-  // Height after which this datagram can no longer be executed
-  uint64            timeoutHeight
-  // Height after which the ConnCloseAck datagram can no longer be executed
-  uint64            nextTimeoutHeight
+  identifier              Identifier
+  identifierCounterparty  Identifier
+  proofInit               CommitmentProof
+  timeoutHeight           uint64
+  nextTimeoutHeight       uint64
 }
 ```
 
@@ -357,12 +325,9 @@ function connCloseTry(identifier, identifierCounterparty, proofInit, timeoutHeig
 
 ```golang
 type ConnCloseAck struct {
-  // Identifier of connection
-  Identifier        identifier
-  // Proof of intermediary state on counterparty chain
-  CommitmentProof   proofTry
-  // Height after which this datagram can no longer be executed
-  uint64            timeoutHeight
+  identifier    Identifier
+  proofTry      CommitmentProof
+  timeoutHeight uint64
 }
 ```
 
@@ -382,10 +347,8 @@ function connCloseAck(identifier, proofTry, timeoutHeight)
 
 ```golang
 type ConnCloseTimeout struct {
-  // Identifier for connection on this chain
-  Identifier      identifier
-  // Proof of not-progressed state past the timeout height
-  CommitmentProof proofTimeout
+  identifier    Identifier
+  proofTimeout  CommitmentProof
 }
 ```
 
