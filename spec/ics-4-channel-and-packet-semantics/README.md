@@ -35,7 +35,7 @@ A *bidirectional* channel is a channel where packets can flow in both directions
 A *unidirectional* channel is a channel where packets can only flow in one direction: from `A` to `B`.
 
 ```golang
-enum Direction {
+type ChannelDirection enum {
   Tx
   Rx
   TxRx
@@ -45,7 +45,7 @@ enum Direction {
 An *end* of a channel is a data structure on one chain storing channel metadata:
 
 ```golang
-struct ChannelEnd {
+type ChannelEnd struct {
   name            string
   direction       Direction
   lastTxSequence  uint64
@@ -59,6 +59,13 @@ Certain fields may be omitted depending on the direction of the end.
 An *ordered* channel is a channel where packets are delivered exactly in the order which they were sent.
 
 An *unordered* channel is a channel where packets can be delivered in any order, which may differ from the order in which they were sent.
+
+```golang
+type ChannelOrdering enum {
+  Ordered
+  Unordered
+}
+```
 
 Directionality and ordering are independent, so one can speak of a bidirectional unordered channel, a unidirectional ordered channel, etc.
 
@@ -99,16 +106,61 @@ For example, an application may wish to allow a single tokenized asset to be tra
 
 ### Channel opening handshake
 
+```golang
+type ChanOpenInit struct {
+  Identifier        connectionIdentifier
+  Identifier        counterpartyConnectionIdentifier
+  Identifier        channelIdentifier
+  Identifier        counterpartyChannelIdentifier
+  Identifier        counterpartyModuleIdentifier
+  ChannelDirection  direction
+  ChannelOrdering   ordering
+  Version           version
+}
+```
+
 ```coffeescript
 function chanOpenInit()
+```
+
+```golang
+type ChanOpenTry struct {
+  Identifier        connectionIdentifier
+  Identifier        counterpartyConnectionIdentifier
+  Identifier        channelIdentifier
+  Identifier        counterpartyChannelIdentifier
+  Identifier        moduleIdentifier
+  Identifier        counterpartyModuleIdentifier
+  ChannelDirection  direction
+  ChannelOrdering   ordering
+  Version           version
+}
+```
+
+```golang
+type ChanOpenTry struct {
+  Identifier        channelIdentifier
+  Identifier        counterpartyChannelIdentifier
+  Version           version
+}
 ```
 
 ```coffeescript
 function chanOpenTry()
 ```
 
+```golang
+type ChanOpenAck struct {
+}
+```
+
 ```coffeescript
 function chanOpenAck()
+```
+
+```golang
+type ChanOpenConfirm struct {
+}
 ```
 
 ```coffeescript
