@@ -26,7 +26,7 @@ The interblockchain communication protocol uses a cross-chain message passing mo
 
 `Commitment`, `CommitmentProof`, and `CommitmentRoot` are as defined in ICS 23.
 
-`Get`, `Set`, and module-system related primitives are as defined in ICS 24.
+`Identifier`, `get`, `set`, `delete`, and module-system related primitives are as defined in ICS 24.
 
 A *channel* is a pipeline for exactly-once packet delivery between specific modules on separate blockchains, which has at least one send and one receive end.
 
@@ -97,13 +97,31 @@ For example, an application may wish to allow a single tokenized asset to be tra
 
 ## Technical Specification
 
-### Sending Packets
+### Channel opening handshake
+
+```coffeescript
+function chanOpenInit()
+```
+
+```coffeescript
+function chanOpenTry()
+```
+
+```coffeescript
+function chanOpenAck()
+```
+
+```coffeescript
+function chanOpenConfirm()
+```
+
+### Sending packets
 
 ```coffeescript
 function sendPacket(Packet packet)
 ```
 
-### Receiving Packets
+### Receiving packets
 
 ```coffeescript
 function recvPacket(Packet packet)
