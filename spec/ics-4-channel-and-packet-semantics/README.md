@@ -121,6 +121,10 @@ type ChanOpenInit struct {
 
 ```coffeescript
 function chanOpenInit()
+  owner = callingModule()
+  assert(get("channels/{channelIdentifier}") == null)
+  assert(get("connections/{connectionIdentifier}") != null)
+  set("channels/{channelIdentifier}", (owner, counterpartyChannelIdentifier, connectionIdentifier, counterpartyConnectionIdentifier, direction, ordering, version))
 ```
 
 ```golang
@@ -137,20 +141,16 @@ type ChanOpenTry struct {
 }
 ```
 
-```golang
-type ChanOpenTry struct {
-  Identifier        channelIdentifier
-  Identifier        counterpartyChannelIdentifier
-  Version           version
-}
-```
-
 ```coffeescript
 function chanOpenTry()
+  assert(get("channels/{channelIdentifier}") == null)
 ```
 
 ```golang
 type ChanOpenAck struct {
+  Identifier        channelIdentifier
+  Identifier        counterpartyChannelIdentifier
+  Version           version
 }
 ```
 
@@ -160,6 +160,8 @@ function chanOpenAck()
 
 ```golang
 type ChanOpenConfirm struct {
+  Identifier        channelIdentifier
+  Identifier        counterpartyChannelIdentifier
 }
 ```
 
