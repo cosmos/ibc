@@ -228,7 +228,7 @@ function chanOpenConfirm()
 
 ```coffeescript
 function sendPacket(Packet packet)
-  (state, moduleIdentifier, _, _, _, _, direction, ordering, _) <- get("channels/{channelIdentifier}")
+  (state, moduleIdentifier, _, _, _, _, direction, ordering, _) = get("channels/{channelIdentifier}")
   assert(state == OPEN)
 ```
 
@@ -236,7 +236,7 @@ function sendPacket(Packet packet)
 
 ```coffeescript
 function recvPacket(Packet packet)
-  (state, moduleIdentifier, _, _, _, _, direction, ordering, _) <- get("channels/{channelIdentifier}")
+  (state, moduleIdentifier, _, _, _, _, direction, ordering, _) = get("channels/{channelIdentifier}")
   assert(state == OPEN)
 ```
 
@@ -244,7 +244,7 @@ function recvPacket(Packet packet)
 
 ```coffeescript
 function timeoutPacket(Packet packet)
-  (state, moduleIdentifier, _, _, _, _, direction, ordering, _) <- get("channels/{channelIdentifier}")
+  (state, moduleIdentifier, _, _, _, _, direction, ordering, _) = get("channels/{channelIdentifier}")
   assert(state == OPEN)
 ```
 
