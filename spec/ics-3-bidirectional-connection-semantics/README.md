@@ -266,8 +266,13 @@ function handleConnOpenTimeout(identifier, proofTimeout)
       assert(verifyNonMembership(consensusState, proofTimeout,
         "connections/{counterpartyIdentifier}"))
     case TRYOPEN:
-      assert(verifyMembership(consensusState, proofTimeout,
-        "connections/{counterpartyIdentifier}", (INIT, version, identifier, counterpartyClientIdentifier, clientIdentifier, _)))
+      assert(
+        verifyMembership(consensusState, proofTimeout,
+        "connections/{counterpartyIdentifier}", (INIT, version, identifier, counterpartyClientIdentifier, clientIdentifier, _))
+        ||
+        verifyNonMembership(consensusState, proofTimeout,
+        "connections/{counterpartyIdentifier}")
+      )
     case OPEN:
       assert(verifyMembership(consensusState, proofTimeout,
         "connections/{counterpartyIdentifier}", (TRYOPEN, version, identifier, counterpartyClientIdentifier, clientIdentifier, _)))
