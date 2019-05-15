@@ -42,20 +42,6 @@ type ChannelDirection enum {
 }
 ```
 
-An *end* of a channel is a data structure on one chain storing channel metadata:
-
-```golang
-type ChannelEnd struct {
-  name            string
-  direction       Direction
-  lastTxSequence  uint64
-  lastRxSequence  uint64
-  rxCommitment    CommitmentRoot
-}
-```
-
-Certain fields may be omitted depending on the direction of the end.
-
 An *ordered* channel is a channel where packets are delivered exactly in the order which they were sent.
 
 An *unordered* channel is a channel where packets can be delivered in any order, which may differ from the order in which they were sent.
@@ -82,6 +68,25 @@ type ChannelState struct {
   CLOSED
 }
 ```
+
+An *end* of a channel is a data structure on one chain storing channel metadata:
+
+```golang
+type ChannelEnd struct {
+  state                             ChannelState
+  counterpartyChannelIdentifier     string
+  connectionIdentifier              string
+  counterpartyConnectionIdentifier  string
+  direction                         ChannelDirection
+  ordering                          ChannelOrdering
+  version                           Version
+  lastTxSequence                    uint64
+  lastRxSequence                    uint64
+  rxCommitment                      CommitmentRoot
+}
+```
+
+Certain fields may be omitted depending on the direction of the end.
 
 An IBC *packet* is a particular datagram, defined as follows:
 
@@ -120,13 +125,13 @@ For example, an application may wish to allow a single tokenized asset to be tra
 
 ```golang
 type ChanOpenInit struct {
-  Identifier        connectionIdentifier
-  Identifier        channelIdentifier
-  Identifier        counterpartyChannelIdentifier
-  Identifier        counterpartyModuleIdentifier
-  ChannelDirection  direction
-  ChannelOrdering   ordering
-  Version           version
+  connectionIdentifier            Identifier
+  channelIdentifier               Identifier
+  counterpartyChannelIdentifier   Identifier
+  counterpartyModuleIdentifier    Identifier
+  direction                       ChannelDirection
+  ordering                        ChannelOrdering
+  version                         Version
 }
 ```
 
@@ -141,15 +146,15 @@ function chanOpenInit()
 
 ```golang
 type ChanOpenTry struct {
-  Identifier        connectionIdentifier
-  Identifier        channelIdentifier
-  Identifier        counterpartyChannelIdentifier
-  Identifier        moduleIdentifier
-  Identifier        counterpartyModuleIdentifier
-  ChannelDirection  direction
-  ChannelOrdering   ordering
-  Version           version
-  CommitmentProof   proofInit
+  connectionIdentifier          Identifier
+  channelIdentifier             Identifier
+  counterpartyChannelIdentifier Identifier
+  moduleIdentifier              Identifier
+  counterpartyModuleIdentifier  Identifier
+  direction                     ChannelDirection
+  ordering                      ChannelOrdering
+  version                       Version
+  proofInit                     CommitmentProof
 }
 ```
 
@@ -171,9 +176,9 @@ function chanOpenTry()
 
 ```golang
 type ChanOpenAck struct {
-  Identifier        channelIdentifier
-  Version           version
-  CommitmentProof   proofTry
+  channelIdentifier   Identifier
+  version             Version
+  proofTry            CommitmentProof
 }
 ```
 
@@ -195,9 +200,9 @@ function chanOpenAck()
 
 ```golang
 type ChanOpenConfirm struct {
-  Identifier        channelIdentifier
-  Version           version
-  CommitmentProof   proofAck
+  channelIdentifier Identifier
+  version           Version
+  proofAck          CommitmentProof
 }
 ```
 
