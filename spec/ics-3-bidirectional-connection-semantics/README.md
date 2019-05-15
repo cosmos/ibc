@@ -138,7 +138,7 @@ type ConnOpenInit struct {
 ```
 
 ```coffeescript
-function handleConnOpenInit(identifier, desiredVersion, desiredCounterpartyIdentifier, clientIdentifier, counterpartyClientIdentifier, nextTimeoutHeight)
+function connOpenInit(identifier, desiredVersion, desiredCounterpartyIdentifier, clientIdentifier, counterpartyClientIdentifier, nextTimeoutHeight)
   assert(get("connections/{identifier}") == null)
   state = INIT
   set("connections/{identifier}",
@@ -169,7 +169,7 @@ type ConnOpenTry struct {
 ```
 
 ```coffeescript
-function handleConnOpenTry(desiredIdentifier, counterpartyIdentifier, desiredVersion, counterpartyClientIdentifier, clientIdentifier, proofInit, timeoutHeight, nextTimeoutHeight)
+function connOpenTry(desiredIdentifier, counterpartyIdentifier, desiredVersion, counterpartyClientIdentifier, clientIdentifier, proofInit, timeoutHeight, nextTimeoutHeight)
   assert(getConsensusState().getHeight() <= timeoutHeight)
   consensusState = get("clients/{clientIdentifier}")
   expectedConsensusState = getConsensusState()
@@ -203,7 +203,7 @@ type ConnOpenAck struct {
 ```
 
 ```coffeescript
-function handleConnOpenAck(identifier, agreedVersion, proofTry, timeoutHeight, nextTimeoutHeight)
+function connOpenAck(identifier, agreedVersion, proofTry, timeoutHeight, nextTimeoutHeight)
   assert(getConsensusState().getHeight() <= timeoutHeight)
   (state, desiredVersion, desiredCounterpartyIdentifier, clientIdentifier, counterpartyClientIdentifier, _) = get("connections/{identifier}")
   assert(state == INIT)
@@ -233,7 +233,7 @@ type ConnOpenConfirm struct {
 ```
 
 ```coffeescript
-function handleConnOpenConfirm(identifier, proofAck, timeoutHeight)
+function connOpenConfirm(identifier, proofAck, timeoutHeight)
   assert(getConsensusState().getHeight() <= timeoutHeight)
   (state, version, counterpartyIdentifier, clientIdentifier, counterpartyClientIdentifier, _) = get("connections/{identifier}")
   assert(state == OPENTRY)
@@ -257,7 +257,7 @@ type ConnOpenTimeout struct {
 ```
 
 ```coffeescript
-function handleConnOpenTimeout(identifier, proofTimeout)
+function connOpenTimeout(identifier, proofTimeout)
   (state, version, counterpartyIdentifier, clientIdentifier, counterpartyClientIdentifier, timeoutHeight) = get("connections/{identifier}")
   consensusState = get("clients/{clientIdentifier}")
   assert(consensusState.getHeight() > timeoutHeight)
@@ -314,7 +314,7 @@ type ConnCloseInit struct {
 ```
 
 ```coffeescript
-function handleConnCloseInit(identifier, identifierCounterparty, nextTimeoutHeight)
+function connCloseInit(identifier, identifierCounterparty, nextTimeoutHeight)
   (state, version, counterpartyIdentifier, clientIdentifier, counterpartyClientIdentifier, _) = get("connections/{identifier}")
   assert(state == OPEN)
   assert(identifierCounterparty == counterpartyIdentifier)
@@ -340,7 +340,7 @@ type ConnCloseTry struct {
 ```
 
 ```coffeescript
-function handleConnCloseTry(identifier, identifierCounterparty, proofInit, timeoutHeight, nextTimeoutHeight)
+function connCloseTry(identifier, identifierCounterparty, proofInit, timeoutHeight, nextTimeoutHeight)
   assert(getConsensusState().getHeight() <= timeoutHeight)
   (state, version, counterpartyIdentifier, clientIdentifier, counterpartyClientIdentifier, _) = get("connections/{identifier}")
   assert(state == OPEN)
@@ -367,7 +367,7 @@ type ConnCloseAck struct {
 ```
 
 ```coffeescript
-function handleConnCloseAck(identifier, proofTry, timeoutHeight)
+function connCloseAck(identifier, proofTry, timeoutHeight)
   assert(getConsensusState().getHeight() <= timeoutHeight)
   (state, version, counterpartyIdentifier, clientIdentifier, counterpartyClientIdentifier, _) = get("connections/{identifier}")
   assert(state == TRYCLOSE)
@@ -390,7 +390,7 @@ type ConnCloseTimeout struct {
 ```
 
 ```coffeescript
-function handleConnOpenTimeout(identifier, proofTimeout)
+function connOpenTimeout(identifier, proofTimeout)
   (state, version, counterpartyIdentifier, clientIdentifier, counterpartyClientIdentifier, timeoutHeight) = get("connections/{identifier}")
   consensusState = get("clients/{clientIdentifier}")
   assert(consensusState.getHeight() > timeoutHeight)
