@@ -4,204 +4,249 @@ ics: 2
 title: Consensus Verification
 stage: draft
 category: ibc-core
-requires: 23
+requires: 23, 24
 required-by: 3
 author: Juwoon Yun <joon@tendermint.com>, Christopher Goes <cwgoes@tendermint.com>
 created: 2019-02-25
-modified: 2019-04-02
+modified: 2019-04-29
 
 ---
 
 ## Synopsis
 
-This standard specifies the properties that consensus algorithms of chains implementing IBC are 
-expected to satisfy. The properties are needed for efficient and safe verification in the higher
-level protocol abstractions. The algorithm which uses these properties to verify substates of 
-another chain is referred to as a "light client".
+This standard specifies the properties that consensus algorithms of chains implementing IBC are
+expected to satisfy. These properties are needed for efficient and safe verification in the higher
+level protocol abstractions. The algorithm which uses these properties to verify substates of
+another chain is referred to as a "light client ValidityPredicate", and pairing it with a state that the
+ValidityPredicate trusts forms a "light client".
+
+This standard also specifies how the light clients will be stored, registered, and updated on a
+blockchain. The stored light client instances will be able to be verified by a third party actor, such as a user inspecting the state of the chain.
 
 ## Specification
 
 ### Motivation
 
-`FullNode`s are procedures running a `Consensus`. Given a `([Transaction], Commit)`, a 
-`FullNode` can compute the result `RootOfTrust` that the `Consensus` is expected to commit on 
-with the same `[Transaction]`, if exists. 
+In the IBC protocol, a chain needs to be able to verify updates to the state of another chain. A light client is the algorithm with which they can do so.
+updating state with a light client pointing to that chain. This standard formalises the common
+model of light client to minimise the dependency on consensus algorithms, so that the protocol can
+easily connect with new chains which are running new consensus algorithms, without need to
+upgrade the light client protocol itself.
 
-`Blockchain` defines required properties of the blockchain on the network. The implementors can 
-check whether the consensus that they are using is qualified to be connected to the network or 
-not. If not, they can modify the algorithm or wrap it with additional logic to make it 
-compatible with the specification. It also provides base layer for the protocol that the other 
-components can rely on.
-
+<!--
+`FullNode`s are procedures running a `Consensus`. Given a `([Transaction], Commit)`, a
+`FullNode` can compute the result `ConsensusState` that the `Consensus` is expected to commit on
+with the same `[Transaction]`, if exists.
+--->
 ### Desired Properties
 
-This standard specification provides secure layer to verify other chains' canonical headers, 
-using the existing `RootOfTrust`. The higher level logics can be able to verify the substate 
-with the `AccumulatorRoot` stored in the `RootOfTrust`, which is guaranteed to be committed by 
+This standard specification provides secure layer to verify other chains' canonical headers,
+using the existing `ConsensusState`. The higher level abstractions will then be able to verify subcomponents of the state
+with the `CommitmentRoot` stored in the `ConsensusState`, which is guaranteed to be committed by
 the other chain's consensus algorithm.
 
-* Blockchains, defined as an infinite list of `Header` starting from a genesis `RootOfTrust`, 
-are linear; no conflicting `Header`s can be both validated, thus no past accumulator roots can 
-be changed after they have been committed. Two `Header`s are conflicting when they both have the
-same height in a blockchain but are not equal.
-
-* Verifiers can verify future `Header`s using an existing `RootOfTrust`. When the verifier 
-validates it, the verified header is in the canonical blockchain.
-
-* `RootOfTrust`s contains an accumulator root (ICS23) that the downstream logic can use to 
-verify whether key-value pairs are present in the state or not.
+* `ValidityPredicate`s are expected to reflect the behaviour of the full node which is running the  
+corresponding consensus algorithm. Given a `ConsensusState` and `[Message]`, if a full node
+accepts the new `Header` generated with `Commit`, then the light client MUST also accept it,
+and if a full node rejects it, then the light client MUST also reject it. The consensus algorithm
+ensures this correspondence. However light clients are not replaying the whole messages, so it
+is possible that the light clients' behaviour differs from the full nodes'. In this case, the
+equivocation proof which proves the divergence between the `ValidityPredicate` and the full node will be
+generated and submitted to the chain, as defined in
+[ICS ?](https://github.com/cosmos/ics/issues/53), so that the chain can safely deactivate the
+light client.
 
 ### Technical Specification
 
-#### Definitions
-
-##### Types
-
-* `RootOfTrust` is a blockchain commit which contains an accumulator root and the requisite 
-  state to verify future roots, stored in one blockchain to verify the state of the other.
-  Defined as 2-tuple `(base :: VerifierBase, root :: AccumulatorRoot)`, 
-  where
-    * `base` is a data used by `Consensus.Verifier` to verify `Header`s 
-    * `root` is the `AccumuatorRoot`, used to prove internal state
-
-* `Header` is a blockchain header which provides information to update `RootOfTrust`, 
-  submitted to one blockchain to update the stored `RootOfTrust`.
-  Defined as 3-tuple `(proof :: HeaderProof, base :: Maybe<VerifierBase>, root :: AccumulatorRoot)`,
-  where
-    * `proof` is the commit proof used by `Consensus.Verifier` to be verified
-    * `base` is the new verify, if needed to be updated
-    * `root` is the new `AccumulatorRoot` which will replace the existing one
- 
-* `Consensus` is a blockchain consensus algorithm which generates valid `Header`s.
-  Defined as 2-tuple `(commit :: RootOfTrust -> [Message] -> Header, verify :: RootOfTrust -> 
-  Header -> Error|RootOfTrust)` where
-    * `commit` is the header generation function from the base `RootOfTrust` and arbitrary messages
-    * `verify` is the verifier, proves `Header.proof` and returns the updated `RootOfTrust`
-
-* `Blockchain` is defined as 3-tuple `(cons :: Consensus, genesis :: RootOfTrust, 
-  headers :: [Header])`, where
-    * `cons` is the Consensus algorithm that is running the blockchain
-    * `genesis` is the genesis `RootOfTrust`
-    * `headers` is the list of header generated by `c`, starting from the `gen`. In detail, 
-      `B.hs` is defined as `B.hs = fold(B.c, zip(B.gen:B.hs, msgs))` for arbitrary `msgs` 
-      in `[Message]` 
-      // XXX: make it readable
-
-* `update` is a helper function using `Consensus.verify` to update the existing 
-  `RootOfTrust`, defined as
-
-```
-function update(cons :: Consensus, rot :: RootOfTrust, h :: Header) returns (Error|RootOfTrust) {
-    if cons.verify(rot, h):
-        if h.base != Nothing:
-            return RootOfTrust(h.base, h.root)
-        else:
-            return RoofOfTrust(rot.base, h.root)
-    else:
-        return Error  
-   
-}
-``` 
-
-##### Functions
-
-* `Height :: Blockchain -> Header -> Uint` returns the position of the header in the
-  Blockchain's header list.
-
 #### Requirements
 
-Consensus verification requires the following accumulator primitives with datastructures and
-properties as defined in ICS23:
+* `get`, `set`, `Key`, and `Identifier` are as defined in [ICS24](..//ics-24-host-requirements).
+are used by the datagram handler.
 
-* `AccumulatorRoot`
+* `CommitmentRoot` is as defined in [ICS23](https://github.com/cosmos/ics/pull/74).
+`ConsensusState`. The downstream logic can use it to verify whether key-value pairs are present
+in the state or not.
+
+#### Definitions
+
+##### ConsensusState
+
+`ConsensusState` is a blockchain commit which contains a `CommitmentRoot` and the requisite
+state to verify future roots. The `ConsensusState` of a chain is stored by other chains in order to verify the state of this chain. It is defined as:
+Defined as
+
+```go
+type ConsensusState struct {
+  Base ValidityPredicateBase
+  Root CommitmentRoot
+}
+```
+where
+  * `Base` is a data used by `Consensus.ValidityPredicate` to verify `Header`s.
+  * `Root` is the `CommitmentRoot`, used to prove internal state.
+
+##### Header
+
+`Header` is a blockchain header which provides information to update a `ConsensusState`,
+submitted to one blockchain to update the stored `ConsensusState`.
+Defined as
+
+```go
+type Header struct {
+  Proof HeaderProof
+  Base Maybe[ValidityPredicateBase]
+  Root CommitmentRoot
+}
+```
+where
+  * `Proof` is the commit proof used by `Consensus.ValidityPredicate` to be verified
+  * `Base` is the new verify, if it needs to be updated.
+  * `Root` is the new `CommitmentRoot` which will replace the existing one
+
+##### ValidityPredicate
+
+`ValidityPredicate` is a light client ValidityPredicate proving `Header` depending on the `Commit`.
+Using the ValidityPredicate SHOULD be far more computationally efficient than replaying `Consensus` logic
+for the given parent `Header` and the list of network messages, ideally in O(1) time.
+Defined as
+
+```go
+type ValidityPredicate func(ConsensusState, Header) (Error|ConsensusState)
+```
+
+The detailed specification of `ValidityPredicate` is defined in [ValidityPredicate.md](./ValidityPredicate.md)
+
+##### LightClient
+
+LightClient is defined as
+```go
+type LightClient struct {
+  ValidityPredicate ValidityPredicate
+  ConsensusState ConsensusState
+}
+```
+where
+  * `ConsensusState` is the root of trust providing the `ValidityPredicateBase`
+  * `ValidityPredicate` is the lightclient verification logic
+
+The exact type of each fields are depending on the type of the actual consensus logic.
 
 #### Subprotocols
 
-##### Verifier
+The chains MUST implement functions `register` and `update`, as they form the `handleDatagram`.
+Calling both functions MAY be permissionless.
 
-The verifier algorithm checks that new `Header`s were in fact generated by a blockchain. It is expected to verify a `Header` 
-efficiently; far more efficiently than replaying `Consensus` logic for the given parent `Header` and the
-list of network messages, idealy in O(1) time. `Header.p` provides the proof that the verifier can use. 
-Verifiers assume the following properties will be satisfied for the `Header`s:
+##### Preliminaries
 
-1. `Header`s have no more than one direct child
- 
-* Satisfied if: deterministic safety
-* Possible violation scenario: validator double signing, chain reorganization (Nakamoto consensus)
+`newID` is a function which generates a new `Identifier` for a `LightClient`, which MAY depending
+on the `Header`. The behaviour of `newID` is implementation specific. Possible implementations are:
 
-2. `Header`s eventually have at least one direct child
+* Random bytestring
+* Hash of the `Header`
+* Incrementing integer index, big-endian encoded
 
-* Satisfied if: liveness, light-client verifier continuity
-* Possible violation scenario: synchronized halt, incompatible hard fork
+`newID` MUST NOT return an `Identifier` which has already been generated.
 
-3. `Header`s are generated from the `Consensus`, which ensures valid transition of the state
+`storekey` takes an `Identifier` and returns a `KVStore` compatible `Key`.
 
-* Satisfied if: correct block generation & state machine
-* Possible violation scenario: invariant break, validator cartel
+```coffee
+newID = (header) -> # impl specific
+storekey = (id) -> # impl specific
+```
 
-##### Accumulator Root
+##### Register
 
-`RootOfTrust` contains an accumulator root, which identifies the whole state of the 
-corresponding blockchain at the point of time that the commit is generated. It is expected that 
-the verifying inclusion or exclusion of certain data in the accumulator can be done efficiently. See 
-ICS23 for the details about the `AccumulatorRoot`s.
+Registering a new `LightClient` is done simply by submitting it to the `register` function,
+as the chain automatically generates the `Identifier` for the `LightClient`.
 
-##### Consensus 
+```coffee
+register = (lightclient) ->
+  id = newID()
+  set(storekey(id), register)
+  id
+}
+```
 
-`Consensus` is a blockchain protocol which actually generates a list of `Header`s from the latest
-state and the incoming transactions. While the chains on the network does not directly proving the 
-consensus process, it is expected that the consensus algorithms will generate valid `Header`s.
+##### Update
+
+Updating `LightClient` is done by submitting a new `Header`. The `Identifier` is used to point the
+stored `LightClient` that the logic will update. When the new `Header` is verifiable with
+the stored `LightClient`'s `ValidityPredicate` and `ConsensusState`, then it SHOULD update the
+`LightClient` unless an additional logic intentionally blocks the updating process (e.g.
+waiting for the equivocation proof period.
+
+```coffee
+update = (id, header) ->
+  stored = get(storekey(id))
+  state = stored.ConsensusState
+  ValidityPredicate = stored.ValidityPredicate
+
+  assert(ValidityPredicate(state, header))
+
+  state.Root = header.Root
+  if header.Base? then state.Base = header.Base
+
+  setLightClient(update.ID, {state, ValidityPredicate})
+
+  return nil
+}
+```
 
 ### Example Implementation
 
-An example blockchain `B` runs on a single operator consensus algorithm, called `Op`. If a 
-block is signed by the operator, then it is valid. The operator signing key can be changed while
-the chain is running. In that case, the new header stores the updated pubkey. 
+An example blockchain `Op` runs on a single `Op`erator consensus algorithm,
+where the valid blocks are signed by the operator. The operator signing Key
+can be changed while the chain is running.
 
-`H` contains `LogStore`, which is a list with type of `[bytes]`. The whole state is serialized 
-and stored as `AccumulatorRoot`
+`Op` is constructed from the followings:
+* `OpValidityPredicateBase`: Operator pubkey
+* `OpValidityPredicate`: Signature ValidityPredicate
+* `OpCommitmentRoot`: KVStore Merkle root
+* `OpHeaderProof`: Operator signature
 
 #### Consensus
 
 `B` is defined as `(Op, Gen, [H])`. `B` satisfies `Blockchain`:
 
-```
-TX = Append(bytes) or ChangeOperator(Pubkey)
+```coffee
+TX = RegisterLightClient | UpdateLightClient | ChangeOperator(Pubkey)
 
-function commit(h :: H, txs :: [TX]) returns C {
-    store := c.AccumulatorRoot
-    newpubkey := c.Pubkey
+function commit(cs :: State, txs :: [TX]) returns H {
+  newpubkey := c.Pubkey
 
-    foreach tx in txs:
-        case Append(data): 
-            state = state + data
-        case ChangeOperator(pubkey): 
-            newpubkey = pubkey
+  foreach tx in txs:
+    case RegisterLightClient:
+      register(tx)
+    case UpdateLightClient:
+      update(tx)
+    case ChangeOperator(pubkey):
+      newpubkey = pubkey
 
-    result := H(newpubkey, store)
-    sig := Privkey.Sign(result)
-    return C(sig, result)
+  root := getMerkleRoot()
+  result := H(_, newpubkey, root)
+  result.Sig := Privkey.Sign(result)
+  return result
 }
 
-function verify(rot :: ROT, h :: H) returns rot.Pubkey.VerifySignature(h.Sig)
+function verify(rot :: CS, h :: H) returns rot.Pubkey.VerifySignature(h.Sig)
 
 Op = (commit, verify)
 
-Gen = ROT(InitialPubkey, EmptyLogStore)
+Gen = CS(InitialPubkey, EmptyLogStore)
 ```
 
-The `[H]` is generated by `Op.commit`, recursivly applied on the genesis and its successors.
-The `[TX]` applied on the `Op.commit` can be any value, but when the `B` is instantiated 
-in the real world, the `[TX]` is fixed to a single value to satisfy consensus properties. In 
+The `[H]` is generated by `Op.commit`, recursively applied on the genesis and its successors.
+The `[TX]` applied on the `Op.commit` can be any value, but when the `B` is instantiated
+in the real world, the `[TX]` is fixed to a single value to satisfy consensus properties. In
 this example, we assume that it is enforced by a legal authority.
 
-#### RootOfTrust
+#### ConsensusState
 
-Type `ROT` is defined as `(Pubkey, LogStore)`. `ROT` satisfies `RootOfTrust`:
+Type `CS` is defined as `(Pubkey, LogStore)`. `CS` satisfies `ConsensusState`:
 
 ```
-function ROT.base() returns ROT.Pubkey
-function ROT.root() returns ROT.LogStore
+function CS.base() returns CS.Pubkey
+function CS.root() returns CS.LogStore
 ```
 
 #### Header
@@ -214,6 +259,6 @@ function H.base() returns H.Pubkey
 function H.root() returns H.LogStore
 ```
 
-## History 
+## History
 
 March 5th 2019: Initial ICS 2 draft finished and submitted as a PR
