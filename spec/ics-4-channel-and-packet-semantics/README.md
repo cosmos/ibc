@@ -32,13 +32,7 @@ A *bidirectional* channel is a channel where packets can flow in both directions
 
 A *unidirectional* channel is a channel where packets can only flow in one direction: from `A` to `B`.
 
-```golang
-type ChannelDirection enum {
-  Tx
-  Rx
-  TxRx
-}
-```
+This specification only concerns itself with *bidirectional* channels. *Unidirectional* channels use almost exactly the same protocol and will be outlined in a future ICS.
 
 An *ordered* channel is a channel where packets are delivered exactly in the order which they were sent.
 
@@ -75,7 +69,6 @@ type ChannelEnd struct {
   counterpartyChannelIdentifier     string
   connectionIdentifier              string
   counterpartyConnectionIdentifier  string
-  direction                         ChannelDirection
   ordering                          ChannelOrdering
   version                           Version
   lastTxSequence                    uint64
@@ -83,8 +76,6 @@ type ChannelEnd struct {
   rxCommitment                      CommitmentRoot
 }
 ```
-
-Certain fields may be omitted depending on the direction of the end.
 
 An IBC *packet* is a particular datagram, defined as follows:
 
@@ -127,7 +118,6 @@ type ChanOpenInit struct {
   channelIdentifier               Identifier
   counterpartyChannelIdentifier   Identifier
   counterpartyModuleIdentifier    Identifier
-  direction                       ChannelDirection
   ordering                        ChannelOrdering
   version                         Version
 }
@@ -139,7 +129,7 @@ function chanOpenInit()
   assert(get("channels/{channelIdentifier}") == null)
   (state, _, counterpartyConnectionIdentifier, _, _, _) = get("connections/{connectionIdentifier}")
   assert(state == OPEN)
-  set("channels/{channelIdentifier}", (INIT, moduleIdentifier, counterpartyModuleIdentifier, counterpartyChannelIdentifier, connectionIdentifier, counterpartyConnectionIdentifier, direction, ordering, version))
+  set("channels/{channelIdentifier}", (INIT, moduleIdentifier, counterpartyModuleIdentifier, counterpartyChannelIdentifier, connectionIdentifier, counterpartyConnectionIdentifier, ordering, version))
 ```
 
 ```golang
@@ -149,7 +139,6 @@ type ChanOpenTry struct {
   counterpartyChannelIdentifier Identifier
   moduleIdentifier              Identifier
   counterpartyModuleIdentifier  Identifier
-  direction                     ChannelDirection
   ordering                      ChannelOrdering
   version                       Version
   proofInit                     CommitmentProof
@@ -167,9 +156,9 @@ function chanOpenTry()
     consensusState,
     proofInit,
     "channels/{counterpartyChannelIdentifier}",
-    (INIT, counterpartyModuleIdentifier, moduleIdentifier, channelIdentifier, counterpartyConnectionIdentifier, connectionIdentifier, direction, ordering, version)
+    (INIT, counterpartyModuleIdentifier, moduleIdentifier, channelIdentifier, counterpartyConnectionIdentifier, connectionIdentifier, ordering, version)
   ))
-  set("channels/{channelIdentifier}", (TRYOPEN, moduleIdentifier, counterpartyModuleIdentifier, counterpartyChannelIdentifier, connectionIdentifier, counterpartyConnectionIdentifier, direction, ordering, version))
+  set("channels/{channelIdentifier}", (TRYOPEN, moduleIdentifier, counterpartyModuleIdentifier, counterpartyChannelIdentifier, connectionIdentifier, counterpartyConnectionIdentifier, ordering, version))
 ```
 
 ```golang
@@ -182,7 +171,7 @@ type ChanOpenAck struct {
 
 ```coffeescript
 function chanOpenAck()
-  (state, moduleIdentifier, counterpartyModuleIdentifier, counterpartyChannelIdentifier, connectionIdentifier, counterpartyConnectionIdentifier, direction, ordering, version) = get("channels/{channelIdentifier}")
+  (state, moduleIdentifier, counterpartyModuleIdentifier, counterpartyChannelIdentifier, connectionIdentifier, counterpartyConnectionIdentifier, ordering, version) = get("channels/{channelIdentifier}")
   assert(state == INIT)
   assert(getCallingModule() == moduleIdentifier)
   (connectionState, _, _, clientIdentifier, _, _) = get("connections/{connectionIdentifier}")
@@ -191,9 +180,9 @@ function chanOpenAck()
     consensusState,
     proofTry,
     "channels/{counterpartyChannelIdentifier}",
-    (TRYOPEN, counterpartyModuleIdentifier, moduleIdentifier, channelIdentifier, counterpartyConnectionIdentifier, connectionIdentifier, direction, ordering, version) 
+    (TRYOPEN, counterpartyModuleIdentifier, moduleIdentifier, channelIdentifier, counterpartyConnectionIdentifier, connectionIdentifier, ordering, version) 
   ))
-  set("channels/{channelIdentifier}", (OPEN, moduleIdentifier, counterpartyModuleIdentifier, counterpartyChannelIdentifier, connectionIdentifier, counterpartyConnectionIdentifier, direction, ordering, version)) 
+  set("channels/{channelIdentifier}", (OPEN, moduleIdentifier, counterpartyModuleIdentifier, counterpartyChannelIdentifier, connectionIdentifier, counterpartyConnectionIdentifier, ordering, version)) 
 ```
 
 ```golang
@@ -206,7 +195,7 @@ type ChanOpenConfirm struct {
 
 ```coffeescript
 function chanOpenConfirm()
-  (state, moduleIdentifier, counterpartyModuleIdentifier, counterpartyChannelIdentifier, connectionIdentifier, counterpartyConnectionIdentifier, direction, ordering, version) = get("channels/{channelIdentifier}")
+  (state, moduleIdentifier, counterpartyModuleIdentifier, counterpartyChannelIdentifier, connectionIdentifier, counterpartyConnectionIdentifier, ordering, version) = get("channels/{channelIdentifier}")
   assert(state == TRYOPEN)
   assert(getCallingModule() == moduleIdentifier)
   (connectionState, _, _, clientIdentifier, _, _) = get("connections/{connectionIdentifier}")
@@ -215,21 +204,20 @@ function chanOpenConfirm()
     consensusState.getRoot(),
     proofAck,
     "channels/{counterpartyChannelIdentifier}",
-    (OPEN, counterpartyModuleIdentifier, moduleIdentifier, channelIdentifier, counterpartyConnectionIdentifier, connectionIdentifier, direction, ordering, version)
+    (OPEN, counterpartyModuleIdentifier, moduleIdentifier, channelIdentifier, counterpartyConnectionIdentifier, connectionIdentifier, ordering, version)
   ))
-  set("channels/{channelIdentifier}", (OPEN, moduleIdentifier, counterpartyModuleIdentifier, counterpartyChannelIdentifier, connectionIdentifier, counterpartyConnectionIdentifier, direction, ordering, version)) 
+  set("channels/{channelIdentifier}", (OPEN, moduleIdentifier, counterpartyModuleIdentifier, counterpartyChannelIdentifier, connectionIdentifier, counterpartyConnectionIdentifier, ordering, version)) 
 ```
 
-(modulo version negotation, direction alteration)
+(modulo version negotation)
 
 ### Sending packets
 
 ```coffeescript
 function sendPacket(Packet packet)
-  (state, moduleIdentifier, _, _, _, _, direction, ordering, _) = get("channels/{channelIdentifier}")
+  (state, moduleIdentifier, _, _, _, _, ordering, _) = get("channels/{channelIdentifier}")
   assert(state == OPEN)
   assert(getCallingModule() == moduleIdentifier)
-  assert(direction == Tx || direction == TxRx)
   (connectionState, _, _, _, _, _) = get("connections/{connectionIdentifier}")
   assert(connectionState == OPEN)
   sequence = oldSequence + 1
@@ -242,10 +230,9 @@ function sendPacket(Packet packet)
 
 ```coffeescript
 function recvPacket(Packet packet)
-  (state, moduleIdentifier, _, _, _, _, direction, ordering, _) = get("channels/{channelIdentifier}")
+  (state, moduleIdentifier, _, _, _, _, ordering, _) = get("channels/{channelIdentifier}")
   assert(state == OPEN)
   assert(getCallingModule() == moduleIdentifier)
-  assert(direction == Rx || direction == TxRx)
   // assert timeout not passed
   // check sequence or check send commitment depending on ordering
   assert(verifyMembership(
@@ -265,10 +252,9 @@ Note that in order to avoid any possible "double-spend" attacks, the timeout alg
 
 ```coffeescript
 function timeoutPacket(Packet packet)
-  (state, moduleIdentifier, _, _, _, _, direction, ordering, _) = get("channels/{channelIdentifier}")
+  (state, moduleIdentifier, _, _, _, _, ordering, _) = get("channels/{channelIdentifier}")
   assert(state == OPEN)
   assert(getCallingModule() == moduleIdentifier)
-  assert(direction == Rx || direction == TxRx)
   assert(verifyNonMembership(...))
   // set stored recv sequence, clear, etc.
 ```
