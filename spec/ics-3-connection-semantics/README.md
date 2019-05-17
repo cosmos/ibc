@@ -7,7 +7,7 @@ requires: 2, 6, 10, 23
 required-by: 4, 25, 26
 author: Christopher Goes <cwgoes@tendermint.com>, Juwoon Yun <joon@tendermint.com>
 created: 2019-03-07
-modified: 2019-05-15
+modified: 2019-05-17
 ---
 
 ## Synopsis
@@ -388,7 +388,7 @@ Coming soon.
 Parts of this document were inspired by the [previous IBC specification](https://github.com/cosmos/cosmos-sdk/tree/master/docs/spec/ibc).
 
 29 March 2019 - Initial draft version submitted
-15 May 2019 - Draft finalized
+17 May 2019 - Draft finalized
 
 ## Copyright
 
