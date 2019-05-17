@@ -3,7 +3,7 @@ ics: 3
 title: Connection Semantics
 stage: draft
 category: ibc-core
-requires: 2, 6, 10, 23
+requires: 2, 23, 24
 required-by: 4, 25, 26
 author: Christopher Goes <cwgoes@tendermint.com>, Juwoon Yun <joon@tendermint.com>
 created: 2019-03-07
@@ -12,7 +12,7 @@ modified: 2019-05-17
 
 ## Synopsis
 
-This standards document describes the abstraction of an IBC *connection*: two stateful objects on two separate chains, each associated with a light client of the other chain, which faciliate cross-chain substate verification and datagram association. Protocols for safely establishing a connection between two chains, cleanly closing a connection, and closing a connection due to detected equivocation are described.
+This standards document describes the abstraction of an IBC *connection*: two stateful objects (*connection ends*) on two separate chains, each associated with a light client of the other chain, which together faciliate cross-chain substate verification and packet association (through channels). Protocols for safely establishing a connection between two chains and cleanly closing a connection are described.
 
 ### Motivation
 
