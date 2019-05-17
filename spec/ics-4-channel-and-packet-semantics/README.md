@@ -5,7 +5,7 @@ stage: draft
 category: ibc-core
 author: Christopher Goes <cwgoes@tendermint.com>
 created: 2019-03-07
-modified: 2019-05-12
+modified: 2019-05-17
 ---
 
 ## Synopsis
@@ -32,27 +32,20 @@ A *bidirectional* channel is a channel where packets can flow in both directions
 
 A *unidirectional* channel is a channel where packets can only flow in one direction: from `A` to `B`.
 
-This specification only concerns itself with *bidirectional* channels. *Unidirectional* channels use almost exactly the same protocol and will be outlined in a future ICS.
-
 An *ordered* channel is a channel where packets are delivered exactly in the order which they were sent.
 
 An *unordered* channel is a channel where packets can be delivered in any order, which may differ from the order in which they were sent.
-
-```golang
-type ChannelOrdering enum {
-  Ordered
-  Unordered
-}
-```
 
 Directionality and ordering are independent, so one can speak of a bidirectional unordered channel, a unidirectional ordered channel, etc.
 
 All channels provide exactly-once packet delivery.
 
-Channels also have a *state*:
+This specification only concerns itself with *bidirectional ordered* channels. *Unidirectional* and *unordered* channels use almost exactly the same protocol and will be outlined in a future ICS.
+
+Channels have a *state*:
 
 ```golang
-type ChannelState struct {
+type ChannelState enum {
   INIT
   TRYOPEN
   OPEN
@@ -74,13 +67,14 @@ type ChannelEnd struct {
   lastTxSequence                    uint64
   lastRxSequence                    uint64
   rxCommitment                      CommitmentRoot
+
 }
 ```
 
 An IBC *packet* is a particular datagram, defined as follows:
 
 ```golang
-struct Packet {
+type Packet struct {
   sequence      uint64
   sourceChannel string
   destChannel   string
@@ -90,15 +84,17 @@ struct Packet {
 
 ### Desired Properties
 
+#### Efficiency
+
 - The speed of packet transmission and confirmation should be limited only by the speed of the underlying chains.
-- Exactly-once packet delivery, without assumptions of network synchrony and even if one or both of the chains should halt (no-more-than-once delivery in that case).
-- Ordering, for ordered channels, whereby if packet *x* is sent before packet *y* on chain `A`, packet *x* must be received before packet *y* on chain `B`.
 
 #### Exactly-once delivery
 
-either ordering or accumulator
+- Exactly-once packet delivery, without assumptions of network synchrony and even if one or both of the chains should halt (no-more-than-once delivery in that case).
 
 #### Ordering
+
+- Ordering, for ordered channels, whereby if packet *x* is sent before packet *y* on chain `A`, packet *x* must be received before packet *y* on chain `B`.
 
 IBC channels implement a vector clock for the restricted case of two processes (in our case, blockchains). Given *x* → *y* means *x* is causally before *y*, chains `A` and `B`, and *a* ⇒ *b* means *a* implies *b*:
 
@@ -107,6 +103,8 @@ Every transaction on the same chain already has a well-defined causality relatio
 For example, an application may wish to allow a single tokenized asset to be transferred between and held on multiple blockchains while preserving fungibility and conservation of supply. The application can mint asset vouchers on chain `B` when a particular IBC packet is committed to chain `B`, and require outgoing sends of that packet on chain `A` to escrow an equal amount of the asset on chain `A` until the vouchers are later redeemed back to chain `A` with an IBC packet in the reverse direction. This ordering guarantee along with correct application logic can ensure that total supply is preserved across both chains and that any vouchers minted on chain `B` can later be redeemed back to chain `A`.
 
 #### Permissioning
+
+- Channel ends should be permissioned to one module on each end.
 
 ## Specification
 
@@ -211,6 +209,10 @@ function chanOpenConfirm()
 
 (modulo version negotation)
 
+### Channel closing handshake
+
+(todo)
+
 ### Sending packets
 
 ```coffeescript
@@ -277,7 +279,7 @@ Coming soon.
 
 ## History
 
-12 May 2019 - Draft submitted
+17 May 2019 - Draft submitted
 
 ## Copyright
 
