@@ -137,7 +137,8 @@ type ChanOpenTry struct {
   counterpartyChannelIdentifier Identifier
   moduleIdentifier              Identifier
   counterpartyModuleIdentifier  Identifier
-  version                       Version
+  requestedVersion              Version
+  acceptedVersion               Version
   proofInit                     CommitmentProof
 }
 ```
@@ -153,22 +154,22 @@ function chanOpenTry()
     consensusState,
     proofInit,
     "channels/{counterpartyChannelIdentifier}",
-    (INIT, counterpartyModuleIdentifier, moduleIdentifier, channelIdentifier, counterpartyConnectionIdentifier, connectionIdentifier, version, 0, 0)
+    (INIT, counterpartyModuleIdentifier, moduleIdentifier, channelIdentifier, counterpartyConnectionIdentifier, connectionIdentifier, requestedVersion, 0, 0)
   ))
-  set("channels/{channelIdentifier}", (TRYOPEN, moduleIdentifier, counterpartyModuleIdentifier, counterpartyChannelIdentifier, connectionIdentifier, counterpartyConnectionIdentifier, version, 0, 0))
+  set("channels/{channelIdentifier}", (TRYOPEN, moduleIdentifier, counterpartyModuleIdentifier, counterpartyChannelIdentifier, connectionIdentifier, counterpartyConnectionIdentifier, acceptedVersion, 0, 0))
 ```
 
 ```golang
 type ChanOpenAck struct {
   channelIdentifier   Identifier
-  version             Version
+  acceptedVersion     Version
   proofTry            CommitmentProof
 }
 ```
 
 ```coffeescript
 function chanOpenAck()
-  (state, moduleIdentifier, counterpartyModuleIdentifier, counterpartyChannelIdentifier, connectionIdentifier, counterpartyConnectionIdentifier, version, _, _) = get("channels/{channelIdentifier}")
+  (state, moduleIdentifier, counterpartyModuleIdentifier, counterpartyChannelIdentifier, connectionIdentifier, counterpartyConnectionIdentifier, _, _, _) = get("channels/{channelIdentifier}")
   assert(state == INIT)
   assert(getCallingModule() == moduleIdentifier)
   (connectionState, _, _, clientIdentifier, _, _) = get("connections/{connectionIdentifier}")
@@ -177,15 +178,14 @@ function chanOpenAck()
     consensusState,
     proofTry,
     "channels/{counterpartyChannelIdentifier}",
-    (TRYOPEN, counterpartyModuleIdentifier, moduleIdentifier, channelIdentifier, counterpartyConnectionIdentifier, connectionIdentifier, version, 0, 0)
+    (TRYOPEN, counterpartyModuleIdentifier, moduleIdentifier, channelIdentifier, counterpartyConnectionIdentifier, connectionIdentifier, acceptedVersion, 0, 0)
   ))
-  set("channels/{channelIdentifier}", (OPEN, moduleIdentifier, counterpartyModuleIdentifier, counterpartyChannelIdentifier, connectionIdentifier, counterpartyConnectionIdentifier, version, 0, 0)) 
+  set("channels/{channelIdentifier}", (OPEN, moduleIdentifier, counterpartyModuleIdentifier, counterpartyChannelIdentifier, connectionIdentifier, counterpartyConnectionIdentifier, acceptedVersion, 0, 0))
 ```
 
 ```golang
 type ChanOpenConfirm struct {
   channelIdentifier Identifier
-  version           Version
   proofAck          CommitmentProof
 }
 ```
@@ -206,15 +206,15 @@ function chanOpenConfirm()
   set("channels/{channelIdentifier}", (OPEN, moduleIdentifier, counterpartyModuleIdentifier, counterpartyChannelIdentifier, connectionIdentifier, counterpartyConnectionIdentifier, version, 0, 0))
 ```
 
-(modulo version negotation)
-
 ### Channel closing handshake
 
-(todo)
+(todo, isomorphic to connection closing handshake)
+
+![packet-state-machine](packet-state-machine.png)
 
 ### Sending packets
 
-![packet-state-machine](packet-state-machine.png)
+`sendPacket` is called by a module.
 
 ```coffeescript
 function sendPacket(Packet packet)
@@ -230,6 +230,8 @@ function sendPacket(Packet packet)
 ```
 
 ### Receiving packets
+
+`recvPacket` is called by a module.
 
 ```coffeescript
 function recvPacket(Packet packet)
@@ -253,6 +255,8 @@ function recvPacket(Packet packet)
 Application semantics may require some timeout: an upper limit to how long the chain will wait for a transaction to be processed before considering it an error. Since the two chains have different local clocks, this is an obvious attack vector for a double spend - an attacker may delay the relay of the receipt or wait to send the packet until right after the timeout - so applications cannot safely implement naive timeout logic themselves.
 
 Note that in order to avoid any possible "double-spend" attacks, the timeout algorithm requires that the destination chain is running and reachable. One can prove nothing in a complete network partition, and must wait to connect; the timeout must be proven on the recipient chain, not simply the absence of a response on the sending chain.
+
+`timeoutPacket` is called by a module.
 
 ```coffeescript
 function timeoutPacket(Packet packet)
