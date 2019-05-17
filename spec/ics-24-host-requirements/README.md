@@ -7,24 +7,22 @@ requires: 2
 required-by: 2, 3, 4, 5, 18
 author: Christopher Goes <cwgoes@tendermint.com>
 created: 2019-04-16
-modified: 2019-04-29
+modified: 2019-05-11
 ---
 
-# Synopsis
+## Synopsis
 
 This specification defines the minimal set of interfaces which must be provided and properties which must be fulfilled by a blockchain & state machine hosting an IBC handler (implementation of the interblockchain communication protocol; see [the architecture document](../../docs/ibc/1_IBC_ARCHITECTURE.md) for details).
 
-# Specification
-
-## Motivation
+### Motivation
 
 IBC is designed to be a common standard which will be hosted by a variety of blockchains & state machines and must clearly define the requirements of the host.
 
-## Definitions
+### Definitions
 
-`RootOfTrust` is as defined in [ICS 2](../ics-2-consensus-requirements).
+`ConsensusState` is as defined in [ICS 2](../ics-2-consensus-requirements).
 
-## Desired Properties
+### Desired Properties
 
 IBC should require as simple an interface from the underlying state machine as possible to maximize the ease of correct implementation.
 
@@ -40,11 +38,11 @@ Identifiers are not intended to be valuable resources — to prevent name squatt
 
 The separator `/` is used to separate and concatenate two identifiers or an identifier and a constant bytestring. Identifiers MUST NOT contain the `/` character, which prevents ambiguity.
 
-Variable interpolation, denoted by curly braces, MAY be used as shorthand to define key formats, e.g. `client/{clientIdentifier}/rootOfTrust`.
+Variable interpolation, denoted by curly braces, MAY be used as shorthand to define key formats, e.g. `client/{clientIdentifier}/consensusState`.
 
 ### Key/value Store
 
-Host chains MUST provide a simple key-value store interface, with two functions which behave in the standard way:
+Host chains MUST provide a simple key-value store interface, with three functions which behave in the standard way:
 
 ```coffeescript
 function get(Key key) -> Value | null
@@ -54,23 +52,35 @@ function get(Key key) -> Value | null
 function set(Key key, Value value)
 ```
 
-`Key` is as defined above. `Value` is an arbitrary bytestring encoding of a particular data structure. Encoding details are left to separate ICSs.
-
-### Root-of-trust Introspection
-
-Host chains MUST provide the ability to introspect their own root-of-trust, with `getRootOfTrust`:
-
 ```coffeescript
-function getRootOfTrust() -> RootOfTrust
+function delete(Key key)
 ```
 
-`getRootOfTrust` MUST return the current root-of-trust for the consensus algorithm of the host chain.
+`Key` is as defined above. `Value` is an arbitrary bytestring encoding of a particular data structure. Encoding details are left to separate ICSs.
+
+These functions MUST be permissioned to the IBC handler module (the implementation of which is described in separate standards) only, so only the IBC handler module can `set` or `delete` the keys which can be read by `get`. This can possibly be implemented as a sub-store (prefixed keyspace) of a larger key-value store used by the entire state machine.
+
+### Consensus State Introspection
+
+Host chains MUST provide the ability to introspect their own consensus state, with `getConsensusState`:
+
+```coffeescript
+function getConsensusState() -> ConsensusState
+```
+
+`getConsensusState` MUST return the current consensus state for the consensus algorithm of the host chain.
 
 ### Module system
 
 Host chains MUST implement a module system, where each module has a unique serializable identifier, which:
 - can be read by the IBC handler in an authenticated manner when the module calls the IBC handler, e.g. to send a packet
 - can be used by the IBC handler to look up a module, which it can then call into (e.g. to handle a received packet addressed to that module)
+
+Host chains MUST provide the ability to read the calling module in the IBC handler with `getCallingModule`:
+
+```coffeescript
+function getCallingModule() -> string
+```
 
 Modules which wish to make use of particular IBC features MAY implement certain handler functions, e.g. to add additional logic to a channel handshake with an associated module on another chain.
 
@@ -90,7 +100,7 @@ Not applicable.
 
 ## Forwards Compatibility
 
-Key-value store functionality and root of trust type are unlikely to change during operation of a single host chain.
+Key-value store functionality and consensus state type are unlikely to change during operation of a single host chain.
 
 `submitDatagram` can change over time as relayers should be able to update their processes.
 
@@ -102,10 +112,11 @@ Coming soon.
 
 Coming soon.
 
-# History
+## History
 
-April 29 2019 - Initial draft
+29 April 2019 - Initial draft
+11 May 2019 - Rename "RootOfTrust" to "ConsensusState"
 
-# Copyright
+## Copyright
 
 Copyright and related rights waived via [CC0](https://creativecommons.org/publicdomain/zero/1.0/).

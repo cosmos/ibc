@@ -32,3 +32,11 @@ All standards in the "draft" stage are listed here in order of their ICS numbers
 | Interchain Standard Number   | Standard Title             | Stage |
 | ---------------------------- | -------------------------- | ----- |
 | [1](spec/ics-1-ics-standard) | ICS Specification Standard | Draft |
+
+### IBC (Core)
+
+| Interchain Standard Number                          | Standard Title                     | Stage |
+| --------------------------------------------------- | ---------------------------------- | ----- |
+| [18](spec/ics-18-relayer-algorithms)                | Relayer Algorithms                 | Draft |
+| [23](spec/ics-23-vector-commitments)                | Vector Commitments                 | Draft |
+| [24](spec/ics-24-host-requirements)                 | Host Requirements                  | Draft |
