@@ -60,14 +60,13 @@ An *end* of a channel is a data structure on one chain storing channel metadata:
 type ChannelEnd struct {
   state                             ChannelState
   counterpartyChannelIdentifier     string
+  moduleIdentifier                  string
+  counterpartyModuleIdentifier      string
   connectionIdentifier              string
   counterpartyConnectionIdentifier  string
-  ordering                          ChannelOrdering
   version                           Version
-  lastTxSequence                    uint64
-  lastRxSequence                    uint64
-  rxCommitment                      CommitmentRoot
-
+  nextSequenceSend uint64
+  nextSequenceRecv uint64
 }
 ```
 
@@ -118,7 +117,6 @@ type ChanOpenInit struct {
   channelIdentifier               Identifier
   counterpartyChannelIdentifier   Identifier
   counterpartyModuleIdentifier    Identifier
-  ordering                        ChannelOrdering
   version                         Version
 }
 ```
@@ -129,7 +127,7 @@ function chanOpenInit()
   assert(get("channels/{channelIdentifier}") == null)
   (state, _, counterpartyConnectionIdentifier, _, _, _) = get("connections/{connectionIdentifier}")
   assert(state == OPEN)
-  set("channels/{channelIdentifier}", (INIT, moduleIdentifier, counterpartyModuleIdentifier, counterpartyChannelIdentifier, connectionIdentifier, counterpartyConnectionIdentifier, ordering, version))
+  set("channels/{channelIdentifier}", (INIT, moduleIdentifier, counterpartyModuleIdentifier, counterpartyChannelIdentifier, connectionIdentifier, counterpartyConnectionIdentifier, version, 0, 0))
 ```
 
 ```golang
@@ -139,7 +137,6 @@ type ChanOpenTry struct {
   counterpartyChannelIdentifier Identifier
   moduleIdentifier              Identifier
   counterpartyModuleIdentifier  Identifier
-  ordering                      ChannelOrdering
   version                       Version
   proofInit                     CommitmentProof
 }
@@ -156,9 +153,9 @@ function chanOpenTry()
     consensusState,
     proofInit,
     "channels/{counterpartyChannelIdentifier}",
-    (INIT, counterpartyModuleIdentifier, moduleIdentifier, channelIdentifier, counterpartyConnectionIdentifier, connectionIdentifier, ordering, version)
+    (INIT, counterpartyModuleIdentifier, moduleIdentifier, channelIdentifier, counterpartyConnectionIdentifier, connectionIdentifier, version, 0, 0)
   ))
-  set("channels/{channelIdentifier}", (TRYOPEN, moduleIdentifier, counterpartyModuleIdentifier, counterpartyChannelIdentifier, connectionIdentifier, counterpartyConnectionIdentifier, ordering, version))
+  set("channels/{channelIdentifier}", (TRYOPEN, moduleIdentifier, counterpartyModuleIdentifier, counterpartyChannelIdentifier, connectionIdentifier, counterpartyConnectionIdentifier, version, 0, 0))
 ```
 
 ```golang
@@ -171,7 +168,7 @@ type ChanOpenAck struct {
 
 ```coffeescript
 function chanOpenAck()
-  (state, moduleIdentifier, counterpartyModuleIdentifier, counterpartyChannelIdentifier, connectionIdentifier, counterpartyConnectionIdentifier, ordering, version) = get("channels/{channelIdentifier}")
+  (state, moduleIdentifier, counterpartyModuleIdentifier, counterpartyChannelIdentifier, connectionIdentifier, counterpartyConnectionIdentifier, version, _, _) = get("channels/{channelIdentifier}")
   assert(state == INIT)
   assert(getCallingModule() == moduleIdentifier)
   (connectionState, _, _, clientIdentifier, _, _) = get("connections/{connectionIdentifier}")
@@ -180,9 +177,9 @@ function chanOpenAck()
     consensusState,
     proofTry,
     "channels/{counterpartyChannelIdentifier}",
-    (TRYOPEN, counterpartyModuleIdentifier, moduleIdentifier, channelIdentifier, counterpartyConnectionIdentifier, connectionIdentifier, ordering, version) 
+    (TRYOPEN, counterpartyModuleIdentifier, moduleIdentifier, channelIdentifier, counterpartyConnectionIdentifier, connectionIdentifier, version, 0, 0)
   ))
-  set("channels/{channelIdentifier}", (OPEN, moduleIdentifier, counterpartyModuleIdentifier, counterpartyChannelIdentifier, connectionIdentifier, counterpartyConnectionIdentifier, ordering, version)) 
+  set("channels/{channelIdentifier}", (OPEN, moduleIdentifier, counterpartyModuleIdentifier, counterpartyChannelIdentifier, connectionIdentifier, counterpartyConnectionIdentifier, version, 0, 0)) 
 ```
 
 ```golang
@@ -195,7 +192,7 @@ type ChanOpenConfirm struct {
 
 ```coffeescript
 function chanOpenConfirm()
-  (state, moduleIdentifier, counterpartyModuleIdentifier, counterpartyChannelIdentifier, connectionIdentifier, counterpartyConnectionIdentifier, ordering, version) = get("channels/{channelIdentifier}")
+  (state, moduleIdentifier, counterpartyModuleIdentifier, counterpartyChannelIdentifier, connectionIdentifier, counterpartyConnectionIdentifier, version, _, _) = get("channels/{channelIdentifier}")
   assert(state == TRYOPEN)
   assert(getCallingModule() == moduleIdentifier)
   (connectionState, _, _, clientIdentifier, _, _) = get("connections/{connectionIdentifier}")
@@ -204,9 +201,9 @@ function chanOpenConfirm()
     consensusState.getRoot(),
     proofAck,
     "channels/{counterpartyChannelIdentifier}",
-    (OPEN, counterpartyModuleIdentifier, moduleIdentifier, channelIdentifier, counterpartyConnectionIdentifier, connectionIdentifier, ordering, version)
+    (OPEN, counterpartyModuleIdentifier, moduleIdentifier, channelIdentifier, counterpartyConnectionIdentifier, connectionIdentifier, version, 0, 0)
   ))
-  set("channels/{channelIdentifier}", (OPEN, moduleIdentifier, counterpartyModuleIdentifier, counterpartyChannelIdentifier, connectionIdentifier, counterpartyConnectionIdentifier, ordering, version)) 
+  set("channels/{channelIdentifier}", (OPEN, moduleIdentifier, counterpartyModuleIdentifier, counterpartyChannelIdentifier, connectionIdentifier, counterpartyConnectionIdentifier, version, 0, 0))
 ```
 
 (modulo version negotation)
@@ -221,14 +218,14 @@ function chanOpenConfirm()
 
 ```coffeescript
 function sendPacket(Packet packet)
-  (state, moduleIdentifier, _, _, _, _, ordering, _) = get("channels/{channelIdentifier}")
+  (state, moduleIdentifier, _, _, connectionIdentifier, _, _, nextSequenceSend, _) = get("channels/{channelIdentifier}")
   assert(state == OPEN)
   assert(getCallingModule() == moduleIdentifier)
   (connectionState, _, _, _, _, _) = get("connections/{connectionIdentifier}")
   assert(connectionState == OPEN)
-  sequence = oldSequence + 1
-  // set stored send sequence
-  // or add to send commitment
+  assert(sequence == nextSequenceSend)
+  set("channels/{channelIdentifier}",
+    (state, moduleIdentifier, counterpartyModuleIdentifier, counterpartyChannelIdentifier, connectionIdentifier, counterpartyConnectionIdentifier, version, nextSequenceSend + 1, nextSequenceRecv))
   set("channels/{channelIdentifier}/packets/{sequence}", commit(packet.data))
 ```
 
@@ -236,18 +233,19 @@ function sendPacket(Packet packet)
 
 ```coffeescript
 function recvPacket(Packet packet)
-  (state, moduleIdentifier, _, _, _, _, ordering, _) = get("channels/{channelIdentifier}")
+  (state, moduleIdentifier, _, _, _, _, _) = get("channels/{channelIdentifier}")
   assert(state == OPEN)
   assert(getCallingModule() == moduleIdentifier)
-  // assert timeout not passed
-  // check sequence or check send commitment depending on ordering
+  consensusState = get("clients/{clientIdentifier}")
+  assert(consensusState.getHeight() < timeoutHeight)
+  assert(sequence == nextSequenceRecv)
   assert(verifyMembership(
     consensusState.getRoot(),
     proof,
     "channels/{channelIdentifier}/packets/{sequence}",
     commit(packet.data)
   ))
-  // set stored recv sequence depending on ordering
+  // set stored recv sequence so we can't recv again
 ```
 
 ### Timeouts
@@ -258,12 +256,17 @@ Note that in order to avoid any possible "double-spend" attacks, the timeout alg
 
 ```coffeescript
 function timeoutPacket(Packet packet)
-  (state, moduleIdentifier, _, _, _, _, ordering, _) = get("channels/{channelIdentifier}")
+  (state, moduleIdentifier, _, _, _, _, _) = get("channels/{channelIdentifier}")
   assert(state == OPEN)
   assert(getCallingModule() == moduleIdentifier)
-  assert(verifyNonMembership(...))
-  // set stored recv sequence, clear, etc.
+  assert(consensusState.getHeight() >= timeoutHeight)
+  // verify we actually sent this packet, check the store
+  // check recv sequence on opposite chain less than send sequence of packet
+  // clear the store so we can't "timeout" again"
 ```
+
+Notes
+- Can "bulk timeout" because of ordering guarantees if we enforce relations between timeout height and channels
 
 ## Backwards Compatibility
 
