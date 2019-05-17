@@ -1,6 +1,6 @@
 ---
 ics: 4
-title: Bidirectional Ordered Channel Semantics
+title: Channel & Packet Semantics
 stage: draft
 category: ibc-core
 author: Christopher Goes <cwgoes@tendermint.com>
