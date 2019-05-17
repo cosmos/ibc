@@ -108,6 +108,8 @@ For example, an application may wish to allow a single tokenized asset to be tra
 
 ## Specification
 
+![channel-state-machine](channel-state-machine.png)
+
 ### Channel opening handshake
 
 ```golang
@@ -214,6 +216,8 @@ function chanOpenConfirm()
 (todo)
 
 ### Sending packets
+
+![packet-state-machine](packet-state-machine.png)
 
 ```coffeescript
 function sendPacket(Packet packet)
