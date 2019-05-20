@@ -17,8 +17,8 @@ modified: 2019-04-29
 This standard specifies the properties that consensus algorithms of chains implementing IBC are
 expected to satisfy. These properties are needed for efficient and safe verification in the higher
 level protocol abstractions. The algorithm which uses these properties to verify substates of
-another chain is referred to as a "light client ValidityPredicate", and pairing it with a state that the
-ValidityPredicate trusts forms a "light client".
+another chain is referred to as a "light client verifier", and pairing it with a state that the
+verifier trusts forms a "light client".
 
 This standard also specifies how the light clients will be stored, registered, and updated on a
 blockchain. The stored light client instances will be able to be verified by a third party actor, such as a user inspecting the state of the chain.
@@ -60,14 +60,34 @@ light client.
 
 #### Requirements
 
-* `get`, `set`, `Key`, and `Identifier` are as defined in [ICS24](..//ics-24-host-requirements).
+* `get`, `set`, `Key`, and `Identifier` are as defined in [ICS24](../ics-24-host-requirements).
 are used by the datagram handler.
 
 * `CommitmentRoot` is as defined in [ICS23](https://github.com/cosmos/ics/pull/74).
 `ConsensusState`. The downstream logic can use it to verify whether key-value pairs are present
 in the state or not.
 
+* `createClient`, `queryClient`, `updateClient`, `freezeClient`, `deleteClient` are as
+defined in [ICS25](https://github.com/cosmos/ics/pull/79)
+
 #### Definitions
+
+##### ValidityPredicateBase
+
+`ValidityPredicateBase` is the data that is being used by the `ValidityPredicate`s. The exact
+type is dependent on the type of `ValidityPredicate`. The `ValidityPredicateBase`s SHOULD
+have a function `Height() int64`. The function returns the height of the
+`ValidityPredicateBase`. A `ValidityPredicateBase` can verify a `Header` only if it has a
+higher height than itself. `ValidityPredicateBase`s have to be generated from `Consensus`,
+which assigns unique heights for each `ValidityPredicateBase`. Two `ValidityPredicateBase`
+on a same chain SHOULD NOT have same height, if not equal. Such event is called an
+"equivocation", and the proof for it can be generated and submitted(see Subprotocols-Freeze).
+
+```go
+type ValidityPredicateBase interface {
+  Height() int64
+}
+```
 
 ##### ConsensusState
 
@@ -84,6 +104,8 @@ type ConsensusState struct {
 where
   * `Base` is a data used by `Consensus.ValidityPredicate` to verify `Header`s.
   * `Root` is the `CommitmentRoot`, used to prove internal state.
+
+`ValidityPredicateBase` is defined dependently on `ConsensusState`.
 
 ##### Header
 
@@ -149,22 +171,30 @@ on the `Header`. The behaviour of `newID` is implementation specific. Possible i
 
 `storekey` takes an `Identifier` and returns a `KVStore` compatible `Key`.
 
-```coffee
-newID = (header) -> # impl specific
-storekey = (id) -> # impl specific
-```
+##### Create
 
-##### Register
-
-Registering a new `LightClient` is done simply by submitting it to the `register` function,
+Creating a new `LightClient` is done simply by submitting it to the `createClient` function,
 as the chain automatically generates the `Identifier` for the `LightClient`.
 
 ```coffee
-register = (lightclient) ->
+function createClient(info)
   id = newID()
-  set(storekey(id), register)
-  id
+  set(storekey(id), info)
+  set(freezekey(id), false)
+  return id
 }
+```
+
+##### Query
+
+Clients can be queried by their identifier.
+
+```coffee
+function queryClient(id)
+  if get(freezekey(id)) then
+    return nil
+  else
+    return get(storekey(id))
 ```
 
 ##### Update
@@ -176,20 +206,50 @@ the stored `LightClient`'s `ValidityPredicate` and `ConsensusState`, then it SHO
 waiting for the equivocation proof period.
 
 ```coffee
-update = (id, header) ->
-  stored = get(storekey(id))
-  state = stored.ConsensusState
-  ValidityPredicate = stored.ValidityPredicate
+function updateClient(id, header)
+  assert(!freezekey(id))
 
-  assert(ValidityPredicate(state, header))
+  stored = get(storekey(id))
+  assert(stored /= nil)
+
+  state = stored.ConsensusState
+  pred = stored.ValidityPredicate
+
+  assert(pred(state, header))
 
   state.Root = header.Root
   if header.Base? then state.Base = header.Base
 
-  setLightClient(update.ID, {state, ValidityPredicate})
+  set(storekey(id), {state, pred})
 
   return nil
 }
+```
+
+##### Freeze
+
+A client can be frozen, in case when an equivocation proof for the client is provided.
+The client information SHOULD NOT be deleted from the state. To completely remove a client,
+one must call `deleteClient` defined below.
+
+```coffee
+function freezeClient(id, header1, header2)
+  assert(!get(freezekey(id)))
+  stored = get(storekey(id))
+  // TODO
+```
+
+##### Delete
+
+Deletes the stored client, when the client is no longer needed or no longer valid, as
+determined by the application logic.
+
+```coffee
+function deleteClient(id)
+  assert(get(storekey(id)) /= nil)
+  assert(get(freezekey(id)))
+  del(storekey(id))
+  return nil
 ```
 
 ### Example Implementation
