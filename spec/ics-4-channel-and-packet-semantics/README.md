@@ -252,6 +252,8 @@ function recvPacket(Packet packet)
   // set stored recv sequence so we can't recv again
 ```
 
+todo: clear up to timeout
+
 ### Timeouts
 
 Application semantics may require some timeout: an upper limit to how long the chain will wait for a transaction to be processed before considering it an error. Since the two chains have different local clocks, this is an obvious attack vector for a double spend - an attacker may delay the relay of the receipt or wait to send the packet until right after the timeout - so applications cannot safely implement naive timeout logic themselves.
@@ -265,10 +267,26 @@ function timeoutPacket(Packet packet)
   (state, moduleIdentifier, _, _, _, _, _) = get("connections/{connectionIdentifier}/channels/{channelIdentifier}")
   assert(state == OPEN)
   assert(getCallingModule() == moduleIdentifier)
+
+  // check that this packet has not yet been received
+  assert(nextSequenceRecv <= packet.sequence)
+
+  // check that timeout height has passed
   assert(consensusState.getHeight() >= timeoutHeight)
+
   // verify we actually sent this packet, check the store
-  // check recv sequence on opposite chain less than send sequence of packet
+  assert(get("connections/{connectionIdentifier}/channels/{channelIdentifier}/packets/{sequence}") == commit(packet.data))
+
+  // check that the recv sequence is as claimed
+  assert(verifyMembership(
+    consensusState.getRoot(),
+    proof,
+    "connections/{connectionIdentifier}/channels/{channelIdentifier}/nextSequenceRecv",
+    nextSequenceRecv
+  ))
+
   // clear the store so we can't "timeout" again"
+  delete("connections/{connectionIdentifier}/channels/{channelIdentifier}/packets/{sequence}")
 ```
 
 Notes
