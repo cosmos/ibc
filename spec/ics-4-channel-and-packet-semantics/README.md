@@ -124,10 +124,10 @@ type ChanOpenInit struct {
 ```coffeescript
 function chanOpenInit()
   moduleIdentifier = getCallingModule()
-  assert(get("channels/{channelIdentifier}") == null)
+  assert(get("connections/{connectionIdentifier}/channels/{channelIdentifier}") == null)
   (state, _, counterpartyConnectionIdentifier, _, _, _) = get("connections/{connectionIdentifier}")
   assert(state == OPEN)
-  set("channels/{channelIdentifier}", (INIT, moduleIdentifier, counterpartyModuleIdentifier, counterpartyChannelIdentifier, connectionIdentifier, counterpartyConnectionIdentifier, version, 0, 0))
+  set("connections/{connectionIdentifier}/channels/{channelIdentifier}", (INIT, moduleIdentifier, counterpartyModuleIdentifier, counterpartyChannelIdentifier, connectionIdentifier, counterpartyConnectionIdentifier, version, 0, 0))
 ```
 
 ```golang
@@ -145,7 +145,7 @@ type ChanOpenTry struct {
 
 ```coffeescript
 function chanOpenTry()
-  assert(get("channels/{channelIdentifier}") == null)
+  assert(get("connections/{connectionIdentifier}/channels/{channelIdentifier}") == null)
   assert(getCallingModule() == moduleIdentifier)
   (connectionState, _, counterpartyConnectionIdentifier, clientIdentifier, _, _) = get("connections/{connectionIdentifier}")
   assert(connectionState == OPEN)
@@ -153,23 +153,24 @@ function chanOpenTry()
   assert(verifyMembership(
     consensusState,
     proofInit,
-    "channels/{counterpartyChannelIdentifier}",
+    "connections/{connectionIdentifier}/channels/{counterpartyChannelIdentifier}",
     (INIT, counterpartyModuleIdentifier, moduleIdentifier, channelIdentifier, counterpartyConnectionIdentifier, connectionIdentifier, requestedVersion, 0, 0)
   ))
-  set("channels/{channelIdentifier}", (TRYOPEN, moduleIdentifier, counterpartyModuleIdentifier, counterpartyChannelIdentifier, connectionIdentifier, counterpartyConnectionIdentifier, acceptedVersion, 0, 0))
+  set("connections/{connectionIdentifier}/channels/{channelIdentifier}", (TRYOPEN, moduleIdentifier, counterpartyModuleIdentifier, counterpartyChannelIdentifier, connectionIdentifier, counterpartyConnectionIdentifier, acceptedVersion, 0, 0))
 ```
 
 ```golang
 type ChanOpenAck struct {
-  channelIdentifier   Identifier
-  acceptedVersion     Version
-  proofTry            CommitmentProof
+  connectionIdentifier  Identifier
+  channelIdentifier     Identifier
+  acceptedVersion       Version
+  proofTry              CommitmentProof
 }
 ```
 
 ```coffeescript
 function chanOpenAck()
-  (state, moduleIdentifier, counterpartyModuleIdentifier, counterpartyChannelIdentifier, connectionIdentifier, counterpartyConnectionIdentifier, _, _, _) = get("channels/{channelIdentifier}")
+  (state, moduleIdentifier, counterpartyModuleIdentifier, counterpartyChannelIdentifier, connectionIdentifier, counterpartyConnectionIdentifier, _, _, _) = get("connections/{connectionIdentifier}/channels/{channelIdentifier}")
   assert(state == INIT)
   assert(getCallingModule() == moduleIdentifier)
   (connectionState, _, _, clientIdentifier, _, _) = get("connections/{connectionIdentifier}")
@@ -177,22 +178,23 @@ function chanOpenAck()
   assert(verifyMembership(
     consensusState,
     proofTry,
-    "channels/{counterpartyChannelIdentifier}",
+    "connections/{connectionIdentifier}/channels/{counterpartyChannelIdentifier}",
     (TRYOPEN, counterpartyModuleIdentifier, moduleIdentifier, channelIdentifier, counterpartyConnectionIdentifier, connectionIdentifier, acceptedVersion, 0, 0)
   ))
-  set("channels/{channelIdentifier}", (OPEN, moduleIdentifier, counterpartyModuleIdentifier, counterpartyChannelIdentifier, connectionIdentifier, counterpartyConnectionIdentifier, acceptedVersion, 0, 0))
+  set("connections/{connectionIdentifier}/channels/{channelIdentifier}", (OPEN, moduleIdentifier, counterpartyModuleIdentifier, counterpartyChannelIdentifier, connectionIdentifier, counterpartyConnectionIdentifier, acceptedVersion, 0, 0))
 ```
 
 ```golang
 type ChanOpenConfirm struct {
-  channelIdentifier Identifier
-  proofAck          CommitmentProof
+  connectionIdentifier  Identifier
+  channelIdentifier     Identifier
+  proofAck              CommitmentProof
 }
 ```
 
 ```coffeescript
 function chanOpenConfirm()
-  (state, moduleIdentifier, counterpartyModuleIdentifier, counterpartyChannelIdentifier, connectionIdentifier, counterpartyConnectionIdentifier, version, _, _) = get("channels/{channelIdentifier}")
+  (state, moduleIdentifier, counterpartyModuleIdentifier, counterpartyChannelIdentifier, connectionIdentifier, counterpartyConnectionIdentifier, version, _, _) = get("connections/{connectionIdentifier}/channels/{channelIdentifier}")
   assert(state == TRYOPEN)
   assert(getCallingModule() == moduleIdentifier)
   (connectionState, _, _, clientIdentifier, _, _) = get("connections/{connectionIdentifier}")
@@ -200,10 +202,10 @@ function chanOpenConfirm()
   assert(verifyMembership(
     consensusState.getRoot(),
     proofAck,
-    "channels/{counterpartyChannelIdentifier}",
+    "connections/{connectionIdentifier}/channels/{counterpartyChannelIdentifier}",
     (OPEN, counterpartyModuleIdentifier, moduleIdentifier, channelIdentifier, counterpartyConnectionIdentifier, connectionIdentifier, version, 0, 0)
   ))
-  set("channels/{channelIdentifier}", (OPEN, moduleIdentifier, counterpartyModuleIdentifier, counterpartyChannelIdentifier, connectionIdentifier, counterpartyConnectionIdentifier, version, 0, 0))
+  set("connections/{connectionIdentifier}/channels/{channelIdentifier}", (OPEN, moduleIdentifier, counterpartyModuleIdentifier, counterpartyChannelIdentifier, connectionIdentifier, counterpartyConnectionIdentifier, version, 0, 0))
 ```
 
 ### Channel closing handshake
@@ -218,15 +220,15 @@ function chanOpenConfirm()
 
 ```coffeescript
 function sendPacket(Packet packet)
-  (state, moduleIdentifier, _, _, connectionIdentifier, _, _, nextSequenceSend, _) = get("channels/{channelIdentifier}")
+  (state, moduleIdentifier, _, _, connectionIdentifier, _, _, nextSequenceSend, _) = get("connections/{connectionIdentifier}/channels/{channelIdentifier}")
   assert(state == OPEN)
   assert(getCallingModule() == moduleIdentifier)
   (connectionState, _, _, _, _, _) = get("connections/{connectionIdentifier}")
   assert(connectionState == OPEN)
   assert(sequence == nextSequenceSend)
-  set("channels/{channelIdentifier}",
+  set("connections/{connectionIdentifier}/channels/{channelIdentifier}",
     (state, moduleIdentifier, counterpartyModuleIdentifier, counterpartyChannelIdentifier, connectionIdentifier, counterpartyConnectionIdentifier, version, nextSequenceSend + 1, nextSequenceRecv))
-  set("channels/{channelIdentifier}/packets/{sequence}", commit(packet.data))
+  set("connections/{connectionIdentifier}/channels/{channelIdentifier}/packets/{sequence}", commit(packet.data))
 ```
 
 ### Receiving packets
@@ -235,7 +237,7 @@ function sendPacket(Packet packet)
 
 ```coffeescript
 function recvPacket(Packet packet)
-  (state, moduleIdentifier, _, _, _, _, _) = get("channels/{channelIdentifier}")
+  (state, moduleIdentifier, _, _, _, _, _) = get("connections/{connectionIdentifier}/channels/{channelIdentifier}")
   assert(state == OPEN)
   assert(getCallingModule() == moduleIdentifier)
   consensusState = get("clients/{clientIdentifier}")
@@ -244,7 +246,7 @@ function recvPacket(Packet packet)
   assert(verifyMembership(
     consensusState.getRoot(),
     proof,
-    "channels/{channelIdentifier}/packets/{sequence}",
+    "connections/{connectionIdentifier}/channels/{channelIdentifier}/packets/{sequence}",
     commit(packet.data)
   ))
   // set stored recv sequence so we can't recv again
@@ -260,7 +262,7 @@ Note that in order to avoid any possible "double-spend" attacks, the timeout alg
 
 ```coffeescript
 function timeoutPacket(Packet packet)
-  (state, moduleIdentifier, _, _, _, _, _) = get("channels/{channelIdentifier}")
+  (state, moduleIdentifier, _, _, _, _, _) = get("connections/{connectionIdentifier}/channels/{channelIdentifier}")
   assert(state == OPEN)
   assert(getCallingModule() == moduleIdentifier)
   assert(consensusState.getHeight() >= timeoutHeight)
