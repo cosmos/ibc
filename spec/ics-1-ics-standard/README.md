@@ -130,10 +130,10 @@ Example pseudocode struct:
 
 ```golang
 type Connection struct {
-  ConnectionState state
-  Version version
-  Identifier counterpartyIdentifier
-  RootOfTrust rootOfTrust
+  state                   ConnectionState
+  version                 Version
+  counterpartyIdentifier  Identifier
+  consensusState          ConsensusState
 }
 ```
 

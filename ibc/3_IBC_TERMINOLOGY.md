@@ -85,3 +85,11 @@ To *trust* a blockchain or validator set means to expect that the validator set 
 ### Equivocation
 
 *Equivocation* refers to a particular class of consensus fault committed by a validator or validators which sign votes on multiple different successors to a single block.
+
+### Subprotocol
+
+Subprotocols are defined as a set of datagram types and functions which must be implemented by the IBC handler module of the implementing blockchain.
+
+Datagrams must be relayed between chains by an external process. This process is assumed to behave in an arbitrary manner — no safety properties are dependent on its behavior, although progress is generally dependent on the existence of at least one correct relayer process.
+
+IBC subprotocols are reasoned about as interactions between two chains `A` and `B` — there is no prior distinction between these two chains and they are assumed to be executing the same, correct IBC protocol. `A` is simply by convention the chain which goes first in the subprotocol and `B` the chain which goes second. Protocol definitions should generally avoid including `A` and `B` in variable names to avoid confusion (as the chains themselves do not know whether they are `A` or `B` in the protocol).
