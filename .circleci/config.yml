@@ -17,6 +17,7 @@ jobs:
           key: makefile-{{ checksum "Makefile" }}
           paths:
             - "/usr/lib/python3.7"
+            - "/usr/local/lib/python3.7"
 
   check_dependencies:
     <<: *linux_defaults
