@@ -5,62 +5,28 @@ defaults: &linux_defaults
     - image: circleci/python:3.7.2
 
 jobs:
-  setup_dependencies:
-    <<: *linux_defaults
-    steps:
-      - checkout
-      - restore_cache:
-          keys:
-            - makefile-{{ checksum "Makefile" }}
-      - run: sudo make setup_dependencies
-      - save_cache:
-          key: makefile-{{ checksum "Makefile" }}
-          paths:
-            - "/usr/lib/python3.7"
-            - "/usr/local/lib/python3.7"
-
   check_dependencies:
     <<: *linux_defaults
     steps:
       - checkout
-      - restore_cache:
-          keys:
-            - makefile-{{ checksum "Makefile" }}
-      - run: make check_dependencies
+      - run: make setup_dependencies check_dependencies
 
   check_links:
     <<: *linux_defaults
     steps:
       - checkout
-      - restore_cache:
-          keys:
-            - makefile-{{ checksum "Makefile" }}
-      - run: make check_links
+      - run: make setup_dependencies check_links
 
   check_syntax:
     <<: *linux_defaults
     steps:
       - checkout
-      - restore_cache:
-          keys:
-            - makefile-{{ checksum "Makefile" }}
       - run: make check_syntax
 
 workflows:
   version: 2
   test-suite:
     jobs:
-      - setup_dependencies:
-          filters:
-            tags:
-              only:
-                - /^v.*/
-      - check_dependencies:
-          requires:
-            - setup_dependencies
-      - check_links:
-          requires:
-            - setup_dependencies
-      - check_syntax:
-          requires:
-            - setup_dependencies
+      - check_dependencies
+      - check_links
+      - check_syntax
