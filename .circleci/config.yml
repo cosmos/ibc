@@ -15,7 +15,13 @@ jobs:
     <<: *linux_defaults
     steps:
       - checkout
-      - run: sudo make setup_dependencies check_links
+      - run: make check_links
+
+  check_sections:
+    <<: *linux_defaults
+    steps:
+      - checkout
+      - run: make check_sections
 
   check_syntax:
     <<: *linux_defaults
@@ -31,4 +37,5 @@ workflows:
     jobs:
       - check_dependencies
       - check_links
+      - check_sections
       - check_syntax
