@@ -8,6 +8,7 @@ jobs:
   setup_dependencies:
     <<: *linux_defaults
     steps:
+      - checkout
       - restore_cache:
           keys:
             - makefile-{{ checksum "Makefile" }}
@@ -20,6 +21,7 @@ jobs:
   check_dependencies:
     <<: *linux_defaults
     steps:
+      - checkout
       - restore_cache:
           keys:
             - makefile-{{ checksum "Makefile" }}
@@ -28,6 +30,7 @@ jobs:
   check_links:
     <<: *linux_defaults
     steps:
+      - checkout
       - restore_cache:
           keys:
             - makefile-{{ checksum "Makefile" }}
