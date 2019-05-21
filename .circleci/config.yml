@@ -12,7 +12,7 @@ jobs:
       - restore_cache:
           keys:
             - makefile-{{ checksum "Makefile" }}
-      - run: sudo pip install networkx matplotlib
+      - run: sudo make setup_dependencies
       - save_cache:
           key: makefile-{{ checksum "Makefile" }}
           paths:
@@ -26,7 +26,7 @@ jobs:
       - restore_cache:
           keys:
             - makefile-{{ checksum "Makefile" }}
-      - run: python ./scripts/check-dependencies.py
+      - run: make check_dependencies
 
   check_links:
     <<: *linux_defaults
@@ -35,7 +35,16 @@ jobs:
       - restore_cache:
           keys:
             - makefile-{{ checksum "Makefile" }}
-      - run: python ./scripts/check-links.py
+      - run: make check_links
+
+  check_syntax:
+    <<: *linux_defaults
+    steps:
+      - checkout
+      - restore_cache:
+          keys:
+            - makefile-{{ checksum "Makefile" }}
+      - run: make check_syntax
 
 workflows:
   version: 2
@@ -50,5 +59,8 @@ workflows:
           requires:
             - setup_dependencies
       - check_links:
+          requires:
+            - setup_dependencies
+      - check_syntax:
           requires:
             - setup_dependencies
