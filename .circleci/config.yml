@@ -9,13 +9,13 @@ jobs:
     <<: *linux_defaults
     steps:
       - checkout
-      - run: make setup_dependencies check_dependencies
+      - run: sudo make setup_dependencies check_dependencies
 
   check_links:
     <<: *linux_defaults
     steps:
       - checkout
-      - run: make setup_dependencies check_links
+      - run: sudo make setup_dependencies check_links
 
   check_syntax:
     <<: *linux_defaults
