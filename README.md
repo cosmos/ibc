@@ -44,4 +44,6 @@ All standards in the "draft" stage are listed here in order of their ICS numbers
 
 ## Standard Dependency Visualization
 
+Directed arrows indicate a dependency relationship (that origin depends on destination).
+
 ![deps](deps.png)
