@@ -31,21 +31,21 @@
   \textcolor{red}{Timeouts} \\
   \end{tabular}};
 
-	\draw[->, blue, bend right](empty) edge node[yshift=3mm, xshift=1mm] {\tiny{\textsc{ConnInit}}} (init);
- 	\draw[->, blue](init) edge node {\tiny{\textsc{ConnOpenTry}}} (tryopen);
-	\draw[->, blue](tryopen) edge node {\tiny{\textsc{ConnOpenAck}}} (tryopen1);
-	\draw[->, blue](tryopen1) edge node {\tiny{\textsc{ConnOpenConfirm}}} (open);
+	\draw[->, blue, bend right](empty) edge node[yshift=4mm, xshift=1mm] {\textsc{ConnInit}} (init);
+ 	\draw[->, blue](init) edge node {\textsc{ConnOpenTry}} (tryopen);
+	\draw[->, blue](tryopen) edge node {\textsc{ConnOpenAck}} (tryopen1);
+	\draw[->, blue](tryopen1) edge node {\textsc{ConnOpenConfirm}} (open);
 
-  \draw[->, green, bend right](open) edge node[yshift=3mm, xshift=1mm] {\tiny{\textsc{ConnCloseTry}}} (tryclose);
-  \draw[->, green](tryclose) edge node {\tiny{\textsc{ConnCloseAck}}} (tryclose1);
-  \draw[->, green](tryclose1) edge node {\tiny{\textsc{ConnCloseConfirm}}} (closed);
+  \draw[->, green, bend right](open) edge node[yshift=4mm, xshift=1mm] {\textsc{ConnCloseTry}} (tryclose);
+  \draw[->, green](tryclose) edge node {\textsc{ConnCloseAck}} (tryclose1);
+  \draw[->, green](tryclose1) edge node {\textsc{ConnCloseConfirm}} (closed);
 
-  \draw[->, red, bend right](init) edge node {\tiny{\textsc{ConnOpenTimeout}}} (empty);
-  \draw[->, red](tryopen) edge node {\tiny{\textsc{ConnOpenTimeout}}} (empty);
-  \draw[->, red](tryopen1) edge node {\tiny{\textsc{ConnOpenTimeout}}} (empty);
+  \draw[->, red, bend right](init) edge node {\textsc{ConnOpenTimeout}} (empty);
+  \draw[->, red](tryopen) edge node[yshift=1cm, xshift=1cm] {\textsc{ConnOpenTimeout}} (empty);
+  \draw[->, red](tryopen1) edge node[yshift=2cm, xshift=2cm] {\textsc{ConnOpenTimeout}} (empty);
 
-  \draw[->, red, bend right](tryclose) edge node {\tiny{\textsc{ConnCloseTimeout}}} (open);
-  \draw[->, red](tryclose1) edge node {\tiny{\textsc{ConnCloseTimeout}}} (open);
+  \draw[->, red, bend right](tryclose) edge node {\textsc{ConnCloseTimeout}} (open);
+  \draw[->, red](tryclose1) edge node {\textsc{ConnCloseTimeout}} (open);
 
 	\draw[color=black,thick](-0.5,-14) rectangle (22,2.8);
 

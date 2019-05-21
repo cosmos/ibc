@@ -1,4 +1,4 @@
-SUBDIRS := spec/ics-3-bidirectional-connection-semantics
+SUBDIRS := spec/ics-3-connection-semantics
 TOPTARGETS := all clean
 
 $(TOPTARGETS): $(SUBDIRS)
