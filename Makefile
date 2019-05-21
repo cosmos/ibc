@@ -17,4 +17,7 @@ check_dependencies:
 check_syntax:
 	bash ./scripts/check_syntax.sh
 
-.PHONY: $(TOPTARGETS) $(SUBDIRS) setup_dependencies check_links check_dependencies check_syntax
+check_sections:
+	python ./scripts/check_sections.py
+
+.PHONY: $(TOPTARGETS) $(SUBDIRS) setup_dependencies check_links check_dependencies check_syntax check_sections
