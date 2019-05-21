@@ -35,6 +35,7 @@ for (num, origin) in all_required_by:
     edge = (origin, num)
     if edge not in edges:
         print('Missing requirement from {} to {}!'.format(origin, num))
+        sys.exit(1)
 
 print('Scanning for possible cycles...')
 
