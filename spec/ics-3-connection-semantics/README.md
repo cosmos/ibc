@@ -88,7 +88,7 @@ type Connection struct {
 
 ### Subprotocols
 
-This ICS defines three subprotocols: opening handshake, header tracking, closing handshake. Datagrams defined herein are handled as external messages by the IBC relayer module defined in [ICS 26](../spec/ics-26-relayer-module).
+This ICS defines two subprotocols: opening handshake and closing handshake. Header tracking and closing-by-equivocation are defined in ICS 2. Datagrams defined herein are handled as external messages by the IBC relayer module defined in [ICS 26](../spec/ics-26-relayer-module).
 
 ![State Machine Diagram](state.png)
 
