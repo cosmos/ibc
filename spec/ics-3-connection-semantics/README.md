@@ -98,7 +98,7 @@ The opening handshake subprotocol serves to initialize consensus states for two 
 
 The opening handshake defines four datagrams: *ConnOpenInit*, *ConnOpenTry*, *ConnOpenAck*, and *ConnOpenConfirm*.
 
-A correct protocol execution flows as follows:
+A correct protocol execution flows as follows (note that all calls are made through modules per ICS 25):
 
 | Initiator | Datagram          | Chain |
 | --------- | ----------------- | ----- |
@@ -129,8 +129,8 @@ type ConnOpenInit struct {
 function connOpenInit(identifier, desiredCounterpartyIdentifier, clientIdentifier, counterpartyClientIdentifier, nextTimeoutHeight)
   assert(get("connections/{identifier}") == null)
   state = INIT
-  set("connections/{identifier}",
-    (state, desiredCounterpartyIdentifier, clientIdentifier, counterpartyClientIdentifier, nextTimeoutHeight))
+  connection = Connection{state, desiredCounterpartyIdentifier, clientIdentifier, counterpartyClientIdentifier, nextTimeoutHeight}
+  set("connections/{identifier}", connection)
 ```
 
 *ConnOpenTry* relays notice of a connection attempt on chain A to chain B.
@@ -152,15 +152,14 @@ function connOpenTry(desiredIdentifier, counterpartyIdentifier, counterpartyClie
   assert(getConsensusState().getHeight() <= timeoutHeight)
   consensusState = get("clients/{clientIdentifier}")
   expectedConsensusState = getConsensusState()
-  assert(verifyMembership(consensusState.getRoot(), proofInit,
-    "connections/{counterpartyIdentifier}", (INIT, desiredIdentifier, counterpartyClientIdentifier, clientIdentifier, timeoutHeight)))
-  assert(verifyMembership(consensusState.getRoot(), proofInit,
-    "clients/{counterpartyClientIdentifier}", expectedConsensusState))
+  expected = Connection{INIT, desiredIdentifier, counterpartyClientIdentifier, clientIdentifier, timeoutHeight}
+  assert(verifyMembership(consensusState.getRoot(), proofInit, "connections/{counterpartyIdentifier}", expected))
+  assert(verifyMembership(consensusState.getRoot(), proofInit, "clients/{counterpartyClientIdentifier}", expectedConsensusState))
   assert(get("connections/{desiredIdentifier}") == nil)
   identifier = desiredIdentifier
   state = OPENTRY
-  set("connections/{identifier}",
-    (state, counterpartyIdentifier, clientIdentifier, counterpartyClientIdentifier, nextTimeoutHeight))
+  connection = Connection{state, counterpartyIdentifier, clientIdentifier, counterpartyClientIdentifier, nextTimeoutHeight}
+  set("connections/{identifier}", connection)
 ```
 
 *ConnOpenAck* relays acceptance of a connection open attempt from chain B back to chain A.
@@ -177,17 +176,16 @@ type ConnOpenAck struct {
 ```coffeescript
 function connOpenAck(identifier, proofTry, timeoutHeight, nextTimeoutHeight)
   assert(getConsensusState().getHeight() <= timeoutHeight)
-  (state, desiredCounterpartyIdentifier, clientIdentifier, counterpartyClientIdentifier, _) = get("connections/{identifier}")
-  assert(state == INIT)
-  consensusState = get("clients/{clientIdentifier}")
+  connection = get("connections/{identifier}")
+  assert(connection.state == INIT)
+  consensusState = get("clients/{connection.clientIdentifier}")
   expectedConsensusState = getConsensusState()
-  assert(verifyMembership(consensusState, proofTry,
-    "connections/{desiredCounterpartyIdentifier}", (OPENTRY, identifier, counterpartyClientIdentifier, clientIdentifier, timeoutHeight)))
-  assert(verifyMembership(consensusState, proofTry,
-    counterpartyClientIdentifier, expectedConsensusState))
-  state = OPEN
-  set("connections/{identifier}",
-    (state, desiredCounterpartyIdentifier, clientIdentifier, counterpartyClientIdentifier, nextTimeoutHeight))
+  expected = Connection{OPENTRY, identifier, connection.counterpartyClientIdentifier, connection.clientIdentifier, timeoutHeight}
+  assert(verifyMembership(consensusState, proofTry, "connections/{connection.counterpartyIdentifier}", expected))
+  assert(verifyMembership(consensusState, proofTry, "clients/{connection.counterpartyClientIdentifier}", expectedConsensusState))
+  connection.state = OPEN
+  connection.nextTimeoutHeight = nextTimeoutHeight
+  set("connections/{identifier}", connection)
 ```
 
 *ConnOpenConfirm* confirms opening of a connection on chain A to chain B, after which the connection is open on both chains.
@@ -203,14 +201,14 @@ type ConnOpenConfirm struct {
 ```coffeescript
 function connOpenConfirm(identifier, proofAck, timeoutHeight)
   assert(getConsensusState().getHeight() <= timeoutHeight)
-  (state, counterpartyIdentifier, clientIdentifier, counterpartyClientIdentifier, _) = get("connections/{identifier}")
-  assert(state == OPENTRY)
-  consensusState = get("clients/{clientIdentifier}")
-  expectedConsensusState = getConsensusState()
-  assert(verifyMembership(consensusState, proofAck,
-    "connections/{counterpartyIdentifier}", (OPEN, identifier, counterpartyClientIdentifier, clientIdentifier, timeoutHeight)))
-  state = OPEN
-  set("connections/{identifier}", (state, counterpartyIdentifier, clientIdentifier, counterpartyClientIdentifier, 0))
+  connection = get("connections/{identifier}")
+  assert(connection.state == OPENTRY)
+  consensusState = get("clients/{connection.clientIdentifier}")
+  expected = Connection{OPEN, identifier, connection.counterpartyClientIdentifier, connection.clientIdentifier, timeoutHeight}
+  assert(verifyMembership(consensusState, proofAck, "connections/{connection.counterpartyIdentifier}", expected))
+  connection.state = OPEN
+  connection.nextTimeoutHeight = 0
+  set("connections/{identifier}", connection)
 ```
 
 *ConnOpenTimeout* aborts a connection opening attempt due to a timeout on the other side.
@@ -219,29 +217,34 @@ function connOpenConfirm(identifier, proofAck, timeoutHeight)
 type ConnOpenTimeout struct {
   identifier    Identifier
   proofTimeout  CommitmentProof
+  timeoutHeight uint64
 }
 ```
 
 ```coffeescript
-function connOpenTimeout(identifier, proofTimeout)
-  (state, counterpartyIdentifier, clientIdentifier, counterpartyClientIdentifier, timeoutHeight) = get("connections/{identifier}")
-  consensusState = get("clients/{clientIdentifier}")
-  assert(consensusState.getHeight() > timeoutHeight)
+function connOpenTimeout(identifier, proofTimeout, timeoutHeight)
+  connection = get("connections/{identifier}")
+  consensusState = get("clients/{connection.clientIdentifier}")
+  assert(consensusState.getHeight() > connection.nextTimeoutHeight)
   switch state {
     case INIT:
       assert(verifyNonMembership(consensusState, proofTimeout,
-        "connections/{counterpartyIdentifier}"))
+        "connections/{connection.counterpartyIdentifier}"))
     case TRYOPEN:
       assert(
         verifyMembership(consensusState, proofTimeout,
-        "connections/{counterpartyIdentifier}", (INIT, identifier, counterpartyClientIdentifier, clientIdentifier, _))
+        "connections/{connection.counterpartyIdentifier}",
+        Connection{INIT, identifier, connection.counterpartyClientIdentifier, connection.clientIdentifier, timeoutHeight}
+        )
         ||
         verifyNonMembership(consensusState, proofTimeout,
-        "connections/{counterpartyIdentifier}")
+        "connections/{connection.counterpartyIdentifier}")
       )
     case OPEN:
       assert(verifyMembership(consensusState, proofTimeout,
-        "connections/{counterpartyIdentifier}", (TRYOPEN, identifier, counterpartyClientIdentifier, clientIdentifier, _)))
+        "connections/{connection.counterpartyIdentifier}",
+        Connection{TRYOPEN, identifier, connection.counterpartyClientIdentifier, connection.clientIdentifier, timeoutHeight}
+      ))
   }
   delete("connections/{identifier}")
 ```
@@ -258,7 +261,7 @@ This subprotocol will likely need to be permissioned to an entity who "owns" the
 
 The closing handshake subprotocol defines three datagrams: *ConnCloseInit*, *ConnCloseTry*, and *ConnCloseAck*.
 
-A correct protocol execution flows as follows:
+A correct protocol execution flows as follows (note that all calls are made through modules per ICS 25):
 
 | Initiator | Datagram          | Chain |
 | --------- | ----------------- | ----- |
@@ -271,18 +274,17 @@ A correct protocol execution flows as follows:
 ```golang
 type ConnCloseInit struct {
   identifier             Identifier
-  identifierCounterparty Identifier
   nextTimeoutHeight      uint64
 }
 ```
 
 ```coffeescript
-function connCloseInit(identifier, identifierCounterparty, nextTimeoutHeight)
-  (state, counterpartyIdentifier, clientIdentifier, counterpartyClientIdentifier, _) = get("connections/{identifier}")
-  assert(state == OPEN)
-  assert(identifierCounterparty == counterpartyIdentifier)
-  state = TRYCLOSE
-  set("connections/{identifier}", (state, counterpartyIdentifier, clientIdentifier, counterpartyClientIdentifier, nextTimeoutHeight))
+function connCloseInit(identifier, nextTimeoutHeight)
+  connection = get("connections/{identifier}")
+  assert(connection.state == OPEN)
+  connection.state = TRYCLOSE
+  connection.nextTimeoutHeight = nextTimeoutHeight
+  set("connections/{identifier}", connection)
 ```
 
 *ConnCloseTry* relays the intent to close a connection from chain A to chain B.
@@ -290,7 +292,6 @@ function connCloseInit(identifier, identifierCounterparty, nextTimeoutHeight)
 ```golang
 type ConnCloseTry struct {
   identifier              Identifier
-  identifierCounterparty  Identifier
   proofInit               CommitmentProof
   timeoutHeight           uint64
   nextTimeoutHeight       uint64
@@ -298,17 +299,16 @@ type ConnCloseTry struct {
 ```
 
 ```coffeescript
-function connCloseTry(identifier, identifierCounterparty, proofInit, timeoutHeight, nextTimeoutHeight)
+function connCloseTry(identifier, proofInit, timeoutHeight, nextTimeoutHeight)
   assert(getConsensusState().getHeight() <= timeoutHeight)
-  (state, counterpartyIdentifier, clientIdentifier, counterpartyClientIdentifier, _) = get("connections/{identifier}")
-  assert(state == OPEN)
-  assert(identifierCounterparty == counterpartyIdentifier)
-  consensusState = get("clients/{clientIdentifier}")
-  assert(verifyMembership(consensusState, proofInit, "connections/{counterpartyIdentifier}",
-    (TRYCLOSE, identifier, counterpartyClientIdentifier, clientIdentifier, timeoutHeight)))
-  state = CLOSED
-  set("connections/{identifier}",
-    (state, counterpartyIdentifier, clientIdentifier, counterpartyClientIdentifier, nextTimeoutHeight))
+  connection = get("connections/{identifier}")
+  assert(connection.state == OPEN)
+  consensusState = get("clients/{connection.clientIdentifier}")
+  expected = Connection{TRYCLOSE, identifier, connection.counterpartyClientIdentifier, connection.clientIdentifier, timeoutHeight}
+  assert(verifyMembership(consensusState, proofInit, "connections/{counterpartyIdentifier}", expected))
+  connection.state = CLOSED
+  connection.nextTimeoutHeight = nextTimeoutHeight
+  set("connections/{identifier}", connection)
 ```
 
 *ConnCloseAck* acknowledges a connection closure on chain B.
@@ -324,13 +324,14 @@ type ConnCloseAck struct {
 ```coffeescript
 function connCloseAck(identifier, proofTry, timeoutHeight)
   assert(getConsensusState().getHeight() <= timeoutHeight)
-  (state, counterpartyIdentifier, clientIdentifier, counterpartyClientIdentifier, _) = get("connections/{identifier}")
-  assert(state == TRYCLOSE)
-  consensusState = get("clients/{clientIdentifier}")
-  assert(verifyMembership(consensusState, proofTry, "connections/{counterpartyIdentifier}",
-    (CLOSED, identifier, counterpartyClientIdentifier, clientIdentifier, timeoutHeight)))
-  state = CLOSED
-  set("connections/{identifier}", (state, counterpartyIdentifier, clientIdentifier, counterpartyClientIdentifier, 0))
+  connection = get("connections/{identifier}")
+  assert(connection.state == TRYCLOSE)
+  consensusState = get("clients/{connection.clientIdentifier}")
+  expected = Connection{CLOSED, identifier, connection.counterpartyClientIdentifier, connection.clientIdentifier, timeoutHeight}
+  assert(verifyMembership(consensusState, proofTry, "connections/{counterpartyIdentifier}", expected))
+  connection.state = CLOSED
+  connection.nextTimeoutHeight = 0
+  set("connections/{identifier}", connection)
 ```
 
 *ConnCloseTimeout* aborts a connection closing attempt due to a timeout on the other side and reopens the connection.
@@ -339,23 +340,28 @@ function connCloseAck(identifier, proofTry, timeoutHeight)
 type ConnCloseTimeout struct {
   identifier    Identifier
   proofTimeout  CommitmentProof
+  timeoutHeight uint64
 }
 ```
 
 ```coffeescript
-function connOpenTimeout(identifier, proofTimeout)
-  (state, counterpartyIdentifier, clientIdentifier, counterpartyClientIdentifier, timeoutHeight) = get("connections/{identifier}")
-  consensusState = get("clients/{clientIdentifier}")
-  assert(consensusState.getHeight() > timeoutHeight)
+function connOpenTimeout(identifier, proofTimeout, timeoutHeight)
+  connection = get("connections/{identifier}")
+  consensusState = get("clients/{connection/clientIdentifier}")
+  assert(consensusState.getHeight() > connection.nextTimeoutHeight)
   switch state {
     case TRYCLOSE:
-      assert(verifyMembership(consensusState, proofTimeout,
-        "connections/{counterpartyIdentifier}", (OPEN, identifier, counterpartyClientIdentifier, clientIdentifier, _)))
-      set("connections/{identifier}", (OPEN, counterpartyIdentifier, clientIdentifier, counterpartyClientIdentifier, 0))
+      expected = Connection{OPEN, identifier, connection.counterpartyClientIdentifier, connection.clientIdentifier, timeoutHeight}
+      assert(verifyMembership(consensusState, proofTimeout, "connections/{counterpartyIdentifier}", expected))
+      connection.state = OPEN
+      connection.nextTimeoutHeight = 0
+      set("connections/{identifier}", connection)
     case CLOSED:
-      assert(verifyMembership(consensusState, proofTimeout,
-        "connections/{counterpartyIdentifier}", (TRYCLOSE, identifier, counterpartyClientIdentifier, clientIdentifier, _)))
-      set("connections/{identifier}", (OPEN, counterpartyIdentifier, clientIdentifier, counterpartyClientIdentifier, 0))
+      expected = Connection{TRYCLOSE, identifier, connection.counterpartyClientIdentifier, connection.clientIdentifier, timeoutHeight}
+      assert(verifyMembership(consensusState, proofTimeout, "connections/{counterpartyIdentifier}", expected))
+      connection.state = OPEN
+      connection.nextTimeoutHeight = 0
+      set("connections/{identifier}", connection)
   }
 ```
 
