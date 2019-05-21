@@ -1,4 +1,4 @@
-SUBDIRS := spec/ics-3-connection-semantics
+SUBDIRS := spec/ics-3-connection-semantics papers/bpos
 TOPTARGETS := all clean
 
 $(TOPTARGETS): $(SUBDIRS)
