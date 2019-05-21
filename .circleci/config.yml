@@ -25,6 +25,14 @@ jobs:
             - makefile-{{ checksum "Makefile" }}
       - run: python ./scripts/check-dependencies.py
 
+  check_links:
+    <<: *linux_defaults
+    steps:
+      - restore_cache:
+          keys:
+            - makefile-{{ checksum "Makefile" }}
+      - run: python ./scripts/check-links.py
+
 workflows:
   version: 2
   test-suite:
@@ -35,5 +43,8 @@ workflows:
               only:
                 - /^v.*/
       - check_dependencies:
+          requires:
+            - setup_dependencies
+      - check_links:
           requires:
             - setup_dependencies
