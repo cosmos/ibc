@@ -1,0 +1,55 @@
+\documentclass[tikz,10pt,border=10pt]{standalone}
+\usepackage{textcomp}
+\usepackage{xcolor}
+\usetikzlibrary{shapes,arrows}
+\begin{document}
+\tikzset{%
+  state/.style    = {draw, thick, rectangle, node distance = 6cm}
+}
+\newcommand{\CA}[1]{\it{A} \textcolor{black}{\textsc{#1}}}
+\newcommand{\CB}[1]{\it{B} \textcolor{black}{\textsc{#1}}}
+\newcommand{\CS}[2]{\begin{tabular}{l}
+\CA{#1} \\
+\CB{#2}
+\end{tabular}}
+
+\begin{tikzpicture}[auto, thick, node distance=2cm, >=triangle 45]
+\draw
+	node [state, name=empty, right = 0.5mm] {\CS{Uninitialized}{Uninitialized}}
+  node [state, below of=empty] (init) {\CS{Init}{Uninitialized}}
+  node [state, right of=init] (tryopen) {\CS{Init}{TryOpen}}
+  node [state, right of=tryopen] (tryopen1) {\CS{Open}{TryOpen}}
+  node [state, right of=tryopen1] (open) {\CS{Open}{Open}}
+  node [state, below of=open] (tryclose) {\CS{TryClose}{Open}}
+  node [state, left of=tryclose] (tryclose1) {\CS{TryClose}{Closed}}
+  node [state, left of=tryclose1] (closed) {\CS{Closed}{Closed}};
+
+  \draw node [state, name = key, right = 18cm, above = 2mm] {\begin{tabular}{l}
+  \it{Key} \\
+  \textcolor{blue}{Opening Handshake} \\
+  \textcolor{green}{Closing Handshake} \\
+  \textcolor{red}{Timeouts} \\
+  \end{tabular}};
+
+	\draw[->, blue, bend right](empty) edge node[yshift=4mm, xshift=1mm] {\textsc{ConnInit}} (init);
+ 	\draw[->, blue](init) edge node {\textsc{ConnOpenTry}} (tryopen);
+	\draw[->, blue](tryopen) edge node {\textsc{ConnOpenAck}} (tryopen1);
+	\draw[->, blue](tryopen1) edge node {\textsc{ConnOpenConfirm}} (open);
+
+  \draw[->, green, bend right](open) edge node[yshift=4mm, xshift=1mm] {\textsc{ConnCloseTry}} (tryclose);
+  \draw[->, green](tryclose) edge node {\textsc{ConnCloseAck}} (tryclose1);
+  \draw[->, green](tryclose1) edge node {\textsc{ConnCloseConfirm}} (closed);
+
+  \draw[->, red, bend right](init) edge node {\textsc{ConnOpenTimeout}} (empty);
+  \draw[->, red](tryopen) edge node[yshift=1cm, xshift=1cm] {\textsc{ConnOpenTimeout}} (empty);
+  \draw[->, red](tryopen1) edge node[yshift=2cm, xshift=2cm] {\textsc{ConnOpenTimeout}} (empty);
+
+  \draw[->, red, bend right](tryclose) edge node {\textsc{ConnCloseTimeout}} (open);
+  \draw[->, red](tryclose1) edge node {\textsc{ConnCloseTimeout}} (open);
+
+	\draw[color=black,thick](-0.5,-14) rectangle (22,2.8);
+
+	\node at (-0.5,1.5) [above=0.5mm, right=5mm] {\huge{\textsc{Connection State Machine}}};
+
+\end{tikzpicture}
+\end{document}
