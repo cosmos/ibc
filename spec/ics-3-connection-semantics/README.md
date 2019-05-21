@@ -4,6 +4,7 @@ title: Connection Semantics
 stage: draft
 category: ibc-core
 requires: 23, 24
+required-by: 25
 author: Christopher Goes <cwgoes@tendermint.com>, Juwoon Yun <joon@tendermint.com>
 created: 2019-03-07
 modified: 2019-05-17
