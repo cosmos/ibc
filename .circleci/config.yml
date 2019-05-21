@@ -11,7 +11,7 @@ jobs:
       - restore_cache:
           keys:
             - makefile-{{ checksum "Makefile" }}
-      - run: pip install networkx matplotlib
+      - run: sudo pip install networkx matplotlib
       - save_cache:
           key: makefile-{{ checksum "Makefile" }}
           paths:
