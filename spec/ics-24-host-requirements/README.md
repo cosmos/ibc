@@ -3,8 +3,7 @@ ics: 24
 title: Host State Machine Requirements
 stage: draft
 category: ibc-core
-requires: 2
-required-by: 2, 3, 4, 5, 18
+required-by: 3, 18
 author: Christopher Goes <cwgoes@tendermint.com>
 created: 2019-04-16
 modified: 2019-05-11
@@ -75,6 +74,12 @@ function getConsensusState() -> ConsensusState
 Host chains MUST implement a module system, where each module has a unique serializable identifier, which:
 - can be read by the IBC handler in an authenticated manner when the module calls the IBC handler, e.g. to send a packet
 - can be used by the IBC handler to look up a module, which it can then call into (e.g. to handle a received packet addressed to that module)
+
+Host chains MUST provide the ability to read the calling module in the IBC handler with `getCallingModule`:
+
+```coffeescript
+function getCallingModule() -> string
+```
 
 Modules which wish to make use of particular IBC features MAY implement certain handler functions, e.g. to add additional logic to a channel handshake with an associated module on another chain.
 
