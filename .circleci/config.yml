@@ -21,7 +21,8 @@ jobs:
     <<: *linux_defaults
     steps:
       - checkout
-      - run: sudo apt-get update && sudo apt-get -y install npm golang-go && sudo npm install codedown coffeescript -g
+      - run: curl -sL https://deb.nodesource.com/setup_10.x | sudo -E bash -
+      - run: sudo apt-get update && sudo apt-get -y install nodejs npm golang-go && sudo npm install codedown coffeescript -g
       - run: make check_syntax
 
 workflows:
