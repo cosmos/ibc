@@ -28,9 +28,9 @@ blockchain. The stored light client instances will be able to be verified by a t
 ### Motivation
 
 In the IBC protocol, a chain needs to be able to verify updates to the state of another chain. A light client is the algorithm with which they can do so.
-updating state with a light client pointing to that chain. This standard formalises the common
+This standard formalizes the common
 model of light client to minimise the dependency on consensus algorithms, so that the protocol can
-easily connect with new chains which are running new consensus algorithms, without need to
+easily connect with new chains which are running new consensus algorithms, without the need to
 upgrade the light client protocol itself.
 
 <!--
@@ -40,7 +40,7 @@ with the same `[Transaction]`, if exists.
 --->
 ### Desired Properties
 
-This standard specification provides secure layer to verify other chains' canonical headers,
+Light clients must provide a secure algorithm to verify other chains' canonical headers,
 using the existing `ConsensusState`. The higher level abstractions will then be able to verify subcomponents of the state
 with the `CommitmentRoot` stored in the `ConsensusState`, which is guaranteed to be committed by
 the other chain's consensus algorithm.
