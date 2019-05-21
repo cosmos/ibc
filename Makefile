@@ -6,7 +6,7 @@ $(SUBDIRS):
 	$(MAKE) -C $@ $(MAKECMDGOALS)
 
 setup_dependencies:
-	pip install matploblib networkx
+	pip install matplotlib networkx
 
 check_links:
 	python ./scripts/check_links.py
