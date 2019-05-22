@@ -1,9 +1,7 @@
 check:
-	agda HostRequirements.agda
 
 build:
 
 clean:
-	rm -f *.agdai
 
 .PHONY: check build clean

@@ -1,13 +1,9 @@
 AGDADIRS := spec/ics-24-host-requirements
-SUBDIRS := spec/ics-3-connection-semantics
-TOPTARGETS := all clean
+SUBDIRS := $(filter-out $(wildcard ./spec/*.md),$(wildcard ./spec/*))
+TOPTARGETS := check build clean
 
 $(TOPTARGETS): $(SUBDIRS)
 $(SUBDIRS):
-	$(MAKE) -C $@ $(MAKECMDGOALS)
-
-typecheck: $(AGDADIRS)
-$(AGDADIRS):
 	$(MAKE) -C $@ $(MAKECMDGOALS)
 
 setup_dependencies:
@@ -25,4 +21,4 @@ check_syntax:
 check_sections:
 	python ./scripts/check_sections.py
 
-.PHONY: $(TOPTARGETS) $(SUBDIRS) $(AGDADIRS) setup_dependencies check_links check_dependencies check_syntax check_sections
+.PHONY: $(TOPTARGETS) $(SUBDIRS) setup_dependencies check_links check_dependencies check_syntax check_sections

@@ -1,4 +1,6 @@
-all: $(addsuffix .png, $(basename $(wildcard *.tex))) cleanup
+check:
+
+build: $(addsuffix .png, $(basename $(wildcard *.tex))) cleanup
 
 %.png : %.tex
 	pdflatex "\input{$<}"
@@ -12,4 +14,4 @@ cleanup:
 clean:
 	rm -f *.png
 
-.PHONY: all clean cleanup
+.PHONY: check build clean cleanup
