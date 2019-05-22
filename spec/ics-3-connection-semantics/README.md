@@ -3,7 +3,7 @@ ics: 3
 title: Connection Semantics
 stage: draft
 category: ibc-core
-requires: 23, 24
+requires: 2, 23, 24
 required-by: 4
 author: Christopher Goes <cwgoes@tendermint.com>, Juwoon Yun <joon@tendermint.com>
 created: 2019-03-07
@@ -16,11 +16,11 @@ This standards document describes the abstraction of an IBC *connection*: two st
 
 ### Motivation
 
-The core IBC protocol provides *authorization* and *ordering* semantics for packets: guarantees, respectively, that packets have been committed on the sending blockchain (and according state transitions executed, such as escrowing tokens), and that they have been committed exactly once in a particular order and can be delivered exactly once in that same order. The *connection* abstraction specified in this standard, in conjunction with the *client* abstraction specified in ICS 2, defines the *authorization* semantics of IBC. Ordering semantics are described in [ICS 4](../ics-4-channel-and-packet-semantics)).
+The core IBC protocol provides *authorization* and *ordering* semantics for packets: guarantees, respectively, that packets have been committed on the sending blockchain (and according state transitions executed, such as escrowing tokens), and that they have been committed exactly once in a particular order and can be delivered exactly once in that same order. The *connection* abstraction specified in this standard, in conjunction with the *client* abstraction specified in [ICS 2](../spec-ics-2-consensus-verification), defines the *authorization* semantics of IBC. Ordering semantics are described in [ICS 4](../spec/ics-4-channel-and-packet-semantics)).
 
 ### Definitions
 
-`ConsensusState`, `Header`, and `updateConsensusState` are as defined in ICS 2.
+`ConsensusState`, `Header`, and `updateConsensusState` are as defined in [ICS 2](../spec/ics-2-consensus-verification).
 
 `CommitmentProof`, `verifyMembership`, and `verifyNonMembership` are as defined in [ICS 23](../ics-23-vector-commitments).
 
@@ -88,7 +88,7 @@ type Connection struct {
 
 ### Subprotocols
 
-This ICS defines two subprotocols: opening handshake and closing handshake. Header tracking and closing-by-equivocation are defined in ICS 2. Datagrams defined herein are handled as external messages by the IBC relayer module defined in ICS 26.
+This ICS defines two subprotocols: opening handshake and closing handshake. Header tracking and closing-by-equivocation are defined in [ICS 2](../spec/ics-2-consensus-verification). Datagrams defined herein are handled as external messages by the IBC relayer module defined in ICS 26.
 
 ![State Machine Diagram](state.png)
 
@@ -251,7 +251,7 @@ function connOpenTimeout(identifier, proofTimeout, timeoutHeight)
 
 #### Header Tracking
 
-Headers are tracked at the client level. See ICS 2.
+Headers are tracked at the client level. See [ICS 2](../spec/ics-2-consensus-verification).
 
 #### Closing Handshake
 
@@ -367,7 +367,7 @@ function connOpenTimeout(identifier, proofTimeout, timeoutHeight)
 
 #### Freezing by Equivocation
 
-The equivocation detection subprotocol is defined in ICS 2. If a client is frozen by equivocation, all associated connections are immediately frozen as well.
+The equivocation detection subprotocol is defined in [ICS 2](../spec/ics-2-consensus-verification). If a client is frozen by equivocation, all associated connections are immediately frozen as well.
 
 Implementing chains may want to allow applications to register handlers to take action upon discovery of an equivocation. Further discussion is deferred to ICS 12.
 
