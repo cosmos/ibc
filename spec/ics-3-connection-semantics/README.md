@@ -65,23 +65,23 @@ Once a negotiation handshake has completed:
 
 This ICS defines the `Connection` type:
 
-```golang
-type ConnectionState enum {
-  INIT
-  TRYOPEN
-  CLOSETRY
-  OPEN
-  CLOSED
+```typescript
+enum ConnectionState {
+  INIT,
+  TRYOPEN,
+  CLOSETRY,
+  OPEN,
+  CLOSED,
 }
 ```
 
-```golang
-type Connection struct {
-  state                         ConnectionState
-  counterpartyIdentifier        Identifier
-  clientIdentifier              Identifier
-  counterpartyClientIdentifier  Identifier
-  nextTimeoutHeight             uint64
+```typescript
+interface Connection {
+  state: ConnectionState
+  counterpartyIdentifier: Identifier
+  clientIdentifier: Identifier
+  counterpartyClientIdentifier: Identifier
+  nextTimeoutHeight: uint64
 }
 ```
 
@@ -114,13 +114,13 @@ This subprotocol need not be permissioned, modulo anti-spam measures.
 
 *ConnOpenInit* initializes a connection attempt on chain A.
 
-```golang
-type ConnOpenInit struct {
-  identifier                    Identifier
-  desiredCounterpartyIdentifier Identifier
-  clientIdentifier              Identifier
-  counterpartyClientIdentifier  Identifier
-  nextTimeoutHeight             uint64
+```typescript
+interface ConnOpenInit {
+  identifier: Identifier
+  desiredCounterpartyIdentifier: Identifier
+  clientIdentifier: Identifier
+  counterpartyClientIdentifier: Identifier
+  nextTimeoutHeight: uint64
 }
 ```
 
@@ -134,15 +134,15 @@ function connOpenInit(identifier, desiredCounterpartyIdentifier, clientIdentifie
 
 *ConnOpenTry* relays notice of a connection attempt on chain A to chain B.
 
-```golang
-type ConnOpenTry struct {
-  desiredIdentifier             Identifier
-  counterpartyIdentifier        Identifier
-  counterpartyClientIdentifier  Identifier
-  clientIdentifier              Identifier
-  proofInit                     CommitmentProof
-  timeoutHeight                 uint64
-  nextTimeoutHeight             uint64
+```typescript
+interface ConnOpenTry {
+  desiredIdentifier: Identifier
+  counterpartyIdentifier: Identifier
+  counterpartyClientIdentifier: Identifier
+  clientIdentifier: Identifier
+  proofInit: CommitmentProof
+  timeoutHeight: uint64
+  nextTimeoutHeight: uint64
 }
 ```
 
@@ -163,12 +163,12 @@ function connOpenTry(desiredIdentifier, counterpartyIdentifier, counterpartyClie
 
 *ConnOpenAck* relays acceptance of a connection open attempt from chain B back to chain A.
 
-```golang
-type ConnOpenAck struct {
-  identifier        Identifier
-  proofTry          CommitmentProof
-  timeoutHeight     uint64
-  nextTimeoutHeight uint64
+```typescript
+interface ConnOpenAck {
+  identifier: Identifier
+  proofTry: CommitmentProof
+  timeoutHeight: uint64
+  nextTimeoutHeight: uint64
 }
 ```
 
@@ -189,11 +189,11 @@ function connOpenAck(identifier, proofTry, timeoutHeight, nextTimeoutHeight)
 
 *ConnOpenConfirm* confirms opening of a connection on chain A to chain B, after which the connection is open on both chains.
 
-```golang
-type ConnOpenConfirm struct {
-  identifier    Identifier
-  proofAck      CommitmentProof
-  timeoutHeight uint64
+```typescript
+interface ConnOpenConfirm {
+  identifier: Identifier
+  proofAck: CommitmentProof
+  timeoutHeight: uint64
 }
 ```
 
@@ -212,11 +212,11 @@ function connOpenConfirm(identifier, proofAck, timeoutHeight)
 
 *ConnOpenTimeout* aborts a connection opening attempt due to a timeout on the other side.
 
-```golang
-type ConnOpenTimeout struct {
-  identifier    Identifier
-  proofTimeout  CommitmentProof
-  timeoutHeight uint64
+```typescript
+interface ConnOpenTimeout {
+  identifier: Identifier
+  proofTimeout: CommitmentProof
+  timeoutHeight: uint64
 }
 ```
 
@@ -270,10 +270,10 @@ A correct protocol execution flows as follows (note that all calls are made thro
 
 *ConnCloseInit* initializes a close attempt on chain A.
 
-```golang
-type ConnCloseInit struct {
-  identifier             Identifier
-  nextTimeoutHeight      uint64
+```typescript
+interface ConnCloseInit {
+  identifier: Identifier
+  nextTimeoutHeight: uint64
 }
 ```
 
@@ -288,12 +288,12 @@ function connCloseInit(identifier, nextTimeoutHeight)
 
 *ConnCloseTry* relays the intent to close a connection from chain A to chain B.
 
-```golang
-type ConnCloseTry struct {
-  identifier              Identifier
-  proofInit               CommitmentProof
-  timeoutHeight           uint64
-  nextTimeoutHeight       uint64
+```typescript
+interface ConnCloseTry {
+  identifier: Identifier
+  proofInit: CommitmentProof
+  timeoutHeight: uint64
+  nextTimeoutHeight: uint64
 }
 ```
 
@@ -312,11 +312,11 @@ function connCloseTry(identifier, proofInit, timeoutHeight, nextTimeoutHeight)
 
 *ConnCloseAck* acknowledges a connection closure on chain B.
 
-```golang
-type ConnCloseAck struct {
-  identifier    Identifier
-  proofTry      CommitmentProof
-  timeoutHeight uint64
+```typescript
+interface ConnCloseAck {
+  identifier: Identifier
+  proofTry: CommitmentProof
+  timeoutHeight: uint64
 }
 ```
 
@@ -335,11 +335,11 @@ function connCloseAck(identifier, proofTry, timeoutHeight)
 
 *ConnCloseTimeout* aborts a connection closing attempt due to a timeout on the other side and reopens the connection.
 
-```golang
-type ConnCloseTimeout struct {
-  identifier    Identifier
-  proofTimeout  CommitmentProof
-  timeoutHeight uint64
+```typescript
+interface ConnCloseTimeout {
+  identifier: Identifier
+  proofTimeout: CommitmentProof
+  timeoutHeight: uint64
 }
 ```
 
