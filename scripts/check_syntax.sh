@@ -2,14 +2,13 @@
 
 set -e
 
-for file in $(find . -type f -name "*.md"); do
+for file in $(find ./spec -type f -name "*.md"); do
   echo "Checking syntax in $file..."
   tempfile=$(mktemp).ts
   cat $file | codedown typescript > $tempfile
-  cat $tempfile
   echo "Running tslint..."
-  tslint -c ./scripts/tslint.json $tempfile
-  echo "Running typescript compiler (note: not required for the time being)..."
-  (tsc --lib es6 --downlevelIteration $tempfile || exit 0)
+  tslint -c ./scripts/tslint.json $tempfile || (cat $tempfile && exit 1)
+  echo "Running typescript compiler..."
+  tsc --lib es6 --downlevelIteration $tempfile || (cat $tempfile)
   rm -f $tempfile
 done
