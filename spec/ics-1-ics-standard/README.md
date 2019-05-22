@@ -161,8 +161,8 @@ This specification was significantly inspired by and derived from Ethereum's [EI
 was in turn derived from Bitcoin's BIP process and Python's PEP process. Antecedent authors are not responsible for any shortcomings of this ICS spec or
 the ICS process. Please direct all comments to the ICS repository maintainers.
 
-March 4th, 2019: Initial ICS 1 draft finished and submitted as a PR
-March 7th, 2019: ICS 1 draft merged
+March 4th, 2019: Initial draft finished and submitted as a PR
+March 7th, 2019: Draft merged
 April 11th, 2019: Updates to pseudocode formatting, add definitions subsection
 
 ## Copyright

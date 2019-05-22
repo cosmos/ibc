@@ -19,7 +19,7 @@ IBC is designed to be a common standard which will be hosted by a variety of blo
 
 ### Definitions
 
-`ConsensusState` is as defined in [ICS 2](../ics-2-consensus-requirements).
+`ConsensusState` is as defined in ICS 2.
 
 ### Desired Properties
 
