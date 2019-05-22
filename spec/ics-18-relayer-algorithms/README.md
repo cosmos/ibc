@@ -40,16 +40,15 @@ The relayer algorithm is defined over a set `C` of chains implementing the IBC p
 `submitDatagram` is a procedure defined per-chain (submitting a transaction of some sort).
 
 ```typescript
-relay = (C) ->
-  for chain in C
-    do (chain) ->
-      for counterparty in C
-        do (counterparty) ->
-          if counterparty != chain
-            datagrams = pendingDatagrams(chain, counterparty)
-            for datagram in datagrams
-              do (datagram) ->
-                submitDatagram(counterparty, datagram)
+function relay(C: Set<Chain>) {
+  for (const chain of C)
+    for (const counterparty of C)
+      if (counterparty !== chain) {
+        const datagrams = pendingDatagrams(chain, counterparty)
+        for (const datagram of datagrams)
+          submitDatagram(counterparty, datagram)
+      }
+}
 ```
 
 ### Incentivization
