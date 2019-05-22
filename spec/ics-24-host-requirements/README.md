@@ -3,7 +3,7 @@ ics: 24
 title: Host State Machine Requirements
 stage: draft
 category: ibc-core
-required-by: 3, 18
+required-by: 2, 3, 18
 author: Christopher Goes <cwgoes@tendermint.com>
 created: 2019-04-16
 modified: 2019-05-11
@@ -19,7 +19,7 @@ IBC is designed to be a common standard which will be hosted by a variety of blo
 
 ### Definitions
 
-`ConsensusState` is as defined in ICS 2.
+`ConsensusState` is as defined in [ICS 2](../ics-2-consensus-verification).
 
 ### Desired Properties
 
