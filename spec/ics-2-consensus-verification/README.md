@@ -154,8 +154,9 @@ the `handleDatagram`.
 ##### Preliminaries
 
 `newID` is a function which generates a new `Identifier` for a `Client`.
-The generation of the `Identifier` MAY depend on the `Header` of the `ClientInfo`.
-The behaviour of `newID` is implementation specific. Possible implementations are:
+The generation of the `Identifier` MAY depend on the `Header` of the `Client` that will be
+registered under that `Identifier`. The behaviour of `newID` is implementation specific.
+Possible implementations are:
 
 * Random bytestring.
 * Hash of the `Header`.
