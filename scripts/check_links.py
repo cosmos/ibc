@@ -3,6 +3,7 @@
 import re, os, sys
 
 link_regex = re.compile('\[(.*)\]\(../ics([^\)]*)\)')
+title_regex = re.compile('ICS ([0-9]+)([ .:])')
 
 specs = [f.path for f in os.scandir('./spec') if f.is_dir()]
 files = [f.path for spec in specs for f in os.scandir(spec) if f.is_file() and f.path[-3:] == '.md']
@@ -17,4 +18,10 @@ for fn in files:
         found = link in specs_cut
         if not found:
             print('Link to {} not found!'.format(link))
+            sys.exit(1)
+    titles = [int(x[0]) for x in title_regex.findall(data)]
+    for num in titles:
+        matched = [f for f in files if f[7:7+4+len(str(num))+1] == 'ics-' + str(num) + '-']
+        if len(matched) > 0:
+            print('Expected "ICS {}" to link to {} but not found!'.format(num, matched[0]))
             sys.exit(1)

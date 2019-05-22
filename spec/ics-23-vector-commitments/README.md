@@ -45,7 +45,7 @@ An commitment construction MUST specify the following datatypes, which are other
 An `CommitmentState` is the full state of the commitment, which will be stored by the manager.
 
 ```golang
-type CommitmentState struct
+type CommitmentState struct {}
 ```
 
 #### Root
@@ -55,7 +55,7 @@ An `CommitmentRoot` commits to a particular commitment state and should be succi
 In certain commitment constructions with succinct states, `CommitmentState` and `CommitmentRoot` may be the same type.
 
 ```golang
-type CommitmentRoot struct
+type CommitmentRoot struct {}
 ```
 
 #### Proof
@@ -63,7 +63,7 @@ type CommitmentRoot struct
 An `CommitmentProof` demonstrates membership or non-membership for an element or set of elements, verifiable in conjunction with a known commitment root. Proofs should be succinct.
 
 ```golang
-type CommitmentProof struct
+type CommitmentProof struct {}
 ```
 
 ### Required functions
