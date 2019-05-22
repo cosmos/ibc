@@ -1,4 +1,4 @@
-# Verifier
+## Synopsis
 
 Full nodes are procedures which process a list of messages, `[Message]`, according to the
 `Consensus` algorithm. The lightclient `Verifier` does not process all messages, but
@@ -8,9 +8,9 @@ security assumptions of `Consensus` are preserved. This means that if and only
 if a full node accepts the new `Header` given a `ConsensusState` and
 `[Message]`, will the `Verifier` then also accept it.
 
-## Definitions
+### Definitions
 
-### Consensus
+#### Consensus
 
 `Consensus` is a `Header` generating function which takes the previous
 `ConsensusState` with the messages and returns the result.
@@ -36,6 +36,10 @@ where
   * `Genesis` is the genesis `ConsensusState`
   * `Consensus` is the header generating function
 
+### Desired Properties
+
+#### Blockchain
+
 The headers generated from the `Blockchain` are expected to satisfy the
 followings:
 
@@ -59,7 +63,7 @@ may not work as intended; the chain can receive multiple conflicting
 packets, the chain cannot recover from the timeout event, the chain can
 steal the user's asset, etc.
 
-## Verifier
+#### Verifier
 
 The validity of `Verifier` is dependent on the security model of the
 `Consensus`. For example, the `Consensus` can be a proof of authority with

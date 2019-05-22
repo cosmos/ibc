@@ -31,7 +31,7 @@ model of light client to minimise the dependency on consensus algorithms, so tha
 easily connect with new chains which are running new consensus algorithms, without the need to
 upgrade the light client protocol itself.
 
-#### Definitions
+### Definitions
 
 * `get`, `set`, `Key`, and `Identifier` are as defined in [ICS24](../ics-24-host-requirements).
 are used by the datagram handler.
@@ -41,7 +41,7 @@ are used by the datagram handler.
 in the state or not.
 
 * `createClient`, `queryClient`, `updateClient`, `freezeClient`, `deleteClient`
-function signatures are as defined in [ICS25](../ics-25-handler-interface).
+function signatures are as defined in ICS25.
 
 ### Desired Properties
 
