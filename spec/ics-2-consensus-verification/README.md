@@ -33,11 +33,6 @@ model of light client to minimise the dependency on consensus algorithms, so tha
 easily connect with new chains which are running new consensus algorithms, without need to
 upgrade the light client protocol itself.
 
-<!--
-`FullNode`s are procedures running a `Consensus`. Given a `([Transaction], Commit)`, a
-`FullNode` can compute the result `ConsensusState` that the `Consensus` is expected to commit on
-with the same `[Transaction]`, if exists.
---->
 ### Desired Properties
 
 This standard specification provides secure layer to verify other chains' canonical headers,
@@ -228,9 +223,9 @@ function updateClient(id, header)
 
 ##### Freeze
 
-A client can be frozen, in case when an equivocation proof for the client is provided.
-The client information SHOULD NOT be deleted from the state. To completely remove a client,
-one must call `deleteClient` defined below.
+A client can be frozen, in case when the application logic decided that there was a malicious
+activity on the client. Frozen client SHOULD NOT be deleted from the state, as a recovery
+method can be introduced in the future versions.
 
 ```coffee
 function freezeClient(id, header1, header2)
