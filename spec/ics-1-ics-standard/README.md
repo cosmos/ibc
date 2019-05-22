@@ -124,35 +124,36 @@ The key words "MUST", "MUST NOT", "REQUIRED", "SHALL", "SHALL NOT", "SHOULD", "S
 Pseudocode in specifications should be language-agnostic and formatted in a simple imperative standard, with line numbers, variables, simple conditional blocks, for loops, and
 English fragments where necessary to explain further functionality such as scheduling timeouts. LaTeX images should be avoided because they are difficult to review in diff form.
 
-Pseudocode for structs should use Golang syntax highlighting.
+Pseudocode for structs should be written in simple Typescript, as interfaces.
 
 Example pseudocode struct:
 
-```golang
-type Connection struct {
-  state                   ConnectionState
-  version                 Version
-  counterpartyIdentifier  Identifier
-  consensusState          ConsensusState
+```typescript
+interface Connection {
+  state: ConnectionState
+  version: Version
+  counterpartyIdentifier: Identifier
+  consensusState: ConsensusState
 }
 ```
 
-Pseudocode for algorithms should use CoffeeScript syntax highlighting.
+Pseudocode for algorithms should be written in simple Typescript, as functions.
 
 Example pseudocode algorithm:
 
-```coffeescript
-function startRound(round)
+```typescript
+function startRound(round) {
   round_p = round
   step_p = PROPOSE
-  if proposer(h_p, round_p) == p then
-    if validValue_p /= nil then
+  if (proposer(h_p, round_p) === p) {
+    if (validValue_p !== nil)
       proposal = validValue_p
     else
       proposal = getValue()
     broadcast( {PROPOSAL, h_p, round_p, proposal, validRound} )
-  else
+  } else
     schedule(onTimeoutPropose(h_p, round_p), timeoutPropose(round_p))
+}
 ```
 
 ## History

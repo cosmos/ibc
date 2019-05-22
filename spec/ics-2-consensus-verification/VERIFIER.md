@@ -15,8 +15,8 @@ if a full node accepts the new `Header` given a `ConsensusState` and
 `Consensus` is a `Header` generating function which takes the previous
 `ConsensusState` with the messages and returns the result.
 
-```go
-type Consensus func(ConsensusState, [Message]) Header
+```typescript
+type Consensus = (ConsensusState, [Message]) => Header
 ```
 
 ### Blockchain
@@ -26,10 +26,10 @@ It generates a unique list of headers starting from a genesis `ConsensusState` w
 messages.
 
 `Blockchain` is defined as
-```go
-type Blockchain struct {
-  Genesis ConsensusState
-  Consensus Consensus
+```typescript
+interface Blockchain {
+  genesis: ConsensusState
+  consensus: Consensus
 }
 ```
 where

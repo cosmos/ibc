@@ -37,6 +37,7 @@ All standards in the "draft" stage are listed here in order of their ICS numbers
 
 | Interchain Standard Number                          | Standard Title                     | Stage |
 | --------------------------------------------------- | ---------------------------------- | ----- |
+| [2](spec/ics-2-consensus-verification)              | Consensus Verification             | Draft |
 | [3](spec/ics-3-connection-semantics)                | Connection Semantics               | Draft |
 | [4](spec/ics-4-channel-and-packet-semantics)        | Channel & Packet Semantics         | Draft |
 | [18](spec/ics-18-relayer-algorithms)                | Relayer Algorithms                 | Draft |

@@ -44,8 +44,8 @@ An commitment construction MUST specify the following datatypes, which are other
 
 An `CommitmentState` is the full state of the commitment, which will be stored by the manager.
 
-```golang
-type CommitmentState struct {}
+```typescript
+type CommitmentState = object
 ```
 
 #### Root
@@ -54,16 +54,16 @@ An `CommitmentRoot` commits to a particular commitment state and should be succi
 
 In certain commitment constructions with succinct states, `CommitmentState` and `CommitmentRoot` may be the same type.
 
-```golang
-type CommitmentRoot struct {}
+```typescript
+type CommitmentRoot = object
 ```
 
 #### Proof
 
 An `CommitmentProof` demonstrates membership or non-membership for an element or set of elements, verifiable in conjunction with a known commitment root. Proofs should be succinct.
 
-```golang
-type CommitmentProof struct {}
+```typescript
+type CommitmentProof = object
 ```
 
 ### Required functions
@@ -74,58 +74,58 @@ An commitment construction MUST provide the following functions:
 
 The `generate` function initializes the state of the commitment from an initial (possibly empty) map of keys to values.
 
-```coffeescript
-generate(Map<Key, Value> initial) -> CommitmentState
+```typescript
+type generate = (initial: Map<Key, Value>) => CommitmentState
 ```
 
 #### Root calculation
 
 The `calculateRoot` function calculates a succinct commitment to the commitment state which can be used to verify proofs.
 
-```coffeescript
-calculateRoot(CommitmentState state) -> CommitmentRoot
+```typescript
+type calculateRoot = (state: CommitmentState) => CommitmentRoot
 ```
 
 #### Adding & removing elements
 
 The `set` function sets a key to a value in the commitment.
 
-```coffeescript
-set(CommitmentState state, Key key, Value value) -> CommitmentState
+```typescript
+type set = (state: CommitmentState, key: Key, value: Value) => CommitmentState
 ```
 
 The `remove` function removes a key and associated value from an commitment.
 
-```coffeescript
-remove(CommitmentState state, Key key) -> CommitmentState
+```typescript
+type remove = (state: CommitmentState, key: Key) => CommitmentState
 ```
 
 #### Proof generation
 
 The `createMembershipProof` function generates a proof that a particular key has been set to a particular value in an commitment.
 
-```coffeescript
-createMembershipProof(CommitmentState state, Key key, Value value) -> CommitmentProof
+```typescript
+type createMembershipProof = (state: CommitmentState, key: Key, value: Value) => CommitmentProof
 ```
 
 The `createNonMembershipProof` function generates a proof that a key has not been set to any value in an commitment.
 
-```coffeescript
-createNonMembershipProof(CommitmentState state, Key key) -> CommitmentProof
+```typescript
+type createNonMembershipProof = (state: CommitmentState, key: Key) => CommitmentProof
 ```
 
 #### Proof verification
 
 The `verifyMembership` function verifies a proof that a key has been set to a particular value in an commitment.
 
-```coffeescript
-verifyMembership(CommitmentRoot root, CommitmentProof proof, Key key, Value value) -> boolean
+```typescript
+type verifyMembership = (root: CommitmentRoot, proof: CommitmentProof, key: Key, value: Value) => bool
 ```
 
 The `verifyNonMembership` function verifies a proof that a key has not been set to any value in an commitment.
 
-```coffeescript
-verifyNonMembership(CommitmentRoot root, CommitmentProof proof, Key key) -> boolean
+```typescript
+type verifyNonMembership = (root: CommitmentRoot, proof: CommitmentProof, key: Key) => bool
 ```
 
 ### Optional functions
@@ -134,28 +134,26 @@ An commitment construction MAY provide the following functions:
 
 The `batchVerifyMembership` function verifies a proof that many keys have been set to specific values in an commitment.
 
-```coffeescript
-batchVerifyMembership(CommitmentRoot root, CommitmentProof proof, Map<Key, Value> items) -> boolean
+```typescript
+type batchVerifyMembership = (root: CommitmentRoot, proof: CommitmentProof, items: Map<Key, Value>) => bool
 ```
 
 The `batchVerifyNonMembership` function verifies a proof that many keys have not been set to any value in an commitment.
 
-```coffeescript
-batchVerifyNonMembership(CommitmentRoot root, CommitmentProof proof, Set<Key> keys) -> boolean
+```typescript
+type batchVerifyNonMembership = (root: CommitmentRoot, proof: CommitmentProof, keys: Set<Key>) => bool
 ```
 
 If defined, these functions MUST be computationally equivalent to the conjunctive union of `verifyMembership` and `verifyNonMembership` respectively (`proof` may vary):
 
-```coffeescript
-batchVerifyMembership(root, proof, items) ==
-  verifyMembership(root, proof, items[0].Key, items[0].Value) &&
-  verifyMembership(root, proof, items[1].Key, items[1].Value) && ...
+```typescript
+batchVerifyMembership(root, proof, items) ===
+  all(verifyMembership(root, proof, item) for item in items)
 ```
 
-```coffeescript
-batchVerifyNonMembership(root, proof, keys) ==
-  verifyNonMembership(root, proof, keys[0]) &&
-  verifyNonMembership(root, proof, keys[1]) && ...
+```typescript
+batchVerifyNonMembership(root, proof, keys) ===
+  all(verifyNonMembership(root, proof, key) for key in keys)
 ```
 
 If batch verification is possible and more efficient than individual verification of one proof per element, an commitment construction SHOULD define batch verification functions.
@@ -170,18 +168,18 @@ Commitment proofs MUST be *complete*: key => value mappings which have been adde
 
 For any key `key` last set to a value `value` in the commitment `acc`,
 
-```coffeescript
+```typescript
 root = getRoot(acc)
 proof = createMembershipProof(acc, key, value)
-Pr(verifyMembership(root, proof, key, value) == false) negligible in λ
+Pr(verifyMembership(root, proof, key, value) === false) negligible in λ
 ```
 
 For any key `key` not set in the commitment `acc`, for all values of `proof` and all values of `value`,
 
-```coffeescript
+```typescript
 root = getRoot(acc)
 proof = createNonMembershipProof(acc, key)
-Pr(verifyNonMembership(root, proof, key) == false) negligible in λ
+Pr(verifyNonMembership(root, proof, key) === false) negligible in λ
 ```
 
 #### Soundness
@@ -190,14 +188,14 @@ Commitment proofs MUST be *sound*: key => value mappings which have not been add
 
 For any key `key` last set to a value `value` in the commitment `acc`, for all values of `proof`,
 
-```coffeescript
-Pr(verifyNonMembership(root, proof, key) == true) negligible in λ
+```typescript
+Pr(verifyNonMembership(root, proof, key) === true) negligible in λ
 ```
 
 For any key `key` not set in the commitment `acc`, for all values of `proof` and all values of `value`,
 
-```coffeescript
-Pr(verifyMembership(root, proof, key, value) == true) negligible in λ
+```typescript
+Pr(verifyMembership(root, proof, key, value) === true) negligible in λ
 ```
 
 #### Position binding
@@ -206,16 +204,16 @@ Commitment proofs MUST be *position binding*: a given key can only map to one va
 
 For any key `key` set in the commitment `acc`, there is one `value` for which:
 
-```coffeescript
+```typescript
 root = getRoot(acc)
 proof = createMembershipProof(acc, key, value)
-Pr(verifyMembership(root, proof, key, value) == false) negligible in λ
+Pr(verifyMembership(root, proof, key, value) === false) negligible in λ
 ```
 
 For all other values `otherValue` where `value /= otherValue`, for all values of `proof`,
 
-```coffeescript
-Pr(verifyMembership(root, proof, key, otherValue) == true) negligible in λ
+```typescript
+Pr(verifyMembership(root, proof, key, otherValue) === true) negligible in λ
 ```
 
 ## Backwards Compatibility
