@@ -10,7 +10,9 @@
       "curly": [true, "as-needed"],
       "no-consecutive-blank-lines": false,
       "no-unused-expression": false,
-      "interface-name": false
+      "interface-name": false,
+      "object-literal-sort-keys": false,
+      "trailing-comma": false
     },
     "rulesDirectory": []
 }
