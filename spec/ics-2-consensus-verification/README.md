@@ -325,6 +325,15 @@ function H.base() returns H.Pubkey
 function H.root() returns H.LogStore
 ```
 
+## Backwards Compatibility
+
+Not applicable.
+
+## Forwards Compatibility
+
+In a future version, this ICS will define a new function `unfreezeClient` that can be called 
+when the application logic resolves equivocation event.
+
 ## History
 
 March 5th 2019: Initial draft finished and submitted as a PR
