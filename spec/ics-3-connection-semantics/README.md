@@ -15,13 +15,13 @@ This standards document describes the abstraction of an IBC *connection*: two st
 
 ### Motivation
 
-The core IBC protocol provides *authorization* and *ordering* semantics for packets: guarantees, respectively, that packets have been committed on the sending blockchain (and according state transitions executed, such as escrowing tokens), and that they have been committed exactly once in a particular order and can be delivered exactly once in that same order. The *connection* abstraction specified in this standard, in conjunction with the *client* abstraction specified in [ICS 2](../spec/ics-2-consensus-verification), defines the *authorization* semantics of IBC. Ordering semantics are described in [ICS 4](../spec/ics-4-channel-packet-semantics)).
+The core IBC protocol provides *authorization* and *ordering* semantics for packets: guarantees, respectively, that packets have been committed on the sending blockchain (and according state transitions executed, such as escrowing tokens), and that they have been committed exactly once in a particular order and can be delivered exactly once in that same order. The *connection* abstraction specified in this standard, in conjunction with the *client* abstraction specified in ICS 2, defines the *authorization* semantics of IBC. Ordering semantics are described in [ICS 4](../spec/ics-4-channel-packet-semantics)).
 
 ### Definitions
 
-`ConsensusState`, `Header`, and `updateConsensusState` are as defined in [ICS 2: Consensus Verification](../spec/ics-2-consensus-verification).
+`ConsensusState`, `Header`, and `updateConsensusState` are as defined in ICS 2.
 
-`CommitmentProof`, `verifyMembership`, and `verifyNonMembership` are as defined in [ICS 23: Vector Commitments](../spec/ics-23-vector-commitments).
+`CommitmentProof`, `verifyMembership`, and `verifyNonMembership` are as defined in [ICS 23](../spec/ics-23-vector-commitments).
 
 `Identifier` and other host state machine requirements are as defined in [ICS 24](../spec/ics-24-host-requirements). The identifier is not necessarily intended to be a human-readable name (and likely should not be, to discourage squatting or racing for identifiers).
 
@@ -87,7 +87,7 @@ type Connection struct {
 
 ### Subprotocols
 
-This ICS defines two subprotocols: opening handshake and closing handshake. Header tracking and closing-by-equivocation are defined in ICS 2. Datagrams defined herein are handled as external messages by the IBC relayer module defined in [ICS 26](../spec/ics-26-relayer-module).
+This ICS defines two subprotocols: opening handshake and closing handshake. Header tracking and closing-by-equivocation are defined in ICS 2. Datagrams defined herein are handled as external messages by the IBC relayer module defined in ICS 26.
 
 ![State Machine Diagram](state.png)
 
@@ -250,7 +250,7 @@ function connOpenTimeout(identifier, proofTimeout, timeoutHeight)
 
 #### Header Tracking
 
-Headers are tracked at the client level. See [ICS 2](../ics-2-consensus-requirements).
+Headers are tracked at the client level. See ICS 2.
 
 #### Closing Handshake
 
@@ -368,7 +368,7 @@ function connOpenTimeout(identifier, proofTimeout, timeoutHeight)
 
 The equivocation detection subprotocol is defined in ICS 2. If a client is frozen by equivocation, all associated connections are immediately frozen as well.
 
-Implementing chains may want to allow applications to register handlers to take action upon discovery of an equivocation. Further discussion is deferred to [ICS 12: Byzantine Recovery Strategies](../ics-12-byzantine-recovery-strategies).
+Implementing chains may want to allow applications to register handlers to take action upon discovery of an equivocation. Further discussion is deferred to ICS 12.
 
 ## Backwards Compatibility
 
@@ -376,7 +376,7 @@ Not applicable.
 
 ## Forwards Compatibility
 
-A future version of this ICS will include version negotiation in the opening handshake. Once a connection has been established and a version negotiated, future version updates can be negotiated per [ICS 6](../spec/ics-6-connection-channel-versioning).
+A future version of this ICS will include version negotiation in the opening handshake. Once a connection has been established and a version negotiated, future version updates can be negotiated per ICS 6.
 
 The consensus state can only be updated as allowed by the `updateConsensusState` function defined by the consensus protocol chosen when the connection is established.
 

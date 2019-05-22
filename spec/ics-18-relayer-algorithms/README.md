@@ -40,12 +40,16 @@ The relayer algorithm is defined over a set `C` of chains implementing the IBC p
 `submitDatagram` is a procedure defined per-chain (submitting a transaction of some sort).
 
 ```coffeescript
-function relay(C)
+relay = (C) ->
   for chain in C
-    for counterparty in C if counterparty != chain
-      datagrams = pendingDatagrams(chain, counterparty)
-      for datagram in datagrams
-        submitDatagram(counterparty, datagram)
+    do (chain) ->
+      for counterparty in C
+        do (counterparty) ->
+          if counterparty != chain
+            datagrams = pendingDatagrams(chain, counterparty)
+            for datagram in datagrams
+              do (datagram) ->
+                submitDatagram(counterparty, datagram)
 ```
 
 ### Incentivization
