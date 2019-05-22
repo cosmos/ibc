@@ -76,7 +76,7 @@ which assigns unique heights for each `ValidityPredicateBase`. Two `ValidityPred
 on a same chain SHOULD NOT have same height, if not equal. Such event is called an
 "equivocation", and the proof for it can be generated and submitted(see Subprotocols-Freeze).
 
-```go
+```typescript
 type ValidityPredicateBase interface {
   Height() int64
 }
@@ -87,10 +87,10 @@ type ValidityPredicateBase interface {
 `ConsensusState` is a blockchain commit which contains a `CommitmentRoot` and the requisite
 state to verify future roots. The `ConsensusState` of a chain is stored by other chains in order to verify the state of this chain. It is defined as:
 
-```go
-type ConsensusState struct {
-  Base ValidityPredicateBase
-  Root CommitmentRoot
+```typescript
+interface ConsensusState {
+  base: ValidityPredicateBase
+  root: CommitmentRoot
 }
 ```
 where
@@ -104,11 +104,11 @@ where
 `Header` is a blockchain header which provides information to update a `ConsensusState`,
 submitted to one blockchain to update the stored `ConsensusState`. Defined as
 
-```go
-type Header struct {
-  Proof HeaderProof
-  Base Maybe[ValidityPredicateBase]
-  Root CommitmentRoot
+```typescript
+interface Header {
+  proof: HeaderProof
+  base: Maybe[ValidityPredicateBase]
+  root: CommitmentRoot
 }
 ```
 where
@@ -123,8 +123,8 @@ Using the ValidityPredicate SHOULD be far more computationally efficient than re
 for the given parent `Header` and the list of network messages, ideally in constant time
 independent from the size of message stored in the `Header`. Defined as
 
-```go
-type ValidityPredicate func(ConsensusState, Header) (Error|ConsensusState)
+```typescript
+type ValidityPredicate = (ConsensusState, Header) => Error | ConsensusState
 ```
 
 The detailed specification of `ValidityPredicate` is defined in [ValidityPredicate.md](./ValidityPredicate.md)
@@ -132,10 +132,10 @@ The detailed specification of `ValidityPredicate` is defined in [ValidityPredica
 #### LightClient
 
 LightClient is defined as
-```go
-type LightClient struct {
-  ValidityPredicate ValidityPredicate
-  ConsensusState ConsensusState
+```typescript
+interface LightClient {
+  validityPredicate: ValidityPredicate
+  consensusState: ConsensusState
 }
 ```
 where
@@ -164,16 +164,18 @@ Possible implementations are:
 
 `storekey` takes an `Identifier` and returns a `KVStore` compatible `Key`.
 
-```coffee
-function storekey(id)
+```typescript
+function storekey(id: Identifier) {
   return "clients/{id}"
+}
 ```
 
 `freezekey` takes an `Identifier` and returns a `KVStore` compatible `Key`.
 
-```coffee
-function freezekey(id)
+```typescript
+function freezekey(id: Identifier) {
   return "clients/{id}/freeze"
+}
 ```
 
 #### Create
@@ -181,8 +183,8 @@ function freezekey(id)
 Creating a new `LightClient` is done simply by submitting it to the `createClient` function,
 as the chain automatically generates the `Identifier` for the `LightClient`.
 
-```coffee
-function createClient(info)
+```typescript
+function createClient(info: LightClient) {
   id = newID()
   set(storekey(id), info)
   set(freezekey(id), false)
@@ -194,12 +196,13 @@ function createClient(info)
 
 Clients can be queried by their identifier.
 
-```coffee
-function queryClient(id)
+```typescript
+function queryClient(id: Identifier) {
   if get(freezekey(id)) then
     return nil
   else
     return get(storekey(id))
+}
 ```
 
 #### Update
@@ -210,8 +213,8 @@ the stored `LightClient`'s `ValidityPredicate` and `ConsensusState`, then it SHO
 `LightClient` unless an additional logic intentionally blocks the updating process (e.g.
 waiting for the equivocation proof period.
 
-```coffee
-function updateClient(id, header)
+```typescript
+function updateClient(id: Identifier, header: Header) {
   assert(!freezekey(id))
 
   stored = get(storekey(id))
@@ -223,7 +226,9 @@ function updateClient(id, header)
   assert(pred(state, header))
 
   state.Root = header.Root
-  if header.Base? then state.Base = header.Base
+
+  if header.Base !== null
+    state.Base = header.Base
 
   set(storekey(id), {state, pred})
 
@@ -237,12 +242,13 @@ A client can be frozen, in case when the application logic decided that there wa
 activity on the client. Frozen client SHOULD NOT be deleted from the state, as a recovery
 method can be introduced in the future versions.
 
-```coffee
-function freezeClient(id, header1, header2)
+```typescript
+function freezeClient(id: Identifier, header1: Header, header2: Header) {
   assert(!get(freezekey(id)))
   stored = get(storekey(id))
   assert(stored /= nil)
   set(freezekey(id))
+}
 ```
 
 #### Delete
@@ -250,12 +256,13 @@ function freezeClient(id, header1, header2)
 Deletes the stored client, when the client is no longer needed or no longer valid, as
 determined by the application logic.
 
-```coffee
-function deleteClient(id)
+```typescript
+function deleteClient(id: Identifier) {
   assert(get(storekey(id)) /= nil)
   assert(get(freezekey(id)))
-  del(storekey(id))
+  delete(storekey(id))
   return nil
+}
 ```
 
 ### Example Implementation
@@ -274,31 +281,35 @@ can be changed while the chain is running.
 
 `B` is defined as `(Op, Gen, [H])`. `B` satisfies `Blockchain`:
 
-```coffee
-TX = RegisterLightClient | UpdateLightClient | ChangeOperator(Pubkey)
+```typescript
+type TX = RegisterLightClient | UpdateLightClient | ChangeOperator(Pubkey)
 
-function commit(cs :: State, txs :: [TX]) returns H {
-  newpubkey := c.Pubkey
+function commit(cs: State, txs: [TX]): H {
+  newpubkey = c.Pubkey
 
-  foreach tx in txs:
-    case RegisterLightClient:
-      register(tx)
-    case UpdateLightClient:
-      update(tx)
-    case ChangeOperator(pubkey):
-      newpubkey = pubkey
+  for (const tx of txs)
+    switch tx {
+      case RegisterLightClient:
+        register(tx)
+      case UpdateLightClient:
+        update(tx)
+      case ChangeOperator(pubkey):
+        newpubkey = pubkey
+    }
 
-  root := getMerkleRoot()
-  result := H(_, newpubkey, root)
-  result.Sig := Privkey.Sign(result)
+  root = getMerkleRoot()
+  result = H(_, newpubkey, root)
+  result.Sig = Privkey.Sign(result)
   return result
 }
 
-function verify(rot :: CS, h :: H) returns rot.Pubkey.VerifySignature(h.Sig)
+function verify(rot: CS, h: H): bool {
+  return rot.Pubkey.VerifySignature(h.Sig)
+}
 
-Op = (commit, verify)
+type Op = (commit, verify)
 
-Gen = CS(InitialPubkey, EmptyLogStore)
+type Gen = CS(InitialPubkey, EmptyLogStore)
 ```
 
 The `[H]` is generated by `Op.commit`, recursively applied on the genesis and its successors.
@@ -320,9 +331,17 @@ function CS.root() returns CS.LogStore
 Type `H` is defined as `(Sig, Maybe<Pubkey>, LogStore)`. `H` satisfies `Header`:
 
 ```
-function H.proof() returns H.Sig
-function H.base() returns H.Pubkey
-function H.root() returns H.LogStore
+function proof(header: H): Signature {
+  return H.Sig
+}
+
+function base(header: H): PubKey {
+  return H.PubKey
+}
+
+function root(header: H): LogStore {
+  return H.LogStore
+}
 ```
 
 ## Backwards Compatibility
