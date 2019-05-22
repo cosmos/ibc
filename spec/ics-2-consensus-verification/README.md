@@ -327,4 +327,4 @@ function H.root() returns H.LogStore
 
 ## History
 
-March 5th 2019: Initial ICS 2 draft finished and submitted as a PR
+March 5th 2019: Initial draft finished and submitted as a PR
