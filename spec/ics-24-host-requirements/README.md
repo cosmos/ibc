@@ -43,16 +43,22 @@ Variable interpolation, denoted by curly braces, MAY be used as shorthand to def
 
 Host chains MUST provide a simple key-value store interface, with three functions which behave in the standard way:
 
-```coffeescript
-function get(Key key) -> Value | null
+```typescript
+type Key = string
+
+type Value = string
 ```
 
-```coffeescript
-function set(Key key, Value value)
+```typescript
+type get = (key: Key) => Value | void
 ```
 
-```coffeescript
-function delete(Key key)
+```typescript
+type set = (key: Key, value: Value) => void
+```
+
+```typescript
+type delete = (key: Key) => void
 ```
 
 `Key` is as defined above. `Value` is an arbitrary bytestring encoding of a particular data structure. Encoding details are left to separate ICSs.
@@ -63,8 +69,8 @@ These functions MUST be permissioned to the IBC handler module (the implementati
 
 Host chains MUST provide the ability to introspect their own consensus state, with `getConsensusState`:
 
-```coffeescript
-function getConsensusState() -> ConsensusState
+```typescript
+type getConsensusState = () => ConsensusState
 ```
 
 `getConsensusState` MUST return the current consensus state for the consensus algorithm of the host chain.
@@ -77,8 +83,8 @@ Host chains MUST implement a module system, where each module has a unique seria
 
 Host chains MUST provide the ability to read the calling module in the IBC handler with `getCallingModule`:
 
-```coffeescript
-function getCallingModule() -> string
+```typescript
+type getCallingModule = () => string
 ```
 
 Modules which wish to make use of particular IBC features MAY implement certain handler functions, e.g. to add additional logic to a channel handshake with an associated module on another chain.
@@ -87,8 +93,8 @@ Modules which wish to make use of particular IBC features MAY implement certain 
 
 Host chains MAY define a unique `submitDatagram` function to submit [datagrams](../../docs/ibc/2_IBC_TERMINOLOGY.md) directly:
 
-```coffeescript
-function submitDatagram(Datagram datagram)
+```typescript
+type submitDatagram = (datagram: Datagram) => void
 ```
 
 `submitDatagram` allows relayers to relay IBC datagrams directly to the host chain. Host chains MAY require that the relayer submitting the datagram has an account to pay transaction fees, signs over the datagram in a larger transaction structure, etc - `submitDatagram` MUST define any such packaging required.

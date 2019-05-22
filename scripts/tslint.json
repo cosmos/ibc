@@ -5,8 +5,11 @@
     ],
     "jsRules": {},
     "rules": {
+      "align": [true, "parameters", "arguments", "members", "elements"],
       "semicolon": [true, "never"],
-      "curly": [true, "as-needed"]
+      "curly": [true, "as-needed"],
+      "no-consecutive-blank-lines": false,
+      "no-unused-expression": false
     },
     "rulesDirectory": []
 }
