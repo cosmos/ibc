@@ -105,7 +105,7 @@ For example, an application may wish to allow a single tokenized asset to be tra
 
 - Channel ends should be permissioned to one module on each end.
 
-## Specification
+## Technical Specification
 
 ![channel-state-machine](channel-state-machine.png)
 
