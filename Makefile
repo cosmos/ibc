@@ -1,4 +1,3 @@
-AGDADIRS := spec/ics-24-host-requirements
 SUBDIRS := $(filter-out $(wildcard ./spec/*.md),$(wildcard ./spec/*))
 TOPTARGETS := check build clean
 
