@@ -62,8 +62,8 @@ are used by the datagram handler.
 `ConsensusState`. The downstream logic can use it to verify whether key-value pairs are present
 in the state or not.
 
-* `createClient`, `queryClient`, `updateClient`, `freezeClient`, `deleteClient` are as
-defined in [ICS25](https://github.com/cosmos/ics/pull/79).
+* `createClient`, `queryClient`, `updateClient`, `freezeClient`, `deleteClient`
+function signatures are as defined in [ICS25](https://github.com/cosmos/ics/pull/79).
 
 #### Definitions
 
@@ -88,7 +88,6 @@ type ValidityPredicateBase interface {
 
 `ConsensusState` is a blockchain commit which contains a `CommitmentRoot` and the requisite
 state to verify future roots. The `ConsensusState` of a chain is stored by other chains in order to verify the state of this chain. It is defined as:
-Defined as
 
 ```go
 type ConsensusState struct {
@@ -105,8 +104,7 @@ where
 ##### Header
 
 `Header` is a blockchain header which provides information to update a `ConsensusState`,
-submitted to one blockchain to update the stored `ConsensusState`.
-Defined as
+submitted to one blockchain to update the stored `ConsensusState`. Defined as
 
 ```go
 type Header struct {
@@ -124,8 +122,8 @@ where
 
 `ValidityPredicate` is a light client ValidityPredicate proving `Header` depending on the `Commit`.
 Using the ValidityPredicate SHOULD be far more computationally efficient than replaying `Consensus` logic
-for the given parent `Header` and the list of network messages, ideally in O(1) time.
-Defined as
+for the given parent `Header` and the list of network messages, ideally in constant time
+independent from the size of message stored in the `Header`. Defined as
 
 ```go
 type ValidityPredicate func(ConsensusState, Header) (Error|ConsensusState)
@@ -150,13 +148,14 @@ The exact type of each fields are depending on the type of the actual consensus 
 
 #### Subprotocols
 
-The chains MUST implement functions `register` and `update`, as they form the `handleDatagram`.
-Calling both functions MAY be permissionless.
+The chains MUST implement the functions defined below ending with `Client`, as they form
+the `handleDatagram`.
 
 ##### Preliminaries
 
-`newID` is a function which generates a new `Identifier` for a `LightClient`, which MAY depending
-on the `Header`. The behaviour of `newID` is implementation specific. Possible implementations are:
+`newID` is a function which generates a new `Identifier` for a `Client`.
+The generation of the `Identifier` MAY depend on the `Header` of the `ClientInfo`.
+The behaviour of `newID` is implementation specific. Possible implementations are:
 
 * Random bytestring.
 * Hash of the `Header`.
