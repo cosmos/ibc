@@ -63,7 +63,7 @@ are used by the datagram handler.
 in the state or not.
 
 * `createClient`, `queryClient`, `updateClient`, `freezeClient`, `deleteClient` are as
-defined in [ICS25](https://github.com/cosmos/ics/pull/79)
+defined in [ICS25](https://github.com/cosmos/ics/pull/79).
 
 #### Definitions
 
@@ -116,9 +116,9 @@ type Header struct {
 }
 ```
 where
-  * `Proof` is the commit proof used by `Consensus.ValidityPredicate` to be verified
+  * `Proof` is the commit proof used by `Consensus.ValidityPredicate` to be verified.
   * `Base` is the new verify, if it needs to be updated.
-  * `Root` is the new `CommitmentRoot` which will replace the existing one
+  * `Root` is the new `CommitmentRoot` which will replace the existing one.
 
 ##### ValidityPredicate
 
@@ -143,8 +143,8 @@ type LightClient struct {
 }
 ```
 where
-  * `ConsensusState` is the root of trust providing the `ValidityPredicateBase`
-  * `ValidityPredicate` is the lightclient verification logic
+  * `ConsensusState` is the root of trust providing the `ValidityPredicateBase`.
+  * `ValidityPredicate` is the lightclient verification logic.
 
 The exact type of each fields are depending on the type of the actual consensus logic.
 
@@ -158,13 +158,25 @@ Calling both functions MAY be permissionless.
 `newID` is a function which generates a new `Identifier` for a `LightClient`, which MAY depending
 on the `Header`. The behaviour of `newID` is implementation specific. Possible implementations are:
 
-* Random bytestring
-* Hash of the `Header`
-* Incrementing integer index, big-endian encoded
+* Random bytestring.
+* Hash of the `Header`.
+* Incrementing integer index, big-endian encoded.
 
 `newID` MUST NOT return an `Identifier` which has already been generated.
 
 `storekey` takes an `Identifier` and returns a `KVStore` compatible `Key`.
+
+```coffee
+function storekey(id)
+  return "clients/{id}"
+```
+
+`freezekey` takes an `Identifier` and returns a `KVStore` compatible `Key`.
+
+```coffee
+function freezekey(id)
+  return "clients/{id}/freeze"
+```
 
 ##### Create
 
@@ -195,7 +207,7 @@ function queryClient(id)
 ##### Update
 
 Updating `LightClient` is done by submitting a new `Header`. The `Identifier` is used to point the
-stored `LightClient` that the logic will update. When the new `Header` is verifiable with
+stored `LightClient` that the logic will update. When the new `Header` is verified with
 the stored `LightClient`'s `ValidityPredicate` and `ConsensusState`, then it SHOULD update the
 `LightClient` unless an additional logic intentionally blocks the updating process (e.g.
 waiting for the equivocation proof period.
@@ -231,7 +243,8 @@ method can be introduced in the future versions.
 function freezeClient(id, header1, header2)
   assert(!get(freezekey(id)))
   stored = get(storekey(id))
-  // TODO
+  assert(stored /= nil)
+  set(freezekey(id))
 ```
 
 ##### Delete
