@@ -20,11 +20,11 @@ The interblockchain communication protocol uses a cross-chain message passing mo
 
 ### Definitions
 
-`Connection` is as defined in ICS 3.
+`Connection` is as defined in [ICS 3](../ics-3-connection-semantics).
 
-`Commitment`, `CommitmentProof`, and `CommitmentRoot` are as defined in ICS 23.
+`Commitment`, `CommitmentProof`, and `CommitmentRoot` are as defined in [ICS 23](../ics-23-vector-commitments).
 
-`Identifier`, `get`, `set`, `delete`, and module-system related primitives are as defined in ICS 24.
+`Identifier`, `get`, `set`, `delete`, and module-system related primitives are as defined in [ICS 24](../ics-24-host-requirements).
 
 A *channel* is a pipeline for exactly-once packet delivery between specific modules on separate blockchains, which has at least one send and one receive end.
 

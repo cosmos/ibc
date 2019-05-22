@@ -15,15 +15,15 @@ This standards document describes the abstraction of an IBC *connection*: two st
 
 ### Motivation
 
-The core IBC protocol provides *authorization* and *ordering* semantics for packets: guarantees, respectively, that packets have been committed on the sending blockchain (and according state transitions executed, such as escrowing tokens), and that they have been committed exactly once in a particular order and can be delivered exactly once in that same order. The *connection* abstraction specified in this standard, in conjunction with the *client* abstraction specified in ICS 2, defines the *authorization* semantics of IBC. Ordering semantics are described in [ICS 4](../spec/ics-4-channel-packet-semantics)).
+The core IBC protocol provides *authorization* and *ordering* semantics for packets: guarantees, respectively, that packets have been committed on the sending blockchain (and according state transitions executed, such as escrowing tokens), and that they have been committed exactly once in a particular order and can be delivered exactly once in that same order. The *connection* abstraction specified in this standard, in conjunction with the *client* abstraction specified in ICS 2, defines the *authorization* semantics of IBC. Ordering semantics are described in [ICS 4](../ics-4-channel-and-packet-semantics)).
 
 ### Definitions
 
 `ConsensusState`, `Header`, and `updateConsensusState` are as defined in ICS 2.
 
-`CommitmentProof`, `verifyMembership`, and `verifyNonMembership` are as defined in [ICS 23](../spec/ics-23-vector-commitments).
+`CommitmentProof`, `verifyMembership`, and `verifyNonMembership` are as defined in [ICS 23](../ics-23-vector-commitments).
 
-`Identifier` and other host state machine requirements are as defined in [ICS 24](../spec/ics-24-host-requirements). The identifier is not necessarily intended to be a human-readable name (and likely should not be, to discourage squatting or racing for identifiers).
+`Identifier` and other host state machine requirements are as defined in [ICS 24](../ics-24-host-requirements). The identifier is not necessarily intended to be a human-readable name (and likely should not be, to discourage squatting or racing for identifiers).
 
 The opening handshake protocol allows each chain to verify the identifier used to reference the connection on the other chain, enabling modules on each chain to reason about the reference on the other chain.
 
