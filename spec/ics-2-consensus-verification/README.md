@@ -23,8 +23,6 @@ verifier trusts forms a "light client".
 This standard also specifies how the light clients will be stored, registered, and updated on a
 blockchain. The stored light client instances will be able to be verified by a third party actor, such as a user inspecting the state of the chain.
 
-## Specification
-
 ### Motivation
 
 In the IBC protocol, a chain needs to be able to verify updates to the state of another chain. A light client is the algorithm with which they can do so.
@@ -33,6 +31,18 @@ model of light client to minimise the dependency on consensus algorithms, so tha
 easily connect with new chains which are running new consensus algorithms, without the need to
 upgrade the light client protocol itself.
 
+#### Definitions
+
+* `get`, `set`, `Key`, and `Identifier` are as defined in [ICS24](../ics-24-host-requirements).
+are used by the datagram handler.
+
+* `CommitmentRoot` is as defined in [ICS23](../ics-23-vector-commitments).
+`ConsensusState`. The downstream logic can use it to verify whether key-value pairs are present
+in the state or not.
+
+* `createClient`, `queryClient`, `updateClient`, `freezeClient`, `deleteClient`
+function signatures are as defined in [ICS25](../ics-25-handler-interface).
+
 ### Desired Properties
 
 Light clients must provide a secure algorithm to verify other chains' canonical headers,
@@ -40,7 +50,7 @@ using the existing `ConsensusState`. The higher level abstractions will then be 
 with the `CommitmentRoot` stored in the `ConsensusState`, which is guaranteed to be committed by
 the other chain's consensus algorithm.
 
-* `ValidityPredicate`s are expected to reflect the behaviour of the full node which is running the  
+`ValidityPredicate`s are expected to reflect the behaviour of the full node which is running the  
 corresponding consensus algorithm. Given a `ConsensusState` and `[Message]`, if a full node
 accepts the new `Header` generated with `Commit`, then the light client MUST also accept it,
 and if a full node rejects it, then the light client MUST also reject it. The consensus algorithm
@@ -51,23 +61,11 @@ generated and submitted to the chain, as defined in
 [ICS ?](https://github.com/cosmos/ics/issues/53), so that the chain can safely deactivate the
 light client.
 
-### Technical Specification
+## Technical Specification
 
-#### Requirements
+### Data Structures
 
-* `get`, `set`, `Key`, and `Identifier` are as defined in [ICS24](../ics-24-host-requirements).
-are used by the datagram handler.
-
-* `CommitmentRoot` is as defined in [ICS23](https://github.com/cosmos/ics/pull/74).
-`ConsensusState`. The downstream logic can use it to verify whether key-value pairs are present
-in the state or not.
-
-* `createClient`, `queryClient`, `updateClient`, `freezeClient`, `deleteClient`
-function signatures are as defined in [ICS25](https://github.com/cosmos/ics/pull/79).
-
-#### Definitions
-
-##### ValidityPredicateBase
+#### ValidityPredicateBase
 
 `ValidityPredicateBase` is the data that is being used by the `ValidityPredicate`s. The exact
 type is dependent on the type of `ValidityPredicate`. The `ValidityPredicateBase`s SHOULD
@@ -84,7 +82,7 @@ type ValidityPredicateBase interface {
 }
 ```
 
-##### ConsensusState
+#### ConsensusState
 
 `ConsensusState` is a blockchain commit which contains a `CommitmentRoot` and the requisite
 state to verify future roots. The `ConsensusState` of a chain is stored by other chains in order to verify the state of this chain. It is defined as:
@@ -101,7 +99,7 @@ where
 
 `ValidityPredicateBase` is defined dependently on `ConsensusState`.
 
-##### Header
+#### Header
 
 `Header` is a blockchain header which provides information to update a `ConsensusState`,
 submitted to one blockchain to update the stored `ConsensusState`. Defined as
@@ -118,7 +116,7 @@ where
   * `Base` is the new verify, if it needs to be updated.
   * `Root` is the new `CommitmentRoot` which will replace the existing one.
 
-##### ValidityPredicate
+#### ValidityPredicate
 
 `ValidityPredicate` is a light client ValidityPredicate proving `Header` depending on the `Commit`.
 Using the ValidityPredicate SHOULD be far more computationally efficient than replaying `Consensus` logic
@@ -131,7 +129,7 @@ type ValidityPredicate func(ConsensusState, Header) (Error|ConsensusState)
 
 The detailed specification of `ValidityPredicate` is defined in [ValidityPredicate.md](./ValidityPredicate.md)
 
-##### LightClient
+#### LightClient
 
 LightClient is defined as
 ```go
@@ -146,12 +144,12 @@ where
 
 The exact type of each fields are depending on the type of the actual consensus logic.
 
-#### Subprotocols
+### Subprotocols
 
 The chains MUST implement the functions defined below ending with `Client`, as they form
 the `handleDatagram`.
 
-##### Preliminaries
+#### Preliminaries
 
 `newID` is a function which generates a new `Identifier` for a `Client`.
 The generation of the `Identifier` MAY depend on the `Header` of the `Client` that will be
@@ -160,7 +158,7 @@ Possible implementations are:
 
 * Random bytestring.
 * Hash of the `Header`.
-* Incrementing integer index, big-endian encoded.
+* Incrementing integer index
 
 `newID` MUST NOT return an `Identifier` which has already been generated.
 
@@ -178,7 +176,7 @@ function freezekey(id)
   return "clients/{id}/freeze"
 ```
 
-##### Create
+#### Create
 
 Creating a new `LightClient` is done simply by submitting it to the `createClient` function,
 as the chain automatically generates the `Identifier` for the `LightClient`.
@@ -192,7 +190,7 @@ function createClient(info)
 }
 ```
 
-##### Query
+#### Query
 
 Clients can be queried by their identifier.
 
@@ -204,7 +202,7 @@ function queryClient(id)
     return get(storekey(id))
 ```
 
-##### Update
+#### Update
 
 Updating `LightClient` is done by submitting a new `Header`. The `Identifier` is used to point the
 stored `LightClient` that the logic will update. When the new `Header` is verified with
@@ -233,7 +231,7 @@ function updateClient(id, header)
 }
 ```
 
-##### Freeze
+#### Freeze
 
 A client can be frozen, in case when the application logic decided that there was a malicious
 activity on the client. Frozen client SHOULD NOT be deleted from the state, as a recovery
@@ -247,7 +245,7 @@ function freezeClient(id, header1, header2)
   set(freezekey(id))
 ```
 
-##### Delete
+#### Delete
 
 Deletes the stored client, when the client is no longer needed or no longer valid, as
 determined by the application logic.
