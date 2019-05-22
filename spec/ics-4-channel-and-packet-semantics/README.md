@@ -3,7 +3,7 @@ ics: 4
 title: Channel & Packet Semantics
 stage: draft
 category: ibc-core
-requires: 3
+requires: 2, 3, 24
 author: Christopher Goes <cwgoes@tendermint.com>
 created: 2019-03-07
 modified: 2019-05-17
