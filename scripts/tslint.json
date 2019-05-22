@@ -9,7 +9,8 @@
       "semicolon": [true, "never"],
       "curly": [true, "as-needed"],
       "no-consecutive-blank-lines": false,
-      "no-unused-expression": false
+      "no-unused-expression": false,
+      "interface-name": false
     },
     "rulesDirectory": []
 }
