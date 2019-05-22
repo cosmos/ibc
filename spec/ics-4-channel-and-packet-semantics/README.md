@@ -45,7 +45,7 @@ This specification only concerns itself with *bidirectional ordered* channels. *
 
 Channels have a *state*:
 
-```golang
+```typescript
 type ChannelState enum {
   INIT
   TRYOPEN
@@ -57,7 +57,7 @@ type ChannelState enum {
 
 An *end* of a channel is a data structure on one chain storing channel metadata:
 
-```golang
+```typescript
 type ChannelEnd struct {
   state                             ChannelState
   counterpartyChannelIdentifier     string
@@ -73,7 +73,7 @@ type ChannelEnd struct {
 
 An IBC *packet* is a particular datagram, defined as follows:
 
-```golang
+```typescript
 type Packet struct {
   sequence      uint64
   sourceChannel string
@@ -112,7 +112,7 @@ For example, an application may wish to allow a single tokenized asset to be tra
 
 ### Channel opening handshake
 
-```golang
+```typescript
 type ChanOpenInit struct {
   connectionIdentifier            Identifier
   channelIdentifier               Identifier
@@ -122,7 +122,7 @@ type ChanOpenInit struct {
 }
 ```
 
-```coffeescript
+```typescript
 function chanOpenInit()
   moduleIdentifier = getCallingModule()
   assert(get("connections/{connectionIdentifier}/channels/{channelIdentifier}") == null)
@@ -131,7 +131,7 @@ function chanOpenInit()
   set("connections/{connectionIdentifier}/channels/{channelIdentifier}", (INIT, moduleIdentifier, counterpartyModuleIdentifier, counterpartyChannelIdentifier, connectionIdentifier, counterpartyConnectionIdentifier, version, 0, 0))
 ```
 
-```golang
+```typescript
 type ChanOpenTry struct {
   connectionIdentifier          Identifier
   channelIdentifier             Identifier
@@ -144,7 +144,7 @@ type ChanOpenTry struct {
 }
 ```
 
-```coffeescript
+```typescript
 function chanOpenTry()
   assert(get("connections/{connectionIdentifier}/channels/{channelIdentifier}") == null)
   assert(getCallingModule() == moduleIdentifier)
@@ -160,7 +160,7 @@ function chanOpenTry()
   set("connections/{connectionIdentifier}/channels/{channelIdentifier}", (TRYOPEN, moduleIdentifier, counterpartyModuleIdentifier, counterpartyChannelIdentifier, connectionIdentifier, counterpartyConnectionIdentifier, acceptedVersion, 0, 0))
 ```
 
-```golang
+```typescript
 type ChanOpenAck struct {
   connectionIdentifier  Identifier
   channelIdentifier     Identifier
@@ -169,7 +169,7 @@ type ChanOpenAck struct {
 }
 ```
 
-```coffeescript
+```typescript
 function chanOpenAck()
   (state, moduleIdentifier, counterpartyModuleIdentifier, counterpartyChannelIdentifier, connectionIdentifier, counterpartyConnectionIdentifier, _, _, _) = get("connections/{connectionIdentifier}/channels/{channelIdentifier}")
   assert(state == INIT)
@@ -185,7 +185,7 @@ function chanOpenAck()
   set("connections/{connectionIdentifier}/channels/{channelIdentifier}", (OPEN, moduleIdentifier, counterpartyModuleIdentifier, counterpartyChannelIdentifier, connectionIdentifier, counterpartyConnectionIdentifier, acceptedVersion, 0, 0))
 ```
 
-```golang
+```typescript
 type ChanOpenConfirm struct {
   connectionIdentifier  Identifier
   channelIdentifier     Identifier
@@ -193,7 +193,7 @@ type ChanOpenConfirm struct {
 }
 ```
 
-```coffeescript
+```typescript
 function chanOpenConfirm()
   (state, moduleIdentifier, counterpartyModuleIdentifier, counterpartyChannelIdentifier, connectionIdentifier, counterpartyConnectionIdentifier, version, _, _) = get("connections/{connectionIdentifier}/channels/{channelIdentifier}")
   assert(state == TRYOPEN)
@@ -219,7 +219,7 @@ function chanOpenConfirm()
 
 `sendPacket` is called by a module.
 
-```coffeescript
+```typescript
 function sendPacket(Packet packet)
   (state, moduleIdentifier, _, _, connectionIdentifier, _, _, nextSequenceSend, _) = get("connections/{connectionIdentifier}/channels/{channelIdentifier}")
   assert(state == OPEN)
@@ -236,7 +236,7 @@ function sendPacket(Packet packet)
 
 `recvPacket` is called by a module.
 
-```coffeescript
+```typescript
 function recvPacket(Packet packet)
   (state, moduleIdentifier, _, _, _, _, _) = get("connections/{connectionIdentifier}/channels/{channelIdentifier}")
   assert(state == OPEN)
@@ -263,7 +263,7 @@ Note that in order to avoid any possible "double-spend" attacks, the timeout alg
 
 `timeoutPacket` is called by a module.
 
-```coffeescript
+```typescript
 function timeoutPacket(Packet packet)
   (state, moduleIdentifier, _, _, _, _, _) = get("connections/{connectionIdentifier}/channels/{channelIdentifier}")
   assert(state == OPEN)
