@@ -39,7 +39,7 @@ The relayer algorithm is defined over a set `C` of chains implementing the IBC p
 
 `submitDatagram` is a procedure defined per-chain (submitting a transaction of some sort).
 
-```coffeescript
+```typescript
 relay = (C) ->
   for chain in C
     do (chain) ->
