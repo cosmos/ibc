@@ -46,39 +46,39 @@ This specification only concerns itself with *bidirectional ordered* channels. *
 Channels have a *state*:
 
 ```typescript
-type ChannelState enum {
-  INIT
-  TRYOPEN
-  OPEN
-  TRYCLOSE
-  CLOSED
+enum ChannelState {
+  INIT,
+  TRYOPEN,
+  OPEN,
+  TRYCLOSE,
+  CLOSED,
 }
 ```
 
 An *end* of a channel is a data structure on one chain storing channel metadata:
 
 ```typescript
-type ChannelEnd struct {
-  state                             ChannelState
-  counterpartyChannelIdentifier     string
-  moduleIdentifier                  string
-  counterpartyModuleIdentifier      string
-  connectionIdentifier              string
-  counterpartyConnectionIdentifier  string
-  version                           Version
-  nextSequenceSend uint64
-  nextSequenceRecv uint64
+interface ChannelEnd {
+  state: ChannelState
+  counterpartyChannelIdentifier: Identifier
+  moduleIdentifier: Identifier
+  counterpartyModuleIdentifier: Identifier
+  connectionIdentifier: Identifier
+  counterpartyConnectionIdentifier: Identifier
+  version: Version
+  nextSequenceSend: uint64
+  nextSequenceRecv: uint64
 }
 ```
 
 An IBC *packet* is a particular datagram, defined as follows:
 
 ```typescript
-type Packet struct {
-  sequence      uint64
-  sourceChannel string
-  destChannel   string
-  data          bytes
+interface Packet {
+  sequence: uint64
+  sourceChannel: Identifier
+  destChannel: Identifier
+  data: bytes
 }
 ```
 
@@ -113,100 +113,115 @@ For example, an application may wish to allow a single tokenized asset to be tra
 ### Channel opening handshake
 
 ```typescript
-type ChanOpenInit struct {
-  connectionIdentifier            Identifier
-  channelIdentifier               Identifier
-  counterpartyChannelIdentifier   Identifier
-  counterpartyModuleIdentifier    Identifier
-  version                         Version
+interface ChanOpenInit {
+  connectionIdentifier: Identifier
+  channelIdentifier: Identifier
+  counterpartyChannelIdentifier: Identifier
+  counterpartyModuleIdentifier: Identifier
+  version: Version
 }
 ```
 
 ```typescript
-function chanOpenInit()
+function chanOpenInit() {
   moduleIdentifier = getCallingModule()
-  assert(get("connections/{connectionIdentifier}/channels/{channelIdentifier}") == null)
+  assert(get("connections/{connectionIdentifier}/channels/{channelIdentifier}") === null)
   (state, _, counterpartyConnectionIdentifier, _, _, _) = get("connections/{connectionIdentifier}")
-  assert(state == OPEN)
-  set("connections/{connectionIdentifier}/channels/{channelIdentifier}", (INIT, moduleIdentifier, counterpartyModuleIdentifier, counterpartyChannelIdentifier, connectionIdentifier, counterpartyConnectionIdentifier, version, 0, 0))
-```
-
-```typescript
-type ChanOpenTry struct {
-  connectionIdentifier          Identifier
-  channelIdentifier             Identifier
-  counterpartyChannelIdentifier Identifier
-  moduleIdentifier              Identifier
-  counterpartyModuleIdentifier  Identifier
-  requestedVersion              Version
-  acceptedVersion               Version
-  proofInit                     CommitmentProof
+  assert(state === OPEN)
+  set("connections/{connectionIdentifier}/channels/{channelIdentifier}",
+      Channel{INIT, moduleIdentifier, counterpartyModuleIdentifier, counterpartyChannelIdentifier,
+              connectionIdentifier, counterpartyConnectionIdentifier, version, 0, 0})
 }
 ```
 
 ```typescript
-function chanOpenTry()
-  assert(get("connections/{connectionIdentifier}/channels/{channelIdentifier}") == null)
-  assert(getCallingModule() == moduleIdentifier)
+interface ChanOpenTry {
+  connectionIdentifier: Identifier
+  channelIdentifier: Identifier
+  counterpartyChannelIdentifier: Identifier
+  moduleIdentifier: Identifier
+  counterpartyModuleIdentifier: Identifier
+  requestedVersion: Version
+  acceptedVersion: Version
+  proofInit: CommitmentProof
+}
+```
+
+```typescript
+function chanOpenTry() {
+  assert(get("connections/{connectionIdentifier}/channels/{channelIdentifier}") === null)
+  assert(getCallingModule() === moduleIdentifier)
   (connectionState, _, counterpartyConnectionIdentifier, clientIdentifier, _, _) = get("connections/{connectionIdentifier}")
-  assert(connectionState == OPEN)
+  assert(connectionState === OPEN)
   consensusState = get("clients/{clientIdentifier}")
   assert(verifyMembership(
     consensusState,
     proofInit,
     "connections/{connectionIdentifier}/channels/{counterpartyChannelIdentifier}",
-    (INIT, counterpartyModuleIdentifier, moduleIdentifier, channelIdentifier, counterpartyConnectionIdentifier, connectionIdentifier, requestedVersion, 0, 0)
+    Channel{INIT, counterpartyModuleIdentifier, moduleIdentifier,
+            channelIdentifier, counterpartyConnectionIdentifier, connectionIdentifier, requestedVersion, 0, 0}
   ))
-  set("connections/{connectionIdentifier}/channels/{channelIdentifier}", (TRYOPEN, moduleIdentifier, counterpartyModuleIdentifier, counterpartyChannelIdentifier, connectionIdentifier, counterpartyConnectionIdentifier, acceptedVersion, 0, 0))
-```
-
-```typescript
-type ChanOpenAck struct {
-  connectionIdentifier  Identifier
-  channelIdentifier     Identifier
-  acceptedVersion       Version
-  proofTry              CommitmentProof
+  set("connections/{connectionIdentifier}/channels/{channelIdentifier}",
+      Channel{TRYOPEN, moduleIdentifier, counterpartyModuleIdentifier, counterpartyChannelIdentifier,
+              connectionIdentifier, counterpartyConnectionIdentifier, acceptedVersion, 0, 0})
 }
 ```
 
 ```typescript
-function chanOpenAck()
+interface ChanOpenAck {
+  connectionIdentifier: Identifier
+  channelIdentifier: Identifier
+  acceptedVersion: Version
+  proofTry: CommitmentProof
+}
+```
+
+```typescript
+function chanOpenAck() {
   (state, moduleIdentifier, counterpartyModuleIdentifier, counterpartyChannelIdentifier, connectionIdentifier, counterpartyConnectionIdentifier, _, _, _) = get("connections/{connectionIdentifier}/channels/{channelIdentifier}")
-  assert(state == INIT)
-  assert(getCallingModule() == moduleIdentifier)
+  assert(state === INIT)
+  assert(getCallingModule() === moduleIdentifier)
   (connectionState, _, _, clientIdentifier, _, _) = get("connections/{connectionIdentifier}")
-  assert(connectionState == OPEN)
+  assert(connectionState === OPEN)
   assert(verifyMembership(
     consensusState,
     proofTry,
     "connections/{connectionIdentifier}/channels/{counterpartyChannelIdentifier}",
-    (TRYOPEN, counterpartyModuleIdentifier, moduleIdentifier, channelIdentifier, counterpartyConnectionIdentifier, connectionIdentifier, acceptedVersion, 0, 0)
+    Channel{TRYOPEN, counterpartyModuleIdentifier, moduleIdentifier, channelIdentifier,
+            counterpartyConnectionIdentifier, connectionIdentifier, acceptedVersion, 0, 0}
   ))
-  set("connections/{connectionIdentifier}/channels/{channelIdentifier}", (OPEN, moduleIdentifier, counterpartyModuleIdentifier, counterpartyChannelIdentifier, connectionIdentifier, counterpartyConnectionIdentifier, acceptedVersion, 0, 0))
-```
-
-```typescript
-type ChanOpenConfirm struct {
-  connectionIdentifier  Identifier
-  channelIdentifier     Identifier
-  proofAck              CommitmentProof
+  set("connections/{connectionIdentifier}/channels/{channelIdentifier}",
+      Channel{OPEN, moduleIdentifier, counterpartyModuleIdentifier, counterpartyChannelIdentifier,
+              connectionIdentifier, counterpartyConnectionIdentifier, acceptedVersion, 0, 0})
 }
 ```
 
 ```typescript
-function chanOpenConfirm()
+interface ChanOpenConfirm {
+  connectionIdentifier: Identifier
+  channelIdentifier: Identifier
+  proofAck: CommitmentProof
+}
+```
+
+```typescript
+function chanOpenConfirm() {
   (state, moduleIdentifier, counterpartyModuleIdentifier, counterpartyChannelIdentifier, connectionIdentifier, counterpartyConnectionIdentifier, version, _, _) = get("connections/{connectionIdentifier}/channels/{channelIdentifier}")
-  assert(state == TRYOPEN)
-  assert(getCallingModule() == moduleIdentifier)
+  assert(state === TRYOPEN)
+  assert(getCallingModule() === moduleIdentifier)
   (connectionState, _, _, clientIdentifier, _, _) = get("connections/{connectionIdentifier}")
-  assert(connectionState == OPEN)
+  assert(connectionState === OPEN)
   assert(verifyMembership(
     consensusState.getRoot(),
     proofAck,
     "connections/{connectionIdentifier}/channels/{counterpartyChannelIdentifier}",
-    (OPEN, counterpartyModuleIdentifier, moduleIdentifier, channelIdentifier, counterpartyConnectionIdentifier, connectionIdentifier, version, 0, 0)
+    Channel{OPEN, counterpartyModuleIdentifier, moduleIdentifier, channelIdentifier,
+            counterpartyConnectionIdentifier, connectionIdentifier, version, 0, 0}
   ))
-  set("connections/{connectionIdentifier}/channels/{channelIdentifier}", (OPEN, moduleIdentifier, counterpartyModuleIdentifier, counterpartyChannelIdentifier, connectionIdentifier, counterpartyConnectionIdentifier, version, 0, 0))
+  set("connections/{connectionIdentifier}/channels/{channelIdentifier}",
+      Channel{OPEN, moduleIdentifier, counterpartyModuleIdentifier, counterpartyChannelIdentifier,
+              connectionIdentifier, counterpartyConnectionIdentifier, version, 0, 0})
+}
 ```
 
 ### Channel closing handshake
@@ -220,16 +235,18 @@ function chanOpenConfirm()
 `sendPacket` is called by a module.
 
 ```typescript
-function sendPacket(Packet packet)
+function sendPacket(packet: Packet) {
   (state, moduleIdentifier, _, _, connectionIdentifier, _, _, nextSequenceSend, _) = get("connections/{connectionIdentifier}/channels/{channelIdentifier}")
-  assert(state == OPEN)
-  assert(getCallingModule() == moduleIdentifier)
+  assert(state === OPEN)
+  assert(getCallingModule() === moduleIdentifier)
   (connectionState, _, _, _, _, _) = get("connections/{connectionIdentifier}")
-  assert(connectionState == OPEN)
-  assert(sequence == nextSequenceSend)
+  assert(connectionState === OPEN)
+  assert(sequence === nextSequenceSend)
   set("connections/{connectionIdentifier}/channels/{channelIdentifier}",
-    (state, moduleIdentifier, counterpartyModuleIdentifier, counterpartyChannelIdentifier, connectionIdentifier, counterpartyConnectionIdentifier, version, nextSequenceSend + 1, nextSequenceRecv))
+      Channel{state, moduleIdentifier, counterpartyModuleIdentifier, counterpartyChannelIdentifier,
+              connectionIdentifier, counterpartyConnectionIdentifier, version, nextSequenceSend + 1, nextSequenceRecv})
   set("connections/{connectionIdentifier}/channels/{channelIdentifier}/packets/{sequence}", commit(packet.data))
+}
 ```
 
 ### Receiving packets
@@ -237,13 +254,13 @@ function sendPacket(Packet packet)
 `recvPacket` is called by a module.
 
 ```typescript
-function recvPacket(Packet packet)
+function recvPacket(packet: Packet) {
   (state, moduleIdentifier, _, _, _, _, _) = get("connections/{connectionIdentifier}/channels/{channelIdentifier}")
-  assert(state == OPEN)
-  assert(getCallingModule() == moduleIdentifier)
+  assert(state === OPEN)
+  assert(getCallingModule() === moduleIdentifier)
   consensusState = get("clients/{clientIdentifier}")
   assert(consensusState.getHeight() < timeoutHeight)
-  assert(sequence == nextSequenceRecv)
+  assert(sequence === nextSequenceRecv)
   assert(verifyMembership(
     consensusState.getRoot(),
     proof,
@@ -251,6 +268,7 @@ function recvPacket(Packet packet)
     commit(packet.data)
   ))
   // set stored recv sequence so we can't recv again
+}
 ```
 
 todo: clear up to timeout
@@ -264,10 +282,10 @@ Note that in order to avoid any possible "double-spend" attacks, the timeout alg
 `timeoutPacket` is called by a module.
 
 ```typescript
-function timeoutPacket(Packet packet)
+function timeoutPacket(packet: Packet) {
   (state, moduleIdentifier, _, _, _, _, _) = get("connections/{connectionIdentifier}/channels/{channelIdentifier}")
-  assert(state == OPEN)
-  assert(getCallingModule() == moduleIdentifier)
+  assert(state === OPEN)
+  assert(getCallingModule() === moduleIdentifier)
 
   // check that this packet has not yet been received
   assert(nextSequenceRecv <= packet.sequence)
@@ -276,7 +294,7 @@ function timeoutPacket(Packet packet)
   assert(consensusState.getHeight() >= timeoutHeight)
 
   // verify we actually sent this packet, check the store
-  assert(get("connections/{connectionIdentifier}/channels/{channelIdentifier}/packets/{sequence}") == commit(packet.data))
+  assert(get("connections/{connectionIdentifier}/channels/{channelIdentifier}/packets/{sequence}") === commit(packet.data))
 
   // check that the recv sequence is as claimed
   assert(verifyMembership(
@@ -288,6 +306,7 @@ function timeoutPacket(Packet packet)
 
   // clear the store so we can't "timeout" again"
   delete("connections/{connectionIdentifier}/channels/{channelIdentifier}/packets/{sequence}")
+}
 ```
 
 Notes
