@@ -65,7 +65,6 @@ interface ChannelEnd {
   counterpartyModuleIdentifier: Identifier
   connectionIdentifier: Identifier
   counterpartyConnectionIdentifier: Identifier
-  version: Version
   nextSequenceSend: uint64
   nextSequenceRecv: uint64
 }
@@ -76,7 +75,10 @@ An IBC *packet* is a particular datagram, defined as follows:
 ```typescript
 interface Packet {
   sequence: uint64
+  timeoutHeight: uint64
+  sourceConnection: Identifier
   sourceChannel: Identifier
+  destConnection: Identifier
   destChannel: Identifier
   data: bytes
 }
@@ -118,7 +120,6 @@ interface ChanOpenInit {
   channelIdentifier: Identifier
   counterpartyChannelIdentifier: Identifier
   counterpartyModuleIdentifier: Identifier
-  version: Version
 }
 ```
 
@@ -129,7 +130,7 @@ function chanOpenInit() {
   connection = get("connections/{connectionIdentifier}")
   assert(connection.state === OPEN)
   channel = Channel{INIT, moduleIdentifier, counterpartyModuleIdentifier, counterpartyChannelIdentifier,
-                    connectionIdentifier, counterpartyConnectionIdentifier, version, 0, 0}
+                    connectionIdentifier, counterpartyConnectionIdentifier, 0, 0}
   set("connections/{connectionIdentifier}/channels/{channelIdentifier}", channel)
 }
 ```
@@ -141,8 +142,6 @@ interface ChanOpenTry {
   counterpartyChannelIdentifier: Identifier
   moduleIdentifier: Identifier
   counterpartyModuleIdentifier: Identifier
-  requestedVersion: Version
-  acceptedVersion: Version
   proofInit: CommitmentProof
 }
 ```
@@ -159,10 +158,10 @@ function chanOpenTry() {
     proofInit,
     "connections/{connectionIdentifier}/channels/{connection.counterpartyChannelIdentifier}",
     Channel{INIT, counterpartyModuleIdentifier, moduleIdentifier, channelIdentifier,
-            connection.counterpartyConnectionIdentifier, connectionIdentifier, requestedVersion, 0, 0}
+            connection.counterpartyConnectionIdentifier, connectionIdentifier, 0, 0}
   ))
   channel = Channel{TRYOPEN, moduleIdentifier, counterpartyModuleIdentifier, counterpartyChannelIdentifier,
-                    connectionIdentifier, counterpartyConnectionIdentifier, acceptedVersion, 0, 0}
+                    connectionIdentifier, counterpartyConnectionIdentifier, 0, 0}
   set("connections/{connectionIdentifier}/channels/{channelIdentifier}", channel)
 }
 ```
@@ -171,7 +170,6 @@ function chanOpenTry() {
 interface ChanOpenAck {
   connectionIdentifier: Identifier
   channelIdentifier: Identifier
-  acceptedVersion: Version
   proofTry: CommitmentProof
 }
 ```
@@ -189,10 +187,9 @@ function chanOpenAck() {
     proofTry,
     "connections/{connectionIdentifier}/channels/{channel.counterpartyChannelIdentifier}",
     Channel{TRYOPEN, channel.counterpartyModuleIdentifier, channel.moduleIdentifier, channelIdentifier,
-            channel.counterpartyConnectionIdentifier, connectionIdentifier, acceptedVersion, 0, 0}
+            channel.counterpartyConnectionIdentifier, connectionIdentifier, 0, 0}
   ))
   channel.state = OPEN
-  channel.version = acceptedVersion
   set("connections/{connectionIdentifier}/channels/{channelIdentifier}", channel)
 }
 ```
@@ -218,7 +215,7 @@ function chanOpenConfirm() {
     proofAck,
     "connections/{connectionIdentifier}/channels/{channel.counterpartyChannelIdentifier}",
     Channel{OPEN, channel.counterpartyModuleIdentifier, channel.moduleIdentifier, channelIdentifier,
-            channel.counterpartyConnectionIdentifier, connectionIdentifier, version, 0, 0}
+            channel.counterpartyConnectionIdentifier, connectionIdentifier, 0, 0}
   ))
   channel.state = OPEN
   set("connections/{connectionIdentifier}/channels/{channelIdentifier}", channel)
@@ -237,17 +234,19 @@ function chanOpenConfirm() {
 
 ```typescript
 function sendPacket(packet: Packet) {
-  channel = get("connections/{connectionIdentifier}/channels/{channelIdentifier}")
+  channel = get("connections/{packet.sourceConnection}/channels/{packet.sourceChannel}")
   assert(channel.state === OPEN)
   assert(getCallingModule() === channel.moduleIdentifier)
-  connection = get("connections/{connectionIdentifier}")
+  assert(packet.destConnection === channel.counterpartyConnectionIdentifier)
+  assert(packet.destChannel === channel.counterpartyChannelIdentifier)
+  connection = get("connections/{packet.sourceConnection}")
   assert(connection.state === OPEN)
   consensusState = get("clients/{connection.clientIdentifier}")
   assert(consensusState.getHeight() < packet.timeoutHeight)
   assert(packet.sequence === channel.nextSequenceSend)
   channel.nextSequenceSend = channel.nextSequenceSend + 1
-  set("connections/{connectionIdentifier}/channels/{channelIdentifier}", channel)
-  set("connections/{connectionIdentifier}/channels/{channelIdentifier}/packets/{sequence}", commit(packet.data))
+  set("connections/{packet.sourceConnection}/channels/{packet.sourceChannel}", channel)
+  set("connections/{packet.sourceConnection}/channels/{packet.sourceChannel}/packets/{sequence}", commit(packet.data))
 }
 ```
 
@@ -257,28 +256,34 @@ function sendPacket(packet: Packet) {
 
 ```typescript
 function recvPacket(packet: Packet) {
-  channel = get("connections/{connectionIdentifier}/channels/{channelIdentifier}")
+  channel = get("connections/{packet.destConnection}/channels/{packet.destChannel}")
   assert(channel.state === OPEN)
   assert(getCallingModule() === channel.moduleIdentifier)
-  assert(sequence === channel.nextSequenceRecv)
+  assert(packet.sourceConnection === channel.counterpartyConnectionIdentifier)
+  assert(packet.sourceChannel === channel.counterpartyChannelIdentifier)
+  assert(packet.sequence === channel.nextSequenceRecv)
   connection = get("connections/{connectionIdentifier}")
   assert(connection.state === OPEN)
   consensusState = getConsensusState()
   assert(consensusState.getHeight() < packet.timeoutHeight)
-  key = "connections/{channel.counterpartyConnectionIdentifier}/channels/" ++
-        "{channel.counterpartyChannelIdentifier}/packets/{sequence}"
   assert(verifyMembership(
     consensusState.getRoot(),
     proof,
+    "connections/{packet.sourceConnection}/channels/{packet.sourceChannel}/packets/{sequence}"
     key,
     commit(packet.data)
   ))
   channel.nextSequenceRecv = channel.nextSequenceRecv + 1
-  set("connections/{connectionIdentifier}/channels/{channelIdentifier}", channel)
+  set("connections/{packet.destConnection}/channels/{packet.destChannel}", channel)
 }
 ```
 
-todo: clear up to timeout
+`recvTimedOutPacket` is called by a module.
+
+```typescript
+```
+
+todo: allow recv packets after timeout, not executed
 
 ### Timeouts
 
@@ -290,14 +295,17 @@ Note that in order to avoid any possible "double-spend" attacks, the timeout alg
 
 ```typescript
 function timeoutPacket(packet: Packet) {
-  (state, moduleIdentifier, _, _, _, _, _) = get("connections/{connectionIdentifier}/channels/{channelIdentifier}")
-  assert(state === OPEN)
-  assert(getCallingModule() === moduleIdentifier)
+  channel = get("connections/{packet.connectionIdentifier}/channels/{packet.channelIdentifier}")
+  assert(channel.state === OPEN)
+  assert(getCallingModule() === channel.moduleIdentifier)
+  connection = get("connections/{packet.connectionIdentifier}")
+  assert(connection.state === OPEN)
 
   // check that this packet has not yet been received
-  assert(nextSequenceRecv <= packet.sequence)
+  assert(channel.nextSequenceRecv <= packet.sequence)
 
   // check that timeout height has passed
+  consensusState = get("clients/{connection.clientIdentifier}")
   assert(consensusState.getHeight() >= timeoutHeight)
 
   // verify we actually sent this packet, check the store
@@ -314,6 +322,7 @@ function timeoutPacket(packet: Packet) {
   ))
 
   // clear the store so we can't "timeout" again"
+  // TODO unsafe? need for post-timeout handling on other side... instead separate cleanup?
   delete("connections/{connectionIdentifier}/channels/{channelIdentifier}/packets/{sequence}")
 }
 ```
