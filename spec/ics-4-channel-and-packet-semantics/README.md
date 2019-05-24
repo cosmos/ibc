@@ -63,8 +63,6 @@ interface ChannelEnd {
   counterpartyChannelIdentifier: Identifier
   moduleIdentifier: Identifier
   counterpartyModuleIdentifier: Identifier
-  connectionIdentifier: Identifier
-  counterpartyConnectionIdentifier: Identifier
   nextSequenceSend: uint64
   nextSequenceRecv: uint64
 }
@@ -129,8 +127,7 @@ function chanOpenInit() {
   assert(get("connections/{connectionIdentifier}/channels/{channelIdentifier}") === null)
   connection = get("connections/{connectionIdentifier}")
   assert(connection.state === OPEN)
-  channel = Channel{INIT, moduleIdentifier, counterpartyModuleIdentifier, counterpartyChannelIdentifier,
-                    connectionIdentifier, counterpartyConnectionIdentifier, 0, 0}
+  channel = Channel{INIT, moduleIdentifier, counterpartyModuleIdentifier, counterpartyChannelIdentifier, 0, 0}
   set("connections/{connectionIdentifier}/channels/{channelIdentifier}", channel)
 }
 ```
@@ -156,12 +153,10 @@ function chanOpenTry() {
   assert(verifyMembership(
     consensusState,
     proofInit,
-    "connections/{connectionIdentifier}/channels/{connection.counterpartyChannelIdentifier}",
-    Channel{INIT, counterpartyModuleIdentifier, moduleIdentifier, channelIdentifier,
-            connection.counterpartyConnectionIdentifier, connectionIdentifier, 0, 0}
+    "connections/{connection.counterpartyConnectionIdentifier}/channels/{counterpartyChannelIdentifier}",
+    Channel{INIT, counterpartyModuleIdentifier, moduleIdentifier, channelIdentifier, 0, 0}
   ))
-  channel = Channel{TRYOPEN, moduleIdentifier, counterpartyModuleIdentifier, counterpartyChannelIdentifier,
-                    connectionIdentifier, counterpartyConnectionIdentifier, 0, 0}
+  channel = Channel{TRYOPEN, moduleIdentifier, counterpartyModuleIdentifier, counterpartyChannelIdentifier, 0, 0}
   set("connections/{connectionIdentifier}/channels/{channelIdentifier}", channel)
 }
 ```
@@ -185,9 +180,8 @@ function chanOpenAck() {
   assert(verifyMembership(
     consensusState.getRoot(),
     proofTry,
-    "connections/{connectionIdentifier}/channels/{channel.counterpartyChannelIdentifier}",
-    Channel{TRYOPEN, channel.counterpartyModuleIdentifier, channel.moduleIdentifier, channelIdentifier,
-            channel.counterpartyConnectionIdentifier, connectionIdentifier, 0, 0}
+    "connections/{connection.counterpartyConnectionIdentifier}/channels/{channel.counterpartyChannelIdentifier}",
+    Channel{TRYOPEN, channel.counterpartyModuleIdentifier, channel.moduleIdentifier, channelIdentifier, 0, 0}
   ))
   channel.state = OPEN
   set("connections/{connectionIdentifier}/channels/{channelIdentifier}", channel)
@@ -213,9 +207,8 @@ function chanOpenConfirm() {
   assert(verifyMembership(
     consensusState.getRoot(),
     proofAck,
-    "connections/{connectionIdentifier}/channels/{channel.counterpartyChannelIdentifier}",
-    Channel{OPEN, channel.counterpartyModuleIdentifier, channel.moduleIdentifier, channelIdentifier,
-            channel.counterpartyConnectionIdentifier, connectionIdentifier, 0, 0}
+    "connections/{connection.counterpartyConnectionIdentifier}/channels/{channel.counterpartyChannelIdentifier}",
+    Channel{OPEN, channel.counterpartyModuleIdentifier, channel.moduleIdentifier, channelIdentifier, 0, 0}
   ))
   channel.state = OPEN
   set("connections/{connectionIdentifier}/channels/{channelIdentifier}", channel)
@@ -237,10 +230,10 @@ function sendPacket(packet: Packet) {
   channel = get("connections/{packet.sourceConnection}/channels/{packet.sourceChannel}")
   assert(channel.state === OPEN)
   assert(getCallingModule() === channel.moduleIdentifier)
-  assert(packet.destConnection === channel.counterpartyConnectionIdentifier)
   assert(packet.destChannel === channel.counterpartyChannelIdentifier)
   connection = get("connections/{packet.sourceConnection}")
   assert(connection.state === OPEN)
+  assert(packet.destConnection === connection.counterpartyConnectionIdentifier)
   consensusState = get("clients/{connection.clientIdentifier}")
   assert(consensusState.getHeight() < packet.timeoutHeight)
   assert(packet.sequence === channel.nextSequenceSend)
@@ -259,10 +252,10 @@ function recvPacket(packet: Packet) {
   channel = get("connections/{packet.destConnection}/channels/{packet.destChannel}")
   assert(channel.state === OPEN)
   assert(getCallingModule() === channel.moduleIdentifier)
-  assert(packet.sourceConnection === channel.counterpartyConnectionIdentifier)
   assert(packet.sourceChannel === channel.counterpartyChannelIdentifier)
   assert(packet.sequence === channel.nextSequenceRecv)
   connection = get("connections/{connectionIdentifier}")
+  assert(packet.sourceConnection === connection.counterpartyConnectionIdentifier)
   assert(connection.state === OPEN)
   consensusState = getConsensusState()
   assert(consensusState.getHeight() < packet.timeoutHeight)
