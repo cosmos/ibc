@@ -126,11 +126,11 @@ interface ChanOpenInit {
 function chanOpenInit() {
   moduleIdentifier = getCallingModule()
   assert(get("connections/{connectionIdentifier}/channels/{channelIdentifier}") === null)
-  (state, _, counterpartyConnectionIdentifier, _, _, _) = get("connections/{connectionIdentifier}")
-  assert(state === OPEN)
-  set("connections/{connectionIdentifier}/channels/{channelIdentifier}",
-      Channel{INIT, moduleIdentifier, counterpartyModuleIdentifier, counterpartyChannelIdentifier,
-              connectionIdentifier, counterpartyConnectionIdentifier, version, 0, 0})
+  connection = get("connections/{connectionIdentifier}")
+  assert(connection.state === OPEN)
+  channel = Channel{INIT, moduleIdentifier, counterpartyModuleIdentifier, counterpartyChannelIdentifier,
+                    connectionIdentifier, counterpartyConnectionIdentifier, version, 0, 0}
+  set("connections/{connectionIdentifier}/channels/{channelIdentifier}", channel)
 }
 ```
 
@@ -151,19 +151,19 @@ interface ChanOpenTry {
 function chanOpenTry() {
   assert(get("connections/{connectionIdentifier}/channels/{channelIdentifier}") === null)
   assert(getCallingModule() === moduleIdentifier)
-  (connectionState, _, counterpartyConnectionIdentifier, clientIdentifier, _, _) = get("connections/{connectionIdentifier}")
-  assert(connectionState === OPEN)
-  consensusState = get("clients/{clientIdentifier}")
+  connection = get("connections/{connectionIdentifier}")
+  assert(connection.state === OPEN)
+  consensusState = get("clients/{connection.clientIdentifier}")
   assert(verifyMembership(
     consensusState,
     proofInit,
-    "connections/{connectionIdentifier}/channels/{counterpartyChannelIdentifier}",
-    Channel{INIT, counterpartyModuleIdentifier, moduleIdentifier,
-            channelIdentifier, counterpartyConnectionIdentifier, connectionIdentifier, requestedVersion, 0, 0}
+    "connections/{connectionIdentifier}/channels/{connection.counterpartyChannelIdentifier}",
+    Channel{INIT, counterpartyModuleIdentifier, moduleIdentifier, channelIdentifier,
+            connection.counterpartyConnectionIdentifier, connectionIdentifier, requestedVersion, 0, 0}
   ))
-  set("connections/{connectionIdentifier}/channels/{channelIdentifier}",
-      Channel{TRYOPEN, moduleIdentifier, counterpartyModuleIdentifier, counterpartyChannelIdentifier,
-              connectionIdentifier, counterpartyConnectionIdentifier, acceptedVersion, 0, 0})
+  channel = Channel{TRYOPEN, moduleIdentifier, counterpartyModuleIdentifier, counterpartyChannelIdentifier,
+                    connectionIdentifier, counterpartyConnectionIdentifier, acceptedVersion, 0, 0}
+  set("connections/{connectionIdentifier}/channels/{channelIdentifier}", channel)
 }
 ```
 
@@ -178,21 +178,22 @@ interface ChanOpenAck {
 
 ```typescript
 function chanOpenAck() {
-  (state, moduleIdentifier, counterpartyModuleIdentifier, counterpartyChannelIdentifier, connectionIdentifier, counterpartyConnectionIdentifier, _, _, _) = get("connections/{connectionIdentifier}/channels/{channelIdentifier}")
-  assert(state === INIT)
-  assert(getCallingModule() === moduleIdentifier)
-  (connectionState, _, _, clientIdentifier, _, _) = get("connections/{connectionIdentifier}")
-  assert(connectionState === OPEN)
+  channel = get("connections/{connectionIdentifier}/channels/{channelIdentifier}")
+  assert(channel.state === INIT)
+  assert(getCallingModule() === channel.moduleIdentifier)
+  connection = get("connections/{connectionIdentifier}")
+  assert(connection.state === OPEN)
+  consensusState = get("clients/{connection.clientIdentifier}")
   assert(verifyMembership(
-    consensusState,
+    consensusState.getRoot(),
     proofTry,
-    "connections/{connectionIdentifier}/channels/{counterpartyChannelIdentifier}",
-    Channel{TRYOPEN, counterpartyModuleIdentifier, moduleIdentifier, channelIdentifier,
-            counterpartyConnectionIdentifier, connectionIdentifier, acceptedVersion, 0, 0}
+    "connections/{connectionIdentifier}/channels/{channel.counterpartyChannelIdentifier}",
+    Channel{TRYOPEN, channel.counterpartyModuleIdentifier, channel.moduleIdentifier, channelIdentifier,
+            channel.counterpartyConnectionIdentifier, connectionIdentifier, acceptedVersion, 0, 0}
   ))
-  set("connections/{connectionIdentifier}/channels/{channelIdentifier}",
-      Channel{OPEN, moduleIdentifier, counterpartyModuleIdentifier, counterpartyChannelIdentifier,
-              connectionIdentifier, counterpartyConnectionIdentifier, acceptedVersion, 0, 0})
+  channel.state = OPEN
+  channel.version = acceptedVersion
+  set("connections/{connectionIdentifier}/channels/{channelIdentifier}", channel)
 }
 ```
 
@@ -206,21 +207,21 @@ interface ChanOpenConfirm {
 
 ```typescript
 function chanOpenConfirm() {
-  (state, moduleIdentifier, counterpartyModuleIdentifier, counterpartyChannelIdentifier, connectionIdentifier, counterpartyConnectionIdentifier, version, _, _) = get("connections/{connectionIdentifier}/channels/{channelIdentifier}")
-  assert(state === TRYOPEN)
-  assert(getCallingModule() === moduleIdentifier)
-  (connectionState, _, _, clientIdentifier, _, _) = get("connections/{connectionIdentifier}")
-  assert(connectionState === OPEN)
+  channel = get("connections/{connectionIdentifier}/channels/{channelIdentifier}")
+  assert(channel.state === TRYOPEN)
+  assert(getCallingModule() === channel.moduleIdentifier)
+  connection = get("connections/{connectionIdentifier}")
+  assert(connection.state === OPEN)
+  consensusState = get("clients/{connection.clientIdentifier}")
   assert(verifyMembership(
     consensusState.getRoot(),
     proofAck,
-    "connections/{connectionIdentifier}/channels/{counterpartyChannelIdentifier}",
-    Channel{OPEN, counterpartyModuleIdentifier, moduleIdentifier, channelIdentifier,
-            counterpartyConnectionIdentifier, connectionIdentifier, version, 0, 0}
+    "connections/{connectionIdentifier}/channels/{channel.counterpartyChannelIdentifier}",
+    Channel{OPEN, channel.counterpartyModuleIdentifier, channel.moduleIdentifier, channelIdentifier,
+            channel.counterpartyConnectionIdentifier, connectionIdentifier, version, 0, 0}
   ))
-  set("connections/{connectionIdentifier}/channels/{channelIdentifier}",
-      Channel{OPEN, moduleIdentifier, counterpartyModuleIdentifier, counterpartyChannelIdentifier,
-              connectionIdentifier, counterpartyConnectionIdentifier, version, 0, 0})
+  channel.state = OPEN
+  set("connections/{connectionIdentifier}/channels/{channelIdentifier}", channel)
 }
 ```
 
@@ -236,15 +237,16 @@ function chanOpenConfirm() {
 
 ```typescript
 function sendPacket(packet: Packet) {
-  (state, moduleIdentifier, _, _, connectionIdentifier, _, _, nextSequenceSend, _) = get("connections/{connectionIdentifier}/channels/{channelIdentifier}")
-  assert(state === OPEN)
-  assert(getCallingModule() === moduleIdentifier)
-  (connectionState, _, _, _, _, _) = get("connections/{connectionIdentifier}")
-  assert(connectionState === OPEN)
-  assert(sequence === nextSequenceSend)
-  set("connections/{connectionIdentifier}/channels/{channelIdentifier}",
-      Channel{state, moduleIdentifier, counterpartyModuleIdentifier, counterpartyChannelIdentifier,
-              connectionIdentifier, counterpartyConnectionIdentifier, version, nextSequenceSend + 1, nextSequenceRecv})
+  channel = get("connections/{connectionIdentifier}/channels/{channelIdentifier}")
+  assert(channel.state === OPEN)
+  assert(getCallingModule() === channel.moduleIdentifier)
+  connection = get("connections/{connectionIdentifier}")
+  assert(connection.state === OPEN)
+  consensusState = get("clients/{connection.clientIdentifier}")
+  assert(consensusState.getHeight() < packet.timeoutHeight)
+  assert(packet.sequence === channel.nextSequenceSend)
+  channel.nextSequenceSend = channel.nextSequenceSend + 1
+  set("connections/{connectionIdentifier}/channels/{channelIdentifier}", channel)
   set("connections/{connectionIdentifier}/channels/{channelIdentifier}/packets/{sequence}", commit(packet.data))
 }
 ```
@@ -255,19 +257,24 @@ function sendPacket(packet: Packet) {
 
 ```typescript
 function recvPacket(packet: Packet) {
-  (state, moduleIdentifier, _, _, _, _, _) = get("connections/{connectionIdentifier}/channels/{channelIdentifier}")
-  assert(state === OPEN)
-  assert(getCallingModule() === moduleIdentifier)
-  consensusState = get("clients/{clientIdentifier}")
-  assert(consensusState.getHeight() < timeoutHeight)
-  assert(sequence === nextSequenceRecv)
+  channel = get("connections/{connectionIdentifier}/channels/{channelIdentifier}")
+  assert(channel.state === OPEN)
+  assert(getCallingModule() === channel.moduleIdentifier)
+  assert(sequence === channel.nextSequenceRecv)
+  connection = get("connections/{connectionIdentifier}")
+  assert(connection.state === OPEN)
+  consensusState = getConsensusState()
+  assert(consensusState.getHeight() < packet.timeoutHeight)
+  key = "connections/{channel.counterpartyConnectionIdentifier}/channels/" ++
+        "{channel.counterpartyChannelIdentifier}/packets/{sequence}"
   assert(verifyMembership(
     consensusState.getRoot(),
     proof,
-    "connections/{connectionIdentifier}/channels/{channelIdentifier}/packets/{sequence}",
+    key,
     commit(packet.data)
   ))
-  // set stored recv sequence so we can't recv again
+  channel.nextSequenceRecv = channel.nextSequenceRecv + 1
+  set("connections/{connectionIdentifier}/channels/{channelIdentifier}", channel)
 }
 ```
 
@@ -294,7 +301,9 @@ function timeoutPacket(packet: Packet) {
   assert(consensusState.getHeight() >= timeoutHeight)
 
   // verify we actually sent this packet, check the store
-  assert(get("connections/{connectionIdentifier}/channels/{channelIdentifier}/packets/{sequence}") === commit(packet.data))
+  assert(
+    get("connections/{connectionIdentifier}/channels/{channelIdentifier}/packets/{sequence}") === commit(packet.data)
+  )
 
   // check that the recv sequence is as claimed
   assert(verifyMembership(
