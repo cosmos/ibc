@@ -39,7 +39,7 @@ An *unordered* channel is a channel where packets can be delivered in any order,
 
 Directionality and ordering are independent, so one can speak of a bidirectional unordered channel, a unidirectional ordered channel, etc.
 
-All channels provide exactly-once packet delivery.
+All channels provide exactly-once packet delivery, meaning that a packet sent on one end of a channel is delivered no more than once, eventually, to the other end.
 
 This specification only concerns itself with *bidirectional ordered* channels. *Unidirectional* and *unordered* channels use almost exactly the same protocol and will be outlined in a future ICS.
 
@@ -248,7 +248,7 @@ function sendPacket(packet: Packet) {
 `recvPacket` is called by a module.
 
 ```typescript
-function recvPacket(packet: Packet) {
+function recvPacket(packet: Packet, proof: CommitmentProof) {
   channel = get("connections/{packet.destConnection}/channels/{packet.destChannel}")
   assert(channel.state === OPEN)
   assert(getCallingModule() === channel.moduleIdentifier)
@@ -287,41 +287,77 @@ Note that in order to avoid any possible "double-spend" attacks, the timeout alg
 `timeoutPacket` is called by a module.
 
 ```typescript
-function timeoutPacket(packet: Packet) {
-  channel = get("connections/{packet.connectionIdentifier}/channels/{packet.channelIdentifier}")
+function timeoutPacket(packet: Packet, proof: CommitmentProof) {
+  channel = get("connections/{packet.sourceConnection}/channels/{packet.sourceChannel}")
   assert(channel.state === OPEN)
   assert(getCallingModule() === channel.moduleIdentifier)
-  connection = get("connections/{packet.connectionIdentifier}")
+  assert(packet.destChannel === channel.counterpartyChannelIdentifier)
+  connection = get("connections/{packet.sourceConnection}")
   assert(connection.state === OPEN)
+  assert(packet.destConnection === connection.counterpartyIdentifier)
 
-  // check that this packet has not yet been received
-  assert(channel.nextSequenceRecv <= packet.sequence)
 
-  // check that timeout height has passed
+  // check that timeout height has passed on the other end
   consensusState = get("clients/{connection.clientIdentifier}")
   assert(consensusState.getHeight() >= timeoutHeight)
 
   // verify we actually sent this packet, check the store
-  assert(
-    get("connections/{connectionIdentifier}/channels/{channelIdentifier}/packets/{sequence}") === commit(packet.data)
-  )
+  key = "connections/{packet.sourceConnection}/channels/{packet.sourceChannel}/packets/{sequence}"
+  assert(get(key) === commit(packet.data))
+
+  // assert we haven't "timed-out" already, TODO
 
   // check that the recv sequence is as claimed
   assert(verifyMembership(
     consensusState.getRoot(),
     proof,
-    "connections/{connectionIdentifier}/channels/{channelIdentifier}/nextSequenceRecv",
+    "connections/{packet.destConnection}/channels/{packet.destChannel}/nextSequenceRecv",
     nextSequenceRecv
   ))
 
-  // clear the store so we can't "timeout" again"
-  // TODO unsafe? need for post-timeout handling on other side... instead separate cleanup?
-  delete("connections/{connectionIdentifier}/channels/{channelIdentifier}/packets/{sequence}")
+  // mark the store so we can't "timeout" again" TODO
+  set("connections/{packet.sourceConnection}/channels/{packet.sourceChannel}/packets/{sequence}/timedOut", "true")
 }
 ```
 
 Notes
 - Can "bulk timeout" because of ordering guarantees if we enforce relations between timeout height and channels
+
+`cleanupPacket` can be called by a module to remove a received packet commitment from storage. Notably, the receiving end must have already processed the packet (whether regularly or past timeout).
+
+```typescript
+function cleanupPacket(packet: Packet, proof: CommitmentProof, nextSequenceRecv: uint64) {
+  channel = get("connections/{packet.sourceConnection}/channels/{packet.sourceChannel}")
+  assert(channel.state === OPEN)
+  assert(getCallingModule() === channel.moduleIdentifier)
+  assert(packet.destChannel === channel.counterpartyChannelIdentifier)
+  connection = get("connections/{packet.sourceConnection}")
+  assert(connection.state === OPEN)
+  assert(packet.destConnection === connection.counterpartyIdentifier)
+
+  // assert packet has been received on the other end
+  assert(nextSequenceRecv > packet.sequence)
+
+  consensusState = get("clients/{connection.clientIdentifier}")
+
+  // check that the recv sequence is as claimed
+  assert(verifyMembership(
+    consensusState.getRoot(),
+    proof,
+    "connections/{packet.destConnection}/channels/{packet.destChannel}/nextSequenceRecv",
+    nextSequenceRecv
+  ))
+
+  // calculate key
+  key = "connections/{packet.sourceConnection}/channels/{packet.sourceChannel}/packets/{sequence}"
+
+  // verify we actually sent the packet, check the store
+  assert(get(key) === commit(packet.data))
+  
+  // clear the store
+  delete(key)
+}
+```
 
 ## Backwards Compatibility
 
