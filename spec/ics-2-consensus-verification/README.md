@@ -122,7 +122,7 @@ interface Header {
 ```
 where
   * `Proof` is the commit proof used by `Consensus.ValidityPredicate` to be verified.
-  * `Base` is the new verify, if it needs to be updated.
+  * `Base` is the new verification function, if it needs to be updated.
   * `Root` is the new `CommitmentRoot` which will replace the existing one.
 
 #### ValidityPredicate
