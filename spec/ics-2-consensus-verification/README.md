@@ -4,7 +4,7 @@ title: Consensus Verification
 stage: draft
 category: ibc-core
 requires: 23, 24
-required-by: 3
+required-by: 3, 24
 author: Juwoon Yun <joon@tendermint.com>, Christopher Goes <cwgoes@tendermint.com>
 created: 2019-02-25
 modified: 2019-05-28
@@ -15,7 +15,7 @@ modified: 2019-05-28
 This standard specifies the properties that consensus algorithms of chains implementing the interblockchain
 communication protocol are required to satisfy. These properties are necessary for efficient and safe
 verification in the higher-level protocol abstractions. The algorithm utilized in IBC to verify the
-consensus transcript & sub-states of another chain is referred to as a "light client verifier",
+consensus transcript & state subcomponents of another chain is referred to as a "light client verifier",
 and pairing it with a state that the verifier trusts forms a "light client".
 
 This standard also specifies how the light clients will be stored, registered, and updated in the
@@ -48,9 +48,9 @@ as long as associated light client algorithms fulfilling the requirements are pr
 ### Desired Properties
 
 Light clients must provide a secure algorithm to verify other chains' canonical headers,
-using the existing `ConsensusState`. The higher level abstractions will then be able to verify subcomponents of the state
-with the `CommitmentRoot` stored in the `ConsensusState`, which is guaranteed to be committed by
-the other chain's consensus algorithm.
+using the existing `ConsensusState`. The higher level abstractions will then be able to verify
+subcomponents of the state with the `CommitmentRoot` stored in the `ConsensusState`, which is
+guaranteed to have been committed by the other chain's consensus algorithm.
 
 `ValidityPredicate`s are expected to reflect the behaviour of the full node which is running the  
 corresponding consensus algorithm. Given a `ConsensusState` and `[Message]`, if a full node
@@ -59,8 +59,7 @@ and if a full node rejects it, then the light client MUST also reject it. The co
 ensures this correspondence. However light clients are not replaying the whole messages, so it
 is possible that the light clients' behaviour differs from the full nodes'. In this case, the
 equivocation proof which proves the divergence between the `ValidityPredicate` and the full node will be
-generated and submitted to the chain, as defined in
-[ICS ?](https://github.com/cosmos/ics/issues/53), so that the chain can safely deactivate the
+generated and submitted to the chain so that the chain can safely deactivate the
 light client.
 
 ## Technical Specification
@@ -91,8 +90,7 @@ state to verify future roots. The `ConsensusState` of a chain is stored by other
 
 ```typescript
 interface ConsensusState {
-  base: ValidityPredicateBase
-  root: CommitmentRoot
+  roots: Map<uint64, CommitmentRoot>
 }
 ```
 where
@@ -108,6 +106,7 @@ submitted to one blockchain to update the stored `ConsensusState`. Defined as
 
 ```typescript
 interface Header {
+  height: uint64
   proof: HeaderProof
   base: Maybe[ValidityPredicateBase]
   root: CommitmentRoot
@@ -353,8 +352,9 @@ Not applicable.
 ## Forwards Compatibility
 
 In a future version, this ICS will define a new function `unfreezeClient` that can be called 
-when the application logic resolves equivocation event.
+when the application logic resolves an equivocation event.
 
 ## History
 
-March 5th 2019: Initial draft finished and submitted as a PR
+March 5th 2019: Initial draft finished and submitted as a PR.
+May 29 2019: Various revisions, notably multiple commitment-roots
