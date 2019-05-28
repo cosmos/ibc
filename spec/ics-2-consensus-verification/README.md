@@ -1,5 +1,4 @@
 ---
-
 ics: 2
 title: Consensus Verification
 stage: draft
@@ -8,40 +7,43 @@ requires: 23, 24
 required-by: 3
 author: Juwoon Yun <joon@tendermint.com>, Christopher Goes <cwgoes@tendermint.com>
 created: 2019-02-25
-modified: 2019-04-29
-
+modified: 2019-05-28
 ---
 
 ## Synopsis
 
-This standard specifies the properties that consensus algorithms of chains implementing IBC are
-expected to satisfy. These properties are needed for efficient and safe verification in the higher
-level protocol abstractions. The algorithm which uses these properties to verify substates of
-another chain is referred to as a "light client verifier", and pairing it with a state that the
-verifier trusts forms a "light client".
+This standard specifies the properties that consensus algorithms of chains implementing the interblockchain
+communication protocol are required to satisfy. These properties are necessary for efficient and safe
+verification in the higher-level protocol abstractions. The algorithm utilized in IBC to verify the
+consensus transcript & sub-states of another chain is referred to as a "light client verifier",
+and pairing it with a state that the verifier trusts forms a "light client".
 
-This standard also specifies how the light clients will be stored, registered, and updated on a
-blockchain. The stored light client instances will be able to be verified by a third party actor, such as a user inspecting the state of the chain.
+This standard also specifies how the light clients will be stored, registered, and updated in the
+canonical IBC handler. The stored light client instances will be verifiable by a third party actor,
+such as a user inspecting the state of the chain and deciding whether or not to send an IBC packet.
 
 ### Motivation
 
-In the IBC protocol, a chain needs to be able to verify updates to the state of another chain. A light client is the algorithm with which they can do so.
-This standard formalizes the common
-model of light client to minimise the dependency on consensus algorithms, so that the protocol can
-easily connect with new chains which are running new consensus algorithms, without the need to
-upgrade the light client protocol itself.
+In the IBC protocol, a chain needs to be able to verify updates to the state of another chain
+which the other chain's consensus algorithm has agreed upon, and reject any possible updates
+which the other chain's consensus algorithm has not agreed upon. A light client is the algorithm
+with which a chain can do so. This standard formalizes the light client model and requirements,
+so that the IBC protocol can easily connect with new chains which are running new consensus algorithms,
+as long as associated light client algorithms fulfilling the requirements are provided.
 
 ### Definitions
 
-* `get`, `set`, `Key`, and `Identifier` are as defined in [ICS24](../ics-24-host-requirements).
-are used by the datagram handler.
+* `get`, `set`, `Key`, and `Identifier` are as defined in [ICS 24](../ics-24-host-requirements).
 
-* `CommitmentRoot` is as defined in [ICS23](../ics-23-vector-commitments).
-`ConsensusState`. The downstream logic can use it to verify whether key-value pairs are present
-in the state or not.
+* `CommitmentRoot` is as defined in [ICS 23](../ics-23-vector-commitments).
 
-* `createClient`, `queryClient`, `updateClient`, `freezeClient`, `deleteClient`
-function signatures are as defined in ICS25.
+* `ConsensusState` is an opaque type representing the state of a light client, defined in this ICS.
+  `ConsensusState` must be able to verify state updates agreed upon by the associated consensus algorithm,
+  and must provide an inexpensive way for downstream logic to verify whether key-value pairs are present
+  in the state or not.
+
+* `createClient`, `queryClient`, `updateClient`, `freezeClient`, and `deleteClient` function signatures are as defined in ICS 25.
+  The function implementations are defined in this standard.
 
 ### Desired Properties
 
