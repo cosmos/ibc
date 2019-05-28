@@ -59,7 +59,7 @@ type set = (key: Key, value: Value) => void
 ```
 
 ```typescript
-type delete = (key: Key) => void
+type del = (key: Key) => void
 ```
 
 `Key` is as defined above. `Value` is an arbitrary bytestring encoding of a particular data structure. Encoding details are left to separate ICSs.
@@ -92,7 +92,7 @@ Modules which wish to make use of particular IBC features MAY implement certain 
 
 ### Datagram Submission
 
-Host chains MAY define a unique `submitDatagram` function to submit [datagrams](../../docs/ibc/2_IBC_TERMINOLOGY.md) directly:
+Host chains MAY define a unique `Datagram` type & `submitDatagram` function to submit [datagrams](../../docs/ibc/2_IBC_TERMINOLOGY.md) directly:
 
 ```typescript
 type submitDatagram = (datagram: Datagram) => void
