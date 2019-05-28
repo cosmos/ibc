@@ -49,18 +49,19 @@ as long as associated light client algorithms fulfilling the requirements are pr
 
 Light clients must provide a secure algorithm to verify other chains' canonical headers,
 using the existing `ConsensusState`. The higher level abstractions will then be able to verify
-subcomponents of the state with the `CommitmentRoot` stored in the `ConsensusState`, which is
+subcomponents of the state with the `CommitmentRoot`s stored in the `ConsensusState`, which are
 guaranteed to have been committed by the other chain's consensus algorithm.
 
-`ValidityPredicate`s are expected to reflect the behaviour of the full node which is running the  
+`ValidityPredicate`s are expected to reflect the behaviour of the full nodes which are running the  
 corresponding consensus algorithm. Given a `ConsensusState` and `[Message]`, if a full node
 accepts the new `Header` generated with `Commit`, then the light client MUST also accept it,
-and if a full node rejects it, then the light client MUST also reject it. The consensus algorithm
-ensures this correspondence. However light clients are not replaying the whole messages, so it
-is possible that the light clients' behaviour differs from the full nodes'. In this case, the
-equivocation proof which proves the divergence between the `ValidityPredicate` and the full node will be
-generated and submitted to the chain so that the chain can safely deactivate the
-light client.
+and if a full node rejects it, then the light client MUST also reject it.
+
+Light clients are not replaying the whole message transcript, so it is possible under cases of
+consensus equivocation that the light clients' behaviour differs from the full nodes'.
+In this case, an equivocation proof which proves the divergence between the `ValidityPredicate`
+and the full node can be generated and submitted to the chain so that the chain can safely deactivate the
+light client and await higher-level intervention.
 
 ## Technical Specification
 
@@ -69,13 +70,17 @@ light client.
 #### ValidityPredicateBase
 
 `ValidityPredicateBase` is the data that is being used by the `ValidityPredicate`s. The exact
-type is dependent on the type of `ValidityPredicate`. The `ValidityPredicateBase`s SHOULD
-have a function `Height() int64`. The function returns the height of the
+type is dependent on the type of `ValidityPredicate` - likely the structure will contain
+the last commit, including signatures and validator set metadata, from the consensus algorithm. 
+
+A `ValidityPredicateBase` MUST have a function `Height() int64`. The function returns the height of the
 `ValidityPredicateBase`. A `ValidityPredicateBase` can verify a `Header` only if it has a
-higher height than itself. `ValidityPredicateBase`s have to be generated from `Consensus`,
-which assigns unique heights for each `ValidityPredicateBase`. Two `ValidityPredicateBase`
-on a same chain SHOULD NOT have same height, if not equal. Such event is called an
-"equivocation", and the proof for it can be generated and submitted(see Subprotocols-Freeze).
+higher height than itself.
+
+`ValidityPredicateBase` MUST be generated from an instance of `Consensus`, which assigns unique heights
+for each `ValidityPredicateBase`. Two `ValidityPredicateBase` on the same chain SHOULD NOT have the same height
+if they do not have equal commitment roots. Such an event is called an "equivocation", and should one occur,
+a proof should be generated and submitted so that the client can be frozen.
 
 ```typescript
 type ValidityPredicateBase interface {
@@ -85,17 +90,20 @@ type ValidityPredicateBase interface {
 
 #### ConsensusState
 
-`ConsensusState` is a blockchain commit which contains a `CommitmentRoot` and the requisite
-state to verify future roots. The `ConsensusState` of a chain is stored by other chains in order to verify the state of this chain. It is defined as:
+`ConsensusState` is the light client state, which contains the requisite state to verify future headers
+and a map of heights to `CommitmentRoot`s, used to verify presence or absence of particular key-value pairs
+in state at particular heights. The `ConsensusState` of a chain is stored by other chains in order to verify the chain's state.
 
 ```typescript
 interface ConsensusState {
+  base: ValidityPredicateBase
   roots: Map<uint64, CommitmentRoot>
 }
 ```
+
 where
-  * `Base` is a data used by `Consensus.ValidityPredicate` to verify `Header`s.
-  * `Root` is the `CommitmentRoot`, used to prove internal state.
+  * `base` is the data used by `Consensus.ValidityPredicate` to verify `Header`s.
+  * `roots` is a map of heights to `CommitmentRoot` structs, used to prove presence or absence of key-value pairs in state.
 
 `ValidityPredicateBase` is defined dependently on `ConsensusState`.
 
@@ -133,6 +141,7 @@ The detailed specification of `ValidityPredicate` is defined in [ValidityPredica
 #### LightClient
 
 LightClient is defined as
+
 ```typescript
 interface LightClient {
   validityPredicate: ValidityPredicate
@@ -166,7 +175,7 @@ Possible implementations are:
 `storekey` takes an `Identifier` and returns a `KVStore` compatible `Key`.
 
 ```typescript
-function storekey(id: Identifier) {
+function storekey(id: Identifier): string {
   return "clients/{id}"
 }
 ```
@@ -174,7 +183,7 @@ function storekey(id: Identifier) {
 `freezekey` takes an `Identifier` and returns a `KVStore` compatible `Key`.
 
 ```typescript
-function freezekey(id: Identifier) {
+function freezekey(id: Identifier): string {
   return "clients/{id}/freeze"
 }
 ```
@@ -185,7 +194,7 @@ Creating a new `LightClient` is done simply by submitting it to the `createClien
 as the chain automatically generates the `Identifier` for the `LightClient`.
 
 ```typescript
-function createClient(info: LightClient) {
+function createClient(info: LightClient): string {
   id = newID()
   set(storekey(id), info)
   set(freezekey(id), false)
