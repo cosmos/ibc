@@ -7,7 +7,7 @@ sub_section_regex = re.compile('[^#]## (.*)')
 sub_sub_section_regex = re.compile('[^#]### (.*)')
 
 specs = [f.path for f in os.scandir('./spec') if f.is_dir()]
-files = [f.path for spec in specs for f in os.scandir(spec) if f.is_file() and f.path[-3:] == '.md' and 'ics-1' not in f.path]
+files = [f.path for spec in specs for f in os.scandir(spec) if f.is_file() and f.path == 'README.md' and 'ics-1-ics-standard' not in f.path]
 
 expected_sub_sections = ['Synopsis', 'Technical Specification', 'Backwards Compatibility', 'Forwards Compatibility', 'Example Implementation', 'Other Implementations', 'History', 'Copyright']
 expected_sub_sub_sections = ['Motivation', 'Definitions', 'Desired Properties']

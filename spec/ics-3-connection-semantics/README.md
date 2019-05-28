@@ -3,8 +3,12 @@ ics: 3
 title: Connection Semantics
 stage: draft
 category: ibc-core
+<<<<<<< HEAD
 requires: 23, 24
 required-by: 25
+=======
+requires: 2, 23, 24
+>>>>>>> master
 author: Christopher Goes <cwgoes@tendermint.com>, Juwoon Yun <joon@tendermint.com>
 created: 2019-03-07
 modified: 2019-05-17
@@ -16,13 +20,13 @@ This standards document describes the abstraction of an IBC *connection*: two st
 
 ### Motivation
 
-The core IBC protocol provides *authorization* and *ordering* semantics for packets: guarantees, respectively, that packets have been committed on the sending blockchain (and according state transitions executed, such as escrowing tokens), and that they have been committed exactly once in a particular order and can be delivered exactly once in that same order. The *connection* abstraction specified in this standard, in conjunction with the *client* abstraction specified in [ICS 2](../spec/ics-2-consensus-verification), defines the *authorization* semantics of IBC. Ordering semantics are described in [ICS 4](../spec/ics-4-channel-packet-semantics)).
+The core IBC protocol provides *authorization* and *ordering* semantics for packets: guarantees, respectively, that packets have been committed on the sending blockchain (and according state transitions executed, such as escrowing tokens), and that they have been committed exactly once in a particular order and can be delivered exactly once in that same order. The *connection* abstraction specified in this standard, in conjunction with the *client* abstraction specified in [ICS 2](../spec-ics-2-consensus-verification), defines the *authorization* semantics of IBC. Ordering semantics are described in [ICS 4](../spec/ics-4-channel-packet-semantics)).
 
 ### Definitions
 
-`ConsensusState`, `Header`, and `updateConsensusState` are as defined in [ICS 2: Consensus Verification](../spec/ics-2-consensus-verification).
+`ConsensusState`, `Header`, and `updateConsensusState` are as defined in [ICS 2](../spec/ics-2-consensus-verification).
 
-`CommitmentProof`, `verifyMembership`, and `verifyNonMembership` are as defined in [ICS 23: Vector Commitments](../spec/ics-23-vector-commitments).
+`CommitmentProof`, `verifyMembership`, and `verifyNonMembership` are as defined in [ICS 23](../spec/ics-23-vector-commitments).
 
 `Identifier` and other host state machine requirements are as defined in [ICS 24](../spec/ics-24-host-requirements). The identifier is not necessarily intended to be a human-readable name (and likely should not be, to discourage squatting or racing for identifiers).
 
@@ -66,29 +70,29 @@ Once a negotiation handshake has completed:
 
 This ICS defines the `Connection` type:
 
-```golang
-type ConnectionState enum {
-  INIT
-  TRYOPEN
-  CLOSETRY
-  OPEN
-  CLOSED
+```typescript
+enum ConnectionState {
+  INIT,
+  TRYOPEN,
+  CLOSETRY,
+  OPEN,
+  CLOSED,
 }
 ```
 
-```golang
-type Connection struct {
-  state                         ConnectionState
-  counterpartyIdentifier        Identifier
-  clientIdentifier              Identifier
-  counterpartyClientIdentifier  Identifier
-  nextTimeoutHeight             uint64
+```typescript
+interface Connection {
+  state: ConnectionState
+  counterpartyIdentifier: Identifier
+  clientIdentifier: Identifier
+  counterpartyClientIdentifier: Identifier
+  nextTimeoutHeight: uint64
 }
 ```
 
 ### Subprotocols
 
-This ICS defines two subprotocols: opening handshake and closing handshake. Header tracking and closing-by-equivocation are defined in ICS 2. Datagrams defined herein are handled as external messages by the IBC relayer module defined in [ICS 26](../spec/ics-26-relayer-module).
+This ICS defines two subprotocols: opening handshake and closing handshake. Header tracking and closing-by-equivocation are defined in [ICS 2](../spec/ics-2-consensus-verification). Datagrams defined herein are handled as external messages by the IBC relayer module defined in ICS 26.
 
 ![State Machine Diagram](state.png)
 
@@ -115,96 +119,112 @@ This subprotocol need not be permissioned, modulo anti-spam measures.
 
 *ConnOpenInit* initializes a connection attempt on chain A.
 
-```golang
-type ConnOpenInit struct {
-  identifier                    Identifier
-  desiredCounterpartyIdentifier Identifier
-  clientIdentifier              Identifier
-  counterpartyClientIdentifier  Identifier
-  nextTimeoutHeight             uint64
+```typescript
+interface ConnOpenInit {
+  identifier: Identifier
+  desiredCounterpartyIdentifier: Identifier
+  clientIdentifier: Identifier
+  counterpartyClientIdentifier: Identifier
+  nextTimeoutHeight: uint64
 }
 ```
 
-```coffeescript
-function connOpenInit(identifier, desiredCounterpartyIdentifier, clientIdentifier, counterpartyClientIdentifier, nextTimeoutHeight)
+```typescript
+function connOpenInit(
+  identifier: Identifier, desiredCounterpartyIdentifier: Identifier,
+  clientIdentifier: Identifier, counterpartyClientIdentifier: Identifier, nextTimeoutHeight: uint64) {
   assert(get("connections/{identifier}") == null)
   state = INIT
-  connection = Connection{state, desiredCounterpartyIdentifier, clientIdentifier, counterpartyClientIdentifier, nextTimeoutHeight}
+  connection = Connection{state, desiredCounterpartyIdentifier, clientIdentifier,
+    counterpartyClientIdentifier, nextTimeoutHeight}
   set("connections/{identifier}", connection)
+}
 ```
 
 *ConnOpenTry* relays notice of a connection attempt on chain A to chain B.
 
-```golang
-type ConnOpenTry struct {
-  desiredIdentifier             Identifier
-  counterpartyIdentifier        Identifier
-  counterpartyClientIdentifier  Identifier
-  clientIdentifier              Identifier
-  proofInit                     CommitmentProof
-  timeoutHeight                 uint64
-  nextTimeoutHeight             uint64
+```typescript
+interface ConnOpenTry {
+  desiredIdentifier: Identifier
+  counterpartyIdentifier: Identifier
+  counterpartyClientIdentifier: Identifier
+  clientIdentifier: Identifier
+  proofInit: CommitmentProof
+  timeoutHeight: uint64
+  nextTimeoutHeight: uint64
 }
 ```
 
-```coffeescript
-function connOpenTry(desiredIdentifier, counterpartyIdentifier, counterpartyClientIdentifier, clientIdentifier, proofInit, timeoutHeight, nextTimeoutHeight)
+```typescript
+function connOpenTry(
+  desiredIdentifier: Identifier, counterpartyIdentifier: Identifier,
+  counterpartyClientIdentifier: Identifier, clientIdentifier: Identifier,
+  proofInit: CommitmentProof, timeoutHeight: uint64, nextTimeoutHeight: uint64) {
   assert(getConsensusState().getHeight() <= timeoutHeight)
   consensusState = get("clients/{clientIdentifier}")
   expectedConsensusState = getConsensusState()
   expected = Connection{INIT, desiredIdentifier, counterpartyClientIdentifier, clientIdentifier, timeoutHeight}
   assert(verifyMembership(consensusState.getRoot(), proofInit, "connections/{counterpartyIdentifier}", expected))
-  assert(verifyMembership(consensusState.getRoot(), proofInit, "clients/{counterpartyClientIdentifier}", expectedConsensusState))
-  assert(get("connections/{desiredIdentifier}") == nil)
+  assert(verifyMembership(consensusState.getRoot(), proofInit,
+                          "clients/{counterpartyClientIdentifier}", expectedConsensusState))
+  assert(get("connections/{desiredIdentifier}") === null)
   identifier = desiredIdentifier
   state = TRYOPEN
-  connection = Connection{state, counterpartyIdentifier, clientIdentifier, counterpartyClientIdentifier, nextTimeoutHeight}
+  connection = Connection{state, counterpartyIdentifier, clientIdentifier,
+                          counterpartyClientIdentifier, nextTimeoutHeight}
   set("connections/{identifier}", connection)
+}
 ```
 
 *ConnOpenAck* relays acceptance of a connection open attempt from chain B back to chain A.
 
-```golang
-type ConnOpenAck struct {
-  identifier        Identifier
-  proofTry          CommitmentProof
-  timeoutHeight     uint64
-  nextTimeoutHeight uint64
+```typescript
+interface ConnOpenAck {
+  identifier: Identifier
+  proofTry: CommitmentProof
+  timeoutHeight: uint64
+  nextTimeoutHeight: uint64
 }
 ```
 
-```coffeescript
-function connOpenAck(identifier, proofTry, timeoutHeight, nextTimeoutHeight)
+```typescript
+function connOpenAck(
+  identifier: Identifier, proofTry: CommitmentProof,
+  timeoutHeight: uint64, nextTimeoutHeight: uint64) {
   assert(getConsensusState().getHeight() <= timeoutHeight)
   connection = get("connections/{identifier}")
-  assert(connection.state == INIT)
+  assert(connection.state === INIT)
   consensusState = get("clients/{connection.clientIdentifier}")
   expectedConsensusState = getConsensusState()
-  expected = Connection{TRYOPEN, identifier, connection.counterpartyClientIdentifier, connection.clientIdentifier, timeoutHeight}
+  expected = Connection{TRYOPEN, identifier, connection.counterpartyClientIdentifier,
+                        connection.clientIdentifier, timeoutHeight}
   assert(verifyMembership(consensusState, proofTry, "connections/{connection.counterpartyIdentifier}", expected))
-  assert(verifyMembership(consensusState, proofTry, "clients/{connection.counterpartyClientIdentifier}", expectedConsensusState))
+  assert(verifyMembership(consensusState, proofTry,
+                          "clients/{connection.counterpartyClientIdentifier}", expectedConsensusState))
   connection.state = OPEN
   connection.nextTimeoutHeight = nextTimeoutHeight
   set("connections/{identifier}", connection)
+}
 ```
 
 *ConnOpenConfirm* confirms opening of a connection on chain A to chain B, after which the connection is open on both chains.
 
-```golang
-type ConnOpenConfirm struct {
-  identifier    Identifier
-  proofAck      CommitmentProof
-  timeoutHeight uint64
+```typescript
+interface ConnOpenConfirm {
+  identifier: Identifier
+  proofAck: CommitmentProof
+  timeoutHeight: uint64
 }
 ```
 
-```coffeescript
-function connOpenConfirm(identifier, proofAck, timeoutHeight)
+```typescript
+function connOpenConfirm(identifier: Identifier, proofAck: CommitmentProof, timeoutHeight: uint64)
   assert(getConsensusState().getHeight() <= timeoutHeight)
   connection = get("connections/{identifier}")
-  assert(connection.state == TRYOPEN)
+  assert(connection.state === TRYOPEN)
   consensusState = get("clients/{connection.clientIdentifier}")
-  expected = Connection{OPEN, identifier, connection.counterpartyClientIdentifier, connection.clientIdentifier, timeoutHeight}
+  expected = Connection{OPEN, identifier, connection.counterpartyClientIdentifier,
+                        Gconnection.clientIdentifier, timeoutHeight}
   assert(verifyMembership(consensusState, proofAck, "connections/{connection.counterpartyIdentifier}", expected))
   connection.state = OPEN
   connection.nextTimeoutHeight = 0
@@ -213,45 +233,53 @@ function connOpenConfirm(identifier, proofAck, timeoutHeight)
 
 *ConnOpenTimeout* aborts a connection opening attempt due to a timeout on the other side.
 
-```golang
-type ConnOpenTimeout struct {
-  identifier    Identifier
-  proofTimeout  CommitmentProof
-  timeoutHeight uint64
+```typescript
+interface ConnOpenTimeout {
+  identifier: Identifier
+  proofTimeout: CommitmentProof
+  timeoutHeight: uint64
 }
 ```
 
-```coffeescript
-function connOpenTimeout(identifier, proofTimeout, timeoutHeight)
+```typescript
+function connOpenTimeout(identifier: Identifier, proofTimeout: CommitmentProof, timeoutHeight: uint64) {
   connection = get("connections/{identifier}")
   consensusState = get("clients/{connection.clientIdentifier}")
   assert(consensusState.getHeight() > connection.nextTimeoutHeight)
   switch state {
     case INIT:
-      assert(verifyNonMembership(consensusState, proofTimeout,
+      assert(verifyNonMembership(
+        consensusState, proofTimeout,
         "connections/{connection.counterpartyIdentifier}"))
     case TRYOPEN:
       assert(
-        verifyMembership(consensusState, proofTimeout,
-        "connections/{connection.counterpartyIdentifier}",
-        Connection{INIT, identifier, connection.counterpartyClientIdentifier, connection.clientIdentifier, timeoutHeight}
+        verifyMembership(
+          consensusState, proofTimeout,
+          "connections/{connection.counterpartyIdentifier}",
+          Connection{INIT, identifier, connection.counterpartyClientIdentifier,
+                     connection.clientIdentifier, timeoutHeight}
         )
         ||
-        verifyNonMembership(consensusState, proofTimeout,
-        "connections/{connection.counterpartyIdentifier}")
+        verifyNonMembership(
+          consensusState, proofTimeout,
+          "connections/{connection.counterpartyIdentifier}"
+        )
       )
     case OPEN:
-      assert(verifyMembership(consensusState, proofTimeout,
+      assert(verifyMembership(
+        consensusState, proofTimeout,
         "connections/{connection.counterpartyIdentifier}",
-        Connection{TRYOPEN, identifier, connection.counterpartyClientIdentifier, connection.clientIdentifier, timeoutHeight}
+        Connection{TRYOPEN, identifier, connection.counterpartyClientIdentifier,
+                   connection.clientIdentifier, timeoutHeight}
       ))
   }
   delete("connections/{identifier}")
+}
 ```
 
 #### Header Tracking
 
-Headers are tracked at the client level. See [ICS 2](../ics-2-consensus-requirements).
+Headers are tracked at the client level. See [ICS 2](../spec/ics-2-consensus-verification).
 
 #### Closing Handshake
 
@@ -271,105 +299,121 @@ A correct protocol execution flows as follows (note that all calls are made thro
 
 *ConnCloseInit* initializes a close attempt on chain A.
 
-```golang
-type ConnCloseInit struct {
-  identifier             Identifier
-  nextTimeoutHeight      uint64
+```typescript
+interface ConnCloseInit {
+  identifier: Identifier
+  nextTimeoutHeight: uint64
 }
 ```
 
-```coffeescript
-function connCloseInit(identifier, nextTimeoutHeight)
+```typescript
+function connCloseInit(identifier: Identifier, nextTimeoutHeight: uint64) {
   connection = get("connections/{identifier}")
-  assert(connection.state == OPEN)
+  assert(connection.state === OPEN)
   connection.state = CLOSETRY
   connection.nextTimeoutHeight = nextTimeoutHeight
   set("connections/{identifier}", connection)
+}
 ```
 
 *ConnCloseTry* relays the intent to close a connection from chain A to chain B.
 
-```golang
-type ConnCloseTry struct {
-  identifier              Identifier
-  proofInit               CommitmentProof
-  timeoutHeight           uint64
-  nextTimeoutHeight       uint64
+```typescript
+interface ConnCloseTry {
+  identifier: Identifier
+  proofInit: CommitmentProof
+  timeoutHeight: uint64
+  nextTimeoutHeight: uint64
 }
 ```
 
-```coffeescript
-function connCloseTry(identifier, proofInit, timeoutHeight, nextTimeoutHeight)
+```typescript
+function connCloseTry(
+  identifier: Identifier, proofInit: CommitmentProof,
+  timeoutHeight: uint64, nextTimeoutHeight: uint64) {
   assert(getConsensusState().getHeight() <= timeoutHeight)
   connection = get("connections/{identifier}")
-  assert(connection.state == OPEN)
+  assert(connection.state === OPEN)
   consensusState = get("clients/{connection.clientIdentifier}")
-  expected = Connection{CLOSETRY, identifier, connection.counterpartyClientIdentifier, connection.clientIdentifier, timeoutHeight}
+  expected = Connection{CLOSETRY, identifier, connection.counterpartyClientIdentifier,
+                        connection.clientIdentifier, timeoutHeight}
   assert(verifyMembership(consensusState, proofInit, "connections/{counterpartyIdentifier}", expected))
   connection.state = CLOSED
   connection.nextTimeoutHeight = nextTimeoutHeight
   set("connections/{identifier}", connection)
+}
 ```
 
 *ConnCloseAck* acknowledges a connection closure on chain B.
 
-```golang
-type ConnCloseAck struct {
-  identifier    Identifier
-  proofTry      CommitmentProof
-  timeoutHeight uint64
+```typescript
+interface ConnCloseAck {
+  identifier: Identifier
+  proofTry: CommitmentProof
+  timeoutHeight: uint64
 }
 ```
 
-```coffeescript
-function connCloseAck(identifier, proofTry, timeoutHeight)
+```typescript
+function connCloseAck(identifier: Identifier, proofTry: CommitmentProof, timeoutHeight: uint64) {
   assert(getConsensusState().getHeight() <= timeoutHeight)
   connection = get("connections/{identifier}")
-  assert(connection.state == CLOSETRY)
+  assert(connection.state === CLOSETRY)
   consensusState = get("clients/{connection.clientIdentifier}")
-  expected = Connection{CLOSED, identifier, connection.counterpartyClientIdentifier, connection.clientIdentifier, timeoutHeight}
+  expected = Connection{CLOSED, identifier, connection.counterpartyClientIdentifier,
+                        connection.clientIdentifier, timeoutHeight}
   assert(verifyMembership(consensusState, proofTry, "connections/{counterpartyIdentifier}", expected))
   connection.state = CLOSED
   connection.nextTimeoutHeight = 0
   set("connections/{identifier}", connection)
+}
 ```
 
 *ConnCloseTimeout* aborts a connection closing attempt due to a timeout on the other side and reopens the connection.
 
-```golang
-type ConnCloseTimeout struct {
-  identifier    Identifier
-  proofTimeout  CommitmentProof
-  timeoutHeight uint64
+```typescript
+interface ConnCloseTimeout {
+  identifier: Identifier
+  proofTimeout: CommitmentProof
+  timeoutHeight: uint64
 }
 ```
 
-```coffeescript
-function connOpenTimeout(identifier, proofTimeout, timeoutHeight)
+```typescript
+function connCloseTimeout(identifier: Identifier, proofTimeout: CommitmentProof, timeoutHeight: uint64) {
   connection = get("connections/{identifier}")
   consensusState = get("clients/{connection/clientIdentifier}")
   assert(consensusState.getHeight() > connection.nextTimeoutHeight)
   switch state {
     case CLOSETRY:
-      expected = Connection{OPEN, identifier, connection.counterpartyClientIdentifier, connection.clientIdentifier, timeoutHeight}
-      assert(verifyMembership(consensusState, proofTimeout, "connections/{counterpartyIdentifier}", expected))
+      expected = Connection{OPEN, identifier, connection.counterpartyClientIdentifier,
+                            connection.clientIdentifier, timeoutHeight}
+      assert(verifyMembership(
+        consensusState, proofTimeout,
+        "connections/{counterpartyIdentifier}", expected
+      ))
       connection.state = OPEN
       connection.nextTimeoutHeight = 0
       set("connections/{identifier}", connection)
     case CLOSED:
-      expected = Connection{CLOSETRY, identifier, connection.counterpartyClientIdentifier, connection.clientIdentifier, timeoutHeight}
-      assert(verifyMembership(consensusState, proofTimeout, "connections/{counterpartyIdentifier}", expected))
+      expected = Connection{CLOSETRY, identifier, connection.counterpartyClientIdentifier,
+                            connection.clientIdentifier, timeoutHeight}
+      assert(verifyMembership(
+        consensusState, proofTimeout,
+        "connections/{counterpartyIdentifier}", expected
+      ))
       connection.state = OPEN
       connection.nextTimeoutHeight = 0
       set("connections/{identifier}", connection)
   }
+}
 ```
 
 #### Freezing by Equivocation
 
-The equivocation detection subprotocol is defined in ICS 2. If a client is frozen by equivocation, all associated connections are immediately frozen as well.
+The equivocation detection subprotocol is defined in [ICS 2](../spec/ics-2-consensus-verification). If a client is frozen by equivocation, all associated connections are immediately frozen as well.
 
-Implementing chains may want to allow applications to register handlers to take action upon discovery of an equivocation. Further discussion is deferred to [ICS 12: Byzantine Recovery Strategies](../ics-12-byzantine-recovery-strategies).
+Implementing chains may want to allow applications to register handlers to take action upon discovery of an equivocation. Further discussion is deferred to ICS 12.
 
 ## Backwards Compatibility
 
@@ -377,7 +421,7 @@ Not applicable.
 
 ## Forwards Compatibility
 
-A future version of this ICS will include version negotiation in the opening handshake. Once a connection has been established and a version negotiated, future version updates can be negotiated per [ICS 6](../spec/ics-6-connection-channel-versioning).
+A future version of this ICS will include version negotiation in the opening handshake. Once a connection has been established and a version negotiated, future version updates can be negotiated per ICS 6.
 
 The consensus state can only be updated as allowed by the `updateConsensusState` function defined by the consensus protocol chosen when the connection is established.
 
