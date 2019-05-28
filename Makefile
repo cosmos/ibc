@@ -5,9 +5,6 @@ $(TOPTARGETS): $(SUBDIRS)
 $(SUBDIRS):
 	$(MAKE) -C $@ $(MAKECMDGOALS)
 
-setup_dependencies:
-	pip install matplotlib networkx
-
 check_links:
 	python ./scripts/check_links.py
 
@@ -15,9 +12,9 @@ check_dependencies:
 	python ./scripts/check_dependencies.py
 
 check_syntax:
-	bash ./scripts/check_syntax.sh
+	python ./scripts/check_syntax.py
 
 check_sections:
 	python ./scripts/check_sections.py
 
-.PHONY: $(TOPTARGETS) $(SUBDIRS) setup_dependencies check_links check_dependencies check_syntax check_sections
+.PHONY: $(TOPTARGETS) $(SUBDIRS) check_links check_dependencies check_syntax check_sections
