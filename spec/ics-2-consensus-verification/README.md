@@ -193,6 +193,7 @@ Consensus state MUST be stored separately so it can be verified independently.
 ```typescript
 function consensusStateKey(id: Identifier): Key {
   return "clients/{id}/consensusState"
+}
 ```
 
 `rootKey` takes an `Identifier` and a height (as `uint64`) and returns a `Key` under which to store a particular state root.
