@@ -16,10 +16,10 @@ This standard specifies the properties that consensus algorithms of chains imple
 communication protocol are required to satisfy. These properties are necessary for efficient and safe
 verification in the higher-level protocol abstractions. The algorithm utilized in IBC to verify the
 consensus transcript & state subcomponents of another chain is referred to as a "light client verifier",
-and pairing it with a state that the verifier trusts forms a "light client".
+and pairing it with a state that the verifier trusts forms a "light client" (often shortened to "client").
 
-This standard also specifies how the light clients will be stored, registered, and updated in the
-canonical IBC handler. The stored light client instances will be verifiable by a third party actor,
+This standard also specifies how the clients will be stored, registered, and updated in the
+canonical IBC handler. The stored client instances will be verifiable by a third party actor,
 such as a user inspecting the state of the chain and deciding whether or not to send an IBC packet.
 
 ### Motivation
@@ -37,10 +37,15 @@ as long as associated light client algorithms fulfilling the requirements are pr
 
 * `CommitmentRoot` is as defined in [ICS 23](../ics-23-vector-commitments).
 
-* `ConsensusState` is an opaque type representing the state of a light client, defined in this ICS.
+* `ConsensusState` is an opaque type representing the verification state of a light client.
   `ConsensusState` must be able to verify state updates agreed upon by the associated consensus algorithm,
   and must provide an inexpensive way for downstream logic to verify whether key-value pairs are present
   in the state or not.
+
+* `ClientState` is a structure representing the state of a client, defined in this ICS.
+  A `ClientState` contains the latest `ConsensusState` and a map of heights to previously
+  verified state roots which can be utilized by downstream logic to verify subcomponents
+  of state at particular heights.
 
 * `createClient`, `queryClient`, `updateClient`, `freezeClient`, and `deleteClient` function signatures are as defined in ICS 25.
   The function implementations are defined in this standard.
@@ -67,45 +72,45 @@ light client and await higher-level intervention.
 
 ### Data Structures
 
-#### ValidityPredicateBase
+#### ConsensusState
 
-`ValidityPredicateBase` is the data that is being used by the `ValidityPredicate`s. The exact
-type is dependent on the type of `ValidityPredicate` - likely the structure will contain
-the last commit, including signatures and validator set metadata, from the consensus algorithm. 
+`ConsensusState` is a type defined by each consensus algorithm, used by the validty predicate to
+verify new commits & state roots. Likely the strucutre will contain the last commit, including
+signatures and validator set metadata, produced by the consensus process.
 
-A `ValidityPredicateBase` MUST have a function `Height() int64`. The function returns the height of the
-`ValidityPredicateBase`. A `ValidityPredicateBase` can verify a `Header` only if it has a
+A `ConsensusState` MUST have a function `Height() int64`. The function returns the height of the
+last verified commit. A `ConsensusState` can verify a `Header` only if it has a
 higher height than itself.
 
-`ValidityPredicateBase` MUST be generated from an instance of `Consensus`, which assigns unique heights
-for each `ValidityPredicateBase`. Two `ValidityPredicateBase` on the same chain SHOULD NOT have the same height
+`ConsensusState` MUST be generated from an instance of `Consensus`, which assigns unique heights
+for each `ConsensusState`. Two `ConsensusState`s on the same chain SHOULD NOT have the same height
 if they do not have equal commitment roots. Such an event is called an "equivocation", and should one occur,
 a proof should be generated and submitted so that the client can be frozen.
 
+The `ConsensusState` of a chain is stored by other chains in order to verify the chain's state.
+
 ```typescript
-type ValidityPredicateBase interface {
+type ConsensusState interface {
   Height() int64
 }
 ```
 
-#### ConsensusState
+#### ClientState
 
-`ConsensusState` is the light client state, which contains the requisite state to verify future headers
-and a map of heights to `CommitmentRoot`s, used to verify presence or absence of particular key-value pairs
-in state at particular heights. The `ConsensusState` of a chain is stored by other chains in order to verify the chain's state.
+`ClientState` is the light client state, which contains the latest `ConsensusState` along with
+a map of heights to `CommitmentRoot`s, used to verify presence or absence of particular key-value pairs
+in state at particular heights.
 
 ```typescript
-interface ConsensusState {
-  base: ValidityPredicateBase
-  roots: Map<uint64, CommitmentRoot>
+interface ClientState {
+  consensusState: ConsensusState
+  verifiedRoots: Map<uint64, CommitmentRoot>
 }
 ```
 
 where
-  * `base` is the data used by `Consensus.ValidityPredicate` to verify `Header`s.
-  * `roots` is a map of heights to `CommitmentRoot` structs, used to prove presence or absence of key-value pairs in state.
-
-`ValidityPredicateBase` is defined dependently on `ConsensusState`.
+  * `consensusState` is the `ConsensusState` used by `Consensus.ValidityPredicate` to verify `Header`s.
+  * `roots` is a map of heights to previously verified `CommitmentRoot` structs, used to prove presence or absence of key-value pairs in state at particular heights.
 
 #### Header
 
@@ -116,14 +121,15 @@ submitted to one blockchain to update the stored `ConsensusState`. Defined as
 interface Header {
   height: uint64
   proof: HeaderProof
-  base: Maybe[ValidityPredicateBase]
+  state: Maybe[ConsensusState]
   root: CommitmentRoot
 }
 ```
 where
-  * `Proof` is the commit proof used by `Consensus.ValidityPredicate` to be verified.
-  * `Base` is the new verification function, if it needs to be updated.
-  * `Root` is the new `CommitmentRoot` which will replace the existing one.
+  * `height` is the height of the the consensus instance.
+  * `proof` is the commit proof used by `Consensus.ValidityPredicate` to be verified.
+  * `state` is the new verification function, if it needs to be updated.
+  * `root` is the new `CommitmentRoot` which will replace the existing one.
 
 #### ValidityPredicate
 
