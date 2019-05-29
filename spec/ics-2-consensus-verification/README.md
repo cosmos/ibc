@@ -144,22 +144,6 @@ type ValidityPredicate = (ConsensusState, Header) => Error | ConsensusState
 
 The detailed specification of `ValidityPredicate` is defined in [ValidityPredicate.md](./ValidityPredicate.md)
 
-#### LightClient
-
-LightClient is defined as
-
-```typescript
-interface LightClient {
-  validityPredicate: ValidityPredicate
-  consensusState: ConsensusState
-}
-```
-where
-  * `ConsensusState` is the root of trust providing the `ValidityPredicateBase`.
-  * `ValidityPredicate` is the lightclient verification logic.
-
-The exact type of each fields are depending on the type of the actual consensus logic.
-
 ### Subprotocols
 
 The chains MUST implement the functions defined below ending with `Client`, as they form
@@ -196,11 +180,11 @@ function freezekey(id: Identifier): string {
 
 #### Create
 
-Creating a new `LightClient` is done simply by submitting it to the `createClient` function,
-as the chain automatically generates the `Identifier` for the `LightClient`.
+Creating a new `ClientState` is done simply by submitting it to the `createClient` function,
+as the chain automatically generates the `Identifier` for the `ClientState`.
 
 ```typescript
-function createClient(info: LightClient): string {
+function createClient(info: ClientState): string {
   id = newID()
   set(storekey(id), info)
   set(freezekey(id), false)
@@ -223,10 +207,10 @@ function queryClient(id: Identifier) {
 
 #### Update
 
-Updating `LightClient` is done by submitting a new `Header`. The `Identifier` is used to point the
-stored `LightClient` that the logic will update. When the new `Header` is verified with
-the stored `LightClient`'s `ValidityPredicate` and `ConsensusState`, then it SHOULD update the
-`LightClient` unless an additional logic intentionally blocks the updating process (e.g.
+Updating a client is done by submitting a new `Header`. The `Identifier` is used to point to the
+stored `ClientState` that the logic will update. When the new `Header` is verified with
+the stored `ClientState`'s `ValidityPredicate` and `ConsensusState`, then it SHOULD update the
+`ClientState` unless an additional logic intentionally blocks the updating process (e.g.
 waiting for the equivocation proof period.
 
 ```typescript
