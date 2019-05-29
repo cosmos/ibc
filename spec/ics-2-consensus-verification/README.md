@@ -146,12 +146,11 @@ The `ValidityPredicate` type is defined as
 type ValidityPredicate = (ConsensusState, Header) => Error | ConsensusState
 ```
 
-The detailed specification of `ValidityPredicate` is defined in [ValidityPredicate.md](./ValidityPredicate.md)
+The detailed specification of `ValidityPredicate` is defined [here](./VALIDITY_PREDICATE.md).
 
 ### Subprotocols
 
-The chains MUST implement the functions defined below ending with `Client`, as they form
-the `handleDatagram`.
+IBC handlers MUST implement the functions defined below.
 
 #### Preliminaries
 
