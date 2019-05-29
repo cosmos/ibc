@@ -92,6 +92,7 @@ The `ConsensusState` of a chain is stored by other chains in order to verify the
 ```typescript
 interface ConsensusState {
   height: uint64
+  root: CommitmentRoot
   validityPredicate: ValidityPredicate
   equivocationPredicate: EquivocationPredicate
 }
@@ -113,8 +114,10 @@ interface ClientState {
 
 where
   * `consensusState` is the `ConsensusState` used by `Consensus.ValidityPredicate` to verify `Header`s.
-  * `roots` is a map of heights to previously verified `CommitmentRoot` structs, used to prove presence or absence of key-value pairs in state at particular heights.
+  * `verifiedRoots` is a map of heights to previously verified `CommitmentRoot` structs, used to prove presence or absence of key-value pairs in state at particular heights.
   * `frozen` is a boolean indicating whether the client has been frozen due to a detected equivocation.
+
+Note that instead of `ClientState` being stored directly, the consensus state, roots, and frozen boolean are stored at separate keys.
 
 #### Header
 
@@ -170,16 +173,37 @@ IBC handlers MUST implement the functions defined below.
 
 #### Preliminaries
 
-Clients are stored under a unique `Identifier`. The generation of the `Identifier` MAY
+Clients are stored under a unique `Identifier` prefix. The generation of the `Identifier` MAY
 depend on the `Header` of the `Client` that will be registered under that `Identifier`.
 This ICS does not require that client identifiers be generated in a particular manner,
 only that they be unique.
 
-`clientKey` takes an `Identifier` and returns a `KVStore` compatible `Key` under which to store the state of a client.
+`frozenKey` takes an `Identifier` and returns a `Key` under which to store whether or not a client is frozen.
 
 ```typescript
-function clientKey(id: Identifier): string {
-  return "clients/{id}"
+function frozenKey(id: Identifier): Key {
+  return "clients/{id}/frozen"
+}
+```
+
+`consensusStateKey` takes an `Identifier` and returns a `Key` under which to store the consensus state of a client.
+
+Consensus state MUST be stored separately so it can be verified independently.
+
+```typescript
+function consensusStateKey(id: Identifier): Key {
+  return "clients/{id}/consensusState"
+```
+
+`rootKey` takes an `Identifier` and a height (as `uint64`) and returns a `Key` under which to store a particular state root.
+
+Roots MUST be stored under separate keys, one per height, for efficient retrieval.
+
+Roots for old heights MAY be periodically cleaned up.
+
+```typescript
+function rootKey(id: Identifier, height: uint64): Key {
+  return "clients/{id}/roots/{height}"
 }
 ```
 
@@ -197,11 +221,23 @@ function createClient(id: Identifier, consensusState: ConsensusState) {
 
 #### Query
 
-Clients can be queried by their identifier.
+Client frozen state, consensus state, and previously verified roots can be queried by identifier.
 
 ```typescript
-function queryClient(id: Identifier) {
-  return get(clientKey(id))
+function queryClientFrozen(id: Identifier): bool {
+  return get(frozenKey(id))
+}
+```
+
+```typescript
+function queryClientConsensusState(id: Identifier): ConsensusState {
+  return get(consensusStateKey(id))
+}
+```
+
+```typescript
+function queryClientRoot(id: Identifier, height: uint64): CommitmentRoot {
+  return get(rootKey(id, height))
 }
 ```
 
@@ -215,15 +251,16 @@ waiting for the equivocation proof period.
 
 ```typescript
 function updateClient(id: Identifier, header: Header) {
-  client = get(clientKey(id))
-  assert(client !== nil)
-  assert(!client.frozen)
-  switch client.consensusState.validityPredicate(header) {
+  frozen = get(frozenKey(id))
+  assert(!frozen)
+  consensusState = get(consensusStateKey(id))
+  assert(consensusState !== nil)
+  switch consensusState.validityPredicate(header) {
     case error:
       throw error
     case newState:
-      client.consensusState = newState
-      set(clientKey(id), client)
+      set(consensusStateKey(id), newState)
+      set(rootKey(id, newState.height), newState.root)
       return
   }
 }
@@ -237,10 +274,9 @@ method can be introduced in the future versions.
 
 ```typescript
 function freezeClient(id: Identifier, h1: Header, h2: Header) {
-  client = get(clientKey(id))
-  assert(client.consensusState.equivocationPredicate(h1, h2))
-  client.frozen = true
-  set(clientKey(id), client)
+  consensusState = get(consensusStateKey(id))
+  assert(consensusState.equivocationPredicate(h1, h2))
+  set(frozenKey(id), true)
 }
 ```
 
@@ -251,8 +287,9 @@ determined by the application logic.
 
 ```typescript
 function deleteClient(id: Identifier) {
-  assert(get(clientKey(id)) !== nil)
-  delete(clientKey(id))
+  delete(frozenKey(id))
+  delete(consensusStateKey(id))
+  deletePrefix("clients/{id}/roots")
 }
 ```
 
