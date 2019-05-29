@@ -90,8 +90,10 @@ a proof should be generated and submitted so that the client can be frozen.
 The `ConsensusState` of a chain is stored by other chains in order to verify the chain's state.
 
 ```typescript
-type ConsensusState interface {
-  Height() int64
+interface ConsensusState {
+  height: uint64
+  validityPredicate: ValidityPredicate
+  equivocationPredicate: EquivocationPredicate
 }
 ```
 
@@ -146,7 +148,21 @@ The `ValidityPredicate` type is defined as
 type ValidityPredicate = (ConsensusState, Header) => Error | ConsensusState
 ```
 
-The detailed specification of `ValidityPredicate` is defined [here](./VALIDITY_PREDICATE.md).
+The detailed specification of `ValidityPredicate` can be found in [CONSENSUS.md](./CONSENSUS.md).
+
+#### EquivocationPredicate
+
+An `EquivocationPredicate` is a light client function used to check if two headers
+constitute a violation of the consensus protocol (consensus equivocation) and should
+freeze a light client.
+
+The `EquivocationPredicate` type is defined as
+
+```typescript
+type EquivocationPredicate = (ConsensusState, Header, Header) => bool
+```
+
+More details about `EquivocationPredicate`s can be found in [CONSENSUS.md](./CONSENSUS.md)
 
 ### Subprotocols
 
@@ -202,11 +218,7 @@ function updateClient(id: Identifier, header: Header) {
   client = get(clientKey(id))
   assert(client !== nil)
   assert(!client.frozen)
-
-  state = client.consensusState
-  validityPredicate = client.validityPredicate
-
-  switch validityPredicate(state, header) {
+  switch client.consensusState.validityPredicate(header) {
     case error:
       throw error
     case newState:
@@ -226,7 +238,7 @@ method can be introduced in the future versions.
 ```typescript
 function freezeClient(id: Identifier, h1: Header, h2: Header) {
   client = get(clientKey(id))
-  assert(client.checkEquivocation(client.consensusState, h1, h2))
+  assert(client.consensusState.equivocationPredicate(h1, h2))
   client.frozen = true
   set(clientKey(id), client)
 }
