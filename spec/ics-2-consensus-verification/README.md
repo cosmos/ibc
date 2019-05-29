@@ -105,17 +105,19 @@ in state at particular heights.
 interface ClientState {
   consensusState: ConsensusState
   verifiedRoots: Map<uint64, CommitmentRoot>
+  frozen: bool
 }
 ```
 
 where
   * `consensusState` is the `ConsensusState` used by `Consensus.ValidityPredicate` to verify `Header`s.
   * `roots` is a map of heights to previously verified `CommitmentRoot` structs, used to prove presence or absence of key-value pairs in state at particular heights.
+  * `frozen` is a boolean indicating whether the client has been frozen due to a detected equivocation.
 
 #### Header
 
-`Header` is a blockchain header which provides information to update a `ConsensusState`,
-submitted to one blockchain to update the stored `ConsensusState`. Defined as
+A `Header` is a blockchain header which provides information to update a `ConsensusState`.
+Headers can be submitted to an associated client to update the stored `ConsensusState`.
 
 ```typescript
 interface Header {
@@ -127,16 +129,18 @@ interface Header {
 ```
 where
   * `height` is the height of the the consensus instance.
-  * `proof` is the commit proof used by `Consensus.ValidityPredicate` to be verified.
-  * `state` is the new verification function, if it needs to be updated.
+  * `proof` is the commit proof used by `Consensus.ValidityPredicate` to verify the header.
+  * `state` is the new (or partially new) consensus state.
   * `root` is the new `CommitmentRoot` which will replace the existing one.
 
 #### ValidityPredicate
 
-`ValidityPredicate` is a light client ValidityPredicate proving `Header` depending on the `Commit`.
+A `ValidityPredicate` is a light client function to verify `Header`s depending on the current `ConsensusState`.
 Using the ValidityPredicate SHOULD be far more computationally efficient than replaying `Consensus` logic
 for the given parent `Header` and the list of network messages, ideally in constant time
-independent from the size of message stored in the `Header`. Defined as
+independent from the size of message stored in the `Header`.
+
+The `ValidityPredicate` type is defined as
 
 ```typescript
 type ValidityPredicate = (ConsensusState, Header) => Error | ConsensusState
@@ -151,30 +155,16 @@ the `handleDatagram`.
 
 #### Preliminaries
 
-`newID` is a function which generates a new `Identifier` for a `Client`.
-The generation of the `Identifier` MAY depend on the `Header` of the `Client` that will be
-registered under that `Identifier`. The behaviour of `newID` is implementation specific.
-Possible implementations are:
+Clients are stored under a unique `Identifier`. The generation of the `Identifier` MAY
+depend on the `Header` of the `Client` that will be registered under that `Identifier`.
+This ICS does not require that client identifiers be generated in a particular manner,
+only that they be unique.
 
-* Random bytestring.
-* Hash of the `Header`.
-* Incrementing integer index
-
-`newID` MUST NOT return an `Identifier` which has already been generated.
-
-`storekey` takes an `Identifier` and returns a `KVStore` compatible `Key`.
+`clientKey` takes an `Identifier` and returns a `KVStore` compatible `Key` under which to store the state of a client.
 
 ```typescript
-function storekey(id: Identifier): string {
+function clientKey(id: Identifier): string {
   return "clients/{id}"
-}
-```
-
-`freezekey` takes an `Identifier` and returns a `KVStore` compatible `Key`.
-
-```typescript
-function freezekey(id: Identifier): string {
-  return "clients/{id}/freeze"
 }
 ```
 
@@ -184,11 +174,9 @@ Creating a new `ClientState` is done simply by submitting it to the `createClien
 as the chain automatically generates the `Identifier` for the `ClientState`.
 
 ```typescript
-function createClient(info: ClientState): string {
-  id = newID()
-  set(storekey(id), info)
-  set(freezekey(id), false)
-  return id
+function createClient(id: Identifier, consensusState: ConsensusState) {
+  client = ClientState{consensusState, empty, false}
+  set(clientKey(id), client)
 }
 ```
 
@@ -198,10 +186,7 @@ Clients can be queried by their identifier.
 
 ```typescript
 function queryClient(id: Identifier) {
-  if get(freezekey(id)) then
-    return nil
-  else
-    return get(storekey(id))
+  return get(clientKey(id))
 }
 ```
 
@@ -215,24 +200,21 @@ waiting for the equivocation proof period.
 
 ```typescript
 function updateClient(id: Identifier, header: Header) {
-  assert(!freezekey(id))
+  client = get(clientKey(id))
+  assert(client !== nil)
+  assert(!client.frozen)
 
-  stored = get(storekey(id))
-  assert(stored /= nil)
+  state = client.consensusState
+  validityPredicate = client.validityPredicate
 
-  state = stored.ConsensusState
-  pred = stored.ValidityPredicate
-
-  assert(pred(state, header))
-
-  state.Root = header.Root
-
-  if header.Base !== null
-    state.Base = header.Base
-
-  set(storekey(id), {state, pred})
-
-  return nil
+  switch validityPredicate(state, header) {
+    case error:
+      throw error
+    case newState:
+      client.consensusState = newState
+      set(clientKey(id), client)
+      return
+  }
 }
 ```
 
@@ -243,11 +225,11 @@ activity on the client. Frozen client SHOULD NOT be deleted from the state, as a
 method can be introduced in the future versions.
 
 ```typescript
-function freezeClient(id: Identifier, header1: Header, header2: Header) {
-  assert(!get(freezekey(id)))
-  stored = get(storekey(id))
-  assert(stored /= nil)
-  set(freezekey(id))
+function freezeClient(id: Identifier, h1: Header, h2: Header) {
+  client = get(clientKey(id))
+  assert(client.checkEquivocation(client.consensusState, h1, h2))
+  client.frozen = true
+  set(clientKey(id), client)
 }
 ```
 
@@ -258,10 +240,8 @@ determined by the application logic.
 
 ```typescript
 function deleteClient(id: Identifier) {
-  assert(get(storekey(id)) /= nil)
-  assert(get(freezekey(id)))
-  delete(storekey(id))
-  return nil
+  assert(get(clientKey(id)) !== nil)
+  delete(clientKey(id))
 }
 ```
 
