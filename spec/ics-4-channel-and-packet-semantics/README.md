@@ -6,7 +6,7 @@ category: ibc-core
 requires: 2, 3, 23, 24
 author: Christopher Goes <cwgoes@tendermint.com>
 created: 2019-03-07
-modified: 2019-05-24
+modified: 2019-06-03
 ---
 
 ## Synopsis
@@ -619,7 +619,7 @@ Not applicable.
 
 ## Forwards Compatibility
 
-Data structures & encoding can be versioned at the connection or channel level.
+Data structures & encoding can be versioned at the connection or channel level. Channel logic is completely agnostic to packet data formats, which can be changed by the modules any way they like at any time.
 
 ## Example Implementation
 
@@ -631,7 +631,7 @@ Coming soon.
 
 ## History
 
-17 May 2019 - Draft submitted
+3 June 2019 - Draft submitted
 
 ## Copyright
 
