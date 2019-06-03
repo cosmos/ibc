@@ -65,6 +65,7 @@ interface ChannelEnd {
   counterpartyModuleIdentifier: Identifier
   nextSequenceSend: uint64
   nextSequenceRecv: uint64
+  nextTimeoutHeight: uint64
 }
 ```
 
@@ -120,18 +121,19 @@ interface ChanOpenInit {
   channelIdentifier: Identifier
   counterpartyChannelIdentifier: Identifier
   counterpartyModuleIdentifier: Identifier
+  nextTimeoutHeight: uint64
 }
 ```
 
 ```typescript
 function chanOpenInit(
   connectionIdentifier: Identifier, channelIdentifier: Identifier,
-  counterpartyChannelIdentifier: Identifier, counterpartyModuleIdentifier: Identifier) {
+  counterpartyChannelIdentifier: Identifier, counterpartyModuleIdentifier: Identifier, nextTimeoutHeight: uint64) {
   moduleIdentifier = getCallingModule()
   assert(get("connections/{connectionIdentifier}/channels/{channelIdentifier}") === null)
   connection = get("connections/{connectionIdentifier}")
   assert(connection.state === OPEN)
-  channel = Channel{INIT, moduleIdentifier, counterpartyModuleIdentifier, counterpartyChannelIdentifier, 0, 0}
+  channel = Channel{INIT, moduleIdentifier, counterpartyModuleIdentifier, counterpartyChannelIdentifier, 0, 0, nextTimeoutHeight}
   set("connections/{connectionIdentifier}/channels/{channelIdentifier}", channel)
 }
 ```
@@ -143,6 +145,8 @@ interface ChanOpenTry {
   counterpartyChannelIdentifier: Identifier
   moduleIdentifier: Identifier
   counterpartyModuleIdentifier: Identifier
+  timeoutHeight: uint64
+  nextTimeoutHeight: uint64
   proofInit: CommitmentProof
 }
 ```
@@ -150,7 +154,9 @@ interface ChanOpenTry {
 ```typescript
 function chanOpenTry(
   connectionIdentifier: Identifier, channelIdentifier: Identifier, counterpartyChannelIdentifier: Identifier,
-  moduleIdentifier: Identifier, counterpartyModuleIdentifier: Identifier, proofInit: CommitmentProof) {
+  moduleIdentifier: Identifier, counterpartyModuleIdentifier: Identifier,
+  timeoutHeight: uint64, nextTimeoutHeight: uint64, proofInit: CommitmentProof) {
+  assert(getConsensusState().getHeight() < timeoutHeight)
   assert(get("connections/{connectionIdentifier}/channels/{channelIdentifier}") === null)
   assert(getCallingModule() === moduleIdentifier)
   connection = get("connections/{connectionIdentifier}")
@@ -160,9 +166,9 @@ function chanOpenTry(
     consensusState,
     proofInit,
     "connections/{connection.counterpartyConnectionIdentifier}/channels/{counterpartyChannelIdentifier}",
-    Channel{INIT, counterpartyModuleIdentifier, moduleIdentifier, channelIdentifier, 0, 0}
+    Channel{INIT, counterpartyModuleIdentifier, moduleIdentifier, channelIdentifier, 0, 0, timeoutHeight}
   ))
-  channel = Channel{TRYOPEN, moduleIdentifier, counterpartyModuleIdentifier, counterpartyChannelIdentifier, 0, 0}
+  channel = Channel{TRYOPEN, moduleIdentifier, counterpartyModuleIdentifier, counterpartyChannelIdentifier, 0, 0, nextTimeoutHeight}
   set("connections/{connectionIdentifier}/channels/{channelIdentifier}", channel)
 }
 ```
@@ -171,12 +177,16 @@ function chanOpenTry(
 interface ChanOpenAck {
   connectionIdentifier: Identifier
   channelIdentifier: Identifier
+  timeoutHeight: uint64
+  nextTimeoutHeight: uint64
   proofTry: CommitmentProof
 }
 ```
 
 ```typescript
-function chanOpenAck(connectionIdentifier: Identifier, channelIdentifier: Identifier, proofTry: CommitmentProof) {
+function chanOpenAck(connectionIdentifier: Identifier, channelIdentifier: Identifier,
+  timeoutHeight: uint64, nextTimeoutHeight: uint64, proofTry: CommitmentProof) {
+  assert(getConsensusState().getHeight() < timeoutHeight)
   channel = get("connections/{connectionIdentifier}/channels/{channelIdentifier}")
   assert(channel.state === INIT)
   assert(getCallingModule() === channel.moduleIdentifier)
@@ -187,9 +197,10 @@ function chanOpenAck(connectionIdentifier: Identifier, channelIdentifier: Identi
     consensusState.getRoot(),
     proofTry,
     "connections/{connection.counterpartyConnectionIdentifier}/channels/{channel.counterpartyChannelIdentifier}",
-    Channel{TRYOPEN, channel.counterpartyModuleIdentifier, channel.moduleIdentifier, channelIdentifier, 0, 0}
+    Channel{TRYOPEN, channel.counterpartyModuleIdentifier, channel.moduleIdentifier, channelIdentifier, 0, 0, timeoutHeight}
   ))
   channel.state = OPEN
+  channel.nextTimeoutHeight = nextTimeoutHeight
   set("connections/{connectionIdentifier}/channels/{channelIdentifier}", channel)
 }
 ```
@@ -198,12 +209,15 @@ function chanOpenAck(connectionIdentifier: Identifier, channelIdentifier: Identi
 interface ChanOpenConfirm {
   connectionIdentifier: Identifier
   channelIdentifier: Identifier
+  timeoutHeight: uint64
   proofAck: CommitmentProof
 }
 ```
 
 ```typescript
-function chanOpenConfirm(connectionIdentifier: Identifier, channelIdentifier: Identifier, proofAck: CommitmentProof) {
+function chanOpenConfirm(connectionIdentifier: Identifier, channelIdentifier: Identifier,
+  timeoutHeight: uint64, proofAck: CommitmentProof) {
+  assert(getConsensusState().getHeight() < timeoutHeight)
   channel = get("connections/{connectionIdentifier}/channels/{channelIdentifier}")
   assert(channel.state === TRYOPEN)
   assert(getCallingModule() === channel.moduleIdentifier)
@@ -214,10 +228,36 @@ function chanOpenConfirm(connectionIdentifier: Identifier, channelIdentifier: Id
     consensusState.getRoot(),
     proofAck,
     "connections/{connection.counterpartyConnectionIdentifier}/channels/{channel.counterpartyChannelIdentifier}",
-    Channel{OPEN, channel.counterpartyModuleIdentifier, channel.moduleIdentifier, channelIdentifier, 0, 0}
+    Channel{OPEN, channel.counterpartyModuleIdentifier, channel.moduleIdentifier, channelIdentifier, 0, 0, timeoutHeight}
   ))
   channel.state = OPEN
+  channel.nextTimeoutHeight = 0
   set("connections/{connectionIdentifier}/channels/{channelIdentifier}", channel)
+}
+```
+
+```typescript
+interface ChanOpenTimeout {
+  connectionIdentifier: Identifier
+  channelIdentifier: Identifier
+  timeoutHeight: uint64
+  proofTimeout: CommitmentProof 
+}
+```
+
+```typescript
+function chanOpenTimeout( 
+  connectionIdentifier: Identifier, channelIdentifier: Identifier,
+  timeoutHeight: uint64, proofTimeout: CommitmentProof) {
+  channel = get("connections/{connectionIdentifier}/channels/{channelIdentifier}")
+  consensusState = get("clients/{connection.clientIdentifier}/consensusState")
+  assert(consensusState.getHeight() >= connection.nextTimeoutHeight)
+  switch channel.state {
+    case INIT:
+    case TRYOPEN:
+    case OPEN:
+  }
+  delete("connections/{connectionIdentifier}/channels/{channelIdentifier}")
 }
 ```
 
@@ -233,7 +273,13 @@ interface ChanCloseInit {
 
 ```typescript
 function chanCloseInit(connectionIdentifier: Identifier, channelIdentifier: Identifier, nextTimeoutHeight: uint64) {
-  return
+  channel = get("connections/{connectionIdentifier}/channels/{channelIdentifier}")
+  assert(channel.state === OPEN)
+  connection = get("connections/{connectionIdentifier}")
+  assert(connection.state === OPEN)
+  channel.state = CLOSETRY
+  channel.nextTimeoutHeight = nextTimeoutHeight
+  set("connections/{connectionIdentifier}/channels/{channelIdentifier}", channel)
 }
 ```
 
@@ -251,7 +297,22 @@ interface ChanCloseTry {
 function chanCloseTry(
   connectionIdentifier: Identifier, channelIdentifier: Identifier,
   timeoutHeight: uint64, nextTimeoutHeight: uint64, proofInit: CommitmentProof) {
-  return
+  assert(getConsensusState().getHeight() < timeoutHeight)
+  channel = get("connections/{connectionIdentifier}/channels/{channelIdentifier}")
+  assert(channel.state === OPEN)
+  connection = get("connections/{connectionIdentifier}")
+  assert(connection.state === OPEN)
+  consensusState = get("clients/{connection.clientIdentifier}/consensusState")
+  expected = Channel{INIT, channel.counterpartyModuleIdentifier, channel.moduleIdentifier, channel.channelIdentifier, 0, 0, timeoutHeight}
+  assert(verifyMembership(
+    consensusState,
+    proofInit,
+    "connections/{connection.counterpartyIdentifier}/channels/{channel.counterpartyChannelIdentifier}",
+    expected
+  ))
+  channel.state = CLOSED
+  channel.nextTimeoutHeight = nextTimeoutHeight
+  set("connections/{connectionIdentifier}/channels/{channelIdentifier}", channel)
 }
 ```
 
@@ -268,8 +329,22 @@ interface ChanCloseAck {
 function chanCloseAck(
   connectionIdentifier: Identifier, channelIdentifier: Identifier,
   timeoutHeight: uint64, proofTry: CommitmentProof) {
-  return
-}
+  assert(getConsensusState().getHeight() < timeoutHeight)
+  channel = get("connections/{connectionIdentifier}/channels/{channelIdentifier}")
+  assert(channel.state === OPEN)
+  connection = get("connections/{connectionIdentifier}")
+  assert(connection.state === OPEN)
+  consensusState = get("clients/{connection.clientIdentifier}/consensusState")
+  expected = Channel{CLOSED, channel.counterpartyModuleIdentifier, channel.moduleIdentifier, channel.channelIdentifier, 0, 0, timeoutHeight}
+  assert(verifyMembership(
+    consensusState.getRoot(),
+    proofInit,
+    "connections/{connection.counterpartyIdentifier}/channels/{channel.counterpartyChannelIdentifier}",
+    expected
+  ))
+  channel.state = CLOSED
+  channel.nextTimeoutHeight = 0
+  set("connections/{connectionIdentifier}/channels/{channelIdentifier}", channel)
 }
 ```
 
