@@ -125,8 +125,8 @@ interface ChanOpenInit {
 
 ```typescript
 function chanOpenInit(
-  connectionIdentifier, channelIdentifier,
-  counterpartyChannelIdentifier, counterpartyModuleIdentifier) {
+  connectionIdentifier: Identifier, channelIdentifier: Identifier,
+  counterpartyChannelIdentifier: Identifier, counterpartyModuleIdentifier: Identifier) {
   moduleIdentifier = getCallingModule()
   assert(get("connections/{connectionIdentifier}/channels/{channelIdentifier}") === null)
   connection = get("connections/{connectionIdentifier}")
@@ -149,8 +149,8 @@ interface ChanOpenTry {
 
 ```typescript
 function chanOpenTry(
-  connectionIdentifier, channelIdentifier, counterpartyChannelIdentifier,
-  moduleIdentifier, counterpartyModuleIdentifier, proofInit) {
+  connectionIdentifier: Identifier, channelIdentifier: Identifier, counterpartyChannelIdentifier: Identifier,
+  moduleIdentifier: Identifier, counterpartyModuleIdentifier: Identifier, proofInit: CommitmentProof) {
   assert(get("connections/{connectionIdentifier}/channels/{channelIdentifier}") === null)
   assert(getCallingModule() === moduleIdentifier)
   connection = get("connections/{connectionIdentifier}")
@@ -176,7 +176,7 @@ interface ChanOpenAck {
 ```
 
 ```typescript
-function chanOpenAck(connectionIdentifier, channelIdentifier, proofTry) {
+function chanOpenAck(connectionIdentifier: Identifier, channelIdentifier: Identifier, proofTry: CommitmentProof) {
   channel = get("connections/{connectionIdentifier}/channels/{channelIdentifier}")
   assert(channel.state === INIT)
   assert(getCallingModule() === channel.moduleIdentifier)
@@ -203,7 +203,7 @@ interface ChanOpenConfirm {
 ```
 
 ```typescript
-function chanOpenConfirm(connectionIdentifier, channelIdentifier, proofAck) {
+function chanOpenConfirm(connectionIdentifier: Identifier, channelIdentifier: Identifier, proofAck: CommitmentProof) {
   channel = get("connections/{connectionIdentifier}/channels/{channelIdentifier}")
   assert(channel.state === TRYOPEN)
   assert(getCallingModule() === channel.moduleIdentifier)
@@ -232,12 +232,26 @@ interface ChanCloseInit {
 ```
 
 ```typescript
+function chanCloseInit(connectionIdentifier: Identifier, channelIdentifier: Identifier, nextTimeoutHeight: uint64) {
+  return
+}
+```
+
+```typescript
 interface ChanCloseTry {
   connectionIdentifier: Identifier
   channelIdentifier: Identifier
   timeoutHeight: uint64
   nextTimeoutHeight: uint64
   proofInit: CommitmentProof
+}
+```
+
+```typescript
+function chanCloseTry(
+  connectionIdentifier: Identifier, channelIdentifier: Identifier,
+  timeoutHeight: uint64, nextTimeoutHeight: uint64, proofInit: CommitmentProof) {
+  return
 }
 ```
 
@@ -251,6 +265,15 @@ interface ChanCloseAck {
 ```
 
 ```typescript
+function chanCloseAck(
+  connectionIdentifier: Identifier, channelIdentifier: Identifier,
+  timeoutHeight: uint64, proofTry: CommitmentProof) {
+  return
+}
+}
+```
+
+```typescript
 interface ChanCloseTimeout {
   connectionIdentifier: Identifier
   channelIdentifier: Identifier
@@ -259,9 +282,17 @@ interface ChanCloseTimeout {
 }
 ```
 
-![packet-state-machine](packet-state-machine.png)
+```typescript
+function chanCloseTimeout(
+  connectionIdentifier: Identifier, channelIdentifier: Identifier,
+  timeoutHeight: uint64, proofTimeout: CommitmentProof) {
+  return
+}
+```
 
 ### Sending packets
+
+![packet-state-machine](packet-state-machine.png)
 
 `sendPacket` is called by a module.
 
