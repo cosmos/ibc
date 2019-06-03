@@ -25,6 +25,8 @@ The interblockchain communication protocol uses a cross-chain message passing mo
 
 `Commitment`, `CommitmentProof`, and `CommitmentRoot` are as defined in [ICS 23](../ics-23-vector-commitments).
 
+`commit` is a generic collision-resistant hash function, the specifics of which must be agreed on by the modules utilizing the channel.
+
 `Identifier`, `get`, `set`, `delete`, and module-system related primitives are as defined in [ICS 24](../ics-24-host-requirements).
 
 A *channel* is a pipeline for exactly-once packet delivery between specific modules on separate blockchains, which has at least one send and one receive end.
@@ -422,7 +424,19 @@ function chanCloseTimeout(
 
 ![packet-state-machine](packet-state-machine.png)
 
-`sendPacket` is called by a module.
+The `sendPacket` function is called by a module in order to send an IBC packet on a channel end owned by the calling module to the corresponding module the counterparty chain.
+
+Calling modules MUST execute application logic atomically in conjunction with calling `sendPacket`.
+
+The IBC handler performs the following steps in order:
+- Checks that the channel & connection are open to send packets
+- Checks that the calling module owns the channel end
+- Checks that the packet metadata matches the channel & connection information
+- Checks that the timeout height specified has not already passed on the destination chain
+- Increments the send sequence counter associated with the channel
+- Stores a succinct hash commitment to the packet data
+
+Note that the full packet is not stored in the state of the chain - merely a short hash-commitment. The packet data can be calculated from the transaction execution and possibly returned as log output which relayers can index.
 
 ```typescript
 function sendPacket(packet: Packet) {
@@ -444,7 +458,18 @@ function sendPacket(packet: Packet) {
 
 ### Receiving packets
 
-`recvPacket` is called by a module.
+The `recvPacket` function is called by a module in order to receive & process an IBC packet sent on the corresponding channel end on the counterparty chain.
+
+Calling modules MUST execute application logic atomically in conjunction with calling `recvPacket`.
+
+The IBC handler performs the following steps in order:
+- Checks that the channel & connection are open to receive packets
+- Checks that the calling module owns the channel end
+- Checks that the packet metadata matches the channel & connection information
+- Checks that the packet sequence is the next sequence the channel end expects to receive
+- Checks that the timeout height has not yet passed
+- Checks the inclusion proof of packet data commitment in the outgoing chain's state
+- Increments the packet receive sequence associated with the channel end
 
 ```typescript
 function recvPacket(packet: Packet, proof: CommitmentProof) {
@@ -470,20 +495,17 @@ function recvPacket(packet: Packet, proof: CommitmentProof) {
 }
 ```
 
-`recvTimedOutPacket` is called by a module.
-
-```typescript
-```
-
-todo: allow recv packets after timeout, not executed
-
 ### Timeouts
 
 Application semantics may require some timeout: an upper limit to how long the chain will wait for a transaction to be processed before considering it an error. Since the two chains have different local clocks, this is an obvious attack vector for a double spend - an attacker may delay the relay of the receipt or wait to send the packet until right after the timeout - so applications cannot safely implement naive timeout logic themselves.
 
 Note that in order to avoid any possible "double-spend" attacks, the timeout algorithm requires that the destination chain is running and reachable. One can prove nothing in a complete network partition, and must wait to connect; the timeout must be proven on the recipient chain, not simply the absence of a response on the sending chain.
 
-`timeoutPacket` is called by a module.
+#### Sending end
+
+The `timeoutPacket` function is called by a module.
+
+Calling modules MUST atomically execute appropriate application timeout-handling logic in conjunction with calling `timeoutPacket`.
 
 ```typescript
 function timeoutPacket(packet: Packet, proof: CommitmentProof) {
@@ -519,10 +541,43 @@ function timeoutPacket(packet: Packet, proof: CommitmentProof) {
 }
 ```
 
-Notes
-- Can "bulk timeout" because of ordering guarantees if we enforce relations between timeout height and channels
+If relations are enforced between timeout heights of subsequent packets, safe bulk timeouts of all packets prior to a timed-out packet can be performed.
+This specification omits details for now.
 
-`cleanupPacket` can be called by a module to remove a received packet commitment from storage. Notably, the receiving end must have already processed the packet (whether regularly or past timeout).
+#### Receiving end
+
+The `recvTimeoutPacket` function is called by a module in order to process an IBC packet sent on the corresponding channel which has timed out.
+This must be done in order to safely increment the received packet sequence and move on to future packets.
+
+Calling modules MUST NOT execute any application logic in conjunction with calling `recvTimeoutPacket`.
+
+```typescript
+function recvTimeoutPacket(packet: Packet, proof: CommitmentProof) {
+  channel = get("connections/{packet.destConnection}/channels/{packet.destChannel}")
+  assert(channel.state === OPEN)
+  assert(getCallingModule() === channel.moduleIdentifier)
+  assert(packet.sourceChannel === channel.counterpartyChannelIdentifier)
+  assert(packet.sequence === channel.nextSequenceRecv)
+  connection = get("connections/{connectionIdentifier}")
+  assert(packet.sourceConnection === connection.counterpartyConnectionIdentifier)
+  assert(connection.state === OPEN)
+  consensusState = getConsensusState()
+  assert(consensusState.getHeight() >= packet.timeoutHeight)
+  assert(verifyMembership(
+    consensusState.getRoot(),
+    proof,
+    "connections/{packet.sourceConnection}/channels/{packet.sourceChannel}/packets/{sequence}"
+    key,
+    commit(packet.data)
+  ))
+  channel.nextSequenceRecv = channel.nextSequenceRecv + 1
+  set("connections/{packet.destConnection}/channels/{packet.destChannel}", channel)
+}
+```
+
+### Cleaning up state
+
+`cleanupPacket` can be called by a module to remove a received packet commitment from storage. The receiving end must have already processed the packet (whether regularly or past timeout).
 
 ```typescript
 function cleanupPacket(packet: Packet, proof: CommitmentProof, nextSequenceRecv: uint64) {
