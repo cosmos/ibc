@@ -124,7 +124,9 @@ interface ChanOpenInit {
 ```
 
 ```typescript
-function chanOpenInit() {
+function chanOpenInit(
+  connectionIdentifier, channelIdentifier,
+  counterpartyChannelIdentifier, counterpartyModuleIdentifier) {
   moduleIdentifier = getCallingModule()
   assert(get("connections/{connectionIdentifier}/channels/{channelIdentifier}") === null)
   connection = get("connections/{connectionIdentifier}")
@@ -146,7 +148,9 @@ interface ChanOpenTry {
 ```
 
 ```typescript
-function chanOpenTry() {
+function chanOpenTry(
+  connectionIdentifier, channelIdentifier, counterpartyChannelIdentifier,
+  moduleIdentifier, counterpartyModuleIdentifier, proofInit) {
   assert(get("connections/{connectionIdentifier}/channels/{channelIdentifier}") === null)
   assert(getCallingModule() === moduleIdentifier)
   connection = get("connections/{connectionIdentifier}")
@@ -172,7 +176,7 @@ interface ChanOpenAck {
 ```
 
 ```typescript
-function chanOpenAck() {
+function chanOpenAck(connectionIdentifier, channelIdentifier, proofTry) {
   channel = get("connections/{connectionIdentifier}/channels/{channelIdentifier}")
   assert(channel.state === INIT)
   assert(getCallingModule() === channel.moduleIdentifier)
@@ -199,7 +203,7 @@ interface ChanOpenConfirm {
 ```
 
 ```typescript
-function chanOpenConfirm() {
+function chanOpenConfirm(connectionIdentifier, channelIdentifier, proofAck) {
   channel = get("connections/{connectionIdentifier}/channels/{channelIdentifier}")
   assert(channel.state === TRYOPEN)
   assert(getCallingModule() === channel.moduleIdentifier)
@@ -219,7 +223,41 @@ function chanOpenConfirm() {
 
 ### Channel closing handshake
 
-(todo, isomorphic to connection closing handshake)
+```typescript
+interface ChanCloseInit {
+  connectionIdentifier: Identifier
+  channelIdentifier: Identifier
+  nextTimeoutHeight: uint64
+}
+```
+
+```typescript
+interface ChanCloseTry {
+  connectionIdentifier: Identifier
+  channelIdentifier: Identifier
+  timeoutHeight: uint64
+  nextTimeoutHeight: uint64
+  proofInit: CommitmentProof
+}
+```
+
+```typescript
+interface ChanCloseAck {
+  connectionIdentifier: Identifier
+  channelIdentifier: Identifier
+  timeoutHeight: uint64
+  proofTry: CommitmentProof
+}
+```
+
+```typescript
+interface ChanCloseTimeout {
+  connectionIdentifier: Identifier
+  channelIdentifier: Identifier
+  timeoutHeight: uint64
+  proofTimeout: CommitmentProof
+}
+```
 
 ![packet-state-machine](packet-state-machine.png)
 
