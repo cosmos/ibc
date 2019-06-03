@@ -87,26 +87,28 @@ interface Packet {
 #### Efficiency
 
 - The speed of packet transmission and confirmation should be limited only by the speed of the underlying chains.
+  Proofs should be batcheable where possible.
 
 #### Exactly-once delivery
 
-- Exactly-once packet delivery, without assumptions of network synchrony and even if one or both of the chains should halt (no-more-than-once delivery in that case).
+- IBC packets sent on one end of a channel should be delivered exactly once to the other end.
+- No network synchrony assumptions should be required for safety of exactly-once delivery.
+  If one or both of the chains should halt, packets should be delivered no more than once, and once the chains resume packets should be able to flow again.
 
 #### Ordering
 
-- Ordering, for ordered channels, whereby if packet *x* is sent before packet *y* on chain `A`, packet *x* must be received before packet *y* on chain `B`.
-
-IBC channels implement a vector clock for the restricted case of two processes (in our case, blockchains). Given *x* → *y* means *x* is causally before *y*, chains `A` and `B`, and *a* ⇒ *b* means *a* implies *b*:
-
-Every transaction on the same chain already has a well-defined causality relation (order in history). IBC provides an ordering guarantee across two chains which can be used to reason about the combined state of both chains as a whole.
-
-For example, an application may wish to allow a single tokenized asset to be transferred between and held on multiple blockchains while preserving fungibility and conservation of supply. The application can mint asset vouchers on chain `B` when a particular IBC packet is committed to chain `B`, and require outgoing sends of that packet on chain `A` to escrow an equal amount of the asset on chain `A` until the vouchers are later redeemed back to chain `A` with an IBC packet in the reverse direction. This ordering guarantee along with correct application logic can ensure that total supply is preserved across both chains and that any vouchers minted on chain `B` can later be redeemed back to chain `A`.
+- Packets should be sent and received in the same order: if packet *x* is sent before packet *y* by a channel end on chain `A`, packet *x* must be received before packet *y* by the corresponding channel end on chain `B`.
 
 #### Permissioning
 
-- Channel ends should be permissioned to one module on each end.
+- Channels should be permissioned to one module on each end, determined during the handshake and immutable afterwards (higher-level logic could tokenize channel ownership).
+  Only the module associated with a channel end should be able to send or receive on it.
 
 ## Technical Specification
+
+#### Reasoning
+
+The ordering and exactly-once delivery guarantees provided by IBC can be used to reason about the combined state of connected modules on two chains. For example, an application may wish to allow a single tokenized asset to be transferred between and held on multiple blockchains while preserving fungibility and conservation of supply. The application can mint asset vouchers on chain `B` when a particular IBC packet is committed to chain `B`, and require outgoing sends of that packet on chain `A` to escrow an equal amount of the asset on chain `A` until the vouchers are later redeemed back to chain `A` with an IBC packet in the reverse direction. This ordering guarantee along with correct application logic can ensure that total supply is preserved across both chains and that any vouchers minted on chain `B` can later be redeemed back to chain `A`.
 
 ![channel-state-machine](channel-state-machine.png)
 
