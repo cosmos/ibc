@@ -133,7 +133,8 @@ function chanOpenInit(
   assert(get("connections/{connectionIdentifier}/channels/{channelIdentifier}") === null)
   connection = get("connections/{connectionIdentifier}")
   assert(connection.state === OPEN)
-  channel = Channel{INIT, moduleIdentifier, counterpartyModuleIdentifier, counterpartyChannelIdentifier, 0, 0, nextTimeoutHeight}
+  channel = Channel{INIT, moduleIdentifier, counterpartyModuleIdentifier,
+                    counterpartyChannelIdentifier, 0, 0, nextTimeoutHeight}
   set("connections/{connectionIdentifier}/channels/{channelIdentifier}", channel)
 }
 ```
@@ -168,7 +169,8 @@ function chanOpenTry(
     "connections/{connection.counterpartyConnectionIdentifier}/channels/{counterpartyChannelIdentifier}",
     Channel{INIT, counterpartyModuleIdentifier, moduleIdentifier, channelIdentifier, 0, 0, timeoutHeight}
   ))
-  channel = Channel{OPENTRY, moduleIdentifier, counterpartyModuleIdentifier, counterpartyChannelIdentifier, 0, 0, nextTimeoutHeight}
+  channel = Channel{OPENTRY, moduleIdentifier, counterpartyModuleIdentifier,
+                    counterpartyChannelIdentifier, 0, 0, nextTimeoutHeight}
   set("connections/{connectionIdentifier}/channels/{channelIdentifier}", channel)
 }
 ```
@@ -184,7 +186,8 @@ interface ChanOpenAck {
 ```
 
 ```typescript
-function chanOpenAck(connectionIdentifier: Identifier, channelIdentifier: Identifier,
+function chanOpenAck(
+  connectionIdentifier: Identifier, channelIdentifier: Identifier,
   timeoutHeight: uint64, nextTimeoutHeight: uint64, proofTry: CommitmentProof) {
   assert(getConsensusState().getHeight() < timeoutHeight)
   channel = get("connections/{connectionIdentifier}/channels/{channelIdentifier}")
@@ -197,7 +200,8 @@ function chanOpenAck(connectionIdentifier: Identifier, channelIdentifier: Identi
     consensusState.getRoot(),
     proofTry,
     "connections/{connection.counterpartyConnectionIdentifier}/channels/{channel.counterpartyChannelIdentifier}",
-    Channel{OPENTRY, channel.counterpartyModuleIdentifier, channel.moduleIdentifier, channelIdentifier, 0, 0, timeoutHeight}
+    Channel{OPENTRY, channel.counterpartyModuleIdentifier, channel.moduleIdentifier,
+            channelIdentifier, 0, 0, timeoutHeight}
   ))
   channel.state = OPEN
   channel.nextTimeoutHeight = nextTimeoutHeight
@@ -215,7 +219,8 @@ interface ChanOpenConfirm {
 ```
 
 ```typescript
-function chanOpenConfirm(connectionIdentifier: Identifier, channelIdentifier: Identifier,
+function chanOpenConfirm(
+  connectionIdentifier: Identifier, channelIdentifier: Identifier,
   timeoutHeight: uint64, proofAck: CommitmentProof) {
   assert(getConsensusState().getHeight() < timeoutHeight)
   channel = get("connections/{connectionIdentifier}/channels/{channelIdentifier}")
@@ -228,7 +233,8 @@ function chanOpenConfirm(connectionIdentifier: Identifier, channelIdentifier: Id
     consensusState.getRoot(),
     proofAck,
     "connections/{connection.counterpartyConnectionIdentifier}/channels/{channel.counterpartyChannelIdentifier}",
-    Channel{OPEN, channel.counterpartyModuleIdentifier, channel.moduleIdentifier, channelIdentifier, 0, 0, timeoutHeight}
+    Channel{OPEN, channel.counterpartyModuleIdentifier, channel.moduleIdentifier,
+            channelIdentifier, 0, 0, timeoutHeight}
   ))
   channel.state = OPEN
   channel.nextTimeoutHeight = 0
@@ -241,12 +247,12 @@ interface ChanOpenTimeout {
   connectionIdentifier: Identifier
   channelIdentifier: Identifier
   timeoutHeight: uint64
-  proofTimeout: CommitmentProof 
+  proofTimeout: CommitmentProof
 }
 ```
 
 ```typescript
-function chanOpenTimeout( 
+function chanOpenTimeout(
   connectionIdentifier: Identifier, channelIdentifier: Identifier,
   timeoutHeight: uint64, proofTimeout: CommitmentProof) {
   channel = get("connections/{connectionIdentifier}/channels/{channelIdentifier}")
@@ -329,7 +335,8 @@ function chanCloseTry(
   connection = get("connections/{connectionIdentifier}")
   assert(connection.state === OPEN)
   consensusState = get("clients/{connection.clientIdentifier}/consensusState")
-  expected = Channel{INIT, channel.counterpartyModuleIdentifier, channel.moduleIdentifier, channel.channelIdentifier, 0, 0, timeoutHeight}
+  expected = Channel{INIT, channel.counterpartyModuleIdentifier, channel.moduleIdentifier,
+                     channel.channelIdentifier, 0, 0, timeoutHeight}
   assert(verifyMembership(
     consensusState,
     proofInit,
@@ -361,7 +368,8 @@ function chanCloseAck(
   connection = get("connections/{connectionIdentifier}")
   assert(connection.state === OPEN)
   consensusState = get("clients/{connection.clientIdentifier}/consensusState")
-  expected = Channel{CLOSED, channel.counterpartyModuleIdentifier, channel.moduleIdentifier, channelIdentifier, 0, 0, timeoutHeight}
+  expected = Channel{CLOSED, channel.counterpartyModuleIdentifier, channel.moduleIdentifier,
+                     channelIdentifier, 0, 0, timeoutHeight}
   assert(verifyMembership(
     consensusState.getRoot(),
     proofInit,
