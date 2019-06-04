@@ -6,7 +6,7 @@ category: ibc-core
 requires: 2, 3, 23, 24
 author: Christopher Goes <cwgoes@tendermint.com>
 created: 2019-03-07
-modified: 2019-06-03
+modified: 2019-06-04
 ---
 
 ## Synopsis
@@ -117,6 +117,9 @@ The ordering and exactly-once delivery guarantees provided by IBC can be used to
 
 ### Channel opening handshake
 
+The `chanOpenInit` function is called by a module to initiate a channel opening handshake with a module on another chain.
+The opening channel must provide the identifiers of the local channel end, local connection, and desired remote channel end.
+
 ```typescript
 interface ChanOpenInit {
   connectionIdentifier: Identifier
@@ -140,6 +143,8 @@ function chanOpenInit(
   set("connections/{connectionIdentifier}/channels/{channelIdentifier}", channel)
 }
 ```
+
+The `chanOpenTry` function is called by a module to accept the first step of a chanel opening handshake initiated by a module on another chain
 
 ```typescript
 interface ChanOpenTry {
@@ -177,6 +182,9 @@ function chanOpenTry(
 }
 ```
 
+The `chanOpenAck` is called by the handshake-originating module to acknowledge the acceptance of the initial request by the
+counterparty module on the other chain.
+
 ```typescript
 interface ChanOpenAck {
   connectionIdentifier: Identifier
@@ -211,6 +219,9 @@ function chanOpenAck(
 }
 ```
 
+The `chanOpenConfirm` function is called by the handshake-accepting module to acknowledge the acknowledgement
+of the handshake-originating module on the other chain and finish the channel opening handshake.
+
 ```typescript
 interface ChanOpenConfirm {
   connectionIdentifier: Identifier
@@ -243,6 +254,9 @@ function chanOpenConfirm(
   set("connections/{connectionIdentifier}/channels/{channelIdentifier}", channel)
 }
 ```
+
+The `chanOpenTimeout` function can be called by either the handshake-originating
+module or the handshake-confirming module to prove that a timeout has occurred and reset the state.
 
 ```typescript
 interface ChanOpenTimeout {
@@ -297,6 +311,9 @@ function chanOpenTimeout(
 
 ### Channel closing handshake
 
+The `chanCloseInit` function can be called by either module to initiate
+the channel-closing handshake.
+
 ```typescript
 interface ChanCloseInit {
   connectionIdentifier: Identifier
@@ -316,6 +333,9 @@ function chanCloseInit(connectionIdentifier: Identifier, channelIdentifier: Iden
   set("connections/{connectionIdentifier}/channels/{channelIdentifier}", channel)
 }
 ```
+
+The `chanCloseTry` function is called by the handshake-accepting module
+to acknowledge the channel close request and continue the closing process.
 
 ```typescript
 interface ChanCloseTry {
@@ -351,6 +371,9 @@ function chanCloseTry(
 }
 ```
 
+The `chanCloseAck` function is called by the handshake-originating module
+to acknowledge the closing acknowledgement and finalize channel closure.
+
 ```typescript
 interface ChanCloseAck {
   connectionIdentifier: Identifier
@@ -383,6 +406,9 @@ function chanCloseAck(
   set("connections/{connectionIdentifier}/channels/{channelIdentifier}", channel)
 }
 ```
+
+The `chanCloseTimeout` function can be called by either the handshake-originating
+or handshake-accepting module to prove a timeout and reset state.
 
 ```typescript
 interface ChanCloseTimeout {
@@ -495,7 +521,7 @@ function recvPacket(packet: Packet, proof: CommitmentProof) {
 }
 ```
 
-### Timeouts
+### Packet timeouts
 
 Application semantics may require some timeout: an upper limit to how long the chain will wait for a transaction to be processed before considering it an error. Since the two chains have different local clocks, this is an obvious attack vector for a double spend - an attacker may delay the relay of the receipt or wait to send the packet until right after the timeout - so applications cannot safely implement naive timeout logic themselves.
 
@@ -631,7 +657,7 @@ Coming soon.
 
 ## History
 
-3 June 2019 - Draft submitted
+4 June 2019 - Draft submitted
 
 ## Copyright
 
