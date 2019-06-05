@@ -13,13 +13,15 @@ modified: 2019-06-04
 
 The "channel" abstraction provides message delivery semantics to the interblockchain communication protocol, in three categories: ordering, exactly-once delivery, and module permissioning. A channel serves as a conduit for packets passing between a module on one chain and a module on another, ensuring that packets are executed only once, delivered in the order in which they were sent (if necessary), and delivered only to the corresponding module owning the other end of the channel on the destination chain. Each channel is associated with a particular connection, and a connection may have any number of associated channels, allowing the use of common identifiers and amortizing the cost of header verification across all the channels utilizing a connection & light client.
 
-Channels are payload-agnostic. The module which receives an IBC packet on chain `B` decides how to act upon the incoming data, and must utilize its own application logic to determine which state transactions to apply according to what data the packet contains. Both chains must only agree that the packet has been received.
+Channels are payload-agnostic. The modules which send and receive IBC packets decide how to construct packet data and how to act upon the incoming packet data, and must utilize their own application logic to determine which state transactions to apply according to what data the packet contains.
 
 ### Motivation
 
 The interblockchain communication protocol uses a cross-chain message passing model which makes no assumptions about network synchrony. IBC *packets* are relayed from one blockchain to the other by external relayer processes. Chain `A` and chain `B` confirm new blocks independently, and packets from one chain to the other may be delayed, censored, or re-ordered arbitrarily. Packets are public and can be read from a blockchain by any relayer and submitted to any other blockchain. In order to provide the desired ordering, exactly-once delivery, and module permissioning semantics to the application layer, the interblockchain communication protocol must implement an abstraction to enforce these semantics — channels are this abstraction.
 
 ### Definitions
+
+`ConsensusState` is as defined in [ICS 2](../ics-2-consensus-verification).
 
 `Connection` is as defined in [ICS 3](../ics-3-connection-semantics).
 
@@ -446,9 +448,11 @@ function chanCloseTimeout(
 }
 ```
 
-### Sending packets
+### Packet handling
 
 ![packet-state-machine](packet-state-machine.png)
+
+#### Sending packets
 
 The `sendPacket` function is called by a module in order to send an IBC packet on a channel end owned by the calling module to the corresponding module the counterparty chain.
 
@@ -482,7 +486,7 @@ function sendPacket(packet: Packet) {
 }
 ```
 
-### Receiving packets
+#### Receiving packets
 
 The `recvPacket` function is called by a module in order to receive & process an IBC packet sent on the corresponding channel end on the counterparty chain.
 
@@ -512,8 +516,7 @@ function recvPacket(packet: Packet, proof: CommitmentProof) {
   assert(verifyMembership(
     consensusState.getRoot(),
     proof,
-    "connections/{packet.sourceConnection}/channels/{packet.sourceChannel}/packets/{sequence}"
-    key,
+    "connections/{packet.sourceConnection}/channels/{packet.sourceChannel}/packets/{sequence}",
     commit(packet.data)
   ))
   channel.nextSequenceRecv = channel.nextSequenceRecv + 1
@@ -534,7 +537,7 @@ The `timeoutPacket` function is called by a module.
 Calling modules MUST atomically execute appropriate application timeout-handling logic in conjunction with calling `timeoutPacket`.
 
 ```typescript
-function timeoutPacket(packet: Packet, proof: CommitmentProof) {
+function timeoutPacket(packet: Packet, proof: CommitmentProof, nextSequenceRecv: uint64) {
   channel = get("connections/{packet.sourceConnection}/channels/{packet.sourceChannel}")
   assert(channel.state === OPEN)
   assert(getCallingModule() === channel.moduleIdentifier)
@@ -543,16 +546,20 @@ function timeoutPacket(packet: Packet, proof: CommitmentProof) {
   assert(connection.state === OPEN)
   assert(packet.destConnection === connection.counterpartyIdentifier)
 
-
   // check that timeout height has passed on the other end
   consensusState = get("clients/{connection.clientIdentifier}")
   assert(consensusState.getHeight() >= timeoutHeight)
+
+  // check that packet has not been received
+  assert(nextSequenceRecv < packet.sequence)
 
   // verify we actually sent this packet, check the store
   key = "connections/{packet.sourceConnection}/channels/{packet.sourceChannel}/packets/{sequence}"
   assert(get(key) === commit(packet.data))
 
-  // assert we haven't "timed-out" already, TODO
+  // assert we haven't "timed-out" already
+  timeoutKey = "connections/{packet.sourceConnection}/channels/{packet.sourceChannel}/packets/{sequence}/timedOut"
+  assert(get(timeoutKey) === nil)
 
   // check that the recv sequence is as claimed
   assert(verifyMembership(
@@ -562,8 +569,8 @@ function timeoutPacket(packet: Packet, proof: CommitmentProof) {
     nextSequenceRecv
   ))
 
-  // mark the store so we can't "timeout" again" TODO
-  set("connections/{packet.sourceConnection}/channels/{packet.sourceChannel}/packets/{sequence}/timedOut", "true")
+  // mark the store so we can't "timeout" again"
+  set(timeoutKey, "true")
 }
 ```
 
