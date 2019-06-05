@@ -20,8 +20,6 @@ IBC is designed to be a common standard which will be hosted by a variety of blo
 
 ### Definitions
 
-`ConsensusState` is as defined in [ICS 2](../ics-2-consensus-verification).
-
 ### Desired Properties
 
 IBC should require as simple an interface from the underlying state machine as possible to maximize the ease of correct implementation.
@@ -68,6 +66,13 @@ These functions MUST be permissioned to the IBC handler module (the implementati
 
 ### Consensus State Introspection
 
+Host chains MUST define a unique `ConsensusState` type fulfilling the requirements of [ICS 2](../ics-2-consensus-verification):
+
+```typescript
+interface ConsensusState {
+}
+```
+
 Host chains MUST provide the ability to introspect their own consensus state, with `getConsensusState`:
 
 ```typescript
@@ -92,13 +97,30 @@ Modules which wish to make use of particular IBC features MAY implement certain 
 
 ### Datagram Submission
 
-Host chains MAY define a unique `Datagram` type & `submitDatagram` function to submit [datagrams](../../docs/ibc/2_IBC_TERMINOLOGY.md) directly:
+Host chains MAY define a unique `Datagram` type & `submitDatagram` function to submit [datagrams](../../docs/ibc/2_IBC_TERMINOLOGY.md) directly to the relayer module:
 
 ```typescript
-type submitDatagram = (datagram: Datagram) => void
+interface Datagram {
+  // fields defined per datagram type, and possible additional fields defined per chain
+}
+
+type SubmitDatagram = (datagram: Datagram) => void
 ```
 
 `submitDatagram` allows relayers to relay IBC datagrams directly to the host chain. Host chains MAY require that the relayer submitting the datagram has an account to pay transaction fees, signs over the datagram in a larger transaction structure, etc - `submitDatagram` MUST define any such packaging required.
+
+Host chains MAY also define a `pendingDatagrams` function to scan the pending datagrams to be sent to another counterparty chain:
+
+```typescript
+type PendingDatagrams = (counterparty: Chain) => Set<Datagram>
+```
+
+```typescript
+interface Chain {
+  submitDatagram: SubmitDatagram
+  pendingDatagrams: PendingDatagrams
+}
+```
 
 ## Backwards Compatibility
 
