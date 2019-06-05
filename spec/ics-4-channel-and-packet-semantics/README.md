@@ -237,7 +237,7 @@ function chanOpenTry(
   moduleIdentifier: Identifier, counterpartyModuleIdentifier: Identifier,
   timeoutHeight: uint64, nextTimeoutHeight: uint64, proofInit: CommitmentProof) {
   assert(getConsensusState().getHeight() < timeoutHeight)
-  assert(get("connections/{connectionIdentifier}/channels/{channelIdentifier}") === null)
+  assert(get(channelKey(connectionIdentifier, channelIdentifier)) === null)
   assert(getCallingModule() === moduleIdentifier)
   connection = get("connections/{connectionIdentifier}")
   assert(connection.state === OPEN)
@@ -245,12 +245,12 @@ function chanOpenTry(
   assert(verifyMembership(
     consensusState,
     proofInit,
-    "connections/{connection.counterpartyConnectionIdentifier}/channels/{counterpartyChannelIdentifier}",
+    channelKey(connection.counterpartyConnectionIdentifier, counterpartyChannelIdentifier),
     Channel{INIT, counterpartyModuleIdentifier, moduleIdentifier, channelIdentifier, 0, 0, timeoutHeight}
   ))
   channel = Channel{OPENTRY, moduleIdentifier, counterpartyModuleIdentifier,
                     counterpartyChannelIdentifier, 0, 0, nextTimeoutHeight}
-  set("connections/{connectionIdentifier}/channels/{channelIdentifier}", channel)
+  set(channelKey(connectionIdentifier, channelIdentifier), channel)
 }
 ```
 
@@ -272,7 +272,7 @@ function chanOpenAck(
   connectionIdentifier: Identifier, channelIdentifier: Identifier,
   timeoutHeight: uint64, nextTimeoutHeight: uint64, proofTry: CommitmentProof) {
   assert(getConsensusState().getHeight() < timeoutHeight)
-  channel = get("connections/{connectionIdentifier}/channels/{channelIdentifier}")
+  channel = get(channelKey(connectionIdentifier, channelIdentifier))
   assert(channel.state === INIT)
   assert(getCallingModule() === channel.moduleIdentifier)
   connection = get("connections/{connectionIdentifier}")
@@ -287,7 +287,7 @@ function chanOpenAck(
   ))
   channel.state = OPEN
   channel.nextTimeoutHeight = nextTimeoutHeight
-  set("connections/{connectionIdentifier}/channels/{channelIdentifier}", channel)
+  set(channelKey(connectionIdentifier, channelIdentifier), channel)
 }
 ```
 
@@ -308,7 +308,7 @@ function chanOpenConfirm(
   connectionIdentifier: Identifier, channelIdentifier: Identifier,
   timeoutHeight: uint64, proofAck: CommitmentProof) {
   assert(getConsensusState().getHeight() < timeoutHeight)
-  channel = get("connections/{connectionIdentifier}/channels/{channelIdentifier}")
+  channel = get(channelKey(connectionIdentifier, channelIdentifier))
   assert(channel.state === OPENTRY)
   assert(getCallingModule() === channel.moduleIdentifier)
   connection = get("connections/{connectionIdentifier}")
@@ -323,7 +323,7 @@ function chanOpenConfirm(
   ))
   channel.state = OPEN
   channel.nextTimeoutHeight = 0
-  set("connections/{connectionIdentifier}/channels/{channelIdentifier}", channel)
+  set(channelKey(connectionIdentifier, channelIdentifier), channel)
 }
 ```
 
@@ -343,7 +343,7 @@ interface ChanOpenTimeout {
 function chanOpenTimeout(
   connectionIdentifier: Identifier, channelIdentifier: Identifier,
   timeoutHeight: uint64, proofTimeout: CommitmentProof) {
-  channel = get("connections/{connectionIdentifier}/channels/{channelIdentifier}")
+  channel = get(channelKey(connectionIdentifier, channelIdentifier))
   connection = get("connections/{connectionIdentifier}")
   assert(connection.state === OPEN)
   consensusState = get("clients/{connection.clientIdentifier}/consensusState")
@@ -377,7 +377,7 @@ function chanOpenTimeout(
         expected
       ))
   }
-  delete("connections/{connectionIdentifier}/channels/{channelIdentifier}")
+  delete(channelKey(connectionIdentifier, channelIdentifier))
 }
 ```
 
@@ -396,13 +396,13 @@ interface ChanCloseInit {
 
 ```typescript
 function chanCloseInit(connectionIdentifier: Identifier, channelIdentifier: Identifier, nextTimeoutHeight: uint64) {
-  channel = get("connections/{connectionIdentifier}/channels/{channelIdentifier}")
+  channel = get(channelKey(connectionIdentifier, channelIdentifier))
   assert(channel.state === OPEN)
   connection = get("connections/{connectionIdentifier}")
   assert(connection.state === OPEN)
   channel.state = CLOSETRY
   channel.nextTimeoutHeight = nextTimeoutHeight
-  set("connections/{connectionIdentifier}/channels/{channelIdentifier}", channel)
+  set(channelKey(connectionIdentifier, channelIdentifier), channel)
 }
 ```
 
@@ -424,7 +424,7 @@ function chanCloseTry(
   connectionIdentifier: Identifier, channelIdentifier: Identifier,
   timeoutHeight: uint64, nextTimeoutHeight: uint64, proofInit: CommitmentProof) {
   assert(getConsensusState().getHeight() < timeoutHeight)
-  channel = get("connections/{connectionIdentifier}/channels/{channelIdentifier}")
+  channel = get(channelKey(connectionIdentifier, channelIdentifier))
   assert(channel.state === OPEN)
   connection = get("connections/{connectionIdentifier}")
   assert(connection.state === OPEN)
@@ -439,7 +439,7 @@ function chanCloseTry(
   ))
   channel.state = CLOSED
   channel.nextTimeoutHeight = nextTimeoutHeight
-  set("connections/{connectionIdentifier}/channels/{channelIdentifier}", channel)
+  set(channelKey(connectionIdentifier, channelIdentifier), channel)
 }
 ```
 
@@ -460,7 +460,7 @@ function chanCloseAck(
   connectionIdentifier: Identifier, channelIdentifier: Identifier,
   timeoutHeight: uint64, proofTry: CommitmentProof) {
   assert(getConsensusState().getHeight() < timeoutHeight)
-  channel = get("connections/{connectionIdentifier}/channels/{channelIdentifier}")
+  channel = get(channelKey(connectionIdentifier, channelIdentifier))
   assert(channel.state === OPEN)
   connection = get("connections/{connectionIdentifier}")
   assert(connection.state === OPEN)
@@ -475,7 +475,7 @@ function chanCloseAck(
   ))
   channel.state = CLOSED
   channel.nextTimeoutHeight = 0
-  set("connections/{connectionIdentifier}/channels/{channelIdentifier}", channel)
+  set(channelKey(connectionIdentifier, channelIdentifier), channel)
 }
 ```
 
@@ -495,7 +495,7 @@ interface ChanCloseTimeout {
 function chanCloseTimeout(
   connectionIdentifier: Identifier, channelIdentifier: Identifier,
   timeoutHeight: uint64, proofTimeout: CommitmentProof) {
-  channel = get("connections/{connectionIdentifier}/channels/{channelIdentifier}")
+  channel = get(channelKey(connectionIdentifier, channelIdentifier))
   consensusState = get("clients/{connection.clientIdentifier}/consensusState")
   assert(consensusState.getHeight() >= connection.nextTimeoutHeight)
   switch channel.state {
@@ -514,7 +514,7 @@ function chanCloseTimeout(
   )
   channel.state = OPEN
   channel.nextTimeoutHeight = 0
-  set("connections/{connectionIdentifier}/channels/{channelIdentifier}", channel)
+  set(channelKey(connectionIdentifier, channelIdentifier), channel)
 }
 ```
 
@@ -540,7 +540,7 @@ Note that the full packet is not stored in the state of the chain - merely a sho
 
 ```typescript
 function sendPacket(packet: Packet) {
-  channel = get("connections/{packet.sourceConnection}/channels/{packet.sourceChannel}")
+  channel = get(channelKey(packet.sourceConnection, packet.sourceChannel))
   assert(channel.state === OPEN)
   assert(getCallingModule() === channel.moduleIdentifier)
   assert(packet.destChannel === channel.counterpartyChannelIdentifier)
@@ -573,7 +573,7 @@ The IBC handler performs the following steps in order:
 
 ```typescript
 function recvPacket(packet: Packet, proof: CommitmentProof) {
-  channel = get("connections/{packet.destConnection}/channels/{packet.destChannel}")
+  channel = get(channelKey(packet.destConnection, packet.destChannel))
   assert(channel.state === OPEN)
   assert(getCallingModule() === channel.moduleIdentifier)
   assert(packet.sourceChannel === channel.counterpartyChannelIdentifier)
@@ -608,7 +608,7 @@ Calling modules MUST atomically execute appropriate application timeout-handling
 
 ```typescript
 function timeoutPacket(packet: Packet, proof: CommitmentProof, nextSequenceRecv: uint64) {
-  channel = get("connections/{packet.sourceConnection}/channels/{packet.sourceChannel}")
+  channel = get(channelKey(packet.sourceConnection, packet.sourceChannel))
   assert(channel.state === OPEN)
   assert(getCallingModule() === channel.moduleIdentifier)
   assert(packet.destChannel === channel.counterpartyChannelIdentifier)
@@ -656,7 +656,7 @@ Calling modules MUST NOT execute any application logic in conjunction with calli
 
 ```typescript
 function recvTimeoutPacket(packet: Packet, proof: CommitmentProof) {
-  channel = get("connections/{packet.destConnection}/channels/{packet.destChannel}")
+  channel = get(channelKey(packet.destConnection, packet.destChannel))
   assert(channel.state === OPEN)
   assert(getCallingModule() === channel.moduleIdentifier)
   assert(packet.sourceChannel === channel.counterpartyChannelIdentifier)
@@ -684,7 +684,7 @@ function recvTimeoutPacket(packet: Packet, proof: CommitmentProof) {
 
 ```typescript
 function cleanupPacket(packet: Packet, proof: CommitmentProof, nextSequenceRecv: uint64) {
-  channel = get("connections/{packet.sourceConnection}/channels/{packet.sourceChannel}")
+  channel = get(channelKey(packet.sourceConnection, packet.sourceChannel))
   assert(channel.state === OPEN)
   assert(getCallingModule() === channel.moduleIdentifier)
   assert(packet.destChannel === channel.counterpartyChannelIdentifier)
