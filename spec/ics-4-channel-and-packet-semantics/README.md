@@ -77,8 +77,6 @@ interface ChannelEnd {
   counterpartyChannelIdentifier: Identifier
   moduleIdentifier: Identifier
   counterpartyModuleIdentifier: Identifier
-  nextSequenceSend: uint64
-  nextSequenceRecv: uint64
   nextTimeoutHeight: uint64
 }
 ```
@@ -87,8 +85,8 @@ interface ChannelEnd {
 - The `counterpartyChannelIdentifier` identifies the channel end on the counterparty chain.
 - The `moduleIdentifier` identifies the module which owns this channel end.
 - The `counterpartyModuleIdentifier` identifies the module on the counterparty chain which owns the other end of the channel.
-- The `nextSequenceSend` stores the sequence number for the next packet to be sent.
-- The `nextSequenceRecv` stores the sequence number for the next packet to be received.
+- The `nextSequenceSend`, stored separately, tracks the sequence number for the next packet to be sent.
+- The `nextSequenceRecv`, stored separately, tracks the sequence number for the next packet to be received.
 - The `nextTimeoutHeight` stores the timeout height for the next stage of the handshake, used only in channel opening and closing handshakes.
 
 An IBC *packet* is a particular datagram, defined as follows:
@@ -206,13 +204,15 @@ interface ChanOpenInit {
 function chanOpenInit(
   connectionIdentifier: Identifier, channelIdentifier: Identifier,
   counterpartyChannelIdentifier: Identifier, counterpartyModuleIdentifier: Identifier, nextTimeoutHeight: uint64) {
-  moduleIdentifier = getCallingModule()
-  assert(get(channelKey(connectionIdentifier, channelIdentifier)) == nil)
+  assert(get(channelKey(connectionIdentifier, channelIdentifier)) === nil)
   connection = get("connections/{connectionIdentifier}")
   assert(connection.state === OPEN)
+  moduleIdentifier = getCallingModule()
   channel = Channel{INIT, moduleIdentifier, counterpartyModuleIdentifier,
-                    counterpartyChannelIdentifier, 0, 0, nextTimeoutHeight}
-  set("connections/{connectionIdentifier}/channels/{channelIdentifier}", channel)
+                    counterpartyChannelIdentifier, nextTimeoutHeight}
+  set(channelKey(connectionIdentifier, channelIdentifier), channel)
+  set(nextSequenceSendKey(connectionIdentifier, channelIdentifier), 0)
+  set(nextSequenceRecvKey(connectionIdentifier, channelIdentifier), 0)
 }
 ```
 
@@ -246,11 +246,13 @@ function chanOpenTry(
     consensusState,
     proofInit,
     channelKey(connection.counterpartyConnectionIdentifier, counterpartyChannelIdentifier),
-    Channel{INIT, counterpartyModuleIdentifier, moduleIdentifier, channelIdentifier, 0, 0, timeoutHeight}
+    Channel{INIT, counterpartyModuleIdentifier, moduleIdentifier, channelIdentifier, timeoutHeight}
   ))
   channel = Channel{OPENTRY, moduleIdentifier, counterpartyModuleIdentifier,
-                    counterpartyChannelIdentifier, 0, 0, nextTimeoutHeight}
+                    counterpartyChannelIdentifier, nextTimeoutHeight}
   set(channelKey(connectionIdentifier, channelIdentifier), channel)
+  set(nextSequenceSendKey(connectionIdentifier, channelIdentifier), 0)
+  set(nextSequenceRecvKey(connectionIdentifier, channelIdentifier), 0)
 }
 ```
 
@@ -283,7 +285,7 @@ function chanOpenAck(
     proofTry,
     "connections/{connection.counterpartyConnectionIdentifier}/channels/{channel.counterpartyChannelIdentifier}",
     Channel{OPENTRY, channel.counterpartyModuleIdentifier, channel.moduleIdentifier,
-            channelIdentifier, 0, 0, timeoutHeight}
+            channelIdentifier, timeoutHeight}
   ))
   channel.state = OPEN
   channel.nextTimeoutHeight = nextTimeoutHeight
@@ -319,7 +321,7 @@ function chanOpenConfirm(
     proofAck,
     "connections/{connection.counterpartyConnectionIdentifier}/channels/{channel.counterpartyChannelIdentifier}",
     Channel{OPEN, channel.counterpartyModuleIdentifier, channel.moduleIdentifier,
-            channelIdentifier, 0, 0, timeoutHeight}
+            channelIdentifier, timeoutHeight}
   ))
   channel.state = OPEN
   channel.nextTimeoutHeight = 0
@@ -352,28 +354,28 @@ function chanOpenTimeout(
     case INIT:
       assert(verifyNonMembership(
         consensusState, proofTimeout,
-        "connections/{connection.counterpartyIdentifier}/channels/{channel.counterpartyChannelIdentifier}"
+        channelKey(connection.counterpartyIdentifier, channel.counterpartyIdentifier)
       ))
     case OPENTRY:
       assert(
         verifyNonMembership(
           consensusState, proofTimeout,
-          "connections/{connection.counterpartyIdentifier}/channels/{channel.counterpartyChannelIdentifier}"
+          channelKey(connection.counterpartyIdentifier, channel.counterpartyIdentifier)
         )
         ||
         verifyMembership(
           consensusState, proofTimeout,
-          "connections/{connection.counterpartyIdentifier}/channels/{channel.counterpartyChannelIdentifier}",
+          channelKey(connection.counterpartyIdentifier, channel.counterpartyIdentifier),
           Channel{INIT, channel.counterpartyModuleIdentifier, channel.moduleIdentifier,
-                  channelIdentifier, 0, 0, timeoutHeight}
+                  channelIdentifier, timeoutHeight}
         )
       )
     case OPEN:
       expected = Channel{OPENTRY, channel.counterpartyModuleIdentifier, channel.moduleIdentifier,
-                         channelIdentifier, 0, 0, timeoutHeight}
+                         channelIdentifier, timeoutHeight}
       assert(verifyMembership(
         consensusState, proofTimeout,
-        "connections/{connection.counterpartyIdentifier}/channels/{channel.counterpartyChannelIdentifier}",
+        channelKey(connection.counterpartyIdentifier, channel.counterpartyIdentifier),
         expected
       ))
   }
@@ -430,7 +432,7 @@ function chanCloseTry(
   assert(connection.state === OPEN)
   consensusState = get("clients/{connection.clientIdentifier}/consensusState")
   expected = Channel{INIT, channel.counterpartyModuleIdentifier, channel.moduleIdentifier,
-                     channel.channelIdentifier, 0, 0, timeoutHeight}
+                     channel.channelIdentifier, timeoutHeight}
   assert(verifyMembership(
     consensusState,
     proofInit,
@@ -466,11 +468,11 @@ function chanCloseAck(
   assert(connection.state === OPEN)
   consensusState = get("clients/{connection.clientIdentifier}/consensusState")
   expected = Channel{CLOSED, channel.counterpartyModuleIdentifier, channel.moduleIdentifier,
-                     channelIdentifier, 0, 0, timeoutHeight}
+                     channelIdentifier, timeoutHeight}
   assert(verifyMembership(
     consensusState.getRoot(),
     proofInit,
-    "connections/{connection.counterpartyIdentifier}/channels/{channel.counterpartyChannelIdentifier}",
+    channelKey(connection.counterpartyIdentifier, channel.counterpartyChannelIdentifier),
     expected
   ))
   channel.state = CLOSED
@@ -501,15 +503,15 @@ function chanCloseTimeout(
   switch channel.state {
     case CLOSETRY:
       expected = Channel{OPEN, channel.counterpartyModuleIdentifier, channel.moduleIdentifier,
-                         channelIdentifier, 0, 0, timeoutHeight}
+                         channelIdentifier, timeoutHeight}
     case CLOSED:
       expected = Channel{CLOSETRY, channel.counterpartyModuleIdentifier, channel.moduleIdentifier,
-                         channelIdentifier, 0, 0, timeoutHeight}
+                         channelIdentifier, timeoutHeight}
   }
   verifyMembership(
     consensusState,
     proofTimeout,
-    "connections/{connectionIdentifier}/channels/{channelIdentifier}",
+    channelKey(connection.counterpartyIdentifier, channel.counterpartyIdentifier),
     expected
   )
   channel.state = OPEN
@@ -549,10 +551,11 @@ function sendPacket(packet: Packet) {
   assert(packet.destConnection === connection.counterpartyConnectionIdentifier)
   consensusState = get("clients/{connection.clientIdentifier}")
   assert(consensusState.getHeight() < packet.timeoutHeight)
-  assert(packet.sequence === channel.nextSequenceSend)
-  channel.nextSequenceSend = channel.nextSequenceSend + 1
-  set("connections/{packet.sourceConnection}/channels/{packet.sourceChannel}", channel)
-  set("connections/{packet.sourceConnection}/channels/{packet.sourceChannel}/packets/{sequence}", commit(packet.data))
+  nextSequenceSend = get(nextSequenceSendKey(packet.sourceConnection, packet.sourceChannel))
+  assert(packet.sequence === nextSequenceSend)
+  nextSequenceSend = nextSequenceSend + 1
+  set(nextSequenceSendKey(packet.sourceConnection, packet.sourceChannel), nextSequenceSend)
+  set(packetCommitmentKey(packet.sourceConnection, packet.sourceChannel, sequence), commit(packet.data))
 }
 ```
 
@@ -587,7 +590,7 @@ function recvPacket(packet: Packet, proof: CommitmentProof) {
   assert(verifyMembership(
     consensusState.getRoot(),
     proof,
-    "connections/{packet.sourceConnection}/channels/{packet.sourceChannel}/packets/{sequence}",
+    packetCommitmentKey(packet.sourceConnection, packet.sourceChannel, packet.sequence),
     commit(packet.data)
   ))
   nextSequenceRecv = nextSequenceRecv + 1
