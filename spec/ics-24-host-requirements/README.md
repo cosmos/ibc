@@ -3,7 +3,6 @@ ics: 24
 title: Host State Machine Requirements
 stage: draft
 category: ibc-core
-requires: 2
 required-by: 2, 3, 18
 author: Christopher Goes <cwgoes@tendermint.com>
 created: 2019-04-16
