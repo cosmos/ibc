@@ -207,7 +207,7 @@ function chanOpenInit(
   connectionIdentifier: Identifier, channelIdentifier: Identifier,
   counterpartyChannelIdentifier: Identifier, counterpartyModuleIdentifier: Identifier, nextTimeoutHeight: uint64) {
   moduleIdentifier = getCallingModule()
-  assert(get("connections/{connectionIdentifier}/channels/{channelIdentifier}") === null)
+  assert(get(channelKey(connectionIdentifier, channelIdentifier)) == nil)
   connection = get("connections/{connectionIdentifier}")
   assert(connection.state === OPEN)
   channel = Channel{INIT, moduleIdentifier, counterpartyModuleIdentifier,
@@ -577,7 +577,8 @@ function recvPacket(packet: Packet, proof: CommitmentProof) {
   assert(channel.state === OPEN)
   assert(getCallingModule() === channel.moduleIdentifier)
   assert(packet.sourceChannel === channel.counterpartyChannelIdentifier)
-  assert(packet.sequence === channel.nextSequenceRecv)
+  nextSequenceRecv = get(nextSequenceRecvKey(packet.destConnection, packet.destChannel))
+  assert(packet.sequence === nextSequenceRecv)
   connection = get("connections/{connectionIdentifier}")
   assert(packet.sourceConnection === connection.counterpartyConnectionIdentifier)
   assert(connection.state === OPEN)
@@ -589,8 +590,8 @@ function recvPacket(packet: Packet, proof: CommitmentProof) {
     "connections/{packet.sourceConnection}/channels/{packet.sourceChannel}/packets/{sequence}",
     commit(packet.data)
   ))
-  channel.nextSequenceRecv = channel.nextSequenceRecv + 1
-  set("connections/{packet.destConnection}/channels/{packet.destChannel}", channel)
+  nextSequenceRecv = nextSequenceRecv + 1
+  set(nextSequenceRecvKey(packet.destConnection, packet.destChannel), nextSequenceRecv)
 }
 ```
 
@@ -624,23 +625,21 @@ function timeoutPacket(packet: Packet, proof: CommitmentProof, nextSequenceRecv:
   assert(nextSequenceRecv < packet.sequence)
 
   // verify we actually sent this packet, check the store
-  key = "connections/{packet.sourceConnection}/channels/{packet.sourceChannel}/packets/{sequence}"
-  assert(get(key) === commit(packet.data))
+  assert(get(packetCommitmentKey(packet.sourceConnection, packet.sourceChannel, sequence)) === commit(packet.data))
 
   // assert we haven't "timed-out" already
-  timeoutKey = "connections/{packet.sourceConnection}/channels/{packet.sourceChannel}/packets/{sequence}/timedOut"
-  assert(get(timeoutKey) === nil)
+  assert(get(packetTimeoutKey(packet.sourceConnection, packet.sourceChannel, sequence)) === nil)
 
   // check that the recv sequence is as claimed
   assert(verifyMembership(
     consensusState.getRoot(),
     proof,
-    "connections/{packet.destConnection}/channels/{packet.destChannel}/nextSequenceRecv",
+    nextSequenceRecvKey(packet.destConnection, packet.destChannel),
     nextSequenceRecv
   ))
 
   // mark the store so we can't "timeout" again"
-  set(timeoutKey, "true")
+  set(packetTimeoutKey(packet.sourceConnection, packet.sourceChannel, sequence), "1")
 }
 ```
 
@@ -660,7 +659,8 @@ function recvTimeoutPacket(packet: Packet, proof: CommitmentProof) {
   assert(channel.state === OPEN)
   assert(getCallingModule() === channel.moduleIdentifier)
   assert(packet.sourceChannel === channel.counterpartyChannelIdentifier)
-  assert(packet.sequence === channel.nextSequenceRecv)
+  nextSequenceRecv = get(nextSequenceRecvKey(packet.destConnection, packet.destChannel))
+  assert(packet.sequence === nextSequenceRecv)
   connection = get("connections/{connectionIdentifier}")
   assert(packet.sourceConnection === connection.counterpartyConnectionIdentifier)
   assert(connection.state === OPEN)
@@ -669,12 +669,12 @@ function recvTimeoutPacket(packet: Packet, proof: CommitmentProof) {
   assert(verifyMembership(
     consensusState.getRoot(),
     proof,
-    "connections/{packet.sourceConnection}/channels/{packet.sourceChannel}/packets/{sequence}"
+    packetCommitmentKey(packet.sourceConnection, packet.sourceChannel, sequence),
     key,
     commit(packet.data)
   ))
-  channel.nextSequenceRecv = channel.nextSequenceRecv + 1
-  set("connections/{packet.destConnection}/channels/{packet.destChannel}", channel)
+  nextSequenceRecv = channel.nextSequenceRecv + 1
+  set(nextSequenceRecvKey(packet.destConnection, packet.destChannel), nextSequenceRecv)
 }
 ```
 
@@ -701,18 +701,15 @@ function cleanupPacket(packet: Packet, proof: CommitmentProof, nextSequenceRecv:
   assert(verifyMembership(
     consensusState.getRoot(),
     proof,
-    "connections/{packet.destConnection}/channels/{packet.destChannel}/nextSequenceRecv",
+    nextSequenceRecvKey(packet.destConnection, packet.destChannel),
     nextSequenceRecv
   ))
 
-  // calculate key
-  key = "connections/{packet.sourceConnection}/channels/{packet.sourceChannel}/packets/{sequence}"
-
   // verify we actually sent the packet, check the store
-  assert(get(key) === commit(packet.data))
+  assert(get(packetCommitmentKey(packet.sourceConnection, packet.sourceChannel, sequence)) === commit(packet.data))
   
   // clear the store
-  delete(key)
+  delete(packetCommitmentKey(packet.sourceConnection, packet.sourceChannel, sequence))
 }
 ```
 
