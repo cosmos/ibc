@@ -6,7 +6,7 @@ category: ibc-core
 requires: 2, 3, 23, 24
 author: Christopher Goes <cwgoes@tendermint.com>
 created: 2019-03-07
-modified: 2019-06-04
+modified: 2019-06-05
 ---
 
 ## Synopsis
@@ -17,7 +17,11 @@ Channels are payload-agnostic. The modules which send and receive IBC packets de
 
 ### Motivation
 
-The interblockchain communication protocol uses a cross-chain message passing model which makes no assumptions about network synchrony. IBC *packets* are relayed from one blockchain to the other by external relayer processes. Chain `A` and chain `B` confirm new blocks independently, and packets from one chain to the other may be delayed, censored, or re-ordered arbitrarily. Packets are public and can be read from a blockchain by any relayer and submitted to any other blockchain. In order to provide the desired ordering, exactly-once delivery, and module permissioning semantics to the application layer, the interblockchain communication protocol must implement an abstraction to enforce these semantics — channels are this abstraction.
+The interblockchain communication protocol uses a cross-chain message passing model which makes no assumptions about network synchrony. IBC *packets* are relayed from one blockchain to the other by external relayer processes. Chain `A` and chain `B` confirm new blocks independently, and packets from one chain to the other may be delayed, censored, or re-ordered arbitrarily. Packets are public and can be read from a blockchain by any relayer and submitted to any other blockchain.
+
+The ordering and exactly-once delivery guarantees provided by IBC can be used to reason about the combined state of connected modules on two chains. For example, an application may wish to allow a single tokenized asset to be transferred between and held on multiple blockchains while preserving fungibility and conservation of supply. The application can mint asset vouchers on chain `B` when a particular IBC packet is committed to chain `B`, and require outgoing sends of that packet on chain `A` to escrow an equal amount of the asset on chain `A` until the vouchers are later redeemed back to chain `A` with an IBC packet in the reverse direction. This ordering guarantee along with correct application logic can ensure that total supply is preserved across both chains and that any vouchers minted on chain `B` can later be redeemed back to chain `A`.
+
+In order to provide the desired ordering, exactly-once delivery, and module permissioning semantics to the application layer, the interblockchain communication protocol must implement an abstraction to enforce these semantics — channels are this abstraction.
 
 ### Definitions
 
@@ -31,7 +35,7 @@ The interblockchain communication protocol uses a cross-chain message passing mo
 
 `Identifier`, `get`, `set`, `delete`, and module-system related primitives are as defined in [ICS 24](../ics-24-host-requirements).
 
-A *channel* is a pipeline for exactly-once packet delivery between specific modules on separate blockchains, which has at least one send and one receive end.
+A *channel* is a pipeline for exactly-once packet delivery between specific modules on separate blockchains, which has at least one send end and one receive end.
 
 A *bidirectional* channel is a channel where packets can flow in both directions: from `A` to `B` and from `B` to `A`.
 
@@ -43,7 +47,7 @@ An *unordered* channel is a channel where packets can be delivered in any order,
 
 Directionality and ordering are independent, so one can speak of a bidirectional unordered channel, a unidirectional ordered channel, etc.
 
-All channels provide exactly-once packet delivery, meaning that a packet sent on one end of a channel is delivered no more than once, eventually, to the other end.
+All channels provide exactly-once packet delivery, meaning that a packet sent on one end of a channel is delivered no more and no less than once, eventually, to the other end.
 
 This specification only concerns itself with *bidirectional ordered* channels. *Unidirectional* and *unordered* channels use almost exactly the same protocol and will be outlined in a future ICS.
 
@@ -111,13 +115,11 @@ interface Packet {
 
 ## Technical Specification
 
-#### Reasoning
-
-The ordering and exactly-once delivery guarantees provided by IBC can be used to reason about the combined state of connected modules on two chains. For example, an application may wish to allow a single tokenized asset to be transferred between and held on multiple blockchains while preserving fungibility and conservation of supply. The application can mint asset vouchers on chain `B` when a particular IBC packet is committed to chain `B`, and require outgoing sends of that packet on chain `A` to escrow an equal amount of the asset on chain `A` until the vouchers are later redeemed back to chain `A` with an IBC packet in the reverse direction. This ordering guarantee along with correct application logic can ensure that total supply is preserved across both chains and that any vouchers minted on chain `B` can later be redeemed back to chain `A`.
+### Channel lifecycle management
 
 ![channel-state-machine](channel-state-machine.png)
 
-### Channel opening handshake
+#### Opening handshake
 
 The `chanOpenInit` function is called by a module to initiate a channel opening handshake with a module on another chain.
 The opening channel must provide the identifiers of the local channel end, local connection, and desired remote channel end.
@@ -257,7 +259,7 @@ function chanOpenConfirm(
 }
 ```
 
-The `chanOpenTimeout` function can be called by either the handshake-originating
+The `chanOpenTimeout` function is called by either the handshake-originating
 module or the handshake-confirming module to prove that a timeout has occurred and reset the state.
 
 ```typescript
@@ -311,9 +313,9 @@ function chanOpenTimeout(
 }
 ```
 
-### Channel closing handshake
+#### Closing handshake
 
-The `chanCloseInit` function can be called by either module to initiate
+The `chanCloseInit` function is called by either module to initiate
 the channel-closing handshake.
 
 ```typescript
@@ -409,7 +411,7 @@ function chanCloseAck(
 }
 ```
 
-The `chanCloseTimeout` function can be called by either the handshake-originating
+The `chanCloseTimeout` function is called by either the handshake-originating
 or handshake-accepting module to prove a timeout and reset state.
 
 ```typescript
@@ -448,7 +450,7 @@ function chanCloseTimeout(
 }
 ```
 
-### Packet handling
+### Packet flow & handling
 
 ![packet-state-machine](packet-state-machine.png)
 
@@ -524,13 +526,13 @@ function recvPacket(packet: Packet, proof: CommitmentProof) {
 }
 ```
 
-### Packet timeouts
+#### Timeouts
 
 Application semantics may require some timeout: an upper limit to how long the chain will wait for a transaction to be processed before considering it an error. Since the two chains have different local clocks, this is an obvious attack vector for a double spend - an attacker may delay the relay of the receipt or wait to send the packet until right after the timeout - so applications cannot safely implement naive timeout logic themselves.
 
 Note that in order to avoid any possible "double-spend" attacks, the timeout algorithm requires that the destination chain is running and reachable. One can prove nothing in a complete network partition, and must wait to connect; the timeout must be proven on the recipient chain, not simply the absence of a response on the sending chain.
 
-#### Sending end
+##### Sending end
 
 The `timeoutPacket` function is called by a module.
 
@@ -577,7 +579,7 @@ function timeoutPacket(packet: Packet, proof: CommitmentProof, nextSequenceRecv:
 If relations are enforced between timeout heights of subsequent packets, safe bulk timeouts of all packets prior to a timed-out packet can be performed.
 This specification omits details for now.
 
-#### Receiving end
+##### Receiving end
 
 The `recvTimeoutPacket` function is called by a module in order to process an IBC packet sent on the corresponding channel which has timed out.
 This must be done in order to safely increment the received packet sequence and move on to future packets.
@@ -608,9 +610,9 @@ function recvTimeoutPacket(packet: Packet, proof: CommitmentProof) {
 }
 ```
 
-### Cleaning up state
+#### Cleaning up state
 
-`cleanupPacket` can be called by a module to remove a received packet commitment from storage. The receiving end must have already processed the packet (whether regularly or past timeout).
+`cleanupPacket` is called by a module to remove a received packet commitment from storage. The receiving end must have already processed the packet (whether regularly or past timeout).
 
 ```typescript
 function cleanupPacket(packet: Packet, proof: CommitmentProof, nextSequenceRecv: uint64) {
@@ -664,7 +666,7 @@ Coming soon.
 
 ## History
 
-4 June 2019 - Draft submitted
+5 June 2019 - Draft submitted
 
 ## Copyright
 
