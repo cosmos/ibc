@@ -1,5 +1,4 @@
 ---
-
 ics: 2
 title: Consensus Verification
 stage: draft
@@ -9,7 +8,6 @@ required-by: 3
 author: Juwoon Yun <joon@tendermint.com>, Christopher Goes <cwgoes@tendermint.com>
 created: 2019-02-25
 modified: 2019-04-29
-
 ---
 
 ## Synopsis
