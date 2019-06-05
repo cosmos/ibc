@@ -51,10 +51,10 @@ All channels provide exactly-once packet delivery, meaning that a packet sent on
 
 This specification only concerns itself with *bidirectional ordered* channels. *Unidirectional* and *unordered* channels use almost exactly the same protocol and will be outlined in a future ICS.
 
-Channels have a *state*:
+Channel ends have a *state*:
 
 ```typescript
-enum ChannelState {
+enum ChannelEndState {
   INIT,
   OPENTRY,
   OPEN,
@@ -63,11 +63,17 @@ enum ChannelState {
 }
 ```
 
+- A channel end in `INIT` state has just started the opening handshake.
+- A channel end in `OPENTRY` state has acknowledged the handshake step on the counterparty chain.
+- A channel end in `OPEN` state has completed the handshake and is ready to send and receive packets.
+- A channel end in `CLOSETRY` state has just started the closing handshake.
+- A channel end in `CLOSED` state has been closed and can no longer be used to send or receive packets.
+
 An *end* of a channel is a data structure on one chain storing channel metadata:
 
 ```typescript
 interface ChannelEnd {
-  state: ChannelState
+  state: ChannelEndState
   counterpartyChannelIdentifier: Identifier
   moduleIdentifier: Identifier
   counterpartyModuleIdentifier: Identifier
@@ -76,6 +82,14 @@ interface ChannelEnd {
   nextTimeoutHeight: uint64
 }
 ```
+
+- The `state` is the current state of the channel end.
+- The `counterpartyChannelIdentifier` identifies the channel end on the counterparty chain.
+- The `moduleIdentifier` identifies the module which owns this channel end.
+- The `counterpartyModuleIdentifier` identifies the module on the counterparty chain which owns the other end of the channel.
+- The `nextSequenceSend` stores the sequence number for the next packet to be sent.
+- The `nextSequenceRecv` stores the sequence number for the next packet to be received.
+- The `nextTimeoutHeight` stores the timeout height for the next stage of the handshake, used only in channel opening and closing handshakes.
 
 An IBC *packet* is a particular datagram, defined as follows:
 
@@ -90,6 +104,14 @@ interface Packet {
   data: bytes
 }
 ```
+
+- The `sequence` number corresponds to the order of sends and receives, where a packet with an earlier sequence number must be sent and received before a packet with a later sequence number.
+- The `timeoutHeight` indicates a consensus height on the destination chain after which the packet will no longer be processed, and will instead count as having timed-out.
+- The `sourceConnection` identifies the connection end on the sending chain.
+- The `sourceChannel` identifies the channel end on the sending chain.
+- The `destConnection` identifies the connection end on the receiving chain.
+- The `destChannel` identifies the channel end on the receiving chain.
+- The `data` is an opaque field which can be defined by the application logic of the associated modules.
 
 ### Desired Properties
 
