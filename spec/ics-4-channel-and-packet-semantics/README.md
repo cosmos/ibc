@@ -137,11 +137,53 @@ interface Packet {
 
 ## Technical Specification
 
-### Channel lifecycle management
+### Preliminaries
+
+#### Store keys
+
+Channel structures are stored under a store key prefix unique to a combination of a connection identifier and channel identifier:
+
+```typescript
+function channelKey(connectionIdentifier: Identifier, channelIdentifier: Identifier) {
+  return "connections/{connectionIdentifier}/channels/{channelIdentifier}"
+}
+```
+
+`nextSequenceSend` and `nextSequenceRecv` are stored separately so they can be proved individually:
+
+```typescript
+function nextSequenceSendKey(connectionIdentifier: Identifier, channelIdentifier: Identifier) {
+  return channelKey(connectionIdentifier, channelIdentifier) + "/nextSequenceSend"
+}
+
+function nextSequenceRecvKey(connectionIdentifier: Identifier, channelIdentifier: Identifier) {
+  return channelKey(connectionIdentifier, channelIdentifier) + "/nextSequenceRecv"
+}
+```
+
+Packet commitments are stored under the packet sequence number:
+
+```typescript
+function packetCommitmentKey(connectionIdentifier: Identifier, channelIdentifier: Identifier, sequence: uint64) {
+  return channelKey(connectionIdentifier, channelIdentifier) + "/packets/" + sequence
+}
+```
+
+An additional bit is stored to indicate whether a packet has timed-out:
+
+```typescript
+function packetTimeoutKey(connectionIdentifier: Identifier, channelIdentifier: Identifier, sequence: uint64) {
+  return channelKey(connectionIdentifier, channelIdentifier) + "/packets/" + sequence + "/timeout"
+}
+```
+
+### Subprotocols
+
+#### Channel lifecycle management
 
 ![channel-state-machine](channel-state-machine.png)
 
-#### Opening handshake
+##### Opening handshake
 
 The `chanOpenInit` function is called by a module to initiate a channel opening handshake with a module on another chain.
 The opening channel must provide the identifiers of the local channel end, local connection, and desired remote channel end.
@@ -339,7 +381,7 @@ function chanOpenTimeout(
 }
 ```
 
-#### Closing handshake
+##### Closing handshake
 
 The `chanCloseInit` function is called by either module to initiate
 the channel-closing handshake.
@@ -476,11 +518,11 @@ function chanCloseTimeout(
 }
 ```
 
-### Packet flow & handling
+#### Packet flow & handling
 
 ![packet-state-machine](packet-state-machine.png)
 
-#### Sending packets
+##### Sending packets
 
 The `sendPacket` function is called by a module in order to send an IBC packet on a channel end owned by the calling module to the corresponding module the counterparty chain.
 
@@ -605,7 +647,7 @@ function timeoutPacket(packet: Packet, proof: CommitmentProof, nextSequenceRecv:
 If relations are enforced between timeout heights of subsequent packets, safe bulk timeouts of all packets prior to a timed-out packet can be performed.
 This specification omits details for now.
 
-##### Receiving end
+###### Receiving end
 
 The `recvTimeoutPacket` function is called by a module in order to process an IBC packet sent on the corresponding channel which has timed out.
 This must be done in order to safely increment the received packet sequence and move on to future packets.
@@ -636,7 +678,7 @@ function recvTimeoutPacket(packet: Packet, proof: CommitmentProof) {
 }
 ```
 
-#### Cleaning up state
+##### Cleaning up state
 
 `cleanupPacket` is called by a module to remove a received packet commitment from storage. The receiving end must have already processed the packet (whether regularly or past timeout).
 
