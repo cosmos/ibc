@@ -146,6 +146,10 @@ interface Packet {
 The `chanOpenInit` function is called by a module to initiate a channel opening handshake with a module on another chain.
 The opening channel must provide the identifiers of the local channel end, local connection, and desired remote channel end.
 
+When the opening handshake is complete, the module which initiates the handshake will own the end of the created channel on the host ledger, and the counterparty module which
+it specifies will own the other end of the created channel on the counterparty chain. Once a channel is created, ownership cannot be changed (although higher-level abstractions
+could be implemented to provide this).
+
 ```typescript
 interface ChanOpenInit {
   connectionIdentifier: Identifier
