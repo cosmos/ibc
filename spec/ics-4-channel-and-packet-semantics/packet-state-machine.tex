@@ -15,39 +15,25 @@
 
 \begin{tikzpicture}[auto, thick, node distance=2cm, >=triangle 45]
 \draw
-	node [state, name=empty, right = 0.5mm] {\CS{Uninitialized}{Uninitialized}}
-  node [state, below of=empty] (init) {\CS{Init}{Uninitialized}}
-  node [state, right of=init] (tryopen) {\CS{Init}{TryOpen}}
-  node [state, right of=tryopen] (tryopen1) {\CS{Open}{TryOpen}}
-  node [state, right of=tryopen1] (open) {\CS{Open}{Open}}
-  node [state, below of=open] (tryclose) {\CS{TryClose}{Open}}
-  node [state, left of=tryclose] (tryclose1) {\CS{TryClose}{Closed}}
-  node [state, left of=tryclose1] (closed) {\CS{Closed}{Closed}};
+	node [state, name=start, right = 0.5mm] {\CS{Unsent}{Unreceived}}
+  node [state, right of=start] (send) {\CS{Sent}{Unreceived}}
+  node [state, right of=send] (recv) {\CS{Sent}{Received}}
+  node [state, below of=send] (timeout) {\CS{Sent,TimedOut}{Unreceived}}
+  node [state, right of=timeout] (timeoutfinal) {\CS{Sent,TimedOut}{TimedOut}};
 
   \draw node [state, name = key, right = 18cm, above = 2mm] {\begin{tabular}{l}
   \it{Key} \\
-  \textcolor{blue}{Opening Handshake} \\
-  \textcolor{green}{Closing Handshake} \\
-  \textcolor{red}{Timeouts} \\
+  \textcolor{blue}{Standard Flow} \\
+  \textcolor{red}{Timeout Flow} \\
   \end{tabular}};
 
-	\draw[->, blue, bend right](empty) edge node[yshift=3mm, xshift=1mm] {\tiny{\textsc{ChanInit}}} (init);
-  \draw[->, blue](init) edge node {\tiny{\textsc{ChanOpenTry}}} (tryopen);
-	\draw[->, blue](tryopen) edge node {\tiny{\textsc{ChanOpenAck}}} (tryopen1);
-	\draw[->, blue](tryopen1) edge node {\tiny{\textsc{ChanOpenConfirm}}} (open);
+	\draw[->, blue](start) edge node[yshift=3mm, xshift=1mm] {\tiny{\textsc{sendPacket}}} (send);
+  \draw[->, blue](send) edge node {\tiny{\textsc{recvPacket}}} (recv);
 
-  \draw[->, green, bend right](open) edge node[yshift=3mm, xshift=1mm] {\tiny{\textsc{ChanCloseTry}}} (tryclose);
-  \draw[->, green](tryclose) edge node {\tiny{\textsc{ChanCloseAck}}} (tryclose1);
-  \draw[->, green](tryclose1) edge node {\tiny{\textsc{ChanCloseConfirm}}} (closed);
+  \draw[->, red](send) edge node {\tiny{\textsc{timeoutPacket}}} (timeout);
+  \draw[->, red](timeout) edge node {\tiny{\textsc{recvTimeoutPacket}}} (timeoutfinal);
 
-  \draw[->, red, bend right](init) edge node {\tiny{\textsc{ChanOpenTimeout}}} (empty);
-  \draw[->, red](tryopen) edge node {\tiny{\textsc{ChanOpenTimeout}}} (empty);
-  \draw[->, red](tryopen1) edge node {\tiny{\textsc{ChanOpenTimeout}}} (empty);
-
-  \draw[->, red, bend right](tryclose) edge node {\tiny{\textsc{ChanCloseTimeout}}} (open);
-  \draw[->, red](tryclose1) edge node {\tiny{\textsc{ChanCloseTimeout}}} (open);
-
-	\draw[color=black,thick](-0.5,-14) rectangle (22,2.8);
+	\draw[color=black,thick](-1.5,-8) rectangle (20,2);
 
 	\node at (-0.5,1.5) [above=0.5mm, right=5mm] {\huge{\textsc{Packet State Machine}}};
 
