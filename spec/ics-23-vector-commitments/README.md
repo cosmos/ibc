@@ -68,7 +68,13 @@ type CommitmentProof = object
 
 ### Required functions
 
-An commitment construction MUST provide the following functions:
+An commitment construction MUST provide the following functions, defined over keys and values as byte arrays:
+
+```typescript
+type Key = string
+
+type Value = string
+```
 
 #### Initialization
 
@@ -119,13 +125,13 @@ type createNonMembershipProof = (state: CommitmentState, key: Key) => Commitment
 The `verifyMembership` function verifies a proof that a key has been set to a particular value in an commitment.
 
 ```typescript
-type verifyMembership = (root: CommitmentRoot, proof: CommitmentProof, key: Key, value: Value) => bool
+type verifyMembership = (root: CommitmentRoot, proof: CommitmentProof, key: Key, value: Value) => boolean
 ```
 
 The `verifyNonMembership` function verifies a proof that a key has not been set to any value in an commitment.
 
 ```typescript
-type verifyNonMembership = (root: CommitmentRoot, proof: CommitmentProof, key: Key) => bool
+type verifyNonMembership = (root: CommitmentRoot, proof: CommitmentProof, key: Key) => boolean
 ```
 
 ### Optional functions
@@ -135,25 +141,25 @@ An commitment construction MAY provide the following functions:
 The `batchVerifyMembership` function verifies a proof that many keys have been set to specific values in an commitment.
 
 ```typescript
-type batchVerifyMembership = (root: CommitmentRoot, proof: CommitmentProof, items: Map<Key, Value>) => bool
+type batchVerifyMembership = (root: CommitmentRoot, proof: CommitmentProof, items: Map<Key, Value>) => boolean
 ```
 
 The `batchVerifyNonMembership` function verifies a proof that many keys have not been set to any value in an commitment.
 
 ```typescript
-type batchVerifyNonMembership = (root: CommitmentRoot, proof: CommitmentProof, keys: Set<Key>) => bool
+type batchVerifyNonMembership = (root: CommitmentRoot, proof: CommitmentProof, keys: Set<Key>) => boolean
 ```
 
 If defined, these functions MUST be computationally equivalent to the conjunctive union of `verifyMembership` and `verifyNonMembership` respectively (`proof` may vary):
 
 ```typescript
 batchVerifyMembership(root, proof, items) ===
-  all(verifyMembership(root, proof, item) for item in items)
+  all(items.map((item) => verifyMembership(root, proof, item)))
 ```
 
 ```typescript
 batchVerifyNonMembership(root, proof, keys) ===
-  all(verifyNonMembership(root, proof, key) for key in keys)
+  all(items.map((item) => verifyNonMembership(root, proof, key)))
 ```
 
 If batch verification is possible and more efficient than individual verification of one proof per element, an commitment construction SHOULD define batch verification functions.
@@ -171,6 +177,9 @@ For any key `key` last set to a value `value` in the commitment `acc`,
 ```typescript
 root = getRoot(acc)
 proof = createMembershipProof(acc, key, value)
+```
+
+```
 Pr(verifyMembership(root, proof, key, value) === false) negligible in λ
 ```
 
@@ -179,6 +188,9 @@ For any key `key` not set in the commitment `acc`, for all values of `proof` and
 ```typescript
 root = getRoot(acc)
 proof = createNonMembershipProof(acc, key)
+```
+
+```
 Pr(verifyNonMembership(root, proof, key) === false) negligible in λ
 ```
 
@@ -188,13 +200,13 @@ Commitment proofs MUST be *sound*: key => value mappings which have not been add
 
 For any key `key` last set to a value `value` in the commitment `acc`, for all values of `proof`,
 
-```typescript
+```
 Pr(verifyNonMembership(root, proof, key) === true) negligible in λ
 ```
 
 For any key `key` not set in the commitment `acc`, for all values of `proof` and all values of `value`,
 
-```typescript
+```
 Pr(verifyMembership(root, proof, key, value) === true) negligible in λ
 ```
 
@@ -207,12 +219,15 @@ For any key `key` set in the commitment `acc`, there is one `value` for which:
 ```typescript
 root = getRoot(acc)
 proof = createMembershipProof(acc, key, value)
+```
+
+```
 Pr(verifyMembership(root, proof, key, value) === false) negligible in λ
 ```
 
 For all other values `otherValue` where `value /= otherValue`, for all values of `proof`,
 
-```typescript
+```
 Pr(verifyMembership(root, proof, key, otherValue) === true) negligible in λ
 ```
 
