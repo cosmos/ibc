@@ -106,7 +106,7 @@ For safety (e.g. exactly-once packet delivery), host chains MUST have eventual d
 
 For liveness (relaying packets, which will have a timeout), host chains MUST have partially synchronous data availability (e.g. within a wall clock or block height bound), such that any key-value pairs in state can be retrieved by relayers within the bound.
 
-Data computable from a subset of state and knowledge of the state machine (e.g. IBC packet data, which is not directly stored) are also assumed to be available to relayers.
+Data computable from a subset of state and knowledge of the state machine (e.g. IBC packet data, which is not directly stored) are also assumed to be available to and efficiently computable by relayers.
 
 Light clients of particular consensus algorithms may have different and/or more strict data availability requirements.
 
