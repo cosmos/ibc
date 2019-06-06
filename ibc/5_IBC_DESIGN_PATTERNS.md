@@ -28,3 +28,36 @@ off-chain and merely check that a new channel creation attempt doesn't use a pre
 reserved identifier.
 
 ## Call receiver instead of call dispatch
+
+Essential to the functionality of the IBC handler is an interface to other modules
+running on the same ledger, so that it can accept requests to send packets and can
+route incoming packets to modules. This interface should be as minimal as possible
+in order to reduce implementation complexity and requirements imposed on host state machines.
+
+For this reason, the core IBC logic uses a receive-only call pattern that differs
+slightly from the intuitive dataflow. As one might expect, modules call into the IBC handler to create
+connections, channels, and send packets. However, instead of the IBC handler, upon receipt
+of a packet from another chain, selecting and calling into the appropriate module,
+the module itself must call `recvPacket` on the IBC handler (likewise for accepting
+channel creation handshakes). When `recvPacket` is called, the IBC handler will check
+that the calling module is authorized to receive and process the packet (based on included proofs and
+known state of connections / channels), perform appropriate state updates (incrementing
+sequence numbers to prevent replay), and return control to the module or throw on error.
+The IBC handler never calls into modules directly.
+
+Although a bit counterintuitive to reason about at first, this pattern has a few notable advantages:
+- It minimizes requirements of the host state machine, since the IBC handler need not understand how to call
+  into other modules or store any references to them.
+- It avoids the necessity of managing a module lookup table in the handler state.
+- It avoids the necessity of dealing with module return data or failures. If a module does not want to 
+  receive a packet (perhaps having implemented additional authorization on top), it simply never calls
+  `recvPacket`. If the routing logic were implemented in the IBC handler, the handler would need to deal
+  with the failure of the module, which is tricky to interpret.
+
+It also has one notable disadvantage:
+- Without an additional abstraction, the relayer logic becomes more complex, since off-chain
+  relayer processes will need to track the state of multiple modules to determine when packets
+  can be submitted.
+
+However, for common relay patterns, an "IBC relayer" module can optionally be implemented, outside of IBC
+core, which maintains a module dispatch table and simplifies the job of relayers. This relayer module will be defined in ICS 26.
