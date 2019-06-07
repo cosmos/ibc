@@ -405,7 +405,8 @@ interface ChanCloseInit {
 ```
 
 ```typescript
-function chanCloseInit(connectionIdentifier: Identifier, channelIdentifier: Identifier, nextTimeoutHeight: uint64) {
+function chanCloseInit(
+  connectionIdentifier: Identifier, channelIdentifier: Identifier, nextTimeoutHeight: uint64) {
   channel = get(channelKey(connectionIdentifier, channelIdentifier))
   assert(channel.state === OPEN)
   connection = get("connections/{connectionIdentifier}")
