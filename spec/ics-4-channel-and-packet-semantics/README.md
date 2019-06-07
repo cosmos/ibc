@@ -238,7 +238,7 @@ function chanOpenTry(
   connectionIdentifier: Identifier, channelIdentifier: Identifier, counterpartyChannelIdentifier: Identifier,
   moduleIdentifier: Identifier, counterpartyModuleIdentifier: Identifier,
   timeoutHeight: uint64, nextTimeoutHeight: uint64, proofInit: CommitmentProof) {
-  assert(getConsensusState().getHeight() < timeoutHeight)
+  assert(getConsensusState().height < timeoutHeight)
   assert(get(channelKey(connectionIdentifier, channelIdentifier)) === null)
   assert(getCallingModule() === moduleIdentifier)
   connection = get("connections/{connectionIdentifier}")
@@ -275,7 +275,7 @@ interface ChanOpenAck {
 function chanOpenAck(
   connectionIdentifier: Identifier, channelIdentifier: Identifier,
   timeoutHeight: uint64, nextTimeoutHeight: uint64, proofTry: CommitmentProof) {
-  assert(getConsensusState().getHeight() < timeoutHeight)
+  assert(getConsensusState().height < timeoutHeight)
   channel = get(channelKey(connectionIdentifier, channelIdentifier))
   assert(channel.state === INIT)
   assert(getCallingModule() === channel.moduleIdentifier)
@@ -311,7 +311,7 @@ interface ChanOpenConfirm {
 function chanOpenConfirm(
   connectionIdentifier: Identifier, channelIdentifier: Identifier,
   timeoutHeight: uint64, proofAck: CommitmentProof) {
-  assert(getConsensusState().getHeight() < timeoutHeight)
+  assert(getConsensusState().height < timeoutHeight)
   channel = get(channelKey(connectionIdentifier, channelIdentifier))
   assert(channel.state === OPENTRY)
   assert(getCallingModule() === channel.moduleIdentifier)
@@ -351,7 +351,7 @@ function chanOpenTimeout(
   connection = get("connections/{connectionIdentifier}")
   assert(connection.state === OPEN)
   consensusState = get("clients/{connection.clientIdentifier}/consensusState")
-  assert(consensusState.getHeight() >= connection.nextTimeoutHeight)
+  assert(consensusState.height >= connection.nextTimeoutHeight)
   switch channel.state {
     case INIT:
       assert(verifyNonMembership(
