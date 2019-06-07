@@ -135,6 +135,12 @@ interface Packet {
 
 ## Technical Specification
 
+### Dataflow visualization
+
+The architecture of clients, connections, channels and packets:
+
+![dataflow](dataflow.png)
+
 ### Preliminaries
 
 #### Store keys
