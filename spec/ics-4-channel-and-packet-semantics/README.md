@@ -652,7 +652,7 @@ function timeoutPacket(packet: Packet, proof: CommitmentProof, nextSequenceRecv:
     nextSequenceRecv
   ))
 
-  // mark the store so we can't "timeout" again"
+  // mark the store so we can't "timeout" again
   set(packetTimeoutKey(packet.sourceConnection, packet.sourceChannel, sequence), "1")
 }
 ```
