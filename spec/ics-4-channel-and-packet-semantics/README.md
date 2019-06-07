@@ -33,13 +33,13 @@ In order to provide the desired ordering, exactly-once delivery, and module perm
 
 `commit` is a generic collision-resistant hash function, the specifics of which must be agreed on by the modules utilizing the channel.
 
-`Identifier`, `get`, `set`, `delete`, and module-system related primitives are as defined in [ICS 24](../ics-24-host-requirements).
+`Identifier`, `get`, `set`, `delete`, `getConsensusState`, and module-system related primitives are as defined in [ICS 24](../ics-24-host-requirements).
 
-A *channel* is a pipeline for exactly-once packet delivery between specific modules on separate blockchains, which has at least one send end and one receive end.
+A *channel* is a pipeline for exactly-once packet delivery between specific modules on separate blockchains, which has at least one end capable of sending packets and one end capable of receiving packets.
 
 A *bidirectional* channel is a channel where packets can flow in both directions: from `A` to `B` and from `B` to `A`.
 
-A *unidirectional* channel is a channel where packets can only flow in one direction: from `A` to `B`.
+A *unidirectional* channel is a channel where packets can only flow in one direction: from `A` to `B` (or from `B` to `A`, the order of naming is arbitrary).
 
 An *ordered* channel is a channel where packets are delivered exactly in the order which they were sent.
 
@@ -49,25 +49,7 @@ Directionality and ordering are independent, so one can speak of a bidirectional
 
 All channels provide exactly-once packet delivery, meaning that a packet sent on one end of a channel is delivered no more and no less than once, eventually, to the other end.
 
-This specification only concerns itself with *bidirectional ordered* channels. *Unidirectional* and *unordered* channels use almost exactly the same protocol and will be outlined in a future ICS.
-
-Channel ends have a *state*:
-
-```typescript
-enum ChannelEndState {
-  INIT,
-  OPENTRY,
-  OPEN,
-  CLOSETRY,
-  CLOSED,
-}
-```
-
-- A channel end in `INIT` state has just started the opening handshake.
-- A channel end in `OPENTRY` state has acknowledged the handshake step on the counterparty chain.
-- A channel end in `OPEN` state has completed the handshake and is ready to send and receive packets.
-- A channel end in `CLOSETRY` state has just started the closing handshake.
-- A channel end in `CLOSED` state has been closed and can no longer be used to send or receive packets.
+This specification only concerns itself with *bidirectional ordered* channels. *Unidirectional* and *unordered* channels can use almost exactly the same protocol and will be outlined in a future ICS.
 
 An *end* of a channel is a data structure on one chain storing channel metadata:
 
@@ -89,7 +71,25 @@ interface ChannelEnd {
 - The `nextSequenceRecv`, stored separately, tracks the sequence number for the next packet to be received.
 - The `nextTimeoutHeight` stores the timeout height for the next stage of the handshake, used only in channel opening and closing handshakes.
 
-An IBC *packet* is a particular datagram, defined as follows:
+Channel ends have a *state*:
+
+```typescript
+enum ChannelEndState {
+  INIT,
+  OPENTRY,
+  OPEN,
+  CLOSETRY,
+  CLOSED,
+}
+```
+
+- A channel end in `INIT` state has just started the opening handshake.
+- A channel end in `OPENTRY` state has acknowledged the handshake step on the counterparty chain.
+- A channel end in `OPEN` state has completed the handshake and is ready to send and receive packets.
+- A channel end in `CLOSETRY` state has just started the closing handshake.
+- A channel end in `CLOSED` state has been closed and can no longer be used to send or receive packets.
+
+A *packet*, in the interblockchain communication protocol, is a particular datagram, defined as follows:
 
 ```typescript
 interface Packet {
@@ -109,7 +109,7 @@ interface Packet {
 - The `sourceChannel` identifies the channel end on the sending chain.
 - The `destConnection` identifies the connection end on the receiving chain.
 - The `destChannel` identifies the channel end on the receiving chain.
-- The `data` is an opaque field which can be defined by the application logic of the associated modules.
+- The `data` is an opaque value which can be defined by the application logic of the associated modules.
 
 ### Desired Properties
 
@@ -147,7 +147,7 @@ function channelKey(connectionIdentifier: Identifier, channelIdentifier: Identif
 }
 ```
 
-`nextSequenceSend` and `nextSequenceRecv` are stored separately so they can be proved individually:
+The `nextSequenceSend` and `nextSequenceRecv` unsigned integer counters are stored separately so they can be proved individually:
 
 ```typescript
 function nextSequenceSendKey(connectionIdentifier: Identifier, channelIdentifier: Identifier) {
@@ -159,7 +159,7 @@ function nextSequenceRecvKey(connectionIdentifier: Identifier, channelIdentifier
 }
 ```
 
-Packet commitments are stored under the packet sequence number:
+Succint commitments to packet data fields are stored under the packet sequence number:
 
 ```typescript
 function packetCommitmentKey(connectionIdentifier: Identifier, channelIdentifier: Identifier, sequence: uint64) {
@@ -174,6 +174,8 @@ function packetTimeoutKey(connectionIdentifier: Identifier, channelIdentifier: I
   return channelKey(connectionIdentifier, channelIdentifier) + "/packets/" + sequence + "/timeout"
 }
 ```
+
+Absence of the key in the store is equivalent to a zero-bit.
 
 ### Subprotocols
 
@@ -216,7 +218,7 @@ function chanOpenInit(
 }
 ```
 
-The `chanOpenTry` function is called by a module to accept the first step of a chanel opening handshake initiated by a module on another chain
+The `chanOpenTry` function is called by a module to accept the first step of a chanel opening handshake initiated by a module on another chain.
 
 ```typescript
 interface ChanOpenTry {
@@ -241,7 +243,7 @@ function chanOpenTry(
   assert(getCallingModule() === moduleIdentifier)
   connection = get("connections/{connectionIdentifier}")
   assert(connection.state === OPEN)
-  consensusState = get("clients/{connection.clientIdentifier}")
+  consensusState = get("clients/{connection.clientIdentifier}/consensusState")
   assert(verifyMembership(
     consensusState,
     proofInit,
@@ -279,7 +281,7 @@ function chanOpenAck(
   assert(getCallingModule() === channel.moduleIdentifier)
   connection = get("connections/{connectionIdentifier}")
   assert(connection.state === OPEN)
-  consensusState = get("clients/{connection.clientIdentifier}")
+  consensusState = get("clients/{connection.clientIdentifier}/consensusState")
   assert(verifyMembership(
     consensusState.getRoot(),
     proofTry,
@@ -315,7 +317,7 @@ function chanOpenConfirm(
   assert(getCallingModule() === channel.moduleIdentifier)
   connection = get("connections/{connectionIdentifier}")
   assert(connection.state === OPEN)
-  consensusState = get("clients/{connection.clientIdentifier}")
+  consensusState = get("clients/{connection.clientIdentifier}/consensusState")
   assert(verifyMembership(
     consensusState.getRoot(),
     proofAck,
@@ -549,7 +551,7 @@ function sendPacket(packet: Packet) {
   connection = get("connections/{packet.sourceConnection}")
   assert(connection.state === OPEN)
   assert(packet.destConnection === connection.counterpartyConnectionIdentifier)
-  consensusState = get("clients/{connection.clientIdentifier}")
+  consensusState = get("clients/{connection.clientIdentifier}/consensusState")
   assert(consensusState.getHeight() < packet.timeoutHeight)
   nextSequenceSend = get(nextSequenceSendKey(packet.sourceConnection, packet.sourceChannel))
   assert(packet.sequence === nextSequenceSend)
@@ -606,7 +608,9 @@ Note that in order to avoid any possible "double-spend" attacks, the timeout alg
 
 ##### Sending end
 
-The `timeoutPacket` function is called by a module.
+The `timeoutPacket` function is called by a module which originally attempted to send a packet to a counterparty module,
+where the timeout height has passed on the counterparty chain without the packet being committed, to prove that the packet
+can no longer be executed and to allow the calling module to safely perform appropriate state transitions.
 
 Calling modules MUST atomically execute appropriate application timeout-handling logic in conjunction with calling `timeoutPacket`.
 
@@ -616,12 +620,13 @@ function timeoutPacket(packet: Packet, proof: CommitmentProof, nextSequenceRecv:
   assert(channel.state === OPEN)
   assert(getCallingModule() === channel.moduleIdentifier)
   assert(packet.destChannel === channel.counterpartyChannelIdentifier)
+
   connection = get("connections/{packet.sourceConnection}")
   assert(connection.state === OPEN)
   assert(packet.destConnection === connection.counterpartyIdentifier)
 
   // check that timeout height has passed on the other end
-  consensusState = get("clients/{connection.clientIdentifier}")
+  consensusState = get("clients/{connection.clientIdentifier}/consensusState")
   assert(consensusState.getHeight() >= timeoutHeight)
 
   // check that packet has not been received
@@ -662,20 +667,24 @@ function recvTimeoutPacket(packet: Packet, proof: CommitmentProof) {
   assert(channel.state === OPEN)
   assert(getCallingModule() === channel.moduleIdentifier)
   assert(packet.sourceChannel === channel.counterpartyChannelIdentifier)
+
+  connection = get("connections/{connectionIdentifier}")
+  assert(connection.state === OPEN)
+  assert(packet.sourceConnection === connection.counterpartyConnectionIdentifier)
+
   nextSequenceRecv = get(nextSequenceRecvKey(packet.destConnection, packet.destChannel))
   assert(packet.sequence === nextSequenceRecv)
-  connection = get("connections/{connectionIdentifier}")
-  assert(packet.sourceConnection === connection.counterpartyConnectionIdentifier)
-  assert(connection.state === OPEN)
+
   consensusState = getConsensusState()
   assert(consensusState.getHeight() >= packet.timeoutHeight)
+
   assert(verifyMembership(
     consensusState.getRoot(),
     proof,
     packetCommitmentKey(packet.sourceConnection, packet.sourceChannel, sequence),
-    key,
     commit(packet.data)
   ))
+
   nextSequenceRecv = channel.nextSequenceRecv + 1
   set(nextSequenceRecvKey(packet.destConnection, packet.destChannel), nextSequenceRecv)
 }
@@ -691,6 +700,7 @@ function cleanupPacket(packet: Packet, proof: CommitmentProof, nextSequenceRecv:
   assert(channel.state === OPEN)
   assert(getCallingModule() === channel.moduleIdentifier)
   assert(packet.destChannel === channel.counterpartyChannelIdentifier)
+
   connection = get("connections/{packet.sourceConnection}")
   assert(connection.state === OPEN)
   assert(packet.destConnection === connection.counterpartyIdentifier)
@@ -698,7 +708,7 @@ function cleanupPacket(packet: Packet, proof: CommitmentProof, nextSequenceRecv:
   // assert packet has been received on the other end
   assert(nextSequenceRecv > packet.sequence)
 
-  consensusState = get("clients/{connection.clientIdentifier}")
+  consensusState = get("clients/{connection.clientIdentifier}/consensusState")
 
   // check that the recv sequence is as claimed
   assert(verifyMembership(
