@@ -2,6 +2,7 @@
 ics: 23
 title: Vector Commitments
 stage: draft
+required-by: 2, 3, 4
 category: ibc-core
 author: Christopher Goes <cwgoes@tendermint.com>
 created: 2019-04-16

@@ -382,7 +382,19 @@ Not applicable.
 In a future version, this ICS will define a new function `unfreezeClient` that can be called 
 when the application logic resolves an equivocation event.
 
+## Example Implementation
+
+Coming soon.
+
+## Other Implementations
+
+Coming soon.
+
 ## History
 
-March 5th 2019: Initial draft finished and submitted as a PR.
+March 5th 2019: Initial draft finished and submitted as a PR
 May 29 2019: Various revisions, notably multiple commitment-roots
+
+## Copyright
+
+Copyright and related rights waived via [CC0](https://creativecommons.org/publicdomain/zero/1.0/).
