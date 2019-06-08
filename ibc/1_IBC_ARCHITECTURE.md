@@ -8,6 +8,8 @@
 
 **For a set of example use cases, see [here](./4_IBC_USECASES.md).**
 
+**For a discussion of design patterns, see [here](./5_IBC_DESIGN_PATTERNS.md).**
+
 This document outlines the architecture of the authentication, transport, and ordering layers of the inter-blockchain communication (IBC) protocol stack. This document does not describe specific protocol details — those are contained in individual ICSs.
 
 > Note: *Ledger*, *chain*, and *blockchain* are used interchangeably throughout this document, in accordance with their colloquial usage.
@@ -150,16 +152,16 @@ Consider the path of an IBC packet between two chains — call them *A* and *B*:
 1. On chain *A*
     1. Module (application-specific)
     1. Handler (parts defined in different ICSs)
-    1. Packet (defined in [ICS 5](../../spec/ics-5-packet-semantics))
-    1. Channel (defined in [ICS 4](../../spec/ics-4-channel-semantics))
-    1. Connection (defined in [ICS 3](../../spec/ics-3-connection-semantics))
-    1. Consensus (defined in [ICS 2](../../spec/ics-2-consensus-requirements))
+    1. Packet (defined in [ICS 4](../spec/ics-4-channel-and-packet-semantics))
+    1. Channel (defined in [ICS 4](../spec/ics-4-channel-and-packet-semantics))
+    1. Connection (defined in [ICS 3](../spec/ics-3-connection-semantics))
+    1. Consensus (defined in [ICS 2](../spec/ics-2-consensus-verification))
 2. Off-chain
-    1. Relayer (defined in [ICS 18](../../spec/ics-18-offchain-relayer))
+    1. Relayer (defined in [ICS 18](../../spec/ics-18-relayer-algorithms))
 3. On chain *B*
-    1. Consensus (defined in [ICS 2](../../spec/ics-2-consensus-requirements))
-    1. Connection (defined in [ICS 3](../../spec/ics-3-connection-semantics))
-    1. Channel (defined in [ICS 4](../../spec/ics-4-channel-semantics))
-    1. Packet (defined in [ICS 5](../../spec/ics-5-packet-semantics))
+    1. Consensus (defined in [ICS 2](/../spec/ics-2-consensus-verification))
+    1. Connection (defined in [ICS 3](/../spec/ics-3-connection-semantics))
+    1. Channel (defined in [ICS 4](/../spec/ics-4-channel-and-packet-semantics))
+    1. Packet (defined in [ICS 4](/../spec/ics-4-channel-and-packet-semantics))
     1. Handler (parts defined in different ICSs)
     1. Module (application-specific)
