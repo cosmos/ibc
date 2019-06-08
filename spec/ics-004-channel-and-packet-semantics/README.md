@@ -25,15 +25,15 @@ In order to provide the desired ordering, exactly-once delivery, and module perm
 
 ### Definitions
 
-`ConsensusState` is as defined in [ICS 2](../ics-2-consensus-verification).
+`ConsensusState` is as defined in [ICS 2](../ics-002-consensus-verification).
 
-`Connection` is as defined in [ICS 3](../ics-3-connection-semantics).
+`Connection` is as defined in [ICS 3](../ics-003-connection-semantics).
 
-`Commitment`, `CommitmentProof`, and `CommitmentRoot` are as defined in [ICS 23](../ics-23-vector-commitments).
+`Commitment`, `CommitmentProof`, and `CommitmentRoot` are as defined in [ICS 23](../ics-023-vector-commitments).
 
 `commit` is a generic collision-resistant hash function, the specifics of which must be agreed on by the modules utilizing the channel.
 
-`Identifier`, `get`, `set`, `delete`, `getConsensusState`, and module-system related primitives are as defined in [ICS 24](../ics-24-host-requirements).
+`Identifier`, `get`, `set`, `delete`, `getConsensusState`, and module-system related primitives are as defined in [ICS 24](../ics-024-host-requirements).
 
 A *channel* is a pipeline for exactly-once packet delivery between specific modules on separate blockchains, which has at least one end capable of sending packets and one end capable of receiving packets.
 

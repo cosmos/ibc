@@ -30,20 +30,20 @@ All standards in the "draft" stage are listed here in order of their ICS numbers
 
 ### Meta
 
-| Interchain Standard Number   | Standard Title             | Stage |
-| ---------------------------- | -------------------------- | ----- |
-| [1](spec/ics-1-ics-standard) | ICS Specification Standard | Draft |
+| Interchain Standard Number     | Standard Title             | Stage |
+| ------------------------------ | -------------------------- | ----- |
+| [1](spec/ics-001-ics-standard) | ICS Specification Standard | Draft |
 
 ### IBC (Core)
 
 | Interchain Standard Number                          | Standard Title                     | Stage |
 | --------------------------------------------------- | ---------------------------------- | ----- |
-| [2](spec/ics-2-consensus-verification)              | Consensus Verification             | Draft |
-| [3](spec/ics-3-connection-semantics)                | Connection Semantics               | Draft |
-| [4](spec/ics-4-channel-and-packet-semantics)        | Channel & Packet Semantics         | Draft |
-| [18](spec/ics-18-relayer-algorithms)                | Relayer Algorithms                 | Draft |
-| [23](spec/ics-23-vector-commitments)                | Vector Commitments                 | Draft |
-| [24](spec/ics-24-host-requirements)                 | Host Requirements                  | Draft |
+| [2](spec/ics-002-consensus-verification)            | Consensus Verification             | Draft |
+| [3](spec/ics-003-connection-semantics)              | Connection Semantics               | Draft |
+| [4](spec/ics-004-channel-and-packet-semantics)      | Channel & Packet Semantics         | Draft |
+| [18](spec/ics-018-relayer-algorithms)               | Relayer Algorithms                 | Draft |
+| [23](spec/ics-023-vector-commitments)               | Vector Commitments                 | Draft |
+| [24](spec/ics-024-host-requirements)                | Host Requirements                  | Draft |
 
 ## Standard Dependency Visualization
 
