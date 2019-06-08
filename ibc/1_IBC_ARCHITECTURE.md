@@ -8,6 +8,8 @@
 
 **For a set of example use cases, see [here](./4_IBC_USECASES.md).**
 
+**For a discussion of design patterns, see [here](./5_IBC_DESIGN_PATTERNS.md).**
+
 This document outlines the architecture of the authentication, transport, and ordering layers of the inter-blockchain communication (IBC) protocol stack. This document does not describe specific protocol details — those are contained in individual ICSs.
 
 > Note: *Ledger*, *chain*, and *blockchain* are used interchangeably throughout this document, in accordance with their colloquial usage.
@@ -54,7 +56,7 @@ IBC sits between modules — smart contracts, other state machine components, or
 
 IBC provides to modules a set of functions much like the functions which might be provided to a module for interacting with another module on the same ledger: sending data packets and receiving data packets on an established connection & channel (primitives for authentication & ordering, see [definitions](./3_IBC_TERMINOLOGY.md)) — in addition to calls to manage the protocol state: opening and closing connections and channels, choosing connection, channel, and packet delivery options, and inspecting connection & channel status.
 
-IBC assumes functionalities and properties of the underlying consensus protocols and ledgers as defined in [ICS 2](../../spec/ics-2-consensus-requirements), primarily finality, cheaply-verifiable consensus transcripts, and simple key-value store functionality. On the network side, IBC requires only eventual data delivery — no authentication, synchrony, or ordering properties are assumed.
+IBC assumes functionalities and properties of the underlying consensus protocols and ledgers as defined in [ICS 2](../../spec/ics-002-consensus-verification), primarily finality, cheaply-verifiable consensus transcripts, and simple key-value store functionality. On the network side, IBC requires only eventual data delivery — no authentication, synchrony, or ordering properties are assumed.
 
 ### Protocol relations
 
@@ -150,16 +152,16 @@ Consider the path of an IBC packet between two chains — call them *A* and *B*:
 1. On chain *A*
     1. Module (application-specific)
     1. Handler (parts defined in different ICSs)
-    1. Packet (defined in [ICS 5](../../spec/ics-5-packet-semantics))
-    1. Channel (defined in [ICS 4](../../spec/ics-4-channel-semantics))
-    1. Connection (defined in [ICS 3](../../spec/ics-3-connection-semantics))
-    1. Consensus (defined in [ICS 2](../../spec/ics-2-consensus-requirements))
+    1. Packet (defined in [ICS 4](../spec/ics-004-channel-and-packet-semantics))
+    1. Channel (defined in [ICS 4](../spec/ics-004-channel-and-packet-semantics))
+    1. Connection (defined in [ICS 3](../spec/ics-003-connection-semantics))
+    1. Consensus (defined in [ICS 2](../spec/ics-002-consensus-verification))
 2. Off-chain
-    1. Relayer (defined in [ICS 18](../../spec/ics-18-offchain-relayer))
+    1. Relayer (defined in [ICS 18](../../spec/ics-018-relayer-algorithms))
 3. On chain *B*
-    1. Consensus (defined in [ICS 2](../../spec/ics-2-consensus-requirements))
-    1. Connection (defined in [ICS 3](../../spec/ics-3-connection-semantics))
-    1. Channel (defined in [ICS 4](../../spec/ics-4-channel-semantics))
-    1. Packet (defined in [ICS 5](../../spec/ics-5-packet-semantics))
+    1. Consensus (defined in [ICS 2](/../spec/ics-002-consensus-verification))
+    1. Connection (defined in [ICS 3](/../spec/ics-003-connection-semantics))
+    1. Channel (defined in [ICS 4](/../spec/ics-004-channel-and-packet-semantics))
+    1. Packet (defined in [ICS 4](/../spec/ics-004-channel-and-packet-semantics))
     1. Handler (parts defined in different ICSs)
     1. Module (application-specific)

@@ -2,7 +2,7 @@
 
 import re, os, sys
 
-link_regex = re.compile('\[(.*)\]\(../ics([^\)]*)\)')
+link_regex = re.compile('\[ICS ([0-9]+)\]\(([^\)]*)\)')
 title_regex = re.compile('ICS ([0-9]+)([ .:])')
 
 specs = [f.path for f in os.scandir('./spec') if f.is_dir()]
@@ -13,7 +13,7 @@ specs_cut = set([spec[7:] for spec in specs])
 for fn in files:
     print('Checking links in {}'.format(fn))
     data = open(fn).read()
-    links = ['ics' + l[1] for l in link_regex.findall(data)]
+    links = [l[1][3:] for l in link_regex.findall(data)]
     for link in links:
         found = link in specs_cut
         if not found:

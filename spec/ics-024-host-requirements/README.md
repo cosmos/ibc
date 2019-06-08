@@ -4,7 +4,7 @@ title: Host State Machine Requirements
 stage: draft
 category: ibc-core
 requires: 2
-required-by: 2, 3, 18
+required-by: 2, 3, 4, 18
 author: Christopher Goes <cwgoes@tendermint.com>
 created: 2019-04-16
 modified: 2019-05-11
@@ -20,7 +20,7 @@ IBC is designed to be a common standard which will be hosted by a variety of blo
 
 ### Definitions
 
-`ConsensusState` is as defined in [ICS 2](../ics-2-consensus-verification).
+`ConsensusState` is as defined in [ICS 2](../ics-002-consensus-verification).
 
 ### Desired Properties
 
@@ -90,7 +90,7 @@ type getCallingModule = () => string
 
 Modules which wish to make use of particular IBC features MAY implement certain handler functions, e.g. to add additional logic to a channel handshake with an associated module on another chain.
 
-### Datagram Submission
+### Datagram submission
 
 Host chains MAY define a unique `submitDatagram` function to submit [datagrams](../../docs/ibc/2_IBC_TERMINOLOGY.md) directly:
 
@@ -99,6 +99,16 @@ type submitDatagram = (datagram: Datagram) => void
 ```
 
 `submitDatagram` allows relayers to relay IBC datagrams directly to the host chain. Host chains MAY require that the relayer submitting the datagram has an account to pay transaction fees, signs over the datagram in a larger transaction structure, etc - `submitDatagram` MUST define any such packaging required.
+
+### Data availability
+
+For safety (e.g. exactly-once packet delivery), host chains MUST have eventual data availability, such that any key-value pairs in state can be eventually retrieved by relayers.
+
+For liveness (relaying packets, which will have a timeout), host chains MUST have partially synchronous data availability (e.g. within a wall clock or block height bound), such that any key-value pairs in state can be retrieved by relayers within the bound.
+
+Data computable from a subset of state and knowledge of the state machine (e.g. IBC packet data, which is not directly stored) are also assumed to be available to and efficiently computable by relayers.
+
+Light clients of particular consensus algorithms may have different and/or more strict data availability requirements.
 
 ## Backwards Compatibility
 
