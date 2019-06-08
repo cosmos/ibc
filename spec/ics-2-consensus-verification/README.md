@@ -1,238 +1,269 @@
 ---
-
 ics: 2
 title: Consensus Verification
 stage: draft
 category: ibc-core
 requires: 23, 24
-required-by: 3
+required-by: 3, 24
 author: Juwoon Yun <joon@tendermint.com>, Christopher Goes <cwgoes@tendermint.com>
 created: 2019-02-25
-modified: 2019-04-29
-
+modified: 2019-05-28
 ---
 
 ## Synopsis
 
-This standard specifies the properties that consensus algorithms of chains implementing IBC are
-expected to satisfy. These properties are needed for efficient and safe verification in the higher
-level protocol abstractions. The algorithm which uses these properties to verify substates of
-another chain is referred to as a "light client verifier", and pairing it with a state that the
-verifier trusts forms a "light client".
+This standard specifies the properties that consensus algorithms of chains implementing the interblockchain
+communication protocol are required to satisfy. These properties are necessary for efficient and safe
+verification in the higher-level protocol abstractions. The algorithm utilized in IBC to verify the
+consensus transcript & state subcomponents of another chain is referred to as a "light client verifier",
+and pairing it with a state that the verifier trusts forms a "light client" (often shortened to "client").
 
-This standard also specifies how the light clients will be stored, registered, and updated on a
-blockchain. The stored light client instances will be able to be verified by a third party actor, such as a user inspecting the state of the chain.
+This standard also specifies how the clients will be stored, registered, and updated in the
+canonical IBC handler. The stored client instances will be verifiable by a third party actor,
+such as a user inspecting the state of the chain and deciding whether or not to send an IBC packet.
 
 ### Motivation
 
-In the IBC protocol, a chain needs to be able to verify updates to the state of another chain. A light client is the algorithm with which they can do so.
-This standard formalizes the common
-model of light client to minimise the dependency on consensus algorithms, so that the protocol can
-easily connect with new chains which are running new consensus algorithms, without the need to
-upgrade the light client protocol itself.
+In the IBC protocol, a chain needs to be able to verify updates to the state of another chain
+which the other chain's consensus algorithm has agreed upon, and reject any possible updates
+which the other chain's consensus algorithm has not agreed upon. A light client is the algorithm
+with which a chain can do so. This standard formalizes the light client model and requirements,
+so that the IBC protocol can easily connect with new chains which are running new consensus algorithms,
+as long as associated light client algorithms fulfilling the requirements are provided.
 
 ### Definitions
 
-* `get`, `set`, `Key`, and `Identifier` are as defined in [ICS24](../ics-24-host-requirements).
-are used by the datagram handler.
+* `get`, `set`, `Key`, and `Identifier` are as defined in [ICS 24](../ics-24-host-requirements).
 
-* `CommitmentRoot` is as defined in [ICS23](../ics-23-vector-commitments).
-`ConsensusState`. The downstream logic can use it to verify whether key-value pairs are present
-in the state or not.
+* `CommitmentRoot` is as defined in [ICS 23](../ics-23-vector-commitments).
 
-* `createClient`, `queryClient`, `updateClient`, `freezeClient`, `deleteClient`
-function signatures are as defined in ICS25.
+* `ConsensusState` is an opaque type representing the verification state of a light client.
+  `ConsensusState` must be able to verify state updates agreed upon by the associated consensus algorithm,
+  and must provide an inexpensive way for downstream logic to verify whether key-value pairs are present
+  in the state or not.
+
+* `ClientState` is a structure representing the state of a client, defined in this ICS.
+  A `ClientState` contains the latest `ConsensusState` and a map of heights to previously
+  verified state roots which can be utilized by downstream logic to verify subcomponents
+  of state at particular heights.
+
+* `createClient`, `queryClient`, `updateClient`, `freezeClient`, and `deleteClient` function signatures are as defined in ICS 25.
+  The function implementations are defined in this standard.
 
 ### Desired Properties
 
 Light clients must provide a secure algorithm to verify other chains' canonical headers,
-using the existing `ConsensusState`. The higher level abstractions will then be able to verify subcomponents of the state
-with the `CommitmentRoot` stored in the `ConsensusState`, which is guaranteed to be committed by
-the other chain's consensus algorithm.
+using the existing `ConsensusState`. The higher level abstractions will then be able to verify
+subcomponents of the state with the `CommitmentRoot`s stored in the `ConsensusState`, which are
+guaranteed to have been committed by the other chain's consensus algorithm.
 
-`ValidityPredicate`s are expected to reflect the behaviour of the full node which is running the  
+`ValidityPredicate`s are expected to reflect the behaviour of the full nodes which are running the  
 corresponding consensus algorithm. Given a `ConsensusState` and `[Message]`, if a full node
 accepts the new `Header` generated with `Commit`, then the light client MUST also accept it,
-and if a full node rejects it, then the light client MUST also reject it. The consensus algorithm
-ensures this correspondence. However light clients are not replaying the whole messages, so it
-is possible that the light clients' behaviour differs from the full nodes'. In this case, the
-equivocation proof which proves the divergence between the `ValidityPredicate` and the full node will be
-generated and submitted to the chain, as defined in
-[ICS ?](https://github.com/cosmos/ics/issues/53), so that the chain can safely deactivate the
-light client.
+and if a full node rejects it, then the light client MUST also reject it.
+
+Light clients are not replaying the whole message transcript, so it is possible under cases of
+consensus equivocation that the light clients' behaviour differs from the full nodes'.
+In this case, an equivocation proof which proves the divergence between the `ValidityPredicate`
+and the full node can be generated and submitted to the chain so that the chain can safely deactivate the
+light client and await higher-level intervention.
 
 ## Technical Specification
 
 ### Data Structures
 
-#### ValidityPredicateBase
-
-`ValidityPredicateBase` is the data that is being used by the `ValidityPredicate`s. The exact
-type is dependent on the type of `ValidityPredicate`. The `ValidityPredicateBase`s SHOULD
-have a function `Height() int64`. The function returns the height of the
-`ValidityPredicateBase`. A `ValidityPredicateBase` can verify a `Header` only if it has a
-higher height than itself. `ValidityPredicateBase`s have to be generated from `Consensus`,
-which assigns unique heights for each `ValidityPredicateBase`. Two `ValidityPredicateBase`
-on a same chain SHOULD NOT have same height, if not equal. Such event is called an
-"equivocation", and the proof for it can be generated and submitted(see Subprotocols-Freeze).
-
-```typescript
-type ValidityPredicateBase interface {
-  Height() int64
-}
-```
-
 #### ConsensusState
 
-`ConsensusState` is a blockchain commit which contains a `CommitmentRoot` and the requisite
-state to verify future roots. The `ConsensusState` of a chain is stored by other chains in order to verify the state of this chain. It is defined as:
+`ConsensusState` is a type defined by each consensus algorithm, used by the validty predicate to
+verify new commits & state roots. Likely the strucutre will contain the last commit, including
+signatures and validator set metadata, produced by the consensus process.
+
+A `ConsensusState` MUST have a function `Height() int64`. The function returns the height of the
+last verified commit. A `ConsensusState` can verify a `Header` only if it has a
+higher height than itself.
+
+`ConsensusState` MUST be generated from an instance of `Consensus`, which assigns unique heights
+for each `ConsensusState`. Two `ConsensusState`s on the same chain SHOULD NOT have the same height
+if they do not have equal commitment roots. Such an event is called an "equivocation", and should one occur,
+a proof should be generated and submitted so that the client can be frozen.
+
+The `ConsensusState` of a chain is stored by other chains in order to verify the chain's state.
 
 ```typescript
 interface ConsensusState {
-  base: ValidityPredicateBase
+  height: uint64
   root: CommitmentRoot
+  validityPredicate: ValidityPredicate
+  equivocationPredicate: EquivocationPredicate
 }
 ```
-where
-  * `Base` is a data used by `Consensus.ValidityPredicate` to verify `Header`s.
-  * `Root` is the `CommitmentRoot`, used to prove internal state.
 
-`ValidityPredicateBase` is defined dependently on `ConsensusState`.
+#### ClientState
+
+`ClientState` is the light client state, which contains the latest `ConsensusState` along with
+a map of heights to `CommitmentRoot`s, used to verify presence or absence of particular key-value pairs
+in state at particular heights.
+
+```typescript
+interface ClientState {
+  consensusState: ConsensusState
+  verifiedRoots: Map<uint64, CommitmentRoot>
+  frozen: bool
+}
+```
+
+where
+  * `consensusState` is the `ConsensusState` used by `Consensus.ValidityPredicate` to verify `Header`s.
+  * `verifiedRoots` is a map of heights to previously verified `CommitmentRoot` structs, used to prove presence or absence of key-value pairs in state at particular heights.
+  * `frozen` is a boolean indicating whether the client has been frozen due to a detected equivocation.
+
+Note that instead of `ClientState` being stored directly, the consensus state, roots, and frozen boolean are stored at separate keys.
 
 #### Header
 
-`Header` is a blockchain header which provides information to update a `ConsensusState`,
-submitted to one blockchain to update the stored `ConsensusState`. Defined as
+A `Header` is a blockchain header which provides information to update a `ConsensusState`.
+Headers can be submitted to an associated client to update the stored `ConsensusState`.
 
 ```typescript
 interface Header {
+  height: uint64
   proof: HeaderProof
-  base: Maybe[ValidityPredicateBase]
+  state: Maybe[ConsensusState]
   root: CommitmentRoot
 }
 ```
 where
-  * `Proof` is the commit proof used by `Consensus.ValidityPredicate` to be verified.
-  * `Base` is the new verify, if it needs to be updated.
-  * `Root` is the new `CommitmentRoot` which will replace the existing one.
+  * `height` is the height of the the consensus instance.
+  * `proof` is the commit proof used by `Consensus.ValidityPredicate` to verify the header.
+  * `state` is the new (or partially new) consensus state.
+  * `root` is the new `CommitmentRoot` which will replace the existing one.
 
 #### ValidityPredicate
 
-`ValidityPredicate` is a light client ValidityPredicate proving `Header` depending on the `Commit`.
+A `ValidityPredicate` is a light client function to verify `Header`s depending on the current `ConsensusState`.
 Using the ValidityPredicate SHOULD be far more computationally efficient than replaying `Consensus` logic
 for the given parent `Header` and the list of network messages, ideally in constant time
-independent from the size of message stored in the `Header`. Defined as
+independent from the size of message stored in the `Header`.
+
+The `ValidityPredicate` type is defined as
 
 ```typescript
 type ValidityPredicate = (ConsensusState, Header) => Error | ConsensusState
 ```
 
-The detailed specification of `ValidityPredicate` is defined in [ValidityPredicate.md](./ValidityPredicate.md)
+The detailed specification of `ValidityPredicate` can be found in [CONSENSUS.md](./CONSENSUS.md).
 
-#### LightClient
+#### EquivocationPredicate
 
-LightClient is defined as
+An `EquivocationPredicate` is a light client function used to check if two headers
+constitute a violation of the consensus protocol (consensus equivocation) and should
+freeze a light client.
+
+The `EquivocationPredicate` type is defined as
+
 ```typescript
-interface LightClient {
-  validityPredicate: ValidityPredicate
-  consensusState: ConsensusState
-}
+type EquivocationPredicate = (ConsensusState, Header, Header) => bool
 ```
-where
-  * `ConsensusState` is the root of trust providing the `ValidityPredicateBase`.
-  * `ValidityPredicate` is the lightclient verification logic.
 
-The exact type of each fields are depending on the type of the actual consensus logic.
+More details about `EquivocationPredicate`s can be found in [CONSENSUS.md](./CONSENSUS.md)
 
 ### Subprotocols
 
-The chains MUST implement the functions defined below ending with `Client`, as they form
-the `handleDatagram`.
+IBC handlers MUST implement the functions defined below.
 
 #### Preliminaries
 
-`newID` is a function which generates a new `Identifier` for a `Client`.
-The generation of the `Identifier` MAY depend on the `Header` of the `Client` that will be
-registered under that `Identifier`. The behaviour of `newID` is implementation specific.
-Possible implementations are:
+Clients are stored under a unique `Identifier` prefix. The generation of the `Identifier` MAY
+depend on the `Header` of the `Client` that will be registered under that `Identifier`.
+This ICS does not require that client identifiers be generated in a particular manner,
+only that they be unique.
 
-* Random bytestring.
-* Hash of the `Header`.
-* Incrementing integer index
-
-`newID` MUST NOT return an `Identifier` which has already been generated.
-
-`storekey` takes an `Identifier` and returns a `KVStore` compatible `Key`.
+`frozenKey` takes an `Identifier` and returns a `Key` under which to store whether or not a client is frozen.
 
 ```typescript
-function storekey(id: Identifier) {
-  return "clients/{id}"
+function frozenKey(id: Identifier): Key {
+  return "clients/{id}/frozen"
 }
 ```
 
-`freezekey` takes an `Identifier` and returns a `KVStore` compatible `Key`.
+`consensusStateKey` takes an `Identifier` and returns a `Key` under which to store the consensus state of a client.
+
+Consensus state MUST be stored separately so it can be verified independently.
 
 ```typescript
-function freezekey(id: Identifier) {
-  return "clients/{id}/freeze"
+function consensusStateKey(id: Identifier): Key {
+  return "clients/{id}/consensusState"
+}
+```
+
+`rootKey` takes an `Identifier` and a height (as `uint64`) and returns a `Key` under which to store a particular state root.
+
+Roots MUST be stored under separate keys, one per height, for efficient retrieval.
+
+Roots for old heights MAY be periodically cleaned up.
+
+```typescript
+function rootKey(id: Identifier, height: uint64): Key {
+  return "clients/{id}/roots/{height}"
 }
 ```
 
 #### Create
 
-Creating a new `LightClient` is done simply by submitting it to the `createClient` function,
-as the chain automatically generates the `Identifier` for the `LightClient`.
+Creating a new `ClientState` is done simply by submitting it to the `createClient` function,
+as the chain automatically generates the `Identifier` for the `ClientState`.
 
 ```typescript
-function createClient(info: LightClient) {
-  id = newID()
-  set(storekey(id), info)
-  set(freezekey(id), false)
-  return id
+function createClient(id: Identifier, consensusState: ConsensusState) {
+  client = ClientState{consensusState, empty, false}
+  set(clientKey(id), client)
 }
 ```
 
 #### Query
 
-Clients can be queried by their identifier.
+Client frozen state, consensus state, and previously verified roots can be queried by identifier.
 
 ```typescript
-function queryClient(id: Identifier) {
-  if get(freezekey(id)) then
-    return nil
-  else
-    return get(storekey(id))
+function queryClientFrozen(id: Identifier): bool {
+  return get(frozenKey(id))
+}
+```
+
+```typescript
+function queryClientConsensusState(id: Identifier): ConsensusState {
+  return get(consensusStateKey(id))
+}
+```
+
+```typescript
+function queryClientRoot(id: Identifier, height: uint64): CommitmentRoot {
+  return get(rootKey(id, height))
 }
 ```
 
 #### Update
 
-Updating `LightClient` is done by submitting a new `Header`. The `Identifier` is used to point the
-stored `LightClient` that the logic will update. When the new `Header` is verified with
-the stored `LightClient`'s `ValidityPredicate` and `ConsensusState`, then it SHOULD update the
-`LightClient` unless an additional logic intentionally blocks the updating process (e.g.
+Updating a client is done by submitting a new `Header`. The `Identifier` is used to point to the
+stored `ClientState` that the logic will update. When the new `Header` is verified with
+the stored `ClientState`'s `ValidityPredicate` and `ConsensusState`, then it SHOULD update the
+`ClientState` unless an additional logic intentionally blocks the updating process (e.g.
 waiting for the equivocation proof period.
 
 ```typescript
 function updateClient(id: Identifier, header: Header) {
-  assert(!freezekey(id))
-
-  stored = get(storekey(id))
-  assert(stored /= nil)
-
-  state = stored.ConsensusState
-  pred = stored.ValidityPredicate
-
-  assert(pred(state, header))
-
-  state.Root = header.Root
-
-  if header.Base !== null
-    state.Base = header.Base
-
-  set(storekey(id), {state, pred})
-
-  return nil
+  frozen = get(frozenKey(id))
+  assert(!frozen)
+  consensusState = get(consensusStateKey(id))
+  assert(consensusState !== nil)
+  switch consensusState.validityPredicate(header) {
+    case error:
+      throw error
+    case newState:
+      set(consensusStateKey(id), newState)
+      set(rootKey(id, newState.height), newState.root)
+      return
+  }
 }
 ```
 
@@ -243,11 +274,10 @@ activity on the client. Frozen client SHOULD NOT be deleted from the state, as a
 method can be introduced in the future versions.
 
 ```typescript
-function freezeClient(id: Identifier, header1: Header, header2: Header) {
-  assert(!get(freezekey(id)))
-  stored = get(storekey(id))
-  assert(stored /= nil)
-  set(freezekey(id))
+function freezeClient(id: Identifier, h1: Header, h2: Header) {
+  consensusState = get(consensusStateKey(id))
+  assert(consensusState.equivocationPredicate(h1, h2))
+  set(frozenKey(id), true)
 }
 ```
 
@@ -258,10 +288,9 @@ determined by the application logic.
 
 ```typescript
 function deleteClient(id: Identifier) {
-  assert(get(storekey(id)) /= nil)
-  assert(get(freezekey(id)))
-  delete(storekey(id))
-  return nil
+  delete(frozenKey(id))
+  delete(consensusStateKey(id))
+  deletePrefix("clients/{id}/roots")
 }
 ```
 
@@ -351,7 +380,7 @@ Not applicable.
 ## Forwards Compatibility
 
 In a future version, this ICS will define a new function `unfreezeClient` that can be called 
-when the application logic resolves equivocation event.
+when the application logic resolves an equivocation event.
 
 ## Example Implementation
 
@@ -364,6 +393,7 @@ Coming soon.
 ## History
 
 March 5th 2019: Initial draft finished and submitted as a PR
+May 29 2019: Various revisions, notably multiple commitment-roots
 
 ## Copyright
 

@@ -8,6 +8,8 @@
 
 **For a set of example use cases, see [here](./4_IBC_USECASES.md).**
 
+**For a discussion of design patterns, see [here](./5_IBC_DESIGN_PATTERNS.md).**
+
 This document provides definitions in plain English of key terms used throughout the IBC specification set.
 
 ## Definitions
