@@ -33,9 +33,9 @@ as long as associated light client algorithms fulfilling the requirements are pr
 
 ### Definitions
 
-* `get`, `set`, `Key`, and `Identifier` are as defined in [ICS 24](../ics-24-host-requirements).
+* `get`, `set`, `Key`, and `Identifier` are as defined in [ICS 24](../ics-024-host-requirements).
 
-* `CommitmentRoot` is as defined in [ICS 23](../ics-23-vector-commitments).
+* `CommitmentRoot` is as defined in [ICS 23](../ics-023-vector-commitments).
 
 * `ConsensusState` is an opaque type representing the verification state of a light client.
   `ConsensusState` must be able to verify state updates agreed upon by the associated consensus algorithm,
