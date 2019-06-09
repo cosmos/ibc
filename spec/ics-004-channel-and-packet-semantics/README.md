@@ -646,6 +646,16 @@ function cleanupPacket(packet: Packet, proof: CommitmentProof, nextSequenceRecv:
 }
 ```
 
+#### Querying channels
+
+Channels can be queried with `queryChannel`:
+
+```typescript
+function queryChannel(connId: Identifier, chanId: Identifier): ChannelEnd | void {
+  return get(channelKey(connId, chanId))
+}
+```
+
 ## Backwards Compatibility
 
 Not applicable.

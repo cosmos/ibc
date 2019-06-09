@@ -64,7 +64,7 @@ Once a negotiation handshake has completed:
 
 ### Data Structures
 
-This ICS defines the `Connection` type:
+This ICS defines the `ConnectionState` and `ConnectionEnd` types:
 
 ```typescript
 enum ConnectionState {
@@ -77,7 +77,7 @@ enum ConnectionState {
 ```
 
 ```typescript
-interface Connection {
+interface ConnectionEnd {
   state: ConnectionState
   counterpartyConnectionIdentifier: Identifier
   clientIdentifier: Identifier
@@ -87,6 +87,8 @@ interface Connection {
 ```
 
 ### Store keys
+
+Connection keys are stored under a unique identifier.
 
 ```typescript
 function connectionKey(id: Identifier): Key {
@@ -129,7 +131,7 @@ function connOpenInit(
   clientIdentifier: Identifier, counterpartyClientIdentifier: Identifier, nextTimeoutHeight: uint64) {
   assert(get(connectionKey(identifier)) == null)
   state = INIT
-  connection = Connection{state, desiredCounterpartyConnectionIdentifier, clientIdentifier,
+  connection = ConnectionEnd{state, desiredCounterpartyConnectionIdentifier, clientIdentifier,
     counterpartyClientIdentifier, nextTimeoutHeight}
   set(connectionKey(identifier), connection)
 }
@@ -145,7 +147,7 @@ function connOpenTry(
   assert(getConsensusState().getHeight() <= timeoutHeight)
   consensusState = get(consensusStateKey(clientIdentifier))
   expectedConsensusState = getConsensusState()
-  expected = Connection{INIT, desiredIdentifier, counterpartyClientIdentifier, clientIdentifier, timeoutHeight}
+  expected = ConnectionEnd{INIT, desiredIdentifier, counterpartyClientIdentifier, clientIdentifier, timeoutHeight}
   assert(verifyMembership(consensusState.getRoot(), proofInit,
                           connectionKey(counterpartyConnectionIdentifier), expected))
   assert(verifyMembership(consensusState.getRoot(), proofInit,
@@ -154,8 +156,8 @@ function connOpenTry(
   assert(get(connectionKey(desiredIdentifier)) === null)
   identifier = desiredIdentifier
   state = TRYOPEN
-  connection = Connection{state, counterpartyConnectionIdentifier, clientIdentifier,
-                          counterpartyClientIdentifier, nextTimeoutHeight}
+  connection = ConnectionEnd{state, counterpartyConnectionIdentifier, clientIdentifier,
+                             counterpartyClientIdentifier, nextTimeoutHeight}
   set(connectionKey(identifier), connection)
 }
 ```
@@ -171,8 +173,8 @@ function connOpenAck(
   assert(connection.state === INIT)
   consensusState = get(consensusStateKey(connection.clientIdentifier))
   expectedConsensusState = getConsensusState()
-  expected = Connection{TRYOPEN, identifier, connection.counterpartyClientIdentifier,
-                        connection.clientIdentifier, timeoutHeight}
+  expected = ConnectionEnd{TRYOPEN, identifier, connection.counterpartyClientIdentifier,
+                           connection.clientIdentifier, timeoutHeight}
   assert(verifyMembership(consensusState, proofTry,
                           connectionKey(connection.counterpartyConnectionIdentifier), expected))
   assert(verifyMembership(consensusState, proofTry,
@@ -191,8 +193,8 @@ function connOpenConfirm(identifier: Identifier, proofAck: CommitmentProof, time
   connection = get(connectionKey(identifier))
   assert(connection.state === TRYOPEN)
   consensusState = get(consensusStateKey(connection.clientIdentifier))
-  expected = Connection{OPEN, identifier, connection.counterpartyClientIdentifier,
-                        Gconnection.clientIdentifier, timeoutHeight}
+  expected = ConnectionEnd{OPEN, identifier, connection.counterpartyClientIdentifier,
+                           connection.clientIdentifier, timeoutHeight}
   assert(verifyMembership(consensusState, proofAck,
                           connectionKey(connection.counterpartyConnectionIdentifier), expected))
   connection.state = OPEN
@@ -217,8 +219,8 @@ function connOpenTimeout(identifier: Identifier, proofTimeout: CommitmentProof, 
         verifyMembership(
           consensusState, proofTimeout,
           connectionKey(connection.counterpartyConnectionIdentifier),
-          Connection{INIT, identifier, connection.counterpartyClientIdentifier,
-                     connection.clientIdentifier, timeoutHeight}
+          ConnectionEnd{INIT, identifier, connection.counterpartyClientIdentifier,
+                        connection.clientIdentifier, timeoutHeight}
         )
         ||
         verifyNonMembership(
@@ -230,8 +232,8 @@ function connOpenTimeout(identifier: Identifier, proofTimeout: CommitmentProof, 
       assert(verifyMembership(
         consensusState, proofTimeout,
         connectionKey(connection.counterpartyConnectionIdentifier),
-        Connection{TRYOPEN, identifier, connection.counterpartyClientIdentifier,
-                   connection.clientIdentifier, timeoutHeight}
+        ConnectionEnd{TRYOPEN, identifier, connection.counterpartyClientIdentifier,
+                      connection.clientIdentifier, timeoutHeight}
       ))
   }
   delete(connectionKey(identifier))
@@ -280,8 +282,8 @@ function connCloseTry(
   connection = get(connectionKey(identifier))
   assert(connection.state === OPEN)
   consensusState = get(consensusStateKey(connection.clientIdentifier))
-  expected = Connection{CLOSETRY, identifier, connection.counterpartyClientIdentifier,
-                        connection.clientIdentifier, timeoutHeight}
+  expected = ConnectionEnd{CLOSETRY, identifier, connection.counterpartyClientIdentifier,
+                           connection.clientIdentifier, timeoutHeight}
   assert(verifyMembership(consensusState, proofInit, connectionKey(counterpartyConnectionIdentifier), expected))
   connection.state = CLOSED
   connection.nextTimeoutHeight = nextTimeoutHeight
@@ -297,8 +299,8 @@ function connCloseAck(identifier: Identifier, proofTry: CommitmentProof, timeout
   connection = get(connectionKey(identifier))
   assert(connection.state === CLOSETRY)
   consensusState = get(consensusStateKey(connection.clientIdentifier))
-  expected = Connection{CLOSED, identifier, connection.counterpartyClientIdentifier,
-                        connection.clientIdentifier, timeoutHeight}
+  expected = ConnectionEnd{CLOSED, identifier, connection.counterpartyClientIdentifier,
+                           connection.clientIdentifier, timeoutHeight}
   assert(verifyMembership(consensusState, proofTry, connectionKey(counterpartyConnectionIdentifier), expected))
   connection.state = CLOSED
   connection.nextTimeoutHeight = 0
@@ -315,8 +317,8 @@ function connCloseTimeout(identifier: Identifier, proofTimeout: CommitmentProof,
   assert(consensusState.getHeight() > connection.nextTimeoutHeight)
   switch state {
     case CLOSETRY:
-      expected = Connection{OPEN, identifier, connection.counterpartyClientIdentifier,
-                            connection.clientIdentifier, timeoutHeight}
+      expected = ConnectionEnd{OPEN, identifier, connection.counterpartyClientIdentifier,
+                               connection.clientIdentifier, timeoutHeight}
       assert(verifyMembership(
         consensusState, proofTimeout,
         connectionKey(counterpartyConnectionIdentifier), expected
@@ -325,8 +327,8 @@ function connCloseTimeout(identifier: Identifier, proofTimeout: CommitmentProof,
       connection.nextTimeoutHeight = 0
       set(connectionKey(identifier), connection)
     case CLOSED:
-      expected = Connection{CLOSETRY, identifier, connection.counterpartyClientIdentifier,
-                            connection.clientIdentifier, timeoutHeight}
+      expected = ConnectionEnd{CLOSETRY, identifier, connection.counterpartyClientIdentifier,
+                               connection.clientIdentifier, timeoutHeight}
       assert(verifyMembership(
         consensusState, proofTimeout,
         connectionKey(counterpartyConnectionIdentifier), expected
@@ -343,6 +345,16 @@ function connCloseTimeout(identifier: Identifier, proofTimeout: CommitmentProof,
 The equivocation detection subprotocol is defined in [ICS 2](../ics-002-consensus-verification). If a client is frozen by equivocation, all associated connections are immediately frozen as well.
 
 Implementing chains may want to allow applications to register handlers to take action upon discovery of an equivocation. Further discussion is deferred to ICS 12.
+
+#### Querying
+
+Connections can be queried by identifier with `queryConnection`.
+
+```typescript
+function queryConnection(id: Identifier): ConnectionEnd | void {
+  return get(connectionKey(id))
+}
+```
 
 ## Backwards Compatibility
 
