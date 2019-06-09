@@ -23,7 +23,7 @@ IBC is an inter-module communication protocol, designed to faciliate reliable, a
 
 `Connection` and `ConnectionState` are as defined in [ICS 3](../ics-003-connection-semantics).
 
-`Channel` and `Packet` are as defined in [ICS 4](../ics-004-channel-and-packet-semantics).
+`ChannelState` and `Packet` are as defined in [ICS 4](../ics-004-channel-and-packet-semantics).
 
 `CommitmentProof` is as defined in [ICS 23](../ics-023-vector-commitments).
 
@@ -99,6 +99,8 @@ function connOpenInit(
 }
 ```
 
+`connOpenTry` acknowledges a connection initialization on the initiating chain.
+
 The default IBC relayer module will allow external calls to `connOpenTry`.
 
 ```typescript
@@ -110,7 +112,7 @@ function connOpenTry(
 }
 ```
 
-`ackConnection` acknowledges a connection in progress on another chain (part two of the three-way connection handshake).
+`connOpenAck` acknowledges a connection in progress on another chain.
 
 The default IBC relayer module will allow external calls to `connOpenAck`.
 
@@ -122,6 +124,8 @@ function connOpenAck(
 }
 ```
 
+`connOpenConfirm` acknowledges the acknowledgement and finalizes a new connection.
+
 The default IBC relayer module will allow external calls to `connOpenConfirm`.
 
 ```typescript
@@ -129,6 +133,10 @@ function connOpenConfirm(identifier: Identifier, proofAck: CommitmentProof, time
   // defined in ICS 3
 }
 ```
+
+`connOpenTimeout` proves that a connection handshake has timed-out and resets the process.
+
+The default IBC relayer module will allow external calls to `connOpenTimeout`.
 
 ```typescript
 function connOpenTimeout(identifier: Identifier, proofTimeout: CommitmentProof, timeoutHeight: uint64) {
@@ -166,6 +174,10 @@ function connCloseAck(identifier: Identifier, proofTry: CommitmentProof, timeout
 }
 ```
 
+`connCloseTimeout` proves that a connection closing handshake has timed-out and resets the process.
+
+The default IBC relayer module will allow external calls to `connCloseTimeout`.
+
 ```typescript
 function connCloseTimeout(identifier: Identifier, proofTimeout: CommitmentProof, timeoutHeight: uint64) {
   // defined in ICS 3
@@ -188,6 +200,8 @@ function chanOpenInit(
 
 `chanOpenTry` tries to initialize a channel based on proof of an initialization attempt on the counterparty chain, failing if the channel identifier is unavailable, the proof is invalid, or the calling module is not authorized.
 
+The default IBC relayer module will allow external calls to `chanOpenTry`.
+
 ```typescript
 function chanOpenTry(
   connectionIdentifier: Identifier, channelIdentifier: Identifier, counterpartyChannelIdentifier: Identifier,
@@ -199,6 +213,8 @@ function chanOpenTry(
 
 `chanOpenAck` acknowledges a channel creation in progress on another chain, failing if the channel identifier is not found, the proof is invalid, or the calling module is not authorized.
 
+The default IBC relayer module will allow external calls to `chanOpenAck`.
+
 ```typescript
 function chanOpenAck(
   connectionIdentifier: Identifier, channelIdentifier: Identifier,
@@ -209,6 +225,8 @@ function chanOpenAck(
 
 `chanOpenConfirm` finalizes the channel opening handshake, failing if the channel identifier is not found, the proof is invalid, or the calling module is not authorized.
 
+The default IBC relayer module will allow external calls to `chanOpenConfirm`.
+
 ```typescript
 function chanOpenConfirm(
   connectionIdentifier: Identifier, channelIdentifier: Identifier,
@@ -216,6 +234,10 @@ function chanOpenConfirm(
   // defined in ICS 4
 }
 ```
+
+`chanOpenTimeout` proves that a channel opening handshake has timed-out and resets the process.
+
+The default IBC relayer module will allow external calls to `chanOpenTimeout`.
 
 ```typescript
 function chanOpenTimeout(
@@ -233,12 +255,18 @@ function queryChannel(string identifier): void {
 }
 ```
 
+`chanCloseInit` initiates the channel closing handshake.
+
 ```typescript
 function chanCloseInit(
   connectionIdentifier: Identifier, channelIdentifier: Identifier, nextTimeoutHeight: uint64) {
   // defined in ICS 4
 }
 ```
+
+`chanCloseTry` acknowledges the initialization of the channel closing handshake on the counterparty chain.
+
+The default IBC relayer module will allow external calls to `chanCloseTry`.
 
 ```typescript
 function chanCloseTry(
@@ -248,6 +276,10 @@ function chanCloseTry(
 }
 ```
 
+`chanCloseAck` acknowledges the acknowledgement and finalizes the channel closing handshake.
+
+The default IBC relayer module will allow external calls to `chanCloseAck`.
+
 ```typescript
 function chanCloseAck(
   connectionIdentifier: Identifier, channelIdentifier: Identifier,
@@ -255,6 +287,10 @@ function chanCloseAck(
   // defined in ICS 4
 }
 ```
+
+`chanCloseTimeout` proves that a channel closing handshake has timed-out and resets the process.
+
+The default IBC relayer module will allow external calls to `chanCloseTimeout`.
 
 ```typescript
 function chanCloseTimeout(
@@ -272,6 +308,8 @@ Packets are permissioned by channel (only a module which owns a channel can send
 
 The returned identifier will be the same as that sent by the timeout handler `timeoutPacket`, so it can be used by the sending module to associate a specific action with a specific packet timeout.
 
+The default IBC relayer module will allow external calls to `sendPacket`.
+
 ```typescript
 function sendPacket(packet: Packet) {
   // defined in ICS 4
@@ -279,6 +317,8 @@ function sendPacket(packet: Packet) {
 ```
 
 `recvPacket` attempts to receive a packet, returning an error if the calling module is not authorized to handle the packet, or if the packet does not exist or has been already handled.
+
+The default IBC relayer module will allow external calls to `recvPacket`.
 
 ```typescript
 function recvPacket(packet: Packet, proof: CommitmentProof) {
@@ -288,75 +328,22 @@ function recvPacket(packet: Packet, proof: CommitmentProof) {
 
 `timeoutPacket` attemps to handle a packet timeout, returning an error if the calling module is not authorized to handle the packet timeout, or if the packet does not exist, has not timed out, or has already been handled.
 
+The default IBC relayer module will allow external calls to `timeoutPacket`.
+
 ```coffeescript
 function timeoutPacket(packet: Packet, proof: CommitmentProof, nextSequenceRecv: uint64) {
   // defined in ICS 4
 }
 ```
 
+`recvTimeoutPacket` function is called by a module in order to process an IBC packet sent on the corresponding channel which has timed out.
+
+The default IBC relayer module will allow external calls to `recvTimeoutPacket`.
+
 ```typescript
 function recvTimeoutPacket(packet: Packet, proof: CommitmentProof) {
   // defined in ICS 4
 }
-```
-
-### Interface usage example
-
-As a demonstration of interface usage, a simple module handling send/receive of a native asset could be implemented as follows:
-
-```golang
-type State struct {
-  channel     string
-}
-```
-
-```golang
-type PacketData struct {
-  asset         string
-  amount        integer
-  source        address
-  destination   address
-}
-```
-
-```coffeescript
-function myModuleInit()
-  client = createClient(consensusState)
-  connection = createConnection(nil, client)
-  state.channel = createChannel(nil, connection, myModuleRecv, myModuleTimeout)
-```
-
-```coffeescript
-function myModuleSend(string asset, integer amount, address source, address destination)
-  checkSignature(source)
-  deductBalance(source, asset, amount)
-  escrow(asset, amount)
-  sendPacket({
-    channel: state.channel,
-    data: {
-      asset       : asset,
-      amount      : amount,
-      source      : source,
-      destination : destination,
-    }
-  })
-```
-
-```coffeescript
-function myModuleRecv(Packet packet)
-  recvPacket(packet)
-  assert(packet.channel == channel)
-  data = packet.data
-  unescrow(data.asset, data.amount)
-  increaseBalance(data.destination, data.asset, data.amount)
-```
-
-```coffeescript
-function myModuleTimeout(Packet packet)
-  timeoutPacket(packet)
-  data = packet.data
-  unescrow(packet.asset, packet.amount)
-  increaseBalance(packet.source, packet.asset, packet.amount)
 ```
 
 ## Backwards Compatibility
