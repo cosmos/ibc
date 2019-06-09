@@ -20,7 +20,7 @@ but is a bit tricky to understand and may require extra work on the part of rela
 
 ### Definitions
 
-All functions provided by the IBC handler interface are defined as in ICS 25.
+All functions provided by the IBC handler interface are defined as in [ICS 25](../ics-025-handler-interface).
 
 ### Desired Properties
 
@@ -180,6 +180,16 @@ interface ChanCloseInit {
 ```
 
 ```typescript
+interface ChanCloseTry {
+  connectionIdentifier: Identifier
+  channelIdentifier: Identifier
+  timeoutHeight: uint64
+  nextTimeoutHeight: uint64
+  proofInit: CommitmentProof
+}
+```
+
+```typescript
 interface ChanCloseAck {
   connectionIdentifier: Identifier
   channelIdentifier: Identifier
@@ -200,6 +210,65 @@ interface ChanCloseTimeout {
 #### Packet relay
 
 ### Subprotocols
+
+### Interface usage example
+
+As a demonstration of interface usage, a simple module handling send/receive of a native asset could be implemented as follows:
+
+```golang
+type State struct {
+  channel     string
+}
+```
+
+```golang
+type PacketData struct {
+  asset         string
+  amount        integer
+  source        address
+  destination   address
+}
+```
+
+```coffeescript
+function myModuleInit()
+  client = createClient(consensusState)
+  connection = createConnection(nil, client)
+  state.channel = createChannel(nil, connection, myModuleRecv, myModuleTimeout)
+```
+
+```coffeescript
+function myModuleSend(string asset, integer amount, address source, address destination)
+  checkSignature(source)
+  deductBalance(source, asset, amount)
+  escrow(asset, amount)
+  sendPacket({
+    channel: state.channel,
+    data: {
+      asset       : asset,
+      amount      : amount,
+      source      : source,
+      destination : destination,
+    }
+  })
+```
+
+```coffeescript
+function myModuleRecv(Packet packet)
+  recvPacket(packet)
+  assert(packet.channel == channel)
+  data = packet.data
+  unescrow(data.asset, data.amount)
+  increaseBalance(data.destination, data.asset, data.amount)
+```
+
+```coffeescript
+function myModuleTimeout(Packet packet)
+  timeoutPacket(packet)
+  data = packet.data
+  unescrow(packet.asset, packet.amount)
+  increaseBalance(packet.source, packet.asset, packet.amount)
+```
 
 ## Backwards Compatibility
 

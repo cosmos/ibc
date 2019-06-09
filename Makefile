@@ -1,4 +1,4 @@
-SUBDIRS := spec/ics-3-connection-semantics spec/ics-4-channel-and-packet-semantics
+SUBDIRS := spec/ics-003-connection-semantics spec/ics-004-channel-and-packet-semantics
 TOPTARGETS := all clean
 
 $(TOPTARGETS): $(SUBDIRS)
