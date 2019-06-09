@@ -65,7 +65,7 @@ These functions MUST be permissioned to the IBC handler module (the implementati
 
 ### Consensus State Introspection
 
-Host chains MUST define a unique `ConsensusState` type fulfilling the requirements of [ICS 2](../ics-2-consensus-verification):
+Host chains MUST define a unique `ConsensusState` type fulfilling the requirements of [ICS 2](../ics-002-consensus-verification):
 
 ```typescript
 interface ConsensusState {
