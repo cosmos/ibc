@@ -60,4 +60,4 @@ It also has one notable disadvantage:
   can be submitted.
 
 However, for common relay patterns, an "IBC relayer" module can optionally be implemented, outside of IBC
-core, which maintains a module dispatch table and simplifies the job of relayers. This relayer module will be defined in ICS 26.
+core, which maintains a module dispatch table and simplifies the job of relayers. This relayer module will be defined in [ICS 26](../spec/ics-026-relayer-module).
