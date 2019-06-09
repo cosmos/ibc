@@ -10,27 +10,32 @@ modified: 2019-06-09
 
 ## Synopsis
 
-(high-level description of and rationale for specification)
+The relayer module is a default implementation of a secondary module which will accept external datagrams and call into the interblockchain communication protocol handler to deal with handshakes and packet relay.
+The relayer module can keep a lookup table of modules, which it can use to look up and call a module when a packet is received, so that external relayers need only ever relay packets to the relayer module.
 
 ### Motivation
 
-(rationale for existence of standard)
+The default IBC handler uses a receiver call pattern, where modules must individually call the IBC handler in order to start handshakes, accept handshakes, send and receive packets, etc. This is flexible and simple (see [Design Patterns](../../ibc/5_IBC_DESIGN_PATTERNS.md))
+but is a bit tricky to understand and may require extra work on the part of relayer processes, who must track the state of many modules. This standard describes an IBC "relayer module" to automate most common functionality, route packets, and simplify the task of relayers.
 
 ### Definitions
 
-(definitions of any new terms not defined in common documentation)
+All functions provided by the IBC handler interface are defined as in ICS 25.
 
 ### Desired Properties
 
-(desired characteristics / properties of protocol, effects if properties are violated)
+- Modules should be able to own channels through the relayer module.
+- No overhead should be added for packet sends and receives other than the layer of call indirection.
 
 ## Technical Specification
 
-(main part of standard document - not all subsections are required)
-
-(detailed technical specification: syntax, semantics, sub-protocols, algorithms, data structures, etc)
-
 ### Datagrams
+
+*Datagrams* are external data blobs accepted as transactions by the relayer module.
+
+#### Client lifecycle management
+
+(todo)
 
 #### Connection lifecycle management
 
@@ -192,34 +197,29 @@ interface ChanCloseTimeout {
 }
 ```
 
-
-### Data Structures
-
-(new data structures, if applicable)
+#### Packet relay
 
 ### Subprotocols
 
-(subprotocols, if applicable)
-
 ## Backwards Compatibility
 
-(discussion of compatibility or lack thereof with previous standards)
+Not applicable.
 
 ## Forwards Compatibility
 
-(discussion of compatibility or lack thereof with expected future standards)
+Relayer modules are closely tied to the IBC handler interface.
 
 ## Example Implementation
 
-(link to or description of concrete example implementation)
+Coming soon.
 
 ## Other Implementations
 
-(links to or descriptions of other implementations)
+Coming soon.
 
 ## History
 
-(changelog and notable inspirations / references)
+June 9 2019 - Draft submitted
 
 ## Copyright
 
