@@ -199,16 +199,6 @@ it specifies will own the other end of the created channel on the counterparty c
 could be implemented to provide this).
 
 ```typescript
-interface ChanOpenInit {
-  connectionIdentifier: Identifier
-  channelIdentifier: Identifier
-  counterpartyChannelIdentifier: Identifier
-  counterpartyModuleIdentifier: Identifier
-  nextTimeoutHeight: uint64
-}
-```
-
-```typescript
 function chanOpenInit(
   connectionIdentifier: Identifier, channelIdentifier: Identifier,
   counterpartyChannelIdentifier: Identifier, counterpartyModuleIdentifier: Identifier, nextTimeoutHeight: uint64) {
@@ -225,19 +215,6 @@ function chanOpenInit(
 ```
 
 The `chanOpenTry` function is called by a module to accept the first step of a chanel opening handshake initiated by a module on another chain.
-
-```typescript
-interface ChanOpenTry {
-  connectionIdentifier: Identifier
-  channelIdentifier: Identifier
-  counterpartyChannelIdentifier: Identifier
-  moduleIdentifier: Identifier
-  counterpartyModuleIdentifier: Identifier
-  timeoutHeight: uint64
-  nextTimeoutHeight: uint64
-  proofInit: CommitmentProof
-}
-```
 
 ```typescript
 function chanOpenTry(
@@ -268,16 +245,6 @@ The `chanOpenAck` is called by the handshake-originating module to acknowledge t
 counterparty module on the other chain.
 
 ```typescript
-interface ChanOpenAck {
-  connectionIdentifier: Identifier
-  channelIdentifier: Identifier
-  timeoutHeight: uint64
-  nextTimeoutHeight: uint64
-  proofTry: CommitmentProof
-}
-```
-
-```typescript
 function chanOpenAck(
   connectionIdentifier: Identifier, channelIdentifier: Identifier,
   timeoutHeight: uint64, nextTimeoutHeight: uint64, proofTry: CommitmentProof) {
@@ -305,15 +272,6 @@ The `chanOpenConfirm` function is called by the handshake-accepting module to ac
 of the handshake-originating module on the other chain and finish the channel opening handshake.
 
 ```typescript
-interface ChanOpenConfirm {
-  connectionIdentifier: Identifier
-  channelIdentifier: Identifier
-  timeoutHeight: uint64
-  proofAck: CommitmentProof
-}
-```
-
-```typescript
 function chanOpenConfirm(
   connectionIdentifier: Identifier, channelIdentifier: Identifier,
   timeoutHeight: uint64, proofAck: CommitmentProof) {
@@ -339,15 +297,6 @@ function chanOpenConfirm(
 
 The `chanOpenTimeout` function is called by either the handshake-originating
 module or the handshake-confirming module to prove that a timeout has occurred and reset the state.
-
-```typescript
-interface ChanOpenTimeout {
-  connectionIdentifier: Identifier
-  channelIdentifier: Identifier
-  timeoutHeight: uint64
-  proofTimeout: CommitmentProof
-}
-```
 
 ```typescript
 function chanOpenTimeout(
@@ -395,14 +344,6 @@ function chanOpenTimeout(
 
 The `chanCloseInit` function is called by either module to initiate
 the channel-closing handshake.
-
-```typescript
-interface ChanCloseInit {
-  connectionIdentifier: Identifier
-  channelIdentifier: Identifier
-  nextTimeoutHeight: uint64
-}
-```
 
 ```typescript
 function chanCloseInit(
@@ -458,15 +399,6 @@ The `chanCloseAck` function is called by the handshake-originating module
 to acknowledge the closing acknowledgement and finalize channel closure.
 
 ```typescript
-interface ChanCloseAck {
-  connectionIdentifier: Identifier
-  channelIdentifier: Identifier
-  timeoutHeight: uint64
-  proofTry: CommitmentProof
-}
-```
-
-```typescript
 function chanCloseAck(
   connectionIdentifier: Identifier, channelIdentifier: Identifier,
   timeoutHeight: uint64, proofTry: CommitmentProof) {
@@ -492,15 +424,6 @@ function chanCloseAck(
 
 The `chanCloseTimeout` function is called by either the handshake-originating
 or handshake-accepting module to prove a timeout and reset state.
-
-```typescript
-interface ChanCloseTimeout {
-  connectionIdentifier: Identifier
-  channelIdentifier: Identifier
-  timeoutHeight: uint64
-  proofTimeout: CommitmentProof
-}
-```
 
 ```typescript
 function chanCloseTimeout(

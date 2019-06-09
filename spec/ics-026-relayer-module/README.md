@@ -115,6 +115,83 @@ interface ConnCloseTimeout {
 
 #### Channel lifecycle management
 
+```typescript
+interface ChanOpenInit {
+  connectionIdentifier: Identifier
+  channelIdentifier: Identifier
+  counterpartyChannelIdentifier: Identifier
+  counterpartyModuleIdentifier: Identifier
+  nextTimeoutHeight: uint64
+}
+```
+
+```typescript
+interface ChanOpenTry {
+  connectionIdentifier: Identifier
+  channelIdentifier: Identifier
+  counterpartyChannelIdentifier: Identifier
+  moduleIdentifier: Identifier
+  counterpartyModuleIdentifier: Identifier
+  timeoutHeight: uint64
+  nextTimeoutHeight: uint64
+  proofInit: CommitmentProof
+}
+```
+
+```typescript
+interface ChanOpenAck {
+  connectionIdentifier: Identifier
+  channelIdentifier: Identifier
+  timeoutHeight: uint64
+  nextTimeoutHeight: uint64
+  proofTry: CommitmentProof
+}
+```
+
+```typescript
+interface ChanOpenConfirm {
+  connectionIdentifier: Identifier
+  channelIdentifier: Identifier
+  timeoutHeight: uint64
+  proofAck: CommitmentProof
+}
+```
+
+```typescript
+interface ChanOpenTimeout {
+  connectionIdentifier: Identifier
+  channelIdentifier: Identifier
+  timeoutHeight: uint64
+  proofTimeout: CommitmentProof
+}
+```
+
+```typescript
+interface ChanCloseInit {
+  connectionIdentifier: Identifier
+  channelIdentifier: Identifier
+  nextTimeoutHeight: uint64
+}
+```
+
+```typescript
+interface ChanCloseAck {
+  connectionIdentifier: Identifier
+  channelIdentifier: Identifier
+  timeoutHeight: uint64
+  proofTry: CommitmentProof
+}
+```
+
+```typescript
+interface ChanCloseTimeout {
+  connectionIdentifier: Identifier
+  channelIdentifier: Identifier
+  timeoutHeight: uint64
+  proofTimeout: CommitmentProof
+}
+```
+
 
 ### Data Structures
 
