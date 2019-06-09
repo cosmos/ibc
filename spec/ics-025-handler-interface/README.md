@@ -6,7 +6,7 @@ category: ibc-core
 requires: 2, 3, 4, 23, 24
 author: Christopher Goes <cwgoes@tendermint.com>
 created: 2019-04-23
-modified: 2019-05-14
+modified: 2019-06-09
 ---
 
 ## Synopsis
@@ -19,15 +19,15 @@ IBC is an inter-module communication protocol, designed to faciliate reliable, a
 
 ### Definitions
 
-`Client` and `ConsensusState` are as defined in ICS 2.
+`Client` and `ConsensusState` are as defined in [ICS 2](../ics-002-consensus-verification).
 
-`Connection` and `ConnectionState` are as defined in ICS 3.
+`Connection` and `ConnectionState` are as defined in [ICS 3](../ics-003-connection-semantics).
 
-`Channel` and `Packet` are as defined in ICS 4.
+`Channel` and `Packet` are as defined in [ICS 4](../ics-004-channel-and-packet-semantics).
 
-`CommitmentProof` is as defined in ICS 23.
+`CommitmentProof` is as defined in [ICS 23](../ics-023-vector-commitments).
 
-`Identifier`s must conform to the schema defined in ICS 24.
+`Identifier`s must conform to the schema defined in [ICS 24](../ics-024-host-requirements).
 
 ### Desired Properties
 
@@ -358,7 +358,7 @@ Coming soon.
 
 ## History
 
-30 April 2019 - Draft written
+9 June 2019 - Draft written
 
 ## Copyright
 
