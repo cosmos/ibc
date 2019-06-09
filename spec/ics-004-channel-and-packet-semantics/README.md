@@ -203,7 +203,7 @@ function chanOpenInit(
   connectionIdentifier: Identifier, channelIdentifier: Identifier,
   counterpartyChannelIdentifier: Identifier, counterpartyModuleIdentifier: Identifier, nextTimeoutHeight: uint64) {
   assert(get(channelKey(connectionIdentifier, channelIdentifier)) === nil)
-  connection = get("connections/{connectionIdentifier}")
+  connection = get(connectionKey(connectionIdentifier))
   assert(connection.state === OPEN)
   moduleIdentifier = getCallingModule()
   channel = Channel{INIT, moduleIdentifier, counterpartyModuleIdentifier,
@@ -224,9 +224,9 @@ function chanOpenTry(
   assert(getConsensusState().height < timeoutHeight)
   assert(get(channelKey(connectionIdentifier, channelIdentifier)) === null)
   assert(getCallingModule() === moduleIdentifier)
-  connection = get("connections/{connectionIdentifier}")
+  connection = get(connectionKey(connectionIdentifier))
   assert(connection.state === OPEN)
-  consensusState = get("clients/{connection.clientIdentifier}/consensusState")
+  consensusState = get(consensusStateKey(connection.clientIdentifier))
   assert(verifyMembership(
     consensusState,
     proofInit,
@@ -252,13 +252,13 @@ function chanOpenAck(
   channel = get(channelKey(connectionIdentifier, channelIdentifier))
   assert(channel.state === INIT)
   assert(getCallingModule() === channel.moduleIdentifier)
-  connection = get("connections/{connectionIdentifier}")
+  connection = get(connectionKey(connectionIdentifier))
   assert(connection.state === OPEN)
-  consensusState = get("clients/{connection.clientIdentifier}/consensusState")
+  consensusState = get(consensusStateKey(connection.clientIdentifier))
   assert(verifyMembership(
     consensusState.getRoot(),
     proofTry,
-    "connections/{connection.counterpartyConnectionIdentifier}/channels/{channel.counterpartyChannelIdentifier}",
+    channelKey(connection.counterpartyConnectionIdentifier, channel.counterpartyChannelIdentifier),
     Channel{OPENTRY, channel.counterpartyModuleIdentifier, channel.moduleIdentifier,
             channelIdentifier, timeoutHeight}
   ))
@@ -279,13 +279,13 @@ function chanOpenConfirm(
   channel = get(channelKey(connectionIdentifier, channelIdentifier))
   assert(channel.state === OPENTRY)
   assert(getCallingModule() === channel.moduleIdentifier)
-  connection = get("connections/{connectionIdentifier}")
+  connection = get(connectionKey(connectionIdentifier))
   assert(connection.state === OPEN)
-  consensusState = get("clients/{connection.clientIdentifier}/consensusState")
+  consensusState = get(consensusStateKey(connection.clientIdentifier))
   assert(verifyMembership(
     consensusState.getRoot(),
     proofAck,
-    "connections/{connection.counterpartyConnectionIdentifier}/channels/{channel.counterpartyChannelIdentifier}",
+    channelKey(connection.counterpartyConnectionIdentifier, channel.counterpartyChannelIdentifier),
     Channel{OPEN, channel.counterpartyModuleIdentifier, channel.moduleIdentifier,
             channelIdentifier, timeoutHeight}
   ))
@@ -303,9 +303,9 @@ function chanOpenTimeout(
   connectionIdentifier: Identifier, channelIdentifier: Identifier,
   timeoutHeight: uint64, proofTimeout: CommitmentProof) {
   channel = get(channelKey(connectionIdentifier, channelIdentifier))
-  connection = get("connections/{connectionIdentifier}")
+  connection = get(connectionKey(connectionIdentifier))
   assert(connection.state === OPEN)
-  consensusState = get("clients/{connection.clientIdentifier}/consensusState")
+  consensusState = get(consensusStateKey(connection.clientIdentifier))
   assert(consensusState.height >= connection.nextTimeoutHeight)
   switch channel.state {
     case INIT:
@@ -350,7 +350,7 @@ function chanCloseInit(
   connectionIdentifier: Identifier, channelIdentifier: Identifier, nextTimeoutHeight: uint64) {
   channel = get(channelKey(connectionIdentifier, channelIdentifier))
   assert(channel.state === OPEN)
-  connection = get("connections/{connectionIdentifier}")
+  connection = get(connectionKey(connectionIdentifier))
   assert(connection.state === OPEN)
   channel.state = CLOSETRY
   channel.nextTimeoutHeight = nextTimeoutHeight
@@ -368,15 +368,15 @@ function chanCloseTry(
   assert(getConsensusState().getHeight() < timeoutHeight)
   channel = get(channelKey(connectionIdentifier, channelIdentifier))
   assert(channel.state === OPEN)
-  connection = get("connections/{connectionIdentifier}")
+  connection = get(connectionKey(connectionIdentifier))
   assert(connection.state === OPEN)
-  consensusState = get("clients/{connection.clientIdentifier}/consensusState")
+  consensusState = get(consensusStateKey(connection.clientIdentifier))
   expected = Channel{INIT, channel.counterpartyModuleIdentifier, channel.moduleIdentifier,
                      channel.channelIdentifier, timeoutHeight}
   assert(verifyMembership(
     consensusState,
     proofInit,
-    "connections/{connection.counterpartyIdentifier}/channels/{channel.counterpartyChannelIdentifier}",
+    channelKey(connection.counterpartyIdentifier, channel.counterpartyChannelIdentifier),
     expected
   ))
   channel.state = CLOSED
@@ -395,9 +395,9 @@ function chanCloseAck(
   assert(getConsensusState().getHeight() < timeoutHeight)
   channel = get(channelKey(connectionIdentifier, channelIdentifier))
   assert(channel.state === OPEN)
-  connection = get("connections/{connectionIdentifier}")
+  connection = get(connectionKey(connectionIdentifier))
   assert(connection.state === OPEN)
-  consensusState = get("clients/{connection.clientIdentifier}/consensusState")
+  consensusState = get(consensusStateKey(connection.clientIdentifier))
   expected = Channel{CLOSED, channel.counterpartyModuleIdentifier, channel.moduleIdentifier,
                      channelIdentifier, timeoutHeight}
   assert(verifyMembership(
@@ -420,7 +420,7 @@ function chanCloseTimeout(
   connectionIdentifier: Identifier, channelIdentifier: Identifier,
   timeoutHeight: uint64, proofTimeout: CommitmentProof) {
   channel = get(channelKey(connectionIdentifier, channelIdentifier))
-  consensusState = get("clients/{connection.clientIdentifier}/consensusState")
+  consensusState = get(consensusStateKey(connection.clientIdentifier))
   assert(consensusState.getHeight() >= connection.nextTimeoutHeight)
   switch channel.state {
     case CLOSETRY:
@@ -468,10 +468,10 @@ function sendPacket(packet: Packet) {
   assert(channel.state === OPEN)
   assert(getCallingModule() === channel.moduleIdentifier)
   assert(packet.destChannel === channel.counterpartyChannelIdentifier)
-  connection = get("connections/{packet.sourceConnection}")
+  connection = get(connectionKey(packet.sourceConnection))
   assert(connection.state === OPEN)
   assert(packet.destConnection === connection.counterpartyConnectionIdentifier)
-  consensusState = get("clients/{connection.clientIdentifier}/consensusState")
+  consensusState = get(consensusStateKey(connection.clientIdentifier))
   assert(consensusState.getHeight() < packet.timeoutHeight)
   nextSequenceSend = get(nextSequenceSendKey(packet.sourceConnection, packet.sourceChannel))
   assert(packet.sequence === nextSequenceSend)
@@ -504,7 +504,7 @@ function recvPacket(packet: Packet, proof: CommitmentProof) {
   assert(packet.sourceChannel === channel.counterpartyChannelIdentifier)
   nextSequenceRecv = get(nextSequenceRecvKey(packet.destConnection, packet.destChannel))
   assert(packet.sequence === nextSequenceRecv)
-  connection = get("connections/{connectionIdentifier}")
+  connection = get(connectionKey(connectionIdentifier))
   assert(packet.sourceConnection === connection.counterpartyConnectionIdentifier)
   assert(connection.state === OPEN)
   consensusState = getConsensusState()
@@ -541,12 +541,12 @@ function timeoutPacket(packet: Packet, proof: CommitmentProof, nextSequenceRecv:
   assert(getCallingModule() === channel.moduleIdentifier)
   assert(packet.destChannel === channel.counterpartyChannelIdentifier)
 
-  connection = get("connections/{packet.sourceConnection}")
+  connection = get(connectionKey(packet.sourceConnection))
   assert(connection.state === OPEN)
   assert(packet.destConnection === connection.counterpartyIdentifier)
 
   // check that timeout height has passed on the other end
-  consensusState = get("clients/{connection.clientIdentifier}/consensusState")
+  consensusState = get(consensusStateKey(connection.clientIdentifier))
   assert(consensusState.getHeight() >= timeoutHeight)
 
   // check that packet has not been received
@@ -588,7 +588,7 @@ function recvTimeoutPacket(packet: Packet, proof: CommitmentProof) {
   assert(getCallingModule() === channel.moduleIdentifier)
   assert(packet.sourceChannel === channel.counterpartyChannelIdentifier)
 
-  connection = get("connections/{connectionIdentifier}")
+  connection = get(connectionKey(connectionIdentifier))
   assert(connection.state === OPEN)
   assert(packet.sourceConnection === connection.counterpartyConnectionIdentifier)
 
@@ -621,14 +621,14 @@ function cleanupPacket(packet: Packet, proof: CommitmentProof, nextSequenceRecv:
   assert(getCallingModule() === channel.moduleIdentifier)
   assert(packet.destChannel === channel.counterpartyChannelIdentifier)
 
-  connection = get("connections/{packet.sourceConnection}")
+  connection = get(connectionKey(packet.sourceConnection))
   assert(connection.state === OPEN)
   assert(packet.destConnection === connection.counterpartyIdentifier)
 
   // assert packet has been received on the other end
   assert(nextSequenceRecv > packet.sequence)
 
-  consensusState = get("clients/{connection.clientIdentifier}/consensusState")
+  consensusState = get(consensusStateKey(connection.clientIdentifier))
 
   // check that the recv sequence is as claimed
   assert(verifyMembership(
