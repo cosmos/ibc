@@ -86,6 +86,9 @@ interface Connection {
 }
 ```
 
+### Store keys
+
+
 ### Subprotocols
 
 This ICS defines two subprotocols: opening handshake and closing handshake. Header tracking and closing-by-equivocation are defined in [ICS 2](../ics-002-consensus-verification). Datagrams defined herein are handled as external messages by the IBC relayer module defined in [ICS 26](../ics-026-relayer-module).
