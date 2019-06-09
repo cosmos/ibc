@@ -311,18 +311,18 @@ function chanOpenTimeout(
     case INIT:
       assert(verifyNonMembership(
         consensusState, proofTimeout,
-        channelKey(connection.counterpartyIdentifier, channel.counterpartyIdentifier)
+        channelKey(connection.counterpartyConnectionIdentifier, channel.counterpartyChannelIdentifier)
       ))
     case OPENTRY:
       assert(
         verifyNonMembership(
           consensusState, proofTimeout,
-          channelKey(connection.counterpartyIdentifier, channel.counterpartyIdentifier)
+          channelKey(connection.counterpartyConnectionIdentifier, channel.counterpartyChannelIdentifier)
         )
         ||
         verifyMembership(
           consensusState, proofTimeout,
-          channelKey(connection.counterpartyIdentifier, channel.counterpartyIdentifier),
+          channelKey(connection.counterpartyConnectionIdentifier, channel.counterpartyChannelIdentifier),
           Channel{INIT, channel.counterpartyModuleIdentifier, channel.moduleIdentifier,
                   channelIdentifier, timeoutHeight}
         )
@@ -332,7 +332,7 @@ function chanOpenTimeout(
                          channelIdentifier, timeoutHeight}
       assert(verifyMembership(
         consensusState, proofTimeout,
-        channelKey(connection.counterpartyIdentifier, channel.counterpartyIdentifier),
+        channelKey(connection.counterpartyConnectionIdentifier, channel.counterpartyChannelIdentifier),
         expected
       ))
   }
@@ -376,7 +376,7 @@ function chanCloseTry(
   assert(verifyMembership(
     consensusState,
     proofInit,
-    channelKey(connection.counterpartyIdentifier, channel.counterpartyChannelIdentifier),
+    channelKey(connection.counterpartyConnectionIdentifier, channel.counterpartyChannelIdentifier),
     expected
   ))
   channel.state = CLOSED
@@ -403,7 +403,7 @@ function chanCloseAck(
   assert(verifyMembership(
     consensusState.getRoot(),
     proofInit,
-    channelKey(connection.counterpartyIdentifier, channel.counterpartyChannelIdentifier),
+    channelKey(connection.counterpartyConnectionIdentifier, channel.counterpartyChannelIdentifier),
     expected
   ))
   channel.state = CLOSED
@@ -433,7 +433,7 @@ function chanCloseTimeout(
   verifyMembership(
     consensusState,
     proofTimeout,
-    channelKey(connection.counterpartyIdentifier, channel.counterpartyIdentifier),
+    channelKey(connection.counterpartyConnectionIdentifier, channel.counterpartyChannelIdentifier),
     expected
   )
   channel.state = OPEN
@@ -543,7 +543,7 @@ function timeoutPacket(packet: Packet, proof: CommitmentProof, nextSequenceRecv:
 
   connection = get(connectionKey(packet.sourceConnection))
   assert(connection.state === OPEN)
-  assert(packet.destConnection === connection.counterpartyIdentifier)
+  assert(packet.destConnection === connection.counterpartyConnectionIdentifier)
 
   // check that timeout height has passed on the other end
   consensusState = get(consensusStateKey(connection.clientIdentifier))
@@ -623,7 +623,7 @@ function cleanupPacket(packet: Packet, proof: CommitmentProof, nextSequenceRecv:
 
   connection = get(connectionKey(packet.sourceConnection))
   assert(connection.state === OPEN)
-  assert(packet.destConnection === connection.counterpartyIdentifier)
+  assert(packet.destConnection === connection.counterpartyConnectionIdentifier)
 
   // assert packet has been received on the other end
   assert(nextSequenceRecv > packet.sequence)

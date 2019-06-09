@@ -105,7 +105,7 @@ The default IBC relayer module will allow external calls to `connOpenTry`.
 
 ```typescript
 function connOpenTry(
-  desiredIdentifier: Identifier, counterpartyIdentifier: Identifier,
+  desiredIdentifier: Identifier, counterpartyConnectionIdentifier: Identifier,
   counterpartyClientIdentifier: Identifier, clientIdentifier: Identifier,
   proofInit: CommitmentProof, timeoutHeight: uint64, nextTimeoutHeight: uint64) {
   // defined in ICS 3
