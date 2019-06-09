@@ -3,7 +3,16 @@ ics: 3
 title: Connection Semantics
 stage: draft
 category: ibc-core
+<<<<<<< HEAD
+requires: 23, 24
+required-by: 25
+=======
 requires: 2, 23, 24
+<<<<<<< HEAD:spec/ics-3-connection-semantics/README.md
+>>>>>>> master
+=======
+required-by: 4
+>>>>>>> master:spec/ics-003-connection-semantics/README.md
 author: Christopher Goes <cwgoes@tendermint.com>, Juwoon Yun <joon@tendermint.com>
 created: 2019-03-07
 modified: 2019-05-17
@@ -15,15 +24,15 @@ This standards document describes the abstraction of an IBC *connection*: two st
 
 ### Motivation
 
-The core IBC protocol provides *authorization* and *ordering* semantics for packets: guarantees, respectively, that packets have been committed on the sending blockchain (and according state transitions executed, such as escrowing tokens), and that they have been committed exactly once in a particular order and can be delivered exactly once in that same order. The *connection* abstraction specified in this standard, in conjunction with the *client* abstraction specified in [ICS 2](../spec-ics-2-consensus-verification), defines the *authorization* semantics of IBC. Ordering semantics are described in [ICS 4](../spec/ics-4-channel-packet-semantics)).
+The core IBC protocol provides *authorization* and *ordering* semantics for packets: guarantees, respectively, that packets have been committed on the sending blockchain (and according state transitions executed, such as escrowing tokens), and that they have been committed exactly once in a particular order and can be delivered exactly once in that same order. The *connection* abstraction specified in this standard, in conjunction with the *client* abstraction specified in [ICS 2](../ics-002-consensus-verification), defines the *authorization* semantics of IBC. Ordering semantics are described in [ICS 4](../ics-004-channel-and-packet-semantics)).
 
 ### Definitions
 
-`ConsensusState`, `Header`, and `updateConsensusState` are as defined in [ICS 2](../spec/ics-2-consensus-verification).
+`ConsensusState`, `Header`, and `updateConsensusState` are as defined in [ICS 2](../ics-002-consensus-verification).
 
-`CommitmentProof`, `verifyMembership`, and `verifyNonMembership` are as defined in [ICS 23](../spec/ics-23-vector-commitments).
+`CommitmentProof`, `verifyMembership`, and `verifyNonMembership` are as defined in [ICS 23](../ics-023-vector-commitments).
 
-`Identifier` and other host state machine requirements are as defined in [ICS 24](../spec/ics-24-host-requirements). The identifier is not necessarily intended to be a human-readable name (and likely should not be, to discourage squatting or racing for identifiers).
+`Identifier` and other host state machine requirements are as defined in [ICS 24](../ics-024-host-requirements). The identifier is not necessarily intended to be a human-readable name (and likely should not be, to discourage squatting or racing for identifiers).
 
 The opening handshake protocol allows each chain to verify the identifier used to reference the connection on the other chain, enabling modules on each chain to reason about the reference on the other chain.
 
@@ -87,7 +96,7 @@ interface Connection {
 
 ### Subprotocols
 
-This ICS defines two subprotocols: opening handshake and closing handshake. Header tracking and closing-by-equivocation are defined in [ICS 2](../spec/ics-2-consensus-verification). Datagrams defined herein are handled as external messages by the IBC relayer module defined in ICS 26.
+This ICS defines two subprotocols: opening handshake and closing handshake. Header tracking and closing-by-equivocation are defined in [ICS 2](../ics-002-consensus-verification). Datagrams defined herein are handled as external messages by the IBC relayer module defined in [ICS 26](../ics-026-relayer-module).
 
 ![State Machine Diagram](state.png)
 
@@ -115,16 +124,6 @@ This subprotocol need not be permissioned, modulo anti-spam measures.
 *ConnOpenInit* initializes a connection attempt on chain A.
 
 ```typescript
-interface ConnOpenInit {
-  identifier: Identifier
-  desiredCounterpartyIdentifier: Identifier
-  clientIdentifier: Identifier
-  counterpartyClientIdentifier: Identifier
-  nextTimeoutHeight: uint64
-}
-```
-
-```typescript
 function connOpenInit(
   identifier: Identifier, desiredCounterpartyIdentifier: Identifier,
   clientIdentifier: Identifier, counterpartyClientIdentifier: Identifier, nextTimeoutHeight: uint64) {
@@ -137,18 +136,6 @@ function connOpenInit(
 ```
 
 *ConnOpenTry* relays notice of a connection attempt on chain A to chain B.
-
-```typescript
-interface ConnOpenTry {
-  desiredIdentifier: Identifier
-  counterpartyIdentifier: Identifier
-  counterpartyClientIdentifier: Identifier
-  clientIdentifier: Identifier
-  proofInit: CommitmentProof
-  timeoutHeight: uint64
-  nextTimeoutHeight: uint64
-}
-```
 
 ```typescript
 function connOpenTry(
@@ -174,15 +161,6 @@ function connOpenTry(
 *ConnOpenAck* relays acceptance of a connection open attempt from chain B back to chain A.
 
 ```typescript
-interface ConnOpenAck {
-  identifier: Identifier
-  proofTry: CommitmentProof
-  timeoutHeight: uint64
-  nextTimeoutHeight: uint64
-}
-```
-
-```typescript
 function connOpenAck(
   identifier: Identifier, proofTry: CommitmentProof,
   timeoutHeight: uint64, nextTimeoutHeight: uint64) {
@@ -205,14 +183,6 @@ function connOpenAck(
 *ConnOpenConfirm* confirms opening of a connection on chain A to chain B, after which the connection is open on both chains.
 
 ```typescript
-interface ConnOpenConfirm {
-  identifier: Identifier
-  proofAck: CommitmentProof
-  timeoutHeight: uint64
-}
-```
-
-```typescript
 function connOpenConfirm(identifier: Identifier, proofAck: CommitmentProof, timeoutHeight: uint64)
   assert(getConsensusState().getHeight() <= timeoutHeight)
   connection = get("connections/{identifier}")
@@ -227,14 +197,6 @@ function connOpenConfirm(identifier: Identifier, proofAck: CommitmentProof, time
 ```
 
 *ConnOpenTimeout* aborts a connection opening attempt due to a timeout on the other side.
-
-```typescript
-interface ConnOpenTimeout {
-  identifier: Identifier
-  proofTimeout: CommitmentProof
-  timeoutHeight: uint64
-}
-```
 
 ```typescript
 function connOpenTimeout(identifier: Identifier, proofTimeout: CommitmentProof, timeoutHeight: uint64) {
@@ -274,7 +236,7 @@ function connOpenTimeout(identifier: Identifier, proofTimeout: CommitmentProof, 
 
 #### Header Tracking
 
-Headers are tracked at the client level. See [ICS 2](../spec/ics-2-consensus-verification).
+Headers are tracked at the client level. See [ICS 2](../ics-002-consensus-verification).
 
 #### Closing Handshake
 
@@ -295,13 +257,6 @@ A correct protocol execution flows as follows (note that all calls are made thro
 *ConnCloseInit* initializes a close attempt on chain A.
 
 ```typescript
-interface ConnCloseInit {
-  identifier: Identifier
-  nextTimeoutHeight: uint64
-}
-```
-
-```typescript
 function connCloseInit(identifier: Identifier, nextTimeoutHeight: uint64) {
   connection = get("connections/{identifier}")
   assert(connection.state === OPEN)
@@ -312,15 +267,6 @@ function connCloseInit(identifier: Identifier, nextTimeoutHeight: uint64) {
 ```
 
 *ConnCloseTry* relays the intent to close a connection from chain A to chain B.
-
-```typescript
-interface ConnCloseTry {
-  identifier: Identifier
-  proofInit: CommitmentProof
-  timeoutHeight: uint64
-  nextTimeoutHeight: uint64
-}
-```
 
 ```typescript
 function connCloseTry(
@@ -342,14 +288,6 @@ function connCloseTry(
 *ConnCloseAck* acknowledges a connection closure on chain B.
 
 ```typescript
-interface ConnCloseAck {
-  identifier: Identifier
-  proofTry: CommitmentProof
-  timeoutHeight: uint64
-}
-```
-
-```typescript
 function connCloseAck(identifier: Identifier, proofTry: CommitmentProof, timeoutHeight: uint64) {
   assert(getConsensusState().getHeight() <= timeoutHeight)
   connection = get("connections/{identifier}")
@@ -365,14 +303,6 @@ function connCloseAck(identifier: Identifier, proofTry: CommitmentProof, timeout
 ```
 
 *ConnCloseTimeout* aborts a connection closing attempt due to a timeout on the other side and reopens the connection.
-
-```typescript
-interface ConnCloseTimeout {
-  identifier: Identifier
-  proofTimeout: CommitmentProof
-  timeoutHeight: uint64
-}
-```
 
 ```typescript
 function connCloseTimeout(identifier: Identifier, proofTimeout: CommitmentProof, timeoutHeight: uint64) {
@@ -406,7 +336,7 @@ function connCloseTimeout(identifier: Identifier, proofTimeout: CommitmentProof,
 
 #### Freezing by Equivocation
 
-The equivocation detection subprotocol is defined in [ICS 2](../spec/ics-2-consensus-verification). If a client is frozen by equivocation, all associated connections are immediately frozen as well.
+The equivocation detection subprotocol is defined in [ICS 2](../ics-002-consensus-verification). If a client is frozen by equivocation, all associated connections are immediately frozen as well.
 
 Implementing chains may want to allow applications to register handlers to take action upon discovery of an equivocation. Further discussion is deferred to ICS 12.
 

@@ -1,9 +1,11 @@
-SUBDIRS := spec/ics-3-connection-semantics
+SUBDIRS := spec/ics-003-connection-semantics spec/ics-004-channel-and-packet-semantics
 TOPTARGETS := all clean
 
 $(TOPTARGETS): $(SUBDIRS)
 $(SUBDIRS):
 	$(MAKE) -C $@ $(MAKECMDGOALS)
+
+check: check_links check_dependencies check_syntax check_sections
 
 check_links:
 	python ./scripts/check_links.py
@@ -17,4 +19,4 @@ check_syntax:
 check_sections:
 	python ./scripts/check_sections.py
 
-.PHONY: $(TOPTARGETS) $(SUBDIRS) check_links check_dependencies check_syntax check_sections
+.PHONY: $(TOPTARGETS) $(SUBDIRS) check check_links check_dependencies check_syntax check_sections

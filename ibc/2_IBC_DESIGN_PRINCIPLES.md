@@ -8,6 +8,8 @@
 
 **For a set of example use cases, see [here](./4_IBC_USECASES.md).**
 
+**For a discussion of design patterns, see [here](./5_IBC_DESIGN_PATTERNS.md).**
+
 The design space of "interblockchain communication protocols" is wide, and the term itself has become a bit too all-encompassing. The "Interblockchain Communication Protocol" (IBC) is a very particular point in that design space, chosen to provide specific versatility, locality, modularity, and efficiency properties for the expected interchain ecosystem of interoperable blockchains. This document outlines the "why" of IBC and enumerates the primary high-level design goals.
 
 ## Versatility
