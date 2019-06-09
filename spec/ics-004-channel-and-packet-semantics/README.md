@@ -362,16 +362,6 @@ The `chanCloseTry` function is called by the handshake-accepting module
 to acknowledge the channel close request and continue the closing process.
 
 ```typescript
-interface ChanCloseTry {
-  connectionIdentifier: Identifier
-  channelIdentifier: Identifier
-  timeoutHeight: uint64
-  nextTimeoutHeight: uint64
-  proofInit: CommitmentProof
-}
-```
-
-```typescript
 function chanCloseTry(
   connectionIdentifier: Identifier, channelIdentifier: Identifier,
   timeoutHeight: uint64, nextTimeoutHeight: uint64, proofInit: CommitmentProof) {
