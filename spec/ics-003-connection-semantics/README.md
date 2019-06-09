@@ -3,16 +3,8 @@ ics: 3
 title: Connection Semantics
 stage: draft
 category: ibc-core
-<<<<<<< HEAD
-requires: 23, 24
-required-by: 25
-=======
 requires: 2, 23, 24
-<<<<<<< HEAD:spec/ics-3-connection-semantics/README.md
->>>>>>> master
-=======
-required-by: 4
->>>>>>> master:spec/ics-003-connection-semantics/README.md
+required-by: 4, 25
 author: Christopher Goes <cwgoes@tendermint.com>, Juwoon Yun <joon@tendermint.com>
 created: 2019-03-07
 modified: 2019-05-17
@@ -96,6 +88,11 @@ interface Connection {
 
 ### Store keys
 
+```typescript
+function connectionKey(id: Identifier): Key {
+  return "connections/{id}"
+}
+```
 
 ### Subprotocols
 
@@ -130,11 +127,11 @@ This subprotocol need not be permissioned, modulo anti-spam measures.
 function connOpenInit(
   identifier: Identifier, desiredCounterpartyIdentifier: Identifier,
   clientIdentifier: Identifier, counterpartyClientIdentifier: Identifier, nextTimeoutHeight: uint64) {
-  assert(get("connections/{identifier}") == null)
+  assert(get(connectionKey(identifier)) == null)
   state = INIT
   connection = Connection{state, desiredCounterpartyIdentifier, clientIdentifier,
     counterpartyClientIdentifier, nextTimeoutHeight}
-  set("connections/{identifier}", connection)
+  set(connectionKey(identifier), connection)
 }
 ```
 
@@ -146,18 +143,18 @@ function connOpenTry(
   counterpartyClientIdentifier: Identifier, clientIdentifier: Identifier,
   proofInit: CommitmentProof, timeoutHeight: uint64, nextTimeoutHeight: uint64) {
   assert(getConsensusState().getHeight() <= timeoutHeight)
-  consensusState = get("clients/{clientIdentifier}")
+  consensusState = get(consensusStateKey(clientIdentifier))
   expectedConsensusState = getConsensusState()
   expected = Connection{INIT, desiredIdentifier, counterpartyClientIdentifier, clientIdentifier, timeoutHeight}
-  assert(verifyMembership(consensusState.getRoot(), proofInit, "connections/{counterpartyIdentifier}", expected))
-  assert(verifyMembership(consensusState.getRoot(), proofInit,
-                          "clients/{counterpartyClientIdentifier}", expectedConsensusState))
-  assert(get("connections/{desiredIdentifier}") === null)
+  assert(verifyMembership(consensusState.getRoot(), proofInit, connectionKey(counterpartyIdentifier), expected))
+  assert(verifyMembership(consensusState.getRoot(), proofInit, consensusStateKey(counterpartyClientIdentifier),
+                          expectedConsensusState))
+  assert(get(connectionKey(desiredIdentifier)) === null)
   identifier = desiredIdentifier
   state = TRYOPEN
   connection = Connection{state, counterpartyIdentifier, clientIdentifier,
                           counterpartyClientIdentifier, nextTimeoutHeight}
-  set("connections/{identifier}", connection)
+  set(connectionKey(identifier), connection)
 }
 ```
 
@@ -168,18 +165,18 @@ function connOpenAck(
   identifier: Identifier, proofTry: CommitmentProof,
   timeoutHeight: uint64, nextTimeoutHeight: uint64) {
   assert(getConsensusState().getHeight() <= timeoutHeight)
-  connection = get("connections/{identifier}")
+  connection = get(connectionKey(identifier))
   assert(connection.state === INIT)
-  consensusState = get("clients/{connection.clientIdentifier}")
+  consensusState = get(consensusStateKey(connection.clientIdentifier))
   expectedConsensusState = getConsensusState()
   expected = Connection{TRYOPEN, identifier, connection.counterpartyClientIdentifier,
                         connection.clientIdentifier, timeoutHeight}
-  assert(verifyMembership(consensusState, proofTry, "connections/{connection.counterpartyIdentifier}", expected))
+  assert(verifyMembership(consensusState, proofTry, connectionKey(connection.counterpartyIdentifier), expected))
   assert(verifyMembership(consensusState, proofTry,
-                          "clients/{connection.counterpartyClientIdentifier}", expectedConsensusState))
+                          consensusStateKey(connection.counterpartyClientIdentifier), expectedConsensusState))
   connection.state = OPEN
   connection.nextTimeoutHeight = nextTimeoutHeight
-  set("connections/{identifier}", connection)
+  set(connectionKey(identifier), connection)
 }
 ```
 
@@ -188,52 +185,52 @@ function connOpenAck(
 ```typescript
 function connOpenConfirm(identifier: Identifier, proofAck: CommitmentProof, timeoutHeight: uint64)
   assert(getConsensusState().getHeight() <= timeoutHeight)
-  connection = get("connections/{identifier}")
+  connection = get(connectionKey(identifier))
   assert(connection.state === TRYOPEN)
-  consensusState = get("clients/{connection.clientIdentifier}")
+  consensusState = get(consensusStateKey(connection.clientIdentifier))
   expected = Connection{OPEN, identifier, connection.counterpartyClientIdentifier,
                         Gconnection.clientIdentifier, timeoutHeight}
-  assert(verifyMembership(consensusState, proofAck, "connections/{connection.counterpartyIdentifier}", expected))
+  assert(verifyMembership(consensusState, proofAck, connectionKey(connection.counterpartyIdentifier), expected))
   connection.state = OPEN
   connection.nextTimeoutHeight = 0
-  set("connections/{identifier}", connection)
+  set(connectionKey(identifier), connection)
 ```
 
 *ConnOpenTimeout* aborts a connection opening attempt due to a timeout on the other side.
 
 ```typescript
 function connOpenTimeout(identifier: Identifier, proofTimeout: CommitmentProof, timeoutHeight: uint64) {
-  connection = get("connections/{identifier}")
-  consensusState = get("clients/{connection.clientIdentifier}")
+  connection = get(connectionKey(identifier))
+  consensusState = get(consensusStateKey(connection.clientIdentifier))
   assert(consensusState.getHeight() > connection.nextTimeoutHeight)
   switch state {
     case INIT:
       assert(verifyNonMembership(
         consensusState, proofTimeout,
-        "connections/{connection.counterpartyIdentifier}"))
+        connectionKey(connection.counterpartyIdentifier)))
     case TRYOPEN:
       assert(
         verifyMembership(
           consensusState, proofTimeout,
-          "connections/{connection.counterpartyIdentifier}",
+          connectionKey(connection.counterpartyIdentifier),
           Connection{INIT, identifier, connection.counterpartyClientIdentifier,
                      connection.clientIdentifier, timeoutHeight}
         )
         ||
         verifyNonMembership(
           consensusState, proofTimeout,
-          "connections/{connection.counterpartyIdentifier}"
+          connectionKey(connection.counterpartyIdentifier)
         )
       )
     case OPEN:
       assert(verifyMembership(
         consensusState, proofTimeout,
-        "connections/{connection.counterpartyIdentifier}",
+        connectionKey(connection.counterpartyIdentifier),
         Connection{TRYOPEN, identifier, connection.counterpartyClientIdentifier,
                    connection.clientIdentifier, timeoutHeight}
       ))
   }
-  delete("connections/{identifier}")
+  delete(connectionKey(identifier))
 }
 ```
 
@@ -261,11 +258,11 @@ A correct protocol execution flows as follows (note that all calls are made thro
 
 ```typescript
 function connCloseInit(identifier: Identifier, nextTimeoutHeight: uint64) {
-  connection = get("connections/{identifier}")
+  connection = get(connectionKey(identifier))
   assert(connection.state === OPEN)
   connection.state = CLOSETRY
   connection.nextTimeoutHeight = nextTimeoutHeight
-  set("connections/{identifier}", connection)
+  set(connectionKey(identifier), connection)
 }
 ```
 
@@ -276,15 +273,15 @@ function connCloseTry(
   identifier: Identifier, proofInit: CommitmentProof,
   timeoutHeight: uint64, nextTimeoutHeight: uint64) {
   assert(getConsensusState().getHeight() <= timeoutHeight)
-  connection = get("connections/{identifier}")
+  connection = get(connectionKey(identifier))
   assert(connection.state === OPEN)
-  consensusState = get("clients/{connection.clientIdentifier}")
+  consensusState = get(consensusStateKey(connection.clientIdentifier))
   expected = Connection{CLOSETRY, identifier, connection.counterpartyClientIdentifier,
                         connection.clientIdentifier, timeoutHeight}
-  assert(verifyMembership(consensusState, proofInit, "connections/{counterpartyIdentifier}", expected))
+  assert(verifyMembership(consensusState, proofInit, connectionKey(counterpartyIdentifier), expected))
   connection.state = CLOSED
   connection.nextTimeoutHeight = nextTimeoutHeight
-  set("connections/{identifier}", connection)
+  set(connectionKey(identifier), connection)
 }
 ```
 
@@ -293,15 +290,15 @@ function connCloseTry(
 ```typescript
 function connCloseAck(identifier: Identifier, proofTry: CommitmentProof, timeoutHeight: uint64) {
   assert(getConsensusState().getHeight() <= timeoutHeight)
-  connection = get("connections/{identifier}")
+  connection = get(connectionKey(identifier))
   assert(connection.state === CLOSETRY)
-  consensusState = get("clients/{connection.clientIdentifier}")
+  consensusState = get(consensusStateKey(connection.clientIdentifier))
   expected = Connection{CLOSED, identifier, connection.counterpartyClientIdentifier,
                         connection.clientIdentifier, timeoutHeight}
-  assert(verifyMembership(consensusState, proofTry, "connections/{counterpartyIdentifier}", expected))
+  assert(verifyMembership(consensusState, proofTry, connectionKey(counterpartyIdentifier), expected))
   connection.state = CLOSED
   connection.nextTimeoutHeight = 0
-  set("connections/{identifier}", connection)
+  set(connectionKey(identifier), connection)
 }
 ```
 
@@ -309,8 +306,8 @@ function connCloseAck(identifier: Identifier, proofTry: CommitmentProof, timeout
 
 ```typescript
 function connCloseTimeout(identifier: Identifier, proofTimeout: CommitmentProof, timeoutHeight: uint64) {
-  connection = get("connections/{identifier}")
-  consensusState = get("clients/{connection/clientIdentifier}")
+  connection = get(connectionKey(identifier))
+  consensusState = get(consensusStateKey(connection.clientIdentifier))
   assert(consensusState.getHeight() > connection.nextTimeoutHeight)
   switch state {
     case CLOSETRY:
@@ -318,21 +315,21 @@ function connCloseTimeout(identifier: Identifier, proofTimeout: CommitmentProof,
                             connection.clientIdentifier, timeoutHeight}
       assert(verifyMembership(
         consensusState, proofTimeout,
-        "connections/{counterpartyIdentifier}", expected
+        connectionKey(counterpartyIdentifier), expected
       ))
       connection.state = OPEN
       connection.nextTimeoutHeight = 0
-      set("connections/{identifier}", connection)
+      set(connectionKey(identifier), connection)
     case CLOSED:
       expected = Connection{CLOSETRY, identifier, connection.counterpartyClientIdentifier,
                             connection.clientIdentifier, timeoutHeight}
       assert(verifyMembership(
         consensusState, proofTimeout,
-        "connections/{counterpartyIdentifier}", expected
+        connectionKey(counterpartyIdentifier), expected
       ))
       connection.state = OPEN
       connection.nextTimeoutHeight = 0
-      set("connections/{identifier}", connection)
+      set(connectionKey(identifier), connection)
   }
 }
 ```
