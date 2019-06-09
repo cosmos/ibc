@@ -32,6 +32,88 @@ modified: 2019-06-09
 
 ### Datagrams
 
+#### Connection lifecycle management
+
+```typescript
+interface ConnOpenInit {
+  identifier: Identifier
+  desiredCounterpartyIdentifier: Identifier
+  clientIdentifier: Identifier
+  counterpartyClientIdentifier: Identifier
+  nextTimeoutHeight: uint64
+}
+```
+
+```typescript
+interface ConnOpenTry {
+  desiredIdentifier: Identifier
+  counterpartyIdentifier: Identifier
+  counterpartyClientIdentifier: Identifier
+  clientIdentifier: Identifier
+  proofInit: CommitmentProof
+  timeoutHeight: uint64
+  nextTimeoutHeight: uint64
+}
+```
+
+```typescript
+interface ConnOpenAck {
+  identifier: Identifier
+  proofTry: CommitmentProof
+  timeoutHeight: uint64
+  nextTimeoutHeight: uint64
+}
+```
+
+```typescript
+interface ConnOpenConfirm {
+  identifier: Identifier
+  proofAck: CommitmentProof
+  timeoutHeight: uint64
+}
+```
+
+```typescript
+interface ConnOpenTimeout {
+  identifier: Identifier
+  proofTimeout: CommitmentProof
+  timeoutHeight: uint64
+}
+```
+
+```typescript
+interface ConnCloseInit {
+  identifier: Identifier
+  nextTimeoutHeight: uint64
+}
+```
+
+```typescript
+interface ConnCloseTry {
+  identifier: Identifier
+  proofInit: CommitmentProof
+  timeoutHeight: uint64
+  nextTimeoutHeight: uint64
+}
+```
+
+```typescript
+interface ConnCloseAck {
+  identifier: Identifier
+  proofTry: CommitmentProof
+  timeoutHeight: uint64
+}
+```
+
+```typescript
+interface ConnCloseTimeout {
+  identifier: Identifier
+  proofTimeout: CommitmentProof
+  timeoutHeight: uint64
+}
+```
+
+#### Channel lifecycle management
 
 
 ### Data Structures
