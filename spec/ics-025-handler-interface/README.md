@@ -35,7 +35,7 @@ IBC is an inter-module communication protocol, designed to faciliate reliable, a
 - The module set should be dynamic: chains should be able to add and destroy modules at will with a persistent IBC handler.
 - Modules should be able to write their own more complex abstractions on top of IBC to provide additional semantics or guarantees.
 
-## Specification
+## Technical Specification
 
 ### Clients
 
