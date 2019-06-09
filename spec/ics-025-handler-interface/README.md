@@ -37,7 +37,7 @@ IBC is an inter-module communication protocol, designed to faciliate reliable, a
 
 ## Technical Specification
 
-### Clients
+### Client lifecycle management
 
 By default, clients are unowned: any module can create a new client, query any existing client, update any existing client, and delete any existing client not in use.
 
@@ -87,99 +87,92 @@ function deleteClient(id: Identifier): error | void {
 
 Implementations of `createClient`, `queryClientConsensusState`, `updateClient`, `freezeClient`, and `deleteClient` are defined in [ICS 2](../ics-002-consensus-verification).
 
-### Connections
+### Connection lifecycle management
 
 By default, connections are unowned. Connections can be closed by any module, but only when all channels associated with the connection have been closed by the modules which opened them and a timeout has passed since the connection was opened.
 
-`ConnectionKind` enumerates the connection types supported by the handler implementation.
-
-```golang
-type ConnectionKind enum {
-  Transmit
-  Receive
-  Broadcast
-  Bidirectional
+```typescript
+function connOpenInit(
+  identifier: Identifier, desiredCounterpartyIdentifier: Identifier,
+  clientIdentifier: Identifier, counterpartyClientIdentifier: Identifier, nextTimeoutHeight: uint64) {
+  // defined in ICS 3
 }
 ```
 
-`ConnectionInfo` contains metadata about & state of an existing connection.
+The default IBC relayer module will allow external calls to `connOpenTry`.
 
-```golang
-type ConnectionInfo struct {
-  ConnectionOptions options
-  ConnectionState   state
+```typescript
+function connOpenTry(
+  desiredIdentifier: Identifier, counterpartyIdentifier: Identifier,
+  counterpartyClientIdentifier: Identifier, clientIdentifier: Identifier,
+  proofInit: CommitmentProof, timeoutHeight: uint64, nextTimeoutHeight: uint64) {
+  // defined in ICS 3
 }
-```
-
-`initConnection` tries to create a new connection with the provided options, failing if the client is not found or the options are invalid.
-
-```coffeescript
-function initConnection(string identifier, string desiredVersion,
-  string desiredCounterpartyIdentifier, string lightClientIdentifier) -> Maybe<err>
-```
-
-`tryConnection` tries to initialize a connection based on an initialization attempt on another chain (part one of the three-way connection handshake), returning an error if the proof was invalid or the requested identifier cannot be reserved.
-
-The default IBC relayer module will allow external calls to `tryConnection`.
-
-```coffeescript
-function tryConnection(string desiredIdentifier, string counterpartyIdentifier, string desiredVersion,
-  string counterpartyLightClientIdentifier, string lightClientIdentifier, CommitmentProof proofInit) -> Maybe<err>
 ```
 
 `ackConnection` acknowledges a connection in progress on another chain (part two of the three-way connection handshake).
 
-The default IBC relayer module will allow external calls to `ackConnection`.
+The default IBC relayer module will allow external calls to `connOpenAck`.
 
-```coffeescript
-function ackConnection(string identifier, string agreedVersion, CommitmentProof proofTry)
+```typescript
+function connOpenAck(
+  identifier: Identifier, proofTry: CommitmentProof,
+  timeoutHeight: uint64, nextTimeoutHeight: uint64) {
+  // defined in ICS 3
+}
 ```
 
-`confirmConnection` finalizes a connection (part three of the three-way connection handshake).
+The default IBC relayer module will allow external calls to `connOpenConfirm`.
 
-The default IBC relayer module will allow external calls to `confirmConnection`.
-
-```coffeescript
-function confirmConnection(string identifier, CommitmentProof proofAck)
+```typescript
+function connOpenConfirm(identifier: Identifier, proofAck: CommitmentProof, timeoutHeight: uint64) {
+  // defined in ICS 3
+}
 ```
 
-`timeoutConnection` handles a timeout in a connection opening handshake.
-
-```coffeescript
-function timeoutConnection(string identifier, CommitmentProof proofTimeout)
+```typescript
+function connOpenTimeout(identifier: Identifier, proofTimeout: CommitmentProof, timeoutHeight: uint64) {
+  // defined in ICS 3
+}
 ```
 
-`queryConnection` queries an existing connection by known identifier, returning the associated metadata if found.
+`connCloseInit` initiates the graceful connection closing process. It will fail if there are any open channels using the connection or if the identifier is invalid.
 
-```coffeescript
-function queryConnection(string identifier) -> Maybe<ConnectionInfo>
+```typescript
+function connCloseInit(identifier: Identifier, nextTimeoutHeight: uint64) {
+  // defined in ICS 3
+}
 ```
 
-`initCloseConnection` initiates the graceful connection closing process. It will fail if there are any open channels using the connection or if the identifier is invalid.
+`connCloseTry` continues the graceful connection closing process. It will fail if there are any open channels using the connection, if the proof is invalid, or if the identifier is invalid.
 
-```coffeescript
-function initCloseConnection(string identifier) -> Maybe<Err>
+The default IBC relayer module will allow external calls to `connCloseTry`.
+
+```typescript
+function connCloseTry(
+  identifier: Identifier, proofInit: CommitmentProof,
+  timeoutHeight: uint64, nextTimeoutHeight: uint64) {
+  // defined in ICS 3
+}
 ```
 
-`tryCloseConnection` continues the graceful connection closing process. It will fail if there are any open channels using the connection, if the proof is invalid, or if the identifier is invalid.
+`connCloseAck` finalizes the graceful connection closing process. It will fail if the proof is invalid or if the identifier is invalid.
 
-The default IBC relayer module will allow external calls to `tryCloseConnection`.
+The default IBC relayer module will allow external calls to `connCloseAck`.
 
-```coffeescript
-function tryCloseConnection(string identifier, proofInit) -> Maybe<Err>
+```typescript
+function connCloseAck(identifier: Identifier, proofTry: CommitmentProof, timeoutHeight: uint64) {
+  // defined in ICS 3
+}
 ```
 
-`ackCloseConnection` finalizes the graceful connection closing process. It will fail if the proof is invalid or if the identifier is invalid.
-
-The default IBC relayer module will allow external calls to `ackCloseConnection`.
-
-```coffeescript
-function ackCloseConnection(string identifier, proofTry) -> Maybe<Err>
+```typescript
+function connCloseTimeout(identifier: Identifier, proofTimeout: CommitmentProof, timeoutHeight: uint64) {
+  // defined in ICS 3
+}
 ```
 
-Implementations of `initConnection`, `tryConnection`, `ackConnection`, `confirmConnection`, `queryConnection`, `initCloseConnection`, `tryCloseConnection`, and `ackCloseConnection` are defined in [ICS 3](../ics-003-connection-semantics).
-
-### Channels
+### Channel lifecycle management
 
 By default, channels are owned by the creating module, meaning only the creating module can inspect, close, or send on the channel. A module can create any number of channels.
 
@@ -239,7 +232,7 @@ function closeChannel(string identifier) -> Future<Maybe<Err>>
 
 Implementations of `createChannel`, `queryChannel`, and `closeChannel` are defined in [ICS 4](../ics-004-channel-and-packet-semantics).
 
-### Packets
+### Packet relay
 
 Packets are permissioned by channel (only a module which owns a channel can send on it).
 
