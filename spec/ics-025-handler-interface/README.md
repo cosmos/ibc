@@ -19,7 +19,7 @@ IBC is an inter-module communication protocol, designed to faciliate reliable, a
 
 ### Definitions
 
-`Client` and `ConsensusState` are as defined in [ICS 2](../ics-002-consensus-verification).
+`ClientState`, `Header`, and `ConsensusState` are as defined in [ICS 2](../ics-002-consensus-verification).
 
 `Connection` and `ConnectionState` are as defined in [ICS 3](../ics-003-connection-semantics).
 
@@ -41,67 +41,51 @@ IBC is an inter-module communication protocol, designed to faciliate reliable, a
 
 By default, clients are unowned: any module can create a new client, query any existing client, update any existing client, and delete any existing client not in use.
 
-`ClientKind` enumerates the list of light client algorithms supported by the handler implementation.
+`createClient` creates a new client with a specified identifier.
 
-```golang
-type ClientKind enum {
-  Tendermint
+```typescript
+function createClient(id: Identifier, consensusState: ConsensusState): void {
+  // defined in ICS 2
 }
 ```
 
-`ClientOptions` contains all the parameter choices required to create a client.
+`queryClientConsensusState` queries a client by a known identifier, returning the associated consensus state if found.
 
-```golang
-type ClientOptions struct {
-  ClientKind      kind
-  ConsensusState  consensusState
+```typescript
+function queryClientConsensusState(id: string): ConsensusState | void {
+  // defined in ICS 2
 }
-```
-
-`ClientInfo` contains information about an existing client.
-
-```golang
-type ClientInfo struct {
-  ClientKind      kind
-  ConsensusState  consensusState
-}
-```
-
-`createClient` creates a new client and returns an automatically allocated identifier.
-
-```coffeescript
-function createClient(ClientOptions options) -> string
-```
-
-`queryClient` queries a client by a known identifier, returning the associated metadata and consensus state if found.
-
-```coffeescript
-function queryClient(string identifier) -> Maybe<ClientInfo>
 ```
 
 `updateClient` updates an existing client with a new header, returning an error if the client was not found or the header was not a valid update.
 
 The default IBC relayer module will allow external calls to `updateClient`.
 
-```coffeescript
-function updateClient(string identifier, Header header) -> Maybe<Err>
+```typescript
+function updateClient(id: Identifier, header; Header): error | void {
+  // defined in ICS 2
+}
 ```
 
 `freezeClient` freezes an existing client by providing proof-of-equivocation, automatically freezing any associated connections & channels.
 
 The default IBC relayer module will allow external calls to `freezeClient`.
 
-```coffeescript
-function freezeClient(string identifier, Header headerOne, Header headerTwo) -> Maybe<Err>
+```typescript
+function freezeClient(id: Identifier, headerOne: Header, headerTwo: Header): error | void {
+  // defined in ICS 2
+}
 ```
 
 `deleteClient` deletes an existing client, returning an error if the identifier is not found or if the associated client was just created or is still in use by any connection.
 
-```coffeescript
-function deleteClient(string identifier) -> Maybe<Err>
+```typescript
+function deleteClient(id: Identifier): error | void {
+  // defined in ICS 2
+}
 ```
 
-Implementations of `createClient`, `queryClient`, `updateClient`, `freezeClient`, and `deleteClient` are defined in ICS 2.
+Implementations of `createClient`, `queryClientConsensusState`, `updateClient`, `freezeClient`, and `deleteClient` are defined in [ICS 2](../ics-002-consensus-verification).
 
 ### Connections
 
@@ -193,7 +177,7 @@ The default IBC relayer module will allow external calls to `ackCloseConnection`
 function ackCloseConnection(string identifier, proofTry) -> Maybe<Err>
 ```
 
-Implementations of `initConnection`, `tryConnection`, `ackConnection`, `confirmConnection`, `queryConnection`, `initCloseConnection`, `tryCloseConnection`, and `ackCloseConnection` are defined in ICS 3.
+Implementations of `initConnection`, `tryConnection`, `ackConnection`, `confirmConnection`, `queryConnection`, `initCloseConnection`, `tryCloseConnection`, and `ackCloseConnection` are defined in [ICS 3](../ics-003-connection-semantics).
 
 ### Channels
 
@@ -247,13 +231,13 @@ function confirmChannel() -> Maybe<Err>
 function queryChannel(string identifier) -> Maybe<ChannelInfo>
 ```
 
-`closeChannel` initiates the graceful channel closing process as defined in ICS 4.
+`closeChannel` initiates the graceful channel closing process as defined in [ICS 4](../ics-004-channel-and-packet-semantics).
 
 ```coffeescript
 function closeChannel(string identifier) -> Future<Maybe<Err>>
 ```
 
-Implementations of `createChannel`, `queryChannel`, and `closeChannel` are defined in ICS 4.
+Implementations of `createChannel`, `queryChannel`, and `closeChannel` are defined in [ICS 4](../ics-004-channel-and-packet-semantics).
 
 ### Packets
 

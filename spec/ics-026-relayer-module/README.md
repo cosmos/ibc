@@ -20,7 +20,7 @@ but is a bit tricky to understand and may require extra work on the part of rela
 
 ### Definitions
 
-All functions provided by the IBC handler interface are defined as in ICS 25.
+All functions provided by the IBC handler interface are defined as in [ICS 25](../ics-025-handler-interface).
 
 ### Desired Properties
 

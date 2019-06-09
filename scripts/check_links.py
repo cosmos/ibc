@@ -21,7 +21,7 @@ for fn in files:
             sys.exit(1)
     titles = [int(x[0]) for x in title_regex.findall(data)]
     for num in titles:
-        matched = [f for f in files if f[7:7+4+len(str(num))+1] == 'ics-' + str(num) + '-']
+        matched = [f for f in files if f[7:7+4+len(str(num).zfill(3))+1] == 'ics-' + str(num).zfill(3) + '-']
         if len(matched) > 0:
             print('Expected "ICS {}" to link to {} but not found!'.format(num, matched[0]))
             sys.exit(1)

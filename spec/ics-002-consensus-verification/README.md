@@ -47,7 +47,7 @@ as long as associated light client algorithms fulfilling the requirements are pr
   verified state roots which can be utilized by downstream logic to verify subcomponents
   of state at particular heights.
 
-* `createClient`, `queryClient`, `updateClient`, `freezeClient`, and `deleteClient` function signatures are as defined in ICS 25.
+* `createClient`, `queryClient`, `updateClient`, `freezeClient`, and `deleteClient` function signatures are as defined in [ICS 25](../ics-025-handler-interface).
   The function implementations are defined in this standard.
 
 ### Desired Properties
