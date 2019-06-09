@@ -9,3 +9,5 @@ For an overview of the IBC protocol, read the following documents in numerical o
 1. [IBC Terminology](./3_IBC_TERMINOLOGY.md)
 1. [IBC Usecases](./4_IBC_USECASES.md)
 1. [IBC Design Patterns](./5_IBC_DESIGN_PATTERNS.md)
+
+You might also be interested in the [research compilation](./RESEARCH.md).

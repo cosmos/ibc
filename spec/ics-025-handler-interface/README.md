@@ -21,9 +21,9 @@ IBC is an inter-module communication protocol, designed to faciliate reliable, a
 
 `ClientState`, `Header`, and `ConsensusState` are as defined in [ICS 2](../ics-002-consensus-verification).
 
-`Connection` and `ConnectionState` are as defined in [ICS 3](../ics-003-connection-semantics).
+`ConnectionEnd` and `ConnectionState` are as defined in [ICS 3](../ics-003-connection-semantics).
 
-`ChannelState` and `Packet` are as defined in [ICS 4](../ics-004-channel-and-packet-semantics).
+`ChannelEnd`, `ChannelState`, and `Packet` are as defined in [ICS 4](../ics-004-channel-and-packet-semantics).
 
 `CommitmentProof` is as defined in [ICS 23](../ics-023-vector-commitments).
 
@@ -52,7 +52,23 @@ function createClient(id: Identifier, consensusState: ConsensusState): void {
 `queryClientConsensusState` queries a client by a known identifier, returning the associated consensus state if found.
 
 ```typescript
-function queryClientConsensusState(id: string): ConsensusState | void {
+function queryClientConsensusState(id: Identifier): ConsensusState | void {
+  // defined in ICS 2
+}
+```
+
+`queryClientFrozen` queries whether or not a client is frozen:
+
+```typescript
+function queryClientFrozen(id: Identifier): boolean | void {
+  // defined in ICS 2
+}
+```
+
+`queryClientRoot` queries a state root by height:
+
+```typescript
+function queryClientRoot(id: Identifier, height: uint64): CommitmentRoot | void {
   // defined in ICS 2
 }
 ```
@@ -85,8 +101,6 @@ function deleteClient(id: Identifier): error | void {
 }
 ```
 
-Implementations of `createClient`, `queryClientConsensusState`, `updateClient`, `freezeClient`, and `deleteClient` are defined in [ICS 2](../ics-002-consensus-verification).
-
 ### Connection lifecycle management
 
 By default, connections are unowned. Connections can be closed by any module, but only when all channels associated with the connection have been closed by the modules which opened them and a timeout has passed since the connection was opened.
@@ -105,7 +119,7 @@ The default IBC relayer module will allow external calls to `connOpenTry`.
 
 ```typescript
 function connOpenTry(
-  desiredIdentifier: Identifier, counterpartyIdentifier: Identifier,
+  desiredIdentifier: Identifier, counterpartyConnectionIdentifier: Identifier,
   counterpartyClientIdentifier: Identifier, clientIdentifier: Identifier,
   proofInit: CommitmentProof, timeoutHeight: uint64, nextTimeoutHeight: uint64) {
   // defined in ICS 3
@@ -184,6 +198,14 @@ function connCloseTimeout(identifier: Identifier, proofTimeout: CommitmentProof,
 }
 ```
 
+`queryConnection` queries for a connection by identifier.
+
+```typescript
+function queryConnection(id: Identifier): ConnectionEnd | void {
+  // defined in ICS 3
+}
+```
+
 ### Channel lifecycle management
 
 By default, channels are owned by the creating module, meaning only the creating module can inspect, close, or send on the channel. A module can create any number of channels.
@@ -247,10 +269,10 @@ function chanOpenTimeout(
 }
 ```
 
-`queryChannel` queries an existing channel by known identifier, returning the associated metadata if found.
+`queryChannel` queries an existing channel by known connection & channel identifier, returning the associated metadata if found.
 
-```typeescript
-function queryChannel(string identifier): void {
+```typescript
+function queryChannel(connId: Identifier, chanId: Identifier): void {
   // defined in ICS 4
 }
 ```

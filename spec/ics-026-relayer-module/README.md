@@ -52,7 +52,7 @@ interface ConnOpenInit {
 ```typescript
 interface ConnOpenTry {
   desiredIdentifier: Identifier
-  counterpartyIdentifier: Identifier
+  counterpartyConnectionIdentifier: Identifier
   counterpartyClientIdentifier: Identifier
   clientIdentifier: Identifier
   proofInit: CommitmentProof
