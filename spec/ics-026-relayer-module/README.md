@@ -180,6 +180,16 @@ interface ChanCloseInit {
 ```
 
 ```typescript
+interface ChanCloseTry {
+  connectionIdentifier: Identifier
+  channelIdentifier: Identifier
+  timeoutHeight: uint64
+  nextTimeoutHeight: uint64
+  proofInit: CommitmentProof
+}
+```
+
+```typescript
 interface ChanCloseAck {
   connectionIdentifier: Identifier
   channelIdentifier: Identifier

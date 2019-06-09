@@ -176,61 +176,93 @@ function connCloseTimeout(identifier: Identifier, proofTimeout: CommitmentProof,
 
 By default, channels are owned by the creating module, meaning only the creating module can inspect, close, or send on the channel. A module can create any number of channels.
 
-`ChannelOptions` contains all the parameter choices required to create a new channel.
+`chanOpenInit` tries to start the handshake to create a new channel with the provided options, failing if the connection is not found or the options are invalid.
 
-```golang
-type ChannelOptions struct {
-  string          connectionIdentifier
-  bool            ordered
+```typescript
+function chanOpenInit(
+  connectionIdentifier: Identifier, channelIdentifier: Identifier,
+  counterpartyChannelIdentifier: Identifier, counterpartyModuleIdentifier: Identifier, nextTimeoutHeight: uint64) {
+  // defined in ICS 4
 }
 ```
 
-`ChannelInfo` contains metadata about an existing channel.
+`chanOpenTry` tries to initialize a channel based on proof of an initialization attempt on the counterparty chain, failing if the channel identifier is unavailable, the proof is invalid, or the calling module is not authorized.
 
-```golang
-type ChannelInfo struct {
-  string         channelIdentifier
-  ChannelOptions options
+```typescript
+function chanOpenTry(
+  connectionIdentifier: Identifier, channelIdentifier: Identifier, counterpartyChannelIdentifier: Identifier,
+  moduleIdentifier: Identifier, counterpartyModuleIdentifier: Identifier,
+  timeoutHeight: uint64, nextTimeoutHeight: uint64, proofInit: CommitmentProof) {
+  // defined in ICS 4
 }
 ```
 
-`initChannel` tries to start the handshake to create a new channel with the provided options, failing if the connection is not found or the options are invalid.
+`chanOpenAck` acknowledges a channel creation in progress on another chain, failing if the channel identifier is not found, the proof is invalid, or the calling module is not authorized.
 
-```coffeescript
-function initChannel(ChannelOptions options) -> Maybe<err>
+```typescript
+function chanOpenAck(
+  connectionIdentifier: Identifier, channelIdentifier: Identifier,
+  timeoutHeight: uint64, nextTimeoutHeight: uint64, proofTry: CommitmentProof) {
+  // defined in ICS 4
+}
 ```
 
-`tryChannel` tries to initialize a channel based on proof of an initialization attempt on the counterparty chain, failing if the channel identifier is unavailable, the proof is invalid, or the calling module is not authorized.
+`chanOpenConfirm` finalizes the channel opening handshake, failing if the channel identifier is not found, the proof is invalid, or the calling module is not authorized.
 
-```coffeescript
-function tryChannel() -> Maybe<Err>
+```typescript
+function chanOpenConfirm(
+  connectionIdentifier: Identifier, channelIdentifier: Identifier,
+  timeoutHeight: uint64, proofAck: CommitmentProof) {
+  // defined in ICS 4
+}
 ```
 
-`ackChannel` acknowledges a channel creation in progress on another chain, failing if the channel identifier is not found, the proof is invalid, or the calling module is not authorized.
-
-```coffeescript
-function ackChannel() -> Maybe<Err>
-```
-
-`confirmChannel` finalizes the channel opening handshake, failing if the channel identifier is not found, the proof is invalid, or the calling module is not authorized.
-
-```coffeescript
-function confirmChannel() -> Maybe<Err>
+```typescript
+function chanOpenTimeout(
+  connectionIdentifier: Identifier, channelIdentifier: Identifier,
+  timeoutHeight: uint64, proofTimeout: CommitmentProof) {
+  // defined in ICS 4
+}
 ```
 
 `queryChannel` queries an existing channel by known identifier, returning the associated metadata if found.
 
-```coffeescript
-function queryChannel(string identifier) -> Maybe<ChannelInfo>
+```typeescript
+function queryChannel(string identifier): void {
+  // defined in ICS 4
+}
 ```
 
-`closeChannel` initiates the graceful channel closing process as defined in [ICS 4](../ics-004-channel-and-packet-semantics).
-
-```coffeescript
-function closeChannel(string identifier) -> Future<Maybe<Err>>
+```typescript
+function chanCloseInit(
+  connectionIdentifier: Identifier, channelIdentifier: Identifier, nextTimeoutHeight: uint64) {
+  // defined in ICS 4
+}
 ```
 
-Implementations of `createChannel`, `queryChannel`, and `closeChannel` are defined in [ICS 4](../ics-004-channel-and-packet-semantics).
+```typescript
+function chanCloseTry(
+  connectionIdentifier: Identifier, channelIdentifier: Identifier,
+  timeoutHeight: uint64, nextTimeoutHeight: uint64, proofInit: CommitmentProof) {
+  // defined in ICS 4
+}
+```
+
+```typescript
+function chanCloseAck(
+  connectionIdentifier: Identifier, channelIdentifier: Identifier,
+  timeoutHeight: uint64, proofTry: CommitmentProof) {
+  // defined in ICS 4
+}
+```
+
+```typescript
+function chanCloseTimeout(
+  connectionIdentifier: Identifier, channelIdentifier: Identifier,
+  timeoutHeight: uint64, proofTimeout: CommitmentProof) {
+  // defined in ICS 4
+}
+```
 
 ### Packet relay
 
@@ -240,25 +272,35 @@ Packets are permissioned by channel (only a module which owns a channel can send
 
 The returned identifier will be the same as that sent by the timeout handler `timeoutPacket`, so it can be used by the sending module to associate a specific action with a specific packet timeout.
 
-```coffeescript
-function sendPacket(Packet packet) -> string | Err
+```typescript
+function sendPacket(packet: Packet) {
+  // defined in ICS 4
+}
 ```
 
 `recvPacket` attempts to receive a packet, returning an error if the calling module is not authorized to handle the packet, or if the packet does not exist or has been already handled.
 
-```coffeescript
-function recvPacket(Packet packet) -> string | Err
+```typescript
+function recvPacket(packet: Packet, proof: CommitmentProof) {
+  // defined in ICS 4
+}
 ```
 
 `timeoutPacket` attemps to handle a packet timeout, returning an error if the calling module is not authorized to handle the packet timeout, or if the packet does not exist, has not timed out, or has already been handled.
 
 ```coffeescript
-function timeoutPacket(Packet packet) -> string | Err
+function timeoutPacket(packet: Packet, proof: CommitmentProof, nextSequenceRecv: uint64) {
+  // defined in ICS 4
+}
 ```
 
-Implementations of `sendPacket`, `recvPacket`, and `timeoutPacket` are defined in ICS 5.
+```typescript
+function recvTimeoutPacket(packet: Packet, proof: CommitmentProof) {
+  // defined in ICS 4
+}
+```
 
-#### Example
+### Interface usage example
 
 As a demonstration of interface usage, a simple module handling send/receive of a native asset could be implemented as follows:
 
