@@ -44,6 +44,7 @@ All standards in the "draft" stage are listed here in order of their ICS numbers
 | [18](spec/ics-018-relayer-algorithms)               | Relayer Algorithms                 | Draft |
 | [23](spec/ics-023-vector-commitments)               | Vector Commitments                 | Draft |
 | [24](spec/ics-024-host-requirements)                | Host Requirements                  | Draft |
+| [26](spec/ics-026-relayer-module)                   | Relayer Module                     | Draft |
 
 ## Standard Dependency Visualization
 

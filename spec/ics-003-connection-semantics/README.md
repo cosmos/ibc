@@ -96,7 +96,7 @@ interface Connection {
 
 ### Subprotocols
 
-This ICS defines two subprotocols: opening handshake and closing handshake. Header tracking and closing-by-equivocation are defined in [ICS 2](../ics-002-consensus-verification). Datagrams defined herein are handled as external messages by the IBC relayer module defined in ICS 26.
+This ICS defines two subprotocols: opening handshake and closing handshake. Header tracking and closing-by-equivocation are defined in [ICS 2](../ics-002-consensus-verification). Datagrams defined herein are handled as external messages by the IBC relayer module defined in [ICS 26](../ics-026-relayer-module).
 
 ![State Machine Diagram](state.png)
 
@@ -124,16 +124,6 @@ This subprotocol need not be permissioned, modulo anti-spam measures.
 *ConnOpenInit* initializes a connection attempt on chain A.
 
 ```typescript
-interface ConnOpenInit {
-  identifier: Identifier
-  desiredCounterpartyIdentifier: Identifier
-  clientIdentifier: Identifier
-  counterpartyClientIdentifier: Identifier
-  nextTimeoutHeight: uint64
-}
-```
-
-```typescript
 function connOpenInit(
   identifier: Identifier, desiredCounterpartyIdentifier: Identifier,
   clientIdentifier: Identifier, counterpartyClientIdentifier: Identifier, nextTimeoutHeight: uint64) {
@@ -146,18 +136,6 @@ function connOpenInit(
 ```
 
 *ConnOpenTry* relays notice of a connection attempt on chain A to chain B.
-
-```typescript
-interface ConnOpenTry {
-  desiredIdentifier: Identifier
-  counterpartyIdentifier: Identifier
-  counterpartyClientIdentifier: Identifier
-  clientIdentifier: Identifier
-  proofInit: CommitmentProof
-  timeoutHeight: uint64
-  nextTimeoutHeight: uint64
-}
-```
 
 ```typescript
 function connOpenTry(
@@ -183,15 +161,6 @@ function connOpenTry(
 *ConnOpenAck* relays acceptance of a connection open attempt from chain B back to chain A.
 
 ```typescript
-interface ConnOpenAck {
-  identifier: Identifier
-  proofTry: CommitmentProof
-  timeoutHeight: uint64
-  nextTimeoutHeight: uint64
-}
-```
-
-```typescript
 function connOpenAck(
   identifier: Identifier, proofTry: CommitmentProof,
   timeoutHeight: uint64, nextTimeoutHeight: uint64) {
@@ -214,14 +183,6 @@ function connOpenAck(
 *ConnOpenConfirm* confirms opening of a connection on chain A to chain B, after which the connection is open on both chains.
 
 ```typescript
-interface ConnOpenConfirm {
-  identifier: Identifier
-  proofAck: CommitmentProof
-  timeoutHeight: uint64
-}
-```
-
-```typescript
 function connOpenConfirm(identifier: Identifier, proofAck: CommitmentProof, timeoutHeight: uint64)
   assert(getConsensusState().getHeight() <= timeoutHeight)
   connection = get("connections/{identifier}")
@@ -236,14 +197,6 @@ function connOpenConfirm(identifier: Identifier, proofAck: CommitmentProof, time
 ```
 
 *ConnOpenTimeout* aborts a connection opening attempt due to a timeout on the other side.
-
-```typescript
-interface ConnOpenTimeout {
-  identifier: Identifier
-  proofTimeout: CommitmentProof
-  timeoutHeight: uint64
-}
-```
 
 ```typescript
 function connOpenTimeout(identifier: Identifier, proofTimeout: CommitmentProof, timeoutHeight: uint64) {
@@ -304,13 +257,6 @@ A correct protocol execution flows as follows (note that all calls are made thro
 *ConnCloseInit* initializes a close attempt on chain A.
 
 ```typescript
-interface ConnCloseInit {
-  identifier: Identifier
-  nextTimeoutHeight: uint64
-}
-```
-
-```typescript
 function connCloseInit(identifier: Identifier, nextTimeoutHeight: uint64) {
   connection = get("connections/{identifier}")
   assert(connection.state === OPEN)
@@ -321,15 +267,6 @@ function connCloseInit(identifier: Identifier, nextTimeoutHeight: uint64) {
 ```
 
 *ConnCloseTry* relays the intent to close a connection from chain A to chain B.
-
-```typescript
-interface ConnCloseTry {
-  identifier: Identifier
-  proofInit: CommitmentProof
-  timeoutHeight: uint64
-  nextTimeoutHeight: uint64
-}
-```
 
 ```typescript
 function connCloseTry(
@@ -351,14 +288,6 @@ function connCloseTry(
 *ConnCloseAck* acknowledges a connection closure on chain B.
 
 ```typescript
-interface ConnCloseAck {
-  identifier: Identifier
-  proofTry: CommitmentProof
-  timeoutHeight: uint64
-}
-```
-
-```typescript
 function connCloseAck(identifier: Identifier, proofTry: CommitmentProof, timeoutHeight: uint64) {
   assert(getConsensusState().getHeight() <= timeoutHeight)
   connection = get("connections/{identifier}")
@@ -374,14 +303,6 @@ function connCloseAck(identifier: Identifier, proofTry: CommitmentProof, timeout
 ```
 
 *ConnCloseTimeout* aborts a connection closing attempt due to a timeout on the other side and reopens the connection.
-
-```typescript
-interface ConnCloseTimeout {
-  identifier: Identifier
-  proofTimeout: CommitmentProof
-  timeoutHeight: uint64
-}
-```
 
 ```typescript
 function connCloseTimeout(identifier: Identifier, proofTimeout: CommitmentProof, timeoutHeight: uint64) {
