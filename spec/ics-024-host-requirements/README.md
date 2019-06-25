@@ -76,17 +76,17 @@ type getConsensusState = () => ConsensusState
 
 `getConsensusState` MUST return the current consensus state for the consensus algorithm of the host chain.
 
-### Module system
+### Port system
 
-Host chains MUST implement a module system, where each module has a unique serializable identifier, which:
-- can be read by the IBC handler in an authenticated manner when the module calls the IBC handler, e.g. to send a packet
-- can be used by the IBC handler to look up a module, which it can then call into (e.g. to handle a received packet addressed to that module)
+Host chains MUST implement a port system, where the IBC handler can expose functions to different parts of the state machine (perhaps modules) that can bind to uniquely named ports.
 
-Host chains MUST provide the ability to read the calling module in the IBC handler with `getCallingModule`:
+Host chains MUST permission interaction with the IBC handler such that:
 
-```typescript
-type getCallingModule = () => string
-```
+- Once a module has bound to a port, no other modules can use that port until the module releases it
+- A single module can bind to multiple ports
+- Ports are allocated first-come first-serve and "reserved" ports for known modules can be bound when the chain is first started
+
+This permissioning can be implemented either with unique references (object capabilities) for each port (a la the Cosmos SDK) or with source authentication (a la Ethereum), in either case enforced by the host state machine.
 
 Modules which wish to make use of particular IBC features MAY implement certain handler functions, e.g. to add additional logic to a channel handshake with an associated module on another chain.
 
@@ -132,6 +132,7 @@ Coming soon.
 
 29 April 2019 - Initial draft
 11 May 2019 - Rename "RootOfTrust" to "ConsensusState"
+25 June 2019 - Use "ports" instead of module names
 
 ## Copyright
 
