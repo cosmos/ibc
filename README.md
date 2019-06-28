@@ -1,4 +1,5 @@
 # Interchain Standards Development
+![banner](./interchain-standards-image.jpg)
 
 ## Synopsis
 
