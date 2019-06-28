@@ -157,7 +157,7 @@ Consider the path of an IBC packet between two chains — call them *A* and *B*:
     1. Connection (defined in [ICS 3](../spec/ics-003-connection-semantics))
     1. Consensus (defined in [ICS 2](../spec/ics-002-consensus-verification))
 2. Off-chain
-    1. Relayer (defined in [ICS 18](../../spec/ics-018-relayer-algorithms))
+    1. Relayer (defined in [ICS 18](../spec/ics-018-relayer-algorithms))
 3. On chain *B*
     1. Consensus (defined in [ICS 2](/../spec/ics-002-consensus-verification))
     1. Connection (defined in [ICS 3](/../spec/ics-003-connection-semantics))
