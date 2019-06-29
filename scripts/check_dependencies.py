@@ -50,4 +50,4 @@ else:
 print('Drawing dependency graph...')
 
 nx.draw_circular(G, with_labels = True, font_weight = 'bold', node_size = 500)
-plt.savefig('deps.png')
+plt.savefig('assets/deps.png')
