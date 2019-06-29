@@ -3,7 +3,6 @@ ics: 24
 title: Host State Machine Requirements
 stage: draft
 category: ibc-core
-requires: 2
 required-by: 2, 3, 4, 18
 author: Christopher Goes <cwgoes@tendermint.com>
 created: 2019-04-16
@@ -19,8 +18,6 @@ This specification defines the minimal set of interfaces which must be provided 
 IBC is designed to be a common standard which will be hosted by a variety of blockchains & state machines and must clearly define the requirements of the host.
 
 ### Definitions
-
-`ConsensusState` is as defined in [ICS 2](../ics-002-consensus-verification).
 
 ### Desired Properties
 
@@ -59,7 +56,7 @@ type set = (key: Key, value: Value) => void
 ```
 
 ```typescript
-type delete = (key: Key) => void
+type del = (key: Key) => void
 ```
 
 `Key` is as defined above. `Value` is an arbitrary bytestring encoding of a particular data structure. Encoding details are left to separate ICSs.
@@ -67,6 +64,12 @@ type delete = (key: Key) => void
 These functions MUST be permissioned to the IBC handler module (the implementation of which is described in separate standards) only, so only the IBC handler module can `set` or `delete` the keys which can be read by `get`. This can possibly be implemented as a sub-store (prefixed keyspace) of a larger key-value store used by the entire state machine.
 
 ### Consensus State Introspection
+
+Host chains MUST define a unique `ConsensusState` type fulfilling the requirements of [ICS 2](../ics-002-consensus-verification):
+
+```typescript
+type ConsensusState object
+```
 
 Host chains MUST provide the ability to introspect their own consensus state, with `getConsensusState`:
 
@@ -92,13 +95,29 @@ Modules which wish to make use of particular IBC features MAY implement certain 
 
 ### Datagram submission
 
-Host chains MAY define a unique `submitDatagram` function to submit [datagrams](../../docs/ibc/2_IBC_TERMINOLOGY.md) directly:
+Host chains MAY define a unique `Datagram` type & `submitDatagram` function to submit [datagrams](../../docs/ibc/2_IBC_TERMINOLOGY.md) directly to the relayer module:
 
 ```typescript
-type submitDatagram = (datagram: Datagram) => void
+type Datagram object
+// fields defined per datagram type, and possible additional fields defined per chain
+
+type SubmitDatagram = (datagram: Datagram) => void
 ```
 
 `submitDatagram` allows relayers to relay IBC datagrams directly to the host chain. Host chains MAY require that the relayer submitting the datagram has an account to pay transaction fees, signs over the datagram in a larger transaction structure, etc - `submitDatagram` MUST define any such packaging required.
+
+Host chains MAY also define a `pendingDatagrams` function to scan the pending datagrams to be sent to another counterparty chain:
+
+```typescript
+type PendingDatagrams = (counterparty: Chain) => Set<Datagram>
+```
+
+```typescript
+interface Chain {
+  submitDatagram: SubmitDatagram
+  pendingDatagrams: PendingDatagrams
+}
+```
 
 ### Data availability
 

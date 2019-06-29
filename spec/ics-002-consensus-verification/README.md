@@ -4,7 +4,7 @@ title: Consensus Verification
 stage: draft
 category: ibc-core
 requires: 23, 24
-required-by: 3, 24
+required-by: 3
 author: Juwoon Yun <joon@tendermint.com>, Christopher Goes <cwgoes@tendermint.com>
 created: 2019-02-25
 modified: 2019-05-28
