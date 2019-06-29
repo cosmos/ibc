@@ -103,7 +103,7 @@ See an example history section [below](#history-1).
 
 ### Copyright
 
-An ICS should include a copyright section waiving rights via [CC0](https://creativecommons.org/publicdomain/zero/1.0/).
+An ICS should include a copyright section waiving rights via [Apache 2.0](https://www.apache.org/licenses/LICENSE-2.0).
 
 ## Formatting
 
@@ -168,4 +168,4 @@ April 11th, 2019: Updates to pseudocode formatting, add definitions subsection
 
 ## Copyright
 
-Copyright and related rights waived via [CC0](https://creativecommons.org/publicdomain/zero/1.0/).
+All content herein is licensed under [Apache 2.0](https://www.apache.org/licenses/LICENSE-2.0).

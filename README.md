@@ -1,4 +1,5 @@
 # Interchain Standards Development
+![banner](./interchain-standards-image.jpg)
 
 ## Synopsis
 
@@ -6,7 +7,7 @@ This repository is the canonical location for development and documentation of i
 
 ## Standardization
 
-Please see [ICS 1](spec/ics-1-ics-standard) for a description of what a standard entails.
+Please see [ICS 1](spec/ics-001-ics-standard) for a description of what a standard entails.
 
 To propose a new standard, [open an issue](https://github.com/cosmos/ics/issues/new). To start a new standardization document, copy the [template](spec/ics-template.md) and open a PR.
 

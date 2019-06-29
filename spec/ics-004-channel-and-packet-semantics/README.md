@@ -220,15 +220,16 @@ The `chanOpenTry` function is called by a module to accept the first step of a c
 function chanOpenTry(
   connectionIdentifier: Identifier, channelIdentifier: Identifier, counterpartyChannelIdentifier: Identifier,
   moduleIdentifier: Identifier, counterpartyModuleIdentifier: Identifier,
-  timeoutHeight: uint64, nextTimeoutHeight: uint64, proofInit: CommitmentProof) {
+  timeoutHeight: uint64, nextTimeoutHeight: uint64,
+  proofInit: CommitmentProof, proofHeight: uint64) {
   assert(getConsensusState().height < timeoutHeight)
   assert(get(channelKey(connectionIdentifier, channelIdentifier)) === null)
   assert(getCallingModule() === moduleIdentifier)
   connection = get(connectionKey(connectionIdentifier))
   assert(connection.state === OPEN)
-  consensusState = get(consensusStateKey(connection.clientIdentifier))
+  counterpartyStateRoot = get(rootKey(connection.clientIdentifier, proofHeight))
   assert(verifyMembership(
-    consensusState,
+    counterpartyStateRoot,
     proofInit,
     channelKey(connection.counterpartyConnectionIdentifier, counterpartyChannelIdentifier),
     Channel{INIT, counterpartyModuleIdentifier, moduleIdentifier, channelIdentifier, timeoutHeight}
@@ -247,16 +248,17 @@ counterparty module on the other chain.
 ```typescript
 function chanOpenAck(
   connectionIdentifier: Identifier, channelIdentifier: Identifier,
-  timeoutHeight: uint64, nextTimeoutHeight: uint64, proofTry: CommitmentProof) {
+  timeoutHeight: uint64, nextTimeoutHeight: uint64,
+  proofTry: CommitmentProof, proofHeight: uint64) {
   assert(getConsensusState().height < timeoutHeight)
   channel = get(channelKey(connectionIdentifier, channelIdentifier))
   assert(channel.state === INIT)
   assert(getCallingModule() === channel.moduleIdentifier)
   connection = get(connectionKey(connectionIdentifier))
   assert(connection.state === OPEN)
-  consensusState = get(consensusStateKey(connection.clientIdentifier))
+  counterpartyStateRoot = get(rootKey(connection.clientIdentifier, proofHeight))
   assert(verifyMembership(
-    consensusState.getRoot(),
+    counterpartyStateRoot,
     proofTry,
     channelKey(connection.counterpartyConnectionIdentifier, channel.counterpartyChannelIdentifier),
     Channel{OPENTRY, channel.counterpartyModuleIdentifier, channel.moduleIdentifier,
@@ -274,16 +276,16 @@ of the handshake-originating module on the other chain and finish the channel op
 ```typescript
 function chanOpenConfirm(
   connectionIdentifier: Identifier, channelIdentifier: Identifier,
-  timeoutHeight: uint64, proofAck: CommitmentProof) {
+  timeoutHeight: uint64, proofAck: CommitmentProof, proofHeight: uint64) {
   assert(getConsensusState().height < timeoutHeight)
   channel = get(channelKey(connectionIdentifier, channelIdentifier))
   assert(channel.state === OPENTRY)
   assert(getCallingModule() === channel.moduleIdentifier)
   connection = get(connectionKey(connectionIdentifier))
   assert(connection.state === OPEN)
-  consensusState = get(consensusStateKey(connection.clientIdentifier))
+  counterpartyStateRoot = get(rootKey(connection.clientIdentifier, proofHeight))
   assert(verifyMembership(
-    consensusState.getRoot(),
+    counterpartyStateRoot,
     proofAck,
     channelKey(connection.counterpartyConnectionIdentifier, channel.counterpartyChannelIdentifier),
     Channel{OPEN, channel.counterpartyModuleIdentifier, channel.moduleIdentifier,
@@ -301,27 +303,27 @@ module or the handshake-confirming module to prove that a timeout has occurred a
 ```typescript
 function chanOpenTimeout(
   connectionIdentifier: Identifier, channelIdentifier: Identifier,
-  timeoutHeight: uint64, proofTimeout: CommitmentProof) {
+  timeoutHeight: uint64, proofTimeout: CommitmentProof, proofHeight: uint64) {
   channel = get(channelKey(connectionIdentifier, channelIdentifier))
   connection = get(connectionKey(connectionIdentifier))
   assert(connection.state === OPEN)
-  consensusState = get(consensusStateKey(connection.clientIdentifier))
-  assert(consensusState.height >= connection.nextTimeoutHeight)
+  counterpartyStateRoot = get(rootKey(connection.clientIdentifier, proofHeight))
+  assert(proofHeight >= connection.nextTimeoutHeight)
   switch channel.state {
     case INIT:
       assert(verifyNonMembership(
-        consensusState, proofTimeout,
+        counterpartyStateRoot, proofTimeout,
         channelKey(connection.counterpartyConnectionIdentifier, channel.counterpartyChannelIdentifier)
       ))
     case OPENTRY:
       assert(
         verifyNonMembership(
-          consensusState, proofTimeout,
+          counterpartyStateRoot, proofTimeout,
           channelKey(connection.counterpartyConnectionIdentifier, channel.counterpartyChannelIdentifier)
         )
         ||
         verifyMembership(
-          consensusState, proofTimeout,
+          counterpartyStateRoot, proofTimeout,
           channelKey(connection.counterpartyConnectionIdentifier, channel.counterpartyChannelIdentifier),
           Channel{INIT, channel.counterpartyModuleIdentifier, channel.moduleIdentifier,
                   channelIdentifier, timeoutHeight}
@@ -331,7 +333,7 @@ function chanOpenTimeout(
       expected = Channel{OPENTRY, channel.counterpartyModuleIdentifier, channel.moduleIdentifier,
                          channelIdentifier, timeoutHeight}
       assert(verifyMembership(
-        consensusState, proofTimeout,
+        counterpartyStateRoot, proofTimeout,
         channelKey(connection.counterpartyConnectionIdentifier, channel.counterpartyChannelIdentifier),
         expected
       ))
@@ -364,17 +366,18 @@ to acknowledge the channel close request and continue the closing process.
 ```typescript
 function chanCloseTry(
   connectionIdentifier: Identifier, channelIdentifier: Identifier,
-  timeoutHeight: uint64, nextTimeoutHeight: uint64, proofInit: CommitmentProof) {
+  timeoutHeight: uint64, nextTimeoutHeight: uint64,
+  proofInit: CommitmentProof, proofHeight: uint64) {
   assert(getConsensusState().getHeight() < timeoutHeight)
   channel = get(channelKey(connectionIdentifier, channelIdentifier))
   assert(channel.state === OPEN)
   connection = get(connectionKey(connectionIdentifier))
   assert(connection.state === OPEN)
-  consensusState = get(consensusStateKey(connection.clientIdentifier))
+  counterpartyStateRoot = get(rootKey(connection.clientIdentifier, proofHeight))
   expected = Channel{INIT, channel.counterpartyModuleIdentifier, channel.moduleIdentifier,
                      channel.channelIdentifier, timeoutHeight}
   assert(verifyMembership(
-    consensusState,
+    counterpartyStateRoot,
     proofInit,
     channelKey(connection.counterpartyConnectionIdentifier, channel.counterpartyChannelIdentifier),
     expected
@@ -391,17 +394,17 @@ to acknowledge the closing acknowledgement and finalize channel closure.
 ```typescript
 function chanCloseAck(
   connectionIdentifier: Identifier, channelIdentifier: Identifier,
-  timeoutHeight: uint64, proofTry: CommitmentProof) {
+  timeoutHeight: uint64, proofTry: CommitmentProof, proofHeight: uint64) {
   assert(getConsensusState().getHeight() < timeoutHeight)
   channel = get(channelKey(connectionIdentifier, channelIdentifier))
   assert(channel.state === OPEN)
   connection = get(connectionKey(connectionIdentifier))
   assert(connection.state === OPEN)
-  consensusState = get(consensusStateKey(connection.clientIdentifier))
+  counterpartyStateRoot = get(rootKey(connection.clientIdentifier, proofHeight))
   expected = Channel{CLOSED, channel.counterpartyModuleIdentifier, channel.moduleIdentifier,
                      channelIdentifier, timeoutHeight}
   assert(verifyMembership(
-    consensusState.getRoot(),
+    counterpartyStateRoot,
     proofInit,
     channelKey(connection.counterpartyConnectionIdentifier, channel.counterpartyChannelIdentifier),
     expected
@@ -418,10 +421,10 @@ or handshake-accepting module to prove a timeout and reset state.
 ```typescript
 function chanCloseTimeout(
   connectionIdentifier: Identifier, channelIdentifier: Identifier,
-  timeoutHeight: uint64, proofTimeout: CommitmentProof) {
+  timeoutHeight: uint64, proofTimeout: CommitmentProof, proofHeight: uint64) {
   channel = get(channelKey(connectionIdentifier, channelIdentifier))
-  consensusState = get(consensusStateKey(connection.clientIdentifier))
-  assert(consensusState.getHeight() >= connection.nextTimeoutHeight)
+  counterpartyStateRoot = get(rootKey(connection.clientIdentifier, proofHeight))
+  assert(proofHeight >= connection.nextTimeoutHeight)
   switch channel.state {
     case CLOSETRY:
       expected = Channel{OPEN, channel.counterpartyModuleIdentifier, channel.moduleIdentifier,
@@ -431,7 +434,7 @@ function chanCloseTimeout(
                          channelIdentifier, timeoutHeight}
   }
   verifyMembership(
-    consensusState,
+    counterpartyStateRoot,
     proofTimeout,
     channelKey(connection.counterpartyConnectionIdentifier, channel.counterpartyChannelIdentifier),
     expected
@@ -497,7 +500,7 @@ The IBC handler performs the following steps in order:
 - Increments the packet receive sequence associated with the channel end
 
 ```typescript
-function recvPacket(packet: Packet, proof: CommitmentProof) {
+function recvPacket(packet: Packet, proof: CommitmentProof, proofHeight: uint64) {
   channel = get(channelKey(packet.destConnection, packet.destChannel))
   assert(channel.state === OPEN)
   assert(getCallingModule() === channel.moduleIdentifier)
@@ -507,10 +510,10 @@ function recvPacket(packet: Packet, proof: CommitmentProof) {
   connection = get(connectionKey(connectionIdentifier))
   assert(packet.sourceConnection === connection.counterpartyConnectionIdentifier)
   assert(connection.state === OPEN)
-  consensusState = getConsensusState()
-  assert(consensusState.getHeight() < packet.timeoutHeight)
+  counterpartyStateRoot = get(rootKey(connection.clientIdentifier, proofHeight))
+  assert(proofHeight < packet.timeoutHeight)
   assert(verifyMembership(
-    consensusState.getRoot(),
+    counterpartyStateRoot,
     proof,
     packetCommitmentKey(packet.sourceConnection, packet.sourceChannel, packet.sequence),
     commit(packet.data)
@@ -535,7 +538,7 @@ can no longer be executed and to allow the calling module to safely perform appr
 Calling modules MUST atomically execute appropriate application timeout-handling logic in conjunction with calling `timeoutPacket`.
 
 ```typescript
-function timeoutPacket(packet: Packet, proof: CommitmentProof, nextSequenceRecv: uint64) {
+function timeoutPacket(packet: Packet, proof: CommitmentProof, proofHeight: uint64, nextSequenceRecv: uint64) {
   channel = get(channelKey(packet.sourceConnection, packet.sourceChannel))
   assert(channel.state === OPEN)
   assert(getCallingModule() === channel.moduleIdentifier)
@@ -546,8 +549,8 @@ function timeoutPacket(packet: Packet, proof: CommitmentProof, nextSequenceRecv:
   assert(packet.destConnection === connection.counterpartyConnectionIdentifier)
 
   // check that timeout height has passed on the other end
-  consensusState = get(consensusStateKey(connection.clientIdentifier))
-  assert(consensusState.getHeight() >= timeoutHeight)
+  counterpartyStateRoot = get(rootKey(connection.clientIdentifier, proofHeight))
+  assert(proofHeight >= timeoutHeight)
 
   // check that packet has not been received
   assert(nextSequenceRecv < packet.sequence)
@@ -560,7 +563,7 @@ function timeoutPacket(packet: Packet, proof: CommitmentProof, nextSequenceRecv:
 
   // check that the recv sequence is as claimed
   assert(verifyMembership(
-    consensusState.getRoot(),
+    counterpartyStateRoot,
     proof,
     nextSequenceRecvKey(packet.destConnection, packet.destChannel),
     nextSequenceRecv
@@ -582,7 +585,7 @@ This must be done in order to safely increment the received packet sequence and 
 Calling modules MUST NOT execute any application logic in conjunction with calling `recvTimeoutPacket`.
 
 ```typescript
-function recvTimeoutPacket(packet: Packet, proof: CommitmentProof) {
+function recvTimeoutPacket(packet: Packet, proof: CommitmentProof, proofHeight: uint64) {
   channel = get(channelKey(packet.destConnection, packet.destChannel))
   assert(channel.state === OPEN)
   assert(getCallingModule() === channel.moduleIdentifier)
@@ -595,11 +598,11 @@ function recvTimeoutPacket(packet: Packet, proof: CommitmentProof) {
   nextSequenceRecv = get(nextSequenceRecvKey(packet.destConnection, packet.destChannel))
   assert(packet.sequence === nextSequenceRecv)
 
-  consensusState = getConsensusState()
-  assert(consensusState.getHeight() >= packet.timeoutHeight)
+  counterpartyStateRoot = get(rootKey(connection.clientIdentifier, proofHeight))
+  assert(proofHeight >= packet.timeoutHeight)
 
   assert(verifyMembership(
-    consensusState.getRoot(),
+    counterpartyStateRoot,
     proof,
     packetCommitmentKey(packet.sourceConnection, packet.sourceChannel, sequence),
     commit(packet.data)
@@ -615,7 +618,7 @@ function recvTimeoutPacket(packet: Packet, proof: CommitmentProof) {
 `cleanupPacket` is called by a module to remove a received packet commitment from storage. The receiving end must have already processed the packet (whether regularly or past timeout).
 
 ```typescript
-function cleanupPacket(packet: Packet, proof: CommitmentProof, nextSequenceRecv: uint64) {
+function cleanupPacket(packet: Packet, proof: CommitmentProof, proofHeight: uint64, nextSequenceRecv: uint64) {
   channel = get(channelKey(packet.sourceConnection, packet.sourceChannel))
   assert(channel.state === OPEN)
   assert(getCallingModule() === channel.moduleIdentifier)
@@ -628,11 +631,11 @@ function cleanupPacket(packet: Packet, proof: CommitmentProof, nextSequenceRecv:
   // assert packet has been received on the other end
   assert(nextSequenceRecv > packet.sequence)
 
-  consensusState = get(consensusStateKey(connection.clientIdentifier))
+  counterpartyStateRoot = get(rootKey(connection.clientIdentifier, proofHeight))
 
   // check that the recv sequence is as claimed
   assert(verifyMembership(
-    consensusState.getRoot(),
+    counterpartyStateRoot,
     proof,
     nextSequenceRecvKey(packet.destConnection, packet.destChannel),
     nextSequenceRecv
@@ -678,4 +681,4 @@ Coming soon.
 
 ## Copyright
 
-Copyright and related rights waived via [CC0](https://creativecommons.org/publicdomain/zero/1.0/).
+All content herein is licensed under [Apache 2.0](https://www.apache.org/licenses/LICENSE-2.0).
