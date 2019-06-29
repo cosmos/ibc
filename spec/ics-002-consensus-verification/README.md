@@ -208,6 +208,14 @@ function rootKey(id: Identifier, height: uint64): Key {
 }
 ```
 
+##### Utilizing past roots
+
+To avoid race conditions between client updates (which change the state root) and proof-carrying
+transactions in handshakes or packet receipt, many IBC handler functions allow the caller to specify
+a particular past root to reference, which is looked up by height. IBC handler functions which do this
+must ensure that they also perform any requisite checks on the height passed in by the caller to ensure
+logical correctness.
+
 #### Create
 
 Creating a new `ClientState` is done simply by submitting it to the `createClient` function,
