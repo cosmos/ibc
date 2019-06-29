@@ -9,7 +9,8 @@ jobs:
     <<: *linux_defaults
     steps:
       - checkout
-      - run: sudo make setup_dependencies check_dependencies
+      - run: sudo pip install matplotlib networkx
+      - run: make check_dependencies
 
   check_links:
     <<: *linux_defaults

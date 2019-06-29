@@ -46,6 +46,7 @@ if len(cycles) == 0:
 else:
     print('Found cycles!')
     print(cycles)
+    sys.exit(1)
 
 print('Drawing dependency graph...')
 
