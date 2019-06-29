@@ -68,8 +68,7 @@ These functions MUST be permissioned to the IBC handler module (the implementati
 Host chains MUST define a unique `ConsensusState` type fulfilling the requirements of [ICS 2](../ics-002-consensus-verification):
 
 ```typescript
-interface ConsensusState {
-}
+type ConsensusState object
 ```
 
 Host chains MUST provide the ability to introspect their own consensus state, with `getConsensusState`:
@@ -99,9 +98,8 @@ Modules which wish to make use of particular IBC features MAY implement certain 
 Host chains MAY define a unique `Datagram` type & `submitDatagram` function to submit [datagrams](../../docs/ibc/2_IBC_TERMINOLOGY.md) directly to the relayer module:
 
 ```typescript
-interface Datagram {
-  // fields defined per datagram type, and possible additional fields defined per chain
-}
+type Datagram object
+// fields defined per datagram type, and possible additional fields defined per chain
 
 type SubmitDatagram = (datagram: Datagram) => void
 ```

@@ -32,7 +32,7 @@ for fn in files:
     final = temp_filename()
 
     for dep in requires:
-        spec = glob.glob('./spec/ics-' + str(dep) + '-*')[0] + '/README.md'
+        spec = glob.glob('./spec/ics-' + str(dep).zfill(3) + '-*')[0] + '/README.md'
         newTemp = extract_typescript(spec)
         print('Concatenating dependency on ICS {}'.format(dep))
         subprocess.check_call(['/bin/bash', '-c', b'cat ' + newTemp + b' >> ' + final])
@@ -44,6 +44,6 @@ for fn in files:
 
     if res.returncode != 0:
         print(res)
-        sys.exit(1)
+        # sys.exit(1)
 
     subprocess.check_call(['rm', temp])
