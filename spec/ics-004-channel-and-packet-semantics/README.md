@@ -29,7 +29,7 @@ In order to provide the desired ordering, exactly-once delivery, and module perm
 
 `Connection` is as defined in [ICS 3](../ics-003-connection-semantics).
 
-`Port` is as defined in [ICS 5](../ics-005-port-allocation).
+`Port` and `authenticate` are as defined in [ICS 5](../ics-005-port-allocation).
 
 `Commitment`, `CommitmentProof`, and `CommitmentRoot` are as defined in [ICS 23](../ics-023-vector-commitments).
 
@@ -203,11 +203,12 @@ could be implemented to provide this).
 ```typescript
 function chanOpenInit(
   connectionIdentifier: Identifier, channelIdentifier: Identifier,
-  counterpartyChannelIdentifier: Identifier, counterpartyPortIdentifier: Identifier, nextTimeoutHeight: uint64) {
+  portIdentifier: Identifier, counterpartyChannelIdentifier: Identifier,
+  counterpartyPortIdentifier: Identifier, nextTimeoutHeight: uint64) {
   assert(get(channelKey(connectionIdentifier, channelIdentifier)) === nil)
   connection = get(connectionKey(connectionIdentifier))
   assert(connection.state === OPEN)
-  portIdentifier = getCallingModule()
+  assert(authenticate(get(portKey(portIdentifier))))
   channel = Channel{INIT, portIdentifier, counterpartyPortIdentifier,
                     counterpartyChannelIdentifier, nextTimeoutHeight}
   set(channelKey(connectionIdentifier, channelIdentifier), channel)
@@ -226,7 +227,7 @@ function chanOpenTry(
   proofInit: CommitmentProof, proofHeight: uint64) {
   assert(getConsensusState().height < timeoutHeight)
   assert(get(channelKey(connectionIdentifier, channelIdentifier)) === null)
-  assert(getCallingModule() === portIdentifier)
+  assert(authenticate(get(portKey(portIdentifier))))
   connection = get(connectionKey(connectionIdentifier))
   assert(connection.state === OPEN)
   counterpartyStateRoot = get(rootKey(connection.clientIdentifier, proofHeight))
@@ -255,7 +256,7 @@ function chanOpenAck(
   assert(getConsensusState().height < timeoutHeight)
   channel = get(channelKey(connectionIdentifier, channelIdentifier))
   assert(channel.state === INIT)
-  assert(getCallingModule() === channel.portIdentifier)
+  assert(authenticate(get(portKey(channel.portIdentifier))))
   connection = get(connectionKey(connectionIdentifier))
   assert(connection.state === OPEN)
   counterpartyStateRoot = get(rootKey(connection.clientIdentifier, proofHeight))
@@ -282,7 +283,7 @@ function chanOpenConfirm(
   assert(getConsensusState().height < timeoutHeight)
   channel = get(channelKey(connectionIdentifier, channelIdentifier))
   assert(channel.state === OPENTRY)
-  assert(getCallingModule() === channel.portIdentifier)
+  assert(authenticate(get(portKey(channel.portIdentifier))))
   connection = get(connectionKey(connectionIdentifier))
   assert(connection.state === OPEN)
   counterpartyStateRoot = get(rootKey(connection.clientIdentifier, proofHeight))
@@ -471,7 +472,7 @@ Note that the full packet is not stored in the state of the chain - merely a sho
 function sendPacket(packet: Packet) {
   channel = get(channelKey(packet.sourceConnection, packet.sourceChannel))
   assert(channel.state === OPEN)
-  assert(getCallingModule() === channel.portIdentifier)
+  assert(authenticate(get(portKey(channel.portIdentifier))))
   assert(packet.destChannel === channel.counterpartyChannelIdentifier)
   connection = get(connectionKey(packet.sourceConnection))
   assert(connection.state === OPEN)
@@ -505,7 +506,7 @@ The IBC handler performs the following steps in order:
 function recvPacket(packet: Packet, proof: CommitmentProof, proofHeight: uint64) {
   channel = get(channelKey(packet.destConnection, packet.destChannel))
   assert(channel.state === OPEN)
-  assert(getCallingModule() === channel.portIdentifier)
+  assert(authenticate(get(portKey(channel.portIdentifier))))
   assert(packet.sourceChannel === channel.counterpartyChannelIdentifier)
   nextSequenceRecv = get(nextSequenceRecvKey(packet.destConnection, packet.destChannel))
   assert(packet.sequence === nextSequenceRecv)
@@ -543,7 +544,7 @@ Calling modules MUST atomically execute appropriate application timeout-handling
 function timeoutPacket(packet: Packet, proof: CommitmentProof, proofHeight: uint64, nextSequenceRecv: uint64) {
   channel = get(channelKey(packet.sourceConnection, packet.sourceChannel))
   assert(channel.state === OPEN)
-  assert(getCallingModule() === channel.portIdentifier)
+  assert(authenticate(get(portKey(channel.portIdentifier))))
   assert(packet.destChannel === channel.counterpartyChannelIdentifier)
 
   connection = get(connectionKey(packet.sourceConnection))
@@ -590,7 +591,7 @@ Calling modules MUST NOT execute any application logic in conjunction with calli
 function recvTimeoutPacket(packet: Packet, proof: CommitmentProof, proofHeight: uint64) {
   channel = get(channelKey(packet.destConnection, packet.destChannel))
   assert(channel.state === OPEN)
-  assert(getCallingModule() === channel.portIdentifier)
+  assert(authenticate(get(portKey(channel.portIdentifier))))
   assert(packet.sourceChannel === channel.counterpartyChannelIdentifier)
 
   connection = get(connectionKey(connectionIdentifier))
@@ -623,7 +624,7 @@ function recvTimeoutPacket(packet: Packet, proof: CommitmentProof, proofHeight: 
 function cleanupPacket(packet: Packet, proof: CommitmentProof, proofHeight: uint64, nextSequenceRecv: uint64) {
   channel = get(channelKey(packet.sourceConnection, packet.sourceChannel))
   assert(channel.state === OPEN)
-  assert(getCallingModule() === channel.portIdentifier)
+  assert(authenticate(get(portKey(channel.portIdentifier))))
   assert(packet.destChannel === channel.counterpartyChannelIdentifier)
 
   connection = get(connectionKey(packet.sourceConnection))
