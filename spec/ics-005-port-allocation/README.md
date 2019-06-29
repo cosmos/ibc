@@ -2,6 +2,8 @@
 ics: 5
 title: Port Allocation
 stage: Draft
+required: 24
+required-by: 4
 category: IBC Core
 author: Christopher Goes <cwgoes@tendermint.com>
 created: 29 June 2019
@@ -10,17 +12,24 @@ modified: 29 June 2019
 
 ## Synopsis
 
+This standard specifies the port allocation system by which modules can bind to uniquely named ports, allocated by the IBC handler,
+from and to which channels can then be opened, and which can be transferred or later released by the module which originally bound to them.
+
+### Motivation
+
 The interblockchain communication protocol is designed to faciliate module-to-module traffic, where modules are independent, possibly mutually distributed, self-contained
 elements of code executing on sovereign ledgers. In order to provide the desired end-to-end semantics, the IBC handler must permission channels to particular modules, and
 for convenience they should be addressable by name. This specification defines the *port allocation and ownership* system which realises that model.
 
-### Motivation
-
-Conventions may emerge...
+Conventions may emerge as to what kind of module logic is bound to a particular port name, such as "bank" for fungible token handling or "staking" for interchain collateralization,
+analogous to port 80's common use for HTTP servers (and also analogously, the protocol cannot enforce that particular module logic is *actually* bound to conventional ports, so
+users must check that themselves).
 
 ### Definitions
 
-A *port* is a named identifier.
+`Identifier`, `get`, `set`, and `del` are defined as in [ICS 24](../ics-024-host-requirements).
+
+A *port* is a particular kind of identifier which is used to permission channel opening and usage to modules.
 
 A *module* is a subcomponent of the host state machine independent of the IBC handler. Examples include Ethereum smart contracts and Cosmos SDK & Substrate modules.
 The IBC specification makes no assumptions of module functionality other than the ability to use object-capability or source authentication to permission ports to modules.
@@ -28,16 +37,11 @@ The IBC specification makes no assumptions of module functionality other than th
 ### Desired Properties
 
 - Once a module has bound to a port, no other modules can use that port until the module releases it
-- A single module can bind to multiple ports
+- A module can, on its option, release a port or transfer it to another module
+- A single module can bind to multiple ports at once
 - Ports are allocated first-come first-serve and "reserved" ports for known modules can be bound when the chain is first started
 
 ## Technical Specification
-
-### Store keys
-
-(main part of standard document - not all subsections are required)
-
-(detailed technical specification: syntax, semantics, sub-protocols, algorithms, data structures, etc)
 
 ### Data Structures
 
@@ -65,6 +69,7 @@ function portKey(id: Identifier) {
 
 ```typescript
 function bindPort(id: Identifier) {
+  set(portKey(id))
 }
 ```
 
@@ -74,6 +79,7 @@ If the host state machine supports object-capability keys, no additional protoco
 
 ```typescript
 function transferPort(id: Identifier, newOwner: Identifier) {
+  set(portKey(id))
 }
 ```
 
@@ -81,6 +87,7 @@ function transferPort(id: Identifier, newOwner: Identifier) {
 
 ```typescript
 function releasePort(id: Identifier) {
+  del(portKey(id))
 }
 ```
 
