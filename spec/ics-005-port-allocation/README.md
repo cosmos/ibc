@@ -56,7 +56,7 @@ type CapabilityKey object
 ```
 
 ```typescript
-function newCapabilityKey(id: string): CapabilityKey {
+function newCapabilityKey(): CapabilityKey {
   // provided by host state machine, e.g. pointer address in Cosmos SDK
 }
 ```
@@ -75,6 +75,36 @@ function callingModuleIdentifier(): SourceIdentifier {
 }
 ```
 
+`generate` and `authenticate` functions are then defined as follows.
+
+In the former case, `generate` returns a new object-capability key, which must be returned by the outer-layer function, and `authenticate` requires that the outer-layer function take an extra argument `capability`, which is an object-capability key with uniqueness enforced by the host state machine.
+
+```typescript
+function generate(): CapabilityKey {
+  return newCapabilityKey()
+}
+```
+
+```typescript
+function authenticate(key: CapabilityKey) {
+  return capability === key
+}
+```
+
+In the latter case, `generate` returns the calling module's identifier and `authenticate` merely checks it.
+
+```typescript
+function generate(): SourceIdentifier {
+  return callingModuleIdentifier()
+}
+```
+
+```typescript
+function authenticate(id: SourceIdentifier) {
+  return callingModuleIdentifier() === id
+}
+```
+
 ### Subprotocols
 
 #### Preliminaries
@@ -89,26 +119,36 @@ function portKey(id: Identifier) {
 
 #### Binding to a port
 
+The IBC handler MUST implement `bindPort`. `bindPort` binds to an unallocated port, failing if the port has already been allocated.
+
 ```typescript
 function bindPort(id: Identifier) {
-  set(portKey(id))
+  assert(get(portKey(id)) === null)
+  key = generate()
+  set(key, portKey(id))
+  return key
 }
 ```
 
 #### Transferring ownership of a port
 
-If the host state machine supports object-capability keys, no additional protocol is necessary, since the port reference is a bearer capability.
+If the host state machine supports object-capability keys, no additional protocol is necessary, since the port reference is a bearer capability. If it does not, the IBC handler MAY implement the following `transferPort` function.
 
 ```typescript
-function transferPort(id: Identifier, newOwner: Identifier) {
-  set(portKey(id))
+function transferPort(id: Identifier) {
+  assert(authenticate(get(portKey(id))))
+  key = generate()
+  set(portKey(id), key)
 }
 ```
 
 #### Releasing a port
 
+The IBC handler MUST implement the `releasePort` function, which allows a module to release a port such that other modules may then bind to it.
+
 ```typescript
 function releasePort(id: Identifier) {
+  assert(authenticate(get(portKey(id))))
   del(portKey(id))
 }
 ```
