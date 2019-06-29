@@ -226,7 +226,8 @@ The `chanOpenTry` function is called by a module to accept the first step of a c
 
 ```typescript
 function chanOpenTry(
-  order: ChannelOrder, connectionIdentifier: Identifier, channelIdentifier: Identifier, counterpartyChannelIdentifier: Identifier,
+  order: ChannelOrder, connectionIdentifier: Identifier,
+  channelIdentifier: Identifier, counterpartyChannelIdentifier: Identifier,
   moduleIdentifier: Identifier, counterpartyModuleIdentifier: Identifier,
   timeoutHeight: uint64, nextTimeoutHeight: uint64,
   proofInit: CommitmentProof, proofHeight: uint64) {
@@ -529,9 +530,8 @@ function recvPacket(packet: Packet, proof: CommitmentProof, proofHeight: uint64)
     assert(packet.sequence === nextSequenceRecv)
     nextSequenceRecv = nextSequenceRecv + 1
     set(nextSequenceRecvKey(packet.destConnection, packet.destChannel), nextSequenceRecv)
-  } else {
-    // set some accumulator
   }
+  // else set some accumulator
 }
 ```
 
@@ -584,10 +584,10 @@ function timeoutPacket(packet: Packet, proof: CommitmentProof, proofHeight: uint
   if (channel.order === ORDERED) {
     // close the channel
     channel.state = CLOSED
-  } else {
-    // mark the store so we can't "timeout" again
+    set(channelKey(packet.sourceConnection, packet.sourceChannel), channel)
+  } else
     set(packetTimeoutKey(packet.sourceConnection, packet.sourceChannel, sequence), "1")
-  }
+    // mark the store so we can't "timeout" again
 
 }
 ```
@@ -653,7 +653,7 @@ function cleanupPacket(packet: Packet, proof: CommitmentProof, proofHeight: uint
 
   counterpartyStateRoot = get(rootKey(connection.clientIdentifier, proofHeight))
 
-  if (channel.order === ORDERED) {
+  if (channel.order === ORDERED)
     // check that the recv sequence is as claimed
     assert(verifyMembership(
       counterpartyStateRoot,
@@ -661,9 +661,7 @@ function cleanupPacket(packet: Packet, proof: CommitmentProof, proofHeight: uint
       nextSequenceRecvKey(packet.destConnection, packet.destChannel),
       nextSequenceRecv
     ))
-  } else {
-    // check the accumulator inclusion
-  }
+  // else check the accumulator inclusion
 
   // verify we actually sent the packet, check the store
   assert(get(packetCommitmentKey(packet.sourceConnection, packet.sourceChannel, sequence)) === commit(packet.data))
