@@ -3,7 +3,7 @@ ics: 24
 title: Host State Machine Requirements
 stage: draft
 category: ibc-core
-required-by: 2, 3, 4, 18
+required-by: 2, 3, 4, 5, 18
 author: Christopher Goes <cwgoes@tendermint.com>
 created: 2019-04-16
 modified: 2019-05-11
@@ -89,7 +89,7 @@ Host chains MUST permission interaction with the IBC handler such that:
 - A single module can bind to multiple ports
 - Ports are allocated first-come first-serve and "reserved" ports for known modules can be bound when the chain is first started
 
-This permissioning can be implemented either with unique references (object capabilities) for each port (a la the Cosmos SDK) or with source authentication (a la Ethereum), in either case enforced by the host state machine.
+This permissioning can be implemented either with unique references (object capabilities) for each port (a la the Cosmos SDK) or with source authentication (a la Ethereum), in either case enforced by the host state machine. See [ICS 5](../ics-005-port-allocation) for details.
 
 Modules which wish to make use of particular IBC features MAY implement certain handler functions, e.g. to add additional logic to a channel handshake with an associated module on another chain.
 
