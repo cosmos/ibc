@@ -10,21 +10,30 @@ modified: 29 June 2019
 
 ## Synopsis
 
-(high-level description of and rationale for specification)
+The interblockchain communication protocol is designed to faciliate module-to-module traffic, where modules are independent, possibly mutually distributed, self-contained
+elements of code executing on sovereign ledgers. In order to provide the desired end-to-end semantics, the IBC handler must permission channels to particular modules, and
+for convenience they should be addressable by name. This specification defines the *port allocation and ownership* system which realises that model.
 
 ### Motivation
 
-(rationale for existence of standard)
+Conventions may emerge...
 
 ### Definitions
 
-(definitions of any new terms not defined in common documentation)
+A *port* is a named identifier.
+
+A *module* is a subcomponent of the host state machine independent of the IBC handler. Examples include Ethereum smart contracts and Cosmos SDK & Substrate modules.
+The IBC specification makes no assumptions of module functionality other than the ability to use object-capability or source authentication to permission ports to modules.
 
 ### Desired Properties
 
-(desired characteristics / properties of protocol, effects if properties are violated)
+- Once a module has bound to a port, no other modules can use that port until the module releases it
+- A single module can bind to multiple ports
+- Ports are allocated first-come first-serve and "reserved" ports for known modules can be bound when the chain is first started
 
 ## Technical Specification
+
+### Store keys
 
 (main part of standard document - not all subsections are required)
 
@@ -32,31 +41,68 @@ modified: 29 June 2019
 
 ### Data Structures
 
-(new data structures, if applicable)
+```typescript
+type CapabilityKey object
+```
+
+```typescript
+type SourceIdentifier string
+```
 
 ### Subprotocols
 
-(subprotocols, if applicable)
+#### Preliminaries
+
+`portKey` takes an `Identifier` and returns the store key under which the object-capability reference or owner module identifier associated with a port should be stored.
+
+```typescript
+function portKey(id: Identifier) {
+  return "ports/{id}"
+}
+```
+
+#### Binding to a port
+
+```typescript
+function bindPort(id: Identifier) {
+}
+```
+
+#### Transferring ownership of a port
+
+If the host state machine supports object-capability keys, no additional protocol is necessary, since the port reference is a bearer capability.
+
+```typescript
+function transferPort(id: Identifier, newOwner: Identifier) {
+}
+```
+
+#### Releasing a port
+
+```typescript
+function releasePort(id: Identifier) {
+}
+```
 
 ## Backwards Compatibility
 
-(discussion of compatibility or lack thereof with previous standards)
+Not applicable.
 
 ## Forwards Compatibility
 
-(discussion of compatibility or lack thereof with expected future standards)
+Port binding is not a wire protocol, so interfaces can change independently on separate chains as long as the ownership semantics are unaffected.
 
 ## Example Implementation
 
-(link to or description of concrete example implementation)
+Coming soon.
 
 ## Other Implementations
 
-(links to or descriptions of other implementations)
+Coming soon.
 
 ## History
 
-(changelog and notable inspirations / references)
+29 June 2019 - Initial draft
 
 ## Copyright
 
