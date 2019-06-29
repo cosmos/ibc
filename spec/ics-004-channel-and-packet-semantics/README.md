@@ -45,17 +45,25 @@ An *ordered* channel is a channel where packets are delivered exactly in the ord
 
 An *unordered* channel is a channel where packets can be delivered in any order, which may differ from the order in which they were sent.
 
+```typescript
+enum ChannelOrder {
+  ORDERED,
+  UNORDERED,
+}
+```
+
 Directionality and ordering are independent, so one can speak of a bidirectional unordered channel, a unidirectional ordered channel, etc.
 
 All channels provide exactly-once packet delivery, meaning that a packet sent on one end of a channel is delivered no more and no less than once, eventually, to the other end.
 
-This specification only concerns itself with *bidirectional ordered* channels. *Unidirectional* and *unordered* channels can use almost exactly the same protocol and will be outlined in a future ICS.
+This specification only concerns itself with *bidirectional* channels. *Unidirectional* channels can use almost exactly the same protocol and will be outlined in a future ICS.
 
 An *end* of a channel is a data structure on one chain storing channel metadata:
 
 ```typescript
 interface ChannelEnd {
   state: ChannelEndState
+  ordering: ChannelOrder
   counterpartyChannelIdentifier: Identifier
   moduleIdentifier: Identifier
   counterpartyModuleIdentifier: Identifier
