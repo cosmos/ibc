@@ -2,7 +2,7 @@
 ics: 5
 title: Port Allocation
 stage: Draft
-required: 24
+requires: 24
 required-by: 4
 category: IBC Core
 author: Christopher Goes <cwgoes@tendermint.com>
