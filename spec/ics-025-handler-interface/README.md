@@ -32,7 +32,7 @@ IBC is an inter-module communication protocol, designed to faciliate reliable, a
 ### Desired Properties
 
 - Creation of clients, connections, and channels should be as permissionless as possible.
-- The module set should be dynamic: chains should be able to add and destroy modules at will with a persistent IBC handler.
+- The module set should be dynamic: chains should be able to add and destroy modules, which can themselves bind to and unbind from ports, at will with a persistent IBC handler.
 - Modules should be able to write their own more complex abstractions on top of IBC to provide additional semantics or guarantees.
 
 ## Technical Specification
@@ -208,32 +208,32 @@ function queryConnection(id: Identifier): ConnectionEnd | void {
 
 ### Channel lifecycle management
 
-By default, channels are owned by the creating module, meaning only the creating module can inspect, close, or send on the channel. A module can create any number of channels.
+By default, channels are owned by the creating port, meaning only the module bound to that port can inspect, close, or send on the channel. A port can create any number of channels.
 
 `chanOpenInit` tries to start the handshake to create a new channel with the provided options, failing if the connection is not found or the options are invalid.
 
 ```typescript
 function chanOpenInit(
   connectionIdentifier: Identifier, channelIdentifier: Identifier,
-  counterpartyChannelIdentifier: Identifier, counterpartyModuleIdentifier: Identifier, nextTimeoutHeight: uint64) {
+  counterpartyChannelIdentifier: Identifier, counterpartyPortIdentifier: Identifier, nextTimeoutHeight: uint64) {
   // defined in ICS 4
 }
 ```
 
-`chanOpenTry` tries to initialize a channel based on proof of an initialization attempt on the counterparty chain, failing if the channel identifier is unavailable, the proof is invalid, or the calling module is not authorized.
+`chanOpenTry` tries to initialize a channel based on proof of an initialization attempt on the counterparty chain, failing if the channel identifier is unavailable, the proof is invalid, or the calling module is not bound to the port.
 
 The default IBC relayer module will allow external calls to `chanOpenTry`.
 
 ```typescript
 function chanOpenTry(
   connectionIdentifier: Identifier, channelIdentifier: Identifier, counterpartyChannelIdentifier: Identifier,
-  moduleIdentifier: Identifier, counterpartyModuleIdentifier: Identifier,
+  portIdentifier: Identifier, counterpartyPortIdentifier: Identifier,
   timeoutHeight: uint64, nextTimeoutHeight: uint64, proofInit: CommitmentProof) {
   // defined in ICS 4
 }
 ```
 
-`chanOpenAck` acknowledges a channel creation in progress on another chain, failing if the channel identifier is not found, the proof is invalid, or the calling module is not authorized.
+`chanOpenAck` acknowledges a channel creation in progress on another chain, failing if the channel identifier is not found, the proof is invalid, or the calling module is not bound to the port.
 
 The default IBC relayer module will allow external calls to `chanOpenAck`.
 
@@ -245,7 +245,7 @@ function chanOpenAck(
 }
 ```
 
-`chanOpenConfirm` finalizes the channel opening handshake, failing if the channel identifier is not found, the proof is invalid, or the calling module is not authorized.
+`chanOpenConfirm` finalizes the channel opening handshake, failing if the channel identifier is not found, the proof is invalid, or the calling module is not bound to the port.
 
 The default IBC relayer module will allow external calls to `chanOpenConfirm`.
 
@@ -324,9 +324,9 @@ function chanCloseTimeout(
 
 ### Packet relay
 
-Packets are permissioned by channel (only a module which owns a channel can send on it).
+Packets are permissioned by channel (only a port which owns a channel can send or receive on it).
 
-`sendPacket` attempts to send a packet, returning an error if the packet cannot be sent (perhaps because the sending module does not own the channel in question or because the channel is frozen), and returning a unique identifier if successful.
+`sendPacket` attempts to send a packet, returning an error if the packet cannot be sent (perhaps because the sending module is not bound to the port in question or because the channel is frozen), and returning a unique identifier if successful.
 
 The returned identifier will be the same as that sent by the timeout handler `timeoutPacket`, so it can be used by the sending module to associate a specific action with a specific packet timeout.
 
@@ -338,7 +338,7 @@ function sendPacket(packet: Packet) {
 }
 ```
 
-`recvPacket` attempts to receive a packet, returning an error if the calling module is not authorized to handle the packet, or if the packet does not exist or has been already handled.
+`recvPacket` attempts to receive a packet, returning an error if the calling module is not bound to the associated port, or if the packet does not exist or has been already handled.
 
 The default IBC relayer module will allow external calls to `recvPacket`.
 
@@ -348,7 +348,7 @@ function recvPacket(packet: Packet, proof: CommitmentProof) {
 }
 ```
 
-`timeoutPacket` attemps to handle a packet timeout, returning an error if the calling module is not authorized to handle the packet timeout, or if the packet does not exist, has not timed out, or has already been handled.
+`timeoutPacket` attemps to handle a packet timeout, returning an error if the calling module is not bound to the associated port, or if the packet does not exist, has not timed out, or has already been handled.
 
 The default IBC relayer module will allow external calls to `timeoutPacket`.
 
