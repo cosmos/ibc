@@ -358,103 +358,45 @@ function chanOpenTimeout(
 
 ##### Closing handshake
 
-The `chanCloseInit` function is called by either module to initiate
-the channel-closing handshake.
+The `chanClose` function is called by either module to close their end of the channel.
+
+Calling modules MAY atomically execute appropriate application logic in conjunction with calling `chanClose`.
 
 ```typescript
-function chanCloseInit(
-  connectionIdentifier: Identifier, channelIdentifier: Identifier, nextTimeoutHeight: uint64) {
+function chanClose(
+  connectionIdentifier: Identifier, channelIdentifier: Identifier) {
   channel = get(channelKey(connectionIdentifier, channelIdentifier))
   assert(channel.state === OPEN)
   connection = get(connectionKey(connectionIdentifier))
   assert(connection.state === OPEN)
-  channel.state = CLOSETRY
-  channel.nextTimeoutHeight = nextTimeoutHeight
-  set(channelKey(connectionIdentifier, channelIdentifier), channel)
-}
-```
-
-The `chanCloseTry` function is called by the handshake-accepting module
-to acknowledge the channel close request and continue the closing process.
-
-```typescript
-function chanCloseTry(
-  connectionIdentifier: Identifier, channelIdentifier: Identifier,
-  timeoutHeight: uint64, nextTimeoutHeight: uint64,
-  proofInit: CommitmentProof, proofHeight: uint64) {
-  assert(getConsensusState().getHeight() < timeoutHeight)
-  channel = get(channelKey(connectionIdentifier, channelIdentifier))
-  assert(channel.state === OPEN)
-  connection = get(connectionKey(connectionIdentifier))
-  assert(connection.state === OPEN)
-  counterpartyStateRoot = get(rootKey(connection.clientIdentifier, proofHeight))
-  expected = Channel{INIT, channel.order, channel.counterpartyPortIdentifier, channel.portIdentifier,
-                     channel.channelIdentifier, timeoutHeight}
-  assert(verifyMembership(
-    counterpartyStateRoot,
-    proofInit,
-    channelKey(connection.counterpartyConnectionIdentifier, channel.counterpartyChannelIdentifier),
-    expected
-  ))
   channel.state = CLOSED
-  channel.nextTimeoutHeight = nextTimeoutHeight
   set(channelKey(connectionIdentifier, channelIdentifier), channel)
 }
 ```
 
-The `chanCloseAck` function is called by the handshake-originating module
-to acknowledge the closing acknowledgement and finalize channel closure.
+The `chanCloseConfirm` function is called by the counterparty module to close their end of the channel,
+since the other end has been closed.
+
+Calling modules MAY atomically execute appropriate application logic in conjunction with calling `chanCloseConfirm`.
 
 ```typescript
-function chanCloseAck(
+function chanCloseConfirm(
   connectionIdentifier: Identifier, channelIdentifier: Identifier,
-  timeoutHeight: uint64, proofTry: CommitmentProof, proofHeight: uint64) {
-  assert(getConsensusState().getHeight() < timeoutHeight)
+  proof: CommitmentProof, proofHeight: uint64) {
   channel = get(channelKey(connectionIdentifier, channelIdentifier))
   assert(channel.state === OPEN)
   connection = get(connectionKey(connectionIdentifier))
   assert(connection.state === OPEN)
   counterpartyStateRoot = get(rootKey(connection.clientIdentifier, proofHeight))
   expected = Channel{CLOSED, channel.order, channel.counterpartyPortIdentifier, channel.portIdentifier,
-                     channelIdentifier, timeoutHeight}
+                     channel.channelIdentifier, 0}
   assert(verifyMembership(
     counterpartyStateRoot,
-    proofInit,
+    proof,
     channelKey(connection.counterpartyConnectionIdentifier, channel.counterpartyChannelIdentifier),
     expected
   ))
   channel.state = CLOSED
-  channel.nextTimeoutHeight = 0
-  set(channelKey(connectionIdentifier, channelIdentifier), channel)
-}
-```
-
-The `chanCloseTimeout` function is called by either the handshake-originating
-or handshake-accepting module to prove a timeout and reset state.
-
-```typescript
-function chanCloseTimeout(
-  connectionIdentifier: Identifier, channelIdentifier: Identifier,
-  timeoutHeight: uint64, proofTimeout: CommitmentProof, proofHeight: uint64) {
-  channel = get(channelKey(connectionIdentifier, channelIdentifier))
-  counterpartyStateRoot = get(rootKey(connection.clientIdentifier, proofHeight))
-  assert(proofHeight >= connection.nextTimeoutHeight)
-  switch channel.state {
-    case CLOSETRY:
-      expected = Channel{OPEN, channel.order, channel.counterpartyPortIdentifier, channel.portIdentifier,
-                         channelIdentifier, timeoutHeight}
-    case CLOSED:
-      expected = Channel{CLOSETRY, channel.order, channel.counterpartyPortIdentifier, channel.portIdentifier,
-                         channelIdentifier, timeoutHeight}
-  }
-  verifyMembership(
-    counterpartyStateRoot,
-    proofTimeout,
-    channelKey(connection.counterpartyConnectionIdentifier, channel.counterpartyChannelIdentifier),
-    expected
-  )
-  channel.state = OPEN
-  channel.nextTimeoutHeight = 0
   set(channelKey(connectionIdentifier, channelIdentifier), channel)
 }
 ```
@@ -687,7 +629,7 @@ been received on a particular ordered channel has timed out, and the channel mus
 
 This is an alternative to closing the other end of the channel and proving that closure. Either works.
 
-Calling modules MAY execute any application logic associated with channel closure in conjunction with calling `recvTimeoutPacket`.
+Calling modules MAY atomically execute any application logic associated with channel closure in conjunction with calling `recvTimeoutPacket`.
 
 ```typescript
 function timeoutClose(packet: Packet, proof: CommitmentProof, proofHeight: uint64) {
