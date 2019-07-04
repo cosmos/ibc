@@ -183,14 +183,6 @@ function packetCommitmentKey(connectionIdentifier: Identifier, channelIdentifier
 }
 ```
 
-An additional bit is stored to indicate whether a packet has timed-out:
-
-```typescript
-function packetTimeoutKey(connectionIdentifier: Identifier, channelIdentifier: Identifier, sequence: uint64) {
-  return channelKey(connectionIdentifier, channelIdentifier) + "/packets/" + sequence + "/timeout"
-}
-```
-
 Absence of the key in the store is equivalent to a zero-bit.
 
 Packet acknowledgement data are stored under the `packetAcknowledgementKey`:
@@ -523,7 +515,10 @@ The IBC handler performs the following steps in order:
 - Increments the packet receive sequence associated with the channel end (ordered channels only)
 
 ```typescript
-function recvPacket(packet: Packet, proof: CommitmentProof, proofHeight: uint64, acknowledgement: bytes) {
+function recvPacket(
+  packet: Packet, proof: CommitmentProof,
+  proofHeight: uint64, acknowledgement: bytes) {
+
   channel = get(channelKey(packet.destConnection, packet.destChannel))
   assert(channel.state === OPEN)
   assert(authenticate(get(portKey(channel.portIdentifier))))
@@ -567,10 +562,10 @@ function acknowledgePacket(
   assert(connection.state === OPEN)
   counterpartyStateRoot = get(rootKey(connection.clientIdentifier, proofHeight))
 
-  // verify we sent the packet
+  // verify we sent the packet and haven't cleared it out yet
+  assert(get(packetCommitmentKey(packet.sourceConnection, packet.sourceChannel, sequence)) === commit(packet.data))
 
-  // delete our copy
-
+  // assert correct acknowledgement on counterparty chain
   assert(verifyMembership(
     counterpartyStateRoot,
     proof,
@@ -578,8 +573,8 @@ function acknowledgePacket(
     commit(acknowledgement)
   ))
 
-  // set key so cannot be acked
-
+  // delete our commitment so we can't "acknowledge" again
+  delete(packetCommitmentKey(packet.sourceConnection, packet.sourceChannel, sequence))
 }
 ```
 
@@ -618,9 +613,6 @@ function timeoutPacket(packet: Packet, proof: CommitmentProof, proofHeight: uint
   // verify we actually sent this packet, check the store
   assert(get(packetCommitmentKey(packet.sourceConnection, packet.sourceChannel, sequence)) === commit(packet.data))
 
-  // assert we haven't "timed-out" already
-  assert(get(packetTimeoutKey(packet.sourceConnection, packet.sourceChannel, sequence)) === nil)
-
   // check that the recv sequence is as claimed
   assert(verifyMembership(
     counterpartyStateRoot,
@@ -630,13 +622,13 @@ function timeoutPacket(packet: Packet, proof: CommitmentProof, proofHeight: uint
   ))
 
   if (channel.order === ORDERED) {
+    // TODO consider w.r.t. handshake
     // close the channel
     channel.state = CLOSED
     set(channelKey(packet.sourceConnection, packet.sourceChannel), channel)
   } else
-    // mark the store so we can't "timeout" again
-    set(packetTimeoutKey(packet.sourceConnection, packet.sourceChannel, sequence), "1")
-
+    // delete our commitment so we can't timeout again
+    delete(packetCommitmentKey(packet.sourceConnection, packet.sourceChannel, sequence))
 }
 ```
 
@@ -715,7 +707,7 @@ function cleanupPacket(packet: Packet, proof: CommitmentProof, proofHeight: uint
       nextSequenceRecvKey(packet.destConnection, packet.destChannel),
       nextSequenceRecv
     ))
-  // else check the accumulator inclusion
+  // TODO else check ranges, etc
 
   // verify we actually sent the packet, check the store
   assert(get(packetCommitmentKey(packet.sourceConnection, packet.sourceChannel, sequence)) === commit(packet.data))
