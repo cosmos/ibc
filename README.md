@@ -1,5 +1,6 @@
 # Interchain Standards Development
-![banner](./interchain-standards-image.jpg)
+
+![banner](./assets/interchain-standards-image.jpg)
 
 ## Synopsis
 
@@ -42,6 +43,7 @@ All standards in the "draft" stage are listed here in order of their ICS numbers
 | [2](spec/ics-002-consensus-verification)            | Consensus Verification             | Draft |
 | [3](spec/ics-003-connection-semantics)              | Connection Semantics               | Draft |
 | [4](spec/ics-004-channel-and-packet-semantics)      | Channel & Packet Semantics         | Draft |
+| [5](spec/ics-005-port-allocation)                   | Port Allocation                    | Draft |
 | [18](spec/ics-018-relayer-algorithms)               | Relayer Algorithms                 | Draft |
 | [23](spec/ics-023-vector-commitments)               | Vector Commitments                 | Draft |
 | [24](spec/ics-024-host-requirements)                | Host Requirements                  | Draft |
@@ -52,4 +54,4 @@ All standards in the "draft" stage are listed here in order of their ICS numbers
 
 Directed arrows indicate a dependency relationship (that origin depends on destination).
 
-![deps](deps.png)
+![deps](assets/deps.png)
