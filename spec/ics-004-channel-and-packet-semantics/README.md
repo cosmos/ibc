@@ -549,6 +549,12 @@ function recvPacket(
 
 #### Acknowledgements
 
+The `acknowledgePacket` function is called by a module to process the acknowledgement of a packet previously sent on a
+channel to a counterparty module on the counterparty chain. `acknowledgePacket` also cleans up the packet commitment,
+which is no longer necessary since the packet has been received and acted upon.
+
+Calling modules MAY atomically execute appropriate application acknowledgement-handling logic in conjunction with calling `acknowledgePacket`.
+
 ```typescript
 function acknowledgePacket(
   packet: Packet, proof: CommitmentProof,
@@ -591,12 +597,17 @@ The `timeoutPacket` function is called by a module which originally attempted to
 where the timeout height has passed on the counterparty chain without the packet being committed, to prove that the packet
 can no longer be executed and to allow the calling module to safely perform appropriate state transitions.
 
-Calling modules MUST atomically execute appropriate application timeout-handling logic in conjunction with calling `timeoutPacket`.
+There are two variants, for ordered & unordered channels: `timeoutPacketOrdered` and `timeoutPacketUnordered`.
+
+Calling modules MAY atomically execute appropriate application timeout-handling logic in conjunction with calling `timeoutPacketOrdered` or `timeoutPacketUnordered`.
+
+`timeoutPacketOrdered`, the variant for ordered channels, checks the recvSequence of the receiving channel end and closes the channel if a packet has timed out.
 
 ```typescript
-function timeoutPacket(packet: Packet, proof: CommitmentProof, proofHeight: uint64, nextSequenceRecv: uint64) {
+function timeoutPacketOrdered(packet: Packet, proof: CommitmentProof, proofHeight: uint64, nextSequenceRecv: uint64) {
   channel = get(channelKey(packet.sourceConnection, packet.sourceChannel))
   assert(channel.state === OPEN)
+  assert(channel.order === ORDERED)
   assert(authenticate(get(portKey(channel.portIdentifier))))
   assert(packet.destChannel === channel.counterpartyChannelIdentifier)
 
@@ -622,39 +633,67 @@ function timeoutPacket(packet: Packet, proof: CommitmentProof, proofHeight: uint
     nextSequenceRecv
   ))
 
-  if (channel.order === ORDERED) {
-    // TODO consider w.r.t. handshake
-    // close the channel
-    channel.state = CLOSED
-    set(channelKey(packet.sourceConnection, packet.sourceChannel), channel)
-  } else
-    // delete our commitment so we can't timeout again
-    delete(packetCommitmentKey(packet.sourceConnection, packet.sourceChannel, sequence))
-}
-```
+  // delete our commitment
+  delete(packetCommitmentKey(packet.sourceConnection, packet.sourceChannel, packet.sequence))
 
-```typescript
-function timeoutPacketUnordered(packet: Packet, proof: CommitmentProof, proofHeight: uint64) {
-  // verify absence of acknowledgement at packet index
+  // close the channel
+  channel.state = CLOSED
+  set(channelKey(packet.sourceConnection, packet.sourceChannel), channel)
 }
 ```
 
 If relations are enforced between timeout heights of subsequent packets, safe bulk timeouts of all packets prior to a timed-out packet can be performed.
 This specification omits details for now.
 
-###### Receiving end
+`timeoutPacketUnordered`, the variant for unordered channels, checks the absence of an acknowledgement (which will have been written if the packet was receieved).
 
-The `recvTimeoutPacket` function is called by a module in order to process an IBC packet sent on the corresponding channel which has timed out.
-This must be done in order to safely increment the received packet sequence and move on to future packets.
-
-Calling modules MUST NOT execute any application logic in conjunction with calling `recvTimeoutPacket`.
-
-// TODO replace with closing the channel in case of ordered channels, unnecessary in case of unordered channels
+`timeoutPacketUnordered` does not close the channel; unordered channels are expected to continue in the face of timed-out packets.
 
 ```typescript
-function recvTimeoutPacket(packet: Packet, proof: CommitmentProof, proofHeight: uint64) {
+function timeoutPacketUnordered(packet: Packet, proof: CommitmentProof, proofHeight: uint64) {
+  channel = get(channelKey(packet.sourceConnection, packet.sourceChannel))
+  assert(channel.state === OPEN)
+  assert(channel.order === UNORDERED)
+  assert(authenticate(get(portKey(channel.portIdentifier))))
+  assert(packet.destChannel === channel.counterpartyChannelIdentifier)
+
+  connection = get(connectionKey(packet.sourceConnection))
+  assert(connection.state === OPEN)
+  assert(packet.destConnection === connection.counterpartyConnectionIdentifier)
+
+  // check that timeout height has passed on the other end
+  counterpartyStateRoot = get(rootKey(connection.clientIdentifier, proofHeight))
+  assert(proofHeight >= timeoutHeight)
+
+  // verify we actually sent this packet, check the store
+  assert(get(packetCommitmentKey(packet.sourceConnection, packet.sourceChannel, sequence)) === commit(packet.data))
+
+  // verify absence of acknowledgement at packet index
+  assert(verifyNonMembership((
+    counterpartyStateRoot,
+    proof,
+    packetAcknowledgementKey(packet.sourceConnection, packet.sourceChannel, packet.sequence)
+  ))
+
+  // delete our commitment
+  delete(packetCommitmentKey(packet.sourceConnection, packet.sourceChannel, sequence))
+}
+```
+
+###### Closing on timeout
+
+The `timeoutClose` function is called by a module in order to prove that a packet which ought to have
+been received on a particular ordered channel has timed out, and the channel must be closed.
+
+This is an alternative to closing the other end of the channel and proving that closure. Either works.
+
+Calling modules MAY execute any application logic associated with channel closure in conjunction with calling `recvTimeoutPacket`.
+
+```typescript
+function timeoutClose(packet: Packet, proof: CommitmentProof, proofHeight: uint64) {
   channel = get(channelKey(packet.destConnection, packet.destChannel))
   assert(channel.state === OPEN)
+  assert(channel.order === ORDERED)
   assert(authenticate(get(portKey(channel.portIdentifier))))
   assert(packet.sourceChannel === channel.counterpartyChannelIdentifier)
 
@@ -675,8 +714,8 @@ function recvTimeoutPacket(packet: Packet, proof: CommitmentProof, proofHeight: 
     commit(packet.data)
   ))
 
-  nextSequenceRecv = channel.nextSequenceRecv + 1
-  set(nextSequenceRecvKey(packet.destConnection, packet.destChannel), nextSequenceRecv)
+  channel.state = CLOSED
+  set(channelKey(packet.destConnection, packet.destChannel), channel)
 }
 ```
 
@@ -718,14 +757,6 @@ function cleanupPacket(packet: Packet, proof: CommitmentProof, proofHeight: uint
 }
 ```
 
-Calling modules MUST execute associated application logic in conjunction with calling `ackPacket`.
-
-```typescript
-function ackPacket(packet: Packet, proof: CommitmentProof, proofHeight: uint64, ack: bytes) {
-  // also cleanup packet
-}
-```
-
 #### Querying channels
 
 Channels can be queried with `queryChannel`:
@@ -755,6 +786,7 @@ Coming soon.
 ## History
 
 5 June 2019 - Draft submitted
+4 July 2019 - Modifications for unordered channels & acknowledgements
 
 ## Copyright
 
