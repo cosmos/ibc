@@ -15,7 +15,7 @@ The relayer module can keep a lookup table of modules, which it can use to look 
 
 ### Motivation
 
-The default IBC handler uses a receiver call pattern, where modules must individually call the IBC handler in order to start handshakes, accept handshakes, send and receive packets, etc. This is flexible and simple (see [Design Patterns](../../ibc/5_IBC_DESIGN_PATTERNS.md))
+The default IBC handler uses a receiver call pattern, where modules must individually call the IBC handler in order to bind to ports, start handshakes, accept handshakes, send and receive packets, etc. This is flexible and simple (see [Design Patterns](../../ibc/5_IBC_DESIGN_PATTERNS.md))
 but is a bit tricky to understand and may require extra work on the part of relayer processes, who must track the state of many modules. This standard describes an IBC "relayer module" to automate most common functionality, route packets, and simplify the task of relayers.
 
 ### Definitions
@@ -24,7 +24,7 @@ All functions provided by the IBC handler interface are defined as in [ICS 25](.
 
 ### Desired Properties
 
-- Modules should be able to own channels through the relayer module.
+- Modules should be able to bind to ports and own channels through the relayer module.
 - No overhead should be added for packet sends and receives other than the layer of call indirection.
 
 ## Technical Specification
@@ -125,7 +125,7 @@ interface ChanOpenInit {
   connectionIdentifier: Identifier
   channelIdentifier: Identifier
   counterpartyChannelIdentifier: Identifier
-  counterpartyModuleIdentifier: Identifier
+  counterpartyPortIdentifier: Identifier
   nextTimeoutHeight: uint64
 }
 ```
@@ -135,8 +135,8 @@ interface ChanOpenTry {
   connectionIdentifier: Identifier
   channelIdentifier: Identifier
   counterpartyChannelIdentifier: Identifier
-  moduleIdentifier: Identifier
-  counterpartyModuleIdentifier: Identifier
+  portIdentifier: Identifier
+  counterpartyPortIdentifier: Identifier
   timeoutHeight: uint64
   nextTimeoutHeight: uint64
   proofInit: CommitmentProof
