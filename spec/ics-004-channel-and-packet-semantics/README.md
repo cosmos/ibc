@@ -534,9 +534,10 @@ function recvPacket(
     packetCommitmentKey(packet.sourceConnection, packet.sourceChannel, packet.sequence),
     commit(packet.data)
   ))
-  if (acknowledgement.length > 0 || channel.order === UNORDERED) {
+
+  if (acknowledgement.length > 0 || channel.order === UNORDERED)
     set(packetAcknowledgementKey(packet.destConnection, packet.destChannel, packet.sequence), commit(acknowledgement))
-  }
+
   if (channel.order === ORDERED) {
     nextSequenceRecv = get(nextSequenceRecvKey(packet.destConnection, packet.destChannel))
     assert(packet.sequence === nextSequenceRecv)
