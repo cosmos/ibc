@@ -523,7 +523,7 @@ function acknowledgePacket(
   ))
 
   // delete our commitment so we can't "acknowledge" again
-  delete(packetCommitmentKey(packet.sourceConnection, packet.sourceChannel, sequence))
+  delete(packetCommitmentKey(packet.sourceConnection, packet.sourceChannel, packet.sequence))
 }
 ```
 
@@ -565,7 +565,8 @@ function timeoutPacketOrdered(packet: Packet, proof: CommitmentProof, proofHeigh
   assert(nextSequenceRecv < packet.sequence)
 
   // verify we actually sent this packet, check the store
-  assert(get(packetCommitmentKey(packet.sourceConnection, packet.sourceChannel, sequence)) === commit(packet.data))
+  assert(get(packetCommitmentKey(packet.sourceConnection, packet.sourceChannel, sequence))
+         === commit(packet.data))
 
   // check that the recv sequence is as claimed
   assert(verifyMembership(
@@ -608,17 +609,18 @@ function timeoutPacketUnordered(packet: Packet, proof: CommitmentProof, proofHei
   assert(proofHeight >= timeoutHeight)
 
   // verify we actually sent this packet, check the store
-  assert(get(packetCommitmentKey(packet.sourceConnection, packet.sourceChannel, sequence)) === commit(packet.data))
+  assert(get(packetCommitmentKey(packet.sourceConnection, packet.sourceChannel, packet.sequence))
+         === commit(packet.data))
 
   // verify absence of acknowledgement at packet index
-  assert(verifyNonMembership((
+  assert(verifyNonMembership(
     counterpartyStateRoot,
     proof,
     packetAcknowledgementKey(packet.sourceConnection, packet.sourceChannel, packet.sequence)
   ))
 
   // delete our commitment
-  delete(packetCommitmentKey(packet.sourceConnection, packet.sourceChannel, sequence))
+  delete(packetCommitmentKey(packet.sourceConnection, packet.sourceChannel, packet.sequence))
 }
 ```
 
@@ -692,10 +694,11 @@ function cleanupPacket(packet: Packet, proof: CommitmentProof, proofHeight: uint
   // TODO else check ranges, etc
 
   // verify we actually sent the packet, check the store
-  assert(get(packetCommitmentKey(packet.sourceConnection, packet.sourceChannel, sequence)) === commit(packet.data))
+  assert(get(packetCommitmentKey(packet.sourceConnection, packet.sourceChannel, packet.sequence))
+             === commit(packet.data))
   
   // clear the store
-  delete(packetCommitmentKey(packet.sourceConnection, packet.sourceChannel, sequence))
+  delete(packetCommitmentKey(packet.sourceConnection, packet.sourceChannel, packet.sequence))
 }
 ```
 
