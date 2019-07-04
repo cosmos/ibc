@@ -193,6 +193,16 @@ function packetTimeoutKey(connectionIdentifier: Identifier, channelIdentifier: I
 
 Absence of the key in the store is equivalent to a zero-bit.
 
+Packet receipts, including acknowledgement data, are stored under the `packetReceiptKey`:
+
+```typescript
+function packetReceiptKey(connectionIdentifier: Identifier, channelIdentifier: Identifier, sequence: uint64) {
+  return channelKey(connectionIdentifier, channelIdentifier) + "/receipts/" + sequence
+}
+```
+
+Unordered channels must always write a receipt to this key so that the absence of such can be used as proof-of-timeout.
+
 ### Subprotocols
 
 #### Channel lifecycle management
@@ -533,8 +543,9 @@ function recvPacket(packet: Packet, proof: CommitmentProof, proofHeight: uint64)
     assert(packet.sequence === nextSequenceRecv)
     nextSequenceRecv = nextSequenceRecv + 1
     set(nextSequenceRecvKey(packet.destConnection, packet.destChannel), nextSequenceRecv)
+  } else {
+    set(packetReceiptKey(packet.destConnection, packet.destChannel, packet.sequence), "1")
   }
-  // else set some accumulator
 }
 ```
 
@@ -589,9 +600,15 @@ function timeoutPacket(packet: Packet, proof: CommitmentProof, proofHeight: uint
     channel.state = CLOSED
     set(channelKey(packet.sourceConnection, packet.sourceChannel), channel)
   } else
-    set(packetTimeoutKey(packet.sourceConnection, packet.sourceChannel, sequence), "1")
     // mark the store so we can't "timeout" again
+    set(packetTimeoutKey(packet.sourceConnection, packet.sourceChannel, sequence), "1")
 
+}
+```
+
+```typescript
+function timeoutPacketUnordered(packet: Packet, proof: CommitmentProof, proofHeight: uint64) {
+  // verify absence of receipt at packet index
 }
 ```
 
@@ -605,7 +622,7 @@ This must be done in order to safely increment the received packet sequence and 
 
 Calling modules MUST NOT execute any application logic in conjunction with calling `recvTimeoutPacket`.
 
-// TODO replace with closing the channel
+// TODO replace with closing the channel in case of ordered channels, unnecessary in case of unordered channels
 
 ```typescript
 function recvTimeoutPacket(packet: Packet, proof: CommitmentProof, proofHeight: uint64) {
@@ -671,6 +688,14 @@ function cleanupPacket(packet: Packet, proof: CommitmentProof, proofHeight: uint
   
   // clear the store
   delete(packetCommitmentKey(packet.sourceConnection, packet.sourceChannel, sequence))
+}
+```
+
+Calling modules MUST execute associated application logic in conjunction with calling `ackPacket`.
+
+```typescript
+function ackPacket(packet: Packet, proof: CommitmentProof, proofHeight: uint64, ack: bytes) {
+  // also cleanup packet
 }
 ```
 
