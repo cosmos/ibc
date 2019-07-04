@@ -193,15 +193,15 @@ function packetTimeoutKey(connectionIdentifier: Identifier, channelIdentifier: I
 
 Absence of the key in the store is equivalent to a zero-bit.
 
-Packet receipts, including acknowledgement data, are stored under the `packetReceiptKey`:
+Packet acknowledgement data are stored under the `packetAcknowledgementKey`:
 
 ```typescript
-function packetReceiptKey(connectionIdentifier: Identifier, channelIdentifier: Identifier, sequence: uint64) {
-  return channelKey(connectionIdentifier, channelIdentifier) + "/receipts/" + sequence
+function packetAcknowledgementKey(connectionIdentifier: Identifier, channelIdentifier: Identifier, sequence: uint64) {
+  return channelKey(connectionIdentifier, channelIdentifier) + "/acknowledgements/" + sequence
 }
 ```
 
-Unordered channels must always write a receipt to this key so that the absence of such can be used as proof-of-timeout.
+Unordered channels must always write a acknowledgement (even an empty one) to this key so that the absence of such can be used as proof-of-timeout.
 
 ### Subprotocols
 
@@ -510,7 +510,7 @@ function sendPacket(packet: Packet) {
 
 The `recvPacket` function is called by a module in order to receive & process an IBC packet sent on the corresponding channel end on the counterparty chain.
 
-Calling modules MUST execute application logic atomically in conjunction with calling `recvPacket`.
+Calling modules MUST execute application logic atomically in conjunction with calling `recvPacket`, likely beforehand to calculate the acknowledgement value.
 
 The IBC handler performs the following steps in order:
 - Checks that the channel & connection are open to receive packets
@@ -519,10 +519,11 @@ The IBC handler performs the following steps in order:
 - Checks that the packet sequence is the next sequence the channel end expects to receive
 - Checks that the timeout height has not yet passed
 - Checks the inclusion proof of packet data commitment in the outgoing chain's state
-- Increments the packet receive sequence associated with the channel end
+- Sets the opaque acknowledgement value at a store key unique to the packet (if the acknowledgement is non-empty or the channel is unordered)
+- Increments the packet receive sequence associated with the channel end (ordered channels only)
 
 ```typescript
-function recvPacket(packet: Packet, proof: CommitmentProof, proofHeight: uint64) {
+function recvPacket(packet: Packet, proof: CommitmentProof, proofHeight: uint64, acknowledgement: bytes) {
   channel = get(channelKey(packet.destConnection, packet.destChannel))
   assert(channel.state === OPEN)
   assert(authenticate(get(portKey(channel.portIdentifier))))
@@ -538,14 +539,47 @@ function recvPacket(packet: Packet, proof: CommitmentProof, proofHeight: uint64)
     packetCommitmentKey(packet.sourceConnection, packet.sourceChannel, packet.sequence),
     commit(packet.data)
   ))
+  if (acknowledgement.length > 0 || channel.order === UNORDERED) {
+    set(packetAcknowledgementKey(packet.destConnection, packet.destChannel, packet.sequence), commit(acknowledgement))
+  }
   if (channel.order === ORDERED) {
     nextSequenceRecv = get(nextSequenceRecvKey(packet.destConnection, packet.destChannel))
     assert(packet.sequence === nextSequenceRecv)
     nextSequenceRecv = nextSequenceRecv + 1
     set(nextSequenceRecvKey(packet.destConnection, packet.destChannel), nextSequenceRecv)
-  } else {
-    set(packetReceiptKey(packet.destConnection, packet.destChannel, packet.sequence), "1")
   }
+}
+```
+
+#### Acknowledgements
+
+```typescript
+function acknowledgePacket(
+  packet: Packet, proof: CommitmentProof,
+  proofHeight: uint64, acknowledgement: bytes) {
+
+  channel = get(channelKey(packet.destConnection, packet.destChannel))
+  assert(channel.state === OPEN)
+  assert(authenticate(get(portKey(channel.portIdentifier))))
+  assert(packet.sourceChannel === channel.counterpartyChannelIdentifier)
+  connection = get(connectionKey(connectionIdentifier))
+  assert(packet.sourceConnection === connection.counterpartyConnectionIdentifier)
+  assert(connection.state === OPEN)
+  counterpartyStateRoot = get(rootKey(connection.clientIdentifier, proofHeight))
+
+  // verify we sent the packet
+
+  // delete our copy
+
+  assert(verifyMembership(
+    counterpartyStateRoot,
+    proof,
+    packetAcknowledgementKey(packet.destConnection, packet.destChannel, packet.sequence),
+    commit(acknowledgement)
+  ))
+
+  // set key so cannot be acked
+
 }
 ```
 
@@ -608,7 +642,7 @@ function timeoutPacket(packet: Packet, proof: CommitmentProof, proofHeight: uint
 
 ```typescript
 function timeoutPacketUnordered(packet: Packet, proof: CommitmentProof, proofHeight: uint64) {
-  // verify absence of receipt at packet index
+  // verify absence of acknowledgement at packet index
 }
 ```
 
