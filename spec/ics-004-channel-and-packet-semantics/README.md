@@ -665,12 +665,15 @@ function timeoutClose(packet: Packet, proof: CommitmentProof, proofHeight: uint6
 
 ##### Cleaning up state
 
-`cleanupPacket` is called by a module to remove a received packet commitment from storage. The receiving end must have already processed the packet (whether regularly or past timeout).
+`cleanupPacketOrdered` and `cleanupPacketUnordered`, variants for ordered and unordered channels respectively, are called by a module to remove a received packet commitment from storage. The receiving end must have already processed the packet (whether regularly or past timeout).
+
+`cleanupPacketOrdered` cleans-up a packet on an ordered channel by proving that the packet has been received on the other end.
 
 ```typescript
-function cleanupPacket(packet: Packet, proof: CommitmentProof, proofHeight: uint64, nextSequenceRecv: uint64) {
+function cleanupPacketOrdered(packet: Packet, proof: CommitmentProof, proofHeight: uint64, nextSequenceRecv: uint64) {
   channel = get(channelKey(packet.sourceConnection, packet.sourceChannel))
   assert(channel.state === OPEN)
+  assert(channel.order === ORDERED)
   assert(authenticate(get(portKey(channel.portIdentifier))))
   assert(packet.destChannel === channel.counterpartyChannelIdentifier)
 
@@ -683,20 +686,51 @@ function cleanupPacket(packet: Packet, proof: CommitmentProof, proofHeight: uint
 
   counterpartyStateRoot = get(rootKey(connection.clientIdentifier, proofHeight))
 
-  if (channel.order === ORDERED)
-    // check that the recv sequence is as claimed
-    assert(verifyMembership(
-      counterpartyStateRoot,
-      proof,
-      nextSequenceRecvKey(packet.destConnection, packet.destChannel),
-      nextSequenceRecv
-    ))
-  // TODO else check ranges, etc
+  // check that the recv sequence is as claimed
+  assert(verifyMembership(
+    counterpartyStateRoot,
+    proof,
+    nextSequenceRecvKey(packet.destConnection, packet.destChannel),
+    nextSequenceRecv
+  ))
 
   // verify we actually sent the packet, check the store
   assert(get(packetCommitmentKey(packet.sourceConnection, packet.sourceChannel, packet.sequence))
              === commit(packet.data))
-  
+
+  // clear the store
+  delete(packetCommitmentKey(packet.sourceConnection, packet.sourceChannel, packet.sequence))
+}
+```
+
+`cleanupPacketUnordered` cleans-up a packet on an unordered channel by proving that the associated acknowledgement has been written.
+
+```typescript
+function cleanupPacketUnordered(packet: Packet, proof: CommitmentProof, proofHeight: uint64, acknowledgement: bytes) {
+  channel = get(channelKey(packet.sourceConnection, packet.sourceChannel))
+  assert(channel.state === OPEN)
+  assert(channel.order === UNORDERED)
+  assert(authenticate(get(portKey(channel.portIdentifier))))
+  assert(packet.destChannel === channel.counterpartyChannelIdentifier)
+
+  connection = get(connectionKey(packet.sourceConnection))
+  assert(connection.state === OPEN)
+  assert(packet.destConnection === connection.counterpartyConnectionIdentifier)
+
+  counterpartyStateRoot = get(rootKey(connection.clientIdentifier, proofHeight))
+
+  // assert acknowledgement on the other end
+  assert(verifyMembership(
+    counterpartyStateRoot,
+    proof,
+    packetAcknowledgementKey(packet.destConnection, packet.destChannel, packet.sequence),
+    acknowledgement
+  ))
+
+  // verify we actually sent the packet, check the store
+  assert(get(packetCommitmentKey(packet.sourceConnection, packet.sourceChannel, packet.sequence))
+             === commit(packet.data))
+
   // clear the store
   delete(packetCommitmentKey(packet.sourceConnection, packet.sourceChannel, packet.sequence))
 }
