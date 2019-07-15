@@ -31,12 +31,13 @@ The IBC handler interface & IBC relayer module interface are as defined in [ICS 
 
 ### Data Structures
 
-Only one packet data type is required:
+Only one packet data type, `FungibleTokenPacketData`, which specifies the denomination, amount, and receiving account, is required.
 
 ```typescript
 interface FungibleTokenPacketData {
   denomination: string
   amount: uint256
+  receiver: string
 }
 ```
 
@@ -49,11 +50,19 @@ In plain English, between chains `A` and `B`:
 
 ```typescript
 function handleFungibleTokenPacketSend(denomination: string, amount: uint256) {
+  // transfer coins from user
+  // construct receiving denomination
+  // escrow coins in amount (if source) or unescrow (if destination)
+  // send packet
 }
 ```
 
 ```typescript
 function handleFungibleTokenPacketRecv(denomination: string, amount: uint256) {
+  // recv packet
+  // verify receiving denomination
+  // unescrow coins in amount (if source) or escrow (if destination)
+  // transfer coins to user
 }
 ```
 
