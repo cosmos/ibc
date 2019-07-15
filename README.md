@@ -50,6 +50,12 @@ All standards in the "draft" stage are listed here in order of their ICS numbers
 | [25](spec/ics-025-handler-interface)                | Handler Interface                  | Draft |
 | [26](spec/ics-026-relayer-module)                   | Relayer Module                     | Draft |
 
+### IBC (Application)
+
+| Interchain Standard Number                 | Standard Title          | Stage |
+| ------------------------------------------ | ----------------------- | ----- |
+| [20](spec/ics-020-fungible-token-transfer) | Fungible Token Transfer | Draft |
+
 ## Standard Dependency Visualization
 
 Directed arrows indicate a dependency relationship (that origin depends on destination).
