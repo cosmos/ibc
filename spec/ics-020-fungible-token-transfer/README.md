@@ -17,6 +17,8 @@ This standard document specifies packet data structure, state machine handling l
 
 ### Definitions
 
+The IBC handler interface & IBC relayer module interface are as defined in [ICS 25](../ics-025-handler-interface) and [ICS 26](../ics-026-relayer-module), respectively.
+
 ### Desired Properties
 
 - Preservation of fungibility (two-way peg).
@@ -42,8 +44,8 @@ interface FungibleTokenPacketData {
 
 In plain English, between chains `A` and `B`:
 - Chain `A` bank module accepts new connections / channels from any module on another chain.
-- Denominations sent from chain `B` are prefixed with the hash of the root of trust and the name of the counterparty port of `B`, e.g. `0x1234/bank` for the bank module on chain `B` with root-of-trust hash `0x1234`. No supply limits are enforced, but the bank module on chain `A` tracks the amount of each denomination sent by chain `B` and keeps it in a store location which can be queried / proven.
-- Coins sent by chain `A` to chain `B` are prefixed in the same way when sent (`0x4567/bank` if the bank module is running on a hub with root-of-trust hash `0x4567`). Outgoing supply is tracked in a store location which can be queried and proven. Chain `B` is allowed to send back coins prefixed with `0x4567/bank` only up to the amount which has been sent to it.
+- Denominations sent from chain `B` are prefixed with the connection identifier and the name of the counterparty port of `B`, e.g. `0x1234/bank` for the bank module on chain `B` with connection identifier `0x1234`. No supply limits are enforced, but the bank module on chain `A` tracks the amount of each denomination sent by chain `B` and keeps it in a store location which can be queried / proven.
+- Coins sent by chain `A` to chain `B` are prefixed in the same way when sent (`0x4567/bank` if the bank module is running on a hub with connection identifier `0x4567`). Outgoing supply is tracked in a store location which can be queried and proven. Chain `B` is allowed to send back coins prefixed with `0x4567/bank` only up to the amount which has been sent to it.
 
 ```typescript
 function handleFungibleTokenPacketSend(denomination: string, amount: uint256) {
@@ -54,6 +56,8 @@ function handleFungibleTokenPacketSend(denomination: string, amount: uint256) {
 function handleFungibleTokenPacketRecv(denomination: string, amount: uint256) {
 }
 ```
+
+This does not yet handle the "diamond problem", where a user sends a token originating on chain A to chain B, then to chain D, and wants to return it through D -> C -> A - since the supply is tracked as owned by chain B, chain C cannot serve as the intermediary. I don't know whether dealing with that case should be in-protocol or not - it may be fine to just require the original path of redemption (and if there is frequent liquidity on both paths it will work most of the time). Complexities arising from long redemption paths may lead to the emergence of central chains in the network topology (Hubs).
 
 ## Backwards Compatibility
 
