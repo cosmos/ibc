@@ -218,12 +218,13 @@ function chanOpenInit(
   order: ChannelOrder, connectionHops: [Identifier], channelIdentifier: Identifier,
   portIdentifier: Identifier, counterpartyChannelIdentifier: Identifier,
   counterpartyPortIdentifier: Identifier, nextTimeoutHeight: uint64) {
+  assert(connectionHops.length === 2)
   assert(get(channelKey(portIdentifier, channelIdentifier)) === nil)
   connection = get(connectionKey(connectionHops[0]))
   assert(connection.state === OPEN)
   assert(authenticate(get(portKey(portIdentifier))))
   channel = Channel{INIT, order, portIdentifier, counterpartyPortIdentifier,
-                    counterpartyChannelIdentifier, nextTimeoutHeight}
+                    counterpartyChannelIdentifier, connectionHops, nextTimeoutHeight}
   set(channelKey(portIdentifier, channelIdentifier), channel)
   set(nextSequenceSendKey(portIdentifier, channelIdentifier), 0)
   set(nextSequenceRecvKey(portIdentifier, channelIdentifier), 0)
@@ -239,6 +240,7 @@ function chanOpenTry(
   portIdentifier: Identifier, counterpartyPortIdentifier: Identifier,
   timeoutHeight: uint64, nextTimeoutHeight: uint64,
   proofInit: CommitmentProof, proofHeight: uint64) {
+  assert(connectionHops.length === 2)
   assert(getConsensusState().height < timeoutHeight)
   assert(get(channelKey(portIdentifier, channelIdentifier)) === null)
   assert(authenticate(get(portKey(portIdentifier))))
@@ -249,10 +251,10 @@ function chanOpenTry(
     counterpartyStateRoot,
     proofInit,
     channelKey(counterpartyPortIdentifier, counterpartyChannelIdentifier),
-    Channel{INIT, order, counterpartyPortIdentifier, portIdentifier, channelIdentifier, timeoutHeight}
+    Channel{INIT, order, counterpartyPortIdentifier, portIdentifier, channelIdentifier, connectionHops[::-1], timeoutHeight}
   ))
   channel = Channel{OPENTRY, order, portIdentifier, counterpartyPortIdentifier,
-                    counterpartyChannelIdentifier, nextTimeoutHeight}
+                    counterpartyChannelIdentifier, connectionHops, nextTimeoutHeight}
   set(channelKey(portIdentifier, channelIdentifier), channel)
   set(nextSequenceSendKey(portIdentifier, channelIdentifier), 0)
   set(nextSequenceRecvKey(portIdentifier, channelIdentifier), 0)
@@ -279,7 +281,7 @@ function chanOpenAck(
     proofTry,
     channelKey(channel.counterpartyPortIdentifier, channel.counterpartyChannelIdentifier),
     Channel{OPENTRY, channel.order, channel.counterpartyPortIdentifier, channel.portIdentifier,
-            channelIdentifier, timeoutHeight}
+            channelIdentifier, channel.connectionHops[::-1], timeoutHeight}
   ))
   channel.state = OPEN
   channel.nextTimeoutHeight = nextTimeoutHeight
@@ -306,7 +308,7 @@ function chanOpenConfirm(
     proofAck,
     channelKey(channel.counterpartyPortIdentifier, channel.counterpartyChannelIdentifier),
     Channel{OPEN, channel.order, channel.counterpartyPortIdentifier, channel.portIdentifier,
-            channelIdentifier, timeoutHeight}
+            channelIdentifier, channel.connectionHops[::-1], timeoutHeight}
   ))
   channel.state = OPEN
   channel.nextTimeoutHeight = 0
@@ -343,7 +345,7 @@ function chanOpenTimeout(
           counterpartyStateRoot, proofTimeout,
           channelKey(channel.counterpartyPortIdentifier, channel.counterpartyChannelIdentifier),
           Channel{INIT, channel.order, channel.counterpartyPortIdentifier, channel.portIdentifier,
-                  channelIdentifier, timeoutHeight}
+                  channelIdentifier, channel.connectionHops[::-1], timeoutHeight}
         )
       )
     case OPEN:
@@ -392,7 +394,7 @@ function chanCloseConfirm(
   assert(connection.state === OPEN)
   counterpartyStateRoot = get(rootKey(connection.clientIdentifier, proofHeight))
   expected = Channel{CLOSED, channel.order, channel.counterpartyPortIdentifier, channel.portIdentifier,
-                     channel.channelIdentifier, 0}
+                     channel.channelIdentifier, channel.connectionHops[::-1], 0}
   assert(verifyMembership(
     counterpartyStateRoot,
     proof,
@@ -429,10 +431,10 @@ function sendPacket(packet: Packet) {
   channel = get(channelKey(packet.sourcePort, packet.sourceChannel))
   assert(channel.state === OPEN)
   assert(authenticate(get(portKey(channel.portIdentifier))))
+  assert(packet.destPort === channel.counterpartyPortIdentifier)
   assert(packet.destChannel === channel.counterpartyChannelIdentifier)
   connection = get(connectionKey(packet.connectionHops[0]))
   assert(connection.state === OPEN)
-  assert(packet.destPort === channel.counterpartyPortIdentifier)
   assert(packet.connectionHops === channel.connectionHops)
   consensusState = get(consensusStateKey(connection.clientIdentifier))
   assert(consensusState.getHeight() < packet.timeoutHeight)
@@ -468,11 +470,11 @@ function recvPacket(
   channel = get(channelKey(packet.destPort, packet.destChannel))
   assert(channel.state === OPEN)
   assert(authenticate(get(portKey(channel.portIdentifier))))
+  assert(packet.sourcePort === channel.counterpartyPortIdentifier)
   assert(packet.sourceChannel === channel.counterpartyChannelIdentifier)
   connection = get(connectionKey(channel.connectionHops[0]))
-  assert(packet.sourcePort === channel.counterpartyPortIdentifier)
-  assert(packet.connectionHops === channel.connectionHops)
   assert(connection.state === OPEN)
+  assert(packet.connectionHops === channel.connectionHops)
   counterpartyStateRoot = get(rootKey(connection.clientIdentifier, proofHeight))
   assert(proofHeight < packet.timeoutHeight)
   assert(verifyMembership(
