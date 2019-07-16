@@ -221,6 +221,7 @@ function chanOpenInit(
   assert(get(channelKey(portIdentifier, channelIdentifier)) === nil)
   connection = get(connectionKey(connectionHops[0]))
   assert(connection.state === OPEN)
+  assert(connection.counterpartyConnectionIdentifier === connectionHops[1])
   assert(authenticate(get(portKey(portIdentifier))))
   channel = Channel{INIT, order, portIdentifier, counterpartyPortIdentifier,
                     counterpartyChannelIdentifier, connectionHops, nextTimeoutHeight}
@@ -245,6 +246,7 @@ function chanOpenTry(
   assert(authenticate(get(portKey(portIdentifier))))
   connection = get(connectionKey(connectionHops[0]))
   assert(connection.state === OPEN)
+  assert(connection.counterpartyConnectionIdentifier === connectionHops[1])
   counterpartyStateRoot = get(rootKey(connection.clientIdentifier, proofHeight))
   assert(verifyMembership(
     counterpartyStateRoot,
