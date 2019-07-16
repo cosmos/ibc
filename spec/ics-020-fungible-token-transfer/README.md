@@ -45,6 +45,8 @@ interface FungibleTokenPacketData {
 
 ### Subprotocols
 
+The subprotocols described herein should be implemented in a "bank-bridge" module with access to a bank module and to the IBC relayer module.
+
 In plain English, between chains `A` and `B`:
 - Chain `A` bank module accepts new connections / channels from any module on another chain.
 - Denominations sent from chain `B` are prefixed with the connection identifier and the name of the counterparty port of `B`, e.g. `0x1234/bank` for the bank module on chain `B` with connection identifier `0x1234`. No supply limits are enforced, but the bank module on chain `A` tracks the amount of each denomination sent by chain `B` and keeps it in a store location which can be queried / proven.
