@@ -212,7 +212,7 @@ could be implemented to provide this).
 
 ```typescript
 function chanOpenInit(
-  order: ChannelOrder, connectionIdentifier: Identifier, channelIdentifier: Identifier,
+  order: ChannelOrder, connectionHops: [Identifier], channelIdentifier: Identifier,
   portIdentifier: Identifier, counterpartyChannelIdentifier: Identifier,
   counterpartyPortIdentifier: Identifier, nextTimeoutHeight: uint64) {
   assert(get(channelKey(connectionIdentifier, channelIdentifier)) === nil)
@@ -231,7 +231,7 @@ The `chanOpenTry` function is called by a module to accept the first step of a c
 
 ```typescript
 function chanOpenTry(
-  order: ChannelOrder, connectionIdentifier: Identifier,
+  order: ChannelOrder, connectionHops: [Identifier],
   channelIdentifier: Identifier, counterpartyChannelIdentifier: Identifier,
   portIdentifier: Identifier, counterpartyPortIdentifier: Identifier,
   timeoutHeight: uint64, nextTimeoutHeight: uint64,
@@ -261,7 +261,7 @@ counterparty module on the other chain.
 
 ```typescript
 function chanOpenAck(
-  connectionIdentifier: Identifier, channelIdentifier: Identifier,
+  connectionHops: [Identifier], channelIdentifier: Identifier,
   timeoutHeight: uint64, nextTimeoutHeight: uint64,
   proofTry: CommitmentProof, proofHeight: uint64) {
   assert(getConsensusState().height < timeoutHeight)
@@ -289,7 +289,7 @@ of the handshake-originating module on the other chain and finish the channel op
 
 ```typescript
 function chanOpenConfirm(
-  connectionIdentifier: Identifier, channelIdentifier: Identifier,
+  connectionHops: [Identifier], channelIdentifier: Identifier,
   timeoutHeight: uint64, proofAck: CommitmentProof, proofHeight: uint64) {
   assert(getConsensusState().height < timeoutHeight)
   channel = get(channelKey(connectionIdentifier, channelIdentifier))
@@ -316,7 +316,7 @@ module or the handshake-confirming module to prove that a timeout has occurred a
 
 ```typescript
 function chanOpenTimeout(
-  connectionIdentifier: Identifier, channelIdentifier: Identifier,
+  connectionHops: [Identifier], channelIdentifier: Identifier,
   timeoutHeight: uint64, proofTimeout: CommitmentProof, proofHeight: uint64) {
   channel = get(channelKey(connectionIdentifier, channelIdentifier))
   connection = get(connectionKey(connectionIdentifier))
@@ -364,7 +364,7 @@ Calling modules MAY atomically execute appropriate application logic in conjunct
 
 ```typescript
 function chanClose(
-  connectionIdentifier: Identifier, channelIdentifier: Identifier) {
+  connectionHops: [Identifier], channelIdentifier: Identifier) {
   channel = get(channelKey(connectionIdentifier, channelIdentifier))
   assert(channel.state === OPEN)
   connection = get(connectionKey(connectionIdentifier))
@@ -381,7 +381,7 @@ Calling modules MAY atomically execute appropriate application logic in conjunct
 
 ```typescript
 function chanCloseConfirm(
-  connectionIdentifier: Identifier, channelIdentifier: Identifier,
+  connectionHops: [Identifier], channelIdentifier: Identifier,
   proof: CommitmentProof, proofHeight: uint64) {
   channel = get(channelKey(connectionIdentifier, channelIdentifier))
   assert(channel.state === OPEN)
