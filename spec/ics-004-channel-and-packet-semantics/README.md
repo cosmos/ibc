@@ -251,7 +251,8 @@ function chanOpenTry(
     counterpartyStateRoot,
     proofInit,
     channelKey(counterpartyPortIdentifier, counterpartyChannelIdentifier),
-    Channel{INIT, order, counterpartyPortIdentifier, portIdentifier, channelIdentifier, connectionHops[::-1], timeoutHeight}
+    Channel{INIT, order, counterpartyPortIdentifier, portIdentifier,
+            channelIdentifier, connectionHops.reverse(), timeoutHeight}
   ))
   channel = Channel{OPENTRY, order, portIdentifier, counterpartyPortIdentifier,
                     counterpartyChannelIdentifier, connectionHops, nextTimeoutHeight}
@@ -281,7 +282,7 @@ function chanOpenAck(
     proofTry,
     channelKey(channel.counterpartyPortIdentifier, channel.counterpartyChannelIdentifier),
     Channel{OPENTRY, channel.order, channel.counterpartyPortIdentifier, channel.portIdentifier,
-            channelIdentifier, channel.connectionHops[::-1], timeoutHeight}
+            channelIdentifier, channel.connectionHops.reverse(), timeoutHeight}
   ))
   channel.state = OPEN
   channel.nextTimeoutHeight = nextTimeoutHeight
@@ -308,7 +309,7 @@ function chanOpenConfirm(
     proofAck,
     channelKey(channel.counterpartyPortIdentifier, channel.counterpartyChannelIdentifier),
     Channel{OPEN, channel.order, channel.counterpartyPortIdentifier, channel.portIdentifier,
-            channelIdentifier, channel.connectionHops[::-1], timeoutHeight}
+            channelIdentifier, channel.connectionHops.reverse(), timeoutHeight}
   ))
   channel.state = OPEN
   channel.nextTimeoutHeight = 0
@@ -345,7 +346,7 @@ function chanOpenTimeout(
           counterpartyStateRoot, proofTimeout,
           channelKey(channel.counterpartyPortIdentifier, channel.counterpartyChannelIdentifier),
           Channel{INIT, channel.order, channel.counterpartyPortIdentifier, channel.portIdentifier,
-                  channelIdentifier, channel.connectionHops[::-1], timeoutHeight}
+                  channelIdentifier, channel.connectionHops.reverse(), timeoutHeight}
         )
       )
     case OPEN:
@@ -394,7 +395,7 @@ function chanCloseConfirm(
   assert(connection.state === OPEN)
   counterpartyStateRoot = get(rootKey(connection.clientIdentifier, proofHeight))
   expected = Channel{CLOSED, channel.order, channel.counterpartyPortIdentifier, channel.portIdentifier,
-                     channel.channelIdentifier, channel.connectionHops[::-1], 0}
+                     channel.channelIdentifier, channel.connectionHops.reverse(), 0}
   assert(verifyMembership(
     counterpartyStateRoot,
     proof,
