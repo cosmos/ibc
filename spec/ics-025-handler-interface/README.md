@@ -226,8 +226,8 @@ The default IBC relayer module will allow external calls to `chanOpenTry`.
 
 ```typescript
 function chanOpenTry(
-  connectionHops: [Identifier], portIdentifier: Identifier, channelIdentifier: Identifier, counterpartyChannelIdentifier: Identifier,
-  portIdentifier: Identifier, counterpartyPortIdentifier: Identifier,
+  connectionHops: [Identifier], portIdentifier: Identifier, channelIdentifier: Identifier,
+  counterpartyPortIdentifier: Identifier, counterpartyChannelIdentifier: Identifier,
   timeoutHeight: uint64, nextTimeoutHeight: uint64, proofInit: CommitmentProof) {
   // defined in ICS 4
 }
