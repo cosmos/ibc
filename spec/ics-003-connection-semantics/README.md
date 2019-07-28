@@ -268,84 +268,28 @@ A correct protocol execution flows as follows (note that all calls are made thro
 *ConnCloseInit* initializes a close attempt on chain A.
 
 ```typescript
-function connCloseInit(identifier: Identifier, nextTimeoutHeight: uint64) {
+function connCloseInit(identifier: Identifier) {
   connection = get(connectionKey(identifier))
   assert(connection.state === OPEN)
-  connection.state = CLOSETRY
-  connection.nextTimeoutHeight = nextTimeoutHeight
-  set(connectionKey(identifier), connection)
-}
-```
-
-*ConnCloseTry* relays the intent to close a connection from chain A to chain B.
-
-```typescript
-function connCloseTry(
-  identifier: Identifier, proofInit: CommitmentProof, proofHeight: uint64,
-  timeoutHeight: uint64, nextTimeoutHeight: uint64) {
-  assert(getConsensusState().getHeight() <= timeoutHeight)
-  connection = get(connectionKey(identifier))
-  assert(connection.state === OPEN)
-  counterpartyStateRoot = get(rootKey(connection.clientIdentifier, proofHeight))
-  expected = ConnectionEnd{CLOSETRY, identifier, connection.counterpartyClientIdentifier,
-                           connection.clientIdentifier, timeoutHeight}
-  assert(verifyMembership(counterpartyStateRoot, proofInit, connectionKey(counterpartyConnectionIdentifier), expected))
   connection.state = CLOSED
-  connection.nextTimeoutHeight = nextTimeoutHeight
   set(connectionKey(identifier), connection)
 }
 ```
 
-*ConnCloseAck* acknowledges a connection closure on chain B.
+*ConnCloseConfirm* relays the intent to close a connection from chain A to chain B.
 
 ```typescript
-function connCloseAck(
-  identifier: Identifier, proofTry: CommitmentProof,
-  proofHeight: uint64, timeoutHeight: uint64) {
+function connCloseConfirm(
+  identifier: Identifier, proofInit: CommitmentProof, proofHeight: uint64) {
   assert(getConsensusState().getHeight() <= timeoutHeight)
   connection = get(connectionKey(identifier))
-  assert(connection.state === CLOSETRY)
+  assert(connection.state === OPEN)
   counterpartyStateRoot = get(rootKey(connection.clientIdentifier, proofHeight))
   expected = ConnectionEnd{CLOSED, identifier, connection.counterpartyClientIdentifier,
-                           connection.clientIdentifier, timeoutHeight}
-  assert(verifyMembership(counterpartyStateRoot, proofTry, connectionKey(counterpartyConnectionIdentifier), expected))
+                           connection.clientIdentifier, 0}
+  assert(verifyMembership(counterpartyStateRoot, proofInit, connectionKey(counterpartyConnectionIdentifier), expected))
   connection.state = CLOSED
-  connection.nextTimeoutHeight = 0
   set(connectionKey(identifier), connection)
-}
-```
-
-*ConnCloseTimeout* aborts a connection closing attempt due to a timeout on the other side and reopens the connection.
-
-```typescript
-function connCloseTimeout(
-  identifier: Identifier, proofTimeout: CommitmentProof,
-  proofHeight: uint64, timeoutHeight: uint64) {
-  connection = get(connectionKey(identifier))
-  counterpartyStateRoot = get(rootKey(connection.clientIdentifier, proofHeight))
-  assert(proofHeight > connection.nextTimeoutHeight)
-  switch state {
-    case CLOSETRY:
-      expected = ConnectionEnd{OPEN, identifier, connection.counterpartyClientIdentifier,
-                               connection.clientIdentifier, timeoutHeight}
-      assert(verifyMembership(
-        counterpartyStateRoot, proofTimeout,
-        connectionKey(counterpartyConnectionIdentifier), expected
-      ))
-      connection.state = OPEN
-      connection.nextTimeoutHeight = 0
-      set(connectionKey(identifier), connection)
-    case CLOSED:
-      expected = ConnectionEnd{CLOSETRY, identifier, connection.counterpartyClientIdentifier,
-                               connection.clientIdentifier, timeoutHeight}
-      assert(verifyMembership(
-        counterpartyStateRoot, proofTimeout,
-        connectionKey(counterpartyConnectionIdentifier), expected
-      ))
-      connection.state = OPEN
-      connection.nextTimeoutHeight = 0
-      set(connectionKey(identifier), connection)
-  }
 }
 ```
 

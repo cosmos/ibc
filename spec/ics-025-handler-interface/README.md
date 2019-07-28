@@ -166,34 +166,12 @@ function connCloseInit(identifier: Identifier, nextTimeoutHeight: uint64) {
 }
 ```
 
-`connCloseTry` continues the graceful connection closing process. It will fail if there are any open channels using the connection, if the proof is invalid, or if the identifier is invalid.
+`connCloseConfirm` finalizes the graceful connection closing process. It will fail if the proof is invalid or if the identifier is invalid.
 
-The default IBC relayer module will allow external calls to `connCloseTry`.
-
-```typescript
-function connCloseTry(
-  identifier: Identifier, proofInit: CommitmentProof,
-  timeoutHeight: uint64, nextTimeoutHeight: uint64) {
-  // defined in ICS 3
-}
-```
-
-`connCloseAck` finalizes the graceful connection closing process. It will fail if the proof is invalid or if the identifier is invalid.
-
-The default IBC relayer module will allow external calls to `connCloseAck`.
+The default IBC relayer module will allow external calls to `connCloseConfirm`.
 
 ```typescript
-function connCloseAck(identifier: Identifier, proofTry: CommitmentProof, timeoutHeight: uint64) {
-  // defined in ICS 3
-}
-```
-
-`connCloseTimeout` proves that a connection closing handshake has timed-out and resets the process.
-
-The default IBC relayer module will allow external calls to `connCloseTimeout`.
-
-```typescript
-function connCloseTimeout(identifier: Identifier, proofTimeout: CommitmentProof, timeoutHeight: uint64) {
+function connCloseConfirm(identifier: Identifier, proofInit: CommitmentProof, proofHeight: uint64) {
   // defined in ICS 3
 }
 ```
