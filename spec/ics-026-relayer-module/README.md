@@ -89,6 +89,15 @@ interface ConnOpenInit {
 ```
 
 ```typescript
+function handleConnOpenInit(datagram: ConnOpenInit) {
+  handler.connOpenInit(
+    datagram.identifier, datagram.desiredCounterpartyIdentifier, datagram.clientIdentifier,
+    datagram.counterpartyClientIdentifier, datagram.nextTimeoutHeight
+  )
+}
+```
+
+```typescript
 interface ConnOpenTry {
   desiredIdentifier: Identifier
   counterpartyConnectionIdentifier: Identifier
@@ -97,6 +106,15 @@ interface ConnOpenTry {
   proofInit: CommitmentProof
   timeoutHeight: uint64
   nextTimeoutHeight: uint64
+}
+```
+
+```typescript
+function handleConnOpenTry(datagram: ConnOpenTry) {
+  handler.connOpenTry(
+    datagram.desiredIdentifier, datagram.counterpartyConnectionIdentifier, datagram.counterpartyClientIdentifier,
+    datagram.clientIdentifier, datagram.proofInit, datagram.timeoutHeight, datagram.nextTimeoutHeight
+  )
 }
 ```
 
@@ -110,10 +128,27 @@ interface ConnOpenAck {
 ```
 
 ```typescript
+function handleConnOpenAck(datagram: ConnOpenAck) {
+  handler.connOpenAck(
+    datagram.identifier, datagram.proofTry,
+    datagram.timeoutHeight, datagram.nextTimeoutHeight
+  )
+}
+```
+
+```typescript
 interface ConnOpenConfirm {
   identifier: Identifier
   proofAck: CommitmentProof
   timeoutHeight: uint64
+}
+```
+
+```typescript
+function handleConnOpenConfirm(datagram: ConnOpenConfirm) {
+  handler.connOpenConfirm(
+    datagram.identifier, datagram.proofAck, datagram.timeoutHeight
+  )
 }
 ```
 
@@ -126,8 +161,22 @@ interface ConnOpenTimeout {
 ```
 
 ```typescript
+function handleConnOpenTimeout(datagram: ConnOpenTimeout) {
+  handler.handleConnOpenTimeout(
+    datagram.identifier, datagram.proofTimeout, datagram.timeoutHeight
+  )
+}
+```
+
+```typescript
 interface ConnCloseInit {
   identifier: Identifier
+}
+```
+
+```typescript
+function handleConnCloseInit(datagram: ConnCloseInit) {
+  handler.handleConnCloseInit(identifier)
 }
 ```
 
@@ -136,6 +185,14 @@ interface ConnCloseConfirm {
   identifier: Identifier
   proofInit: CommitmentProof
   proofHeight: uint64
+}
+```
+
+```typescript
+function handleConnCloseConfirm(datagram: ConnCloseConfirm) {
+  handler.handleConnCloseConfirm(
+    datagram.identifier, datagram.proofInit, datagram.timeoutHeight
+  )
 }
 ```
 
