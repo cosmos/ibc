@@ -35,7 +35,27 @@ All functions provided by the IBC handler interface are defined as in [ICS 25](.
 
 #### Client lifecycle management
 
-(todo)
+```typescript
+interface ClientCreate {
+  identifier: Identifier
+  consensusState: ConsensusState
+}
+```
+
+```typescript
+interface ClientUpdate {
+  identifier: Identifier
+  header: Header
+}
+```
+
+```typescript
+interface ClientFreeze {
+  identifier: Identifier
+  firstHeader: Header
+  secondHeader: Header
+}
+```
 
 #### Connection lifecycle management
 
@@ -104,21 +124,22 @@ interface ConnCloseConfirm {
 
 ```typescript
 interface ChanOpenInit {
-  connectionIdentifier: Identifier
+  portIdentifier: Identifier
   channelIdentifier: Identifier
-  counterpartyChannelIdentifier: Identifier
   counterpartyPortIdentifier: Identifier
+  counterpartyChannelIdentifier: Identifier
+  connectionHops: [Identifier]
   nextTimeoutHeight: uint64
 }
 ```
 
 ```typescript
 interface ChanOpenTry {
-  connectionIdentifier: Identifier
-  channelIdentifier: Identifier
-  counterpartyChannelIdentifier: Identifier
   portIdentifier: Identifier
+  channelIdentifier: Identifier
   counterpartyPortIdentifier: Identifier
+  counterpartyChannelIdentifier: Identifier
+  connectionHops: [Identifier]
   timeoutHeight: uint64
   nextTimeoutHeight: uint64
   proofInit: CommitmentProof
@@ -127,7 +148,7 @@ interface ChanOpenTry {
 
 ```typescript
 interface ChanOpenAck {
-  connectionIdentifier: Identifier
+  portIdentifier: Identifier
   channelIdentifier: Identifier
   timeoutHeight: uint64
   nextTimeoutHeight: uint64
@@ -137,7 +158,7 @@ interface ChanOpenAck {
 
 ```typescript
 interface ChanOpenConfirm {
-  connectionIdentifier: Identifier
+  portIdentifier: Identifier
   channelIdentifier: Identifier
   timeoutHeight: uint64
   proofAck: CommitmentProof
@@ -146,7 +167,7 @@ interface ChanOpenConfirm {
 
 ```typescript
 interface ChanOpenTimeout {
-  connectionIdentifier: Identifier
+  portIdentifier: Identifier
   channelIdentifier: Identifier
   timeoutHeight: uint64
   proofTimeout: CommitmentProof
