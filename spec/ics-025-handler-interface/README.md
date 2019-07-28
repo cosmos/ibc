@@ -280,8 +280,7 @@ function queryChannel(connId: Identifier, chanId: Identifier): void {
 `chanCloseInit` initiates the channel closing handshake.
 
 ```typescript
-function chanCloseInit(
-  portIdentifier: Identifier, channelIdentifier: Identifier, nextTimeoutHeight: uint64) {
+function chanCloseInit(portIdentifier: Identifier, channelIdentifier: Identifier) {
   // defined in ICS 4
 }
 ```
@@ -293,7 +292,7 @@ The default IBC relayer module will allow external calls to `chanCloseConfirm`.
 ```typescript
 function chanCloseConfirm(
   portIdentifier: Identifier, channelIdentifier: Identifier,
-  timeoutHeight: uint64, nextTimeoutHeight: uint64, proofInit: CommitmentProof) {
+  proofInit: CommitmentProof, proofHeight: uint64) {
   // defined in ICS 4
 }
 ```

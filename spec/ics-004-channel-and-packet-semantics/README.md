@@ -367,13 +367,12 @@ function chanOpenTimeout(
 
 ##### Closing handshake
 
-The `chanClose` function is called by either module to close their end of the channel.
+The `chanCloseInit` function is called by either module to close their end of the channel.
 
-Calling modules MAY atomically execute appropriate application logic in conjunction with calling `chanClose`.
+Calling modules MAY atomically execute appropriate application logic in conjunction with calling `chanCloseInit`.
 
 ```typescript
-function chanClose(
-  portIdentifier: Identifier, channelIdentifier: Identifier) {
+function chanCloseInit(portIdentifier: Identifier, channelIdentifier: Identifier) {
   channel = get(channelKey(portIdentifier, channelIdentifier))
   assert(channel.state === OPEN)
   connection = get(connectionKey(channel.connectionHops[0]))
@@ -391,7 +390,7 @@ Calling modules MAY atomically execute appropriate application logic in conjunct
 ```typescript
 function chanCloseConfirm(
   portIdentifier: Identifier, channelIdentifier: Identifier,
-  proof: CommitmentProof, proofHeight: uint64) {
+  proofInit: CommitmentProof, proofHeight: uint64) {
   channel = get(channelKey(portIdentifier, channelIdentifier))
   assert(channel.state === OPEN)
   connection = get(connectionKey(channel.connectionHops[0]))
