@@ -89,32 +89,14 @@ interface ConnOpenTimeout {
 ```typescript
 interface ConnCloseInit {
   identifier: Identifier
-  nextTimeoutHeight: uint64
 }
 ```
 
 ```typescript
-interface ConnCloseTry {
+interface ConnCloseConfirm {
   identifier: Identifier
   proofInit: CommitmentProof
-  timeoutHeight: uint64
-  nextTimeoutHeight: uint64
-}
-```
-
-```typescript
-interface ConnCloseAck {
-  identifier: Identifier
-  proofTry: CommitmentProof
-  timeoutHeight: uint64
-}
-```
-
-```typescript
-interface ConnCloseTimeout {
-  identifier: Identifier
-  proofTimeout: CommitmentProof
-  timeoutHeight: uint64
+  proofHeight: uint64
 }
 ```
 
@@ -173,37 +155,17 @@ interface ChanOpenTimeout {
 
 ```typescript
 interface ChanCloseInit {
-  connectionIdentifier: Identifier
+  portIdentifier: Identifier
   channelIdentifier: Identifier
-  nextTimeoutHeight: uint64
 }
 ```
 
 ```typescript
-interface ChanCloseTry {
-  connectionIdentifier: Identifier
+interface ChanCloseConfirm {
+  portIdentifier: Identifier
   channelIdentifier: Identifier
-  timeoutHeight: uint64
-  nextTimeoutHeight: uint64
   proofInit: CommitmentProof
-}
-```
-
-```typescript
-interface ChanCloseAck {
-  connectionIdentifier: Identifier
-  channelIdentifier: Identifier
-  timeoutHeight: uint64
-  proofTry: CommitmentProof
-}
-```
-
-```typescript
-interface ChanCloseTimeout {
-  connectionIdentifier: Identifier
-  channelIdentifier: Identifier
-  timeoutHeight: uint64
-  proofTimeout: CommitmentProof
+  proofHeight: uint64
 }
 ```
 
@@ -289,6 +251,7 @@ Coming soon.
 ## History
 
 June 9 2019 - Draft submitted
+July 28 2019 - Major revisions
 
 ## Copyright
 
