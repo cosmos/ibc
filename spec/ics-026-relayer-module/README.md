@@ -191,15 +191,12 @@ interface ConnCloseConfirm {
 ```typescript
 function handleConnCloseConfirm(datagram: ConnCloseConfirm) {
   handler.handleConnCloseConfirm(
-    datagram.identifier, datagram.proofInit, datagram.timeoutHeight
+    datagram.identifier, datagram.proofInit, datagram.proofHeight
   )
 }
 ```
 
-- expose publicly (write): connopeninit, connopentry, connopenack, connopenconfirm, connopentimeout, conncloseinit, conncloseconfirm
-- expose publicly (read): query
 - expose to modules (hook): on-close hooks
-- expose to modules (read): query
 
 #### Channel lifecycle management
 
