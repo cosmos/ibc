@@ -1,0 +1,27 @@
+syntax = 'proto3';
+
+message ConnOpenInit {
+  string identifier = 1;
+  string desiredCounterpartyIdentifier = 2;
+  string clientIdentifier = 3;
+  string counterpartyClientIdentifier = 4;
+  int64  nextTimeoutHeight = 5;
+}
+
+message ConnOpenTry {
+}
+
+message ConnOpenAck {
+}
+
+message ConnOpenConfirm {
+}
+
+message ConnOpenTimeout {
+}
+
+message ConnCloseInit {
+}
+
+message ConnCloseConfirm {
+}
