@@ -26,6 +26,7 @@ All functions provided by the IBC handler interface are defined as in [ICS 25](.
 
 - Modules should be able to bind to ports and own channels through the relayer module.
 - No overhead should be added for packet sends and receives other than the layer of call indirection.
+- The relayer module should call specified handler functions on modules when they need to act upon packets.
 
 ## Technical Specification
 
@@ -43,9 +44,21 @@ interface ClientCreate {
 ```
 
 ```typescript
+function handleClientCreate(datagram: ClientCreate) {
+  handler.createClient(datagram.identifier, datagram.consensusState)
+}
+```
+
+```typescript
 interface ClientUpdate {
   identifier: Identifier
   header: Header
+}
+```
+
+```typescript
+function handleClientUpdate(datagram: ClientUpdate) {
+  handler.updateClient(datagram.identifier, datagram.header)
 }
 ```
 
@@ -57,9 +70,11 @@ interface ClientFreeze {
 }
 ```
 
-- expose publicly (write): create, update, freeze
-- expose publicly (read): query
-- expose to modules (read): query
+```typescript
+function handleClientFreeze(datagram: ClientUpdate) {
+  handler.freezeClient(datagram.identifier, datagram.firstHeader, datagram.secondHeader)
+}
+```
 
 #### Connection lifecycle management
 
@@ -222,6 +237,8 @@ interface PacketRecv {
 }
 ```
 
+- call handlePacket on module
+
 ```typescript
 interface PacketTimeoutOrdered {
   packet: Packet
@@ -231,6 +248,8 @@ interface PacketTimeoutOrdered {
 }
 ```
 
+- call handlePacketTimeout on module
+
 ```typescript
 interface PacketTimeoutUnordered {
   packet: Packet
@@ -239,6 +258,8 @@ interface PacketTimeoutUnordered {
 }
 ```
 
+- call handlePacketTimeout on module
+
 ```typescript
 interface PacketTimeoutClose {
   packet: Packet
@@ -246,6 +267,8 @@ interface PacketTimeoutClose {
   proofHeight: uint64
 }
 ```
+
+- on-close hooks
 
 ```typescript
 interface PacketCleanupOrdered {

@@ -88,7 +88,7 @@ function updateClient(id: Identifier, header; Header): error | void {
 The default IBC relayer module will allow external calls to `freezeClient`.
 
 ```typescript
-function freezeClient(id: Identifier, headerOne: Header, headerTwo: Header): error | void {
+function freezeClient(id: Identifier, firstHeader: Header, secondHeader: Header): error | void {
   // defined in ICS 2
 }
 ```
