@@ -57,6 +57,10 @@ interface ClientFreeze {
 }
 ```
 
+- expose publicly (write): create, update, freeze
+- expose publicly (read): query
+- expose to modules (read): query
+
 #### Connection lifecycle management
 
 ```typescript
@@ -119,6 +123,11 @@ interface ConnCloseConfirm {
   proofHeight: uint64
 }
 ```
+
+- expose publicly (write): connopeninit, connopentry, connopenack, connopenconfirm, connopentimeout, conncloseinit, conncloseconfirm
+- expose publicly (read): query
+- expose to modules (hook): on-close hooks
+- expose to modules (read): query
 
 #### Channel lifecycle management
 
@@ -190,7 +199,76 @@ interface ChanCloseConfirm {
 }
 ```
 
+- expose publicly (write): chanopeninit, chanopentry, chanopenack, chanopenconfirm, chanopentimeout, chancloseconfirm
+- expose to modules (hooks): chanopeninit, chanopentry, chanopenack, chanopenconfirm, chanopentimeout, chancloseconfirm
+- expose to modules (write): chancloseinit
+- expose publicly (read): query
+- expose to modules (read): query
+
 #### Packet relay
+
+```typescript
+interface PacketSend {
+  packet: Packet
+}
+```
+
+```typescript
+interface PacketRecv {
+  packet: Packet
+  proof: CommitmentProof
+  proofHeight: uint64
+  acknowledgement: bytes
+}
+```
+
+```typescript
+interface PacketTimeoutOrdered {
+  packet: Packet
+  proof: CommitmentProof
+  proofHeight: uint64
+  nextSequenceRecv: uint64
+}
+```
+
+```typescript
+interface PacketTimeoutUnordered {
+  packet: Packet
+  proof: CommitmentProof
+  proofHeight: uint64
+}
+```
+
+```typescript
+interface PacketTimeoutClose {
+  packet: Packet
+  proof: CommitmentProof
+  proofHeight: uint64
+}
+```
+
+```typescript
+interface PacketCleanupOrdered {
+  packet: Packet
+  proof: CommitmentProof
+  proofHeight: uint64
+  nextSequenceRecv: uint64
+}
+```
+
+```typescript
+interface PacketCleanupUnordered {
+  packet: Packet
+  proof: CommitmentProof
+  proofHeight: uint64
+  acknowledgement: bytes
+}
+```
+
+- expose publicly (write): recvpacket, all timeouts, cleanup
+- expose publicly (read): query
+- expose to modules (write): sendpacket
+- expose to modules (read): query
 
 ### Subprotocols
 
