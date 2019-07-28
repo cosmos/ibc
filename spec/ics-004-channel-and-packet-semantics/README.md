@@ -66,8 +66,8 @@ An *end* of a channel is a data structure on one chain storing channel metadata:
 interface ChannelEnd {
   state: ChannelEndState
   ordering: ChannelOrder
-  counterpartyChannelIdentifier: Identifier
   counterpartyPortIdentifier: Identifier
+  counterpartyChannelIdentifier: Identifier
   connectionHops: [Identifier]
   nextTimeoutHeight: uint64
 }
@@ -75,11 +75,11 @@ interface ChannelEnd {
 
 - The `state` is the current state of the channel end.
 - The `ordering` field indicates whether the channel is ordered or unordered.
-- The `counterpartyChannelIdentifier` identifies the channel end on the counterparty chain.
 - The `counterpartyPortIdentifier` identifies the port on the counterparty chain which owns the other end of the channel.
+- The `counterpartyChannelIdentifier` identifies the channel end on the counterparty chain.
 - The `nextSequenceSend`, stored separately, tracks the sequence number for the next packet to be sent.
 - The `nextSequenceRecv`, stored separately, tracks the sequence number for the next packet to be received.
-- The `connectionHops` stores the list of connection identifiers, in order, along which packets sent on this channel will travel. At the moment this list must be of length 2.
+- The `connectionHops` stores the list of connection identifiers, in order, along which packets sent on this channel will travel. At the moment this list must be of length 2, where the first connection is the source and second connection the destination.
 - The `nextTimeoutHeight` stores the timeout height for the next stage of the handshake, used only in channel opening and closing handshakes.
 
 Channel ends have a *state*:
@@ -138,7 +138,8 @@ interface Packet {
 
 #### Ordering
 
-- Packets should be sent and received in the same order: if packet *x* is sent before packet *y* by a channel end on chain `A`, packet *x* must be received before packet *y* by the corresponding channel end on chain `B`.
+- On ordered channels, packets should be sent and received in the same order: if packet *x* is sent before packet *y* by a channel end on chain `A`, packet *x* must be received before packet *y* by the corresponding channel end on chain `B`.
+- On unordered channels, packets may be sent and received in any order.
 
 #### Permissioning
 
@@ -157,7 +158,7 @@ The architecture of clients, connections, channels and packets:
 
 #### Store keys
 
-Channel structures are stored under a store key prefix unique to a combination of a connection identifier and channel identifier:
+Channel structures are stored under a store key prefix unique to a combination of a port identifier and channel identifier:
 
 ```typescript
 function channelKey(portIdentifier: Identifier, channelIdentifier: Identifier) {
@@ -206,7 +207,8 @@ Unordered channels must always write a acknowledgement (even an empty one) to th
 ##### Opening handshake
 
 The `chanOpenInit` function is called by a module to initiate a channel opening handshake with a module on another chain.
-The opening channel must provide the identifiers of the local channel end, local connection, and desired remote channel end.
+
+The opening channel must provide the identifiers of the local channel identifier, local port, remote port, and remote channel identifier.
 
 When the opening handshake is complete, the module which initiates the handshake will own the end of the created channel on the host ledger, and the counterparty module which
 it specifies will own the other end of the created channel on the counterparty chain. Once a channel is created, ownership cannot be changed (although higher-level abstractions
