@@ -66,19 +66,20 @@ An *end* of a channel is a data structure on one chain storing channel metadata:
 interface ChannelEnd {
   state: ChannelEndState
   ordering: ChannelOrder
-  counterpartyChannelIdentifier: Identifier
-  portIdentifier: Identifier
   counterpartyPortIdentifier: Identifier
+  counterpartyChannelIdentifier: Identifier
+  connectionHops: [Identifier]
   nextTimeoutHeight: uint64
 }
 ```
 
 - The `state` is the current state of the channel end.
+- The `ordering` field indicates whether the channel is ordered or unordered.
+- The `counterpartyPortIdentifier` identifies the port on the counterparty chain which owns the other end of the channel.
 - The `counterpartyChannelIdentifier` identifies the channel end on the counterparty chain.
-- The `portIdentifier` identifies the module which owns this channel end.
-- The `counterpartyPortIdentifier` identifies the module on the counterparty chain which owns the other end of the channel.
 - The `nextSequenceSend`, stored separately, tracks the sequence number for the next packet to be sent.
 - The `nextSequenceRecv`, stored separately, tracks the sequence number for the next packet to be received.
+- The `connectionHops` stores the list of connection identifiers, in order, along which packets sent on this channel will travel. At the moment this list must be of length 2, where the first connection is the source and second connection the destination.
 - The `nextTimeoutHeight` stores the timeout height for the next stage of the handshake, used only in channel opening and closing handshakes.
 
 Channel ends have a *state*:
@@ -105,19 +106,20 @@ A *packet*, in the interblockchain communication protocol, is a particular datag
 interface Packet {
   sequence: uint64
   timeoutHeight: uint64
-  sourceConnection: Identifier
+  sourcePort: Identifier
   sourceChannel: Identifier
-  destConnection: Identifier
+  destPort: Identifier
   destChannel: Identifier
+  connectionHops: [Identifier]
   data: bytes
 }
 ```
 
 - The `sequence` number corresponds to the order of sends and receives, where a packet with an earlier sequence number must be sent and received before a packet with a later sequence number.
 - The `timeoutHeight` indicates a consensus height on the destination chain after which the packet will no longer be processed, and will instead count as having timed-out.
-- The `sourceConnection` identifies the connection end on the sending chain.
+- The `sourcePort` identifies the port on the sending chain.
 - The `sourceChannel` identifies the channel end on the sending chain.
-- The `destConnection` identifies the connection end on the receiving chain.
+- The `destPort` identifies the port on the receiving chain.
 - The `destChannel` identifies the channel end on the receiving chain.
 - The `data` is an opaque value which can be defined by the application logic of the associated modules.
 
@@ -136,7 +138,8 @@ interface Packet {
 
 #### Ordering
 
-- Packets should be sent and received in the same order: if packet *x* is sent before packet *y* by a channel end on chain `A`, packet *x* must be received before packet *y* by the corresponding channel end on chain `B`.
+- On ordered channels, packets should be sent and received in the same order: if packet *x* is sent before packet *y* by a channel end on chain `A`, packet *x* must be received before packet *y* by the corresponding channel end on chain `B`.
+- On unordered channels, packets may be sent and received in any order.
 
 #### Permissioning
 
@@ -155,31 +158,31 @@ The architecture of clients, connections, channels and packets:
 
 #### Store keys
 
-Channel structures are stored under a store key prefix unique to a combination of a connection identifier and channel identifier:
+Channel structures are stored under a store key prefix unique to a combination of a port identifier and channel identifier:
 
 ```typescript
-function channelKey(connectionIdentifier: Identifier, channelIdentifier: Identifier) {
-  return "connections/{connectionIdentifier}/channels/{channelIdentifier}"
+function channelKey(portIdentifier: Identifier, channelIdentifier: Identifier) {
+  return "ports/{portIdentifier}/channels/{channelIdentifier}"
 }
 ```
 
 The `nextSequenceSend` and `nextSequenceRecv` unsigned integer counters are stored separately so they can be proved individually:
 
 ```typescript
-function nextSequenceSendKey(connectionIdentifier: Identifier, channelIdentifier: Identifier) {
-  return channelKey(connectionIdentifier, channelIdentifier) + "/nextSequenceSend"
+function nextSequenceSendKey(portIdentifier: Identifier, channelIdentifier: Identifier) {
+  return channelKey(portIdentifier, channelIdentifier) + "/nextSequenceSend"
 }
 
-function nextSequenceRecvKey(connectionIdentifier: Identifier, channelIdentifier: Identifier) {
-  return channelKey(connectionIdentifier, channelIdentifier) + "/nextSequenceRecv"
+function nextSequenceRecvKey(portIdentifier: Identifier, channelIdentifier: Identifier) {
+  return channelKey(portIdentifier, channelIdentifier) + "/nextSequenceRecv"
 }
 ```
 
 Succint commitments to packet data fields are stored under the packet sequence number:
 
 ```typescript
-function packetCommitmentKey(connectionIdentifier: Identifier, channelIdentifier: Identifier, sequence: uint64) {
-  return channelKey(connectionIdentifier, channelIdentifier) + "/packets/" + sequence
+function packetCommitmentKey(portIdentifier: Identifier, channelIdentifier: Identifier, sequence: uint64) {
+  return channelKey(portIdentifier, channelIdentifier) + "/packets/" + sequence
 }
 ```
 
@@ -188,8 +191,8 @@ Absence of the key in the store is equivalent to a zero-bit.
 Packet acknowledgement data are stored under the `packetAcknowledgementKey`:
 
 ```typescript
-function packetAcknowledgementKey(connectionIdentifier: Identifier, channelIdentifier: Identifier, sequence: uint64) {
-  return channelKey(connectionIdentifier, channelIdentifier) + "/acknowledgements/" + sequence
+function packetAcknowledgementKey(portIdentifier: Identifier, channelIdentifier: Identifier, sequence: uint64) {
+  return channelKey(portIdentifier, channelIdentifier) + "/acknowledgements/" + sequence
 }
 ```
 
@@ -204,7 +207,8 @@ Unordered channels must always write a acknowledgement (even an empty one) to th
 ##### Opening handshake
 
 The `chanOpenInit` function is called by a module to initiate a channel opening handshake with a module on another chain.
-The opening channel must provide the identifiers of the local channel end, local connection, and desired remote channel end.
+
+The opening channel must provide the identifiers of the local channel identifier, local port, remote port, and remote channel identifier.
 
 When the opening handshake is complete, the module which initiates the handshake will own the end of the created channel on the host ledger, and the counterparty module which
 it specifies will own the other end of the created channel on the counterparty chain. Once a channel is created, ownership cannot be changed (although higher-level abstractions
@@ -212,18 +216,20 @@ could be implemented to provide this).
 
 ```typescript
 function chanOpenInit(
-  order: ChannelOrder, connectionIdentifier: Identifier, channelIdentifier: Identifier,
+  order: ChannelOrder, connectionHops: [Identifier], channelIdentifier: Identifier,
   portIdentifier: Identifier, counterpartyChannelIdentifier: Identifier,
   counterpartyPortIdentifier: Identifier, nextTimeoutHeight: uint64) {
-  assert(get(channelKey(connectionIdentifier, channelIdentifier)) === nil)
-  connection = get(connectionKey(connectionIdentifier))
+  assert(connectionHops.length === 2)
+  assert(get(channelKey(portIdentifier, channelIdentifier)) === nil)
+  connection = get(connectionKey(connectionHops[0]))
   assert(connection.state === OPEN)
+  assert(connection.counterpartyConnectionIdentifier === connectionHops[1])
   assert(authenticate(get(portKey(portIdentifier))))
   channel = Channel{INIT, order, portIdentifier, counterpartyPortIdentifier,
-                    counterpartyChannelIdentifier, nextTimeoutHeight}
-  set(channelKey(connectionIdentifier, channelIdentifier), channel)
-  set(nextSequenceSendKey(connectionIdentifier, channelIdentifier), 0)
-  set(nextSequenceRecvKey(connectionIdentifier, channelIdentifier), 0)
+                    counterpartyChannelIdentifier, connectionHops, nextTimeoutHeight}
+  set(channelKey(portIdentifier, channelIdentifier), channel)
+  set(nextSequenceSendKey(portIdentifier, channelIdentifier), 0)
+  set(nextSequenceRecvKey(portIdentifier, channelIdentifier), 0)
 }
 ```
 
@@ -231,28 +237,31 @@ The `chanOpenTry` function is called by a module to accept the first step of a c
 
 ```typescript
 function chanOpenTry(
-  order: ChannelOrder, connectionIdentifier: Identifier,
+  order: ChannelOrder, connectionHops: [Identifier],
   channelIdentifier: Identifier, counterpartyChannelIdentifier: Identifier,
   portIdentifier: Identifier, counterpartyPortIdentifier: Identifier,
   timeoutHeight: uint64, nextTimeoutHeight: uint64,
   proofInit: CommitmentProof, proofHeight: uint64) {
+  assert(connectionHops.length === 2)
   assert(getConsensusState().height < timeoutHeight)
-  assert(get(channelKey(connectionIdentifier, channelIdentifier)) === null)
+  assert(get(channelKey(portIdentifier, channelIdentifier)) === null)
   assert(authenticate(get(portKey(portIdentifier))))
-  connection = get(connectionKey(connectionIdentifier))
+  connection = get(connectionKey(connectionHops[0]))
   assert(connection.state === OPEN)
+  assert(connection.counterpartyConnectionIdentifier === connectionHops[1])
   counterpartyStateRoot = get(rootKey(connection.clientIdentifier, proofHeight))
   assert(verifyMembership(
     counterpartyStateRoot,
     proofInit,
-    channelKey(connection.counterpartyConnectionIdentifier, counterpartyChannelIdentifier),
-    Channel{INIT, order, counterpartyPortIdentifier, portIdentifier, channelIdentifier, timeoutHeight}
+    channelKey(counterpartyPortIdentifier, counterpartyChannelIdentifier),
+    Channel{INIT, order, counterpartyPortIdentifier, portIdentifier,
+            channelIdentifier, connectionHops.reverse(), timeoutHeight}
   ))
   channel = Channel{OPENTRY, order, portIdentifier, counterpartyPortIdentifier,
-                    counterpartyChannelIdentifier, nextTimeoutHeight}
-  set(channelKey(connectionIdentifier, channelIdentifier), channel)
-  set(nextSequenceSendKey(connectionIdentifier, channelIdentifier), 0)
-  set(nextSequenceRecvKey(connectionIdentifier, channelIdentifier), 0)
+                    counterpartyChannelIdentifier, connectionHops, nextTimeoutHeight}
+  set(channelKey(portIdentifier, channelIdentifier), channel)
+  set(nextSequenceSendKey(portIdentifier, channelIdentifier), 0)
+  set(nextSequenceRecvKey(portIdentifier, channelIdentifier), 0)
 }
 ```
 
@@ -261,26 +270,26 @@ counterparty module on the other chain.
 
 ```typescript
 function chanOpenAck(
-  connectionIdentifier: Identifier, channelIdentifier: Identifier,
+  channelIdentifier: Identifier, portIdentifier: Identifier,
   timeoutHeight: uint64, nextTimeoutHeight: uint64,
   proofTry: CommitmentProof, proofHeight: uint64) {
   assert(getConsensusState().height < timeoutHeight)
-  channel = get(channelKey(connectionIdentifier, channelIdentifier))
+  channel = get(channelKey(portIdentifier, channelIdentifier))
   assert(channel.state === INIT)
-  assert(authenticate(get(portKey(channel.portIdentifier))))
-  connection = get(connectionKey(connectionIdentifier))
+  assert(authenticate(get(portKey(portIdentifier))))
+  connection = get(connectionKey(channel.connectionHops[0]))
   assert(connection.state === OPEN)
   counterpartyStateRoot = get(rootKey(connection.clientIdentifier, proofHeight))
   assert(verifyMembership(
     counterpartyStateRoot,
     proofTry,
-    channelKey(connection.counterpartyConnectionIdentifier, channel.counterpartyChannelIdentifier),
-    Channel{OPENTRY, channel.order, channel.counterpartyPortIdentifier, channel.portIdentifier,
-            channelIdentifier, timeoutHeight}
+    channelKey(channel.counterpartyPortIdentifier, channel.counterpartyChannelIdentifier),
+    Channel{OPENTRY, channel.order, channel.counterpartyPortIdentifier, portIdentifier,
+            channelIdentifier, channel.connectionHops.reverse(), timeoutHeight}
   ))
   channel.state = OPEN
   channel.nextTimeoutHeight = nextTimeoutHeight
-  set(channelKey(connectionIdentifier, channelIdentifier), channel)
+  set(channelKey(portIdentifier, channelIdentifier), channel)
 }
 ```
 
@@ -289,25 +298,25 @@ of the handshake-originating module on the other chain and finish the channel op
 
 ```typescript
 function chanOpenConfirm(
-  connectionIdentifier: Identifier, channelIdentifier: Identifier,
+  portIdentifier: Identifier, channelIdentifier: Identifier,
   timeoutHeight: uint64, proofAck: CommitmentProof, proofHeight: uint64) {
   assert(getConsensusState().height < timeoutHeight)
-  channel = get(channelKey(connectionIdentifier, channelIdentifier))
+  channel = get(channelKey(portIdentifier, channelIdentifier))
   assert(channel.state === OPENTRY)
-  assert(authenticate(get(portKey(channel.portIdentifier))))
-  connection = get(connectionKey(connectionIdentifier))
+  assert(authenticate(get(portKey(portIdentifier))))
+  connection = get(connectionKey(channel.connectionHops[0]))
   assert(connection.state === OPEN)
   counterpartyStateRoot = get(rootKey(connection.clientIdentifier, proofHeight))
   assert(verifyMembership(
     counterpartyStateRoot,
     proofAck,
-    channelKey(connection.counterpartyConnectionIdentifier, channel.counterpartyChannelIdentifier),
-    Channel{OPEN, channel.order, channel.counterpartyPortIdentifier, channel.portIdentifier,
-            channelIdentifier, timeoutHeight}
+    channelKey(channel.counterpartyPortIdentifier, channel.counterpartyChannelIdentifier),
+    Channel{OPEN, channel.order, channel.counterpartyPortIdentifier, portIdentifier,
+            channelIdentifier, channel.connectionHops.reverse(), timeoutHeight}
   ))
   channel.state = OPEN
   channel.nextTimeoutHeight = 0
-  set(channelKey(connectionIdentifier, channelIdentifier), channel)
+  set(channelKey(portIdentifier, channelIdentifier), channel)
 }
 ```
 
@@ -316,10 +325,10 @@ module or the handshake-confirming module to prove that a timeout has occurred a
 
 ```typescript
 function chanOpenTimeout(
-  connectionIdentifier: Identifier, channelIdentifier: Identifier,
+  portIdentifier: Identifier, channelIdentifier: Identifier,
   timeoutHeight: uint64, proofTimeout: CommitmentProof, proofHeight: uint64) {
-  channel = get(channelKey(connectionIdentifier, channelIdentifier))
-  connection = get(connectionKey(connectionIdentifier))
+  channel = get(channelKey(portIdentifier, channelIdentifier))
+  connection = get(connectionKey(channel.connectionHops[0]))
   assert(connection.state === OPEN)
   counterpartyStateRoot = get(rootKey(connection.clientIdentifier, proofHeight))
   assert(proofHeight >= connection.nextTimeoutHeight)
@@ -327,32 +336,32 @@ function chanOpenTimeout(
     case INIT:
       assert(verifyNonMembership(
         counterpartyStateRoot, proofTimeout,
-        channelKey(connection.counterpartyConnectionIdentifier, channel.counterpartyChannelIdentifier)
+        channelKey(channel.counterpartyPortIdentifier, channel.counterpartyChannelIdentifier)
       ))
     case OPENTRY:
       assert(
         verifyNonMembership(
           counterpartyStateRoot, proofTimeout,
-          channelKey(connection.counterpartyConnectionIdentifier, channel.counterpartyChannelIdentifier)
+          channelKey(channel.counterpartyPortIdentifier, channel.counterpartyChannelIdentifier)
         )
         ||
         verifyMembership(
           counterpartyStateRoot, proofTimeout,
-          channelKey(connection.counterpartyConnectionIdentifier, channel.counterpartyChannelIdentifier),
-          Channel{INIT, channel.order, channel.counterpartyPortIdentifier, channel.portIdentifier,
-                  channelIdentifier, timeoutHeight}
+          channelKey(channel.counterpartyPortIdentifier, channel.counterpartyChannelIdentifier),
+          Channel{INIT, channel.order, channel.counterpartyPortIdentifier, portIdentifier,
+                  channelIdentifier, channel.connectionHops.reverse(), timeoutHeight}
         )
       )
     case OPEN:
-      expected = Channel{OPENTRY, channel.order, channel.counterpartyPortIdentifier, channel.portIdentifier,
+      expected = Channel{OPENTRY, channel.order, channel.counterpartyPortIdentifier, portIdentifier,
                          channelIdentifier, timeoutHeight}
       assert(verifyMembership(
         counterpartyStateRoot, proofTimeout,
-        channelKey(connection.counterpartyConnectionIdentifier, channel.counterpartyChannelIdentifier),
+        channelKey(channel.counterpartyPortIdentifier, channel.counterpartyChannelIdentifier),
         expected
       ))
   }
-  delete(channelKey(connectionIdentifier, channelIdentifier))
+  delete(channelKey(portIdentifier, channelIdentifier))
 }
 ```
 
@@ -364,13 +373,13 @@ Calling modules MAY atomically execute appropriate application logic in conjunct
 
 ```typescript
 function chanClose(
-  connectionIdentifier: Identifier, channelIdentifier: Identifier) {
-  channel = get(channelKey(connectionIdentifier, channelIdentifier))
+  portIdentifier: Identifier, channelIdentifier: Identifier) {
+  channel = get(channelKey(portIdentifier, channelIdentifier))
   assert(channel.state === OPEN)
-  connection = get(connectionKey(connectionIdentifier))
+  connection = get(connectionKey(channel.connectionHops[0]))
   assert(connection.state === OPEN)
   channel.state = CLOSED
-  set(channelKey(connectionIdentifier, channelIdentifier), channel)
+  set(channelKey(portIdentifier, channelIdentifier), channel)
 }
 ```
 
@@ -381,23 +390,23 @@ Calling modules MAY atomically execute appropriate application logic in conjunct
 
 ```typescript
 function chanCloseConfirm(
-  connectionIdentifier: Identifier, channelIdentifier: Identifier,
+  portIdentifier: Identifier, channelIdentifier: Identifier,
   proof: CommitmentProof, proofHeight: uint64) {
-  channel = get(channelKey(connectionIdentifier, channelIdentifier))
+  channel = get(channelKey(portIdentifier, channelIdentifier))
   assert(channel.state === OPEN)
-  connection = get(connectionKey(connectionIdentifier))
+  connection = get(connectionKey(channel.connectionHops[0]))
   assert(connection.state === OPEN)
   counterpartyStateRoot = get(rootKey(connection.clientIdentifier, proofHeight))
-  expected = Channel{CLOSED, channel.order, channel.counterpartyPortIdentifier, channel.portIdentifier,
-                     channel.channelIdentifier, 0}
+  expected = Channel{CLOSED, channel.order, channel.counterpartyPortIdentifier, portIdentifier,
+                     channel.channelIdentifier, channel.connectionHops.reverse(), 0}
   assert(verifyMembership(
     counterpartyStateRoot,
     proof,
-    channelKey(connection.counterpartyConnectionIdentifier, channel.counterpartyChannelIdentifier),
+    channelKey(channel.counterpartyPortIdentifier, channel.counterpartyChannelIdentifier),
     expected
   ))
   channel.state = CLOSED
-  set(channelKey(connectionIdentifier, channelIdentifier), channel)
+  set(channelKey(portIdentifier, channelIdentifier), channel)
 }
 ```
 
@@ -423,20 +432,21 @@ Note that the full packet is not stored in the state of the chain - merely a sho
 
 ```typescript
 function sendPacket(packet: Packet) {
-  channel = get(channelKey(packet.sourceConnection, packet.sourceChannel))
+  channel = get(channelKey(packet.sourcePort, packet.sourceChannel))
   assert(channel.state === OPEN)
-  assert(authenticate(get(portKey(channel.portIdentifier))))
+  assert(authenticate(get(portKey(packet.sourcePort))))
+  assert(packet.destPort === channel.counterpartyPortIdentifier)
   assert(packet.destChannel === channel.counterpartyChannelIdentifier)
-  connection = get(connectionKey(packet.sourceConnection))
+  connection = get(connectionKey(packet.connectionHops[0]))
   assert(connection.state === OPEN)
-  assert(packet.destConnection === connection.counterpartyConnectionIdentifier)
+  assert(packet.connectionHops === channel.connectionHops)
   consensusState = get(consensusStateKey(connection.clientIdentifier))
   assert(consensusState.getHeight() < packet.timeoutHeight)
-  nextSequenceSend = get(nextSequenceSendKey(packet.sourceConnection, packet.sourceChannel))
+  nextSequenceSend = get(nextSequenceSendKey(packet.sourcePort, packet.sourceChannel))
   assert(packet.sequence === nextSequenceSend)
   nextSequenceSend = nextSequenceSend + 1
-  set(nextSequenceSendKey(packet.sourceConnection, packet.sourceChannel), nextSequenceSend)
-  set(packetCommitmentKey(packet.sourceConnection, packet.sourceChannel, sequence), commit(packet.data))
+  set(nextSequenceSendKey(packet.sourcePort, packet.sourceChannel), nextSequenceSend)
+  set(packetCommitmentKey(packet.sourcePort, packet.sourceChannel, sequence), commit(packet.data))
 }
 ```
 
@@ -461,30 +471,31 @@ function recvPacket(
   packet: Packet, proof: CommitmentProof,
   proofHeight: uint64, acknowledgement: bytes) {
 
-  channel = get(channelKey(packet.destConnection, packet.destChannel))
+  channel = get(channelKey(packet.destPort, packet.destChannel))
   assert(channel.state === OPEN)
-  assert(authenticate(get(portKey(channel.portIdentifier))))
+  assert(authenticate(get(portKey(packet.destPort))))
+  assert(packet.sourcePort === channel.counterpartyPortIdentifier)
   assert(packet.sourceChannel === channel.counterpartyChannelIdentifier)
-  connection = get(connectionKey(connectionIdentifier))
-  assert(packet.sourceConnection === connection.counterpartyConnectionIdentifier)
+  connection = get(connectionKey(channel.connectionHops[0]))
   assert(connection.state === OPEN)
+  assert(packet.connectionHops === channel.connectionHops)
   counterpartyStateRoot = get(rootKey(connection.clientIdentifier, proofHeight))
   assert(proofHeight < packet.timeoutHeight)
   assert(verifyMembership(
     counterpartyStateRoot,
     proof,
-    packetCommitmentKey(packet.sourceConnection, packet.sourceChannel, packet.sequence),
+    packetCommitmentKey(packet.sourcePort, packet.sourceChannel, packet.sequence),
     commit(packet.data)
   ))
 
   if (acknowledgement.length > 0 || channel.order === UNORDERED)
-    set(packetAcknowledgementKey(packet.destConnection, packet.destChannel, packet.sequence), commit(acknowledgement))
+    set(packetAcknowledgementKey(packet.destPort, packet.destChannel, packet.sequence), commit(acknowledgement))
 
   if (channel.order === ORDERED) {
-    nextSequenceRecv = get(nextSequenceRecvKey(packet.destConnection, packet.destChannel))
+    nextSequenceRecv = get(nextSequenceRecvKey(packet.destPort, packet.destChannel))
     assert(packet.sequence === nextSequenceRecv)
     nextSequenceRecv = nextSequenceRecv + 1
-    set(nextSequenceRecvKey(packet.destConnection, packet.destChannel), nextSequenceRecv)
+    set(nextSequenceRecvKey(packet.destPort, packet.destChannel), nextSequenceRecv)
   }
 }
 ```
@@ -502,28 +513,29 @@ function acknowledgePacket(
   packet: Packet, proof: CommitmentProof,
   proofHeight: uint64, acknowledgement: bytes) {
 
-  channel = get(channelKey(packet.destConnection, packet.destChannel))
+  channel = get(channelKey(packet.sourcePort, packet.sourceChannel))
   assert(channel.state === OPEN)
-  assert(authenticate(get(portKey(channel.portIdentifier))))
+  assert(authenticate(get(portKey(packet.sourcePort))))
   assert(packet.sourceChannel === channel.counterpartyChannelIdentifier)
-  connection = get(connectionKey(connectionIdentifier))
-  assert(packet.sourceConnection === connection.counterpartyConnectionIdentifier)
+  connection = get(connectionKey(channel.connectionHops[0]))
+  assert(packet.sourcePort === channel.counterpartyPortIdentifier)
+  assert(packet.connectionHops === channel.connectionHops)
   assert(connection.state === OPEN)
   counterpartyStateRoot = get(rootKey(connection.clientIdentifier, proofHeight))
 
   // verify we sent the packet and haven't cleared it out yet
-  assert(get(packetCommitmentKey(packet.sourceConnection, packet.sourceChannel, sequence)) === commit(packet.data))
+  assert(get(packetCommitmentKey(packet.sourcePort, packet.sourceChannel, sequence)) === commit(packet.data))
 
   // assert correct acknowledgement on counterparty chain
   assert(verifyMembership(
     counterpartyStateRoot,
     proof,
-    packetAcknowledgementKey(packet.destConnection, packet.destChannel, packet.sequence),
+    packetAcknowledgementKey(packet.destPort, packet.destChannel, packet.sequence),
     commit(acknowledgement)
   ))
 
   // delete our commitment so we can't "acknowledge" again
-  delete(packetCommitmentKey(packet.sourceConnection, packet.sourceChannel, packet.sequence))
+  delete(packetCommitmentKey(packet.sourcePort, packet.sourceChannel, packet.sequence))
 }
 ```
 
@@ -547,15 +559,16 @@ Calling modules MAY atomically execute appropriate application timeout-handling 
 
 ```typescript
 function timeoutPacketOrdered(packet: Packet, proof: CommitmentProof, proofHeight: uint64, nextSequenceRecv: uint64) {
-  channel = get(channelKey(packet.sourceConnection, packet.sourceChannel))
+  channel = get(channelKey(packet.sourcePort, packet.sourceChannel))
   assert(channel.state === OPEN)
   assert(channel.order === ORDERED)
-  assert(authenticate(get(portKey(channel.portIdentifier))))
+  assert(authenticate(get(portKey(packet.sourcePort))))
   assert(packet.destChannel === channel.counterpartyChannelIdentifier)
 
-  connection = get(connectionKey(packet.sourceConnection))
+  connection = get(connectionKey(packet.connectionHops[0]))
   assert(connection.state === OPEN)
-  assert(packet.destConnection === connection.counterpartyConnectionIdentifier)
+  assert(packet.destPort === channel.counterpartyPortIdentifier)
+  assert(packet.connectionHops === channel.connectionHops)
 
   // check that timeout height has passed on the other end
   counterpartyStateRoot = get(rootKey(connection.clientIdentifier, proofHeight))
@@ -565,23 +578,23 @@ function timeoutPacketOrdered(packet: Packet, proof: CommitmentProof, proofHeigh
   assert(nextSequenceRecv < packet.sequence)
 
   // verify we actually sent this packet, check the store
-  assert(get(packetCommitmentKey(packet.sourceConnection, packet.sourceChannel, sequence))
+  assert(get(packetCommitmentKey(packet.sourcePort, packet.sourceChannel, sequence))
          === commit(packet.data))
 
   // check that the recv sequence is as claimed
   assert(verifyMembership(
     counterpartyStateRoot,
     proof,
-    nextSequenceRecvKey(packet.destConnection, packet.destChannel),
+    nextSequenceRecvKey(packet.destPort, packet.destChannel),
     nextSequenceRecv
   ))
 
   // delete our commitment
-  delete(packetCommitmentKey(packet.sourceConnection, packet.sourceChannel, packet.sequence))
+  delete(packetCommitmentKey(packet.sourcePort, packet.sourceChannel, packet.sequence))
 
   // close the channel
   channel.state = CLOSED
-  set(channelKey(packet.sourceConnection, packet.sourceChannel), channel)
+  set(channelKey(packet.sourcePort, packet.sourceChannel), channel)
 }
 ```
 
@@ -594,33 +607,34 @@ This specification omits details for now.
 
 ```typescript
 function timeoutPacketUnordered(packet: Packet, proof: CommitmentProof, proofHeight: uint64) {
-  channel = get(channelKey(packet.sourceConnection, packet.sourceChannel))
+  channel = get(channelKey(packet.sourcePort, packet.sourceChannel))
   assert(channel.state === OPEN)
   assert(channel.order === UNORDERED)
-  assert(authenticate(get(portKey(channel.portIdentifier))))
+  assert(authenticate(get(portKey(packet.sourcePort))))
   assert(packet.destChannel === channel.counterpartyChannelIdentifier)
 
-  connection = get(connectionKey(packet.sourceConnection))
+  connection = get(connectionKey(packet.connectionHops[0]))
   assert(connection.state === OPEN)
-  assert(packet.destConnection === connection.counterpartyConnectionIdentifier)
+  assert(packet.destPort === channel.counterpartyPortIdentifier)
+  assert(packet.connectionHops === channel.connectionHops)
 
   // check that timeout height has passed on the other end
   counterpartyStateRoot = get(rootKey(connection.clientIdentifier, proofHeight))
   assert(proofHeight >= timeoutHeight)
 
   // verify we actually sent this packet, check the store
-  assert(get(packetCommitmentKey(packet.sourceConnection, packet.sourceChannel, packet.sequence))
+  assert(get(packetCommitmentKey(packet.sourcePort, packet.sourceChannel, packet.sequence))
          === commit(packet.data))
 
   // verify absence of acknowledgement at packet index
   assert(verifyNonMembership(
     counterpartyStateRoot,
     proof,
-    packetAcknowledgementKey(packet.sourceConnection, packet.sourceChannel, packet.sequence)
+    packetAcknowledgementKey(packet.sourcePort, packet.sourceChannel, packet.sequence)
   ))
 
   // delete our commitment
-  delete(packetCommitmentKey(packet.sourceConnection, packet.sourceChannel, packet.sequence))
+  delete(packetCommitmentKey(packet.sourcePort, packet.sourceChannel, packet.sequence))
 }
 ```
 
@@ -635,17 +649,18 @@ Calling modules MAY atomically execute any application logic associated with cha
 
 ```typescript
 function timeoutClose(packet: Packet, proof: CommitmentProof, proofHeight: uint64) {
-  channel = get(channelKey(packet.destConnection, packet.destChannel))
+  channel = get(channelKey(packet.destPort, packet.destChannel))
   assert(channel.state === OPEN)
   assert(channel.order === ORDERED)
-  assert(authenticate(get(portKey(channel.portIdentifier))))
+  assert(authenticate(get(portKey(packet.destPort))))
   assert(packet.sourceChannel === channel.counterpartyChannelIdentifier)
 
-  connection = get(connectionKey(connectionIdentifier))
+  connection = get(connectionKey(channel.connectionHops[0]))
   assert(connection.state === OPEN)
-  assert(packet.sourceConnection === connection.counterpartyConnectionIdentifier)
+  assert(packet.sourcePort === channel.counterpartyPortIdentifier)
+  assert(packet.connectionHops === channel.connectionHops)
 
-  nextSequenceRecv = get(nextSequenceRecvKey(packet.destConnection, packet.destChannel))
+  nextSequenceRecv = get(nextSequenceRecvKey(packet.destPort, packet.destChannel))
   assert(packet.sequence === nextSequenceRecv)
 
   counterpartyStateRoot = get(rootKey(connection.clientIdentifier, proofHeight))
@@ -654,12 +669,12 @@ function timeoutClose(packet: Packet, proof: CommitmentProof, proofHeight: uint6
   assert(verifyMembership(
     counterpartyStateRoot,
     proof,
-    packetCommitmentKey(packet.sourceConnection, packet.sourceChannel, sequence),
+    packetCommitmentKey(packet.sourcePort, packet.sourceChannel, sequence),
     commit(packet.data)
   ))
 
   channel.state = CLOSED
-  set(channelKey(packet.destConnection, packet.destChannel), channel)
+  set(channelKey(packet.destPort, packet.destChannel), channel)
 }
 ```
 
@@ -671,15 +686,16 @@ function timeoutClose(packet: Packet, proof: CommitmentProof, proofHeight: uint6
 
 ```typescript
 function cleanupPacketOrdered(packet: Packet, proof: CommitmentProof, proofHeight: uint64, nextSequenceRecv: uint64) {
-  channel = get(channelKey(packet.sourceConnection, packet.sourceChannel))
+  channel = get(channelKey(packet.sourcePort, packet.sourceChannel))
   assert(channel.state === OPEN)
   assert(channel.order === ORDERED)
-  assert(authenticate(get(portKey(channel.portIdentifier))))
+  assert(authenticate(get(portKey(packet.sourcePort))))
   assert(packet.destChannel === channel.counterpartyChannelIdentifier)
 
-  connection = get(connectionKey(packet.sourceConnection))
+  connection = get(connectionKey(packet.connectionHops[0]))
   assert(connection.state === OPEN)
-  assert(packet.destConnection === connection.counterpartyConnectionIdentifier)
+  assert(packet.destPort === channel.counterpartyPortIdentifier)
+  assert(packet.connectionHops === channel.connectionHops)
 
   // assert packet has been received on the other end
   assert(nextSequenceRecv > packet.sequence)
@@ -690,16 +706,16 @@ function cleanupPacketOrdered(packet: Packet, proof: CommitmentProof, proofHeigh
   assert(verifyMembership(
     counterpartyStateRoot,
     proof,
-    nextSequenceRecvKey(packet.destConnection, packet.destChannel),
+    nextSequenceRecvKey(packet.destPort, packet.destChannel),
     nextSequenceRecv
   ))
 
   // verify we actually sent the packet, check the store
-  assert(get(packetCommitmentKey(packet.sourceConnection, packet.sourceChannel, packet.sequence))
+  assert(get(packetCommitmentKey(packet.sourcePort, packet.sourceChannel, packet.sequence))
              === commit(packet.data))
 
   // clear the store
-  delete(packetCommitmentKey(packet.sourceConnection, packet.sourceChannel, packet.sequence))
+  delete(packetCommitmentKey(packet.sourcePort, packet.sourceChannel, packet.sequence))
 }
 ```
 
@@ -707,15 +723,16 @@ function cleanupPacketOrdered(packet: Packet, proof: CommitmentProof, proofHeigh
 
 ```typescript
 function cleanupPacketUnordered(packet: Packet, proof: CommitmentProof, proofHeight: uint64, acknowledgement: bytes) {
-  channel = get(channelKey(packet.sourceConnection, packet.sourceChannel))
+  channel = get(channelKey(packet.sourcePort, packet.sourceChannel))
   assert(channel.state === OPEN)
   assert(channel.order === UNORDERED)
-  assert(authenticate(get(portKey(channel.portIdentifier))))
+  assert(authenticate(get(portKey(packet.sourcePort))))
   assert(packet.destChannel === channel.counterpartyChannelIdentifier)
 
-  connection = get(connectionKey(packet.sourceConnection))
+  connection = get(connectionKey(packet.connectionHops[0]))
   assert(connection.state === OPEN)
-  assert(packet.destConnection === connection.counterpartyConnectionIdentifier)
+  assert(packet.destPort === channel.counterpartyPortIdentifier)
+  assert(packet.connectionHops === channel.connectionHops)
 
   counterpartyStateRoot = get(rootKey(connection.clientIdentifier, proofHeight))
 
@@ -723,16 +740,16 @@ function cleanupPacketUnordered(packet: Packet, proof: CommitmentProof, proofHei
   assert(verifyMembership(
     counterpartyStateRoot,
     proof,
-    packetAcknowledgementKey(packet.destConnection, packet.destChannel, packet.sequence),
+    packetAcknowledgementKey(packet.destPort, packet.destChannel, packet.sequence),
     acknowledgement
   ))
 
   // verify we actually sent the packet, check the store
-  assert(get(packetCommitmentKey(packet.sourceConnection, packet.sourceChannel, packet.sequence))
+  assert(get(packetCommitmentKey(packet.sourcePort, packet.sourceChannel, packet.sequence))
              === commit(packet.data))
 
   // clear the store
-  delete(packetCommitmentKey(packet.sourceConnection, packet.sourceChannel, packet.sequence))
+  delete(packetCommitmentKey(packet.sourcePort, packet.sourceChannel, packet.sequence))
 }
 ```
 
@@ -766,6 +783,7 @@ Coming soon.
 
 5 June 2019 - Draft submitted
 4 July 2019 - Modifications for unordered channels & acknowledgements
+16 July 2019 - Alterations for multi-hop routing future compatibility
 
 ## Copyright
 
