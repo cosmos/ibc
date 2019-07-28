@@ -124,3 +124,43 @@ message ChanCloseConfirm {
 }
 
 /* Packet relay. */
+
+message PacketRecv {
+  string packet = 1; // TODO
+  string proof = 2; // TODO
+  uint64 proofHeight = 3;
+  bytes  acknowledgement = 4;
+}
+
+message PacketTimeoutOrdered {
+  string packet = 1; // TODO
+  string proof = 2; // TODO
+  uint64 proofHeight = 3;
+  uint64 nextSequenceRecv = 4;
+}
+
+message PacketTimeoutUnordered {
+  string packet = 1; // TODO
+  string proof = 2; // TODO
+  uint64 proofHeight = 3;
+}
+
+message PacketTimeoutClose {
+  string packet = 1; // TODO
+  string proof = 2; // TODO
+  uint64 proofHeight = 3;
+}
+
+message PacketCleanupOrdered {
+  string packet = 1; // TODO
+  string proof = 2; // TODO
+  uint64 proofHeight = 3;
+  uint64 nextSequenceRecv = 4;
+}
+
+message PacketCleanupUnordered {
+  string packet = 1; // TODO
+  string proof = 2; // TODO
+  uint64 proofHeight = 3;
+  bytes  acknowledgement = 4;
+}
