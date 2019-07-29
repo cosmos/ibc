@@ -96,6 +96,36 @@ function connectionKey(id: Identifier): Key {
 }
 ```
 
+A reverse mapping from clients to a set of connections (utilized to look up all connections using a client) is stored under a unique prefix per-client:
+
+```typescript
+function clientConnectionsKey(clientIdentifier: Identifier): Key {
+  return "clients/{clientIdentifier}/connections"
+}
+```
+
+### Helper functions
+
+`addConnectionToClient` is used to add a connection identifier to the set of connections associated with a client.
+
+```typescript
+function addConnectionToClient(clientIdentifier: Identifier, connectionIdentifier: Identifier) {
+  conns = get(clientConnectionsKey(clientIdentifier, connectionIdentifier))
+  conns.add(connectionIdentifier)
+  set(clientConnectionsKey(clientIdentifier, connectionIdentifier), conns)
+}
+```
+
+`removeConnectionFromClient` is used to remove a connection identifier from the set of connections associated with a client.
+
+```
+function removeConnectionFromClient(clientIdentifier: Identifier, connectionIdentifier: Identifier) {
+  conns = get(clientConnectionsKey(clientIdentifier, connectionIdentifier))
+  conns.remove(connectionIdentifier)
+  set(clientConnectionsKey(clientIdentifier, connectionIdentifier), conns)
+}
+```
+
 ### Subprotocols
 
 This ICS defines two subprotocols: opening handshake and closing handshake. Header tracking and closing-by-equivocation are defined in [ICS 2](../ics-002-consensus-verification). Datagrams defined herein are handled as external messages by the IBC relayer module defined in [ICS 26](../ics-026-relayer-module).
@@ -134,6 +164,7 @@ function connOpenInit(
   connection = ConnectionEnd{state, desiredCounterpartyConnectionIdentifier, clientIdentifier,
     counterpartyClientIdentifier, nextTimeoutHeight}
   set(connectionKey(identifier), connection)
+  addConnectionToClient(clientIdentifier, identifier)
 }
 ```
 
@@ -160,6 +191,7 @@ function connOpenTry(
   connection = ConnectionEnd{state, counterpartyConnectionIdentifier, clientIdentifier,
                              counterpartyClientIdentifier, nextTimeoutHeight}
   set(connectionKey(identifier), connection)
+  addConnectionToClient(clientIdentifier, identifier)
 }
 ```
 
@@ -242,6 +274,7 @@ function connOpenTimeout(
       ))
   }
   delete(connectionKey(identifier))
+  removeConnectionFromClient(clientIdentifier, identifier)
 }
 ```
 
@@ -309,6 +342,14 @@ function queryConnection(id: Identifier): ConnectionEnd | void {
 }
 ```
 
+Connections associated with a particular client can be queried by client identifier with `queryClientConnections`.
+
+```typescript
+function queryClientConnections(id: Identifier): Set<Identifier> {
+  return get(clientConnectionsKey(id))
+}
+```
+
 ## Backwards Compatibility
 
 Not applicable.
@@ -333,6 +374,7 @@ Parts of this document were inspired by the [previous IBC specification](https:/
 
 29 March 2019 - Initial draft version submitted
 17 May 2019 - Draft finalized
+29 July 2019 - Revisions to track connection set associated with client
 
 ## Copyright
 

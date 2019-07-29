@@ -30,11 +30,16 @@ All functions provided by the IBC handler interface are defined as in [ICS 25](.
 
 ## Technical Specification
 
-### Datagrams
+### Datagram handlers
 
 *Datagrams* are external data blobs accepted as transactions by the relayer module.
+This section defines a *handler function* for each datagram, which is executed when the associated datagram is submitted to the relayer module in a transaction.
+All datagrams can also be safely submitted by other modules to the relayer module.
+No message signatures or data validity checks are assumed beyond those which are explicitly indicated.
 
 #### Client lifecycle management
+
+`ClientCreate` creates a new light client with the specified identifier & consensus state.
 
 ```typescript
 interface ClientCreate {
@@ -49,6 +54,8 @@ function handleClientCreate(datagram: ClientCreate) {
 }
 ```
 
+`ClientUpdate` updates an existing light client with the specified identifier & new header.
+
 ```typescript
 interface ClientUpdate {
   identifier: Identifier
@@ -62,6 +69,8 @@ function handleClientUpdate(datagram: ClientUpdate) {
 }
 ```
 
+`ClientFreeze` freezes an existing light client with the specified identifier by proving that an equivocation has occurred.
+
 ```typescript
 interface ClientFreeze {
   identifier: Identifier
@@ -73,10 +82,17 @@ interface ClientFreeze {
 ```typescript
 function handleClientFreeze(datagram: ClientUpdate) {
   handler.freezeClient(datagram.identifier, datagram.firstHeader, datagram.secondHeader)
+
+  for (const identifier in handler.queryClientConnections(client))
+    handler.handleConnCloseInit(identifier)
+
+  // TODO: on-close hooks for modules owning channels?
 }
 ```
 
 #### Connection lifecycle management
+
+The `ConnOpenInit` datagram starts the connection handshake process with an IBC module on another chain.
 
 ```typescript
 interface ConnOpenInit {
@@ -96,6 +112,8 @@ function handleConnOpenInit(datagram: ConnOpenInit) {
   )
 }
 ```
+
+The `ConnOpenTry` datagram accepts a handshake request from an IBC module on another chain.
 
 ```typescript
 interface ConnOpenTry {
@@ -118,6 +136,8 @@ function handleConnOpenTry(datagram: ConnOpenTry) {
 }
 ```
 
+The `ConnOpenAck` datagram confirms a handshake acceptance by the IBC module on another chain.
+
 ```typescript
 interface ConnOpenAck {
   identifier: Identifier
@@ -136,6 +156,8 @@ function handleConnOpenAck(datagram: ConnOpenAck) {
 }
 ```
 
+The `ConnOpenConfirm` datagram acknowledges a handshake acknowledgement by an IBC module on another chain & finalizes the connection.
+
 ```typescript
 interface ConnOpenConfirm {
   identifier: Identifier
@@ -151,6 +173,8 @@ function handleConnOpenConfirm(datagram: ConnOpenConfirm) {
   )
 }
 ```
+
+The `ConnOpenTimeout` datagram proves that a connection handshake has timed out prior to completion, resetting the state.
 
 ```typescript
 interface ConnOpenTimeout {
@@ -168,6 +192,8 @@ function handleConnOpenTimeout(datagram: ConnOpenTimeout) {
 }
 ```
 
+The `ConnCloseInit` datagram closes an unused connection.
+
 ```typescript
 interface ConnCloseInit {
   identifier: Identifier
@@ -179,6 +205,8 @@ function handleConnCloseInit(datagram: ConnCloseInit) {
   handler.handleConnCloseInit(identifier)
 }
 ```
+
+The `ConnCloseConfirm` datagram acknowledges that a connection has been closed on the counterparty chain and closes the end on this chain.
 
 ```typescript
 interface ConnCloseConfirm {
@@ -196,7 +224,6 @@ function handleConnCloseConfirm(datagram: ConnCloseConfirm) {
 }
 ```
 
-- expose to modules (hook): on-close hooks
 
 #### Channel lifecycle management
 
