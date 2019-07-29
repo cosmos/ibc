@@ -6,7 +6,7 @@ category: ibc-core
 requires: 2, 3, 5, 23, 24
 author: Christopher Goes <cwgoes@tendermint.com>
 created: 2019-03-07
-modified: 2019-06-05
+modified: 2019-06-29
 ---
 
 ## Synopsis
@@ -565,7 +565,7 @@ function timeoutPacketOrdered(packet: Packet, proof: CommitmentProof, proofHeigh
   assert(packet.destChannel === channel.counterpartyChannelIdentifier)
 
   connection = get(connectionKey(packet.connectionHops[0]))
-  assert(connection.state === OPEN)
+  // note: the connection may have been closed
   assert(packet.destPort === channel.counterpartyPortIdentifier)
   assert(packet.connectionHops === channel.connectionHops)
 
@@ -613,7 +613,7 @@ function timeoutPacketUnordered(packet: Packet, proof: CommitmentProof, proofHei
   assert(packet.destChannel === channel.counterpartyChannelIdentifier)
 
   connection = get(connectionKey(packet.connectionHops[0]))
-  assert(connection.state === OPEN)
+  // note: the connection may have been closed
   assert(packet.destPort === channel.counterpartyPortIdentifier)
   assert(packet.connectionHops === channel.connectionHops)
 
@@ -655,7 +655,7 @@ function timeoutClose(packet: Packet, proof: CommitmentProof, proofHeight: uint6
   assert(packet.sourceChannel === channel.counterpartyChannelIdentifier)
 
   connection = get(connectionKey(channel.connectionHops[0]))
-  assert(connection.state === OPEN)
+  // note: the connection may have been closed
   assert(packet.sourcePort === channel.counterpartyPortIdentifier)
   assert(packet.connectionHops === channel.connectionHops)
 
@@ -692,7 +692,7 @@ function cleanupPacketOrdered(packet: Packet, proof: CommitmentProof, proofHeigh
   assert(packet.destChannel === channel.counterpartyChannelIdentifier)
 
   connection = get(connectionKey(packet.connectionHops[0]))
-  assert(connection.state === OPEN)
+  // note: the connection may have been closed
   assert(packet.destPort === channel.counterpartyPortIdentifier)
   assert(packet.connectionHops === channel.connectionHops)
 
@@ -729,7 +729,7 @@ function cleanupPacketUnordered(packet: Packet, proof: CommitmentProof, proofHei
   assert(packet.destChannel === channel.counterpartyChannelIdentifier)
 
   connection = get(connectionKey(packet.connectionHops[0]))
-  assert(connection.state === OPEN)
+  // note: the connection may have been closed
   assert(packet.destPort === channel.counterpartyPortIdentifier)
   assert(packet.connectionHops === channel.connectionHops)
 
@@ -783,6 +783,7 @@ Coming soon.
 5 June 2019 - Draft submitted
 4 July 2019 - Modifications for unordered channels & acknowledgements
 16 July 2019 - Alterations for multi-hop routing future compatibility
+29 July 2019 - Revisions to handle timeouts after connection closure
 
 ## Copyright
 
