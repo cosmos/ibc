@@ -47,7 +47,9 @@ interface FungibleTokenPacketData {
 
 The subprotocols described herein should be implemented in a "bank-ibc-bridge" module with access to a bank module and to the IBC relayer module.
 
-#### Initial setup
+#### Port & channel setup
+
+The `setup` function must be called exactly once when the module is created (perhaps when the blockchain itself is initialized) to bind to the appropriate port.
 
 ```typescript
 function setup() {
@@ -62,6 +64,8 @@ function setup() {
   })
 }
 ```
+
+Once the `setup` function has been called, channels can be created through the IBC relayer module between instances of the fungible token transfer module on separate chains.
 
 #### Sending packets
 
@@ -130,7 +134,17 @@ function onTimeoutPacket(): boolean {
 }
 ```
 
-#### Notes
+#### Reasoning
+
+##### Correctness
+
+This implementation preserves both fungibility & supply.
+
+Fungibility: send back to other chain. If had previously sent, can send back.
+
+Supply: Redefine supply as unlocked tokens. All send-recv pairs are net zero. Source chain can change supply.
+
+##### Multi-chain notes
 
 This does not yet handle the "diamond problem", where a user sends a token originating on chain A to chain B, then to chain D, and wants to return it through D -> C -> A — since the supply is tracked as owned by chain B, chain C cannot serve as the intermediary. It is not yet clear whether that case should be dealt with in-protocol or not — it may be fine to just require the original path of redemption (and if there is frequent liquidity and some surplus on both paths the diamond path will work most of the time). Complexities arising from long redemption paths may lead to the emergence of central chains in the network topology.
 
