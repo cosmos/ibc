@@ -5,7 +5,7 @@ stage: Draft
 category: ibc-core
 author: Christopher Goes <cwgoes@tendermint.com>
 created: 2019-06-09
-modified: 2019-07-28
+modified: 2019-07-29
 ---
 
 ## Synopsis
@@ -193,8 +193,6 @@ function handleClientFreeze(datagram: ClientUpdate) {
 
   for (const identifier in handler.queryClientConnections(client))
     handler.handleConnCloseInit(identifier)
-
-  // TODO: on-close hooks for modules owning channels?
 }
 ```
 
@@ -588,62 +586,7 @@ function handlePacketCleanupUnordered(datagram: PacketCleanupUnordered) {
 
 ### Interface usage example
 
-As a demonstration of interface usage, a simple module handling send/receive of a native asset could be implemented as follows:
-
-```golang
-type State struct {
-  channel     string
-}
-```
-
-```golang
-type PacketData struct {
-  asset         string
-  amount        integer
-  source        address
-  destination   address
-}
-```
-
-```coffeescript
-function myModuleInit()
-  client = createClient(consensusState)
-  connection = createConnection(nil, client)
-  state.channel = createChannel(nil, connection, myModuleRecv, myModuleTimeout)
-```
-
-```coffeescript
-function myModuleSend(string asset, integer amount, address source, address destination)
-  checkSignature(source)
-  deductBalance(source, asset, amount)
-  escrow(asset, amount)
-  sendPacket({
-    channel: state.channel,
-    data: {
-      asset       : asset,
-      amount      : amount,
-      source      : source,
-      destination : destination,
-    }
-  })
-```
-
-```coffeescript
-function myModuleRecv(Packet packet)
-  recvPacket(packet)
-  assert(packet.channel == channel)
-  data = packet.data
-  unescrow(data.asset, data.amount)
-  increaseBalance(data.destination, data.asset, data.amount)
-```
-
-```coffeescript
-function myModuleTimeout(Packet packet)
-  timeoutPacket(packet)
-  data = packet.data
-  unescrow(packet.asset, packet.amount)
-  increaseBalance(packet.source, packet.asset, packet.amount)
-```
+See ICS 20 for a usage example.
 
 ## Backwards Compatibility
 
