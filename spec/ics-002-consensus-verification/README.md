@@ -282,9 +282,9 @@ activity on the client. Frozen client SHOULD NOT be deleted from the state, as a
 method can be introduced in the future versions.
 
 ```typescript
-function freezeClient(id: Identifier, h1: Header, h2: Header) {
-  consensusState = get(consensusStateKey(id))
-  assert(consensusState.equivocationPredicate(h1, h2))
+function freezeClient(identifier: Identifier, firstHeader: Header, secondHeader: Header) {
+  consensusState = get(consensusStateKey(identifier))
+  assert(consensusState.equivocationPredicate(firstHeader, secondHeader))
   set(frozenKey(id), true)
 }
 ```
