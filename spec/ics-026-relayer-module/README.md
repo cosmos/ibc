@@ -30,7 +30,7 @@ All functions provided by the IBC handler interface are defined as in [ICS 25](.
 
 ## Technical Specification
 
-### Datagram handlers
+### Datagram handlers (write)
 
 *Datagrams* are external data blobs accepted as transactions by the relayer module.
 This section defines a *handler function* for each datagram, which is executed when the associated datagram is submitted to the relayer module in a transaction.
@@ -239,6 +239,13 @@ interface ChanOpenInit {
 ```
 
 ```typescript
+function handleChanOpenInit(datagram: ChanOpenInit) {
+  // call into module
+  // call handler
+}
+```
+
+```typescript
 interface ChanOpenTry {
   portIdentifier: Identifier
   channelIdentifier: Identifier
@@ -248,6 +255,13 @@ interface ChanOpenTry {
   timeoutHeight: uint64
   nextTimeoutHeight: uint64
   proofInit: CommitmentProof
+}
+```
+
+```typescript
+function handleChanOpenTry(datagram: ChanOpenTry) {
+  // call into module
+  // call handler
 }
 ```
 
@@ -262,11 +276,23 @@ interface ChanOpenAck {
 ```
 
 ```typescript
+function handleChanOpenAck(datagram: ChanOpenAck) {
+  // call handler
+}
+```
+
+```typescript
 interface ChanOpenConfirm {
   portIdentifier: Identifier
   channelIdentifier: Identifier
   timeoutHeight: uint64
   proofAck: CommitmentProof
+}
+```
+
+```typescript
+function handleChanOpenConfirm(datagram: ChanOpenConfirm) {
+  // call handler
 }
 ```
 
@@ -280,11 +306,23 @@ interface ChanOpenTimeout {
 ```
 
 ```typescript
+function handleChanOpenTimeout(datagram: ChanOpenTimeout) {
+  // call module
+  // call into handler
+}
+```
+
+```typescript
 interface ChanCloseInit {
   portIdentifier: Identifier
   channelIdentifier: Identifier
 }
 ```
+
+should this be a datagram?
+
+Channel closure can only be initiated by the owning module directly.
+
 
 ```typescript
 interface ChanCloseConfirm {
@@ -292,6 +330,13 @@ interface ChanCloseConfirm {
   channelIdentifier: Identifier
   proofInit: CommitmentProof
   proofHeight: uint64
+}
+```
+
+```typescript
+function handleChanCloseConfirm(datagram: ChanCloseConfirm) {
+  // call module
+  // call handler
 }
 ```
 
@@ -318,7 +363,12 @@ interface PacketRecv {
 }
 ```
 
-- call handlePacket on module
+```typescript
+function handlePacketRecv(datagram: PacketRecv) {
+  // call handlePacket on module
+  // call recvPacket on handler
+}
+```
 
 ```typescript
 interface PacketTimeoutOrdered {
@@ -329,7 +379,12 @@ interface PacketTimeoutOrdered {
 }
 ```
 
-- call handlePacketTimeout on module
+```typescript
+function handlePacketTimeoutOrdered(datagram: PacketTimeoutOrdered) {
+  // call handler
+  // call module
+}
+```
 
 ```typescript
 interface PacketTimeoutUnordered {
@@ -339,7 +394,12 @@ interface PacketTimeoutUnordered {
 }
 ```
 
-- call handlePacketTimeout on module
+```typescript
+function handlePacketTimeoutUnordered(datagram: PacketTimeoutUnordered) {
+  // call handler
+  // call module
+}
+```
 
 ```typescript
 interface PacketTimeoutClose {
@@ -349,7 +409,11 @@ interface PacketTimeoutClose {
 }
 ```
 
-- on-close hooks
+```typescript
+function handlePacketTimeoutClose(datagram: PacketTimeoutClose) {
+  // call handler
+}
+```
 
 ```typescript
 interface PacketCleanupOrdered {
@@ -357,6 +421,12 @@ interface PacketCleanupOrdered {
   proof: CommitmentProof
   proofHeight: uint64
   nextSequenceRecv: uint64
+}
+```
+
+```typescript
+function handlePacketCleanupOrdered(datagram: PacketCleanupOrdered) {
+  // call handler
 }
 ```
 
@@ -369,12 +439,22 @@ interface PacketCleanupUnordered {
 }
 ```
 
+```typescript
+function handlePacketCleanupUnordered(datagram: PacketCleanupUnordered) {
+  // call handler
+}
+```
+
 - expose publicly (write): recvpacket, all timeouts, cleanup
 - expose publicly (read): query
 - expose to modules (write): sendpacket
 - expose to modules (read): query
 
-### Subprotocols
+### Query (read-only) functions
+
+- query clients
+- query connections
+- query channels
 
 ### Interface usage example
 
