@@ -93,14 +93,6 @@ function freezeClient(id: Identifier, firstHeader: Header, secondHeader: Header)
 }
 ```
 
-`deleteClient` deletes an existing client, returning an error if the identifier is not found or if the associated client was just created or is still in use by any connection.
-
-```typescript
-function deleteClient(id: Identifier): error | void {
-  // defined in ICS 2
-}
-```
-
 ### Connection lifecycle management
 
 By default, connections are unowned. Connections can be closed by any module, but only when all channels associated with the connection have been closed by the modules which opened them and a timeout has passed since the connection was opened.

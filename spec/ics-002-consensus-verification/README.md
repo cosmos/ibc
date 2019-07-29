@@ -218,11 +218,11 @@ logical correctness.
 
 #### Create
 
-Creating a new `ClientState` is done simply by submitting it to the `createClient` function,
-as the chain automatically generates the `Identifier` for the `ClientState`.
+Calling `createClient` with the specified identifier & initial consensus state creates a new client.
 
 ```typescript
 function createClient(id: Identifier, consensusState: ConsensusState) {
+  assert(get(clientKey(id)) === null)
   client = ClientState{consensusState, empty, false}
   set(clientKey(id), client)
 }
@@ -286,19 +286,6 @@ function freezeClient(identifier: Identifier, firstHeader: Header, secondHeader:
   consensusState = get(consensusStateKey(identifier))
   assert(consensusState.equivocationPredicate(firstHeader, secondHeader))
   set(frozenKey(id), true)
-}
-```
-
-#### Delete
-
-Deletes the stored client, when the client is no longer needed or no longer valid, as
-determined by the application logic.
-
-```typescript
-function deleteClient(id: Identifier) {
-  delete(frozenKey(id))
-  delete(consensusStateKey(id))
-  deletePrefix("clients/{id}/roots")
 }
 ```
 
@@ -383,9 +370,7 @@ function root(header: H): LogStore {
 
 ### Properties & Invariants
 
-- non-conflicting connections
-- no MITM once handshake started
-- safe assuming light client invariants hold
+- Client identifiers are first-come-first-serve: once a client identifier has been allocated, all future headers & roots-of-trust stored under that identifier will have satisfied the client's validity predicate.
 
 ## Backwards Compatibility
 
