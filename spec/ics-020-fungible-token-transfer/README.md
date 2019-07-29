@@ -33,12 +33,13 @@ The IBC handler interface & IBC relayer module interface are as defined in [ICS 
 
 ### Data Structures
 
-Only one packet data type, `FungibleTokenPacketData`, which specifies the denomination, amount, and receiving account, is required.
+Only one packet data type, `FungibleTokenPacketData`, which specifies the denomination, amount, sending account, and receiving account, is required.
 
 ```typescript
 interface FungibleTokenPacketData {
   denomination: string
   amount: uint256
+  sender: string
   receiver: string
 }
 ```
@@ -49,7 +50,7 @@ The subprotocols described herein should be implemented in a "bank-ibc-bridge" m
 
 #### Port & channel setup
 
-The `setup` function must be called exactly once when the module is created (perhaps when the blockchain itself is initialized) to bind to the appropriate port.
+The `setup` function must be called exactly once when the module is created (perhaps when the blockchain itself is initialized) to bind to the appropriate port and create an escrow address (owned by the module).
 
 ```typescript
 function setup() {
@@ -62,6 +63,7 @@ function setup() {
     onRecvPacket,
     onTimeoutPacket,
   })
+  escrowAddress = newAddress()
 }
 ```
 
@@ -92,7 +94,8 @@ function handleFungibleTokenPacketSend(denomination: string, amount: uint256, re
 function onChanOpenInit(
   portIdentifier: Identifier, channelIdentifier: Identifier, counterpartyPortIdentifier: Identifier,
   counterpartyChannelIdentifier: Identifier, connectionHops: [Identifier], nextTimeoutHeight: uint64): boolean {
-  return true
+  // only allow channels to "bank" port on counterparty chain
+  return counterpartyPortIdentifier === "bank"
 }
 ```
 
@@ -100,7 +103,8 @@ function onChanOpenInit(
 function onChanOpenTry(
   portIdentifier: Identifier, channelIdentifier: Identifier, counterpartyPortIdentifier: Identifier,
   counterpartyChannelIdentifier: Identifier, connectionHops: [Identifier], nextTimeoutHeight: uint64): boolean {
-  return true
+  // only allow channels to "bank" port on counterparty chain
+  return counterpartyPortIdentifier === "bank"
 }
 ```
 
@@ -131,7 +135,6 @@ function onChanCloseConfirm(portIdentifier: Identifier, channelIdentifier: Ident
 ```typescript
 function onRecvPacket(packet: Packet): bytes {
   FungibleTokenPacketData data = packet.data
-  // recv packet
   // verify receiving denomination
   // unescrow coins in amount (if source) or escrow (if destination)
   // transfer coins to user
@@ -141,6 +144,7 @@ function onRecvPacket(packet: Packet): bytes {
 
 ```typescript
 function onTimeoutPacket(packet: Packet): boolean {
+  FungibleTokenPacketData data = packet.data
   // refund tokens
 }
 ```
