@@ -3,7 +3,7 @@ ics: 18
 title: Relayer Algorithms
 stage: draft
 category: ibc-core
-requires: 24
+requires: 24, 25, 26
 author: Christopher Goes <cwgoes@tendermint.com>
 created: 2019-03-07
 modified: 2019-05-11

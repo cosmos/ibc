@@ -8,7 +8,7 @@ titlepage-rule-color: "FFFFFF"
 titlepage-rule-height: 1
 toc-own-page: true
 mainfont: DejaVuSerifCondensed
-fontsize: 7pt
+fontsize: 8pt
 author: IBC Specification Team
 date: \today \ - \textbf{1.0.0-rc0}
 urlcolor: cyan

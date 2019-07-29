@@ -38,6 +38,10 @@ modified: (modification date)
 
 (subprotocols, if applicable)
 
+### Properties & Invariants
+
+(properties & invariants maintained by the protocols specified, if applicable)
+
 ## Backwards Compatibility
 
 (discussion of compatibility or lack thereof with previous standards)
