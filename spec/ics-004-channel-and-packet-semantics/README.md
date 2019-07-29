@@ -764,7 +764,11 @@ function queryChannel(connId: Identifier, chanId: Identifier): ChannelEnd | void
 
 ### Properties & Invariants
 
-(TODO)
+- non-conflicting channels
+- module ownership
+- exactly once delivery
+- safety, liveness
+- no MITM on handshake
 
 ## Backwards Compatibility
 

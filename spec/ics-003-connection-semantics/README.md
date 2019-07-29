@@ -352,7 +352,8 @@ function queryClientConnections(id: Identifier): Set<Identifier> {
 
 ### Properties & Invariants
 
-(TODO)
+- non-conflicting connections
+- no MITM on handshake
 
 ## Backwards Compatibility
 

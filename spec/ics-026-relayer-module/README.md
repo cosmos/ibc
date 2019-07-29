@@ -597,7 +597,8 @@ See [ICS 20](../ics-020-fungible-token-transfer) for a usage example.
 
 ### Properties & Invariants
 
-(TODO)
+- port binding proxy correctness
+- safe calls, recv packet iff module accepts, etc. for handshake
 
 ## Backwards Compatibility
 

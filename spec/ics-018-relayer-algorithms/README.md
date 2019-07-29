@@ -3,7 +3,7 @@ ics: 18
 title: Relayer Algorithms
 stage: draft
 category: ibc-core
-requires: 24
+requires: 24, 25, 26
 author: Christopher Goes <cwgoes@tendermint.com>
 created: 2019-03-07
 modified: 2019-05-11
@@ -59,7 +59,7 @@ Any number of relayer processes may be safely run in parallel (and indeed, it is
 
 ### Properties & Invariants
 
-(TODO)
+- no permissions required
 
 ## Backwards Compatibility
 

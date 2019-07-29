@@ -323,7 +323,7 @@ function recvTimeoutPacket(packet: Packet, proof: CommitmentProof) {
 
 ### Properties & Invariants
 
-(TODO)
+- see other icss
 
 ## Backwards Compatibility
 

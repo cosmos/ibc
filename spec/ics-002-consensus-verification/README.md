@@ -383,7 +383,9 @@ function root(header: H): LogStore {
 
 ### Properties & Invariants
 
-(TODO)
+- non-conflicting connections
+- no MITM once handshake started
+- safe assuming light client invariants hold
 
 ## Backwards Compatibility
 

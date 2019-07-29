@@ -131,7 +131,8 @@ Light clients of particular consensus algorithms may have different and/or more 
 
 ### Properties & Invariants
 
-(TODO)
+- get after set
+- substore part
 
 ## Backwards Compatibility
 

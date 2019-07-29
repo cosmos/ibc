@@ -234,7 +234,7 @@ Pr(verifyMembership(root, proof, key, otherValue) === true) negligible in λ
 
 ### Properties & Invariants
 
-(TODO)
+- as above
 
 ## Backwards Compatibility
 

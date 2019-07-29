@@ -155,7 +155,7 @@ function releasePort(id: Identifier) {
 
 ### Properties & Invariants
 
-(TODO)
+- first-come-first-serve port binding
 
 ## Backwards Compatibility
 
