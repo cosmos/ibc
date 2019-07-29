@@ -20,6 +20,9 @@ check_sections:
 	python ./scripts/check_sections.py
 
 check_proto:
+	$(MAKE) -C spec/ics-002-consensus-verification check_proto
+	$(MAKE) -C spec/ics-003-connection-semantics check_proto
+	$(MAKE) -C spec/ics-004-channel-and-packet-semantics check_proto
 	$(MAKE) -C spec/ics-020-fungible-token-transfer check_proto
 	$(MAKE) -C spec/ics-026-relayer-module check_proto
 

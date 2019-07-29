@@ -12,4 +12,7 @@ cleanup:
 clean:
 	rm -f *.png
 
-.PHONY: all clean cleanup
+check_proto:
+	/bin/bash -c 'TEMP=$$(mktemp); protoc data-structures.proto -o $$TEMP; rm -f $$TEMP'
+
+.PHONY: all clean cleanup check_proto

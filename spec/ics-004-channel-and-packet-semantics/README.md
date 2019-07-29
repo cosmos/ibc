@@ -64,7 +64,7 @@ An *end* of a channel is a data structure on one chain storing channel metadata:
 
 ```typescript
 interface ChannelEnd {
-  state: ChannelEndState
+  state: ChannelState
   ordering: ChannelOrder
   counterpartyPortIdentifier: Identifier
   counterpartyChannelIdentifier: Identifier
@@ -85,11 +85,10 @@ interface ChannelEnd {
 Channel ends have a *state*:
 
 ```typescript
-enum ChannelEndState {
+enum ChannelState {
   INIT,
   OPENTRY,
   OPEN,
-  CLOSETRY,
   CLOSED,
 }
 ```
