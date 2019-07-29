@@ -20,6 +20,7 @@ check_sections:
 	python ./scripts/check_sections.py
 
 check_proto:
+	$(MAKE) -C spec/ics-020-fungible-token-transfer check_proto
 	$(MAKE) -C spec/ics-026-relayer-module check_proto
 
 spec_pdf:
