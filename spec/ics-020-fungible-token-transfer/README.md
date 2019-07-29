@@ -89,47 +89,58 @@ function handleFungibleTokenPacketSend(denomination: string, amount: uint256, re
 #### Relayer module callbacks
 
 ```typescript
-function onChanOpenInit(): boolean {
+function onChanOpenInit(
+  portIdentifier: Identifier, channelIdentifier: Identifier, counterpartyPortIdentifier: Identifier,
+  counterpartyChannelIdentifier: Identifier, connectionHops: [Identifier], nextTimeoutHeight: uint64): boolean {
   return true
 }
 ```
 
 ```typescript
-function onChanOpenTry(): boolean {
+function onChanOpenTry(
+  portIdentifier: Identifier, channelIdentifier: Identifier, counterpartyPortIdentifier: Identifier,
+  counterpartyChannelIdentifier: Identifier, connectionHops: [Identifier], nextTimeoutHeight: uint64): boolean {
   return true
 }
 ```
 
 ```typescript
-function onChanOpenAck(): boolean {
+function onChanOpenAck(portIdentifier: Identifier, channelIdentifier: Identifier, nextTimeoutHeight: uint64): boolean {
   return true
 }
 ```
 
 ```typescript
-function onChanOpenTimeout(): boolean {
+function onChanOpenConfirm(portIdentifier: Identifier, channelIdentifier: Identifier): boolean {
   return true
 }
 ```
 
 ```typescript
-function onChanCloseConfirm(): boolean {
+function onChanOpenTimeout(portIdentifier: Identifier, channelIdentifier: Identifier): void {
+  // ??
+}
+```
+
+```typescript
+function onChanCloseConfirm(portIdentifier: Identifier, channelIdentifier: Identifier): void {
   return true
 }
 ```
 
 ```typescript
-function onRecvPacket(packet: Packet) {
+function onRecvPacket(packet: Packet): bytes {
   FungibleTokenPacketData data = packet.data
   // recv packet
   // verify receiving denomination
   // unescrow coins in amount (if source) or escrow (if destination)
   // transfer coins to user
+  return 0x
 }
 ```
 
 ```typescript
-function onTimeoutPacket(): boolean {
+function onTimeoutPacket(packet: Packet): boolean {
   // refund tokens
 }
 ```
