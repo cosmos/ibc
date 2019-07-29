@@ -68,6 +68,38 @@ function onTimeoutPacket() {
 }
 ```
 
+These are combined together in a `ModuleCallbacks` interface:
+
+```typescript
+interface ModuleCallbacks {
+  onChanOpenInit: () => ()
+}
+```
+
+Callbacks are provided when the module binds to a port.
+
+### Port binding
+
+The IBC relayer module sits in-between the handler module ([ICS 25](../ics-025-handler-interface)) and individual modules on the host state machine.
+
+```typescript
+function bindPort(id: Identifier, callbacks: Callbacks) {
+  // todo
+}
+```
+
+```typescript
+function transferPort(id: Identifier) {
+  // todo
+}
+```
+
+```typescript
+function releasePort(id: Identifier) {
+  // todo
+}
+```
+
 ### Datagram handlers (write)
 
 *Datagrams* are external data blobs accepted as transactions by the relayer module.
