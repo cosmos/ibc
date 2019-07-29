@@ -30,6 +30,44 @@ All functions provided by the IBC handler interface are defined as in [ICS 25](.
 
 ## Technical Specification
 
+### Module callback interface
+
+Modules must expose the following function signatures to the relayer module, which are called upon the receipt of various datagrams:
+
+```typescript
+function onChanOpenInit() {
+  // defined by the module
+}
+
+function onChanOpenTry() {
+  // defined by the module
+}
+
+function onChanOpenAck() {
+  // defined by the module
+}
+
+function onChanOpenConfirm() {
+  // defined by the module
+}
+
+function onChanOpenTimeout() {
+  // defined by the module
+}
+
+function onChanCloseConfirm() {
+  // defined by the module
+}
+
+function onRecvPacket() {
+  // defined by the module
+}
+
+function onTimeoutPacket() {
+  // defined by the module
+}
+```
+
 ### Datagram handlers (write)
 
 *Datagrams* are external data blobs accepted as transactions by the relayer module.
@@ -241,7 +279,7 @@ interface ChanOpenInit {
 ```typescript
 function handleChanOpenInit(datagram: ChanOpenInit) {
   module = lookupModule(datagram.portIdentifier)
-  module.handleChanOpenInit(datagram)
+  module.onChanOpenInit(datagram)
   handler.chanOpenInit(
     datagram.portIdentifier, datagram.channelIdentifier, datagram.counterpartyPortIdentifier,
     datagram.counterpartyChannelIdentifier, datagram.connectionHops, datagram.nextTimeoutHeight
@@ -265,7 +303,7 @@ interface ChanOpenTry {
 ```typescript
 function handleChanOpenTry(datagram: ChanOpenTry) {
   module = lookupModule(datagram.portIdentifier)
-  module.handleChanOpenTry(datagram)
+  module.onChanOpenTry(datagram)
   handler.chanOpenTry(
     datagram.portIdentifier, datagram.channelIdentifier, datagram.counterpartyPortIdentifier,
     datagram.counterpartyChannelIdentifier, datagram.connectionHops, datagram.timeoutHeight,
@@ -286,6 +324,7 @@ interface ChanOpenAck {
 
 ```typescript
 function handleChanOpenAck(datagram: ChanOpenAck) {
+  module.onChanOpenAck(datagram)
   handler.chanOpenAck(
     datagram.portIdentifier, datagram.channelIdentifier, datagram.timeoutHeight,
     datagram.nextTimeoutHeight, datagram.proofTry
@@ -304,6 +343,7 @@ interface ChanOpenConfirm {
 
 ```typescript
 function handleChanOpenConfirm(datagram: ChanOpenConfirm) {
+  module.onChanOpenConfirm(datagram)
   handler.chanOpenConfirm(
     datagram.portIdentifier, datagram.channelIdentifier,
     datagram.timeoutHeight, datagram.proofAck
@@ -323,7 +363,7 @@ interface ChanOpenTimeout {
 ```typescript
 function handleChanOpenTimeout(datagram: ChanOpenTimeout) {
   module = lookupModule(datagram.portIdentifier)
-  module.chanOpenTimeout(datagram)
+  module.onChanOpenTimeout(datagram)
   handler.chanOpenTimeout(
     datagram.portIdentifier, datagram.channelIdentifier,
     datagram.timeoutHeight, datagram.proofTimeout
@@ -351,7 +391,7 @@ interface ChanCloseConfirm {
 ```typescript
 function handleChanCloseConfirm(datagram: ChanCloseConfirm) {
   module = lookupModule(datagram.portIdentifier)
-  module.chanCloseConfirm(datagram)
+  module.onChanCloseConfirm(datagram)
   handler.chanCloseConfirm(
     datagram.portIdentifier, datagram.channelIdentifier,
     datagram.proofInit, datagram.proofHeight
@@ -382,7 +422,7 @@ interface PacketRecv {
 ```typescript
 function handlePacketRecv(datagram: PacketRecv) {
   module = lookupModule(datagram.portIdentifier)
-  module.recvPacket(datagram.packet)
+  module.onRecvPacket(datagram.packet)
   handler.recvPacket(packet, proof, proofHeight, acknowledgement)
 }
 ```
@@ -401,7 +441,7 @@ function handlePacketTimeoutOrdered(datagram: PacketTimeoutOrdered) {
   handler.timeoutPacketOrdered(
     datagram.packet, datagram.proof, datagram.proofHeight, datagram.nextSequenceRecv
   )
-  module.timeoutPacket(datagram.packet)
+  module.onTimeoutPacket(datagram.packet)
 }
 ```
 
@@ -416,7 +456,7 @@ interface PacketTimeoutUnordered {
 ```typescript
 function handlePacketTimeoutUnordered(datagram: PacketTimeoutUnordered) {
   handler.timeoutPacketUnordered(datagram.packet, datagram.proof, datagram.proofHeight)
-  module.timeoutPacket(datagram.packet)
+  module.onTimeoutPacket(datagram.packet)
 }
 ```
 
