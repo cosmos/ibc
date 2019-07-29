@@ -129,7 +129,6 @@ message PacketRecv {
   string packet = 1; // TODO
   string proof = 2; // TODO
   uint64 proofHeight = 3;
-  bytes  acknowledgement = 4;
 }
 
 message PacketTimeoutOrdered {
