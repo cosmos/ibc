@@ -586,7 +586,7 @@ function handlePacketCleanupUnordered(datagram: PacketCleanupUnordered) {
 
 ### Interface usage example
 
-See ICS 20 for a usage example.
+See [ICS 20](../ics-020-fungible-token-transfer) for a usage example.
 
 ## Backwards Compatibility
 
