@@ -37,35 +37,39 @@ The functions `generate` & `authenticate` are defined as in [ICS 5](../ics-005-p
 Modules must expose the following function signatures to the relayer module, which are called upon the receipt of various datagrams:
 
 ```typescript
-function onChanOpenInit() {
+function onChanOpenInit(
+  portIdentifier: Identifier, channelIdentifier: Identifier, counterpartyPortIdentifier: Identifier,
+  counterpartyChannelIdentifier: Identifier, connectionHops: [Identifier], nextTimeoutHeight: uint64): boolean {
   // defined by the module
 }
 
-function onChanOpenTry() {
+function onChanOpenTry(
+  portIdentifier: Identifier, channelIdentifier: Identifier, counterpartyPortIdentifier: Identifier,
+  counterpartyChannelIdentifier: Identifier, connectionHops: [Identifier], nextTimeoutHeight: uint64): boolean {
   // defined by the module
 }
 
-function onChanOpenAck() {
+function onChanOpenAck(portIdentifier: Identifier, channelIdentifier: Identifier, nextTimeoutHeight: uint64): boolean {
   // defined by the module
 }
 
-function onChanOpenConfirm() {
+function onChanOpenConfirm(portIdentifier: Identifier, channelIdentifier: Identifier): boolean {
   // defined by the module
 }
 
-function onChanOpenTimeout() {
+function onChanOpenTimeout(portIdentifier: Identifier, channelIdentifier: Identifier): void {
   // defined by the module
 }
 
-function onChanCloseConfirm() {
+function onChanCloseConfirm(portIdentifier: Identifier, channelIdentifier: Identifier): void {
   // defined by the module
 }
 
-function onRecvPacket() {
-  // defined by the module
+function onRecvPacket(packet: Packet): bytes {
+  // defined by the module, returns acknowledgement
 }
 
-function onTimeoutPacket() {
+function onTimeoutPacket(packet: Packet): boolean {
   // defined by the module
 }
 ```
@@ -74,14 +78,14 @@ These are combined together in a `ModuleCallbacks` interface:
 
 ```typescript
 interface ModuleCallbacks {
-  onChanOpenInit: () => boolean
-  onChanOpenTry: () => boolean
-  onChanOpenAck: () => boolean
-  onChanOpenConfirm: () => boolean
-  onChanOpenTimeout: () => boolean
-  onChanCloseConfirm: () => boolean
-  onRecvPacket: () => boolean
-  onTimeoutPacket: () => boolean
+  onChanOpenInit: (Identifier, Identifier, Identifier, Identifier, [Identifier], uint64) => boolean
+  onChanOpenTry: (Identifier, Identifier, Identifier, Identifier, [Identifier], uint64) => boolean
+  onChanOpenAck: (Identifier, Identifier, uint64) => boolean
+  onChanOpenConfirm: (Identifier, Identifier) => boolean
+  onChanOpenTimeout: (Identifier, Identifier) => void
+  onChanCloseConfirm: (Identifier, Identifier) => void
+  onRecvPacket: (Packet) => bytes
+  onTimeoutPacket: (Packet) => boolean
 }
 ```
 
@@ -347,7 +351,10 @@ interface ChanOpenInit {
 ```typescript
 function handleChanOpenInit(datagram: ChanOpenInit) {
   module = lookupModule(datagram.portIdentifier)
-  module.onChanOpenInit(datagram)
+  module.onChanOpenInit(
+    datagram.portIdentifier, datagram.channelIdentifier, datagram.counterpartyPortIdentifier,
+    datagram.counterpartyChannelIdentifier, datagram.connectionHops, datagram.nextTimeoutHeight
+  )
   handler.chanOpenInit(
     datagram.portIdentifier, datagram.channelIdentifier, datagram.counterpartyPortIdentifier,
     datagram.counterpartyChannelIdentifier, datagram.connectionHops, datagram.nextTimeoutHeight
@@ -371,7 +378,10 @@ interface ChanOpenTry {
 ```typescript
 function handleChanOpenTry(datagram: ChanOpenTry) {
   module = lookupModule(datagram.portIdentifier)
-  module.onChanOpenTry(datagram)
+  module.onChanOpenTry(
+    datagram.portIdentifier, datagram.channelIdentifier, datagram.counterpartyPortIdentifier,
+    datagram.counterpartyChannelIdentifier, datagram.connectionHops, datagram.nextTimeoutHeight
+  )
   handler.chanOpenTry(
     datagram.portIdentifier, datagram.channelIdentifier, datagram.counterpartyPortIdentifier,
     datagram.counterpartyChannelIdentifier, datagram.connectionHops, datagram.timeoutHeight,
@@ -392,7 +402,7 @@ interface ChanOpenAck {
 
 ```typescript
 function handleChanOpenAck(datagram: ChanOpenAck) {
-  module.onChanOpenAck(datagram)
+  module.onChanOpenAck(datagram.portIdentifier, datagram.channelIdentifier, datagram.nextTimeoutHeight)
   handler.chanOpenAck(
     datagram.portIdentifier, datagram.channelIdentifier, datagram.timeoutHeight,
     datagram.nextTimeoutHeight, datagram.proofTry
@@ -411,7 +421,7 @@ interface ChanOpenConfirm {
 
 ```typescript
 function handleChanOpenConfirm(datagram: ChanOpenConfirm) {
-  module.onChanOpenConfirm(datagram)
+  module.onChanOpenConfirm(datagram.portIdentifier, datagram.channelIdentifier)
   handler.chanOpenConfirm(
     datagram.portIdentifier, datagram.channelIdentifier,
     datagram.timeoutHeight, datagram.proofAck
@@ -431,7 +441,7 @@ interface ChanOpenTimeout {
 ```typescript
 function handleChanOpenTimeout(datagram: ChanOpenTimeout) {
   module = lookupModule(datagram.portIdentifier)
-  module.onChanOpenTimeout(datagram)
+  module.onChanOpenTimeout(datagram.portIdentifier, datagram.channelIdentifier)
   handler.chanOpenTimeout(
     datagram.portIdentifier, datagram.channelIdentifier,
     datagram.timeoutHeight, datagram.proofTimeout
@@ -459,7 +469,7 @@ interface ChanCloseConfirm {
 ```typescript
 function handleChanCloseConfirm(datagram: ChanCloseConfirm) {
   module = lookupModule(datagram.portIdentifier)
-  module.onChanCloseConfirm(datagram)
+  module.onChanCloseConfirm(datagram.portIdentifier, datagram.channelIdentifier)
   handler.chanCloseConfirm(
     datagram.portIdentifier, datagram.channelIdentifier,
     datagram.proofInit, datagram.proofHeight
@@ -483,14 +493,13 @@ interface PacketRecv {
   packet: Packet
   proof: CommitmentProof
   proofHeight: uint64
-  acknowledgement: bytes
 }
 ```
 
 ```typescript
 function handlePacketRecv(datagram: PacketRecv) {
   module = lookupModule(datagram.portIdentifier)
-  module.onRecvPacket(datagram.packet)
+  acknowledgement = module.onRecvPacket(datagram.packet)
   handler.recvPacket(packet, proof, proofHeight, acknowledgement)
 }
 ```
@@ -506,10 +515,10 @@ interface PacketTimeoutOrdered {
 
 ```typescript
 function handlePacketTimeoutOrdered(datagram: PacketTimeoutOrdered) {
+  module.onTimeoutPacket(datagram.packet)
   handler.timeoutPacketOrdered(
     datagram.packet, datagram.proof, datagram.proofHeight, datagram.nextSequenceRecv
   )
-  module.onTimeoutPacket(datagram.packet)
 }
 ```
 
@@ -523,8 +532,8 @@ interface PacketTimeoutUnordered {
 
 ```typescript
 function handlePacketTimeoutUnordered(datagram: PacketTimeoutUnordered) {
-  handler.timeoutPacketUnordered(datagram.packet, datagram.proof, datagram.proofHeight)
   module.onTimeoutPacket(datagram.packet)
+  handler.timeoutPacketUnordered(datagram.packet, datagram.proof, datagram.proofHeight)
 }
 ```
 
@@ -580,13 +589,11 @@ function handlePacketCleanupUnordered(datagram: PacketCleanupUnordered) {
 
 ### Query (read-only) functions
 
-- query clients
-- query connections
-- query channels
+Query functions for clients, connections, and channels should be exposed (read-only) by the IBC handler module.
 
 ### Interface usage example
 
-See ICS 20 for a usage example.
+See [ICS 20](../ics-020-fungible-token-transfer) for a usage example.
 
 ## Backwards Compatibility
 

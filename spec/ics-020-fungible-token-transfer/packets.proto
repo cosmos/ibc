@@ -1,0 +1,8 @@
+syntax = 'proto3';
+
+message FungibleTokenPacketData {
+  string denomination = 1;
+  uint64 amount = 2; // TODO
+  string sender = 3;
+  string receiver = 4;
+}
