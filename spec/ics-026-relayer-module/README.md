@@ -5,7 +5,7 @@ stage: Draft
 category: ibc-core
 author: Christopher Goes <cwgoes@tendermint.com>
 created: 2019-06-09
-modified: 2019-06-09
+modified: 2019-07-28
 ---
 
 ## Synopsis
@@ -240,8 +240,12 @@ interface ChanOpenInit {
 
 ```typescript
 function handleChanOpenInit(datagram: ChanOpenInit) {
-  // call into module
-  // call handler
+  module = lookupModule(datagram.portIdentifier)
+  module.handleChanOpenInit(datagram)
+  handler.chanOpenInit(
+    datagram.portIdentifier, datagram.channelIdentifier, datagram.counterpartyPortIdentifier,
+    datagram.counterpartyChannelIdentifier, datagram.connectionHops, datagram.nextTimeoutHeight
+  )
 }
 ```
 
@@ -260,8 +264,13 @@ interface ChanOpenTry {
 
 ```typescript
 function handleChanOpenTry(datagram: ChanOpenTry) {
-  // call into module
-  // call handler
+  module = lookupModule(datagram.portIdentifier)
+  module.handleChanOpenTry(datagram)
+  handler.chanOpenTry(
+    datagram.portIdentifier, datagram.channelIdentifier, datagram.counterpartyPortIdentifier,
+    datagram.counterpartyChannelIdentifier, datagram.connectionHops, datagram.timeoutHeight,
+    datagram.nextTimeoutHeight, datagram.proofInit
+  )
 }
 ```
 
@@ -277,7 +286,10 @@ interface ChanOpenAck {
 
 ```typescript
 function handleChanOpenAck(datagram: ChanOpenAck) {
-  // call handler
+  handler.chanOpenAck(
+    datagram.portIdentifier, datagram.channelIdentifier, datagram.timeoutHeight,
+    datagram.nextTimeoutHeight, datagram.proofTry
+  )
 }
 ```
 
@@ -292,7 +304,10 @@ interface ChanOpenConfirm {
 
 ```typescript
 function handleChanOpenConfirm(datagram: ChanOpenConfirm) {
-  // call handler
+  handler.chanOpenConfirm(
+    datagram.portIdentifier, datagram.channelIdentifier,
+    datagram.timeoutHeight, datagram.proofAck
+  )
 }
 ```
 
@@ -307,22 +322,22 @@ interface ChanOpenTimeout {
 
 ```typescript
 function handleChanOpenTimeout(datagram: ChanOpenTimeout) {
-  // call module
-  // call into handler
+  module = lookupModule(datagram.portIdentifier)
+  module.chanOpenTimeout(datagram)
+  handler.chanOpenTimeout(
+    datagram.portIdentifier, datagram.channelIdentifier,
+    datagram.timeoutHeight, datagram.proofTimeout
+  )
 }
 ```
+
+Channel closure can only be initiated by the owning module directly (so there is no associated datagram).
 
 ```typescript
-interface ChanCloseInit {
-  portIdentifier: Identifier
-  channelIdentifier: Identifier
+function handleChanCloseInit(portIdentifier: Identifier, channelIdentifier: Identifier) {
+  handler.chanCloseInit(portIdentifier, channelIdentifier)
 }
 ```
-
-should this be a datagram?
-
-Channel closure can only be initiated by the owning module directly.
-
 
 ```typescript
 interface ChanCloseConfirm {
@@ -335,22 +350,23 @@ interface ChanCloseConfirm {
 
 ```typescript
 function handleChanCloseConfirm(datagram: ChanCloseConfirm) {
-  // call module
-  // call handler
+  module = lookupModule(datagram.portIdentifier)
+  module.chanCloseConfirm(datagram)
+  handler.chanCloseConfirm(
+    datagram.portIdentifier, datagram.channelIdentifier,
+    datagram.proofInit, datagram.proofHeight
+  )
 }
 ```
 
-- expose publicly (write): chanopeninit, chanopentry, chanopenack, chanopenconfirm, chanopentimeout, chancloseconfirm
-- expose to modules (hooks): chanopeninit, chanopentry, chanopenack, chanopenconfirm, chanopentimeout, chancloseconfirm
-- expose to modules (write): chancloseinit
-- expose publicly (read): query
-- expose to modules (read): query
-
 #### Packet relay
 
+`sendPacket` can only be invoked directly by the module owning the channel on which the packet is to be sent, so there is no associated datagram.
+
 ```typescript
-interface PacketSend {
-  packet: Packet
+function handlePacketSend(packet: Packet) {
+  // auth module
+  handler.sendPacket(packet)
 }
 ```
 
@@ -365,8 +381,9 @@ interface PacketRecv {
 
 ```typescript
 function handlePacketRecv(datagram: PacketRecv) {
-  // call handlePacket on module
-  // call recvPacket on handler
+  module = lookupModule(datagram.portIdentifier)
+  module.recvPacket(datagram.packet)
+  handler.recvPacket(packet, proof, proofHeight, acknowledgement)
 }
 ```
 
@@ -381,8 +398,10 @@ interface PacketTimeoutOrdered {
 
 ```typescript
 function handlePacketTimeoutOrdered(datagram: PacketTimeoutOrdered) {
-  // call handler
-  // call module
+  handler.timeoutPacketOrdered(
+    datagram.packet, datagram.proof, datagram.proofHeight, datagram.nextSequenceRecv
+  )
+  module.timeoutPacket(datagram.packet)
 }
 ```
 
@@ -396,8 +415,8 @@ interface PacketTimeoutUnordered {
 
 ```typescript
 function handlePacketTimeoutUnordered(datagram: PacketTimeoutUnordered) {
-  // call handler
-  // call module
+  handler.timeoutPacketUnordered(datagram.packet, datagram.proof, datagram.proofHeight)
+  module.timeoutPacket(datagram.packet)
 }
 ```
 
@@ -411,7 +430,7 @@ interface PacketTimeoutClose {
 
 ```typescript
 function handlePacketTimeoutClose(datagram: PacketTimeoutClose) {
-  // call handler
+  handler.timeoutPacketClose(datagram.packet, datagram.proof, datagram.proofHeight)
 }
 ```
 
@@ -426,7 +445,10 @@ interface PacketCleanupOrdered {
 
 ```typescript
 function handlePacketCleanupOrdered(datagram: PacketCleanupOrdered) {
-  // call handler
+  handler.cleanupPacketOrdered(
+    datagram.packet, datagram.proof,
+    datagram.proofHeight, datagram.nextSequenceRecv
+  )
 }
 ```
 
@@ -441,14 +463,12 @@ interface PacketCleanupUnordered {
 
 ```typescript
 function handlePacketCleanupUnordered(datagram: PacketCleanupUnordered) {
-  // call handler
+  handler.cleanupPacketUnordered(
+    datagram.packet, datagram.proof,
+    datagram.proofHeight, datagram.acknowledgement
+  )
 }
 ```
-
-- expose publicly (write): recvpacket, all timeouts, cleanup
-- expose publicly (read): query
-- expose to modules (write): sendpacket
-- expose to modules (read): query
 
 ### Query (read-only) functions
 
