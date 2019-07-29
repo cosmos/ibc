@@ -45,7 +45,23 @@ interface FungibleTokenPacketData {
 
 ### Subprotocols
 
-The subprotocols described herein should be implemented in a "bank-bridge" module with access to a bank module and to the IBC relayer module.
+The subprotocols described herein should be implemented in a "bank-ibc-bridge" module with access to a bank module and to the IBC relayer module.
+
+#### Initial setup
+
+```typescript
+function setup() {
+  relayerModule.bindPort("bank", ModuleCallbacks{
+    onChanOpenInit,
+    onChanOpenTry,
+    onChanOpenAck,
+    onChanOpenConfirm,
+    onChanCloseConfirm,
+    onRecvPacket,
+    onTimeoutPacket,
+  })
+}
+```
 
 #### Sending packets
 
