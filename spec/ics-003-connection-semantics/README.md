@@ -70,7 +70,6 @@ This ICS defines the `ConnectionState` and `ConnectionEnd` types:
 enum ConnectionState {
   INIT,
   TRYOPEN,
-  CLOSETRY,
   OPEN,
   CLOSED,
 }

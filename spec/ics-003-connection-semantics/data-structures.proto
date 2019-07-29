@@ -1,0 +1,16 @@
+syntax = 'proto3';
+
+enum ConnectionState {
+  INIT = 0;
+  TRYOPEN = 1;
+  OPEN = 2;
+  CLOSED = 3;
+}
+
+message ConnectionEnd {
+  ConnectionState state = 1;
+  string counterpartyConnectionIdentifier = 2;
+  string clientIdentifier = 3;
+  string counterpartyClientIdentifier = 4;
+  uint64 nextTimeoutHeight = 5;
+}

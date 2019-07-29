@@ -92,7 +92,6 @@ The `ConsensusState` of a chain is stored by other chains in order to verify the
 ```typescript
 interface ConsensusState {
   height: uint64
-  root: CommitmentRoot
   validityPredicate: ValidityPredicate
   equivocationPredicate: EquivocationPredicate
 }
@@ -128,14 +127,14 @@ Headers can be submitted to an associated client to update the stored `Consensus
 interface Header {
   height: uint64
   proof: HeaderProof
-  state: Maybe[ConsensusState]
+  predicate: Maybe[ValidityPredicate]
   root: CommitmentRoot
 }
 ```
 where
   * `height` is the height of the the consensus instance.
   * `proof` is the commit proof used by `Consensus.ValidityPredicate` to verify the header.
-  * `state` is the new (or partially new) consensus state.
+  * `predicate` is the new (or partially new) consensus state.
   * `root` is the new `CommitmentRoot` which will replace the existing one.
 
 #### ValidityPredicate

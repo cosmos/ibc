@@ -1,0 +1,14 @@
+syntax = 'proto3';
+
+message ConsensusState {
+  uint64 height = 1;
+  bytes validityPredicate = 2; // TODO
+  bytes equivocationPredicate = 3; // TODO
+}
+
+message Header {
+  uint64 height = 1;
+  bytes proof = 2;
+  bytes predicate = 3;
+  bytes commitmentRoot = 4;
+}
