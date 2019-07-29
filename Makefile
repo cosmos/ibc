@@ -22,4 +22,7 @@ check_sections:
 check_proto:
 	$(MAKE) -C spec/ics-026-relayer-module check_proto
 
-.PHONY: $(TOPTARGETS) $(SUBDIRS) check check_links check_dependencies check_syntax check_sections check_proto
+spec_pdf:
+	pandoc --pdf-engine=xelatex --template eisvogel --filter pandoc-include --mathjax --toc --number-sections -o spec.pdf spec.pdc
+
+.PHONY: $(TOPTARGETS) $(SUBDIRS) check check_links check_dependencies check_syntax check_sections check_proto spec_pdf
