@@ -37,35 +37,35 @@ The functions `generate` & `authenticate` are defined as in [ICS 5](../ics-005-p
 Modules must expose the following function signatures to the relayer module, which are called upon the receipt of various datagrams:
 
 ```typescript
-function onChanOpenInit() {
+function onChanOpenInit(): boolean {
   // defined by the module
 }
 
-function onChanOpenTry() {
+function onChanOpenTry(): boolean {
   // defined by the module
 }
 
-function onChanOpenAck() {
+function onChanOpenAck(): boolean {
   // defined by the module
 }
 
-function onChanOpenConfirm() {
+function onChanOpenConfirm(): boolean {
   // defined by the module
 }
 
-function onChanOpenTimeout() {
+function onChanOpenTimeout(): void {
   // defined by the module
 }
 
-function onChanCloseConfirm() {
+function onChanCloseConfirm(): void {
   // defined by the module
 }
 
-function onRecvPacket() {
-  // defined by the module
+function onRecvPacket(): bytes {
+  // defined by the module, returns acknowledgement
 }
 
-function onTimeoutPacket() {
+function onTimeoutPacket(): boolean {
   // defined by the module
 }
 ```
@@ -78,9 +78,9 @@ interface ModuleCallbacks {
   onChanOpenTry: () => boolean
   onChanOpenAck: () => boolean
   onChanOpenConfirm: () => boolean
-  onChanOpenTimeout: () => boolean
-  onChanCloseConfirm: () => boolean
-  onRecvPacket: () => boolean
+  onChanOpenTimeout: () => void
+  onChanCloseConfirm: () => void
+  onRecvPacket: () => bytes
   onTimeoutPacket: () => boolean
 }
 ```

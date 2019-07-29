@@ -6,7 +6,7 @@ category: ibc-app
 requires: 25, 26
 author: Christopher Goes <cwgoes@tendermint.com>
 created: 2019-07-15 
-modified: 2019-07-15
+modified: 2019-07-29
 ---
 
 ## Synopsis
@@ -47,6 +47,8 @@ interface FungibleTokenPacketData {
 
 The subprotocols described herein should be implemented in a "bank-bridge" module with access to a bank module and to the IBC relayer module.
 
+#### Sending packets
+
 In plain English, between chains `A` and `B`:
 - Chain `A` bank module accepts new connections / channels from any module on another chain.
 - Denominations sent from chain `B` are prefixed with the connection identifier and the name of the counterparty port of `B`, e.g. `0x1234/bank` for the bank module on chain `B` with connection identifier `0x1234`. No supply limits are enforced, but the bank module on chain `A` tracks the amount of each denomination sent by chain `B` and keeps it in a store location which can be queried / proven.
@@ -54,22 +56,65 @@ In plain English, between chains `A` and `B`:
 - Each chain, locally, can keep a lookup table to use short, user-friendly local denominations in state which are translated to and from the longer denominations when sending and receiving packets.
 
 ```typescript
-function handleFungibleTokenPacketSend(denomination: string, amount: uint256) {
+function handleFungibleTokenPacketSend(denomination: string, amount: uint256, receiver: string) {
   // transfer coins from user
   // construct receiving denomination
   // escrow coins in amount (if source) or unescrow (if destination)
   // send packet
+  data = FungibleTokenPacketData{denomination, amount, receiver}
+  relayerModule.sendPacket(data)
+}
+```
+
+#### Relayer module callbacks
+
+```typescript
+function onChanOpenInit(): boolean {
+  return true
 }
 ```
 
 ```typescript
-function handleFungibleTokenPacketRecv(denomination: string, amount: uint256) {
+function onChanOpenTry(): boolean {
+  return true
+}
+```
+
+```typescript
+function onChanOpenAck(): boolean {
+  return true
+}
+```
+
+```typescript
+function onChanOpenTimeout(): boolean {
+  return true
+}
+```
+
+```typescript
+function onChanCloseConfirm(): boolean {
+  return true
+}
+```
+
+```typescript
+function onRecvPacket(packet: Packet) {
+  FungibleTokenPacketData data = packet.data
   // recv packet
   // verify receiving denomination
   // unescrow coins in amount (if source) or escrow (if destination)
   // transfer coins to user
 }
 ```
+
+```typescript
+function onTimeoutPacket(): boolean {
+  // refund tokens
+}
+```
+
+#### Notes
 
 This does not yet handle the "diamond problem", where a user sends a token originating on chain A to chain B, then to chain D, and wants to return it through D -> C -> A — since the supply is tracked as owned by chain B, chain C cannot serve as the intermediary. It is not yet clear whether that case should be dealt with in-protocol or not — it may be fine to just require the original path of redemption (and if there is frequent liquidity and some surplus on both paths the diamond path will work most of the time). Complexities arising from long redemption paths may lead to the emergence of central chains in the network topology.
 
@@ -92,6 +137,7 @@ Coming soon.
 ## History
 
 15 July 2019 - Draft written
+29 July 2019 - Major revisions; cleanup
 
 ## Copyright
 
