@@ -129,6 +129,10 @@ Data computable from a subset of state and knowledge of the state machine (e.g. 
 
 Light clients of particular consensus algorithms may have different and/or more strict data availability requirements.
 
+### Properties & Invariants
+
+(TODO)
+
 ## Backwards Compatibility
 
 Not applicable.

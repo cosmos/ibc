@@ -595,6 +595,10 @@ Query functions for clients, connections, and channels should be exposed (read-o
 
 See [ICS 20](../ics-020-fungible-token-transfer) for a usage example.
 
+### Properties & Invariants
+
+(TODO)
+
 ## Backwards Compatibility
 
 Not applicable.

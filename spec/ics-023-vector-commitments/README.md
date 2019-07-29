@@ -232,6 +232,10 @@ For all other values `otherValue` where `value /= otherValue`, for all values of
 Pr(verifyMembership(root, proof, key, otherValue) === true) negligible in λ
 ```
 
+### Properties & Invariants
+
+(TODO)
+
 ## Backwards Compatibility
 
 Not applicable.

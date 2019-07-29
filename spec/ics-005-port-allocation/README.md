@@ -153,6 +153,10 @@ function releasePort(id: Identifier) {
 }
 ```
 
+### Properties & Invariants
+
+(TODO)
+
 ## Backwards Compatibility
 
 Not applicable.

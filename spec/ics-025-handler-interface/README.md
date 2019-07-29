@@ -321,6 +321,10 @@ function recvTimeoutPacket(packet: Packet, proof: CommitmentProof) {
 }
 ```
 
+### Properties & Invariants
+
+(TODO)
+
 ## Backwards Compatibility
 
 Not applicable.

@@ -762,6 +762,10 @@ function queryChannel(connId: Identifier, chanId: Identifier): ChannelEnd | void
 }
 ```
 
+### Properties & Invariants
+
+(TODO)
+
 ## Backwards Compatibility
 
 Not applicable.

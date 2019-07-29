@@ -350,6 +350,10 @@ function queryClientConnections(id: Identifier): Set<Identifier> {
 }
 ```
 
+### Properties & Invariants
+
+(TODO)
+
 ## Backwards Compatibility
 
 Not applicable.

@@ -381,6 +381,10 @@ function root(header: H): LogStore {
 }
 ```
 
+### Properties & Invariants
+
+(TODO)
+
 ## Backwards Compatibility
 
 Not applicable.
