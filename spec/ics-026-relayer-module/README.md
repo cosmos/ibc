@@ -22,6 +22,8 @@ but is a bit tricky to understand and may require extra work on the part of rela
 
 All functions provided by the IBC handler interface are defined as in [ICS 25](../ics-025-handler-interface).
 
+The functions `generate` & `authenticate` are defined as in [ICS 5](../ics-005-port-allocation).
+
 ### Desired Properties
 
 - Modules should be able to bind to ports and own channels through the relayer module.
@@ -72,31 +74,67 @@ These are combined together in a `ModuleCallbacks` interface:
 
 ```typescript
 interface ModuleCallbacks {
-  onChanOpenInit: () => ()
+  onChanOpenInit: () => boolean
+  onChanOpenTry: () => boolean
+  onChanOpenAck: () => boolean
+  onChanOpenConfirm: () => boolean
+  onChanOpenTimeout: () => boolean
+  onChanCloseConfirm: () => boolean
+  onRecvPacket: () => boolean
+  onTimeoutPacket: () => boolean
 }
 ```
 
 Callbacks are provided when the module binds to a port.
 
+```typescript
+function callbackKey(portIdentifier: Identifier) {
+  return "callbacks/{portIdentifier}"
+}
+```
+
+The calling module identifier is also stored for future authentication should the callbacks need to be altered.
+
+```typescript
+function authenticationKey(portIdentifier: Identifier) {
+  return "authentication/{portIdentifier}"
+}
+```
+
 ### Port binding
 
 The IBC relayer module sits in-between the handler module ([ICS 25](../ics-025-handler-interface)) and individual modules on the host state machine.
 
+The function `bindPort` can be called by a module in order to bind to a port, through the relayer module, and set up callbacks.
+
 ```typescript
 function bindPort(id: Identifier, callbacks: Callbacks) {
-  // todo
+  assert(get(callbackKey(id)) === null)
+  handler.bindPort(id)
+  key = generate()
+  set(authenticationKey(id), key)
+  set(callbackKey(id), callbacks)
 }
 ```
 
+The function `updatePort` can be called by a module in order to alter the callbacks.
+
+
 ```typescript
-function transferPort(id: Identifier) {
-  // todo
+function updatePort(id: Identifier, newCallbacks: Callbacks) {
+  assert(authenticate(get(authenticationKey(id))))
+  set(callbackKey(id), newCallbacks)
 }
 ```
+
+The function `releasePort` can be called by a module in order to release a port previously in use.
 
 ```typescript
 function releasePort(id: Identifier) {
-  // todo
+  assert(authenticate(get(authenticationKey(id))))
+  handler.releasePort(id)
+  del(callbackKey(id))
+  del(authenticationKey(id))
 }
 ```
 
