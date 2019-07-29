@@ -155,7 +155,7 @@ function releasePort(id: Identifier) {
 
 ### Properties & Invariants
 
-- first-come-first-serve port binding
+- Port identifiers are first-come-first-serve: once a module has bound to a port, only that module can utilize the port until the module transfers or releases it.
 
 ## Backwards Compatibility
 

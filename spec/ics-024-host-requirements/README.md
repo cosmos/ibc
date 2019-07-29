@@ -129,11 +129,6 @@ Data computable from a subset of state and knowledge of the state machine (e.g. 
 
 Light clients of particular consensus algorithms may have different and/or more strict data availability requirements.
 
-### Properties & Invariants
-
-- get after set
-- substore part
-
 ## Backwards Compatibility
 
 Not applicable.

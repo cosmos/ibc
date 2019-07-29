@@ -597,8 +597,7 @@ See [ICS 20](../ics-020-fungible-token-transfer) for a usage example.
 
 ### Properties & Invariants
 
-- port binding proxy correctness
-- safe calls, recv packet iff module accepts, etc. for handshake
+- Proxy port binding is first-come-first-serve: once a module binds to a port through the IBC relayer module, only that module can utilize that port until the module releases it.
 
 ## Backwards Compatibility
 

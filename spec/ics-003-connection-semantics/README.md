@@ -352,8 +352,8 @@ function queryClientConnections(id: Identifier): Set<Identifier> {
 
 ### Properties & Invariants
 
-- non-conflicting connections
-- no MITM on handshake
+- Connection identifiers are first-come-first-serve: once a connection has been negotiated, a unique identifier pair exists between two chains.
+- The connection handshake cannot be man-in-the-middled by another blockchain's IBC handler.
 
 ## Backwards Compatibility
 

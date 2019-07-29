@@ -165,7 +165,7 @@ batchVerifyNonMembership(root, proof, keys) ===
 
 If batch verification is possible and more efficient than individual verification of one proof per element, an commitment construction SHOULD define batch verification functions.
 
-### Properties
+### Properties & Invariants
 
 Commitments MUST be *complete*, *sound*, and *position binding*. These properties are defined with respect to a security parameter `λ`, which MUST be agreed upon by the manager, prover, and verifier (and often will be constant for the commitment algorithm).
 
@@ -231,10 +231,6 @@ For all other values `otherValue` where `value /= otherValue`, for all values of
 ```
 Pr(verifyMembership(root, proof, key, otherValue) === true) negligible in λ
 ```
-
-### Properties & Invariants
-
-- as above
 
 ## Backwards Compatibility
 

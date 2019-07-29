@@ -315,7 +315,7 @@ function recvTimeoutPacket(packet: Packet, proof: CommitmentProof) {
 
 ### Properties & Invariants
 
-- see other icss
+The IBC handler module interface as defined here inherits properties of functions as defined in their associated specifications.
 
 ## Backwards Compatibility
 

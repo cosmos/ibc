@@ -764,11 +764,9 @@ function queryChannel(connId: Identifier, chanId: Identifier): ChannelEnd | void
 
 ### Properties & Invariants
 
-- non-conflicting channels
-- module ownership
-- exactly once delivery
-- safety, liveness
-- no MITM on handshake
+- The unique combinations of channel & port identifiers are first-come-first-serve: once a pair has been allocated, only the modules owning the ports in question can send or receive on that channel.
+- Packets are delivered exactly once, assuming that the chains are live within the timeout window, and in case of timeout can be timed-out exactly once on the sending chain.
+- The channel handshake cannot be man-in-the-middle attacked by another module on either blockchain or another blockchain's IBC handler.
 
 ## Backwards Compatibility
 
