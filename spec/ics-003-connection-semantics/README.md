@@ -96,6 +96,36 @@ function connectionKey(id: Identifier): Key {
 }
 ```
 
+A reverse mapping from clients to a set of connections (utilized to look up all connections using a client) is stored under a unique prefix per-client:
+
+```typescript
+function clientConnectionsKey(clientIdentifier: Identifier): Key {
+  return "clients/{clientIdentifier}/connections"
+}
+```
+
+### Helper functions
+
+`addConnectionToClient` is used to add a connection identifier to the set of connections associated with a client.
+
+```typescript
+function addConnectionToClient(clientIdentifier: Identifier, connectionIdentifier: Identifier) {
+  conns = get(clientConnectionsKey(clientIdentifier, connectionIdentifier))
+  conns.add(connectionIdentifier)
+  set(clientConnectionsKey(clientIdentifier, connectionIdentifier), conns)
+}
+```
+
+`removeConnectionFromClient` is used to remove a connection identifier from the set of connections associated with a client.
+
+```
+function removeConnectionFromClient(clientIdentifier: Identifier, connectionIdentifier: Identifier) {
+  conns = get(clientConnectionsKey(clientIdentifier, connectionIdentifier))
+  conns.remove(connectionIdentifier)
+  set(clientConnectionsKey(clientIdentifier, connectionIdentifier), conns)
+}
+```
+
 ### Subprotocols
 
 This ICS defines two subprotocols: opening handshake and closing handshake. Header tracking and closing-by-equivocation are defined in [ICS 2](../ics-002-consensus-verification). Datagrams defined herein are handled as external messages by the IBC relayer module defined in [ICS 26](../ics-026-relayer-module).
@@ -134,6 +164,7 @@ function connOpenInit(
   connection = ConnectionEnd{state, desiredCounterpartyConnectionIdentifier, clientIdentifier,
     counterpartyClientIdentifier, nextTimeoutHeight}
   set(connectionKey(identifier), connection)
+  addConnectionToClient(clientIdentifier, identifier)
 }
 ```
 
@@ -160,6 +191,7 @@ function connOpenTry(
   connection = ConnectionEnd{state, counterpartyConnectionIdentifier, clientIdentifier,
                              counterpartyClientIdentifier, nextTimeoutHeight}
   set(connectionKey(identifier), connection)
+  addConnectionToClient(clientIdentifier, identifier)
 }
 ```
 
@@ -242,6 +274,7 @@ function connOpenTimeout(
       ))
   }
   delete(connectionKey(identifier))
+  removeConnectionFromClient(clientIdentifier, identifier)
 }
 ```
 
@@ -268,84 +301,28 @@ A correct protocol execution flows as follows (note that all calls are made thro
 *ConnCloseInit* initializes a close attempt on chain A.
 
 ```typescript
-function connCloseInit(identifier: Identifier, nextTimeoutHeight: uint64) {
+function connCloseInit(identifier: Identifier) {
   connection = get(connectionKey(identifier))
   assert(connection.state === OPEN)
-  connection.state = CLOSETRY
-  connection.nextTimeoutHeight = nextTimeoutHeight
-  set(connectionKey(identifier), connection)
-}
-```
-
-*ConnCloseTry* relays the intent to close a connection from chain A to chain B.
-
-```typescript
-function connCloseTry(
-  identifier: Identifier, proofInit: CommitmentProof, proofHeight: uint64,
-  timeoutHeight: uint64, nextTimeoutHeight: uint64) {
-  assert(getConsensusState().getHeight() <= timeoutHeight)
-  connection = get(connectionKey(identifier))
-  assert(connection.state === OPEN)
-  counterpartyStateRoot = get(rootKey(connection.clientIdentifier, proofHeight))
-  expected = ConnectionEnd{CLOSETRY, identifier, connection.counterpartyClientIdentifier,
-                           connection.clientIdentifier, timeoutHeight}
-  assert(verifyMembership(counterpartyStateRoot, proofInit, connectionKey(counterpartyConnectionIdentifier), expected))
   connection.state = CLOSED
-  connection.nextTimeoutHeight = nextTimeoutHeight
   set(connectionKey(identifier), connection)
 }
 ```
 
-*ConnCloseAck* acknowledges a connection closure on chain B.
+*ConnCloseConfirm* relays the intent to close a connection from chain A to chain B.
 
 ```typescript
-function connCloseAck(
-  identifier: Identifier, proofTry: CommitmentProof,
-  proofHeight: uint64, timeoutHeight: uint64) {
+function connCloseConfirm(
+  identifier: Identifier, proofInit: CommitmentProof, proofHeight: uint64) {
   assert(getConsensusState().getHeight() <= timeoutHeight)
   connection = get(connectionKey(identifier))
-  assert(connection.state === CLOSETRY)
+  assert(connection.state === OPEN)
   counterpartyStateRoot = get(rootKey(connection.clientIdentifier, proofHeight))
   expected = ConnectionEnd{CLOSED, identifier, connection.counterpartyClientIdentifier,
-                           connection.clientIdentifier, timeoutHeight}
-  assert(verifyMembership(counterpartyStateRoot, proofTry, connectionKey(counterpartyConnectionIdentifier), expected))
+                           connection.clientIdentifier, 0}
+  assert(verifyMembership(counterpartyStateRoot, proofInit, connectionKey(counterpartyConnectionIdentifier), expected))
   connection.state = CLOSED
-  connection.nextTimeoutHeight = 0
   set(connectionKey(identifier), connection)
-}
-```
-
-*ConnCloseTimeout* aborts a connection closing attempt due to a timeout on the other side and reopens the connection.
-
-```typescript
-function connCloseTimeout(
-  identifier: Identifier, proofTimeout: CommitmentProof,
-  proofHeight: uint64, timeoutHeight: uint64) {
-  connection = get(connectionKey(identifier))
-  counterpartyStateRoot = get(rootKey(connection.clientIdentifier, proofHeight))
-  assert(proofHeight > connection.nextTimeoutHeight)
-  switch state {
-    case CLOSETRY:
-      expected = ConnectionEnd{OPEN, identifier, connection.counterpartyClientIdentifier,
-                               connection.clientIdentifier, timeoutHeight}
-      assert(verifyMembership(
-        counterpartyStateRoot, proofTimeout,
-        connectionKey(counterpartyConnectionIdentifier), expected
-      ))
-      connection.state = OPEN
-      connection.nextTimeoutHeight = 0
-      set(connectionKey(identifier), connection)
-    case CLOSED:
-      expected = ConnectionEnd{CLOSETRY, identifier, connection.counterpartyClientIdentifier,
-                               connection.clientIdentifier, timeoutHeight}
-      assert(verifyMembership(
-        counterpartyStateRoot, proofTimeout,
-        connectionKey(counterpartyConnectionIdentifier), expected
-      ))
-      connection.state = OPEN
-      connection.nextTimeoutHeight = 0
-      set(connectionKey(identifier), connection)
-  }
 }
 ```
 
@@ -362,6 +339,14 @@ Connections can be queried by identifier with `queryConnection`.
 ```typescript
 function queryConnection(id: Identifier): ConnectionEnd | void {
   return get(connectionKey(id))
+}
+```
+
+Connections associated with a particular client can be queried by client identifier with `queryClientConnections`.
+
+```typescript
+function queryClientConnections(id: Identifier): Set<Identifier> {
+  return get(clientConnectionsKey(id))
 }
 ```
 
@@ -389,6 +374,7 @@ Parts of this document were inspired by the [previous IBC specification](https:/
 
 29 March 2019 - Initial draft version submitted
 17 May 2019 - Draft finalized
+29 July 2019 - Revisions to track connection set associated with client
 
 ## Copyright
 

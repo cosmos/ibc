@@ -14,6 +14,8 @@ To propose a new standard, [open an issue](https://github.com/cosmos/ics/issues/
 
 See [PROCESS.md](PROCESS.md) for a description of the standardization process.
 
+Quick references & interchain standards can be read as [a single PDF](./spec.pdf).
+
 ## IBC Quick References
 
 The subject of most initial interchain standards is the inter-blockchain communication protocol, "IBC".

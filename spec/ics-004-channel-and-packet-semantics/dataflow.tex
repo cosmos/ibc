@@ -9,32 +9,32 @@
 \tikzstyle{arrow} = [thick,->,>=stealth]
 \begin{tikzpicture}[auto, thick, node distance=2cm, >=triangle 45]
 
-\draw (0,0) -- (4,0) -- (4,8) -- (0,8) -- (0,0);
+\draw (0,0) -- (6,0) -- (6,8) -- (0,8) -- (0,0);
 
-\node (clientB) [draw] at (2,1) {\textsc{Client 'B'}};
+\node (clientB) [draw] at (3,1) {\textsc{Client 'B'}};
 
-\node (conn123a) [draw] at (2,2) {\textsc{Conn '123a'}};
+\node (conn123a) [draw] at (3,2) {\textsc{Conn '123a'}};
 
-\node (chan0x1a) [draw] at (2,3) {\textsc{Chan '0x1a'}};
-\node (chan0x2a) [draw] at (2,4) {\textsc{Chan '0x2a'}};
-\node (chan0x3a) [draw] at (2,5) {\textsc{Chan '0x3a'}};
-\node (chan0x4a) [draw] at (2,6) {\textsc{Chan '0x4a'}};
+\node (chan0x1a) [draw] at (3,3) {\textsc{Port '1', Chan '0x1a'}};
+\node (chan0x2a) [draw] at (3,4) {\textsc{Port '2', Chan '0x2a'}};
+\node (chan0x3a) [draw] at (3,5) {\textsc{Port '3', Chan '0x3a'}};
+\node (chan0x4a) [draw] at (3,6) {\textsc{Port '4', Chan '0x4a'}};
 
 \draw[arrow, bend right] (chan0x1a.west) to (conn123a.west);
 \draw[arrow, bend right] (chan0x2a.west) to (conn123a.west);
 \draw[arrow, bend right] (chan0x3a.west) to (conn123a.west);
 \draw[arrow, bend right] (chan0x4a.west) to (conn123a.west);
 
-\draw (10,0) -- (14,0) -- (14,8) -- (10,8) -- (10,0);
+\draw (12,0) -- (18,0) -- (18,8) -- (12,8) -- (12,0);
 
-\node (clientA) [draw] at (12,1) {\textsc{Client 'A'}};
+\node (clientA) [draw] at (15,1) {\textsc{Client 'A'}};
 
-\node (conn123b) [draw] at (12,2) {\textsc{Conn '123b'}};
+\node (conn123b) [draw] at (15,2) {\textsc{Conn '123b'}};
 
-\node (chan0x1b) [draw] at (12,3) {\textsc{Chan '0x1b'}};
-\node (chan0x2b) [draw] at (12,4) {\textsc{Chan '0x2b'}};
-\node (chan0x3b) [draw] at (12,5) {\textsc{Chan '0x3b'}};
-\node (chan0x4b) [draw] at (12,6) {\textsc{Chan '0x4b'}};
+\node (chan0x1b) [draw] at (15,3) {\textsc{Port '1', Chan '0x1b'}};
+\node (chan0x2b) [draw] at (15,4) {\textsc{Port '2', Chan '0x2b'}};
+\node (chan0x3b) [draw] at (15,5) {\textsc{Port '3', Chan '0x3b'}};
+\node (chan0x4b) [draw] at (15,6) {\textsc{Port '4', Chan '0x4b'}};
 
 \draw[arrow, bend left] (chan0x1b.east) to (conn123b.east);
 \draw[arrow, bend left] (chan0x2b.east) to (conn123b.east);
@@ -47,8 +47,8 @@
 \draw[arrow] (conn123a) -- node[anchor=east] {\textsc{\tiny{Verification}}} (clientB);
 \draw[arrow] (conn123b) -- node[anchor=west] {\textsc{\tiny{Verification}}} (clientA);
 
-\draw[arrow] (8,1) -- node[anchor=south east] {\textsc{\tiny{Headers from 'A'}}} (clientA);
-\draw[arrow] (6,1) -- node[anchor=south west] {\textsc{\tiny{Headers from 'B'}}} (clientB);
+\draw[arrow] (10,1) -- node[anchor=south east] {\textsc{\tiny{Headers from 'A'}}} (clientA);
+\draw[arrow] (8,1) -- node[anchor=south west] {\textsc{\tiny{Headers from 'B'}}} (clientB);
 
 \draw[arrow] (chan0x1b) -- (chan0x1a);
 \draw[arrow] (chan0x1a) -- node[anchor=south] {\textsc{\tiny{Channel Handshake (once), packets (many)}}} (chan0x1b);

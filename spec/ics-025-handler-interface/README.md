@@ -88,7 +88,7 @@ function updateClient(id: Identifier, header; Header): error | void {
 The default IBC relayer module will allow external calls to `freezeClient`.
 
 ```typescript
-function freezeClient(id: Identifier, headerOne: Header, headerTwo: Header): error | void {
+function freezeClient(id: Identifier, firstHeader: Header, secondHeader: Header): error | void {
   // defined in ICS 2
 }
 ```
@@ -166,34 +166,12 @@ function connCloseInit(identifier: Identifier, nextTimeoutHeight: uint64) {
 }
 ```
 
-`connCloseTry` continues the graceful connection closing process. It will fail if there are any open channels using the connection, if the proof is invalid, or if the identifier is invalid.
+`connCloseConfirm` finalizes the graceful connection closing process. It will fail if the proof is invalid or if the identifier is invalid.
 
-The default IBC relayer module will allow external calls to `connCloseTry`.
-
-```typescript
-function connCloseTry(
-  identifier: Identifier, proofInit: CommitmentProof,
-  timeoutHeight: uint64, nextTimeoutHeight: uint64) {
-  // defined in ICS 3
-}
-```
-
-`connCloseAck` finalizes the graceful connection closing process. It will fail if the proof is invalid or if the identifier is invalid.
-
-The default IBC relayer module will allow external calls to `connCloseAck`.
+The default IBC relayer module will allow external calls to `connCloseConfirm`.
 
 ```typescript
-function connCloseAck(identifier: Identifier, proofTry: CommitmentProof, timeoutHeight: uint64) {
-  // defined in ICS 3
-}
-```
-
-`connCloseTimeout` proves that a connection closing handshake has timed-out and resets the process.
-
-The default IBC relayer module will allow external calls to `connCloseTimeout`.
-
-```typescript
-function connCloseTimeout(identifier: Identifier, proofTimeout: CommitmentProof, timeoutHeight: uint64) {
+function connCloseConfirm(identifier: Identifier, proofInit: CommitmentProof, proofHeight: uint64) {
   // defined in ICS 3
 }
 ```
@@ -214,7 +192,7 @@ By default, channels are owned by the creating port, meaning only the module bou
 
 ```typescript
 function chanOpenInit(
-  connectionIdentifier: Identifier, channelIdentifier: Identifier,
+  connectionHops: [Identifier], portIdentifier: Identifier, channelIdentifier: Identifier,
   counterpartyChannelIdentifier: Identifier, counterpartyPortIdentifier: Identifier, nextTimeoutHeight: uint64) {
   // defined in ICS 4
 }
@@ -226,8 +204,8 @@ The default IBC relayer module will allow external calls to `chanOpenTry`.
 
 ```typescript
 function chanOpenTry(
-  connectionIdentifier: Identifier, channelIdentifier: Identifier, counterpartyChannelIdentifier: Identifier,
-  portIdentifier: Identifier, counterpartyPortIdentifier: Identifier,
+  connectionHops: [Identifier], portIdentifier: Identifier, channelIdentifier: Identifier,
+  counterpartyPortIdentifier: Identifier, counterpartyChannelIdentifier: Identifier,
   timeoutHeight: uint64, nextTimeoutHeight: uint64, proofInit: CommitmentProof) {
   // defined in ICS 4
 }
@@ -239,7 +217,7 @@ The default IBC relayer module will allow external calls to `chanOpenAck`.
 
 ```typescript
 function chanOpenAck(
-  connectionIdentifier: Identifier, channelIdentifier: Identifier,
+  portIdentifier: Identifier, channelIdentifier: Identifier,
   timeoutHeight: uint64, nextTimeoutHeight: uint64, proofTry: CommitmentProof) {
   // defined in ICS 4
 }
@@ -251,7 +229,7 @@ The default IBC relayer module will allow external calls to `chanOpenConfirm`.
 
 ```typescript
 function chanOpenConfirm(
-  connectionIdentifier: Identifier, channelIdentifier: Identifier,
+  portIdentifier: Identifier, channelIdentifier: Identifier,
   timeoutHeight: uint64, proofAck: CommitmentProof) {
   // defined in ICS 4
 }
@@ -263,7 +241,7 @@ The default IBC relayer module will allow external calls to `chanOpenTimeout`.
 
 ```typescript
 function chanOpenTimeout(
-  connectionIdentifier: Identifier, channelIdentifier: Identifier,
+  portIdentifier: Identifier, channelIdentifier: Identifier,
   timeoutHeight: uint64, proofTimeout: CommitmentProof) {
   // defined in ICS 4
 }
@@ -280,44 +258,19 @@ function queryChannel(connId: Identifier, chanId: Identifier): void {
 `chanCloseInit` initiates the channel closing handshake.
 
 ```typescript
-function chanCloseInit(
-  connectionIdentifier: Identifier, channelIdentifier: Identifier, nextTimeoutHeight: uint64) {
+function chanCloseInit(portIdentifier: Identifier, channelIdentifier: Identifier) {
   // defined in ICS 4
 }
 ```
 
-`chanCloseTry` acknowledges the initialization of the channel closing handshake on the counterparty chain.
+`chanCloseConfirm` acknowledges the closure of a channel on the counterparty chain and closes the corresponding end on this chain.
 
-The default IBC relayer module will allow external calls to `chanCloseTry`.
-
-```typescript
-function chanCloseTry(
-  connectionIdentifier: Identifier, channelIdentifier: Identifier,
-  timeoutHeight: uint64, nextTimeoutHeight: uint64, proofInit: CommitmentProof) {
-  // defined in ICS 4
-}
-```
-
-`chanCloseAck` acknowledges the acknowledgement and finalizes the channel closing handshake.
-
-The default IBC relayer module will allow external calls to `chanCloseAck`.
+The default IBC relayer module will allow external calls to `chanCloseConfirm`.
 
 ```typescript
-function chanCloseAck(
-  connectionIdentifier: Identifier, channelIdentifier: Identifier,
-  timeoutHeight: uint64, proofTry: CommitmentProof) {
-  // defined in ICS 4
-}
-```
-
-`chanCloseTimeout` proves that a channel closing handshake has timed-out and resets the process.
-
-The default IBC relayer module will allow external calls to `chanCloseTimeout`.
-
-```typescript
-function chanCloseTimeout(
-  connectionIdentifier: Identifier, channelIdentifier: Identifier,
-  timeoutHeight: uint64, proofTimeout: CommitmentProof) {
+function chanCloseConfirm(
+  portIdentifier: Identifier, channelIdentifier: Identifier,
+  proofInit: CommitmentProof, proofHeight: uint64) {
   // defined in ICS 4
 }
 ```
