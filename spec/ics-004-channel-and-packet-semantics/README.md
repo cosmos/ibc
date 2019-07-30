@@ -242,7 +242,7 @@ function chanOpenTry(
   timeoutHeight: uint64, nextTimeoutHeight: uint64,
   proofInit: CommitmentProof, proofHeight: uint64) {
   assert(connectionHops.length === 2)
-  assert(getConsensusState().height < timeoutHeight)
+  assert(getCurrentHeight() < timeoutHeight)
   assert(get(channelKey(portIdentifier, channelIdentifier)) === null)
   assert(authenticate(get(portKey(portIdentifier))))
   connection = get(connectionKey(connectionHops[0]))
@@ -272,7 +272,7 @@ function chanOpenAck(
   channelIdentifier: Identifier, portIdentifier: Identifier,
   timeoutHeight: uint64, nextTimeoutHeight: uint64,
   proofTry: CommitmentProof, proofHeight: uint64) {
-  assert(getConsensusState().height < timeoutHeight)
+  assert(getCurrentHeight() < timeoutHeight)
   channel = get(channelKey(portIdentifier, channelIdentifier))
   assert(channel.state === INIT)
   assert(authenticate(get(portKey(portIdentifier))))

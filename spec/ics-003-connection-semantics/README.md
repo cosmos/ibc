@@ -173,11 +173,12 @@ function connOpenInit(
 function connOpenTry(
   desiredIdentifier: Identifier, counterpartyConnectionIdentifier: Identifier,
   counterpartyClientIdentifier: Identifier, clientIdentifier: Identifier,
-  proofInit: CommitmentProof, proofHeight: uint64,
+  proofInit: CommitmentProof, proofHeight: uint64, consensusHeight: uint64,
   timeoutHeight: uint64, nextTimeoutHeight: uint64) {
-  assert(getConsensusState().getHeight() <= timeoutHeight)
+  assert(consensusHeight <= getCurrentHeight())
+  assert(getCurrentHeight() <= timeoutHeight)
   counterpartyStateRoot = get(rootKey(connection.clientIdentifier, proofHeight))
-  expectedConsensusState = getConsensusState()
+  expectedConsensusState = getConsensusState(consensusHeight)
   expected = ConnectionEnd{INIT, desiredIdentifier, counterpartyClientIdentifier, clientIdentifier, timeoutHeight}
   assert(verifyMembership(counterpartyStateRoot, proofInit,
                           connectionKey(counterpartyConnectionIdentifier), expected))
@@ -199,12 +200,13 @@ function connOpenTry(
 ```typescript
 function connOpenAck(
   identifier: Identifier, proofTry: CommitmentProof, proofHeight: uint64,
-  timeoutHeight: uint64, nextTimeoutHeight: uint64) {
-  assert(getConsensusState().getHeight() <= timeoutHeight)
+  consensusHeight: uint64, timeoutHeight: uint64, nextTimeoutHeight: uint64) {
+  assert(consensusHeight <= getCurrentHeight())
+  assert(getCurrentHeight() <= timeoutHeight)
   connection = get(connectionKey(identifier))
   assert(connection.state === INIT)
   counterpartyStateRoot = get(rootKey(connection.clientIdentifier, proofHeight))
-  expectedConsensusState = getConsensusState()
+  expectedConsensusState = getConsensusState(consensusHeight)
   expected = ConnectionEnd{TRYOPEN, identifier, connection.counterpartyClientIdentifier,
                            connection.clientIdentifier, timeoutHeight}
   assert(verifyMembership(counterpartyStateRoot, proofTry,
@@ -223,7 +225,7 @@ function connOpenAck(
 function connOpenConfirm(
   identifier: Identifier, proofAck: CommitmentProof,
   proofHeight: uint64, timeoutHeight: uint64)
-  assert(getConsensusState().getHeight() <= timeoutHeight)
+  assert(getCurremtHeight() <= timeoutHeight)
   connection = get(connectionKey(identifier))
   assert(connection.state === TRYOPEN)
   counterpartyStateRoot = get(rootKey(connection.clientIdentifier, proofHeight))
@@ -313,7 +315,7 @@ function connCloseInit(identifier: Identifier) {
 ```typescript
 function connCloseConfirm(
   identifier: Identifier, proofInit: CommitmentProof, proofHeight: uint64) {
-  assert(getConsensusState().getHeight() <= timeoutHeight)
+  assert(getCurrentHeight() <= timeoutHeight)
   connection = get(connectionKey(identifier))
   assert(connection.state === OPEN)
   counterpartyStateRoot = get(rootKey(connection.clientIdentifier, proofHeight))

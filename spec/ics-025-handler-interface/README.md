@@ -113,7 +113,8 @@ The default IBC relayer module will allow external calls to `connOpenTry`.
 function connOpenTry(
   desiredIdentifier: Identifier, counterpartyConnectionIdentifier: Identifier,
   counterpartyClientIdentifier: Identifier, clientIdentifier: Identifier,
-  proofInit: CommitmentProof, timeoutHeight: uint64, nextTimeoutHeight: uint64) {
+  proofInit: CommitmentProof, proofHeight: uint64, consensusHeight: uint64,
+  timeoutHeight: uint64, nextTimeoutHeight: uint64) {
   // defined in ICS 3
 }
 ```
@@ -125,6 +126,7 @@ The default IBC relayer module will allow external calls to `connOpenAck`.
 ```typescript
 function connOpenAck(
   identifier: Identifier, proofTry: CommitmentProof,
+  proofHeight: uint64, consensusHeight: uint64,
   timeoutHeight: uint64, nextTimeoutHeight: uint64) {
   // defined in ICS 3
 }
@@ -135,7 +137,9 @@ function connOpenAck(
 The default IBC relayer module will allow external calls to `connOpenConfirm`.
 
 ```typescript
-function connOpenConfirm(identifier: Identifier, proofAck: CommitmentProof, timeoutHeight: uint64) {
+function connOpenConfirm(
+  identifier: Identifier, proofAck: CommitmentProof,
+  proofHeight: uint64, timeoutHeight: uint64) {
   // defined in ICS 3
 }
 ```
@@ -145,7 +149,9 @@ function connOpenConfirm(identifier: Identifier, proofAck: CommitmentProof, time
 The default IBC relayer module will allow external calls to `connOpenTimeout`.
 
 ```typescript
-function connOpenTimeout(identifier: Identifier, proofTimeout: CommitmentProof, timeoutHeight: uint64) {
+function connOpenTimeout(
+  identifier: Identifier, proofTimeout: CommitmentProof,
+  proofHeight: uint64, timeoutHeight: uint64) {
   // defined in ICS 3
 }
 ```
