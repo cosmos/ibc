@@ -110,25 +110,27 @@ function onChanOpenTry(
 
 ```typescript
 function onChanOpenAck(portIdentifier: Identifier, channelIdentifier: Identifier, nextTimeoutHeight: uint64): boolean {
+  // accept all acknowledgements, port has already been validated
   return true
 }
 ```
 
 ```typescript
 function onChanOpenConfirm(portIdentifier: Identifier, channelIdentifier: Identifier): boolean {
+  // accept confirmations, port has already been validated
   return true
 }
 ```
 
 ```typescript
 function onChanOpenTimeout(portIdentifier: Identifier, channelIdentifier: Identifier): void {
-  // ??
+  // no action necessary
 }
 ```
 
 ```typescript
 function onChanCloseConfirm(portIdentifier: Identifier, channelIdentifier: Identifier): void {
-  return true
+  // no action necessary
 }
 ```
 
