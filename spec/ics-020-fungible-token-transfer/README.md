@@ -137,9 +137,9 @@ function onChanCloseConfirm(portIdentifier: Identifier, channelIdentifier: Ident
 ```typescript
 function onRecvPacket(packet: Packet): bytes {
   FungibleTokenPacketData data = packet.data
-  // verify receiving denomination
-  // unescrow coins in amount (if source) or escrow (if destination)
-  // transfer coins to user
+  prefix = "{packet.destPort}/{packet.destChannel}"
+  assert(data.denomination.slice(0, len(prefix)) === prefix)
+  bank.TransferCoins(escrowAccount, data.denomination, data.amount, data.receiver)
   return 0x
 }
 ```
@@ -147,9 +147,18 @@ function onRecvPacket(packet: Packet): bytes {
 ```typescript
 function onTimeoutPacket(packet: Packet): boolean {
   FungibleTokenPacketData data = packet.data
-  // refund tokens
+  prefix = "{packet.destPort}/{packet.destChannel}"
+  assert(data.denomination.slice(0, len(prefix)) === prefix)
+  bank.TransferCoins(escrowAccount, data.denomination.slice(len(prefix)), data.amount, data.sender)
 }
 ```
+
+```typescript
+function sendPacket(packet: Packet): boolean {
+  prefix = "{packet/destPort}/{packet.destChannel}"
+  bank.TransferCoins(data.sender, data.denomination.slice(len(prefix)), data.amount, escrowAccount)
+  relayerModule.sendPacket(packet)
+}
 
 #### Reasoning
 
@@ -157,9 +166,9 @@ function onTimeoutPacket(packet: Packet): boolean {
 
 This implementation preserves both fungibility & supply.
 
-Fungibility: send back to other chain. If had previously sent, can send back.
+Fungibility: If tokens have been sent to the coutnerparty chain, they can be redeemed back in the same denomination & amount on the source chain.
 
-Supply: Redefine supply as unlocked tokens. All send-recv pairs are net zero. Source chain can change supply.
+Supply: Redefine supply as unlocked tokens. All send-recv pairs sum to net zero. Source chain can change supply.
 
 ##### Multi-chain notes
 
