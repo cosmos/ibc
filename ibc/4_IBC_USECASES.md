@@ -8,6 +8,8 @@
 
 **For definitions of terms used in IBC specifications, see [here](./3_IBC_TERMINOLOGY.md).**
 
+**For a discussion of design patterns, see [here](./5_IBC_DESIGN_PATTERNS.md).**
+
 This is a far-from-comprehensive list of possible concrete application use-cases for the inter-blockchain communication protocol (IBC), listed here for inspiration & with the intent of providing inspiration and a set of viewpoints from which to evaluate the design of the protocol.
 
 For each use case, we define the requirements of the involved chains, the high-level packet handling logic, the application properties maintained across a combined-state view of the involved chains, and a list of potential involved zones with different comparative advantages or other application features.

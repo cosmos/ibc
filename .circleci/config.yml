@@ -9,7 +9,8 @@ jobs:
     <<: *linux_defaults
     steps:
       - checkout
-      - run: sudo make setup_dependencies check_dependencies
+      - run: sudo pip install matplotlib networkx
+      - run: make check_dependencies
 
   check_links:
     <<: *linux_defaults
@@ -28,8 +29,15 @@ jobs:
     steps:
       - checkout
       - run: curl -sL https://deb.nodesource.com/setup_10.x | sudo -E bash -
-      - run: sudo apt-get update && sudo apt-get -y install nodejs npm golang-go && sudo npm install codedown coffeescript -g
+      - run: sudo apt-get update && sudo apt-get -y install nodejs npm && sudo npm install codedown typescript tslint -g
       - run: make check_syntax
+
+  check_proto:
+    <<: *linux_defaults
+    steps:
+      - checkout
+      - run: sudo apt-get update && sudo apt-get -y install protobuf-compiler
+      - run: make check_proto
 
 workflows:
   version: 2
@@ -39,3 +47,4 @@ workflows:
       - check_links
       - check_sections
       - check_syntax
+      - check_proto

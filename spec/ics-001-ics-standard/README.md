@@ -103,7 +103,7 @@ See an example history section [below](#history-1).
 
 ### Copyright
 
-An ICS should include a copyright section waiving rights via [CC0](https://creativecommons.org/publicdomain/zero/1.0/).
+An ICS should include a copyright section waiving rights via [Apache 2.0](https://www.apache.org/licenses/LICENSE-2.0).
 
 ## Formatting
 
@@ -124,35 +124,36 @@ The key words "MUST", "MUST NOT", "REQUIRED", "SHALL", "SHALL NOT", "SHOULD", "S
 Pseudocode in specifications should be language-agnostic and formatted in a simple imperative standard, with line numbers, variables, simple conditional blocks, for loops, and
 English fragments where necessary to explain further functionality such as scheduling timeouts. LaTeX images should be avoided because they are difficult to review in diff form.
 
-Pseudocode for structs should use Golang syntax highlighting.
+Pseudocode for structs should be written in simple Typescript, as interfaces.
 
 Example pseudocode struct:
 
-```golang
-type Connection struct {
-  state                   ConnectionState
-  version                 Version
-  counterpartyIdentifier  Identifier
-  consensusState          ConsensusState
+```typescript
+interface Connection {
+  state: ConnectionState
+  version: Version
+  counterpartyIdentifier: Identifier
+  consensusState: ConsensusState
 }
 ```
 
-Pseudocode for algorithms should use CoffeeScript syntax highlighting.
+Pseudocode for algorithms should be written in simple Typescript, as functions.
 
 Example pseudocode algorithm:
 
-```coffeescript
-function startRound(round)
+```typescript
+function startRound(round) {
   round_p = round
   step_p = PROPOSE
-  if proposer(h_p, round_p) == p then
-    if validValue_p /= nil then
+  if (proposer(h_p, round_p) === p) {
+    if (validValue_p !== nil)
       proposal = validValue_p
     else
       proposal = getValue()
     broadcast( {PROPOSAL, h_p, round_p, proposal, validRound} )
-  else
+  } else
     schedule(onTimeoutPropose(h_p, round_p), timeoutPropose(round_p))
+}
 ```
 
 ## History
@@ -161,10 +162,10 @@ This specification was significantly inspired by and derived from Ethereum's [EI
 was in turn derived from Bitcoin's BIP process and Python's PEP process. Antecedent authors are not responsible for any shortcomings of this ICS spec or
 the ICS process. Please direct all comments to the ICS repository maintainers.
 
-March 4th, 2019: Initial ICS 1 draft finished and submitted as a PR
-March 7th, 2019: ICS 1 draft merged
+March 4th, 2019: Initial draft finished and submitted as a PR
+March 7th, 2019: Draft merged
 April 11th, 2019: Updates to pseudocode formatting, add definitions subsection
 
 ## Copyright
 
-Copyright and related rights waived via [CC0](https://creativecommons.org/publicdomain/zero/1.0/).
+All content herein is licensed under [Apache 2.0](https://www.apache.org/licenses/LICENSE-2.0).

@@ -1,0 +1,22 @@
+syntax = 'proto3';
+
+enum ChannelOrder {
+  ORDERED = 0;
+  UNORDERED = 1;
+}
+
+enum ChannelState {
+  INIT = 0;
+  OPENTRY = 1;
+  OPEN = 2;
+  CLOSED = 3;
+}
+
+message ChannelEnd {
+  ChannelState state = 1;
+  ChannelOrder ordering = 2;
+  string counterpartyPortIdentifier = 3;
+  string counterpartyChannelIdentifier = 4;
+  repeated string connectionHops = 5;
+  uint64 nextTimeoutHeight = 6;
+} 

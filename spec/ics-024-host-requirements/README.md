@@ -3,7 +3,7 @@ ics: 24
 title: Host State Machine Requirements
 stage: draft
 category: ibc-core
-required-by: 3, 18
+required-by: 2, 3, 4, 5, 18
 author: Christopher Goes <cwgoes@tendermint.com>
 created: 2019-04-16
 modified: 2019-05-11
@@ -18,8 +18,6 @@ This specification defines the minimal set of interfaces which must be provided 
 IBC is designed to be a common standard which will be hosted by a variety of blockchains & state machines and must clearly define the requirements of the host.
 
 ### Definitions
-
-`ConsensusState` is as defined in [ICS 2](../ics-2-consensus-requirements).
 
 ### Desired Properties
 
@@ -43,16 +41,22 @@ Variable interpolation, denoted by curly braces, MAY be used as shorthand to def
 
 Host chains MUST provide a simple key-value store interface, with three functions which behave in the standard way:
 
-```coffeescript
-function get(Key key) -> Value | null
+```typescript
+type Key = string
+
+type Value = string
 ```
 
-```coffeescript
-function set(Key key, Value value)
+```typescript
+type get = (key: Key) => Value | void
 ```
 
-```coffeescript
-function delete(Key key)
+```typescript
+type set = (key: Key, value: Value) => void
+```
+
+```typescript
+type del = (key: Key) => void
 ```
 
 `Key` is as defined above. `Value` is an arbitrary bytestring encoding of a particular data structure. Encoding details are left to separate ICSs.
@@ -61,37 +65,75 @@ These functions MUST be permissioned to the IBC handler module (the implementati
 
 ### Consensus State Introspection
 
+Host chains MUST provide the ability to introspect their current height, with `getCurrentHeight`:
+
+```
+type getCurrentHeight = () => uint64
+```
+
+Host chains MUST define a unique `ConsensusState` type fulfilling the requirements of [ICS 2](../ics-002-consensus-verification):
+
+```typescript
+type ConsensusState object
+```
+
 Host chains MUST provide the ability to introspect their own consensus state, with `getConsensusState`:
 
-```coffeescript
-function getConsensusState() -> ConsensusState
+```typescript
+type getConsensusState = (height: uint64) => ConsensusState
 ```
 
-`getConsensusState` MUST return the current consensus state for the consensus algorithm of the host chain.
+`getConsensusState` MUST return the consensus state for the consensus algorithm of the host chain at the specified height, for all heights greater than zero and less than or equal to the current height.
 
-### Module system
+### Port system
 
-Host chains MUST implement a module system, where each module has a unique serializable identifier, which:
-- can be read by the IBC handler in an authenticated manner when the module calls the IBC handler, e.g. to send a packet
-- can be used by the IBC handler to look up a module, which it can then call into (e.g. to handle a received packet addressed to that module)
+Host chains MUST implement a port system, where the IBC handler can expose functions to different parts of the state machine (perhaps modules) that can bind to uniquely named ports.
 
-Host chains MUST provide the ability to read the calling module in the IBC handler with `getCallingModule`:
+Host chains MUST permission interaction with the IBC handler such that:
 
-```coffeescript
-function getCallingModule() -> string
-```
+- Once a module has bound to a port, no other modules can use that port until the module releases it
+- A single module can bind to multiple ports
+- Ports are allocated first-come first-serve and "reserved" ports for known modules can be bound when the chain is first started
+
+This permissioning can be implemented either with unique references (object capabilities) for each port (a la the Cosmos SDK) or with source authentication (a la Ethereum), in either case enforced by the host state machine. See [ICS 5](../ics-005-port-allocation) for details.
 
 Modules which wish to make use of particular IBC features MAY implement certain handler functions, e.g. to add additional logic to a channel handshake with an associated module on another chain.
 
-### Datagram Submission
+### Datagram submission
 
-Host chains MAY define a unique `submitDatagram` function to submit [datagrams](../../docs/ibc/2_IBC_TERMINOLOGY.md) directly:
+Host chains MAY define a unique `Datagram` type & `submitDatagram` function to submit [datagrams](../../docs/ibc/2_IBC_TERMINOLOGY.md) directly to the relayer module:
 
-```coffeescript
-function submitDatagram(Datagram datagram)
+```typescript
+type Datagram object
+// fields defined per datagram type, and possible additional fields defined per chain
+
+type SubmitDatagram = (datagram: Datagram) => void
 ```
 
 `submitDatagram` allows relayers to relay IBC datagrams directly to the host chain. Host chains MAY require that the relayer submitting the datagram has an account to pay transaction fees, signs over the datagram in a larger transaction structure, etc - `submitDatagram` MUST define any such packaging required.
+
+Host chains MAY also define a `pendingDatagrams` function to scan the pending datagrams to be sent to another counterparty chain:
+
+```typescript
+type PendingDatagrams = (counterparty: Chain) => Set<Datagram>
+```
+
+```typescript
+interface Chain {
+  submitDatagram: SubmitDatagram
+  pendingDatagrams: PendingDatagrams
+}
+```
+
+### Data availability
+
+For safety (e.g. exactly-once packet delivery), host chains MUST have eventual data availability, such that any key-value pairs in state can be eventually retrieved by relayers.
+
+For liveness (relaying packets, which will have a timeout), host chains MUST have partially synchronous data availability (e.g. within a wall clock or block height bound), such that any key-value pairs in state can be retrieved by relayers within the bound.
+
+Data computable from a subset of state and knowledge of the state machine (e.g. IBC packet data, which is not directly stored) are also assumed to be available to and efficiently computable by relayers.
+
+Light clients of particular consensus algorithms may have different and/or more strict data availability requirements.
 
 ## Backwards Compatibility
 
@@ -115,7 +157,8 @@ Coming soon.
 
 29 April 2019 - Initial draft
 11 May 2019 - Rename "RootOfTrust" to "ConsensusState"
+25 June 2019 - Use "ports" instead of module names
 
 ## Copyright
 
-Copyright and related rights waived via [CC0](https://creativecommons.org/publicdomain/zero/1.0/).
+All content herein is licensed under [Apache 2.0](https://www.apache.org/licenses/LICENSE-2.0).

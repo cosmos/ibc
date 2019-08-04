@@ -1,0 +1,165 @@
+syntax = 'proto3';
+
+/* Client lifecycle management. */
+
+message ClientCreate {
+  string identifier = 1;
+  string consensusState = 2; // TODO
+}
+
+message ClientUpdate {
+  string identifier = 1;
+  string header = 2; // TODO
+}
+
+message ClientFreeze {
+  string identifier = 1;
+  string firstHeader = 2; // TODO
+  string secondHeader = 3; // TODO
+}
+
+/* Connection lifecycle management. */
+
+message ConnOpenInit {
+  string identifier = 1;
+  string desiredCounterpartyIdentifier = 2;
+  string clientIdentifier = 3;
+  string counterpartyClientIdentifier = 4;
+  int64  nextTimeoutHeight = 5;
+}
+
+message ConnOpenTry {
+  string desiredIdentifier = 1;
+  string counterpartyConnectionIdentifier = 2;
+  string counterpartyClientIdentifier = 3;
+  string clientIdentifier = 4;
+  string proofInit = 5; // TODO
+  uint64 timeoutHeight = 6;
+  uint64 nextTimeoutHeight = 7;
+}
+
+message ConnOpenAck {
+  string identifier = 1;
+  string proofTry = 2; // TODO
+  uint64 timeoutHeight = 3;
+  uint64 nextTimeoutHeight = 4;
+}
+
+message ConnOpenConfirm {
+  string identifier = 1;
+  string proofAck = 2; // TODO
+  uint64 timeoutHeight = 3;
+}
+
+message ConnOpenTimeout {
+  string identifier = 1;
+  string proofTimeout = 2; // TODO
+  uint64 timeoutHeight = 3;
+}
+
+message ConnCloseInit {
+  string identifier = 1;
+}
+
+message ConnCloseConfirm {
+  string identifier = 1;
+  string proofInit = 2; // TODO
+  uint64 proofHeight = 3;
+}
+
+/* Channel lifecycle management. */
+
+message ChanOpenInit {
+  string portIdentifier = 1;
+  string channelIdentifier = 2;
+  string counterpartyPortIdentifier = 3;
+  string counterpartyChannelIdentifier = 4;
+  repeated string connectionHops = 5;
+  uint64 nextTimeoutHeight = 6; 
+}
+
+message ChanOpenTry {
+  string portIdentifier = 1;
+  string channelIdentifier = 2;
+  string counterpartyPortIdentifier = 3;
+  string counterpartyChannelIdentifier = 4;
+  repeated string connectionHops = 5;
+  uint64 timeoutHeight = 6;
+  uint64 nextTimeoutHeight = 7;
+  string proofInit = 8; // TODO
+}
+
+message ChanOpenAck {
+  string portIdentifier = 1;
+  string channelIdentifier = 2;
+  uint64 timeoutHeight = 3;
+  uint64 nextTimeoutHeight = 4;
+  string proofTry = 5; // TODO
+}
+
+message ChanOpenConfirm {
+  string portIdentifier = 1;
+  string channelIdentifier = 2;
+  uint64 timeoutHeight = 3;
+  string proofAck = 4; // TODO
+}
+
+message ChanOpenTimeout {
+  string portIdentifier = 1;
+  string channelIdentifier = 2;
+  uint64 timeoutHeight = 3;
+  string proofTimeout = 4; // TODO
+}
+
+message ChanCloseInit {
+  string portIdentifier = 1;
+  string channelIdentifier = 2;
+}
+
+message ChanCloseConfirm {
+  string portIdentifier = 1;
+  string channelIdentifier = 2;
+  string proofInit = 3; // TODO
+  uint64 proofHeight = 4;
+}
+
+/* Packet relay. */
+
+message PacketRecv {
+  string packet = 1; // TODO
+  string proof = 2; // TODO
+  uint64 proofHeight = 3;
+}
+
+message PacketTimeoutOrdered {
+  string packet = 1; // TODO
+  string proof = 2; // TODO
+  uint64 proofHeight = 3;
+  uint64 nextSequenceRecv = 4;
+}
+
+message PacketTimeoutUnordered {
+  string packet = 1; // TODO
+  string proof = 2; // TODO
+  uint64 proofHeight = 3;
+}
+
+message PacketTimeoutClose {
+  string packet = 1; // TODO
+  string proof = 2; // TODO
+  uint64 proofHeight = 3;
+}
+
+message PacketCleanupOrdered {
+  string packet = 1; // TODO
+  string proof = 2; // TODO
+  uint64 proofHeight = 3;
+  uint64 nextSequenceRecv = 4;
+}
+
+message PacketCleanupUnordered {
+  string packet = 1; // TODO
+  string proof = 2; // TODO
+  uint64 proofHeight = 3;
+  bytes  acknowledgement = 4;
+}

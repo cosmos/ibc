@@ -3,7 +3,7 @@ ics: 18
 title: Relayer Algorithms
 stage: draft
 category: ibc-core
-requires: 24
+requires: 24, 25, 26
 author: Christopher Goes <cwgoes@tendermint.com>
 created: 2019-03-07
 modified: 2019-05-11
@@ -39,13 +39,16 @@ The relayer algorithm is defined over a set `C` of chains implementing the IBC p
 
 `submitDatagram` is a procedure defined per-chain (submitting a transaction of some sort).
 
-```coffeescript
-function relay(C)
-  for chain in C
-    for counterparty in C if counterparty != chain
-      datagrams = pendingDatagrams(chain, counterparty)
-      for datagram in datagrams
-        submitDatagram(counterparty, datagram)
+```typescript
+function relay(C: Set<Chain>) {
+  for (const chain of C)
+    for (const counterparty of C)
+      if (counterparty !== chain) {
+        const datagrams = chain.pendingDatagrams(counterparty)
+        for (const datagram of datagrams)
+          counterparty.submitDatagram(datagram)
+      }
+}
 ```
 
 ### Incentivization
@@ -78,4 +81,4 @@ Coming soon.
 
 ## Copyright
 
-Copyright and related rights waived via [CC0](https://creativecommons.org/publicdomain/zero/1.0/).
+All content herein is licensed under [Apache 2.0](https://www.apache.org/licenses/LICENSE-2.0).
