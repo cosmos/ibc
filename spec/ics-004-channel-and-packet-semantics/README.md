@@ -35,7 +35,7 @@ In order to provide the desired ordering, exactly-once delivery, and module perm
 
 `commit` is a generic collision-resistant hash function, the specifics of which must be agreed on by the modules utilizing the channel.
 
-`Identifier`, `get`, `set`, `delete`, `getConsensusState`, and module-system related primitives are as defined in [ICS 24](../ics-024-host-requirements).
+`Identifier`, `get`, `set`, `delete`, `getCurrentHeight`, and module-system related primitives are as defined in [ICS 24](../ics-024-host-requirements).
 
 A *channel* is a pipeline for exactly-once packet delivery between specific modules on separate blockchains, which has at least one end capable of sending packets and one end capable of receiving packets.
 
@@ -242,7 +242,7 @@ function chanOpenTry(
   timeoutHeight: uint64, nextTimeoutHeight: uint64,
   proofInit: CommitmentProof, proofHeight: uint64) {
   assert(connectionHops.length === 2)
-  assert(getConsensusState().height < timeoutHeight)
+  assert(getCurrentHeight() < timeoutHeight)
   assert(get(channelKey(portIdentifier, channelIdentifier)) === null)
   assert(authenticate(get(portKey(portIdentifier))))
   connection = get(connectionKey(connectionHops[0]))
@@ -272,7 +272,7 @@ function chanOpenAck(
   channelIdentifier: Identifier, portIdentifier: Identifier,
   timeoutHeight: uint64, nextTimeoutHeight: uint64,
   proofTry: CommitmentProof, proofHeight: uint64) {
-  assert(getConsensusState().height < timeoutHeight)
+  assert(getCurrentHeight() < timeoutHeight)
   channel = get(channelKey(portIdentifier, channelIdentifier))
   assert(channel.state === INIT)
   assert(authenticate(get(portKey(portIdentifier))))
@@ -299,7 +299,7 @@ of the handshake-originating module on the other chain and finish the channel op
 function chanOpenConfirm(
   portIdentifier: Identifier, channelIdentifier: Identifier,
   timeoutHeight: uint64, proofAck: CommitmentProof, proofHeight: uint64) {
-  assert(getConsensusState().height < timeoutHeight)
+  assert(getCurrentHeight() < timeoutHeight)
   channel = get(channelKey(portIdentifier, channelIdentifier))
   assert(channel.state === OPENTRY)
   assert(authenticate(get(portKey(portIdentifier))))

@@ -65,6 +65,12 @@ These functions MUST be permissioned to the IBC handler module (the implementati
 
 ### Consensus State Introspection
 
+Host chains MUST provide the ability to introspect their current height, with `getCurrentHeight`:
+
+```
+type getCurrentHeight = () => uint64
+```
+
 Host chains MUST define a unique `ConsensusState` type fulfilling the requirements of [ICS 2](../ics-002-consensus-verification):
 
 ```typescript
@@ -74,10 +80,10 @@ type ConsensusState object
 Host chains MUST provide the ability to introspect their own consensus state, with `getConsensusState`:
 
 ```typescript
-type getConsensusState = () => ConsensusState
+type getConsensusState = (height: uint64) => ConsensusState
 ```
 
-`getConsensusState` MUST return the current consensus state for the consensus algorithm of the host chain.
+`getConsensusState` MUST return the consensus state for the consensus algorithm of the host chain at the specified height, for all heights greater than zero and less than or equal to the current height.
 
 ### Port system
 
