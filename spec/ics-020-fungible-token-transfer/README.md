@@ -159,6 +159,7 @@ function sendPacket(packet: Packet): boolean {
   bank.TransferCoins(data.sender, data.denomination.slice(len(prefix)), data.amount, escrowAccount)
   relayerModule.sendPacket(packet)
 }
+```
 
 #### Reasoning
 
