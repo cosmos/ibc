@@ -83,7 +83,7 @@ Host chains MUST provide the ability to introspect their own consensus state, wi
 type getConsensusState = (height: uint64) => ConsensusState
 ```
 
-`getConsensusState` is RECOMMENDED to return the consensus state for the consensus algorithm of the host chain at the specified height, for all heights greater than zero and less than or equal to the current height. `getConsensusState` MAY return the consensus state only for some number of recent heights.
+`getConsensusState` is RECOMMENDED to return the consensus state for the consensus algorithm of the host chain at the specified height, for all heights greater than zero and less than or equal to the current height. `getConsensusState` MAY return the consensus state only for some number of recent heights, where the number is constant for the host chain.
 
 ### Port system
 
