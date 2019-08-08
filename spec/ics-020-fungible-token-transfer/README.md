@@ -159,6 +159,7 @@ function sendPacket(packet: Packet): boolean {
   bank.TransferCoins(data.sender, data.denomination.slice(len(prefix)), data.amount, escrowAccount)
   relayerModule.sendPacket(packet)
 }
+```
 
 #### Reasoning
 
@@ -166,7 +167,7 @@ function sendPacket(packet: Packet): boolean {
 
 This implementation preserves both fungibility & supply.
 
-Fungibility: If tokens have been sent to the coutnerparty chain, they can be redeemed back in the same denomination & amount on the source chain.
+Fungibility: If tokens have been sent to the counterparty chain, they can be redeemed back in the same denomination & amount on the source chain.
 
 Supply: Redefine supply as unlocked tokens. All send-recv pairs sum to net zero. Source chain can change supply.
 

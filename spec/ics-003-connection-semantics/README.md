@@ -12,7 +12,7 @@ modified: 2019-05-17
 
 ## Synopsis
 
-This standards document describes the abstraction of an IBC *connection*: two stateful objects (*connection ends*) on two separate chains, each associated with a light client of the other chain, which together faciliate cross-chain substate verification and packet association (through channels). Protocols for safely establishing a connection between two chains and cleanly closing a connection are described.
+This standards document describes the abstraction of an IBC *connection*: two stateful objects (*connection ends*) on two separate chains, each associated with a light client of the other chain, which together facilitate cross-chain substate verification and packet association (through channels). Protocols for safely establishing a connection between two chains and cleanly closing a connection are described.
 
 ### Motivation
 
@@ -28,7 +28,7 @@ The core IBC protocol provides *authorization* and *ordering* semantics for pack
 
 The opening handshake protocol allows each chain to verify the identifier used to reference the connection on the other chain, enabling modules on each chain to reason about the reference on the other chain.
 
-A *actor*, as referred to in this specification, is an entity capable of executing datagrams who is paying for computation / storage (via gas or a similar mechanism) but is otherwise untrusted. Possible actors include:
+An *actor*, as referred to in this specification, is an entity capable of executing datagrams who is paying for computation / storage (via gas or a similar mechanism) but is otherwise untrusted. Possible actors include:
 - End users signing with an account key
 - On-chain smart contracts acting autonomously or in response to another transaction
 - On-chain modules acting in response to another transaction or in a scheduled manner
@@ -225,7 +225,7 @@ function connOpenAck(
 function connOpenConfirm(
   identifier: Identifier, proofAck: CommitmentProof,
   proofHeight: uint64, timeoutHeight: uint64)
-  assert(getCurremtHeight() <= timeoutHeight)
+  assert(getCurrentHeight() <= timeoutHeight)
   connection = get(connectionKey(identifier))
   assert(connection.state === TRYOPEN)
   counterpartyStateRoot = get(rootKey(connection.clientIdentifier, proofHeight))
