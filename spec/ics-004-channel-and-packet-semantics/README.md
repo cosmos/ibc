@@ -96,7 +96,6 @@ enum ChannelState {
 - A channel end in `INIT` state has just started the opening handshake.
 - A channel end in `OPENTRY` state has acknowledged the handshake step on the counterparty chain.
 - A channel end in `OPEN` state has completed the handshake and is ready to send and receive packets.
-- A channel end in `CLOSETRY` state has just started the closing handshake.
 - A channel end in `CLOSED` state has been closed and can no longer be used to send or receive packets.
 
 A *packet*, in the interblockchain communication protocol, is a particular datagram, defined as follows:
