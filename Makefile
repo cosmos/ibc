@@ -1,5 +1,5 @@
-SUBDIRS := spec/ics-003-connection-semantics spec/ics-004-channel-and-packet-semantics
-TOPTARGETS := all clean
+SUBDIRS := $(filter-out $(wildcard ./spec/*.md),$(wildcard ./spec/*))
+TOPTARGETS := typecheck build clean
 
 $(TOPTARGETS): $(SUBDIRS)
 $(SUBDIRS):
