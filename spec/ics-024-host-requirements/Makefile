@@ -1,4 +1,5 @@
 typecheck:
+	agda HostRequirements.agda
 
 build:
 
