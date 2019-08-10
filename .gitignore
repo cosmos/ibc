@@ -1,2 +1,8 @@
+# vim swapfiles
+
 *.swp
 *.swo
+
+# agda interpreter state
+
+*.agdai

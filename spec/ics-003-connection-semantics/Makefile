@@ -1,4 +1,6 @@
-all: $(addsuffix .png, $(basename $(wildcard *.tex))) cleanup
+typecheck:
+
+build: $(addsuffix .png, $(basename $(wildcard *.tex))) cleanup
 
 %.png : %.tex
 	pdflatex "\input{$<}"
@@ -15,4 +17,4 @@ clean:
 check_proto:
 	/bin/bash -c 'TEMP=$$(mktemp); protoc data-structures.proto -o $$TEMP; rm -f $$TEMP'
 
-.PHONY: all clean cleanup check_proto
+.PHONY: typecheck build clean cleanup check_proto
