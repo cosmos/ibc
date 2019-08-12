@@ -3,6 +3,7 @@ ics: 24
 title: Host State Machine Requirements
 stage: draft
 category: ibc-core
+requires: 23
 required-by: 2, 3, 4, 5, 18
 author: Christopher Goes <cwgoes@tendermint.com>
 created: 2019-04-16
@@ -18,6 +19,8 @@ This specification defines the minimal set of interfaces which must be provided 
 IBC is designed to be a common standard which will be hosted by a variety of blockchains & state machines and must clearly define the requirements of the host.
 
 ### Definitions
+
+`CommitmentPath` is as defined in [ICS 23](../ics-023-vector-commitments).
 
 ### Desired Properties
 
@@ -84,6 +87,16 @@ type getConsensusState = (height: uint64) => ConsensusState
 ```
 
 `getConsensusState` is RECOMMENDED to return the consensus state for the consensus algorithm of the host chain at the specified height, for all heights greater than zero and less than or equal to the current height. `getConsensusState` MAY return the consensus state only for some number of recent heights, where the number is constant for the host chain.
+
+### Commitment Path Introspection
+
+Host chains are RECOMMENDED to provide the ability to inspect their commitment path, with `getCommitmentPath`:
+
+```
+type getCommitmentPath = () => CommitmentPath
+```
+
+The result `CommitmentPath` is the definition of the key-value store's substate definition. The pair of the `CommitmentPath` and a key should form a full key string under the entire key-value store with `applyPath`. For a key-value store, the `getCommitmentPath` RECOMMENDED to be constant.
 
 ### Port system
 
