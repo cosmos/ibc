@@ -43,6 +43,7 @@ jobs:
     <<: *linux_defaults
     steps:
       - checkout
+      - run: sudo apt-get update && sudo apt-get -y install aspell
       - run: make spellcheck
 
 workflows:
