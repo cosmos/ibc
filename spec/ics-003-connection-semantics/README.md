@@ -22,7 +22,7 @@ The core IBC protocol provides *authorization* and *ordering* semantics for pack
 
 `ConsensusState`, `Header`, and `updateConsensusState` are as defined in [ICS 2](../ics-002-consensus-verification).
 
-`CommitmentProof`, `verifyMembership`, and `verifyNonMembership` are as defined in [ICS 23](../ics-023-vector-commitments).
+`CommitmentPath`, `CommitmentProof`, `verifyMembership`, and `verifyNonMembership` are as defined in [ICS 23](../ics-023-vector-commitments).
 
 `Identifier` and other host state machine requirements are as defined in [ICS 24](../ics-024-host-requirements). The identifier is not necessarily intended to be a human-readable name (and likely should not be, to discourage squatting or racing for identifiers).
 
@@ -79,6 +79,7 @@ enum ConnectionState {
 interface ConnectionEnd {
   state: ConnectionState
   counterpartyConnectionIdentifier: Identifier
+  counterpartyPath: CommitmentPath
   clientIdentifier: Identifier
   counterpartyClientIdentifier: Identifier
   nextTimeoutHeight: uint64
@@ -179,7 +180,8 @@ function connOpenTry(
   assert(getCurrentHeight() <= timeoutHeight)
   counterpartyStateRoot = get(rootKey(connection.clientIdentifier, proofHeight))
   expectedConsensusState = getConsensusState(consensusHeight)
-  expected = ConnectionEnd{INIT, desiredIdentifier, counterpartyClientIdentifier, clientIdentifier, timeoutHeight}
+  expected = ConnectionEnd{INIT, desiredIdentifier, getCommitmentPath(), counterpartyClientIdentifier, 
+                           clientIdentifier, timeoutHeight}
   assert(verifyMembership(counterpartyStateRoot, proofInit,
                           connectionKey(counterpartyConnectionIdentifier), expected))
   assert(verifyMembership(counterpartyStateRoot, proofInit,
@@ -207,7 +209,7 @@ function connOpenAck(
   assert(connection.state === INIT)
   counterpartyStateRoot = get(rootKey(connection.clientIdentifier, proofHeight))
   expectedConsensusState = getConsensusState(consensusHeight)
-  expected = ConnectionEnd{TRYOPEN, identifier, connection.counterpartyClientIdentifier,
+  expected = ConnectionEnd{TRYOPEN, identifier, getCommitmentPath(), connection.counterpartyClientIdentifier,
                            connection.clientIdentifier, timeoutHeight}
   assert(verifyMembership(counterpartyStateRoot, proofTry,
                           connectionKey(connection.counterpartyConnectionIdentifier), expected))
@@ -229,7 +231,7 @@ function connOpenConfirm(
   connection = get(connectionKey(identifier))
   assert(connection.state === TRYOPEN)
   counterpartyStateRoot = get(rootKey(connection.clientIdentifier, proofHeight))
-  expected = ConnectionEnd{OPEN, identifier, connection.counterpartyClientIdentifier,
+  expected = ConnectionEnd{OPEN, identifier, getCommitmentPath(), connection.counterpartyClientIdentifier,
                            connection.clientIdentifier, timeoutHeight}
   assert(verifyMembership(counterpartyStateRoot, proofAck,
                           connectionKey(connection.counterpartyConnectionIdentifier), expected))
@@ -257,7 +259,7 @@ function connOpenTimeout(
         verifyMembership(
           counterpartyStateRoot, proofTimeout,
           connectionKey(connection.counterpartyConnectionIdentifier),
-          ConnectionEnd{INIT, identifier, connection.counterpartyClientIdentifier,
+          ConnectionEnd{INIT, identifier, getCommitmentPath(), connection.counterpartyClientIdentifier,
                         connection.clientIdentifier, timeoutHeight}
         )
         ||
@@ -270,7 +272,7 @@ function connOpenTimeout(
       assert(verifyMembership(
         counterpartyStateRoot, proofTimeout,
         connectionKey(connection.counterpartyConnectionIdentifier),
-        ConnectionEnd{TRYOPEN, identifier, connection.counterpartyClientIdentifier,
+        ConnectionEnd{TRYOPEN, identifier, getCommitmentPath(), connection.counterpartyClientIdentifier,
                       connection.clientIdentifier, timeoutHeight}
       ))
   }
@@ -319,7 +321,7 @@ function connCloseConfirm(
   connection = get(connectionKey(identifier))
   assert(connection.state === OPEN)
   counterpartyStateRoot = get(rootKey(connection.clientIdentifier, proofHeight))
-  expected = ConnectionEnd{CLOSED, identifier, connection.counterpartyClientIdentifier,
+  expected = ConnectionEnd{CLOSED, identifier, getCommitmentPath(), connection.counterpartyClientIdentifier,
                            connection.clientIdentifier, 0}
   assert(verifyMembership(counterpartyStateRoot, proofInit, connectionKey(counterpartyConnectionIdentifier), expected))
   connection.state = CLOSED
