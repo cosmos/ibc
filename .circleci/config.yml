@@ -44,7 +44,7 @@ jobs:
     steps:
       - checkout
       - run: sudo apt-get update && sudo apt-get -y install aspell
-      - run: make spellcheck
+      - run: make spellcheck_noninteractive
 
 workflows:
   version: 2
