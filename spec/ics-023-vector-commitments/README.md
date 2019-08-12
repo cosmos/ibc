@@ -39,11 +39,11 @@ This document only defines desired properties, not a concrete implementation —
 
 ### Datatypes
 
-An commitment construction MUST specify the following datatypes, which are otherwise opaque (need not be introspected) but MUST be serializable:
+A commitment construction MUST specify the following datatypes, which are otherwise opaque (need not be introspected) but MUST be serializable:
 
 #### State
 
-An `CommitmentState` is the full state of the commitment, which will be stored by the manager.
+A `CommitmentState` is the full state of the commitment, which will be stored by the manager.
 
 ```typescript
 type CommitmentState = object
@@ -59,6 +59,30 @@ In certain commitment constructions with succinct states, `CommitmentState` and 
 type CommitmentRoot = object
 ```
 
+#### Path
+
+A `CommitmentPath` defines a substate of the commitment. It is passed to the proof verification functions with the key to provide the substate context information. 
+
+```typescript
+type CommitmentPath = object
+```
+
+The function `pathify` constructs a new key from the arguments. It interprets the key argument in the context of the path argument. For two `(path, key)` tuples, `pathify(path, key)` should return the same key only if the tuple elements are equal.
+
+```typescript
+type pathify = (path: CommitmentPath, key: Key) => Key
+```
+
+When a `CommitmentPath` is provided as an argument with a `Key` or a set of `Key`s to a function, it should apply `pathify` to the `Key` with the `CommitmentPath` first. The effected functions are:
+* `set`
+* `remove`
+* `createMembershipProof`
+* `createNonMembershipProof`
+* `verifyMembership`
+* `verifyNonMembership`
+* `batchVerifyMembership`
+* `batchVerifyNonMembership`
+
 #### Proof
 
 An `CommitmentProof` demonstrates membership or non-membership for an element or set of elements, verifiable in conjunction with a known commitment root. Proofs should be succinct.
@@ -69,7 +93,7 @@ type CommitmentProof = object
 
 ### Required functions
 
-An commitment construction MUST provide the following functions, defined over keys and values as byte arrays:
+A commitment construction MUST provide the following functions, defined over keys and values as byte arrays:
 
 ```typescript
 type Key = string
@@ -98,72 +122,72 @@ type calculateRoot = (state: CommitmentState) => CommitmentRoot
 The `set` function sets a key to a value in the commitment.
 
 ```typescript
-type set = (state: CommitmentState, key: Key, value: Value) => CommitmentState
+type set = (state: CommitmentState, path: CommitmentPath, key: Key, value: Value) => CommitmentState
 ```
 
-The `remove` function removes a key and associated value from an commitment.
+The `remove` function removes a key and associated value from a commitment.
 
 ```typescript
-type remove = (state: CommitmentState, key: Key) => CommitmentState
+type remove = (state: CommitmentState, path: CommitmentPath, key: Key) => CommitmentState
 ```
 
 #### Proof generation
 
-The `createMembershipProof` function generates a proof that a particular key has been set to a particular value in an commitment.
+The `createMembershipProof` function generates a proof that a particular key has been set to a particular value in a commitment.
 
 ```typescript
-type createMembershipProof = (state: CommitmentState, key: Key, value: Value) => CommitmentProof
+type createMembershipProof = (state: CommitmentState, path: CommitmentPath, key: Key, value: Value) => CommitmentProof
 ```
 
-The `createNonMembershipProof` function generates a proof that a key has not been set to any value in an commitment.
+The `createNonMembershipProof` function generates a proof that a key has not been set to any value in a commitment.
 
 ```typescript
-type createNonMembershipProof = (state: CommitmentState, key: Key) => CommitmentProof
+type createNonMembershipProof = (state: CommitmentState, path: CommitmentPath, key: Key) => CommitmentProof
 ```
 
 #### Proof verification
 
-The `verifyMembership` function verifies a proof that a key has been set to a particular value in an commitment.
+The `verifyMembership` function verifies a proof that a key has been set to a particular value in a commitment.
 
 ```typescript
-type verifyMembership = (root: CommitmentRoot, proof: CommitmentProof, key: Key, value: Value) => boolean
+type verifyMembership = (root: CommitmentRoot, proof: CommitmentProof, path: CommitmentPath, key: Key, value: Value) => boolean
 ```
 
-The `verifyNonMembership` function verifies a proof that a key has not been set to any value in an commitment.
+The `verifyNonMembership` function verifies a proof that a key has not been set to any value in a commitment.
 
 ```typescript
-type verifyNonMembership = (root: CommitmentRoot, proof: CommitmentProof, key: Key) => boolean
+type verifyNonMembership = (root: CommitmentRoot, proof: CommitmentProof, path: CommitmentPath, key: Key) => boolean
 ```
 
 ### Optional functions
 
-An commitment construction MAY provide the following functions:
+A commitment construction MAY provide the following functions:
 
-The `batchVerifyMembership` function verifies a proof that many keys have been set to specific values in an commitment.
+The `batchVerifyMembership` function verifies a proof that many keys have been set to specific values in a commitment.
 
 ```typescript
-type batchVerifyMembership = (root: CommitmentRoot, proof: CommitmentProof, items: Map<Key, Value>) => boolean
+type batchVerifyMembership = (root: CommitmentRoot, proof: CommitmentProof, path: CommitmentPath, items: Map<Key, Value>) => boolean
 ```
 
-The `batchVerifyNonMembership` function verifies a proof that many keys have not been set to any value in an commitment.
+The `batchVerifyNonMembership` function verifies a proof that many keys have not been set to any value in a commitment.
 
 ```typescript
-type batchVerifyNonMembership = (root: CommitmentRoot, proof: CommitmentProof, keys: Set<Key>) => boolean
+type batchVerifyNonMembership = (root: CommitmentRoot, proof: CommitmentProof, path: CommitmentPath, keys: Set<Key>) => boolean
 ```
 
 If defined, these functions MUST be computationally equivalent to the conjunctive union of `verifyMembership` and `verifyNonMembership` respectively (`proof` may vary):
 
 ```typescript
-batchVerifyMembership(root, proof, items) ===
-  all(items.map((item) => verifyMembership(root, proof, item)))
+batchVerifyMembership(root, proof, path, items) ===
+  all(items.map((item) => verifyMembership(root, proof, path, item)))
 ```
 
 ```typescript
-batchVerifyNonMembership(root, proof, keys) ===
-  all(items.map((item) => verifyNonMembership(root, proof, key)))
+batchVerifyNonMembership(root, proof, path, keys) ===
+  all(keys.map((key) => verifyNonMembership(root, proof, path, key)))
 ```
 
-If batch verification is possible and more efficient than individual verification of one proof per element, an commitment construction SHOULD define batch verification functions.
+If batch verification is possible and more efficient than individual verification of one proof per element, a commitment construction SHOULD define batch verification functions.
 
 ### Properties & Invariants
 
@@ -177,22 +201,22 @@ For any key `key` last set to a value `value` in the commitment `acc`,
 
 ```typescript
 root = getRoot(acc)
-proof = createMembershipProof(acc, key, value)
+proof = createMembershipProof(acc, path, key, value)
 ```
 
 ```
-Pr(verifyMembership(root, proof, key, value) === false) negligible in λ
+Pr(verifyMembership(root, proof, path, key, value) === false) negligible in λ
 ```
 
 For any key `key` not set in the commitment `acc`, for all values of `proof` and all values of `value`,
 
 ```typescript
 root = getRoot(acc)
-proof = createNonMembershipProof(acc, key)
+proof = createNonMembershipProof(acc, path, key)
 ```
 
 ```
-Pr(verifyNonMembership(root, proof, key) === false) negligible in λ
+Pr(verifyNonMembership(root, proof, path, key) === false) negligible in λ
 ```
 
 #### Soundness
@@ -202,34 +226,34 @@ Commitment proofs MUST be *sound*: key => value mappings which have not been add
 For any key `key` last set to a value `value` in the commitment `acc`, for all values of `proof`,
 
 ```
-Pr(verifyNonMembership(root, proof, key) === true) negligible in λ
+Pr(verifyNonMembership(root, proof, path, key) === true) negligible in λ
 ```
 
 For any key `key` not set in the commitment `acc`, for all values of `proof` and all values of `value`,
 
 ```
-Pr(verifyMembership(root, proof, key, value) === true) negligible in λ
+Pr(verifyMembership(root, proof, path, key, value) === true) negligible in λ
 ```
 
 #### Position binding
 
-Commitment proofs MUST be *position binding*: a given key can only map to one value, and an commitment proof cannot prove that the same key opens to a different value except with probability negligible in λ.
+Commitment proofs MUST be *position binding*: a given key can only map to one value, and a commitment proof cannot prove that the same key opens to a different value except with probability negligible in λ.
 
 For any key `key` set in the commitment `acc`, there is one `value` for which:
 
 ```typescript
 root = getRoot(acc)
-proof = createMembershipProof(acc, key, value)
+proof = createMembershipProof(acc, path, key, value)
 ```
 
 ```
-Pr(verifyMembership(root, proof, key, value) === false) negligible in λ
+Pr(verifyMembership(root, proof, path, key, value) === false) negligible in λ
 ```
 
 For all other values `otherValue` where `value /= otherValue`, for all values of `proof`,
 
 ```
-Pr(verifyMembership(root, proof, key, otherValue) === true) negligible in λ
+Pr(verifyMembership(root, proof, path, key, otherValue) === true) negligible in λ
 ```
 
 ## Backwards Compatibility
