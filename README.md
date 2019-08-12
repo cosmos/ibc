@@ -4,15 +4,15 @@
 
 ## Synopsis
 
-This repository is the canonical location for development and documentation of inter-chain standards utilized by the Cosmos network & interchain ecosystem. Initially it will be used to consolidate design documentation for the inter-blockchain communication protocol (IBC), encoding standards for Cosmos chains, and miscellaneous utilities such as off-chain message signing.
+This repository is the canonical location for development and documentation of inter-chain standards utilised by the Cosmos network & interchain ecosystem. Initially it will be used to consolidate design documentation for the inter-blockchain communication protocol (IBC), encoding standards for Cosmos chains, and miscellaneous utilities such as off-chain message signing.
 
-## Standardization
+## Standardisation
 
 Please see [ICS 1](spec/ics-001-ics-standard) for a description of what a standard entails.
 
-To propose a new standard, [open an issue](https://github.com/cosmos/ics/issues/new). To start a new standardization document, copy the [template](spec/ics-template.md) and open a PR.
+To propose a new standard, [open an issue](https://github.com/cosmos/ics/issues/new). To start a new standardisation document, copy the [template](spec/ics-template.md) and open a PR.
 
-See [PROCESS.md](PROCESS.md) for a description of the standardization process.
+See [PROCESS.md](PROCESS.md) for a description of the standardisation process.
 
 Quick references & interchain standards can be read as [a single PDF](./spec.pdf).
 
@@ -58,7 +58,7 @@ All standards in the "draft" stage are listed here in order of their ICS numbers
 | ------------------------------------------ | ----------------------- | ----- |
 | [20](spec/ics-020-fungible-token-transfer) | Fungible Token Transfer | Draft |
 
-## Standard Dependency Visualization
+## Standard Dependency Visualisation
 
 Directed arrows indicate a dependency relationship (that origin depends on destination).
 
