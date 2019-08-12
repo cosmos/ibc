@@ -30,6 +30,6 @@ spec_pdf:
 	pandoc --pdf-engine=xelatex --template eisvogel --filter pandoc-include --mathjax --toc --number-sections -o spec.pdf spec.pdc
 
 spellcheck:
-	aspell -p ./misc/aspell_dict -x -d en_GB -c ./spec/ics-001-ics-standard/README.md
+	find . -type f -name "*.md" -exec aspell -p ./misc/aspell_dict -x -d en_GB -c {} \;
 
-.PHONY: $(TOPTARGETS) $(SUBDIRS) check check_links check_dependencies check_syntax check_sections check_proto spec_pdf
+.PHONY: $(TOPTARGETS) $(SUBDIRS) check check_links check_dependencies check_syntax check_sections check_proto spec_pdf spellcheck
