@@ -33,44 +33,44 @@ header-includes:
 
 # ICS 001 - ICS Standard
 
-!include spec/ics-001-ics-standard/README.md
+!include spec/ics-001-ics-standard/README.md.xfm
 
 # ICS 023 - Vector Commitments
 
-!include spec/ics-023-vector-commitments/README.md
+!include spec/ics-023-vector-commitments/README.md.xfm
 
 # ICS 024 - Host Requirements
 
-!include spec/ics-024-host-requirements/README.md
+!include spec/ics-024-host-requirements/README.md.xfm
 
 # ICS 002 - Consensus Verification
 
-!include spec/ics-002-consensus-verification/README.md
+!include spec/ics-002-consensus-verification/README.md.xfm
 
 # ICS 003 - Connection Semantics
 
-!include spec/ics-003-connection-semantics/README.md
+!include spec/ics-003-connection-semantics/README.md.xfm
 
 # ICS 005 - Port Allocation
 
-!include spec/ics-005-port-allocation/README.md
+!include spec/ics-005-port-allocation/README.md.xfm
 
 # ICS 004 - Channel & Packet Semantics
 
-!include spec/ics-004-channel-and-packet-semantics/README.md
+!include spec/ics-004-channel-and-packet-semantics/README.md.xfm
 
 # ICS 025 - Handler Interface
 
-!include spec/ics-025-handler-interface/README.md
+!include spec/ics-025-handler-interface/README.md.xfm
 
 # ICS 026 - Relayer Module
 
-!include spec/ics-026-relayer-module/README.md
+!include spec/ics-026-relayer-module/README.md.xfm
 
 # ICS 018 - Relayer Algorithms
 
-!include spec/ics-018-relayer-algorithms/README.md
+!include spec/ics-018-relayer-algorithms/README.md.xfm
 
 # ICS 020 - Fungible Token Transfer
 
-!include spec/ics-020-fungible-token-transfer/README.md
+!include spec/ics-020-fungible-token-transfer/README.md.xfm

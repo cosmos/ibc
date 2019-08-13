@@ -6,3 +6,6 @@
 # agda interpreter state
 
 *.agdai
+
+# temporary files created during pdf preprocessing
+*.md.xfm

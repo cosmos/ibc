@@ -167,11 +167,11 @@ If batch verification is possible and more efficient than individual verificatio
 
 ### Properties & Invariants
 
-Commitments MUST be *complete*, *sound*, and *position binding*. These properties are defined with respect to a security parameter `λ`, which MUST be agreed upon by the manager, prover, and verifier (and often will be constant for the commitment algorithm).
+Commitments MUST be *complete*, *sound*, and *position binding*. These properties are defined with respect to a security parameter `k`, which MUST be agreed upon by the manager, prover, and verifier (and often will be constant for the commitment algorithm).
 
 #### Completeness
 
-Commitment proofs MUST be *complete*: key => value mappings which have been added to the commitment can always be proved to have been included, and keys which have not been included can always be proved to have been excluded, except with probability negligible in `λ`.
+Commitment proofs MUST be *complete*: key => value mappings which have been added to the commitment can always be proved to have been included, and keys which have not been included can always be proved to have been excluded, except with probability negligible in `k`.
 
 For any key `key` last set to a value `value` in the commitment `acc`,
 
@@ -181,7 +181,7 @@ proof = createMembershipProof(acc, key, value)
 ```
 
 ```
-Pr(verifyMembership(root, proof, key, value) === false) negligible in λ
+Pr(verifyMembership(root, proof, key, value) === false) negligible in k
 ```
 
 For any key `key` not set in the commitment `acc`, for all values of `proof` and all values of `value`,
@@ -192,28 +192,28 @@ proof = createNonMembershipProof(acc, key)
 ```
 
 ```
-Pr(verifyNonMembership(root, proof, key) === false) negligible in λ
+Pr(verifyNonMembership(root, proof, key) === false) negligible in k
 ```
 
 #### Soundness
 
-Commitment proofs MUST be *sound*: key => value mappings which have not been added to the commitment cannot be proved to have been included, or keys which have been added to the commitment excluded, except with probability negligible in a configurable security parameter `λ`.
+Commitment proofs MUST be *sound*: key => value mappings which have not been added to the commitment cannot be proved to have been included, or keys which have been added to the commitment excluded, except with probability negligible in a configurable security parameter `k`.
 
 For any key `key` last set to a value `value` in the commitment `acc`, for all values of `proof`,
 
 ```
-Pr(verifyNonMembership(root, proof, key) === true) negligible in λ
+Pr(verifyNonMembership(root, proof, key) === true) negligible in k
 ```
 
 For any key `key` not set in the commitment `acc`, for all values of `proof` and all values of `value`,
 
 ```
-Pr(verifyMembership(root, proof, key, value) === true) negligible in λ
+Pr(verifyMembership(root, proof, key, value) === true) negligible in k
 ```
 
 #### Position binding
 
-Commitment proofs MUST be *position binding*: a given key can only map to one value, and an commitment proof cannot prove that the same key opens to a different value except with probability negligible in λ.
+Commitment proofs MUST be *position binding*: a given key can only map to one value, and an commitment proof cannot prove that the same key opens to a different value except with probability negligible in k.
 
 For any key `key` set in the commitment `acc`, there is one `value` for which:
 
@@ -223,13 +223,13 @@ proof = createMembershipProof(acc, key, value)
 ```
 
 ```
-Pr(verifyMembership(root, proof, key, value) === false) negligible in λ
+Pr(verifyMembership(root, proof, key, value) === false) negligible in k
 ```
 
 For all other values `otherValue` where `value /= otherValue`, for all values of `proof`,
 
 ```
-Pr(verifyMembership(root, proof, key, otherValue) === true) negligible in λ
+Pr(verifyMembership(root, proof, key, otherValue) === true) negligible in k
 ```
 
 ## Backwards Compatibility
