@@ -1,0 +1,16 @@
+name:                transform
+version:             0.1.0.0
+homepage:            https://github.com/cosmos/ics
+license:             BSD3
+author:              Christopher Goes
+extra-source-files:
+- README.md
+
+dependencies:
+  - base >= 4.7 && < 5
+  - pandoc
+
+executables:
+  spec-transform:
+    source-dirs:      src
+    main:             Main.hs
