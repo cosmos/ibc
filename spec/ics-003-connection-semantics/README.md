@@ -86,6 +86,13 @@ interface ConnectionEnd {
 }
 ```
 
+- The `state` field describes the current state of the connection end.
+- The `counterpartyConnectionIdentifier` field identifies the identifier under which the associated connection end is stored on the counterparty chain.
+- The `clientIdentifier` field identifies the client associated with this connection.
+- The `counterpartyClientIdentifier` field identifies the client on the counterparty chain associated with this connection.
+- The `version` field is an opaque string which can be utilized to determine encodings or protocols for channels or packets utilizing this connection.
+- The `nextTimeoutHeight` field stores a height after which the next step of a handshake will be considered to have timed out.
+
 ### Store keys
 
 Connection keys are stored under a unique identifier.
