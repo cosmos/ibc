@@ -129,6 +129,16 @@ interface Chain {
 }
 ```
 
+### Exception system
+
+Host chains MUST support an exception system, whereby a transaction can abort execution and revert any previously made state changes, exposed through an `assert` function:
+
+```typescript
+type assert = (bool) => ()
+```
+
+If the boolean passed to `assert` is `true`, the host chain need not do anything. If the boolean passed to `assert` is `false`, the host chain MUST abort the transaction and revert any previously made state changes, such as writes to the key-value store.
+
 ### Data availability
 
 For safety (e.g. exactly-once packet delivery), host chains MUST have eventual data availability, such that any key-value pairs in state can be eventually retrieved by relayers.
