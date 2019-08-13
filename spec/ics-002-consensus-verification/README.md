@@ -162,8 +162,12 @@ state transitions, or other evidence as defined by the consensus algorithm.
 The `MisbehaviourPredicate` type is defined as
 
 ```typescript
-type MisbehaviourPredicate = (ConsensusState, bytes) => bool
+type MisbehaviourPredicate = (ConsensusState, bytes) => (bool)
 ```
+
+The boolean returned indicates whether the evidence of misbehaviour was valid.
+The client MUST also mutate internal state to mark appropriate heights which
+were previously considered valid invalid, according to the nature of the misbehaviour.
 
 More details about `MisbehaviourPredicate`s can be found in [CONSENSUS.md](./CONSENSUS.md)
 
@@ -285,7 +289,6 @@ method can be introduced in the future versions.
 function freezeClient(identifier: Identifier, evidence: bytes) {
   consensusState = get(consensusStateKey(identifier))
   assert(consensusState.misbehaviourPredicate(evidence))
-  set(frozenKey(id), true)
 }
 ```
 

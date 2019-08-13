@@ -6,7 +6,7 @@ category: ibc-core
 requires: 2, 3, 5, 23, 24
 author: Christopher Goes <cwgoes@tendermint.com>
 created: 2019-03-07
-modified: 2019-06-29
+modified: 2019-08-13
 ---
 
 ## Synopsis
@@ -790,6 +790,7 @@ Coming soon.
 4 July 2019 - Modifications for unordered channels & acknowledgements
 16 July 2019 - Alterations for multi-hop routing future compatibility
 29 July 2019 - Revisions to handle timeouts after connection closure
+13 August 2019 - Various edits
 
 ## Copyright
 
