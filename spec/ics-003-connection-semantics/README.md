@@ -81,6 +81,7 @@ interface ConnectionEnd {
   counterpartyConnectionIdentifier: Identifier
   clientIdentifier: Identifier
   counterpartyClientIdentifier: Identifier
+  version: string
   nextTimeoutHeight: uint64
 }
 ```
@@ -157,11 +158,12 @@ This subprotocol need not be permissioned, modulo anti-spam measures.
 ```typescript
 function connOpenInit(
   identifier: Identifier, desiredCounterpartyConnectionIdentifier: Identifier,
-  clientIdentifier: Identifier, counterpartyClientIdentifier: Identifier, nextTimeoutHeight: uint64) {
+  clientIdentifier: Identifier, counterpartyClientIdentifier: Identifier,
+  version: string, nextTimeoutHeight: uint64) {
   assert(get(connectionKey(identifier)) == null)
   state = INIT
   connection = ConnectionEnd{state, desiredCounterpartyConnectionIdentifier, clientIdentifier,
-    counterpartyClientIdentifier, nextTimeoutHeight}
+    counterpartyClientIdentifier, version, nextTimeoutHeight}
   set(connectionKey(identifier), connection)
   addConnectionToClient(clientIdentifier, identifier)
 }
@@ -174,12 +176,13 @@ function connOpenTry(
   desiredIdentifier: Identifier, counterpartyConnectionIdentifier: Identifier,
   counterpartyClientIdentifier: Identifier, clientIdentifier: Identifier,
   proofInit: CommitmentProof, proofHeight: uint64, consensusHeight: uint64,
-  timeoutHeight: uint64, nextTimeoutHeight: uint64) {
+  version: string, timeoutHeight: uint64, nextTimeoutHeight: uint64) {
   assert(consensusHeight <= getCurrentHeight())
   assert(getCurrentHeight() <= timeoutHeight)
   counterpartyStateRoot = get(rootKey(connection.clientIdentifier, proofHeight))
   expectedConsensusState = getConsensusState(consensusHeight)
-  expected = ConnectionEnd{INIT, desiredIdentifier, counterpartyClientIdentifier, clientIdentifier, timeoutHeight}
+  expected = ConnectionEnd{INIT, desiredIdentifier, counterpartyClientIdentifier,
+                           clientIdentifier, version, timeoutHeight}
   assert(verifyMembership(counterpartyStateRoot, proofInit,
                           connectionKey(counterpartyConnectionIdentifier), expected))
   assert(verifyMembership(counterpartyStateRoot, proofInit,
@@ -189,7 +192,7 @@ function connOpenTry(
   identifier = desiredIdentifier
   state = TRYOPEN
   connection = ConnectionEnd{state, counterpartyConnectionIdentifier, clientIdentifier,
-                             counterpartyClientIdentifier, nextTimeoutHeight}
+                             counterpartyClientIdentifier, version, nextTimeoutHeight}
   set(connectionKey(identifier), connection)
   addConnectionToClient(clientIdentifier, identifier)
 }
@@ -208,7 +211,7 @@ function connOpenAck(
   counterpartyStateRoot = get(rootKey(connection.clientIdentifier, proofHeight))
   expectedConsensusState = getConsensusState(consensusHeight)
   expected = ConnectionEnd{TRYOPEN, identifier, connection.counterpartyClientIdentifier,
-                           connection.clientIdentifier, timeoutHeight}
+                           connection.clientIdentifier, connection.version, timeoutHeight}
   assert(verifyMembership(counterpartyStateRoot, proofTry,
                           connectionKey(connection.counterpartyConnectionIdentifier), expected))
   assert(verifyMembership(counterpartyStateRoot, proofTry,
@@ -230,7 +233,7 @@ function connOpenConfirm(
   assert(connection.state === TRYOPEN)
   counterpartyStateRoot = get(rootKey(connection.clientIdentifier, proofHeight))
   expected = ConnectionEnd{OPEN, identifier, connection.counterpartyClientIdentifier,
-                           connection.clientIdentifier, timeoutHeight}
+                           connection.clientIdentifier, connection.version, timeoutHeight}
   assert(verifyMembership(counterpartyStateRoot, proofAck,
                           connectionKey(connection.counterpartyConnectionIdentifier), expected))
   connection.state = OPEN
@@ -258,7 +261,7 @@ function connOpenTimeout(
           counterpartyStateRoot, proofTimeout,
           connectionKey(connection.counterpartyConnectionIdentifier),
           ConnectionEnd{INIT, identifier, connection.counterpartyClientIdentifier,
-                        connection.clientIdentifier, timeoutHeight}
+                        connection.clientIdentifier, connection.version, timeoutHeight}
         )
         ||
         verifyNonMembership(
@@ -271,7 +274,7 @@ function connOpenTimeout(
         counterpartyStateRoot, proofTimeout,
         connectionKey(connection.counterpartyConnectionIdentifier),
         ConnectionEnd{TRYOPEN, identifier, connection.counterpartyClientIdentifier,
-                      connection.clientIdentifier, timeoutHeight}
+                      connection.clientIdentifier, connection.version, timeoutHeight}
       ))
   }
   delete(connectionKey(identifier))
@@ -320,7 +323,7 @@ function connCloseConfirm(
   assert(connection.state === OPEN)
   counterpartyStateRoot = get(rootKey(connection.clientIdentifier, proofHeight))
   expected = ConnectionEnd{CLOSED, identifier, connection.counterpartyClientIdentifier,
-                           connection.clientIdentifier, 0}
+                           connection.clientIdentifier, connection.version, 0}
   assert(verifyMembership(counterpartyStateRoot, proofInit, connectionKey(counterpartyConnectionIdentifier), expected))
   connection.state = CLOSED
   set(connectionKey(identifier), connection)

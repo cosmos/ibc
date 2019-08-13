@@ -39,13 +39,15 @@ Modules must expose the following function signatures to the relayer module, whi
 ```typescript
 function onChanOpenInit(
   portIdentifier: Identifier, channelIdentifier: Identifier, counterpartyPortIdentifier: Identifier,
-  counterpartyChannelIdentifier: Identifier, connectionHops: [Identifier], nextTimeoutHeight: uint64): boolean {
+  counterpartyChannelIdentifier: Identifier, connectionHops: [Identifier],
+  version: string, nextTimeoutHeight: uint64): boolean {
   // defined by the module
 }
 
 function onChanOpenTry(
   portIdentifier: Identifier, channelIdentifier: Identifier, counterpartyPortIdentifier: Identifier,
-  counterpartyChannelIdentifier: Identifier, connectionHops: [Identifier], nextTimeoutHeight: uint64): boolean {
+  counterpartyChannelIdentifier: Identifier, connectionHops: [Identifier],
+  version: string, nextTimeoutHeight: uint64): boolean {
   // defined by the module
 }
 
@@ -78,8 +80,8 @@ These are combined together in a `ModuleCallbacks` interface:
 
 ```typescript
 interface ModuleCallbacks {
-  onChanOpenInit: (Identifier, Identifier, Identifier, Identifier, [Identifier], uint64) => boolean
-  onChanOpenTry: (Identifier, Identifier, Identifier, Identifier, [Identifier], uint64) => boolean
+  onChanOpenInit: (Identifier, Identifier, Identifier, Identifier, [Identifier], bytestring, uint64) => boolean
+  onChanOpenTry: (Identifier, Identifier, Identifier, Identifier, [Identifier], bytestring, uint64) => boolean
   onChanOpenAck: (Identifier, Identifier, uint64) => boolean
   onChanOpenConfirm: (Identifier, Identifier) => boolean
   onChanOpenTimeout: (Identifier, Identifier) => void
@@ -218,7 +220,7 @@ interface ConnOpenInit {
 function handleConnOpenInit(datagram: ConnOpenInit) {
   handler.connOpenInit(
     datagram.identifier, datagram.desiredCounterpartyIdentifier, datagram.clientIdentifier,
-    datagram.counterpartyClientIdentifier, datagram.nextTimeoutHeight
+    datagram.counterpartyClientIdentifier, datagram.version, datagram.nextTimeoutHeight
   )
 }
 ```
@@ -241,7 +243,7 @@ interface ConnOpenTry {
 function handleConnOpenTry(datagram: ConnOpenTry) {
   handler.connOpenTry(
     datagram.desiredIdentifier, datagram.counterpartyConnectionIdentifier, datagram.counterpartyClientIdentifier,
-    datagram.clientIdentifier, datagram.proofInit, datagram.timeoutHeight, datagram.nextTimeoutHeight
+    datagram.clientIdentifier, datagram.proofInit, datagram.timeoutHeight, datagram.version, datagram.nextTimeoutHeight
   )
 }
 ```
@@ -353,11 +355,11 @@ function handleChanOpenInit(datagram: ChanOpenInit) {
   module = lookupModule(datagram.portIdentifier)
   module.onChanOpenInit(
     datagram.portIdentifier, datagram.channelIdentifier, datagram.counterpartyPortIdentifier,
-    datagram.counterpartyChannelIdentifier, datagram.connectionHops, datagram.nextTimeoutHeight
+    datagram.counterpartyChannelIdentifier, datagram.connectionHops, datagram.version, datagram.nextTimeoutHeight
   )
   handler.chanOpenInit(
     datagram.portIdentifier, datagram.channelIdentifier, datagram.counterpartyPortIdentifier,
-    datagram.counterpartyChannelIdentifier, datagram.connectionHops, datagram.nextTimeoutHeight
+    datagram.counterpartyChannelIdentifier, datagram.connectionHops, datagram.version, datagram.nextTimeoutHeight
   )
 }
 ```
@@ -380,11 +382,11 @@ function handleChanOpenTry(datagram: ChanOpenTry) {
   module = lookupModule(datagram.portIdentifier)
   module.onChanOpenTry(
     datagram.portIdentifier, datagram.channelIdentifier, datagram.counterpartyPortIdentifier,
-    datagram.counterpartyChannelIdentifier, datagram.connectionHops, datagram.nextTimeoutHeight
+    datagram.counterpartyChannelIdentifier, datagram.connectionHops, datagram.version, datagram.nextTimeoutHeight
   )
   handler.chanOpenTry(
     datagram.portIdentifier, datagram.channelIdentifier, datagram.counterpartyPortIdentifier,
-    datagram.counterpartyChannelIdentifier, datagram.connectionHops, datagram.timeoutHeight,
+    datagram.counterpartyChannelIdentifier, datagram.connectionHops, datagram.version, datagram.timeoutHeight,
     datagram.nextTimeoutHeight, datagram.proofInit
   )
 }

@@ -100,7 +100,8 @@ By default, connections are unowned. Connections can be closed by any module, bu
 ```typescript
 function connOpenInit(
   identifier: Identifier, desiredCounterpartyIdentifier: Identifier,
-  clientIdentifier: Identifier, counterpartyClientIdentifier: Identifier, nextTimeoutHeight: uint64) {
+  clientIdentifier: Identifier, counterpartyClientIdentifier: Identifier,
+  version: string, nextTimeoutHeight: uint64) {
   // defined in ICS 3
 }
 ```
@@ -114,7 +115,7 @@ function connOpenTry(
   desiredIdentifier: Identifier, counterpartyConnectionIdentifier: Identifier,
   counterpartyClientIdentifier: Identifier, clientIdentifier: Identifier,
   proofInit: CommitmentProof, proofHeight: uint64, consensusHeight: uint64,
-  timeoutHeight: uint64, nextTimeoutHeight: uint64) {
+  version: string, timeoutHeight: uint64, nextTimeoutHeight: uint64) {
   // defined in ICS 3
 }
 ```
@@ -191,7 +192,8 @@ By default, channels are owned by the creating port, meaning only the module bou
 ```typescript
 function chanOpenInit(
   connectionHops: [Identifier], portIdentifier: Identifier, channelIdentifier: Identifier,
-  counterpartyChannelIdentifier: Identifier, counterpartyPortIdentifier: Identifier, nextTimeoutHeight: uint64) {
+  counterpartyChannelIdentifier: Identifier, counterpartyPortIdentifier: Identifier,
+  version: string, nextTimeoutHeight: uint64) {
   // defined in ICS 4
 }
 ```
@@ -204,7 +206,7 @@ The default IBC relayer module will allow external calls to `chanOpenTry`.
 function chanOpenTry(
   connectionHops: [Identifier], portIdentifier: Identifier, channelIdentifier: Identifier,
   counterpartyPortIdentifier: Identifier, counterpartyChannelIdentifier: Identifier,
-  timeoutHeight: uint64, nextTimeoutHeight: uint64, proofInit: CommitmentProof) {
+  version: string, timeoutHeight: uint64, nextTimeoutHeight: uint64, proofInit: CommitmentProof) {
   // defined in ICS 4
 }
 ```
