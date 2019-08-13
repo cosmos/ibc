@@ -291,7 +291,7 @@ function freezeClient(identifier: Identifier, evidence: bytes) {
 
 ### Example Implementation
 
-An example blockchain `Op` runs on a single `Op`erator consensus algorithm,
+An example blockchain `Op` runs on a single operator consensus algorithm,
 where the valid blocks are signed by the operator. The operator signing Key
 can be changed while the chain is running.
 
