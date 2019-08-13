@@ -27,7 +27,7 @@ check_proto:
 	$(MAKE) -C spec/ics-026-relayer-module check_proto
 
 spec_pdf:
-	pandoc --pdf-engine=xelatex --template eisvogel --filter pandoc-include --mathjax --toc --number-sections -o spec.pdf spec.pdc
+	scripts/make_pdf.sh
 
 spellcheck:
 	find . -type f -name "*.md" -exec aspell -p ./misc/aspell_dict -x -d en_GB -c {} \;
