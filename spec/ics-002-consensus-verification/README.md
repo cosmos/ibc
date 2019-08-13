@@ -14,8 +14,8 @@ modified: 2019-05-28
 
 This standard specifies the properties that consensus algorithms of chains implementing the interblockchain
 communication protocol are required to satisfy. These properties are necessary for efficient and safe
-verification in the higher-level protocol abstractions. The algorithm utilized in IBC to verify the
-consensus transcript & state subcomponents of another chain is referred to as a "light client verifier",
+verification in the higher-level protocol abstractions. The algorithm utilised in IBC to verify the
+consensus transcript & state sub-components of another chain is referred to as a "light client verifier",
 and pairing it with a state that the verifier trusts forms a "light client" (often shortened to "client").
 
 This standard also specifies how the clients will be stored, registered, and updated in the
@@ -27,7 +27,7 @@ such as a user inspecting the state of the chain and deciding whether or not to 
 In the IBC protocol, a chain needs to be able to verify updates to the state of another chain
 which the other chain's consensus algorithm has agreed upon, and reject any possible updates
 which the other chain's consensus algorithm has not agreed upon. A light client is the algorithm
-with which a chain can do so. This standard formalizes the light client model and requirements,
+with which a chain can do so. This standard formalises the light client model and requirements,
 so that the IBC protocol can easily connect with new chains which are running new consensus algorithms,
 as long as associated light client algorithms fulfilling the requirements are provided.
 
@@ -44,7 +44,7 @@ as long as associated light client algorithms fulfilling the requirements are pr
 
 * `ClientState` is a structure representing the state of a client, defined in this ICS.
   A `ClientState` contains the latest `ConsensusState` and a map of heights to previously
-  verified state roots which can be utilized by downstream logic to verify subcomponents
+  verified state roots which can be utilised by downstream logic to verify sub-components
   of state at particular heights.
 
 * `createClient`, `queryClient`, `updateClient`, `freezeClient`, and `deleteClient` function signatures are as defined in [ICS 25](../ics-025-handler-interface).
@@ -54,7 +54,7 @@ as long as associated light client algorithms fulfilling the requirements are pr
 
 Light clients must provide a secure algorithm to verify other chains' canonical headers,
 using the existing `ConsensusState`. The higher level abstractions will then be able to verify
-subcomponents of the state with the `CommitmentRoot`s stored in the `ConsensusState`, which are
+sub-components of the state with the `CommitmentRoot`s stored in the `ConsensusState`, which are
 guaranteed to have been committed by the other chain's consensus algorithm.
 
 `ValidityPredicate`s are expected to reflect the behaviour of the full nodes which are running the  
@@ -74,8 +74,8 @@ light client and await higher-level intervention.
 
 #### ConsensusState
 
-`ConsensusState` is a type defined by each consensus algorithm, used by the validty predicate to
-verify new commits & state roots. Likely the strucutre will contain the last commit, including
+`ConsensusState` is a type defined by each consensus algorithm, used by the validity predicate to
+verify new commits & state roots. Likely the structure will contain the last commit, including
 signatures and validator set metadata, produced by the consensus process.
 
 A `ConsensusState` MUST have a function `Height() int64`. The function returns the height of the
@@ -167,7 +167,7 @@ type MisbehaviourPredicate = (ConsensusState, bytes) => bool
 
 More details about `MisbehaviourPredicate`s can be found in [CONSENSUS.md](./CONSENSUS.md)
 
-### Subprotocols
+### Sub-protocols
 
 IBC handlers MUST implement the functions defined below.
 
@@ -208,7 +208,7 @@ function rootKey(id: Identifier, height: uint64): Key {
 }
 ```
 
-##### Utilizing past roots
+##### Utilising past roots
 
 To avoid race conditions between client updates (which change the state root) and proof-carrying
 transactions in handshakes or packet receipt, many IBC handler functions allow the caller to specify

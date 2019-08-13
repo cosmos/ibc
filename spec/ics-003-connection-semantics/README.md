@@ -12,11 +12,11 @@ modified: 2019-05-17
 
 ## Synopsis
 
-This standards document describes the abstraction of an IBC *connection*: two stateful objects (*connection ends*) on two separate chains, each associated with a light client of the other chain, which together facilitate cross-chain substate verification and packet association (through channels). Protocols for safely establishing a connection between two chains and cleanly closing a connection are described.
+This standards document describes the abstraction of an IBC *connection*: two stateful objects (*connection ends*) on two separate chains, each associated with a light client of the other chain, which together facilitate cross-chain sub-state verification and packet association (through channels). Protocols for safely establishing a connection between two chains and cleanly closing a connection are described.
 
 ### Motivation
 
-The core IBC protocol provides *authorization* and *ordering* semantics for packets: guarantees, respectively, that packets have been committed on the sending blockchain (and according state transitions executed, such as escrowing tokens), and that they have been committed exactly once in a particular order and can be delivered exactly once in that same order. The *connection* abstraction specified in this standard, in conjunction with the *client* abstraction specified in [ICS 2](../ics-002-consensus-verification), defines the *authorization* semantics of IBC. Ordering semantics are described in [ICS 4](../ics-004-channel-and-packet-semantics)).
+The core IBC protocol provides *authorisation* and *ordering* semantics for packets: guarantees, respectively, that packets have been committed on the sending blockchain (and according state transitions executed, such as escrowing tokens), and that they have been committed exactly once in a particular order and can be delivered exactly once in that same order. The *connection* abstraction specified in this standard, in conjunction with the *client* abstraction specified in [ICS 2](../ics-002-consensus-verification), defines the *authorisation* semantics of IBC. Ordering semantics are described in [ICS 4](../ics-004-channel-and-packet-semantics)).
 
 ### Definitions
 
@@ -41,7 +41,7 @@ An *actor*, as referred to in this specification, is an entity capable of execut
 
 Prior to connection establishment:
 
-- No further IBC subprotocols should operate, since cross-chain substates cannot be verified.
+- No further IBC subprotocols should operate, since cross-chain sub-states cannot be verified.
 - The initiating actor (who creates the connection) must be able to specify an initial consensus state for the chain to connect to and an initial consensus state for the connecting chain (implicitly, e.g. by sending the transaction).
 
 #### During Handshake
@@ -90,7 +90,7 @@ interface ConnectionEnd {
 - The `counterpartyConnectionIdentifier` field identifies the identifier under which the associated connection end is stored on the counterparty chain.
 - The `clientIdentifier` field identifies the client associated with this connection.
 - The `counterpartyClientIdentifier` field identifies the client on the counterparty chain associated with this connection.
-- The `version` field is an opaque string which can be utilized to determine encodings or protocols for channels or packets utilizing this connection.
+- The `version` field is an opaque string which can be utilised to determine encodings or protocols for channels or packets utilising this connection.
 - The `nextTimeoutHeight` field stores a height after which the next step of a handshake will be considered to have timed out.
 
 ### Store keys
@@ -103,7 +103,7 @@ function connectionKey(id: Identifier): Key {
 }
 ```
 
-A reverse mapping from clients to a set of connections (utilized to look up all connections using a client) is stored under a unique prefix per-client:
+A reverse mapping from clients to a set of connections (utilised to look up all connections using a client) is stored under a unique prefix per-client:
 
 ```typescript
 function clientConnectionsKey(clientIdentifier: Identifier): Key {
@@ -141,7 +141,7 @@ This ICS defines two subprotocols: opening handshake and closing handshake. Head
 
 #### Opening Handshake
 
-The opening handshake subprotocol serves to initialize consensus states for two chains on each other.
+The opening handshake sub-protocol serves to initialise consensus states for two chains on each other.
 
 The opening handshake defines four datagrams: *ConnOpenInit*, *ConnOpenTry*, *ConnOpenAck*, and *ConnOpenConfirm*.
 
@@ -154,13 +154,13 @@ A correct protocol execution flows as follows (note that all calls are made thro
 | Relayer   | `ConnOpenAck`     | A                | (INIT, TRYOPEN)    | (OPEN, TRYOPEN)   |
 | Relayer   | `ConnOpenConfirm` | B                | (OPEN, TRYOPEN)    | (OPEN, OPEN)      |
 
-At the end of an opening handshake between two chains implementing the subprotocol, the following properties hold:
+At the end of an opening handshake between two chains implementing the sub-protocol, the following properties hold:
 - Each chain has each other's correct consensus state as originally specified by the initiating actor.
 - Each chain has knowledge of and has agreed to its identifier on the other chain.
 
-This subprotocol need not be permissioned, modulo anti-spam measures.
+This sub-protocol need not be permissioned, modulo anti-spam measures.
 
-*ConnOpenInit* initializes a connection attempt on chain A.
+*ConnOpenInit* initialises a connection attempt on chain A.
 
 ```typescript
 function connOpenInit(
@@ -297,9 +297,9 @@ Headers are tracked at the client level. See [ICS 2](../ics-002-consensus-verifi
 
 The closing handshake protocol serves to cleanly close a connection on two chains.
 
-This subprotocol will likely need to be permissioned to an entity who "owns" the connection on the initiating chain, such as a particular end user, smart contract, or governance mechanism.
+This sub-protocol will likely need to be permissioned to an entity who "owns" the connection on the initiating chain, such as a particular end user, smart contract, or governance mechanism.
 
-The closing handshake subprotocol defines three datagrams: *ConnCloseInit*, *ConnCloseTry*, and *ConnCloseAck*.
+The closing handshake sub-protocol defines three datagrams: *ConnCloseInit*, *ConnCloseTry*, and *ConnCloseAck*.
 
 A correct protocol execution flows as follows (note that all calls are made through modules per ICS 25):
 
@@ -309,7 +309,7 @@ A correct protocol execution flows as follows (note that all calls are made thro
 | Relayer   | `ConnCloseTry`    | B                | (CLOSETRY, OPEN)   | (CLOSETRY, CLOSED) |
 | Relayer   | `ConnCloseAck`    | A                | (CLOSETRY, CLOSED) | (CLOSED, CLOSED)   |
 
-*ConnCloseInit* initializes a close attempt on chain A.
+*ConnCloseInit* initialises a close attempt on chain A.
 
 ```typescript
 function connCloseInit(identifier: Identifier) {
@@ -339,7 +339,7 @@ function connCloseConfirm(
 
 #### Freezing by Misbehaviour 
 
-The misbehaviour detection subprotocol is defined in [ICS 2](../ics-002-consensus-verification). If a client is frozen by misbehaviour, all associated connections are immediately frozen as well.
+The misbehaviour detection sub-protocol is defined in [ICS 2](../ics-002-consensus-verification). If a client is frozen by misbehaviour, all associated connections are immediately frozen as well.
 
 Implementing chains may want to allow applications to register handlers to take action upon discovery of misbehaviour. Further discussion is deferred to ICS 12.
 
@@ -389,7 +389,7 @@ Coming soon.
 Parts of this document were inspired by the [previous IBC specification](https://github.com/cosmos/cosmos-sdk/tree/master/docs/spec/ibc).
 
 29 March 2019 - Initial draft version submitted
-17 May 2019 - Draft finalized
+17 May 2019 - Draft finalised
 29 July 2019 - Revisions to track connection set associated with client
 
 ## Copyright

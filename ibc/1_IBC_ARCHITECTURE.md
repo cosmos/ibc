@@ -101,19 +101,19 @@ IBC does not require specific provision for computation-level flow control since
 
 ### Authentication
 
-All datagrams in IBC are authenticated: a block finalized by the consensus algorithm of the sending ledger must commit to the outgoing datagram via a cryptographic commitment, and the receiving chain's IBC handler must verify both the consensus transcript and the cryptographic commitment proof that the datagram was sent (and associated actions executed) before acting upon it.
+All datagrams in IBC are authenticated: a block finalised by the consensus algorithm of the sending ledger must commit to the outgoing datagram via a cryptographic commitment, and the receiving chain's IBC handler must verify both the consensus transcript and the cryptographic commitment proof that the datagram was sent (and associated actions executed) before acting upon it.
 
 ### Statefulness
 
-Reliability, flow control, and authentication as described above require that IBC initializes and maintains certain status information for each datastream. This information is called a connection. Each connection object contains information about the consensus state of the connected ledger, negotiated encoding & multiplexing options, and state & sequence numbers. When two modules wish to communicate, they must locate an existing connection between their two ledgers, or initialize a new connection if none yet exists. Initializing a connection requires a multi-step handshake which, once complete, ensures that only the two intended ledgers are connected and future datagrams relayed will be authenticated, encoded, and sequenced as desired.
+Reliability, flow control, and authentication as described above require that IBC initialises and maintains certain status information for each datastream. This information is called a connection. Each connection object contains information about the consensus state of the connected ledger, negotiated encoding & multiplexing options, and state & sequence numbers. When two modules wish to communicate, they must locate an existing connection between their two ledgers, or initialise a new connection if none yet exists. Initialising a connection requires a multi-step handshake which, once complete, ensures that only the two intended ledgers are connected and future datagrams relayed will be authenticated, encoded, and sequenced as desired.
 
 ### Multiplexing
 
-To allow for many modules within a single host ledger to use an IBC connection simultaneously, IBC provides a set of channels within each connection, which each uniquely identify a linear datapipe over which packets can be sent in order to a destination module on the receiving ledger. Channels are usually expected to be associated with a single module on each ledger, but one-to-many and many-to-one channels are also possible. The number of channels is unbounded, facilitating concurrent throughput limited only by the throughput of the underlying ledgers with only a single connection necessary to track consensus information (and consensus transcript verification cost thus amortized across all channels using the connection).
+To allow for many modules within a single host ledger to use an IBC connection simultaneously, IBC provides a set of channels within each connection, which each uniquely identify a linear datapipe over which packets can be sent in order to a destination module on the receiving ledger. Channels are usually expected to be associated with a single module on each ledger, but one-to-many and many-to-one channels are also possible. The number of channels is unbounded, facilitating concurrent throughput limited only by the throughput of the underlying ledgers with only a single connection necessary to track consensus information (and consensus transcript verification cost thus amortised across all channels using the connection).
 
 ## Dataflow
 
-IBC can be conceptualized as a layered protocol stack, through which data flows top-to-bottom (when sending IBC packets) and bottom-to-top (when receiving IBC packets).
+IBC can be conceptualised as a layered protocol stack, through which data flows top-to-bottom (when sending IBC packets) and bottom-to-top (when receiving IBC packets).
 
 The "handler" is the part of the state machine implementing the IBC protocol, which is responsible for translating calls from modules to and from packets and routing them appropriately to and from channels & connections.
 

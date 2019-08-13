@@ -40,7 +40,7 @@ A *header* is an update to the consensus state of a particular blockchain that c
 
 ### Finality
 
-*Finality* is the guarantee provided by a consensus algorithm that a particular block will not be reverted, subject to certain assumptions about the behavior of the validator set. The IBC protocol requires finality.
+*Finality* is the guarantee provided by a consensus algorithm that a particular block will not be reverted, subject to certain assumptions about the behaviour of the validator set. The IBC protocol requires finality.
 
 ### Commitment 
 
@@ -48,11 +48,11 @@ A cryptographic *commitment* is a way to cheaply verify membership of a key => v
 
 ### Handler
 
-An IBC *handler* is the module or subcomponent within the state machine of a ledger responsible for implementing the IBC specification by "handling" datagrams, performing the appropriate checks, proof verifications, and/or storage alterations, and routing valid packets to other parts of the state machine, as defined by the application-layer semantics.
+An IBC *handler* is the module or sub-component within the state machine of a ledger responsible for implementing the IBC specification by "handling" datagrams, performing the appropriate checks, proof verifications, and/or storage alterations, and routing valid packets to other parts of the state machine, as defined by the application-layer semantics.
 
 ### Datagram
 
-A *datagram* is an opaque bytestring transmitted over some physical network, and handled by the top-level IBC handler implemented in the ledger's state machine. In some implementations, the datagram may be a field in a ledger-specific transaction or message data structure which also contains other information (e.g. a fee for spam prevention, nonce for replay prevention, type identifier to route to the IBC handler, etc.). All IBC subprotocols (such as opening a connection, creating a channel, sending a packet) are defined in terms of sets of datagrams and protocols for handling them.
+A *datagram* is an opaque bytestring transmitted over some physical network, and handled by the top-level IBC handler implemented in the ledger's state machine. In some implementations, the datagram may be a field in a ledger-specific transaction or message data structure which also contains other information (e.g. a fee for spam prevention, nonce for replay prevention, type identifier to route to the IBC handler, etc.). All IBC sub-protocols (such as opening a connection, creating a channel, sending a packet) are defined in terms of sets of datagrams and protocols for handling them.
 
 ### Connection
 
@@ -68,13 +68,13 @@ A *packet* is a particular data structure with sequence-related metadata (define
 
 ### Module
 
-A *module* is a subcomponent of the state machine of a particular blockchain which may interact with the IBC handler and alter state according to the *data* field of particular IBC packets sent or received (minting or burning tokens, for example).
+A *module* is a sub-component of the state machine of a particular blockchain which may interact with the IBC handler and alter state according to the *data* field of particular IBC packets sent or received (minting or burning tokens, for example).
 
 ## Auxiliary Terms
 
 ### Handshake
 
-A *handshake* is a particular class of subprotocol involving multiple datagrams, generally used to initialize some common state on the two involved chains such as roots-of-trust for each others' consensus algorithms.
+A *handshake* is a particular class of sub-protocol involving multiple datagrams, generally used to initialise some common state on the two involved chains such as roots-of-trust for each others' consensus algorithms.
 
 ### Trust
 
@@ -88,10 +88,10 @@ To *trust* a blockchain or validator set means to expect that the validator set 
 
 *Equivocation* refers to a particular class of consensus fault committed by a validator or validators which sign votes on multiple different successors to a single block.
 
-### Subprotocol
+### Sub-protocol
 
-Subprotocols are defined as a set of datagram types and functions which must be implemented by the IBC handler module of the implementing blockchain.
+Sub-protocols are defined as a set of datagram types and functions which must be implemented by the IBC handler module of the implementing blockchain.
 
-Datagrams must be relayed between chains by an external process. This process is assumed to behave in an arbitrary manner — no safety properties are dependent on its behavior, although progress is generally dependent on the existence of at least one correct relayer process.
+Datagrams must be relayed between chains by an external process. This process is assumed to behave in an arbitrary manner — no safety properties are dependent on its behaviour, although progress is generally dependent on the existence of at least one correct relayer process.
 
-IBC subprotocols are reasoned about as interactions between two chains `A` and `B` — there is no prior distinction between these two chains and they are assumed to be executing the same, correct IBC protocol. `A` is simply by convention the chain which goes first in the subprotocol and `B` the chain which goes second. Protocol definitions should generally avoid including `A` and `B` in variable names to avoid confusion (as the chains themselves do not know whether they are `A` or `B` in the protocol).
+IBC sub-protocols are reasoned about as interactions between two chains `A` and `B` — there is no prior distinction between these two chains and they are assumed to be executing the same, correct IBC protocol. `A` is simply by convention the chain which goes first in the sub-protocol and `B` the chain which goes second. Protocol definitions should generally avoid including `A` and `B` in variable names to avoid confusion (as the chains themselves do not know whether they are `A` or `B` in the protocol).

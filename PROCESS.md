@@ -1,6 +1,6 @@
-## Interchain Standardization Process
+## Interchain Standardisation Process
 
-Inter-chain standardization will follow an adaptation of the [TC 39](https://tc39.github.io/process-document/) process used by the ECMAScript steering committee.
+Inter-chain standardisation will follow an adaptation of the [TC 39](https://tc39.github.io/process-document/) process used by the ECMAScript steering committee.
 
 #### Stage 1 - `Strawman`
 
@@ -18,24 +18,24 @@ Inter-chain standardization will follow an adaptation of the [TC 39](https://tc3
   * Describe the shape of a potential solution
   * Identify challenges to this proposal
 - _**Entrance Criteria**_:
-  * Prose outlining the problem or need and the general shape of a solution in a PR to a `./spec/ics-{{ .Spec.Number }}-{{ .Spec.Name }}/README.md` file in this repo.
+  * Prose outlining the problem or need and the general shape of a solution in a PR to a `./spec/ics-{{ .Spec.Number }}-{{ .Spec.Name }}/README.md` file in this repository.
     This file should contain:
     1. List of expected projects & users within the Cosmos ecosystem who might make use of the specification along with any particular requirements they have
     1. Discussion of key algorithms, abstractions, and semantics
     1. High-level application interface outline, where applicable
-    1. Identification of potential design tradeoffs and implementation challenges/complexity
+    1. Identification of potential design trade-offs and implementation challenges/complexity
     See [ICS 1](spec/ics-1-ics-standard) for a more detailed description of standard requirements.
   * Identified `author(s)` who will advance the proposal in the header of the standard file
   * Any additional reference documentation or media in the `./spec/ics-{{ .Spec.Number }}-{{ .Spec.Name }}` directory
-  * The specification team expects that this proposal will be finalized and eventually included in the ICS standard set.
+  * The specification team expects that this proposal will be finalised and eventually included in the ICS standard set.
 - _**Spec Quality**_:
   * Follows the structure laid out in ICS 1 and provides a reasonable overview of the proposed addition.
 - _**Acceptance Requirements**_:
   * The PR has received two approvals from members of the core specification team, at which point it can be merged into the ICS repository.
 - _**Changes Expected Post-Acceptance**_:
-  * Changes to details but not to the key concepts are expected after a standard enters draft stage. Implementors should work with the spec authors as work continues on spec development.
+  * Changes to details but not to the key concepts are expected after a standard enters draft stage. Implementers should work with the spec authors as work continues on spec development.
 - _**Implementation Types Expected**_:
-  * Tightly bounded demos, example repos showing reproduction steps for issues fixed by proposal
+  * Tightly bounded demos, example repositories showing reproduction steps for issues fixed by proposal
 
 #### Stage 3 - `Candidate`
 
@@ -56,7 +56,7 @@ Inter-chain standardization will follow an adaptation of the [TC 39](https://tc3
 - _**Implementation Types Expected**_:
   * Specification-compliant
 
-#### Stage 4 - `Finalized`
+#### Stage 4 - `Finalised`
 
 - _**Purpose**_:
   * Indicate that the addition is included in the formal ICS standard set
@@ -65,9 +65,9 @@ Inter-chain standardization will follow an adaptation of the [TC 39](https://tc3
   * At least two specification-compatible implementations exist, and they have been tested against each other
   * All relevant ecosystem stakeholders approve the specification (any holdout can block this stage)
   * Acceptance tests are written and merged into the relevant repositories
-  * All files in the `./spec/ics-{{ .Spec.Number }}-{{ .Spec.Name}}/` directory are up to date and merged into the `cosmos/ics` repo
+  * All files in the `./spec/ics-{{ .Spec.Number }}-{{ .Spec.Name}}/` directory are up to date and merged into the `cosmos/ics` repository
 - _**Acceptance Requirements**_:
-  * The PR changing the stage to "finalized" has been approved by representatives from all relevant ecosystem stakeholders, and all members of the core specification team.
+  * The PR changing the stage to "finalised" has been approved by representatives from all relevant ecosystem stakeholders, and all members of the core specification team.
 - _**Spec Quality**_:
   * Final: All changes as a result of implementation experience are integrated
 - _**Changes Expected Post-Acceptance**_:

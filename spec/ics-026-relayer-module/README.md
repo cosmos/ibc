@@ -268,7 +268,7 @@ function handleConnOpenAck(datagram: ConnOpenAck) {
 }
 ```
 
-The `ConnOpenConfirm` datagram acknowledges a handshake acknowledgement by an IBC module on another chain & finalizes the connection.
+The `ConnOpenConfirm` datagram acknowledges a handshake acknowledgement by an IBC module on another chain & finalises the connection.
 
 ```typescript
 interface ConnOpenConfirm {
@@ -599,7 +599,7 @@ See [ICS 20](../ics-020-fungible-token-transfer) for a usage example.
 
 ### Properties & Invariants
 
-- Proxy port binding is first-come-first-serve: once a module binds to a port through the IBC relayer module, only that module can utilize that port until the module releases it.
+- Proxy port binding is first-come-first-serve: once a module binds to a port through the IBC relayer module, only that module can utilise that port until the module releases it.
 
 ## Backwards Compatibility
 
