@@ -29,4 +29,10 @@ check_proto:
 spec_pdf:
 	pandoc --pdf-engine=xelatex --template eisvogel --filter pandoc-include --mathjax --toc --number-sections -o spec.pdf spec.pdc
 
-.PHONY: $(TOPTARGETS) $(SUBDIRS) check check_links check_dependencies check_syntax check_sections check_proto spec_pdf
+spellcheck:
+	find . -type f -name "*.md" -exec aspell -p ./misc/aspell_dict -x -d en_GB -c {} \;
+
+spellcheck_noninteractive:
+	find . -type f -name "*.md" | xargs -n 1 -I % ./scripts/spellcheck.sh %
+
+.PHONY: $(TOPTARGETS) $(SUBDIRS) check check_links check_dependencies check_syntax check_sections check_proto spec_pdf spellcheck spellcheck_noninteractive
