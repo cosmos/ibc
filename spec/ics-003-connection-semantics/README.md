@@ -58,7 +58,7 @@ Once a negotiation handshake has completed:
 - The created connection objects on both chains contain the consensus states specified by the initiating actor.
 - No other connection objects can be maliciously created on other chains by replaying datagrams.
 - The connection should be able to be voluntarily & cleanly closed by either blockchain.
-- The connection should be able to be immediately closed upon discovery of a consensus equivocation.
+- The connection should be able to be immediately closed upon discovery of a consensus misbehaviour.
 
 ## Technical Specification
 
@@ -135,7 +135,7 @@ function removeConnectionFromClient(clientIdentifier: Identifier, connectionIden
 
 ### Subprotocols
 
-This ICS defines two subprotocols: opening handshake and closing handshake. Header tracking and closing-by-equivocation are defined in [ICS 2](../ics-002-consensus-verification). Datagrams defined herein are handled as external messages by the IBC relayer module defined in [ICS 26](../ics-026-relayer-module).
+This ICS defines two subprotocols: opening handshake and closing handshake. Header tracking and closing-by-misbehaviour are defined in [ICS 2](../ics-002-consensus-verification). Datagrams defined herein are handled as external messages by the IBC relayer module defined in [ICS 26](../ics-026-relayer-module).
 
 ![State Machine Diagram](state.png)
 
@@ -337,11 +337,11 @@ function connCloseConfirm(
 }
 ```
 
-#### Freezing by Equivocation
+#### Freezing by Misbehaviour 
 
-The equivocation detection subprotocol is defined in [ICS 2](../ics-002-consensus-verification). If a client is frozen by equivocation, all associated connections are immediately frozen as well.
+The misbehaviour detection subprotocol is defined in [ICS 2](../ics-002-consensus-verification). If a client is frozen by misbehaviour, all associated connections are immediately frozen as well.
 
-Implementing chains may want to allow applications to register handlers to take action upon discovery of an equivocation. Further discussion is deferred to ICS 12.
+Implementing chains may want to allow applications to register handlers to take action upon discovery of misbehaviour. Further discussion is deferred to ICS 12.
 
 #### Querying
 

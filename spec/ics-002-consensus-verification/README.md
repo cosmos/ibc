@@ -63,8 +63,8 @@ accepts the new `Header` generated with `Commit`, then the light client MUST als
 and if a full node rejects it, then the light client MUST also reject it.
 
 Light clients are not replaying the whole message transcript, so it is possible under cases of
-consensus equivocation that the light clients' behaviour differs from the full nodes'.
-In this case, an equivocation proof which proves the divergence between the `ValidityPredicate`
+consensus misbehaviour that the light clients' behaviour differs from the full nodes'.
+In this case, an misbehaviour proof which proves the divergence between the `ValidityPredicate`
 and the full node can be generated and submitted to the chain so that the chain can safely deactivate the
 light client and await higher-level intervention.
 
@@ -93,7 +93,7 @@ The `ConsensusState` of a chain is stored by other chains in order to verify the
 interface ConsensusState {
   height: uint64
   validityPredicate: ValidityPredicate
-  equivocationPredicate: EquivocationPredicate
+  misbehaviourPredicate: MisbehaviourPredicate
 }
 ```
 
@@ -114,7 +114,7 @@ interface ClientState {
 where
   * `consensusState` is the `ConsensusState` used by `Consensus.ValidityPredicate` to verify `Header`s.
   * `verifiedRoots` is a map of heights to previously verified `CommitmentRoot` structs, used to prove presence or absence of key-value pairs in state at particular heights.
-  * `frozen` is a boolean indicating whether the client has been frozen due to a detected equivocation.
+  * `frozen` is a boolean indicating whether the client has been frozen due to a detected misbehaviour.
 
 Note that instead of `ClientState` being stored directly, the consensus state, roots, and frozen boolean are stored at separate keys.
 
@@ -152,19 +152,20 @@ type ValidityPredicate = (ConsensusState, Header) => Error | ConsensusState
 
 The detailed specification of `ValidityPredicate` can be found in [CONSENSUS.md](./CONSENSUS.md).
 
-#### EquivocationPredicate
+#### MisbehaviourPredicate
 
-An `EquivocationPredicate` is a light client function used to check if two headers
-constitute a violation of the consensus protocol (consensus equivocation) and should
-freeze a light client.
+An `MisbehaviourPredicate` is a light client function used to check if data
+constitutes a violation of the consensus protocol. This might be two headers
+with different state roots but the same height, a signed header containing invalid
+state transitions, or other evidence as defined by the consensus algorithm.
 
-The `EquivocationPredicate` type is defined as
+The `MisbehaviourPredicate` type is defined as
 
 ```typescript
-type EquivocationPredicate = (ConsensusState, Header, Header) => bool
+type MisbehaviourPredicate = (ConsensusState, bytes) => bool
 ```
 
-More details about `EquivocationPredicate`s can be found in [CONSENSUS.md](./CONSENSUS.md)
+More details about `MisbehaviourPredicate`s can be found in [CONSENSUS.md](./CONSENSUS.md)
 
 ### Subprotocols
 
@@ -255,7 +256,7 @@ Updating a client is done by submitting a new `Header`. The `Identifier` is used
 stored `ClientState` that the logic will update. When the new `Header` is verified with
 the stored `ClientState`'s `ValidityPredicate` and `ConsensusState`, then it SHOULD update the
 `ClientState` unless an additional logic intentionally blocks the updating process (e.g.
-waiting for the equivocation proof period.
+waiting for the misbehaviour proof period.
 
 ```typescript
 function updateClient(id: Identifier, header: Header) {
@@ -281,9 +282,9 @@ activity on the client. Frozen client SHOULD NOT be deleted from the state, as a
 method can be introduced in the future versions.
 
 ```typescript
-function freezeClient(identifier: Identifier, firstHeader: Header, secondHeader: Header) {
+function freezeClient(identifier: Identifier, evidence: bytes) {
   consensusState = get(consensusStateKey(identifier))
-  assert(consensusState.equivocationPredicate(firstHeader, secondHeader))
+  assert(consensusState.misbehaviourPredicate(evidence))
   set(frozenKey(id), true)
 }
 ```
@@ -378,7 +379,7 @@ Not applicable.
 ## Forwards Compatibility
 
 In a future version, this ICS will define a new function `unfreezeClient` that can be called 
-when the application logic resolves an equivocation event.
+when the application logic resolves an misbehaviour event.
 
 ## Example Implementation
 

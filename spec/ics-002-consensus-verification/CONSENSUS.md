@@ -74,6 +74,6 @@ security assumptions break, the correspondence between `Consensus` and
 `Verifier` no longer exists, and the behaviour of `Verifier` becomes
 undefined. Also, the `Blockchain` may not longer satisfy
 the requirements above, which will cause the chain to be incompatible with the IBC
-protocol. In cases of attributable faults, an equivocation proof can be generated and submitted to the
+protocol. In cases of attributable faults, a misbehaviour proof can be generated and submitted to the
 chain storing the `LightClient` to safely freeze the light client and
 prevent further IBC packet relay.
