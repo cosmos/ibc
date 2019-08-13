@@ -8,7 +8,14 @@ extra-source-files:
 
 dependencies:
   - base >= 4.7 && < 5
+  - protolude
+  - text
   - pandoc
+  - pandoc-types
+
+default-extensions:
+  - OverloadedStrings
+  - NoImplicitPrelude
 
 executables:
   spec-transform:

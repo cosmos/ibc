@@ -1,21 +1,31 @@
 module Main where
 
+import           Data.Text
+import           Data.Text.IO
+import           Prelude            (error, id)
+import           Protolude
+import           System.Environment (getArgs)
 import           Text.Pandoc
-import           Text.Pandoc.Walk (walk)
+import           Text.Pandoc.Walk   (walk)
 
 behead :: Block -> Block
-behead (Header n _ xs) | n >= 2 = Para [Emph xs]
+behead x@(Header n t xs) | n == 2 =
+  case t of
+    ("Copyright", _, _) -> Null
+    _                   -> x
 behead x               = x
 
-readDoc :: String -> Pandoc
-readDoc s = readMarkdown def s
--- or, for pandoc 1.14 and greater, use:
--- readDoc s = case readMarkdown def s of
---                  Right doc -> doc
---                  Left err  -> error (show err)
+readDoc :: Text -> IO (Either PandocError Pandoc)
+readDoc s = runIO (readMarkdown def s)
 
-writeDoc :: Pandoc -> String
-writeDoc doc = writeMarkdown def doc
+writeDoc :: Pandoc -> IO (Either PandocError Text)
+writeDoc doc = runIO (writeMarkdown def doc)
 
 main :: IO ()
-main = interact (writeDoc . walk behead . readDoc)
+main = do
+  [fin, fout] <- getArgs
+  print (fin, fout)
+  Right doc <- readDoc =<< readFile fin
+  let newDoc = walk (id :: Block -> Block) doc
+  Right updated <- writeDoc newDoc
+  writeFile fout updated
