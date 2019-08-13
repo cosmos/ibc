@@ -83,12 +83,12 @@ function updateClient(id: Identifier, header; Header): error | void {
 }
 ```
 
-`freezeClient` freezes an existing client by providing proof-of-equivocation, automatically freezing any associated connections & channels.
+`freezeClient` freezes an existing client by providing proof-of-misbehaviour, automatically freezing any associated connections & channels.
 
 The default IBC relayer module will allow external calls to `freezeClient`.
 
 ```typescript
-function freezeClient(id: Identifier, firstHeader: Header, secondHeader: Header): error | void {
+function freezeClient(id: Identifier, evidence: bytes): error | void {
   // defined in ICS 2
 }
 ```

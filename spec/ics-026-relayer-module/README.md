@@ -188,14 +188,13 @@ function handleClientUpdate(datagram: ClientUpdate) {
 ```typescript
 interface ClientFreeze {
   identifier: Identifier
-  firstHeader: Header
-  secondHeader: Header
+  evidence: bytes
 }
 ```
 
 ```typescript
 function handleClientFreeze(datagram: ClientUpdate) {
-  handler.freezeClient(datagram.identifier, datagram.firstHeader, datagram.secondHeader)
+  handler.freezeClient(datagram.identifier, datagram.evidence)
 
   for (const identifier in handler.queryClientConnections(client))
     handler.handleConnCloseInit(identifier)
