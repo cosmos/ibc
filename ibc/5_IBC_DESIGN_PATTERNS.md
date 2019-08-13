@@ -40,17 +40,17 @@ connections, channels, and send packets. However, instead of the IBC handler, up
 of a packet from another chain, selecting and calling into the appropriate module,
 the module itself must call `recvPacket` on the IBC handler (likewise for accepting
 channel creation handshakes). When `recvPacket` is called, the IBC handler will check
-that the calling module is authorized to receive and process the packet (based on included proofs and
+that the calling module is authorised to receive and process the packet (based on included proofs and
 known state of connections / channels), perform appropriate state updates (incrementing
 sequence numbers to prevent replay), and return control to the module or throw on error.
 The IBC handler never calls into modules directly.
 
 Although a bit counterintuitive to reason about at first, this pattern has a few notable advantages:
-- It minimizes requirements of the host state machine, since the IBC handler need not understand how to call
+- It minimises requirements of the host state machine, since the IBC handler need not understand how to call
   into other modules or store any references to them.
 - It avoids the necessity of managing a module lookup table in the handler state.
 - It avoids the necessity of dealing with module return data or failures. If a module does not want to 
-  receive a packet (perhaps having implemented additional authorization on top), it simply never calls
+  receive a packet (perhaps having implemented additional authorisation on top), it simply never calls
   `recvPacket`. If the routing logic were implemented in the IBC handler, the handler would need to deal
   with the failure of the module, which is tricky to interpret.
 

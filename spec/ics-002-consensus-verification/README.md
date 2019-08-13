@@ -14,8 +14,8 @@ modified: 2019-05-28
 
 This standard specifies the properties that consensus algorithms of chains implementing the interblockchain
 communication protocol are required to satisfy. These properties are necessary for efficient and safe
-verification in the higher-level protocol abstractions. The algorithm utilized in IBC to verify the
-consensus transcript & state subcomponents of another chain is referred to as a "light client verifier",
+verification in the higher-level protocol abstractions. The algorithm utilised in IBC to verify the
+consensus transcript & state sub-components of another chain is referred to as a "light client verifier",
 and pairing it with a state that the verifier trusts forms a "light client" (often shortened to "client").
 
 This standard also specifies how the clients will be stored, registered, and updated in the
@@ -27,7 +27,7 @@ such as a user inspecting the state of the chain and deciding whether or not to 
 In the IBC protocol, a chain needs to be able to verify updates to the state of another chain
 which the other chain's consensus algorithm has agreed upon, and reject any possible updates
 which the other chain's consensus algorithm has not agreed upon. A light client is the algorithm
-with which a chain can do so. This standard formalizes the light client model and requirements,
+with which a chain can do so. This standard formalises the light client model and requirements,
 so that the IBC protocol can easily connect with new chains which are running new consensus algorithms,
 as long as associated light client algorithms fulfilling the requirements are provided.
 
@@ -44,7 +44,7 @@ as long as associated light client algorithms fulfilling the requirements are pr
 
 * `ClientState` is a structure representing the state of a client, defined in this ICS.
   A `ClientState` contains the latest `ConsensusState` and a map of heights to previously
-  verified state roots which can be utilized by downstream logic to verify subcomponents
+  verified state roots which can be utilised by downstream logic to verify sub-components
   of state at particular heights.
 
 * `createClient`, `queryClient`, `updateClient`, `freezeClient`, and `deleteClient` function signatures are as defined in [ICS 25](../ics-025-handler-interface).
@@ -54,7 +54,7 @@ as long as associated light client algorithms fulfilling the requirements are pr
 
 Light clients must provide a secure algorithm to verify other chains' canonical headers,
 using the existing `ConsensusState`. The higher level abstractions will then be able to verify
-subcomponents of the state with the `CommitmentRoot`s stored in the `ConsensusState`, which are
+sub-components of the state with the `CommitmentRoot`s stored in the `ConsensusState`, which are
 guaranteed to have been committed by the other chain's consensus algorithm.
 
 `ValidityPredicate`s are expected to reflect the behaviour of the full nodes which are running the  
@@ -63,8 +63,8 @@ accepts the new `Header` generated with `Commit`, then the light client MUST als
 and if a full node rejects it, then the light client MUST also reject it.
 
 Light clients are not replaying the whole message transcript, so it is possible under cases of
-consensus equivocation that the light clients' behaviour differs from the full nodes'.
-In this case, an equivocation proof which proves the divergence between the `ValidityPredicate`
+consensus misbehaviour that the light clients' behaviour differs from the full nodes'.
+In this case, an misbehaviour proof which proves the divergence between the `ValidityPredicate`
 and the full node can be generated and submitted to the chain so that the chain can safely deactivate the
 light client and await higher-level intervention.
 
@@ -74,8 +74,8 @@ light client and await higher-level intervention.
 
 #### ConsensusState
 
-`ConsensusState` is a type defined by each consensus algorithm, used by the validty predicate to
-verify new commits & state roots. Likely the strucutre will contain the last commit, including
+`ConsensusState` is a type defined by each consensus algorithm, used by the validity predicate to
+verify new commits & state roots. Likely the structure will contain the last commit, including
 signatures and validator set metadata, produced by the consensus process.
 
 A `ConsensusState` MUST have a function `Height() int64`. The function returns the height of the
@@ -93,7 +93,7 @@ The `ConsensusState` of a chain is stored by other chains in order to verify the
 interface ConsensusState {
   height: uint64
   validityPredicate: ValidityPredicate
-  equivocationPredicate: EquivocationPredicate
+  misbehaviourPredicate: MisbehaviourPredicate
 }
 ```
 
@@ -114,7 +114,7 @@ interface ClientState {
 where
   * `consensusState` is the `ConsensusState` used by `Consensus.ValidityPredicate` to verify `Header`s.
   * `verifiedRoots` is a map of heights to previously verified `CommitmentRoot` structs, used to prove presence or absence of key-value pairs in state at particular heights.
-  * `frozen` is a boolean indicating whether the client has been frozen due to a detected equivocation.
+  * `frozen` is a boolean indicating whether the client has been frozen due to a detected misbehaviour.
 
 Note that instead of `ClientState` being stored directly, the consensus state, roots, and frozen boolean are stored at separate keys.
 
@@ -152,21 +152,22 @@ type ValidityPredicate = (ConsensusState, Header) => Error | ConsensusState
 
 The detailed specification of `ValidityPredicate` can be found in [CONSENSUS.md](./CONSENSUS.md).
 
-#### EquivocationPredicate
+#### MisbehaviourPredicate
 
-An `EquivocationPredicate` is a light client function used to check if two headers
-constitute a violation of the consensus protocol (consensus equivocation) and should
-freeze a light client.
+An `MisbehaviourPredicate` is a light client function used to check if data
+constitutes a violation of the consensus protocol. This might be two headers
+with different state roots but the same height, a signed header containing invalid
+state transitions, or other evidence as defined by the consensus algorithm.
 
-The `EquivocationPredicate` type is defined as
+The `MisbehaviourPredicate` type is defined as
 
 ```typescript
-type EquivocationPredicate = (ConsensusState, Header, Header) => bool
+type MisbehaviourPredicate = (ConsensusState, bytes) => bool
 ```
 
-More details about `EquivocationPredicate`s can be found in [CONSENSUS.md](./CONSENSUS.md)
+More details about `MisbehaviourPredicate`s can be found in [CONSENSUS.md](./CONSENSUS.md)
 
-### Subprotocols
+### Sub-protocols
 
 IBC handlers MUST implement the functions defined below.
 
@@ -207,7 +208,7 @@ function rootKey(id: Identifier, height: uint64): Key {
 }
 ```
 
-##### Utilizing past roots
+##### Utilising past roots
 
 To avoid race conditions between client updates (which change the state root) and proof-carrying
 transactions in handshakes or packet receipt, many IBC handler functions allow the caller to specify
@@ -255,7 +256,7 @@ Updating a client is done by submitting a new `Header`. The `Identifier` is used
 stored `ClientState` that the logic will update. When the new `Header` is verified with
 the stored `ClientState`'s `ValidityPredicate` and `ConsensusState`, then it SHOULD update the
 `ClientState` unless an additional logic intentionally blocks the updating process (e.g.
-waiting for the equivocation proof period.
+waiting for the misbehaviour proof period.
 
 ```typescript
 function updateClient(id: Identifier, header: Header) {
@@ -281,16 +282,16 @@ activity on the client. Frozen client SHOULD NOT be deleted from the state, as a
 method can be introduced in the future versions.
 
 ```typescript
-function freezeClient(identifier: Identifier, firstHeader: Header, secondHeader: Header) {
+function freezeClient(identifier: Identifier, evidence: bytes) {
   consensusState = get(consensusStateKey(identifier))
-  assert(consensusState.equivocationPredicate(firstHeader, secondHeader))
+  assert(consensusState.misbehaviourPredicate(evidence))
   set(frozenKey(id), true)
 }
 ```
 
 ### Example Implementation
 
-An example blockchain `Op` runs on a single `Op`erator consensus algorithm,
+An example blockchain `Op` runs on a single operator consensus algorithm,
 where the valid blocks are signed by the operator. The operator signing Key
 can be changed while the chain is running.
 
@@ -378,7 +379,7 @@ Not applicable.
 ## Forwards Compatibility
 
 In a future version, this ICS will define a new function `unfreezeClient` that can be called 
-when the application logic resolves an equivocation event.
+when the application logic resolves an misbehaviour event.
 
 ## Example Implementation
 

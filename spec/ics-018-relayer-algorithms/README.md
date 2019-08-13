@@ -19,15 +19,15 @@ In the IBC protocol, a blockchain can only record the *intention* to send partic
 
 ### Definitions
 
-A *relayer* is an off-chain process with the ability to read the state of and submit transactions to some set of ledgers utilizing the IBC protocol.
+A *relayer* is an off-chain process with the ability to read the state of and submit transactions to some set of ledgers utilising the IBC protocol.
 
 ### Desired Properties
 
 - No safety properties of IBC should depend on relayer behaviour (assume Byzantine relayers).
 - Liveness properties of IBC should depend only on the existence of at least one correct, live relayer.
 - Relaying should be permissionless, all requisite verification should be performed on-chain.
-- Requisite communication between the IBC user and the relayer should be minimized.
-- Provision for relayer incentivization should be possible at the application layer.
+- Requisite communication between the IBC user and the relayer should be minimised.
+- Provision for relayer incentivisation should be possible at the application layer.
 
 ## Technical Specification
 
@@ -35,7 +35,7 @@ A *relayer* is an off-chain process with the ability to read the state of and su
 
 The relayer algorithm is defined over a set `C` of chains implementing the IBC protocol. Each relayer may not necessarily have access to read state from and write datagrams to all chains in the interchain network (especially in the case of permissioned or private chains) — different relayers may relay between different subsets.
 
-`pendingDatagrams` calculates the set of all valid datagrams to be relayed from one chain to another based on the state of both chains. Subcomponents of this function are defined in individual ICSs. The relayer must possess prior knowledge of what subset of the IBC protocol is implemented by the blockchains in the set for which they are relaying (e.g. by reading the source code).
+`pendingDatagrams` calculates the set of all valid datagrams to be relayed from one chain to another based on the state of both chains. Sub-components of this function are defined in individual ICSs. The relayer must possess prior knowledge of what subset of the IBC protocol is implemented by the blockchains in the set for which they are relaying (e.g. by reading the source code).
 
 `submitDatagram` is a procedure defined per-chain (submitting a transaction of some sort).
 
@@ -51,7 +51,7 @@ function relay(C: Set<Chain>) {
 }
 ```
 
-### Incentivization
+### Incentivisation
 
 The relay process must have access to accounts on both chains with sufficient balance to pay for transaction fees. Relayers may employ application-level methods to recoup these fees, such by including a small payment to themselves in the packet data — protocols for relayer fee payment will be described in future versions of this ICS or in separate ICSs.
 

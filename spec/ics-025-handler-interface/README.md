@@ -15,7 +15,7 @@ This document describes the interface exposed by the standard IBC implementation
 
 ### Motivation
 
-IBC is an inter-module communication protocol, designed to faciliate reliable, authentication message passing between modules on separate blockchains. Modules should be able to reason about the interface they interact with and the requirements they must adhere to in order to utilize it safely.
+IBC is an inter-module communication protocol, designed to facilitate reliable, authentication message passing between modules on separate blockchains. Modules should be able to reason about the interface they interact with and the requirements they must adhere to in order to utilise it safely.
 
 ### Definitions
 
@@ -83,12 +83,12 @@ function updateClient(id: Identifier, header; Header): error | void {
 }
 ```
 
-`freezeClient` freezes an existing client by providing proof-of-equivocation, automatically freezing any associated connections & channels.
+`freezeClient` freezes an existing client by providing proof-of-misbehaviour, automatically freezing any associated connections & channels.
 
 The default IBC relayer module will allow external calls to `freezeClient`.
 
 ```typescript
-function freezeClient(id: Identifier, firstHeader: Header, secondHeader: Header): error | void {
+function freezeClient(id: Identifier, evidence: bytes): error | void {
   // defined in ICS 2
 }
 ```
@@ -100,12 +100,13 @@ By default, connections are unowned. Connections can be closed by any module, bu
 ```typescript
 function connOpenInit(
   identifier: Identifier, desiredCounterpartyIdentifier: Identifier,
-  clientIdentifier: Identifier, counterpartyClientIdentifier: Identifier, nextTimeoutHeight: uint64) {
+  clientIdentifier: Identifier, counterpartyClientIdentifier: Identifier,
+  version: string, nextTimeoutHeight: uint64) {
   // defined in ICS 3
 }
 ```
 
-`connOpenTry` acknowledges a connection initialization on the initiating chain.
+`connOpenTry` acknowledges a connection initialisation on the initiating chain.
 
 The default IBC relayer module will allow external calls to `connOpenTry`.
 
@@ -114,7 +115,7 @@ function connOpenTry(
   desiredIdentifier: Identifier, counterpartyConnectionIdentifier: Identifier,
   counterpartyClientIdentifier: Identifier, clientIdentifier: Identifier,
   proofInit: CommitmentProof, proofHeight: uint64, consensusHeight: uint64,
-  timeoutHeight: uint64, nextTimeoutHeight: uint64) {
+  version: string, timeoutHeight: uint64, nextTimeoutHeight: uint64) {
   // defined in ICS 3
 }
 ```
@@ -132,7 +133,7 @@ function connOpenAck(
 }
 ```
 
-`connOpenConfirm` acknowledges the acknowledgement and finalizes a new connection.
+`connOpenConfirm` acknowledges the acknowledgement and finalises a new connection.
 
 The default IBC relayer module will allow external calls to `connOpenConfirm`.
 
@@ -164,7 +165,7 @@ function connCloseInit(identifier: Identifier, nextTimeoutHeight: uint64) {
 }
 ```
 
-`connCloseConfirm` finalizes the graceful connection closing process. It will fail if the proof is invalid or if the identifier is invalid.
+`connCloseConfirm` finalises the graceful connection closing process. It will fail if the proof is invalid or if the identifier is invalid.
 
 The default IBC relayer module will allow external calls to `connCloseConfirm`.
 
@@ -191,12 +192,13 @@ By default, channels are owned by the creating port, meaning only the module bou
 ```typescript
 function chanOpenInit(
   connectionHops: [Identifier], portIdentifier: Identifier, channelIdentifier: Identifier,
-  counterpartyChannelIdentifier: Identifier, counterpartyPortIdentifier: Identifier, nextTimeoutHeight: uint64) {
+  counterpartyChannelIdentifier: Identifier, counterpartyPortIdentifier: Identifier,
+  version: string, nextTimeoutHeight: uint64) {
   // defined in ICS 4
 }
 ```
 
-`chanOpenTry` tries to initialize a channel based on proof of an initialization attempt on the counterparty chain, failing if the channel identifier is unavailable, the proof is invalid, or the calling module is not bound to the port.
+`chanOpenTry` tries to initialise a channel based on proof of an initialisation attempt on the counterparty chain, failing if the channel identifier is unavailable, the proof is invalid, or the calling module is not bound to the port.
 
 The default IBC relayer module will allow external calls to `chanOpenTry`.
 
@@ -204,7 +206,7 @@ The default IBC relayer module will allow external calls to `chanOpenTry`.
 function chanOpenTry(
   connectionHops: [Identifier], portIdentifier: Identifier, channelIdentifier: Identifier,
   counterpartyPortIdentifier: Identifier, counterpartyChannelIdentifier: Identifier,
-  timeoutHeight: uint64, nextTimeoutHeight: uint64, proofInit: CommitmentProof) {
+  version: string, timeoutHeight: uint64, nextTimeoutHeight: uint64, proofInit: CommitmentProof) {
   // defined in ICS 4
 }
 ```
@@ -221,7 +223,7 @@ function chanOpenAck(
 }
 ```
 
-`chanOpenConfirm` finalizes the channel opening handshake, failing if the channel identifier is not found, the proof is invalid, or the calling module is not bound to the port.
+`chanOpenConfirm` finalises the channel opening handshake, failing if the channel identifier is not found, the proof is invalid, or the calling module is not bound to the port.
 
 The default IBC relayer module will allow external calls to `chanOpenConfirm`.
 
@@ -299,7 +301,7 @@ function recvPacket(packet: Packet, proof: CommitmentProof) {
 }
 ```
 
-`timeoutPacket` attemps to handle a packet timeout, returning an error if the calling module is not bound to the associated port, or if the packet does not exist, has not timed out, or has already been handled.
+`timeoutPacket` attempts to handle a packet timeout, returning an error if the calling module is not bound to the associated port, or if the packet does not exist, has not timed out, or has already been handled.
 
 The default IBC relayer module will allow external calls to `timeoutPacket`.
 

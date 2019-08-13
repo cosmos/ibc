@@ -11,9 +11,9 @@ modified: 2019-06-29
 
 ## Synopsis
 
-The "channel" abstraction provides message delivery semantics to the interblockchain communication protocol, in three categories: ordering, exactly-once delivery, and module permissioning. A channel serves as a conduit for packets passing between a module on one chain and a module on another, ensuring that packets are executed only once, delivered in the order in which they were sent (if necessary), and delivered only to the corresponding module owning the other end of the channel on the destination chain. Each channel is associated with a particular connection, and a connection may have any number of associated channels, allowing the use of common identifiers and amortizing the cost of header verification across all the channels utilizing a connection & light client.
+The "channel" abstraction provides message delivery semantics to the interblockchain communication protocol, in three categories: ordering, exactly-once delivery, and module permissioning. A channel serves as a conduit for packets passing between a module on one chain and a module on another, ensuring that packets are executed only once, delivered in the order in which they were sent (if necessary), and delivered only to the corresponding module owning the other end of the channel on the destination chain. Each channel is associated with a particular connection, and a connection may have any number of associated channels, allowing the use of common identifiers and amortising the cost of header verification across all the channels utilising a connection & light client.
 
-Channels are payload-agnostic. The modules which send and receive IBC packets decide how to construct packet data and how to act upon the incoming packet data, and must utilize their own application logic to determine which state transactions to apply according to what data the packet contains.
+Channels are payload-agnostic. The modules which send and receive IBC packets decide how to construct packet data and how to act upon the incoming packet data, and must utilise their own application logic to determine which state transactions to apply according to what data the packet contains.
 
 ### Motivation
 
@@ -33,7 +33,7 @@ In order to provide the desired ordering, exactly-once delivery, and module perm
 
 `Commitment`, `CommitmentProof`, and `CommitmentRoot` are as defined in [ICS 23](../ics-023-vector-commitments).
 
-`commit` is a generic collision-resistant hash function, the specifics of which must be agreed on by the modules utilizing the channel.
+`commit` is a generic collision-resistant hash function, the specifics of which must be agreed on by the modules utilising the channel.
 
 `Identifier`, `get`, `set`, `delete`, `getCurrentHeight`, and module-system related primitives are as defined in [ICS 24](../ics-024-host-requirements).
 
@@ -69,6 +69,7 @@ interface ChannelEnd {
   counterpartyPortIdentifier: Identifier
   counterpartyChannelIdentifier: Identifier
   connectionHops: [Identifier]
+  version: string
   nextTimeoutHeight: uint64
 }
 ```
@@ -80,6 +81,7 @@ interface ChannelEnd {
 - The `nextSequenceSend`, stored separately, tracks the sequence number for the next packet to be sent.
 - The `nextSequenceRecv`, stored separately, tracks the sequence number for the next packet to be received.
 - The `connectionHops` stores the list of connection identifiers, in order, along which packets sent on this channel will travel. At the moment this list must be of length 2, where the first connection is the source and second connection the destination.
+- The `version` string stores an opaque channel version, which is agreed upon during the handshake. This can determine module-level configuration such as which packet encoding is used for the channel.
 - The `nextTimeoutHeight` stores the timeout height for the next stage of the handshake, used only in channel opening and closing handshakes.
 
 Channel ends have a *state*:
@@ -126,7 +128,7 @@ interface Packet {
 #### Efficiency
 
 - The speed of packet transmission and confirmation should be limited only by the speed of the underlying chains.
-  Proofs should be batcheable where possible.
+  Proofs should be batchable where possible.
 
 #### Exactly-once delivery
 
@@ -146,7 +148,7 @@ interface Packet {
 
 ## Technical Specification
 
-### Dataflow visualization
+### Dataflow visualisation
 
 The architecture of clients, connections, channels and packets:
 
@@ -176,7 +178,7 @@ function nextSequenceRecvKey(portIdentifier: Identifier, channelIdentifier: Iden
 }
 ```
 
-Succint commitments to packet data fields are stored under the packet sequence number:
+Succinct commitments to packet data fields are stored under the packet sequence number:
 
 ```typescript
 function packetCommitmentKey(portIdentifier: Identifier, channelIdentifier: Identifier, sequence: uint64) {
@@ -196,7 +198,7 @@ function packetAcknowledgementKey(portIdentifier: Identifier, channelIdentifier:
 
 Unordered channels must always write a acknowledgement (even an empty one) to this key so that the absence of such can be used as proof-of-timeout.
 
-### Subprotocols
+### Sub-protocols
 
 #### Channel lifecycle management
 
@@ -216,7 +218,7 @@ could be implemented to provide this).
 function chanOpenInit(
   order: ChannelOrder, connectionHops: [Identifier], channelIdentifier: Identifier,
   portIdentifier: Identifier, counterpartyChannelIdentifier: Identifier,
-  counterpartyPortIdentifier: Identifier, nextTimeoutHeight: uint64) {
+  counterpartyPortIdentifier: Identifier, version: string, nextTimeoutHeight: uint64) {
   assert(connectionHops.length === 2)
   assert(get(channelKey(portIdentifier, channelIdentifier)) === nil)
   connection = get(connectionKey(connectionHops[0]))
@@ -224,7 +226,7 @@ function chanOpenInit(
   assert(connection.counterpartyConnectionIdentifier === connectionHops[1])
   assert(authenticate(get(portKey(portIdentifier))))
   channel = Channel{INIT, order, portIdentifier, counterpartyPortIdentifier,
-                    counterpartyChannelIdentifier, connectionHops, nextTimeoutHeight}
+                    counterpartyChannelIdentifier, connectionHops, version, nextTimeoutHeight}
   set(channelKey(portIdentifier, channelIdentifier), channel)
   set(nextSequenceSendKey(portIdentifier, channelIdentifier), 0)
   set(nextSequenceRecvKey(portIdentifier, channelIdentifier), 0)
@@ -238,7 +240,7 @@ function chanOpenTry(
   order: ChannelOrder, connectionHops: [Identifier],
   channelIdentifier: Identifier, counterpartyChannelIdentifier: Identifier,
   portIdentifier: Identifier, counterpartyPortIdentifier: Identifier,
-  timeoutHeight: uint64, nextTimeoutHeight: uint64,
+  version: string, timeoutHeight: uint64, nextTimeoutHeight: uint64,
   proofInit: CommitmentProof, proofHeight: uint64) {
   assert(connectionHops.length === 2)
   assert(getCurrentHeight() < timeoutHeight)
@@ -253,10 +255,10 @@ function chanOpenTry(
     proofInit,
     channelKey(counterpartyPortIdentifier, counterpartyChannelIdentifier),
     Channel{INIT, order, counterpartyPortIdentifier, portIdentifier,
-            channelIdentifier, connectionHops.reverse(), timeoutHeight}
+            channelIdentifier, connectionHops.reverse(), version, timeoutHeight}
   ))
   channel = Channel{OPENTRY, order, portIdentifier, counterpartyPortIdentifier,
-                    counterpartyChannelIdentifier, connectionHops, nextTimeoutHeight}
+                    counterpartyChannelIdentifier, connectionHops, version, nextTimeoutHeight}
   set(channelKey(portIdentifier, channelIdentifier), channel)
   set(nextSequenceSendKey(portIdentifier, channelIdentifier), 0)
   set(nextSequenceRecvKey(portIdentifier, channelIdentifier), 0)
@@ -283,7 +285,7 @@ function chanOpenAck(
     proofTry,
     channelKey(channel.counterpartyPortIdentifier, channel.counterpartyChannelIdentifier),
     Channel{OPENTRY, channel.order, channel.counterpartyPortIdentifier, portIdentifier,
-            channelIdentifier, channel.connectionHops.reverse(), timeoutHeight}
+            channelIdentifier, channel.connectionHops.reverse(), channel.version, timeoutHeight}
   ))
   channel.state = OPEN
   channel.nextTimeoutHeight = nextTimeoutHeight
@@ -310,7 +312,7 @@ function chanOpenConfirm(
     proofAck,
     channelKey(channel.counterpartyPortIdentifier, channel.counterpartyChannelIdentifier),
     Channel{OPEN, channel.order, channel.counterpartyPortIdentifier, portIdentifier,
-            channelIdentifier, channel.connectionHops.reverse(), timeoutHeight}
+            channelIdentifier, channel.connectionHops.reverse(), channel.version, timeoutHeight}
   ))
   channel.state = OPEN
   channel.nextTimeoutHeight = 0
@@ -347,12 +349,12 @@ function chanOpenTimeout(
           counterpartyStateRoot, proofTimeout,
           channelKey(channel.counterpartyPortIdentifier, channel.counterpartyChannelIdentifier),
           Channel{INIT, channel.order, channel.counterpartyPortIdentifier, portIdentifier,
-                  channelIdentifier, channel.connectionHops.reverse(), timeoutHeight}
+                  channelIdentifier, channel.connectionHops.reverse(), channel.version, timeoutHeight}
         )
       )
     case OPEN:
       expected = Channel{OPENTRY, channel.order, channel.counterpartyPortIdentifier, portIdentifier,
-                         channelIdentifier, timeoutHeight}
+                         channelIdentifier, channel.version, timeoutHeight}
       assert(verifyMembership(
         counterpartyStateRoot, proofTimeout,
         channelKey(channel.counterpartyPortIdentifier, channel.counterpartyChannelIdentifier),
@@ -395,7 +397,7 @@ function chanCloseConfirm(
   assert(connection.state === OPEN)
   counterpartyStateRoot = get(rootKey(connection.clientIdentifier, proofHeight))
   expected = Channel{CLOSED, channel.order, channel.counterpartyPortIdentifier, portIdentifier,
-                     channel.channelIdentifier, channel.connectionHops.reverse(), 0}
+                     channel.channelIdentifier, channel.connectionHops.reverse(), channel.version, 0}
   assert(verifyMembership(
     counterpartyStateRoot,
     proof,
@@ -598,7 +600,7 @@ function timeoutPacketOrdered(packet: Packet, proof: CommitmentProof, proofHeigh
 If relations are enforced between timeout heights of subsequent packets, safe bulk timeouts of all packets prior to a timed-out packet can be performed.
 This specification omits details for now.
 
-`timeoutPacketUnordered`, the variant for unordered channels, checks the absence of an acknowledgement (which will have been written if the packet was receieved).
+`timeoutPacketUnordered`, the variant for unordered channels, checks the absence of an acknowledgement (which will have been written if the packet was received).
 
 `timeoutPacketUnordered` does not close the channel; unordered channels are expected to continue in the face of timed-out packets.
 

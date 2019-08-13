@@ -11,11 +11,11 @@ modified: 2019-07-29
 
 ## Synopsis
 
-This standard document specifies packet data structure, state machine handling logic, and encoding details for the transfer of fungible tokens over an IBC channel between two modules on separate chains. The state machine logic presented allows for safe mult-chain denomination handling with permissionless channel opening.
+This standard document specifies packet data structure, state machine handling logic, and encoding details for the transfer of fungible tokens over an IBC channel between two modules on separate chains. The state machine logic presented allows for safe multi-chain denomination handling with permissionless channel opening.
 
 ### Motivation
 
-Users of a set of chains connected over the IBC protocol might wish to utilize an asset issued on one chain on another chain, perhaps to make use of additional features such as exchange or privacy protection, while retaining fungibility with the original asset on the issuing chain. This application-layer standard describes a protocol for transferring fungible tokens between chains connected with IBC which preserves asset fungibility, preserves asset ownership, contains Byzantine faults, and requires no additional permissioning.
+Users of a set of chains connected over the IBC protocol might wish to utilise an asset issued on one chain on another chain, perhaps to make use of additional features such as exchange or privacy protection, while retaining fungibility with the original asset on the issuing chain. This application-layer standard describes a protocol for transferring fungible tokens between chains connected with IBC which preserves asset fungibility, preserves asset ownership, contains Byzantine faults, and requires no additional permissioning.
 
 ### Definitions
 
@@ -46,11 +46,11 @@ interface FungibleTokenPacketData {
 
 ### Subprotocols
 
-The subprotocols described herein should be implemented in a "bank-ibc-bridge" module with access to a bank module and to the IBC relayer module.
+The sub-protocols described herein should be implemented in a "bank-ibc-bridge" module with access to a bank module and to the IBC relayer module.
 
 #### Port & channel setup
 
-The `setup` function must be called exactly once when the module is created (perhaps when the blockchain itself is initialized) to bind to the appropriate port and create an escrow address (owned by the module).
+The `setup` function must be called exactly once when the module is created (perhaps when the blockchain itself is initialised) to bind to the appropriate port and create an escrow address (owned by the module).
 
 ```typescript
 function setup() {

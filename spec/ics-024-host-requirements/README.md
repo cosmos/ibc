@@ -21,7 +21,7 @@ IBC is designed to be a common standard which will be hosted by a variety of blo
 
 ### Desired Properties
 
-IBC should require as simple an interface from the underlying state machine as possible to maximize the ease of correct implementation.
+IBC should require as simple an interface from the underlying state machine as possible to maximise the ease of correct implementation.
 
 ## Technical Specification
 
@@ -61,11 +61,11 @@ type del = (key: Key) => void
 
 `Key` is as defined above. `Value` is an arbitrary bytestring encoding of a particular data structure. Encoding details are left to separate ICSs.
 
-These functions MUST be permissioned to the IBC handler module (the implementation of which is described in separate standards) only, so only the IBC handler module can `set` or `delete` the keys which can be read by `get`. This can possibly be implemented as a sub-store (prefixed keyspace) of a larger key-value store used by the entire state machine.
+These functions MUST be permissioned to the IBC handler module (the implementation of which is described in separate standards) only, so only the IBC handler module can `set` or `delete` the keys which can be read by `get`. This can possibly be implemented as a sub-store (prefixed key-space) of a larger key-value store used by the entire state machine.
 
 The first interface provided by the host state machine MUST write to a key-value store whose data can be externally proved with a vector commitment as defined in [ICS 23](../ics-023-vector-commitments). The second interface MAY support external proofs, but is not required to - the IBC handler will never write data to it which needs to be proved.
 
-These interfaces are referred to throughout specifications which utilize them as the `provableStore` and the `privateStore` respectively, where `get`, `set`, and `del` are called as methods, e.g. `provableStore.set('key', 'value')`.
+These interfaces are referred to throughout specifications which utilise them as the `provableStore` and the `privateStore` respectively, where `get`, `set`, and `del` are called as methods, e.g. `provableStore.set('key', 'value')`.
 
 ### Consensus State Introspection
 
@@ -128,6 +128,16 @@ interface Chain {
   pendingDatagrams: PendingDatagrams
 }
 ```
+
+### Exception system
+
+Host chains MUST support an exception system, whereby a transaction can abort execution and revert any previously made state changes, exposed through an `assert` function:
+
+```typescript
+type assert = (bool) => ()
+```
+
+If the boolean passed to `assert` is `true`, the host chain need not do anything. If the boolean passed to `assert` is `false`, the host chain MUST abort the transaction and revert any previously made state changes, such as writes to the key-value store.
 
 ### Data availability
 

@@ -12,7 +12,7 @@ modified: 2019-05-11
 ## Synopsis
 
 A *vector commitment* is a construction that produces a succinct, binding commitment to an indexed vector of elements and short membership and/or non-membership proofs for any indices & elements in the vector.
-This specification enumerates the functions and properties required of commitment constructions used in the IBC protocol. In particular, commitments utilized in IBC are required to be *positionally binding*: they must be able to prove existence or
+This specification enumerates the functions and properties required of commitment constructions used in the IBC protocol. In particular, commitments utilised in IBC are required to be *positionally binding*: they must be able to prove existence or
 nonexistence of values at specific positions (indices).
 
 ### Motivation
@@ -27,7 +27,7 @@ The *prover* is the actor responsible for generating proofs of inclusion or non-
 
 The *verifier* is the actor who checks proofs in order to verify that the manager of the commitment did or did not add a particular element. Generally this will be an IBC handler (module implementing IBC) running on another chain.
 
-Commitments are instantiated with particular *key* and *value* types, which are assumed to be arbitrary serializable data.
+Commitments are instantiated with particular *key* and *value* types, which are assumed to be arbitrary serialisable data.
 
 A *negligible function* is a function that grows more slowly than the reciprocal of every positive polynomial, as defined [here](https://en.wikipedia.org/wiki/Negligible_function).
 
@@ -39,7 +39,7 @@ This document only defines desired properties, not a concrete implementation —
 
 ### Datatypes
 
-An commitment construction MUST specify the following datatypes, which are otherwise opaque (need not be introspected) but MUST be serializable:
+An commitment construction MUST specify the following datatypes, which are otherwise opaque (need not be introspected) but MUST be serialisable:
 
 #### State
 
@@ -77,9 +77,9 @@ type Key = string
 type Value = string
 ```
 
-#### Initialization
+#### Initialisation
 
-The `generate` function initializes the state of the commitment from an initial (possibly empty) map of keys to values.
+The `generate` function initialises the state of the commitment from an initial (possibly empty) map of keys to values.
 
 ```typescript
 type generate = (initial: Map<Key, Value>) => CommitmentState

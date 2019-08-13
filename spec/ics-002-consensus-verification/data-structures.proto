@@ -3,7 +3,7 @@ syntax = 'proto3';
 message ConsensusState {
   uint64 height = 1;
   bytes validityPredicate = 2; // TODO
-  bytes equivocationPredicate = 3; // TODO
+  bytes misbehaviourPredicate = 3; // TODO
 }
 
 message Header {

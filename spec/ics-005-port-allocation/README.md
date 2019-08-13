@@ -17,11 +17,11 @@ from and to which channels can then be opened, and which can be transferred or l
 
 ### Motivation
 
-The interblockchain communication protocol is designed to faciliate module-to-module traffic, where modules are independent, possibly mutually distrusted, self-contained
+The interblockchain communication protocol is designed to facilitate module-to-module traffic, where modules are independent, possibly mutually distrusted, self-contained
 elements of code executing on sovereign ledgers. In order to provide the desired end-to-end semantics, the IBC handler must permission channels to particular modules, and
 for convenience they should be addressable by name. This specification defines the *port allocation and ownership* system which realises that model.
 
-Conventions may emerge as to what kind of module logic is bound to a particular port name, such as "bank" for fungible token handling or "staking" for interchain collateralization.
+Conventions may emerge as to what kind of module logic is bound to a particular port name, such as "bank" for fungible token handling or "staking" for interchain collateralisation.
 This is analogous to port 80's common use for HTTP servers — the protocol cannot enforce that particular module logic is *actually* bound to conventional ports, so
 users must check that themselves.
 
@@ -31,7 +31,7 @@ users must check that themselves.
 
 A *port* is a particular kind of identifier which is used to permission channel opening and usage to modules.
 
-A *module* is a subcomponent of the host state machine independent of the IBC handler. Examples include Ethereum smart contracts and Cosmos SDK & Substrate modules.
+A *module* is a sub-component of the host state machine independent of the IBC handler. Examples include Ethereum smart contracts and Cosmos SDK & Substrate modules.
 The IBC specification makes no assumptions of module functionality other than the ability of the host state machine to use object-capability or source authentication to permission ports to modules.
 
 ### Desired Properties
@@ -155,7 +155,7 @@ function releasePort(id: Identifier) {
 
 ### Properties & Invariants
 
-- Port identifiers are first-come-first-serve: once a module has bound to a port, only that module can utilize the port until the module transfers or releases it.
+- Port identifiers are first-come-first-serve: once a module has bound to a port, only that module can utilise the port until the module transfers or releases it.
 
 ## Backwards Compatibility
 
