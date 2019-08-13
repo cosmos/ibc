@@ -303,11 +303,10 @@ The closing handshake sub-protocol defines three datagrams: *ConnCloseInit*, *Co
 
 A correct protocol execution flows as follows (note that all calls are made through modules per ICS 25):
 
-| Initiator | Datagram          | Chain acted upon | Prior state (A, B) | Post state (A, B)  |
-| --------- | ----------------- | ---------------- | ------------------ | ------------------ |
-| Actor     | `ConnCloseInit`   | A                | (OPEN, OPEN)       | (CLOSETRY, OPEN)   |
-| Relayer   | `ConnCloseTry`    | B                | (CLOSETRY, OPEN)   | (CLOSETRY, CLOSED) |
-| Relayer   | `ConnCloseAck`    | A                | (CLOSETRY, CLOSED) | (CLOSED, CLOSED)   |
+| Initiator | Datagram            | Chain acted upon | Prior state (A, B) | Post state (A, B) |
+| --------- | ------------------- | ---------------- | ------------------ | ----------------- |
+| Actor     | `ConnCloseInit`     | A                | (OPEN, OPEN)       | (CLOSED, OPEN)    |
+| Relayer   | `ConnCloseConfirm`  | B                | (CLOSED, OPEN)     | (CLOSED, CLOSED)  |
 
 *ConnCloseInit* initialises a close attempt on chain A.
 
