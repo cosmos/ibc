@@ -12,24 +12,30 @@ modified: 2019-05-28
 
 ## Synopsis
 
-This standard specifies the properties that consensus algorithms of chains implementing the interblockchain
+This standard specifies the properties that consensus algorithms of machines implementing the interblockchain
 communication protocol are required to satisfy. These properties are necessary for efficient and safe
 verification in the higher-level protocol abstractions. The algorithm utilised in IBC to verify the
-consensus transcript & state sub-components of another chain is referred to as a "light client verifier",
+consensus transcript & state sub-components of another machine is referred to as a "validity predicate",
 and pairing it with a state that the verifier trusts forms a "light client" (often shortened to "client").
 
-This standard also specifies how the clients will be stored, registered, and updated in the
-canonical IBC handler. The stored client instances will be verifiable by a third party actor,
+This standard also specifies how light clients will be stored, registered, and updated in the
+canonical IBC handler. The stored client instances will be introspectable by a third party actor,
 such as a user inspecting the state of the chain and deciding whether or not to send an IBC packet.
 
 ### Motivation
 
-In the IBC protocol, a chain needs to be able to verify updates to the state of another chain
-which the other chain's consensus algorithm has agreed upon, and reject any possible updates
-which the other chain's consensus algorithm has not agreed upon. A light client is the algorithm
-with which a chain can do so. This standard formalises the light client model and requirements,
-so that the IBC protocol can easily connect with new chains which are running new consensus algorithms,
-as long as associated light client algorithms fulfilling the requirements are provided.
+In the IBC protocol, a machine needs to be able to verify updates to the state of another machine
+which the other machine's consensus algorithm has agreed upon, and reject any possible updates
+which the other machine's consensus algorithm has not agreed upon. A light client is the algorithm
+with which a machine can do so. This standard formalises the light client model and requirements,
+so that the IBC protocol can easily integrate with new machines which are running new consensus algorithms,
+as long as associated light client algorithms fulfilling the listed requirements are provided.
+
+Beyond the properties described in this specification, IBC does not impose any requirements on
+the internal operation of machines and their consensus algorithms. A machine may consist of a
+single process signing operations with a private key, many processes operating a consensus algorithm,
+or other configurations yet to be invented — from the perspective of IBC, a machine is defined
+entirely by its validity predicate and a particular trusted state.
 
 ### Definitions
 
