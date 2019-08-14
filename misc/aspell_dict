@@ -1,4 +1,4 @@
-personal_ws-1.1 en 355 
+personal_ws-1.1 en 358 
 structs
 lookupModule
 RLP
@@ -12,6 +12,7 @@ connOpenTry
 handleClientUpdate
 TCP
 recvSequence
+unordered
 mempools
 middled
 Dev
@@ -50,7 +51,6 @@ ConnectionEnd
 timeoutPacketUnordered
 modularity
 RegisterLightClient
-ValidityPredicate
 validityPredicate
 handleConnOpenInit
 coffeescript
@@ -199,6 +199,7 @@ calculateRoot
 len
 CommitmentState
 YYYY
+interoperability
 destPort
 stablecoins
 handleChanOpenInit
@@ -285,6 +286,7 @@ acc
 connectionIdentifier
 ABI
 acknowledgePacket
+synchrony
 commited
 getHeight
 chanCloseInit
@@ -332,6 +334,7 @@ changelog
 datapipe
 queryClientRoot
 Pre
+whitelist
 createClient
 dataflow
 BIP
