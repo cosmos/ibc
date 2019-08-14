@@ -78,7 +78,43 @@ light client, invalidate past state roots, and await higher-level intervention.
 
 ### Data Structures
 
+#### ValidityPredicate
+
+A `ValidityPredicate` is a light client function to verify `Header`s depending on the current `ConsensusState`.
+Using the ValidityPredicate SHOULD be far more computationally efficient than replaying `Consensus` logic
+for the given parent `Header` and the list of network messages, ideally in constant time
+independent from the size of message stored in the `Header`.
+
+The `ValidityPredicate` type is defined as
+
+```typescript
+type ValidityPredicate = (Header) => Maybe Error
+```
+
+The detailed specification of `ValidityPredicate` can be found in [CONSENSUS.md](./CONSENSUS.md).
+
+#### MisbehaviourPredicate
+
+An `MisbehaviourPredicate` is a light client function used to check if data
+constitutes a violation of the consensus protocol. This might be two headers
+with different state roots but the same height, a signed header containing invalid
+state transitions, or other evidence as defined by the consensus algorithm.
+
+The `MisbehaviourPredicate` type is defined as
+
+```typescript
+type MisbehaviourPredicate = (bytes) => (bool)
+```
+
+The boolean returned indicates whether the evidence of misbehaviour was valid.
+The client MUST also mutate internal state to mark appropriate heights which
+were previously considered valid invalid, according to the nature of the misbehaviour.
+
+More details about `MisbehaviourPredicate`s can be found in [CONSENSUS.md](./CONSENSUS.md)
+
 #### ConsensusState
+
+- expose validity predicate, misbehaviour predicate, state roots
 
 `ConsensusState` is a type defined by each consensus algorithm, used by the validity predicate to
 verify new commits & state roots. Likely the structure will contain the last commit, including
@@ -97,7 +133,7 @@ The `ConsensusState` of a chain is stored by other chains in order to verify the
 
 ```typescript
 interface ConsensusState {
-  height: uint64
+  height: () => uint64
   validityPredicate: ValidityPredicate
   misbehaviourPredicate: MisbehaviourPredicate
 }
@@ -144,40 +180,6 @@ where
   * `proof` is the commit proof used by `Consensus.ValidityPredicate` to verify the header.
   * `predicate` is the new (or partially new) consensus state.
   * `root` is the new `CommitmentRoot` which will replace the existing one.
-
-#### ValidityPredicate
-
-A `ValidityPredicate` is a light client function to verify `Header`s depending on the current `ConsensusState`.
-Using the ValidityPredicate SHOULD be far more computationally efficient than replaying `Consensus` logic
-for the given parent `Header` and the list of network messages, ideally in constant time
-independent from the size of message stored in the `Header`.
-
-The `ValidityPredicate` type is defined as
-
-```typescript
-type ValidityPredicate = (ConsensusState, Header) => Error | ConsensusState
-```
-
-The detailed specification of `ValidityPredicate` can be found in [CONSENSUS.md](./CONSENSUS.md).
-
-#### MisbehaviourPredicate
-
-An `MisbehaviourPredicate` is a light client function used to check if data
-constitutes a violation of the consensus protocol. This might be two headers
-with different state roots but the same height, a signed header containing invalid
-state transitions, or other evidence as defined by the consensus algorithm.
-
-The `MisbehaviourPredicate` type is defined as
-
-```typescript
-type MisbehaviourPredicate = (ConsensusState, bytes) => (bool)
-```
-
-The boolean returned indicates whether the evidence of misbehaviour was valid.
-The client MUST also mutate internal state to mark appropriate heights which
-were previously considered valid invalid, according to the nature of the misbehaviour.
-
-More details about `MisbehaviourPredicate`s can be found in [CONSENSUS.md](./CONSENSUS.md)
 
 ### Sub-protocols
 
