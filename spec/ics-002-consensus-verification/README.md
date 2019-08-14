@@ -43,15 +43,15 @@ entirely by its validity predicate and a particular trusted state.
 
 * `CommitmentRoot` is as defined in [ICS 23](../ics-023-vector-commitments).
 
-* `ConsensusState` is an opaque type representing the verification state of a light client.
-  `ConsensusState` must be able to verify state updates agreed upon by the associated consensus algorithm,
-  and must provide an inexpensive way for downstream logic to verify whether key-value pairs are present
-  in the state or not.
+* `ConsensusState` is an opaque type representing the state of a validity predicate.
+  `ConsensusState` must be able to verify state updates agreed upon by the associated consensus algorithm.
+  It must also be serializable in a canonical fashion so that third parties, such as counterparty machines,
+  can check that a particular machine has stored a particular `ConsensusState`.
 
-* `ClientState` is a structure representing the state of a client, defined in this ICS.
-  A `ClientState` contains the latest `ConsensusState` and a map of heights to previously
-  verified state roots which can be utilised by downstream logic to verify sub-components
-  of state at particular heights.
+* `ClientState` is an opaque type representing the state of a client.
+  A `ClientState` must expose query functions to retrieve trusted state roots at previously
+  verified heights, retrieve the current `ConsensusState`. It must provide an inexpensive way for
+  downstream logic to verify whether key-value pairs are present in a state root or not.
 
 * `createClient`, `queryClient`, `updateClient`, `freezeClient`, and `deleteClient` function signatures are as defined in [ICS 25](../ics-025-handler-interface).
   The function implementations are defined in this standard.
@@ -72,7 +72,7 @@ Light clients are not replaying the whole message transcript, so it is possible 
 consensus misbehaviour that the light clients' behaviour differs from the full nodes'.
 In this case, an misbehaviour proof which proves the divergence between the `ValidityPredicate`
 and the full node can be generated and submitted to the chain so that the chain can safely deactivate the
-light client and await higher-level intervention.
+light client, invalidate past state roots, and await higher-level intervention.
 
 ## Technical Specification
 
