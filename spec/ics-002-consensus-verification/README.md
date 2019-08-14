@@ -101,7 +101,9 @@ interface ConsensusState {
 
 `ClientState` is the light client state, which contains the latest `ConsensusState` along with
 a map of heights to `CommitmentRoot`s, used to verify presence or absence of particular key-value pairs
-in state at particular heights.
+in state at particular heights. Light clients are representially-opaque — different consensus algorithms
+can define different light client update algorithms — but they must expose a common set of query functions
+to the IBC handler.
 
 ```typescript
 interface ClientState {
