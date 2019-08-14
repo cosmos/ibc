@@ -1,5 +1,3 @@
-all: check typecheck spellcheck build spec_pdf clean
-
 SUBDIRS := $(filter-out $(wildcard ./spec/*.md),$(wildcard ./spec/*))
 TOPTARGETS := typecheck check_proto build clean
 
@@ -7,7 +5,7 @@ $(TOPTARGETS): $(SUBDIRS)
 $(SUBDIRS):
 	$(MAKE) -C $@ $(MAKECMDGOALS)
 
-check: check_links check_dependencies check_syntax check_sections check_proto
+check: check_links check_dependencies check_syntax check_sections
 
 check_links:
 	python ./scripts/check_links.py
@@ -30,4 +28,4 @@ spellcheck:
 spellcheck_noninteractive:
 	find . -type f -name "*.md" | xargs -n 1 -I % ./scripts/spellcheck.sh %
 
-.PHONY: all $(TOPTARGETS) $(SUBDIRS) check check_links check_dependencies check_syntax check_sections check_proto spec_pdf spellcheck spellcheck_noninteractive
+.PHONY: $(TOPTARGETS) $(SUBDIRS) check check_links check_dependencies check_syntax check_sections check_proto spec_pdf spellcheck spellcheck_noninteractive
