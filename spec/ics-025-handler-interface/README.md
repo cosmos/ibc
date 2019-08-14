@@ -19,7 +19,7 @@ IBC is an inter-module communication protocol, designed to facilitate reliable, 
 
 ### Definitions
 
-`ClientState`, `Header`, and `ConsensusState` are as defined in [ICS 2](../ics-002-consensus-verification).
+`ClientState`, `Header`, and `ConsensusState` are as defined in [ICS 2](../ics-002-validity-predicate).
 
 `ConnectionEnd` and `ConnectionState` are as defined in [ICS 3](../ics-003-connection-semantics).
 

@@ -1,6 +1,6 @@
 ---
 ics: 2
-title: Consensus Verification
+title: Validity Predicate
 stage: draft
 category: ibc-core
 requires: 23, 24
@@ -45,7 +45,7 @@ entirely by its validity predicate and a particular trusted state.
 
 * `ConsensusState` is an opaque type representing the state of a validity predicate.
   `ConsensusState` must be able to verify state updates agreed upon by the associated consensus algorithm.
-  It must also be serializable in a canonical fashion so that third parties, such as counterparty machines,
+  It must also be serialisable in a canonical fashion so that third parties, such as counterparty machines,
   can check that a particular machine has stored a particular `ConsensusState`.
 
 * `ClientState` is an opaque type representing the state of a client.

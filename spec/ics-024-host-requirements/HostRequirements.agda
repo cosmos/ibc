@@ -2,6 +2,8 @@ module HostRequirements where
 
 open import Agda.Builtin.Unit
 open import Data.String as String using (String)
+open import Category.Applicative
+open import Category.Monad
 open import Category.Monad.State
 
 data Key : Set where
@@ -19,19 +21,19 @@ separator = "/"
 data Env : Set where
   MkEnv : Env
 
+{-
 get : Key -> State Env Value
-get key = ?
+get key = return (MkValue "")
 
 set : Key -> Value -> State Env ⊤
-set key value = ?
+set key value = return ⊤
 
 delete : Key -> State Env ⊤
-delete key = ?
+delete key = return ⊤
 
-{-
 getConsensusState : State Env ConsensusState
 getConsensusState = ?
--}
 
 getCallingModule : State Env Identifier
-getCallingModule = ?
+getCallingModule = return (MkIdentifier "")
+-}
