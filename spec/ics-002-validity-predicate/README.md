@@ -88,8 +88,14 @@ independent from the size of message stored in the `Header`.
 The `ValidityPredicate` type is defined as
 
 ```typescript
-type ValidityPredicate = (Header) => Maybe Error
+type ValidityPredicate = (Header) => (bool)
 ```
+
+The boolean returned indicates whether the provided header was valid.
+
+If the provided header was valid, the client MUST also mutate internal state to store
+now-finalized consensus roots and update any necessary signature authority tracking (e.g.
+changes to the validator set) for future calls to the validity predicate.
 
 The detailed specification of `ValidityPredicate` can be found in [CONSENSUS.md](./CONSENSUS.md).
 
@@ -107,79 +113,66 @@ type MisbehaviourPredicate = (bytes) => (bool)
 ```
 
 The boolean returned indicates whether the evidence of misbehaviour was valid.
-The client MUST also mutate internal state to mark appropriate heights which
+If misbehaviour was valid, the client MUST also mutate internal state to mark appropriate heights which
 were previously considered valid invalid, according to the nature of the misbehaviour.
 
 More details about `MisbehaviourPredicate`s can be found in [CONSENSUS.md](./CONSENSUS.md)
 
 #### ConsensusState
 
-- expose validity predicate, misbehaviour predicate, state roots
-
-`ConsensusState` is a type defined by each consensus algorithm, used by the validity predicate to
-verify new commits & state roots. Likely the structure will contain the last commit, including
-signatures and validator set metadata, produced by the consensus process.
-
-A `ConsensusState` MUST have a function `Height() int64`. The function returns the height of the
-last verified commit. A `ConsensusState` can verify a `Header` only if it has a
-higher height than itself.
+`ConsensusState` is a opaque type defined by each consensus algorithm, used by the validity predicate to
+verify new commits & state roots. Likely the structure will contain the last commit produced by
+the consensus process, including signatures and validator set metadata.
 
 `ConsensusState` MUST be generated from an instance of `Consensus`, which assigns unique heights
 for each `ConsensusState`. Two `ConsensusState`s on the same chain SHOULD NOT have the same height
 if they do not have equal commitment roots. Such an event is called an "equivocation", and should one occur,
 a proof should be generated and submitted so that the client can be frozen.
 
-The `ConsensusState` of a chain is stored by other chains in order to verify the chain's state.
+The `ConsensusState` of a chain MUST have a canonical serialization, so that other chains can check
+that a stored consensus state is equal to another.
 
 ```typescript
-interface ConsensusState {
-  height: () => uint64
+type ConsensusState = bytes
+```
+
+#### ClientState
+
+`ClientState` is the light client state, which must expose the latest `ConsensusState`, a validity predicate,
+a misbehaviour predicate,  and finally a function to lookup verified `CommitmentRoot`s,
+which are then used to verify presence or absence of particular key-value pairs in state at particular heights.
+
+Light clients are representation-opaque — different consensus algorithms can define different light client update algorithms —
+but they must expose this common set of query functions to the IBC handler.
+
+```typescript
+interface ClientState {
+  getConsensusState: () => ConsensusState
+  getVerifiedRoot: (uint64) => CommitmentRoot
   validityPredicate: ValidityPredicate
   misbehaviourPredicate: MisbehaviourPredicate
 }
 ```
 
-#### ClientState
-
-`ClientState` is the light client state, which contains the latest `ConsensusState` along with
-a map of heights to `CommitmentRoot`s, used to verify presence or absence of particular key-value pairs
-in state at particular heights. Light clients are representation-opaque — different consensus algorithms
-can define different light client update algorithms — but they must expose a common set of query functions
-to the IBC handler.
-
-```typescript
-interface ClientState {
-  consensusState: ConsensusState
-  verifiedRoots: Map<uint64, CommitmentRoot>
-  frozen: bool
-}
-```
-
 where
-  * `consensusState` is the `ConsensusState` used by `Consensus.ValidityPredicate` to verify `Header`s.
-  * `verifiedRoots` is a map of heights to previously verified `CommitmentRoot` structs, used to prove presence or absence of key-value pairs in state at particular heights.
-  * `frozen` is a boolean indicating whether the client has been frozen due to a detected misbehaviour.
+  * `consensusState` is the `ConsensusState` used by the validity predicate to verify headers
+  * `verifiedRoot` is a function mapping heights to previously verified `CommitmentRoot`s
+  * `validityPredicate` is a validity predicate as described above
+  * `misbehaviourPredicate` is a misbehaviour predicate as described above
 
-Note that instead of `ClientState` being stored directly, the consensus state, roots, and frozen boolean are stored at separate keys.
+The `consensusState` MUST be stored under a particular key, defined below, so that other chains can verify that a particular consensus state has been stored.
 
 #### Header
 
 A `Header` is a blockchain header which provides information to update a `ConsensusState`.
 Headers can be submitted to an associated client to update the stored `ConsensusState`.
 
+Headers are representation-opaque to the IBC protocol. They likely contain a height, a proof,
+a commitment root, and possibly updates to the validity predicate.
+
 ```typescript
-interface Header {
-  height: uint64
-  proof: HeaderProof
-  predicate: Maybe[ValidityPredicate]
-  root: CommitmentRoot
-}
+type Header = bytes
 ```
-where
-  * `height` is the height of the the consensus instance.
-  * `proof` is the commit proof used by `Consensus.ValidityPredicate` to verify the header.
-  * `predicate` is the new (or partially new) consensus state.
-  * `root` is the new `CommitmentRoot` which will replace the existing one.
 
 ### Sub-protocols
 
@@ -187,38 +180,24 @@ IBC handlers MUST implement the functions defined below.
 
 #### Preliminaries
 
-Clients are stored under a unique `Identifier` prefix. The generation of the `Identifier` MAY
-depend on the `Header` of the `Client` that will be registered under that `Identifier`.
-This ICS does not require that client identifiers be generated in a particular manner,
-only that they be unique.
+Clients are stored under a unique `Identifier` prefix.
+This ICS does not require that client identifiers be generated in a particular manner, only that they be unique.
 
-`frozenKey` takes an `Identifier` and returns a `Key` under which to store whether or not a client is frozen.
+`clientKey` takes an `Identifier` and returns a `Key` under which to store a particular client.
 
 ```typescript
-function frozenKey(id: Identifier): Key {
-  return "clients/{id}/frozen"
+function clientKey(id: Identifier): Key {
+  return "clients/{id}"
 }
 ```
 
-`consensusStateKey` takes an `Identifier` and returns a `Key` under which to store the consensus state of a client.
+Consensus states MUST be stored separately so that they can be independently verified.
 
-Consensus state MUST be stored separately so it can be verified independently.
+`consensusStateKey` takes an `Identifier` and returns a `Key` under which to store the consensus state of a client.
 
 ```typescript
 function consensusStateKey(id: Identifier): Key {
   return "clients/{id}/consensusState"
-}
-```
-
-`rootKey` takes an `Identifier` and a height (as `uint64`) and returns a `Key` under which to store a particular state root.
-
-Roots MUST be stored under separate keys, one per height, for efficient retrieval.
-
-Roots for old heights MAY be periodically cleaned up.
-
-```typescript
-function rootKey(id: Identifier, height: uint64): Key {
-  return "clients/{id}/roots/{height}"
 }
 ```
 
@@ -235,22 +214,15 @@ logical correctness.
 Calling `createClient` with the specified identifier & initial consensus state creates a new client.
 
 ```typescript
-function createClient(id: Identifier, consensusState: ConsensusState) {
+function createClient(id: Identifier, clientState: ClientState) {
   assert(get(clientKey(id)) === null)
-  client = ClientState{consensusState, empty, false}
-  set(clientKey(id), client)
+  set(clientKey(id), clientState)
 }
 ```
 
 #### Query
 
-Client frozen state, consensus state, and previously verified roots can be queried by identifier.
-
-```typescript
-function queryClientFrozen(id: Identifier): bool {
-  return get(frozenKey(id))
-}
-```
+Client consensus state and previously verified roots can be queried by identifier.
 
 ```typescript
 function queryClientConsensusState(id: Identifier): ConsensusState {
@@ -260,59 +232,50 @@ function queryClientConsensusState(id: Identifier): ConsensusState {
 
 ```typescript
 function queryClientRoot(id: Identifier, height: uint64): CommitmentRoot {
-  return get(rootKey(id, height))
+  return get(clientKey(id)).getVerifiedRoot(height)
 }
 ```
 
 #### Update
 
 Updating a client is done by submitting a new `Header`. The `Identifier` is used to point to the
-stored `ClientState` that the logic will update. When the new `Header` is verified with
-the stored `ClientState`'s `ValidityPredicate` and `ConsensusState`, then it SHOULD update the
-`ClientState` unless an additional logic intentionally blocks the updating process (e.g.
-waiting for the misbehaviour proof period.
+stored `ClientState` that the logic will update. When a new `Header` is verified with
+the stored `ClientState`'s `ValidityPredicate` and `ConsensusState`, the client MUST
+update its internal state accordingly, possibly finalizing commitment roots and
+updating the signature authority logic in the stored consensus state.
 
 ```typescript
 function updateClient(id: Identifier, header: Header) {
-  frozen = get(frozenKey(id))
-  assert(!frozen)
-  consensusState = get(consensusStateKey(id))
-  assert(consensusState !== nil)
-  switch consensusState.validityPredicate(header) {
-    case error:
-      throw error
-    case newState:
-      set(consensusStateKey(id), newState)
-      set(rootKey(id, newState.height), newState.root)
-      return
-  }
+  client = get(clientKey(id))
+  assert(client !== null)
+  assert(client.validityPredicate(header))
 }
 ```
 
-#### Freeze
+#### Misbehaviour
 
-A client can be frozen, in case when the application logic decided that there was a malicious
-activity on the client. Frozen client SHOULD NOT be deleted from the state, as a recovery
-method can be introduced in the future versions.
+If the client detects evidence of misbehaviour, the client can be alerted, possibly invalidating
+previously valid state roots & preventing future updates.
 
 ```typescript
-function freezeClient(identifier: Identifier, evidence: bytes) {
-  consensusState = get(consensusStateKey(identifier))
-  assert(consensusState.misbehaviourPredicate(evidence))
+function submitMisbehaviour(id: Identifier, evidence: bytes) {
+  client = get(clientKey(id))
+  assert(client !== null)
+  assert(client.misbehaviourPredicate(evidence))
 }
 ```
 
 ### Example Implementation
 
-An example blockchain `Op` runs on a single operator consensus algorithm,
+An example validity predicate is constructed for a chain running a single-operator consensus algorithm,
 where the valid blocks are signed by the operator. The operator signing Key
 can be changed while the chain is running.
 
-`Op` is constructed from the followings:
-* `OpValidityPredicateBase`: Operator pubkey
-* `OpValidityPredicate`: Signature ValidityPredicate
-* `OpCommitmentRoot`: KVStore Merkle root
-* `OpHeaderProof`: Operator signature
+The client-specific types are then defined as follows:
+- `ConsensusState` stores the latest height and latest public key
+- `Header`s contain a height, a new commitment root, and a signature by the operator
+- `ValidityPredicate` checks that the submitted height is monotonically increasing and that the signature is correct
+- `MisbehaviourPredicate` checks for two headers with the same height & different commitment roots
 
 #### Consensus
 
