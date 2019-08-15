@@ -1,4 +1,4 @@
-personal_ws-1.1 en 368 
+personal_ws-1.1 en 374 
 structs
 lookupModule
 RLP
@@ -93,6 +93,7 @@ nextTimeoutHeight
 chanId
 cryptographic
 lifecycle
+submitMisbehaviourToClient
 ibc
 ConnCloseTry
 Composability
@@ -107,6 +108,7 @@ newCallbacks
 EVM
 txs
 ConnectionState
+pastPublicKeys
 onChanOpenTimeout
 submitDatagram
 incrementing
@@ -132,6 +134,7 @@ removeConnectionFromClient
 deps
 LightClient
 ModuleCallbacks
+clientType
 connOpenInit
 deleteClient
 provableStore
@@ -151,6 +154,7 @@ timeoutPropose
 OpCommitmentRoot
 handlePacketTimeoutUnordered
 PacketCleanupUnordered
+clientStateKey
 connectionKey
 Ethereum's
 OpValidityPredicate
@@ -227,6 +231,7 @@ proofTimeout
 interchain
 misbehaviourPredicate
 onChanOpenAck
+namespaced
 permissioning
 transferPort
 HeaderProof
@@ -304,6 +309,7 @@ verifyNonMembership
 permissionless
 chanOpenInit
 untrusted
+clientTypeKey
 VM
 tx
 Zcash

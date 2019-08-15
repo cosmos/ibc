@@ -1,6 +1,6 @@
 ---
 ics: 2
-title: Validity Predicate
+title: Client Semantics
 stage: draft
 category: ibc-core
 requires: 23, 24
@@ -82,18 +82,28 @@ light client, invalidate past state roots, and await higher-level intervention.
 
 ## Technical Specification
 
+This specification outlines what each *client type* must define. A client type is a set of definitions
+of the data structures, initialisation logic, validity predicate, and misbehaviour predicate required
+to operate a light client. State machines implementing the IBC protocol can support any number of client
+types, and each client type can be instantiated with different initial consensus states in order to track
+different consensus instances. In order to establish a connection between two machines (see [ICS 3](../ics-003-connection-semantics)),
+the machines must each support the client type corresponding to the other machine's consensus algorithm.
+
+By convention, client types shall be globally namespaced between machines implementing the IBC protocol.
+
 ### Data Structures
 
 #### ConsensusState
 
-`ConsensusState` is a opaque type defined by each consensus algorithm, used by the validity predicate to
+`ConsensusState` is a opaque data structure defined by a client type, used by the validity predicate to
 verify new commits & state roots. Likely the structure will contain the last commit produced by
 the consensus process, including signatures and validator set metadata.
 
 `ConsensusState` MUST be generated from an instance of `Consensus`, which assigns unique heights
 for each `ConsensusState`. Two `ConsensusState`s on the same chain SHOULD NOT have the same height
-if they do not have equal commitment roots. Such an event is called an "equivocation", and should one occur,
-a proof should be generated and submitted so that the client can be frozen.
+if they do not have equal commitment roots. Such an event is called an "equivocation" and MUST be classified
+as misbehaviour. Should one occur, a proof should be generated and submitted so that the client can be frozen
+and previous state roots invalidated as necessary.
 
 The `ConsensusState` of a chain MUST have a canonical serialization, so that other chains can check
 that a stored consensus state is equal to another.
@@ -102,12 +112,12 @@ that a stored consensus state is equal to another.
 type ConsensusState = bytes
 ```
 
+The `ConsensusState` MUST be stored under a particular key, defined below, so that other chains can verify that a particular consensus state has been stored.
+
 #### Header
 
-A `Header` is a blockchain header which provides information to update a `ConsensusState`.
-Headers can be submitted to an associated client to update the stored `ConsensusState`.
-
-Headers are representation-opaque to the IBC protocol. They likely contain a height, a proof,
+A `Header` is an opaque data structure defined by a client type which provides information to update a `ConsensusState`.
+Headers can be submitted to an associated client to update the stored `ConsensusState`. They likely contain a height, a proof,
 a commitment root, and possibly updates to the validity predicate.
 
 ```typescript
@@ -116,7 +126,7 @@ type Header = bytes
 
 #### ValidityPredicate
 
-A `ValidityPredicate` is a light client function to verify `Header`s depending on the current `ConsensusState`.
+A `ValidityPredicate` is an opaque function defined by a client type to verify `Header`s depending on the current `ConsensusState`.
 Using the ValidityPredicate SHOULD be far more computationally efficient than replaying the full consensus algorithm
 for the given parent `Header` and the list of network messages.
 
@@ -132,14 +142,12 @@ If the provided header was valid, the client MUST also mutate internal state to 
 now-finalised consensus roots and update any necessary signature authority tracking (e.g.
 changes to the validator set) for future calls to the validity predicate.
 
-The detailed specification of `ValidityPredicate` can be found in [CONSENSUS.md](./CONSENSUS.md).
-
 #### MisbehaviourPredicate
 
-An `MisbehaviourPredicate` is a light client function used to check if data
-constitutes a violation of the consensus protocol. This might be two headers
+An `MisbehaviourPredicate` is an opaque function defined by a client type, used to check if data
+constitutes a violation of the consensus protocol. This might be two signed headers
 with different state roots but the same height, a signed header containing invalid
-state transitions, or other evidence as defined by the consensus algorithm.
+state transitions, or other evidence of malfeasance as defined by the consensus algorithm.
 
 The `MisbehaviourPredicate` type is defined as
 
@@ -155,45 +163,53 @@ More details about `MisbehaviourPredicate`s can be found in [CONSENSUS.md](./CON
 
 #### ClientState
 
-`ClientState` is the light client state, which must expose the latest `ConsensusState`, a validity predicate,
-a misbehaviour predicate, and finally a function to lookup verified `CommitmentRoot`s,
-which are then used to verify presence or absence of particular key-value pairs in state at particular heights.
+`ClientState` is an opaque data structure defined by a client type.
 It may keep arbitrary internal state to track verified roots and past misbehaviours.
 
 Light clients are representation-opaque — different consensus algorithms can define different light client update algorithms —
 but they must expose this common set of query functions to the IBC handler.
 
 ```typescript
-interface ClientState {
-  initialize: (ConsensusState) => void
-  getVerifiedRoot: (uint64) => CommitmentRoot
-  validityPredicate: ValidityPredicate
-  misbehaviourPredicate: MisbehaviourPredicate
-}
+type ClientState = bytes
 ```
 
-where
-  * `initialize` must set an initial `ConsensusState` provided when the light client is created, and initialize any internal state accordingly
-  * `verifiedRoot` is a function mapping heights to previously verified `CommitmentRoot`s
-  * `validityPredicate` is a validity predicate as described above
-  * `misbehaviourPredicate` is a misbehaviour predicate as described above
+Client types must also define a function to initialize a client state with a provided consensus state:
 
-The `consensusState` MUST be stored under a particular key, defined below, so that other chains can verify that a particular consensus state has been stored.
+```typescript
+type initialize = (ConsensusState) => ClientState
+```
+
+#### Root introspection
+
+Client types must define a function to lookup previously verified `CommitmentRoot`s,
+which are then used to verify presence or absence of particular key-value pairs in state at particular heights.
+
+```typescript
+type getVerifiedRoot = (ClientState, uint64) => CommitmentRoot
+```
 
 ### Sub-protocols
 
 IBC handlers MUST implement the functions defined below.
 
-#### Preliminaries
+#### Key-space
 
 Clients are stored under a unique `Identifier` prefix.
 This ICS does not require that client identifiers be generated in a particular manner, only that they be unique.
 
-`clientKey` takes an `Identifier` and returns a `Key` under which to store a particular client.
+`clientStateKey` takes an `Identifier` and returns a `Key` under which to store a particular client state.
 
 ```typescript
-function clientKey(id: Identifier): Key {
-  return "clients/{id}"
+function clientStateKey(id: Identifier): Key {
+  return "clients/{id}/state"
+}
+```
+
+`clientTypeKey` takes an `Identifier` and returns ` Key` under which to store the type of a particular client.
+
+```typescript
+function clientTypeKey(id: Identifier): Key {
+  return "clients/{id}/type"
 }
 ```
 
@@ -220,10 +236,11 @@ logical correctness.
 Calling `createClient` with the specified identifier & initial consensus state creates a new client.
 
 ```typescript
-function createClient(id: Identifier, clientState: ClientState, consensusState: ConsensusState) {
-  assert(get(clientKey(id)) === null)
-  set(clientKey(id), clientState)
-  clientState.initialize(consensusState)
+function createClient(id: Identifier, clientType: ClientType, consensusState: ConsensusState) {
+  assert(get(clientStateKey(id)) === null)
+  clientState = clientType.initialize(consensusState)
+  set(clientTypeKey(id), clientType)
+  set(clientStateKey(id), clientState)
 }
 ```
 
@@ -239,7 +256,9 @@ function queryClientConsensusState(id: Identifier): ConsensusState {
 
 ```typescript
 function queryClientRoot(id: Identifier, height: uint64): CommitmentRoot {
-  return get(clientKey(id)).getVerifiedRoot(height)
+  clientType = get(clientTypeKey(id))
+  clientState = get(clientStateKey(id))
+  return clientType.getVerifiedRoot(height)
 }
 ```
 
@@ -253,9 +272,11 @@ updating the signature authority logic in the stored consensus state.
 
 ```typescript
 function updateClient(id: Identifier, header: Header) {
-  client = get(clientKey(id))
-  assert(client !== null)
-  assert(client.validityPredicate(header))
+  clientType = get(clientTypeKey(id))
+  assert(clientType !== null)
+  clientState = get(clientStateKey(id))
+  assert(clientState !== null)
+  assert(clientType.validityPredicate(clientState, header))
 }
 ```
 
@@ -265,10 +286,12 @@ If the client detects evidence of misbehaviour, the client can be alerted, possi
 previously valid state roots & preventing future updates.
 
 ```typescript
-function submitMisbehaviour(id: Identifier, evidence: bytes) {
-  client = get(clientKey(id))
-  assert(client !== null)
-  assert(client.misbehaviourPredicate(evidence))
+function submitMisbehaviourToClient(id: Identifier, evidence: bytes) {
+  clientType = get(clientTypeKey(id))
+  assert(clientType !== null)
+  clientState = get(clientStateKey(id))
+  assert(clientState !== null)
+  assert(clientType.misbehaviourPredicate(clientState, evidence))
 }
 ```
 
@@ -285,14 +308,15 @@ The client-specific types are then defined as follows:
 - `MisbehaviourPredicate` checks for two headers with the same height & different commitment roots
 
 ```typescript
+interface ClientState {
+  frozen: bool
+  pastPublicKeys: Set<PublicKey>
+  verifiedRoots: Map<uint64, CommitmentRoot>
+}
+
 interface ConsensusState {
   height: uint64
   publicKey: PublicKey
-}
-
-interface ClientState {
-  frozen: bool
-  verifiedRoots: Map<uint64, CommitmentRoot>
 }
 
 interface Header {
@@ -313,12 +337,20 @@ function commit(root: CommitmentRoot, height: uint64, newPublicKey: Maybe<Public
   return header
 }
 
+function initialize(consensusState: ConsensusState): ClientState {
+  return ClientState{false, Set.singleton(consensusState.publicKey), Map.empty()}
+}
+
 function validityPredicate(clientState: ClientState, header: Header): bool {
+  if (consensusState.height + 1 !== header.height)
+    return false
   if (!consensusState.publicKey.verify(header.signature))
     return false
   if (header.newPublicKey !== null)
     consensusState.publicKey = header.newPublicKey
-  client.verifiedRoots[height] = header.commitmentRoot
+    clientState.pastPublicKeys.add(header.newPublicKey)
+  consensusState.height = header.height
+  clientState.verifiedRoots[height] = header.commitmentRoot
   return true
 }
 
@@ -327,13 +359,15 @@ function getVerifiedRoot(clientState: ClientState, height: uint64) {
   return client.verifiedRoots[height]
 }
 
-function misbehaviourPredicate(consensusState: ConsensusState, evidence: Evidence): bool {
+function misbehaviourPredicate(clientState: ClientState, evidence: Evidence): bool {
   h1 = evidence.h1
   h2 = evidence.h2
-  if (h1.height === h2.height &&
+  if (h1.publicKey === h2.publicKey &&
+      clientState.pastPublicKeys.contains(h1.publicKey) &&
+      h1.height === h2.height &&
       h1.commitmentRoot !== h2.commitmentRoot &&
-      consensusState.publicKey.verify(h1.signature) &&
-      consensusState.publicKey.verify(h2.signature)) {
+      h1.publicKey.verify(h1.signature) &&
+      h2.publicKey.verify(h2.signature)) {
     client.frozen = true
     return true
   }
@@ -343,7 +377,7 @@ function misbehaviourPredicate(consensusState: ConsensusState, evidence: Evidenc
 
 ### Properties & Invariants
 
-- Client identifiers are first-come-first-serve: once a client identifier has been allocated, all future headers & roots-of-trust stored under that identifier will have satisfied the client's validity predicate.
+- Client identifiers are immutable & first-come-first-serve: once a client identifier has been allocated, all future headers & roots-of-trust stored under that identifier will have satisfied the client's validity predicate.
 
 ## Backwards Compatibility
 
