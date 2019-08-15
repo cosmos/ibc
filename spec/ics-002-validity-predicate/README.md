@@ -165,7 +165,7 @@ but they must expose this common set of query functions to the IBC handler.
 
 ```typescript
 interface ClientState {
-  initialize: (ConsensusState) => ()
+  initialize: (ConsensusState) => void
   getVerifiedRoot: (uint64) => CommitmentRoot
   validityPredicate: ValidityPredicate
   misbehaviourPredicate: MisbehaviourPredicate
@@ -285,24 +285,24 @@ The client-specific types are then defined as follows:
 - `MisbehaviourPredicate` checks for two headers with the same height & different commitment roots
 
 ```typescript
-type ConsensusState {
+interface ConsensusState {
   height: uint64
   publicKey: PublicKey
 }
 
-type ClientState {
+interface ClientState {
   frozen: bool
   verifiedRoots: Map<uint64, CommitmentRoot>
 }
 
-type Header {
+interface Header {
   height: uint64
   commitmentRoot: CommitmentRoot
   signature: Signature
   newPublicKey: Maybe<PublicKey>
 }
 
-type Evidence {
+interface Evidence {
   h1: Header
   h2: Header
 }
