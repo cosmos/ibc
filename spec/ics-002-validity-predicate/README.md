@@ -94,7 +94,7 @@ type ValidityPredicate = (Header) => (bool)
 The boolean returned indicates whether the provided header was valid.
 
 If the provided header was valid, the client MUST also mutate internal state to store
-now-finalized consensus roots and update any necessary signature authority tracking (e.g.
+now-finalised consensus roots and update any necessary signature authority tracking (e.g.
 changes to the validator set) for future calls to the validity predicate.
 
 The detailed specification of `ValidityPredicate` can be found in [CONSENSUS.md](./CONSENSUS.md).
@@ -241,7 +241,7 @@ function queryClientRoot(id: Identifier, height: uint64): CommitmentRoot {
 Updating a client is done by submitting a new `Header`. The `Identifier` is used to point to the
 stored `ClientState` that the logic will update. When a new `Header` is verified with
 the stored `ClientState`'s `ValidityPredicate` and `ConsensusState`, the client MUST
-update its internal state accordingly, possibly finalizing commitment roots and
+update its internal state accordingly, possibly finalising commitment roots and
 updating the signature authority logic in the stored consensus state.
 
 ```typescript

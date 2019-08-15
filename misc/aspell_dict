@@ -1,4 +1,4 @@
-personal_ws-1.1 en 359 
+personal_ws-1.1 en 365 
 structs
 lookupModule
 RLP
@@ -43,7 +43,7 @@ topologies
 consensusStateKey
 handleConnCloseConfirm
 clientIdentifier
-ClientState
+clientState
 verifier
 counterpartyIdentifier
 UDP
@@ -71,7 +71,7 @@ freezeClient
 encodings
 callingModuleIdentifier
 ChannelState
-CommitmentRoot
+commitmentRoot
 destChannel
 verifyMembership
 portIdentifier
@@ -85,6 +85,7 @@ chanel
 counterpartyClientIdentifier
 verifications
 proofAck
+verifiedRoot
 WASM
 onRecvPacket
 tokenize
@@ -205,6 +206,7 @@ destPort
 stablecoins
 handleChanOpenInit
 validator
+privateKey
 startRound
 nextSequenceRecvKey
 handleConnOpenConfirm
@@ -212,6 +214,7 @@ Yun
 connOpenAck
 onTimeoutPropose
 handlePacketRecv
+getVerifiedRoot
 privateStore
 const
 getMerkleRoot
@@ -224,6 +227,7 @@ onChanOpenAck
 permissioning
 transferPort
 HeaderProof
+publicKey
 liveness
 updateConsensusState
 Juwoon
@@ -258,6 +262,7 @@ counterpartyChannelIdentifier
 unfreezeClient
 connOpenConfirm
 desiredIdentifier
+submitMisbehaviour
 relayerModule
 recv
 pubkey
@@ -351,6 +356,7 @@ sdk
 Directionality
 handleConnOpenTry
 invariants
+newPublicKey
 callbackKey
 proofHeight
 timeoutClose
