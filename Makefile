@@ -1,11 +1,11 @@
 SUBDIRS := $(filter-out $(wildcard ./spec/*.md),$(wildcard ./spec/*))
-TOPTARGETS := typecheck build clean
+TOPTARGETS := typecheck check_proto build clean
 
 $(TOPTARGETS): $(SUBDIRS)
 $(SUBDIRS):
 	$(MAKE) -C $@ $(MAKECMDGOALS)
 
-check: check_links check_dependencies check_syntax check_sections check_proto
+check: check_links check_dependencies check_syntax check_sections
 
 check_links:
 	python ./scripts/check_links.py
@@ -18,13 +18,6 @@ check_syntax:
 
 check_sections:
 	python ./scripts/check_sections.py
-
-check_proto:
-	$(MAKE) -C spec/ics-002-consensus-verification check_proto
-	$(MAKE) -C spec/ics-003-connection-semantics check_proto
-	$(MAKE) -C spec/ics-004-channel-and-packet-semantics check_proto
-	$(MAKE) -C spec/ics-020-fungible-token-transfer check_proto
-	$(MAKE) -C spec/ics-026-relayer-module check_proto
 
 spec_pdf:
 	scripts/make_pdf.sh

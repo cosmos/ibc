@@ -75,7 +75,7 @@ Host chains MUST provide the ability to introspect their current height, with `g
 type getCurrentHeight = () => uint64
 ```
 
-Host chains MUST define a unique `ConsensusState` type fulfilling the requirements of [ICS 2](../ics-002-consensus-verification):
+Host chains MUST define a unique `ConsensusState` type fulfilling the requirements of [ICS 2](../ics-002-validity-predicate):
 
 ```typescript
 type ConsensusState object

@@ -43,9 +43,9 @@ header-includes:
 
 !include spec/ics-024-host-requirements/README.md.xfm
 
-# ICS 002 - Consensus Verification
+# ICS 002 - Validity Predicate
 
-!include spec/ics-002-consensus-verification/README.md.xfm
+!include spec/ics-002-validity-predicate/README.md.xfm
 
 # ICS 003 - Connection Semantics
 

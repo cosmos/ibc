@@ -16,11 +16,11 @@ This standards document describes the abstraction of an IBC *connection*: two st
 
 ### Motivation
 
-The core IBC protocol provides *authorisation* and *ordering* semantics for packets: guarantees, respectively, that packets have been committed on the sending blockchain (and according state transitions executed, such as escrowing tokens), and that they have been committed exactly once in a particular order and can be delivered exactly once in that same order. The *connection* abstraction specified in this standard, in conjunction with the *client* abstraction specified in [ICS 2](../ics-002-consensus-verification), defines the *authorisation* semantics of IBC. Ordering semantics are described in [ICS 4](../ics-004-channel-and-packet-semantics)).
+The core IBC protocol provides *authorisation* and *ordering* semantics for packets: guarantees, respectively, that packets have been committed on the sending blockchain (and according state transitions executed, such as escrowing tokens), and that they have been committed exactly once in a particular order and can be delivered exactly once in that same order. The *connection* abstraction specified in this standard, in conjunction with the *client* abstraction specified in [ICS 2](../ics-002-validity-predicate), defines the *authorisation* semantics of IBC. Ordering semantics are described in [ICS 4](../ics-004-channel-and-packet-semantics)).
 
 ### Definitions
 
-`ConsensusState`, `Header`, and `updateConsensusState` are as defined in [ICS 2](../ics-002-consensus-verification).
+`ConsensusState`, `Header`, and `updateConsensusState` are as defined in [ICS 2](../ics-002-validity-predicate).
 
 `CommitmentProof`, `verifyMembership`, and `verifyNonMembership` are as defined in [ICS 23](../ics-023-vector-commitments).
 
@@ -135,7 +135,7 @@ function removeConnectionFromClient(clientIdentifier: Identifier, connectionIden
 
 ### Subprotocols
 
-This ICS defines two subprotocols: opening handshake and closing handshake. Header tracking and closing-by-misbehaviour are defined in [ICS 2](../ics-002-consensus-verification). Datagrams defined herein are handled as external messages by the IBC relayer module defined in [ICS 26](../ics-026-relayer-module).
+This ICS defines two subprotocols: opening handshake and closing handshake. Header tracking and closing-by-misbehaviour are defined in [ICS 2](../ics-002-validity-predicate). Datagrams defined herein are handled as external messages by the IBC relayer module defined in [ICS 26](../ics-026-relayer-module).
 
 ![State Machine Diagram](state.png)
 
@@ -291,7 +291,7 @@ function connOpenTimeout(
 
 #### Header Tracking
 
-Headers are tracked at the client level. See [ICS 2](../ics-002-consensus-verification).
+Headers are tracked at the client level. See [ICS 2](../ics-002-validity-predicate).
 
 #### Closing Handshake
 
@@ -338,7 +338,7 @@ function connCloseConfirm(
 
 #### Freezing by Misbehaviour 
 
-The misbehaviour detection sub-protocol is defined in [ICS 2](../ics-002-consensus-verification). If a client is frozen by misbehaviour, all associated connections are immediately frozen as well.
+The misbehaviour detection sub-protocol is defined in [ICS 2](../ics-002-validity-predicate). If a client is frozen by misbehaviour, all associated connections are immediately frozen as well.
 
 Implementing chains may want to allow applications to register handlers to take action upon discovery of misbehaviour. Further discussion is deferred to ICS 12.
 
