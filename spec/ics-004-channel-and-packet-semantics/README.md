@@ -25,7 +25,7 @@ In order to provide the desired ordering, exactly-once delivery, and module perm
 
 ### Definitions
 
-`ConsensusState` is as defined in [ICS 2](../ics-002-validity-predicate).
+`ConsensusState` is as defined in [ICS 2](../ics-002-client-semantics).
 
 `Connection` is as defined in [ICS 3](../ics-003-connection-semantics).
 

@@ -1,6 +1,6 @@
 ---
 ics: 2
-title: Validity Predicate
+title: Client Semantics
 stage: draft
 category: ibc-core
 requires: 23, 24
@@ -81,6 +81,13 @@ and the full node can be generated and submitted to the chain so that the chain 
 light client, invalidate past state roots, and await higher-level intervention.
 
 ## Technical Specification
+
+This specification outlines what each *client type* must define. A client type is a set of definitions
+of the data structures, initialisation logic, validity predicate, and misbehaviour predicate required
+to operate a light client. State machines implementing the IBC protocol can support any number of client
+types, and each client type can be instantiated with different initial consensus states in order to track
+different consensus instances. In order to establish a connection between two machines (see [ICS 3](../ics-003-connection-semantics)),
+the machines must each support the client type corresponding to the other machine's consensus algorithm.
 
 ### Data Structures
 
