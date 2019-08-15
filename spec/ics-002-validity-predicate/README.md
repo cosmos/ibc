@@ -38,7 +38,7 @@ many processes operating a Byzantine fault-tolerant consensus algorithm, or othe
 — from the perspective of IBC, a machine is defined entirely by its light client validation & equivocation detection logic.
 
 Clients could also act as thresholding views of other clients. In the case where
-modules utilizing the IBC protocol to interact with probablistic-finality consensus algoritms
+modules utilising the IBC protocol to interact with probabilistic-finality consensus algorithms
 which might require different finality thresholds for different applications, one write-only
 client could be created to track headers and many read-only clients with different finality
 thresholds (confirmation depths after which state roots are considered final) could use that same state.

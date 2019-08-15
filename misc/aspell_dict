@@ -1,4 +1,4 @@
-personal_ws-1.1 en 365 
+personal_ws-1.1 en 368 
 structs
 lookupModule
 RLP
@@ -140,6 +140,7 @@ consensusState
 handlePacketCleanupUnordered
 atomicity
 runtime
+initialize
 handleClientFreeze
 permissioned
 Tezos
@@ -162,7 +163,9 @@ updatePort
 createNonMembershipProof
 datagram
 unowned
+thresholding
 QUIC
+misbehaviours
 tokenized
 Protobuf
 validValue
@@ -188,8 +191,8 @@ CryptoKitties
 pendingDatagrams
 ChannelEnd
 clientConnectionsKey
-queryClientConsensusState
 escrowAccount
+queryClientConsensusState
 SourceIdentifier
 chanOpenTry
 handleChanCloseInit
