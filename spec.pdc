@@ -45,7 +45,7 @@ header-includes:
 
 # ICS 002 - Validity Predicate
 
-!include spec/ics-002-validity-predicate/README.md.xfm
+!include spec/ics-002-client-semantics/README.md.xfm
 
 # ICS 003 - Connection Semantics
 
