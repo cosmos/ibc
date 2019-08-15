@@ -28,6 +28,7 @@ It generates a unique list of headers starting from a genesis `ConsensusState` w
 messages.
 
 `Blockchain` is defined as
+
 ```typescript
 interface Blockchain {
   genesis: ConsensusState

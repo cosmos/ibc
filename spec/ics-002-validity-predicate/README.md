@@ -28,20 +28,21 @@ In the IBC protocol, a machine needs to be able to verify updates to the state o
 which the other machine's consensus algorithm has agreed upon, and reject any possible updates
 which the other machine's consensus algorithm has not agreed upon. A light client is the algorithm
 with which a machine can do so. This standard formalises the light client model and requirements,
-so that the IBC protocol can easily integrate with new machines which are running new consensus algorithms,
+so that the IBC protocol can easily integrate with new machines which are running new consensus algorithms
 as long as associated light client algorithms fulfilling the listed requirements are provided.
 
 Beyond the properties described in this specification, IBC does not impose any requirements on
 the internal operation of machines and their consensus algorithms. A machine may consist of a
-single process signing operations with a private key, many processes operating a consensus algorithm,
-or other configurations yet to be invented — from the perspective of IBC, a machine is defined
-entirely by its validity predicate and a particular trusted state.
+single process signing operations with a private key, a quorum of processes signing in unison,
+many processes operating a Byzantine fault-tolerant consensus algorithm, or other configurations yet to be invented
+— from the perspective of IBC, a machine is defined entirely by its light client validation & equivocation detection logic.
 
 ### Definitions
 
 * `get`, `set`, `Key`, and `Identifier` are as defined in [ICS 24](../ics-024-host-requirements).
 
-* `CommitmentRoot` is as defined in [ICS 23](../ics-023-vector-commitments).
+* `CommitmentRoot` is as defined in [ICS 23](../ics-023-vector-commitments). It must provide an inexpensive way for
+  downstream logic to verify whether key-value pairs are present in state at a particular height.
 
 * `ConsensusState` is an opaque type representing the state of a validity predicate.
   `ConsensusState` must be able to verify state updates agreed upon by the associated consensus algorithm.
@@ -50,11 +51,10 @@ entirely by its validity predicate and a particular trusted state.
 
 * `ClientState` is an opaque type representing the state of a client.
   A `ClientState` must expose query functions to retrieve trusted state roots at previously
-  verified heights, retrieve the current `ConsensusState`. It must provide an inexpensive way for
-  downstream logic to verify whether key-value pairs are present in a state root or not.
+  verified heights and retrieve the current `ConsensusState`.
 
 * `createClient`, `queryClient`, `updateClient`, `freezeClient`, and `deleteClient` function signatures are as defined in [ICS 25](../ics-025-handler-interface).
-  The function implementations are defined in this standard.
+  The function implementations are defined in this specification.
 
 ### Desired Properties
 
@@ -78,12 +78,41 @@ light client, invalidate past state roots, and await higher-level intervention.
 
 ### Data Structures
 
+#### ConsensusState
+
+`ConsensusState` is a opaque type defined by each consensus algorithm, used by the validity predicate to
+verify new commits & state roots. Likely the structure will contain the last commit produced by
+the consensus process, including signatures and validator set metadata.
+
+`ConsensusState` MUST be generated from an instance of `Consensus`, which assigns unique heights
+for each `ConsensusState`. Two `ConsensusState`s on the same chain SHOULD NOT have the same height
+if they do not have equal commitment roots. Such an event is called an "equivocation", and should one occur,
+a proof should be generated and submitted so that the client can be frozen.
+
+The `ConsensusState` of a chain MUST have a canonical serialization, so that other chains can check
+that a stored consensus state is equal to another.
+
+```typescript
+type ConsensusState = bytes
+```
+
+#### Header
+
+A `Header` is a blockchain header which provides information to update a `ConsensusState`.
+Headers can be submitted to an associated client to update the stored `ConsensusState`.
+
+Headers are representation-opaque to the IBC protocol. They likely contain a height, a proof,
+a commitment root, and possibly updates to the validity predicate.
+
+```typescript
+type Header = bytes
+```
+
 #### ValidityPredicate
 
 A `ValidityPredicate` is a light client function to verify `Header`s depending on the current `ConsensusState`.
-Using the ValidityPredicate SHOULD be far more computationally efficient than replaying `Consensus` logic
-for the given parent `Header` and the list of network messages, ideally in constant time
-independent from the size of message stored in the `Header`.
+Using the ValidityPredicate SHOULD be far more computationally efficient than replaying the full consensus algorithm
+for the given parent `Header` and the list of network messages.
 
 The `ValidityPredicate` type is defined as
 
@@ -118,36 +147,19 @@ were previously considered valid invalid, according to the nature of the misbeha
 
 More details about `MisbehaviourPredicate`s can be found in [CONSENSUS.md](./CONSENSUS.md)
 
-#### ConsensusState
-
-`ConsensusState` is a opaque type defined by each consensus algorithm, used by the validity predicate to
-verify new commits & state roots. Likely the structure will contain the last commit produced by
-the consensus process, including signatures and validator set metadata.
-
-`ConsensusState` MUST be generated from an instance of `Consensus`, which assigns unique heights
-for each `ConsensusState`. Two `ConsensusState`s on the same chain SHOULD NOT have the same height
-if they do not have equal commitment roots. Such an event is called an "equivocation", and should one occur,
-a proof should be generated and submitted so that the client can be frozen.
-
-The `ConsensusState` of a chain MUST have a canonical serialization, so that other chains can check
-that a stored consensus state is equal to another.
-
-```typescript
-type ConsensusState = bytes
-```
-
 #### ClientState
 
 `ClientState` is the light client state, which must expose the latest `ConsensusState`, a validity predicate,
-a misbehaviour predicate,  and finally a function to lookup verified `CommitmentRoot`s,
+a misbehaviour predicate, and finally a function to lookup verified `CommitmentRoot`s,
 which are then used to verify presence or absence of particular key-value pairs in state at particular heights.
+It may keep arbitrary internal state to track verified roots and past misbehaviours.
 
 Light clients are representation-opaque — different consensus algorithms can define different light client update algorithms —
 but they must expose this common set of query functions to the IBC handler.
 
 ```typescript
 interface ClientState {
-  getConsensusState: () => ConsensusState
+  initialize: (ConsensusState) => ()
   getVerifiedRoot: (uint64) => CommitmentRoot
   validityPredicate: ValidityPredicate
   misbehaviourPredicate: MisbehaviourPredicate
@@ -155,24 +167,12 @@ interface ClientState {
 ```
 
 where
-  * `consensusState` is the `ConsensusState` used by the validity predicate to verify headers
+  * `initialize` must set an initial `ConsensusState` provided when the light client is created, and initialize any internal state accordingly
   * `verifiedRoot` is a function mapping heights to previously verified `CommitmentRoot`s
   * `validityPredicate` is a validity predicate as described above
   * `misbehaviourPredicate` is a misbehaviour predicate as described above
 
 The `consensusState` MUST be stored under a particular key, defined below, so that other chains can verify that a particular consensus state has been stored.
-
-#### Header
-
-A `Header` is a blockchain header which provides information to update a `ConsensusState`.
-Headers can be submitted to an associated client to update the stored `ConsensusState`.
-
-Headers are representation-opaque to the IBC protocol. They likely contain a height, a proof,
-a commitment root, and possibly updates to the validity predicate.
-
-```typescript
-type Header = bytes
-```
 
 ### Sub-protocols
 
@@ -214,9 +214,10 @@ logical correctness.
 Calling `createClient` with the specified identifier & initial consensus state creates a new client.
 
 ```typescript
-function createClient(id: Identifier, clientState: ClientState) {
+function createClient(id: Identifier, clientState: ClientState, consensusState: ConsensusState) {
   assert(get(clientKey(id)) === null)
   set(clientKey(id), clientState)
+  clientState.initialize(consensusState)
 }
 ```
 
