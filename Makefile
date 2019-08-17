@@ -1,3 +1,6 @@
+all:
+	./scripts/all.sh
+
 SUBDIRS := $(filter-out $(wildcard ./spec/*.md),$(wildcard ./spec/*))
 TOPTARGETS := typecheck check_proto build clean
 
@@ -28,4 +31,4 @@ spellcheck:
 spellcheck_noninteractive:
 	find . -type f -name "*.md" | xargs -n 1 -I % ./scripts/spellcheck.sh %
 
-.PHONY: $(TOPTARGETS) $(SUBDIRS) check check_links check_dependencies check_syntax check_sections check_proto spec_pdf spellcheck spellcheck_noninteractive
+.PHONY: $(TOPTARGETS) $(SUBDIRS) all check check_links check_dependencies check_syntax check_sections check_proto spec_pdf spellcheck spellcheck_noninteractive

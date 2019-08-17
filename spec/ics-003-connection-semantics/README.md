@@ -117,9 +117,9 @@ function clientConnectionsKey(clientIdentifier: Identifier): Key {
 
 ```typescript
 function addConnectionToClient(clientIdentifier: Identifier, connectionIdentifier: Identifier) {
-  conns = get(clientConnectionsKey(clientIdentifier, connectionIdentifier))
+  conns = privateStore.get(clientConnectionsKey(clientIdentifier, connectionIdentifier))
   conns.add(connectionIdentifier)
-  set(clientConnectionsKey(clientIdentifier, connectionIdentifier), conns)
+  privateStore.set(clientConnectionsKey(clientIdentifier, connectionIdentifier), conns)
 }
 ```
 
@@ -127,9 +127,9 @@ function addConnectionToClient(clientIdentifier: Identifier, connectionIdentifie
 
 ```
 function removeConnectionFromClient(clientIdentifier: Identifier, connectionIdentifier: Identifier) {
-  conns = get(clientConnectionsKey(clientIdentifier, connectionIdentifier))
+  conns = privateStore.get(clientConnectionsKey(clientIdentifier, connectionIdentifier))
   conns.remove(connectionIdentifier)
-  set(clientConnectionsKey(clientIdentifier, connectionIdentifier), conns)
+  privateStore.set(clientConnectionsKey(clientIdentifier, connectionIdentifier), conns)
 }
 ```
 
@@ -167,11 +167,11 @@ function connOpenInit(
   identifier: Identifier, desiredCounterpartyConnectionIdentifier: Identifier,
   clientIdentifier: Identifier, counterpartyClientIdentifier: Identifier,
   version: string, nextTimeoutHeight: uint64) {
-  assert(get(connectionKey(identifier)) == null)
+  assert(provableStore.get(connectionKey(identifier)) == null)
   state = INIT
   connection = ConnectionEnd{state, desiredCounterpartyConnectionIdentifier, clientIdentifier,
     counterpartyClientIdentifier, version, nextTimeoutHeight}
-  set(connectionKey(identifier), connection)
+  provableStore.set(connectionKey(identifier), connection)
   addConnectionToClient(clientIdentifier, identifier)
 }
 ```
@@ -186,7 +186,7 @@ function connOpenTry(
   version: string, timeoutHeight: uint64, nextTimeoutHeight: uint64) {
   assert(consensusHeight <= getCurrentHeight())
   assert(getCurrentHeight() <= timeoutHeight)
-  counterpartyStateRoot = get(rootKey(connection.clientIdentifier, proofHeight))
+  counterpartyStateRoot = privateStore.get(rootKey(connection.clientIdentifier, proofHeight))
   expectedConsensusState = getConsensusState(consensusHeight)
   expected = ConnectionEnd{INIT, desiredIdentifier, counterpartyClientIdentifier,
                            clientIdentifier, version, timeoutHeight}
@@ -195,12 +195,12 @@ function connOpenTry(
   assert(verifyMembership(counterpartyStateRoot, proofInit,
                           consensusStateKey(counterpartyClientIdentifier),
                           expectedConsensusState))
-  assert(get(connectionKey(desiredIdentifier)) === null)
+  assert(provableStore.get(connectionKey(desiredIdentifier)) === null)
   identifier = desiredIdentifier
   state = TRYOPEN
   connection = ConnectionEnd{state, counterpartyConnectionIdentifier, clientIdentifier,
                              counterpartyClientIdentifier, version, nextTimeoutHeight}
-  set(connectionKey(identifier), connection)
+  provableStore.set(connectionKey(identifier), connection)
   addConnectionToClient(clientIdentifier, identifier)
 }
 ```
@@ -213,9 +213,9 @@ function connOpenAck(
   consensusHeight: uint64, timeoutHeight: uint64, nextTimeoutHeight: uint64) {
   assert(consensusHeight <= getCurrentHeight())
   assert(getCurrentHeight() <= timeoutHeight)
-  connection = get(connectionKey(identifier))
+  connection = provableStore.get(connectionKey(identifier))
   assert(connection.state === INIT)
-  counterpartyStateRoot = get(rootKey(connection.clientIdentifier, proofHeight))
+  counterpartyStateRoot = privateStore.get(rootKey(connection.clientIdentifier, proofHeight))
   expectedConsensusState = getConsensusState(consensusHeight)
   expected = ConnectionEnd{TRYOPEN, identifier, connection.counterpartyClientIdentifier,
                            connection.clientIdentifier, connection.version, timeoutHeight}
@@ -225,7 +225,7 @@ function connOpenAck(
                           consensusStateKey(connection.counterpartyClientIdentifier), expectedConsensusState))
   connection.state = OPEN
   connection.nextTimeoutHeight = nextTimeoutHeight
-  set(connectionKey(identifier), connection)
+  provableStore.set(connectionKey(identifier), connection)
 }
 ```
 
@@ -236,16 +236,16 @@ function connOpenConfirm(
   identifier: Identifier, proofAck: CommitmentProof,
   proofHeight: uint64, timeoutHeight: uint64)
   assert(getCurrentHeight() <= timeoutHeight)
-  connection = get(connectionKey(identifier))
+  connection = provableStore.get(connectionKey(identifier))
   assert(connection.state === TRYOPEN)
-  counterpartyStateRoot = get(rootKey(connection.clientIdentifier, proofHeight))
+  counterpartyStateRoot = privateStore.get(rootKey(connection.clientIdentifier, proofHeight))
   expected = ConnectionEnd{OPEN, identifier, connection.counterpartyClientIdentifier,
                            connection.clientIdentifier, connection.version, timeoutHeight}
   assert(verifyMembership(counterpartyStateRoot, proofAck,
                           connectionKey(connection.counterpartyConnectionIdentifier), expected))
   connection.state = OPEN
   connection.nextTimeoutHeight = 0
-  set(connectionKey(identifier), connection)
+  provableStore.set(connectionKey(identifier), connection)
 ```
 
 *ConnOpenTimeout* aborts a connection opening attempt due to a timeout on the other side.
@@ -254,8 +254,8 @@ function connOpenConfirm(
 function connOpenTimeout(
   identifier: Identifier, proofTimeout: CommitmentProof,
   proofHeight: uint64, timeoutHeight: uint64) {
-  connection = get(connectionKey(identifier))
-  counterpartyStateRoot = get(rootKey(connection.clientIdentifier, proofHeight))
+  connection = provableStore.get(connectionKey(identifier))
+  counterpartyStateRoot = privateStore.get(rootKey(connection.clientIdentifier, proofHeight))
   assert(proofHeight > connection.nextTimeoutHeight)
   switch state {
     case INIT:
@@ -284,7 +284,7 @@ function connOpenTimeout(
                       connection.clientIdentifier, connection.version, timeoutHeight}
       ))
   }
-  delete(connectionKey(identifier))
+  provableStore.delete(connectionKey(identifier))
   removeConnectionFromClient(clientIdentifier, identifier)
 }
 ```
@@ -312,10 +312,10 @@ A correct protocol execution flows as follows (note that all calls are made thro
 
 ```typescript
 function connCloseInit(identifier: Identifier) {
-  connection = get(connectionKey(identifier))
+  connection = provableStore.get(connectionKey(identifier))
   assert(connection.state === OPEN)
   connection.state = CLOSED
-  set(connectionKey(identifier), connection)
+  provableStore.set(connectionKey(identifier), connection)
 }
 ```
 
@@ -325,14 +325,14 @@ function connCloseInit(identifier: Identifier) {
 function connCloseConfirm(
   identifier: Identifier, proofInit: CommitmentProof, proofHeight: uint64) {
   assert(getCurrentHeight() <= timeoutHeight)
-  connection = get(connectionKey(identifier))
+  connection = provableStore.get(connectionKey(identifier))
   assert(connection.state === OPEN)
-  counterpartyStateRoot = get(rootKey(connection.clientIdentifier, proofHeight))
+  counterpartyStateRoot = privateStore.get(rootKey(connection.clientIdentifier, proofHeight))
   expected = ConnectionEnd{CLOSED, identifier, connection.counterpartyClientIdentifier,
                            connection.clientIdentifier, connection.version, 0}
   assert(verifyMembership(counterpartyStateRoot, proofInit, connectionKey(counterpartyConnectionIdentifier), expected))
   connection.state = CLOSED
-  set(connectionKey(identifier), connection)
+  provableStore.set(connectionKey(identifier), connection)
 }
 ```
 
@@ -348,7 +348,7 @@ Connections can be queried by identifier with `queryConnection`.
 
 ```typescript
 function queryConnection(id: Identifier): ConnectionEnd | void {
-  return get(connectionKey(id))
+  return provableStore.get(connectionKey(id))
 }
 ```
 
@@ -356,7 +356,7 @@ Connections associated with a particular client can be queried by client identif
 
 ```typescript
 function queryClientConnections(id: Identifier): Set<Identifier> {
-  return get(clientConnectionsKey(id))
+  return privateStore.get(clientConnectionsKey(id))
 }
 ```
 

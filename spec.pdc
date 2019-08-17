@@ -10,7 +10,7 @@ toc-own-page: true
 mainfont: DejaVuSerifCondensed
 fontsize: 8pt
 author: IBC Specification Team
-date: \today \ - \textbf{1.0.0-rc1}
+date: \today \ - \textbf{1.0.0-rc2}
 urlcolor: cyan
 header-includes:
     - \usepackage{graphicx}
@@ -21,15 +21,17 @@ header-includes:
 
 \pagebreak
 
-!include ibc/1_IBC_ARCHITECTURE.md
+# Architectural Overview
 
-!include ibc/2_IBC_DESIGN_PRINCIPLES.md
+!include ibc/1_IBC_ARCHITECTURE.md.xfm
 
-!include ibc/3_IBC_TERMINOLOGY.md
+!include ibc/2_IBC_DESIGN_PRINCIPLES.md.xfm
 
-!include ibc/4_IBC_USECASES.md
+!include ibc/3_IBC_TERMINOLOGY.md.xfm
 
-!include ibc/5_IBC_DESIGN_PATTERNS.md
+!include ibc/4_IBC_USECASES.md.xfm
+
+!include ibc/5_IBC_DESIGN_PATTERNS.md.xfm
 
 # ICS 001 - ICS Standard
 
@@ -43,7 +45,7 @@ header-includes:
 
 !include spec/ics-024-host-requirements/README.md.xfm
 
-# ICS 002 - Validity Predicate
+# ICS 002 - Client Semantics
 
 !include spec/ics-002-client-semantics/README.md.xfm
 

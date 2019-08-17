@@ -27,7 +27,7 @@ users must check that themselves.
 
 ### Definitions
 
-`Identifier`, `get`, `set`, and `del` are defined as in [ICS 24](../ics-024-host-requirements).
+`Identifier`, `get`, `set`, and `delete` are defined as in [ICS 24](../ics-024-host-requirements).
 
 A *port* is a particular kind of identifier which is used to permission channel opening and usage to modules.
 
@@ -123,9 +123,9 @@ The IBC handler MUST implement `bindPort`. `bindPort` binds to an unallocated po
 
 ```typescript
 function bindPort(id: Identifier) {
-  assert(get(portKey(id)) === null)
+  assert(provableStore.get(portKey(id)) === null)
   key = generate()
-  set(key, portKey(id))
+  provableStore.set(key, portKey(id))
   return key
 }
 ```
@@ -136,9 +136,9 @@ If the host state machine supports object-capability keys, no additional protoco
 
 ```typescript
 function transferPort(id: Identifier) {
-  assert(authenticate(get(portKey(id))))
+  assert(authenticate(provableStore.get(portKey(id))))
   key = generate()
-  set(portKey(id), key)
+  provableStore.set(portKey(id), key)
 }
 ```
 
@@ -148,8 +148,8 @@ The IBC handler MUST implement the `releasePort` function, which allows a module
 
 ```typescript
 function releasePort(id: Identifier) {
-  assert(authenticate(get(portKey(id))))
-  del(portKey(id))
+  assert(authenticate(provableStore.get(portKey(id))))
+  provableStore.delete(portKey(id))
 }
 ```
 
