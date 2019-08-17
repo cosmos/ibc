@@ -1,4 +1,4 @@
-# Interchain Standards Development
+# Interchain Standards
 
 ![banner](./assets/interchain-standards-image.jpg)
 
