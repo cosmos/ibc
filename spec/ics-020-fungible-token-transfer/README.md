@@ -2,7 +2,7 @@
 ics: 20
 title: Fungible Token Transfer
 stage: draft
-category: ibc-app
+category: IBC/APP
 requires: 25, 26
 author: Christopher Goes <cwgoes@tendermint.com>
 created: 2019-07-15 

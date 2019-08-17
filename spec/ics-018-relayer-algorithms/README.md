@@ -2,7 +2,7 @@
 ics: 18
 title: Relayer Algorithms
 stage: draft
-category: ibc-core
+category: IBC/TAO
 requires: 24, 25, 26
 author: Christopher Goes <cwgoes@tendermint.com>
 created: 2019-03-07

@@ -5,7 +5,7 @@ stage: draft
 category: meta
 author: Christopher Goes <cwgoes@tendermint.com>
 created: 2019-02-12
-modified: 2019-04-11
+modified: 2019-08-17
 ---
 
 ## What is an ICS?
@@ -49,9 +49,8 @@ See [README.md](../../README.md) for a description of the ICS acceptance stages.
 
 `category` - ICS category, one of the following:
 - `meta` - A standard about the ICS process
-- `ibc-core` - A standard about the inter-blockchain communication system core protocol.
-- `ibc-app` - A standard about the inter-blockchain communication system application layer.
-- `misc` - A standard about miscellaneous / auxiliary features, e.g. message signing
+- `IBC/TAO` - A standard about an inter-blockchain communication system core transport, authentication, and ordering layer protocol.
+- `IBC/APP` - A standard about an inter-blockchain communication system application layer protocol.
 
 `author` - ICS author(s) & contact information (in order of preference: email, GitHub handle, Twitter handle, other contact methods likely to elicit response).
            The first author is the primary "owner" of the ICS and is responsible for advancing it through the standardisation process.
@@ -165,6 +164,7 @@ the ICS process. Please direct all comments to the ICS repository maintainers.
 March 4th, 2019: Initial draft finished and submitted as a PR
 March 7th, 2019: Draft merged
 April 11th, 2019: Updates to pseudocode formatting, add definitions subsection
+August 17th, 2019: Clarifications to categories
 
 ## Copyright
 

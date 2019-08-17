@@ -2,7 +2,7 @@
 ics: 25
 title: Handler Interface
 stage: draft
-category: ibc-core
+category: IBC/TAO
 requires: 2, 3, 4, 23, 24
 author: Christopher Goes <cwgoes@tendermint.com>
 created: 2019-04-23

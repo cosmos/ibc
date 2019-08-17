@@ -2,7 +2,7 @@
 ics: 24
 title: Host State Machine Requirements
 stage: draft
-category: ibc-core
+category: IBC/TAO
 required-by: 2, 3, 4, 5, 18
 author: Christopher Goes <cwgoes@tendermint.com>
 created: 2019-04-16
