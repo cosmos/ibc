@@ -228,8 +228,8 @@ function chanOpenInit(
   channel = Channel{INIT, order, portIdentifier, counterpartyPortIdentifier,
                     counterpartyChannelIdentifier, connectionHops, version, nextTimeoutHeight}
   provableStore.set(channelKey(portIdentifier, channelIdentifier), channel)
-  provableStore.set(nextSequenceSendKey(portIdentifier, channelIdentifier), 0)
-  provableStore.set(nextSequenceRecvKey(portIdentifier, channelIdentifier), 0)
+  provableStore.set(nextSequenceSendKey(portIdentifier, channelIdentifier), 1)
+  provableStore.set(nextSequenceRecvKey(portIdentifier, channelIdentifier), 1)
 }
 ```
 
@@ -260,8 +260,8 @@ function chanOpenTry(
   channel = Channel{OPENTRY, order, portIdentifier, counterpartyPortIdentifier,
                     counterpartyChannelIdentifier, connectionHops, version, nextTimeoutHeight}
   provableStore.set(channelKey(portIdentifier, channelIdentifier), channel)
-  provableStore.set(nextSequenceSendKey(portIdentifier, channelIdentifier), 0)
-  provableStore.set(nextSequenceRecvKey(portIdentifier, channelIdentifier), 0)
+  provableStore.set(nextSequenceSendKey(portIdentifier, channelIdentifier), 1)
+  provableStore.set(nextSequenceRecvKey(portIdentifier, channelIdentifier), 1)
 }
 ```
 
