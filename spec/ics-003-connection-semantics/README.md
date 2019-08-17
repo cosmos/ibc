@@ -2,7 +2,7 @@
 ics: 3
 title: Connection Semantics
 stage: draft
-category: ibc-core
+category: IBC/TAO
 requires: 2, 23, 24
 required-by: 4, 25
 author: Christopher Goes <cwgoes@tendermint.com>, Juwoon Yun <joon@tendermint.com>

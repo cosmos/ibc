@@ -2,7 +2,7 @@
 ics: 26
 title: Relayer Module
 stage: Draft
-category: ibc-core
+category: IBC/TAO
 author: Christopher Goes <cwgoes@tendermint.com>
 created: 2019-06-09
 modified: 2019-07-29

@@ -2,7 +2,7 @@
 ics: 4
 title: Channel & Packet Semantics
 stage: draft
-category: ibc-core
+category: IBC/TAO
 requires: 2, 3, 5, 23, 24
 author: Christopher Goes <cwgoes@tendermint.com>
 created: 2019-03-07
