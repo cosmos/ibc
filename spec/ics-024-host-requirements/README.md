@@ -11,7 +11,7 @@ modified: 2019-05-11
 
 ## Synopsis
 
-This specification defines the minimal set of interfaces which must be provided and properties which must be fulfilled by a blockchain & state machine hosting an IBC handler (implementation of the interblockchain communication protocol; see [the architecture document](../../docs/ibc/1_IBC_ARCHITECTURE.md) for details).
+This specification defines the minimal set of interfaces which must be provided and properties which must be fulfilled by a state machine hosting an implementation of the interblockchain communication protocol.
 
 ### Motivation
 
@@ -56,7 +56,7 @@ type set = (key: Key, value: Value) => void
 ```
 
 ```typescript
-type del = (key: Key) => void
+type delete = (key: Key) => void
 ```
 
 `Key` is as defined above. `Value` is an arbitrary bytestring encoding of a particular data structure. Encoding details are left to separate ICSs.
@@ -65,7 +65,9 @@ These functions MUST be permissioned to the IBC handler module (the implementati
 
 The first interface provided by the host state machine MUST write to a key-value store whose data can be externally proved with a vector commitment as defined in [ICS 23](../ics-023-vector-commitments). The second interface MAY support external proofs, but is not required to - the IBC handler will never write data to it which needs to be proved.
 
-These interfaces are referred to throughout specifications which utilise them as the `provableStore` and the `privateStore` respectively, where `get`, `set`, and `del` are called as methods, e.g. `provableStore.set('key', 'value')`.
+These interfaces are referred to throughout specifications which utilise them as the `provableStore` and the `privateStore` respectively, where `get`, `set`, and `delete` are called as methods, e.g. `provableStore.set('key', 'value')`.
+
+The `provableStore` and `privateStore` differ also in their encoding restrictions. The `provableStore` MUST use canonical data structure encodings provided in these specifications as proto3 files, since values stored in the `provableStore` must be comprehensible to other machines implementing IBC.
 
 ### Consensus state introspection
 

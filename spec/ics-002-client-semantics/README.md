@@ -237,10 +237,11 @@ Calling `createClient` with the specified identifier & initial consensus state c
 
 ```typescript
 function createClient(id: Identifier, clientType: ClientType, consensusState: ConsensusState) {
-  assert(get(clientStateKey(id)) === null)
+  assert(privateStore.get(clientStateKey(id)) === null)
+  assert(provableStore.get(clientTypeKey(id)) === null)
   clientState = clientType.initialize(consensusState)
-  set(clientTypeKey(id), clientType)
-  set(clientStateKey(id), clientState)
+  provableStore.set(clientTypeKey(id), clientType)
+  privateStore.set(clientStateKey(id), clientState)
 }
 ```
 
@@ -250,14 +251,14 @@ Client consensus state and previously verified roots can be queried by identifie
 
 ```typescript
 function queryClientConsensusState(id: Identifier): ConsensusState {
-  return get(consensusStateKey(id))
+  return provableStore.get(consensusStateKey(id))
 }
 ```
 
 ```typescript
 function queryClientRoot(id: Identifier, height: uint64): CommitmentRoot {
-  clientType = get(clientTypeKey(id))
-  clientState = get(clientStateKey(id))
+  clientType = provableStore.get(clientTypeKey(id))
+  clientState = privateStore.get(clientStateKey(id))
   return clientType.getVerifiedRoot(height)
 }
 ```
@@ -272,9 +273,9 @@ updating the signature authority logic in the stored consensus state.
 
 ```typescript
 function updateClient(id: Identifier, header: Header) {
-  clientType = get(clientTypeKey(id))
+  clientType = provableStore.get(clientTypeKey(id))
   assert(clientType !== null)
-  clientState = get(clientStateKey(id))
+  clientState = privateStore.get(clientStateKey(id))
   assert(clientState !== null)
   assert(clientType.validityPredicate(clientState, header))
 }
@@ -287,9 +288,9 @@ previously valid state roots & preventing future updates.
 
 ```typescript
 function submitMisbehaviourToClient(id: Identifier, evidence: bytes) {
-  clientType = get(clientTypeKey(id))
+  clientType = provableStore.get(clientTypeKey(id))
   assert(clientType !== null)
-  clientState = get(clientStateKey(id))
+  clientState = privateStore.get(clientStateKey(id))
   assert(clientState !== null)
   assert(clientType.misbehaviourPredicate(clientState, evidence))
 }

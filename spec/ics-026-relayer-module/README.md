@@ -115,11 +115,11 @@ The function `bindPort` can be called by a module in order to bind to a port, th
 
 ```typescript
 function bindPort(id: Identifier, callbacks: Callbacks) {
-  assert(get(callbackKey(id)) === null)
+  assert(privateStore.get(callbackKey(id)) === null)
   handler.bindPort(id)
   key = generate()
-  set(authenticationKey(id), key)
-  set(callbackKey(id), callbacks)
+  privateStore.set(authenticationKey(id), key)
+  privateStore.set(callbackKey(id), callbacks)
 }
 ```
 
@@ -128,8 +128,8 @@ The function `updatePort` can be called by a module in order to alter the callba
 
 ```typescript
 function updatePort(id: Identifier, newCallbacks: Callbacks) {
-  assert(authenticate(get(authenticationKey(id))))
-  set(callbackKey(id), newCallbacks)
+  assert(authenticate(privateStore.get(authenticationKey(id))))
+  privateStore.set(callbackKey(id), newCallbacks)
 }
 ```
 
@@ -137,10 +137,10 @@ The function `releasePort` can be called by a module in order to release a port 
 
 ```typescript
 function releasePort(id: Identifier) {
-  assert(authenticate(get(authenticationKey(id))))
+  assert(authenticate(privateStore.get(authenticationKey(id))))
   handler.releasePort(id)
-  del(callbackKey(id))
-  del(authenticationKey(id))
+  privateStore.delete(callbackKey(id))
+  privateStore.delete(authenticationKey(id))
 }
 ```
 
