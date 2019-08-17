@@ -67,7 +67,7 @@ The first interface provided by the host state machine MUST write to a key-value
 
 These interfaces are referred to throughout specifications which utilise them as the `provableStore` and the `privateStore` respectively, where `get`, `set`, and `del` are called as methods, e.g. `provableStore.set('key', 'value')`.
 
-### Consensus State Introspection
+### Consensus state introspection
 
 Host chains MUST provide the ability to introspect their current height, with `getCurrentHeight`:
 
@@ -87,7 +87,7 @@ Host chains MUST provide the ability to introspect their own consensus state, wi
 type getConsensusState = (height: uint64) => ConsensusState
 ```
 
-`getConsensusState` is RECOMMENDED to return the consensus state for the consensus algorithm of the host chain at the specified height, for all heights greater than zero and less than or equal to the current height. `getConsensusState` MAY return the consensus state only for some number of recent heights, where the number is constant for the host chain.
+`getConsensusState` MUST return the consensus state for at least some number `n` of contiguous recent heights, where `n` is constant for the host chain. Heights older than `n` MAY be safely pruned (causing future calls to fail for those heights).
 
 ### Port system
 
