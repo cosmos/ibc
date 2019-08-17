@@ -488,7 +488,10 @@ function recvPacket(
   ))
 
   if (acknowledgement.length > 0 || channel.order === UNORDERED)
-    provableStore.set(packetAcknowledgementKey(packet.destPort, packet.destChannel, packet.sequence), commit(acknowledgement))
+    provableStore.set(
+      packetAcknowledgementKey(packet.destPort, packet.destChannel, packet.sequence),
+      commit(acknowledgement)
+    )
 
   if (channel.order === ORDERED) {
     nextSequenceRecv = provableStore.get(nextSequenceRecvKey(packet.destPort, packet.destChannel))
@@ -523,7 +526,8 @@ function acknowledgePacket(
   counterpartyStateRoot = privateStore.get(rootKey(connection.clientIdentifier, proofHeight))
 
   // verify we sent the packet and haven't cleared it out yet
-  assert(provableStore.get(packetCommitmentKey(packet.sourcePort, packet.sourceChannel, sequence)) === commit(packet.data))
+  assert(provableStore.get(packetCommitmentKey(packet.sourcePort, packet.sourceChannel, sequence))
+         === commit(packet.data))
 
   // assert correct acknowledgement on counterparty chain
   assert(verifyMembership(
