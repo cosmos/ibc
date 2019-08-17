@@ -11,7 +11,7 @@ modified: 2019-05-11
 
 ## Synopsis
 
-This specification defines the minimal set of interfaces which must be provided and properties which must be fulfilled by a state machine hosting an implementation of the interblockstate machine communication protocol.
+This specification defines the minimal set of interfaces which must be provided and properties which must be fulfilled by a state machine hosting an implementation of the interblockchain communication protocol.
 
 ### Motivation
 
@@ -68,6 +68,8 @@ The first interface provided by the host state machine MUST write to a key-value
 These interfaces are referred to throughout specifications which utilise them as the `provableStore` and the `privateStore` respectively, where `get`, `set`, and `delete` are called as methods, e.g. `provableStore.set('key', 'value')`.
 
 The `provableStore` and `privateStore` differ also in their encoding restrictions. The `provableStore` MUST use canonical data structure encodings provided in these specifications as proto3 files, since values stored in the `provableStore` must be comprehensible to other machines implementing IBC.
+
+> Note: any key-value store interface which provides these methods & properties is sufficient for IBC. Host state machines may implement "proxy stores" with underlying storage models which do not directly match the key & value pairs set and retrieved through the store interface — keys could be grouped into buckets & values stored in pages which could be proved in a single commitment, keyspaces could be remapped non-contiguously in some bijective manner, etc — as long as `get`, `set`, and `delete` behave as expected and other machines can verify commitment proofs of key & value pairs (or their absence) in the provable store.
 
 ### Consensus state introspection
 
