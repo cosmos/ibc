@@ -4,7 +4,9 @@
 
 ## Synopsis
 
-This repository is the canonical location for development and documentation of inter-chain standards utilised by the Cosmos network & interchain ecosystem. Initially it will be used to consolidate design documentation for the inter-blockchain communication protocol (IBC), encoding standards for Cosmos chains, and miscellaneous utilities such as off-chain message signing.
+This repository is the canonical location for development and documentation of inter-chain standards utilised by the Cosmos network & interchain ecosystem. It shall be used to consolidate design rationale, protocol semantics, and encoding descriptions for the inter-blockchain protocol (IBC), including both the core transport, authentication, & ordering layer (IBC/TAO) and the application layers describing packet encoding & processing semantics (IBC/APP). Contributions are welcome.
+
+The rendered, ordered set of all interchain standards written so far can be read as [a single PDF](./spec.pdf).
 
 ## Standardisation
 
@@ -14,19 +16,15 @@ To propose a new standard, [open an issue](https://github.com/cosmos/ics/issues/
 
 See [PROCESS.md](PROCESS.md) for a description of the standardisation process.
 
-Quick references & interchain standards can be read as [a single PDF](./spec.pdf).
-
 ## IBC Quick References
 
-The subject of most initial interchain standards is the inter-blockchain communication protocol, "IBC".
+If you are diving in or planning to review inter-blockchain communication protocol specifications, the following are required reading:
 
-If you are diving in or planning to review specifications, the following are recommended reading:
 - [IBC Architecture](./ibc/1_IBC_ARCHITECTURE.md)
 - [IBC Design Principles](./ibc/2_IBC_DESIGN_PRINCIPLES.md)
 - [IBC Terminology](./ibc/3_IBC_TERMINOLOGY.md)
 - [IBC Usecases](./ibc/4_IBC_USECASES.md)
 - [IBC Design Patterns](./ibc/5_IBC_DESIGN_PATTERNS.md)
-- [IBC specification progress tracking](https://github.com/cosmos/ics/issues/26)
 
 ## Interchain Standards
 
@@ -38,7 +36,7 @@ All standards in the "draft" stage are listed here in order of their ICS numbers
 | ------------------------------ | -------------------------- | ----- |
 | [1](spec/ics-001-ics-standard) | ICS Specification Standard | Draft |
 
-### IBC (Core)
+### IBC/TAO
 
 | Interchain Standard Number                          | Standard Title                     | Stage |
 | --------------------------------------------------- | ---------------------------------- | ----- |
@@ -52,7 +50,7 @@ All standards in the "draft" stage are listed here in order of their ICS numbers
 | [25](spec/ics-025-handler-interface)                | Handler Interface                  | Draft |
 | [26](spec/ics-026-relayer-module)                   | Relayer Module                     | Draft |
 
-### IBC (Application)
+### IBC/APP
 
 | Interchain Standard Number                 | Standard Title          | Stage |
 | ------------------------------------------ | ----------------------- | ----- |
