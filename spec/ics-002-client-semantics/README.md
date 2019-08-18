@@ -133,10 +133,10 @@ for the given parent `Header` and the list of network messages.
 The `ValidityPredicate` type is defined as
 
 ```typescript
-type ValidityPredicate = (Header) => (bool)
+type ValidityPredicate = (Header) => Void
 ```
 
-The boolean returned indicates whether the provided header was valid.
+The validity predicate MUST throw an exception if the provided header was not valid.
 
 If the provided header was valid, the client MUST also mutate internal state to store
 now-finalised consensus roots and update any necessary signature authority tracking (e.g.
@@ -152,10 +152,11 @@ state transitions, or other evidence of malfeasance as defined by the consensus 
 The `MisbehaviourPredicate` type is defined as
 
 ```typescript
-type MisbehaviourPredicate = (bytes) => (bool)
+type MisbehaviourPredicate = (bytes) => Void
 ```
 
-The boolean returned indicates whether the evidence of misbehaviour was valid.
+The misbehaviour predicate MUST throw an exception if the provided evidence was not valid.
+
 If misbehaviour was valid, the client MUST also mutate internal state to mark appropriate heights which
 were previously considered valid invalid, according to the nature of the misbehaviour.
 
@@ -310,7 +311,7 @@ The client-specific types are then defined as follows:
 
 ```typescript
 interface ClientState {
-  frozen: bool
+  frozen: boolean
   pastPublicKeys: Set<PublicKey>
   verifiedRoots: Map<uint64, CommitmentRoot>
 }
@@ -342,17 +343,14 @@ function initialize(consensusState: ConsensusState): ClientState {
   return ClientState{false, Set.singleton(consensusState.publicKey), Map.empty()}
 }
 
-function validityPredicate(clientState: ClientState, header: Header): bool {
-  if (consensusState.height + 1 !== header.height)
-    return false
-  if (!consensusState.publicKey.verify(header.signature))
-    return false
+function validityPredicate(clientState: ClientState, header: Header) {
+  assert(consensusState.height + 1 === header.height)
+  assert(consensusState.publicKey.verify(header.signature))
   if (header.newPublicKey !== null)
     consensusState.publicKey = header.newPublicKey
     clientState.pastPublicKeys.add(header.newPublicKey)
   consensusState.height = header.height
   clientState.verifiedRoots[height] = header.commitmentRoot
-  return true
 }
 
 function getVerifiedRoot(clientState: ClientState, height: uint64) {
@@ -360,19 +358,16 @@ function getVerifiedRoot(clientState: ClientState, height: uint64) {
   return client.verifiedRoots[height]
 }
 
-function misbehaviourPredicate(clientState: ClientState, evidence: Evidence): bool {
+function misbehaviourPredicate(clientState: ClientState, evidence: Evidence) {
   h1 = evidence.h1
   h2 = evidence.h2
-  if (h1.publicKey === h2.publicKey &&
-      clientState.pastPublicKeys.contains(h1.publicKey) &&
-      h1.height === h2.height &&
-      h1.commitmentRoot !== h2.commitmentRoot &&
-      h1.publicKey.verify(h1.signature) &&
-      h2.publicKey.verify(h2.signature)) {
-    client.frozen = true
-    return true
-  }
-  return false
+  assert(h1.publicKey === h2.publicKey)
+  assert(clientState.pastPublicKeys.contains(h1.publicKey))
+  assert(h1.height === h2.height)
+  assert(h1.commitmentRoot !== h2.commitmentRoot)
+  assert(h1.publicKey.verify(h1.signature))
+  assert(h2.publicKey.verify(h2.signature))
+  client.frozen = true
 }
 ```
 

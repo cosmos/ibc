@@ -40,22 +40,22 @@ Modules must expose the following function signatures to the relayer module, whi
 function onChanOpenInit(
   portIdentifier: Identifier, channelIdentifier: Identifier, counterpartyPortIdentifier: Identifier,
   counterpartyChannelIdentifier: Identifier, connectionHops: [Identifier],
-  version: string, nextTimeoutHeight: uint64): boolean {
+  version: string, nextTimeoutHeight: uint64) {
   // defined by the module
 }
 
 function onChanOpenTry(
   portIdentifier: Identifier, channelIdentifier: Identifier, counterpartyPortIdentifier: Identifier,
   counterpartyChannelIdentifier: Identifier, connectionHops: [Identifier],
-  version: string, nextTimeoutHeight: uint64): boolean {
+  version: string, nextTimeoutHeight: uint64) {
   // defined by the module
 }
 
-function onChanOpenAck(portIdentifier: Identifier, channelIdentifier: Identifier, nextTimeoutHeight: uint64): boolean {
+function onChanOpenAck(portIdentifier: Identifier, channelIdentifier: Identifier, nextTimeoutHeight: uint64) {
   // defined by the module
 }
 
-function onChanOpenConfirm(portIdentifier: Identifier, channelIdentifier: Identifier): boolean {
+function onChanOpenConfirm(portIdentifier: Identifier, channelIdentifier: Identifier) {
   // defined by the module
 }
 
@@ -71,23 +71,25 @@ function onRecvPacket(packet: Packet): bytes {
   // defined by the module, returns acknowledgement
 }
 
-function onTimeoutPacket(packet: Packet): boolean {
+function onTimeoutPacket(packet: Packet) {
   // defined by the module
 }
 ```
+
+Exceptions MUST be thrown to indicate failure and reject the handshake, incoming packet, etc.
 
 These are combined together in a `ModuleCallbacks` interface:
 
 ```typescript
 interface ModuleCallbacks {
-  onChanOpenInit: (Identifier, Identifier, Identifier, Identifier, [Identifier], bytestring, uint64) => boolean
-  onChanOpenTry: (Identifier, Identifier, Identifier, Identifier, [Identifier], bytestring, uint64) => boolean
-  onChanOpenAck: (Identifier, Identifier, uint64) => boolean
-  onChanOpenConfirm: (Identifier, Identifier) => boolean
+  onChanOpenInit: (Identifier, Identifier, Identifier, Identifier, [Identifier], bytestring, uint64) => void
+  onChanOpenTry: (Identifier, Identifier, Identifier, Identifier, [Identifier], bytestring, uint64) => void
+  onChanOpenAck: (Identifier, Identifier, uint64) => void
+  onChanOpenConfirm: (Identifier, Identifier) => void
   onChanOpenTimeout: (Identifier, Identifier) => void
   onChanCloseConfirm: (Identifier, Identifier) => void
   onRecvPacket: (Packet) => bytes
-  onTimeoutPacket: (Packet) => boolean
+  onTimeoutPacket: (Packet) => void
 }
 ```
 
