@@ -4,7 +4,7 @@ title: Port Allocation
 stage: Draft
 requires: 24
 required-by: 4
-category: IBC Core
+category: IBC/TAO
 author: Christopher Goes <cwgoes@tendermint.com>
 created: 29 June 2019
 modified: 29 June 2019
@@ -22,8 +22,11 @@ elements of code executing on sovereign ledgers. In order to provide the desired
 for convenience they should be addressable by name. This specification defines the *port allocation and ownership* system which realises that model.
 
 Conventions may emerge as to what kind of module logic is bound to a particular port name, such as "bank" for fungible token handling or "staking" for interchain collateralisation.
-This is analogous to port 80's common use for HTTP servers — the protocol cannot enforce that particular module logic is *actually* bound to conventional ports, so
-users must check that themselves.
+This is analogous to port 80's common use for HTTP servers — the protocol cannot enforce that particular module logic is actually bound to conventional ports, so
+users must check that themselves. Ephemeral ports with pseudorandom identifiers may be created for temporary protocol handling.
+
+Modules may bind to multiple ports and connect to multiple ports bound to by another module on a separate machine. Any number of (uniquely identified) channels can utilise a single
+port simultaneously. Channels are end-to-end between two ports, each of which must have been previously bound to by a module, which will then control that end of the channel.
 
 ### Definitions
 
