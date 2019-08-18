@@ -6,7 +6,7 @@ category: IBC/TAO
 required-by: 2, 3, 4, 5, 18
 author: Christopher Goes <cwgoes@tendermint.com>
 created: 2019-04-16
-modified: 2019-05-11
+modified: 2019-08-18
 ---
 
 ## Synopsis
@@ -25,7 +25,13 @@ IBC should require as simple an interface from the underlying state machine as p
 
 ## Technical Specification
 
-### Keys, Identifiers, Separators
+### Module system
+
+The host state machine must support a module system, whereby self-contained, potentially mutually distrusted packages of code can safely execute on the same ledger, control how and when they allow other modules to communicate with them, and be identified and manipulated by a "master module" or execution environment.
+
+The IBC/TAO specifications define the implementations of two modules: the core "IBC handler" module and the "IBC relayer" module. IBC/APP specifications further define other modules for particular packet handling application logic. IBC requires that the "master module" or execution environment can be used to grant other modules on the host state machine access to the IBC handler module and/or the IBC relayer module, but otherwise does not impose requirements on the functionality or communication abilities of any other modules which may be co-located on the state machine.
+
+### Keys, identifiers, separators
 
 A `Key` is a bytestring used as the key for an object stored in state. Keys MUST contain only alphanumeric characters and the separator `/`.
 
@@ -109,33 +115,17 @@ Modules which wish to make use of particular IBC features MAY implement certain 
 
 ### Datagram submission
 
-Host state machines MAY define a unique `Datagram` type & `submitDatagram` function to submit [datagrams](../../docs/ibc/2_IBC_TERMINOLOGY.md) directly to the relayer module:
+Host state machines MAY define a `submitDatagram` function to submit [datagrams](../../docs/ibc/2_IBC_TERMINOLOGY.md), which will be included in transactions, directly to the relayer module:
 
 ```typescript
-type Datagram object
-// fields defined per datagram type, and possible additional fields defined per state machine
-
 type SubmitDatagram = (datagram: Datagram) => void
 ```
 
-`submitDatagram` allows relayers to relay IBC datagrams directly to the host state machine. Host state machines MAY require that the relayer submitting the datagram has an account to pay transaction fees, signs over the datagram in a larger transaction structure, etc - `submitDatagram` MUST define any such packaging required.
-
-Host state machines MAY also define a `pendingDatagrams` function to scan the pending datagrams to be sent to another counterparty state machine:
-
-```typescript
-type PendingDatagrams = (counterparty: Machine) => Set<Datagram>
-```
-
-```typescript
-interface Machine {
-  submitDatagram: SubmitDatagram
-  pendingDatagrams: PendingDatagrams
-}
-```
+`submitDatagram` allows relayers to relay IBC datagrams directly to the host state machine. Host state machines MAY require that the relayer submitting the datagram has an account to pay transaction fees, signs over the datagram in a larger transaction structure, etc — `submitDatagram` MUST define & construct any such packaging required.
 
 ### Exception system
 
-Host state machines MUST support an exception system, whereby a transaction can abort execution and revert any previously made state changes, exposed through an `assert` function:
+Host state machines MUST support an exception system, whereby a transaction can abort execution and revert any previously made state changes (including state changes in other modules happening within the same transaction). This exception system MUST be exposed through an `assert` function:
 
 ```typescript
 type assert = (bool) => ()
@@ -176,6 +166,7 @@ Coming soon.
 29 April 2019 - Initial draft
 11 May 2019 - Rename "RootOfTrust" to "ConsensusState"
 25 June 2019 - Use "ports" instead of module names
+18 August 2019 - Revisions to module system, definitions
 
 ## Copyright
 
