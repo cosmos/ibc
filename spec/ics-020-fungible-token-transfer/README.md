@@ -93,32 +93,30 @@ function handleFungibleTokenPacketSend(denomination: string, amount: uint256, re
 ```typescript
 function onChanOpenInit(
   portIdentifier: Identifier, channelIdentifier: Identifier, counterpartyPortIdentifier: Identifier,
-  counterpartyChannelIdentifier: Identifier, connectionHops: [Identifier], nextTimeoutHeight: uint64): boolean {
+  counterpartyChannelIdentifier: Identifier, connectionHops: [Identifier], nextTimeoutHeight: uint64) {
   // only allow channels to "bank" port on counterparty chain
-  return counterpartyPortIdentifier === "bank"
+  assert(counterpartyPortIdentifier === "bank")
 }
 ```
 
 ```typescript
 function onChanOpenTry(
   portIdentifier: Identifier, channelIdentifier: Identifier, counterpartyPortIdentifier: Identifier,
-  counterpartyChannelIdentifier: Identifier, connectionHops: [Identifier], nextTimeoutHeight: uint64): boolean {
+  counterpartyChannelIdentifier: Identifier, connectionHops: [Identifier], nextTimeoutHeight: uint64) {
   // only allow channels to "bank" port on counterparty chain
-  return counterpartyPortIdentifier === "bank"
+  assert(counterpartyPortIdentifier === "bank")
 }
 ```
 
 ```typescript
-function onChanOpenAck(portIdentifier: Identifier, channelIdentifier: Identifier, nextTimeoutHeight: uint64): boolean {
+function onChanOpenAck(portIdentifier: Identifier, channelIdentifier: Identifier, nextTimeoutHeight: uint64) {
   // accept all acknowledgements, port has already been validated
-  return true
 }
 ```
 
 ```typescript
-function onChanOpenConfirm(portIdentifier: Identifier, channelIdentifier: Identifier): boolean {
+function onChanOpenConfirm(portIdentifier: Identifier, channelIdentifier: Identifier) {
   // accept confirmations, port has already been validated
-  return true
 }
 ```
 
@@ -145,7 +143,7 @@ function onRecvPacket(packet: Packet): bytes {
 ```
 
 ```typescript
-function onTimeoutPacket(packet: Packet): boolean {
+function onTimeoutPacket(packet: Packet) {
   FungibleTokenPacketData data = packet.data
   prefix = "{packet.destPort}/{packet.destChannel}"
   assert(data.denomination.slice(0, len(prefix)) === prefix)
@@ -154,7 +152,7 @@ function onTimeoutPacket(packet: Packet): boolean {
 ```
 
 ```typescript
-function sendPacket(packet: Packet): boolean {
+function sendPacket(packet: Packet) {
   prefix = "{packet/destPort}/{packet.destChannel}"
   bank.TransferCoins(data.sender, data.denomination.slice(len(prefix)), data.amount, escrowAccount)
   relayerModule.sendPacket(packet)

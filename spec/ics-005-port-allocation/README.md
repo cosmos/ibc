@@ -89,7 +89,7 @@ function generate(): CapabilityKey {
 ```
 
 ```
-function authenticate(key: CapabilityKey) {
+function authenticate(key: CapabilityKey): boolean {
   return capability === key
 }
 ```
@@ -103,7 +103,7 @@ function generate(): SourceIdentifier {
 ```
 
 ```
-function authenticate(id: SourceIdentifier) {
+function authenticate(id: SourceIdentifier): boolean {
   return callingModuleIdentifier() === id
 }
 ```

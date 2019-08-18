@@ -128,7 +128,7 @@ type SubmitDatagram = (datagram: Datagram) => void
 Host state machines MUST support an exception system, whereby a transaction can abort execution and revert any previously made state changes (including state changes in other modules happening within the same transaction). This exception system MUST be exposed through an `assert` function:
 
 ```typescript
-type assert = (bool) => ()
+type assert = (bool) => void
 ```
 
 If the boolean passed to `assert` is `true`, the host state machine need not do anything. If the boolean passed to `assert` is `false`, the host state machine MUST abort the transaction and revert any previously made state changes, such as writes to the key-value store.
