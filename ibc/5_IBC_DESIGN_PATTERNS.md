@@ -27,7 +27,7 @@ Instead, the IBC handler should require that the random identifier generation be
 off-chain and merely check that a new channel creation attempt doesn't use a previously
 reserved identifier.
 
-## Call receiver instead of call dispatch
+## Call receiver
 
 Essential to the functionality of the IBC handler is an interface to other modules
 running on the same ledger, so that it can accept requests to send packets and can
@@ -59,5 +59,18 @@ It also has one notable disadvantage:
   relayer processes will need to track the state of multiple modules to determine when packets
   can be submitted.
 
-However, for common relay patterns, an "IBC relayer" module can optionally be implemented, outside of IBC
-core, which maintains a module dispatch table and simplifies the job of relayers. This relayer module will be defined in [ICS 26](../spec/ics-026-relayer-module).
+For this reason, there is an additional IBC "relayer module" which exposes a call dispatch interface.
+
+## Call dispatch
+
+For common relay patterns, an "IBC relayer module" can be implemented which maintains a module dispatch table and simplifies the job of relayers.
+
+In the call dispatch pattern, datagrams (contained within transaction types defined by the host state machine) are relayed directly
+to the relayer module, which then looks up the appropriate module (owning the channel & port to which the datagram was addressed)
+and calls an appropriate function (which must have been previously registered with the relayer module). This allows modules to 
+avoid handling datagrams directly, and makes it harder to accidentally screw-up the atomic state transition execution which must
+happen in conjunction with sending or receiving a packet (since the module never handles packets directly, but rather exposes
+functions which are called by the relayer module upon receipt of a valid packet).
+
+Additionally, the relayer module can implement default logic for handshake datagram handling (accepting incoming handshakes
+on behalf of modules), which is convenient for modules which do not need to implement their own custom logic.
