@@ -43,6 +43,14 @@ which might require different finality thresholds for different applications, on
 client could be created to track headers and many read-only clients with different finality
 thresholds (confirmation depths after which state roots are considered final) could use that same state.
 
+Another problem to consider is that of third-party introduction. Alice, a module on a machine,
+wants to introduce Bob, a second module on a second machine who Alice knows (and who knows Alice),
+to Carol, a third module on a third machine, who Alice knows but Bob does not. Alice must utilise
+an existing channel to Bob to communicate the canonically-serializable validity predicate for
+Carol, with which Bob can then open a connection & channel so that Bob and Carol can talk directly.
+If necessary, Alice may also communicate to Carol the validity predicate for Bob, prior to Bob's
+connection attempt, so that Carol knows to accept the incoming request.
+
 ### Definitions
 
 * `get`, `set`, `Key`, and `Identifier` are as defined in [ICS 24](../ics-024-host-requirements).
