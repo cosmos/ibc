@@ -77,9 +77,9 @@ The `provableStore` and `privateStore` differ also in their encoding restriction
 
 > Note: any key-value store interface which provides these methods & properties is sufficient for IBC. Host state machines may implement "proxy stores" with underlying storage models which do not directly match the key & value pairs set and retrieved through the store interface — keys could be grouped into buckets & values stored in pages which could be proved in a single commitment, keyspaces could be remapped non-contiguously in some bijective manner, etc — as long as `get`, `set`, and `delete` behave as expected and other machines can verify commitment proofs of key & value pairs (or their absence) in the provable store.
 
-### Keyspace
+### Key-space
 
-At present, IBC/TAO utilises the following key prefixes for the `provableStore` and `privateStore`. Future keys may be used in future versions of the protocol, so the entire keyspace in both stores MUST be reserved for the IBC handler.
+At present, IBC/TAO utilises the following key prefixes for the `provableStore` and `privateStore`. Future keys may be used in future versions of the protocol, so the entire key-space in both stores MUST be reserved for the IBC handler.
 
 | Store          | Key format                                           | Value type        | Defined in |
 | -------------- | ---------------------------------------------------- | ----------------- | ---------------------- |
