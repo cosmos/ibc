@@ -81,12 +81,19 @@ The `provableStore` and `privateStore` differ also in their encoding restriction
 
 At present, IBC/TAO utilises the following key prefixes for the `provableStore` and `privateStore`. Future keys may be used in future versions of the protocol, so the entire keyspace in both stores MUST be reserved for the IBC handler.
 
-| Store          | Key format                 | Value type    | Defined in |
-| -------------- | -------------------------- | ------------- | ---------- |
-| privateStore   | ""                         |               |            |
-| provableStore  | "clients/{identifier}"     | Client        | [ICS 2](../ics-002-client-semantics) |
-| provableStore  | "connections/{identifier}" | ConnectionEnd | [ICS 3](../ics-003-connection-semantics) |
-| provableStore  | "channels/{identifier}"    | ChannelEnd    | [ICS 4](../ics-004-channel-and-packet-semantics) |
+| Store          | Key format                                           | Value type        | Defined in |
+| -------------- | ---------------------------------------------------- | ----------------- | ---------------------- |
+| privateStore   | "clients/{identifier}"                               | ClientState       | [ICS 2](../ics-002-client-semantics) |
+| provableStore  | "clients/{identifier}/consensusState"                | ConsensusState    | [ICS 2](../ics-002-client-semantics) |
+| privateStore   | "clients/{identifier}/roots/{height}                 | CommitmentRoot    | [ICS 2](../ics-002-client-semantics) |
+| provableStore  | "clients/{identifier}/type"                          | ClientType        | [ICS 2](../ics-002-client-semantics) |
+| provableStore  | "connections/{identifier}"                           | ConnectionEnd     | [ICS 3](../ics-003-connection-semantics) |
+| provableStore  | "channels/{identifier}"                              | ChannelEnd        | [ICS 4](../ics-004-channel-and-packet-semantics) |
+| provableStore  | "channels/{identifier}/nextSequenceRecv"             | uint64            | [ICS 4](../ics-004-channel-and-packet-semantics) |
+| provableStore  | "channels/{identifier}/packets/{sequence}"           | bytes             | [ICS 4](../ics-004-channel-and-packet-semantics) |
+| provableStore  | "channels/{identifier}/acknowledgements/{sequence}"  | bytes             | [ICS 4](../ics-004-channel-and-packet-semantics) |
+| provableStore  | "ports/{identifier}"                                 | Key               | [ICS 5](../ics-005-port-allocation) |
+| privateStore   | "callbacks/{identifier}"                             | ModuleCallbacks   | [ICS 26](../ics-026-relayer-module) |
 
 ### Consensus state introspection
 
