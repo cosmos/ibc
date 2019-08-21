@@ -1,4 +1,4 @@
-personal_ws-1.1 en 377 
+personal_ws-1.1 en 376 
 structs
 lookupModule
 RLP
@@ -286,7 +286,6 @@ cleanupPacketOrdered
 relayers
 TransferCoins
 counterintuitive
-serialization
 KVStore
 secondHeader
 unescrowing

@@ -84,7 +84,7 @@ IBC can be used to execute arbitrary contract-to-contract calls between separate
 
 Contracts: Ethereum `EVM`, `WASM` (various), Tezos `Michelson`, Agoric `Jessie`.
 
-Calldata: Ethereum `ABI`, generic serialization formats such as RLP, Protobuf, or JSON.
+Calldata: Ethereum `ABI`, generic serialisation formats such as RLP, Protobuf, or JSON.
 
 #### Implementation
 
@@ -156,7 +156,7 @@ IBC can be used to implement an arbitrary-depth multi-chain "cache" system where
 
 #### Representations
 
-Generic serialization formats, such as Amino, RLP, Protobuf, JSON.
+Generic serialisation formats, such as Amino, RLP, Protobuf, JSON.
 
 #### Implementation
 

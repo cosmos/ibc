@@ -105,7 +105,7 @@ if they do not have equal commitment roots. Such an event is called an "equivoca
 as misbehaviour. Should one occur, a proof should be generated and submitted so that the client can be frozen
 and previous state roots invalidated as necessary.
 
-The `ConsensusState` of a chain MUST have a canonical serialization, so that other chains can check
+The `ConsensusState` of a chain MUST have a canonical serialisation, so that other chains can check
 that a stored consensus state is equal to another.
 
 ```typescript
