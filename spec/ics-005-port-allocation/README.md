@@ -28,6 +28,10 @@ users must check that themselves. Ephemeral ports with pseudorandom identifiers 
 Modules may bind to multiple ports and connect to multiple ports bound to by another module on a separate machine. Any number of (uniquely identified) channels can utilise a single
 port simultaneously. Channels are end-to-end between two ports, each of which must have been previously bound to by a module, which will then control that end of the channel.
 
+Optionally, the host state machine can elect to expose port binding only to a specially-permissioned module manager,
+which can control which ports modules can bind to with a custom ruleset, and transfer ports to modules only when it
+has validated the port name & module. This role can be played by the relayer module (see [ICS 26](../ics-026-relayer-module)).
+
 ### Definitions
 
 `Identifier`, `get`, `set`, and `delete` are defined as in [ICS 24](../ics-024-host-requirements).
@@ -124,6 +128,8 @@ function portKey(id: Identifier) {
 
 The IBC handler MUST implement `bindPort`. `bindPort` binds to an unallocated port, failing if the port has already been allocated.
 
+If the host state machine does not implement a special module manager to control port allocation, `bindPort` SHOULD be available to all modules. If it does, `bindPort` SHOULD only be callable by the module manager.
+
 ```typescript
 function bindPort(id: Identifier) {
   assert(provableStore.get(portKey(id)) === null)
@@ -137,6 +143,8 @@ function bindPort(id: Identifier) {
 
 If the host state machine supports object-capability keys, no additional protocol is necessary, since the port reference is a bearer capability. If it does not, the IBC handler MAY implement the following `transferPort` function.
 
+`transferPort` SHOULD be available to all modules.
+
 ```typescript
 function transferPort(id: Identifier) {
   assert(authenticate(provableStore.get(portKey(id))))
@@ -149,6 +157,8 @@ function transferPort(id: Identifier) {
 
 The IBC handler MUST implement the `releasePort` function, which allows a module to release a port such that other modules may then bind to it.
 
+`releaePort` SHOULD be available to all modules.
+
 ```typescript
 function releasePort(id: Identifier) {
   assert(authenticate(provableStore.get(portKey(id))))
@@ -158,7 +168,7 @@ function releasePort(id: Identifier) {
 
 ### Properties & Invariants
 
-- Port identifiers are first-come-first-serve: once a module has bound to a port, only that module can utilise the port until the module transfers or releases it.
+- By default, port identifiers are first-come-first-serve: once a module has bound to a port, only that module can utilise the port until the module transfers or releases it. A module manager can implement custom logic which overrides this.
 
 ## Backwards Compatibility
 
