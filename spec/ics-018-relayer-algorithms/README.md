@@ -31,7 +31,7 @@ A *relayer* is an off-chain process with the ability to read the state of and su
 
 ## Technical Specification
 
-### Relayer Algorithm
+### Basic relayer algorithm
 
 The relayer algorithm is defined over a set `C` of chains implementing the IBC protocol. Each relayer may not necessarily have access to read state from and write datagrams to all chains in the interchain network (especially in the case of permissioned or private chains) — different relayers may relay between different subsets.
 
@@ -50,6 +50,18 @@ function relay(C: Set<Chain>) {
       }
 }
 ```
+
+### Ordering constraints
+
+There are implicit ordering constraints imposed on the relayer process determining which datagrams must be submitted in what order. For example, a header must be submitted to finalise the stored consensus state & commitment root for a particular height in a light client before a packet can be relayed. The relayer process is responsible for frequently querying the state of the chains between which they are relaying in order to determine what must be relayed when.
+
+### Bundling
+
+If the host state machine supports it, the relayer process can bundle many datagrams into a single transaction, which will cause them to be executed in sequence, and amortise any overhead costs (e.g. signature checks for fee payment).
+
+### Race conditions
+
+Multiple relayers relaying between the same pair of modules & chains may attempt to relay the same packet (or submit the same header) at the same time. If two relayers do so, the first transaction will succeed and the second will fail. Out-of-band coordination between the relayers or between the actors who sent the original packets and the relayers is necessary to mitigate this. Further discussion is out of scope of this standard.
 
 ### Incentivisation
 
