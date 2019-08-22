@@ -18,6 +18,9 @@ The relayer module can keep a lookup table of modules, which it can use to look 
 The default IBC handler uses a receiver call pattern, where modules must individually call the IBC handler in order to bind to ports, start handshakes, accept handshakes, send and receive packets, etc. This is flexible and simple (see [Design Patterns](../../ibc/5_IBC_DESIGN_PATTERNS.md))
 but is a bit tricky to understand and may require extra work on the part of relayer processes, who must track the state of many modules. This standard describes an IBC "relayer module" to automate most common functionality, route packets, and simplify the task of relayers.
 
+The relayer module can also play the role of the module manager as discussed in [ICS 5](../ics-005-port-allocation) and implement
+logic to determine when modules are allowed to bind to ports and what those ports can be named.
+
 ### Definitions
 
 All functions provided by the IBC handler interface are defined as in [ICS 25](../ics-025-handler-interface).
@@ -109,9 +112,17 @@ function authenticationKey(portIdentifier: Identifier) {
 }
 ```
 
-### Port binding
+### Port binding as module manager
 
 The IBC relayer module sits in-between the handler module ([ICS 25](../ics-025-handler-interface)) and individual modules on the host state machine.
+
+The relayer module, acting as a module manager, differentiates between two kinds of ports:
+
+- "Existing name” ports: e.g. “bank”, with standardised prior meanings, which should not be first-come-first-serve
+- “Fresh name” ports: new identity (perhaps a smart contract) w/no prior relationships, new random number port, post-generation port name can be communicated over another channel
+
+A set of existing names are allocated, along with corresponding modules, when the relayer module is instantiated by the host state machine.
+The relayer module then allows allocation of fresh ports at any time by modules, but they must use a specific standardised prefix.
 
 The function `bindPort` can be called by a module in order to bind to a port, through the relayer module, and set up callbacks.
 
