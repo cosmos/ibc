@@ -37,6 +37,8 @@ IBC is an inter-module communication protocol, designed to facilitate reliable, 
 
 ## Technical Specification
 
+> Note: If the host state machine is utilising object capability authentication (see [ICS 005](../ics-005-port-allocation)), all functions utilising ports take an additional capability key parameter.
+
 ### Client lifecycle management
 
 By default, clients are unowned: any module can create a new client, query any existing client, update any existing client, and delete any existing client not in use.
