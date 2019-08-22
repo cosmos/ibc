@@ -200,6 +200,8 @@ Unordered channels must always write a acknowledgement (even an empty one) to th
 
 ### Sub-protocols
 
+> Note: If the host state machine is utilising object capability authentication (see [ICS 005](../ics-005-port-allocation)), all functions utilising ports take an additional capability key parameter.
+
 #### Channel lifecycle management
 
 ![channel-state-machine](channel-state-machine.png)

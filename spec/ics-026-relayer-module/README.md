@@ -35,6 +35,8 @@ The functions `generate` & `authenticate` are defined as in [ICS 5](../ics-005-p
 
 ## Technical Specification
 
+> Note: If the host state machine is utilising object capability authentication (see [ICS 005](../ics-005-port-allocation)), all functions utilising ports take an additional capability key parameter.
+
 ### Module callback interface
 
 Modules must expose the following function signatures to the relayer module, which are called upon the receipt of various datagrams:

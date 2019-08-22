@@ -84,7 +84,7 @@ function callingModuleIdentifier(): SourceIdentifier {
 
 `generate` and `authenticate` functions are then defined as follows.
 
-In the former case, `generate` returns a new object-capability key, which must be returned by the outer-layer function, and `authenticate` requires that the outer-layer function take an extra argument `capability`, which is an object-capability key with uniqueness enforced by the host state machine.
+In the former case, `generate` returns a new object-capability key, which must be returned by the outer-layer function, and `authenticate` requires that the outer-layer function take an extra argument `capability`, which is an object-capability key with uniqueness enforced by the host state machine. Outer-layer functions are any functions exposed by the IBC handler ([ICS 25](../ics-025-handler-interface)) or relayer module ([ICS 26](../ics-026-relayer-module)) to modules.
 
 ```
 function generate(): CapabilityKey {
@@ -111,6 +111,8 @@ function authenticate(id: SourceIdentifier): boolean {
   return callingModuleIdentifier() === id
 }
 ```
+
+
 
 ### Subprotocols
 
