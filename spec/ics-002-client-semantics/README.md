@@ -51,7 +51,7 @@ Carol, with which Bob can then open a connection & channel so that Bob and Carol
 If necessary, Alice may also communicate to Carol the validity predicate for Bob, prior to Bob's
 connection attempt, so that Carol knows to accept the incoming request.
 
-Client logic should also be constructed so that custom validation logic can be provided safely
+Client interfaces should also be constructed so that custom validation logic can be provided safely
 to define a custom client at runtime, as long as the underlying state machine can provide an
 appropriate gas metering mechanism to charge for compute & storage. On a host state machine
 which supports WASM execution, for example, the validity predicate & equivocation predicate
