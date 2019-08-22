@@ -29,7 +29,7 @@ Modules may bind to multiple ports and connect to multiple ports bound to by ano
 port simultaneously. Channels are end-to-end between two ports, each of which must have been previously bound to by a module, which will then control that end of the channel.
 
 Optionally, the host state machine can elect to expose port binding only to a specially-permissioned module manager,
-which can control which ports modules can bind to with a custom ruleset, and transfer ports to modules only when it
+which can control which ports modules can bind to with a custom rule-set, and transfer ports to modules only when it
 has validated the port name & module. This role can be played by the relayer module (see [ICS 26](../ics-026-relayer-module)).
 
 ### Definitions
@@ -157,7 +157,7 @@ function transferPort(id: Identifier) {
 
 The IBC handler MUST implement the `releasePort` function, which allows a module to release a port such that other modules may then bind to it.
 
-`releaePort` SHOULD be available to all modules.
+`releasePort` SHOULD be available to all modules.
 
 ```typescript
 function releasePort(id: Identifier) {
