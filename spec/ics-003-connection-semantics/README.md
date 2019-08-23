@@ -133,6 +133,14 @@ function removeConnectionFromClient(clientIdentifier: Identifier, connectionIden
 }
 ```
 
+### Versioning
+
+During the handshake process, two ends of a connection come to agreement on a version bytestring associated
+with that connection. At the moment, the contents of this version bytestring are opaque to the IBC core protocol.
+In the future, it might be used to indicate what kinds of channels can utilise the connection in question, or
+what encoding formats channel-related datagrams will use. At present, it could be used by host state machines
+to negotiate encodings, priorities, or connection-specific metadata related to custom IBC logic.
+
 ### Subprotocols
 
 This ICS defines two subprotocols: opening handshake and closing handshake. Header tracking and closing-by-misbehaviour are defined in [ICS 2](../ics-002-client-semantics). Datagrams defined herein are handled as external messages by the IBC relayer module defined in [ICS 26](../ics-026-relayer-module).
