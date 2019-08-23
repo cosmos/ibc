@@ -194,13 +194,28 @@ Client types must also define a function to initialize a client state with a pro
 type initialize = (ConsensusState) => ClientState
 ```
 
-#### Root introspection
+#### CommitmentProof
 
-Client types must define a function to lookup previously verified `CommitmentRoot`s,
-which are then used to verify presence or absence of particular key-value pairs in state at particular heights.
+`CommitmentProof` is an opaque data structure defined by a client type.
+It is utilised to verify presence or absence of a particular key, value pair in state
+at a particular finalised height (necessarily associated with a particular commitment root).
 
 ```typescript
-type getVerifiedRoot = (ClientState, uint64) => CommitmentRoot
+type CommitmentProof = bytes
+```
+
+#### State verification
+
+Client types must define functions, in accordance with [ICS 23](../ics-023-vector-commitments), to verify presence or absence of particular key-value pairs
+in state at particular heights. The behaviour of these functions MUST comply with the properties defined in [ICS 23](../ics-023-vector-commitments); however,
+internal implementation details may differ (for example, a loopback client could simply read directly from the state and require no proofs).
+
+```type
+type verifyMembership = (ClientState, uint64, CommitmentProof, Key, Value) => boolean
+```
+
+```typescript
+type verifyNonMembership = (ClientState, uint64, CommitmentProof, Key) => boolean
 ```
 
 ### Sub-protocols
@@ -262,7 +277,8 @@ function createClient(id: Identifier, clientType: ClientType, consensusState: Co
 
 #### Query
 
-Client consensus state and previously verified roots can be queried by identifier.
+Client consensus state and client internal state can be queried by identifier. The returned
+client state must fulfil an interface allowing membership / non-membership verification.
 
 ```typescript
 function queryClientConsensusState(id: Identifier): ConsensusState {
@@ -271,10 +287,8 @@ function queryClientConsensusState(id: Identifier): ConsensusState {
 ```
 
 ```typescript
-function queryClientRoot(id: Identifier, height: uint64): CommitmentRoot {
-  clientType = provableStore.get(clientTypeKey(id))
-  clientState = privateStore.get(clientStateKey(id))
-  return clientType.getVerifiedRoot(height)
+function queryClient(id: Identifier): ClientState {
+  return privateStore.get(clientStateKey(id))
 }
 ```
 

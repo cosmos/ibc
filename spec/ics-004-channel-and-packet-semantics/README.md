@@ -3,7 +3,7 @@ ics: 4
 title: Channel & Packet Semantics
 stage: draft
 category: IBC/TAO
-requires: 2, 3, 5, 23, 24
+requires: 2, 3, 5, 24
 author: Christopher Goes <cwgoes@tendermint.com>
 created: 2019-03-07
 modified: 2019-08-13
@@ -30,8 +30,6 @@ In order to provide the desired ordering, exactly-once delivery, and module perm
 `Connection` is as defined in [ICS 3](../ics-003-connection-semantics).
 
 `Port` and `authenticate` are as defined in [ICS 5](../ics-005-port-allocation).
-
-`Commitment`, `CommitmentProof`, and `CommitmentRoot` are as defined in [ICS 23](../ics-023-vector-commitments).
 
 `commit` is a generic collision-resistant hash function, the specifics of which must be agreed on by the modules utilising the channel.
 
@@ -261,9 +259,9 @@ function chanOpenTry(
   connection = provableStore.get(connectionKey(connectionHops[0]))
   assert(connection.state === OPEN)
   assert(connection.counterpartyConnectionIdentifier === connectionHops[1])
-  counterpartyStateRoot = privateStore.get(rootKey(connection.clientIdentifier, proofHeight))
-  assert(verifyMembership(
-    counterpartyStateRoot,
+  client = queryClient(connection.clientIdentifier)
+  assert(client.verifyMembership(
+    proofHeight,
     proofInit,
     channelKey(counterpartyPortIdentifier, counterpartyChannelIdentifier),
     Channel{INIT, order, counterpartyPortIdentifier, portIdentifier,
@@ -292,9 +290,9 @@ function chanOpenAck(
   assert(authenticate(provableStore.get(portKey(portIdentifier))))
   connection = provableStore.get(connectionKey(channel.connectionHops[0]))
   assert(connection.state === OPEN)
-  counterpartyStateRoot = privateStore.get(rootKey(connection.clientIdentifier, proofHeight))
-  assert(verifyMembership(
-    counterpartyStateRoot,
+  client = queryClient(connection.clientIdentifier)
+  assert(client.verifyMembership(
+    proofHeight,
     proofTry,
     channelKey(channel.counterpartyPortIdentifier, channel.counterpartyChannelIdentifier),
     Channel{OPENTRY, channel.order, channel.counterpartyPortIdentifier, portIdentifier,
@@ -320,9 +318,9 @@ function chanOpenConfirm(
   assert(authenticate(provableStore.get(portKey(portIdentifier))))
   connection = provableStore.get(connectionKey(channel.connectionHops[0]))
   assert(connection.state === OPEN)
-  counterpartyStateRoot = privateStore.get(rootKey(connection.clientIdentifier, proofHeight))
-  assert(verifyMembership(
-    counterpartyStateRoot,
+  client = queryClient(connection.clientIdentifier)
+  assert(client.verifyMembership(
+    proofHeight,
     proofAck,
     channelKey(channel.counterpartyPortIdentifier, channel.counterpartyChannelIdentifier),
     Channel{OPEN, channel.order, channel.counterpartyPortIdentifier, portIdentifier,
@@ -344,23 +342,23 @@ function chanOpenTimeout(
   channel = provableStore.get(channelKey(portIdentifier, channelIdentifier))
   connection = provableStore.get(connectionKey(channel.connectionHops[0]))
   assert(connection.state === OPEN)
-  counterpartyStateRoot = privateStore.get(rootKey(connection.clientIdentifier, proofHeight))
+  client = queryClient(connection.clientIdentifier)
   assert(proofHeight >= connection.nextTimeoutHeight)
   switch channel.state {
     case INIT:
       assert(verifyNonMembership(
-        counterpartyStateRoot, proofTimeout,
+        proofHeight, proofTimeout,
         channelKey(channel.counterpartyPortIdentifier, channel.counterpartyChannelIdentifier)
       ))
     case OPENTRY:
       assert(
-        verifyNonMembership(
-          counterpartyStateRoot, proofTimeout,
+        client.verifyNonMembership(
+          proofHeight, proofTimeout,
           channelKey(channel.counterpartyPortIdentifier, channel.counterpartyChannelIdentifier)
         )
         ||
-        verifyMembership(
-          counterpartyStateRoot, proofTimeout,
+        client.verifyMembership(
+          proofHeight, proofTimeout,
           channelKey(channel.counterpartyPortIdentifier, channel.counterpartyChannelIdentifier),
           Channel{INIT, channel.order, channel.counterpartyPortIdentifier, portIdentifier,
                   channelIdentifier, channel.connectionHops.reverse(), channel.version, timeoutHeight}
@@ -369,8 +367,8 @@ function chanOpenTimeout(
     case OPEN:
       expected = Channel{OPENTRY, channel.order, channel.counterpartyPortIdentifier, portIdentifier,
                          channelIdentifier, channel.version, timeoutHeight}
-      assert(verifyMembership(
-        counterpartyStateRoot, proofTimeout,
+      assert(client.verifyMembership(
+        proofHeight, proofTimeout,
         channelKey(channel.counterpartyPortIdentifier, channel.counterpartyChannelIdentifier),
         expected
       ))
@@ -409,11 +407,11 @@ function chanCloseConfirm(
   assert(channel.state === OPEN)
   connection = provableStore.get(connectionKey(channel.connectionHops[0]))
   assert(connection.state === OPEN)
-  counterpartyStateRoot = privateStore.get(rootKey(connection.clientIdentifier, proofHeight))
   expected = Channel{CLOSED, channel.order, channel.counterpartyPortIdentifier, portIdentifier,
                      channel.channelIdentifier, channel.connectionHops.reverse(), channel.version, 0}
-  assert(verifyMembership(
-    counterpartyStateRoot,
+  client = queryClient(connection.clientIdentifier)
+  assert(client.verifyMembership(
+    proofHeight,
     proof,
     channelKey(channel.counterpartyPortIdentifier, channel.counterpartyChannelIdentifier),
     expected
@@ -492,10 +490,10 @@ function recvPacket(
   connection = provableStore.get(connectionKey(channel.connectionHops[0]))
   assert(connection.state === OPEN)
   assert(packet.connectionHops === channel.connectionHops)
-  counterpartyStateRoot = privateStore.get(rootKey(connection.clientIdentifier, proofHeight))
   assert(proofHeight < packet.timeoutHeight)
-  assert(verifyMembership(
-    counterpartyStateRoot,
+  client = queryClient(connection.clientIdentifier)
+  assert(client.verifyMembership(
+    proofHeight,
     proof,
     packetCommitmentKey(packet.sourcePort, packet.sourceChannel, packet.sequence),
     commit(packet.data)
@@ -537,15 +535,15 @@ function acknowledgePacket(
   assert(packet.sourcePort === channel.counterpartyPortIdentifier)
   assert(packet.connectionHops === channel.connectionHops)
   assert(connection.state === OPEN)
-  counterpartyStateRoot = privateStore.get(rootKey(connection.clientIdentifier, proofHeight))
 
   // verify we sent the packet and haven't cleared it out yet
   assert(provableStore.get(packetCommitmentKey(packet.sourcePort, packet.sourceChannel, sequence))
          === commit(packet.data))
 
   // assert correct acknowledgement on counterparty chain
-  assert(verifyMembership(
-    counterpartyStateRoot,
+  client = queryClient(connection.clientIdentifier)
+  assert(client.verifyMembership(
+    proofHeight,
     proof,
     packetAcknowledgementKey(packet.destPort, packet.destChannel, packet.sequence),
     commit(acknowledgement)
@@ -588,7 +586,6 @@ function timeoutPacketOrdered(packet: Packet, proof: CommitmentProof, proofHeigh
   assert(packet.connectionHops === channel.connectionHops)
 
   // check that timeout height has passed on the other end
-  counterpartyStateRoot = privateStore.get(rootKey(connection.clientIdentifier, proofHeight))
   assert(proofHeight >= timeoutHeight)
 
   // check that packet has not been received
@@ -599,8 +596,9 @@ function timeoutPacketOrdered(packet: Packet, proof: CommitmentProof, proofHeigh
          === commit(packet.data))
 
   // check that the recv sequence is as claimed
-  assert(verifyMembership(
-    counterpartyStateRoot,
+  client = queryClient(connection.clientIdentifier)
+  assert(client.verifyMembership(
+    proofHeight,
     proof,
     nextSequenceRecvKey(packet.destPort, packet.destChannel),
     nextSequenceRecv
@@ -636,7 +634,6 @@ function timeoutPacketUnordered(packet: Packet, proof: CommitmentProof, proofHei
   assert(packet.connectionHops === channel.connectionHops)
 
   // check that timeout height has passed on the other end
-  counterpartyStateRoot = privateStore.get(rootKey(connection.clientIdentifier, proofHeight))
   assert(proofHeight >= timeoutHeight)
 
   // verify we actually sent this packet, check the store
@@ -644,8 +641,9 @@ function timeoutPacketUnordered(packet: Packet, proof: CommitmentProof, proofHei
          === commit(packet.data))
 
   // verify absence of acknowledgement at packet index
-  assert(verifyNonMembership(
-    counterpartyStateRoot,
+  client = queryClient(connection.clientIdentifier)
+  assert(client.verifyNonMembership(
+    proofHeight,
     proof,
     packetAcknowledgementKey(packet.sourcePort, packet.sourceChannel, packet.sequence)
   ))
@@ -680,11 +678,11 @@ function timeoutClose(packet: Packet, proof: CommitmentProof, proofHeight: uint6
   nextSequenceRecv = provableStore.get(nextSequenceRecvKey(packet.destPort, packet.destChannel))
   assert(packet.sequence === nextSequenceRecv)
 
-  counterpartyStateRoot = privateStore.get(rootKey(connection.clientIdentifier, proofHeight))
   assert(proofHeight >= packet.timeoutHeight)
 
-  assert(verifyMembership(
-    counterpartyStateRoot,
+  client = queryClient(connection.clientIdentifier)
+  assert(client.verifyMembership(
+    proofHeight,
     proof,
     packetCommitmentKey(packet.sourcePort, packet.sourceChannel, sequence),
     commit(packet.data)
@@ -717,11 +715,10 @@ function cleanupPacketOrdered(packet: Packet, proof: CommitmentProof, proofHeigh
   // assert packet has been received on the other end
   assert(nextSequenceRecv > packet.sequence)
 
-  counterpartyStateRoot = privateStore.get(rootKey(connection.clientIdentifier, proofHeight))
-
   // check that the recv sequence is as claimed
-  assert(verifyMembership(
-    counterpartyStateRoot,
+  client = queryClient(connection.clientIdentifier)
+  assert(client.verifyMembership(
+    proofHeight,
     proof,
     nextSequenceRecvKey(packet.destPort, packet.destChannel),
     nextSequenceRecv
@@ -751,11 +748,10 @@ function cleanupPacketUnordered(packet: Packet, proof: CommitmentProof, proofHei
   assert(packet.destPort === channel.counterpartyPortIdentifier)
   assert(packet.connectionHops === channel.connectionHops)
 
-  counterpartyStateRoot = privateStore.get(rootKey(connection.clientIdentifier, proofHeight))
-
   // assert acknowledgement on the other end
-  assert(verifyMembership(
-    counterpartyStateRoot,
+  client = queryClient(connection.clientIdentifier)
+  assert(client.verifyMembership(
+    proofHeight,
     proof,
     packetAcknowledgementKey(packet.destPort, packet.destChannel, packet.sequence),
     acknowledgement
