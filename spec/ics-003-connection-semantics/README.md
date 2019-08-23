@@ -138,8 +138,10 @@ function removeConnectionFromClient(clientIdentifier: Identifier, connectionIden
 During the handshake process, two ends of a connection come to agreement on a version bytestring associated
 with that connection. At the moment, the contents of this version bytestring are opaque to the IBC core protocol.
 In the future, it might be used to indicate what kinds of channels can utilise the connection in question, or
-what encoding formats channel-related datagrams will use. At present, it could be used by host state machines
-to negotiate encodings, priorities, or connection-specific metadata related to custom IBC logic.
+what encoding formats channel-related datagrams will use. At present, host state machine MAY utilise the version data
+to negotiate encodings, priorities, or connection-specific metadata related to custom logic on top of IBC.
+
+Host state machines MAY also safely ignore the version data or specify an empty string.
 
 ### Subprotocols
 
