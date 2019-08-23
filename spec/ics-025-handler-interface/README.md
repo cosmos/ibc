@@ -209,7 +209,8 @@ The default IBC relayer module will allow external calls to `chanOpenTry`.
 function chanOpenTry(
   connectionHops: [Identifier], portIdentifier: Identifier, channelIdentifier: Identifier,
   counterpartyPortIdentifier: Identifier, counterpartyChannelIdentifier: Identifier,
-  version: string, timeoutHeight: uint64, nextTimeoutHeight: uint64, proofInit: CommitmentProof) {
+  version: string, counterpartyVersion: string,
+  timeoutHeight: uint64, nextTimeoutHeight: uint64, proofInit: CommitmentProof) {
   // defined in ICS 4
 }
 ```
@@ -220,7 +221,7 @@ The default IBC relayer module will allow external calls to `chanOpenAck`.
 
 ```typescript
 function chanOpenAck(
-  portIdentifier: Identifier, channelIdentifier: Identifier,
+  portIdentifier: Identifier, channelIdentifier: Identifier, version: string,
   timeoutHeight: uint64, nextTimeoutHeight: uint64, proofTry: CommitmentProof) {
   // defined in ICS 4
 }
