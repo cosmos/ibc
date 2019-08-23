@@ -3,7 +3,7 @@ ics: 3
 title: Connection Semantics
 stage: draft
 category: IBC/TAO
-requires: 2, 23, 24
+requires: 2, 24
 required-by: 4, 25
 author: Christopher Goes <cwgoes@tendermint.com>, Juwoon Yun <joon@tendermint.com>
 created: 2019-03-07
@@ -20,9 +20,7 @@ The core IBC protocol provides *authorisation* and *ordering* semantics for pack
 
 ### Definitions
 
-`ConsensusState`, `Header`, and `updateConsensusState` are as defined in [ICS 2](../ics-002-client-semantics).
-
-`CommitmentProof`, `verifyMembership`, and `verifyNonMembership` are as defined in [ICS 23](../ics-023-vector-commitments).
+Client-related types & functions are as defined in [ICS 2](../ics-002-client-semantics).
 
 `Identifier` and other host state machine requirements are as defined in [ICS 24](../ics-024-host-requirements). The identifier is not necessarily intended to be a human-readable name (and likely should not be, to discourage squatting or racing for identifiers).
 
@@ -197,15 +195,15 @@ function connOpenTry(
   timeoutHeight: uint64, nextTimeoutHeight: uint64) {
   assert(consensusHeight <= getCurrentHeight())
   assert(getCurrentHeight() <= timeoutHeight)
-  counterpartyStateRoot = privateStore.get(rootKey(connection.clientIdentifier, proofHeight))
+  client = queryClient(connection.clientIdentifier)
   expectedConsensusState = getConsensusState(consensusHeight)
   expected = ConnectionEnd{INIT, desiredIdentifier, counterpartyClientIdentifier,
                            clientIdentifier, counterpartyVersion, timeoutHeight}
-  assert(verifyMembership(counterpartyStateRoot, proofInit,
-                          connectionKey(counterpartyConnectionIdentifier), expected))
-  assert(verifyMembership(counterpartyStateRoot, proofInit,
-                          consensusStateKey(counterpartyClientIdentifier),
-                          expectedConsensusState))
+  assert(client.verifyMembership(proofHeight, proofInit,
+                                 connectionKey(counterpartyConnectionIdentifier), expected))
+  assert(client.verifyMembership(proofHeight, proofInit,
+                                 consensusStateKey(counterpartyClientIdentifier),
+                                 expectedConsensusState))
   assert(provableStore.get(connectionKey(desiredIdentifier)) === null)
   identifier = desiredIdentifier
   state = TRYOPEN
@@ -226,14 +224,14 @@ function connOpenAck(
   assert(getCurrentHeight() <= timeoutHeight)
   connection = provableStore.get(connectionKey(identifier))
   assert(connection.state === INIT)
-  counterpartyStateRoot = privateStore.get(rootKey(connection.clientIdentifier, proofHeight))
+  client = queryClient(connection.clientIdentifier)
   expectedConsensusState = getConsensusState(consensusHeight)
   expected = ConnectionEnd{TRYOPEN, identifier, connection.counterpartyClientIdentifier,
                            connection.clientIdentifier, version, timeoutHeight}
-  assert(verifyMembership(counterpartyStateRoot, proofTry,
-                          connectionKey(connection.counterpartyConnectionIdentifier), expected))
-  assert(verifyMembership(counterpartyStateRoot, proofTry,
-                          consensusStateKey(connection.counterpartyClientIdentifier), expectedConsensusState))
+  assert(client.verifyMembership(proofHeight, proofTry,
+                                 connectionKey(connection.counterpartyConnectionIdentifier), expected))
+  assert(client.verifyMembership(proofHeight, proofTry,
+                                 consensusStateKey(connection.counterpartyClientIdentifier), expectedConsensusState))
   connection.state = OPEN
   connection.version = version
   connection.nextTimeoutHeight = nextTimeoutHeight
@@ -250,11 +248,11 @@ function connOpenConfirm(
   assert(getCurrentHeight() <= timeoutHeight)
   connection = provableStore.get(connectionKey(identifier))
   assert(connection.state === TRYOPEN)
-  counterpartyStateRoot = privateStore.get(rootKey(connection.clientIdentifier, proofHeight))
   expected = ConnectionEnd{OPEN, identifier, connection.counterpartyClientIdentifier,
                            connection.clientIdentifier, connection.version, timeoutHeight}
-  assert(verifyMembership(counterpartyStateRoot, proofAck,
-                          connectionKey(connection.counterpartyConnectionIdentifier), expected))
+  client = queryClient(connection.clientIdentifier)
+  assert(client.verifyMembership(counterpartyStateRoot, proofAck,
+                                 connectionKey(connection.counterpartyConnectionIdentifier), expected))
   connection.state = OPEN
   connection.nextTimeoutHeight = 0
   provableStore.set(connectionKey(identifier), connection)
@@ -267,30 +265,30 @@ function connOpenTimeout(
   identifier: Identifier, proofTimeout: CommitmentProof,
   proofHeight: uint64, timeoutHeight: uint64) {
   connection = provableStore.get(connectionKey(identifier))
-  counterpartyStateRoot = privateStore.get(rootKey(connection.clientIdentifier, proofHeight))
   assert(proofHeight > connection.nextTimeoutHeight)
+  client = queryClient(connection.clientIdentifier)
   switch state {
     case INIT:
-      assert(verifyNonMembership(
-        counterpartyStateRoot, proofTimeout,
+      assert(client.verifyNonMembership(
+        proofHeight, proofTimeout,
         connectionKey(connection.counterpartyConnectionIdentifier)))
     case TRYOPEN:
       assert(
-        verifyMembership(
-          counterpartyStateRoot, proofTimeout,
+        client.verifyMembership(
+          proofHeight, proofTimeout,
           connectionKey(connection.counterpartyConnectionIdentifier),
           ConnectionEnd{INIT, identifier, connection.counterpartyClientIdentifier,
                         connection.clientIdentifier, connection.version, timeoutHeight}
         )
         ||
-        verifyNonMembership(
-          counterpartyStateRoot, proofTimeout,
+        client.verifyNonMembership(
+          proofHeight, proofTimeout,
           connectionKey(connection.counterpartyConnectionIdentifier)
         )
       )
     case OPEN:
-      assert(verifyMembership(
-        counterpartyStateRoot, proofTimeout,
+      assert(client.verifyMembership(
+        proofHeight, proofTimeout,
         connectionKey(connection.counterpartyConnectionIdentifier),
         ConnectionEnd{TRYOPEN, identifier, connection.counterpartyClientIdentifier,
                       connection.clientIdentifier, connection.version, timeoutHeight}
@@ -339,10 +337,10 @@ function connCloseConfirm(
   assert(getCurrentHeight() <= timeoutHeight)
   connection = provableStore.get(connectionKey(identifier))
   assert(connection.state === OPEN)
-  counterpartyStateRoot = privateStore.get(rootKey(connection.clientIdentifier, proofHeight))
+  client = queryClient(connection.clientIdentifier)
   expected = ConnectionEnd{CLOSED, identifier, connection.counterpartyClientIdentifier,
                            connection.clientIdentifier, connection.version, 0}
-  assert(verifyMembership(counterpartyStateRoot, proofInit, connectionKey(counterpartyConnectionIdentifier), expected))
+  assert(client.verifyMembership(proofHeight, proofInit, connectionKey(counterpartyConnectionIdentifier), expected))
   connection.state = CLOSED
   provableStore.set(connectionKey(identifier), connection)
 }

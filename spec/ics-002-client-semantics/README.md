@@ -277,7 +277,8 @@ function createClient(id: Identifier, clientType: ClientType, consensusState: Co
 
 #### Query
 
-Client consensus state and previously verified roots can be queried by identifier.
+Client consensus state and client internal state can be queried by identifier. The returned
+client state must fulfil an interface allowing membership / non-membership verification.
 
 ```typescript
 function queryClientConsensusState(id: Identifier): ConsensusState {
@@ -286,10 +287,8 @@ function queryClientConsensusState(id: Identifier): ConsensusState {
 ```
 
 ```typescript
-function queryClientRoot(id: Identifier, height: uint64): CommitmentRoot {
-  clientType = provableStore.get(clientTypeKey(id))
-  clientState = privateStore.get(clientStateKey(id))
-  return clientType.getVerifiedRoot(height)
+function queryClient(id: Identifier): ClientState {
+  return privateStore.get(clientStateKey(id))
 }
 ```
 
