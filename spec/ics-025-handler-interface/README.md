@@ -117,7 +117,8 @@ function connOpenTry(
   desiredIdentifier: Identifier, counterpartyConnectionIdentifier: Identifier,
   counterpartyClientIdentifier: Identifier, clientIdentifier: Identifier,
   proofInit: CommitmentProof, proofHeight: uint64, consensusHeight: uint64,
-  version: string, timeoutHeight: uint64, nextTimeoutHeight: uint64) {
+  version: string, counterpartyVersion: string,
+  timeoutHeight: uint64, nextTimeoutHeight: uint64) {
   // defined in ICS 3
 }
 ```
@@ -128,7 +129,7 @@ The default IBC relayer module will allow external calls to `connOpenAck`.
 
 ```typescript
 function connOpenAck(
-  identifier: Identifier, proofTry: CommitmentProof,
+  identifier: Identifier, version: string, proofTry: CommitmentProof,
   proofHeight: uint64, consensusHeight: uint64,
   timeoutHeight: uint64, nextTimeoutHeight: uint64) {
   // defined in ICS 3
@@ -208,7 +209,8 @@ The default IBC relayer module will allow external calls to `chanOpenTry`.
 function chanOpenTry(
   connectionHops: [Identifier], portIdentifier: Identifier, channelIdentifier: Identifier,
   counterpartyPortIdentifier: Identifier, counterpartyChannelIdentifier: Identifier,
-  version: string, timeoutHeight: uint64, nextTimeoutHeight: uint64, proofInit: CommitmentProof) {
+  version: string, counterpartyVersion: string,
+  timeoutHeight: uint64, nextTimeoutHeight: uint64, proofInit: CommitmentProof) {
   // defined in ICS 4
 }
 ```
@@ -219,7 +221,7 @@ The default IBC relayer module will allow external calls to `chanOpenAck`.
 
 ```typescript
 function chanOpenAck(
-  portIdentifier: Identifier, channelIdentifier: Identifier,
+  portIdentifier: Identifier, channelIdentifier: Identifier, version: string,
   timeoutHeight: uint64, nextTimeoutHeight: uint64, proofTry: CommitmentProof) {
   // defined in ICS 4
 }

@@ -133,6 +133,16 @@ function removeConnectionFromClient(clientIdentifier: Identifier, connectionIden
 }
 ```
 
+### Versioning
+
+During the handshake process, two ends of a connection come to agreement on a version bytestring associated
+with that connection. At the moment, the contents of this version bytestring are opaque to the IBC core protocol.
+In the future, it might be used to indicate what kinds of channels can utilise the connection in question, or
+what encoding formats channel-related datagrams will use. At present, host state machine MAY utilise the version data
+to negotiate encodings, priorities, or connection-specific metadata related to custom logic on top of IBC.
+
+Host state machines MAY also safely ignore the version data or specify an empty string.
+
 ### Subprotocols
 
 This ICS defines two subprotocols: opening handshake and closing handshake. Header tracking and closing-by-misbehaviour are defined in [ICS 2](../ics-002-client-semantics). Datagrams defined herein are handled as external messages by the IBC relayer module defined in [ICS 26](../ics-026-relayer-module).
@@ -183,13 +193,14 @@ function connOpenTry(
   desiredIdentifier: Identifier, counterpartyConnectionIdentifier: Identifier,
   counterpartyClientIdentifier: Identifier, clientIdentifier: Identifier,
   proofInit: CommitmentProof, proofHeight: uint64, consensusHeight: uint64,
-  version: string, timeoutHeight: uint64, nextTimeoutHeight: uint64) {
+  version: string, counterpartyVersion: string,
+  timeoutHeight: uint64, nextTimeoutHeight: uint64) {
   assert(consensusHeight <= getCurrentHeight())
   assert(getCurrentHeight() <= timeoutHeight)
   counterpartyStateRoot = privateStore.get(rootKey(connection.clientIdentifier, proofHeight))
   expectedConsensusState = getConsensusState(consensusHeight)
   expected = ConnectionEnd{INIT, desiredIdentifier, counterpartyClientIdentifier,
-                           clientIdentifier, version, timeoutHeight}
+                           clientIdentifier, counterpartyVersion, timeoutHeight}
   assert(verifyMembership(counterpartyStateRoot, proofInit,
                           connectionKey(counterpartyConnectionIdentifier), expected))
   assert(verifyMembership(counterpartyStateRoot, proofInit,
@@ -209,7 +220,7 @@ function connOpenTry(
 
 ```typescript
 function connOpenAck(
-  identifier: Identifier, proofTry: CommitmentProof, proofHeight: uint64,
+  identifier: Identifier, version: string, proofTry: CommitmentProof, proofHeight: uint64,
   consensusHeight: uint64, timeoutHeight: uint64, nextTimeoutHeight: uint64) {
   assert(consensusHeight <= getCurrentHeight())
   assert(getCurrentHeight() <= timeoutHeight)
@@ -218,12 +229,13 @@ function connOpenAck(
   counterpartyStateRoot = privateStore.get(rootKey(connection.clientIdentifier, proofHeight))
   expectedConsensusState = getConsensusState(consensusHeight)
   expected = ConnectionEnd{TRYOPEN, identifier, connection.counterpartyClientIdentifier,
-                           connection.clientIdentifier, connection.version, timeoutHeight}
+                           connection.clientIdentifier, version, timeoutHeight}
   assert(verifyMembership(counterpartyStateRoot, proofTry,
                           connectionKey(connection.counterpartyConnectionIdentifier), expected))
   assert(verifyMembership(counterpartyStateRoot, proofTry,
                           consensusStateKey(connection.counterpartyClientIdentifier), expectedConsensusState))
   connection.state = OPEN
+  connection.version = version
   connection.nextTimeoutHeight = nextTimeoutHeight
   provableStore.set(connectionKey(identifier), connection)
 }

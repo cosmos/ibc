@@ -198,6 +198,15 @@ function packetAcknowledgementKey(portIdentifier: Identifier, channelIdentifier:
 
 Unordered channels must always write a acknowledgement (even an empty one) to this key so that the absence of such can be used as proof-of-timeout.
 
+### Versioning
+
+During the handshake process, two ends of a channel come to agreement on a version bytestring associated
+with that channel. The contents of this version bytestring are and will remain opaque to the IBC core protocol.
+Host state machines MAY utilise the version data to indicate supported IBC/APP protocols, agree on packet
+encoding formats, or negotiate other channel-related metadata related to custom logic on top of IBC.
+
+Host state machines MAY also safely ignore the version data or specify an empty string.
+
 ### Sub-protocols
 
 > Note: If the host state machine is utilising object capability authentication (see [ICS 005](../ics-005-port-allocation)), all functions utilising ports take an additional capability key parameter.
@@ -242,7 +251,8 @@ function chanOpenTry(
   order: ChannelOrder, connectionHops: [Identifier],
   channelIdentifier: Identifier, counterpartyChannelIdentifier: Identifier,
   portIdentifier: Identifier, counterpartyPortIdentifier: Identifier,
-  version: string, timeoutHeight: uint64, nextTimeoutHeight: uint64,
+  version: string, counterpartyVersion: string,
+  timeoutHeight: uint64, nextTimeoutHeight: uint64,
   proofInit: CommitmentProof, proofHeight: uint64) {
   assert(connectionHops.length === 2)
   assert(getCurrentHeight() < timeoutHeight)
@@ -257,7 +267,7 @@ function chanOpenTry(
     proofInit,
     channelKey(counterpartyPortIdentifier, counterpartyChannelIdentifier),
     Channel{INIT, order, counterpartyPortIdentifier, portIdentifier,
-            channelIdentifier, connectionHops.reverse(), version, timeoutHeight}
+            channelIdentifier, connectionHops.reverse(), counterpartyVersion, timeoutHeight}
   ))
   channel = Channel{OPENTRY, order, portIdentifier, counterpartyPortIdentifier,
                     counterpartyChannelIdentifier, connectionHops, version, nextTimeoutHeight}
@@ -273,6 +283,7 @@ counterparty module on the other chain.
 ```typescript
 function chanOpenAck(
   channelIdentifier: Identifier, portIdentifier: Identifier,
+  version: string,
   timeoutHeight: uint64, nextTimeoutHeight: uint64,
   proofTry: CommitmentProof, proofHeight: uint64) {
   assert(getCurrentHeight() < timeoutHeight)
@@ -287,9 +298,10 @@ function chanOpenAck(
     proofTry,
     channelKey(channel.counterpartyPortIdentifier, channel.counterpartyChannelIdentifier),
     Channel{OPENTRY, channel.order, channel.counterpartyPortIdentifier, portIdentifier,
-            channelIdentifier, channel.connectionHops.reverse(), channel.version, timeoutHeight}
+            channelIdentifier, channel.connectionHops.reverse(), version, timeoutHeight}
   ))
   channel.state = OPEN
+  channel.version = version
   channel.nextTimeoutHeight = nextTimeoutHeight
   provableStore.set(channelKey(portIdentifier, channelIdentifier), channel)
 }
