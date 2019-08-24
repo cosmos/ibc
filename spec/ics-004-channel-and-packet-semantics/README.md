@@ -209,6 +209,26 @@ Host state machines MAY also safely ignore the version data or specify an empty 
 
 > Note: If the host state machine is utilising object capability authentication (see [ICS 005](../ics-005-port-allocation)), all functions utilising ports take an additional capability key parameter.
 
+#### Tracking channels
+
+```typescript
+function addChannelToConnection(connectionId: Identifier, channelId: Identifier) {
+  privateStore.set(connectionChannelsKey(connectionId), channelId)
+}
+```
+
+```typescript
+function removeChannelFromConnection(connectionId: Identifier, channelId: Identifier) {
+  privateStore.set(connectionChannelsKey(connectionId), channelId)
+}
+```
+
+```typescript
+function queryConnectionChannels(id: Identifier): Set<Identifier> {
+  return privateStore.get(connectionChannelsKey(connectionId))
+}
+```
+
 #### Channel lifecycle management
 
 ![channel-state-machine](channel-state-machine.png)

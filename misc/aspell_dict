@@ -1,4 +1,4 @@
-personal_ws-1.1 en 378 
+personal_ws-1.1 en 384 
 counterpartyVersion
 structs
 lookupModule
@@ -40,6 +40,7 @@ chanCloseConfirm
 ValidatorUpdate
 frozenKey
 collateralising
+channelId
 Merkle
 topologies
 consensusStateKey
@@ -75,6 +76,7 @@ callingModuleIdentifier
 ChannelState
 commitmentRoot
 destChannel
+connectionId
 verifyMembership
 portIdentifier
 ClientCreate
@@ -107,6 +109,7 @@ Statefulness
 VMs
 InitialPubkey
 newCallbacks
+connectionChannelsKey
 EVM
 txs
 ConnectionState
@@ -296,6 +299,7 @@ prover
 duplicable
 connCloseConfirm
 LaTeX
+removeChannelFromConnection
 incentivisation
 cleanupPacketUnordered
 th
@@ -330,6 +334,7 @@ pseudocode
 renderer
 connOpenTimeout
 positionally
+addChannelToConnection
 getConsensusState
 releasePort
 rootKey
@@ -350,6 +355,7 @@ serialisable
 CommitmentProof
 batchVerifyNonMembership
 changelog
+queryConnectionChannels
 datapipe
 queryClientRoot
 Pre
