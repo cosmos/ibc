@@ -148,7 +148,7 @@ interface Packet {
 
 The architecture of clients, connections, channels and packets:
 
-![dataflow](dataflow.png)
+![Dataflow Visualisation](dataflow.png)
 
 ### Preliminaries
 
@@ -229,7 +229,7 @@ function queryConnectionChannels(id: Identifier): Set<Identifier> {
 
 #### Channel lifecycle management
 
-![channel-state-machine](channel-state-machine.png)
+![Channel State Machine](channel-state-machine.png)
 
 ##### Opening handshake
 
@@ -392,7 +392,7 @@ function chanCloseConfirm(
 
 #### Packet flow & handling
 
-![packet-state-machine](packet-state-machine.png)
+![Packet State Machine](packet-state-machine.png)
 
 ##### A day in the life of a packet
 
@@ -414,6 +414,10 @@ The module can interface with the IBC handler through [ICS 25](../ics-025-handle
     1. Channel opening handshake completes successfully (this ICS) (this will require participation of a relayer process) 
 1. Packet confirmation on machine *B*, module *2* (or packet timeout if the timeout height has passed) (this will require participation of a relayer process)
 1. Acknowledgement (possibly) relayed back from module *2* on machine *B* to module *1* on machine *A*
+
+Represented spatially, packet transit between two machines can be rendered as follows:
+
+![Packet Transit](packet-transit.png)
 
 ##### Sending packets
 
