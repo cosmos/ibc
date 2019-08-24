@@ -18,9 +18,9 @@ This document provides definitions in plain English of key terms used throughout
 
 An *actor*, or a *user* (used interchangeably), is an entity interacting with the IBC protocol. An actor can be a human end-user, a module or smart contract running on a blockchain, or an off-chain relayer process capable of signing transactions.
 
-### Chain / Ledger
+### Machine / Chain / Ledger
 
-A *chain*, *blockchain*, or *ledger* (used interchangeably), is a distributed ledger (or "blockchain", although a strict chain of blocks may not be required) implementing part or all of the IBC specification as a component or module within its state machine.
+A *machine*, *chain*, *blockchain*, or *ledger* (used interchangeably), is a state machine (which may be a distributed ledger, or "blockchain", although a strict chain of blocks may not be required) implementing part or all of the IBC specification.
 
 ### State Machine
 
@@ -48,7 +48,7 @@ A cryptographic *commitment* is a way to cheaply verify membership of a key => v
 
 ### Handler
 
-An IBC *handler* is the module or sub-component within the state machine of a ledger responsible for implementing the IBC specification by "handling" datagrams, performing the appropriate checks, proof verifications, and/or storage alterations, and routing valid packets to other parts of the state machine, as defined by the application-layer semantics.
+An IBC *handler* is the module or sub-component within the state machine responsible for implementing the IBC specification by "handling" datagrams, performing the appropriate checks, proof verifications, and/or storage alterations, and routing valid packets to other parts of the state machine, as defined by the application-layer semantics.
 
 ### Datagram
 

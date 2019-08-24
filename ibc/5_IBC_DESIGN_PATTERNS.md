@@ -30,7 +30,7 @@ reserved identifier.
 ## Call receiver
 
 Essential to the functionality of the IBC handler is an interface to other modules
-running on the same ledger, so that it can accept requests to send packets and can
+running on the same machine, so that it can accept requests to send packets and can
 route incoming packets to modules. This interface should be as minimal as possible
 in order to reduce implementation complexity and requirements imposed on host state machines.
 
