@@ -112,7 +112,9 @@ function clientConnectionsKey(clientIdentifier: Identifier): Key {
 `addConnectionToClient` is used to add a connection identifier to the set of connections associated with a client.
 
 ```typescript
-function addConnectionToClient(clientIdentifier: Identifier, connectionIdentifier: Identifier) {
+function addConnectionToClient(
+  clientIdentifier: Identifier,
+  connectionIdentifier: Identifier) {
   conns = privateStore.get(clientConnectionsKey(clientIdentifier, connectionIdentifier))
   conns.add(connectionIdentifier)
   privateStore.set(clientConnectionsKey(clientIdentifier, connectionIdentifier), conns)
@@ -122,7 +124,9 @@ function addConnectionToClient(clientIdentifier: Identifier, connectionIdentifie
 `removeConnectionFromClient` is used to remove a connection identifier from the set of connections associated with a client.
 
 ```
-function removeConnectionFromClient(clientIdentifier: Identifier, connectionIdentifier: Identifier) {
+function removeConnectionFromClient(
+  clientIdentifier: Identifier,
+  connectionIdentifier: Identifier) {
   conns = privateStore.get(clientConnectionsKey(clientIdentifier, connectionIdentifier))
   conns.remove(connectionIdentifier)
   privateStore.set(clientConnectionsKey(clientIdentifier, connectionIdentifier), conns)
@@ -170,8 +174,10 @@ This sub-protocol need not be permissioned, modulo anti-spam measures.
 
 ```typescript
 function connOpenInit(
-  identifier: Identifier, desiredCounterpartyConnectionIdentifier: Identifier,
-  clientIdentifier: Identifier, counterpartyClientIdentifier: Identifier,
+  identifier: Identifier,
+  desiredCounterpartyConnectionIdentifier: Identifier,
+  clientIdentifier: Identifier,
+  counterpartyClientIdentifier: Identifier,
   version: string) {
   assert(provableStore.get(connectionKey(identifier)) == null)
   state = INIT
@@ -186,10 +192,15 @@ function connOpenInit(
 
 ```typescript
 function connOpenTry(
-  desiredIdentifier: Identifier, counterpartyConnectionIdentifier: Identifier,
-  counterpartyClientIdentifier: Identifier, clientIdentifier: Identifier,
-  proofInit: CommitmentProof, proofHeight: uint64, consensusHeight: uint64,
-  version: string, counterpartyVersion: string) {
+  desiredIdentifier: Identifier,
+  counterpartyConnectionIdentifier: Identifier,
+  counterpartyClientIdentifier: Identifier,
+  clientIdentifier: Identifier,
+  proofInit: CommitmentProof,
+  proofHeight: uint64,
+  consensusHeight: uint64,
+  version: string,
+  counterpartyVersion: string) {
   assert(consensusHeight <= getCurrentHeight())
   client = queryClient(connection.clientIdentifier)
   expectedConsensusState = getConsensusState(consensusHeight)
@@ -214,7 +225,10 @@ function connOpenTry(
 
 ```typescript
 function connOpenAck(
-  identifier: Identifier, version: string, proofTry: CommitmentProof, proofHeight: uint64,
+  identifier: Identifier,
+  version: string,
+  proofTry: CommitmentProof,
+  proofHeight: uint64,
   consensusHeight: uint64) {
   assert(consensusHeight <= getCurrentHeight())
   connection = provableStore.get(connectionKey(identifier))
@@ -237,7 +251,8 @@ function connOpenAck(
 
 ```typescript
 function connOpenConfirm(
-  identifier: Identifier, proofAck: CommitmentProof,
+  identifier: Identifier,
+  proofAck: CommitmentProof,
   proofHeight: uint64)
   connection = provableStore.get(connectionKey(identifier))
   assert(connection.state === TRYOPEN)
@@ -289,7 +304,9 @@ Once closed, connections cannot be reopened.
 
 ```typescript
 function connCloseConfirm(
-  identifier: Identifier, proofInit: CommitmentProof, proofHeight: uint64) {
+  identifier: Identifier,
+  proofInit: CommitmentProof,
+  proofHeight: uint64) {
   assert(queryConnectionChannels(identifier).size() === 0)
   connection = provableStore.get(connectionKey(identifier))
   assert(connection.state !== CLOSED)

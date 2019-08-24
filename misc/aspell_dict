@@ -1,4 +1,4 @@
-personal_ws-1.1 en 395 
+personal_ws-1.1 en 396 
 unescrow
 onChanCloseConfirm
 clientKey
@@ -173,6 +173,7 @@ pseudorandom
 invariants
 SourceIdentifier
 commitmentRoot
+OpaquePacket
 atomicity
 lookupModule
 recvTimeoutPacket

@@ -266,7 +266,10 @@ logical correctness.
 Calling `createClient` with the specified identifier & initial consensus state creates a new client.
 
 ```typescript
-function createClient(id: Identifier, clientType: ClientType, consensusState: ConsensusState) {
+function createClient(
+  id: Identifier,
+  clientType: ClientType,
+  consensusState: ConsensusState) {
   assert(privateStore.get(clientStateKey(id)) === null)
   assert(provableStore.get(clientTypeKey(id)) === null)
   clientState = clientType.initialize(consensusState)
@@ -301,7 +304,9 @@ update its internal state accordingly, possibly finalising commitment roots and
 updating the signature authority logic in the stored consensus state.
 
 ```typescript
-function updateClient(id: Identifier, header: Header) {
+function updateClient(
+  id: Identifier,
+  header: Header) {
   clientType = provableStore.get(clientTypeKey(id))
   assert(clientType !== null)
   clientState = privateStore.get(clientStateKey(id))
@@ -316,7 +321,9 @@ If the client detects evidence of misbehaviour, the client can be alerted, possi
 previously valid state roots & preventing future updates.
 
 ```typescript
-function submitMisbehaviourToClient(id: Identifier, evidence: bytes) {
+function submitMisbehaviourToClient(
+  id: Identifier,
+  evidence: bytes) {
   clientType = provableStore.get(clientTypeKey(id))
   assert(clientType !== null)
   clientState = privateStore.get(clientStateKey(id))
@@ -361,7 +368,10 @@ interface Evidence {
   h2: Header
 }
 
-function commit(root: CommitmentRoot, height: uint64, newPublicKey: Maybe<PublicKey>): Header {
+function commit(
+  root: CommitmentRoot,
+  height: uint64,
+  newPublicKey: Maybe<PublicKey>): Header {
   signature = privateKey.sign(root, height, newPublicKey)
   header = Header{height, root, signature}
   return header
@@ -371,7 +381,9 @@ function initialize(consensusState: ConsensusState): ClientState {
   return ClientState{false, Set.singleton(consensusState.publicKey), Map.empty()}
 }
 
-function validityPredicate(clientState: ClientState, header: Header) {
+function validityPredicate(
+  clientState: ClientState,
+  header: Header) {
   assert(consensusState.height + 1 === header.height)
   assert(consensusState.publicKey.verify(header.signature))
   if (header.newPublicKey !== null)
@@ -381,12 +393,16 @@ function validityPredicate(clientState: ClientState, header: Header) {
   clientState.verifiedRoots[height] = header.commitmentRoot
 }
 
-function getVerifiedRoot(clientState: ClientState, height: uint64) {
+function getVerifiedRoot(
+  clientState: ClientState,
+  height: uint64) {
   assert(!client.frozen)
   return client.verifiedRoots[height]
 }
 
-function misbehaviourPredicate(clientState: ClientState, evidence: Evidence) {
+function misbehaviourPredicate(
+  clientState: ClientState,
+  evidence: Evidence) {
   h1 = evidence.h1
   h2 = evidence.h2
   assert(h1.publicKey === h2.publicKey)
