@@ -25,7 +25,6 @@ message ConnOpenInit {
   string desiredCounterpartyIdentifier = 2;
   string clientIdentifier = 3;
   string counterpartyClientIdentifier = 4;
-  int64  nextTimeoutHeight = 5;
 }
 
 message ConnOpenTry {
@@ -34,27 +33,16 @@ message ConnOpenTry {
   string counterpartyClientIdentifier = 3;
   string clientIdentifier = 4;
   string proofInit = 5; // TODO
-  uint64 timeoutHeight = 6;
-  uint64 nextTimeoutHeight = 7;
 }
 
 message ConnOpenAck {
   string identifier = 1;
   string proofTry = 2; // TODO
-  uint64 timeoutHeight = 3;
-  uint64 nextTimeoutHeight = 4;
 }
 
 message ConnOpenConfirm {
   string identifier = 1;
   string proofAck = 2; // TODO
-  uint64 timeoutHeight = 3;
-}
-
-message ConnOpenTimeout {
-  string identifier = 1;
-  string proofTimeout = 2; // TODO
-  uint64 timeoutHeight = 3;
 }
 
 message ConnCloseInit {
@@ -75,7 +63,6 @@ message ChanOpenInit {
   string counterpartyPortIdentifier = 3;
   string counterpartyChannelIdentifier = 4;
   repeated string connectionHops = 5;
-  uint64 nextTimeoutHeight = 6; 
 }
 
 message ChanOpenTry {
@@ -84,31 +71,19 @@ message ChanOpenTry {
   string counterpartyPortIdentifier = 3;
   string counterpartyChannelIdentifier = 4;
   repeated string connectionHops = 5;
-  uint64 timeoutHeight = 6;
-  uint64 nextTimeoutHeight = 7;
-  string proofInit = 8; // TODO
+  string proofInit = 6; // TODO
 }
 
 message ChanOpenAck {
   string portIdentifier = 1;
   string channelIdentifier = 2;
-  uint64 timeoutHeight = 3;
-  uint64 nextTimeoutHeight = 4;
-  string proofTry = 5; // TODO
+  string proofTry = 3; // TODO
 }
 
 message ChanOpenConfirm {
   string portIdentifier = 1;
   string channelIdentifier = 2;
-  uint64 timeoutHeight = 3;
-  string proofAck = 4; // TODO
-}
-
-message ChanOpenTimeout {
-  string portIdentifier = 1;
-  string channelIdentifier = 2;
-  uint64 timeoutHeight = 3;
-  string proofTimeout = 4; // TODO
+  string proofAck = 3; // TODO
 }
 
 message ChanCloseInit {

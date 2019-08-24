@@ -68,7 +68,6 @@ interface ChannelEnd {
   counterpartyChannelIdentifier: Identifier
   connectionHops: [Identifier]
   version: string
-  nextTimeoutHeight: uint64
 }
 ```
 
@@ -80,7 +79,6 @@ interface ChannelEnd {
 - The `nextSequenceRecv`, stored separately, tracks the sequence number for the next packet to be received.
 - The `connectionHops` stores the list of connection identifiers, in order, along which packets sent on this channel will travel. At the moment this list must be of length 2, where the first connection is the source and second connection the destination.
 - The `version` string stores an opaque channel version, which is agreed upon during the handshake. This can determine module-level configuration such as which packet encoding is used for the channel.
-- The `nextTimeoutHeight` stores the timeout height for the next stage of the handshake, used only in channel opening and closing handshakes.
 
 Channel ends have a *state*:
 
@@ -247,7 +245,7 @@ could be implemented to provide this).
 function chanOpenInit(
   order: ChannelOrder, connectionHops: [Identifier], channelIdentifier: Identifier,
   portIdentifier: Identifier, counterpartyChannelIdentifier: Identifier,
-  counterpartyPortIdentifier: Identifier, version: string, nextTimeoutHeight: uint64) {
+  counterpartyPortIdentifier: Identifier, version: string) {
   assert(connectionHops.length === 2)
   assert(provableStore.get(channelKey(portIdentifier, channelIdentifier)) === nil)
   connection = provableStore.get(connectionKey(connectionHops[0]))
@@ -255,7 +253,7 @@ function chanOpenInit(
   assert(connection.counterpartyConnectionIdentifier === connectionHops[1])
   assert(authenticate(provableStore.get(portKey(portIdentifier))))
   channel = Channel{INIT, order, portIdentifier, counterpartyPortIdentifier,
-                    counterpartyChannelIdentifier, connectionHops, version, nextTimeoutHeight}
+                    counterpartyChannelIdentifier, connectionHops, version}
   provableStore.set(channelKey(portIdentifier, channelIdentifier), channel)
   provableStore.set(nextSequenceSendKey(portIdentifier, channelIdentifier), 1)
   provableStore.set(nextSequenceRecvKey(portIdentifier, channelIdentifier), 1)
@@ -270,10 +268,8 @@ function chanOpenTry(
   channelIdentifier: Identifier, counterpartyChannelIdentifier: Identifier,
   portIdentifier: Identifier, counterpartyPortIdentifier: Identifier,
   version: string, counterpartyVersion: string,
-  timeoutHeight: uint64, nextTimeoutHeight: uint64,
   proofInit: CommitmentProof, proofHeight: uint64) {
   assert(connectionHops.length === 2)
-  assert(getCurrentHeight() < timeoutHeight)
   assert(provableStore.get(channelKey(portIdentifier, channelIdentifier)) === null)
   assert(authenticate(provableStore.get(portKey(portIdentifier))))
   connection = provableStore.get(connectionKey(connectionHops[0]))
@@ -285,10 +281,10 @@ function chanOpenTry(
     proofInit,
     channelKey(counterpartyPortIdentifier, counterpartyChannelIdentifier),
     Channel{INIT, order, counterpartyPortIdentifier, portIdentifier,
-            channelIdentifier, connectionHops.reverse(), counterpartyVersion, timeoutHeight}
+            channelIdentifier, connectionHops.reverse(), counterpartyVersion}
   ))
   channel = Channel{OPENTRY, order, portIdentifier, counterpartyPortIdentifier,
-                    counterpartyChannelIdentifier, connectionHops, version, nextTimeoutHeight}
+                    counterpartyChannelIdentifier, connectionHops, version}
   provableStore.set(channelKey(portIdentifier, channelIdentifier), channel)
   provableStore.set(nextSequenceSendKey(portIdentifier, channelIdentifier), 1)
   provableStore.set(nextSequenceRecvKey(portIdentifier, channelIdentifier), 1)
@@ -302,9 +298,7 @@ counterparty module on the other chain.
 function chanOpenAck(
   channelIdentifier: Identifier, portIdentifier: Identifier,
   version: string,
-  timeoutHeight: uint64, nextTimeoutHeight: uint64,
   proofTry: CommitmentProof, proofHeight: uint64) {
-  assert(getCurrentHeight() < timeoutHeight)
   channel = provableStore.get(channelKey(portIdentifier, channelIdentifier))
   assert(channel.state === INIT)
   assert(authenticate(provableStore.get(portKey(portIdentifier))))
@@ -316,11 +310,10 @@ function chanOpenAck(
     proofTry,
     channelKey(channel.counterpartyPortIdentifier, channel.counterpartyChannelIdentifier),
     Channel{OPENTRY, channel.order, channel.counterpartyPortIdentifier, portIdentifier,
-            channelIdentifier, channel.connectionHops.reverse(), version, timeoutHeight}
+            channelIdentifier, channel.connectionHops.reverse(), version}
   ))
   channel.state = OPEN
   channel.version = version
-  channel.nextTimeoutHeight = nextTimeoutHeight
   provableStore.set(channelKey(portIdentifier, channelIdentifier), channel)
 }
 ```
@@ -331,8 +324,7 @@ of the handshake-originating module on the other chain and finish the channel op
 ```typescript
 function chanOpenConfirm(
   portIdentifier: Identifier, channelIdentifier: Identifier,
-  timeoutHeight: uint64, proofAck: CommitmentProof, proofHeight: uint64) {
-  assert(getCurrentHeight() < timeoutHeight)
+  proofAck: CommitmentProof, proofHeight: uint64) {
   channel = provableStore.get(channelKey(portIdentifier, channelIdentifier))
   assert(channel.state === OPENTRY)
   assert(authenticate(provableStore.get(portKey(portIdentifier))))
@@ -344,56 +336,10 @@ function chanOpenConfirm(
     proofAck,
     channelKey(channel.counterpartyPortIdentifier, channel.counterpartyChannelIdentifier),
     Channel{OPEN, channel.order, channel.counterpartyPortIdentifier, portIdentifier,
-            channelIdentifier, channel.connectionHops.reverse(), channel.version, timeoutHeight}
+            channelIdentifier, channel.connectionHops.reverse(), channel.version}
   ))
   channel.state = OPEN
-  channel.nextTimeoutHeight = 0
   provableStore.set(channelKey(portIdentifier, channelIdentifier), channel)
-}
-```
-
-The `chanOpenTimeout` function is called by either the handshake-originating
-module or the handshake-confirming module to prove that a timeout has occurred and reset the state.
-
-```typescript
-function chanOpenTimeout(
-  portIdentifier: Identifier, channelIdentifier: Identifier,
-  timeoutHeight: uint64, proofTimeout: CommitmentProof, proofHeight: uint64) {
-  channel = provableStore.get(channelKey(portIdentifier, channelIdentifier))
-  connection = provableStore.get(connectionKey(channel.connectionHops[0]))
-  assert(connection.state === OPEN)
-  client = queryClient(connection.clientIdentifier)
-  assert(proofHeight >= connection.nextTimeoutHeight)
-  switch channel.state {
-    case INIT:
-      assert(verifyNonMembership(
-        proofHeight, proofTimeout,
-        channelKey(channel.counterpartyPortIdentifier, channel.counterpartyChannelIdentifier)
-      ))
-    case OPENTRY:
-      assert(
-        client.verifyNonMembership(
-          proofHeight, proofTimeout,
-          channelKey(channel.counterpartyPortIdentifier, channel.counterpartyChannelIdentifier)
-        )
-        ||
-        client.verifyMembership(
-          proofHeight, proofTimeout,
-          channelKey(channel.counterpartyPortIdentifier, channel.counterpartyChannelIdentifier),
-          Channel{INIT, channel.order, channel.counterpartyPortIdentifier, portIdentifier,
-                  channelIdentifier, channel.connectionHops.reverse(), channel.version, timeoutHeight}
-        )
-      )
-    case OPEN:
-      expected = Channel{OPENTRY, channel.order, channel.counterpartyPortIdentifier, portIdentifier,
-                         channelIdentifier, channel.version, timeoutHeight}
-      assert(client.verifyMembership(
-        proofHeight, proofTimeout,
-        channelKey(channel.counterpartyPortIdentifier, channel.counterpartyChannelIdentifier),
-        expected
-      ))
-  }
-  provableStore.delete(channelKey(portIdentifier, channelIdentifier))
 }
 ```
 
@@ -406,7 +352,7 @@ Calling modules MAY atomically execute appropriate application logic in conjunct
 ```typescript
 function chanCloseInit(portIdentifier: Identifier, channelIdentifier: Identifier) {
   channel = provableStore.get(channelKey(portIdentifier, channelIdentifier))
-  assert(channel.state === OPEN)
+  assert(channel.state !== CLOSED)
   connection = provableStore.get(connectionKey(channel.connectionHops[0]))
   assert(connection.state === OPEN)
   channel.state = CLOSED
@@ -424,11 +370,11 @@ function chanCloseConfirm(
   portIdentifier: Identifier, channelIdentifier: Identifier,
   proofInit: CommitmentProof, proofHeight: uint64) {
   channel = provableStore.get(channelKey(portIdentifier, channelIdentifier))
-  assert(channel.state === OPEN)
+  assert(channel.state !== CLOSED)
   connection = provableStore.get(connectionKey(channel.connectionHops[0]))
   assert(connection.state === OPEN)
   expected = Channel{CLOSED, channel.order, channel.counterpartyPortIdentifier, portIdentifier,
-                     channel.channelIdentifier, channel.connectionHops.reverse(), channel.version, 0}
+                     channel.channelIdentifier, channel.connectionHops.reverse(), channel.version}
   client = queryClient(connection.clientIdentifier)
   assert(client.verifyMembership(
     proofHeight,
@@ -606,7 +552,7 @@ function timeoutPacketOrdered(packet: Packet, proof: CommitmentProof, proofHeigh
   assert(packet.connectionHops === channel.connectionHops)
 
   // check that timeout height has passed on the other end
-  assert(proofHeight >= timeoutHeight)
+  assert(proofHeight >= packet.timeoutHeight)
 
   // check that packet has not been received
   assert(nextSequenceRecv < packet.sequence)
@@ -654,7 +600,7 @@ function timeoutPacketUnordered(packet: Packet, proof: CommitmentProof, proofHei
   assert(packet.connectionHops === channel.connectionHops)
 
   // check that timeout height has passed on the other end
-  assert(proofHeight >= timeoutHeight)
+  assert(proofHeight >= packet.timeoutHeight)
 
   // verify we actually sent this packet, check the store
   assert(provableStore.get(packetCommitmentKey(packet.sourcePort, packet.sourceChannel, packet.sequence))
