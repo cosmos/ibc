@@ -139,3 +139,11 @@ IBC sub-protocols are reasoned about as interactions between two chains `A` and 
 ### Deliver-or-timeout safety
 
 *Deliver-or-timeout safety* refers to the property that a packet will either be delivered & executed or will timeout in a way that can be proved back to the sender.
+
+### Constant (w.r.t. complexity)
+
+*Constant*, when referring to space or time complexity, means `O(1)`.
+
+### Succinct
+
+*Succinct*, when referring to space or time complexity, means `O(log n)` or better.

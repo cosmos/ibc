@@ -18,7 +18,7 @@ IBC is designed to be a *versatile* protocol. The protocol supports *heterogeneo
 
 ### Heterogeneity
 
-IBC can be implemented by any consensus algorithm and state machine with a basic set of requirements (fast finality & succinct state commitments). The protocol handles data authentication, transport, and ordering — common requirements of any multi-chain application — but is agnostic to the semantics of the application itself. Heterogeneous chains connected over IBC must understand a compatible application-layer "interface" (such as for transferring tokens), but once across the IBC interface handler, the state machines can support arbitrary bespoke functionality (such as shielded transactions).
+IBC can be implemented by any consensus algorithm and state machine with a basic set of requirements (fast finality, constant-size state commitments, and succinct commitment proofs). The protocol handles data authentication, transport, and ordering — common requirements of any multi-chain application — but is agnostic to the semantics of the application itself. Heterogeneous chains connected over IBC must understand a compatible application-layer "interface" (such as for transferring tokens), but once across the IBC interface handler, the state machines can support arbitrary bespoke functionality (such as shielded transactions).
 
 ### Composability
 

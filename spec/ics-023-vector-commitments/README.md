@@ -11,7 +11,7 @@ modified: 2019-05-11
 
 ## Synopsis
 
-A *vector commitment* is a construction that produces a succinct, binding commitment to an indexed vector of elements and short membership and/or non-membership proofs for any indices & elements in the vector.
+A *vector commitment* is a construction that produces a constant-size, binding commitment to an indexed vector of elements and short membership and/or non-membership proofs for any indices & elements in the vector.
 This specification enumerates the functions and properties required of commitment constructions used in the IBC protocol. In particular, commitments utilised in IBC are required to be *positionally binding*: they must be able to prove existence or
 nonexistence of values at specific positions (indices).
 
@@ -51,9 +51,9 @@ type CommitmentState = object
 
 #### Root
 
-An `CommitmentRoot` commits to a particular commitment state and should be succinct.
+An `CommitmentRoot` commits to a particular commitment state and should be constant-size.
 
-In certain commitment constructions with succinct states, `CommitmentState` and `CommitmentRoot` may be the same type.
+In certain commitment constructions with constant-size states, `CommitmentState` and `CommitmentRoot` may be the same type.
 
 ```typescript
 type CommitmentRoot = object
@@ -87,7 +87,7 @@ type generate = (initial: Map<Key, Value>) => CommitmentState
 
 #### Root calculation
 
-The `calculateRoot` function calculates a succinct commitment to the commitment state which can be used to verify proofs.
+The `calculateRoot` function calculates a constant-size commitment to the commitment state which can be used to verify proofs.
 
 ```typescript
 type calculateRoot = (state: CommitmentState) => CommitmentRoot
