@@ -271,6 +271,8 @@ A correct protocol execution flows as follows (note that all calls are made thro
 
 *ConnCloseInit* initialises a close attempt on chain A. It will succeed only if the associated connection does not have any channels.
 
+Once closed, connections cannot be reopened.
+
 ```typescript
 function connCloseInit(identifier: Identifier) {
   assert(queryConnectionChannels(identifier).size() === 0)
@@ -282,6 +284,8 @@ function connCloseInit(identifier: Identifier) {
 ```
 
 *ConnCloseConfirm* relays the intent to close a connection from chain A to chain B. It will succeed only if the associated connection does not have any channels.
+
+Once closed, connections cannot be reopened.
 
 ```typescript
 function connCloseConfirm(

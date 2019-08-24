@@ -249,7 +249,8 @@ function chanOpenInit(
   assert(connectionHops.length === 2)
   assert(provableStore.get(channelKey(portIdentifier, channelIdentifier)) === nil)
   connection = provableStore.get(connectionKey(connectionHops[0]))
-  assert(connection.state === OPEN)
+  // optimistic channel handshakes are allowed
+  assert(connection.state !== CLOSED)
   assert(connection.counterpartyConnectionIdentifier === connectionHops[1])
   assert(authenticate(provableStore.get(portKey(portIdentifier))))
   channel = Channel{INIT, order, portIdentifier, counterpartyPortIdentifier,
@@ -349,6 +350,8 @@ The `chanCloseInit` function is called by either module to close their end of th
 
 Calling modules MAY atomically execute appropriate application logic in conjunction with calling `chanCloseInit`.
 
+Once closed, channels cannot be reopened.
+
 ```typescript
 function chanCloseInit(portIdentifier: Identifier, channelIdentifier: Identifier) {
   channel = provableStore.get(channelKey(portIdentifier, channelIdentifier))
@@ -364,6 +367,8 @@ The `chanCloseConfirm` function is called by the counterparty module to close th
 since the other end has been closed.
 
 Calling modules MAY atomically execute appropriate application logic in conjunction with calling `chanCloseConfirm`.
+
+Once closed, channels cannot be reopened.
 
 ```typescript
 function chanCloseConfirm(
@@ -410,12 +415,14 @@ Note that the full packet is not stored in the state of the chain - merely a sho
 ```typescript
 function sendPacket(packet: Packet) {
   channel = provableStore.get(channelKey(packet.sourcePort, packet.sourceChannel))
-  assert(channel.state === OPEN)
+  // optimistic sends are permitted once the handshake has started
+  assert(channel.state !== CLOSED)
   assert(authenticate(provableStore.get(portKey(packet.sourcePort))))
   assert(packet.destPort === channel.counterpartyPortIdentifier)
   assert(packet.destChannel === channel.counterpartyChannelIdentifier)
   connection = provableStore.get(connectionKey(packet.connectionHops[0]))
-  assert(connection.state === OPEN)
+  // optimistic sends are permitted once the handshake has started
+  assert(connection.state !== CLOSED)
   assert(packet.connectionHops === channel.connectionHops)
   consensusState = provableStore.get(consensusStateKey(connection.clientIdentifier))
   assert(consensusState.getHeight() < packet.timeoutHeight)
@@ -656,6 +663,55 @@ function timeoutClose(packet: Packet, proof: CommitmentProof, proofHeight: uint6
 
   channel.state = CLOSED
   provableStore.set(channelKey(packet.destPort, packet.destChannel), channel)
+}
+```
+
+##### Timing-out on close
+
+The `timeoutOnClose` function is called by a module in order to prove that the channel
+to which an unreceived packet was addressed has been closed, so the packet will never be received
+(even if the `timeoutHeight` has not yet been reached).
+
+```typescript
+function timeoutOnClose(
+  packet: Packet,
+  proofNonMembership: CommitmentProof,
+  proofClosed: CommitmentProof,
+  proofHeight: uint64) {
+  channel = provableStore.get(channelKey(packet.sourcePort, packet.sourceChannel))
+  // note: the channel may have been closed
+  assert(authenticate(provableStore.get(portKey(packet.sourcePort))))
+  assert(packet.destChannel === channel.counterpartyChannelIdentifier)
+
+  connection = provableStore.get(connectionKey(packet.connectionHops[0]))
+  // note: the connection may have been closed
+  assert(packet.destPort === channel.counterpartyPortIdentifier)
+  assert(packet.connectionHops === channel.connectionHops)
+
+  // verify we actually sent this packet, check the store
+  assert(provableStore.get(packetCommitmentKey(packet.sourcePort, packet.sourceChannel, packet.sequence))
+         === commit(packet.data))
+
+  // check that the opposing channel end has closed
+  client = queryClient(connection.clientIdentifier)
+  expected = Channel{CLOSED, channel.order, channel.counterpartyPortIdentifier, portIdentifier,
+                     channel.channelIdentifier, channel.connectionHops.reverse(), channel.version}
+  assert(client.verifyMembership(
+    proofHeight,
+    proofClosed,
+    channelKey(channel.counterpartyPortIdentifier, channel.counterpartyChannelIdentifier),
+    expected
+  ))
+
+  // verify absence of acknowledgement at packet index
+  assert(client.verifyNonMembership(
+    proofHeight,
+    proofNonMembership,
+    packetAcknowledgementKey(packet.sourcePort, packet.sourceChannel, packet.sequence)
+  ))
+
+  // delete our commitment
+  provableStore.delete(packetCommitmentKey(packet.sourcePort, packet.sourceChannel, packet.sequence))
 }
 ```
 
