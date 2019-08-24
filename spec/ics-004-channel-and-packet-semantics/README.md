@@ -249,8 +249,11 @@ could be implemented to provide this).
 
 ```typescript
 function chanOpenInit(
-  order: ChannelOrder, connectionHops: [Identifier], channelIdentifier: Identifier,
-  portIdentifier: Identifier, counterpartyChannelIdentifier: Identifier,
+  order: ChannelOrder,
+  connectionHops: [Identifier],
+  channelIdentifier: Identifier,
+  portIdentifier: Identifier,
+  counterpartyChannelIdentifier: Identifier,
   counterpartyPortIdentifier: Identifier, version: string) {
   assert(connectionHops.length === 1)
   assert(provableStore.get(channelKey(portIdentifier, channelIdentifier)) === nil)
@@ -270,11 +273,16 @@ The `chanOpenTry` function is called by a module to accept the first step of a c
 
 ```typescript
 function chanOpenTry(
-  order: ChannelOrder, connectionHops: [Identifier],
-  channelIdentifier: Identifier, counterpartyChannelIdentifier: Identifier,
-  portIdentifier: Identifier, counterpartyPortIdentifier: Identifier,
-  version: string, counterpartyVersion: string,
-  proofInit: CommitmentProof, proofHeight: uint64) {
+  order: ChannelOrder,
+  connectionHops: [Identifier],
+  channelIdentifier: Identifier,
+  counterpartyChannelIdentifier: Identifier,
+  portIdentifier: Identifier,
+  counterpartyPortIdentifier: Identifier,
+  version: string,
+  counterpartyVersion: string,
+  proofInit: CommitmentProof,
+  proofHeight: uint64) {
   assert(connectionHops.length === 1)
   assert(provableStore.get(channelKey(portIdentifier, channelIdentifier)) === null)
   assert(authenticate(provableStore.get(portKey(portIdentifier))))
@@ -301,9 +309,11 @@ counterparty module on the other chain.
 
 ```typescript
 function chanOpenAck(
-  channelIdentifier: Identifier, portIdentifier: Identifier,
+  channelIdentifier: Identifier,
+  portIdentifier: Identifier,
   version: string,
-  proofTry: CommitmentProof, proofHeight: uint64) {
+  proofTry: CommitmentProof,
+  proofHeight: uint64) {
   channel = provableStore.get(channelKey(portIdentifier, channelIdentifier))
   assert(channel.state === INIT)
   assert(authenticate(provableStore.get(portKey(portIdentifier))))
@@ -328,8 +338,10 @@ of the handshake-originating module on the other chain and finish the channel op
 
 ```typescript
 function chanOpenConfirm(
-  portIdentifier: Identifier, channelIdentifier: Identifier,
-  proofAck: CommitmentProof, proofHeight: uint64) {
+  portIdentifier: Identifier,
+  channelIdentifier: Identifier,
+  proofAck: CommitmentProof,
+  proofHeight: uint64) {
   channel = provableStore.get(channelKey(portIdentifier, channelIdentifier))
   assert(channel.state === OPENTRY)
   assert(authenticate(provableStore.get(portKey(portIdentifier))))
@@ -357,7 +369,9 @@ Calling modules MAY atomically execute appropriate application logic in conjunct
 Once closed, channels cannot be reopened.
 
 ```typescript
-function chanCloseInit(portIdentifier: Identifier, channelIdentifier: Identifier) {
+function chanCloseInit(
+  portIdentifier: Identifier,
+  channelIdentifier: Identifier) {
   channel = provableStore.get(channelKey(portIdentifier, channelIdentifier))
   assert(channel.state !== CLOSED)
   connection = provableStore.get(connectionKey(channel.connectionHops[0]))
@@ -376,8 +390,10 @@ Once closed, channels cannot be reopened.
 
 ```typescript
 function chanCloseConfirm(
-  portIdentifier: Identifier, channelIdentifier: Identifier,
-  proofInit: CommitmentProof, proofHeight: uint64) {
+  portIdentifier: Identifier,
+  channelIdentifier: Identifier,
+  proofInit: CommitmentProof,
+  proofHeight: uint64) {
   channel = provableStore.get(channelKey(portIdentifier, channelIdentifier))
   assert(channel.state !== CLOSED)
   connection = provableStore.get(connectionKey(channel.connectionHops[0]))

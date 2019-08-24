@@ -180,8 +180,11 @@ By default, channels are owned by the creating port, meaning only the module bou
 
 ```typescript
 function chanOpenInit(
-  connectionHops: [Identifier], portIdentifier: Identifier, channelIdentifier: Identifier,
-  counterpartyChannelIdentifier: Identifier, counterpartyPortIdentifier: Identifier,
+  connectionHops: [Identifier],
+  portIdentifier: Identifier,
+  channelIdentifier: Identifier,
+  counterpartyChannelIdentifier: Identifier,
+  counterpartyPortIdentifier: Identifier,
   version: string) {
   // defined in ICS 4
 }
@@ -193,9 +196,13 @@ The default IBC relayer module will allow external calls to `chanOpenTry`.
 
 ```typescript
 function chanOpenTry(
-  connectionHops: [Identifier], portIdentifier: Identifier, channelIdentifier: Identifier,
-  counterpartyPortIdentifier: Identifier, counterpartyChannelIdentifier: Identifier,
-  version: string, counterpartyVersion: string,
+  connectionHops: [Identifier],
+  portIdentifier: Identifier,
+  channelIdentifier: Identifier,
+  counterpartyPortIdentifier: Identifier,
+  counterpartyChannelIdentifier: Identifier,
+  version: string,
+  counterpartyVersion: string,
   proofInit: CommitmentProof) {
   // defined in ICS 4
 }
@@ -207,7 +214,9 @@ The default IBC relayer module will allow external calls to `chanOpenAck`.
 
 ```typescript
 function chanOpenAck(
-  portIdentifier: Identifier, channelIdentifier: Identifier, version: string,
+  portIdentifier: Identifier,
+  channelIdentifier: Identifier,
+  version: string,
   proofTry: CommitmentProof) {
   // defined in ICS 4
 }
@@ -219,7 +228,8 @@ The default IBC relayer module will allow external calls to `chanOpenConfirm`.
 
 ```typescript
 function chanOpenConfirm(
-  portIdentifier: Identifier, channelIdentifier: Identifier,
+  portIdentifier: Identifier,
+  channelIdentifier: Identifier,
   proofAck: CommitmentProof) {
   // defined in ICS 4
 }
@@ -228,7 +238,9 @@ function chanOpenConfirm(
 `queryChannel` queries an existing channel by known connection & channel identifier, returning the associated metadata if found.
 
 ```typescript
-function queryChannel(connId: Identifier, chanId: Identifier): void {
+function queryChannel(
+  connId: Identifier,
+  chanId: Identifier): void {
   // defined in ICS 4
 }
 ```
@@ -247,8 +259,10 @@ The default IBC relayer module will allow external calls to `chanCloseConfirm`.
 
 ```typescript
 function chanCloseConfirm(
-  portIdentifier: Identifier, channelIdentifier: Identifier,
-  proofInit: CommitmentProof, proofHeight: uint64) {
+  portIdentifier: Identifier,
+  channelIdentifier: Identifier,
+  proofInit: CommitmentProof,
+  proofHeight: uint64) {
   // defined in ICS 4
 }
 ```
@@ -274,7 +288,9 @@ function sendPacket(packet: Packet) {
 The default IBC relayer module will allow external calls to `recvPacket`.
 
 ```typescript
-function recvPacket(packet: Packet, proof: CommitmentProof) {
+function recvPacket(
+  packet: Packet,
+  proof: CommitmentProof) {
   // defined in ICS 4
 }
 ```
@@ -284,7 +300,10 @@ function recvPacket(packet: Packet, proof: CommitmentProof) {
 The default IBC relayer module will allow external calls to `timeoutPacket`.
 
 ```coffeescript
-function timeoutPacket(packet: Packet, proof: CommitmentProof, nextSequenceRecv: uint64) {
+function timeoutPacket(
+  packet: Packet,
+  proof: CommitmentProof,
+  nextSequenceRecv: uint64) {
   // defined in ICS 4
 }
 ```
@@ -294,7 +313,9 @@ function timeoutPacket(packet: Packet, proof: CommitmentProof, nextSequenceRecv:
 The default IBC relayer module will allow external calls to `recvTimeoutPacket`.
 
 ```typescript
-function recvTimeoutPacket(packet: Packet, proof: CommitmentProof) {
+function recvTimeoutPacket(
+  packet: Packet,
+  proof: CommitmentProof) {
   // defined in ICS 4
 }
 ```

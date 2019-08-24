@@ -43,32 +43,49 @@ Modules must expose the following function signatures to the relayer module, whi
 
 ```typescript
 function onChanOpenInit(
-  portIdentifier: Identifier, channelIdentifier: Identifier, counterpartyPortIdentifier: Identifier,
-  counterpartyChannelIdentifier: Identifier, connectionHops: [Identifier],
-  version: string, nextTimeoutHeight: uint64) {
+  portIdentifier: Identifier,
+  channelIdentifier: Identifier,
+  counterpartyPortIdentifier: Identifier,
+  counterpartyChannelIdentifier: Identifier,
+  connectionHops: [Identifier],
+  version: string,
+  nextTimeoutHeight: uint64) {
   // defined by the module
 }
 
 function onChanOpenTry(
-  portIdentifier: Identifier, channelIdentifier: Identifier, counterpartyPortIdentifier: Identifier,
-  counterpartyChannelIdentifier: Identifier, connectionHops: [Identifier],
-  version: string, nextTimeoutHeight: uint64) {
+  portIdentifier: Identifier,
+  channelIdentifier: Identifier,
+  counterpartyPortIdentifier: Identifier,
+  counterpartyChannelIdentifier: Identifier,
+  connectionHops: [Identifier],
+  version: string,
+  nextTimeoutHeight: uint64) {
   // defined by the module
 }
 
-function onChanOpenAck(portIdentifier: Identifier, channelIdentifier: Identifier, nextTimeoutHeight: uint64) {
+function onChanOpenAck(
+  portIdentifier: Identifier,
+  channelIdentifier: Identifier,
+  nextTimeoutHeight: uint64) {
   // defined by the module
 }
 
-function onChanOpenConfirm(portIdentifier: Identifier, channelIdentifier: Identifier) {
+function onChanOpenConfirm(
+  portIdentifier: Identifier,
+  channelIdentifier: Identifier) {
   // defined by the module
 }
 
-function onChanOpenTimeout(portIdentifier: Identifier, channelIdentifier: Identifier): void {
+function onChanOpenTimeout(
+  portIdentifier: Identifier,
+  channelIdentifier: Identifier): void {
   // defined by the module
 }
 
-function onChanCloseConfirm(portIdentifier: Identifier, channelIdentifier: Identifier): void {
+function onChanCloseConfirm(
+  portIdentifier: Identifier,
+  channelIdentifier: Identifier): void {
   // defined by the module
 }
 
@@ -129,7 +146,9 @@ The relayer module then allows allocation of fresh ports at any time by modules,
 The function `bindPort` can be called by a module in order to bind to a port, through the relayer module, and set up callbacks.
 
 ```typescript
-function bindPort(id: Identifier, callbacks: Callbacks) {
+function bindPort(
+  id: Identifier,
+  callbacks: Callbacks) {
   assert(privateStore.get(callbackKey(id)) === null)
   handler.bindPort(id)
   key = generate()
@@ -142,7 +161,9 @@ The function `updatePort` can be called by a module in order to alter the callba
 
 
 ```typescript
-function updatePort(id: Identifier, newCallbacks: Callbacks) {
+function updatePort(
+  id: Identifier,
+  newCallbacks: Callbacks) {
   assert(authenticate(privateStore.get(authenticationKey(id))))
   privateStore.set(callbackKey(id), newCallbacks)
 }
