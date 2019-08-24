@@ -80,7 +80,6 @@ interface ConnectionEnd {
   clientIdentifier: Identifier
   counterpartyClientIdentifier: Identifier
   version: string
-  nextTimeoutHeight: uint64
 }
 ```
 
@@ -89,7 +88,6 @@ interface ConnectionEnd {
 - The `clientIdentifier` field identifies the client associated with this connection.
 - The `counterpartyClientIdentifier` field identifies the client on the counterparty chain associated with this connection.
 - The `version` field is an opaque string which can be utilised to determine encodings or protocols for channels or packets utilising this connection.
-- The `nextTimeoutHeight` field stores a height after which the next step of a handshake will be considered to have timed out.
 
 ### Store keys
 
@@ -174,11 +172,11 @@ This sub-protocol need not be permissioned, modulo anti-spam measures.
 function connOpenInit(
   identifier: Identifier, desiredCounterpartyConnectionIdentifier: Identifier,
   clientIdentifier: Identifier, counterpartyClientIdentifier: Identifier,
-  version: string, nextTimeoutHeight: uint64) {
+  version: string) {
   assert(provableStore.get(connectionKey(identifier)) == null)
   state = INIT
   connection = ConnectionEnd{state, desiredCounterpartyConnectionIdentifier, clientIdentifier,
-    counterpartyClientIdentifier, version, nextTimeoutHeight}
+    counterpartyClientIdentifier, version}
   provableStore.set(connectionKey(identifier), connection)
   addConnectionToClient(clientIdentifier, identifier)
 }
@@ -191,14 +189,12 @@ function connOpenTry(
   desiredIdentifier: Identifier, counterpartyConnectionIdentifier: Identifier,
   counterpartyClientIdentifier: Identifier, clientIdentifier: Identifier,
   proofInit: CommitmentProof, proofHeight: uint64, consensusHeight: uint64,
-  version: string, counterpartyVersion: string,
-  timeoutHeight: uint64, nextTimeoutHeight: uint64) {
+  version: string, counterpartyVersion: string) {
   assert(consensusHeight <= getCurrentHeight())
-  assert(getCurrentHeight() <= timeoutHeight)
   client = queryClient(connection.clientIdentifier)
   expectedConsensusState = getConsensusState(consensusHeight)
   expected = ConnectionEnd{INIT, desiredIdentifier, counterpartyClientIdentifier,
-                           clientIdentifier, counterpartyVersion, timeoutHeight}
+                           clientIdentifier, counterpartyVersion}
   assert(client.verifyMembership(proofHeight, proofInit,
                                  connectionKey(counterpartyConnectionIdentifier), expected))
   assert(client.verifyMembership(proofHeight, proofInit,
@@ -208,7 +204,7 @@ function connOpenTry(
   identifier = desiredIdentifier
   state = TRYOPEN
   connection = ConnectionEnd{state, counterpartyConnectionIdentifier, clientIdentifier,
-                             counterpartyClientIdentifier, version, nextTimeoutHeight}
+                             counterpartyClientIdentifier, version}
   provableStore.set(connectionKey(identifier), connection)
   addConnectionToClient(clientIdentifier, identifier)
 }
@@ -219,22 +215,20 @@ function connOpenTry(
 ```typescript
 function connOpenAck(
   identifier: Identifier, version: string, proofTry: CommitmentProof, proofHeight: uint64,
-  consensusHeight: uint64, timeoutHeight: uint64, nextTimeoutHeight: uint64) {
+  consensusHeight: uint64) {
   assert(consensusHeight <= getCurrentHeight())
-  assert(getCurrentHeight() <= timeoutHeight)
   connection = provableStore.get(connectionKey(identifier))
   assert(connection.state === INIT)
   client = queryClient(connection.clientIdentifier)
   expectedConsensusState = getConsensusState(consensusHeight)
   expected = ConnectionEnd{TRYOPEN, identifier, connection.counterpartyClientIdentifier,
-                           connection.clientIdentifier, version, timeoutHeight}
+                           connection.clientIdentifier, version}
   assert(client.verifyMembership(proofHeight, proofTry,
                                  connectionKey(connection.counterpartyConnectionIdentifier), expected))
   assert(client.verifyMembership(proofHeight, proofTry,
                                  consensusStateKey(connection.counterpartyClientIdentifier), expectedConsensusState))
   connection.state = OPEN
   connection.version = version
-  connection.nextTimeoutHeight = nextTimeoutHeight
   provableStore.set(connectionKey(identifier), connection)
 }
 ```
@@ -244,59 +238,16 @@ function connOpenAck(
 ```typescript
 function connOpenConfirm(
   identifier: Identifier, proofAck: CommitmentProof,
-  proofHeight: uint64, timeoutHeight: uint64)
-  assert(getCurrentHeight() <= timeoutHeight)
+  proofHeight: uint64)
   connection = provableStore.get(connectionKey(identifier))
   assert(connection.state === TRYOPEN)
   expected = ConnectionEnd{OPEN, identifier, connection.counterpartyClientIdentifier,
-                           connection.clientIdentifier, connection.version, timeoutHeight}
+                           connection.clientIdentifier, connection.version}
   client = queryClient(connection.clientIdentifier)
   assert(client.verifyMembership(counterpartyStateRoot, proofAck,
                                  connectionKey(connection.counterpartyConnectionIdentifier), expected))
   connection.state = OPEN
-  connection.nextTimeoutHeight = 0
   provableStore.set(connectionKey(identifier), connection)
-```
-
-*ConnOpenTimeout* aborts a connection opening attempt due to a timeout on the other side.
-
-```typescript
-function connOpenTimeout(
-  identifier: Identifier, proofTimeout: CommitmentProof,
-  proofHeight: uint64, timeoutHeight: uint64) {
-  connection = provableStore.get(connectionKey(identifier))
-  assert(proofHeight > connection.nextTimeoutHeight)
-  client = queryClient(connection.clientIdentifier)
-  switch state {
-    case INIT:
-      assert(client.verifyNonMembership(
-        proofHeight, proofTimeout,
-        connectionKey(connection.counterpartyConnectionIdentifier)))
-    case TRYOPEN:
-      assert(
-        client.verifyMembership(
-          proofHeight, proofTimeout,
-          connectionKey(connection.counterpartyConnectionIdentifier),
-          ConnectionEnd{INIT, identifier, connection.counterpartyClientIdentifier,
-                        connection.clientIdentifier, connection.version, timeoutHeight}
-        )
-        ||
-        client.verifyNonMembership(
-          proofHeight, proofTimeout,
-          connectionKey(connection.counterpartyConnectionIdentifier)
-        )
-      )
-    case OPEN:
-      assert(client.verifyMembership(
-        proofHeight, proofTimeout,
-        connectionKey(connection.counterpartyConnectionIdentifier),
-        ConnectionEnd{TRYOPEN, identifier, connection.counterpartyClientIdentifier,
-                      connection.clientIdentifier, connection.version, timeoutHeight}
-      ))
-  }
-  provableStore.delete(connectionKey(identifier))
-  removeConnectionFromClient(clientIdentifier, identifier)
-}
 ```
 
 #### Header Tracking
@@ -315,31 +266,36 @@ A correct protocol execution flows as follows (note that all calls are made thro
 
 | Initiator | Datagram            | Chain acted upon | Prior state (A, B) | Post state (A, B) |
 | --------- | ------------------- | ---------------- | ------------------ | ----------------- |
-| Actor     | `ConnCloseInit`     | A                | (OPEN, OPEN)       | (CLOSED, OPEN)    |
-| Relayer   | `ConnCloseConfirm`  | B                | (CLOSED, OPEN)     | (CLOSED, CLOSED)  |
+| Actor     | `ConnCloseInit`     | A                | (ANY, ANY)         | (CLOSED, ANY)     |
+| Relayer   | `ConnCloseConfirm`  | B                | (CLOSED, ANY)      | (CLOSED, CLOSED)  |
 
-*ConnCloseInit* initialises a close attempt on chain A.
+*ConnCloseInit* initialises a close attempt on chain A. It will succeed only if the associated connection does not have any channels.
+
+Once closed, connections cannot be reopened.
 
 ```typescript
 function connCloseInit(identifier: Identifier) {
+  assert(queryConnectionChannels(identifier).size() === 0)
   connection = provableStore.get(connectionKey(identifier))
-  assert(connection.state === OPEN)
+  assert(connection.state !== CLOSED)
   connection.state = CLOSED
   provableStore.set(connectionKey(identifier), connection)
 }
 ```
 
-*ConnCloseConfirm* relays the intent to close a connection from chain A to chain B.
+*ConnCloseConfirm* relays the intent to close a connection from chain A to chain B. It will succeed only if the associated connection does not have any channels.
+
+Once closed, connections cannot be reopened.
 
 ```typescript
 function connCloseConfirm(
   identifier: Identifier, proofInit: CommitmentProof, proofHeight: uint64) {
-  assert(getCurrentHeight() <= timeoutHeight)
+  assert(queryConnectionChannels(identifier).size() === 0)
   connection = provableStore.get(connectionKey(identifier))
-  assert(connection.state === OPEN)
+  assert(connection.state !== CLOSED)
   client = queryClient(connection.clientIdentifier)
   expected = ConnectionEnd{CLOSED, identifier, connection.counterpartyClientIdentifier,
-                           connection.clientIdentifier, connection.version, 0}
+                           connection.clientIdentifier, connection.version}
   assert(client.verifyMembership(proofHeight, proofInit, connectionKey(counterpartyConnectionIdentifier), expected))
   connection.state = CLOSED
   provableStore.set(connectionKey(identifier), connection)
@@ -348,9 +304,9 @@ function connCloseConfirm(
 
 #### Freezing by Misbehaviour 
 
-The misbehaviour detection sub-protocol is defined in [ICS 2](../ics-002-client-semantics). If a client is frozen by misbehaviour, all associated connections are immediately frozen as well.
+The misbehaviour detection sub-protocol is defined in [ICS 2](../ics-002-client-semantics). If a client is frozen by misbehaviour, `verifyMembership` calls to that client MAY subsequently fail.
 
-Implementing chains may want to allow applications to register handlers to take action upon discovery of misbehaviour. Further discussion is deferred to ICS 12.
+Implementing chains may want to allow applications to register handlers to take action upon discovery of misbehaviour. Further discussion is deferred to a later ICS.
 
 #### Querying
 

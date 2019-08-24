@@ -248,7 +248,6 @@ interface ConnOpenTry {
   counterpartyClientIdentifier: Identifier
   clientIdentifier: Identifier
   proofInit: CommitmentProof
-  timeoutHeight: uint64
   nextTimeoutHeight: uint64
 }
 ```
@@ -257,7 +256,7 @@ interface ConnOpenTry {
 function handleConnOpenTry(datagram: ConnOpenTry) {
   handler.connOpenTry(
     datagram.desiredIdentifier, datagram.counterpartyConnectionIdentifier, datagram.counterpartyClientIdentifier,
-    datagram.clientIdentifier, datagram.proofInit, datagram.timeoutHeight, datagram.version, datagram.nextTimeoutHeight
+    datagram.clientIdentifier, datagram.proofInit, datagram.version
   )
 }
 ```
@@ -268,7 +267,6 @@ The `ConnOpenAck` datagram confirms a handshake acceptance by the IBC module on 
 interface ConnOpenAck {
   identifier: Identifier
   proofTry: CommitmentProof
-  timeoutHeight: uint64
   nextTimeoutHeight: uint64
 }
 ```
@@ -276,8 +274,7 @@ interface ConnOpenAck {
 ```typescript
 function handleConnOpenAck(datagram: ConnOpenAck) {
   handler.connOpenAck(
-    datagram.identifier, datagram.proofTry,
-    datagram.timeoutHeight, datagram.nextTimeoutHeight
+    datagram.identifier, datagram.proofTry
   )
 }
 ```
@@ -288,32 +285,13 @@ The `ConnOpenConfirm` datagram acknowledges a handshake acknowledgement by an IB
 interface ConnOpenConfirm {
   identifier: Identifier
   proofAck: CommitmentProof
-  timeoutHeight: uint64
 }
 ```
 
 ```typescript
 function handleConnOpenConfirm(datagram: ConnOpenConfirm) {
   handler.connOpenConfirm(
-    datagram.identifier, datagram.proofAck, datagram.timeoutHeight
-  )
-}
-```
-
-The `ConnOpenTimeout` datagram proves that a connection handshake has timed out prior to completion, resetting the state.
-
-```typescript
-interface ConnOpenTimeout {
-  identifier: Identifier
-  proofTimeout: CommitmentProof
-  timeoutHeight: uint64
-}
-```
-
-```typescript
-function handleConnOpenTimeout(datagram: ConnOpenTimeout) {
-  handler.handleConnOpenTimeout(
-    datagram.identifier, datagram.proofTimeout, datagram.timeoutHeight
+    datagram.identifier, datagram.proofAck
   )
 }
 ```
@@ -385,7 +363,6 @@ interface ChanOpenTry {
   counterpartyPortIdentifier: Identifier
   counterpartyChannelIdentifier: Identifier
   connectionHops: [Identifier]
-  timeoutHeight: uint64
   nextTimeoutHeight: uint64
   proofInit: CommitmentProof
 }
@@ -400,7 +377,7 @@ function handleChanOpenTry(datagram: ChanOpenTry) {
   )
   handler.chanOpenTry(
     datagram.portIdentifier, datagram.channelIdentifier, datagram.counterpartyPortIdentifier,
-    datagram.counterpartyChannelIdentifier, datagram.connectionHops, datagram.version, datagram.timeoutHeight,
+    datagram.counterpartyChannelIdentifier, datagram.connectionHops, datagram.version,
     datagram.nextTimeoutHeight, datagram.proofInit
   )
 }
@@ -410,7 +387,6 @@ function handleChanOpenTry(datagram: ChanOpenTry) {
 interface ChanOpenAck {
   portIdentifier: Identifier
   channelIdentifier: Identifier
-  timeoutHeight: uint64
   nextTimeoutHeight: uint64
   proofTry: CommitmentProof
 }
@@ -420,7 +396,7 @@ interface ChanOpenAck {
 function handleChanOpenAck(datagram: ChanOpenAck) {
   module.onChanOpenAck(datagram.portIdentifier, datagram.channelIdentifier, datagram.nextTimeoutHeight)
   handler.chanOpenAck(
-    datagram.portIdentifier, datagram.channelIdentifier, datagram.timeoutHeight,
+    datagram.portIdentifier, datagram.channelIdentifier,
     datagram.nextTimeoutHeight, datagram.proofTry
   )
 }
@@ -430,7 +406,6 @@ function handleChanOpenAck(datagram: ChanOpenAck) {
 interface ChanOpenConfirm {
   portIdentifier: Identifier
   channelIdentifier: Identifier
-  timeoutHeight: uint64
   proofAck: CommitmentProof
 }
 ```
@@ -440,27 +415,7 @@ function handleChanOpenConfirm(datagram: ChanOpenConfirm) {
   module.onChanOpenConfirm(datagram.portIdentifier, datagram.channelIdentifier)
   handler.chanOpenConfirm(
     datagram.portIdentifier, datagram.channelIdentifier,
-    datagram.timeoutHeight, datagram.proofAck
-  )
-}
-```
-
-```typescript
-interface ChanOpenTimeout {
-  portIdentifier: Identifier
-  channelIdentifier: Identifier
-  timeoutHeight: uint64
-  proofTimeout: CommitmentProof
-}
-```
-
-```typescript
-function handleChanOpenTimeout(datagram: ChanOpenTimeout) {
-  module = lookupModule(datagram.portIdentifier)
-  module.onChanOpenTimeout(datagram.portIdentifier, datagram.channelIdentifier)
-  handler.chanOpenTimeout(
-    datagram.portIdentifier, datagram.channelIdentifier,
-    datagram.timeoutHeight, datagram.proofTimeout
+    datagram.proofAck
   )
 }
 ```

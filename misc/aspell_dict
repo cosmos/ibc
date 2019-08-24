@@ -1,4 +1,4 @@
-personal_ws-1.1 en 378 
+personal_ws-1.1 en 388 
 counterpartyVersion
 structs
 lookupModule
@@ -40,6 +40,7 @@ chanCloseConfirm
 ValidatorUpdate
 frozenKey
 collateralising
+channelId
 Merkle
 topologies
 consensusStateKey
@@ -75,6 +76,7 @@ callingModuleIdentifier
 ChannelState
 commitmentRoot
 destChannel
+connectionId
 verifyMembership
 portIdentifier
 ClientCreate
@@ -107,6 +109,7 @@ Statefulness
 VMs
 InitialPubkey
 newCallbacks
+connectionChannelsKey
 EVM
 txs
 ConnectionState
@@ -205,6 +208,7 @@ chanOpenTry
 handleChanCloseInit
 keyspaces
 chanOpenTimeout
+proofNonMembership
 conns
 handleConnOpenAck
 counterpartyStateRoot
@@ -216,6 +220,7 @@ interoperability
 destPort
 stablecoins
 handleChanOpenInit
+timeoutOnClose
 validator
 privateKey
 startRound
@@ -268,6 +273,7 @@ blockchain's
 connId
 computable
 NFT
+proofClosed
 proofTry
 getCurrentHeight
 counterpartyChannelIdentifier
@@ -296,6 +302,7 @@ prover
 duplicable
 connCloseConfirm
 LaTeX
+removeChannelFromConnection
 incentivisation
 cleanupPacketUnordered
 th
@@ -330,9 +337,11 @@ pseudocode
 renderer
 connOpenTimeout
 positionally
+addChannelToConnection
 getConsensusState
 releasePort
 rootKey
+unreceived
 Automatability
 stateful
 png
@@ -350,6 +359,7 @@ serialisable
 CommitmentProof
 batchVerifyNonMembership
 changelog
+queryConnectionChannels
 datapipe
 queryClientRoot
 Pre

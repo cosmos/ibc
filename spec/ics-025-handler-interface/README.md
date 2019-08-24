@@ -117,8 +117,7 @@ function connOpenTry(
   desiredIdentifier: Identifier, counterpartyConnectionIdentifier: Identifier,
   counterpartyClientIdentifier: Identifier, clientIdentifier: Identifier,
   proofInit: CommitmentProof, proofHeight: uint64, consensusHeight: uint64,
-  version: string, counterpartyVersion: string,
-  timeoutHeight: uint64, nextTimeoutHeight: uint64) {
+  version: string, counterpartyVersion: string) {
   // defined in ICS 3
 }
 ```
@@ -130,8 +129,7 @@ The default IBC relayer module will allow external calls to `connOpenAck`.
 ```typescript
 function connOpenAck(
   identifier: Identifier, version: string, proofTry: CommitmentProof,
-  proofHeight: uint64, consensusHeight: uint64,
-  timeoutHeight: uint64, nextTimeoutHeight: uint64) {
+  proofHeight: uint64, consensusHeight: uint64) {
   // defined in ICS 3
 }
 ```
@@ -143,19 +141,7 @@ The default IBC relayer module will allow external calls to `connOpenConfirm`.
 ```typescript
 function connOpenConfirm(
   identifier: Identifier, proofAck: CommitmentProof,
-  proofHeight: uint64, timeoutHeight: uint64) {
-  // defined in ICS 3
-}
-```
-
-`connOpenTimeout` proves that a connection handshake has timed-out and resets the process.
-
-The default IBC relayer module will allow external calls to `connOpenTimeout`.
-
-```typescript
-function connOpenTimeout(
-  identifier: Identifier, proofTimeout: CommitmentProof,
-  proofHeight: uint64, timeoutHeight: uint64) {
+  proofHeight: uint64) {
   // defined in ICS 3
 }
 ```
@@ -163,7 +149,7 @@ function connOpenTimeout(
 `connCloseInit` initiates the graceful connection closing process. It will fail if there are any open channels using the connection or if the identifier is invalid.
 
 ```typescript
-function connCloseInit(identifier: Identifier, nextTimeoutHeight: uint64) {
+function connCloseInit(identifier: Identifier) {
   // defined in ICS 3
 }
 ```
@@ -196,7 +182,7 @@ By default, channels are owned by the creating port, meaning only the module bou
 function chanOpenInit(
   connectionHops: [Identifier], portIdentifier: Identifier, channelIdentifier: Identifier,
   counterpartyChannelIdentifier: Identifier, counterpartyPortIdentifier: Identifier,
-  version: string, nextTimeoutHeight: uint64) {
+  version: string) {
   // defined in ICS 4
 }
 ```
@@ -210,7 +196,7 @@ function chanOpenTry(
   connectionHops: [Identifier], portIdentifier: Identifier, channelIdentifier: Identifier,
   counterpartyPortIdentifier: Identifier, counterpartyChannelIdentifier: Identifier,
   version: string, counterpartyVersion: string,
-  timeoutHeight: uint64, nextTimeoutHeight: uint64, proofInit: CommitmentProof) {
+  proofInit: CommitmentProof) {
   // defined in ICS 4
 }
 ```
@@ -222,7 +208,7 @@ The default IBC relayer module will allow external calls to `chanOpenAck`.
 ```typescript
 function chanOpenAck(
   portIdentifier: Identifier, channelIdentifier: Identifier, version: string,
-  timeoutHeight: uint64, nextTimeoutHeight: uint64, proofTry: CommitmentProof) {
+  proofTry: CommitmentProof) {
   // defined in ICS 4
 }
 ```
@@ -234,19 +220,7 @@ The default IBC relayer module will allow external calls to `chanOpenConfirm`.
 ```typescript
 function chanOpenConfirm(
   portIdentifier: Identifier, channelIdentifier: Identifier,
-  timeoutHeight: uint64, proofAck: CommitmentProof) {
-  // defined in ICS 4
-}
-```
-
-`chanOpenTimeout` proves that a channel opening handshake has timed-out and resets the process.
-
-The default IBC relayer module will allow external calls to `chanOpenTimeout`.
-
-```typescript
-function chanOpenTimeout(
-  portIdentifier: Identifier, channelIdentifier: Identifier,
-  timeoutHeight: uint64, proofTimeout: CommitmentProof) {
+  proofAck: CommitmentProof) {
   // defined in ICS 4
 }
 ```
