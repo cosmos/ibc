@@ -466,13 +466,19 @@ function sendPacket(packet: Packet) {
   assert(packet.destPort === channel.counterpartyPortIdentifier)
   assert(packet.destChannel === channel.counterpartyChannelIdentifier)
   connection = provableStore.get(connectionPath(packet.connectionHops[0]))
+
   // optimistic sends are permitted once the handshake has started
   assert(connection.state !== CLOSED)
   assert(packet.connectionHops === channel.connectionHops)
+
   consensusState = provableStore.get(consensusStatePath(connection.clientIdentifier))
   assert(consensusState.getHeight() < packet.timeoutHeight)
+
   nextSequenceSend = provableStore.get(nextSequenceSendPath(packet.sourcePort, packet.sourceChannel))
   assert(packet.sequence === nextSequenceSend)
+
+  // all assertions passed, we can alter state
+
   nextSequenceSend = nextSequenceSend + 1
   provableStore.set(nextSequenceSendPath(packet.sourcePort, packet.sourceChannel), nextSequenceSend)
   provableStore.set(packetCommitmentPath(packet.sourcePort, packet.sourceChannel, sequence), commit(packet.data))
@@ -507,10 +513,13 @@ function recvPacket(
   assert(authenticate(provableStore.get(portPath(packet.destPort))))
   assert(packet.sourcePort === channel.counterpartyPortIdentifier)
   assert(packet.sourceChannel === channel.counterpartyChannelIdentifier)
+
   connection = provableStore.get(connectionPath(channel.connectionHops[0]))
   assert(connection.state === OPEN)
   assert(packet.connectionHops === channel.connectionHops)
+
   assert(proofHeight < packet.timeoutHeight)
+
   client = queryClient(connection.clientIdentifier)
   assert(client.verifyMembership(
     proofHeight,
@@ -518,6 +527,8 @@ function recvPacket(
     packetCommitmentPath(packet.sourcePort, packet.sourceChannel, packet.sequence),
     commit(packet.data)
   ))
+
+  // all assertions passed (except sequence check), we can alter state
 
   if (acknowledgement.length > 0 || channel.order === UNORDERED)
     provableStore.set(
@@ -556,6 +567,7 @@ function acknowledgePacket(
   assert(channel.state === OPEN)
   assert(authenticate(provableStore.get(portPath(packet.sourcePort))))
   assert(packet.sourceChannel === channel.counterpartyChannelIdentifier)
+
   connection = provableStore.get(connectionPath(channel.connectionHops[0]))
   assert(packet.sourcePort === channel.counterpartyPortIdentifier)
   assert(packet.connectionHops === channel.connectionHops)
@@ -573,6 +585,8 @@ function acknowledgePacket(
     packetAcknowledgementPath(packet.destPort, packet.destChannel, packet.sequence),
     commit(acknowledgement)
   ))
+
+  // all assertions passed, we can alter state
 
   // delete our commitment so we can't "acknowledge" again
   provableStore.delete(packetCommitmentPath(packet.sourcePort, packet.sourceChannel, packet.sequence))
@@ -606,9 +620,11 @@ function timeoutPacketOrdered(
   proof: CommitmentProof,
   proofHeight: uint64,
   nextSequenceRecv: uint64): Packet {
+
   channel = provableStore.get(channelPath(packet.sourcePort, packet.sourceChannel))
   assert(channel.state === OPEN)
   assert(channel.order === ORDERED)
+
   assert(authenticate(provableStore.get(portPath(packet.sourcePort))))
   assert(packet.destChannel === channel.counterpartyChannelIdentifier)
 
@@ -635,6 +651,8 @@ function timeoutPacketOrdered(
     nextSequenceRecvPath(packet.destPort, packet.destChannel),
     nextSequenceRecv
   ))
+
+  // all assertions passed, we can alter state
 
   // delete our commitment
   provableStore.delete(packetCommitmentPath(packet.sourcePort, packet.sourceChannel, packet.sequence))
@@ -685,6 +703,8 @@ function timeoutPacketUnordered(
     proof,
     packetAcknowledgementPath(packet.sourcePort, packet.sourceChannel, packet.sequence)
   ))
+  
+  // all assertions passed, we can alter state
 
   // delete our commitment
   provableStore.delete(packetCommitmentPath(packet.sourcePort, packet.sourceChannel, packet.sequence))
@@ -731,6 +751,8 @@ function timeoutClose(
     packetCommitmentPath(packet.sourcePort, packet.sourceChannel, packet.sequence),
     commit(packet.data)
   ))
+
+  // all assertions passed, we can alter state
 
   channel.state = CLOSED
   provableStore.set(channelPath(packet.destPort, packet.destChannel), channel)
@@ -784,6 +806,8 @@ function timeoutOnClose(
     packetAcknowledgementPath(packet.sourcePort, packet.sourceChannel, packet.sequence)
   ))
 
+  // all assertions passed, we can alter state
+
   // delete our commitment
   provableStore.delete(packetCommitmentPath(packet.sourcePort, packet.sourceChannel, packet.sequence))
 
@@ -818,6 +842,10 @@ function cleanupPacketOrdered(
   // assert packet has been received on the other end
   assert(nextSequenceRecv > packet.sequence)
 
+  // verify we actually sent the packet, check the store
+  assert(provableStore.get(packetCommitmentPath(packet.sourcePort, packet.sourceChannel, packet.sequence))
+             === commit(packet.data))
+
   // check that the recv sequence is as claimed
   client = queryClient(connection.clientIdentifier)
   assert(client.verifyMembership(
@@ -827,9 +855,7 @@ function cleanupPacketOrdered(
     nextSequenceRecv
   ))
 
-  // verify we actually sent the packet, check the store
-  assert(provableStore.get(packetCommitmentPath(packet.sourcePort, packet.sourceChannel, packet.sequence))
-             === commit(packet.data))
+  // all assertions passed, we can alter state
 
   // clear the store
   provableStore.delete(packetCommitmentPath(packet.sourcePort, packet.sourceChannel, packet.sequence))
@@ -870,6 +896,8 @@ function cleanupPacketUnordered(
   // verify we actually sent the packet, check the store
   assert(provableStore.get(packetCommitmentPath(packet.sourcePort, packet.sourceChannel, packet.sequence))
              === commit(packet.data))
+
+  // all assertions passed, we can alter state
 
   // clear the store
   provableStore.delete(packetCommitmentPath(packet.sourcePort, packet.sourceChannel, packet.sequence))
