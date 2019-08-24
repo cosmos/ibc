@@ -246,12 +246,11 @@ function chanOpenInit(
   order: ChannelOrder, connectionHops: [Identifier], channelIdentifier: Identifier,
   portIdentifier: Identifier, counterpartyChannelIdentifier: Identifier,
   counterpartyPortIdentifier: Identifier, version: string) {
-  assert(connectionHops.length === 2)
+  assert(connectionHops.length === 1)
   assert(provableStore.get(channelKey(portIdentifier, channelIdentifier)) === nil)
   connection = provableStore.get(connectionKey(connectionHops[0]))
   // optimistic channel handshakes are allowed
   assert(connection.state !== CLOSED)
-  assert(connection.counterpartyConnectionIdentifier === connectionHops[1])
   assert(authenticate(provableStore.get(portKey(portIdentifier))))
   channel = Channel{INIT, order, portIdentifier, counterpartyPortIdentifier,
                     counterpartyChannelIdentifier, connectionHops, version}
@@ -270,12 +269,11 @@ function chanOpenTry(
   portIdentifier: Identifier, counterpartyPortIdentifier: Identifier,
   version: string, counterpartyVersion: string,
   proofInit: CommitmentProof, proofHeight: uint64) {
-  assert(connectionHops.length === 2)
+  assert(connectionHops.length === 1)
   assert(provableStore.get(channelKey(portIdentifier, channelIdentifier)) === null)
   assert(authenticate(provableStore.get(portKey(portIdentifier))))
   connection = provableStore.get(connectionKey(connectionHops[0]))
   assert(connection.state === OPEN)
-  assert(connection.counterpartyConnectionIdentifier === connectionHops[1])
   client = queryClient(connection.clientIdentifier)
   assert(client.verifyMembership(
     proofHeight,
