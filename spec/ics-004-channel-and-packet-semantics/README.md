@@ -441,6 +441,12 @@ Represented spatially, packet transit between two machines can be rendered as fo
 
 ![Packet Transit](packet-transit.png)
 
+##### Helper functions
+
+```
+function 
+```
+
 ##### Sending packets
 
 The `sendPacket` function is called by a module in order to send an IBC packet on a channel end owned by the calling module to the corresponding module the counterparty chain.
