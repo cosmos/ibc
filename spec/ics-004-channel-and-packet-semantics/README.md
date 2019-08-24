@@ -129,7 +129,7 @@ interface Packet {
 #### Exactly-once delivery
 
 - IBC packets sent on one end of a channel should be delivered exactly once to the other end.
-- No network synchrony assumptions should be required for safety of exactly-once delivery.
+- No network synchrony assumptions should be required for exactly-once safety.
   If one or both of the chains should halt, packets should be delivered no more than once, and once the chains resume packets should be able to flow again.
 
 #### Ordering
@@ -174,7 +174,7 @@ function nextSequenceRecvKey(portIdentifier: Identifier, channelIdentifier: Iden
 }
 ```
 
-Succinct commitments to packet data fields are stored under the packet sequence number:
+Constant-size commitments to packet data fields are stored under the packet sequence number:
 
 ```typescript
 function packetCommitmentKey(portIdentifier: Identifier, channelIdentifier: Identifier, sequence: uint64) {
@@ -408,7 +408,7 @@ The IBC handler performs the following steps in order:
 - Checks that the packet metadata matches the channel & connection information
 - Checks that the timeout height specified has not already passed on the destination chain
 - Increments the send sequence counter associated with the channel
-- Stores a succinct hash commitment to the packet data
+- Stores a constant-size commitment to the packet data
 
 Note that the full packet is not stored in the state of the chain - merely a short hash-commitment. The packet data can be calculated from the transaction execution and possibly returned as log output which relayers can index.
 

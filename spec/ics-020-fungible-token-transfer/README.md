@@ -6,7 +6,7 @@ category: IBC/APP
 requires: 25, 26
 author: Christopher Goes <cwgoes@tendermint.com>
 created: 2019-07-15 
-modified: 2019-07-29
+modified: 2019-08-24
 ---
 
 ## Synopsis
