@@ -96,8 +96,6 @@ enum ChannelState {
 - A channel end in `OPEN` state has completed the handshake and is ready to send and receive packets.
 - A channel end in `CLOSED` state has been closed and can no longer be used to send or receive packets.
 
-An `OpaquePacket` is a particular data structure defined as follows:
-
 A `Packet`, in the interblockchain communication protocol, is a particular data structure defined as follows:
 
 ```typescript
@@ -120,6 +118,12 @@ interface Packet {
 - The `destPort` identifies the port on the receiving chain.
 - The `destChannel` identifies the channel end on the receiving chain.
 - The `data` is an opaque value which can be defined by the application logic of the associated modules.
+
+An `OpaquePacket` is a packet, but cloaked in an obscuring data type by the host state machine, such that a module cannot act upon it other than to pass it to the IBC handler. The IBC handler can cast a `Packet` to an `OpaquePacket` and vice versa.
+
+```typescript
+type OpaquePacket = object
+```
 
 ### Desired Properties
 
@@ -477,8 +481,10 @@ The IBC handler performs the following steps in order:
 
 ```typescript
 function recvPacket(
-  packet: Packet, proof: CommitmentProof,
-  proofHeight: uint64, acknowledgement: bytes) {
+  packet: OpaquePacket,
+  proof: CommitmentProof,
+  proofHeight: uint64,
+  acknowledgement: bytes): Packet {
 
   channel = provableStore.get(channelKey(packet.destPort, packet.destChannel))
   assert(channel.state === OPEN)
@@ -509,6 +515,9 @@ function recvPacket(
     nextSequenceRecv = nextSequenceRecv + 1
     provableStore.set(nextSequenceRecvKey(packet.destPort, packet.destChannel), nextSequenceRecv)
   }
+
+  // return transparent packet
+  return packet
 }
 ```
 
@@ -522,8 +531,10 @@ Calling modules MAY atomically execute appropriate application acknowledgement-h
 
 ```typescript
 function acknowledgePacket(
-  packet: Packet, proof: CommitmentProof,
-  proofHeight: uint64, acknowledgement: bytes) {
+  packet: OpaquePacket,
+  proof: CommitmentProof,
+  proofHeight: uint64,
+  acknowledgement: bytes): Packet {
 
   channel = provableStore.get(channelKey(packet.sourcePort, packet.sourceChannel))
   assert(channel.state === OPEN)
@@ -549,6 +560,9 @@ function acknowledgePacket(
 
   // delete our commitment so we can't "acknowledge" again
   provableStore.delete(packetCommitmentKey(packet.sourcePort, packet.sourceChannel, packet.sequence))
+
+  // return transparent packet
+  return packet
 }
 ```
 
@@ -571,7 +585,11 @@ Calling modules MAY atomically execute appropriate application timeout-handling 
 `timeoutPacketOrdered`, the variant for ordered channels, checks the recvSequence of the receiving channel end and closes the channel if a packet has timed out.
 
 ```typescript
-function timeoutPacketOrdered(packet: Packet, proof: CommitmentProof, proofHeight: uint64, nextSequenceRecv: uint64) {
+function timeoutPacketOrdered(
+  packet: OpaquePacket,
+  proof: CommitmentProof,
+  proofHeight: uint64,
+  nextSequenceRecv: uint64): Packet {
   channel = provableStore.get(channelKey(packet.sourcePort, packet.sourceChannel))
   assert(channel.state === OPEN)
   assert(channel.order === ORDERED)
@@ -608,6 +626,9 @@ function timeoutPacketOrdered(packet: Packet, proof: CommitmentProof, proofHeigh
   // close the channel
   channel.state = CLOSED
   provableStore.set(channelKey(packet.sourcePort, packet.sourceChannel), channel)
+
+  // return transparent packet
+  return packet
 }
 ```
 
@@ -619,7 +640,10 @@ This specification omits details for now.
 `timeoutPacketUnordered` does not close the channel; unordered channels are expected to continue in the face of timed-out packets.
 
 ```typescript
-function timeoutPacketUnordered(packet: Packet, proof: CommitmentProof, proofHeight: uint64) {
+function timeoutPacketUnordered(
+  packet: OpaquePacket,
+  proof: CommitmentProof,
+  proofHeight: uint64): Packet {
   channel = provableStore.get(channelKey(packet.sourcePort, packet.sourceChannel))
   assert(channel.state === OPEN)
   assert(channel.order === UNORDERED)
@@ -648,6 +672,9 @@ function timeoutPacketUnordered(packet: Packet, proof: CommitmentProof, proofHei
 
   // delete our commitment
   provableStore.delete(packetCommitmentKey(packet.sourcePort, packet.sourceChannel, packet.sequence))
+
+  // return transparent packet
+  return packet
 }
 ```
 
@@ -661,7 +688,10 @@ This is an alternative to closing the other end of the channel and proving that 
 Calling modules MAY atomically execute any application logic associated with channel closure in conjunction with calling `recvTimeoutPacket`.
 
 ```typescript
-function timeoutClose(packet: Packet, proof: CommitmentProof, proofHeight: uint64) {
+function timeoutClose(
+  packet: OpaquePacket,
+  proof: CommitmentProof,
+  proofHeight: uint64): Packet {
   channel = provableStore.get(channelKey(packet.destPort, packet.destChannel))
   assert(channel.state === OPEN)
   assert(channel.order === ORDERED)
@@ -688,6 +718,9 @@ function timeoutClose(packet: Packet, proof: CommitmentProof, proofHeight: uint6
 
   channel.state = CLOSED
   provableStore.set(channelKey(packet.destPort, packet.destChannel), channel)
+
+  // return transparent packet
+  return packet
 }
 ```
 
@@ -737,6 +770,9 @@ function timeoutOnClose(
 
   // delete our commitment
   provableStore.delete(packetCommitmentKey(packet.sourcePort, packet.sourceChannel, packet.sequence))
+
+  // return transparent packet
+  return packet
 }
 ```
 
@@ -747,7 +783,11 @@ function timeoutOnClose(
 `cleanupPacketOrdered` cleans-up a packet on an ordered channel by proving that the packet has been received on the other end.
 
 ```typescript
-function cleanupPacketOrdered(packet: Packet, proof: CommitmentProof, proofHeight: uint64, nextSequenceRecv: uint64) {
+function cleanupPacketOrdered(
+  packet: OpaquePacket,
+  proof: CommitmentProof,
+  proofHeight: uint64,
+  nextSequenceRecv: uint64): Packet {
   channel = provableStore.get(channelKey(packet.sourcePort, packet.sourceChannel))
   assert(channel.state === OPEN)
   assert(channel.order === ORDERED)
@@ -777,13 +817,20 @@ function cleanupPacketOrdered(packet: Packet, proof: CommitmentProof, proofHeigh
 
   // clear the store
   provableStore.delete(packetCommitmentKey(packet.sourcePort, packet.sourceChannel, packet.sequence))
+
+  // return transparent packet
+  return packet
 }
 ```
 
 `cleanupPacketUnordered` cleans-up a packet on an unordered channel by proving that the associated acknowledgement has been written.
 
 ```typescript
-function cleanupPacketUnordered(packet: Packet, proof: CommitmentProof, proofHeight: uint64, acknowledgement: bytes) {
+function cleanupPacketUnordered(
+  packet: OpaquePacket,
+  proof: CommitmentProof,
+  proofHeight: uint64,
+  acknowledgement: bytes): Packet {
   channel = provableStore.get(channelKey(packet.sourcePort, packet.sourceChannel))
   assert(channel.state === OPEN)
   assert(channel.order === UNORDERED)
@@ -810,6 +857,9 @@ function cleanupPacketUnordered(packet: Packet, proof: CommitmentProof, proofHei
 
   // clear the store
   provableStore.delete(packetCommitmentKey(packet.sourcePort, packet.sourceChannel, packet.sequence))
+
+  // return transparent packet
+  return packet
 }
 ```
 
