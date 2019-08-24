@@ -879,6 +879,24 @@ function cleanupPacketUnordered(
 }
 ```
 
+#### Reasoning about race conditions
+
+##### Identifier allocation
+
+There is an unavoidable race condition on identifier allocation on the destination chain. Modules would be well-advised to utilise pseudo-random, non-valuable identifiers. Managing to claim the identifier that another module wishes to use, however, while annoying, cannot man-in-the-middle a handshake since the receiving module must already own the port to which the handshake was targeted.
+
+##### Timeouts / packet confirmation
+
+There is no race condition between a packet timeout and packet confirmation, as the packet will either have passed the timeout height prior to receipt or not.
+
+##### Man-in-the-middle attacks during handshakes
+
+Verification of cross-chain state prevents man-in-the-middle attacks for both connection handshakes & channel handshakes since all information (source, destination client, channel, etc.) is known by the module which starts the handshake and confirmed prior to handshake completion.
+
+##### Connection / channel closure with in-flight packets
+
+If a connection or channel is closed while packets are in-flight, the packets can no longer be received on the destination chain and can be timed-out on the source chain.
+
 #### Querying channels
 
 Channels can be queried with `queryChannel`:
