@@ -155,7 +155,7 @@ If defined, these functions MUST be computationally equivalent to the conjunctiv
 
 ```typescript
 batchVerifyMembership(root, proof, items) ===
-  all(items.map((item) => verifyMembership(root, proof, item)))
+  all(items.map((item) => verifyMembership(root, proof, item.key, item.value)))
 ```
 
 ```typescript
@@ -181,7 +181,7 @@ proof = createMembershipProof(acc, key, value)
 ```
 
 ```
-Pr(verifyMembership(root, proof, key, value) === false) negligible in k
+Probability(verifyMembership(root, proof, key, value) === false) negligible in k
 ```
 
 For any key `key` not set in the commitment `acc`, for all values of `proof` and all values of `value`,
@@ -192,7 +192,7 @@ proof = createNonMembershipProof(acc, key)
 ```
 
 ```
-Pr(verifyNonMembership(root, proof, key) === false) negligible in k
+Probability(verifyNonMembership(root, proof, key) === false) negligible in k
 ```
 
 #### Soundness
@@ -202,13 +202,13 @@ Commitment proofs MUST be *sound*: key => value mappings which have not been add
 For any key `key` last set to a value `value` in the commitment `acc`, for all values of `proof`,
 
 ```
-Pr(verifyNonMembership(root, proof, key) === true) negligible in k
+Probability(verifyNonMembership(root, proof, key) === true) negligible in k
 ```
 
 For any key `key` not set in the commitment `acc`, for all values of `proof` and all values of `value`,
 
 ```
-Pr(verifyMembership(root, proof, key, value) === true) negligible in k
+Probability(verifyMembership(root, proof, key, value) === true) negligible in k
 ```
 
 #### Position binding
@@ -223,13 +223,13 @@ proof = createMembershipProof(acc, key, value)
 ```
 
 ```
-Pr(verifyMembership(root, proof, key, value) === false) negligible in k
+Probability(verifyMembership(root, proof, key, value) === false) negligible in k
 ```
 
 For all other values `otherValue` where `value /= otherValue`, for all values of `proof`,
 
 ```
-Pr(verifyMembership(root, proof, key, otherValue) === true) negligible in k
+Probability(verifyMembership(root, proof, key, otherValue) === true) negligible in k
 ```
 
 ## Backwards Compatibility

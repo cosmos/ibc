@@ -15,7 +15,7 @@ This document describes the interface exposed by the standard IBC implementation
 
 ### Motivation
 
-IBC is an inter-module communication protocol, designed to facilitate reliable, authentication message passing between modules on separate blockchains. Modules should be able to reason about the interface they interact with and the requirements they must adhere to in order to utilise it safely.
+IBC is an inter-module communication protocol, designed to facilitate reliable, authenticated message passing between modules on separate blockchains. Modules should be able to reason about the interface they interact with and the requirements they must adhere to in order to utilise the interface safely.
 
 ### Definitions
 
@@ -41,7 +41,7 @@ IBC is an inter-module communication protocol, designed to facilitate reliable, 
 
 ### Client lifecycle management
 
-By default, clients are unowned: any module can create a new client, query any existing client, update any existing client, and delete any existing client not in use.
+By default, clients are unowned: any module MAY create a new client, query any existing client, update any existing client, and delete any existing client not in use.
 
 `createClient` creates a new client with a specified identifier.
 
@@ -77,7 +77,7 @@ function queryClientRoot(id: Identifier, height: uint64): CommitmentRoot | void 
 
 `updateClient` updates an existing client with a new header, returning an error if the client was not found or the header was not a valid update.
 
-The default IBC relayer module will allow external calls to `updateClient`.
+The default IBC relayer module SHALL allow external calls to `updateClient`.
 
 ```typescript
 function updateClient(id: Identifier, header; Header): error | void {
@@ -87,7 +87,7 @@ function updateClient(id: Identifier, header; Header): error | void {
 
 `freezeClient` freezes an existing client by providing proof-of-misbehaviour, automatically freezing any associated connections & channels.
 
-The default IBC relayer module will allow external calls to `freezeClient`.
+The default IBC relayer module SHALL allow external calls to `freezeClient`.
 
 ```typescript
 function freezeClient(id: Identifier, evidence: bytes): error | void {
@@ -97,7 +97,7 @@ function freezeClient(id: Identifier, evidence: bytes): error | void {
 
 ### Connection lifecycle management
 
-By default, connections are unowned. Connections can be closed by any module, but only when all channels associated with the connection have been closed by the modules which opened them and a timeout has passed since the connection was opened.
+By default, connections are unowned. Connections MAY be closed by any module, but only when all channels associated with the connection have been closed by the modules which opened them and a timeout has passed since the connection was opened.
 
 ```typescript
 function connOpenInit(
@@ -110,7 +110,7 @@ function connOpenInit(
 
 `connOpenTry` acknowledges a connection initialisation on the initiating chain.
 
-The default IBC relayer module will allow external calls to `connOpenTry`.
+The default IBC relayer module SHALL allow external calls to `connOpenTry`.
 
 ```typescript
 function connOpenTry(
@@ -124,7 +124,7 @@ function connOpenTry(
 
 `connOpenAck` acknowledges a connection in progress on another chain.
 
-The default IBC relayer module will allow external calls to `connOpenAck`.
+The default IBC relayer module SHALL allow external calls to `connOpenAck`.
 
 ```typescript
 function connOpenAck(
@@ -136,7 +136,7 @@ function connOpenAck(
 
 `connOpenConfirm` acknowledges the acknowledgement and finalises a new connection.
 
-The default IBC relayer module will allow external calls to `connOpenConfirm`.
+The default IBC relayer module SHALL allow external calls to `connOpenConfirm`.
 
 ```typescript
 function connOpenConfirm(
@@ -156,7 +156,7 @@ function connCloseInit(identifier: Identifier) {
 
 `connCloseConfirm` finalises the graceful connection closing process. It will fail if the proof is invalid or if the identifier is invalid.
 
-The default IBC relayer module will allow external calls to `connCloseConfirm`.
+The default IBC relayer module SHALL allow external calls to `connCloseConfirm`.
 
 ```typescript
 function connCloseConfirm(identifier: Identifier, proofInit: CommitmentProof, proofHeight: uint64) {
@@ -174,7 +174,7 @@ function queryConnection(id: Identifier): ConnectionEnd | void {
 
 ### Channel lifecycle management
 
-By default, channels are owned by the creating port, meaning only the module bound to that port can inspect, close, or send on the channel. A port can create any number of channels.
+By default, channels are owned by the creating port, meaning only the module bound to that port MAY inspect, close, or send on the channel. A module MAY create any number of channels utilising the same port.
 
 `chanOpenInit` tries to start the handshake to create a new channel with the provided options, failing if the connection is not found or the options are invalid.
 
@@ -192,7 +192,7 @@ function chanOpenInit(
 
 `chanOpenTry` tries to initialise a channel based on proof of an initialisation attempt on the counterparty chain, failing if the channel identifier is unavailable, the proof is invalid, or the calling module is not bound to the port.
 
-The default IBC relayer module will allow external calls to `chanOpenTry`.
+The default IBC relayer module SHALL allow external calls to `chanOpenTry`.
 
 ```typescript
 function chanOpenTry(
@@ -210,7 +210,7 @@ function chanOpenTry(
 
 `chanOpenAck` acknowledges a channel creation in progress on another chain, failing if the channel identifier is not found, the proof is invalid, or the calling module is not bound to the port.
 
-The default IBC relayer module will allow external calls to `chanOpenAck`.
+The default IBC relayer module SHALL allow external calls to `chanOpenAck`.
 
 ```typescript
 function chanOpenAck(
@@ -224,7 +224,7 @@ function chanOpenAck(
 
 `chanOpenConfirm` finalises the channel opening handshake, failing if the channel identifier is not found, the proof is invalid, or the calling module is not bound to the port.
 
-The default IBC relayer module will allow external calls to `chanOpenConfirm`.
+The default IBC relayer module SHALL allow external calls to `chanOpenConfirm`.
 
 ```typescript
 function chanOpenConfirm(
@@ -255,7 +255,7 @@ function chanCloseInit(portIdentifier: Identifier, channelIdentifier: Identifier
 
 `chanCloseConfirm` acknowledges the closure of a channel on the counterparty chain and closes the corresponding end on this chain.
 
-The default IBC relayer module will allow external calls to `chanCloseConfirm`.
+The default IBC relayer module SHALL allow external calls to `chanCloseConfirm`.
 
 ```typescript
 function chanCloseConfirm(
@@ -275,7 +275,7 @@ Packets are permissioned by channel (only a port which owns a channel can send o
 
 The returned identifier will be the same as that sent by the timeout handler `timeoutPacket`, so it can be used by the sending module to associate a specific action with a specific packet timeout.
 
-The default IBC relayer module will allow external calls to `sendPacket`.
+The default IBC relayer module SHALL allow external calls to `sendPacket`.
 
 ```typescript
 function sendPacket(packet: Packet) {
@@ -285,7 +285,7 @@ function sendPacket(packet: Packet) {
 
 `recvPacket` attempts to receive a packet, returning an error if the calling module is not bound to the associated port, or if the packet does not exist or has been already handled.
 
-The default IBC relayer module will allow external calls to `recvPacket`.
+The default IBC relayer module SHALL allow external calls to `recvPacket`.
 
 ```typescript
 function recvPacket(
@@ -297,7 +297,7 @@ function recvPacket(
 
 `timeoutPacket` attempts to handle a packet timeout, returning an error if the calling module is not bound to the associated port, or if the packet does not exist, has not timed out, or has already been handled.
 
-The default IBC relayer module will allow external calls to `timeoutPacket`.
+The default IBC relayer module SHALL allow external calls to `timeoutPacket`.
 
 ```coffeescript
 function timeoutPacket(
@@ -310,7 +310,7 @@ function timeoutPacket(
 
 `recvTimeoutPacket` function is called by a module in order to process an IBC packet sent on the corresponding channel which has timed out.
 
-The default IBC relayer module will allow external calls to `recvTimeoutPacket`.
+The default IBC relayer module SHALL allow external calls to `recvTimeoutPacket`.
 
 ```typescript
 function recvTimeoutPacket(
@@ -330,7 +330,7 @@ Not applicable.
 
 ## Forwards Compatibility
 
-The interface can change when implemented on new chains (or upgrades to an existing chain) as long as the semantics remain the same.
+The interface MAY change when implemented on new chains (or upgrades to an existing chain) as long as the semantics remain the same.
 
 ## Example Implementation
 

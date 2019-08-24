@@ -77,7 +77,7 @@ interface ChannelEnd {
 - The `counterpartyChannelIdentifier` identifies the channel end on the counterparty chain.
 - The `nextSequenceSend`, stored separately, tracks the sequence number for the next packet to be sent.
 - The `nextSequenceRecv`, stored separately, tracks the sequence number for the next packet to be received.
-- The `connectionHops` stores the list of connection identifiers, in order, along which packets sent on this channel will travel. At the moment this list must be of length 2, where the first connection is the source and second connection the destination.
+- The `connectionHops` stores the list of connection identifiers, in order, along which packets sent on this channel will travel. At the moment this list must be of length 1. In the future multi-hop channels may be supported.
 - The `version` string stores an opaque channel version, which is agreed upon during the handshake. This can determine module-level configuration such as which packet encoding is used for the channel.
 
 Channel ends have a *state*:
@@ -136,7 +136,7 @@ type OpaquePacket = object
 
 - IBC packets sent on one end of a channel should be delivered exactly once to the other end.
 - No network synchrony assumptions should be required for exactly-once safety.
-  If one or both of the chains should halt, packets should be delivered no more than once, and once the chains resume packets should be able to flow again.
+  If one or both of the chains halt, packets may be delivered no more than once, and once the chains resume packets should be able to flow again.
 
 #### Ordering
 
@@ -145,7 +145,7 @@ type OpaquePacket = object
 
 #### Permissioning
 
-- Channels should be permissioned to one module on each end, determined during the handshake and immutable afterwards (higher-level logic could tokenize channel ownership).
+- Channels should be permissioned to one module on each end, determined during the handshake and immutable afterwards (higher-level logic could tokenize channel ownership by tokenizing ownership of the port).
   Only the module associated with a channel end should be able to send or receive on it.
 
 ## Technical Specification
@@ -172,11 +172,11 @@ The `nextSequenceSend` and `nextSequenceRecv` unsigned integer counters are stor
 
 ```typescript
 function nextSequenceSendKey(portIdentifier: Identifier, channelIdentifier: Identifier) {
-  return channelKey(portIdentifier, channelIdentifier) + "/nextSequenceSend"
+  return "{channelKey(portIdentifier, channelIdentifier)}/nextSequenceSend"
 }
 
 function nextSequenceRecvKey(portIdentifier: Identifier, channelIdentifier: Identifier) {
-  return channelKey(portIdentifier, channelIdentifier) + "/nextSequenceRecv"
+  return "{channelKey(portIdentifier, channelIdentifier)}/nextSequenceRecv"
 }
 ```
 
@@ -184,7 +184,7 @@ Constant-size commitments to packet data fields are stored under the packet sequ
 
 ```typescript
 function packetCommitmentKey(portIdentifier: Identifier, channelIdentifier: Identifier, sequence: uint64) {
-  return channelKey(portIdentifier, channelIdentifier) + "/packets/" + sequence
+  return "{channelKey(portIdentifier, channelIdentifier)}/packets/" + sequence
 }
 ```
 
@@ -194,11 +194,11 @@ Packet acknowledgement data are stored under the `packetAcknowledgementKey`:
 
 ```typescript
 function packetAcknowledgementKey(portIdentifier: Identifier, channelIdentifier: Identifier, sequence: uint64) {
-  return channelKey(portIdentifier, channelIdentifier) + "/acknowledgements/" + sequence
+  return "{channelKey(portIdentifier, channelIdentifier)}/acknowledgements/" + sequence
 }
 ```
 
-Unordered channels must always write a acknowledgement (even an empty one) to this key so that the absence of such can be used as proof-of-timeout.
+Unordered channels MUST always write a acknowledgement (even an empty one) to this key so that the absence of such can be used as proof-of-timeout. Ordered channels MAY write an acknowledgement, but are not required to.
 
 ### Versioning
 
@@ -489,7 +489,7 @@ The IBC handler performs the following steps in order:
 - Checks that the channel & connection are open to receive packets
 - Checks that the calling module owns the receiving port
 - Checks that the packet metadata matches the channel & connection information
-- Checks that the packet sequence is the next sequence the channel end expects to receive
+- Checks that the packet sequence is the next sequence the channel end expects to receive (for ordered channels)
 - Checks that the timeout height has not yet passed
 - Checks the inclusion proof of packet data commitment in the outgoing chain's state
 - Sets the opaque acknowledgement value at a store key unique to the packet (if the acknowledgement is non-empty or the channel is unordered)
@@ -539,9 +539,9 @@ function recvPacket(
 
 #### Acknowledgements
 
-The `acknowledgePacket` function is called by a module to process the acknowledgement of a packet previously sent on a
-channel to a counterparty module on the counterparty chain. `acknowledgePacket` also cleans up the packet commitment,
-which is no longer necessary since the packet has been received and acted upon.
+The `acknowledgePacket` function is called by a module to process the acknowledgement of a packet previously sent by
+the calling module on a channel to a counterparty module on the counterparty chain.
+`acknowledgePacket` also cleans up the packet commitment, which is no longer necessary since the packet has been received and acted upon.
 
 Calling modules MAY atomically execute appropriate application acknowledgement-handling logic in conjunction with calling `acknowledgePacket`.
 
@@ -562,7 +562,7 @@ function acknowledgePacket(
   assert(connection.state === OPEN)
 
   // verify we sent the packet and haven't cleared it out yet
-  assert(provableStore.get(packetCommitmentKey(packet.sourcePort, packet.sourceChannel, sequence))
+  assert(provableStore.get(packetCommitmentKey(packet.sourcePort, packet.sourceChannel, packet.sequence))
          === commit(packet.data))
 
   // assert correct acknowledgement on counterparty chain
@@ -624,7 +624,7 @@ function timeoutPacketOrdered(
   assert(nextSequenceRecv < packet.sequence)
 
   // verify we actually sent this packet, check the store
-  assert(provableStore.get(packetCommitmentKey(packet.sourcePort, packet.sourceChannel, sequence))
+  assert(provableStore.get(packetCommitmentKey(packet.sourcePort, packet.sourceChannel, packet.sequence))
          === commit(packet.data))
 
   // check that the recv sequence is as claimed
@@ -728,7 +728,7 @@ function timeoutClose(
   assert(client.verifyMembership(
     proofHeight,
     proof,
-    packetCommitmentKey(packet.sourcePort, packet.sourceChannel, sequence),
+    packetCommitmentKey(packet.sourcePort, packet.sourceChannel, packet.sequence),
     commit(packet.data)
   ))
 

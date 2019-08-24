@@ -104,8 +104,8 @@ These are combined together in a `ModuleCallbacks` interface:
 
 ```typescript
 interface ModuleCallbacks {
-  onChanOpenInit: (Identifier, Identifier, Identifier, Identifier, [Identifier], bytestring, uint64) => void
-  onChanOpenTry: (Identifier, Identifier, Identifier, Identifier, [Identifier], bytestring, uint64) => void
+  onChanOpenInit: (Identifier, Identifier, Identifier, Identifier, [Identifier], string, uint64) => void
+  onChanOpenTry: (Identifier, Identifier, Identifier, Identifier, [Identifier], string, uint64) => void
   onChanOpenAck: (Identifier, Identifier, uint64) => void
   onChanOpenConfirm: (Identifier, Identifier) => void
   onChanOpenTimeout: (Identifier, Identifier) => void
