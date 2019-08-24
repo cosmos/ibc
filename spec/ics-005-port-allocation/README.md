@@ -54,7 +54,7 @@ The IBC specification makes no assumptions of module functionality other than th
 
 The host state machine MUST support either object-capability reference or source authentication for modules.
 
-In the former case, the IBC handler must have the ability to generate *object-capability keys*, unique, opaque references
+In the former case, the IBC handler must have the ability to generate *object-capabilities*, unique, opaque references
 which can be passed to a module and will not be duplicable by other modules. Two examples are store keys as used in the Cosmos SDK ([reference](https://github.com/cosmos/cosmos-sdk/blob/master/store/types/store.go#L224))
 and object references as used in Agoric's Javascript runtime ([reference](https://github.com/Agoric/SwingSet)).
 
@@ -63,7 +63,7 @@ type CapabilityKey object
 ```
 
 ```typescript
-function newCapabilityKey(): CapabilityKey {
+function newCapabilityPath(): CapabilityKey {
   // provided by host state machine, e.g. pointer address in Cosmos SDK
 }
 ```
@@ -88,7 +88,7 @@ In the former case, `generate` returns a new object-capability key, which must b
 
 ```
 function generate(): CapabilityKey {
-  return newCapabilityKey()
+  return newCapabilityPath()
 }
 ```
 
@@ -121,7 +121,7 @@ function authenticate(id: SourceIdentifier): boolean {
 `portKey` takes an `Identifier` and returns the store key under which the object-capability reference or owner module identifier associated with a port should be stored.
 
 ```typescript
-function portKey(id: Identifier) {
+function portPath(id: Identifier): Path {
   return "ports/{id}"
 }
 ```
@@ -134,24 +134,24 @@ If the host state machine does not implement a special module manager to control
 
 ```typescript
 function bindPort(id: Identifier) {
-  assert(provableStore.get(portKey(id)) === null)
+  assert(provableStore.get(portPath(id)) === null)
   key = generate()
-  provableStore.set(key, portKey(id))
+  provableStore.set(key, portPath(id))
   return key
 }
 ```
 
 #### Transferring ownership of a port
 
-If the host state machine supports object-capability keys, no additional protocol is necessary, since the port reference is a bearer capability. If it does not, the IBC handler MAY implement the following `transferPort` function.
+If the host state machine supports object-capabilities, no additional protocol is necessary, since the port reference is a bearer capability. If it does not, the IBC handler MAY implement the following `transferPort` function.
 
 `transferPort` SHOULD be available to all modules.
 
 ```typescript
 function transferPort(id: Identifier) {
-  assert(authenticate(provableStore.get(portKey(id))))
+  assert(authenticate(provableStore.get(portPath(id))))
   key = generate()
-  provableStore.set(portKey(id), key)
+  provableStore.set(portPath(id), key)
 }
 ```
 
@@ -163,8 +163,8 @@ The IBC handler MUST implement the `releasePort` function, which allows a module
 
 ```typescript
 function releasePort(id: Identifier) {
-  assert(authenticate(provableStore.get(portKey(id))))
-  provableStore.delete(portKey(id))
+  assert(authenticate(provableStore.get(portPath(id))))
+  provableStore.delete(portPath(id))
 }
 ```
 

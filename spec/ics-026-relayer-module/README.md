@@ -35,7 +35,7 @@ The functions `generate` & `authenticate` are defined as in [ICS 5](../ics-005-p
 
 ## Technical Specification
 
-> Note: If the host state machine is utilising object capability authentication (see [ICS 005](../ics-005-port-allocation)), all functions utilising ports take an additional capability key parameter.
+> Note: If the host state machine is utilising object capability authentication (see [ICS 005](../ics-005-port-allocation)), all functions utilising ports take an additional capability parameter.
 
 ### Module callback interface
 
@@ -118,7 +118,7 @@ interface ModuleCallbacks {
 Callbacks are provided when the module binds to a port.
 
 ```typescript
-function callbackKey(portIdentifier: Identifier) {
+function callbackPath(portIdentifier: Identifier): Path {
   return "callbacks/{portIdentifier}"
 }
 ```
@@ -126,7 +126,7 @@ function callbackKey(portIdentifier: Identifier) {
 The calling module identifier is also stored for future authentication should the callbacks need to be altered.
 
 ```typescript
-function authenticationKey(portIdentifier: Identifier) {
+function authenticationPath(portIdentifier: Identifier): Path {
   return "authentication/{portIdentifier}"
 }
 ```
@@ -149,11 +149,11 @@ The function `bindPort` can be called by a module in order to bind to a port, th
 function bindPort(
   id: Identifier,
   callbacks: Callbacks) {
-  assert(privateStore.get(callbackKey(id)) === null)
+  assert(privateStore.get(callbackPath(id)) === null)
   handler.bindPort(id)
-  key = generate()
-  privateStore.set(authenticationKey(id), key)
-  privateStore.set(callbackKey(id), callbacks)
+  capability = generate()
+  privateStore.set(authenticationPath(id), capability)
+  privateStore.set(callbackPath(id), callbacks)
 }
 ```
 
@@ -164,8 +164,8 @@ The function `updatePort` can be called by a module in order to alter the callba
 function updatePort(
   id: Identifier,
   newCallbacks: Callbacks) {
-  assert(authenticate(privateStore.get(authenticationKey(id))))
-  privateStore.set(callbackKey(id), newCallbacks)
+  assert(authenticate(privateStore.get(authenticationPath(id))))
+  privateStore.set(callbackPath(id), newCallbacks)
 }
 ```
 
@@ -173,10 +173,10 @@ The function `releasePort` can be called by a module in order to release a port 
 
 ```typescript
 function releasePort(id: Identifier) {
-  assert(authenticate(privateStore.get(authenticationKey(id))))
+  assert(authenticate(privateStore.get(authenticationPath(id))))
   handler.releasePort(id)
-  privateStore.delete(callbackKey(id))
-  privateStore.delete(authenticationKey(id))
+  privateStore.delete(callbackPath(id))
+  privateStore.delete(authenticationPath(id))
 }
 ```
 

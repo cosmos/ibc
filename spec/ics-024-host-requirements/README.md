@@ -31,9 +31,9 @@ The host state machine must support a module system, whereby self-contained, pot
 
 The IBC/TAO specifications define the implementations of two modules: the core "IBC handler" module and the "IBC relayer" module. IBC/APP specifications further define other modules for particular packet handling application logic. IBC requires that the "master module" or execution environment can be used to grant other modules on the host state machine access to the IBC handler module and/or the IBC relayer module, but otherwise does not impose requirements on the functionality or communication abilities of any other modules which may be co-located on the state machine.
 
-### Keys, identifiers, separators
+### Paths, identifiers, separators
 
-A `Key` is a bytestring used as the key for an object stored in state. Keys MUST contain only alphanumeric characters and the separator `/`.
+A `Path` is a bytestring used as the key for an object stored in state. Paths MUST contain only alphanumeric characters and the separator `/`.
 
 An `Identifier` is a bytestring used as a key for an object stored in state, such as a connection, channel, or light client. Identifiers MUST consist of alphanumeric characters only. Identifiers MUST be non-empty (of positive integer length).
 
@@ -41,47 +41,47 @@ Identifiers are not intended to be valuable resources — to prevent name squatt
 
 The separator `/` is used to separate and concatenate two identifiers or an identifier and a constant bytestring. Identifiers MUST NOT contain the `/` character, which prevents ambiguity.
 
-Variable interpolation, denoted by curly braces, MAY be used as shorthand to define key formats, e.g. `client/{clientIdentifier}/consensusState`.
+Variable interpolation, denoted by curly braces, MAY be used as shorthand to define path formats, e.g. `client/{clientIdentifier}/consensusState`.
 
 ### Key/value Store
 
 The host state machine MUST provide two separate key-value store interfaces, each with three functions which behave in the standard way:
 
 ```typescript
-type Key = string
+type Path = string
 
 type Value = string
 ```
 
 ```typescript
-type get = (key: Key) => Value | void
+type get = (path: Path) => Value | void
 ```
 
 ```typescript
-type set = (key: Key, value: Value) => void
+type set = (path: Path, value: Value) => void
 ```
 
 ```typescript
-type delete = (key: Key) => void
+type delete = (path: Path) => void
 ```
 
-`Key` is as defined above. `Value` is an arbitrary bytestring encoding of a particular data structure. Encoding details are left to separate ICSs.
+`Path` is as defined above. `Value` is an arbitrary bytestring encoding of a particular data structure. Encoding details are left to separate ICSs.
 
-These functions MUST be permissioned to the IBC handler module (the implementation of which is described in separate standards) only, so only the IBC handler module can `set` or `delete` the keys which can be read by `get`. This can possibly be implemented as a sub-store (prefixed key-space) of a larger key-value store used by the entire state machine.
+These functions MUST be permissioned to the IBC handler module (the implementation of which is described in separate standards) only, so only the IBC handler module can `set` or `delete` the paths which can be read by `get`. This can possibly be implemented as a sub-store (prefixed key-space) of a larger key-value store used by the entire state machine.
 
 The first interface provided by the host state machine MUST write to a key-value store whose data can be externally proved with a vector commitment as defined in [ICS 23](../ics-023-vector-commitments). The second interface MAY support external proofs, but is not required to - the IBC handler will never write data to it which needs to be proved.
 
-These interfaces are referred to throughout specifications which utilise them as the `provableStore` and the `privateStore` respectively, where `get`, `set`, and `delete` are called as methods, e.g. `provableStore.set('key', 'value')`.
+These interfaces are referred to throughout specifications which utilise them as the `provableStore` and the `privateStore` respectively, where `get`, `set`, and `delete` are called as methods, e.g. `provableStore.set('path', 'value')`.
 
 The `provableStore` and `privateStore` differ also in their encoding restrictions. The `provableStore` MUST use canonical data structure encodings provided in these specifications as proto3 files, since values stored in the `provableStore` must be comprehensible to other machines implementing IBC.
 
-> Note: any key-value store interface which provides these methods & properties is sufficient for IBC. Host state machines may implement "proxy stores" with underlying storage models which do not directly match the key & value pairs set and retrieved through the store interface — keys could be grouped into buckets & values stored in pages which could be proved in a single commitment, keyspaces could be remapped non-contiguously in some bijective manner, etc — as long as `get`, `set`, and `delete` behave as expected and other machines can verify commitment proofs of key & value pairs (or their absence) in the provable store.
+> Note: any key-value store interface which provides these methods & properties is sufficient for IBC. Host state machines may implement "proxy stores" with underlying storage models which do not directly match the path & value pairs set and retrieved through the store interface — paths could be grouped into buckets & values stored in pages which could be proved in a single commitment, path-spaces could be remapped non-contiguously in some bijective manner, etc — as long as `get`, `set`, and `delete` behave as expected and other machines can verify commitment proofs of path & value pairs (or their absence) in the provable store.
 
-### Key-space
+### Path-space
 
-At present, IBC/TAO utilises the following key prefixes for the `provableStore` and `privateStore`. Future keys may be used in future versions of the protocol, so the entire key-space in both stores MUST be reserved for the IBC handler.
+At present, IBC/TAO utilises the following path prefixes for the `provableStore` and `privateStore`. Future paths may be used in future versions of the protocol, so the entire key-space in both stores MUST be reserved for the IBC handler.
 
-| Store          | Key format                                           | Value type        | Defined in |
+| Store          | Path format                                          | Value type        | Defined in |
 | -------------- | ---------------------------------------------------- | ----------------- | ---------------------- |
 | privateStore   | "clients/{identifier}"                               | ClientState       | [ICS 2](../ics-002-client-semantics) |
 | provableStore  | "clients/{identifier}/consensusState"                | ConsensusState    | [ICS 2](../ics-002-client-semantics) |
@@ -92,7 +92,7 @@ At present, IBC/TAO utilises the following key prefixes for the `provableStore` 
 | provableStore  | "channels/{identifier}/nextSequenceRecv"             | uint64            | [ICS 4](../ics-004-channel-and-packet-semantics) |
 | provableStore  | "channels/{identifier}/packets/{sequence}"           | bytes             | [ICS 4](../ics-004-channel-and-packet-semantics) |
 | provableStore  | "channels/{identifier}/acknowledgements/{sequence}"  | bytes             | [ICS 4](../ics-004-channel-and-packet-semantics) |
-| provableStore  | "ports/{identifier}"                                 | Key               | [ICS 5](../ics-005-port-allocation) |
+| provableStore  | "ports/{identifier}"                                 | Path              | [ICS 5](../ics-005-port-allocation) |
 | privateStore   | "callbacks/{identifier}"                             | ModuleCallbacks   | [ICS 26](../ics-026-relayer-module) |
 
 ### Module layout

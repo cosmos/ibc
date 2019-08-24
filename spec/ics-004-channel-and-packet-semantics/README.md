@@ -158,12 +158,12 @@ The architecture of clients, connections, channels and packets:
 
 ### Preliminaries
 
-#### Store keys
+#### Store paths 
 
-Channel structures are stored under a store key prefix unique to a combination of a port identifier and channel identifier:
+Channel structures are stored under a store path prefix unique to a combination of a port identifier and channel identifier:
 
 ```typescript
-function channelKey(portIdentifier: Identifier, channelIdentifier: Identifier) {
+function channelPath(portIdentifier: Identifier, channelIdentifier: Identifier): Path {
   return "ports/{portIdentifier}/channels/{channelIdentifier}"
 }
 ```
@@ -171,34 +171,34 @@ function channelKey(portIdentifier: Identifier, channelIdentifier: Identifier) {
 The `nextSequenceSend` and `nextSequenceRecv` unsigned integer counters are stored separately so they can be proved individually:
 
 ```typescript
-function nextSequenceSendKey(portIdentifier: Identifier, channelIdentifier: Identifier) {
-  return "{channelKey(portIdentifier, channelIdentifier)}/nextSequenceSend"
+function nextSequenceSendPath(portIdentifier: Identifier, channelIdentifier: Identifier): Path {
+  return "{channelPath(portIdentifier, channelIdentifier)}/nextSequenceSend"
 }
 
-function nextSequenceRecvKey(portIdentifier: Identifier, channelIdentifier: Identifier) {
-  return "{channelKey(portIdentifier, channelIdentifier)}/nextSequenceRecv"
+function nextSequenceRecvPath(portIdentifier: Identifier, channelIdentifier: Identifier): Path {
+  return "{channelPath(portIdentifier, channelIdentifier)}/nextSequenceRecv"
 }
 ```
 
 Constant-size commitments to packet data fields are stored under the packet sequence number:
 
 ```typescript
-function packetCommitmentKey(portIdentifier: Identifier, channelIdentifier: Identifier, sequence: uint64) {
-  return "{channelKey(portIdentifier, channelIdentifier)}/packets/" + sequence
+function packetCommitmentPath(portIdentifier: Identifier, channelIdentifier: Identifier, sequence: uint64): Path {
+  return "{channelPath(portIdentifier, channelIdentifier)}/packets/" + sequence
 }
 ```
 
-Absence of the key in the store is equivalent to a zero-bit.
+Absence of the path in the store is equivalent to a zero-bit.
 
-Packet acknowledgement data are stored under the `packetAcknowledgementKey`:
+Packet acknowledgement data are stored under the `packetAcknowledgementPath`:
 
 ```typescript
-function packetAcknowledgementKey(portIdentifier: Identifier, channelIdentifier: Identifier, sequence: uint64) {
-  return "{channelKey(portIdentifier, channelIdentifier)}/acknowledgements/" + sequence
+function packetAcknowledgementPath(portIdentifier: Identifier, channelIdentifier: Identifier, sequence: uint64): Path {
+  return "{channelPath(portIdentifier, channelIdentifier)}/acknowledgements/" + sequence
 }
 ```
 
-Unordered channels MUST always write a acknowledgement (even an empty one) to this key so that the absence of such can be used as proof-of-timeout. Ordered channels MAY write an acknowledgement, but are not required to.
+Unordered channels MUST always write a acknowledgement (even an empty one) to this path so that the absence of such can be used as proof-of-timeout. Ordered channels MAY write an acknowledgement, but are not required to.
 
 ### Versioning
 
@@ -211,25 +211,25 @@ Host state machines MAY also safely ignore the version data or specify an empty 
 
 ### Sub-protocols
 
-> Note: If the host state machine is utilising object capability authentication (see [ICS 005](../ics-005-port-allocation)), all functions utilising ports take an additional capability key parameter.
+> Note: If the host state machine is utilising object capability authentication (see [ICS 005](../ics-005-port-allocation)), all functions utilising ports take an additional capability parameter.
 
 #### Tracking channels
 
 ```typescript
 function addChannelToConnection(connectionId: Identifier, channelId: Identifier) {
-  privateStore.set(connectionChannelsKey(connectionId), channelId)
+  privateStore.set(connectionChannelsPath(connectionId), channelId)
 }
 ```
 
 ```typescript
 function removeChannelFromConnection(connectionId: Identifier, channelId: Identifier) {
-  privateStore.set(connectionChannelsKey(connectionId), channelId)
+  privateStore.set(connectionChannelsPath(connectionId), channelId)
 }
 ```
 
 ```typescript
 function queryConnectionChannels(id: Identifier): Set<Identifier> {
-  return privateStore.get(connectionChannelsKey(connectionId))
+  return privateStore.get(connectionChannelsPath(connectionId))
 }
 ```
 
@@ -256,16 +256,16 @@ function chanOpenInit(
   counterpartyChannelIdentifier: Identifier,
   counterpartyPortIdentifier: Identifier, version: string) {
   assert(connectionHops.length === 1)
-  assert(provableStore.get(channelKey(portIdentifier, channelIdentifier)) === nil)
-  connection = provableStore.get(connectionKey(connectionHops[0]))
+  assert(provableStore.get(channelPath(portIdentifier, channelIdentifier)) === nil)
+  connection = provableStore.get(connectionPath(connectionHops[0]))
   // optimistic channel handshakes are allowed
   assert(connection.state !== CLOSED)
-  assert(authenticate(provableStore.get(portKey(portIdentifier))))
+  assert(authenticate(provableStore.get(portPath(portIdentifier))))
   channel = Channel{INIT, order, portIdentifier, counterpartyPortIdentifier,
                     counterpartyChannelIdentifier, connectionHops, version}
-  provableStore.set(channelKey(portIdentifier, channelIdentifier), channel)
-  provableStore.set(nextSequenceSendKey(portIdentifier, channelIdentifier), 1)
-  provableStore.set(nextSequenceRecvKey(portIdentifier, channelIdentifier), 1)
+  provableStore.set(channelPath(portIdentifier, channelIdentifier), channel)
+  provableStore.set(nextSequenceSendPath(portIdentifier, channelIdentifier), 1)
+  provableStore.set(nextSequenceRecvPath(portIdentifier, channelIdentifier), 1)
 }
 ```
 
@@ -284,23 +284,23 @@ function chanOpenTry(
   proofInit: CommitmentProof,
   proofHeight: uint64) {
   assert(connectionHops.length === 1)
-  assert(provableStore.get(channelKey(portIdentifier, channelIdentifier)) === null)
-  assert(authenticate(provableStore.get(portKey(portIdentifier))))
-  connection = provableStore.get(connectionKey(connectionHops[0]))
+  assert(provableStore.get(channelPath(portIdentifier, channelIdentifier)) === null)
+  assert(authenticate(provableStore.get(portPath(portIdentifier))))
+  connection = provableStore.get(connectionPath(connectionHops[0]))
   assert(connection.state === OPEN)
   client = queryClient(connection.clientIdentifier)
   assert(client.verifyMembership(
     proofHeight,
     proofInit,
-    channelKey(counterpartyPortIdentifier, counterpartyChannelIdentifier),
+    channelPath(counterpartyPortIdentifier, counterpartyChannelIdentifier),
     Channel{INIT, order, counterpartyPortIdentifier, portIdentifier,
             channelIdentifier, connectionHops.reverse(), counterpartyVersion}
   ))
   channel = Channel{OPENTRY, order, portIdentifier, counterpartyPortIdentifier,
                     counterpartyChannelIdentifier, connectionHops, version}
-  provableStore.set(channelKey(portIdentifier, channelIdentifier), channel)
-  provableStore.set(nextSequenceSendKey(portIdentifier, channelIdentifier), 1)
-  provableStore.set(nextSequenceRecvKey(portIdentifier, channelIdentifier), 1)
+  provableStore.set(channelPath(portIdentifier, channelIdentifier), channel)
+  provableStore.set(nextSequenceSendPath(portIdentifier, channelIdentifier), 1)
+  provableStore.set(nextSequenceRecvPath(portIdentifier, channelIdentifier), 1)
 }
 ```
 
@@ -314,22 +314,22 @@ function chanOpenAck(
   version: string,
   proofTry: CommitmentProof,
   proofHeight: uint64) {
-  channel = provableStore.get(channelKey(portIdentifier, channelIdentifier))
+  channel = provableStore.get(channelPath(portIdentifier, channelIdentifier))
   assert(channel.state === INIT)
-  assert(authenticate(provableStore.get(portKey(portIdentifier))))
-  connection = provableStore.get(connectionKey(channel.connectionHops[0]))
+  assert(authenticate(provableStore.get(portPath(portIdentifier))))
+  connection = provableStore.get(connectionPath(channel.connectionHops[0]))
   assert(connection.state === OPEN)
   client = queryClient(connection.clientIdentifier)
   assert(client.verifyMembership(
     proofHeight,
     proofTry,
-    channelKey(channel.counterpartyPortIdentifier, channel.counterpartyChannelIdentifier),
+    channelPath(channel.counterpartyPortIdentifier, channel.counterpartyChannelIdentifier),
     Channel{OPENTRY, channel.order, channel.counterpartyPortIdentifier, portIdentifier,
             channelIdentifier, channel.connectionHops.reverse(), version}
   ))
   channel.state = OPEN
   channel.version = version
-  provableStore.set(channelKey(portIdentifier, channelIdentifier), channel)
+  provableStore.set(channelPath(portIdentifier, channelIdentifier), channel)
 }
 ```
 
@@ -342,21 +342,21 @@ function chanOpenConfirm(
   channelIdentifier: Identifier,
   proofAck: CommitmentProof,
   proofHeight: uint64) {
-  channel = provableStore.get(channelKey(portIdentifier, channelIdentifier))
+  channel = provableStore.get(channelPath(portIdentifier, channelIdentifier))
   assert(channel.state === OPENTRY)
-  assert(authenticate(provableStore.get(portKey(portIdentifier))))
-  connection = provableStore.get(connectionKey(channel.connectionHops[0]))
+  assert(authenticate(provableStore.get(portPath(portIdentifier))))
+  connection = provableStore.get(connectionPath(channel.connectionHops[0]))
   assert(connection.state === OPEN)
   client = queryClient(connection.clientIdentifier)
   assert(client.verifyMembership(
     proofHeight,
     proofAck,
-    channelKey(channel.counterpartyPortIdentifier, channel.counterpartyChannelIdentifier),
+    channelPath(channel.counterpartyPortIdentifier, channel.counterpartyChannelIdentifier),
     Channel{OPEN, channel.order, channel.counterpartyPortIdentifier, portIdentifier,
             channelIdentifier, channel.connectionHops.reverse(), channel.version}
   ))
   channel.state = OPEN
-  provableStore.set(channelKey(portIdentifier, channelIdentifier), channel)
+  provableStore.set(channelPath(portIdentifier, channelIdentifier), channel)
 }
 ```
 
@@ -372,12 +372,12 @@ Once closed, channels cannot be reopened.
 function chanCloseInit(
   portIdentifier: Identifier,
   channelIdentifier: Identifier) {
-  channel = provableStore.get(channelKey(portIdentifier, channelIdentifier))
+  channel = provableStore.get(channelPath(portIdentifier, channelIdentifier))
   assert(channel.state !== CLOSED)
-  connection = provableStore.get(connectionKey(channel.connectionHops[0]))
+  connection = provableStore.get(connectionPath(channel.connectionHops[0]))
   assert(connection.state === OPEN)
   channel.state = CLOSED
-  provableStore.set(channelKey(portIdentifier, channelIdentifier), channel)
+  provableStore.set(channelPath(portIdentifier, channelIdentifier), channel)
 }
 ```
 
@@ -394,9 +394,9 @@ function chanCloseConfirm(
   channelIdentifier: Identifier,
   proofInit: CommitmentProof,
   proofHeight: uint64) {
-  channel = provableStore.get(channelKey(portIdentifier, channelIdentifier))
+  channel = provableStore.get(channelPath(portIdentifier, channelIdentifier))
   assert(channel.state !== CLOSED)
-  connection = provableStore.get(connectionKey(channel.connectionHops[0]))
+  connection = provableStore.get(connectionPath(channel.connectionHops[0]))
   assert(connection.state === OPEN)
   expected = Channel{CLOSED, channel.order, channel.counterpartyPortIdentifier, portIdentifier,
                      channel.channelIdentifier, channel.connectionHops.reverse(), channel.version}
@@ -404,11 +404,11 @@ function chanCloseConfirm(
   assert(client.verifyMembership(
     proofHeight,
     proof,
-    channelKey(channel.counterpartyPortIdentifier, channel.counterpartyChannelIdentifier),
+    channelPath(channel.counterpartyPortIdentifier, channel.counterpartyChannelIdentifier),
     expected
   ))
   channel.state = CLOSED
-  provableStore.set(channelKey(portIdentifier, channelIdentifier), channel)
+  provableStore.set(channelPath(portIdentifier, channelIdentifier), channel)
 }
 ```
 
@@ -459,23 +459,23 @@ Note that the full packet is not stored in the state of the chain - merely a sho
 
 ```typescript
 function sendPacket(packet: Packet) {
-  channel = provableStore.get(channelKey(packet.sourcePort, packet.sourceChannel))
+  channel = provableStore.get(channelPath(packet.sourcePort, packet.sourceChannel))
   // optimistic sends are permitted once the handshake has started
   assert(channel.state !== CLOSED)
-  assert(authenticate(provableStore.get(portKey(packet.sourcePort))))
+  assert(authenticate(provableStore.get(portPath(packet.sourcePort))))
   assert(packet.destPort === channel.counterpartyPortIdentifier)
   assert(packet.destChannel === channel.counterpartyChannelIdentifier)
-  connection = provableStore.get(connectionKey(packet.connectionHops[0]))
+  connection = provableStore.get(connectionPath(packet.connectionHops[0]))
   // optimistic sends are permitted once the handshake has started
   assert(connection.state !== CLOSED)
   assert(packet.connectionHops === channel.connectionHops)
-  consensusState = provableStore.get(consensusStateKey(connection.clientIdentifier))
+  consensusState = provableStore.get(consensusStatePath(connection.clientIdentifier))
   assert(consensusState.getHeight() < packet.timeoutHeight)
-  nextSequenceSend = provableStore.get(nextSequenceSendKey(packet.sourcePort, packet.sourceChannel))
+  nextSequenceSend = provableStore.get(nextSequenceSendPath(packet.sourcePort, packet.sourceChannel))
   assert(packet.sequence === nextSequenceSend)
   nextSequenceSend = nextSequenceSend + 1
-  provableStore.set(nextSequenceSendKey(packet.sourcePort, packet.sourceChannel), nextSequenceSend)
-  provableStore.set(packetCommitmentKey(packet.sourcePort, packet.sourceChannel, sequence), commit(packet.data))
+  provableStore.set(nextSequenceSendPath(packet.sourcePort, packet.sourceChannel), nextSequenceSend)
+  provableStore.set(packetCommitmentPath(packet.sourcePort, packet.sourceChannel, sequence), commit(packet.data))
 }
 ```
 
@@ -492,7 +492,7 @@ The IBC handler performs the following steps in order:
 - Checks that the packet sequence is the next sequence the channel end expects to receive (for ordered channels)
 - Checks that the timeout height has not yet passed
 - Checks the inclusion proof of packet data commitment in the outgoing chain's state
-- Sets the opaque acknowledgement value at a store key unique to the packet (if the acknowledgement is non-empty or the channel is unordered)
+- Sets the opaque acknowledgement value at a store path unique to the packet (if the acknowledgement is non-empty or the channel is unordered)
 - Increments the packet receive sequence associated with the channel end (ordered channels only)
 
 ```typescript
@@ -502,12 +502,12 @@ function recvPacket(
   proofHeight: uint64,
   acknowledgement: bytes): Packet {
 
-  channel = provableStore.get(channelKey(packet.destPort, packet.destChannel))
+  channel = provableStore.get(channelPath(packet.destPort, packet.destChannel))
   assert(channel.state === OPEN)
-  assert(authenticate(provableStore.get(portKey(packet.destPort))))
+  assert(authenticate(provableStore.get(portPath(packet.destPort))))
   assert(packet.sourcePort === channel.counterpartyPortIdentifier)
   assert(packet.sourceChannel === channel.counterpartyChannelIdentifier)
-  connection = provableStore.get(connectionKey(channel.connectionHops[0]))
+  connection = provableStore.get(connectionPath(channel.connectionHops[0]))
   assert(connection.state === OPEN)
   assert(packet.connectionHops === channel.connectionHops)
   assert(proofHeight < packet.timeoutHeight)
@@ -515,21 +515,21 @@ function recvPacket(
   assert(client.verifyMembership(
     proofHeight,
     proof,
-    packetCommitmentKey(packet.sourcePort, packet.sourceChannel, packet.sequence),
+    packetCommitmentPath(packet.sourcePort, packet.sourceChannel, packet.sequence),
     commit(packet.data)
   ))
 
   if (acknowledgement.length > 0 || channel.order === UNORDERED)
     provableStore.set(
-      packetAcknowledgementKey(packet.destPort, packet.destChannel, packet.sequence),
+      packetAcknowledgementPath(packet.destPort, packet.destChannel, packet.sequence),
       commit(acknowledgement)
     )
 
   if (channel.order === ORDERED) {
-    nextSequenceRecv = provableStore.get(nextSequenceRecvKey(packet.destPort, packet.destChannel))
+    nextSequenceRecv = provableStore.get(nextSequenceRecvPath(packet.destPort, packet.destChannel))
     assert(packet.sequence === nextSequenceRecv)
     nextSequenceRecv = nextSequenceRecv + 1
-    provableStore.set(nextSequenceRecvKey(packet.destPort, packet.destChannel), nextSequenceRecv)
+    provableStore.set(nextSequenceRecvPath(packet.destPort, packet.destChannel), nextSequenceRecv)
   }
 
   // return transparent packet
@@ -552,17 +552,17 @@ function acknowledgePacket(
   proofHeight: uint64,
   acknowledgement: bytes): Packet {
 
-  channel = provableStore.get(channelKey(packet.sourcePort, packet.sourceChannel))
+  channel = provableStore.get(channelPath(packet.sourcePort, packet.sourceChannel))
   assert(channel.state === OPEN)
-  assert(authenticate(provableStore.get(portKey(packet.sourcePort))))
+  assert(authenticate(provableStore.get(portPath(packet.sourcePort))))
   assert(packet.sourceChannel === channel.counterpartyChannelIdentifier)
-  connection = provableStore.get(connectionKey(channel.connectionHops[0]))
+  connection = provableStore.get(connectionPath(channel.connectionHops[0]))
   assert(packet.sourcePort === channel.counterpartyPortIdentifier)
   assert(packet.connectionHops === channel.connectionHops)
   assert(connection.state === OPEN)
 
   // verify we sent the packet and haven't cleared it out yet
-  assert(provableStore.get(packetCommitmentKey(packet.sourcePort, packet.sourceChannel, packet.sequence))
+  assert(provableStore.get(packetCommitmentPath(packet.sourcePort, packet.sourceChannel, packet.sequence))
          === commit(packet.data))
 
   // assert correct acknowledgement on counterparty chain
@@ -570,12 +570,12 @@ function acknowledgePacket(
   assert(client.verifyMembership(
     proofHeight,
     proof,
-    packetAcknowledgementKey(packet.destPort, packet.destChannel, packet.sequence),
+    packetAcknowledgementPath(packet.destPort, packet.destChannel, packet.sequence),
     commit(acknowledgement)
   ))
 
   // delete our commitment so we can't "acknowledge" again
-  provableStore.delete(packetCommitmentKey(packet.sourcePort, packet.sourceChannel, packet.sequence))
+  provableStore.delete(packetCommitmentPath(packet.sourcePort, packet.sourceChannel, packet.sequence))
 
   // return transparent packet
   return packet
@@ -606,13 +606,13 @@ function timeoutPacketOrdered(
   proof: CommitmentProof,
   proofHeight: uint64,
   nextSequenceRecv: uint64): Packet {
-  channel = provableStore.get(channelKey(packet.sourcePort, packet.sourceChannel))
+  channel = provableStore.get(channelPath(packet.sourcePort, packet.sourceChannel))
   assert(channel.state === OPEN)
   assert(channel.order === ORDERED)
-  assert(authenticate(provableStore.get(portKey(packet.sourcePort))))
+  assert(authenticate(provableStore.get(portPath(packet.sourcePort))))
   assert(packet.destChannel === channel.counterpartyChannelIdentifier)
 
-  connection = provableStore.get(connectionKey(packet.connectionHops[0]))
+  connection = provableStore.get(connectionPath(packet.connectionHops[0]))
   // note: the connection may have been closed
   assert(packet.destPort === channel.counterpartyPortIdentifier)
   assert(packet.connectionHops === channel.connectionHops)
@@ -624,7 +624,7 @@ function timeoutPacketOrdered(
   assert(nextSequenceRecv < packet.sequence)
 
   // verify we actually sent this packet, check the store
-  assert(provableStore.get(packetCommitmentKey(packet.sourcePort, packet.sourceChannel, packet.sequence))
+  assert(provableStore.get(packetCommitmentPath(packet.sourcePort, packet.sourceChannel, packet.sequence))
          === commit(packet.data))
 
   // check that the recv sequence is as claimed
@@ -632,16 +632,16 @@ function timeoutPacketOrdered(
   assert(client.verifyMembership(
     proofHeight,
     proof,
-    nextSequenceRecvKey(packet.destPort, packet.destChannel),
+    nextSequenceRecvPath(packet.destPort, packet.destChannel),
     nextSequenceRecv
   ))
 
   // delete our commitment
-  provableStore.delete(packetCommitmentKey(packet.sourcePort, packet.sourceChannel, packet.sequence))
+  provableStore.delete(packetCommitmentPath(packet.sourcePort, packet.sourceChannel, packet.sequence))
 
   // close the channel
   channel.state = CLOSED
-  provableStore.set(channelKey(packet.sourcePort, packet.sourceChannel), channel)
+  provableStore.set(channelPath(packet.sourcePort, packet.sourceChannel), channel)
 
   // return transparent packet
   return packet
@@ -660,13 +660,13 @@ function timeoutPacketUnordered(
   packet: OpaquePacket,
   proof: CommitmentProof,
   proofHeight: uint64): Packet {
-  channel = provableStore.get(channelKey(packet.sourcePort, packet.sourceChannel))
+  channel = provableStore.get(channelPath(packet.sourcePort, packet.sourceChannel))
   assert(channel.state === OPEN)
   assert(channel.order === UNORDERED)
-  assert(authenticate(provableStore.get(portKey(packet.sourcePort))))
+  assert(authenticate(provableStore.get(portPath(packet.sourcePort))))
   assert(packet.destChannel === channel.counterpartyChannelIdentifier)
 
-  connection = provableStore.get(connectionKey(packet.connectionHops[0]))
+  connection = provableStore.get(connectionPath(packet.connectionHops[0]))
   // note: the connection may have been closed
   assert(packet.destPort === channel.counterpartyPortIdentifier)
   assert(packet.connectionHops === channel.connectionHops)
@@ -675,7 +675,7 @@ function timeoutPacketUnordered(
   assert(proofHeight >= packet.timeoutHeight)
 
   // verify we actually sent this packet, check the store
-  assert(provableStore.get(packetCommitmentKey(packet.sourcePort, packet.sourceChannel, packet.sequence))
+  assert(provableStore.get(packetCommitmentPath(packet.sourcePort, packet.sourceChannel, packet.sequence))
          === commit(packet.data))
 
   // verify absence of acknowledgement at packet index
@@ -683,11 +683,11 @@ function timeoutPacketUnordered(
   assert(client.verifyNonMembership(
     proofHeight,
     proof,
-    packetAcknowledgementKey(packet.sourcePort, packet.sourceChannel, packet.sequence)
+    packetAcknowledgementPath(packet.sourcePort, packet.sourceChannel, packet.sequence)
   ))
 
   // delete our commitment
-  provableStore.delete(packetCommitmentKey(packet.sourcePort, packet.sourceChannel, packet.sequence))
+  provableStore.delete(packetCommitmentPath(packet.sourcePort, packet.sourceChannel, packet.sequence))
 
   // return transparent packet
   return packet
@@ -708,18 +708,18 @@ function timeoutClose(
   packet: OpaquePacket,
   proof: CommitmentProof,
   proofHeight: uint64): Packet {
-  channel = provableStore.get(channelKey(packet.destPort, packet.destChannel))
+  channel = provableStore.get(channelPath(packet.destPort, packet.destChannel))
   assert(channel.state === OPEN)
   assert(channel.order === ORDERED)
-  assert(authenticate(provableStore.get(portKey(packet.destPort))))
+  assert(authenticate(provableStore.get(portPath(packet.destPort))))
   assert(packet.sourceChannel === channel.counterpartyChannelIdentifier)
 
-  connection = provableStore.get(connectionKey(channel.connectionHops[0]))
+  connection = provableStore.get(connectionPath(channel.connectionHops[0]))
   // note: the connection may have been closed
   assert(packet.sourcePort === channel.counterpartyPortIdentifier)
   assert(packet.connectionHops === channel.connectionHops)
 
-  nextSequenceRecv = provableStore.get(nextSequenceRecvKey(packet.destPort, packet.destChannel))
+  nextSequenceRecv = provableStore.get(nextSequenceRecvPath(packet.destPort, packet.destChannel))
   assert(packet.sequence === nextSequenceRecv)
 
   assert(proofHeight >= packet.timeoutHeight)
@@ -728,12 +728,12 @@ function timeoutClose(
   assert(client.verifyMembership(
     proofHeight,
     proof,
-    packetCommitmentKey(packet.sourcePort, packet.sourceChannel, packet.sequence),
+    packetCommitmentPath(packet.sourcePort, packet.sourceChannel, packet.sequence),
     commit(packet.data)
   ))
 
   channel.state = CLOSED
-  provableStore.set(channelKey(packet.destPort, packet.destChannel), channel)
+  provableStore.set(channelPath(packet.destPort, packet.destChannel), channel)
 
   // return transparent packet
   return packet
@@ -752,18 +752,18 @@ function timeoutOnClose(
   proofNonMembership: CommitmentProof,
   proofClosed: CommitmentProof,
   proofHeight: uint64) {
-  channel = provableStore.get(channelKey(packet.sourcePort, packet.sourceChannel))
+  channel = provableStore.get(channelPath(packet.sourcePort, packet.sourceChannel))
   // note: the channel may have been closed
-  assert(authenticate(provableStore.get(portKey(packet.sourcePort))))
+  assert(authenticate(provableStore.get(portPath(packet.sourcePort))))
   assert(packet.destChannel === channel.counterpartyChannelIdentifier)
 
-  connection = provableStore.get(connectionKey(packet.connectionHops[0]))
+  connection = provableStore.get(connectionPath(packet.connectionHops[0]))
   // note: the connection may have been closed
   assert(packet.destPort === channel.counterpartyPortIdentifier)
   assert(packet.connectionHops === channel.connectionHops)
 
   // verify we actually sent this packet, check the store
-  assert(provableStore.get(packetCommitmentKey(packet.sourcePort, packet.sourceChannel, packet.sequence))
+  assert(provableStore.get(packetCommitmentPath(packet.sourcePort, packet.sourceChannel, packet.sequence))
          === commit(packet.data))
 
   // check that the opposing channel end has closed
@@ -773,7 +773,7 @@ function timeoutOnClose(
   assert(client.verifyMembership(
     proofHeight,
     proofClosed,
-    channelKey(channel.counterpartyPortIdentifier, channel.counterpartyChannelIdentifier),
+    channelPath(channel.counterpartyPortIdentifier, channel.counterpartyChannelIdentifier),
     expected
   ))
 
@@ -781,11 +781,11 @@ function timeoutOnClose(
   assert(client.verifyNonMembership(
     proofHeight,
     proofNonMembership,
-    packetAcknowledgementKey(packet.sourcePort, packet.sourceChannel, packet.sequence)
+    packetAcknowledgementPath(packet.sourcePort, packet.sourceChannel, packet.sequence)
   ))
 
   // delete our commitment
-  provableStore.delete(packetCommitmentKey(packet.sourcePort, packet.sourceChannel, packet.sequence))
+  provableStore.delete(packetCommitmentPath(packet.sourcePort, packet.sourceChannel, packet.sequence))
 
   // return transparent packet
   return packet
@@ -804,13 +804,13 @@ function cleanupPacketOrdered(
   proof: CommitmentProof,
   proofHeight: uint64,
   nextSequenceRecv: uint64): Packet {
-  channel = provableStore.get(channelKey(packet.sourcePort, packet.sourceChannel))
+  channel = provableStore.get(channelPath(packet.sourcePort, packet.sourceChannel))
   assert(channel.state === OPEN)
   assert(channel.order === ORDERED)
-  assert(authenticate(provableStore.get(portKey(packet.sourcePort))))
+  assert(authenticate(provableStore.get(portPath(packet.sourcePort))))
   assert(packet.destChannel === channel.counterpartyChannelIdentifier)
 
-  connection = provableStore.get(connectionKey(packet.connectionHops[0]))
+  connection = provableStore.get(connectionPath(packet.connectionHops[0]))
   // note: the connection may have been closed
   assert(packet.destPort === channel.counterpartyPortIdentifier)
   assert(packet.connectionHops === channel.connectionHops)
@@ -823,16 +823,16 @@ function cleanupPacketOrdered(
   assert(client.verifyMembership(
     proofHeight,
     proof,
-    nextSequenceRecvKey(packet.destPort, packet.destChannel),
+    nextSequenceRecvPath(packet.destPort, packet.destChannel),
     nextSequenceRecv
   ))
 
   // verify we actually sent the packet, check the store
-  assert(provableStore.get(packetCommitmentKey(packet.sourcePort, packet.sourceChannel, packet.sequence))
+  assert(provableStore.get(packetCommitmentPath(packet.sourcePort, packet.sourceChannel, packet.sequence))
              === commit(packet.data))
 
   // clear the store
-  provableStore.delete(packetCommitmentKey(packet.sourcePort, packet.sourceChannel, packet.sequence))
+  provableStore.delete(packetCommitmentPath(packet.sourcePort, packet.sourceChannel, packet.sequence))
 
   // return transparent packet
   return packet
@@ -847,13 +847,13 @@ function cleanupPacketUnordered(
   proof: CommitmentProof,
   proofHeight: uint64,
   acknowledgement: bytes): Packet {
-  channel = provableStore.get(channelKey(packet.sourcePort, packet.sourceChannel))
+  channel = provableStore.get(channelPath(packet.sourcePort, packet.sourceChannel))
   assert(channel.state === OPEN)
   assert(channel.order === UNORDERED)
-  assert(authenticate(provableStore.get(portKey(packet.sourcePort))))
+  assert(authenticate(provableStore.get(portPath(packet.sourcePort))))
   assert(packet.destChannel === channel.counterpartyChannelIdentifier)
 
-  connection = provableStore.get(connectionKey(packet.connectionHops[0]))
+  connection = provableStore.get(connectionPath(packet.connectionHops[0]))
   // note: the connection may have been closed
   assert(packet.destPort === channel.counterpartyPortIdentifier)
   assert(packet.connectionHops === channel.connectionHops)
@@ -863,16 +863,16 @@ function cleanupPacketUnordered(
   assert(client.verifyMembership(
     proofHeight,
     proof,
-    packetAcknowledgementKey(packet.destPort, packet.destChannel, packet.sequence),
+    packetAcknowledgementPath(packet.destPort, packet.destChannel, packet.sequence),
     acknowledgement
   ))
 
   // verify we actually sent the packet, check the store
-  assert(provableStore.get(packetCommitmentKey(packet.sourcePort, packet.sourceChannel, packet.sequence))
+  assert(provableStore.get(packetCommitmentPath(packet.sourcePort, packet.sourceChannel, packet.sequence))
              === commit(packet.data))
 
   // clear the store
-  provableStore.delete(packetCommitmentKey(packet.sourcePort, packet.sourceChannel, packet.sequence))
+  provableStore.delete(packetCommitmentPath(packet.sourcePort, packet.sourceChannel, packet.sequence))
 
   // return transparent packet
   return packet
@@ -903,7 +903,7 @@ Channels can be queried with `queryChannel`:
 
 ```typescript
 function queryChannel(connId: Identifier, chanId: Identifier): ChannelEnd | void {
-  return provableStore.get(channelKey(connId, chanId))
+  return provableStore.get(channelPath(connId, chanId))
 }
 ```
 

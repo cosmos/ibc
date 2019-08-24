@@ -59,7 +59,7 @@ could be provided as executable WASM functions when the client instance is creat
 
 ### Definitions
 
-* `get`, `set`, `Key`, and `Identifier` are as defined in [ICS 24](../ics-024-host-requirements).
+* `get`, `set`, `Path`, and `Identifier` are as defined in [ICS 24](../ics-024-host-requirements).
 
 * `CommitmentRoot` is as defined in [ICS 23](../ics-023-vector-commitments). It must provide an inexpensive way for
   downstream logic to verify whether key-value pairs are present in state at a particular height.
@@ -211,44 +211,44 @@ in state at particular heights. The behaviour of these functions MUST comply wit
 internal implementation details may differ (for example, a loopback client could simply read directly from the state and require no proofs).
 
 ```type
-type verifyMembership = (ClientState, uint64, CommitmentProof, Key, Value) => boolean
+type verifyMembership = (ClientState, uint64, CommitmentProof, Path, Value) => boolean
 ```
 
 ```typescript
-type verifyNonMembership = (ClientState, uint64, CommitmentProof, Key) => boolean
+type verifyNonMembership = (ClientState, uint64, CommitmentProof, Path) => boolean
 ```
 
 ### Sub-protocols
 
 IBC handlers MUST implement the functions defined below.
 
-#### Key-space
+#### Path-space
 
 Clients are stored under a unique `Identifier` prefix.
 This ICS does not require that client identifiers be generated in a particular manner, only that they be unique.
 
-`clientStateKey` takes an `Identifier` and returns a `Key` under which to store a particular client state.
+`clientStatePath` takes an `Identifier` and returns a `Path` under which to store a particular client state.
 
 ```typescript
-function clientStateKey(id: Identifier): Key {
+function clientStatePath(id: Identifier): Path {
   return "clients/{id}/state"
 }
 ```
 
-`clientTypeKey` takes an `Identifier` and returns ` Key` under which to store the type of a particular client.
+`clientTypePath` takes an `Identifier` and returns `Path` under which to store the type of a particular client.
 
 ```typescript
-function clientTypeKey(id: Identifier): Key {
+function clientTypePath(id: Identifier): Path {
   return "clients/{id}/type"
 }
 ```
 
 Consensus states MUST be stored separately so that they can be independently verified.
 
-`consensusStateKey` takes an `Identifier` and returns a `Key` under which to store the consensus state of a client.
+`consensusStatePath` takes an `Identifier` and returns a `Path` under which to store the consensus state of a client.
 
 ```typescript
-function consensusStateKey(id: Identifier): Key {
+function consensusStatePath(id: Identifier): Path {
   return "clients/{id}/consensusState"
 }
 ```
@@ -270,11 +270,11 @@ function createClient(
   id: Identifier,
   clientType: ClientType,
   consensusState: ConsensusState) {
-  assert(privateStore.get(clientStateKey(id)) === null)
-  assert(provableStore.get(clientTypeKey(id)) === null)
+  assert(privateStore.get(clientStatePath(id)) === null)
+  assert(provableStore.get(clientTypePath(id)) === null)
   clientState = clientType.initialize(consensusState)
-  provableStore.set(clientTypeKey(id), clientType)
-  privateStore.set(clientStateKey(id), clientState)
+  provableStore.set(clientTypePath(id), clientType)
+  privateStore.set(clientStatePath(id), clientState)
 }
 ```
 
@@ -285,13 +285,13 @@ client state must fulfil an interface allowing membership / non-membership verif
 
 ```typescript
 function queryClientConsensusState(id: Identifier): ConsensusState {
-  return provableStore.get(consensusStateKey(id))
+  return provableStore.get(consensusStatePath(id))
 }
 ```
 
 ```typescript
 function queryClient(id: Identifier): ClientState {
-  return privateStore.get(clientStateKey(id))
+  return privateStore.get(clientStatePath(id))
 }
 ```
 
@@ -307,9 +307,9 @@ updating the signature authority logic in the stored consensus state.
 function updateClient(
   id: Identifier,
   header: Header) {
-  clientType = provableStore.get(clientTypeKey(id))
+  clientType = provableStore.get(clientTypePath(id))
   assert(clientType !== null)
-  clientState = privateStore.get(clientStateKey(id))
+  clientState = privateStore.get(clientStatePath(id))
   assert(clientState !== null)
   assert(clientType.validityPredicate(clientState, header))
 }
@@ -324,9 +324,9 @@ previously valid state roots & preventing future updates.
 function submitMisbehaviourToClient(
   id: Identifier,
   evidence: bytes) {
-  clientType = provableStore.get(clientTypeKey(id))
+  clientType = provableStore.get(clientTypePath(id))
   assert(clientType !== null)
-  clientState = privateStore.get(clientStateKey(id))
+  clientState = privateStore.get(clientStatePath(id))
   assert(clientState !== null)
   assert(clientType.misbehaviourPredicate(clientState, evidence))
 }
