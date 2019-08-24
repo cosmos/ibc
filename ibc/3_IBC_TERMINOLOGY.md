@@ -116,6 +116,10 @@ IBC sub-protocols are reasoned about as interactions between two chains `A` and 
 
 *Data confidentiality* refers to the ability of the host state machine to refuse to make particular data available to particular parties without impairing the functionality of the IBC protocol.
 
+### Non-repudiability
+
+*Non-repudiability* refers to the inability of a machine to deny having sent a particular packet or committed a particular state. IBC is a non-repudiable protocol, modulo data availability choices made by state machines.
+
 ### Consensus liveness
 
 *Consensus liveness* refers to the continuance of block production by the consensus algorithm of a particular machine.

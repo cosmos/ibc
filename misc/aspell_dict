@@ -1,4 +1,4 @@
-personal_ws-1.1 en 390 
+personal_ws-1.1 en 392 
 unescrow
 onChanCloseConfirm
 clientKey
@@ -144,6 +144,7 @@ PacketTimeoutUnordered
 PacketCleanupUnordered
 clientConnectionsKey
 loopback
+repudiability
 TransferCoins
 onRecvPacket
 timeoutPacketOrdered
@@ -247,6 +248,7 @@ chanOpenConfirm
 removeChannelFromConnection
 queryClientFrozen
 recv
+repudiable
 otherValue
 RegisterLightClient
 queryChannel

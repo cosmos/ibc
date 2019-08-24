@@ -76,9 +76,10 @@ IBC assumes functionalities and properties of the underlying consensus protocols
 
 ## Operation
 
-The primary purpose of IBC is to provide reliable, authenticated, ordered communication between modules running on independent host distributed machines. This requires protocol logic in the following areas:
+The primary purpose of IBC is to provide reliable, authenticated, ordered communication between modules running on independent host machines. This requires protocol logic in the following areas:
 
 - Data relay
+- Data confidentiality & legibility
 - Reliability
 - Flow control
 - Authentication
@@ -90,6 +91,10 @@ The following paragraphs outline the protocol logic within IBC for each area.
 ### Data relay
 
 In the IBC architecture, modules are not directly sending messages to each other over networking infrastructure, but rather creating messages to be sent which are then physically relayed by monitoring "relayer processes". IBC assumes the existence of a set of relayer processes with access to an underlying network protocol stack (likely TCP/IP, UDP/IP, or QUIC/IP) and physical interconnect infrastructure. These relayer processes monitor a set of machines implementing the IBC protocol, continuously scanning the state of each machine and executing transactions on another machine when outgoing packets have been committed. For correct operation and progress in a connection between two machines, IBC requires only that at least one correct and live relayer process exists which can relay between the machines.
+
+### Data confidentiality & legibility
+
+The IBC protocol requires only that the minimum data necessary for correct operation of the IBC protocol be made available & legible (serialised in a standardised format), and the state machine may elect to make that data available only to specific relayers (though the details thereof are out-of-scope of this specification). This data consists of consensus state, client, connection, channel, and packet information, and any auxiliary state structure necessary to construct proofs of inclusion or exclusion of particular key-value pairs in state. All data which must be proved to another machine must also be legible; i.e., it must be serialised in a format defined by this specification.
 
 ### Reliability
 
