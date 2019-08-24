@@ -145,7 +145,7 @@ type OpaquePacket = object
 
 #### Permissioning
 
-- Channels should be permissioned to one module on each end, determined during the handshake and immutable afterwards (higher-level logic could tokenize channel ownership by tokenizing ownership of the port).
+- Channels should be permissioned to one module on each end, determined during the handshake and immutable afterwards (higher-level logic could tokenize channel ownership by tokenising ownership of the port).
   Only the module associated with a channel end should be able to send or receive on it.
 
 ## Technical Specification
