@@ -96,7 +96,9 @@ enum ChannelState {
 - A channel end in `OPEN` state has completed the handshake and is ready to send and receive packets.
 - A channel end in `CLOSED` state has been closed and can no longer be used to send or receive packets.
 
-A *packet*, in the interblockchain communication protocol, is a particular datagram, defined as follows:
+An `OpaquePacket` is a particular data structure defined as follows:
+
+A `Packet`, in the interblockchain communication protocol, is a particular data structure defined as follows:
 
 ```typescript
 interface Packet {
