@@ -394,6 +394,27 @@ function chanCloseConfirm(
 
 ![packet-state-machine](packet-state-machine.png)
 
+##### A day in the life of a packet
+
+The following sequence of steps must occur for a packet to be sent from module *1* on machine *A* to module *2* on machine *B*, starting from scratch.
+
+The module can interface with the IBC handler through [ICS 25](../ics-025-handler-interface) or [ICS 26](../ics-026-relayer-module).
+
+1. Initial client & port setup, in any order
+    1. Client created on *A* for *B* (see [ICS 2](../ics-002-client-semantics))
+    1. Client created on *B* for *A* (see [ICS 2](../ics-002-client-semantics))
+    1. Module *1* binds to a port (see [ICS 5](../ics-005-port-allocation))
+    1. Module *2* binds to a port (see [ICS 5](../ics-005-port-allocation)), which is communicated out-of-band to module *1*
+1. Establishment of a connection & channel, optimistic send, in order
+    1. Connection opening handshake started from *A* to *B* by module *1* (see [ICS 3](../ics-003-connection-semantics))
+    1. Channel opening handshake started from *1* to *2* using the newly created connection (this ICS)
+    1. Packet sent over the newly created channel from *1* to *2* (this ICS)
+1. Successful completion of handshakes (if either handshake fails, the connection/channel can be closed & the packet timed-out)
+    1. Connection opening handshake completes successfully (see [ICS 3](../ics-003-connection-semantics)) (this will require participation of a relayer process)
+    1. Channel opening handshake completes successfully (this ICS) (this will require participation of a relayer process) 
+1. Packet confirmation on machine *B*, module *2* (or packet timeout if the timeout height has passed) (this will require participation of a relayer process)
+1. Acknowledgement (possibly) relayed back from module *2* on machine *B* to module *1* on machine *A*
+
 ##### Sending packets
 
 The `sendPacket` function is called by a module in order to send an IBC packet on a channel end owned by the calling module to the corresponding module the counterparty chain.
