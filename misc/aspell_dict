@@ -1,4 +1,4 @@
-personal_ws-1.1 en 397 
+personal_ws-1.1 en 412 
 unescrow
 onChanCloseConfirm
 clientKey
@@ -9,6 +9,7 @@ BIP
 desiredCounterpartyIdentifier
 queryClientConnections
 stablecoins
+packetAcknowledgementPath
 encodings
 addConnectionToClient
 exfiltration
@@ -41,6 +42,7 @@ recvPacket
 duplicable
 collateralising
 OpValidityPredicate
+packetCommitmentPath
 getCurrentHeight
 EIP
 Cephalopod
@@ -59,12 +61,15 @@ provableStore
 clientState
 chanOpenInit
 handleConnOpenTimeout
+callbackPath
 handleChanOpenAck
 ERC
 validator
+authenticationPath
 liveness
 addChannelToConnection
 OpValidityPredicateBase
+channelPath
 clientStateKey
 plaintext
 queryClient
@@ -96,6 +101,7 @@ namespaces
 middled
 channelId
 queryClientConsensusState
+consensusStatePath
 unescrowing
 InitialPubkey
 handlePacketRecv
@@ -125,6 +131,7 @@ startRound
 ChannelEnd
 timeoutPropose
 counterparty
+connectionPath
 handleConnCloseInit
 ValidatorUpdate
 releasePort
@@ -197,6 +204,7 @@ INIT
 handlePacketSend
 handleChanCloseConfirm
 proofInit
+nextSequenceSendPath
 getConsensusState
 png
 tokenized
@@ -204,6 +212,7 @@ connectionId
 newCallbacks
 destChannel
 updateClient
+connectionChannelsPath
 onChanOpenAck
 Pre
 privateStore
@@ -234,11 +243,13 @@ portKey
 computable
 TCP
 counterpartyVersion
+portPath
 createClient
 connOpenTimeout
 subprotocols
 validityPredicate
 topologies
+newCapabilityPath
 multiprocess
 lifecycle
 desiredCounterpartyConnectionIdentifier
@@ -254,12 +265,14 @@ recv
 repudiable
 otherValue
 RegisterLightClient
+clientConnectionsPath
 queryChannel
 misbehaviourPredicate
 ConnCloseTry
 CapabilityKey
 packetAcknowledgementKey
 timeoutHeight
+clientStatePath
 datagram
 interoperating
 batchable
@@ -267,6 +280,7 @@ getMerkleRoot
 bijective
 Juwoon
 proofTimeout
+clientTypePath
 interoperation
 tokenising
 authenticationKey
@@ -327,6 +341,7 @@ chanOpenTry
 incrementing
 queryConnection
 validValue
+nextSequenceRecvPath
 freezeClient
 structs
 keyspaces

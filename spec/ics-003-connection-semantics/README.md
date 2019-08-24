@@ -89,12 +89,12 @@ interface ConnectionEnd {
 - The `counterpartyClientIdentifier` field identifies the client on the counterparty chain associated with this connection.
 - The `version` field is an opaque string which can be utilised to determine encodings or protocols for channels or packets utilising this connection.
 
-### Store keys
+### Store paths
 
-Connection keys are stored under a unique identifier.
+Connection paths are stored under a unique identifier.
 
 ```typescript
-function connectionKey(id: Identifier): Key {
+function connectionPath(id: Identifier): Path {
   return "connections/{id}"
 }
 ```
@@ -102,7 +102,7 @@ function connectionKey(id: Identifier): Key {
 A reverse mapping from clients to a set of connections (utilised to look up all connections using a client) is stored under a unique prefix per-client:
 
 ```typescript
-function clientConnectionsKey(clientIdentifier: Identifier): Key {
+function clientConnectionsPath(clientIdentifier: Identifier): Path {
   return "clients/{clientIdentifier}/connections"
 }
 ```
@@ -115,9 +115,9 @@ function clientConnectionsKey(clientIdentifier: Identifier): Key {
 function addConnectionToClient(
   clientIdentifier: Identifier,
   connectionIdentifier: Identifier) {
-  conns = privateStore.get(clientConnectionsKey(clientIdentifier, connectionIdentifier))
+  conns = privateStore.get(clientConnectionsPath(clientIdentifier, connectionIdentifier))
   conns.add(connectionIdentifier)
-  privateStore.set(clientConnectionsKey(clientIdentifier, connectionIdentifier), conns)
+  privateStore.set(clientConnectionsPath(clientIdentifier, connectionIdentifier), conns)
 }
 ```
 
@@ -127,9 +127,9 @@ function addConnectionToClient(
 function removeConnectionFromClient(
   clientIdentifier: Identifier,
   connectionIdentifier: Identifier) {
-  conns = privateStore.get(clientConnectionsKey(clientIdentifier, connectionIdentifier))
+  conns = privateStore.get(clientConnectionsPath(clientIdentifier, connectionIdentifier))
   conns.remove(connectionIdentifier)
-  privateStore.set(clientConnectionsKey(clientIdentifier, connectionIdentifier), conns)
+  privateStore.set(clientConnectionsPath(clientIdentifier, connectionIdentifier), conns)
 }
 ```
 
@@ -179,11 +179,11 @@ function connOpenInit(
   clientIdentifier: Identifier,
   counterpartyClientIdentifier: Identifier,
   version: string) {
-  assert(provableStore.get(connectionKey(identifier)) == null)
+  assert(provableStore.get(connectionPath(identifier)) == null)
   state = INIT
   connection = ConnectionEnd{state, desiredCounterpartyConnectionIdentifier, clientIdentifier,
     counterpartyClientIdentifier, version}
-  provableStore.set(connectionKey(identifier), connection)
+  provableStore.set(connectionPath(identifier), connection)
   addConnectionToClient(clientIdentifier, identifier)
 }
 ```
@@ -207,16 +207,16 @@ function connOpenTry(
   expected = ConnectionEnd{INIT, desiredIdentifier, counterpartyClientIdentifier,
                            clientIdentifier, counterpartyVersion}
   assert(client.verifyMembership(proofHeight, proofInit,
-                                 connectionKey(counterpartyConnectionIdentifier), expected))
+                                 connectionPath(counterpartyConnectionIdentifier), expected))
   assert(client.verifyMembership(proofHeight, proofInit,
-                                 consensusStateKey(counterpartyClientIdentifier),
+                                 consensusStatePath(counterpartyClientIdentifier),
                                  expectedConsensusState))
-  assert(provableStore.get(connectionKey(desiredIdentifier)) === null)
+  assert(provableStore.get(connectionPath(desiredIdentifier)) === null)
   identifier = desiredIdentifier
   state = TRYOPEN
   connection = ConnectionEnd{state, counterpartyConnectionIdentifier, clientIdentifier,
                              counterpartyClientIdentifier, version}
-  provableStore.set(connectionKey(identifier), connection)
+  provableStore.set(connectionPath(identifier), connection)
   addConnectionToClient(clientIdentifier, identifier)
 }
 ```
@@ -231,19 +231,19 @@ function connOpenAck(
   proofHeight: uint64,
   consensusHeight: uint64) {
   assert(consensusHeight <= getCurrentHeight())
-  connection = provableStore.get(connectionKey(identifier))
+  connection = provableStore.get(connectionPath(identifier))
   assert(connection.state === INIT)
   client = queryClient(connection.clientIdentifier)
   expectedConsensusState = getConsensusState(consensusHeight)
   expected = ConnectionEnd{TRYOPEN, identifier, connection.counterpartyClientIdentifier,
                            connection.clientIdentifier, version}
   assert(client.verifyMembership(proofHeight, proofTry,
-                                 connectionKey(connection.counterpartyConnectionIdentifier), expected))
+                                 connectionPath(connection.counterpartyConnectionIdentifier), expected))
   assert(client.verifyMembership(proofHeight, proofTry,
-                                 consensusStateKey(connection.counterpartyClientIdentifier), expectedConsensusState))
+                                 consensusStatePath(connection.counterpartyClientIdentifier), expectedConsensusState))
   connection.state = OPEN
   connection.version = version
-  provableStore.set(connectionKey(identifier), connection)
+  provableStore.set(connectionPath(identifier), connection)
 }
 ```
 
@@ -254,15 +254,15 @@ function connOpenConfirm(
   identifier: Identifier,
   proofAck: CommitmentProof,
   proofHeight: uint64)
-  connection = provableStore.get(connectionKey(identifier))
+  connection = provableStore.get(connectionPath(identifier))
   assert(connection.state === TRYOPEN)
   expected = ConnectionEnd{OPEN, identifier, connection.counterpartyClientIdentifier,
                            connection.clientIdentifier, connection.version}
   client = queryClient(connection.clientIdentifier)
   assert(client.verifyMembership(counterpartyStateRoot, proofAck,
-                                 connectionKey(connection.counterpartyConnectionIdentifier), expected))
+                                 connectionPath(connection.counterpartyConnectionIdentifier), expected))
   connection.state = OPEN
-  provableStore.set(connectionKey(identifier), connection)
+  provableStore.set(connectionPath(identifier), connection)
 ```
 
 #### Header Tracking
@@ -291,10 +291,10 @@ Once closed, connections cannot be reopened.
 ```typescript
 function connCloseInit(identifier: Identifier) {
   assert(queryConnectionChannels(identifier).size() === 0)
-  connection = provableStore.get(connectionKey(identifier))
+  connection = provableStore.get(connectionPath(identifier))
   assert(connection.state !== CLOSED)
   connection.state = CLOSED
-  provableStore.set(connectionKey(identifier), connection)
+  provableStore.set(connectionPath(identifier), connection)
 }
 ```
 
@@ -308,14 +308,14 @@ function connCloseConfirm(
   proofInit: CommitmentProof,
   proofHeight: uint64) {
   assert(queryConnectionChannels(identifier).size() === 0)
-  connection = provableStore.get(connectionKey(identifier))
+  connection = provableStore.get(connectionPath(identifier))
   assert(connection.state !== CLOSED)
   client = queryClient(connection.clientIdentifier)
   expected = ConnectionEnd{CLOSED, identifier, connection.counterpartyClientIdentifier,
                            connection.clientIdentifier, connection.version}
-  assert(client.verifyMembership(proofHeight, proofInit, connectionKey(counterpartyConnectionIdentifier), expected))
+  assert(client.verifyMembership(proofHeight, proofInit, connectionPath(counterpartyConnectionIdentifier), expected))
   connection.state = CLOSED
-  provableStore.set(connectionKey(identifier), connection)
+  provableStore.set(connectionPath(identifier), connection)
 }
 ```
 
@@ -331,7 +331,7 @@ Connections can be queried by identifier with `queryConnection`.
 
 ```typescript
 function queryConnection(id: Identifier): ConnectionEnd | void {
-  return provableStore.get(connectionKey(id))
+  return provableStore.get(connectionPath(id))
 }
 ```
 
@@ -339,7 +339,7 @@ Connections associated with a particular client can be queried by client identif
 
 ```typescript
 function queryClientConnections(id: Identifier): Set<Identifier> {
-  return privateStore.get(clientConnectionsKey(id))
+  return privateStore.get(clientConnectionsPath(id))
 }
 ```
 

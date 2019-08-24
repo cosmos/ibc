@@ -6,8 +6,8 @@ open import Category.Applicative
 open import Category.Monad
 open import Category.Monad.State
 
-data Key : Set where
-  MkKey : String -> Key
+data Path : Set where
+  MkPath : String -> Path
 
 data Value : Set where
   MkValue : String -> Value
@@ -22,14 +22,14 @@ data Env : Set where
   MkEnv : Env
 
 {-
-get : Key -> State Env Value
-get key = return (MkValue "")
+get : Path -> State Env Value
+get path = return (MkValue "")
 
-set : Key -> Value -> State Env ⊤
-set key value = return ⊤
+set : Path -> Value -> State Env ⊤
+set path value = return ⊤
 
-delete : Key -> State Env ⊤
-delete key = return ⊤
+delete : Path -> State Env ⊤
+delete path = return ⊤
 
 getConsensusState : State Env ConsensusState
 getConsensusState = ?
