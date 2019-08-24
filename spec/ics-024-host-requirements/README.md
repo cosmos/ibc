@@ -153,9 +153,9 @@ If the boolean passed to `assert` is `true`, the host state machine need not do 
 
 ### Data availability
 
-For safety (e.g. exactly-once packet delivery), host state machines MUST have eventual data availability, such that any key-value pairs in state can be eventually retrieved by relayers.
+For deliver-or-timeout safety, host state machines MUST have eventual data availability, such that any key-value pairs in state can be eventually retrieved by relayers. For exactly-once safety, data availability is not required.
 
-For liveness (relaying packets, which will have a timeout), host state machines MUST have partially synchronous data availability (e.g. within a wall clock or block height bound), such that any key-value pairs in state can be retrieved by relayers within the bound.
+For liveness of packet relay, host state machines MUST have transactional liveness (and thus necessarily consensus liveness), such that incoming transactions are confirmed within a block height bound (in particular, less than the timeouts assign to the packets).
 
 Data computable from a subset of state and knowledge of the state machine (e.g. IBC packet data, which is not directly stored) are also assumed to be available to and efficiently computable by relayers.
 

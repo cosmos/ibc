@@ -129,7 +129,7 @@ interface Packet {
 #### Exactly-once delivery
 
 - IBC packets sent on one end of a channel should be delivered exactly once to the other end.
-- No network synchrony assumptions should be required for safety of exactly-once delivery.
+- No network synchrony assumptions should be required for exactly-once safety.
   If one or both of the chains should halt, packets should be delivered no more than once, and once the chains resume packets should be able to flow again.
 
 #### Ordering

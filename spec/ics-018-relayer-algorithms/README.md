@@ -23,8 +23,8 @@ A *relayer* is an off-chain process with the ability to read the state of and su
 
 ### Desired Properties
 
-- No safety properties of IBC should depend on relayer behaviour (assume Byzantine relayers).
-- Liveness properties of IBC should depend only on the existence of at least one correct, live relayer.
+- No exactly-once or deliver-or-timeout safety properties of IBC should depend on relayer behaviour (assume Byzantine relayers).
+- Packet relay liveness properties of IBC should depend only on the existence of at least one correct, live relayer.
 - Relaying should be permissionless, all requisite verification should be performed on-chain.
 - Requisite communication between the IBC user and the relayer should be minimised.
 - Provision for relayer incentivisation should be possible at the application layer.

@@ -12,7 +12,7 @@
 
 This document provides definitions in plain English of key terms used throughout the IBC specification set.
 
-## Definitions
+## Abstraction definitions
 
 ### Actor
 
@@ -41,10 +41,6 @@ A *trusted state* is a particular state which a machine has decided to assume to
 ### Header
 
 A *header* is an update to the consensus state of a particular blockchain that can be verified in a well-defined fashion by a "light client" algorithm defined for that particular consensus algorithm.
-
-### Finality
-
-*Finality* is the quantifiable assurance provided by a consensus algorithm that a particular block will not be reverted, subject to certain assumptions about the behaviour of the validator set. The IBC protocol requires finality, although it need not be absolute (for example, a threshold finality gadget for a Nakamoto consensus algorithm will provide finality subject to economic assumptions about how miners behave).
 
 ### Commitment 
 
@@ -86,18 +82,6 @@ A *module* is a sub-component of the state machine of a particular blockchain wh
 
 A *handshake* is a particular class of sub-protocol involving multiple datagrams, generally used to initialise some common state on the two involved chains such as trusted states for each others' consensus algorithms.
 
-### Authentication
-
-*Authentication* refers to the protocols used to ensure that datagrams were in fact sent by a particular chain and associated state alterations committed by it.
-
-### Equivocation
-
-*Equivocation* refers to a particular class of consensus fault committed by a validator or validators which sign votes on multiple different successors to a single block.
-
-### Misbehaviour
-
-*Misbehaviour* refers to a class of consensus fault defined by a consensus algorithm & detectable (possibly also attributable) by the light client of that consensus algorithm.
-
 ### Sub-protocol
 
 Sub-protocols are defined as a set of datagram kinds and functions which must be implemented by the IBC handler module of the implementing blockchain.
@@ -105,3 +89,53 @@ Sub-protocols are defined as a set of datagram kinds and functions which must be
 Datagrams must be relayed between chains by an external process. This process is assumed to behave in an arbitrary manner — no safety properties are dependent on its behaviour, although progress is generally dependent on the existence of at least one correct relayer process.
 
 IBC sub-protocols are reasoned about as interactions between two chains `A` and `B` — there is no prior distinction between these two chains and they are assumed to be executing the same, correct IBC protocol. `A` is simply by convention the chain which goes first in the sub-protocol and `B` the chain which goes second. Protocol definitions should generally avoid including `A` and `B` in variable names to avoid confusion (as the chains themselves do not know whether they are `A` or `B` in the protocol).
+
+### Authentication
+
+*Authentication* refers to the protocols used to ensure that datagrams were in fact sent by a particular chain and associated state alterations committed by it.
+
+## Property definitions
+
+### Finality
+
+*Finality* is the quantifiable assurance provided by a consensus algorithm that a particular block will not be reverted, subject to certain assumptions about the behaviour of the validator set. The IBC protocol requires finality, although it need not be absolute (for example, a threshold finality gadget for a Nakamoto consensus algorithm will provide finality subject to economic assumptions about how miners behave).
+
+### Misbehaviour
+
+*Misbehaviour* refers to a class of consensus fault defined by a consensus algorithm & detectable (possibly also attributable) by the light client of that consensus algorithm.
+
+### Equivocation
+
+*Equivocation* refers to a particular class of consensus fault committed by a validator or validators which sign votes on multiple different successors to a single block. All equivocations are misbehaviours.
+
+### Data availability
+
+*Data availability* refers to the ability of off-chain relayer processes to retrieve data in the state of a machine within some time bound.
+
+### Data confidentiality
+
+*Data confidentiality* refers to the ability of the host state machine to refuse to make particular data available to particular parties without impairing the functionality of the IBC protocol.
+
+### Consensus liveness
+
+*Consensus liveness* refers to the continuance of block production by the consensus algorithm of a particular machine.
+
+### Transactional liveness
+
+*Transactional liveness* refers to the confirmation of incoming transactions (which transactions should be clear by context) by the consensus algorithm of a particular machine. Transactional liveness requires consensus liveness, but consensus liveness does not necessarily provide transactional liveness.
+
+### Consensus synchrony
+
+*Consensus synchrony* refers to consensus liveness within a particular bound.
+
+### Transactional synchrony
+
+*Transactional synchrony* refers to transactional liveness within a particular bound.
+
+### Exactly-once safety
+
+*Exactly-once safety* refers to the property that a packet is confirmed no more than once (and generally exactly-once assuming eventual transactional liveness).
+
+### Deliver-or-timeout safety
+
+*Deliver-or-timeout safety* refers to the property that a packet will either be delivered & executed or will timeout in a way that can be proved back to the sender.
