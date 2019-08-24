@@ -1,4 +1,4 @@
-personal_ws-1.1 en 392 
+personal_ws-1.1 en 395 
 unescrow
 onChanCloseConfirm
 clientKey
@@ -13,6 +13,7 @@ encodings
 addConnectionToClient
 exfiltration
 relayer
+Cehalopod
 timeoutClose
 timeoutPacket
 Statefulness
@@ -42,6 +43,7 @@ collateralising
 OpValidityPredicate
 getCurrentHeight
 EIP
+Cephalopod
 modularity
 EmptyLogStore
 handleConnOpenInit
@@ -308,6 +310,7 @@ rootKey
 Privkey
 acknowledgePacket
 interoperability
+Betazoid
 callingModuleIdentifier
 LogStore
 introspectable
