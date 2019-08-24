@@ -32,7 +32,11 @@ A *consensus* algorithm is the protocol used by the set of processes operating a
 
 ### Consensus State
 
-The *consensus state*, or the *root-of-trust*, is the set of information about the state of a consensus algorithm required to verify proofs about the output of that consensus algorithm (e.g. commitment roots in signed headers).
+The *consensus state* is the set of information about the state of a consensus algorithm required to verify proofs about the output of that consensus algorithm (e.g. commitment roots in signed headers).
+
+### Trusted State
+
+A *trusted state* is a particular state which a machine has decided to assume to be correct, either a priori or having verified a progression from a preceding trusted state.
 
 ### Header
 
@@ -40,19 +44,27 @@ A *header* is an update to the consensus state of a particular blockchain that c
 
 ### Finality
 
-*Finality* is the guarantee provided by a consensus algorithm that a particular block will not be reverted, subject to certain assumptions about the behaviour of the validator set. The IBC protocol requires finality.
+*Finality* is the quantifiable assurance provided by a consensus algorithm that a particular block will not be reverted, subject to certain assumptions about the behaviour of the validator set. The IBC protocol requires finality, although it need not be absolute (for example, a threshold finality gadget for a Nakamoto consensus algorithm will provide finality subject to economic assumptions about how miners behave).
 
 ### Commitment 
 
-A cryptographic *commitment* is a way to cheaply verify membership of a key => value pair in a mapping, where the mapping can be committed to with a short witness string. An *vector commitment proof* refers to the proof structure which proves whether a particular key maps to a particular value in a committed-to set or not.
+A cryptographic *commitment* is a way to cheaply verify membership of a key => value pair in a mapping, where the mapping can be committed to with a short witness string.
 
-### Handler
+### CommitmentProof
 
-An IBC *handler* is the module or sub-component within the state machine responsible for implementing the IBC specification by "handling" datagrams, performing the appropriate checks, proof verifications, and/or storage alterations, and routing valid packets to other parts of the state machine, as defined by the application-layer semantics.
+A *commitment proof* refers to the proof structure which proves whether a particular key maps to a particular value in a committed-to set or not.
+
+### Handler Module
+
+The IBC *handler module* is the module within the state machine which implements [ICS 25](../spec/ics-025-handler-module), managing clients, connections, & channels, verifying proofs, and storing appropriate commitments for packets.
+
+### Relayer Module
+
+The IBC *relayer module* is the module within the state machine which implements [ICS 26](../spec/ics-026-relayer-module), routing packets between the handler module and other modules on the host state machine which utilise the relayer module's external interface.
 
 ### Datagram
 
-A *datagram* is an opaque bytestring transmitted over some physical network, and handled by the top-level IBC handler implemented in the ledger's state machine. In some implementations, the datagram may be a field in a ledger-specific transaction or message data structure which also contains other information (e.g. a fee for spam prevention, nonce for replay prevention, type identifier to route to the IBC handler, etc.). All IBC sub-protocols (such as opening a connection, creating a channel, sending a packet) are defined in terms of sets of datagrams and protocols for handling them.
+A *datagram* is an opaque bytestring transmitted over some physical network, and handled by the IBC relayer module implemented in the ledger's state machine. In some implementations, the datagram may be a field in a ledger-specific transaction or message data structure which also contains other information (e.g. a fee for spam prevention, nonce for replay prevention, type identifier to route to the IBC handler, etc.). All IBC sub-protocols (such as opening a connection, creating a channel, sending a packet) are defined in terms of sets of datagrams and protocols for handling them through the relayer module.
 
 ### Connection
 
@@ -70,15 +82,9 @@ A *packet* is a particular data structure with sequence-related metadata (define
 
 A *module* is a sub-component of the state machine of a particular blockchain which may interact with the IBC handler and alter state according to the *data* field of particular IBC packets sent or received (minting or burning tokens, for example).
 
-## Auxiliary Terms
-
 ### Handshake
 
-A *handshake* is a particular class of sub-protocol involving multiple datagrams, generally used to initialise some common state on the two involved chains such as roots-of-trust for each others' consensus algorithms.
-
-### Trust
-
-To *trust* a blockchain or validator set means to expect that the validator set will behave in a particular way (such as < 1/3 Byzantine) relative to a well-defined consensus & state machine protocol.
+A *handshake* is a particular class of sub-protocol involving multiple datagrams, generally used to initialise some common state on the two involved chains such as trusted states for each others' consensus algorithms.
 
 ### Authentication
 
@@ -88,9 +94,13 @@ To *trust* a blockchain or validator set means to expect that the validator set 
 
 *Equivocation* refers to a particular class of consensus fault committed by a validator or validators which sign votes on multiple different successors to a single block.
 
+### Misbehaviour
+
+*Misbehaviour* refers to a class of consensus fault defined by a consensus algorithm & detectable (possibly also attributable) by the light client of that consensus algorithm.
+
 ### Sub-protocol
 
-Sub-protocols are defined as a set of datagram types and functions which must be implemented by the IBC handler module of the implementing blockchain.
+Sub-protocols are defined as a set of datagram kinds and functions which must be implemented by the IBC handler module of the implementing blockchain.
 
 Datagrams must be relayed between chains by an external process. This process is assumed to behave in an arbitrary manner — no safety properties are dependent on its behaviour, although progress is generally dependent on the existence of at least one correct relayer process.
 

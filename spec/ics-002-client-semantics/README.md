@@ -16,7 +16,7 @@ This standard specifies the properties that consensus algorithms of machines imp
 communication protocol are required to satisfy. These properties are necessary for efficient and safe
 verification in the higher-level protocol abstractions. The algorithm utilised in IBC to verify the
 consensus transcript & state sub-components of another machine is referred to as a "validity predicate",
-and pairing it with a state that the verifier trusts forms a "light client" (often shortened to "client").
+and pairing it with a state that the verifier assumes to be correct forms a "light client" (often shortened to "client").
 
 This standard also specifies how light clients will be stored, registered, and updated in the
 canonical IBC handler. The stored client instances will be introspectable by a third party actor,
@@ -401,7 +401,7 @@ function misbehaviourPredicate(clientState: ClientState, evidence: Evidence) {
 
 ### Properties & Invariants
 
-- Client identifiers are immutable & first-come-first-serve: once a client identifier has been allocated, all future headers & roots-of-trust stored under that identifier will have satisfied the client's validity predicate.
+- Client identifiers are immutable & first-come-first-serve: once a client identifier has been allocated, all future headers & trusted states stored under that identifier will have satisfied the client's validity predicate.
 
 ## Backwards Compatibility
 

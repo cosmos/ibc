@@ -34,7 +34,7 @@ There may be a starting "source zone", which starts with the entire token balanc
 
 #### Invariants
 
-Fungibility of any amount across all pegged representations, constant (or formulaic, in the case of a inflationary asset) total supply cumulative across chains.
+Fungibility of any amount across all pegged representations, constant (or formulaic, in the case of a inflationary asset) total supply cumulative across chains, and tokens only exist in a spendable form on one chain at once.
 
 ### Non-fungible tokens
 
