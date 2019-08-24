@@ -3,7 +3,7 @@
 import re, os, sys
 
 link_regex = re.compile('\[ICS ([0-9]+)\]\(([^\)]*)\)')
-title_regex = re.compile('ICS ([0-9]+)([ .:])')
+title_regex = re.compile('ICS ([0-9]+)([ :])')
 
 specs = [f.path for f in os.scandir('./spec') if f.is_dir()]
 files = [f.path for spec in specs for f in os.scandir(spec) if f.is_file() and f.path[-3:] == '.md']

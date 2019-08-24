@@ -95,6 +95,30 @@ At present, IBC/TAO utilises the following key prefixes for the `provableStore` 
 | provableStore  | "ports/{identifier}"                                 | Key               | [ICS 5](../ics-005-port-allocation) |
 | privateStore   | "callbacks/{identifier}"                             | ModuleCallbacks   | [ICS 26](../ics-026-relayer-module) |
 
+### Module layout
+
+Represented spatially, the layout of modules & their included specifications on a host state machine looks like so (Aardvark, Betazoid, and Cehalopod are arbitrary modules):
+
+```
++----------------------------------------------------------------------------------------------------------+
+|                                                                                                          |
+| Host State Machine                                                                                       |
+|                                                                                                          |
+| +-------------------+       +--------------------+      +----------------------------------------------+ |
+| | Module Aardvark   | <-->  | IBC Relayer Module |      | IBC Handler Module                           | |
+| +-------------------+       |                    |      |                                              | |
+|                             | Implements ICS 26. |      | Implements ICS 2, 3, 4, 5 internally.        | |
+| +-------------------+       |                    |      |                                              | |
+| | Module Betazoid   | <-->  |                    | -->  | Exposes interface defined in ICS 25.         | |
+| +-------------------+       |                    |      |                                              | |
+|                             |                    |      |                                              | |
+| +-------------------+       |                    |      |                                              | |
+| | Module Cephalopod | <-->  |                    |      |                                              | |
+| +-------------------+       +--------------------+      +----------------------------------------------+ |
+|                                                                                                          |
++----------------------------------------------------------------------------------------------------------+
+```
+
 ### Consensus state introspection
 
 Host state machines MUST provide the ability to introspect their current height, with `getCurrentHeight`:
