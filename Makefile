@@ -25,10 +25,13 @@ check_sections:
 spec_pdf:
 	scripts/make_pdf.sh
 
+architecture_paper:
+	scripts/make_architecture_paper.sh
+
 spellcheck:
 	find . -type f -name "*.md" -exec aspell -p ./misc/aspell_dict -x -d en_GB -c {} \;
 
 spellcheck_noninteractive:
 	find . -type f -name "*.md" | xargs -n 1 -I % ./scripts/spellcheck.sh %
 
-.PHONY: $(TOPTARGETS) $(SUBDIRS) all check check_links check_dependencies check_syntax check_sections check_proto spec_pdf spellcheck spellcheck_noninteractive
+.PHONY: $(TOPTARGETS) $(SUBDIRS) all check check_links check_dependencies check_syntax check_sections check_proto spec_pdf architecture_paper spellcheck spellcheck_noninteractive
