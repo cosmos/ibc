@@ -273,6 +273,8 @@ function createClient(
   provableStore.set(clientTypePath(id), clientType)
   privateStore.set(clientStatePath(id), clientState)
 }
+  assert(!client.frozen)
+  return client.verifiedRoots[height].verifyNonMembership(path, proof)
 ```
 
 #### Query
@@ -308,7 +310,7 @@ function updateClient(
   assert(clientType !== null)
   clientState = privateStore.get(clientStatePath(id))
   assert(clientState !== null)
-  assert(clientType.validityPredicate(clientState, header))
+  clientType.validityPredicate(clientState, header)
 }
 ```
 
@@ -325,7 +327,7 @@ function submitMisbehaviourToClient(
   assert(clientType !== null)
   clientState = privateStore.get(clientStatePath(id))
   assert(clientState !== null)
-  assert(clientType.misbehaviourPredicate(clientState, evidence))
+  clientType.misbehaviourPredicate(clientState, evidence)
 }
 ```
 
@@ -365,6 +367,7 @@ interface Evidence {
   h2: Header
 }
 
+// algorithm run by operator to commit a new block
 function commit(
   root: CommitmentRoot,
   height: uint64,
@@ -374,10 +377,12 @@ function commit(
   return header
 }
 
+// initialisation function defined by the client type
 function initialize(consensusState: ConsensusState): ClientState {
   return ClientState{false, Set.singleton(consensusState.publicKey), Map.empty()}
 }
 
+// validity predicate function defined by the client type
 function validityPredicate(
   clientState: ClientState,
   header: Header) {
@@ -390,13 +395,28 @@ function validityPredicate(
   clientState.verifiedRoots[height] = header.commitmentRoot
 }
 
-function getVerifiedRoot(
+// state membership verification function defined by the client type
+function verifyMembership(
   clientState: ClientState,
-  height: uint64) {
+  height: uint64,
+  proof: CommitmentProof
+  path: Path,
+  value: Value) {
   assert(!client.frozen)
-  return client.verifiedRoots[height]
+  return client.verifiedRoots[height].verifyMembership(path, value, proof)
 }
 
+// state non-membership function defined by the client type
+function verifyNonMembership(
+  clientState: ClientState,
+  height: uint64,
+  proof: CommitmentProof,
+  path: Path) {
+  assert(!client.frozen)
+  return client.verifiedRoots[height].verifyNonMembership(path, proof)
+}
+
+// misbehaviour verification function defined by the client type
 function misbehaviourPredicate(
   clientState: ClientState,
   evidence: Evidence) {
@@ -414,7 +434,7 @@ function misbehaviourPredicate(
 
 ### Properties & Invariants
 
-- Client identifiers are immutable & first-come-first-serve: once a client identifier has been allocated, all future headers & trusted states stored under that identifier will have satisfied the client's validity predicate.
+- Client identifiers are immutable & first-come-first-serve. Clients cannot be deleted (allowing deletion would potentially allow future replay of past packets if identifiers were re-used).
 
 ## Backwards Compatibility
 
@@ -422,8 +442,7 @@ Not applicable.
 
 ## Forwards Compatibility
 
-In a future version, this ICS will define a new function `unfreezeClient` that can be called 
-when the application logic resolves an misbehaviour event.
+New client types can be added by IBC implementations at-will as long as they confirm to this interface.
 
 ## Example Implementation
 

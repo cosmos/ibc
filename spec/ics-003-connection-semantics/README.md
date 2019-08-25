@@ -259,7 +259,7 @@ function connOpenConfirm(
   expected = ConnectionEnd{OPEN, identifier, connection.counterpartyClientIdentifier,
                            connection.clientIdentifier, connection.version}
   client = queryClient(connection.clientIdentifier)
-  assert(client.verifyMembership(counterpartyStateRoot, proofAck,
+  assert(client.verifyMembership(proofHeight, proofAck,
                                  connectionPath(connection.counterpartyConnectionIdentifier), expected))
   connection.state = OPEN
   provableStore.set(connectionPath(identifier), connection)

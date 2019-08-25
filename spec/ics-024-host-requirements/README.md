@@ -85,7 +85,6 @@ At present, IBC/TAO utilises the following path prefixes for the `provableStore`
 | -------------- | ---------------------------------------------------- | ----------------- | ---------------------- |
 | privateStore   | "clients/{identifier}"                               | ClientState       | [ICS 2](../ics-002-client-semantics) |
 | provableStore  | "clients/{identifier}/consensusState"                | ConsensusState    | [ICS 2](../ics-002-client-semantics) |
-| privateStore   | "clients/{identifier}/roots/{height}                 | CommitmentRoot    | [ICS 2](../ics-002-client-semantics) |
 | provableStore  | "clients/{identifier}/type"                          | ClientType        | [ICS 2](../ics-002-client-semantics) |
 | provableStore  | "connections/{identifier}"                           | ConnectionEnd     | [ICS 3](../ics-003-connection-semantics) |
 | provableStore  | "channels/{identifier}"                              | ChannelEnd        | [ICS 4](../ics-004-channel-and-packet-semantics) |
