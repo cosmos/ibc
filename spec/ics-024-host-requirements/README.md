@@ -97,7 +97,7 @@ At present, IBC/TAO utilises the following path prefixes for the `provableStore`
 
 ### Module layout
 
-Represented spatially, the layout of modules & their included specifications on a host state machine looks like so (Aardvark, Betazoid, and Cehalopod are arbitrary modules):
+Represented spatially, the layout of modules & their included specifications on a host state machine looks like so (Aardvark, Betazoid, and Cephalopod are arbitrary modules):
 
 ```
 +----------------------------------------------------------------------------------------------------------+

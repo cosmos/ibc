@@ -213,17 +213,23 @@ Host state machines MAY also safely ignore the version data or specify an empty 
 
 > Note: If the host state machine is utilising object capability authentication (see [ICS 005](../ics-005-port-allocation)), all functions utilising ports take an additional capability parameter.
 
-#### Tracking channels
+#### Tracking non-closed channels
+
+The set of non-closed channels associated with a connection is tracked under `connectionChannelsPath` (necessary to prevent closure of connections until all associated channels have been closed).
 
 ```typescript
 function addChannelToConnection(connectionId: Identifier, channelId: Identifier) {
-  privateStore.set(connectionChannelsPath(connectionId), channelId)
+  channelSet = privateStore.get(connectionChannelsPath(connectionId))
+  channelSet.add(channelId)
+  privateStore.set(connectionChannelsPath(connectionId), channelSet)
 }
 ```
 
 ```typescript
 function removeChannelFromConnection(connectionId: Identifier, channelId: Identifier) {
-  privateStore.set(connectionChannelsPath(connectionId), channelId)
+  channelSet = privateStore.get(connectionChannelsPath(connectionId))
+  channelSet.remove(channelId)
+  privateStore.set(connectionChannelsPath(connectionId), channelSet)
 }
 ```
 
@@ -251,10 +257,11 @@ could be implemented to provide this).
 function chanOpenInit(
   order: ChannelOrder,
   connectionHops: [Identifier],
-  channelIdentifier: Identifier,
   portIdentifier: Identifier,
+  channelIdentifier: Identifier,
+  counterpartyPortIdentifier: Identifier,
   counterpartyChannelIdentifier: Identifier,
-  counterpartyPortIdentifier: Identifier, version: string) {
+  version: string) {
   assert(connectionHops.length === 1)
   assert(provableStore.get(channelPath(portIdentifier, channelIdentifier)) === nil)
   connection = provableStore.get(connectionPath(connectionHops[0]))
@@ -266,6 +273,7 @@ function chanOpenInit(
   provableStore.set(channelPath(portIdentifier, channelIdentifier), channel)
   provableStore.set(nextSequenceSendPath(portIdentifier, channelIdentifier), 1)
   provableStore.set(nextSequenceRecvPath(portIdentifier, channelIdentifier), 1)
+  addChannelToConnection(connectionHops[0], channelIdentifier)
 }
 ```
 
@@ -275,10 +283,10 @@ The `chanOpenTry` function is called by a module to accept the first step of a c
 function chanOpenTry(
   order: ChannelOrder,
   connectionHops: [Identifier],
-  channelIdentifier: Identifier,
-  counterpartyChannelIdentifier: Identifier,
   portIdentifier: Identifier,
+  channelIdentifier: Identifier,
   counterpartyPortIdentifier: Identifier,
+  counterpartyChannelIdentifier: Identifier,
   version: string,
   counterpartyVersion: string,
   proofInit: CommitmentProof,
@@ -301,6 +309,7 @@ function chanOpenTry(
   provableStore.set(channelPath(portIdentifier, channelIdentifier), channel)
   provableStore.set(nextSequenceSendPath(portIdentifier, channelIdentifier), 1)
   provableStore.set(nextSequenceRecvPath(portIdentifier, channelIdentifier), 1)
+  addChannelToConnection(connectionHops[0], channelIdentifier)
 }
 ```
 
@@ -309,8 +318,8 @@ counterparty module on the other chain.
 
 ```typescript
 function chanOpenAck(
-  channelIdentifier: Identifier,
   portIdentifier: Identifier,
+  channelIdentifier: Identifier,
   version: string,
   proofTry: CommitmentProof,
   proofHeight: uint64) {
@@ -378,6 +387,7 @@ function chanCloseInit(
   assert(connection.state === OPEN)
   channel.state = CLOSED
   provableStore.set(channelPath(portIdentifier, channelIdentifier), channel)
+  removeChannelFromConnection(connectionHops[0], channelIdentifier)
 }
 ```
 
@@ -409,6 +419,7 @@ function chanCloseConfirm(
   ))
   channel.state = CLOSED
   provableStore.set(channelPath(portIdentifier, channelIdentifier), channel)
+  removeChannelFromConnection(connectionHops[0], channelIdentifier)
 }
 ```
 

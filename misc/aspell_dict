@@ -1,4 +1,4 @@
-personal_ws-1.1 en 412 
+personal_ws-1.1 en 420 
 unescrow
 onChanCloseConfirm
 clientKey
@@ -10,11 +10,11 @@ desiredCounterpartyIdentifier
 queryClientConnections
 stablecoins
 packetAcknowledgementPath
+ClientSubmitMisbehaviour
 encodings
 addConnectionToClient
 exfiltration
 relayer
-Cehalopod
 timeoutClose
 timeoutPacket
 Statefulness
@@ -104,6 +104,7 @@ queryClientConsensusState
 consensusStatePath
 unescrowing
 InitialPubkey
+PacketSend
 handlePacketRecv
 verifiedRoots
 coffeescript
@@ -162,6 +163,7 @@ connOpenAck
 WASM
 queryConnectionChannels
 NFT
+onChanCloseInit
 newpubkey
 dataflow
 datagrams
@@ -207,6 +209,7 @@ proofInit
 nextSequenceSendPath
 getConsensusState
 png
+ClientMisbehaviour
 tokenized
 connectionId
 newCallbacks
@@ -260,6 +263,7 @@ changelog
 synchrony
 chanOpenConfirm
 removeChannelFromConnection
+timeoutPacketClose
 queryClientFrozen
 recv
 repudiable
@@ -281,6 +285,7 @@ bijective
 Juwoon
 proofTimeout
 clientTypePath
+handleClientMisbehaviour
 interoperation
 tokenising
 authenticationKey
@@ -311,6 +316,7 @@ connOpenInit
 getValue
 channelIdentifier
 handleClientCreate
+channelSet
 ABCI
 struct
 consensusState
@@ -338,6 +344,7 @@ blockchain's
 blockchains
 serialisable
 chanOpenTry
+onAcknowledgePacket
 incrementing
 queryConnection
 validValue
@@ -408,6 +415,7 @@ QUIC
 permissioning
 renderer
 chanId
+onSendPacket
 positionally
 OpHeaderProof
 CryptoKitty

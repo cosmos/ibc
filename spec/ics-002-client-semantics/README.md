@@ -73,9 +73,6 @@ could be provided as executable WASM functions when the client instance is creat
   A `ClientState` must expose query functions to retrieve trusted state roots at previously
   verified heights and retrieve the current `ConsensusState`.
 
-* `createClient`, `queryClient`, `updateClient`, `freezeClient`, and `deleteClient` function signatures are as defined in [ICS 25](../ics-025-handler-interface).
-  The function implementations are defined in this specification.
-
 ### Desired Properties
 
 Light clients must provide a secure algorithm to verify other chains' canonical headers,

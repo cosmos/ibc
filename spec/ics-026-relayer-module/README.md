@@ -5,13 +5,13 @@ stage: Draft
 category: IBC/TAO
 author: Christopher Goes <cwgoes@tendermint.com>
 created: 2019-06-09
-modified: 2019-07-29
+modified: 2019-08-25
 ---
 
 ## Synopsis
 
 The relayer module is a default implementation of a secondary module which will accept external datagrams and call into the interblockchain communication protocol handler to deal with handshakes and packet relay.
-The relayer module can keep a lookup table of modules, which it can use to look up and call a module when a packet is received, so that external relayers need only ever relay packets to the relayer module.
+The relayer module keeps a lookup table of modules, which it can use to look up and call a module when a packet is received, so that external relayers need only ever relay packets to the relayer module.
 
 ### Motivation
 
@@ -43,31 +43,32 @@ Modules must expose the following function signatures to the relayer module, whi
 
 ```typescript
 function onChanOpenInit(
+  order: ChannelOrder,
+  connectionHops: [Identifier],
   portIdentifier: Identifier,
   channelIdentifier: Identifier,
   counterpartyPortIdentifier: Identifier,
   counterpartyChannelIdentifier: Identifier,
-  connectionHops: [Identifier],
-  version: string,
-  nextTimeoutHeight: uint64) {
+  version: string) {
   // defined by the module
 }
 
 function onChanOpenTry(
+  order: ChannelOrder,
+  connectionHops: [Identifier],
   portIdentifier: Identifier,
   channelIdentifier: Identifier,
   counterpartyPortIdentifier: Identifier,
   counterpartyChannelIdentifier: Identifier,
-  connectionHops: [Identifier],
   version: string,
-  nextTimeoutHeight: uint64) {
+  counterpartyVersion: string) {
   // defined by the module
 }
 
 function onChanOpenAck(
   portIdentifier: Identifier,
   channelIdentifier: Identifier,
-  nextTimeoutHeight: uint64) {
+  version: string) {
   // defined by the module
 }
 
@@ -77,15 +78,19 @@ function onChanOpenConfirm(
   // defined by the module
 }
 
-function onChanOpenTimeout(
+function onChanCloseInit(
   portIdentifier: Identifier,
-  channelIdentifier: Identifier): void {
+  channelIdentifier: Identifier) {
   // defined by the module
 }
 
 function onChanCloseConfirm(
   portIdentifier: Identifier,
   channelIdentifier: Identifier): void {
+  // defined by the module
+}
+
+function onSendPacket(packet: Packet) {
   // defined by the module
 }
 
@@ -96,6 +101,10 @@ function onRecvPacket(packet: Packet): bytes {
 function onTimeoutPacket(packet: Packet) {
   // defined by the module
 }
+
+function onAcknowledgePacket(packet: Packet) {
+  // defined by the module
+}
 ```
 
 Exceptions MUST be thrown to indicate failure and reject the handshake, incoming packet, etc.
@@ -104,14 +113,15 @@ These are combined together in a `ModuleCallbacks` interface:
 
 ```typescript
 interface ModuleCallbacks {
-  onChanOpenInit: (Identifier, Identifier, Identifier, Identifier, [Identifier], bytestring, uint64) => void
-  onChanOpenTry: (Identifier, Identifier, Identifier, Identifier, [Identifier], bytestring, uint64) => void
-  onChanOpenAck: (Identifier, Identifier, uint64) => void
-  onChanOpenConfirm: (Identifier, Identifier) => void
-  onChanOpenTimeout: (Identifier, Identifier) => void
-  onChanCloseConfirm: (Identifier, Identifier) => void
-  onRecvPacket: (Packet) => bytes
-  onTimeoutPacket: (Packet) => void
+  onChanOpenInit: onChanOpenInit,
+  onChanOpenTry: onChanOpenTry,
+  onChanOpenAck: onChanOpenAck,
+  onChanOpenConfirm: onChanOpenConfirm,
+  onChanCloseConfirm: onChanCloseConfirm
+  onSendPacket: onSendPacket
+  onRecvPacket: onRecvPacket
+  onTimeoutPacket: onTimeoutPacket
+  onAcknowledgePacket: onAcknowledgePacket
 }
 ```
 
@@ -159,7 +169,6 @@ function bindPort(
 
 The function `updatePort` can be called by a module in order to alter the callbacks.
 
-
 ```typescript
 function updatePort(
   id: Identifier,
@@ -182,9 +191,11 @@ function releasePort(id: Identifier) {
 
 ### Datagram handlers (write)
 
-*Datagrams* are external data blobs accepted as transactions by the relayer module.
-This section defines a *handler function* for each datagram, which is executed when the associated datagram is submitted to the relayer module in a transaction.
+*Datagrams* are external data blobs accepted as transactions by the relayer module. This section defines a *handler function* for each datagram,
+which is executed when the associated datagram is submitted to the relayer module in a transaction.
+
 All datagrams can also be safely submitted by other modules to the relayer module.
+
 No message signatures or data validity checks are assumed beyond those which are explicitly indicated.
 
 #### Client lifecycle management
@@ -194,13 +205,14 @@ No message signatures or data validity checks are assumed beyond those which are
 ```typescript
 interface ClientCreate {
   identifier: Identifier
+  type: ClientType
   consensusState: ConsensusState
 }
 ```
 
 ```typescript
 function handleClientCreate(datagram: ClientCreate) {
-  handler.createClient(datagram.identifier, datagram.consensusState)
+  handler.createClient(datagram.identifier, datagram.type datagram.consensusState)
 }
 ```
 
@@ -219,21 +231,18 @@ function handleClientUpdate(datagram: ClientUpdate) {
 }
 ```
 
-`ClientFreeze` freezes an existing light client with the specified identifier by proving that an equivocation has occurred.
+`ClientSubmitMisbehaviour` submits proof-of-misbehaviour to an existing light client with the specified identifier.
 
 ```typescript
-interface ClientFreeze {
+interface ClientMisbehaviour {
   identifier: Identifier
   evidence: bytes
 }
 ```
 
 ```typescript
-function handleClientFreeze(datagram: ClientUpdate) {
-  handler.freezeClient(datagram.identifier, datagram.evidence)
-
-  for (const identifier in handler.queryClientConnections(client))
-    handler.handleConnCloseInit(identifier)
+function handleClientMisbehaviour(datagram: ClientUpdate) {
+  handler.submitMisbehaviourToClient(datagram.identifier, datagram.evidence)
 }
 ```
 
@@ -247,15 +256,18 @@ interface ConnOpenInit {
   desiredCounterpartyIdentifier: Identifier
   clientIdentifier: Identifier
   counterpartyClientIdentifier: Identifier
-  nextTimeoutHeight: uint64
+  version: string
 }
 ```
 
 ```typescript
 function handleConnOpenInit(datagram: ConnOpenInit) {
   handler.connOpenInit(
-    datagram.identifier, datagram.desiredCounterpartyIdentifier, datagram.clientIdentifier,
-    datagram.counterpartyClientIdentifier, datagram.version, datagram.nextTimeoutHeight
+    datagram.identifier,
+    datagram.desiredCounterpartyIdentifier,
+    datagram.clientIdentifier,
+    datagram.counterpartyClientIdentifier,
+    datagram.version
   )
 }
 ```
@@ -268,16 +280,26 @@ interface ConnOpenTry {
   counterpartyConnectionIdentifier: Identifier
   counterpartyClientIdentifier: Identifier
   clientIdentifier: Identifier
+  version: string
+  counterpartyVersion: string
   proofInit: CommitmentProof
-  nextTimeoutHeight: uint64
+  proofHeight: uint64
+  consensusHeight: uint64
 }
 ```
 
 ```typescript
 function handleConnOpenTry(datagram: ConnOpenTry) {
   handler.connOpenTry(
-    datagram.desiredIdentifier, datagram.counterpartyConnectionIdentifier, datagram.counterpartyClientIdentifier,
-    datagram.clientIdentifier, datagram.proofInit, datagram.version
+    datagram.desiredIdentifier,
+    datagram.counterpartyConnectionIdentifier,
+    datagram.counterpartyClientIdentifier,
+    datagram.clientIdentifier,
+    datagram.version,
+    datagram.counterpartyVersion,
+    datagram.proofInit,
+    datagram.proofHeight,
+    datagram.consensusHeight
   )
 }
 ```
@@ -287,15 +309,21 @@ The `ConnOpenAck` datagram confirms a handshake acceptance by the IBC module on 
 ```typescript
 interface ConnOpenAck {
   identifier: Identifier
+  version: string
   proofTry: CommitmentProof
-  nextTimeoutHeight: uint64
+  proofHeight: uint64
+  consensusHeight: uint64
 }
 ```
 
 ```typescript
 function handleConnOpenAck(datagram: ConnOpenAck) {
   handler.connOpenAck(
-    datagram.identifier, datagram.proofTry
+    datagram.identifier,
+    datagram.version,
+    datagram.proofTry,
+    datagram.proofHeight,
+    datagram.consensusHeight
   )
 }
 ```
@@ -306,13 +334,16 @@ The `ConnOpenConfirm` datagram acknowledges a handshake acknowledgement by an IB
 interface ConnOpenConfirm {
   identifier: Identifier
   proofAck: CommitmentProof
+  proofHeight: uint64
 }
 ```
 
 ```typescript
 function handleConnOpenConfirm(datagram: ConnOpenConfirm) {
   handler.connOpenConfirm(
-    datagram.identifier, datagram.proofAck
+    datagram.identifier,
+    datagram.proofAck,
+    datagram.proofHeight
   )
 }
 ```
@@ -344,7 +375,9 @@ interface ConnCloseConfirm {
 ```typescript
 function handleConnCloseConfirm(datagram: ConnCloseConfirm) {
   handler.handleConnCloseConfirm(
-    datagram.identifier, datagram.proofInit, datagram.proofHeight
+    datagram.identifier,
+    datagram.proofInit,
+    datagram.proofHeight
   )
 }
 ```
@@ -354,12 +387,13 @@ function handleConnCloseConfirm(datagram: ConnCloseConfirm) {
 
 ```typescript
 interface ChanOpenInit {
+  order: ChannelOrder
+  connectionHops: [Identifier]
   portIdentifier: Identifier
   channelIdentifier: Identifier
   counterpartyPortIdentifier: Identifier
   counterpartyChannelIdentifier: Identifier
-  connectionHops: [Identifier]
-  nextTimeoutHeight: uint64
+  version: string
 }
 ```
 
@@ -367,25 +401,38 @@ interface ChanOpenInit {
 function handleChanOpenInit(datagram: ChanOpenInit) {
   module = lookupModule(datagram.portIdentifier)
   module.onChanOpenInit(
-    datagram.portIdentifier, datagram.channelIdentifier, datagram.counterpartyPortIdentifier,
-    datagram.counterpartyChannelIdentifier, datagram.connectionHops, datagram.version, datagram.nextTimeoutHeight
+    datagram.order,
+    datagram.connectionHops,
+    datagram.portIdentifier,
+    datagram.channelIdentifier,
+    datagram.counterpartyPortIdentifier,
+    datagram.counterpartyChannelIdentifier,
+    datagram.version
   )
   handler.chanOpenInit(
-    datagram.portIdentifier, datagram.channelIdentifier, datagram.counterpartyPortIdentifier,
-    datagram.counterpartyChannelIdentifier, datagram.connectionHops, datagram.version, datagram.nextTimeoutHeight
+    datagram.order,
+    datagram.connectionHops,
+    datagram.portIdentifier,
+    datagram.channelIdentifier,
+    datagram.counterpartyPortIdentifier,
+    datagram.counterpartyChannelIdentifier,
+    datagram.version
   )
 }
 ```
 
 ```typescript
 interface ChanOpenTry {
+  order: ChannelOrder
+  connectionHops: [Identifier]
   portIdentifier: Identifier
   channelIdentifier: Identifier
   counterpartyPortIdentifier: Identifier
   counterpartyChannelIdentifier: Identifier
-  connectionHops: [Identifier]
-  nextTimeoutHeight: uint64
+  version: string
+  counterpartyVersion: string
   proofInit: CommitmentProof
+  proofHeight: uint64
 }
 ```
 
@@ -393,13 +440,26 @@ interface ChanOpenTry {
 function handleChanOpenTry(datagram: ChanOpenTry) {
   module = lookupModule(datagram.portIdentifier)
   module.onChanOpenTry(
-    datagram.portIdentifier, datagram.channelIdentifier, datagram.counterpartyPortIdentifier,
-    datagram.counterpartyChannelIdentifier, datagram.connectionHops, datagram.version, datagram.nextTimeoutHeight
+    datagram.order,
+    datagram.connectionHops,
+    datagram.portIdentifier,
+    datagram.channelIdentifier,
+    datagram.counterpartyPortIdentifier,
+    datagram.counterpartyChannelIdentifier,
+    datagram.version,
+    datagram.counterpartyVersion
   )
   handler.chanOpenTry(
-    datagram.portIdentifier, datagram.channelIdentifier, datagram.counterpartyPortIdentifier,
-    datagram.counterpartyChannelIdentifier, datagram.connectionHops, datagram.version,
-    datagram.nextTimeoutHeight, datagram.proofInit
+    datagram.order,
+    datagram.connectionHops,
+    datagram.portIdentifier,
+    datagram.channelIdentifier,
+    datagram.counterpartyPortIdentifier,
+    datagram.counterpartyChannelIdentifier,
+    datagram.version,
+    datagram.counterpartyVersion,
+    datagram.proofInit,
+    datagram.proofHeight
   )
 }
 ```
@@ -408,17 +468,25 @@ function handleChanOpenTry(datagram: ChanOpenTry) {
 interface ChanOpenAck {
   portIdentifier: Identifier
   channelIdentifier: Identifier
-  nextTimeoutHeight: uint64
+  version: string
   proofTry: CommitmentProof
+  proofHeight: uint64
 }
 ```
 
 ```typescript
 function handleChanOpenAck(datagram: ChanOpenAck) {
-  module.onChanOpenAck(datagram.portIdentifier, datagram.channelIdentifier, datagram.nextTimeoutHeight)
+  module.onChanOpenAck(
+    datagram.portIdentifier,
+    datagram.channelIdentifier,
+    datagram.version
+  )
   handler.chanOpenAck(
-    datagram.portIdentifier, datagram.channelIdentifier,
-    datagram.nextTimeoutHeight, datagram.proofTry
+    datagram.portIdentifier,
+    datagram.channelIdentifier,
+    datagram.version,
+    datagram.proofTry,
+    datagram.proofHeight
   )
 }
 ```
@@ -428,24 +496,44 @@ interface ChanOpenConfirm {
   portIdentifier: Identifier
   channelIdentifier: Identifier
   proofAck: CommitmentProof
+  proofHeight: uint64
 }
 ```
 
 ```typescript
 function handleChanOpenConfirm(datagram: ChanOpenConfirm) {
-  module.onChanOpenConfirm(datagram.portIdentifier, datagram.channelIdentifier)
+  module = lookupModule(portIdentifier)
+  module.onChanOpenConfirm(
+    datagram.portIdentifier,
+    datagram.channelIdentifier
+  )
   handler.chanOpenConfirm(
-    datagram.portIdentifier, datagram.channelIdentifier,
-    datagram.proofAck
+    datagram.portIdentifier,
+    datagram.channelIdentifier,
+    datagram.proofAck,
+    datagram.proofHeight
   )
 }
 ```
 
-Channel closure can only be initiated by the owning module directly (so there is no associated datagram).
+```typescript
+interface ChanCloseInit {
+  portIdentifier: Identifier
+  channelIdentifier: Identifier
+}
+```
 
 ```typescript
-function handleChanCloseInit(portIdentifier: Identifier, channelIdentifier: Identifier) {
-  handler.chanCloseInit(portIdentifier, channelIdentifier)
+function handleChanCloseInit(datagram: ChanCloseInit) {
+  module = lookupModule(portIdentifier)
+  module.onChanCloseInit(
+    datagram.portIdentifier,
+    datagram.channelIdentifier
+  )
+  handler.chanCloseInit(
+    datagram.portIdentifier,
+    datagram.channelIdentifier
+  )
 }
 ```
 
@@ -461,10 +549,15 @@ interface ChanCloseConfirm {
 ```typescript
 function handleChanCloseConfirm(datagram: ChanCloseConfirm) {
   module = lookupModule(datagram.portIdentifier)
-  module.onChanCloseConfirm(datagram.portIdentifier, datagram.channelIdentifier)
+  module.onChanCloseConfirm(
+    datagram.portIdentifier,
+    datagram.channelIdentifier
+  )
   handler.chanCloseConfirm(
-    datagram.portIdentifier, datagram.channelIdentifier,
-    datagram.proofInit, datagram.proofHeight
+    datagram.portIdentifier,
+    datagram.channelIdentifier,
+    datagram.proofInit,
+    datagram.proofHeight
   )
 }
 ```
@@ -474,9 +567,16 @@ function handleChanCloseConfirm(datagram: ChanCloseConfirm) {
 `sendPacket` can only be invoked directly by the module owning the channel on which the packet is to be sent, so there is no associated datagram.
 
 ```typescript
+interface PacketSend {
+  packet: Packet
+}
+```
+
+```typescript
 function handlePacketSend(packet: Packet) {
-  // auth module
-  handler.sendPacket(packet)
+  module = lookupModule(datagram.packet.sourcePort)
+  module.onPacketSend(datagram.packet)
+  handler.sendPacket(datagram.packet)
 }
 ```
 
@@ -490,9 +590,14 @@ interface PacketRecv {
 
 ```typescript
 function handlePacketRecv(datagram: PacketRecv) {
-  module = lookupModule(datagram.portIdentifier)
+  module = lookupModule(datagram.packet.sourcePort)
   acknowledgement = module.onRecvPacket(datagram.packet)
-  handler.recvPacket(packet, proof, proofHeight, acknowledgement)
+  handler.recvPacket(
+    datagram.packet,
+    datagram.proof,
+    datagram.proofHeight,
+    acknowledgement
+  )
 }
 ```
 
@@ -509,7 +614,10 @@ interface PacketTimeoutOrdered {
 function handlePacketTimeoutOrdered(datagram: PacketTimeoutOrdered) {
   module.onTimeoutPacket(datagram.packet)
   handler.timeoutPacketOrdered(
-    datagram.packet, datagram.proof, datagram.proofHeight, datagram.nextSequenceRecv
+    datagram.packet,
+    datagram.proof,
+    datagram.proofHeight,
+    datagram.nextSequenceRecv
   )
 }
 ```
@@ -525,7 +633,11 @@ interface PacketTimeoutUnordered {
 ```typescript
 function handlePacketTimeoutUnordered(datagram: PacketTimeoutUnordered) {
   module.onTimeoutPacket(datagram.packet)
-  handler.timeoutPacketUnordered(datagram.packet, datagram.proof, datagram.proofHeight)
+  handler.timeoutPacketUnordered(
+    datagram.packet,
+    datagram.proof,
+    datagram.proofHeight
+  )
 }
 ```
 
@@ -539,7 +651,11 @@ interface PacketTimeoutClose {
 
 ```typescript
 function handlePacketTimeoutClose(datagram: PacketTimeoutClose) {
-  handler.timeoutPacketClose(datagram.packet, datagram.proof, datagram.proofHeight)
+  handler.timeoutPacketClose(
+    datagram.packet,
+    datagram.proof,
+    datagram.proofHeight
+  )
 }
 ```
 
@@ -555,8 +671,10 @@ interface PacketCleanupOrdered {
 ```typescript
 function handlePacketCleanupOrdered(datagram: PacketCleanupOrdered) {
   handler.cleanupPacketOrdered(
-    datagram.packet, datagram.proof,
-    datagram.proofHeight, datagram.nextSequenceRecv
+    datagram.packet,
+    datagram.proof,
+    datagram.proofHeight,
+    datagram.nextSequenceRecv
   )
 }
 ```
@@ -573,15 +691,17 @@ interface PacketCleanupUnordered {
 ```typescript
 function handlePacketCleanupUnordered(datagram: PacketCleanupUnordered) {
   handler.cleanupPacketUnordered(
-    datagram.packet, datagram.proof,
-    datagram.proofHeight, datagram.acknowledgement
+    datagram.packet,
+    datagram.proof,
+    datagram.proofHeight,
+    datagram.acknowledgement
   )
 }
 ```
 
 ### Query (read-only) functions
 
-Query functions for clients, connections, and channels should be exposed (read-only) by the IBC handler module.
+All query functions for clients, connections, and channels should be exposed (read-only) directly by the IBC handler module.
 
 ### Interface usage example
 
@@ -611,6 +731,7 @@ Coming soon.
 
 June 9 2019 - Draft submitted
 July 28 2019 - Major revisions
+August 25 2019 - Major revisions
 
 ## Copyright
 

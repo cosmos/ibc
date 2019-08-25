@@ -196,11 +196,11 @@ function connOpenTry(
   counterpartyConnectionIdentifier: Identifier,
   counterpartyClientIdentifier: Identifier,
   clientIdentifier: Identifier,
+  version: string,
+  counterpartyVersion: string
   proofInit: CommitmentProof,
   proofHeight: uint64,
-  consensusHeight: uint64,
-  version: string,
-  counterpartyVersion: string) {
+  consensusHeight: uint64) {
   assert(consensusHeight <= getCurrentHeight())
   client = queryClient(connection.clientIdentifier)
   expectedConsensusState = getConsensusState(consensusHeight)
@@ -284,7 +284,7 @@ A correct protocol execution flows as follows (note that all calls are made thro
 | Actor     | `ConnCloseInit`     | A                | (ANY, ANY)         | (CLOSED, ANY)     |
 | Relayer   | `ConnCloseConfirm`  | B                | (CLOSED, ANY)      | (CLOSED, CLOSED)  |
 
-*ConnCloseInit* initialises a close attempt on chain A. It will succeed only if the associated connection does not have any channels.
+*ConnCloseInit* initialises a close attempt on chain A. It will succeed only if the associated connection does not have any associated open channels.
 
 Once closed, connections cannot be reopened.
 
