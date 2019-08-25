@@ -105,6 +105,10 @@ function onTimeoutPacket(packet: Packet) {
 function onAcknowledgePacket(packet: Packet) {
   // defined by the module
 }
+
+function onTimeoutPacketClose(packet: Packet) {
+  // defined by the module
+}
 ```
 
 Exceptions MUST be thrown to indicate failure and reject the handshake, incoming packet, etc.
@@ -121,7 +125,8 @@ interface ModuleCallbacks {
   onSendPacket: onSendPacket
   onRecvPacket: onRecvPacket
   onTimeoutPacket: onTimeoutPacket
-  onAcknowledgePacket: onAcknowledgePacket
+  onAcknowledgePacket: onAcknowledgePacket,
+  onTimeoutPacketClose: onTimeoutPacketClose
 }
 ```
 
@@ -186,6 +191,14 @@ function releasePort(id: Identifier) {
   handler.releasePort(id)
   privateStore.delete(callbackPath(id))
   privateStore.delete(authenticationPath(id))
+}
+```
+
+The function `lookupModule` can be used by the relayer module to lookup the callbacks bound to a particular port.
+
+```typescript
+function lookupModule(portId: Identifier) {
+  return privateStore.get(callbackPath(id))
 }
 ```
 
@@ -564,8 +577,6 @@ function handleChanCloseConfirm(datagram: ChanCloseConfirm) {
 
 #### Packet relay
 
-`sendPacket` can only be invoked directly by the module owning the channel on which the packet is to be sent, so there is no associated datagram.
-
 ```typescript
 interface PacketSend {
   packet: Packet
@@ -602,6 +613,33 @@ function handlePacketRecv(datagram: PacketRecv) {
 ```
 
 ```typescript
+interface PacketAcknowledgement {
+  packet: Packet
+  acknowledgement: string
+  proof: CommitmentProof
+  proofHeight: uint64
+}
+```
+
+```typescript
+function handlePacketAcknowledgement(datagram: PacketAcknowledgement) {
+  module = lookupModule(datagram.packet.sourcePort)
+  module.onAcknowledgePacket(
+    datagram.packet,
+    datagram.acknowledgement
+  )
+  handler.acknowledgePacket(
+    datagram.packet,
+    datagram.acknowledgement,
+    datagram.proof,
+    datagram.proofHeight
+  )
+}
+```
+
+#### Packet timeouts
+
+```typescript
 interface PacketTimeoutOrdered {
   packet: Packet
   proof: CommitmentProof
@@ -612,6 +650,7 @@ interface PacketTimeoutOrdered {
 
 ```typescript
 function handlePacketTimeoutOrdered(datagram: PacketTimeoutOrdered) {
+  module = lookupModule(datagram.packet.sourcePort)
   module.onTimeoutPacket(datagram.packet)
   handler.timeoutPacketOrdered(
     datagram.packet,
@@ -632,6 +671,7 @@ interface PacketTimeoutUnordered {
 
 ```typescript
 function handlePacketTimeoutUnordered(datagram: PacketTimeoutUnordered) {
+  module = lookupModule(datagram.packet.sourcePort)
   module.onTimeoutPacket(datagram.packet)
   handler.timeoutPacketUnordered(
     datagram.packet,
@@ -640,6 +680,28 @@ function handlePacketTimeoutUnordered(datagram: PacketTimeoutUnordered) {
   )
 }
 ```
+
+```typescript
+interface PacketTimeoutOnClose {
+  packet: Packet
+  proof: CommitmentProof
+  proofHeight: uint64
+}
+```
+
+```typescript
+function handlePacketTimeoutOnClose(datagram: PacketTimeoutOnClose) {
+  module = lookupModule(datagram.packet.sourcePort)
+  module.onTimeoutPacket(datagram.packet)
+  handler.timeoutOnClose(
+    datagram.packet,
+    datagram.proof,
+    datagram.proofHeight
+  )
+}
+```
+
+#### Closure-by-timeout & packet cleanup
 
 ```typescript
 interface PacketTimeoutClose {
@@ -651,6 +713,8 @@ interface PacketTimeoutClose {
 
 ```typescript
 function handlePacketTimeoutClose(datagram: PacketTimeoutClose) {
+  module = lookupModule(datagram.packet.sourcePort)
+  module.onTimeoutPacketClose(datagram.packet)
   handler.timeoutPacketClose(
     datagram.packet,
     datagram.proof,

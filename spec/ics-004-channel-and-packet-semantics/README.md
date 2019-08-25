@@ -570,9 +570,9 @@ Calling modules MAY atomically execute appropriate application acknowledgement-h
 ```typescript
 function acknowledgePacket(
   packet: OpaquePacket,
+  acknowledgement: bytes,
   proof: CommitmentProof,
-  proofHeight: uint64,
-  acknowledgement: bytes): Packet {
+  proofHeight: uint64): Packet {
 
   // assert that channel is open, calling module owns the associated port, and the packet fields match
   channel = provableStore.get(channelPath(packet.sourcePort, packet.sourceChannel))

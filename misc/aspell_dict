@@ -1,4 +1,4 @@
-personal_ws-1.1 en 420 
+personal_ws-1.1 en 426 
 unescrow
 onChanCloseConfirm
 clientKey
@@ -52,6 +52,7 @@ handleConnOpenInit
 connOpenTry
 boolean
 LaTeX
+handlePacketTimeoutOnClose
 CommitmentProof
 getVerifiedRoot
 OPENTRY
@@ -197,6 +198,7 @@ auth
 unreceived
 handleConnOpenAck
 handleChanOpenTimeout
+portId
 chanCloseInit
 prover
 CommitmentState
@@ -258,6 +260,7 @@ lifecycle
 desiredCounterpartyConnectionIdentifier
 chanCloseConfirm
 ChangeOperator
+handlePacketAcknowledgement
 UDP
 changelog
 synchrony
@@ -335,6 +338,7 @@ interoperability
 Betazoid
 callingModuleIdentifier
 LogStore
+PacketTimeoutOnClose
 introspectable
 destPort
 ModuleCallbacks
@@ -354,12 +358,14 @@ structs
 keyspaces
 counterpartyStateRoot
 JSON
+PacketAcknowledgement
 consensusHeight
 createMembershipProof
 Yun
 md
 counterpartyConnectionIdentifier
 OpCommitmentRoot
+onTimeoutPacketClose
 transactional
 counterpartyPortIdentifier
 packetCommitmentKey
