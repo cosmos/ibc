@@ -102,9 +102,9 @@ middled
 channelId
 queryClientConsensusState
 consensusStatePath
+PacketSend
 unescrowing
 InitialPubkey
-PacketSend
 handlePacketRecv
 verifiedRoots
 coffeescript

@@ -6,7 +6,7 @@ category: IBC/TAO
 requires: 2, 3, 5, 24
 author: Christopher Goes <cwgoes@tendermint.com>
 created: 2019-03-07
-modified: 2019-08-13
+modified: 2019-08-25
 ---
 
 ## Synopsis
@@ -574,6 +574,7 @@ function acknowledgePacket(
   proofHeight: uint64,
   acknowledgement: bytes): Packet {
 
+  // assert that channel is open, calling module owns the associated port, and the packet fields match
   channel = provableStore.get(channelPath(packet.sourcePort, packet.sourceChannel))
   assert(channel.state === OPEN)
   assert(authenticate(provableStore.get(portPath(packet.sourcePort))))
@@ -975,6 +976,7 @@ Coming soon.
 16 July 2019 - Alterations for multi-hop routing future compatibility
 29 July 2019 - Revisions to handle timeouts after connection closure
 13 August 2019 - Various edits
+25 August 2019 - Cleanup
 
 ## Copyright
 

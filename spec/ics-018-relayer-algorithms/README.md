@@ -6,7 +6,7 @@ category: IBC/TAO
 requires: 24, 25, 26
 author: Christopher Goes <cwgoes@tendermint.com>
 created: 2019-03-07
-modified: 2019-05-11
+modified: 2019-08-25
 ---
 
 ## Synopsis

@@ -7,7 +7,7 @@ requires: 23, 24
 required-by: 3
 author: Juwoon Yun <joon@tendermint.com>, Christopher Goes <cwgoes@tendermint.com>
 created: 2019-02-25
-modified: 2019-08-15
+modified: 2019-08-25
 ---
 
 ## Synopsis
