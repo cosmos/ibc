@@ -11,7 +11,7 @@ modified: 2019-08-25
 
 ## Synopsis
 
-This standard document specifies packet data structure, state machine handling logic, and encoding details for the transfer of fungible tokens over an IBC channel between two modules on separate chains. The state machine logic presented allows for safe multi-chain denomination handling with permissionless channel opening.
+This standard document specifies packet data structure, state machine handling logic, and encoding details for the transfer of fungible tokens over an IBC channel between two modules on separate chains. The state machine logic presented allows for safe multi-chain denomination handling with permissionless channel opening. This logic constitutes a "fungible token transfer bridge module", interfacing between the IBC relayer module and an existing asset tracking module on the host state machine.
 
 ### Motivation
 
@@ -44,6 +44,14 @@ interface FungibleTokenPacketData {
 }
 ```
 
+The fungible token transfer bridge module
+
+```typescript
+interface ModuleState {
+  channelEscrowAddresses: Map<Identifier, string>
+}
+```
+
 ### Subprotocols
 
 The sub-protocols described herein should be implemented in a "bank-ibc-bridge" module with access to a bank module and to the IBC relayer module.
@@ -59,76 +67,114 @@ function setup() {
     onChanOpenTry,
     onChanOpenAck,
     onChanOpenConfirm,
+    onChanCloseInit,
     onChanCloseConfirm,
+    onSendPacket,
     onRecvPacket,
     onTimeoutPacket,
+    onAcknowledgePacket,
+    onTimeoutPacketClose
   })
-  escrowAddress = newAddress()
 }
 ```
 
 Once the `setup` function has been called, channels can be created through the IBC relayer module between instances of the fungible token transfer module on separate chains.
 
-#### Sending packets
+#### Relayer module callbacks
+
+##### Channel lifecycle management
+
+```typescript
+function onChanOpenInit(
+  order: ChannelOrder,
+  connectionHops: [Identifier],
+  portIdentifier: Identifier,
+  channelIdentifier: Identifier,
+  counterpartyPortIdentifier: Identifier,
+  counterpartyChannelIdentifier: Identifier,
+  version: string) {
+  // only unordered channels allowed
+  assert(order === UNORDERED)
+  // only allow channels to "bank" port on counterparty chain
+  assert(counterpartyPortIdentifier === "bank")
+  // version not used at present
+  assert(version === "")
+}
+```
+
+```typescript
+function onChanOpenTry(
+  order: ChannelOrder,
+  connectionHops: [Identifier],
+  portIdentifier: Identifier,
+  channelIdentifier: Identifier,
+  counterpartyPortIdentifier: Identifier,
+  counterpartyChannelIdentifier: Identifier,
+  version: string,
+  counterpartyVersion: string) {
+  // only unordered channels allowed
+  assert(order === UNORDERED)
+  // version not used at present
+  assert(version === "")
+  assert(counterpartyVersion === "")
+  // only allow channels to "bank" port on counterparty chain
+  assert(counterpartyPortIdentifier === "bank")
+}
+```
+
+```typescript
+function onChanOpenAck(
+  portIdentifier: Identifier,
+  channelIdentifier: Identifier,
+  version: string) {
+  // version not used at present
+  assert(version === "")
+  // port has already been validated
+}
+```
+
+```typescript
+function onChanOpenConfirm(
+  portIdentifier: Identifier,
+  channelIdentifier: Identifier) {
+  // accept channel confirmations, port has already been validated
+}
+```
+
+```typescript
+function onChanCloseInit(
+  portIdentifier: Identifier,
+  channelIdentifier: Identifier) {
+  // no action necessary
+}
+```
+
+```typescript
+function onChanCloseConfirm(
+  portIdentifier: Identifier,
+  channelIdentifier: Identifier) {
+  // no action necessary
+}
+```
+
+##### Packet relay
 
 In plain English, between chains `A` and `B`:
+
 - Chain `A` bank module accepts new connections / channels from any module on another chain.
 - Denominations sent from chain `B` are prefixed with the connection identifier and the name of the counterparty port of `B`, e.g. `0x1234/bank` for the bank module on chain `B` with connection identifier `0x1234`. No supply limits are enforced, but the bank module on chain `A` tracks the amount of each denomination sent by chain `B` and keeps it in a store location which can be queried / proven.
 - Coins sent by chain `A` to chain `B` are prefixed in the same way when sent (`0x4567/bank` if the bank module is running on a hub with connection identifier `0x4567`). Outgoing supply is tracked in a store location which can be queried and proven. Chain `B` is allowed to send back coins prefixed with `0x4567/bank` only up to the amount which has been sent to it.
 - Each chain, locally, can keep a lookup table to use short, user-friendly local denominations in state which are translated to and from the longer denominations when sending and receiving packets.
 
 ```typescript
-function handleFungibleTokenPacketSend(denomination: string, amount: uint256, receiver: string) {
+function onSendPacket(packet: Packet) {
+  FungibleTokenPacketData data = packet.data
   // transfer coins from user
   // construct receiving denomination
   // escrow coins in amount (if source) or unescrow (if destination)
   // send packet
-  data = FungibleTokenPacketData{denomination, amount, receiver}
-  relayerModule.sendPacket(data)
-}
-```
-
-#### Relayer module callbacks
-
-```typescript
-function onChanOpenInit(
-  portIdentifier: Identifier, channelIdentifier: Identifier, counterpartyPortIdentifier: Identifier,
-  counterpartyChannelIdentifier: Identifier, connectionHops: [Identifier], nextTimeoutHeight: uint64) {
-  // only allow channels to "bank" port on counterparty chain
-  assert(counterpartyPortIdentifier === "bank")
-}
-```
-
-```typescript
-function onChanOpenTry(
-  portIdentifier: Identifier, channelIdentifier: Identifier, counterpartyPortIdentifier: Identifier,
-  counterpartyChannelIdentifier: Identifier, connectionHops: [Identifier], nextTimeoutHeight: uint64) {
-  // only allow channels to "bank" port on counterparty chain
-  assert(counterpartyPortIdentifier === "bank")
-}
-```
-
-```typescript
-function onChanOpenAck(portIdentifier: Identifier, channelIdentifier: Identifier, nextTimeoutHeight: uint64) {
-  // accept all acknowledgements, port has already been validated
-}
-```
-
-```typescript
-function onChanOpenConfirm(portIdentifier: Identifier, channelIdentifier: Identifier) {
-  // accept confirmations, port has already been validated
-}
-```
-
-```typescript
-function onChanOpenTimeout(portIdentifier: Identifier, channelIdentifier: Identifier): void {
-  // no action necessary
-}
-```
-
-```typescript
-function onChanCloseConfirm(portIdentifier: Identifier, channelIdentifier: Identifier): void {
-  // no action necessary
+  prefix = "{packet/destPort}/{packet.destChannel}"
+  bank.TransferCoins(data.sender, data.denomination.slice(len(prefix)), data.amount, escrowAccount)
 }
 ```
 
@@ -143,6 +189,14 @@ function onRecvPacket(packet: Packet): bytes {
 ```
 
 ```typescript
+function onAcknowledgePacket(
+  packet: Packet,
+  acknowledgement: bytes) {
+  // nothing necessary
+}
+```
+
+```typescript
 function onTimeoutPacket(packet: Packet) {
   FungibleTokenPacketData data = packet.data
   prefix = "{packet.destPort}/{packet.destChannel}"
@@ -152,10 +206,8 @@ function onTimeoutPacket(packet: Packet) {
 ```
 
 ```typescript
-function sendPacket(packet: Packet) {
-  prefix = "{packet/destPort}/{packet.destChannel}"
-  bank.TransferCoins(data.sender, data.denomination.slice(len(prefix)), data.amount, escrowAccount)
-  relayerModule.sendPacket(packet)
+function onTimeoutPacketClose(packet: Packet) {
+  // can't happen, only unordered channels allowed
 }
 ```
 
@@ -193,6 +245,7 @@ Coming soon.
 
 15 July 2019 - Draft written
 29 July 2019 - Major revisions; cleanup
+25 August 2019 - Major revisions, more cleanup
 
 ## Copyright
 
