@@ -726,54 +726,6 @@ function timeoutPacketUnordered(
 }
 ```
 
-###### Closing on timeout
-
-The `timeoutClose` function is called by a module in order to prove that a packet which ought to have
-been received on a particular ordered channel has timed out, and the channel must be closed.
-
-This is an alternative to closing the other end of the channel and proving that closure. Either works.
-
-Calling modules MAY atomically execute any application logic associated with channel closure in conjunction with calling `recvTimeoutPacket`.
-
-```typescript
-function timeoutClose(
-  packet: OpaquePacket,
-  proof: CommitmentProof,
-  proofHeight: uint64): Packet {
-  channel = provableStore.get(channelPath(packet.destPort, packet.destChannel))
-  assert(channel.state === OPEN)
-  assert(channel.order === ORDERED)
-  assert(authenticate(provableStore.get(portPath(packet.destPort))))
-  assert(packet.sourceChannel === channel.counterpartyChannelIdentifier)
-
-  connection = provableStore.get(connectionPath(channel.connectionHops[0]))
-  // note: the connection may have been closed
-  assert(packet.sourcePort === channel.counterpartyPortIdentifier)
-  assert(packet.connectionHops === channel.connectionHops)
-
-  nextSequenceRecv = provableStore.get(nextSequenceRecvPath(packet.destPort, packet.destChannel))
-  assert(packet.sequence === nextSequenceRecv)
-
-  assert(proofHeight >= packet.timeoutHeight)
-
-  client = queryClient(connection.clientIdentifier)
-  assert(client.verifyMembership(
-    proofHeight,
-    proof,
-    packetCommitmentPath(packet.sourcePort, packet.sourceChannel, packet.sequence),
-    commit(packet.data)
-  ))
-
-  // all assertions passed, we can alter state
-
-  channel.state = CLOSED
-  provableStore.set(channelPath(packet.destPort, packet.destChannel), channel)
-
-  // return transparent packet
-  return packet
-}
-```
-
 ##### Timing-out on close
 
 The `timeoutOnClose` function is called by a module in order to prove that the channel
@@ -822,6 +774,54 @@ function timeoutOnClose(
 
   // delete our commitment
   provableStore.delete(packetCommitmentPath(packet.sourcePort, packet.sourceChannel, packet.sequence))
+
+  // return transparent packet
+  return packet
+}
+```
+
+###### Closing on timeout
+
+The `timeoutClose` function is called by a module in order to prove that a packet which ought to have
+been received on a particular ordered channel has timed out, and the channel must be closed.
+
+This is an alternative to closing the other end of the channel and proving that closure. Either works.
+
+Calling modules MAY atomically execute any application logic associated with channel closure in conjunction with calling `recvTimeoutPacket`.
+
+```typescript
+function timeoutClose(
+  packet: OpaquePacket,
+  proof: CommitmentProof,
+  proofHeight: uint64): Packet {
+  channel = provableStore.get(channelPath(packet.destPort, packet.destChannel))
+  assert(channel.state === OPEN)
+  assert(channel.order === ORDERED)
+  assert(authenticate(provableStore.get(portPath(packet.destPort))))
+  assert(packet.sourceChannel === channel.counterpartyChannelIdentifier)
+
+  connection = provableStore.get(connectionPath(channel.connectionHops[0]))
+  // note: the connection may have been closed
+  assert(packet.sourcePort === channel.counterpartyPortIdentifier)
+  assert(packet.connectionHops === channel.connectionHops)
+
+  nextSequenceRecv = provableStore.get(nextSequenceRecvPath(packet.destPort, packet.destChannel))
+  assert(packet.sequence === nextSequenceRecv)
+
+  assert(proofHeight >= packet.timeoutHeight)
+
+  client = queryClient(connection.clientIdentifier)
+  assert(client.verifyMembership(
+    proofHeight,
+    proof,
+    packetCommitmentPath(packet.sourcePort, packet.sourceChannel, packet.sequence),
+    commit(packet.data)
+  ))
+
+  // all assertions passed, we can alter state
+
+  channel.state = CLOSED
+  provableStore.set(channelPath(packet.destPort, packet.destChannel), channel)
 
   // return transparent packet
   return packet
