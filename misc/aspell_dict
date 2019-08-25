@@ -1,4 +1,4 @@
-personal_ws-1.1 en 426 
+personal_ws-1.1 en 428 
 unescrow
 onChanCloseConfirm
 clientKey
@@ -219,6 +219,7 @@ destChannel
 updateClient
 connectionChannelsPath
 onChanOpenAck
+channelEscrowAddresses
 Pre
 privateStore
 sdk
@@ -386,6 +387,7 @@ collateralisation
 datapipe
 ConnCloseAck
 VM
+ModuleState
 Strawman
 tx
 bytestring
