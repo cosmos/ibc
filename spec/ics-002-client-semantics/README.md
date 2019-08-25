@@ -70,8 +70,8 @@ could be provided as executable WASM functions when the client instance is creat
   can check that a particular machine has stored a particular `ConsensusState`.
 
 * `ClientState` is an opaque type representing the state of a client.
-  A `ClientState` must expose query functions to retrieve trusted state roots at previously
-  verified heights and retrieve the current `ConsensusState`.
+  A `ClientState` must expose query functions to verify membership or non-membership of
+  key-value pairs in state at particular heights and to retrieve the current `ConsensusState`.
 
 ### Desired Properties
 
@@ -351,12 +351,12 @@ interface ClientState {
 }
 
 interface ConsensusState {
-  height: uint64
+  sequence: uint64
   publicKey: PublicKey
 }
 
 interface Header {
-  height: uint64
+  sequence: uint64
   commitmentRoot: CommitmentRoot
   signature: Signature
   newPublicKey: Maybe<PublicKey>
@@ -370,10 +370,10 @@ interface Evidence {
 // algorithm run by operator to commit a new block
 function commit(
   root: CommitmentRoot,
-  height: uint64,
+  sequence: uint64,
   newPublicKey: Maybe<PublicKey>): Header {
-  signature = privateKey.sign(root, height, newPublicKey)
-  header = Header{height, root, signature}
+  signature = privateKey.sign(root, sequence, newPublicKey)
+  header = Header{sequence, root, signature}
   return header
 }
 
@@ -386,37 +386,39 @@ function initialize(consensusState: ConsensusState): ClientState {
 function validityPredicate(
   clientState: ClientState,
   header: Header) {
-  assert(consensusState.height + 1 === header.height)
+  assert(consensusState.sequence + 1 === header.sequence)
   assert(consensusState.publicKey.verify(header.signature))
-  if (header.newPublicKey !== null)
+  if (header.newPublicKey !== null) {
     consensusState.publicKey = header.newPublicKey
     clientState.pastPublicKeys.add(header.newPublicKey)
-  consensusState.height = header.height
-  clientState.verifiedRoots[height] = header.commitmentRoot
+  }
+  consensusState.sequence = header.sequence
+  clientState.verifiedRoots[sequence] = header.commitmentRoot
 }
 
 // state membership verification function defined by the client type
 function verifyMembership(
   clientState: ClientState,
-  height: uint64,
+  sequence: uint64,
   proof: CommitmentProof
   path: Path,
   value: Value) {
   assert(!client.frozen)
-  return client.verifiedRoots[height].verifyMembership(path, value, proof)
+  return client.verifiedRoots[sequence].verifyMembership(path, value, proof)
 }
 
 // state non-membership function defined by the client type
 function verifyNonMembership(
   clientState: ClientState,
-  height: uint64,
+  sequence: uint64,
   proof: CommitmentProof,
   path: Path) {
   assert(!client.frozen)
-  return client.verifiedRoots[height].verifyNonMembership(path, proof)
+  return client.verifiedRoots[sequence].verifyNonMembership(path, proof)
 }
 
 // misbehaviour verification function defined by the client type
+// any duplicate signature by a past or current key freezes the client
 function misbehaviourPredicate(
   clientState: ClientState,
   evidence: Evidence) {
@@ -424,7 +426,7 @@ function misbehaviourPredicate(
   h2 = evidence.h2
   assert(h1.publicKey === h2.publicKey)
   assert(clientState.pastPublicKeys.contains(h1.publicKey))
-  assert(h1.height === h2.height)
+  assert(h1.sequence === h2.sequence)
   assert(h1.commitmentRoot !== h2.commitmentRoot)
   assert(h1.publicKey.verify(h1.signature))
   assert(h2.publicKey.verify(h2.signature))
