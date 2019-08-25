@@ -85,6 +85,12 @@ Once the `setup` function has been called, channels can be created through the I
 
 ##### Channel lifecycle management
 
+Both machines `A` and `B` accept new channels from any module on another machine, if and only if:
+
+- The other module is bound to the "bank" port.
+- The channel being created is unordered.
+- The version string is empty.
+
 ```typescript
 function onChanOpenInit(
   order: ChannelOrder,
@@ -166,10 +172,10 @@ function onChanCloseConfirm(
 
 In plain English, between chains `A` and `B`:
 
-- Chain `A` bank module accepts new connections / channels from any module on another chain.
-- Denominations sent from chain `B` are prefixed with the connection identifier and the name of the counterparty port of `B`, e.g. `0x1234/bank` for the bank module on chain `B` with connection identifier `0x1234`. No supply limits are enforced, but the bank module on chain `A` tracks the amount of each denomination sent by chain `B` and keeps it in a store location which can be queried / proven.
-- Coins sent by chain `A` to chain `B` are prefixed in the same way when sent (`0x4567/bank` if the bank module is running on a hub with connection identifier `0x4567`). Outgoing supply is tracked in a store location which can be queried and proven. Chain `B` is allowed to send back coins prefixed with `0x4567/bank` only up to the amount which has been sent to it.
-- Each chain, locally, can keep a lookup table to use short, user-friendly local denominations in state which are translated to and from the longer denominations when sending and receiving packets.
+- When acting as the source zone, the bridge module escrows an existing local asset denomination on the sending chain and mints vouchers on the receiving chain.
+- When acting as the sink zone, the bridge module burns local vouchers on the sending chains and unescrows the local asset denomination on the receiving chain.
+- When a packet times-out, local assets are unescrowed back to the sender or vouchers minted back to the sender appropriately.
+- No acknowledgement data is necessary.
 
 ```typescript
 function onSendPacket(packet: Packet) {
@@ -222,7 +228,7 @@ function onRecvPacket(packet: Packet): bytes {
 function onAcknowledgePacket(
   packet: Packet,
   acknowledgement: bytes) {
-  // nothing necessary
+  // nothing is necessary, likely this will never be called since it's a no-op
 }
 ```
 
@@ -269,13 +275,18 @@ Supply: Redefine supply as unlocked tokens. All send-recv pairs sum to net zero.
 
 This does not yet handle the "diamond problem", where a user sends a token originating on chain A to chain B, then to chain D, and wants to return it through D -> C -> A — since the supply is tracked as owned by chain B, chain C cannot serve as the intermediary. It is not yet clear whether that case should be dealt with in-protocol or not — it may be fine to just require the original path of redemption (and if there is frequent liquidity and some surplus on both paths the diamond path will work most of the time). Complexities arising from long redemption paths may lead to the emergence of central chains in the network topology.
 
+#### Optional addenda
+
+- Each chain, locally, could elect to keep a lookup table to use short, user-friendly local denominations in state which are translated to and from the longer denominations when sending and receiving packets. 
+- Additional restrictions may be imposed on which other machines may be connected to & which channels may be established.
+
 ## Backwards Compatibility
 
 Not applicable.
 
 ## Forwards Compatibility
 
-Modules can negotiate packet versions in the channel handshake.
+A future version of this standard could use a different version in the channel handshake.
 
 ## Example Implementation
 
