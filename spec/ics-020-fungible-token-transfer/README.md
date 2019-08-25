@@ -33,7 +33,7 @@ The IBC handler interface & IBC relayer module interface are as defined in [ICS 
 
 ### Data Structures
 
-Only one packet data type, `FungibleTokenPacketData`, which specifies the denomination, amount, sending account, and receiving account, is required.
+Only one packet data type, `FungibleTokenPacketData`, which specifies the denomination, amount, sending account, receiving account, and whether the sending chain is the source of the asset, is required.
 
 ```typescript
 interface FungibleTokenPacketData {
@@ -41,10 +41,11 @@ interface FungibleTokenPacketData {
   amount: uint256
   sender: string
   receiver: string
+  source: boolean
 }
 ```
 
-The fungible token transfer bridge module
+The fungible token transfer bridge module tracks escrow addresses associated with particular channels in state. Fields of the `ModuleState` are assumed to be in scope.
 
 ```typescript
 interface ModuleState {
@@ -54,7 +55,7 @@ interface ModuleState {
 
 ### Subprotocols
 
-The sub-protocols described herein should be implemented in a "bank-ibc-bridge" module with access to a bank module and to the IBC relayer module.
+The sub-protocols described herein should be implemented in a "fungible token transfer bridge" module with access to a bank module and to the IBC relayer module.
 
 #### Port & channel setup
 
@@ -99,6 +100,8 @@ function onChanOpenInit(
   assert(counterpartyPortIdentifier === "bank")
   // version not used at present
   assert(version === "")
+  // allocate an escrow address
+  channelEscrowAddresses[channelIdentifier] = newAddress()
 }
 ```
 
@@ -119,6 +122,8 @@ function onChanOpenTry(
   assert(counterpartyVersion === "")
   // only allow channels to "bank" port on counterparty chain
   assert(counterpartyPortIdentifier === "bank")
+  // allocate an escrow address
+  channelEscrowAddresses[channelIdentifier] = newAddress()
 }
 ```
 
@@ -169,21 +174,46 @@ In plain English, between chains `A` and `B`:
 ```typescript
 function onSendPacket(packet: Packet) {
   FungibleTokenPacketData data = packet.data
-  // transfer coins from user
-  // construct receiving denomination
-  // escrow coins in amount (if source) or unescrow (if destination)
-  // send packet
-  prefix = "{packet/destPort}/{packet.destChannel}"
-  bank.TransferCoins(data.sender, data.denomination.slice(len(prefix)), data.amount, escrowAccount)
+  if data.source {
+    // sender is source chain: escrow tokens
+    // determine escrow account
+    escrowAccount = channelEscrowAddresses[packet.sourceChannel]
+    // construct receiving denomination, check correctness
+    prefix = "{packet/destPort}/{packet.destChannel}"
+    assert(data.denomination.slice(0, len(prefix)) === prefix)
+    // escrow source tokens (assumed to fail if balance insufficient)
+    bank.TransferCoins(data.sender, escrowAccount, data.denomination.slice(len(prefix)), data.amount)
+  } else {
+    // receiver is source chain, burn vouchers
+    // construct receiving denomination, check correctness
+    prefix = "{packet/sourcePort}/{packet.sourceChannel}"
+    assert(data.denomination.slice(0, len(prefix)) === prefix)
+    // burn vouchers (assumed to fail if balance insufficient)
+    bank.BurnCoins(data.sender, data.denomination, data.amount)
+  }
 }
 ```
 
 ```typescript
 function onRecvPacket(packet: Packet): bytes {
   FungibleTokenPacketData data = packet.data
-  prefix = "{packet.destPort}/{packet.destChannel}"
-  assert(data.denomination.slice(0, len(prefix)) === prefix)
-  bank.TransferCoins(escrowAccount, data.denomination, data.amount, data.receiver)
+  if data.source {
+    // sender was source chain: mint vouchers
+    // construct receiving denomination, check correctness
+    prefix = "{packet/destPort}/{packet.destChannel}"
+    assert(data.denomination.slice(0, len(prefix)) === prefix)
+    // mint vouchers to receiver (assumed to fail if balance insufficient)
+    bank.MintCoins(data.receiver, data.denomination, data.amount)
+  } else {
+    // receiver is source chain: unescrow tokens
+    // determine escrow account
+    escrowAccount = channelEscrowAddresses[packet.destChannel]
+    // construct receiving denomination, check correctness
+    prefix = "{packet/sourcePort}/{packet.sourceChannel}"
+    assert(data.denomination.slice(0, len(prefix)) === prefix)
+    // unescrow tokens to receiver (assumed to fail if balance insufficient)
+    bank.TransferCoins(escrowAccount, data.receiver, data.denomination.slice(len(prefix)), data.amount)
+  }
   return 0x
 }
 ```
@@ -199,9 +229,23 @@ function onAcknowledgePacket(
 ```typescript
 function onTimeoutPacket(packet: Packet) {
   FungibleTokenPacketData data = packet.data
-  prefix = "{packet.destPort}/{packet.destChannel}"
-  assert(data.denomination.slice(0, len(prefix)) === prefix)
-  bank.TransferCoins(escrowAccount, data.denomination.slice(len(prefix)), data.amount, data.sender)
+  if data.source {
+    // sender was source chain, unescrow tokens
+    // determine escrow account
+    escrowAccount = channelEscrowAddresses[packet.destChannel]
+    // construct receiving denomination, check correctness
+    prefix = "{packet/sourcePort}/{packet.sourceChannel}"
+    assert(data.denomination.slice(0, len(prefix)) === prefix)
+    // unescrow tokens back to sender
+    bank.TransferCoins(escrowAccount, data.sender, data.denomination.slice(len(prefix)), data.amount)
+  } else {
+    // receiver was source chain, mint vouchers
+    // construct receiving denomination, check correctness
+    prefix = "{packet/sourcePort}/{packet.sourceChannel}"
+    assert(data.denomination.slice(0, len(prefix)) === prefix)
+    // mint vouchers back to sender
+    bank.MintCoins(data.sender, data.denomination, data.amount)
+  }
 }
 ```
 
