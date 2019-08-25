@@ -5,7 +5,7 @@ stage: draft
 category: meta
 author: Christopher Goes <cwgoes@tendermint.com>
 created: 2019-02-12
-modified: 2019-08-17
+modified: 2019-08-25
 ---
 
 ## What is an ICS?

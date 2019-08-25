@@ -6,12 +6,12 @@ category: IBC/APP
 requires: 25, 26
 author: Christopher Goes <cwgoes@tendermint.com>
 created: 2019-07-15 
-modified: 2019-08-24
+modified: 2019-08-25
 ---
 
 ## Synopsis
 
-This standard document specifies packet data structure, state machine handling logic, and encoding details for the transfer of fungible tokens over an IBC channel between two modules on separate chains. The state machine logic presented allows for safe multi-chain denomination handling with permissionless channel opening.
+This standard document specifies packet data structure, state machine handling logic, and encoding details for the transfer of fungible tokens over an IBC channel between two modules on separate chains. The state machine logic presented allows for safe multi-chain denomination handling with permissionless channel opening. This logic constitutes a "fungible token transfer bridge module", interfacing between the IBC relayer module and an existing asset tracking module on the host state machine.
 
 ### Motivation
 
@@ -33,7 +33,7 @@ The IBC handler interface & IBC relayer module interface are as defined in [ICS 
 
 ### Data Structures
 
-Only one packet data type, `FungibleTokenPacketData`, which specifies the denomination, amount, sending account, and receiving account, is required.
+Only one packet data type, `FungibleTokenPacketData`, which specifies the denomination, amount, sending account, receiving account, and whether the sending chain is the source of the asset, is required.
 
 ```typescript
 interface FungibleTokenPacketData {
@@ -41,12 +41,21 @@ interface FungibleTokenPacketData {
   amount: uint256
   sender: string
   receiver: string
+  source: boolean
+}
+```
+
+The fungible token transfer bridge module tracks escrow addresses associated with particular channels in state. Fields of the `ModuleState` are assumed to be in scope.
+
+```typescript
+interface ModuleState {
+  channelEscrowAddresses: Map<Identifier, string>
 }
 ```
 
 ### Subprotocols
 
-The sub-protocols described herein should be implemented in a "bank-ibc-bridge" module with access to a bank module and to the IBC relayer module.
+The sub-protocols described herein should be implemented in a "fungible token transfer bridge" module with access to a bank module and to the IBC relayer module.
 
 #### Port & channel setup
 
@@ -59,103 +68,196 @@ function setup() {
     onChanOpenTry,
     onChanOpenAck,
     onChanOpenConfirm,
+    onChanCloseInit,
     onChanCloseConfirm,
+    onSendPacket,
     onRecvPacket,
     onTimeoutPacket,
+    onAcknowledgePacket,
+    onTimeoutPacketClose
   })
-  escrowAddress = newAddress()
 }
 ```
 
 Once the `setup` function has been called, channels can be created through the IBC relayer module between instances of the fungible token transfer module on separate chains.
 
-#### Sending packets
-
-In plain English, between chains `A` and `B`:
-- Chain `A` bank module accepts new connections / channels from any module on another chain.
-- Denominations sent from chain `B` are prefixed with the connection identifier and the name of the counterparty port of `B`, e.g. `0x1234/bank` for the bank module on chain `B` with connection identifier `0x1234`. No supply limits are enforced, but the bank module on chain `A` tracks the amount of each denomination sent by chain `B` and keeps it in a store location which can be queried / proven.
-- Coins sent by chain `A` to chain `B` are prefixed in the same way when sent (`0x4567/bank` if the bank module is running on a hub with connection identifier `0x4567`). Outgoing supply is tracked in a store location which can be queried and proven. Chain `B` is allowed to send back coins prefixed with `0x4567/bank` only up to the amount which has been sent to it.
-- Each chain, locally, can keep a lookup table to use short, user-friendly local denominations in state which are translated to and from the longer denominations when sending and receiving packets.
-
-```typescript
-function handleFungibleTokenPacketSend(denomination: string, amount: uint256, receiver: string) {
-  // transfer coins from user
-  // construct receiving denomination
-  // escrow coins in amount (if source) or unescrow (if destination)
-  // send packet
-  data = FungibleTokenPacketData{denomination, amount, receiver}
-  relayerModule.sendPacket(data)
-}
-```
-
 #### Relayer module callbacks
+
+##### Channel lifecycle management
+
+Both machines `A` and `B` accept new channels from any module on another machine, if and only if:
+
+- The other module is bound to the "bank" port.
+- The channel being created is unordered.
+- The version string is empty.
 
 ```typescript
 function onChanOpenInit(
-  portIdentifier: Identifier, channelIdentifier: Identifier, counterpartyPortIdentifier: Identifier,
-  counterpartyChannelIdentifier: Identifier, connectionHops: [Identifier], nextTimeoutHeight: uint64) {
+  order: ChannelOrder,
+  connectionHops: [Identifier],
+  portIdentifier: Identifier,
+  channelIdentifier: Identifier,
+  counterpartyPortIdentifier: Identifier,
+  counterpartyChannelIdentifier: Identifier,
+  version: string) {
+  // only unordered channels allowed
+  assert(order === UNORDERED)
   // only allow channels to "bank" port on counterparty chain
   assert(counterpartyPortIdentifier === "bank")
+  // version not used at present
+  assert(version === "")
+  // allocate an escrow address
+  channelEscrowAddresses[channelIdentifier] = newAddress()
 }
 ```
 
 ```typescript
 function onChanOpenTry(
-  portIdentifier: Identifier, channelIdentifier: Identifier, counterpartyPortIdentifier: Identifier,
-  counterpartyChannelIdentifier: Identifier, connectionHops: [Identifier], nextTimeoutHeight: uint64) {
+  order: ChannelOrder,
+  connectionHops: [Identifier],
+  portIdentifier: Identifier,
+  channelIdentifier: Identifier,
+  counterpartyPortIdentifier: Identifier,
+  counterpartyChannelIdentifier: Identifier,
+  version: string,
+  counterpartyVersion: string) {
+  // only unordered channels allowed
+  assert(order === UNORDERED)
+  // version not used at present
+  assert(version === "")
+  assert(counterpartyVersion === "")
   // only allow channels to "bank" port on counterparty chain
   assert(counterpartyPortIdentifier === "bank")
+  // allocate an escrow address
+  channelEscrowAddresses[channelIdentifier] = newAddress()
 }
 ```
 
 ```typescript
-function onChanOpenAck(portIdentifier: Identifier, channelIdentifier: Identifier, nextTimeoutHeight: uint64) {
-  // accept all acknowledgements, port has already been validated
+function onChanOpenAck(
+  portIdentifier: Identifier,
+  channelIdentifier: Identifier,
+  version: string) {
+  // version not used at present
+  assert(version === "")
+  // port has already been validated
 }
 ```
 
 ```typescript
-function onChanOpenConfirm(portIdentifier: Identifier, channelIdentifier: Identifier) {
-  // accept confirmations, port has already been validated
+function onChanOpenConfirm(
+  portIdentifier: Identifier,
+  channelIdentifier: Identifier) {
+  // accept channel confirmations, port has already been validated
 }
 ```
 
 ```typescript
-function onChanOpenTimeout(portIdentifier: Identifier, channelIdentifier: Identifier): void {
+function onChanCloseInit(
+  portIdentifier: Identifier,
+  channelIdentifier: Identifier) {
   // no action necessary
 }
 ```
 
 ```typescript
-function onChanCloseConfirm(portIdentifier: Identifier, channelIdentifier: Identifier): void {
+function onChanCloseConfirm(
+  portIdentifier: Identifier,
+  channelIdentifier: Identifier) {
   // no action necessary
+}
+```
+
+##### Packet relay
+
+In plain English, between chains `A` and `B`:
+
+- When acting as the source zone, the bridge module escrows an existing local asset denomination on the sending chain and mints vouchers on the receiving chain.
+- When acting as the sink zone, the bridge module burns local vouchers on the sending chains and unescrows the local asset denomination on the receiving chain.
+- When a packet times-out, local assets are unescrowed back to the sender or vouchers minted back to the sender appropriately.
+- No acknowledgement data is necessary.
+
+```typescript
+function onSendPacket(packet: Packet) {
+  FungibleTokenPacketData data = packet.data
+  if data.source {
+    // sender is source chain: escrow tokens
+    // determine escrow account
+    escrowAccount = channelEscrowAddresses[packet.sourceChannel]
+    // construct receiving denomination, check correctness
+    prefix = "{packet/destPort}/{packet.destChannel}"
+    assert(data.denomination.slice(0, len(prefix)) === prefix)
+    // escrow source tokens (assumed to fail if balance insufficient)
+    bank.TransferCoins(data.sender, escrowAccount, data.denomination.slice(len(prefix)), data.amount)
+  } else {
+    // receiver is source chain, burn vouchers
+    // construct receiving denomination, check correctness
+    prefix = "{packet/sourcePort}/{packet.sourceChannel}"
+    assert(data.denomination.slice(0, len(prefix)) === prefix)
+    // burn vouchers (assumed to fail if balance insufficient)
+    bank.BurnCoins(data.sender, data.denomination, data.amount)
+  }
 }
 ```
 
 ```typescript
 function onRecvPacket(packet: Packet): bytes {
   FungibleTokenPacketData data = packet.data
-  prefix = "{packet.destPort}/{packet.destChannel}"
-  assert(data.denomination.slice(0, len(prefix)) === prefix)
-  bank.TransferCoins(escrowAccount, data.denomination, data.amount, data.receiver)
+  if data.source {
+    // sender was source chain: mint vouchers
+    // construct receiving denomination, check correctness
+    prefix = "{packet/destPort}/{packet.destChannel}"
+    assert(data.denomination.slice(0, len(prefix)) === prefix)
+    // mint vouchers to receiver (assumed to fail if balance insufficient)
+    bank.MintCoins(data.receiver, data.denomination, data.amount)
+  } else {
+    // receiver is source chain: unescrow tokens
+    // determine escrow account
+    escrowAccount = channelEscrowAddresses[packet.destChannel]
+    // construct receiving denomination, check correctness
+    prefix = "{packet/sourcePort}/{packet.sourceChannel}"
+    assert(data.denomination.slice(0, len(prefix)) === prefix)
+    // unescrow tokens to receiver (assumed to fail if balance insufficient)
+    bank.TransferCoins(escrowAccount, data.receiver, data.denomination.slice(len(prefix)), data.amount)
+  }
   return 0x
+}
+```
+
+```typescript
+function onAcknowledgePacket(
+  packet: Packet,
+  acknowledgement: bytes) {
+  // nothing is necessary, likely this will never be called since it's a no-op
 }
 ```
 
 ```typescript
 function onTimeoutPacket(packet: Packet) {
   FungibleTokenPacketData data = packet.data
-  prefix = "{packet.destPort}/{packet.destChannel}"
-  assert(data.denomination.slice(0, len(prefix)) === prefix)
-  bank.TransferCoins(escrowAccount, data.denomination.slice(len(prefix)), data.amount, data.sender)
+  if data.source {
+    // sender was source chain, unescrow tokens
+    // determine escrow account
+    escrowAccount = channelEscrowAddresses[packet.destChannel]
+    // construct receiving denomination, check correctness
+    prefix = "{packet/sourcePort}/{packet.sourceChannel}"
+    assert(data.denomination.slice(0, len(prefix)) === prefix)
+    // unescrow tokens back to sender
+    bank.TransferCoins(escrowAccount, data.sender, data.denomination.slice(len(prefix)), data.amount)
+  } else {
+    // receiver was source chain, mint vouchers
+    // construct receiving denomination, check correctness
+    prefix = "{packet/sourcePort}/{packet.sourceChannel}"
+    assert(data.denomination.slice(0, len(prefix)) === prefix)
+    // mint vouchers back to sender
+    bank.MintCoins(data.sender, data.denomination, data.amount)
+  }
 }
 ```
 
 ```typescript
-function sendPacket(packet: Packet) {
-  prefix = "{packet/destPort}/{packet.destChannel}"
-  bank.TransferCoins(data.sender, data.denomination.slice(len(prefix)), data.amount, escrowAccount)
-  relayerModule.sendPacket(packet)
+function onTimeoutPacketClose(packet: Packet) {
+  // can't happen, only unordered channels allowed
 }
 ```
 
@@ -173,13 +275,18 @@ Supply: Redefine supply as unlocked tokens. All send-recv pairs sum to net zero.
 
 This does not yet handle the "diamond problem", where a user sends a token originating on chain A to chain B, then to chain D, and wants to return it through D -> C -> A — since the supply is tracked as owned by chain B, chain C cannot serve as the intermediary. It is not yet clear whether that case should be dealt with in-protocol or not — it may be fine to just require the original path of redemption (and if there is frequent liquidity and some surplus on both paths the diamond path will work most of the time). Complexities arising from long redemption paths may lead to the emergence of central chains in the network topology.
 
+#### Optional addenda
+
+- Each chain, locally, could elect to keep a lookup table to use short, user-friendly local denominations in state which are translated to and from the longer denominations when sending and receiving packets. 
+- Additional restrictions may be imposed on which other machines may be connected to & which channels may be established.
+
 ## Backwards Compatibility
 
 Not applicable.
 
 ## Forwards Compatibility
 
-Modules can negotiate packet versions in the channel handshake.
+A future version of this standard could use a different version in the channel handshake.
 
 ## Example Implementation
 
@@ -193,6 +300,7 @@ Coming soon.
 
 15 July 2019 - Draft written
 29 July 2019 - Major revisions; cleanup
+25 August 2019 - Major revisions, more cleanup
 
 ## Copyright
 

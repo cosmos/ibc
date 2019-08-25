@@ -6,7 +6,7 @@ category: IBC/TAO
 required-by: 2, 3, 4, 5, 18
 author: Christopher Goes <cwgoes@tendermint.com>
 created: 2019-04-16
-modified: 2019-08-18
+modified: 2019-08-25
 ---
 
 ## Synopsis
@@ -85,7 +85,6 @@ At present, IBC/TAO utilises the following path prefixes for the `provableStore`
 | -------------- | ---------------------------------------------------- | ----------------- | ---------------------- |
 | privateStore   | "clients/{identifier}"                               | ClientState       | [ICS 2](../ics-002-client-semantics) |
 | provableStore  | "clients/{identifier}/consensusState"                | ConsensusState    | [ICS 2](../ics-002-client-semantics) |
-| privateStore   | "clients/{identifier}/roots/{height}                 | CommitmentRoot    | [ICS 2](../ics-002-client-semantics) |
 | provableStore  | "clients/{identifier}/type"                          | ClientType        | [ICS 2](../ics-002-client-semantics) |
 | provableStore  | "connections/{identifier}"                           | ConnectionEnd     | [ICS 3](../ics-003-connection-semantics) |
 | provableStore  | "channels/{identifier}"                              | ChannelEnd        | [ICS 4](../ics-004-channel-and-packet-semantics) |
@@ -97,7 +96,7 @@ At present, IBC/TAO utilises the following path prefixes for the `provableStore`
 
 ### Module layout
 
-Represented spatially, the layout of modules & their included specifications on a host state machine looks like so (Aardvark, Betazoid, and Cehalopod are arbitrary modules):
+Represented spatially, the layout of modules & their included specifications on a host state machine looks like so (Aardvark, Betazoid, and Cephalopod are arbitrary modules):
 
 ```
 +----------------------------------------------------------------------------------------------------------+

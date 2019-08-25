@@ -1,4 +1,4 @@
-personal_ws-1.1 en 412 
+personal_ws-1.1 en 430 
 unescrow
 onChanCloseConfirm
 clientKey
@@ -10,11 +10,11 @@ desiredCounterpartyIdentifier
 queryClientConnections
 stablecoins
 packetAcknowledgementPath
+ClientSubmitMisbehaviour
 encodings
 addConnectionToClient
 exfiltration
 relayer
-Cehalopod
 timeoutClose
 timeoutPacket
 Statefulness
@@ -52,6 +52,7 @@ handleConnOpenInit
 connOpenTry
 boolean
 LaTeX
+handlePacketTimeoutOnClose
 CommitmentProof
 getVerifiedRoot
 OPENTRY
@@ -63,6 +64,7 @@ chanOpenInit
 handleConnOpenTimeout
 callbackPath
 handleChanOpenAck
+unescrows
 ERC
 validator
 authenticationPath
@@ -102,6 +104,7 @@ middled
 channelId
 queryClientConsensusState
 consensusStatePath
+PacketSend
 unescrowing
 InitialPubkey
 handlePacketRecv
@@ -162,6 +165,7 @@ connOpenAck
 WASM
 queryConnectionChannels
 NFT
+onChanCloseInit
 newpubkey
 dataflow
 datagrams
@@ -195,6 +199,7 @@ auth
 unreceived
 handleConnOpenAck
 handleChanOpenTimeout
+portId
 chanCloseInit
 prover
 CommitmentState
@@ -207,6 +212,7 @@ proofInit
 nextSequenceSendPath
 getConsensusState
 png
+ClientMisbehaviour
 tokenized
 connectionId
 newCallbacks
@@ -214,6 +220,7 @@ destChannel
 updateClient
 connectionChannelsPath
 onChanOpenAck
+channelEscrowAddresses
 Pre
 privateStore
 sdk
@@ -255,11 +262,13 @@ lifecycle
 desiredCounterpartyConnectionIdentifier
 chanCloseConfirm
 ChangeOperator
+handlePacketAcknowledgement
 UDP
 changelog
 synchrony
 chanOpenConfirm
 removeChannelFromConnection
+timeoutPacketClose
 queryClientFrozen
 recv
 repudiable
@@ -281,6 +290,7 @@ bijective
 Juwoon
 proofTimeout
 clientTypePath
+handleClientMisbehaviour
 interoperation
 tokenising
 authenticationKey
@@ -311,6 +321,7 @@ connOpenInit
 getValue
 channelIdentifier
 handleClientCreate
+channelSet
 ABCI
 struct
 consensusState
@@ -329,7 +340,9 @@ interoperability
 Betazoid
 callingModuleIdentifier
 LogStore
+PacketTimeoutOnClose
 introspectable
+unescrowed
 destPort
 ModuleCallbacks
 Multichain
@@ -338,6 +351,7 @@ blockchain's
 blockchains
 serialisable
 chanOpenTry
+onAcknowledgePacket
 incrementing
 queryConnection
 validValue
@@ -347,12 +361,14 @@ structs
 keyspaces
 counterpartyStateRoot
 JSON
+PacketAcknowledgement
 consensusHeight
 createMembershipProof
 Yun
 md
 counterpartyConnectionIdentifier
 OpCommitmentRoot
+onTimeoutPacketClose
 transactional
 counterpartyPortIdentifier
 packetCommitmentKey
@@ -373,6 +389,7 @@ collateralisation
 datapipe
 ConnCloseAck
 VM
+ModuleState
 Strawman
 tx
 bytestring
@@ -408,6 +425,7 @@ QUIC
 permissioning
 renderer
 chanId
+onSendPacket
 positionally
 OpHeaderProof
 CryptoKitty

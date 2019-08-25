@@ -6,7 +6,7 @@ required-by: 2
 category: IBC/TAO
 author: Christopher Goes <cwgoes@tendermint.com>
 created: 2019-04-16
-modified: 2019-05-11
+modified: 2019-08-25
 ---
 
 ## Synopsis

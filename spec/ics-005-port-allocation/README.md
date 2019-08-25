@@ -6,8 +6,8 @@ requires: 24
 required-by: 4
 category: IBC/TAO
 author: Christopher Goes <cwgoes@tendermint.com>
-created: 29 June 2019
-modified: 29 June 2019
+created: 2019-06-20
+modified: 2019-08-25
 ---
 
 ## Synopsis

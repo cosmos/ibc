@@ -6,7 +6,7 @@ category: IBC/TAO
 requires: 2, 3, 5, 24
 author: Christopher Goes <cwgoes@tendermint.com>
 created: 2019-03-07
-modified: 2019-08-13
+modified: 2019-08-25
 ---
 
 ## Synopsis
@@ -213,17 +213,23 @@ Host state machines MAY also safely ignore the version data or specify an empty 
 
 > Note: If the host state machine is utilising object capability authentication (see [ICS 005](../ics-005-port-allocation)), all functions utilising ports take an additional capability parameter.
 
-#### Tracking channels
+#### Tracking non-closed channels
+
+The set of non-closed channels associated with a connection is tracked under `connectionChannelsPath` (necessary to prevent closure of connections until all associated channels have been closed).
 
 ```typescript
 function addChannelToConnection(connectionId: Identifier, channelId: Identifier) {
-  privateStore.set(connectionChannelsPath(connectionId), channelId)
+  channelSet = privateStore.get(connectionChannelsPath(connectionId))
+  channelSet.add(channelId)
+  privateStore.set(connectionChannelsPath(connectionId), channelSet)
 }
 ```
 
 ```typescript
 function removeChannelFromConnection(connectionId: Identifier, channelId: Identifier) {
-  privateStore.set(connectionChannelsPath(connectionId), channelId)
+  channelSet = privateStore.get(connectionChannelsPath(connectionId))
+  channelSet.remove(channelId)
+  privateStore.set(connectionChannelsPath(connectionId), channelSet)
 }
 ```
 
@@ -251,10 +257,11 @@ could be implemented to provide this).
 function chanOpenInit(
   order: ChannelOrder,
   connectionHops: [Identifier],
-  channelIdentifier: Identifier,
   portIdentifier: Identifier,
+  channelIdentifier: Identifier,
+  counterpartyPortIdentifier: Identifier,
   counterpartyChannelIdentifier: Identifier,
-  counterpartyPortIdentifier: Identifier, version: string) {
+  version: string) {
   assert(connectionHops.length === 1)
   assert(provableStore.get(channelPath(portIdentifier, channelIdentifier)) === nil)
   connection = provableStore.get(connectionPath(connectionHops[0]))
@@ -266,6 +273,7 @@ function chanOpenInit(
   provableStore.set(channelPath(portIdentifier, channelIdentifier), channel)
   provableStore.set(nextSequenceSendPath(portIdentifier, channelIdentifier), 1)
   provableStore.set(nextSequenceRecvPath(portIdentifier, channelIdentifier), 1)
+  addChannelToConnection(connectionHops[0], channelIdentifier)
 }
 ```
 
@@ -275,10 +283,10 @@ The `chanOpenTry` function is called by a module to accept the first step of a c
 function chanOpenTry(
   order: ChannelOrder,
   connectionHops: [Identifier],
-  channelIdentifier: Identifier,
-  counterpartyChannelIdentifier: Identifier,
   portIdentifier: Identifier,
+  channelIdentifier: Identifier,
   counterpartyPortIdentifier: Identifier,
+  counterpartyChannelIdentifier: Identifier,
   version: string,
   counterpartyVersion: string,
   proofInit: CommitmentProof,
@@ -301,6 +309,7 @@ function chanOpenTry(
   provableStore.set(channelPath(portIdentifier, channelIdentifier), channel)
   provableStore.set(nextSequenceSendPath(portIdentifier, channelIdentifier), 1)
   provableStore.set(nextSequenceRecvPath(portIdentifier, channelIdentifier), 1)
+  addChannelToConnection(connectionHops[0], channelIdentifier)
 }
 ```
 
@@ -309,8 +318,8 @@ counterparty module on the other chain.
 
 ```typescript
 function chanOpenAck(
-  channelIdentifier: Identifier,
   portIdentifier: Identifier,
+  channelIdentifier: Identifier,
   version: string,
   proofTry: CommitmentProof,
   proofHeight: uint64) {
@@ -378,6 +387,7 @@ function chanCloseInit(
   assert(connection.state === OPEN)
   channel.state = CLOSED
   provableStore.set(channelPath(portIdentifier, channelIdentifier), channel)
+  removeChannelFromConnection(connectionHops[0], channelIdentifier)
 }
 ```
 
@@ -409,6 +419,7 @@ function chanCloseConfirm(
   ))
   channel.state = CLOSED
   provableStore.set(channelPath(portIdentifier, channelIdentifier), channel)
+  removeChannelFromConnection(connectionHops[0], channelIdentifier)
 }
 ```
 
@@ -559,10 +570,11 @@ Calling modules MAY atomically execute appropriate application acknowledgement-h
 ```typescript
 function acknowledgePacket(
   packet: OpaquePacket,
+  acknowledgement: bytes,
   proof: CommitmentProof,
-  proofHeight: uint64,
-  acknowledgement: bytes): Packet {
+  proofHeight: uint64): Packet {
 
+  // assert that channel is open, calling module owns the associated port, and the packet fields match
   channel = provableStore.get(channelPath(packet.sourcePort, packet.sourceChannel))
   assert(channel.state === OPEN)
   assert(authenticate(provableStore.get(portPath(packet.sourcePort))))
@@ -714,54 +726,6 @@ function timeoutPacketUnordered(
 }
 ```
 
-###### Closing on timeout
-
-The `timeoutClose` function is called by a module in order to prove that a packet which ought to have
-been received on a particular ordered channel has timed out, and the channel must be closed.
-
-This is an alternative to closing the other end of the channel and proving that closure. Either works.
-
-Calling modules MAY atomically execute any application logic associated with channel closure in conjunction with calling `recvTimeoutPacket`.
-
-```typescript
-function timeoutClose(
-  packet: OpaquePacket,
-  proof: CommitmentProof,
-  proofHeight: uint64): Packet {
-  channel = provableStore.get(channelPath(packet.destPort, packet.destChannel))
-  assert(channel.state === OPEN)
-  assert(channel.order === ORDERED)
-  assert(authenticate(provableStore.get(portPath(packet.destPort))))
-  assert(packet.sourceChannel === channel.counterpartyChannelIdentifier)
-
-  connection = provableStore.get(connectionPath(channel.connectionHops[0]))
-  // note: the connection may have been closed
-  assert(packet.sourcePort === channel.counterpartyPortIdentifier)
-  assert(packet.connectionHops === channel.connectionHops)
-
-  nextSequenceRecv = provableStore.get(nextSequenceRecvPath(packet.destPort, packet.destChannel))
-  assert(packet.sequence === nextSequenceRecv)
-
-  assert(proofHeight >= packet.timeoutHeight)
-
-  client = queryClient(connection.clientIdentifier)
-  assert(client.verifyMembership(
-    proofHeight,
-    proof,
-    packetCommitmentPath(packet.sourcePort, packet.sourceChannel, packet.sequence),
-    commit(packet.data)
-  ))
-
-  // all assertions passed, we can alter state
-
-  channel.state = CLOSED
-  provableStore.set(channelPath(packet.destPort, packet.destChannel), channel)
-
-  // return transparent packet
-  return packet
-}
-```
-
 ##### Timing-out on close
 
 The `timeoutOnClose` function is called by a module in order to prove that the channel
@@ -810,6 +774,54 @@ function timeoutOnClose(
 
   // delete our commitment
   provableStore.delete(packetCommitmentPath(packet.sourcePort, packet.sourceChannel, packet.sequence))
+
+  // return transparent packet
+  return packet
+}
+```
+
+###### Closing on timeout
+
+The `timeoutClose` function is called by a module in order to prove that a packet which ought to have
+been received on a particular ordered channel has timed out, and the channel must be closed.
+
+This is an alternative to closing the other end of the channel and proving that closure. Either works.
+
+Calling modules MAY atomically execute any application logic associated with channel closure in conjunction with calling `recvTimeoutPacket`.
+
+```typescript
+function timeoutClose(
+  packet: OpaquePacket,
+  proof: CommitmentProof,
+  proofHeight: uint64): Packet {
+  channel = provableStore.get(channelPath(packet.destPort, packet.destChannel))
+  assert(channel.state === OPEN)
+  assert(channel.order === ORDERED)
+  assert(authenticate(provableStore.get(portPath(packet.destPort))))
+  assert(packet.sourceChannel === channel.counterpartyChannelIdentifier)
+
+  connection = provableStore.get(connectionPath(channel.connectionHops[0]))
+  // note: the connection may have been closed
+  assert(packet.sourcePort === channel.counterpartyPortIdentifier)
+  assert(packet.connectionHops === channel.connectionHops)
+
+  nextSequenceRecv = provableStore.get(nextSequenceRecvPath(packet.destPort, packet.destChannel))
+  assert(packet.sequence === nextSequenceRecv)
+
+  assert(proofHeight >= packet.timeoutHeight)
+
+  client = queryClient(connection.clientIdentifier)
+  assert(client.verifyMembership(
+    proofHeight,
+    proof,
+    packetCommitmentPath(packet.sourcePort, packet.sourceChannel, packet.sequence),
+    commit(packet.data)
+  ))
+
+  // all assertions passed, we can alter state
+
+  channel.state = CLOSED
+  provableStore.set(channelPath(packet.destPort, packet.destChannel), channel)
 
   // return transparent packet
   return packet
@@ -964,6 +976,7 @@ Coming soon.
 16 July 2019 - Alterations for multi-hop routing future compatibility
 29 July 2019 - Revisions to handle timeouts after connection closure
 13 August 2019 - Various edits
+25 August 2019 - Cleanup
 
 ## Copyright
 
