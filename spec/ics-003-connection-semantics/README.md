@@ -116,9 +116,9 @@ function clientConnectionsPath(clientIdentifier: Identifier): Path {
 function addConnectionToClient(
   clientIdentifier: Identifier,
   connectionIdentifier: Identifier) {
-  conns = privateStore.get(clientConnectionsPath(clientIdentifier, connectionIdentifier))
+  conns = privateStore.get(clientConnectionsPath(clientIdentifier))
   conns.add(connectionIdentifier)
-  privateStore.set(clientConnectionsPath(clientIdentifier, connectionIdentifier), conns)
+  privateStore.set(clientConnectionsPath(clientIdentifier), conns)
 }
 ```
 
@@ -277,7 +277,7 @@ The closing handshake protocol serves to cleanly close a connection on two chain
 
 This sub-protocol will likely need to be permissioned to an entity who "owns" the connection on the initiating chain, such as a particular end user, smart contract, or governance mechanism.
 
-The closing handshake sub-protocol defines three datagrams: *ConnCloseInit*, *ConnCloseTry*, and *ConnCloseAck*.
+The closing handshake sub-protocol defines two datagrams: *ConnCloseInit*, and *ConnCloseConfirm*.
 
 A correct protocol execution flows as follows (note that all calls are made through modules per ICS 25):
 
