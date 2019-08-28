@@ -16,7 +16,7 @@ This document outlines the architecture of the authentication, transport, and or
 
 ## What is IBC?
 
-The *inter-blockchain communication protocol* is a reliable & secure inter-module communication protocol, where modules are deterministic processes that run on independent machines, which may be distributed ledgers (also referred to as blockchains).
+The *inter-blockchain communication protocol* is a reliable & secure inter-module communication protocol, where modules are deterministic processes that run on independent machines, including replicated state machines (like "blockchains" or "distributed ledgers").
 
 IBC can be used by any application which builds on top of reliable & secure inter-module communication. Example applications include cross-chain asset transfer, atomic swaps, multi-chain smart contracts (with or without mutually comprehensible VMs), and data & code sharding of various kinds.
 
