@@ -128,13 +128,13 @@ IBC sub-protocols are reasoned about as interactions between two chains `A` and 
 
 *Transactional liveness* refers to the confirmation of incoming transactions (which transactions should be clear by context) by the consensus algorithm of a particular machine. Transactional liveness requires consensus liveness, but consensus liveness does not necessarily provide transactional liveness.
 
-### Consensus synchrony
+### Bounded consensus liveness
 
-*Consensus synchrony* refers to consensus liveness within a particular bound.
+*Bounded consensus liveness* refers to consensus liveness within a particular bound.
 
-### Transactional synchrony
+### Bounded transactional liveness
 
-*Transactional synchrony* refers to transactional liveness within a particular bound.
+*Bounded transactional liveness* refers to transactional liveness within a particular bound.
 
 ### Exactly-once safety
 
