@@ -27,6 +27,7 @@ Client-related types & functions are as defined in [ICS 2](../ics-002-client-sem
 The opening handshake protocol allows each chain to verify the identifier used to reference the connection on the other chain, enabling modules on each chain to reason about the reference on the other chain.
 
 An *actor*, as referred to in this specification, is an entity capable of executing datagrams who is paying for computation / storage (via gas or a similar mechanism) but is otherwise untrusted. Possible actors include:
+
 - End users signing with an account key
 - On-chain smart contracts acting autonomously or in response to another transaction
 - On-chain modules acting in response to another transaction or in a scheduled manner
@@ -84,7 +85,7 @@ interface ConnectionEnd {
 ```
 
 - The `state` field describes the current state of the connection end.
-- The `counterpartyConnectionIdentifier` field identifies the identifier under which the associated connection end is stored on the counterparty chain.
+- The `counterpartyConnectionIdentifier` field identifies the connection end on the counterparty chain associated with this connection.
 - The `clientIdentifier` field identifies the client associated with this connection.
 - The `counterpartyClientIdentifier` field identifies the client on the counterparty chain associated with this connection.
 - The `version` field is an opaque string which can be utilised to determine encodings or protocols for channels or packets utilising this connection.
@@ -123,7 +124,7 @@ function addConnectionToClient(
 
 `removeConnectionFromClient` is used to remove a connection identifier from the set of connections associated with a client.
 
-```
+```typescript
 function removeConnectionFromClient(
   clientIdentifier: Identifier,
   connectionIdentifier: Identifier) {
@@ -165,6 +166,7 @@ A correct protocol execution flows as follows (note that all calls are made thro
 | Relayer   | `ConnOpenConfirm` | B                | (OPEN, TRYOPEN)    | (OPEN, OPEN)      |
 
 At the end of an opening handshake between two chains implementing the sub-protocol, the following properties hold:
+
 - Each chain has each other's correct consensus state as originally specified by the initiating actor.
 - Each chain has knowledge of and has agreed to its identifier on the other chain.
 

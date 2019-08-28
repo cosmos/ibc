@@ -338,6 +338,7 @@ where the valid blocks are signed by the operator. The operator signing Key
 can be changed while the chain is running.
 
 The client-specific types are then defined as follows:
+
 - `ConsensusState` stores the latest height and latest public key
 - `Header`s contain a height, a new commitment root, a signature by the operator, and possibly a new public key
 - `ValidityPredicate` checks that the submitted height is monotonically increasing and that the signature is correct
