@@ -30,7 +30,7 @@ IBC is not a token transfer protocol: token transfer is a possible application-l
 
 IBC is not a sharding protocol: there is no single state machine being split across chains, but rather a diverse set of different state machines on different chains which share some common interfaces.
 
-IBC is not a layer-two scaling protocol: all chains implementing IBC exist on the same "layer", although they may occupy different points in the network topology, and there is no necessarily single root chain or necessarily single validator set.
+IBC is not a layer-two scaling protocol: all chains implementing IBC exist on the same "layer", although they may occupy different points in the network topology, and there is not necessarily a single root chain or single validator set.
 
 ## Motivation
 
