@@ -102,7 +102,7 @@ The network layer and relayer processes may behave in arbitrary ways, dropping, 
 
 ### Flow control
 
-IBC does not require specific provision for computation-level flow control since the underlying machines will have throughput limitations and flow control mechanisms of their own (such as "gas" markets). Application-level flow control — limiting the rate of particular packets according to their content — may be useful to ensure security properties (limiting the value on a single machine) and contain damage from Byzantine faults (allowing a challenge period to prove an equivocation, then closing a connection). IBC provides facilities for modules to reject packets and leaves particulars up to the higher-level application protocols.
+IBC does not provide specific provisions for compute-level or economic-level flow control. The underlying machines will have compute throughput limitations and flow control mechanisms of their own (such as "gas" markets). Application-level economic flow control — limiting the rate of particular packets according to their content — may be useful to ensure security properties (limiting the value on a single machine) and contain damage from Byzantine faults (allowing a challenge period to prove an equivocation, then closing a connection). For example, an application transferring value over an IBC channel might want to limit the rate of value transfer per block to limit damage from potential Byzantine behaviour. IBC provides facilities for modules to reject packets and leaves particulars up to the higher-level application protocols.
 
 ### Authentication
 
