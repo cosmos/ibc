@@ -118,7 +118,7 @@ function authenticate(id: SourceIdentifier): boolean {
 
 #### Preliminaries
 
-`portKey` takes an `Identifier` and returns the store key under which the object-capability reference or owner module identifier associated with a port should be stored.
+`portPath` takes an `Identifier` and returns the store path under which the object-capability reference or owner module identifier associated with a port should be stored.
 
 ```typescript
 function portPath(id: Identifier): Path {
@@ -136,7 +136,7 @@ If the host state machine does not implement a special module manager to control
 function bindPort(id: Identifier) {
   assert(provableStore.get(portPath(id)) === null)
   key = generate()
-  provableStore.set(key, portPath(id))
+  provableStore.set(portPath(id), key)
   return key
 }
 ```

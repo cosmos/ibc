@@ -46,6 +46,7 @@ sequence numbers to prevent replay), and return control to the module or throw o
 The IBC handler never calls into modules directly.
 
 Although a bit counterintuitive to reason about at first, this pattern has a few notable advantages:
+
 - It minimises requirements of the host state machine, since the IBC handler need not understand how to call
   into other modules or store any references to them.
 - It avoids the necessity of managing a module lookup table in the handler state.
@@ -55,6 +56,7 @@ Although a bit counterintuitive to reason about at first, this pattern has a few
   with the failure of the module, which is tricky to interpret.
 
 It also has one notable disadvantage:
+
 - Without an additional abstraction, the relayer logic becomes more complex, since off-chain
   relayer processes will need to track the state of multiple modules to determine when packets
   can be submitted.
