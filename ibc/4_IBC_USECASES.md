@@ -34,7 +34,7 @@ There may be a starting "source zone", which starts with the entire token balanc
 
 #### Invariants
 
-Fungibility of any amount across all pegged representations, constant (or formulaic, in the case of a inflationary asset) total supply cumulative across chains, and tokens only exist in a spendable form on one chain at once.
+Fungibility of any amount across all pegged representations, constant (or formulaic, in the case of a inflationary asset) total supply cumulative across chains, and tokens only exist in a spendable form on one chain at a time.
 
 ### Non-fungible tokens
 
@@ -114,7 +114,7 @@ Correct fees paid on one of two chains but not both.
 
 ### Interchain collateralisation
 
-A subset of the validator set on one chain can elect to validate another chain and be held accountable for equivocation faults committed on that chain submitted over an IBC connection, and the second chain can delegate its' validator update logic to the first chain through the same IBC connection.
+A subset of the validator set on one chain can elect to validate another chain and be held accountable for equivocation faults committed on that chain submitted over an IBC connection, and the second chain can delegate its validator update logic to the first chain through the same IBC connection.
 
 #### Representations
 

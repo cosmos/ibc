@@ -160,7 +160,7 @@ batchVerifyMembership(root, proof, items) ===
 
 ```typescript
 batchVerifyNonMembership(root, proof, items) ===
-  all(items.map((item) => verifyNonMembership(root, proof, path)))
+  all(items.map((item) => verifyNonMembership(root, proof, item.path)))
 ```
 
 If batch verification is possible and more efficient than individual verification of one proof per element, an commitment construction SHOULD define batch verification functions.
