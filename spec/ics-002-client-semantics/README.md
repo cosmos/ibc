@@ -185,7 +185,7 @@ but they must expose this common set of query functions to the IBC handler.
 type ClientState = bytes
 ```
 
-Client types must also define a function to initialize a client state with a provided consensus state:
+Client types must also define a method to initialize a client state with a provided consensus state:
 
 ```typescript
 type initialize = (ConsensusState) => ClientState
@@ -274,7 +274,7 @@ function createClient(
   privateStore.set(clientStatePath(id), clientState)
 }
   assert(!client.frozen)
-  return client.verifiedRoots[height].verifyNonMembership(path, proof)
+  return clientState.verifiedRoots[height].verifyNonMembership(path, proof)
 ```
 
 #### Query
@@ -374,7 +374,7 @@ function commit(
   sequence: uint64,
   newPublicKey: Maybe<PublicKey>): Header {
   signature = privateKey.sign(root, sequence, newPublicKey)
-  header = Header{sequence, root, signature}
+  header = Header{sequence, root, signature, newPublicKey}
   return header
 }
 
@@ -405,7 +405,7 @@ function verifyMembership(
   path: Path,
   value: Value) {
   assert(!client.frozen)
-  return client.verifiedRoots[sequence].verifyMembership(path, value, proof)
+  return clientState.verifiedRoots[sequence].verifyMembership(path, value, proof)
 }
 
 // state non-membership function defined by the client type
@@ -415,7 +415,7 @@ function verifyNonMembership(
   proof: CommitmentProof,
   path: Path) {
   assert(!client.frozen)
-  return client.verifiedRoots[sequence].verifyNonMembership(path, proof)
+  return clientState.verifiedRoots[sequence].verifyNonMembership(path, proof)
 }
 
 // misbehaviour verification function defined by the client type
