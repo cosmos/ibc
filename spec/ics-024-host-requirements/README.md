@@ -45,7 +45,8 @@ Variable interpolation, denoted by curly braces, MAY be used as shorthand to def
 
 ### Key/value Store
 
-The host state machine MUST provide two separate key-value store interfaces, each with three functions which behave in the standard way:
+The host state machine MUST provide a key-value store interface 
+with three functions that behave in the standard way:
 
 ```typescript
 type Path = string
@@ -69,11 +70,20 @@ type delete = (path: Path) => void
 
 These functions MUST be permissioned to the IBC handler module (the implementation of which is described in separate standards) only, so only the IBC handler module can `set` or `delete` the paths which can be read by `get`. This can possibly be implemented as a sub-store (prefixed key-space) of a larger key-value store used by the entire state machine.
 
-The first interface provided by the host state machine MUST write to a key-value store whose data can be externally proved with a vector commitment as defined in [ICS 23](../ics-023-vector-commitments). The second interface MAY support external proofs, but is not required to - the IBC handler will never write data to it which needs to be proved.
+Host state machines must provide two instances of this interface - 
+a `provableStore` for storage read by (i.e. proven to) other chains,
+and a `privateStore` for storage local to the host.
 
-These interfaces are referred to throughout specifications which utilise them as the `provableStore` and the `privateStore` respectively, where `get`, `set`, and `delete` are called as methods, e.g. `provableStore.set('path', 'value')`.
+The `provableStore`:
 
-The `provableStore` and `privateStore` differ also in their encoding restrictions. The `provableStore` MUST use canonical data structure encodings provided in these specifications as proto3 files, since values stored in the `provableStore` must be comprehensible to other machines implementing IBC.
+- MUST write to a key-value store whose data can be externally proved with a vector commitment as defined in [ICS 23](../ics-023-vector-commitments). 
+- MUST use canonical data structure encodings provided in these specifications as proto3 files
+
+The `privateStore`:
+
+- MAY support external proofs, but is not required to - the IBC handler will never write data to it which needs to be proved.
+- MAY use canonical proto3 data structures, but is not required to - it can use
+  whatever format is preferred by the application environment.
 
 > Note: any key-value store interface which provides these methods & properties is sufficient for IBC. Host state machines may implement "proxy stores" with underlying storage models which do not directly match the path & value pairs set and retrieved through the store interface — paths could be grouped into buckets & values stored in pages which could be proved in a single commitment, path-spaces could be remapped non-contiguously in some bijective manner, etc — as long as `get`, `set`, and `delete` behave as expected and other machines can verify commitment proofs of path & value pairs (or their absence) in the provable store.
 
