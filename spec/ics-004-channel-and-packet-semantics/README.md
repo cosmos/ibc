@@ -234,7 +234,7 @@ function removeChannelFromConnection(connectionId: Identifier, channelId: Identi
 ```
 
 ```typescript
-function queryConnectionChannels(id: Identifier): Set<Identifier> {
+function queryConnectionChannels(connectionId: Identifier): Set<Identifier> {
   return privateStore.get(connectionChannelsPath(connectionId))
 }
 ```
@@ -263,7 +263,7 @@ function chanOpenInit(
   counterpartyChannelIdentifier: Identifier,
   version: string) {
   assert(connectionHops.length === 1)
-  assert(provableStore.get(channelPath(portIdentifier, channelIdentifier)) === nil)
+  assert(provableStore.get(channelPath(portIdentifier, channelIdentifier)) === null)
   connection = provableStore.get(connectionPath(connectionHops[0]))
   // optimistic channel handshakes are allowed
   assert(connection.state !== CLOSED)
@@ -409,11 +409,11 @@ function chanCloseConfirm(
   connection = provableStore.get(connectionPath(channel.connectionHops[0]))
   assert(connection.state === OPEN)
   expected = Channel{CLOSED, channel.order, channel.counterpartyPortIdentifier, portIdentifier,
-                     channel.channelIdentifier, channel.connectionHops.reverse(), channel.version}
+                     channelIdentifier, channel.connectionHops.reverse(), channel.version}
   client = queryClient(connection.clientIdentifier)
   assert(client.verifyMembership(
     proofHeight,
-    proof,
+    proofInit,
     channelPath(channel.counterpartyPortIdentifier, channel.counterpartyChannelIdentifier),
     expected
   ))
@@ -454,11 +454,12 @@ Represented spatially, packet transit between two machines can be rendered as fo
 
 ##### Sending packets
 
-The `sendPacket` function is called by a module in order to send an IBC packet on a channel end owned by the calling module to the corresponding module the counterparty chain.
+The `sendPacket` function is called by a module in order to send an IBC packet on a channel end owned by the calling module to the corresponding module on the counterparty chain.
 
 Calling modules MUST execute application logic atomically in conjunction with calling `sendPacket`.
 
 The IBC handler performs the following steps in order:
+
 - Checks that the channel & connection are open to send packets
 - Checks that the calling module owns the sending port
 - Checks that the packet metadata matches the channel & connection information
@@ -492,7 +493,7 @@ function sendPacket(packet: Packet) {
 
   nextSequenceSend = nextSequenceSend + 1
   provableStore.set(nextSequenceSendPath(packet.sourcePort, packet.sourceChannel), nextSequenceSend)
-  provableStore.set(packetCommitmentPath(packet.sourcePort, packet.sourceChannel, sequence), commit(packet.data))
+  provableStore.set(packetCommitmentPath(packet.sourcePort, packet.sourceChannel, packet.sequence), commit(packet.data))
 }
 ```
 
@@ -503,6 +504,7 @@ The `recvPacket` function is called by a module in order to receive & process an
 Calling modules MUST execute application logic atomically in conjunction with calling `recvPacket`, likely beforehand to calculate the acknowledgement value.
 
 The IBC handler performs the following steps in order:
+
 - Checks that the channel & connection are open to receive packets
 - Checks that the calling module owns the receiving port
 - Checks that the packet metadata matches the channel & connection information
@@ -754,7 +756,7 @@ function timeoutOnClose(
 
   // check that the opposing channel end has closed
   client = queryClient(connection.clientIdentifier)
-  expected = Channel{CLOSED, channel.order, channel.counterpartyPortIdentifier, portIdentifier,
+  expected = Channel{CLOSED, channel.order, channel.counterpartyPortIdentifier, channel.portIdentifier,
                      channel.channelIdentifier, channel.connectionHops.reverse(), channel.version}
   assert(client.verifyMembership(
     proofHeight,
@@ -780,7 +782,7 @@ function timeoutOnClose(
 }
 ```
 
-###### Closing on timeout
+##### Closing on timeout
 
 The `timeoutClose` function is called by a module in order to prove that a packet which ought to have
 been received on a particular ordered channel has timed out, and the channel must be closed.
