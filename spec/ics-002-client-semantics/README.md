@@ -87,7 +87,7 @@ and if a full node rejects it, then the light client MUST also reject it.
 
 Light clients are not replaying the whole message transcript, so it is possible under cases of
 consensus misbehaviour that the light clients' behaviour differs from the full nodes'.
-In this case, an misbehaviour proof which proves the divergence between the `ValidityPredicate`
+In this case, a misbehaviour proof which proves the divergence between the `ValidityPredicate`
 and the full node can be generated and submitted to the chain so that the chain can safely deactivate the
 light client, invalidate past state roots, and await higher-level intervention.
 
@@ -207,7 +207,7 @@ Client types must define functions, in accordance with [ICS 23](../ics-023-vecto
 in state at particular heights. The behaviour of these functions MUST comply with the properties defined in [ICS 23](../ics-023-vector-commitments); however,
 internal implementation details may differ (for example, a loopback client could simply read directly from the state and require no proofs).
 
-```type
+```typescript
 type verifyMembership = (ClientState, uint64, CommitmentProof, Path, Value) => boolean
 ```
 
@@ -273,8 +273,6 @@ function createClient(
   provableStore.set(clientTypePath(id), clientType)
   privateStore.set(clientStatePath(id), clientState)
 }
-  assert(!client.frozen)
-  return clientState.verifiedRoots[height].verifyNonMembership(path, proof)
 ```
 
 #### Query
@@ -404,7 +402,7 @@ function verifyMembership(
   proof: CommitmentProof
   path: Path,
   value: Value) {
-  assert(!client.frozen)
+  assert(!clientState.frozen)
   return clientState.verifiedRoots[sequence].verifyMembership(path, value, proof)
 }
 
@@ -414,7 +412,7 @@ function verifyNonMembership(
   sequence: uint64,
   proof: CommitmentProof,
   path: Path) {
-  assert(!client.frozen)
+  assert(!clientState.frozen)
   return clientState.verifiedRoots[sequence].verifyNonMembership(path, proof)
 }
 
@@ -431,7 +429,7 @@ function misbehaviourPredicate(
   assert(h1.commitmentRoot !== h2.commitmentRoot)
   assert(h1.publicKey.verify(h1.signature))
   assert(h2.publicKey.verify(h2.signature))
-  client.frozen = true
+  clientState.frozen = true
 }
 ```
 

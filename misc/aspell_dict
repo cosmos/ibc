@@ -253,7 +253,7 @@ counterpartyVersion
 portPath
 createClient
 connOpenTimeout
-subprotocols
+sub-protocols
 validityPredicate
 topologies
 newCapabilityPath
@@ -415,7 +415,6 @@ onTimeoutPacket
 onChanOpenTimeout
 newAddress
 calculateRoot
-chanel
 clientTypeKey
 ChannelState
 secondHeader

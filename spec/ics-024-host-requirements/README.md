@@ -169,7 +169,7 @@ Modules which wish to make use of particular IBC features MAY implement certain 
 Host state machines MAY define a `submitDatagram` function to submit [datagrams](../../docs/ibc/2_IBC_TERMINOLOGY.md), which will be included in transactions, directly to the relayer module:
 
 ```typescript
-type SubmitDatagram = (datagram: Datagram) => void
+type submitDatagram = (datagram: Datagram) => void
 ```
 
 `submitDatagram` allows relayers to relay IBC datagrams directly to the host state machine. Host state machines MAY require that the relayer submitting the datagram has an account to pay transaction fees, signs over the datagram in a larger transaction structure, etc — `submitDatagram` MUST define & construct any such packaging required.

@@ -114,7 +114,7 @@ function authenticate(id: SourceIdentifier): boolean {
 
 
 
-### Subprotocols
+### Sub-protocols
 
 #### Preliminaries
 
