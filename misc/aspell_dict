@@ -415,7 +415,6 @@ onTimeoutPacket
 onChanOpenTimeout
 newAddress
 calculateRoot
-chanel
 clientTypeKey
 ChannelState
 secondHeader

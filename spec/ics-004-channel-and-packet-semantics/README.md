@@ -277,7 +277,7 @@ function chanOpenInit(
 }
 ```
 
-The `chanOpenTry` function is called by a module to accept the first step of a chanel opening handshake initiated by a module on another chain.
+The `chanOpenTry` function is called by a module to accept the first step of a channel opening handshake initiated by a module on another chain.
 
 ```typescript
 function chanOpenTry(
