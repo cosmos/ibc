@@ -402,7 +402,7 @@ function verifyMembership(
   proof: CommitmentProof
   path: Path,
   value: Value) {
-  assert(!client.frozen)
+  assert(!clientState.frozen)
   return clientState.verifiedRoots[sequence].verifyMembership(path, value, proof)
 }
 
@@ -412,7 +412,7 @@ function verifyNonMembership(
   sequence: uint64,
   proof: CommitmentProof,
   path: Path) {
-  assert(!client.frozen)
+  assert(!clientState.frozen)
   return clientState.verifiedRoots[sequence].verifyNonMembership(path, proof)
 }
 
@@ -429,7 +429,7 @@ function misbehaviourPredicate(
   assert(h1.commitmentRoot !== h2.commitmentRoot)
   assert(h1.publicKey.verify(h1.signature))
   assert(h2.publicKey.verify(h2.signature))
-  client.frozen = true
+  clientState.frozen = true
 }
 ```
 
