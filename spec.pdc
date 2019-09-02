@@ -29,10 +29,6 @@ header-includes:
 
 !include ibc/3_IBC_TERMINOLOGY.md.xfm
 
-!include ibc/4_IBC_USECASES.md.xfm
-
-!include ibc/5_IBC_DESIGN_PATTERNS.md.xfm
-
 # ICS 001 - ICS Standard
 
 !include spec/ics-001-ics-standard/README.md.xfm
@@ -76,3 +72,11 @@ header-includes:
 # ICS 020 - Fungible Token Transfer
 
 !include spec/ics-020-fungible-token-transfer/README.md.xfm
+
+# Appendix A: Use-case Descriptions
+
+!include ibc/4_IBC_USECASES.md.xfm
+
+# Appendix B: Design Patterns
+
+!include ibc/5_IBC_DESIGN_PATTERNS.md.xfm

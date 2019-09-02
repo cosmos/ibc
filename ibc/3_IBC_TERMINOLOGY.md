@@ -118,7 +118,7 @@ IBC sub-protocols are reasoned about as interactions between two chains `A` and 
 
 ### Non-repudiability
 
-*Non-repudiability* is the inability of a machine to deny having sent a particular packet or committed a particular state. IBC is a non-repudiable protocol, modulo data availability choices made by state machines.
+*Non-repudiability* is the inability of a machine to successfully dispute having sent a particular packet or committed a particular state. IBC is a non-repudiable protocol, modulo data confidentiality choices made by state machines.
 
 ### Consensus liveness
 
@@ -126,7 +126,7 @@ IBC sub-protocols are reasoned about as interactions between two chains `A` and 
 
 ### Transactional liveness
 
-*Transactional liveness* is the confirmation of incoming transactions (which transactions should be clear by context) by the consensus algorithm of a particular machine. Transactional liveness requires consensus liveness, but consensus liveness does not necessarily provide transactional liveness.
+*Transactional liveness* is the continued confirmation of incoming transactions (which transactions should be clear by context) by the consensus algorithm of a particular machine. Transactional liveness requires consensus liveness, but consensus liveness does not necessarily provide transactional liveness.
 
 ### Bounded consensus liveness
 
