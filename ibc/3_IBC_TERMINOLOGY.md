@@ -48,7 +48,7 @@ A cryptographic *commitment* is a way to cheaply verify membership of a key => v
 
 ### CommitmentProof
 
-A *commitment proof* refers to the proof structure which proves whether a particular key maps to a particular value in a committed-to set or not.
+A *commitment proof* is the proof structure which proves whether a particular key maps to a particular value in a committed-to set or not.
 
 ### Handler Module
 
@@ -92,7 +92,7 @@ IBC sub-protocols are reasoned about as interactions between two chains `A` and 
 
 ### Authentication
 
-*Authentication* refers to the protocols used to ensure that datagrams were in fact sent by a particular chain and associated state alterations committed by it.
+*Authentication* is the property of ensuring that datagrams were in fact sent by a particular chain in the manner defined by the IBC handler.
 
 ## Property definitions
 
@@ -102,47 +102,47 @@ IBC sub-protocols are reasoned about as interactions between two chains `A` and 
 
 ### Misbehaviour
 
-*Misbehaviour* refers to a class of consensus fault defined by a consensus algorithm & detectable (possibly also attributable) by the light client of that consensus algorithm.
+*Misbehaviour* is a class of consensus fault defined by a consensus algorithm & detectable (possibly also attributable) by the light client of that consensus algorithm.
 
 ### Equivocation
 
-*Equivocation* refers to a particular class of consensus fault committed by a validator or validators which sign votes on multiple different successors to a single block. All equivocations are misbehaviours.
+*Equivocation* is a particular class of consensus fault committed by a validator or validators which sign votes on multiple different successors to a single block. All equivocations are misbehaviours.
 
 ### Data availability
 
-*Data availability* refers to the ability of off-chain relayer processes to retrieve data in the state of a machine within some time bound.
+*Data availability* is the ability of off-chain relayer processes to retrieve data in the state of a machine within some time bound.
 
 ### Data confidentiality
 
-*Data confidentiality* refers to the ability of the host state machine to refuse to make particular data available to particular parties without impairing the functionality of the IBC protocol.
+*Data confidentiality* is the ability of the host state machine to refuse to make particular data available to particular parties without impairing the functionality of the IBC protocol.
 
 ### Non-repudiability
 
-*Non-repudiability* refers to the inability of a machine to deny having sent a particular packet or committed a particular state. IBC is a non-repudiable protocol, modulo data availability choices made by state machines.
+*Non-repudiability* is the inability of a machine to deny having sent a particular packet or committed a particular state. IBC is a non-repudiable protocol, modulo data availability choices made by state machines.
 
 ### Consensus liveness
 
-*Consensus liveness* refers to the continuance of block production by the consensus algorithm of a particular machine.
+*Consensus liveness* is the continuance of block production by the consensus algorithm of a particular machine.
 
 ### Transactional liveness
 
-*Transactional liveness* refers to the confirmation of incoming transactions (which transactions should be clear by context) by the consensus algorithm of a particular machine. Transactional liveness requires consensus liveness, but consensus liveness does not necessarily provide transactional liveness.
+*Transactional liveness* is the confirmation of incoming transactions (which transactions should be clear by context) by the consensus algorithm of a particular machine. Transactional liveness requires consensus liveness, but consensus liveness does not necessarily provide transactional liveness.
 
 ### Bounded consensus liveness
 
-*Bounded consensus liveness* refers to consensus liveness within a particular bound.
+*Bounded consensus liveness* is consensus liveness within a particular bound.
 
 ### Bounded transactional liveness
 
-*Bounded transactional liveness* refers to transactional liveness within a particular bound.
+*Bounded transactional liveness* is transactional liveness within a particular bound.
 
 ### Exactly-once safety
 
-*Exactly-once safety* refers to the property that a packet is confirmed no more than once (and generally exactly-once assuming eventual transactional liveness).
+*Exactly-once safety* is the property that a packet is confirmed no more than once (and generally exactly-once assuming eventual transactional liveness).
 
 ### Deliver-or-timeout safety
 
-*Deliver-or-timeout safety* refers to the property that a packet will either be delivered & executed or will timeout in a way that can be proved back to the sender.
+*Deliver-or-timeout safety* is the property that a packet will either be delivered & executed or will timeout in a way that can be proved back to the sender.
 
 ### Constant (w.r.t. complexity)
 
