@@ -253,7 +253,7 @@ counterpartyVersion
 portPath
 createClient
 connOpenTimeout
-subprotocols
+sub-protocols
 validityPredicate
 topologies
 newCapabilityPath
