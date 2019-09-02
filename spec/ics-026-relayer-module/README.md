@@ -198,7 +198,7 @@ The function `lookupModule` can be used by the relayer module to lookup the call
 
 ```typescript
 function lookupModule(portId: Identifier) {
-  return privateStore.get(callbackPath(id))
+  return privateStore.get(callbackPath(portId))
 }
 ```
 
@@ -371,7 +371,7 @@ interface ConnCloseInit {
 
 ```typescript
 function handleConnCloseInit(datagram: ConnCloseInit) {
-  handler.handleConnCloseInit(identifier)
+  handler.connCloseInit(datagram.identifier)
 }
 ```
 
@@ -387,7 +387,7 @@ interface ConnCloseConfirm {
 
 ```typescript
 function handleConnCloseConfirm(datagram: ConnCloseConfirm) {
-  handler.handleConnCloseConfirm(
+  handler.connCloseConfirm(
     datagram.identifier,
     datagram.proofInit,
     datagram.proofHeight
