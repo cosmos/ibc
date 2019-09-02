@@ -40,7 +40,7 @@ An *actor*, as referred to in this specification, is an entity capable of execut
 
 Prior to connection establishment:
 
-- No further IBC subprotocols should operate, since cross-chain sub-states cannot be verified.
+- No further IBC sub-protocols should operate, since cross-chain sub-states cannot be verified.
 - The initiating actor (who creates the connection) must be able to specify an initial consensus state for the chain to connect to and an initial consensus state for the connecting chain (implicitly, e.g. by sending the transaction).
 
 #### During Handshake
@@ -144,9 +144,9 @@ to negotiate encodings, priorities, or connection-specific metadata related to c
 
 Host state machines MAY also safely ignore the version data or specify an empty string.
 
-### Subprotocols
+### Sub-protocols
 
-This ICS defines two subprotocols: opening handshake and closing handshake. Header tracking and closing-by-misbehaviour are defined in [ICS 2](../ics-002-client-semantics). Datagrams defined herein are handled as external messages by the IBC relayer module defined in [ICS 26](../ics-026-relayer-module).
+This ICS defines two sub-protocols: opening handshake and closing handshake. Header tracking and closing-by-misbehaviour are defined in [ICS 2](../ics-002-client-semantics). Datagrams defined herein are handled as external messages by the IBC relayer module defined in [ICS 26](../ics-026-relayer-module).
 
 ![State Machine Diagram](state.png)
 

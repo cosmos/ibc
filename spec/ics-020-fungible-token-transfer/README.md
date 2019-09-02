@@ -53,7 +53,7 @@ interface ModuleState {
 }
 ```
 
-### Subprotocols
+### Sub-protocols
 
 The sub-protocols described herein should be implemented in a "fungible token transfer bridge" module with access to a bank module and to the IBC relayer module.
 
