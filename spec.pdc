@@ -17,7 +17,14 @@ header-includes:
     - \usepackage{hyperref}
     - \usepackage[left]{lineno}
     - \linenumbers
+    - \usepackage{listings}
 ---
+
+\lstset {
+  numbers = left,
+  stepnumber = 1,
+  numberstyle=\tiny\color{gray}
+}
 
 \pagebreak
 
