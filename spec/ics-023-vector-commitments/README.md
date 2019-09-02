@@ -226,7 +226,7 @@ proof = createMembershipProof(acc, path, value)
 Probability(verifyMembership(root, proof, path, value) === false) negligible in k
 ```
 
-For all other values `otherValue` where `value /= otherValue`, for all values of `proof`,
+For all other values `otherValue` where `value !== otherValue`, for all values of `proof`,
 
 ```
 Probability(verifyMembership(root, proof, path, otherValue) === true) negligible in k
