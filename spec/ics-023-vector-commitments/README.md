@@ -39,7 +39,7 @@ This document only defines desired properties, not a concrete implementation —
 
 ### Datatypes
 
-An commitment construction MUST specify the following datatypes, which are otherwise opaque (need not be introspected) but MUST be serialisable:
+A commitment construction MUST specify the following datatypes, which are otherwise opaque (need not be introspected) but MUST be serialisable:
 
 #### State
 
@@ -69,7 +69,7 @@ type CommitmentProof = object
 
 ### Required functions
 
-An commitment construction MUST provide the following functions, defined over paths and values as byte arrays:
+A commitment construction MUST provide the following functions, defined over paths and values as byte arrays:
 
 ```typescript
 type Path = string
@@ -101,7 +101,7 @@ The `set` function sets a path to a value in the commitment.
 type set = (state: CommitmentState, path: Path, value: Value) => CommitmentState
 ```
 
-The `remove` function removes a path and associated value from an commitment.
+The `remove` function removes a path and associated value from a commitment.
 
 ```typescript
 type remove = (state: CommitmentState, path: Path) => CommitmentState
@@ -109,13 +109,13 @@ type remove = (state: CommitmentState, path: Path) => CommitmentState
 
 #### Proof generation
 
-The `createMembershipProof` function generates a proof that a particular path has been set to a particular value in an commitment.
+The `createMembershipProof` function generates a proof that a particular path has been set to a particular value in a commitment.
 
 ```typescript
 type createMembershipProof = (state: CommitmentState, path: Path, value: Value) => CommitmentProof
 ```
 
-The `createNonMembershipProof` function generates a proof that a path has not been set to any value in an commitment.
+The `createNonMembershipProof` function generates a proof that a path has not been set to any value in a commitment.
 
 ```typescript
 type createNonMembershipProof = (state: CommitmentState, path: Path) => CommitmentProof
@@ -123,13 +123,13 @@ type createNonMembershipProof = (state: CommitmentState, path: Path) => Commitme
 
 #### Proof verification
 
-The `verifyMembership` function verifies a proof that a path has been set to a particular value in an commitment.
+The `verifyMembership` function verifies a proof that a path has been set to a particular value in a commitment.
 
 ```typescript
 type verifyMembership = (root: CommitmentRoot, proof: CommitmentProof, path: Path, value: Value) => boolean
 ```
 
-The `verifyNonMembership` function verifies a proof that a path has not been set to any value in an commitment.
+The `verifyNonMembership` function verifies a proof that a path has not been set to any value in a commitment.
 
 ```typescript
 type verifyNonMembership = (root: CommitmentRoot, proof: CommitmentProof, path: Path) => boolean
@@ -137,15 +137,15 @@ type verifyNonMembership = (root: CommitmentRoot, proof: CommitmentProof, path: 
 
 ### Optional functions
 
-An commitment construction MAY provide the following functions:
+A commitment construction MAY provide the following functions:
 
-The `batchVerifyMembership` function verifies a proof that many paths have been set to specific values in an commitment.
+The `batchVerifyMembership` function verifies a proof that many paths have been set to specific values in a commitment.
 
 ```typescript
 type batchVerifyMembership = (root: CommitmentRoot, proof: CommitmentProof, items: Map<Path, Value>) => boolean
 ```
 
-The `batchVerifyNonMembership` function verifies a proof that many paths have not been set to any value in an commitment.
+The `batchVerifyNonMembership` function verifies a proof that many paths have not been set to any value in a commitment.
 
 ```typescript
 type batchVerifyNonMembership = (root: CommitmentRoot, proof: CommitmentProof, paths: Set<Path>) => boolean
@@ -163,7 +163,7 @@ batchVerifyNonMembership(root, proof, items) ===
   all(items.map((item) => verifyNonMembership(root, proof, item.path)))
 ```
 
-If batch verification is possible and more efficient than individual verification of one proof per element, an commitment construction SHOULD define batch verification functions.
+If batch verification is possible and more efficient than individual verification of one proof per element, a commitment construction SHOULD define batch verification functions.
 
 ### Properties & Invariants
 
@@ -213,7 +213,7 @@ Probability(verifyMembership(root, proof, path, value) === true) negligible in k
 
 #### Position binding
 
-Commitment proofs MUST be *position binding*: a given path can only map to one value, and an commitment proof cannot prove that the same path opens to a different value except with probability negligible in k.
+Commitment proofs MUST be *position binding*: a given path can only map to one value, and a commitment proof cannot prove that the same path opens to a different value except with probability negligible in k.
 
 For any path `path` set in the commitment `acc`, there is one `value` for which:
 

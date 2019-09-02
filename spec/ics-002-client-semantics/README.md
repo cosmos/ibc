@@ -87,7 +87,7 @@ and if a full node rejects it, then the light client MUST also reject it.
 
 Light clients are not replaying the whole message transcript, so it is possible under cases of
 consensus misbehaviour that the light clients' behaviour differs from the full nodes'.
-In this case, an misbehaviour proof which proves the divergence between the `ValidityPredicate`
+In this case, a misbehaviour proof which proves the divergence between the `ValidityPredicate`
 and the full node can be generated and submitted to the chain so that the chain can safely deactivate the
 light client, invalidate past state roots, and await higher-level intervention.
 
