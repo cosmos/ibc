@@ -207,7 +207,7 @@ Client types must define functions, in accordance with [ICS 23](../ics-023-vecto
 in state at particular heights. The behaviour of these functions MUST comply with the properties defined in [ICS 23](../ics-023-vector-commitments); however,
 internal implementation details may differ (for example, a loopback client could simply read directly from the state and require no proofs).
 
-```type
+```typescript
 type verifyMembership = (ClientState, uint64, CommitmentProof, Path, Value) => boolean
 ```
 
