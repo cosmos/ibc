@@ -273,8 +273,6 @@ function createClient(
   provableStore.set(clientTypePath(id), clientType)
   privateStore.set(clientStatePath(id), clientState)
 }
-  assert(!client.frozen)
-  return clientState.verifiedRoots[height].verifyNonMembership(path, proof)
 ```
 
 #### Query
