@@ -17,7 +17,31 @@ header-includes:
     - \usepackage{hyperref}
     - \usepackage[left]{lineno}
     - \linenumbers
+    - \usepackage{listings}
 ---
+
+\lstdefinelanguage{Typescript}{
+  morekeywords=[1]{break, continue, delete, else, for, function, if, in,
+    new, return, this, typeof, var, void, while, with},
+  % Literals, primitive types, and reference types.
+  morekeywords=[2]{false, null, true, boolean, number, undefined,
+    Array, Boolean, Date, Math, Number, String, Object},
+  % Built-ins.
+  morekeywords=[3]{eval, parseInt, parseFloat, escape, unescape},
+  sensitive,
+  morecomment=[s]{/*}{*/},
+  morecomment=[l]//,
+  morecomment=[s]{/**}{*/}, % JavaDoc style comments
+  morestring=[b]',
+  morestring=[b]"
+}[keywords, comments, strings]
+
+\lstset {
+  numbers = left,
+  stepnumber = 1,
+  numberstyle=\tiny\color{gray},
+  language = Typescript
+}
 
 \pagebreak
 
@@ -28,10 +52,6 @@ header-includes:
 !include ibc/2_IBC_DESIGN_PRINCIPLES.md.xfm
 
 !include ibc/3_IBC_TERMINOLOGY.md.xfm
-
-!include ibc/4_IBC_USECASES.md.xfm
-
-!include ibc/5_IBC_DESIGN_PATTERNS.md.xfm
 
 # ICS 001 - ICS Standard
 
@@ -76,3 +96,11 @@ header-includes:
 # ICS 020 - Fungible Token Transfer
 
 !include spec/ics-020-fungible-token-transfer/README.md.xfm
+
+# Appendix A: Use-case Descriptions
+
+!include ibc/4_IBC_USECASES.md.xfm
+
+# Appendix B: Design Patterns
+
+!include ibc/5_IBC_DESIGN_PATTERNS.md.xfm

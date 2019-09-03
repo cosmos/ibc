@@ -33,26 +33,20 @@ The IBC/TAO specifications define the implementations of two modules: the core "
 
 ### Paths, identifiers, separators
 
-A `Path` is a bytestring used as the key for an object stored in state. Paths MUST contain only alphanumeric characters and the separator `/`.
-
 An `Identifier` is a bytestring used as a key for an object stored in state, such as a connection, channel, or light client. Identifiers MUST consist of alphanumeric characters only. Identifiers MUST be non-empty (of positive integer length).
 
-Identifiers are not intended to be valuable resources — to prevent name squatting, minimum length requirements or pseudorandom generation MAY be implemented.
+A `Path` is a bytestring used as the key for an object stored in state. Paths MUST contain only identifiers, constant alphanumeric strings, and the separator `"/"`. 
 
-The separator `/` is used to separate and concatenate two identifiers or an identifier and a constant bytestring. Identifiers MUST NOT contain the `/` character, which prevents ambiguity.
+Identifiers are not intended to be valuable resources — to prevent name squatting, minimum length requirements or pseudorandom generation MAY be implemented, but particular restrictions are not imposed by this specification.
 
-Variable interpolation, denoted by curly braces, MAY be used as shorthand to define path formats, e.g. `client/{clientIdentifier}/consensusState`.
+The separator `"/"` is used to separate and concatenate two identifiers or an identifier and a constant bytestring. Identifiers MUST NOT contain the `"/"` character, which prevents ambiguity.
+
+Variable interpolation, denoted by curly braces, is used throughout this specification as shorthand to define path formats, e.g. `client/{clientIdentifier}/consensusState`.
 
 ### Key/value Store
 
 The host state machine MUST provide a key-value store interface 
 with three functions that behave in the standard way:
-
-```typescript
-type Path = string
-
-type Value = string
-```
 
 ```typescript
 type get = (path: Path) => Value | void
@@ -68,11 +62,12 @@ type delete = (path: Path) => void
 
 `Path` is as defined above. `Value` is an arbitrary bytestring encoding of a particular data structure. Encoding details are left to separate ICSs.
 
-These functions MUST be permissioned to the IBC handler module (the implementation of which is described in separate standards) only, so only the IBC handler module can `set` or `delete` the paths which can be read by `get`. This can possibly be implemented as a sub-store (prefixed key-space) of a larger key-value store used by the entire state machine.
+These functions MUST be permissioned to the IBC handler module (the implementation of which is described in separate standards) only, so only the IBC handler module can `set` or `delete` the paths that can be read by `get`. This can possibly be implemented as a sub-store (prefixed key-space) of a larger key-value store used by the entire state machine.
 
-Host state machines must provide two instances of this interface - 
+Host state machines MUST provide two instances of this interface -
 a `provableStore` for storage read by (i.e. proven to) other chains,
-and a `privateStore` for storage local to the host.
+and a `privateStore` for storage local to the host, upon which `get`
+, `set`, and `delete` can be called, e.g. `provableStore.set('some/path', 'value')`.
 
 The `provableStore`:
 

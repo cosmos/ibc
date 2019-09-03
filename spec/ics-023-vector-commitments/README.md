@@ -151,7 +151,7 @@ The `batchVerifyNonMembership` function verifies a proof that many paths have no
 type batchVerifyNonMembership = (root: CommitmentRoot, proof: CommitmentProof, paths: Set<Path>) => boolean
 ```
 
-If defined, these functions MUST be computationally equivalent to the conjunctive union of `verifyMembership` and `verifyNonMembership` respectively (`proof` may vary):
+If defined, these functions MUST produce the same result as the conjunctive union of `verifyMembership` and `verifyNonMembership` respectively (efficiency may vary):
 
 ```typescript
 batchVerifyMembership(root, proof, items) ===
@@ -226,7 +226,7 @@ proof = createMembershipProof(acc, path, value)
 Probability(verifyMembership(root, proof, path, value) === false) negligible in k
 ```
 
-For all other values `otherValue` where `value /= otherValue`, for all values of `proof`,
+For all other values `otherValue` where `value !== otherValue`, for all values of `proof`,
 
 ```
 Probability(verifyMembership(root, proof, path, otherValue) === true) negligible in k
