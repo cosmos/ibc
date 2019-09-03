@@ -64,9 +64,10 @@ type delete = (path: Path) => void
 
 These functions MUST be permissioned to the IBC handler module (the implementation of which is described in separate standards) only, so only the IBC handler module can `set` or `delete` the paths that can be read by `get`. This can possibly be implemented as a sub-store (prefixed key-space) of a larger key-value store used by the entire state machine.
 
-Host state machines must provide two instances of this interface - 
+Host state machines MUST provide two instances of this interface -
 a `provableStore` for storage read by (i.e. proven to) other chains,
-and a `privateStore` for storage local to the host.
+and a `privateStore` for storage local to the host, upon which `get`
+, `set`, and `delete` can be called, e.g. `provableStore.set('some/path', 'value')`.
 
 The `provableStore`:
 
