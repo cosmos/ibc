@@ -131,11 +131,7 @@ Host state machines MUST provide the ability to introspect their current height,
 type getCurrentHeight = () => uint64
 ```
 
-Host state machines MUST define a unique `ConsensusState` type fulfilling the requirements of [ICS 2](../ics-002-client-semantics):
-
-```typescript
-type ConsensusState object
-```
+Host state machines MUST define a unique `ConsensusState` type fulfilling the requirements of [ICS 2](../ics-002-client-semantics), with a canonical binary serialisation.
 
 Host state machines MUST provide the ability to introspect their own consensus state, with `getConsensusState`:
 
@@ -144,6 +140,12 @@ type getConsensusState = (height: uint64) => ConsensusState
 ```
 
 `getConsensusState` MUST return the consensus state for at least some number `n` of contiguous recent heights, where `n` is constant for the host state machine. Heights older than `n` MAY be safely pruned (causing future calls to fail for those heights).
+
+Host state machines MUST provide the ability to introspect this stored recent consensus state count `n`, with `getStoredRecentConsensusStateCount`:
+
+```typescript
+type getStoredRecentConsensusStateCount = () => uint64
+```
 
 ### Port system
 
