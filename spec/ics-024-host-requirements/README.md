@@ -149,7 +149,7 @@ type getStoredRecentConsensusStateCount = () => uint64
 
 ### Port system
 
-Host state machines MUST implement a port system, where the IBC handler can expose functions to different parts of the state machine (perhaps modules) that can bind to uniquely named ports. Ports are identified by an `Identifier`.
+Host state machines MUST implement a port system, where the IBC handler can allow different modules in the host state machine to bind to uniquely named ports. Ports are identified by an `Identifier`.
 
 Host state machines MUST permission interaction with the IBC handler such that:
 
