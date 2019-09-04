@@ -21,7 +21,7 @@
   node [state, right of=tryopen] (tryopen1) {\CS{Open}{TryOpen}}
   node [state, right of=tryopen1] (open) {\CS{Open}{Open}}
   node [state, below of=open] (tryclose) {\CS{Closed}{Open}}
-  node [state, left of=tryclose] (tryclose1) {\CS{Closed}{Closed}}
+  node [state, left of=tryclose] (tryclose1) {\CS{Closed}{Closed}};
 
   \draw node [state, name = key, right = 18cm, above = 2mm] {\begin{tabular}{l}
   \it{Key} \\
