@@ -113,7 +113,7 @@ Machines implementing the IBC protocol are expected to respect these client type
 
 #### ConsensusState
 
-`ConsensusState` is a opaque data structure defined by a client type, used by the validity predicate to
+`ConsensusState` is an opaque data structure defined by a client type, used by the validity predicate to
 verify new commits & state roots. Likely the structure will contain the last commit produced by
 the consensus process, including signatures and validator set metadata.
 
@@ -162,7 +162,7 @@ changes to the validator set) for future calls to the validity predicate.
 
 #### MisbehaviourPredicate
 
-An `MisbehaviourPredicate` is an opaque function defined by a client type, used to check if data
+A `MisbehaviourPredicate` is an opaque function defined by a client type, used to check if data
 constitutes a violation of the consensus protocol. This might be two signed headers
 with different state roots but the same height, a signed header containing invalid
 state transitions, or other evidence of malfeasance as defined by the consensus algorithm.
