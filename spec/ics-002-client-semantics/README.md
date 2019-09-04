@@ -274,10 +274,10 @@ function createClient(
   clientType: ClientType,
   consensusState: ConsensusState) {
   abortTransactionUnless(privateStore.get(clientStatePath(id)) === null)
-  abortTransactionUnless(provableStore.get(clientTypePath(id)) === null)
+  abortSystemUnless(privateStore.get(clientTypePath(id)) === null)
   clientState = clientType.initialize(consensusState)
-  provableStore.set(clientTypePath(id), clientType)
   privateStore.set(clientStatePath(id), clientState)
+  provableStore.set(clientTypePath(id), clientType)
 }
 ```
 
@@ -429,10 +429,9 @@ function checkMisbehaviourAndUpdateState(
   evidence: Evidence) {
   h1 = evidence.h1
   h2 = evidence.h2
-  abortTransactionUnless(h1.publicKey === h2.publicKey)
   abortTransactionUnless(clientState.pastPublicKeys.contains(h1.publicKey))
   abortTransactionUnless(h1.sequence === h2.sequence)
-  abortTransactionUnless(h1.commitmentRoot !== h2.commitmentRoot)
+  abortTransactionUnless(h1.commitmentRoot !== h2.commitmentRoot || h1.publicKey !== h2.publicKey)
   abortTransactionUnless(h1.publicKey.verify(h1.signature))
   abortTransactionUnless(h2.publicKey.verify(h2.signature))
   clientState.frozen = true
