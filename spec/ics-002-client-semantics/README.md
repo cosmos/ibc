@@ -267,8 +267,8 @@ function createClient(
   id: Identifier,
   clientType: ClientType,
   consensusState: ConsensusState) {
-  assert(privateStore.get(clientStatePath(id)) === null)
-  assert(provableStore.get(clientTypePath(id)) === null)
+  abortTransactionUnless(privateStore.get(clientStatePath(id)) === null)
+  abortTransactionUnless(provableStore.get(clientTypePath(id)) === null)
   clientState = clientType.initialize(consensusState)
   provableStore.set(clientTypePath(id), clientType)
   privateStore.set(clientStatePath(id), clientState)
@@ -305,9 +305,9 @@ function updateClient(
   id: Identifier,
   header: Header) {
   clientType = provableStore.get(clientTypePath(id))
-  assert(clientType !== null)
+  abortTransactionUnless(clientType !== null)
   clientState = privateStore.get(clientStatePath(id))
-  assert(clientState !== null)
+  abortTransactionUnless(clientState !== null)
   clientType.validityPredicate(clientState, header)
 }
 ```
@@ -322,9 +322,9 @@ function submitMisbehaviourToClient(
   id: Identifier,
   evidence: bytes) {
   clientType = provableStore.get(clientTypePath(id))
-  assert(clientType !== null)
+  abortTransactionUnless(clientType !== null)
   clientState = privateStore.get(clientStatePath(id))
-  assert(clientState !== null)
+  abortTransactionUnless(clientState !== null)
   clientType.misbehaviourPredicate(clientState, evidence)
 }
 ```
@@ -385,8 +385,8 @@ function initialize(consensusState: ConsensusState): ClientState {
 function validityPredicate(
   clientState: ClientState,
   header: Header) {
-  assert(consensusState.sequence + 1 === header.sequence)
-  assert(consensusState.publicKey.verify(header.signature))
+  abortTransactionUnless(consensusState.sequence + 1 === header.sequence)
+  abortTransactionUnless(consensusState.publicKey.verify(header.signature))
   if (header.newPublicKey !== null) {
     consensusState.publicKey = header.newPublicKey
     clientState.pastPublicKeys.add(header.newPublicKey)
@@ -402,7 +402,7 @@ function verifyMembership(
   proof: CommitmentProof
   path: Path,
   value: Value) {
-  assert(!clientState.frozen)
+  abortTransactionUnless(!clientState.frozen)
   return clientState.verifiedRoots[sequence].verifyMembership(path, value, proof)
 }
 
@@ -412,7 +412,7 @@ function verifyNonMembership(
   sequence: uint64,
   proof: CommitmentProof,
   path: Path) {
-  assert(!clientState.frozen)
+  abortTransactionUnless(!clientState.frozen)
   return clientState.verifiedRoots[sequence].verifyNonMembership(path, proof)
 }
 
@@ -423,12 +423,12 @@ function misbehaviourPredicate(
   evidence: Evidence) {
   h1 = evidence.h1
   h2 = evidence.h2
-  assert(h1.publicKey === h2.publicKey)
-  assert(clientState.pastPublicKeys.contains(h1.publicKey))
-  assert(h1.sequence === h2.sequence)
-  assert(h1.commitmentRoot !== h2.commitmentRoot)
-  assert(h1.publicKey.verify(h1.signature))
-  assert(h2.publicKey.verify(h2.signature))
+  abortTransactionUnless(h1.publicKey === h2.publicKey)
+  abortTransactionUnless(clientState.pastPublicKeys.contains(h1.publicKey))
+  abortTransactionUnless(h1.sequence === h2.sequence)
+  abortTransactionUnless(h1.commitmentRoot !== h2.commitmentRoot)
+  abortTransactionUnless(h1.publicKey.verify(h1.signature))
+  abortTransactionUnless(h2.publicKey.verify(h2.signature))
   clientState.frozen = true
 }
 ```

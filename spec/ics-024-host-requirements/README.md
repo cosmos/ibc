@@ -159,27 +159,35 @@ Host state machines MUST permission interaction with the IBC handler such that:
 
 This permissioning can be implemented with unique references (object capabilities) for each port (a la the Cosmos SDK), with source authentication (a la Ethereum), or with some other method of access control, in any case enforced by the host state machine. See [ICS 5](../ics-005-port-allocation) for details.
 
-Modules which wish to make use of particular IBC features MAY implement certain handler functions, e.g. to add additional logic to a channel handshake with an associated module on another state machine.
+Modules that wish to make use of particular IBC features MAY implement certain handler functions, e.g. to add additional logic to a channel handshake with an associated module on another state machine.
 
 ### Datagram submission
 
-Host state machines MAY define a `submitDatagram` function to submit [datagrams](../../docs/ibc/2_IBC_TERMINOLOGY.md), which will be included in transactions, directly to the relayer module:
+Host state machines which implement the relayer module MAY define a `submitDatagram` function to submit [datagrams](../../docs/ibc/2_IBC_TERMINOLOGY.md), which will be included in transactions, directly to the relayer module (defined in [ICS 26](../ics-026-relayer-module):
 
 ```typescript
 type submitDatagram = (datagram: Datagram) => void
 ```
 
-`submitDatagram` allows relayers to relay IBC datagrams directly to the host state machine. Host state machines MAY require that the relayer submitting the datagram has an account to pay transaction fees, signs over the datagram in a larger transaction structure, etc — `submitDatagram` MUST define & construct any such packaging required.
+`submitDatagram` allows relayer processes to submit IBC datagrams directly to the relayer module on the host state machine. Host state machines MAY require that the relayer process submitting the datagram has an account to pay transaction fees, signs over the datagram in a larger transaction structure, etc — `submitDatagram` MUST define & construct any such packaging required.
 
 ### Exception system
 
-Host state machines MUST support an exception system, whereby a transaction can abort execution and revert any previously made state changes (including state changes in other modules happening within the same transaction). This exception system MUST be exposed through an `assert` function:
+Host state machines MUST support an exception system, whereby a transaction can abort execution and revert any previously made state changes (including state changes in other modules happening within the same transaction), excluding gas consumed & fee payments as appropriate, and a system invariant violation can halt the state machine.
+
+This exception system MUST be exposed through two functions: `abortTransactionUnless` and `abortSystemUnless`, where the former reverts the transaction and the latter halts the state machine.
 
 ```typescript
-type assert = (bool) => void
+type abortTransactionUnless = (bool) => void
 ```
 
-If the boolean passed to `assert` is `true`, the host state machine need not do anything. If the boolean passed to `assert` is `false`, the host state machine MUST abort the transaction and revert any previously made state changes, such as writes to the key-value store.
+If the boolean passed to `abortTransactionUnless` is `true`, the host state machine need not do anything. If the boolean passed to `abortTransactionUnless` is `false`, the host state machine MUST abort the transaction and revert any previously made state changes, excluding gas consumed & fee payments as approriate.
+
+```typescript
+type abortSystemUnless = (bool) => void
+```
+
+If the boolean passed to `abortSystemUnless` is `true`, the host state machine need not do anything. If the boolean passed to `abortSystemUnless` is `false`, the host state machine MUST halt.
 
 ### Data availability
 
