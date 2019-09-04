@@ -119,6 +119,8 @@ interface Packet {
 - The `destChannel` identifies the channel end on the receiving chain.
 - The `data` is an opaque value which can be defined by the application logic of the associated modules.
 
+Note that a `Packet` is never directly serialised. Rather it is an intermediary structure used in certain function calls that may need to be created or processed by modules calling the IBC handler.
+
 An `OpaquePacket` is a packet, but cloaked in an obscuring data type by the host state machine, such that a module cannot act upon it other than to pass it to the IBC handler. The IBC handler can cast a `Packet` to an `OpaquePacket` and vice versa.
 
 ```typescript
@@ -236,7 +238,9 @@ function chanOpenInit(
   counterpartyPortIdentifier: Identifier,
   counterpartyChannelIdentifier: Identifier,
   version: string) {
-    abortTransactionUnless(connectionHops.length === 1)
+
+    abortTransactionUnless(connectionHops.length === 1) // for v1 of the IBC protocol
+
     abortTransactionUnless(provableStore.get(channelPath(portIdentifier, channelIdentifier)) === null)
     connection = provableStore.get(connectionPath(connectionHops[0]))
     // optimistic channel handshakes are allowed
@@ -264,7 +268,7 @@ function chanOpenTry(
   counterpartyVersion: string,
   proofInit: CommitmentProof,
   proofHeight: uint64) {
-    abortTransactionUnless(connectionHops.length === 1)
+    abortTransactionUnless(connectionHops.length === 1) // for v1 of the IBC protocol
     abortTransactionUnless(provableStore.get(channelPath(portIdentifier, channelIdentifier)) === null)
     abortTransactionUnless(authenticate(provableStore.get(portPath(portIdentifier))))
     connection = provableStore.get(connectionPath(connectionHops[0]))
@@ -501,7 +505,7 @@ function recvPacket(
     abortTransactionUnless(connection.state === OPEN)
     abortTransactionUnless(packet.connectionHops === channel.connectionHops)
 
-    abortTransactionUnless(proofHeight < packet.timeoutHeight)
+    abortTransactionUnless(getConsensusHeight() < packet.timeoutHeight)
 
     client = queryClient(connection.clientIdentifier)
     abortTransactionUnless(client.verifyMembership(

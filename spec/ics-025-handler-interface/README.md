@@ -33,13 +33,11 @@ Associated definitions are as defined in referenced prior standards (where the f
 
 ### Client lifecycle management
 
-By default, clients are unowned: any module MAY create a new client, query any existing client, update any existing client, and delete any existing client not in use.
+By default, clients are unowned: any module may create a new client, query any existing client, update any existing client, and delete any existing client not in use.
 
 The handler interface exposes `createClient`, `updateClient`, `queryClientConsensusState`, `queryClient`, and `submitMisbehaviourToClient` as defined in [ICS 2](../ics-002-client-semantics).
 
 ### Connection lifecycle management
-
-By default, connections are unowned. Connections MAY be closed by any module, but only when all channels associated with the connection have been closed by the modules which opened them and a timeout has passed since the connection was opened.
 
 The handler interface exposes `connOpenInit`, `connOpenTry`, `connOpenAck`, `connOpenConfirm`, and `queryConnection`, as defined in [ICS 3](../ics-003-connection-semantics).
 
@@ -47,7 +45,7 @@ The default IBC relayer module SHALL allow external calls to `connOpenTry`, `con
 
 ### Channel lifecycle management
 
-By default, channels are owned by the creating port, meaning only the module bound to that port MAY inspect, close, or send on the channel. A module MAY create any number of channels utilising the same port.
+By default, channels are owned by the creating port, meaning only the module bound to that port is allowed to inspect, close, or send on the channel. A module can create any number of channels utilising the same port.
 
 The handler interface exposes `chanOpenInit`, `chanOpenTry`, `chanOpenAck`, `chanOpenConfirm`, `chanCloseInit`, `chanCloseConfirm`, and `queryChannel`, as defined in [ICS 4](../ics-004-channel-and-packet-semantics).
 

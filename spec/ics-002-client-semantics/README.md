@@ -66,7 +66,7 @@ could be provided as executable WASM functions when the client instance is creat
 * `get`, `set`, `Path`, and `Identifier` are as defined in [ICS 24](../ics-024-host-requirements).
 
 * `CommitmentRoot` is as defined in [ICS 23](../ics-023-vector-commitments). It must provide an inexpensive way for
-  downstream logic to verify whether key-value pairs are present in state at a particular height.
+  downstream logic to verify whether key/value pairs are present in state at a particular height.
 
 * `ConsensusState` is an opaque type representing the state of a validity predicate.
   `ConsensusState` must be able to verify state updates agreed upon by the associated consensus algorithm.
@@ -77,7 +77,7 @@ could be provided as executable WASM functions when the client instance is creat
 
 * `ClientState` is an opaque type representing the state of a client.
   A `ClientState` must expose query functions to verify membership or non-membership of
-  key-value pairs in state at particular heights and to retrieve the current `ConsensusState`.
+  key/value pairs in state at particular heights and to retrieve the current `ConsensusState`.
 
 ### Desired Properties
 
@@ -200,7 +200,7 @@ type initialize = (state: ConsensusState) => ClientState
 #### CommitmentProof
 
 `CommitmentProof` is an opaque data structure defined by a client type.
-It is utilised to verify presence or absence of a particular key, value pair in state
+It is utilised to verify presence or absence of a particular key/value pair in state
 at a particular finalised height (necessarily associated with a particular commitment root).
 
 ```typescript
@@ -209,7 +209,7 @@ type CommitmentProof = bytes
 
 #### State verification
 
-Client types must define functions, in accordance with [ICS 23](../ics-023-vector-commitments), to verify presence or absence of particular key-value pairs
+Client types must define functions, in accordance with [ICS 23](../ics-023-vector-commitments), to verify presence or absence of particular key/value pairs
 in state at particular heights. The behaviour of these functions MUST comply with the properties defined in [ICS 23](../ics-023-vector-commitments); however,
 internal implementation details may differ (for example, a loopback client could simply read directly from the state and require no proofs).
 

@@ -20,15 +20,13 @@
   node [state, right of=init] (tryopen) {\CS{Init}{TryOpen}}
   node [state, right of=tryopen] (tryopen1) {\CS{Open}{TryOpen}}
   node [state, right of=tryopen1] (open) {\CS{Open}{Open}}
-  node [state, below of=open] (tryclose) {\CS{TryClose}{Open}}
-  node [state, left of=tryclose] (tryclose1) {\CS{TryClose}{Closed}}
-  node [state, left of=tryclose1] (closed) {\CS{Closed}{Closed}};
+  node [state, below of=open] (tryclose) {\CS{Closed}{Open}}
+  node [state, left of=tryclose] (tryclose1) {\CS{Closed}{Closed}}
 
   \draw node [state, name = key, right = 18cm, above = 2mm] {\begin{tabular}{l}
   \it{Key} \\
   \textcolor{blue}{Opening Handshake} \\
   \textcolor{green}{Closing Handshake} \\
-  \textcolor{red}{Timeouts} \\
   \end{tabular}};
 
 	\draw[->, blue, bend right](empty) edge node[yshift=3mm, xshift=1mm] {\tiny{\textsc{ChanInit}}} (init);
@@ -36,16 +34,8 @@
 	\draw[->, blue](tryopen) edge node {\tiny{\textsc{ChanOpenAck}}} (tryopen1);
 	\draw[->, blue](tryopen1) edge node {\tiny{\textsc{ChanOpenConfirm}}} (open);
 
-  \draw[->, green, bend right](open) edge node[yshift=3mm, xshift=1mm] {\tiny{\textsc{ChanCloseTry}}} (tryclose);
-  \draw[->, green](tryclose) edge node {\tiny{\textsc{ChanCloseAck}}} (tryclose1);
-  \draw[->, green](tryclose1) edge node {\tiny{\textsc{ChanCloseConfirm}}} (closed);
-
-  \draw[->, red, bend right](init) edge node {\tiny{\textsc{ChanOpenTimeout}}} (empty);
-  \draw[->, red](tryopen) edge node {\tiny{\textsc{ChanOpenTimeout}}} (empty);
-  \draw[->, red](tryopen1) edge node {\tiny{\textsc{ChanOpenTimeout}}} (empty);
-
-  \draw[->, red, bend right](tryclose) edge node {\tiny{\textsc{ChanCloseTimeout}}} (open);
-  \draw[->, red](tryclose1) edge node {\tiny{\textsc{ChanCloseTimeout}}} (open);
+  \draw[->, green, bend right](open) edge node[yshift=3mm, xshift=1mm] {\tiny{\textsc{ChanCloseInit}}} (tryclose);
+  \draw[->, green](tryclose) edge node {\tiny{\textsc{ChanCloseConfirm}}} (tryclose1);
 
 	\draw[color=black,thick](-0.5,-14) rectangle (22,2.8);
 
