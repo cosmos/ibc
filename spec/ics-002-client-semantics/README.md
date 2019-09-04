@@ -86,14 +86,14 @@ using the existing `ConsensusState`. The higher level abstractions will then be 
 sub-components of the state with the `CommitmentRoot`s stored in the `ConsensusState`, which are
 guaranteed to have been committed by the other chain's consensus algorithm.
 
-`ValidityPredicate`s are expected to reflect the behaviour of the full nodes which are running the  
+Validity predicates are expected to reflect the behaviour of the full nodes which are running the
 corresponding consensus algorithm. Given a `ConsensusState` and a list of messages, if a full node
 accepts the new `Header` generated with `Commit`, then the light client MUST also accept it,
 and if a full node rejects it, then the light client MUST also reject it.
 
 Light clients are not replaying the whole message transcript, so it is possible under cases of
 consensus misbehaviour that the light clients' behaviour differs from the full nodes'.
-In this case, a misbehaviour proof which proves the divergence between the `ValidityPredicate`
+In this case, a misbehaviour proof which proves the divergence between the validity predicate
 and the full node can be generated and submitted to the chain so that the chain can safely deactivate the
 light client, invalidate past state roots, and await higher-level intervention.
 
@@ -143,43 +143,41 @@ a commitment root, and possibly updates to the validity predicate.
 type Header = bytes
 ```
 
-#### ValidityPredicate
+#### Validity predicate
 
-A `ValidityPredicate` is an opaque function defined by a client type to verify `Header`s depending on the current `ConsensusState`.
-Using the ValidityPredicate SHOULD be far more computationally efficient than replaying the full consensus algorithm
+A validity predicate is an opaque function defined by a client type to verify `Header`s depending on the current `ConsensusState`.
+Using the validit pPredicate SHOULD be far more computationally efficient than replaying the full consensus algorithm
 for the given parent `Header` and the list of network messages.
 
-The `ValidityPredicate` type is defined as
+The validity predicate & client state update logic are combined into a single `checkValidityAndUpdateState` type, which is defined as
 
 ```typescript
-type ValidityPredicate = (Header) => Void
+type checkValidityAndUpdateState = (Header) => Void
 ```
 
-The validity predicate MUST throw an exception if the provided header was not valid.
+`checkValidityAndUpdateState` MUST throw an exception if the provided header was not valid.
 
 If the provided header was valid, the client MUST also mutate internal state to store
 now-finalised consensus roots and update any necessary signature authority tracking (e.g.
 changes to the validator set) for future calls to the validity predicate.
 
-#### MisbehaviourPredicate
+#### Misbehaviour predicate
 
-A `MisbehaviourPredicate` is an opaque function defined by a client type, used to check if data
+A misbehaviour predicate is an opaque function defined by a client type, used to check if data
 constitutes a violation of the consensus protocol. This might be two signed headers
 with different state roots but the same height, a signed header containing invalid
 state transitions, or other evidence of malfeasance as defined by the consensus algorithm.
 
-The `MisbehaviourPredicate` type is defined as
+The misbehaviour predicate & client state update logic are combined into a single `checkMisbehaviourAndUpdateState` type, which is defined as
 
 ```typescript
-type MisbehaviourPredicate = (bytes) => Void
+type checkMisbehaviourAndUpdateState = (bytes) => Void
 ```
 
-The misbehaviour predicate MUST throw an exception if the provided evidence was not valid.
+`checkMisbehaviourAndUpdateState` MUST throw an exception if the provided evidence was not valid.
 
 If misbehaviour was valid, the client MUST also mutate internal state to mark appropriate heights which
 were previously considered valid invalid, according to the nature of the misbehaviour.
-
-More details about `MisbehaviourPredicate`s can be found in [CONSENSUS.md](./CONSENSUS.md)
 
 #### ClientState
 
@@ -304,7 +302,7 @@ function queryClient(id: Identifier): ClientState {
 
 Updating a client is done by submitting a new `Header`. The `Identifier` is used to point to the
 stored `ClientState` that the logic will update. When a new `Header` is verified with
-the stored `ClientState`'s `ValidityPredicate` and `ConsensusState`, the client MUST
+the stored `ClientState`'s validity predicate and `ConsensusState`, the client MUST
 update its internal state accordingly, possibly finalising commitment roots and
 updating the signature authority logic in the stored consensus state.
 
@@ -316,7 +314,7 @@ function updateClient(
   abortTransactionUnless(clientType !== null)
   clientState = privateStore.get(clientStatePath(id))
   abortTransactionUnless(clientState !== null)
-  clientType.validityPredicate(clientState, header)
+  clientType.checkValidityAndUpdateState(clientState, header)
 }
 ```
 
@@ -333,7 +331,7 @@ function submitMisbehaviourToClient(
   abortTransactionUnless(clientType !== null)
   clientState = privateStore.get(clientStatePath(id))
   abortTransactionUnless(clientState !== null)
-  clientType.misbehaviourPredicate(clientState, evidence)
+  clientType.checkMisbehaviourAndUpdateState(clientState, evidence)
 }
 ```
 
@@ -347,8 +345,8 @@ The client-specific types are then defined as follows:
 
 - `ConsensusState` stores the latest height and latest public key
 - `Header`s contain a height, a new commitment root, a signature by the operator, and possibly a new public key
-- `ValidityPredicate` checks that the submitted height is monotonically increasing and that the signature is correct
-- `MisbehaviourPredicate` checks for two headers with the same height & different commitment roots
+- `checkValidityAndUpdateState` checks that the submitted height is monotonically increasing and that the signature is correct, then mutates the internal state
+- `checkMisbehaviourAndUpdateState` checks for two headers with the same height & different commitment roots, then mutates the internal state
 
 ```typescript
 interface ClientState {
@@ -390,7 +388,7 @@ function initialize(consensusState: ConsensusState): ClientState {
 }
 
 // validity predicate function defined by the client type
-function validityPredicate(
+function checkValidityAndUpdateState(
   clientState: ClientState,
   header: Header) {
   abortTransactionUnless(consensusState.sequence + 1 === header.sequence)
@@ -426,7 +424,7 @@ function verifyNonMembership(
 
 // misbehaviour verification function defined by the client type
 // any duplicate signature by a past or current key freezes the client
-function misbehaviourPredicate(
+function checkMisbehaviourAndUpdateState(
   clientState: ClientState,
   evidence: Evidence) {
   h1 = evidence.h1
