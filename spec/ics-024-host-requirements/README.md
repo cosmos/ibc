@@ -193,9 +193,9 @@ If the boolean passed to `abortSystemUnless` is `true`, the host state machine n
 
 For deliver-or-timeout safety, host state machines MUST have eventual data availability, such that any key-value pairs in state can be eventually retrieved by relayers. For exactly-once safety, data availability is not required.
 
-For liveness of packet relay, host state machines MUST have transactional liveness (and thus necessarily consensus liveness), such that incoming transactions are confirmed within a block height bound (in particular, less than the timeouts assign to the packets).
+For liveness of packet relay, host state machines MUST have bounded transactional liveness (and thus necessarily consensus liveness), such that incoming transactions are confirmed within a block height bound (in particular, less than the timeouts assign to the packets).
 
-Data computable from a subset of state and knowledge of the state machine (e.g. IBC packet data, which is not directly stored) are also assumed to be available to and efficiently computable by relayers.
+IBC packet data, and other data which is not directly stored in the state vector but is relied upon by relayers, MUST be available to & efficiently computable by relayer processes.
 
 Light clients of particular consensus algorithms may have different and/or more strict data availability requirements.
 
