@@ -18,8 +18,8 @@ from and to which channels can then be opened, and which can be transferred or l
 ### Motivation
 
 The interblockchain communication protocol is designed to facilitate module-to-module traffic, where modules are independent, possibly mutually distrusted, self-contained
-elements of code executing on sovereign ledgers. In order to provide the desired end-to-end semantics, the IBC handler must permission channels to particular modules, and
-for convenience they should be addressable by name. This specification defines the *port allocation and ownership* system which realises that model.
+elements of code executing on sovereign ledgers. In order to provide the desired end-to-end semantics, the IBC handler must permission channels to particular modules.
+This specification defines the *port allocation and ownership* system which realises that model.
 
 Conventions may emerge as to what kind of module logic is bound to a particular port name, such as "bank" for fungible token handling or "staking" for interchain collateralisation.
 This is analogous to port 80's common use for HTTP servers — the protocol cannot enforce that particular module logic is actually bound to conventional ports, so
