@@ -326,12 +326,6 @@ function connCloseConfirm(
 }
 ```
 
-#### Freezing by Misbehaviour 
-
-The misbehaviour detection sub-protocol is defined in [ICS 2](../ics-002-client-semantics). If a client is frozen by misbehaviour, `verifyMembership` calls to that client MAY subsequently fail.
-
-Implementing chains may want to allow applications to register handlers to take action upon discovery of misbehaviour. Further discussion is deferred to a later ICS.
-
 #### Querying
 
 Connections can be queried by identifier with `queryConnection`.
