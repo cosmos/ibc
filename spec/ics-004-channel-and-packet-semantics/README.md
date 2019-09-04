@@ -17,9 +17,9 @@ Channels are payload-agnostic. The modules which send and receive IBC packets de
 
 ### Motivation
 
-The interblockchain communication protocol uses a cross-chain message passing model which makes no assumptions about network synchrony. IBC *packets* are relayed from one blockchain to the other by external relayer processes. Chain `A` and chain `B` confirm new blocks independently, and packets from one chain to the other may be delayed, censored, or re-ordered arbitrarily. Packets are public and can be read from a blockchain by any relayer and submitted to any other blockchain.
+The interblockchain communication protocol uses a cross-chain message passing model. IBC *packets* are relayed from one blockchain to the other by external relayer processes. Chain `A` and chain `B` confirm new blocks independently, and packets from one chain to the other may be delayed, censored, or re-ordered arbitrarily. Packets are visible to relayers and can be read from a blockchain by any relayer process and submitted to any other blockchain.
 
-The IBC protocol must provide ordering (for ordered channels) and exactly-once delivery guarantees to allow applications to reason about the combined state of connected modules on two chains. For example, an application may wish to allow a single tokenized asset to be transferred between and held on multiple blockchains while preserving fungibility and conservation of supply. The application can mint asset vouchers on chain `B` when a particular IBC packet is committed to chain `B`, and require outgoing sends of that packet on chain `A` to escrow an equal amount of the asset on chain `A` until the vouchers are later redeemed back to chain `A` with an IBC packet in the reverse direction. This ordering guarantee along with correct application logic can ensure that total supply is preserved across both chains and that any vouchers minted on chain `B` can later be redeemed back to chain `A`.
+> The IBC protocol must provide ordering (for ordered channels) and exactly-once delivery guarantees to allow applications to reason about the combined state of connected modules on two chains. For example, an application may wish to allow a single tokenized asset to be transferred between and held on multiple blockchains while preserving fungibility and conservation of supply. The application can mint asset vouchers on chain `B` when a particular IBC packet is committed to chain `B`, and require outgoing sends of that packet on chain `A` to escrow an equal amount of the asset on chain `A` until the vouchers are later redeemed back to chain `A` with an IBC packet in the reverse direction. This ordering guarantee along with correct application logic can ensure that total supply is preserved across both chains and that any vouchers minted on chain `B` can later be redeemed back to chain `A`.
 
 In order to provide the desired ordering, exactly-once delivery, and module permissioning semantics to the application layer, the interblockchain communication protocol must implement an abstraction to enforce these semantics — channels are this abstraction.
 
@@ -31,7 +31,7 @@ In order to provide the desired ordering, exactly-once delivery, and module perm
 
 `Port` and `authenticate` are as defined in [ICS 5](../ics-005-port-allocation).
 
-`commit` is a generic collision-resistant hash function, the specifics of which must be agreed on by the modules utilising the channel.
+`hash` is a generic collision-resistant hash function, the specifics of which must be agreed on by the modules utilising the channel.
 
 `Identifier`, `get`, `set`, `delete`, `getCurrentHeight`, and module-system related primitives are as defined in [ICS 24](../ics-024-host-requirements).
 
@@ -141,7 +141,7 @@ type OpaquePacket = object
 #### Ordering
 
 - On ordered channels, packets should be sent and received in the same order: if packet *x* is sent before packet *y* by a channel end on chain `A`, packet *x* must be received before packet *y* by the corresponding channel end on chain `B`.
-- On unordered channels, packets may be sent and received in any order.
+- On unordered channels, packets may be sent and received in any order. Unordered packets, like ordered packets, have individual timeouts specified in terms of the destination chain's height.
 
 #### Permissioning
 
@@ -463,7 +463,7 @@ function sendPacket(packet: Packet) {
 
     nextSequenceSend = nextSequenceSend + 1
     provableStore.set(nextSequenceSendPath(packet.sourcePort, packet.sourceChannel), nextSequenceSend)
-    provableStore.set(packetCommitmentPath(packet.sourcePort, packet.sourceChannel, packet.sequence), commit(packet.data))
+    provableStore.set(packetCommitmentPath(packet.sourcePort, packet.sourceChannel, packet.sequence), hash(packet.data))
 }
 ```
 
@@ -508,7 +508,7 @@ function recvPacket(
       proofHeight,
       proof,
       packetCommitmentPath(packet.sourcePort, packet.sourceChannel, packet.sequence),
-      commit(packet.data)
+      hash(packet.data)
     ))
 
     // all assertions passed (except sequence check), we can alter state
@@ -516,7 +516,7 @@ function recvPacket(
     if (acknowledgement.length > 0 || channel.order === UNORDERED)
       provableStore.set(
         packetAcknowledgementPath(packet.destPort, packet.destChannel, packet.sequence),
-        commit(acknowledgement)
+        hash(acknowledgement)
       )
 
     if (channel.order === ORDERED) {
@@ -559,7 +559,7 @@ function acknowledgePacket(
 
     // verify we sent the packet and haven't cleared it out yet
     abortTransactionUnless(provableStore.get(packetCommitmentPath(packet.sourcePort, packet.sourceChannel, packet.sequence))
-           === commit(packet.data))
+           === hash(packet.data))
 
     // abort transaction unless correct acknowledgement on counterparty chain
     client = queryClient(connection.clientIdentifier)
@@ -567,7 +567,7 @@ function acknowledgePacket(
       proofHeight,
       proof,
       packetAcknowledgementPath(packet.destPort, packet.destChannel, packet.sequence),
-      commit(acknowledgement)
+      hash(acknowledgement)
     ))
 
     // all assertions passed, we can alter state
@@ -625,7 +625,7 @@ function timeoutPacketOrdered(
 
     // verify we actually sent this packet, check the store
     abortTransactionUnless(provableStore.get(packetCommitmentPath(packet.sourcePort, packet.sourceChannel, packet.sequence))
-           === commit(packet.data))
+           === hash(packet.data))
 
     // check that the recv sequence is as claimed
     client = queryClient(connection.clientIdentifier)
@@ -678,7 +678,7 @@ function timeoutPacketUnordered(
 
     // verify we actually sent this packet, check the store
     abortTransactionUnless(provableStore.get(packetCommitmentPath(packet.sourcePort, packet.sourceChannel, packet.sequence))
-           === commit(packet.data))
+           === hash(packet.data))
 
     // verify absence of acknowledgement at packet index
     client = queryClient(connection.clientIdentifier)
@@ -723,7 +723,7 @@ function timeoutOnClose(
 
     // verify we actually sent this packet, check the store
     abortTransactionUnless(provableStore.get(packetCommitmentPath(packet.sourcePort, packet.sourceChannel, packet.sequence))
-           === commit(packet.data))
+           === hash(packet.data))
 
     // check that the opposing channel end has closed
     client = queryClient(connection.clientIdentifier)
@@ -789,7 +789,7 @@ function timeoutClose(
       proofHeight,
       proof,
       packetCommitmentPath(packet.sourcePort, packet.sourceChannel, packet.sequence),
-      commit(packet.data)
+      hash(packet.data)
     ))
 
     // all assertions passed, we can alter state
@@ -831,7 +831,7 @@ function cleanupPacketOrdered(
 
     // verify we actually sent the packet, check the store
     abortTransactionUnless(provableStore.get(packetCommitmentPath(packet.sourcePort, packet.sourceChannel, packet.sequence))
-               === commit(packet.data))
+               === hash(packet.data))
 
     // check that the recv sequence is as claimed
     client = queryClient(connection.clientIdentifier)
@@ -883,7 +883,7 @@ function cleanupPacketUnordered(
 
     // verify we actually sent the packet, check the store
     abortTransactionUnless(provableStore.get(packetCommitmentPath(packet.sourcePort, packet.sourceChannel, packet.sequence))
-               === commit(packet.data))
+               === hash(packet.data))
 
     // all assertions passed, we can alter state
 
