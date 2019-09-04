@@ -24,7 +24,8 @@ such as a user inspecting the state of the chain and deciding whether or not to 
 
 ### Motivation
 
-In the IBC protocol, a machine needs to be able to verify updates to the state of another machine
+In the IBC protocol, an actor, which may be an end user, an off-chain process, or a machine,
+needs to be able to verify updates to the state of another machine
 which the other machine's consensus algorithm has agreed upon, and reject any possible updates
 which the other machine's consensus algorithm has not agreed upon. A light client is the algorithm
 with which a machine can do so. This standard formalises the light client model and requirements,
@@ -36,6 +37,9 @@ the internal operation of machines and their consensus algorithms. A machine may
 single process signing operations with a private key, a quorum of processes signing in unison,
 many processes operating a Byzantine fault-tolerant consensus algorithm, or other configurations yet to be invented
 — from the perspective of IBC, a machine is defined entirely by its light client validation & equivocation detection logic.
+Clients will generally not include validation of the state transition logic in general
+(as that would be equivalent to simply executing the other state machine), but may
+elect to validate parts of state transitions in particular cases.
 
 Clients could also act as thresholding views of other clients. In the case where
 modules utilising the IBC protocol to interact with probabilistic-finality consensus algorithms
@@ -43,18 +47,18 @@ which might require different finality thresholds for different applications, on
 client could be created to track headers and many read-only clients with different finality
 thresholds (confirmation depths after which state roots are considered final) could use that same state.
 
-Another problem to consider is that of third-party introduction. Alice, a module on a machine,
+The client protocol should also support third-party introduction. Alice, a module on a machine,
 wants to introduce Bob, a second module on a second machine who Alice knows (and who knows Alice),
 to Carol, a third module on a third machine, who Alice knows but Bob does not. Alice must utilise
 an existing channel to Bob to communicate the canonically-serialisable validity predicate for
-Carol, with which Bob can then open a connection & channel so that Bob and Carol can talk directly.
+Carol, with which Bob can then open a connection and channel so that Bob and Carol can talk directly.
 If necessary, Alice may also communicate to Carol the validity predicate for Bob, prior to Bob's
 connection attempt, so that Carol knows to accept the incoming request.
 
 Client interfaces should also be constructed so that custom validation logic can be provided safely
 to define a custom client at runtime, as long as the underlying state machine can provide an
-appropriate gas metering mechanism to charge for compute & storage. On a host state machine
-which supports WASM execution, for example, the validity predicate & equivocation predicate
+appropriate gas metering mechanism to charge for compute and storage. On a host state machine
+which supports WASM execution, for example, the validity predicate and equivocation predicate
 could be provided as executable WASM functions when the client instance is created.
 
 ### Definitions
