@@ -4,7 +4,11 @@
 
 ## Synopsis
 
-This repository is the canonical location for development and documentation of inter-chain standards utilised by the Cosmos network & interchain ecosystem. It shall be used to consolidate design rationale, protocol semantics, and encoding descriptions for the inter-blockchain protocol (IBC), including both the core transport, authentication, & ordering layer (IBC/TAO) and the application layers describing packet encoding & processing semantics (IBC/APP). Contributions are welcome.
+This repository is the canonical location for development and documentation of inter-chain standards utilised by the Cosmos network & interchain ecosystem.
+
+It shall be used to consolidate design rationale, protocol semantics, and encoding descriptions for the inter-blockchain protocol (IBC), including both the core transport, authentication, & ordering layer (IBC/TAO) and the application layers describing packet encoding & processing semantics (IBC/APP).
+
+Contributions are welcome.
 
 The rendered, ordered set of all interchain standards written so far can be read as [a single PDF](./spec.pdf).
 
@@ -18,7 +22,7 @@ See [PROCESS.md](PROCESS.md) for a description of the standardisation process.
 
 ## IBC Quick References
 
-If you are diving in or planning to review inter-blockchain communication protocol specifications, the following are required reading:
+If you are planning to review inter-blockchain communication protocol specifications, the following are required reading:
 
 - [IBC Architecture](./ibc/1_IBC_ARCHITECTURE.md)
 - [IBC Design Principles](./ibc/2_IBC_DESIGN_PRINCIPLES.md)
@@ -28,7 +32,7 @@ If you are diving in or planning to review inter-blockchain communication protoc
 
 ## Interchain Standards
 
-All standards in the "draft" stage are listed here in order of their ICS numbers, sorted by category.
+All standards at or past the "Draft" stage are listed here in order of their ICS numbers, sorted by category.
 
 ### Meta
 
