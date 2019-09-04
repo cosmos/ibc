@@ -12,14 +12,14 @@ modified: 2019-08-25
 
 ## Synopsis
 
-This standard specifies the port allocation system by which modules can bind to uniquely named ports, allocated by the IBC handler,
-from and to which channels can then be opened, and which can be transferred or later released by the module which originally bound to them and then reused.
+This standard specifies the port allocation system by which modules can bind to uniquely named ports allocated by the IBC handler.
+Ports can then be used to open channels and can be transferred or later released by the module which originally bound to them.
 
 ### Motivation
 
 The interblockchain communication protocol is designed to facilitate module-to-module traffic, where modules are independent, possibly mutually distrusted, self-contained
-elements of code executing on sovereign ledgers. In order to provide the desired end-to-end semantics, the IBC handler must permission channels to particular modules, and
-for convenience they should be addressable by name. This specification defines the *port allocation and ownership* system which realises that model.
+elements of code executing on sovereign ledgers. In order to provide the desired end-to-end semantics, the IBC handler must permission channels to particular modules.
+This specification defines the *port allocation and ownership* system which realises that model.
 
 Conventions may emerge as to what kind of module logic is bound to a particular port name, such as "bank" for fungible token handling or "staking" for interchain collateralisation.
 This is analogous to port 80's common use for HTTP servers — the protocol cannot enforce that particular module logic is actually bound to conventional ports, so
@@ -54,7 +54,7 @@ The IBC specification makes no assumptions of module functionality other than th
 
 The host state machine MUST support either object-capability reference or source authentication for modules.
 
-In the former case, the IBC handler must have the ability to generate *object-capabilities*, unique, opaque references
+In the former object-capability case, the IBC handler must have the ability to generate *object-capabilities*, unique, opaque references
 which can be passed to a module and will not be duplicable by other modules. Two examples are store keys as used in the Cosmos SDK ([reference](https://github.com/cosmos/cosmos-sdk/blob/master/store/types/store.go#L224))
 and object references as used in Agoric's Javascript runtime ([reference](https://github.com/Agoric/SwingSet)).
 
@@ -68,7 +68,7 @@ function newCapabilityPath(): CapabilityKey {
 }
 ```
 
-In the latter case, the IBC handler must have the ability to securely read the *source identifier* of the calling module,
+In the latter source authentication case, the IBC handler must have the ability to securely read the *source identifier* of the calling module,
 a unique string for each module in the host state machine, which cannot be altered by the module or faked by another module.
 An example is smart contract addresses as used by Ethereum ([reference](https://ethereum.github.io/yellowpaper/paper.pdf)).
 
@@ -88,13 +88,13 @@ In the former case, `generate` returns a new object-capability key, which must b
 
 ```
 function generate(): CapabilityKey {
-  return newCapabilityPath()
+    return newCapabilityPath()
 }
 ```
 
 ```
 function authenticate(key: CapabilityKey): boolean {
-  return capability === key
+    return capability === key
 }
 ```
 
@@ -102,13 +102,13 @@ In the latter case, `generate` returns the calling module's identifier and `auth
 
 ```
 function generate(): SourceIdentifier {
-  return callingModuleIdentifier()
+    return callingModuleIdentifier()
 }
 ```
 
 ```
 function authenticate(id: SourceIdentifier): boolean {
-  return callingModuleIdentifier() === id
+    return callingModuleIdentifier() === id
 }
 ```
 
@@ -122,7 +122,7 @@ function authenticate(id: SourceIdentifier): boolean {
 
 ```typescript
 function portPath(id: Identifier): Path {
-  return "ports/{id}"
+    return "ports/{id}"
 }
 ```
 
@@ -134,10 +134,10 @@ If the host state machine does not implement a special module manager to control
 
 ```typescript
 function bindPort(id: Identifier) {
-  abortTransactionUnless(provableStore.get(portPath(id)) === null)
-  key = generate()
-  provableStore.set(portPath(id), key)
-  return key
+    abortTransactionUnless(provableStore.get(portPath(id)) === null)
+    key = generate()
+    provableStore.set(portPath(id), key)
+    return key
 }
 ```
 
@@ -149,9 +149,9 @@ If the host state machine supports object-capabilities, no additional protocol i
 
 ```typescript
 function transferPort(id: Identifier) {
-  abortTransactionUnless(authenticate(provableStore.get(portPath(id))))
-  key = generate()
-  provableStore.set(portPath(id), key)
+    abortTransactionUnless(authenticate(provableStore.get(portPath(id))))
+    key = generate()
+    provableStore.set(portPath(id), key)
 }
 ```
 
@@ -163,8 +163,8 @@ The IBC handler MUST implement the `releasePort` function, which allows a module
 
 ```typescript
 function releasePort(id: Identifier) {
-  abortTransactionUnless(authenticate(provableStore.get(portPath(id))))
-  provableStore.delete(portPath(id))
+    abortTransactionUnless(authenticate(provableStore.get(portPath(id))))
+    provableStore.delete(portPath(id))
 }
 ```
 

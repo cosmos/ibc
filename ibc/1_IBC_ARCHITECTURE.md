@@ -56,7 +56,7 @@ IBC sits between modules — smart contracts, other state machine components, or
 
 IBC provides to modules a set of functions much like the functions which might be provided to a module for interacting with another module on the same state machine: sending data packets and receiving data packets on an established connection & channel (primitives for authentication & ordering, see [definitions](./3_IBC_TERMINOLOGY.md)) — in addition to calls to manage the protocol state: opening and closing connections and channels, choosing connection, channel, and packet delivery options, and inspecting connection & channel status.
 
-IBC assumes functionalities and properties of the underlying consensus protocols and machines as defined in [ICS 2](../../spec/ics-002-client-semantics), primarily finality (or thresholding finality gadgets), cheaply-verifiable consensus transcripts, and simple key-value store functionality. On the network side, IBC requires only eventual data delivery — no authentication, synchrony, or ordering properties are assumed (these properties are defined precisely later on).
+IBC assumes functionalities and properties of the underlying consensus protocols and machines as defined in [ICS 2](../../spec/ics-002-client-semantics), primarily finality (or thresholding finality gadgets), cheaply-verifiable consensus transcripts, and simple key/value store functionality. On the network side, IBC requires only eventual data delivery — no authentication, synchrony, or ordering properties are assumed (these properties are defined precisely later on).
 
 ### Protocol relations
 
@@ -94,7 +94,7 @@ In the IBC architecture, modules are not directly sending messages to each other
 
 ### Data confidentiality & legibility
 
-The IBC protocol requires only that the minimum data necessary for correct operation of the IBC protocol be made available & legible (serialised in a standardised format), and the state machine may elect to make that data available only to specific relayers (though the details thereof are out-of-scope of this specification). This data consists of consensus state, client, connection, channel, and packet information, and any auxiliary state structure necessary to construct proofs of inclusion or exclusion of particular key-value pairs in state. All data which must be proved to another machine must also be legible; i.e., it must be serialised in a format defined by this specification.
+The IBC protocol requires only that the minimum data necessary for correct operation of the IBC protocol be made available & legible (serialised in a standardised format), and the state machine may elect to make that data available only to specific relayers (though the details thereof are out-of-scope of this specification). This data consists of consensus state, client, connection, channel, and packet information, and any auxiliary state structure necessary to construct proofs of inclusion or exclusion of particular key/value pairs in state. All data which must be proved to another machine must also be legible; i.e., it must be serialised in a format defined by this specification.
 
 ### Reliability
 

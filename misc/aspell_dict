@@ -4,7 +4,6 @@ onChanCloseConfirm
 clientKey
 verifyMembership
 Nakamoto
-connCloseConfirm
 BIP
 desiredCounterpartyIdentifier
 queryClientConnections
@@ -140,7 +139,6 @@ ValidatorUpdate
 releasePort
 onChanOpenInit
 ClientCreate
-connCloseInit
 batchVerifyNonMembership
 HeaderProof
 timeoutOnClose
@@ -163,7 +161,6 @@ timeoutPacketOrdered
 tradeoff
 connOpenAck
 WASM
-queryConnectionChannels
 NFT
 onChanCloseInit
 newpubkey

@@ -66,7 +66,7 @@ could be provided as executable WASM functions when the client instance is creat
 * `get`, `set`, `Path`, and `Identifier` are as defined in [ICS 24](../ics-024-host-requirements).
 
 * `CommitmentRoot` is as defined in [ICS 23](../ics-023-vector-commitments). It must provide an inexpensive way for
-  downstream logic to verify whether key-value pairs are present in state at a particular height.
+  downstream logic to verify whether key/value pairs are present in state at a particular height.
 
 * `ConsensusState` is an opaque type representing the state of a validity predicate.
   `ConsensusState` must be able to verify state updates agreed upon by the associated consensus algorithm.
@@ -77,7 +77,7 @@ could be provided as executable WASM functions when the client instance is creat
 
 * `ClientState` is an opaque type representing the state of a client.
   A `ClientState` must expose query functions to verify membership or non-membership of
-  key-value pairs in state at particular heights and to retrieve the current `ConsensusState`.
+  key/value pairs in state at particular heights and to retrieve the current `ConsensusState`.
 
 ### Desired Properties
 
@@ -200,7 +200,7 @@ type initialize = (state: ConsensusState) => ClientState
 #### CommitmentProof
 
 `CommitmentProof` is an opaque data structure defined by a client type.
-It is utilised to verify presence or absence of a particular key, value pair in state
+It is utilised to verify presence or absence of a particular key/value pair in state
 at a particular finalised height (necessarily associated with a particular commitment root).
 
 ```typescript
@@ -209,7 +209,7 @@ type CommitmentProof = bytes
 
 #### State verification
 
-Client types must define functions, in accordance with [ICS 23](../ics-023-vector-commitments), to verify presence or absence of particular key-value pairs
+Client types must define functions, in accordance with [ICS 23](../ics-023-vector-commitments), to verify presence or absence of particular key/value pairs
 in state at particular heights. The behaviour of these functions MUST comply with the properties defined in [ICS 23](../ics-023-vector-commitments); however,
 internal implementation details may differ (for example, a loopback client could simply read directly from the state and require no proofs).
 
@@ -234,7 +234,7 @@ This ICS does not require that client identifiers be generated in a particular m
 
 ```typescript
 function clientStatePath(id: Identifier): Path {
-  return "clients/{id}/state"
+    return "clients/{id}/state"
 }
 ```
 
@@ -242,7 +242,7 @@ function clientStatePath(id: Identifier): Path {
 
 ```typescript
 function clientTypePath(id: Identifier): Path {
-  return "clients/{id}/type"
+    return "clients/{id}/type"
 }
 ```
 
@@ -252,7 +252,7 @@ Consensus states MUST be stored separately so that they can be independently ver
 
 ```typescript
 function consensusStatePath(id: Identifier): Path {
-  return "clients/{id}/consensusState"
+    return "clients/{id}/consensusState"
 }
 ```
 
@@ -273,11 +273,11 @@ function createClient(
   id: Identifier,
   clientType: ClientType,
   consensusState: ConsensusState) {
-  abortTransactionUnless(privateStore.get(clientStatePath(id)) === null)
-  abortSystemUnless(privateStore.get(clientTypePath(id)) === null)
-  clientState = clientType.initialize(consensusState)
-  privateStore.set(clientStatePath(id), clientState)
-  provableStore.set(clientTypePath(id), clientType)
+    abortTransactionUnless(privateStore.get(clientStatePath(id)) === null)
+    abortSystemUnless(privateStore.get(clientTypePath(id)) === null)
+    clientState = clientType.initialize(consensusState)
+    privateStore.set(clientStatePath(id), clientState)
+    provableStore.set(clientTypePath(id), clientType)
 }
 ```
 
@@ -288,13 +288,13 @@ client state must fulfil an interface allowing membership / non-membership verif
 
 ```typescript
 function queryClientConsensusState(id: Identifier): ConsensusState {
-  return provableStore.get(consensusStatePath(id))
+    return provableStore.get(consensusStatePath(id))
 }
 ```
 
 ```typescript
 function queryClient(id: Identifier): ClientState {
-  return privateStore.get(clientStatePath(id))
+    return privateStore.get(clientStatePath(id))
 }
 ```
 
@@ -310,11 +310,11 @@ updating the signature authority logic in the stored consensus state.
 function updateClient(
   id: Identifier,
   header: Header) {
-  clientType = provableStore.get(clientTypePath(id))
-  abortTransactionUnless(clientType !== null)
-  clientState = privateStore.get(clientStatePath(id))
-  abortTransactionUnless(clientState !== null)
-  clientType.checkValidityAndUpdateState(clientState, header)
+    clientType = provableStore.get(clientTypePath(id))
+    abortTransactionUnless(clientType !== null)
+    clientState = privateStore.get(clientStatePath(id))
+    abortTransactionUnless(clientState !== null)
+    clientType.checkValidityAndUpdateState(clientState, header)
 }
 ```
 
@@ -327,11 +327,11 @@ previously valid state roots & preventing future updates.
 function submitMisbehaviourToClient(
   id: Identifier,
   evidence: bytes) {
-  clientType = provableStore.get(clientTypePath(id))
-  abortTransactionUnless(clientType !== null)
-  clientState = privateStore.get(clientStatePath(id))
-  abortTransactionUnless(clientState !== null)
-  clientType.checkMisbehaviourAndUpdateState(clientState, evidence)
+    clientType = provableStore.get(clientTypePath(id))
+    abortTransactionUnless(clientType !== null)
+    clientState = privateStore.get(clientStatePath(id))
+    abortTransactionUnless(clientState !== null)
+    clientType.checkMisbehaviourAndUpdateState(clientState, evidence)
 }
 ```
 
@@ -377,9 +377,9 @@ function commit(
   root: CommitmentRoot,
   sequence: uint64,
   newPublicKey: Maybe<PublicKey>): Header {
-  signature = privateKey.sign(root, sequence, newPublicKey)
-  header = Header{sequence, root, signature, newPublicKey}
-  return header
+    signature = privateKey.sign(root, sequence, newPublicKey)
+    header = Header{sequence, root, signature, newPublicKey}
+    return header
 }
 
 // initialisation function defined by the client type
@@ -391,14 +391,14 @@ function initialize(consensusState: ConsensusState): ClientState {
 function checkValidityAndUpdateState(
   clientState: ClientState,
   header: Header) {
-  abortTransactionUnless(consensusState.sequence + 1 === header.sequence)
-  abortTransactionUnless(consensusState.publicKey.verify(header.signature))
-  if (header.newPublicKey !== null) {
-    consensusState.publicKey = header.newPublicKey
-    clientState.pastPublicKeys.add(header.newPublicKey)
-  }
-  consensusState.sequence = header.sequence
-  clientState.verifiedRoots[sequence] = header.commitmentRoot
+    abortTransactionUnless(consensusState.sequence + 1 === header.sequence)
+    abortTransactionUnless(consensusState.publicKey.verify(header.signature))
+    if (header.newPublicKey !== null) {
+      consensusState.publicKey = header.newPublicKey
+      clientState.pastPublicKeys.add(header.newPublicKey)
+    }
+    consensusState.sequence = header.sequence
+    clientState.verifiedRoots[sequence] = header.commitmentRoot
 }
 
 // state membership verification function defined by the client type
@@ -408,8 +408,8 @@ function verifyMembership(
   proof: CommitmentProof
   path: Path,
   value: Value) {
-  abortTransactionUnless(!clientState.frozen)
-  return clientState.verifiedRoots[sequence].verifyMembership(path, value, proof)
+    abortTransactionUnless(!clientState.frozen)
+    return clientState.verifiedRoots[sequence].verifyMembership(path, value, proof)
 }
 
 // state non-membership function defined by the client type
@@ -418,8 +418,8 @@ function verifyNonMembership(
   sequence: uint64,
   proof: CommitmentProof,
   path: Path) {
-  abortTransactionUnless(!clientState.frozen)
-  return clientState.verifiedRoots[sequence].verifyNonMembership(path, proof)
+    abortTransactionUnless(!clientState.frozen)
+    return clientState.verifiedRoots[sequence].verifyNonMembership(path, proof)
 }
 
 // misbehaviour verification function defined by the client type
@@ -427,14 +427,14 @@ function verifyNonMembership(
 function checkMisbehaviourAndUpdateState(
   clientState: ClientState,
   evidence: Evidence) {
-  h1 = evidence.h1
-  h2 = evidence.h2
-  abortTransactionUnless(clientState.pastPublicKeys.contains(h1.publicKey))
-  abortTransactionUnless(h1.sequence === h2.sequence)
-  abortTransactionUnless(h1.commitmentRoot !== h2.commitmentRoot || h1.publicKey !== h2.publicKey)
-  abortTransactionUnless(h1.publicKey.verify(h1.signature))
-  abortTransactionUnless(h2.publicKey.verify(h2.signature))
-  clientState.frozen = true
+    h1 = evidence.h1
+    h2 = evidence.h2
+    abortTransactionUnless(clientState.pastPublicKeys.contains(h1.publicKey))
+    abortTransactionUnless(h1.sequence === h2.sequence)
+    abortTransactionUnless(h1.commitmentRoot !== h2.commitmentRoot || h1.publicKey !== h2.publicKey)
+    abortTransactionUnless(h1.publicKey.verify(h1.signature))
+    abortTransactionUnless(h2.publicKey.verify(h2.signature))
+    clientState.frozen = true
 }
 ```
 

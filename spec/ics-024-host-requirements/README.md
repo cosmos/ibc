@@ -45,7 +45,7 @@ Variable interpolation, denoted by curly braces, is used throughout this specifi
 
 ### Key/value Store
 
-The host state machine MUST provide a key-value store interface 
+The host state machine MUST provide a key/value store interface 
 with three functions that behave in the standard way:
 
 ```typescript
@@ -62,7 +62,7 @@ type delete = (path: Path) => void
 
 `Path` is as defined above. `Value` is an arbitrary bytestring encoding of a particular data structure. Encoding details are left to separate ICSs.
 
-These functions MUST be permissioned to the IBC handler module (the implementation of which is described in separate standards) only, so only the IBC handler module can `set` or `delete` the paths that can be read by `get`. This can possibly be implemented as a sub-store (prefixed key-space) of a larger key-value store used by the entire state machine.
+These functions MUST be permissioned to the IBC handler module (the implementation of which is described in separate standards) only, so only the IBC handler module can `set` or `delete` the paths that can be read by `get`. This can possibly be implemented as a sub-store (prefixed key-space) of a larger key/value store used by the entire state machine.
 
 Host state machines MUST provide two instances of this interface -
 a `provableStore` for storage read by (i.e. proven to) other chains,
@@ -71,7 +71,7 @@ and a `privateStore` for storage local to the host, upon which `get`
 
 The `provableStore`:
 
-- MUST write to a key-value store whose data can be externally proved with a vector commitment as defined in [ICS 23](../ics-023-vector-commitments). 
+- MUST write to a key/value store whose data can be externally proved with a vector commitment as defined in [ICS 23](../ics-023-vector-commitments). 
 - MUST use canonical data structure encodings provided in these specifications as proto3 files
 
 The `privateStore`:
@@ -80,24 +80,24 @@ The `privateStore`:
 - MAY use canonical proto3 data structures, but is not required to - it can use
   whatever format is preferred by the application environment.
 
-> Note: any key-value store interface which provides these methods & properties is sufficient for IBC. Host state machines may implement "proxy stores" with underlying storage models which do not directly match the path & value pairs set and retrieved through the store interface — paths could be grouped into buckets & values stored in pages which could be proved in a single commitment, path-spaces could be remapped non-contiguously in some bijective manner, etc — as long as `get`, `set`, and `delete` behave as expected and other machines can verify commitment proofs of path & value pairs (or their absence) in the provable store.
+> Note: any key/value store interface which provides these methods & properties is sufficient for IBC. Host state machines may implement "proxy stores" with underlying storage models which do not directly match the path & value pairs set and retrieved through the store interface — paths could be grouped into buckets & values stored in pages which could be proved in a single commitment, path-spaces could be remapped non-contiguously in some bijective manner, etc — as long as `get`, `set`, and `delete` behave as expected and other machines can verify commitment proofs of path & value pairs (or their absence) in the provable store.
 
 ### Path-space
 
 At present, IBC/TAO utilises the following path prefixes for the `provableStore` and `privateStore`. Future paths may be used in future versions of the protocol, so the entire key-space in both stores MUST be reserved for the IBC handler.
 
-| Store          | Path format                                          | Value type        | Defined in |
-| -------------- | ---------------------------------------------------- | ----------------- | ---------------------- |
-| privateStore   | "clients/{identifier}"                               | ClientState       | [ICS 2](../ics-002-client-semantics) |
-| provableStore  | "clients/{identifier}/consensusState"                | ConsensusState    | [ICS 2](../ics-002-client-semantics) |
-| provableStore  | "clients/{identifier}/type"                          | ClientType        | [ICS 2](../ics-002-client-semantics) |
-| provableStore  | "connections/{identifier}"                           | ConnectionEnd     | [ICS 3](../ics-003-connection-semantics) |
-| provableStore  | "channels/{identifier}"                              | ChannelEnd        | [ICS 4](../ics-004-channel-and-packet-semantics) |
-| provableStore  | "channels/{identifier}/nextSequenceRecv"             | uint64            | [ICS 4](../ics-004-channel-and-packet-semantics) |
-| provableStore  | "channels/{identifier}/packets/{sequence}"           | bytes             | [ICS 4](../ics-004-channel-and-packet-semantics) |
-| provableStore  | "channels/{identifier}/acknowledgements/{sequence}"  | bytes             | [ICS 4](../ics-004-channel-and-packet-semantics) |
-| provableStore  | "ports/{identifier}"                                 | Path              | [ICS 5](../ics-005-port-allocation) |
-| privateStore   | "callbacks/{identifier}"                             | ModuleCallbacks   | [ICS 26](../ics-026-relayer-module) |
+| Store          | Path format                                                              | Value type        | Defined in |
+| -------------- | ------------------------------------------------------------------------ | ----------------- | ---------------------- |
+| privateStore   | "clients/{identifier}"                                                   | ClientState       | [ICS 2](../ics-002-client-semantics) |
+| provableStore  | "clients/{identifier}/consensusState"                                    | ConsensusState    | [ICS 2](../ics-002-client-semantics) |
+| provableStore  | "clients/{identifier}/type"                                              | ClientType        | [ICS 2](../ics-002-client-semantics) |
+| provableStore  | "connections/{identifier}"                                               | ConnectionEnd     | [ICS 3](../ics-003-connection-semantics) |
+| provableStore  | "ports/{identifier}/channels/{identifier}"                               | ChannelEnd        | [ICS 4](../ics-004-channel-and-packet-semantics) |
+| provableStore  | "ports/{identifier}/channels/{identifier}/nextSequenceRecv"              | uint64            | [ICS 4](../ics-004-channel-and-packet-semantics) |
+| provableStore  | "ports/{identifier}/channels/{identifier}/packets/{sequence}"            | bytes             | [ICS 4](../ics-004-channel-and-packet-semantics) |
+| provableStore  | "ports/{identifier}channels/{identifier}/acknowledgements/{sequence}"    | bytes             | [ICS 4](../ics-004-channel-and-packet-semantics) |
+| provableStore  | "ports/{identifier}"                                                     | Path              | [ICS 5](../ics-005-port-allocation) |
+| privateStore   | "callbacks/{identifier}"                                                 | ModuleCallbacks   | [ICS 26](../ics-026-relayer-module) |
 
 ### Module layout
 
@@ -191,7 +191,7 @@ If the boolean passed to `abortSystemUnless` is `true`, the host state machine n
 
 ### Data availability
 
-For deliver-or-timeout safety, host state machines MUST have eventual data availability, such that any key-value pairs in state can be eventually retrieved by relayers. For exactly-once safety, data availability is not required.
+For deliver-or-timeout safety, host state machines MUST have eventual data availability, such that any key/value pairs in state can be eventually retrieved by relayers. For exactly-once safety, data availability is not required.
 
 For liveness of packet relay, host state machines MUST have bounded transactional liveness (and thus necessarily consensus liveness), such that incoming transactions are confirmed within a block height bound (in particular, less than the timeouts assign to the packets).
 
@@ -205,7 +205,7 @@ Not applicable.
 
 ## Forwards Compatibility
 
-Key-value store functionality and consensus state type are unlikely to change during operation of a single host state machine.
+Key/value store functionality and consensus state type are unlikely to change during operation of a single host state machine.
 
 `submitDatagram` can change over time as relayers should be able to update their processes.
 

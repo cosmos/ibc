@@ -96,7 +96,7 @@ Connection paths are stored under a unique identifier.
 
 ```typescript
 function connectionPath(id: Identifier): Path {
-  return "connections/{id}"
+    return "connections/{id}"
 }
 ```
 
@@ -104,7 +104,7 @@ A reverse mapping from clients to a set of connections (utilised to look up all 
 
 ```typescript
 function clientConnectionsPath(clientIdentifier: Identifier): Path {
-  return "clients/{clientIdentifier}/connections"
+    return "clients/{clientIdentifier}/connections"
 }
 ```
 
@@ -116,9 +116,9 @@ function clientConnectionsPath(clientIdentifier: Identifier): Path {
 function addConnectionToClient(
   clientIdentifier: Identifier,
   connectionIdentifier: Identifier) {
-  conns = privateStore.get(clientConnectionsPath(clientIdentifier))
-  conns.add(connectionIdentifier)
-  privateStore.set(clientConnectionsPath(clientIdentifier), conns)
+    conns = privateStore.get(clientConnectionsPath(clientIdentifier))
+    conns.add(connectionIdentifier)
+    privateStore.set(clientConnectionsPath(clientIdentifier), conns)
 }
 ```
 
@@ -128,9 +128,9 @@ function addConnectionToClient(
 function removeConnectionFromClient(
   clientIdentifier: Identifier,
   connectionIdentifier: Identifier) {
-  conns = privateStore.get(clientConnectionsPath(clientIdentifier, connectionIdentifier))
-  conns.remove(connectionIdentifier)
-  privateStore.set(clientConnectionsPath(clientIdentifier, connectionIdentifier), conns)
+    conns = privateStore.get(clientConnectionsPath(clientIdentifier, connectionIdentifier))
+    conns.remove(connectionIdentifier)
+    privateStore.set(clientConnectionsPath(clientIdentifier, connectionIdentifier), conns)
 }
 ```
 
@@ -181,16 +181,16 @@ function connOpenInit(
   clientIdentifier: Identifier,
   counterpartyClientIdentifier: Identifier,
   version: string) {
-  abortTransactionUnless(provableStore.get(connectionPath(identifier)) == null)
-  state = INIT
-  connection = ConnectionEnd{state, desiredCounterpartyConnectionIdentifier, clientIdentifier,
-    counterpartyClientIdentifier, version}
-  provableStore.set(connectionPath(identifier), connection)
-  addConnectionToClient(clientIdentifier, identifier)
+    abortTransactionUnless(provableStore.get(connectionPath(identifier)) == null)
+    state = INIT
+    connection = ConnectionEnd{state, desiredCounterpartyConnectionIdentifier, clientIdentifier,
+      counterpartyClientIdentifier, version}
+    provableStore.set(connectionPath(identifier), connection)
+    addConnectionToClient(clientIdentifier, identifier)
 }
 ```
 
-*ConnOpenTry* relays notice of a connection attempt on chain A to chain B.
+*ConnOpenTry* relays notice of a connection attempt on chain A to chain B (this code is executed on chain B).
 
 ```typescript
 function connOpenTry(
@@ -203,29 +203,29 @@ function connOpenTry(
   proofInit: CommitmentProof,
   proofHeight: uint64,
   consensusHeight: uint64) {
-  abortTransactionUnless(consensusHeight <= getCurrentHeight())
-  client = queryClient(connection.clientIdentifier)
-  expectedConsensusState = getConsensusState(consensusHeight)
-  expected = ConnectionEnd{INIT, desiredIdentifier, counterpartyClientIdentifier,
-                           clientIdentifier, counterpartyVersion}
-  abortTransactionUnless(
-    client.verifyMembership(proofHeight, proofInit,
-                            connectionPath(counterpartyConnectionIdentifier), expected))
-  abortTransactionUnless(
-    client.verifyMembership(proofHeight, proofInit,
-                            consensusStatePath(counterpartyClientIdentifier),
-                            expectedConsensusState))
-  abortTransactionUnless(provableStore.get(connectionPath(desiredIdentifier)) === null)
-  identifier = desiredIdentifier
-  state = TRYOPEN
-  connection = ConnectionEnd{state, counterpartyConnectionIdentifier, clientIdentifier,
-                             counterpartyClientIdentifier, version}
-  provableStore.set(connectionPath(identifier), connection)
-  addConnectionToClient(clientIdentifier, identifier)
+    abortTransactionUnless(consensusHeight <= getCurrentHeight())
+    client = queryClient(connection.clientIdentifier)
+    expectedConsensusState = getConsensusState(consensusHeight)
+    expected = ConnectionEnd{INIT, desiredIdentifier, counterpartyClientIdentifier,
+                             clientIdentifier, counterpartyVersion}
+    abortTransactionUnless(
+      client.verifyMembership(proofHeight, proofInit,
+                              connectionPath(counterpartyConnectionIdentifier), expected))
+    abortTransactionUnless(
+      client.verifyMembership(proofHeight, proofInit,
+                              consensusStatePath(counterpartyClientIdentifier),
+                              expectedConsensusState))
+    abortTransactionUnless(provableStore.get(connectionPath(desiredIdentifier)) === null)
+    identifier = desiredIdentifier
+    state = TRYOPEN
+    connection = ConnectionEnd{state, counterpartyConnectionIdentifier, clientIdentifier,
+                               counterpartyClientIdentifier, version}
+    provableStore.set(connectionPath(identifier), connection)
+    addConnectionToClient(clientIdentifier, identifier)
 }
 ```
 
-*ConnOpenAck* relays acceptance of a connection open attempt from chain B back to chain A.
+*ConnOpenAck* relays acceptance of a connection open attempt from chain B back to chain A (this code is executed on chain A).
 
 ```typescript
 function connOpenAck(
@@ -234,103 +234,44 @@ function connOpenAck(
   proofTry: CommitmentProof,
   proofHeight: uint64,
   consensusHeight: uint64) {
-  abortTransactionUnless(consensusHeight <= getCurrentHeight())
-  connection = provableStore.get(connectionPath(identifier))
-  abortTransactionUnless(connection.state === INIT)
-  client = queryClient(connection.clientIdentifier)
-  expectedConsensusState = getConsensusState(consensusHeight)
-  expected = ConnectionEnd{TRYOPEN, identifier, connection.counterpartyClientIdentifier,
-                           connection.clientIdentifier, version}
-  abortTransactionUnless(
-    client.verifyMembership(proofHeight, proofTry,
-                            connectionPath(connection.counterpartyConnectionIdentifier), expected))
-  abortTransactionUnless(
-    client.verifyMembership(proofHeight, proofTry,
-                            consensusStatePath(connection.counterpartyClientIdentifier), expectedConsensusState))
-  connection.state = OPEN
-  connection.version = version
-  provableStore.set(connectionPath(identifier), connection)
+    abortTransactionUnless(consensusHeight <= getCurrentHeight())
+    connection = provableStore.get(connectionPath(identifier))
+    abortTransactionUnless(connection.state === INIT)
+    client = queryClient(connection.clientIdentifier)
+    expectedConsensusState = getConsensusState(consensusHeight)
+    expected = ConnectionEnd{TRYOPEN, identifier, connection.counterpartyClientIdentifier,
+                             connection.clientIdentifier, version}
+    abortTransactionUnless(
+      client.verifyMembership(proofHeight, proofTry,
+                              connectionPath(connection.counterpartyConnectionIdentifier), expected))
+    abortTransactionUnless(
+      client.verifyMembership(proofHeight, proofTry,
+                              consensusStatePath(connection.counterpartyClientIdentifier), expectedConsensusState))
+    connection.state = OPEN
+    connection.version = version
+    provableStore.set(connectionPath(identifier), connection)
 }
 ```
 
-*ConnOpenConfirm* confirms opening of a connection on chain A to chain B, after which the connection is open on both chains.
+*ConnOpenConfirm* confirms opening of a connection on chain A to chain B, after which the connection is open on both chains (this code is executed on chain B).
 
 ```typescript
 function connOpenConfirm(
   identifier: Identifier,
   proofAck: CommitmentProof,
-  proofHeight: uint64)
-  connection = provableStore.get(connectionPath(identifier))
-  abortTransactionUnless(connection.state === TRYOPEN)
-  expected = ConnectionEnd{OPEN, identifier, connection.counterpartyClientIdentifier,
-                           connection.clientIdentifier, connection.version}
-  client = queryClient(connection.clientIdentifier)
-  abortTransactionUnless(
-    client.verifyMembership(proofHeight, proofAck,
-                            connectionPath(connection.counterpartyConnectionIdentifier), expected))
-  connection.state = OPEN
-  provableStore.set(connectionPath(identifier), connection)
-```
-
-#### Header Tracking
-
-Headers are tracked at the client level. See [ICS 2](../ics-002-client-semantics).
-
-#### Closing Handshake
-
-The closing handshake protocol serves to cleanly close a connection on two chains.
-
-This sub-protocol will likely need to be permissioned to an entity who "owns" the connection on the initiating chain, such as a particular end user, smart contract, or governance mechanism.
-
-The closing handshake sub-protocol defines two datagrams: *ConnCloseInit*, and *ConnCloseConfirm*.
-
-A correct protocol execution flows as follows (note that all calls are made through modules per ICS 25):
-
-| Initiator | Datagram            | Chain acted upon | Prior state (A, B) | Post state (A, B) |
-| --------- | ------------------- | ---------------- | ------------------ | ----------------- |
-| Actor     | `ConnCloseInit`     | A                | (ANY, ANY)         | (CLOSED, ANY)     |
-| Relayer   | `ConnCloseConfirm`  | B                | (CLOSED, ANY)      | (CLOSED, CLOSED)  |
-
-*ConnCloseInit* initialises a close attempt on chain A. It will succeed only if the associated connection does not have any associated open channels.
-
-Once closed, connections cannot be reopened.
-
-```typescript
-function connCloseInit(identifier: Identifier) {
-  abortTransactionUnless(queryConnectionChannels(identifier).size() === 0)
-  connection = provableStore.get(connectionPath(identifier))
-  abortTransactionUnless(connection.state !== CLOSED)
-  connection.state = CLOSED
-  provableStore.set(connectionPath(identifier), connection)
-}
-```
-
-*ConnCloseConfirm* relays the intent to close a connection from chain A to chain B. It will succeed only if the associated connection does not have any channels.
-
-Once closed, connections cannot be reopened.
-
-```typescript
-function connCloseConfirm(
-  identifier: Identifier,
-  proofInit: CommitmentProof,
   proofHeight: uint64) {
-  abortTransactionUnless(queryConnectionChannels(identifier).size() === 0)
-  connection = provableStore.get(connectionPath(identifier))
-  abortTransactionUnless(connection.state !== CLOSED)
-  client = queryClient(connection.clientIdentifier)
-  expected = ConnectionEnd{CLOSED, identifier, connection.counterpartyClientIdentifier,
-                           connection.clientIdentifier, connection.version}
-  abortTransactionUnless(client.verifyMembership(proofHeight, proofInit, connectionPath(counterpartyConnectionIdentifier), expected))
-  connection.state = CLOSED
-  provableStore.set(connectionPath(identifier), connection)
+    connection = provableStore.get(connectionPath(identifier))
+    abortTransactionUnless(connection.state === TRYOPEN)
+    expected = ConnectionEnd{OPEN, identifier, connection.counterpartyClientIdentifier,
+                             connection.clientIdentifier, connection.version}
+    client = queryClient(connection.clientIdentifier)
+    abortTransactionUnless(
+      client.verifyMembership(proofHeight, proofAck,
+                              connectionPath(connection.counterpartyConnectionIdentifier), expected))
+    connection.state = OPEN
+    provableStore.set(connectionPath(identifier), connection)
 }
 ```
-
-#### Freezing by Misbehaviour 
-
-The misbehaviour detection sub-protocol is defined in [ICS 2](../ics-002-client-semantics). If a client is frozen by misbehaviour, `verifyMembership` calls to that client MAY subsequently fail.
-
-Implementing chains may want to allow applications to register handlers to take action upon discovery of misbehaviour. Further discussion is deferred to a later ICS.
 
 #### Querying
 
@@ -338,7 +279,7 @@ Connections can be queried by identifier with `queryConnection`.
 
 ```typescript
 function queryConnection(id: Identifier): ConnectionEnd | void {
-  return provableStore.get(connectionPath(id))
+    return provableStore.get(connectionPath(id))
 }
 ```
 
@@ -346,7 +287,7 @@ Connections associated with a particular client can be queried by client identif
 
 ```typescript
 function queryClientConnections(id: Identifier): Set<Identifier> {
-  return privateStore.get(clientConnectionsPath(id))
+    return privateStore.get(clientConnectionsPath(id))
 }
 ```
 
