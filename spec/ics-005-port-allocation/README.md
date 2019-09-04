@@ -54,7 +54,7 @@ The IBC specification makes no assumptions of module functionality other than th
 
 The host state machine MUST support either object-capability reference or source authentication for modules.
 
-In the former case, the IBC handler must have the ability to generate *object-capabilities*, unique, opaque references
+In the former object-capability case, the IBC handler must have the ability to generate *object-capabilities*, unique, opaque references
 which can be passed to a module and will not be duplicable by other modules. Two examples are store keys as used in the Cosmos SDK ([reference](https://github.com/cosmos/cosmos-sdk/blob/master/store/types/store.go#L224))
 and object references as used in Agoric's Javascript runtime ([reference](https://github.com/Agoric/SwingSet)).
 
@@ -68,7 +68,7 @@ function newCapabilityPath(): CapabilityKey {
 }
 ```
 
-In the latter case, the IBC handler must have the ability to securely read the *source identifier* of the calling module,
+In the latter source authentication case, the IBC handler must have the ability to securely read the *source identifier* of the calling module,
 a unique string for each module in the host state machine, which cannot be altered by the module or faked by another module.
 An example is smart contract addresses as used by Ethereum ([reference](https://ethereum.github.io/yellowpaper/paper.pdf)).
 
