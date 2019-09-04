@@ -71,7 +71,9 @@ could be provided as executable WASM functions when the client instance is creat
 * `ConsensusState` is an opaque type representing the state of a validity predicate.
   `ConsensusState` must be able to verify state updates agreed upon by the associated consensus algorithm.
   It must also be serialisable in a canonical fashion so that third parties, such as counterparty machines,
-  can check that a particular machine has stored a particular `ConsensusState`.
+  can check that a particular machine has stored a particular `ConsensusState`. It must finally be
+  introspectable by the state machine which it is for, such that the state machine can look up its
+  own `ConsensusState` at a past height.
 
 * `ClientState` is an opaque type representing the state of a client.
   A `ClientState` must expose query functions to verify membership or non-membership of
@@ -85,7 +87,7 @@ sub-components of the state with the `CommitmentRoot`s stored in the `ConsensusS
 guaranteed to have been committed by the other chain's consensus algorithm.
 
 `ValidityPredicate`s are expected to reflect the behaviour of the full nodes which are running the  
-corresponding consensus algorithm. Given a `ConsensusState` and `[Message]`, if a full node
+corresponding consensus algorithm. Given a `ConsensusState` and a list of messages, if a full node
 accepts the new `Header` generated with `Commit`, then the light client MUST also accept it,
 and if a full node rejects it, then the light client MUST also reject it.
 
@@ -104,7 +106,8 @@ types, and each client type can be instantiated with different initial consensus
 different consensus instances. In order to establish a connection between two machines (see [ICS 3](../ics-003-connection-semantics)),
 the machines must each support the client type corresponding to the other machine's consensus algorithm.
 
-By convention, client types shall be globally namespaced between machines implementing the IBC protocol.
+Specific client types shall be defined in later versions of this specification and a canonical list shall exist in this repository.
+Machines implementing the IBC protocol are expected to respect these client types, although they may elect to support only a subset.
 
 ### Data Structures
 
