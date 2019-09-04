@@ -118,13 +118,14 @@ verify new commits & state roots. Likely the structure will contain the last com
 the consensus process, including signatures and validator set metadata.
 
 `ConsensusState` MUST be generated from an instance of `Consensus`, which assigns unique heights
-for each `ConsensusState`. Two `ConsensusState`s on the same chain SHOULD NOT have the same height
-if they do not have equal commitment roots. Such an event is called an "equivocation" and MUST be classified
+for each `ConsensusState` (such that each height has exactly one associated consensus state).
+Two `ConsensusState`s on the same chain SHOULD NOT have the same height if they do not have
+equal commitment roots. Such an event is called an "equivocation" and MUST be classified
 as misbehaviour. Should one occur, a proof should be generated and submitted so that the client can be frozen
 and previous state roots invalidated as necessary.
 
 The `ConsensusState` of a chain MUST have a canonical serialisation, so that other chains can check
-that a stored consensus state is equal to another.
+that a stored consensus state is equal to another (see [ICS 24](../ics-024-host-requirements) for the keyspace table).
 
 ```typescript
 type ConsensusState = bytes
