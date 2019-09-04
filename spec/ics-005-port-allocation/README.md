@@ -12,8 +12,8 @@ modified: 2019-08-25
 
 ## Synopsis
 
-This standard specifies the port allocation system by which modules can bind to uniquely named ports, allocated by the IBC handler,
-from and to which channels can then be opened, and which can be transferred or later released by the module which originally bound to them and then reused.
+This standard specifies the port allocation system by which modules can bind to uniquely named ports allocated by the IBC handler.
+Ports can then be used to open channels and can be transferred or later released by the module which originally bound to them.
 
 ### Motivation
 
