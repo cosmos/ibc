@@ -177,7 +177,7 @@ type checkMisbehaviourAndUpdateState = (bytes) => Void
 `checkMisbehaviourAndUpdateState` MUST throw an exception if the provided evidence was not valid.
 
 If misbehaviour was valid, the client MUST also mutate internal state to mark appropriate heights which
-were previously considered valid invalid, according to the nature of the misbehaviour.
+were previously considered valid as invalid, according to the nature of the misbehaviour.
 
 #### ClientState
 
@@ -194,7 +194,7 @@ type ClientState = bytes
 Client types must also define a method to initialize a client state with a provided consensus state:
 
 ```typescript
-type initialize = (ConsensusState) => ClientState
+type initialize = (state: ConsensusState) => ClientState
 ```
 
 #### CommitmentProof
