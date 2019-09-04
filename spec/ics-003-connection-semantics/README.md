@@ -190,7 +190,7 @@ function connOpenInit(
 }
 ```
 
-*ConnOpenTry* relays notice of a connection attempt on chain A to chain B.
+*ConnOpenTry* relays notice of a connection attempt on chain A to chain B (this code is executed on chain B).
 
 ```typescript
 function connOpenTry(
@@ -225,7 +225,7 @@ function connOpenTry(
 }
 ```
 
-*ConnOpenAck* relays acceptance of a connection open attempt from chain B back to chain A.
+*ConnOpenAck* relays acceptance of a connection open attempt from chain B back to chain A (this code is executed on chain A).
 
 ```typescript
 function connOpenAck(
@@ -253,7 +253,7 @@ function connOpenAck(
 }
 ```
 
-*ConnOpenConfirm* confirms opening of a connection on chain A to chain B, after which the connection is open on both chains.
+*ConnOpenConfirm* confirms opening of a connection on chain A to chain B, after which the connection is open on both chains (this code is executed on chain B).
 
 ```typescript
 function connOpenConfirm(
