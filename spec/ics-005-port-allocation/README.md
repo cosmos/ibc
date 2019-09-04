@@ -134,7 +134,7 @@ If the host state machine does not implement a special module manager to control
 
 ```typescript
 function bindPort(id: Identifier) {
-  assert(provableStore.get(portPath(id)) === null)
+  abortTransactionUnless(provableStore.get(portPath(id)) === null)
   key = generate()
   provableStore.set(portPath(id), key)
   return key
@@ -149,7 +149,7 @@ If the host state machine supports object-capabilities, no additional protocol i
 
 ```typescript
 function transferPort(id: Identifier) {
-  assert(authenticate(provableStore.get(portPath(id))))
+  abortTransactionUnless(authenticate(provableStore.get(portPath(id))))
   key = generate()
   provableStore.set(portPath(id), key)
 }
@@ -163,7 +163,7 @@ The IBC handler MUST implement the `releasePort` function, which allows a module
 
 ```typescript
 function releasePort(id: Identifier) {
-  assert(authenticate(provableStore.get(portPath(id))))
+  abortTransactionUnless(authenticate(provableStore.get(portPath(id))))
   provableStore.delete(portPath(id))
 }
 ```

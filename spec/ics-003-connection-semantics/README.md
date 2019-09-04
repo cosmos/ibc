@@ -181,7 +181,7 @@ function connOpenInit(
   clientIdentifier: Identifier,
   counterpartyClientIdentifier: Identifier,
   version: string) {
-  assert(provableStore.get(connectionPath(identifier)) == null)
+  abortTransactionUnless(provableStore.get(connectionPath(identifier)) == null)
   state = INIT
   connection = ConnectionEnd{state, desiredCounterpartyConnectionIdentifier, clientIdentifier,
     counterpartyClientIdentifier, version}
@@ -203,17 +203,19 @@ function connOpenTry(
   proofInit: CommitmentProof,
   proofHeight: uint64,
   consensusHeight: uint64) {
-  assert(consensusHeight <= getCurrentHeight())
+  abortTransactionUnless(consensusHeight <= getCurrentHeight())
   client = queryClient(connection.clientIdentifier)
   expectedConsensusState = getConsensusState(consensusHeight)
   expected = ConnectionEnd{INIT, desiredIdentifier, counterpartyClientIdentifier,
                            clientIdentifier, counterpartyVersion}
-  assert(client.verifyMembership(proofHeight, proofInit,
-                                 connectionPath(counterpartyConnectionIdentifier), expected))
-  assert(client.verifyMembership(proofHeight, proofInit,
-                                 consensusStatePath(counterpartyClientIdentifier),
-                                 expectedConsensusState))
-  assert(provableStore.get(connectionPath(desiredIdentifier)) === null)
+  abortTransactionUnless(
+    client.verifyMembership(proofHeight, proofInit,
+                            connectionPath(counterpartyConnectionIdentifier), expected))
+  abortTransactionUnless(
+    client.verifyMembership(proofHeight, proofInit,
+                            consensusStatePath(counterpartyClientIdentifier),
+                            expectedConsensusState))
+  abortTransactionUnless(provableStore.get(connectionPath(desiredIdentifier)) === null)
   identifier = desiredIdentifier
   state = TRYOPEN
   connection = ConnectionEnd{state, counterpartyConnectionIdentifier, clientIdentifier,
@@ -232,17 +234,19 @@ function connOpenAck(
   proofTry: CommitmentProof,
   proofHeight: uint64,
   consensusHeight: uint64) {
-  assert(consensusHeight <= getCurrentHeight())
+  abortTransactionUnless(consensusHeight <= getCurrentHeight())
   connection = provableStore.get(connectionPath(identifier))
-  assert(connection.state === INIT)
+  abortTransactionUnless(connection.state === INIT)
   client = queryClient(connection.clientIdentifier)
   expectedConsensusState = getConsensusState(consensusHeight)
   expected = ConnectionEnd{TRYOPEN, identifier, connection.counterpartyClientIdentifier,
                            connection.clientIdentifier, version}
-  assert(client.verifyMembership(proofHeight, proofTry,
-                                 connectionPath(connection.counterpartyConnectionIdentifier), expected))
-  assert(client.verifyMembership(proofHeight, proofTry,
-                                 consensusStatePath(connection.counterpartyClientIdentifier), expectedConsensusState))
+  abortTransactionUnless(
+    client.verifyMembership(proofHeight, proofTry,
+                            connectionPath(connection.counterpartyConnectionIdentifier), expected))
+  abortTransactionUnless(
+    client.verifyMembership(proofHeight, proofTry,
+                            consensusStatePath(connection.counterpartyClientIdentifier), expectedConsensusState))
   connection.state = OPEN
   connection.version = version
   provableStore.set(connectionPath(identifier), connection)
@@ -257,12 +261,13 @@ function connOpenConfirm(
   proofAck: CommitmentProof,
   proofHeight: uint64)
   connection = provableStore.get(connectionPath(identifier))
-  assert(connection.state === TRYOPEN)
+  abortTransactionUnless(connection.state === TRYOPEN)
   expected = ConnectionEnd{OPEN, identifier, connection.counterpartyClientIdentifier,
                            connection.clientIdentifier, connection.version}
   client = queryClient(connection.clientIdentifier)
-  assert(client.verifyMembership(proofHeight, proofAck,
-                                 connectionPath(connection.counterpartyConnectionIdentifier), expected))
+  abortTransactionUnless(
+    client.verifyMembership(proofHeight, proofAck,
+                            connectionPath(connection.counterpartyConnectionIdentifier), expected))
   connection.state = OPEN
   provableStore.set(connectionPath(identifier), connection)
 ```
@@ -292,9 +297,9 @@ Once closed, connections cannot be reopened.
 
 ```typescript
 function connCloseInit(identifier: Identifier) {
-  assert(queryConnectionChannels(identifier).size() === 0)
+  abortTransactionUnless(queryConnectionChannels(identifier).size() === 0)
   connection = provableStore.get(connectionPath(identifier))
-  assert(connection.state !== CLOSED)
+  abortTransactionUnless(connection.state !== CLOSED)
   connection.state = CLOSED
   provableStore.set(connectionPath(identifier), connection)
 }
@@ -309,13 +314,13 @@ function connCloseConfirm(
   identifier: Identifier,
   proofInit: CommitmentProof,
   proofHeight: uint64) {
-  assert(queryConnectionChannels(identifier).size() === 0)
+  abortTransactionUnless(queryConnectionChannels(identifier).size() === 0)
   connection = provableStore.get(connectionPath(identifier))
-  assert(connection.state !== CLOSED)
+  abortTransactionUnless(connection.state !== CLOSED)
   client = queryClient(connection.clientIdentifier)
   expected = ConnectionEnd{CLOSED, identifier, connection.counterpartyClientIdentifier,
                            connection.clientIdentifier, connection.version}
-  assert(client.verifyMembership(proofHeight, proofInit, connectionPath(counterpartyConnectionIdentifier), expected))
+  abortTransactionUnless(client.verifyMembership(proofHeight, proofInit, connectionPath(counterpartyConnectionIdentifier), expected))
   connection.state = CLOSED
   provableStore.set(connectionPath(identifier), connection)
 }

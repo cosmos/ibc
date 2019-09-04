@@ -101,11 +101,11 @@ function onChanOpenInit(
   counterpartyChannelIdentifier: Identifier,
   version: string) {
   // only unordered channels allowed
-  assert(order === UNORDERED)
+  abortTransactionUnless(order === UNORDERED)
   // only allow channels to "bank" port on counterparty chain
-  assert(counterpartyPortIdentifier === "bank")
+  abortTransactionUnless(counterpartyPortIdentifier === "bank")
   // version not used at present
-  assert(version === "")
+  abortTransactionUnless(version === "")
   // allocate an escrow address
   channelEscrowAddresses[channelIdentifier] = newAddress()
 }
@@ -122,12 +122,12 @@ function onChanOpenTry(
   version: string,
   counterpartyVersion: string) {
   // only unordered channels allowed
-  assert(order === UNORDERED)
+  abortTransactionUnless(order === UNORDERED)
   // version not used at present
-  assert(version === "")
-  assert(counterpartyVersion === "")
+  abortTransactionUnless(version === "")
+  abortTransactionUnless(counterpartyVersion === "")
   // only allow channels to "bank" port on counterparty chain
-  assert(counterpartyPortIdentifier === "bank")
+  abortTransactionUnless(counterpartyPortIdentifier === "bank")
   // allocate an escrow address
   channelEscrowAddresses[channelIdentifier] = newAddress()
 }
@@ -139,7 +139,7 @@ function onChanOpenAck(
   channelIdentifier: Identifier,
   version: string) {
   // version not used at present
-  assert(version === "")
+  abortTransactionUnless(version === "")
   // port has already been validated
 }
 ```
@@ -186,14 +186,14 @@ function onSendPacket(packet: Packet) {
     escrowAccount = channelEscrowAddresses[packet.sourceChannel]
     // construct receiving denomination, check correctness
     prefix = "{packet/destPort}/{packet.destChannel}"
-    assert(data.denomination.slice(0, len(prefix)) === prefix)
+    abortTransactionUnless(data.denomination.slice(0, len(prefix)) === prefix)
     // escrow source tokens (assumed to fail if balance insufficient)
     bank.TransferCoins(data.sender, escrowAccount, data.denomination.slice(len(prefix)), data.amount)
   } else {
     // receiver is source chain, burn vouchers
     // construct receiving denomination, check correctness
     prefix = "{packet/sourcePort}/{packet.sourceChannel}"
-    assert(data.denomination.slice(0, len(prefix)) === prefix)
+    abortTransactionUnless(data.denomination.slice(0, len(prefix)) === prefix)
     // burn vouchers (assumed to fail if balance insufficient)
     bank.BurnCoins(data.sender, data.denomination, data.amount)
   }
@@ -207,7 +207,7 @@ function onRecvPacket(packet: Packet): bytes {
     // sender was source chain: mint vouchers
     // construct receiving denomination, check correctness
     prefix = "{packet/destPort}/{packet.destChannel}"
-    assert(data.denomination.slice(0, len(prefix)) === prefix)
+    abortTransactionUnless(data.denomination.slice(0, len(prefix)) === prefix)
     // mint vouchers to receiver (assumed to fail if balance insufficient)
     bank.MintCoins(data.receiver, data.denomination, data.amount)
   } else {
@@ -216,7 +216,7 @@ function onRecvPacket(packet: Packet): bytes {
     escrowAccount = channelEscrowAddresses[packet.destChannel]
     // construct receiving denomination, check correctness
     prefix = "{packet/sourcePort}/{packet.sourceChannel}"
-    assert(data.denomination.slice(0, len(prefix)) === prefix)
+    abortTransactionUnless(data.denomination.slice(0, len(prefix)) === prefix)
     // unescrow tokens to receiver (assumed to fail if balance insufficient)
     bank.TransferCoins(escrowAccount, data.receiver, data.denomination.slice(len(prefix)), data.amount)
   }
@@ -241,14 +241,14 @@ function onTimeoutPacket(packet: Packet) {
     escrowAccount = channelEscrowAddresses[packet.destChannel]
     // construct receiving denomination, check correctness
     prefix = "{packet/sourcePort}/{packet.sourceChannel}"
-    assert(data.denomination.slice(0, len(prefix)) === prefix)
+    abortTransactionUnless(data.denomination.slice(0, len(prefix)) === prefix)
     // unescrow tokens back to sender
     bank.TransferCoins(escrowAccount, data.sender, data.denomination.slice(len(prefix)), data.amount)
   } else {
     // receiver was source chain, mint vouchers
     // construct receiving denomination, check correctness
     prefix = "{packet/sourcePort}/{packet.sourceChannel}"
-    assert(data.denomination.slice(0, len(prefix)) === prefix)
+    abortTransactionUnless(data.denomination.slice(0, len(prefix)) === prefix)
     // mint vouchers back to sender
     bank.MintCoins(data.sender, data.denomination, data.amount)
   }

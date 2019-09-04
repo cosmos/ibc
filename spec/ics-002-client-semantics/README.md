@@ -24,7 +24,8 @@ such as a user inspecting the state of the chain and deciding whether or not to 
 
 ### Motivation
 
-In the IBC protocol, a machine needs to be able to verify updates to the state of another machine
+In the IBC protocol, an actor, which may be an end user, an off-chain process, or a machine,
+needs to be able to verify updates to the state of another machine
 which the other machine's consensus algorithm has agreed upon, and reject any possible updates
 which the other machine's consensus algorithm has not agreed upon. A light client is the algorithm
 with which a machine can do so. This standard formalises the light client model and requirements,
@@ -36,6 +37,9 @@ the internal operation of machines and their consensus algorithms. A machine may
 single process signing operations with a private key, a quorum of processes signing in unison,
 many processes operating a Byzantine fault-tolerant consensus algorithm, or other configurations yet to be invented
 — from the perspective of IBC, a machine is defined entirely by its light client validation & equivocation detection logic.
+Clients will generally not include validation of the state transition logic in general
+(as that would be equivalent to simply executing the other state machine), but may
+elect to validate parts of state transitions in particular cases.
 
 Clients could also act as thresholding views of other clients. In the case where
 modules utilising the IBC protocol to interact with probabilistic-finality consensus algorithms
@@ -43,18 +47,18 @@ which might require different finality thresholds for different applications, on
 client could be created to track headers and many read-only clients with different finality
 thresholds (confirmation depths after which state roots are considered final) could use that same state.
 
-Another problem to consider is that of third-party introduction. Alice, a module on a machine,
+The client protocol should also support third-party introduction. Alice, a module on a machine,
 wants to introduce Bob, a second module on a second machine who Alice knows (and who knows Alice),
 to Carol, a third module on a third machine, who Alice knows but Bob does not. Alice must utilise
 an existing channel to Bob to communicate the canonically-serialisable validity predicate for
-Carol, with which Bob can then open a connection & channel so that Bob and Carol can talk directly.
+Carol, with which Bob can then open a connection and channel so that Bob and Carol can talk directly.
 If necessary, Alice may also communicate to Carol the validity predicate for Bob, prior to Bob's
 connection attempt, so that Carol knows to accept the incoming request.
 
 Client interfaces should also be constructed so that custom validation logic can be provided safely
 to define a custom client at runtime, as long as the underlying state machine can provide an
-appropriate gas metering mechanism to charge for compute & storage. On a host state machine
-which supports WASM execution, for example, the validity predicate & equivocation predicate
+appropriate gas metering mechanism to charge for compute and storage. On a host state machine
+which supports WASM execution, for example, the validity predicate and equivocation predicate
 could be provided as executable WASM functions when the client instance is created.
 
 ### Definitions
@@ -67,7 +71,9 @@ could be provided as executable WASM functions when the client instance is creat
 * `ConsensusState` is an opaque type representing the state of a validity predicate.
   `ConsensusState` must be able to verify state updates agreed upon by the associated consensus algorithm.
   It must also be serialisable in a canonical fashion so that third parties, such as counterparty machines,
-  can check that a particular machine has stored a particular `ConsensusState`.
+  can check that a particular machine has stored a particular `ConsensusState`. It must finally be
+  introspectable by the state machine which it is for, such that the state machine can look up its
+  own `ConsensusState` at a past height.
 
 * `ClientState` is an opaque type representing the state of a client.
   A `ClientState` must expose query functions to verify membership or non-membership of
@@ -81,7 +87,7 @@ sub-components of the state with the `CommitmentRoot`s stored in the `ConsensusS
 guaranteed to have been committed by the other chain's consensus algorithm.
 
 `ValidityPredicate`s are expected to reflect the behaviour of the full nodes which are running the  
-corresponding consensus algorithm. Given a `ConsensusState` and `[Message]`, if a full node
+corresponding consensus algorithm. Given a `ConsensusState` and a list of messages, if a full node
 accepts the new `Header` generated with `Commit`, then the light client MUST also accept it,
 and if a full node rejects it, then the light client MUST also reject it.
 
@@ -100,7 +106,8 @@ types, and each client type can be instantiated with different initial consensus
 different consensus instances. In order to establish a connection between two machines (see [ICS 3](../ics-003-connection-semantics)),
 the machines must each support the client type corresponding to the other machine's consensus algorithm.
 
-By convention, client types shall be globally namespaced between machines implementing the IBC protocol.
+Specific client types shall be defined in later versions of this specification and a canonical list shall exist in this repository.
+Machines implementing the IBC protocol are expected to respect these client types, although they may elect to support only a subset.
 
 ### Data Structures
 
@@ -267,8 +274,8 @@ function createClient(
   id: Identifier,
   clientType: ClientType,
   consensusState: ConsensusState) {
-  assert(privateStore.get(clientStatePath(id)) === null)
-  assert(provableStore.get(clientTypePath(id)) === null)
+  abortTransactionUnless(privateStore.get(clientStatePath(id)) === null)
+  abortTransactionUnless(provableStore.get(clientTypePath(id)) === null)
   clientState = clientType.initialize(consensusState)
   provableStore.set(clientTypePath(id), clientType)
   privateStore.set(clientStatePath(id), clientState)
@@ -305,9 +312,9 @@ function updateClient(
   id: Identifier,
   header: Header) {
   clientType = provableStore.get(clientTypePath(id))
-  assert(clientType !== null)
+  abortTransactionUnless(clientType !== null)
   clientState = privateStore.get(clientStatePath(id))
-  assert(clientState !== null)
+  abortTransactionUnless(clientState !== null)
   clientType.validityPredicate(clientState, header)
 }
 ```
@@ -322,9 +329,9 @@ function submitMisbehaviourToClient(
   id: Identifier,
   evidence: bytes) {
   clientType = provableStore.get(clientTypePath(id))
-  assert(clientType !== null)
+  abortTransactionUnless(clientType !== null)
   clientState = privateStore.get(clientStatePath(id))
-  assert(clientState !== null)
+  abortTransactionUnless(clientState !== null)
   clientType.misbehaviourPredicate(clientState, evidence)
 }
 ```
@@ -385,8 +392,8 @@ function initialize(consensusState: ConsensusState): ClientState {
 function validityPredicate(
   clientState: ClientState,
   header: Header) {
-  assert(consensusState.sequence + 1 === header.sequence)
-  assert(consensusState.publicKey.verify(header.signature))
+  abortTransactionUnless(consensusState.sequence + 1 === header.sequence)
+  abortTransactionUnless(consensusState.publicKey.verify(header.signature))
   if (header.newPublicKey !== null) {
     consensusState.publicKey = header.newPublicKey
     clientState.pastPublicKeys.add(header.newPublicKey)
@@ -402,7 +409,7 @@ function verifyMembership(
   proof: CommitmentProof
   path: Path,
   value: Value) {
-  assert(!clientState.frozen)
+  abortTransactionUnless(!clientState.frozen)
   return clientState.verifiedRoots[sequence].verifyMembership(path, value, proof)
 }
 
@@ -412,7 +419,7 @@ function verifyNonMembership(
   sequence: uint64,
   proof: CommitmentProof,
   path: Path) {
-  assert(!clientState.frozen)
+  abortTransactionUnless(!clientState.frozen)
   return clientState.verifiedRoots[sequence].verifyNonMembership(path, proof)
 }
 
@@ -423,12 +430,12 @@ function misbehaviourPredicate(
   evidence: Evidence) {
   h1 = evidence.h1
   h2 = evidence.h2
-  assert(h1.publicKey === h2.publicKey)
-  assert(clientState.pastPublicKeys.contains(h1.publicKey))
-  assert(h1.sequence === h2.sequence)
-  assert(h1.commitmentRoot !== h2.commitmentRoot)
-  assert(h1.publicKey.verify(h1.signature))
-  assert(h2.publicKey.verify(h2.signature))
+  abortTransactionUnless(h1.publicKey === h2.publicKey)
+  abortTransactionUnless(clientState.pastPublicKeys.contains(h1.publicKey))
+  abortTransactionUnless(h1.sequence === h2.sequence)
+  abortTransactionUnless(h1.commitmentRoot !== h2.commitmentRoot)
+  abortTransactionUnless(h1.publicKey.verify(h1.signature))
+  abortTransactionUnless(h2.publicKey.verify(h2.signature))
   clientState.frozen = true
 }
 ```

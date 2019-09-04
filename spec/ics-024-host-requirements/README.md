@@ -131,11 +131,7 @@ Host state machines MUST provide the ability to introspect their current height,
 type getCurrentHeight = () => uint64
 ```
 
-Host state machines MUST define a unique `ConsensusState` type fulfilling the requirements of [ICS 2](../ics-002-client-semantics):
-
-```typescript
-type ConsensusState object
-```
+Host state machines MUST define a unique `ConsensusState` type fulfilling the requirements of [ICS 2](../ics-002-client-semantics), with a canonical binary serialisation.
 
 Host state machines MUST provide the ability to introspect their own consensus state, with `getConsensusState`:
 
@@ -145,9 +141,15 @@ type getConsensusState = (height: uint64) => ConsensusState
 
 `getConsensusState` MUST return the consensus state for at least some number `n` of contiguous recent heights, where `n` is constant for the host state machine. Heights older than `n` MAY be safely pruned (causing future calls to fail for those heights).
 
+Host state machines MUST provide the ability to introspect this stored recent consensus state count `n`, with `getStoredRecentConsensusStateCount`:
+
+```typescript
+type getStoredRecentConsensusStateCount = () => uint64
+```
+
 ### Port system
 
-Host state machines MUST implement a port system, where the IBC handler can expose functions to different parts of the state machine (perhaps modules) that can bind to uniquely named ports.
+Host state machines MUST implement a port system, where the IBC handler can allow different modules in the host state machine to bind to uniquely named ports. Ports are identified by an `Identifier`.
 
 Host state machines MUST permission interaction with the IBC handler such that:
 
@@ -155,37 +157,45 @@ Host state machines MUST permission interaction with the IBC handler such that:
 - A single module can bind to multiple ports
 - Ports are allocated first-come first-serve and "reserved" ports for known modules can be bound when the state machine is first started
 
-This permissioning can be implemented either with unique references (object capabilities) for each port (a la the Cosmos SDK) or with source authentication (a la Ethereum), in either case enforced by the host state machine. See [ICS 5](../ics-005-port-allocation) for details.
+This permissioning can be implemented with unique references (object capabilities) for each port (a la the Cosmos SDK), with source authentication (a la Ethereum), or with some other method of access control, in any case enforced by the host state machine. See [ICS 5](../ics-005-port-allocation) for details.
 
-Modules which wish to make use of particular IBC features MAY implement certain handler functions, e.g. to add additional logic to a channel handshake with an associated module on another state machine.
+Modules that wish to make use of particular IBC features MAY implement certain handler functions, e.g. to add additional logic to a channel handshake with an associated module on another state machine.
 
 ### Datagram submission
 
-Host state machines MAY define a `submitDatagram` function to submit [datagrams](../../docs/ibc/2_IBC_TERMINOLOGY.md), which will be included in transactions, directly to the relayer module:
+Host state machines which implement the relayer module MAY define a `submitDatagram` function to submit [datagrams](../../docs/ibc/2_IBC_TERMINOLOGY.md), which will be included in transactions, directly to the relayer module (defined in [ICS 26](../ics-026-relayer-module):
 
 ```typescript
 type submitDatagram = (datagram: Datagram) => void
 ```
 
-`submitDatagram` allows relayers to relay IBC datagrams directly to the host state machine. Host state machines MAY require that the relayer submitting the datagram has an account to pay transaction fees, signs over the datagram in a larger transaction structure, etc — `submitDatagram` MUST define & construct any such packaging required.
+`submitDatagram` allows relayer processes to submit IBC datagrams directly to the relayer module on the host state machine. Host state machines MAY require that the relayer process submitting the datagram has an account to pay transaction fees, signs over the datagram in a larger transaction structure, etc — `submitDatagram` MUST define & construct any such packaging required.
 
 ### Exception system
 
-Host state machines MUST support an exception system, whereby a transaction can abort execution and revert any previously made state changes (including state changes in other modules happening within the same transaction). This exception system MUST be exposed through an `assert` function:
+Host state machines MUST support an exception system, whereby a transaction can abort execution and revert any previously made state changes (including state changes in other modules happening within the same transaction), excluding gas consumed & fee payments as appropriate, and a system invariant violation can halt the state machine.
+
+This exception system MUST be exposed through two functions: `abortTransactionUnless` and `abortSystemUnless`, where the former reverts the transaction and the latter halts the state machine.
 
 ```typescript
-type assert = (bool) => void
+type abortTransactionUnless = (bool) => void
 ```
 
-If the boolean passed to `assert` is `true`, the host state machine need not do anything. If the boolean passed to `assert` is `false`, the host state machine MUST abort the transaction and revert any previously made state changes, such as writes to the key-value store.
+If the boolean passed to `abortTransactionUnless` is `true`, the host state machine need not do anything. If the boolean passed to `abortTransactionUnless` is `false`, the host state machine MUST abort the transaction and revert any previously made state changes, excluding gas consumed & fee payments as approriate.
+
+```typescript
+type abortSystemUnless = (bool) => void
+```
+
+If the boolean passed to `abortSystemUnless` is `true`, the host state machine need not do anything. If the boolean passed to `abortSystemUnless` is `false`, the host state machine MUST halt.
 
 ### Data availability
 
 For deliver-or-timeout safety, host state machines MUST have eventual data availability, such that any key-value pairs in state can be eventually retrieved by relayers. For exactly-once safety, data availability is not required.
 
-For liveness of packet relay, host state machines MUST have transactional liveness (and thus necessarily consensus liveness), such that incoming transactions are confirmed within a block height bound (in particular, less than the timeouts assign to the packets).
+For liveness of packet relay, host state machines MUST have bounded transactional liveness (and thus necessarily consensus liveness), such that incoming transactions are confirmed within a block height bound (in particular, less than the timeouts assign to the packets).
 
-Data computable from a subset of state and knowledge of the state machine (e.g. IBC packet data, which is not directly stored) are also assumed to be available to and efficiently computable by relayers.
+IBC packet data, and other data which is not directly stored in the state vector but is relied upon by relayers, MUST be available to & efficiently computable by relayer processes.
 
 Light clients of particular consensus algorithms may have different and/or more strict data availability requirements.
 
