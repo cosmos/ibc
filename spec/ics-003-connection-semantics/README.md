@@ -273,60 +273,6 @@ function connOpenConfirm(
 }
 ```
 
-#### Header Tracking
-
-Headers are tracked at the client level. See [ICS 2](../ics-002-client-semantics).
-
-#### Closing Handshake
-
-The closing handshake protocol serves to cleanly close a connection on two chains.
-
-This sub-protocol will likely need to be permissioned to an entity who "owns" the connection on the initiating chain, such as a particular end user, smart contract, or governance mechanism.
-
-The closing handshake sub-protocol defines two datagrams: *ConnCloseInit*, and *ConnCloseConfirm*.
-
-A correct protocol execution flows as follows (note that all calls are made through modules per ICS 25):
-
-| Initiator | Datagram            | Chain acted upon | Prior state (A, B) | Post state (A, B) |
-| --------- | ------------------- | ---------------- | ------------------ | ----------------- |
-| Actor     | `ConnCloseInit`     | A                | (ANY, ANY)         | (CLOSED, ANY)     |
-| Relayer   | `ConnCloseConfirm`  | B                | (CLOSED, ANY)      | (CLOSED, CLOSED)  |
-
-*ConnCloseInit* initialises a close attempt on chain A. It will succeed only if the associated connection does not have any associated open channels.
-
-Once closed, connections cannot be reopened.
-
-```typescript
-function connCloseInit(identifier: Identifier) {
-    abortTransactionUnless(queryConnectionChannels(identifier).size() === 0)
-    connection = provableStore.get(connectionPath(identifier))
-    abortTransactionUnless(connection.state !== CLOSED)
-    connection.state = CLOSED
-    provableStore.set(connectionPath(identifier), connection)
-}
-```
-
-*ConnCloseConfirm* relays the intent to close a connection from chain A to chain B. It will succeed only if the associated connection does not have any channels.
-
-Once closed, connections cannot be reopened.
-
-```typescript
-function connCloseConfirm(
-  identifier: Identifier,
-  proofInit: CommitmentProof,
-  proofHeight: uint64) {
-    abortTransactionUnless(queryConnectionChannels(identifier).size() === 0)
-    connection = provableStore.get(connectionPath(identifier))
-    abortTransactionUnless(connection.state !== CLOSED)
-    client = queryClient(connection.clientIdentifier)
-    expected = ConnectionEnd{CLOSED, identifier, connection.counterpartyClientIdentifier,
-                             connection.clientIdentifier, connection.version}
-    abortTransactionUnless(client.verifyMembership(proofHeight, proofInit, connectionPath(counterpartyConnectionIdentifier), expected))
-    connection.state = CLOSED
-    provableStore.set(connectionPath(identifier), connection)
-}
-```
-
 #### Querying
 
 Connections can be queried by identifier with `queryConnection`.

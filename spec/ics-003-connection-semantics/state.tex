@@ -19,23 +19,17 @@
   node [state, below of=empty] (init) {\CS{Init}{Uninitialized}}
   node [state, right of=init] (tryopen) {\CS{Init}{TryOpen}}
   node [state, right of=tryopen] (tryopen1) {\CS{Open}{TryOpen}}
-  node [state, right of=tryopen1] (open) {\CS{Open}{Open}}
-  node [state, below of=open] (tryclose) {\CS{Closed}{Open}}
-  node [state, left of=tryclose] (tryclose1) {\CS{Close}{Closed}};
+  node [state, right of=tryopen1] (open) {\CS{Open}{Open}};
 
   \draw node [state, name = key, right = 18cm, above = 2mm] {\begin{tabular}{l}
   \it{Key} \\
   \textcolor{blue}{Opening Handshake} \\
-  \textcolor{green}{Closing Handshake} \\
   \end{tabular}};
 
 	\draw[->, blue, bend right](empty) edge node[yshift=4mm, xshift=1mm] {\textsc{ConnInit}} (init);
  	\draw[->, blue](init) edge node {\textsc{ConnOpenTry}} (tryopen);
 	\draw[->, blue](tryopen) edge node {\textsc{ConnOpenAck}} (tryopen1);
 	\draw[->, blue](tryopen1) edge node {\textsc{ConnOpenConfirm}} (open);
-
-  \draw[->, green, bend right](open) edge node[yshift=4mm, xshift=1mm] {\textsc{ConnCloseInit}} (tryclose);
-  \draw[->, green](tryclose) edge node {\textsc{ConnCloseConfirm}} (tryclose1);
 
 	\draw[color=black,thick](-0.5,-14) rectangle (22,2.8);
 

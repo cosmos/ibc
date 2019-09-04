@@ -163,7 +163,6 @@ timeoutPacketOrdered
 tradeoff
 connOpenAck
 WASM
-queryConnectionChannels
 NFT
 onChanCloseInit
 newpubkey
