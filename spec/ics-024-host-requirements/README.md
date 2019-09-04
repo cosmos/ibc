@@ -86,18 +86,18 @@ The `privateStore`:
 
 At present, IBC/TAO utilises the following path prefixes for the `provableStore` and `privateStore`. Future paths may be used in future versions of the protocol, so the entire key-space in both stores MUST be reserved for the IBC handler.
 
-| Store          | Path format                                          | Value type        | Defined in |
-| -------------- | ---------------------------------------------------- | ----------------- | ---------------------- |
-| privateStore   | "clients/{identifier}"                               | ClientState       | [ICS 2](../ics-002-client-semantics) |
-| provableStore  | "clients/{identifier}/consensusState"                | ConsensusState    | [ICS 2](../ics-002-client-semantics) |
-| provableStore  | "clients/{identifier}/type"                          | ClientType        | [ICS 2](../ics-002-client-semantics) |
-| provableStore  | "connections/{identifier}"                           | ConnectionEnd     | [ICS 3](../ics-003-connection-semantics) |
-| provableStore  | "channels/{identifier}"                              | ChannelEnd        | [ICS 4](../ics-004-channel-and-packet-semantics) |
-| provableStore  | "channels/{identifier}/nextSequenceRecv"             | uint64            | [ICS 4](../ics-004-channel-and-packet-semantics) |
-| provableStore  | "channels/{identifier}/packets/{sequence}"           | bytes             | [ICS 4](../ics-004-channel-and-packet-semantics) |
-| provableStore  | "channels/{identifier}/acknowledgements/{sequence}"  | bytes             | [ICS 4](../ics-004-channel-and-packet-semantics) |
-| provableStore  | "ports/{identifier}"                                 | Path              | [ICS 5](../ics-005-port-allocation) |
-| privateStore   | "callbacks/{identifier}"                             | ModuleCallbacks   | [ICS 26](../ics-026-relayer-module) |
+| Store          | Path format                                                              | Value type        | Defined in |
+| -------------- | ------------------------------------------------------------------------ | ----------------- | ---------------------- |
+| privateStore   | "clients/{identifier}"                                                   | ClientState       | [ICS 2](../ics-002-client-semantics) |
+| provableStore  | "clients/{identifier}/consensusState"                                    | ConsensusState    | [ICS 2](../ics-002-client-semantics) |
+| provableStore  | "clients/{identifier}/type"                                              | ClientType        | [ICS 2](../ics-002-client-semantics) |
+| provableStore  | "connections/{identifier}"                                               | ConnectionEnd     | [ICS 3](../ics-003-connection-semantics) |
+| provableStore  | "ports/{identifier}/channels/{identifier}"                               | ChannelEnd        | [ICS 4](../ics-004-channel-and-packet-semantics) |
+| provableStore  | "ports/{identifier}/channels/{identifier}/nextSequenceRecv"              | uint64            | [ICS 4](../ics-004-channel-and-packet-semantics) |
+| provableStore  | "ports/{identifier}/channels/{identifier}/packets/{sequence}"            | bytes             | [ICS 4](../ics-004-channel-and-packet-semantics) |
+| provableStore  | "ports/{identifier}channels/{identifier}/acknowledgements/{sequence}"    | bytes             | [ICS 4](../ics-004-channel-and-packet-semantics) |
+| provableStore  | "ports/{identifier}"                                                     | Path              | [ICS 5](../ics-005-port-allocation) |
+| privateStore   | "callbacks/{identifier}"                                                 | ModuleCallbacks   | [ICS 26](../ics-026-relayer-module) |
 
 ### Module layout
 
