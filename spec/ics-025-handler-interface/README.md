@@ -41,9 +41,9 @@ The handler interface exposes `createClient`, `updateClient`, `queryClientConsen
 
 By default, connections are unowned. Connections MAY be closed by any module, but only when all channels associated with the connection have been closed by the modules which opened them and a timeout has passed since the connection was opened.
 
-The handler interface exposes `connOpenInit`, `connOpenTry`, `connOpenAck`, `connOpenConfirm`, `connCloseInit`, `connCloseConfirm`, and `queryConnection`, as defined in [ICS 3](../ics-003-connection-semantics).
+The handler interface exposes `connOpenInit`, `connOpenTry`, `connOpenAck`, `connOpenConfirm`, and `queryConnection`, as defined in [ICS 3](../ics-003-connection-semantics).
 
-The default IBC relayer module SHALL allow external calls to `connOpenTry`, `connOpenAck`, `connOpenConfirm`, and `connCloseConfirm`.
+The default IBC relayer module SHALL allow external calls to `connOpenTry`, `connOpenAck`, and `connOpenConfirm`.
 
 ### Channel lifecycle management
 

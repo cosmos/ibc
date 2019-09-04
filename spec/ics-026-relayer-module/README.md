@@ -361,41 +361,6 @@ function handleConnOpenConfirm(datagram: ConnOpenConfirm) {
 }
 ```
 
-The `ConnCloseInit` datagram closes an unused connection.
-
-```typescript
-interface ConnCloseInit {
-  identifier: Identifier
-}
-```
-
-```typescript
-function handleConnCloseInit(datagram: ConnCloseInit) {
-    handler.connCloseInit(datagram.identifier)
-}
-```
-
-The `ConnCloseConfirm` datagram acknowledges that a connection has been closed on the counterparty chain and closes the end on this chain.
-
-```typescript
-interface ConnCloseConfirm {
-  identifier: Identifier
-  proofInit: CommitmentProof
-  proofHeight: uint64
-}
-```
-
-```typescript
-function handleConnCloseConfirm(datagram: ConnCloseConfirm) {
-    handler.connCloseConfirm(
-      datagram.identifier,
-      datagram.proofInit,
-      datagram.proofHeight
-    )
-}
-```
-
-
 #### Channel lifecycle management
 
 ```typescript
