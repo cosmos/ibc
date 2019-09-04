@@ -50,7 +50,7 @@ function onChanOpenInit(
   counterpartyPortIdentifier: Identifier,
   counterpartyChannelIdentifier: Identifier,
   version: string) {
-  // defined by the module
+    // defined by the module
 }
 
 function onChanOpenTry(
@@ -62,52 +62,52 @@ function onChanOpenTry(
   counterpartyChannelIdentifier: Identifier,
   version: string,
   counterpartyVersion: string) {
-  // defined by the module
+    // defined by the module
 }
 
 function onChanOpenAck(
   portIdentifier: Identifier,
   channelIdentifier: Identifier,
   version: string) {
-  // defined by the module
+    // defined by the module
 }
 
 function onChanOpenConfirm(
   portIdentifier: Identifier,
   channelIdentifier: Identifier) {
-  // defined by the module
+    // defined by the module
 }
 
 function onChanCloseInit(
   portIdentifier: Identifier,
   channelIdentifier: Identifier) {
-  // defined by the module
+    // defined by the module
 }
 
 function onChanCloseConfirm(
   portIdentifier: Identifier,
   channelIdentifier: Identifier): void {
-  // defined by the module
+    // defined by the module
 }
 
 function onSendPacket(packet: Packet) {
-  // defined by the module
+    // defined by the module
 }
 
 function onRecvPacket(packet: Packet): bytes {
-  // defined by the module, returns acknowledgement
+    // defined by the module, returns acknowledgement
 }
 
 function onTimeoutPacket(packet: Packet) {
-  // defined by the module
+    // defined by the module
 }
 
 function onAcknowledgePacket(packet: Packet) {
-  // defined by the module
+    // defined by the module
 }
 
 function onTimeoutPacketClose(packet: Packet) {
-  // defined by the module
+    // defined by the module
 }
 ```
 
@@ -134,7 +134,7 @@ Callbacks are provided when the module binds to a port.
 
 ```typescript
 function callbackPath(portIdentifier: Identifier): Path {
-  return "callbacks/{portIdentifier}"
+    return "callbacks/{portIdentifier}"
 }
 ```
 
@@ -142,7 +142,7 @@ The calling module identifier is also stored for future authentication should th
 
 ```typescript
 function authenticationPath(portIdentifier: Identifier): Path {
-  return "authentication/{portIdentifier}"
+    return "authentication/{portIdentifier}"
 }
 ```
 
@@ -164,11 +164,11 @@ The function `bindPort` can be called by a module in order to bind to a port, th
 function bindPort(
   id: Identifier,
   callbacks: Callbacks) {
-  abortTransactionUnless(privateStore.get(callbackPath(id)) === null)
-  handler.bindPort(id)
-  capability = generate()
-  privateStore.set(authenticationPath(id), capability)
-  privateStore.set(callbackPath(id), callbacks)
+    abortTransactionUnless(privateStore.get(callbackPath(id)) === null)
+    handler.bindPort(id)
+    capability = generate()
+    privateStore.set(authenticationPath(id), capability)
+    privateStore.set(callbackPath(id), callbacks)
 }
 ```
 
@@ -178,8 +178,8 @@ The function `updatePort` can be called by a module in order to alter the callba
 function updatePort(
   id: Identifier,
   newCallbacks: Callbacks) {
-  abortTransactionUnless(authenticate(privateStore.get(authenticationPath(id))))
-  privateStore.set(callbackPath(id), newCallbacks)
+    abortTransactionUnless(authenticate(privateStore.get(authenticationPath(id))))
+    privateStore.set(callbackPath(id), newCallbacks)
 }
 ```
 
@@ -187,10 +187,10 @@ The function `releasePort` can be called by a module in order to release a port 
 
 ```typescript
 function releasePort(id: Identifier) {
-  abortTransactionUnless(authenticate(privateStore.get(authenticationPath(id))))
-  handler.releasePort(id)
-  privateStore.delete(callbackPath(id))
-  privateStore.delete(authenticationPath(id))
+    abortTransactionUnless(authenticate(privateStore.get(authenticationPath(id))))
+    handler.releasePort(id)
+    privateStore.delete(callbackPath(id))
+    privateStore.delete(authenticationPath(id))
 }
 ```
 
@@ -198,7 +198,7 @@ The function `lookupModule` can be used by the relayer module to lookup the call
 
 ```typescript
 function lookupModule(portId: Identifier) {
-  return privateStore.get(callbackPath(portId))
+    return privateStore.get(callbackPath(portId))
 }
 ```
 
@@ -225,7 +225,7 @@ interface ClientCreate {
 
 ```typescript
 function handleClientCreate(datagram: ClientCreate) {
-  handler.createClient(datagram.identifier, datagram.type datagram.consensusState)
+    handler.createClient(datagram.identifier, datagram.type datagram.consensusState)
 }
 ```
 
@@ -240,7 +240,7 @@ interface ClientUpdate {
 
 ```typescript
 function handleClientUpdate(datagram: ClientUpdate) {
-  handler.updateClient(datagram.identifier, datagram.header)
+    handler.updateClient(datagram.identifier, datagram.header)
 }
 ```
 
@@ -255,7 +255,7 @@ interface ClientMisbehaviour {
 
 ```typescript
 function handleClientMisbehaviour(datagram: ClientUpdate) {
-  handler.submitMisbehaviourToClient(datagram.identifier, datagram.evidence)
+    handler.submitMisbehaviourToClient(datagram.identifier, datagram.evidence)
 }
 ```
 
@@ -275,13 +275,13 @@ interface ConnOpenInit {
 
 ```typescript
 function handleConnOpenInit(datagram: ConnOpenInit) {
-  handler.connOpenInit(
-    datagram.identifier,
-    datagram.desiredCounterpartyIdentifier,
-    datagram.clientIdentifier,
-    datagram.counterpartyClientIdentifier,
-    datagram.version
-  )
+    handler.connOpenInit(
+      datagram.identifier,
+      datagram.desiredCounterpartyIdentifier,
+      datagram.clientIdentifier,
+      datagram.counterpartyClientIdentifier,
+      datagram.version
+    )
 }
 ```
 
@@ -303,17 +303,17 @@ interface ConnOpenTry {
 
 ```typescript
 function handleConnOpenTry(datagram: ConnOpenTry) {
-  handler.connOpenTry(
-    datagram.desiredIdentifier,
-    datagram.counterpartyConnectionIdentifier,
-    datagram.counterpartyClientIdentifier,
-    datagram.clientIdentifier,
-    datagram.version,
-    datagram.counterpartyVersion,
-    datagram.proofInit,
-    datagram.proofHeight,
-    datagram.consensusHeight
-  )
+    handler.connOpenTry(
+      datagram.desiredIdentifier,
+      datagram.counterpartyConnectionIdentifier,
+      datagram.counterpartyClientIdentifier,
+      datagram.clientIdentifier,
+      datagram.version,
+      datagram.counterpartyVersion,
+      datagram.proofInit,
+      datagram.proofHeight,
+      datagram.consensusHeight
+    )
 }
 ```
 
@@ -331,13 +331,13 @@ interface ConnOpenAck {
 
 ```typescript
 function handleConnOpenAck(datagram: ConnOpenAck) {
-  handler.connOpenAck(
-    datagram.identifier,
-    datagram.version,
-    datagram.proofTry,
-    datagram.proofHeight,
-    datagram.consensusHeight
-  )
+    handler.connOpenAck(
+      datagram.identifier,
+      datagram.version,
+      datagram.proofTry,
+      datagram.proofHeight,
+      datagram.consensusHeight
+    )
 }
 ```
 
@@ -353,11 +353,11 @@ interface ConnOpenConfirm {
 
 ```typescript
 function handleConnOpenConfirm(datagram: ConnOpenConfirm) {
-  handler.connOpenConfirm(
-    datagram.identifier,
-    datagram.proofAck,
-    datagram.proofHeight
-  )
+    handler.connOpenConfirm(
+      datagram.identifier,
+      datagram.proofAck,
+      datagram.proofHeight
+    )
 }
 ```
 
@@ -371,7 +371,7 @@ interface ConnCloseInit {
 
 ```typescript
 function handleConnCloseInit(datagram: ConnCloseInit) {
-  handler.connCloseInit(datagram.identifier)
+    handler.connCloseInit(datagram.identifier)
 }
 ```
 
@@ -387,11 +387,11 @@ interface ConnCloseConfirm {
 
 ```typescript
 function handleConnCloseConfirm(datagram: ConnCloseConfirm) {
-  handler.connCloseConfirm(
-    datagram.identifier,
-    datagram.proofInit,
-    datagram.proofHeight
-  )
+    handler.connCloseConfirm(
+      datagram.identifier,
+      datagram.proofInit,
+      datagram.proofHeight
+    )
 }
 ```
 
@@ -412,25 +412,25 @@ interface ChanOpenInit {
 
 ```typescript
 function handleChanOpenInit(datagram: ChanOpenInit) {
-  module = lookupModule(datagram.portIdentifier)
-  module.onChanOpenInit(
-    datagram.order,
-    datagram.connectionHops,
-    datagram.portIdentifier,
-    datagram.channelIdentifier,
-    datagram.counterpartyPortIdentifier,
-    datagram.counterpartyChannelIdentifier,
-    datagram.version
-  )
-  handler.chanOpenInit(
-    datagram.order,
-    datagram.connectionHops,
-    datagram.portIdentifier,
-    datagram.channelIdentifier,
-    datagram.counterpartyPortIdentifier,
-    datagram.counterpartyChannelIdentifier,
-    datagram.version
-  )
+    module = lookupModule(datagram.portIdentifier)
+    module.onChanOpenInit(
+      datagram.order,
+      datagram.connectionHops,
+      datagram.portIdentifier,
+      datagram.channelIdentifier,
+      datagram.counterpartyPortIdentifier,
+      datagram.counterpartyChannelIdentifier,
+      datagram.version
+    )
+    handler.chanOpenInit(
+      datagram.order,
+      datagram.connectionHops,
+      datagram.portIdentifier,
+      datagram.channelIdentifier,
+      datagram.counterpartyPortIdentifier,
+      datagram.counterpartyChannelIdentifier,
+      datagram.version
+    )
 }
 ```
 
@@ -451,29 +451,29 @@ interface ChanOpenTry {
 
 ```typescript
 function handleChanOpenTry(datagram: ChanOpenTry) {
-  module = lookupModule(datagram.portIdentifier)
-  module.onChanOpenTry(
-    datagram.order,
-    datagram.connectionHops,
-    datagram.portIdentifier,
-    datagram.channelIdentifier,
-    datagram.counterpartyPortIdentifier,
-    datagram.counterpartyChannelIdentifier,
-    datagram.version,
-    datagram.counterpartyVersion
-  )
-  handler.chanOpenTry(
-    datagram.order,
-    datagram.connectionHops,
-    datagram.portIdentifier,
-    datagram.channelIdentifier,
-    datagram.counterpartyPortIdentifier,
-    datagram.counterpartyChannelIdentifier,
-    datagram.version,
-    datagram.counterpartyVersion,
-    datagram.proofInit,
-    datagram.proofHeight
-  )
+    module = lookupModule(datagram.portIdentifier)
+    module.onChanOpenTry(
+      datagram.order,
+      datagram.connectionHops,
+      datagram.portIdentifier,
+      datagram.channelIdentifier,
+      datagram.counterpartyPortIdentifier,
+      datagram.counterpartyChannelIdentifier,
+      datagram.version,
+      datagram.counterpartyVersion
+    )
+    handler.chanOpenTry(
+      datagram.order,
+      datagram.connectionHops,
+      datagram.portIdentifier,
+      datagram.channelIdentifier,
+      datagram.counterpartyPortIdentifier,
+      datagram.counterpartyChannelIdentifier,
+      datagram.version,
+      datagram.counterpartyVersion,
+      datagram.proofInit,
+      datagram.proofHeight
+    )
 }
 ```
 
@@ -489,18 +489,18 @@ interface ChanOpenAck {
 
 ```typescript
 function handleChanOpenAck(datagram: ChanOpenAck) {
-  module.onChanOpenAck(
-    datagram.portIdentifier,
-    datagram.channelIdentifier,
-    datagram.version
-  )
-  handler.chanOpenAck(
-    datagram.portIdentifier,
-    datagram.channelIdentifier,
-    datagram.version,
-    datagram.proofTry,
-    datagram.proofHeight
-  )
+    module.onChanOpenAck(
+      datagram.portIdentifier,
+      datagram.channelIdentifier,
+      datagram.version
+    )
+    handler.chanOpenAck(
+      datagram.portIdentifier,
+      datagram.channelIdentifier,
+      datagram.version,
+      datagram.proofTry,
+      datagram.proofHeight
+    )
 }
 ```
 
@@ -515,17 +515,17 @@ interface ChanOpenConfirm {
 
 ```typescript
 function handleChanOpenConfirm(datagram: ChanOpenConfirm) {
-  module = lookupModule(portIdentifier)
-  module.onChanOpenConfirm(
-    datagram.portIdentifier,
-    datagram.channelIdentifier
-  )
-  handler.chanOpenConfirm(
-    datagram.portIdentifier,
-    datagram.channelIdentifier,
-    datagram.proofAck,
-    datagram.proofHeight
-  )
+    module = lookupModule(portIdentifier)
+    module.onChanOpenConfirm(
+      datagram.portIdentifier,
+      datagram.channelIdentifier
+    )
+    handler.chanOpenConfirm(
+      datagram.portIdentifier,
+      datagram.channelIdentifier,
+      datagram.proofAck,
+      datagram.proofHeight
+    )
 }
 ```
 
@@ -538,15 +538,15 @@ interface ChanCloseInit {
 
 ```typescript
 function handleChanCloseInit(datagram: ChanCloseInit) {
-  module = lookupModule(portIdentifier)
-  module.onChanCloseInit(
-    datagram.portIdentifier,
-    datagram.channelIdentifier
-  )
-  handler.chanCloseInit(
-    datagram.portIdentifier,
-    datagram.channelIdentifier
-  )
+    module = lookupModule(portIdentifier)
+    module.onChanCloseInit(
+      datagram.portIdentifier,
+      datagram.channelIdentifier
+    )
+    handler.chanCloseInit(
+      datagram.portIdentifier,
+      datagram.channelIdentifier
+    )
 }
 ```
 
@@ -561,17 +561,17 @@ interface ChanCloseConfirm {
 
 ```typescript
 function handleChanCloseConfirm(datagram: ChanCloseConfirm) {
-  module = lookupModule(datagram.portIdentifier)
-  module.onChanCloseConfirm(
-    datagram.portIdentifier,
-    datagram.channelIdentifier
-  )
-  handler.chanCloseConfirm(
-    datagram.portIdentifier,
-    datagram.channelIdentifier,
-    datagram.proofInit,
-    datagram.proofHeight
-  )
+    module = lookupModule(datagram.portIdentifier)
+    module.onChanCloseConfirm(
+      datagram.portIdentifier,
+      datagram.channelIdentifier
+    )
+    handler.chanCloseConfirm(
+      datagram.portIdentifier,
+      datagram.channelIdentifier,
+      datagram.proofInit,
+      datagram.proofHeight
+    )
 }
 ```
 
@@ -601,14 +601,14 @@ interface PacketRecv {
 
 ```typescript
 function handlePacketRecv(datagram: PacketRecv) {
-  module = lookupModule(datagram.packet.sourcePort)
-  acknowledgement = module.onRecvPacket(datagram.packet)
-  handler.recvPacket(
-    datagram.packet,
-    datagram.proof,
-    datagram.proofHeight,
-    acknowledgement
-  )
+    module = lookupModule(datagram.packet.sourcePort)
+    acknowledgement = module.onRecvPacket(datagram.packet)
+    handler.recvPacket(
+      datagram.packet,
+      datagram.proof,
+      datagram.proofHeight,
+      acknowledgement
+    )
 }
 ```
 
@@ -623,17 +623,17 @@ interface PacketAcknowledgement {
 
 ```typescript
 function handlePacketAcknowledgement(datagram: PacketAcknowledgement) {
-  module = lookupModule(datagram.packet.sourcePort)
-  module.onAcknowledgePacket(
-    datagram.packet,
-    datagram.acknowledgement
-  )
-  handler.acknowledgePacket(
-    datagram.packet,
-    datagram.acknowledgement,
-    datagram.proof,
-    datagram.proofHeight
-  )
+    module = lookupModule(datagram.packet.sourcePort)
+    module.onAcknowledgePacket(
+      datagram.packet,
+      datagram.acknowledgement
+    )
+    handler.acknowledgePacket(
+      datagram.packet,
+      datagram.acknowledgement,
+      datagram.proof,
+      datagram.proofHeight
+    )
 }
 ```
 
@@ -650,14 +650,14 @@ interface PacketTimeoutOrdered {
 
 ```typescript
 function handlePacketTimeoutOrdered(datagram: PacketTimeoutOrdered) {
-  module = lookupModule(datagram.packet.sourcePort)
-  module.onTimeoutPacket(datagram.packet)
-  handler.timeoutPacketOrdered(
-    datagram.packet,
-    datagram.proof,
-    datagram.proofHeight,
-    datagram.nextSequenceRecv
-  )
+    module = lookupModule(datagram.packet.sourcePort)
+    module.onTimeoutPacket(datagram.packet)
+    handler.timeoutPacketOrdered(
+      datagram.packet,
+      datagram.proof,
+      datagram.proofHeight,
+      datagram.nextSequenceRecv
+    )
 }
 ```
 
@@ -671,13 +671,13 @@ interface PacketTimeoutUnordered {
 
 ```typescript
 function handlePacketTimeoutUnordered(datagram: PacketTimeoutUnordered) {
-  module = lookupModule(datagram.packet.sourcePort)
-  module.onTimeoutPacket(datagram.packet)
-  handler.timeoutPacketUnordered(
-    datagram.packet,
-    datagram.proof,
-    datagram.proofHeight
-  )
+    module = lookupModule(datagram.packet.sourcePort)
+    module.onTimeoutPacket(datagram.packet)
+    handler.timeoutPacketUnordered(
+      datagram.packet,
+      datagram.proof,
+      datagram.proofHeight
+    )
 }
 ```
 
@@ -691,13 +691,13 @@ interface PacketTimeoutOnClose {
 
 ```typescript
 function handlePacketTimeoutOnClose(datagram: PacketTimeoutOnClose) {
-  module = lookupModule(datagram.packet.sourcePort)
-  module.onTimeoutPacket(datagram.packet)
-  handler.timeoutOnClose(
-    datagram.packet,
-    datagram.proof,
-    datagram.proofHeight
-  )
+    module = lookupModule(datagram.packet.sourcePort)
+    module.onTimeoutPacket(datagram.packet)
+    handler.timeoutOnClose(
+      datagram.packet,
+      datagram.proof,
+      datagram.proofHeight
+    )
 }
 ```
 
@@ -713,13 +713,13 @@ interface PacketTimeoutClose {
 
 ```typescript
 function handlePacketTimeoutClose(datagram: PacketTimeoutClose) {
-  module = lookupModule(datagram.packet.sourcePort)
-  module.onTimeoutPacketClose(datagram.packet)
-  handler.timeoutPacketClose(
-    datagram.packet,
-    datagram.proof,
-    datagram.proofHeight
-  )
+    module = lookupModule(datagram.packet.sourcePort)
+    module.onTimeoutPacketClose(datagram.packet)
+    handler.timeoutPacketClose(
+      datagram.packet,
+      datagram.proof,
+      datagram.proofHeight
+    )
 }
 ```
 
@@ -734,12 +734,12 @@ interface PacketCleanupOrdered {
 
 ```typescript
 function handlePacketCleanupOrdered(datagram: PacketCleanupOrdered) {
-  handler.cleanupPacketOrdered(
-    datagram.packet,
-    datagram.proof,
-    datagram.proofHeight,
-    datagram.nextSequenceRecv
-  )
+    handler.cleanupPacketOrdered(
+      datagram.packet,
+      datagram.proof,
+      datagram.proofHeight,
+      datagram.nextSequenceRecv
+    )
 }
 ```
 
@@ -754,12 +754,12 @@ interface PacketCleanupUnordered {
 
 ```typescript
 function handlePacketCleanupUnordered(datagram: PacketCleanupUnordered) {
-  handler.cleanupPacketUnordered(
-    datagram.packet,
-    datagram.proof,
-    datagram.proofHeight,
-    datagram.acknowledgement
-  )
+    handler.cleanupPacketUnordered(
+      datagram.packet,
+      datagram.proof,
+      datagram.proofHeight,
+      datagram.acknowledgement
+    )
 }
 ```
 

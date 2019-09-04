@@ -88,13 +88,13 @@ In the former case, `generate` returns a new object-capability key, which must b
 
 ```
 function generate(): CapabilityKey {
-  return newCapabilityPath()
+    return newCapabilityPath()
 }
 ```
 
 ```
 function authenticate(key: CapabilityKey): boolean {
-  return capability === key
+    return capability === key
 }
 ```
 
@@ -102,13 +102,13 @@ In the latter case, `generate` returns the calling module's identifier and `auth
 
 ```
 function generate(): SourceIdentifier {
-  return callingModuleIdentifier()
+    return callingModuleIdentifier()
 }
 ```
 
 ```
 function authenticate(id: SourceIdentifier): boolean {
-  return callingModuleIdentifier() === id
+    return callingModuleIdentifier() === id
 }
 ```
 
@@ -122,7 +122,7 @@ function authenticate(id: SourceIdentifier): boolean {
 
 ```typescript
 function portPath(id: Identifier): Path {
-  return "ports/{id}"
+    return "ports/{id}"
 }
 ```
 
@@ -134,10 +134,10 @@ If the host state machine does not implement a special module manager to control
 
 ```typescript
 function bindPort(id: Identifier) {
-  abortTransactionUnless(provableStore.get(portPath(id)) === null)
-  key = generate()
-  provableStore.set(portPath(id), key)
-  return key
+    abortTransactionUnless(provableStore.get(portPath(id)) === null)
+    key = generate()
+    provableStore.set(portPath(id), key)
+    return key
 }
 ```
 
@@ -149,9 +149,9 @@ If the host state machine supports object-capabilities, no additional protocol i
 
 ```typescript
 function transferPort(id: Identifier) {
-  abortTransactionUnless(authenticate(provableStore.get(portPath(id))))
-  key = generate()
-  provableStore.set(portPath(id), key)
+    abortTransactionUnless(authenticate(provableStore.get(portPath(id))))
+    key = generate()
+    provableStore.set(portPath(id), key)
 }
 ```
 
@@ -163,8 +163,8 @@ The IBC handler MUST implement the `releasePort` function, which allows a module
 
 ```typescript
 function releasePort(id: Identifier) {
-  abortTransactionUnless(authenticate(provableStore.get(portPath(id))))
-  provableStore.delete(portPath(id))
+    abortTransactionUnless(authenticate(provableStore.get(portPath(id))))
+    provableStore.delete(portPath(id))
 }
 ```
 

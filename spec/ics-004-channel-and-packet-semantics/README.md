@@ -164,7 +164,7 @@ Channel structures are stored under a store path prefix unique to a combination 
 
 ```typescript
 function channelPath(portIdentifier: Identifier, channelIdentifier: Identifier): Path {
-  return "ports/{portIdentifier}/channels/{channelIdentifier}"
+    return "ports/{portIdentifier}/channels/{channelIdentifier}"
 }
 ```
 
@@ -172,11 +172,11 @@ The `nextSequenceSend` and `nextSequenceRecv` unsigned integer counters are stor
 
 ```typescript
 function nextSequenceSendPath(portIdentifier: Identifier, channelIdentifier: Identifier): Path {
-  return "{channelPath(portIdentifier, channelIdentifier)}/nextSequenceSend"
+    return "{channelPath(portIdentifier, channelIdentifier)}/nextSequenceSend"
 }
 
 function nextSequenceRecvPath(portIdentifier: Identifier, channelIdentifier: Identifier): Path {
-  return "{channelPath(portIdentifier, channelIdentifier)}/nextSequenceRecv"
+    return "{channelPath(portIdentifier, channelIdentifier)}/nextSequenceRecv"
 }
 ```
 
@@ -184,7 +184,7 @@ Constant-size commitments to packet data fields are stored under the packet sequ
 
 ```typescript
 function packetCommitmentPath(portIdentifier: Identifier, channelIdentifier: Identifier, sequence: uint64): Path {
-  return "{channelPath(portIdentifier, channelIdentifier)}/packets/" + sequence
+    return "{channelPath(portIdentifier, channelIdentifier)}/packets/" + sequence
 }
 ```
 
@@ -194,7 +194,7 @@ Packet acknowledgement data are stored under the `packetAcknowledgementPath`:
 
 ```typescript
 function packetAcknowledgementPath(portIdentifier: Identifier, channelIdentifier: Identifier, sequence: uint64): Path {
-  return "{channelPath(portIdentifier, channelIdentifier)}/acknowledgements/" + sequence
+    return "{channelPath(portIdentifier, channelIdentifier)}/acknowledgements/" + sequence
 }
 ```
 
@@ -219,23 +219,23 @@ The set of non-closed channels associated with a connection is tracked under `co
 
 ```typescript
 function addChannelToConnection(connectionId: Identifier, channelId: Identifier) {
-  channelSet = privateStore.get(connectionChannelsPath(connectionId))
-  channelSet.add(channelId)
-  privateStore.set(connectionChannelsPath(connectionId), channelSet)
+    channelSet = privateStore.get(connectionChannelsPath(connectionId))
+    channelSet.add(channelId)
+    privateStore.set(connectionChannelsPath(connectionId), channelSet)
 }
 ```
 
 ```typescript
 function removeChannelFromConnection(connectionId: Identifier, channelId: Identifier) {
-  channelSet = privateStore.get(connectionChannelsPath(connectionId))
-  channelSet.remove(channelId)
-  privateStore.set(connectionChannelsPath(connectionId), channelSet)
+    channelSet = privateStore.get(connectionChannelsPath(connectionId))
+    channelSet.remove(channelId)
+    privateStore.set(connectionChannelsPath(connectionId), channelSet)
 }
 ```
 
 ```typescript
 function queryConnectionChannels(connectionId: Identifier): Set<Identifier> {
-  return privateStore.get(connectionChannelsPath(connectionId))
+    return privateStore.get(connectionChannelsPath(connectionId))
 }
 ```
 
@@ -262,18 +262,18 @@ function chanOpenInit(
   counterpartyPortIdentifier: Identifier,
   counterpartyChannelIdentifier: Identifier,
   version: string) {
-  abortTransactionUnless(connectionHops.length === 1)
-  abortTransactionUnless(provableStore.get(channelPath(portIdentifier, channelIdentifier)) === null)
-  connection = provableStore.get(connectionPath(connectionHops[0]))
-  // optimistic channel handshakes are allowed
-  abortTransactionUnless(connection.state !== CLOSED)
-  abortTransactionUnless(authenticate(provableStore.get(portPath(portIdentifier))))
-  channel = Channel{INIT, order, portIdentifier, counterpartyPortIdentifier,
-                    counterpartyChannelIdentifier, connectionHops, version}
-  provableStore.set(channelPath(portIdentifier, channelIdentifier), channel)
-  provableStore.set(nextSequenceSendPath(portIdentifier, channelIdentifier), 1)
-  provableStore.set(nextSequenceRecvPath(portIdentifier, channelIdentifier), 1)
-  addChannelToConnection(connectionHops[0], channelIdentifier)
+    abortTransactionUnless(connectionHops.length === 1)
+    abortTransactionUnless(provableStore.get(channelPath(portIdentifier, channelIdentifier)) === null)
+    connection = provableStore.get(connectionPath(connectionHops[0]))
+    // optimistic channel handshakes are allowed
+    abortTransactionUnless(connection.state !== CLOSED)
+    abortTransactionUnless(authenticate(provableStore.get(portPath(portIdentifier))))
+    channel = Channel{INIT, order, portIdentifier, counterpartyPortIdentifier,
+                      counterpartyChannelIdentifier, connectionHops, version}
+    provableStore.set(channelPath(portIdentifier, channelIdentifier), channel)
+    provableStore.set(nextSequenceSendPath(portIdentifier, channelIdentifier), 1)
+    provableStore.set(nextSequenceRecvPath(portIdentifier, channelIdentifier), 1)
+    addChannelToConnection(connectionHops[0], channelIdentifier)
 }
 ```
 
@@ -291,25 +291,25 @@ function chanOpenTry(
   counterpartyVersion: string,
   proofInit: CommitmentProof,
   proofHeight: uint64) {
-  abortTransactionUnless(connectionHops.length === 1)
-  abortTransactionUnless(provableStore.get(channelPath(portIdentifier, channelIdentifier)) === null)
-  abortTransactionUnless(authenticate(provableStore.get(portPath(portIdentifier))))
-  connection = provableStore.get(connectionPath(connectionHops[0]))
-  abortTransactionUnless(connection.state === OPEN)
-  client = queryClient(connection.clientIdentifier)
-  abortTransactionUnless(client.verifyMembership(
-    proofHeight,
-    proofInit,
-    channelPath(counterpartyPortIdentifier, counterpartyChannelIdentifier),
-    Channel{INIT, order, counterpartyPortIdentifier, portIdentifier,
-            channelIdentifier, connectionHops.reverse(), counterpartyVersion}
-  ))
-  channel = Channel{OPENTRY, order, portIdentifier, counterpartyPortIdentifier,
-                    counterpartyChannelIdentifier, connectionHops, version}
-  provableStore.set(channelPath(portIdentifier, channelIdentifier), channel)
-  provableStore.set(nextSequenceSendPath(portIdentifier, channelIdentifier), 1)
-  provableStore.set(nextSequenceRecvPath(portIdentifier, channelIdentifier), 1)
-  addChannelToConnection(connectionHops[0], channelIdentifier)
+    abortTransactionUnless(connectionHops.length === 1)
+    abortTransactionUnless(provableStore.get(channelPath(portIdentifier, channelIdentifier)) === null)
+    abortTransactionUnless(authenticate(provableStore.get(portPath(portIdentifier))))
+    connection = provableStore.get(connectionPath(connectionHops[0]))
+    abortTransactionUnless(connection.state === OPEN)
+    client = queryClient(connection.clientIdentifier)
+    abortTransactionUnless(client.verifyMembership(
+      proofHeight,
+      proofInit,
+      channelPath(counterpartyPortIdentifier, counterpartyChannelIdentifier),
+      Channel{INIT, order, counterpartyPortIdentifier, portIdentifier,
+              channelIdentifier, connectionHops.reverse(), counterpartyVersion}
+    ))
+    channel = Channel{OPENTRY, order, portIdentifier, counterpartyPortIdentifier,
+                      counterpartyChannelIdentifier, connectionHops, version}
+    provableStore.set(channelPath(portIdentifier, channelIdentifier), channel)
+    provableStore.set(nextSequenceSendPath(portIdentifier, channelIdentifier), 1)
+    provableStore.set(nextSequenceRecvPath(portIdentifier, channelIdentifier), 1)
+    addChannelToConnection(connectionHops[0], channelIdentifier)
 }
 ```
 
@@ -323,22 +323,22 @@ function chanOpenAck(
   version: string,
   proofTry: CommitmentProof,
   proofHeight: uint64) {
-  channel = provableStore.get(channelPath(portIdentifier, channelIdentifier))
-  abortTransactionUnless(channel.state === INIT)
-  abortTransactionUnless(authenticate(provableStore.get(portPath(portIdentifier))))
-  connection = provableStore.get(connectionPath(channel.connectionHops[0]))
-  abortTransactionUnless(connection.state === OPEN)
-  client = queryClient(connection.clientIdentifier)
-  abortTransactionUnless(client.verifyMembership(
-    proofHeight,
-    proofTry,
-    channelPath(channel.counterpartyPortIdentifier, channel.counterpartyChannelIdentifier),
-    Channel{OPENTRY, channel.order, channel.counterpartyPortIdentifier, portIdentifier,
-            channelIdentifier, channel.connectionHops.reverse(), version}
-  ))
-  channel.state = OPEN
-  channel.version = version
-  provableStore.set(channelPath(portIdentifier, channelIdentifier), channel)
+    channel = provableStore.get(channelPath(portIdentifier, channelIdentifier))
+    abortTransactionUnless(channel.state === INIT)
+    abortTransactionUnless(authenticate(provableStore.get(portPath(portIdentifier))))
+    connection = provableStore.get(connectionPath(channel.connectionHops[0]))
+    abortTransactionUnless(connection.state === OPEN)
+    client = queryClient(connection.clientIdentifier)
+    abortTransactionUnless(client.verifyMembership(
+      proofHeight,
+      proofTry,
+      channelPath(channel.counterpartyPortIdentifier, channel.counterpartyChannelIdentifier),
+      Channel{OPENTRY, channel.order, channel.counterpartyPortIdentifier, portIdentifier,
+              channelIdentifier, channel.connectionHops.reverse(), version}
+    ))
+    channel.state = OPEN
+    channel.version = version
+    provableStore.set(channelPath(portIdentifier, channelIdentifier), channel)
 }
 ```
 
@@ -351,21 +351,21 @@ function chanOpenConfirm(
   channelIdentifier: Identifier,
   proofAck: CommitmentProof,
   proofHeight: uint64) {
-  channel = provableStore.get(channelPath(portIdentifier, channelIdentifier))
-  abortTransactionUnless(channel.state === OPENTRY)
-  abortTransactionUnless(authenticate(provableStore.get(portPath(portIdentifier))))
-  connection = provableStore.get(connectionPath(channel.connectionHops[0]))
-  abortTransactionUnless(connection.state === OPEN)
-  client = queryClient(connection.clientIdentifier)
-  abortTransactionUnless(client.verifyMembership(
-    proofHeight,
-    proofAck,
-    channelPath(channel.counterpartyPortIdentifier, channel.counterpartyChannelIdentifier),
-    Channel{OPEN, channel.order, channel.counterpartyPortIdentifier, portIdentifier,
-            channelIdentifier, channel.connectionHops.reverse(), channel.version}
-  ))
-  channel.state = OPEN
-  provableStore.set(channelPath(portIdentifier, channelIdentifier), channel)
+    channel = provableStore.get(channelPath(portIdentifier, channelIdentifier))
+    abortTransactionUnless(channel.state === OPENTRY)
+    abortTransactionUnless(authenticate(provableStore.get(portPath(portIdentifier))))
+    connection = provableStore.get(connectionPath(channel.connectionHops[0]))
+    abortTransactionUnless(connection.state === OPEN)
+    client = queryClient(connection.clientIdentifier)
+    abortTransactionUnless(client.verifyMembership(
+      proofHeight,
+      proofAck,
+      channelPath(channel.counterpartyPortIdentifier, channel.counterpartyChannelIdentifier),
+      Channel{OPEN, channel.order, channel.counterpartyPortIdentifier, portIdentifier,
+              channelIdentifier, channel.connectionHops.reverse(), channel.version}
+    ))
+    channel.state = OPEN
+    provableStore.set(channelPath(portIdentifier, channelIdentifier), channel)
 }
 ```
 
@@ -381,13 +381,13 @@ Once closed, channels cannot be reopened.
 function chanCloseInit(
   portIdentifier: Identifier,
   channelIdentifier: Identifier) {
-  channel = provableStore.get(channelPath(portIdentifier, channelIdentifier))
-  abortTransactionUnless(channel.state !== CLOSED)
-  connection = provableStore.get(connectionPath(channel.connectionHops[0]))
-  abortTransactionUnless(connection.state === OPEN)
-  channel.state = CLOSED
-  provableStore.set(channelPath(portIdentifier, channelIdentifier), channel)
-  removeChannelFromConnection(connectionHops[0], channelIdentifier)
+    channel = provableStore.get(channelPath(portIdentifier, channelIdentifier))
+    abortTransactionUnless(channel.state !== CLOSED)
+    connection = provableStore.get(connectionPath(channel.connectionHops[0]))
+    abortTransactionUnless(connection.state === OPEN)
+    channel.state = CLOSED
+    provableStore.set(channelPath(portIdentifier, channelIdentifier), channel)
+    removeChannelFromConnection(connectionHops[0], channelIdentifier)
 }
 ```
 
@@ -404,22 +404,22 @@ function chanCloseConfirm(
   channelIdentifier: Identifier,
   proofInit: CommitmentProof,
   proofHeight: uint64) {
-  channel = provableStore.get(channelPath(portIdentifier, channelIdentifier))
-  abortTransactionUnless(channel.state !== CLOSED)
-  connection = provableStore.get(connectionPath(channel.connectionHops[0]))
-  abortTransactionUnless(connection.state === OPEN)
-  expected = Channel{CLOSED, channel.order, channel.counterpartyPortIdentifier, portIdentifier,
-                     channelIdentifier, channel.connectionHops.reverse(), channel.version}
-  client = queryClient(connection.clientIdentifier)
-  abortTransactionUnless(client.verifyMembership(
-    proofHeight,
-    proofInit,
-    channelPath(channel.counterpartyPortIdentifier, channel.counterpartyChannelIdentifier),
-    expected
-  ))
-  channel.state = CLOSED
-  provableStore.set(channelPath(portIdentifier, channelIdentifier), channel)
-  removeChannelFromConnection(connectionHops[0], channelIdentifier)
+    channel = provableStore.get(channelPath(portIdentifier, channelIdentifier))
+    abortTransactionUnless(channel.state !== CLOSED)
+    connection = provableStore.get(connectionPath(channel.connectionHops[0]))
+    abortTransactionUnless(connection.state === OPEN)
+    expected = Channel{CLOSED, channel.order, channel.counterpartyPortIdentifier, portIdentifier,
+                       channelIdentifier, channel.connectionHops.reverse(), channel.version}
+    client = queryClient(connection.clientIdentifier)
+    abortTransactionUnless(client.verifyMembership(
+      proofHeight,
+      proofInit,
+      channelPath(channel.counterpartyPortIdentifier, channel.counterpartyChannelIdentifier),
+      expected
+    ))
+    channel.state = CLOSED
+    provableStore.set(channelPath(portIdentifier, channelIdentifier), channel)
+    removeChannelFromConnection(connectionHops[0], channelIdentifier)
 }
 ```
 
@@ -471,29 +471,29 @@ Note that the full packet is not stored in the state of the chain - merely a sho
 
 ```typescript
 function sendPacket(packet: Packet) {
-  channel = provableStore.get(channelPath(packet.sourcePort, packet.sourceChannel))
-  // optimistic sends are permitted once the handshake has started
-  abortTransactionUnless(channel.state !== CLOSED)
-  abortTransactionUnless(authenticate(provableStore.get(portPath(packet.sourcePort))))
-  abortTransactionUnless(packet.destPort === channel.counterpartyPortIdentifier)
-  abortTransactionUnless(packet.destChannel === channel.counterpartyChannelIdentifier)
-  connection = provableStore.get(connectionPath(packet.connectionHops[0]))
+    channel = provableStore.get(channelPath(packet.sourcePort, packet.sourceChannel))
+    // optimistic sends are permitted once the handshake has started
+    abortTransactionUnless(channel.state !== CLOSED)
+    abortTransactionUnless(authenticate(provableStore.get(portPath(packet.sourcePort))))
+    abortTransactionUnless(packet.destPort === channel.counterpartyPortIdentifier)
+    abortTransactionUnless(packet.destChannel === channel.counterpartyChannelIdentifier)
+    connection = provableStore.get(connectionPath(packet.connectionHops[0]))
 
-  // optimistic sends are permitted once the handshake has started
-  abortTransactionUnless(connection.state !== CLOSED)
-  abortTransactionUnless(packet.connectionHops === channel.connectionHops)
+    // optimistic sends are permitted once the handshake has started
+    abortTransactionUnless(connection.state !== CLOSED)
+    abortTransactionUnless(packet.connectionHops === channel.connectionHops)
 
-  consensusState = provableStore.get(consensusStatePath(connection.clientIdentifier))
-  abortTransactionUnless(consensusState.getHeight() < packet.timeoutHeight)
+    consensusState = provableStore.get(consensusStatePath(connection.clientIdentifier))
+    abortTransactionUnless(consensusState.getHeight() < packet.timeoutHeight)
 
-  nextSequenceSend = provableStore.get(nextSequenceSendPath(packet.sourcePort, packet.sourceChannel))
-  abortTransactionUnless(packet.sequence === nextSequenceSend)
+    nextSequenceSend = provableStore.get(nextSequenceSendPath(packet.sourcePort, packet.sourceChannel))
+    abortTransactionUnless(packet.sequence === nextSequenceSend)
 
-  // all assertions passed, we can alter state
+    // all assertions passed, we can alter state
 
-  nextSequenceSend = nextSequenceSend + 1
-  provableStore.set(nextSequenceSendPath(packet.sourcePort, packet.sourceChannel), nextSequenceSend)
-  provableStore.set(packetCommitmentPath(packet.sourcePort, packet.sourceChannel, packet.sequence), commit(packet.data))
+    nextSequenceSend = nextSequenceSend + 1
+    provableStore.set(nextSequenceSendPath(packet.sourcePort, packet.sourceChannel), nextSequenceSend)
+    provableStore.set(packetCommitmentPath(packet.sourcePort, packet.sourceChannel, packet.sequence), commit(packet.data))
 }
 ```
 
@@ -521,43 +521,43 @@ function recvPacket(
   proofHeight: uint64,
   acknowledgement: bytes): Packet {
 
-  channel = provableStore.get(channelPath(packet.destPort, packet.destChannel))
-  abortTransactionUnless(channel.state === OPEN)
-  abortTransactionUnless(authenticate(provableStore.get(portPath(packet.destPort))))
-  abortTransactionUnless(packet.sourcePort === channel.counterpartyPortIdentifier)
-  abortTransactionUnless(packet.sourceChannel === channel.counterpartyChannelIdentifier)
+    channel = provableStore.get(channelPath(packet.destPort, packet.destChannel))
+    abortTransactionUnless(channel.state === OPEN)
+    abortTransactionUnless(authenticate(provableStore.get(portPath(packet.destPort))))
+    abortTransactionUnless(packet.sourcePort === channel.counterpartyPortIdentifier)
+    abortTransactionUnless(packet.sourceChannel === channel.counterpartyChannelIdentifier)
 
-  connection = provableStore.get(connectionPath(channel.connectionHops[0]))
-  abortTransactionUnless(connection.state === OPEN)
-  abortTransactionUnless(packet.connectionHops === channel.connectionHops)
+    connection = provableStore.get(connectionPath(channel.connectionHops[0]))
+    abortTransactionUnless(connection.state === OPEN)
+    abortTransactionUnless(packet.connectionHops === channel.connectionHops)
 
-  abortTransactionUnless(proofHeight < packet.timeoutHeight)
+    abortTransactionUnless(proofHeight < packet.timeoutHeight)
 
-  client = queryClient(connection.clientIdentifier)
-  abortTransactionUnless(client.verifyMembership(
-    proofHeight,
-    proof,
-    packetCommitmentPath(packet.sourcePort, packet.sourceChannel, packet.sequence),
-    commit(packet.data)
-  ))
+    client = queryClient(connection.clientIdentifier)
+    abortTransactionUnless(client.verifyMembership(
+      proofHeight,
+      proof,
+      packetCommitmentPath(packet.sourcePort, packet.sourceChannel, packet.sequence),
+      commit(packet.data)
+    ))
 
-  // all assertions passed (except sequence check), we can alter state
+    // all assertions passed (except sequence check), we can alter state
 
-  if (acknowledgement.length > 0 || channel.order === UNORDERED)
-    provableStore.set(
-      packetAcknowledgementPath(packet.destPort, packet.destChannel, packet.sequence),
-      commit(acknowledgement)
-    )
+    if (acknowledgement.length > 0 || channel.order === UNORDERED)
+      provableStore.set(
+        packetAcknowledgementPath(packet.destPort, packet.destChannel, packet.sequence),
+        commit(acknowledgement)
+      )
 
-  if (channel.order === ORDERED) {
-    nextSequenceRecv = provableStore.get(nextSequenceRecvPath(packet.destPort, packet.destChannel))
-    abortTransactionUnless(packet.sequence === nextSequenceRecv)
-    nextSequenceRecv = nextSequenceRecv + 1
-    provableStore.set(nextSequenceRecvPath(packet.destPort, packet.destChannel), nextSequenceRecv)
-  }
+    if (channel.order === ORDERED) {
+      nextSequenceRecv = provableStore.get(nextSequenceRecvPath(packet.destPort, packet.destChannel))
+      abortTransactionUnless(packet.sequence === nextSequenceRecv)
+      nextSequenceRecv = nextSequenceRecv + 1
+      provableStore.set(nextSequenceRecvPath(packet.destPort, packet.destChannel), nextSequenceRecv)
+    }
 
-  // return transparent packet
-  return packet
+    // return transparent packet
+    return packet
 }
 ```
 
@@ -576,37 +576,37 @@ function acknowledgePacket(
   proof: CommitmentProof,
   proofHeight: uint64): Packet {
 
-  // abort transaction unless that channel is open, calling module owns the associated port, and the packet fields match
-  channel = provableStore.get(channelPath(packet.sourcePort, packet.sourceChannel))
-  abortTransactionUnless(channel.state === OPEN)
-  abortTransactionUnless(authenticate(provableStore.get(portPath(packet.sourcePort))))
-  abortTransactionUnless(packet.sourceChannel === channel.counterpartyChannelIdentifier)
+    // abort transaction unless that channel is open, calling module owns the associated port, and the packet fields match
+    channel = provableStore.get(channelPath(packet.sourcePort, packet.sourceChannel))
+    abortTransactionUnless(channel.state === OPEN)
+    abortTransactionUnless(authenticate(provableStore.get(portPath(packet.sourcePort))))
+    abortTransactionUnless(packet.sourceChannel === channel.counterpartyChannelIdentifier)
 
-  connection = provableStore.get(connectionPath(channel.connectionHops[0]))
-  abortTransactionUnless(packet.sourcePort === channel.counterpartyPortIdentifier)
-  abortTransactionUnless(packet.connectionHops === channel.connectionHops)
-  abortTransactionUnless(connection.state === OPEN)
+    connection = provableStore.get(connectionPath(channel.connectionHops[0]))
+    abortTransactionUnless(packet.sourcePort === channel.counterpartyPortIdentifier)
+    abortTransactionUnless(packet.connectionHops === channel.connectionHops)
+    abortTransactionUnless(connection.state === OPEN)
 
-  // verify we sent the packet and haven't cleared it out yet
-  abortTransactionUnless(provableStore.get(packetCommitmentPath(packet.sourcePort, packet.sourceChannel, packet.sequence))
-         === commit(packet.data))
+    // verify we sent the packet and haven't cleared it out yet
+    abortTransactionUnless(provableStore.get(packetCommitmentPath(packet.sourcePort, packet.sourceChannel, packet.sequence))
+           === commit(packet.data))
 
-  // abort transaction unless correct acknowledgement on counterparty chain
-  client = queryClient(connection.clientIdentifier)
-  abortTransactionUnless(client.verifyMembership(
-    proofHeight,
-    proof,
-    packetAcknowledgementPath(packet.destPort, packet.destChannel, packet.sequence),
-    commit(acknowledgement)
-  ))
+    // abort transaction unless correct acknowledgement on counterparty chain
+    client = queryClient(connection.clientIdentifier)
+    abortTransactionUnless(client.verifyMembership(
+      proofHeight,
+      proof,
+      packetAcknowledgementPath(packet.destPort, packet.destChannel, packet.sequence),
+      commit(acknowledgement)
+    ))
 
-  // all assertions passed, we can alter state
+    // all assertions passed, we can alter state
 
-  // delete our commitment so we can't "acknowledge" again
-  provableStore.delete(packetCommitmentPath(packet.sourcePort, packet.sourceChannel, packet.sequence))
+    // delete our commitment so we can't "acknowledge" again
+    provableStore.delete(packetCommitmentPath(packet.sourcePort, packet.sourceChannel, packet.sequence))
 
-  // return transparent packet
-  return packet
+    // return transparent packet
+    return packet
 }
 ```
 
@@ -635,48 +635,48 @@ function timeoutPacketOrdered(
   proofHeight: uint64,
   nextSequenceRecv: uint64): Packet {
 
-  channel = provableStore.get(channelPath(packet.sourcePort, packet.sourceChannel))
-  abortTransactionUnless(channel.state === OPEN)
-  abortTransactionUnless(channel.order === ORDERED)
+    channel = provableStore.get(channelPath(packet.sourcePort, packet.sourceChannel))
+    abortTransactionUnless(channel.state === OPEN)
+    abortTransactionUnless(channel.order === ORDERED)
 
-  abortTransactionUnless(authenticate(provableStore.get(portPath(packet.sourcePort))))
-  abortTransactionUnless(packet.destChannel === channel.counterpartyChannelIdentifier)
+    abortTransactionUnless(authenticate(provableStore.get(portPath(packet.sourcePort))))
+    abortTransactionUnless(packet.destChannel === channel.counterpartyChannelIdentifier)
 
-  connection = provableStore.get(connectionPath(packet.connectionHops[0]))
-  // note: the connection may have been closed
-  abortTransactionUnless(packet.destPort === channel.counterpartyPortIdentifier)
-  abortTransactionUnless(packet.connectionHops === channel.connectionHops)
+    connection = provableStore.get(connectionPath(packet.connectionHops[0]))
+    // note: the connection may have been closed
+    abortTransactionUnless(packet.destPort === channel.counterpartyPortIdentifier)
+    abortTransactionUnless(packet.connectionHops === channel.connectionHops)
 
-  // check that timeout height has passed on the other end
-  abortTransactionUnless(proofHeight >= packet.timeoutHeight)
+    // check that timeout height has passed on the other end
+    abortTransactionUnless(proofHeight >= packet.timeoutHeight)
 
-  // check that packet has not been received
-  abortTransactionUnless(nextSequenceRecv < packet.sequence)
+    // check that packet has not been received
+    abortTransactionUnless(nextSequenceRecv < packet.sequence)
 
-  // verify we actually sent this packet, check the store
-  abortTransactionUnless(provableStore.get(packetCommitmentPath(packet.sourcePort, packet.sourceChannel, packet.sequence))
-         === commit(packet.data))
+    // verify we actually sent this packet, check the store
+    abortTransactionUnless(provableStore.get(packetCommitmentPath(packet.sourcePort, packet.sourceChannel, packet.sequence))
+           === commit(packet.data))
 
-  // check that the recv sequence is as claimed
-  client = queryClient(connection.clientIdentifier)
-  abortTransactionUnless(client.verifyMembership(
-    proofHeight,
-    proof,
-    nextSequenceRecvPath(packet.destPort, packet.destChannel),
-    nextSequenceRecv
-  ))
+    // check that the recv sequence is as claimed
+    client = queryClient(connection.clientIdentifier)
+    abortTransactionUnless(client.verifyMembership(
+      proofHeight,
+      proof,
+      nextSequenceRecvPath(packet.destPort, packet.destChannel),
+      nextSequenceRecv
+    ))
 
-  // all assertions passed, we can alter state
+    // all assertions passed, we can alter state
 
-  // delete our commitment
-  provableStore.delete(packetCommitmentPath(packet.sourcePort, packet.sourceChannel, packet.sequence))
+    // delete our commitment
+    provableStore.delete(packetCommitmentPath(packet.sourcePort, packet.sourceChannel, packet.sequence))
 
-  // close the channel
-  channel.state = CLOSED
-  provableStore.set(channelPath(packet.sourcePort, packet.sourceChannel), channel)
+    // close the channel
+    channel.state = CLOSED
+    provableStore.set(channelPath(packet.sourcePort, packet.sourceChannel), channel)
 
-  // return transparent packet
-  return packet
+    // return transparent packet
+    return packet
 }
 ```
 
@@ -692,39 +692,39 @@ function timeoutPacketUnordered(
   packet: OpaquePacket,
   proof: CommitmentProof,
   proofHeight: uint64): Packet {
-  channel = provableStore.get(channelPath(packet.sourcePort, packet.sourceChannel))
-  abortTransactionUnless(channel.state === OPEN)
-  abortTransactionUnless(channel.order === UNORDERED)
-  abortTransactionUnless(authenticate(provableStore.get(portPath(packet.sourcePort))))
-  abortTransactionUnless(packet.destChannel === channel.counterpartyChannelIdentifier)
+    channel = provableStore.get(channelPath(packet.sourcePort, packet.sourceChannel))
+    abortTransactionUnless(channel.state === OPEN)
+    abortTransactionUnless(channel.order === UNORDERED)
+    abortTransactionUnless(authenticate(provableStore.get(portPath(packet.sourcePort))))
+    abortTransactionUnless(packet.destChannel === channel.counterpartyChannelIdentifier)
 
-  connection = provableStore.get(connectionPath(packet.connectionHops[0]))
-  // note: the connection may have been closed
-  abortTransactionUnless(packet.destPort === channel.counterpartyPortIdentifier)
-  abortTransactionUnless(packet.connectionHops === channel.connectionHops)
+    connection = provableStore.get(connectionPath(packet.connectionHops[0]))
+    // note: the connection may have been closed
+    abortTransactionUnless(packet.destPort === channel.counterpartyPortIdentifier)
+    abortTransactionUnless(packet.connectionHops === channel.connectionHops)
 
-  // check that timeout height has passed on the other end
-  abortTransactionUnless(proofHeight >= packet.timeoutHeight)
+    // check that timeout height has passed on the other end
+    abortTransactionUnless(proofHeight >= packet.timeoutHeight)
 
-  // verify we actually sent this packet, check the store
-  abortTransactionUnless(provableStore.get(packetCommitmentPath(packet.sourcePort, packet.sourceChannel, packet.sequence))
-         === commit(packet.data))
+    // verify we actually sent this packet, check the store
+    abortTransactionUnless(provableStore.get(packetCommitmentPath(packet.sourcePort, packet.sourceChannel, packet.sequence))
+           === commit(packet.data))
 
-  // verify absence of acknowledgement at packet index
-  client = queryClient(connection.clientIdentifier)
-  abortTransactionUnless(client.verifyNonMembership(
-    proofHeight,
-    proof,
-    packetAcknowledgementPath(packet.sourcePort, packet.sourceChannel, packet.sequence)
-  ))
+    // verify absence of acknowledgement at packet index
+    client = queryClient(connection.clientIdentifier)
+    abortTransactionUnless(client.verifyNonMembership(
+      proofHeight,
+      proof,
+      packetAcknowledgementPath(packet.sourcePort, packet.sourceChannel, packet.sequence)
+    ))
   
-  // all assertions passed, we can alter state
+    // all assertions passed, we can alter state
 
-  // delete our commitment
-  provableStore.delete(packetCommitmentPath(packet.sourcePort, packet.sourceChannel, packet.sequence))
+    // delete our commitment
+    provableStore.delete(packetCommitmentPath(packet.sourcePort, packet.sourceChannel, packet.sequence))
 
-  // return transparent packet
-  return packet
+    // return transparent packet
+    return packet
 }
 ```
 
@@ -740,45 +740,46 @@ function timeoutOnClose(
   proofNonMembership: CommitmentProof,
   proofClosed: CommitmentProof,
   proofHeight: uint64) {
-  channel = provableStore.get(channelPath(packet.sourcePort, packet.sourceChannel))
-  // note: the channel may have been closed
-  abortTransactionUnless(authenticate(provableStore.get(portPath(packet.sourcePort))))
-  abortTransactionUnless(packet.destChannel === channel.counterpartyChannelIdentifier)
 
-  connection = provableStore.get(connectionPath(packet.connectionHops[0]))
-  // note: the connection may have been closed
-  abortTransactionUnless(packet.destPort === channel.counterpartyPortIdentifier)
-  abortTransactionUnless(packet.connectionHops === channel.connectionHops)
+    channel = provableStore.get(channelPath(packet.sourcePort, packet.sourceChannel))
+    // note: the channel may have been closed
+    abortTransactionUnless(authenticate(provableStore.get(portPath(packet.sourcePort))))
+    abortTransactionUnless(packet.destChannel === channel.counterpartyChannelIdentifier)
 
-  // verify we actually sent this packet, check the store
-  abortTransactionUnless(provableStore.get(packetCommitmentPath(packet.sourcePort, packet.sourceChannel, packet.sequence))
-         === commit(packet.data))
+    connection = provableStore.get(connectionPath(packet.connectionHops[0]))
+    // note: the connection may have been closed
+    abortTransactionUnless(packet.destPort === channel.counterpartyPortIdentifier)
+    abortTransactionUnless(packet.connectionHops === channel.connectionHops)
 
-  // check that the opposing channel end has closed
-  client = queryClient(connection.clientIdentifier)
-  expected = Channel{CLOSED, channel.order, channel.counterpartyPortIdentifier, channel.portIdentifier,
-                     channel.channelIdentifier, channel.connectionHops.reverse(), channel.version}
-  abortTransactionUnless(client.verifyMembership(
-    proofHeight,
-    proofClosed,
-    channelPath(channel.counterpartyPortIdentifier, channel.counterpartyChannelIdentifier),
-    expected
-  ))
+    // verify we actually sent this packet, check the store
+    abortTransactionUnless(provableStore.get(packetCommitmentPath(packet.sourcePort, packet.sourceChannel, packet.sequence))
+           === commit(packet.data))
 
-  // verify absence of acknowledgement at packet index
-  abortTransactionUnless(client.verifyNonMembership(
-    proofHeight,
-    proofNonMembership,
-    packetAcknowledgementPath(packet.sourcePort, packet.sourceChannel, packet.sequence)
-  ))
+    // check that the opposing channel end has closed
+    client = queryClient(connection.clientIdentifier)
+    expected = Channel{CLOSED, channel.order, channel.counterpartyPortIdentifier, channel.portIdentifier,
+                       channel.channelIdentifier, channel.connectionHops.reverse(), channel.version}
+    abortTransactionUnless(client.verifyMembership(
+      proofHeight,
+      proofClosed,
+      channelPath(channel.counterpartyPortIdentifier, channel.counterpartyChannelIdentifier),
+      expected
+    ))
 
-  // all assertions passed, we can alter state
+    // verify absence of acknowledgement at packet index
+    abortTransactionUnless(client.verifyNonMembership(
+      proofHeight,
+      proofNonMembership,
+      packetAcknowledgementPath(packet.sourcePort, packet.sourceChannel, packet.sequence)
+    ))
 
-  // delete our commitment
-  provableStore.delete(packetCommitmentPath(packet.sourcePort, packet.sourceChannel, packet.sequence))
+    // all assertions passed, we can alter state
 
-  // return transparent packet
-  return packet
+    // delete our commitment
+    provableStore.delete(packetCommitmentPath(packet.sourcePort, packet.sourceChannel, packet.sequence))
+
+    // return transparent packet
+    return packet
 }
 ```
 
@@ -796,37 +797,38 @@ function timeoutClose(
   packet: OpaquePacket,
   proof: CommitmentProof,
   proofHeight: uint64): Packet {
-  channel = provableStore.get(channelPath(packet.destPort, packet.destChannel))
-  abortTransactionUnless(channel.state === OPEN)
-  abortTransactionUnless(channel.order === ORDERED)
-  abortTransactionUnless(authenticate(provableStore.get(portPath(packet.destPort))))
-  abortTransactionUnless(packet.sourceChannel === channel.counterpartyChannelIdentifier)
 
-  connection = provableStore.get(connectionPath(channel.connectionHops[0]))
-  // note: the connection may have been closed
-  abortTransactionUnless(packet.sourcePort === channel.counterpartyPortIdentifier)
-  abortTransactionUnless(packet.connectionHops === channel.connectionHops)
+    channel = provableStore.get(channelPath(packet.destPort, packet.destChannel))
+    abortTransactionUnless(channel.state === OPEN)
+    abortTransactionUnless(channel.order === ORDERED)
+    abortTransactionUnless(authenticate(provableStore.get(portPath(packet.destPort))))
+    abortTransactionUnless(packet.sourceChannel === channel.counterpartyChannelIdentifier)
 
-  nextSequenceRecv = provableStore.get(nextSequenceRecvPath(packet.destPort, packet.destChannel))
-  abortTransactionUnless(packet.sequence === nextSequenceRecv)
+    connection = provableStore.get(connectionPath(channel.connectionHops[0]))
+    // note: the connection may have been closed
+    abortTransactionUnless(packet.sourcePort === channel.counterpartyPortIdentifier)
+    abortTransactionUnless(packet.connectionHops === channel.connectionHops)
 
-  abortTransactionUnless(proofHeight >= packet.timeoutHeight)
+    nextSequenceRecv = provableStore.get(nextSequenceRecvPath(packet.destPort, packet.destChannel))
+    abortTransactionUnless(packet.sequence === nextSequenceRecv)
 
-  client = queryClient(connection.clientIdentifier)
-  abortTransactionUnless(client.verifyMembership(
-    proofHeight,
-    proof,
-    packetCommitmentPath(packet.sourcePort, packet.sourceChannel, packet.sequence),
-    commit(packet.data)
-  ))
+    abortTransactionUnless(proofHeight >= packet.timeoutHeight)
 
-  // all assertions passed, we can alter state
+    client = queryClient(connection.clientIdentifier)
+    abortTransactionUnless(client.verifyMembership(
+      proofHeight,
+      proof,
+      packetCommitmentPath(packet.sourcePort, packet.sourceChannel, packet.sequence),
+      commit(packet.data)
+    ))
 
-  channel.state = CLOSED
-  provableStore.set(channelPath(packet.destPort, packet.destChannel), channel)
+    // all assertions passed, we can alter state
 
-  // return transparent packet
-  return packet
+    channel.state = CLOSED
+    provableStore.set(channelPath(packet.destPort, packet.destChannel), channel)
+
+    // return transparent packet
+    return packet
 }
 ```
 
@@ -842,40 +844,41 @@ function cleanupPacketOrdered(
   proof: CommitmentProof,
   proofHeight: uint64,
   nextSequenceRecv: uint64): Packet {
-  channel = provableStore.get(channelPath(packet.sourcePort, packet.sourceChannel))
-  abortTransactionUnless(channel.state === OPEN)
-  abortTransactionUnless(channel.order === ORDERED)
-  abortTransactionUnless(authenticate(provableStore.get(portPath(packet.sourcePort))))
-  abortTransactionUnless(packet.destChannel === channel.counterpartyChannelIdentifier)
 
-  connection = provableStore.get(connectionPath(packet.connectionHops[0]))
-  // note: the connection may have been closed
-  abortTransactionUnless(packet.destPort === channel.counterpartyPortIdentifier)
-  abortTransactionUnless(packet.connectionHops === channel.connectionHops)
+    channel = provableStore.get(channelPath(packet.sourcePort, packet.sourceChannel))
+    abortTransactionUnless(channel.state === OPEN)
+    abortTransactionUnless(channel.order === ORDERED)
+    abortTransactionUnless(authenticate(provableStore.get(portPath(packet.sourcePort))))
+    abortTransactionUnless(packet.destChannel === channel.counterpartyChannelIdentifier)
 
-  // abortTransactionUnless packet has been received on the other end
-  abortTransactionUnless(nextSequenceRecv > packet.sequence)
+    connection = provableStore.get(connectionPath(packet.connectionHops[0]))
+    // note: the connection may have been closed
+    abortTransactionUnless(packet.destPort === channel.counterpartyPortIdentifier)
+    abortTransactionUnless(packet.connectionHops === channel.connectionHops)
 
-  // verify we actually sent the packet, check the store
-  abortTransactionUnless(provableStore.get(packetCommitmentPath(packet.sourcePort, packet.sourceChannel, packet.sequence))
-             === commit(packet.data))
+    // abortTransactionUnless packet has been received on the other end
+    abortTransactionUnless(nextSequenceRecv > packet.sequence)
 
-  // check that the recv sequence is as claimed
-  client = queryClient(connection.clientIdentifier)
-  abortTransactionUnless(client.verifyMembership(
-    proofHeight,
-    proof,
-    nextSequenceRecvPath(packet.destPort, packet.destChannel),
-    nextSequenceRecv
-  ))
+    // verify we actually sent the packet, check the store
+    abortTransactionUnless(provableStore.get(packetCommitmentPath(packet.sourcePort, packet.sourceChannel, packet.sequence))
+               === commit(packet.data))
 
-  // all assertions passed, we can alter state
+    // check that the recv sequence is as claimed
+    client = queryClient(connection.clientIdentifier)
+    abortTransactionUnless(client.verifyMembership(
+      proofHeight,
+      proof,
+      nextSequenceRecvPath(packet.destPort, packet.destChannel),
+      nextSequenceRecv
+    ))
 
-  // clear the store
-  provableStore.delete(packetCommitmentPath(packet.sourcePort, packet.sourceChannel, packet.sequence))
+    // all assertions passed, we can alter state
 
-  // return transparent packet
-  return packet
+    // clear the store
+    provableStore.delete(packetCommitmentPath(packet.sourcePort, packet.sourceChannel, packet.sequence))
+
+    // return transparent packet
+    return packet
 }
 ```
 
@@ -887,37 +890,38 @@ function cleanupPacketUnordered(
   proof: CommitmentProof,
   proofHeight: uint64,
   acknowledgement: bytes): Packet {
-  channel = provableStore.get(channelPath(packet.sourcePort, packet.sourceChannel))
-  abortTransactionUnless(channel.state === OPEN)
-  abortTransactionUnless(channel.order === UNORDERED)
-  abortTransactionUnless(authenticate(provableStore.get(portPath(packet.sourcePort))))
-  abortTransactionUnless(packet.destChannel === channel.counterpartyChannelIdentifier)
 
-  connection = provableStore.get(connectionPath(packet.connectionHops[0]))
-  // note: the connection may have been closed
-  abortTransactionUnless(packet.destPort === channel.counterpartyPortIdentifier)
-  abortTransactionUnless(packet.connectionHops === channel.connectionHops)
+    channel = provableStore.get(channelPath(packet.sourcePort, packet.sourceChannel))
+    abortTransactionUnless(channel.state === OPEN)
+    abortTransactionUnless(channel.order === UNORDERED)
+    abortTransactionUnless(authenticate(provableStore.get(portPath(packet.sourcePort))))
+    abortTransactionUnless(packet.destChannel === channel.counterpartyChannelIdentifier)
 
-  // abortTransactionUnless acknowledgement on the other end
-  client = queryClient(connection.clientIdentifier)
-  abortTransactionUnless(client.verifyMembership(
-    proofHeight,
-    proof,
-    packetAcknowledgementPath(packet.destPort, packet.destChannel, packet.sequence),
-    acknowledgement
-  ))
+    connection = provableStore.get(connectionPath(packet.connectionHops[0]))
+    // note: the connection may have been closed
+    abortTransactionUnless(packet.destPort === channel.counterpartyPortIdentifier)
+    abortTransactionUnless(packet.connectionHops === channel.connectionHops)
 
-  // verify we actually sent the packet, check the store
-  abortTransactionUnless(provableStore.get(packetCommitmentPath(packet.sourcePort, packet.sourceChannel, packet.sequence))
-             === commit(packet.data))
+    // abortTransactionUnless acknowledgement on the other end
+    client = queryClient(connection.clientIdentifier)
+    abortTransactionUnless(client.verifyMembership(
+      proofHeight,
+      proof,
+      packetAcknowledgementPath(packet.destPort, packet.destChannel, packet.sequence),
+      acknowledgement
+    ))
 
-  // all assertions passed, we can alter state
+    // verify we actually sent the packet, check the store
+    abortTransactionUnless(provableStore.get(packetCommitmentPath(packet.sourcePort, packet.sourceChannel, packet.sequence))
+               === commit(packet.data))
 
-  // clear the store
-  provableStore.delete(packetCommitmentPath(packet.sourcePort, packet.sourceChannel, packet.sequence))
+    // all assertions passed, we can alter state
 
-  // return transparent packet
-  return packet
+    // clear the store
+    provableStore.delete(packetCommitmentPath(packet.sourcePort, packet.sourceChannel, packet.sequence))
+
+    // return transparent packet
+    return packet
 }
 ```
 
@@ -945,7 +949,7 @@ Channels can be queried with `queryChannel`:
 
 ```typescript
 function queryChannel(connId: Identifier, chanId: Identifier): ChannelEnd | void {
-  return provableStore.get(channelPath(connId, chanId))
+    return provableStore.get(channelPath(connId, chanId))
 }
 ```
 
