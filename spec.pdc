@@ -10,63 +10,97 @@ toc-own-page: true
 mainfont: DejaVuSerifCondensed
 fontsize: 8pt
 author: IBC Specification Team
-date: \today \ - \textbf{1.0.0-rc1}
+date: \today \ — \textbf{1.0.0-rc2}
 urlcolor: cyan
 header-includes:
     - \usepackage{graphicx}
     - \usepackage{hyperref}
     - \usepackage[left]{lineno}
     - \linenumbers
+    - \usepackage{listings}
 ---
+
+\lstdefinelanguage{Typescript}{
+  morekeywords=[1]{break, continue, delete, else, for, function, if, in,
+    new, return, this, typeof, var, void, while, with},
+  % Literals, primitive types, and reference types.
+  morekeywords=[2]{false, null, true, boolean, number, undefined,
+    Array, Boolean, Date, Math, Number, String, Object},
+  % Built-ins.
+  morekeywords=[3]{eval, parseInt, parseFloat, escape, unescape},
+  sensitive,
+  morecomment=[s]{/*}{*/},
+  morecomment=[l]//,
+  morecomment=[s]{/**}{*/}, % JavaDoc style comments
+  morestring=[b]',
+  morestring=[b]"
+}[keywords, comments, strings]
+
+\lstset {
+  numbers = left,
+  stepnumber = 1,
+  numberstyle=\tiny\color{gray},
+  language = Typescript
+}
 
 \pagebreak
 
-!include ibc/1_IBC_ARCHITECTURE.md
+# Architectural Overview
 
-!include ibc/2_IBC_DESIGN_PRINCIPLES.md
+!include ibc/1_IBC_ARCHITECTURE.md.xfm
 
-!include ibc/3_IBC_TERMINOLOGY.md
+!include ibc/2_IBC_DESIGN_PRINCIPLES.md.xfm
 
-!include ibc/4_IBC_USECASES.md
-
-!include ibc/5_IBC_DESIGN_PATTERNS.md
+!include ibc/3_IBC_TERMINOLOGY.md.xfm
 
 # ICS 001 - ICS Standard
 
-!include spec/ics-001-ics-standard/README.md
-
-# ICS 002 - Consensus Verification
-
-!include spec/ics-002-consensus-verification/README.md
-
-# ICS 003 - Connection Semantics
-
-!include spec/ics-003-connection-semantics/README.md
-
-# ICS 004 - Channel & Packet Semantics
-
-!include spec/ics-004-channel-and-packet-semantics/README.md
-
-# ICS 005 - Port Allocation
-
-!include spec/ics-005-port-allocation/README.md
-
-# ICS 018 - Relayer Algorithms
-
-!include spec/ics-018-relayer-algorithms/README.md
+!include spec/ics-001-ics-standard/README.md.xfm
 
 # ICS 023 - Vector Commitments
 
-!include spec/ics-023-vector-commitments/README.md
+!include spec/ics-023-vector-commitments/README.md.xfm
 
 # ICS 024 - Host Requirements
 
-!include spec/ics-024-host-requirements/README.md
+!include spec/ics-024-host-requirements/README.md.xfm
+
+# ICS 002 - Client Semantics
+
+!include spec/ics-002-client-semantics/README.md.xfm
+
+# ICS 003 - Connection Semantics
+
+!include spec/ics-003-connection-semantics/README.md.xfm
+
+# ICS 005 - Port Allocation
+
+!include spec/ics-005-port-allocation/README.md.xfm
+
+# ICS 004 - Channel & Packet Semantics
+
+!include spec/ics-004-channel-and-packet-semantics/README.md.xfm
 
 # ICS 025 - Handler Interface
 
-!include spec/ics-025-handler-interface/README.md
+!include spec/ics-025-handler-interface/README.md.xfm
 
 # ICS 026 - Relayer Module
 
-!include spec/ics-026-relayer-module/README.md
+!include spec/ics-026-relayer-module/README.md.xfm
+
+# ICS 018 - Relayer Algorithms
+
+!include spec/ics-018-relayer-algorithms/README.md.xfm
+
+# ICS 020 - Fungible Token Transfer
+
+!include spec/ics-020-fungible-token-transfer/README.md.xfm
+
+# Appendix A: Use-case Descriptions
+
+!include ibc/4_IBC_USECASES.md.xfm
+
+# Appendix B: Design Patterns
+
+!include ibc/5_IBC_DESIGN_PATTERNS.md.xfm

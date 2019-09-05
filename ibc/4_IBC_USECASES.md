@@ -1,4 +1,4 @@
-# 4: IBC Usecases
+# 4: IBC Use-cases
 
 **This is a set of possible application-level use cases for the inter-blockchain communication protocol.**
 
@@ -34,11 +34,11 @@ There may be a starting "source zone", which starts with the entire token balanc
 
 #### Invariants
 
-Fungibility of any amount across all pegged representations, constant (or formulaic, in the case of a inflationary asset) total supply cumulative across chains.
+Fungibility of any amount across all pegged representations, constant (or formulaic, in the case of a inflationary asset) total supply cumulative across chains, and tokens only exist in a spendable form on one chain at a time.
 
-### Nonfungible tokens
+### Non-fungible tokens
 
-IBC can be used to transfer nonfungible tokens between chains.
+IBC can be used to transfer non-fungible tokens between chains.
 
 #### Representations
 
@@ -46,31 +46,31 @@ Ethereum `ERC721`, Cosmos SDK `sdk.NFT`.
 
 #### Implementation
 
-Two chains elect to "peg" two semantically compatible nonfungible token namespaces to each other, escrowing, unescrowing, creating, and destroying as necessary when sending & handling IBC packets.
+Two chains elect to "peg" two semantically compatible non-fungible token namespaces to each other, escrowing, unescrowing, creating, and destroying as necessary when sending & handling IBC packets.
 
 There may be a starting "source zone" which starts with particular tokens and contains token-associated logic (e.g. breeding CryptoKitties, redeeming digital ticket), or the associated logic may be packaged along with the NFT in a format which all involved chains can understand.
 
 #### Invariants
 
-Any given nonfungible token exists uniquely on one chain, owned by a particular account, at any point in time, and can always be transferred back to the "source" zone to perform associated actions (e.g. breeding a CryptoKitty) if applicable.
+Any given non-fungible token exists uniquely on one chain, owned by a particular account, at any point in time, and can always be transferred back to the "source" zone to perform associated actions (e.g. breeding a CryptoKitty) if applicable.
 
 ### Involved zones
 
 #### Vanilla payments
 
-A "vanilla payments" zone, such as the Cosmos Hub, may allow incoming & outgoing fungible and/or nonfungible token transfers through IBC. Users might elect to keep assets on such a zone due to high security or high connectivity.
+A "vanilla payments" zone, such as the Cosmos Hub, may allow incoming & outgoing fungible and/or non-fungible token transfers through IBC. Users might elect to keep assets on such a zone due to high security or high connectivity.
 
 #### Shielded payments
 
-A "shielded payments" zone, such as the Zcash blockchain (pending [UITs](https://github.com/zcash/zcash/issues/830)), may allow incoming & outgoing fungible and/or nonfungible token transfers through IBC. Tokens which are transferred to such a zone could then be shielded through the zero-knowledge circuit and held, transferred, traded, etc. Once users had accomplished their anonymity-requiring purposes, they could be transferred out and back over IBC to other zones.
+A "shielded payments" zone, such as the Zcash blockchain (pending [UITs](https://github.com/zcash/zcash/issues/830)), may allow incoming & outgoing fungible and/or non-fungible token transfers through IBC. Tokens which are transferred to such a zone could then be shielded through the zero-knowledge circuit and held, transferred, traded, etc. Once users had accomplished their anonymity-requiring purposes, they could be transferred out and back over IBC to other zones.
 
-#### Decentralized exchange
+#### Decentralised exchange
 
-A "decentralized exchange" zone may allow incoming & outgoing fungible and/or nonfungible token transfers through IBC, and allow tokens stored on that zone to be traded with each other through a decentralized exchange protocol in the style of Uniswap or 0x (or future such protocols).
+A "decentralised exchange" zone may allow incoming & outgoing fungible and/or non-fungible token transfers through IBC, and allow tokens stored on that zone to be traded with each other through a decentralised exchange protocol in the style of Uniswap or 0x (or future such protocols).
 
-#### Decentralized finance
+#### Decentralised finance
 
-A "decentralized finance" zone, such as the Ethereum blockchain, may allow incoming & outgoing fungible and/or nonfungible token transfers though IBC, and allow tokens stored on that zone to interact with a variety of decentralized financial products: synthetic stablecoins, collateralized loans, liquidity pools, etc.
+A "decentralised finance" zone, such as the Ethereum blockchain, may allow incoming & outgoing fungible and/or non-fungible token transfers though IBC, and allow tokens stored on that zone to interact with a variety of decentralised financial products: synthetic stablecoins, collateralised loans, liquidity pools, etc.
 
 ## Multichain contracts
 
@@ -84,11 +84,11 @@ IBC can be used to execute arbitrary contract-to-contract calls between separate
 
 Contracts: Ethereum `EVM`, `WASM` (various), Tezos `Michelson`, Agoric `Jessie`.
 
-Calldata: Ethereum `ABI`, generic serialization formats such as RLP, Protobuf, or JSON.
+Calldata: Ethereum `ABI`, generic serialisation formats such as RLP, Protobuf, or JSON.
 
 #### Implementation
 
-A contract on one zone which intends to call a contract on another zone must serialize the calldata and address of the destination contract in an IBC packet, which can be relayed through an IBC connection to the IBC handler on the destination chain, which will call the specified contract, executing any associated logic, and return the result of the call (if applicable) back in a second IBC packet to the calling contract, which will need to handle it asynchronously.
+A contract on one zone which intends to call a contract on another zone must serialise the calldata and address of the destination contract in an IBC packet, which can be relayed through an IBC connection to the IBC handler on the destination chain, which will call the specified contract, executing any associated logic, and return the result of the call (if applicable) back in a second IBC packet to the calling contract, which will need to handle it asynchronously.
 
 Implementing chains may elect to provide a "channel" object to contract developers, with a send end, receive end, configurable buffer size, etc. much like channels in multiprocess concurrent programming in languages such as Go or Haskell.
 
@@ -98,7 +98,7 @@ Contract-dependent.
 
 ### Cross-chain fee payment
 
-#### Represenations
+#### Representations
 
 Same as "fungible tokens" as above.
 
@@ -112,9 +112,9 @@ The funds can be periodically send back over the IBC connection from the first c
 
 Correct fees paid on one of two chains but not both.
 
-### Interchain collateralization
+### Interchain collateralisation
 
-A subset of the validator set on one chain can elect to validate another chain and be held accountable for equivocation faults commited on that chain submitted over an IBC connection, and the second chain can delegate its' validator update logic to the first chain through the same IBC connection.
+A subset of the validator set on one chain can elect to validate another chain and be held accountable for equivocation faults committed on that chain submitted over an IBC connection, and the second chain can delegate its validator update logic to the first chain through the same IBC connection.
 
 #### Representations
 
@@ -122,13 +122,13 @@ ABCI `Evidence` and `ValidatorUpdate`.
 
 #### Implementation
 
-`ValidatorUpdate`s for a participating subset of the primary (collateralizing) chain's validator set are relayed in IBC packets to the collaralized chain, which uses them directly to set its own validator set.
+`ValidatorUpdate`s for a participating subset of the primary (collateralising) chain's validator set are relayed in IBC packets to the collateralised chain, which uses them directly to set its own validator set.
 
-`Evidence` of any equivocations is relayed back from the collateralized chain to the primary chain so that the equivocating validator(s) can be slashed.
+`Evidence` of any equivocations is relayed back from the collateralised chain to the primary chain so that the equivocating validator(s) can be slashed.
 
 #### Invariants
 
-Validators which commit an equivocation fault are slashable on at least one chain, and possibly the validator set of a collateralized chain is bound to the validator set of a primary (collateralizing) chain.
+Validators which commit an equivocation fault are slashable on at least one chain, and possibly the validator set of a collateralised chain is bound to the validator set of a primary (collateralising) chain.
 
 ## Sharding
 
@@ -138,11 +138,11 @@ IBC can be used to migrate smart contracts & data between blockchains with mutua
 
 #### Representations
 
-Same as "cross-chain contract calls" above, with the additional requirement that all involved code be serializable and mutually comprehensible (executable) by the involved chains.
+Same as "cross-chain contract calls" above, with the additional requirement that all involved code be serialisable and mutually comprehensible (executable) by the involved chains.
 
 #### Implementation
 
-Participating chains migrate contracts, which they can all execute, between themselves according to a known balancing ("sharding") algorithm, perhaps designed to equalize load or acheive efficient locality for frequently-interacting contracts.
+Participating chains migrate contracts, which they can all execute, between themselves according to a known balancing ("sharding") algorithm, perhaps designed to equalise load or achieve efficient locality for frequently-interacting contracts.
 
 A routing system on top of core IBC will be required to correctly route cross-chain contract calls between contracts which may frequently switch chains.
 
@@ -156,11 +156,11 @@ IBC can be used to implement an arbitrary-depth multi-chain "cache" system where
 
 #### Representations
 
-Generic serialization formats, such as Amino, RLP, Protobuf, JSON.
+Generic serialisation formats, such as Amino, RLP, Protobuf, JSON.
 
 #### Implementation
 
-An arbitrary-depth IBC-connection-linked-list of chains, with the first chain optimized for compute and later chains optimized for cheaper storage, can implement a hierarchical cache, where data unused for a period of time on any chain is migrated to the next chain in the list. When data is necessary (e.g. for a contract call or storage access), if it not stored on the chain looking it up, it must be relayed over an IBC packet back to that chain (which can then re-cache it for some period).
+An arbitrary-depth IBC-connection-linked-list of chains, with the first chain optimised for compute and later chains optimised for cheaper storage, can implement a hierarchical cache, where data unused for a period of time on any chain is migrated to the next chain in the list. When data is necessary (e.g. for a contract call or storage access), if it not stored on the chain looking it up, it must be relayed over an IBC packet back to that chain (which can then re-cache it for some period).
 
 #### Invariants
 

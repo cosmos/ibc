@@ -1,10 +1,10 @@
 syntax = 'proto3';
 
 enum ConnectionState {
-  INIT = 0;
-  TRYOPEN = 1;
-  OPEN = 2;
-  CLOSED = 3;
+  INIT = 1;
+  TRYOPEN = 2;
+  OPEN = 3;
+  CLOSED = 4;
 }
 
 message ConnectionEnd {

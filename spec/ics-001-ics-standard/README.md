@@ -5,7 +5,7 @@ stage: draft
 category: meta
 author: Christopher Goes <cwgoes@tendermint.com>
 created: 2019-02-12
-modified: 2019-04-11
+modified: 2019-08-25
 ---
 
 ## What is an ICS?
@@ -14,18 +14,18 @@ An inter-chain standard (ICS) is a design document describing a particular proto
 standard, or feature expected to be of use to the Cosmos ecosystem.
 An ICS should list the desired properties of the standard, explain the design rationale, and
 provide a concise but comprehensive technical specification. The primary ICS author
-is responsible for pushing the proposal through the standardization process, soliciting
+is responsible for pushing the proposal through the standardisation process, soliciting
 input and support from the community, and communicating with relevant stakeholders to
 ensure (social) consensus.
 
-The inter-chain standardization process should be the primary vehicle for proposing
+The inter-chain standardisation process should be the primary vehicle for proposing
 ecosystem-wide protocols, changes, and features, and ICS documents should persist after
 consensus as a record of design decisions and an information repository for future implementers.
 
 Inter-chain standards should *not* be used for proposing changes to a particular blockchain
 (such as the Cosmos Hub), specifying implementation particulars (such as language-specific data structures),
 or debating governance proposals on existing Cosmos blockchains (although it is possible
-that individual blockchains in the Cosmos ecosystem may utilize their governance processes
+that individual blockchains in the Cosmos ecosystem may utilise their governance processes
 to approve or reject inter-chain standards).
 
 ## Components
@@ -49,12 +49,11 @@ See [README.md](../../README.md) for a description of the ICS acceptance stages.
 
 `category` - ICS category, one of the following:
 - `meta` - A standard about the ICS process
-- `ibc-core` - A standard about the inter-blockchain communication system core protocol.
-- `ibc-app` - A standard about the inter-blockchain communication system application layer.
-- `misc` - A standard about miscellaneous / auxiliary features, e.g. message signing
+- `IBC/TAO` - A standard about an inter-blockchain communication system core transport, authentication, and ordering layer protocol.
+- `IBC/APP` - A standard about an inter-blockchain communication system application layer protocol.
 
 `author` - ICS author(s) & contact information (in order of preference: email, GitHub handle, Twitter handle, other contact methods likely to elicit response).
-           The first author is the primary "owner" of the ICS and is responsible for advancing it through the standardization process.
+           The first author is the primary "owner" of the ICS and is responsible for advancing it through the standardisation process.
            Subsequent author ordering should be in order of contribution amount.
 
 `created` - Date ICS was first created (`YYYY-MM-DD`)
@@ -86,14 +85,14 @@ required references, and technical details where appropriate.
 The specification may have any or all of the following sub-components, as appropriate to the particular ICS. Included sub-components should be listed in the order specified here.
 
 - *Motivation* - A rationale for the existence of the proposed feature, or the proposed changes to an existing feature.
-- *Definitions* - A list of new terms or concepts utilized in this ICS or required to understand this ICS. Any terms not defined in the top-level "docs" folder must be defined here.
+- *Definitions* - A list of new terms or concepts utilised in this ICS or required to understand this ICS. Any terms not defined in the top-level "docs" folder must be defined here.
 - *Desired Properties* - A list of the desired properties or characteristics of the protocol or feature specified, and expected effects or failures when the properties are violated.
 - *Technical Specification* - All technical details of the proposed protocol including syntax, semantics, sub-protocols, data structures, algorithms, and pseudocode as appropriate.
     The technical specification should be detailed enough such that separate correct implementations of the specification without knowledge of each other are compatible.
 - *Backwards Compatibility* - A discussion of compatibility (or lack thereof) with previous feature or protocol versions.
 - *Forwards Compatibility* - A discussion of compatibility (or lack thereof) with future possible or expected features or protocol versions.
 - *Example Implementation* - A concrete example implementation or description of an expected implementation to serve as the primary reference for implementers.
-- *Other Implementations* - A list of candidate or finalized implementations (external references, not inline).
+- *Other Implementations* - A list of candidate or finalised implementations (external references, not inline).
 
 ### History
 
@@ -109,9 +108,9 @@ An ICS should include a copyright section waiving rights via [Apache 2.0](https:
 
 ### General
 
-ICS specifications must be written in GitHub-flavored Markdown.
+ICS specifications must be written in GitHub-flavoured Markdown.
 
-For a GitHub-flavored Markdown cheat sheet, see [here](https://github.com/adam-p/markdown-here/wiki/Markdown-Cheatsheet). For a local Markdown renderer, see [here](https://github.com/joeyespo/grip).
+For a GitHub-flavoured Markdown cheat sheet, see [here](https://github.com/adam-p/markdown-here/wiki/Markdown-Cheatsheet). For a local Markdown renderer, see [here](https://github.com/joeyespo/grip).
 
 ### Language
 
@@ -165,6 +164,7 @@ the ICS process. Please direct all comments to the ICS repository maintainers.
 March 4th, 2019: Initial draft finished and submitted as a PR
 March 7th, 2019: Draft merged
 April 11th, 2019: Updates to pseudocode formatting, add definitions subsection
+August 17th, 2019: Clarifications to categories
 
 ## Copyright
 

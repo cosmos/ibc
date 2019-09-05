@@ -2,17 +2,16 @@
 ics: 24
 title: Host State Machine Requirements
 stage: draft
-category: ibc-core
-requires: 23
-required-by: 2, 3, 4, 5, 18
+category: IBC/TAO
+required-by: 2, 3, 4, 5, 18, 23
 author: Christopher Goes <cwgoes@tendermint.com>
 created: 2019-04-16
-modified: 2019-05-11
+modified: 2019-08-25
 ---
 
 ## Synopsis
 
-This specification defines the minimal set of interfaces which must be provided and properties which must be fulfilled by a blockchain & state machine hosting an IBC handler (implementation of the interblockchain communication protocol; see [the architecture document](../../docs/ibc/1_IBC_ARCHITECTURE.md) for details).
+This specification defines the minimal set of interfaces which must be provided and properties which must be fulfilled by a state machine hosting an implementation of the interblockchain communication protocol.
 
 ### Motivation
 
@@ -24,69 +23,131 @@ IBC is designed to be a common standard which will be hosted by a variety of blo
 
 ### Desired Properties
 
-IBC should require as simple an interface from the underlying state machine as possible to maximize the ease of correct implementation.
+IBC should require as simple an interface from the underlying state machine as possible to maximise the ease of correct implementation.
 
 ## Technical Specification
 
-### Keys, Identifiers, Separators
+### Module system
 
-A `Key` is a bytestring used as the key for an object stored in state. Keys MUST contain only alphanumeric characters and the separator `/`.
+The host state machine must support a module system, whereby self-contained, potentially mutually distrusted packages of code can safely execute on the same ledger, control how and when they allow other modules to communicate with them, and be identified and manipulated by a "master module" or execution environment.
 
-An `Identifier` is a bytestring used as a key for an object stored in state, such as a connection, channel, or light client. Identifiers MUST consist of alphanumeric characters only.
+The IBC/TAO specifications define the implementations of two modules: the core "IBC handler" module and the "IBC relayer" module. IBC/APP specifications further define other modules for particular packet handling application logic. IBC requires that the "master module" or execution environment can be used to grant other modules on the host state machine access to the IBC handler module and/or the IBC relayer module, but otherwise does not impose requirements on the functionality or communication abilities of any other modules which may be co-located on the state machine.
 
-Identifiers are not intended to be valuable resources — to prevent name squatting, minimum length requirements or pseudorandom generation MAY be implemented.
+### Paths, identifiers, separators
 
-The separator `/` is used to separate and concatenate two identifiers or an identifier and a constant bytestring. Identifiers MUST NOT contain the `/` character, which prevents ambiguity.
+An `Identifier` is a bytestring used as a key for an object stored in state, such as a connection, channel, or light client. Identifiers MUST consist of alphanumeric characters only. Identifiers MUST be non-empty (of positive integer length).
 
-Variable interpolation, denoted by curly braces, MAY be used as shorthand to define key formats, e.g. `client/{clientIdentifier}/consensusState`.
+A `Path` is a bytestring used as the key for an object stored in state. Paths MUST contain only identifiers, constant alphanumeric strings, and the separator `"/"`. 
+
+Identifiers are not intended to be valuable resources — to prevent name squatting, minimum length requirements or pseudorandom generation MAY be implemented, but particular restrictions are not imposed by this specification.
+
+The separator `"/"` is used to separate and concatenate two identifiers or an identifier and a constant bytestring. Identifiers MUST NOT contain the `"/"` character, which prevents ambiguity.
+
+Variable interpolation, denoted by curly braces, is used throughout this specification as shorthand to define path formats, e.g. `client/{clientIdentifier}/consensusState`.
 
 ### Key/value Store
 
-Host chains MUST provide a simple key-value store interface, with three functions which behave in the standard way:
+The host state machine MUST provide a key/value store interface 
+with three functions that behave in the standard way:
 
 ```typescript
-type Key = string
-
-type Value = string
+type get = (path: Path) => Value | void
 ```
 
 ```typescript
-type get = (key: Key) => Value | void
+type set = (path: Path, value: Value) => void
 ```
 
 ```typescript
-type set = (key: Key, value: Value) => void
+type delete = (path: Path) => void
 ```
 
-```typescript
-type del = (key: Key) => void
+`Path` is as defined above. `Value` is an arbitrary bytestring encoding of a particular data structure. Encoding details are left to separate ICSs.
+
+These functions MUST be permissioned to the IBC handler module (the implementation of which is described in separate standards) only, so only the IBC handler module can `set` or `delete` the paths that can be read by `get`. This can possibly be implemented as a sub-store (prefixed key-space) of a larger key/value store used by the entire state machine.
+
+Host state machines MUST provide two instances of this interface -
+a `provableStore` for storage read by (i.e. proven to) other chains,
+and a `privateStore` for storage local to the host, upon which `get`
+, `set`, and `delete` can be called, e.g. `provableStore.set('some/path', 'value')`.
+
+The `provableStore`:
+
+- MUST write to a key/value store whose data can be externally proved with a vector commitment as defined in [ICS 23](../ics-023-vector-commitments). 
+- MUST use canonical data structure encodings provided in these specifications as proto3 files
+
+The `privateStore`:
+
+- MAY support external proofs, but is not required to - the IBC handler will never write data to it which needs to be proved.
+- MAY use canonical proto3 data structures, but is not required to - it can use
+  whatever format is preferred by the application environment.
+
+> Note: any key/value store interface which provides these methods & properties is sufficient for IBC. Host state machines may implement "proxy stores" with underlying storage models which do not directly match the path & value pairs set and retrieved through the store interface — paths could be grouped into buckets & values stored in pages which could be proved in a single commitment, path-spaces could be remapped non-contiguously in some bijective manner, etc — as long as `get`, `set`, and `delete` behave as expected and other machines can verify commitment proofs of path & value pairs (or their absence) in the provable store.
+
+### Path-space
+
+At present, IBC/TAO utilises the following path prefixes for the `provableStore` and `privateStore`. Future paths may be used in future versions of the protocol, so the entire key-space in both stores MUST be reserved for the IBC handler.
+
+| Store          | Path format                                                              | Value type        | Defined in |
+| -------------- | ------------------------------------------------------------------------ | ----------------- | ---------------------- |
+| privateStore   | "clients/{identifier}"                                                   | ClientState       | [ICS 2](../ics-002-client-semantics) |
+| provableStore  | "clients/{identifier}/consensusState"                                    | ConsensusState    | [ICS 2](../ics-002-client-semantics) |
+| provableStore  | "clients/{identifier}/type"                                              | ClientType        | [ICS 2](../ics-002-client-semantics) |
+| provableStore  | "connections/{identifier}"                                               | ConnectionEnd     | [ICS 3](../ics-003-connection-semantics) |
+| provableStore  | "ports/{identifier}/channels/{identifier}"                               | ChannelEnd        | [ICS 4](../ics-004-channel-and-packet-semantics) |
+| provableStore  | "ports/{identifier}/channels/{identifier}/nextSequenceRecv"              | uint64            | [ICS 4](../ics-004-channel-and-packet-semantics) |
+| provableStore  | "ports/{identifier}/channels/{identifier}/packets/{sequence}"            | bytes             | [ICS 4](../ics-004-channel-and-packet-semantics) |
+| provableStore  | "ports/{identifier}channels/{identifier}/acknowledgements/{sequence}"    | bytes             | [ICS 4](../ics-004-channel-and-packet-semantics) |
+| provableStore  | "ports/{identifier}"                                                     | Path              | [ICS 5](../ics-005-port-allocation) |
+| privateStore   | "callbacks/{identifier}"                                                 | ModuleCallbacks   | [ICS 26](../ics-026-relayer-module) |
+
+### Module layout
+
+Represented spatially, the layout of modules & their included specifications on a host state machine looks like so (Aardvark, Betazoid, and Cephalopod are arbitrary modules):
+
+```
++----------------------------------------------------------------------------------------------------------+
+|                                                                                                          |
+| Host State Machine                                                                                       |
+|                                                                                                          |
+| +-------------------+       +--------------------+      +----------------------------------------------+ |
+| | Module Aardvark   | <-->  | IBC Relayer Module |      | IBC Handler Module                           | |
+| +-------------------+       |                    |      |                                              | |
+|                             | Implements ICS 26. |      | Implements ICS 2, 3, 4, 5 internally.        | |
+| +-------------------+       |                    |      |                                              | |
+| | Module Betazoid   | <-->  |                    | -->  | Exposes interface defined in ICS 25.         | |
+| +-------------------+       |                    |      |                                              | |
+|                             |                    |      |                                              | |
+| +-------------------+       |                    |      |                                              | |
+| | Module Cephalopod | <-->  |                    |      |                                              | |
+| +-------------------+       +--------------------+      +----------------------------------------------+ |
+|                                                                                                          |
++----------------------------------------------------------------------------------------------------------+
 ```
 
-`Key` is as defined above. `Value` is an arbitrary bytestring encoding of a particular data structure. Encoding details are left to separate ICSs.
+### Consensus state introspection
 
-These functions MUST be permissioned to the IBC handler module (the implementation of which is described in separate standards) only, so only the IBC handler module can `set` or `delete` the keys which can be read by `get`. This can possibly be implemented as a sub-store (prefixed keyspace) of a larger key-value store used by the entire state machine.
-
-### Consensus State Introspection
-
-Host chains MUST provide the ability to introspect their current height, with `getCurrentHeight`:
+Host state machines MUST provide the ability to introspect their current height, with `getCurrentHeight`:
 
 ```
 type getCurrentHeight = () => uint64
 ```
 
-Host chains MUST define a unique `ConsensusState` type fulfilling the requirements of [ICS 2](../ics-002-consensus-verification):
+Host state machines MUST define a unique `ConsensusState` type fulfilling the requirements of [ICS 2](../ics-002-client-semantics), with a canonical binary serialisation.
 
-```typescript
-type ConsensusState object
-```
-
-Host chains MUST provide the ability to introspect their own consensus state, with `getConsensusState`:
+Host state machines MUST provide the ability to introspect their own consensus state, with `getConsensusState`:
 
 ```typescript
 type getConsensusState = (height: uint64) => ConsensusState
 ```
 
-`getConsensusState` is RECOMMENDED to return the consensus state for the consensus algorithm of the host chain at the specified height, for all heights greater than zero and less than or equal to the current height. `getConsensusState` MAY return the consensus state only for some number of recent heights, where the number is constant for the host chain.
+`getConsensusState` MUST return the consensus state for at least some number `n` of contiguous recent heights, where `n` is constant for the host state machine. Heights older than `n` MAY be safely pruned (causing future calls to fail for those heights).
+
+Host state machines MUST provide the ability to introspect this stored recent consensus state count `n`, with `getStoredRecentConsensusStateCount`:
+
+```typescript
+type getStoredRecentConsensusStateCount = () => uint64
+```
 
 ### Commitment Path Introspection
 
@@ -100,51 +161,53 @@ The result `CommitmentPath` is the definition of the key-value store's substate 
 
 ### Port system
 
-Host chains MUST implement a port system, where the IBC handler can expose functions to different parts of the state machine (perhaps modules) that can bind to uniquely named ports.
+Host state machines MUST implement a port system, where the IBC handler can allow different modules in the host state machine to bind to uniquely named ports. Ports are identified by an `Identifier`.
 
-Host chains MUST permission interaction with the IBC handler such that:
+Host state machines MUST permission interaction with the IBC handler such that:
 
 - Once a module has bound to a port, no other modules can use that port until the module releases it
 - A single module can bind to multiple ports
-- Ports are allocated first-come first-serve and "reserved" ports for known modules can be bound when the chain is first started
+- Ports are allocated first-come first-serve and "reserved" ports for known modules can be bound when the state machine is first started
 
-This permissioning can be implemented either with unique references (object capabilities) for each port (a la the Cosmos SDK) or with source authentication (a la Ethereum), in either case enforced by the host state machine. See [ICS 5](../ics-005-port-allocation) for details.
+This permissioning can be implemented with unique references (object capabilities) for each port (a la the Cosmos SDK), with source authentication (a la Ethereum), or with some other method of access control, in any case enforced by the host state machine. See [ICS 5](../ics-005-port-allocation) for details.
 
-Modules which wish to make use of particular IBC features MAY implement certain handler functions, e.g. to add additional logic to a channel handshake with an associated module on another chain.
+Modules that wish to make use of particular IBC features MAY implement certain handler functions, e.g. to add additional logic to a channel handshake with an associated module on another state machine.
 
 ### Datagram submission
 
-Host chains MAY define a unique `Datagram` type & `submitDatagram` function to submit [datagrams](../../docs/ibc/2_IBC_TERMINOLOGY.md) directly to the relayer module:
+Host state machines which implement the relayer module MAY define a `submitDatagram` function to submit [datagrams](../../docs/ibc/2_IBC_TERMINOLOGY.md), which will be included in transactions, directly to the relayer module (defined in [ICS 26](../ics-026-relayer-module):
 
 ```typescript
-type Datagram object
-// fields defined per datagram type, and possible additional fields defined per chain
-
-type SubmitDatagram = (datagram: Datagram) => void
+type submitDatagram = (datagram: Datagram) => void
 ```
 
-`submitDatagram` allows relayers to relay IBC datagrams directly to the host chain. Host chains MAY require that the relayer submitting the datagram has an account to pay transaction fees, signs over the datagram in a larger transaction structure, etc - `submitDatagram` MUST define any such packaging required.
+`submitDatagram` allows relayer processes to submit IBC datagrams directly to the relayer module on the host state machine. Host state machines MAY require that the relayer process submitting the datagram has an account to pay transaction fees, signs over the datagram in a larger transaction structure, etc — `submitDatagram` MUST define & construct any such packaging required.
 
-Host chains MAY also define a `pendingDatagrams` function to scan the pending datagrams to be sent to another counterparty chain:
+### Exception system
+
+Host state machines MUST support an exception system, whereby a transaction can abort execution and revert any previously made state changes (including state changes in other modules happening within the same transaction), excluding gas consumed & fee payments as appropriate, and a system invariant violation can halt the state machine.
+
+This exception system MUST be exposed through two functions: `abortTransactionUnless` and `abortSystemUnless`, where the former reverts the transaction and the latter halts the state machine.
 
 ```typescript
-type PendingDatagrams = (counterparty: Chain) => Set<Datagram>
+type abortTransactionUnless = (bool) => void
 ```
 
+If the boolean passed to `abortTransactionUnless` is `true`, the host state machine need not do anything. If the boolean passed to `abortTransactionUnless` is `false`, the host state machine MUST abort the transaction and revert any previously made state changes, excluding gas consumed & fee payments as approriate.
+
 ```typescript
-interface Chain {
-  submitDatagram: SubmitDatagram
-  pendingDatagrams: PendingDatagrams
-}
+type abortSystemUnless = (bool) => void
 ```
+
+If the boolean passed to `abortSystemUnless` is `true`, the host state machine need not do anything. If the boolean passed to `abortSystemUnless` is `false`, the host state machine MUST halt.
 
 ### Data availability
 
-For safety (e.g. exactly-once packet delivery), host chains MUST have eventual data availability, such that any key-value pairs in state can be eventually retrieved by relayers.
+For deliver-or-timeout safety, host state machines MUST have eventual data availability, such that any key/value pairs in state can be eventually retrieved by relayers. For exactly-once safety, data availability is not required.
 
-For liveness (relaying packets, which will have a timeout), host chains MUST have partially synchronous data availability (e.g. within a wall clock or block height bound), such that any key-value pairs in state can be retrieved by relayers within the bound.
+For liveness of packet relay, host state machines MUST have bounded transactional liveness (and thus necessarily consensus liveness), such that incoming transactions are confirmed within a block height bound (in particular, less than the timeouts assign to the packets).
 
-Data computable from a subset of state and knowledge of the state machine (e.g. IBC packet data, which is not directly stored) are also assumed to be available to and efficiently computable by relayers.
+IBC packet data, and other data which is not directly stored in the state vector but is relied upon by relayers, MUST be available to & efficiently computable by relayer processes.
 
 Light clients of particular consensus algorithms may have different and/or more strict data availability requirements.
 
@@ -154,7 +217,7 @@ Not applicable.
 
 ## Forwards Compatibility
 
-Key-value store functionality and consensus state type are unlikely to change during operation of a single host chain.
+Key/value store functionality and consensus state type are unlikely to change during operation of a single host state machine.
 
 `submitDatagram` can change over time as relayers should be able to update their processes.
 
@@ -171,6 +234,7 @@ Coming soon.
 29 April 2019 - Initial draft
 11 May 2019 - Rename "RootOfTrust" to "ConsensusState"
 25 June 2019 - Use "ports" instead of module names
+18 August 2019 - Revisions to module system, definitions
 
 ## Copyright
 

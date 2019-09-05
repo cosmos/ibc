@@ -34,9 +34,9 @@ modified: (modification date)
 
 (new data structures, if applicable)
 
-### Subprotocols
+### Sub-protocols
 
-(subprotocols, if applicable)
+(sub-protocols, if applicable)
 
 ### Properties & Invariants
 

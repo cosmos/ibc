@@ -1,2 +1,11 @@
+# vim swapfiles
+
 *.swp
 *.swo
+
+# agda interpreter state
+
+*.agdai
+
+# temporary files created during pdf preprocessing
+*.md.xfm
