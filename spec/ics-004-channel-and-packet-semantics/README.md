@@ -243,6 +243,7 @@ function chanOpenInit(
 
     abortTransactionUnless(provableStore.get(channelPath(portIdentifier, channelIdentifier)) === null)
     connection = provableStore.get(connectionPath(connectionHops[0]))
+
     // optimistic channel handshakes are allowed
     abortTransactionUnless(connection.state !== CLOSED)
     abortTransactionUnless(authenticate(provableStore.get(portPath(portIdentifier))))
@@ -446,6 +447,7 @@ Note that the full packet is not stored in the state of the chain - merely a sho
 ```typescript
 function sendPacket(packet: Packet) {
     channel = provableStore.get(channelPath(packet.sourcePort, packet.sourceChannel))
+
     // optimistic sends are permitted once the handshake has started
     abortTransactionUnless(channel.state !== CLOSED)
     abortTransactionUnless(authenticate(provableStore.get(portPath(packet.sourcePort))))
@@ -453,7 +455,6 @@ function sendPacket(packet: Packet) {
     abortTransactionUnless(packet.destChannel === channel.counterpartyChannelIdentifier)
     connection = provableStore.get(connectionPath(packet.connectionHops[0]))
 
-    // optimistic sends are permitted once the handshake has started
     abortTransactionUnless(connection.state !== CLOSED)
     abortTransactionUnless(packet.connectionHops === channel.connectionHops)
 
@@ -900,6 +901,10 @@ function cleanupPacketUnordered(
 ```
 
 #### Reasoning about race conditions
+
+##### Simultaneous handshake attempts
+
+If two machines simultaneously initiate channel opening handshakes with each other, attempting to use the same identifiers, both will fail and new identifiers must be used.
 
 ##### Identifier allocation
 
