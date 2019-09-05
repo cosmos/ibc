@@ -22,6 +22,10 @@ An *actor*, or a *user* (used interchangeably), is an entity interacting with th
 
 A *machine*, *chain*, *blockchain*, or *ledger* (used interchangeably), is a state machine (which may be a distributed ledger, or "blockchain", although a strict chain of blocks may not be required) implementing part or all of the IBC specification.
 
+### Relayer process
+
+A *relayer process* is an off-chain process responsible for relaying IBC packet data & metadata between two or more machines by scanning their states & submitting transactions.
+
 ### State Machine
 
 The *state machine* of a particular chain defines the structure of the state as well as the set of rules which determines valid transactions that trigger state-transitions based on the current state agreed upon by the consensus algorithm of the chain.
@@ -34,17 +38,13 @@ A *consensus* algorithm is the protocol used by the set of processes operating a
 
 The *consensus state* is the set of information about the state of a consensus algorithm required to verify proofs about the output of that consensus algorithm (e.g. commitment roots in signed headers).
 
-### Trusted State
+### Commitment
 
-A *trusted state* is a particular state which a machine has decided to assume to be correct, either a priori or having verified a progression from a preceding trusted state.
+A cryptographic *commitment* is a way to cheaply verify membership or non-membership of a key/value pair in a mapping, where the mapping can be committed to with a short witness string.
 
 ### Header
 
-A *header* is an update to the consensus state of a particular blockchain that can be verified in a well-defined fashion by a "light client" algorithm defined for that particular consensus algorithm.
-
-### Commitment 
-
-A cryptographic *commitment* is a way to cheaply verify membership of a key => value pair in a mapping, where the mapping can be committed to with a short witness string.
+A *header* is an update to the consensus state of a particular blockchain, including a commitment to the current state, that can be verified in a well-defined fashion by a "light client" algorithm.
 
 ### CommitmentProof
 
@@ -106,7 +106,8 @@ IBC sub-protocols are reasoned about as interactions between two chains `A` and 
 
 ### Equivocation
 
-*Equivocation* is a particular class of consensus fault committed by a validator or validators which sign votes on multiple different successors to a single block. All equivocations are misbehaviours.
+*Equivocation* is a particular class of consensus fault committed by a validator or validators which sign votes on multiple different successors to a single block in an invalid manner.
+All equivocations are misbehaviours.
 
 ### Data availability
 
@@ -126,7 +127,7 @@ IBC sub-protocols are reasoned about as interactions between two chains `A` and 
 
 ### Transactional liveness
 
-*Transactional liveness* is the continued confirmation of incoming transactions (which transactions should be clear by context) by the consensus algorithm of a particular machine. Transactional liveness requires consensus liveness, but consensus liveness does not necessarily provide transactional liveness.
+*Transactional liveness* is the continued confirmation of incoming transactions (which transactions should be clear by context) by the consensus algorithm of a particular machine. Transactional liveness requires consensus liveness, but consensus liveness does not necessarily provide transactional liveness. Transactional liveness implies censorship resistance.
 
 ### Bounded consensus liveness
 
