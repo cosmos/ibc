@@ -225,7 +225,7 @@ interface ClientCreate {
 
 ```typescript
 function handleClientCreate(datagram: ClientCreate) {
-    handler.createClient(datagram.identifier, datagram.type datagram.consensusState)
+    handler.createClient(datagram.identifier, datagram.type, datagram.consensusState)
 }
 ```
 
