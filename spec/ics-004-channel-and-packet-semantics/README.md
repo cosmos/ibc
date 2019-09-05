@@ -106,7 +106,6 @@ interface Packet {
   sourceChannel: Identifier
   destPort: Identifier
   destChannel: Identifier
-  connectionHops: [Identifier]
   data: bytes
 }
 ```
@@ -464,11 +463,10 @@ function sendPacket(packet: Packet) {
     abortTransactionUnless(authenticate(provableStore.get(portPath(packet.sourcePort))))
     abortTransactionUnless(packet.destPort === channel.counterpartyPortIdentifier)
     abortTransactionUnless(packet.destChannel === channel.counterpartyChannelIdentifier)
-    connection = provableStore.get(connectionPath(packet.connectionHops[0]))
+    connection = provableStore.get(connectionPath(channel.connectionHops[0]))
 
     abortTransactionUnless(connection !== null)
     abortTransactionUnless(connection.state !== CLOSED)
-    abortTransactionUnless(packet.connectionHops === channel.connectionHops)
 
     consensusState = provableStore.get(consensusStatePath(connection.clientIdentifier))
     abortTransactionUnless(consensusState.getHeight() < packet.timeoutHeight)
@@ -518,7 +516,6 @@ function recvPacket(
     connection = provableStore.get(connectionPath(channel.connectionHops[0]))
     abortTransactionUnless(connection !== null)
     abortTransactionUnless(connection.state === OPEN)
-    abortTransactionUnless(packet.connectionHops === channel.connectionHops)
 
     abortTransactionUnless(getConsensusHeight() < packet.timeoutHeight)
 
@@ -576,7 +573,6 @@ function acknowledgePacket(
     abortTransactionUnless(connection !== null)
     abortTransactionUnless(connection.state === OPEN)
     abortTransactionUnless(packet.sourcePort === channel.counterpartyPortIdentifier)
-    abortTransactionUnless(packet.connectionHops === channel.connectionHops)
 
     // verify we sent the packet and haven't cleared it out yet
     abortTransactionUnless(provableStore.get(packetCommitmentPath(packet.sourcePort, packet.sourceChannel, packet.sequence))
@@ -634,10 +630,9 @@ function timeoutPacketOrdered(
     abortTransactionUnless(authenticate(provableStore.get(portPath(packet.sourcePort))))
     abortTransactionUnless(packet.destChannel === channel.counterpartyChannelIdentifier)
 
-    connection = provableStore.get(connectionPath(packet.connectionHops[0]))
+    connection = provableStore.get(connectionPath(channel.connectionHops[0]))
     // note: the connection may have been closed
     abortTransactionUnless(packet.destPort === channel.counterpartyPortIdentifier)
-    abortTransactionUnless(packet.connectionHops === channel.connectionHops)
 
     // check that timeout height has passed on the other end
     abortTransactionUnless(proofHeight >= packet.timeoutHeight)
@@ -691,10 +686,9 @@ function timeoutPacketUnordered(
     abortTransactionUnless(authenticate(provableStore.get(portPath(packet.sourcePort))))
     abortTransactionUnless(packet.destChannel === channel.counterpartyChannelIdentifier)
 
-    connection = provableStore.get(connectionPath(packet.connectionHops[0]))
+    connection = provableStore.get(connectionPath(channel.connectionHops[0]))
     // note: the connection may have been closed
     abortTransactionUnless(packet.destPort === channel.counterpartyPortIdentifier)
-    abortTransactionUnless(packet.connectionHops === channel.connectionHops)
 
     // check that timeout height has passed on the other end
     abortTransactionUnless(proofHeight >= packet.timeoutHeight)
@@ -739,10 +733,9 @@ function timeoutOnClose(
     abortTransactionUnless(authenticate(provableStore.get(portPath(packet.sourcePort))))
     abortTransactionUnless(packet.destChannel === channel.counterpartyChannelIdentifier)
 
-    connection = provableStore.get(connectionPath(packet.connectionHops[0]))
+    connection = provableStore.get(connectionPath(channel.connectionHops[0]))
     // note: the connection may have been closed
     abortTransactionUnless(packet.destPort === channel.counterpartyPortIdentifier)
-    abortTransactionUnless(packet.connectionHops === channel.connectionHops)
 
     // verify we actually sent this packet, check the store
     abortTransactionUnless(provableStore.get(packetCommitmentPath(packet.sourcePort, packet.sourceChannel, packet.sequence))
@@ -801,7 +794,6 @@ function timeoutClose(
     connection = provableStore.get(connectionPath(channel.connectionHops[0]))
     // note: the connection may have been closed
     abortTransactionUnless(packet.sourcePort === channel.counterpartyPortIdentifier)
-    abortTransactionUnless(packet.connectionHops === channel.connectionHops)
 
     nextSequenceRecv = provableStore.get(nextSequenceRecvPath(packet.destPort, packet.destChannel))
     abortTransactionUnless(packet.sequence === nextSequenceRecv)
@@ -846,10 +838,9 @@ function cleanupPacketOrdered(
     abortTransactionUnless(authenticate(provableStore.get(portPath(packet.sourcePort))))
     abortTransactionUnless(packet.destChannel === channel.counterpartyChannelIdentifier)
 
-    connection = provableStore.get(connectionPath(packet.connectionHops[0]))
+    connection = provableStore.get(connectionPath(channel.connectionHops[0]))
     // note: the connection may have been closed
     abortTransactionUnless(packet.destPort === channel.counterpartyPortIdentifier)
-    abortTransactionUnless(packet.connectionHops === channel.connectionHops)
 
     // abortTransactionUnless packet has been received on the other end
     abortTransactionUnless(nextSequenceRecv > packet.sequence)
@@ -893,10 +884,9 @@ function cleanupPacketUnordered(
     abortTransactionUnless(authenticate(provableStore.get(portPath(packet.sourcePort))))
     abortTransactionUnless(packet.destChannel === channel.counterpartyChannelIdentifier)
 
-    connection = provableStore.get(connectionPath(packet.connectionHops[0]))
+    connection = provableStore.get(connectionPath(channel.connectionHops[0]))
     // note: the connection may have been closed
     abortTransactionUnless(packet.destPort === channel.counterpartyPortIdentifier)
-    abortTransactionUnless(packet.connectionHops === channel.connectionHops)
 
     // abortTransactionUnless acknowledgement on the other end
     client = queryClient(connection.clientIdentifier)
