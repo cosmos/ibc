@@ -67,13 +67,13 @@ A `CommitmentPath` defines a substate of the commitment. It is passed to the pro
 type CommitmentPath = object
 ```
 
-The function `pathify` constructs a new key from the arguments. It interprets the key argument in the context of the path argument. For two `(path, key)` tuples, `pathify(path, key)` should return the same key only if the tuple elements are equal.
+The function `applyPath` constructs a new key from the arguments. It interprets the key argument in the context of the path argument. For two `(path, key)` tuples, `applyPath(path, key)` should return the same key only if the tuple elements are equal.
 
 ```typescript
-type pathify = (path: CommitmentPath, key: Key) => Key
+type applyPath = (path: CommitmentPath, key: Key) => Key
 ```
 
-When a `CommitmentPath` is provided as an argument with a `Key` or a set of `Key`s to a function, it should apply `pathify` to the `Key` with the `CommitmentPath` first. The effected functions are:
+When a `CommitmentPath` is provided as an argument with a `Key` or a set of `Key`s to a function, it should apply `applyPath` to the `Key` with the `CommitmentPath` first. The effected functions are:
 * `set`
 * `remove`
 * `createMembershipProof`
