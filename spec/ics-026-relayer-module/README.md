@@ -90,10 +90,6 @@ function onChanCloseConfirm(
     // defined by the module
 }
 
-function onSendPacket(packet: Packet) {
-    // defined by the module
-}
-
 function onRecvPacket(packet: Packet): bytes {
     // defined by the module, returns acknowledgement
 }
@@ -122,7 +118,6 @@ interface ModuleCallbacks {
   onChanOpenAck: onChanOpenAck,
   onChanOpenConfirm: onChanOpenConfirm,
   onChanCloseConfirm: onChanCloseConfirm
-  onSendPacket: onSendPacket
   onRecvPacket: onRecvPacket
   onTimeoutPacket: onTimeoutPacket
   onAcknowledgePacket: onAcknowledgePacket,
@@ -542,19 +537,7 @@ function handleChanCloseConfirm(datagram: ChanCloseConfirm) {
 
 #### Packet relay
 
-```typescript
-interface PacketSend {
-  packet: Packet
-}
-```
-
-```typescript
-function handlePacketSend(packet: Packet) {
-  module = lookupModule(datagram.packet.sourcePort)
-  module.onPacketSend(datagram.packet)
-  handler.sendPacket(datagram.packet)
-}
-```
+Packets are sent by the module directly (by the module calling the IBC handler).
 
 ```typescript
 interface PacketRecv {

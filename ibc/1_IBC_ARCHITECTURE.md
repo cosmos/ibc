@@ -85,6 +85,7 @@ The primary purpose of IBC is to provide reliable, authenticated, ordered commun
 - Authentication
 - Statefulness
 - Multiplexing
+- Serialisation
 
 The following paragraphs outline the protocol logic within IBC for each area.
 
@@ -115,6 +116,13 @@ Reliability, flow control, and authentication as described above require that IB
 ### Multiplexing
 
 To allow for many modules within a single host machine to use an IBC connection simultaneously, IBC provides a set of channels within each connection, which each uniquely identify a datastream over which packets can be sent in order (in the case of an ordered module), and always exactly once, to a destination module on the receiving machine. Channels are usually expected to be associated with a single module on each machine, but one-to-many and many-to-one channels are also possible. The number of channels is unbounded, facilitating concurrent throughput limited only by the throughput of the underlying machines with only a single connection necessary to track consensus information (and consensus transcript verification cost thus amortised across all channels using the connection).
+
+### Serialisation
+
+IBC serves as the interface boundary between otherwise mutually incomprehensible machines, and must provide the requisite mutual comprehensibility of the minimal set of data structure encodings & datagram formats in order to allow two machines which both correctly implement the protocol to understand each other. For this purpose, the IBC specification defines
+canonical encodings of data structures which must be serialised and relayed or checked in proofs between two machines talking over IBC, provided in proto3 format in this repository.
+
+> Note that a subset of proto3 which provides canonical encodings (the same structure always serialises to the same bytes) must be used. Maps and unknown fields are thus prohibited.
 
 ## Dataflow
 

@@ -1,10 +1,11 @@
-personal_ws-1.1 en 430 
+personal_ws-1.1 en 434 
 unescrow
 onChanCloseConfirm
 clientKey
 verifyMembership
 Nakamoto
 BIP
+createOutgoingPacket
 desiredCounterpartyIdentifier
 queryClientConnections
 stablecoins
@@ -14,11 +15,13 @@ encodings
 addConnectionToClient
 exfiltration
 relayer
+abortTransactionUnless
 timeoutClose
 timeoutPacket
 Statefulness
 TRYOPEN
 del
+BurnCoins
 PacketRecv
 verifications
 proofHeight
@@ -206,8 +209,10 @@ INIT
 handlePacketSend
 handleChanCloseConfirm
 proofInit
+checkMisbehaviourAndUpdateState
 nextSequenceSendPath
 getConsensusState
+abortSystemUnless
 png
 ClientMisbehaviour
 tokenized
@@ -250,13 +255,14 @@ counterpartyVersion
 portPath
 createClient
 connOpenTimeout
-sub-protocols
+subprotocols
 validityPredicate
 topologies
 newCapabilityPath
 multiprocess
 lifecycle
 desiredCounterpartyConnectionIdentifier
+getConsensusHeight
 chanCloseConfirm
 ChangeOperator
 handlePacketAcknowledgement
@@ -267,6 +273,7 @@ chanOpenConfirm
 removeChannelFromConnection
 timeoutPacketClose
 queryClientFrozen
+getStoredRecentConsensusStateCount
 recv
 repudiable
 otherValue
@@ -394,6 +401,7 @@ updatePort
 incentivisation
 datastream
 nextSequenceSend
+checkValidityAndUpdateState
 acc
 interoperable
 ABI
@@ -402,6 +410,7 @@ onTimeoutPropose
 permissioned
 unordered
 validators
+keyspace
 conns
 escrowAddress
 UpdateLightClient
@@ -421,7 +430,6 @@ QUIC
 permissioning
 renderer
 chanId
-onSendPacket
 positionally
 OpHeaderProof
 CryptoKitty
