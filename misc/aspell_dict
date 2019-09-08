@@ -250,7 +250,7 @@ counterpartyVersion
 portPath
 createClient
 connOpenTimeout
-sub-protocols
+subprotocols
 validityPredicate
 topologies
 newCapabilityPath
@@ -421,7 +421,6 @@ QUIC
 permissioning
 renderer
 chanId
-onSendPacket
 positionally
 OpHeaderProof
 CryptoKitty

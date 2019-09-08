@@ -70,7 +70,6 @@ function setup() {
     onChanOpenConfirm,
     onChanCloseInit,
     onChanCloseConfirm,
-    onSendPacket,
     onRecvPacket,
     onTimeoutPacket,
     onAcknowledgePacket,
@@ -177,28 +176,38 @@ In plain English, between chains `A` and `B`:
 - When a packet times-out, local assets are unescrowed back to the sender or vouchers minted back to the sender appropriately.
 - No acknowledgement data is necessary.
 
+`createOutgoingPacket` must be called by a transaction handler in the module which performs appropriate signature checks, specific to the account owner on the host state machine.
+
 ```typescript
-function onSendPacket(packet: Packet) {
-  FungibleTokenPacketData data = packet.data
-  if data.source {
+function createOutgoingPacket(
+  denomination: string,
+  amount: uint256,
+  sender: string,
+  receiver: string,
+  source: boolean) {
+  if source {
     // sender is source chain: escrow tokens
     // determine escrow account
     escrowAccount = channelEscrowAddresses[packet.sourceChannel]
     // construct receiving denomination, check correctness
     prefix = "{packet/destPort}/{packet.destChannel}"
-    abortTransactionUnless(data.denomination.slice(0, len(prefix)) === prefix)
+    abortTransactionUnless(denomination.slice(0, len(prefix)) === prefix)
     // escrow source tokens (assumed to fail if balance insufficient)
-    bank.TransferCoins(data.sender, escrowAccount, data.denomination.slice(len(prefix)), data.amount)
+    bank.TransferCoins(sender, escrowAccount, denomination.slice(len(prefix)), amount)
   } else {
     // receiver is source chain, burn vouchers
     // construct receiving denomination, check correctness
     prefix = "{packet/sourcePort}/{packet.sourceChannel}"
-    abortTransactionUnless(data.denomination.slice(0, len(prefix)) === prefix)
+    abortTransactionUnless(denomination.slice(0, len(prefix)) === prefix)
     // burn vouchers (assumed to fail if balance insufficient)
-    bank.BurnCoins(data.sender, data.denomination, data.amount)
+    bank.BurnCoins(sender, denomination, amount)
   }
+  FungibleTokenPacketData data = FungibleTokenPacketData{denomination, amount, sender, receiver, source}
+  handler.sendPacket(packet)
 }
 ```
+
+`onRecvPacket` is called by the relayer module when a packet addressed to this module has been received.
 
 ```typescript
 function onRecvPacket(packet: Packet): bytes {
@@ -224,6 +233,8 @@ function onRecvPacket(packet: Packet): bytes {
 }
 ```
 
+`onAcknowledgePacket` is called by the relayer module when a packet sent by this module has been acknowledged.
+
 ```typescript
 function onAcknowledgePacket(
   packet: Packet,
@@ -231,6 +242,8 @@ function onAcknowledgePacket(
   // nothing is necessary, likely this will never be called since it's a no-op
 }
 ```
+
+`onTimeoutPacket` is called by the relayer module when a packet sent by this module has timed-out (such that it will not be received on the destination chain).
 
 ```typescript
 function onTimeoutPacket(packet: Packet) {
