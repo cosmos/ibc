@@ -80,6 +80,10 @@ function setup() {
 
 Once the `setup` function has been called, channels can be created through the IBC relayer module between instances of the fungible token transfer module on separate chains.
 
+An administrator (with the permissions to create connections & channels on the host state machine) is responsible for setting up connections to other state machines & creating channels
+to other instances of this module (or another module supporting this interface) on other chains. This specification defines packet handling semantics only, and defines them in such a fashion
+that the module itself doesn't need to worry about what connections or channels might or might not exist at any point in time.
+
 #### Relayer module callbacks
 
 ##### Channel lifecycle management

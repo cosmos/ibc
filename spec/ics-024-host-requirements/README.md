@@ -181,7 +181,7 @@ This exception system MUST be exposed through two functions: `abortTransactionUn
 type abortTransactionUnless = (bool) => void
 ```
 
-If the boolean passed to `abortTransactionUnless` is `true`, the host state machine need not do anything. If the boolean passed to `abortTransactionUnless` is `false`, the host state machine MUST abort the transaction and revert any previously made state changes, excluding gas consumed & fee payments as approriate.
+If the boolean passed to `abortTransactionUnless` is `true`, the host state machine need not do anything. If the boolean passed to `abortTransactionUnless` is `false`, the host state machine MUST abort the transaction and revert any previously made state changes, excluding gas consumed & fee payments as appropriate.
 
 ```typescript
 type abortSystemUnless = (bool) => void
