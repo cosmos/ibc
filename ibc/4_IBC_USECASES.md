@@ -2,11 +2,11 @@
 
 **This is a set of possible application-level use cases for the inter-blockchain communication protocol.**
 
-**For an architectural overview, see [here](./1_IBC_ARCHITECTURE.md).**
+**For definitions of terms used in IBC specifications, see [here](./1_IBC_TERMINOLOGY.md).**
 
-**For a broad set of protocol design principles, see [here](./2_IBC_DESIGN_PRINCIPLES.md).**
+**For an architectural overview, see [here](./2_IBC_ARCHITECTURE.md).**
 
-**For definitions of terms used in IBC specifications, see [here](./3_IBC_TERMINOLOGY.md).**
+**For a broad set of protocol design principles, see [here](./3_IBC_DESIGN_PRINCIPLES.md).**
 
 **For a discussion of design patterns, see [here](./5_IBC_DESIGN_PATTERNS.md).**
 

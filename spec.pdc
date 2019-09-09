@@ -47,11 +47,11 @@ header-includes:
 
 # Architectural Overview
 
-!include ibc/1_IBC_ARCHITECTURE.md.xfm
+!include ibc/1_IBC_TERMINOLOGY.md.xfm
 
-!include ibc/2_IBC_DESIGN_PRINCIPLES.md.xfm
+!include ibc/2_IBC_ARCHITECTURE.md.xfm
 
-!include ibc/3_IBC_TERMINOLOGY.md.xfm
+!include ibc/3_IBC_DESIGN_PRINCIPLES.md.xfm
 
 # ICS 001 - ICS Standard
 
