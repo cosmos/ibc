@@ -19,8 +19,6 @@ IBC is designed to be a common standard which will be hosted by a variety of blo
 
 ### Definitions
 
-`CommitmentPrefix` is as defined in [ICS 23](../ics-023-vector-commitments).
-
 ### Desired Properties
 
 IBC should require as simple an interface from the underlying state machine as possible to maximise the ease of correct implementation.

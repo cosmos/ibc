@@ -438,3 +438,9 @@ chanId
 positionally
 OpHeaderProof
 CryptoKitty
+CommitmentPrefix
+getCommitmentPrefix
+applyPrefix
+counterpartyPrefix
+substate
+prefixedPatyh

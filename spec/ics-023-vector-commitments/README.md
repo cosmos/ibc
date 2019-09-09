@@ -67,7 +67,7 @@ A `CommitmentPrefix` defines a substate of the commitment. It is passed to the p
 type CommitmentPrefix = object
 ```
 
-The function `applyPrefix` constructs a new path from the arguments. It interprets the path argument in the context of the prefix argument. For two `(prefix, path)` tuples, `applyPath(prefix, path)` MUST return the same key only if the tuple elements are equal.
+The function `applyPrefix` constructs a new path from the arguments. It interprets the path argument in the context of the prefix argument. For two `(prefix, path)` tuples, `applyPrefix(prefix, path)` MUST return the same key only if the tuple elements are equal.
 
 ```typescript
 type applyPrefix = (prefix: CommitmentPrefix, path: Path) => Path
@@ -156,7 +156,7 @@ A commitment construction MAY provide the following functions:
 The `batchVerifyMembership` function verifies a proof that many paths have been set to specific values in a commitment.
 
 ```typescript
-type batchVerifyMembership = (root: CommitmentRoot, proof: CommitmentProof, items: Map<Path, Value>) => boolean
+function batchVerifyMembership(root: CommitmentRoot, proof: CommitmentProof, items: Map<Path, Value>): boolean
 ```
 
 The `batchVerifyNonMembership` function verifies a proof that many paths have not been set to any value in a commitment.

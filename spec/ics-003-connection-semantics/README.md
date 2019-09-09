@@ -22,7 +22,7 @@ The core IBC protocol provides *authorisation* and *ordering* semantics for pack
 
 Client-related types & functions are as defined in [ICS 2](../ics-002-client-semantics).
 
-Commitment proof related types & functions are defined in [ICS 23](../ics-003-vector-commitments)
+Commitment proof related types & functions are defined in [ICS 23](../ics-023-vector-commitments)
 
 `Identifier` and other host state machine requirements are as defined in [ICS 24](../ics-024-host-requirements). The identifier is not necessarily intended to be a human-readable name (and likely should not be, to discourage squatting or racing for identifiers).
 
@@ -148,7 +148,7 @@ function verifyMembership(
   path: Path, 
   value: Value): bool {
     client = queryClient(connection.clientIdentifier)
-    return verifyMembershipClient(client, height, proof, applyPrefix(connection.counterpartyPrefix, path), value)
+    client.verifyMembership(height, proof, applyPrefix(connection.counterpartyPrefix, path), value)
 }
 ```
 
@@ -159,7 +159,7 @@ function verifyNonMembership(
   proof: CommitmentProof, 
   path: Path): bool {
     client = queryClient(connection.clientIdentifier)
-    return verifyNonMembershipClient(client, height, proof, applyPrefix(connection.counterpartyPrefix, path))
+    client.verifyNonMembership(height, proof, applyPrefix(connection.counterpartyPrefix, path))
 }
 ```
 
@@ -291,7 +291,7 @@ function connOpenAck(
                              connection.counterpartyClientIdentifier, connection.clientIdentifier, 
                              version}
     abortTransactionUnless(
-      connection.verifyMembership(prootHeight, proofTry,
+      connection.verifyMembership(proofHeight, proofTry,
                        connectionPath(connection.counterpartyConnectionIdentifier), expected)
     abortTransactionUnless(
       connection.verifyMembership(proofHeight, proofTry,
