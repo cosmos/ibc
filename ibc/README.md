@@ -4,9 +4,9 @@ The *inter-blockchain communication protocol* is a reliable & secure inter-modul
 
 For an overview of the IBC protocol, read the following documents in numerical order.
 
-1. [IBC Architecture](./1_IBC_ARCHITECTURE.md)
-1. [IBC Design Principles](./2_IBC_DESIGN_PRINCIPLES.md)
-1. [IBC Terminology](./3_IBC_TERMINOLOGY.md)
+1. [IBC Terminology](./1_IBC_TERMINOLOGY.md)
+1. [IBC Architecture](./2_IBC_ARCHITECTURE.md)
+1. [IBC Design Principles](./3_IBC_DESIGN_PRINCIPLES.md)
 1. [IBC Usecases](./4_IBC_USECASES.md)
 1. [IBC Design Patterns](./5_IBC_DESIGN_PATTERNS.md)
 

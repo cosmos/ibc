@@ -1,4 +1,4 @@
-personal_ws-1.1 en 434 
+personal_ws-1.1 en 439 
 unescrow
 onChanCloseConfirm
 clientKey
@@ -50,6 +50,7 @@ EIP
 Cephalopod
 modularity
 EmptyLogStore
+checkVersion
 handleConnOpenInit
 connOpenTry
 boolean
@@ -68,6 +69,7 @@ callbackPath
 handleChanOpenAck
 unescrows
 ERC
+parameterised
 validator
 authenticationPath
 liveness
@@ -164,6 +166,7 @@ timeoutPacketOrdered
 tradeoff
 connOpenAck
 WASM
+backend
 NFT
 onChanCloseInit
 newpubkey
@@ -182,6 +185,7 @@ verifiedRoot
 transferPort
 pseudorandom
 invariants
+Nginx
 SourceIdentifier
 commitmentRoot
 OpaquePacket
@@ -189,8 +193,8 @@ atomicity
 lookupModule
 recvTimeoutPacket
 namespacing
-PubKey
 pubkey
+PubKey
 handleChanCloseInit
 Agoric
 cleanupPacketUnordered
@@ -275,6 +279,7 @@ timeoutPacketClose
 queryClientFrozen
 getStoredRecentConsensusStateCount
 recv
+TLS
 repudiable
 otherValue
 RegisterLightClient

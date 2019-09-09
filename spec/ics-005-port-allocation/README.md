@@ -48,6 +48,17 @@ The IBC specification makes no assumptions of module functionality other than th
 - A single module can bind to multiple ports at once
 - Ports are allocated first-come first-serve and "reserved" ports for known modules can be bound when the chain is first started
 
+As a helpful comparison, the following analogies to TCP are roughly accurate:
+
+| IBC Concept             | TCP/IP Concept            | Differences                                                           |
+| ----------------------- | ------------------------- | --------------------------------------------------------------------- |
+| IBC                     | TCP                       | Many, see the architecture documents describing IBC                   |
+| Port (e.g. "bank")      | Port (e.g. 80)            | No low-number reserved ports, ports are strings                       |
+| Module (e.g. "bank")    | Application (e.g. Nginx)  | Application-specific                                                  |
+| Client                  | -                         | No direct analogy, a bit like L2 routing and a bit like TLS           |
+| Connection              | -                         | No direct analogy, folded into connections in TCP                     |
+| Channel                 | Connection                | Any number of channels can be opened to or from a port simultaneously |
+
 ## Technical Specification
 
 ### Data Structures
@@ -111,8 +122,6 @@ function authenticate(id: SourceIdentifier): boolean {
     return callingModuleIdentifier() === id
 }
 ```
-
-
 
 ### Sub-protocols
 
