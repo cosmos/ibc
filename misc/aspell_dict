@@ -1,4 +1,4 @@
-personal_ws-1.1 en 436 
+personal_ws-1.1 en 438 
 unescrow
 onChanCloseConfirm
 clientKey
@@ -184,6 +184,7 @@ verifiedRoot
 transferPort
 pseudorandom
 invariants
+Nginx
 SourceIdentifier
 commitmentRoot
 OpaquePacket
@@ -277,6 +278,7 @@ timeoutPacketClose
 queryClientFrozen
 getStoredRecentConsensusStateCount
 recv
+TLS
 repudiable
 otherValue
 RegisterLightClient
