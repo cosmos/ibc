@@ -2,9 +2,9 @@
 
 **This is an overview of the high-level architecture & data-flow of the IBC protocol.**
 
-**For a broad set of protocol design principles, see [here](./2_IBC_DESIGN_PRINCIPLES.md).**
+**For definitions of terms used in IBC specifications, see [here](./1_IBC_TERMINOLOGY.md).**
 
-**For definitions of terms used in IBC specifications, see [here](./3_IBC_TERMINOLOGY.md).**
+**For a broad set of protocol design principles, see [here](./3_IBC_DESIGN_PRINCIPLES.md).**
 
 **For a set of example use cases, see [here](./4_IBC_USECASES.md).**
 
@@ -40,7 +40,7 @@ One design direction is to shard a single programmable state machine across sepa
 
 Furthermore, any single consensus algorithm, state machine, and unit of Sybil resistance may fail to provide the requisite levels of security and versatility. Consensus instances are limited in the number of independent operators they can support, meaning that the amortised benefits from corrupting any particular operator increase as the value secured by the consensus instance increases — while the cost to corrupt the operator, which will always reflect the cheapest path (e.g. physical key exfiltration or social engineering), likely cannot scale indefinitely. A single global state machine must cater to the common denominator of a diverse application set, making it less well-suited for any particular application than a specialised state machine would be. Operators of a single consensus instance may abuse their privileged position to extract rent from applications which cannot easily elect to exit. It would be preferable to construct a mechanism by which separate, sovereign consensus instances & state machines can safely, voluntarily interact while sharing only a minimum requisite common interface.
 
-The *interblockchain communication protocol* takes a different approach to a differently formulated version of the scaling & interoperability problems: enabling safe, reliable interoperation of a network of heterogeneous distributed ledgers, arranged in an unknown topology, preserving secrecy where possible, where the ledgers can diversify, develop, and rearrange independently of each other or of a particular imposed topology or state machine design. In a wide, dynamic network of interoperating chains, sporadic Byzantine faults are expected, so the protocol must also detect, mitigate, and contain the potential damage of Byzantine faults in accordance with the requirements of the applications & ledgers involved. For a longer list of design principles, see [here](./2_IBC_DESIGN_PRINCIPLES.md).
+The *interblockchain communication protocol* takes a different approach to a differently formulated version of the scaling & interoperability problems: enabling safe, reliable interoperation of a network of heterogeneous distributed ledgers, arranged in an unknown topology, preserving secrecy where possible, where the ledgers can diversify, develop, and rearrange independently of each other or of a particular imposed topology or state machine design. In a wide, dynamic network of interoperating chains, sporadic Byzantine faults are expected, so the protocol must also detect, mitigate, and contain the potential damage of Byzantine faults in accordance with the requirements of the applications & ledgers involved. For a longer list of design principles, see [here](./3_IBC_DESIGN_PRINCIPLES.md).
 
 To facilitate this heterogeneous interoperation, the interblockchain communication protocol takes a "bottom-up" approach, specifying the set of requirements, functions, and properties necessary to implement interoperation between two ledgers, and then specifying different ways in which multiple interoperating ledgers might be composed which preserve the requirements of higher-level protocols and occupy different points in the safety/speed tradeoff space. IBC thus presumes nothing about and requires nothing of the overall network topology, and of the implementing ledgers requires only that a known, minimal set of functions are available and properties fulfilled. Indeed, ledgers within IBC are defined as their light client consensus validation functions, thus expanding the range of what a "ledger" can be to include single machines and complex consensus algorithms alike.
 
@@ -54,7 +54,7 @@ IBC handles authentication, transport, and ordering of structured data packets r
 
 IBC sits between modules — smart contracts, other state machine components, or otherwise independent pieces of application logic on state machines — on one side, and underlying consensus protocols, machines, and network infrastructure (e.g. TCP/IP), on the other side.
 
-IBC provides to modules a set of functions much like the functions which might be provided to a module for interacting with another module on the same state machine: sending data packets and receiving data packets on an established connection & channel (primitives for authentication & ordering, see [definitions](./3_IBC_TERMINOLOGY.md)) — in addition to calls to manage the protocol state: opening and closing connections and channels, choosing connection, channel, and packet delivery options, and inspecting connection & channel status.
+IBC provides to modules a set of functions much like the functions which might be provided to a module for interacting with another module on the same state machine: sending data packets and receiving data packets on an established connection & channel (primitives for authentication & ordering, see [definitions](./1_IBC_TERMINOLOGY.md)) — in addition to calls to manage the protocol state: opening and closing connections and channels, choosing connection, channel, and packet delivery options, and inspecting connection & channel status.
 
 IBC assumes functionalities and properties of the underlying consensus protocols and machines as defined in [ICS 2](../../spec/ics-002-client-semantics), primarily finality (or thresholding finality gadgets), cheaply-verifiable consensus transcripts, and simple key/value store functionality. On the network side, IBC requires only eventual data delivery — no authentication, synchrony, or ordering properties are assumed (these properties are defined precisely later on).
 
@@ -85,6 +85,7 @@ The primary purpose of IBC is to provide reliable, authenticated, ordered commun
 - Authentication
 - Statefulness
 - Multiplexing
+- Serialisation
 
 The following paragraphs outline the protocol logic within IBC for each area.
 
@@ -115,6 +116,13 @@ Reliability, flow control, and authentication as described above require that IB
 ### Multiplexing
 
 To allow for many modules within a single host machine to use an IBC connection simultaneously, IBC provides a set of channels within each connection, which each uniquely identify a datastream over which packets can be sent in order (in the case of an ordered module), and always exactly once, to a destination module on the receiving machine. Channels are usually expected to be associated with a single module on each machine, but one-to-many and many-to-one channels are also possible. The number of channels is unbounded, facilitating concurrent throughput limited only by the throughput of the underlying machines with only a single connection necessary to track consensus information (and consensus transcript verification cost thus amortised across all channels using the connection).
+
+### Serialisation
+
+IBC serves as the interface boundary between otherwise mutually incomprehensible machines, and must provide the requisite mutual comprehensibility of the minimal set of data structure encodings & datagram formats in order to allow two machines which both correctly implement the protocol to understand each other. For this purpose, the IBC specification defines
+canonical encodings of data structures which must be serialised and relayed or checked in proofs between two machines talking over IBC, provided in proto3 format in this repository.
+
+> Note that a subset of proto3 which provides canonical encodings (the same structure always serialises to the same bytes) must be used. Maps and unknown fields are thus prohibited.
 
 ## Dataflow
 

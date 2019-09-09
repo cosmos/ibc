@@ -146,7 +146,7 @@ type Header = bytes
 #### Validity predicate
 
 A validity predicate is an opaque function defined by a client type to verify `Header`s depending on the current `ConsensusState`.
-Using the validit pPredicate SHOULD be far more computationally efficient than replaying the full consensus algorithm
+Using the validity predicate SHOULD be far more computationally efficient than replaying the full consensus algorithm
 for the given parent `Header` and the list of network messages.
 
 The validity predicate & client state update logic are combined into a single `checkValidityAndUpdateState` type, which is defined as
