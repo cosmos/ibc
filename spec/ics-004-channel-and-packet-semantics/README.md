@@ -218,6 +218,18 @@ Host state machines MAY also safely ignore the version data or specify an empty 
 
 ![Channel State Machine](channel-state-machine.png)
 
+| Initiator | Datagram         | Chain acted upon | Prior state (A, B) | Posterior state (A, B) |
+| --------- | ---------------- | ---------------- | ------------------ | ---------------------- |
+| Actor     | ChanOpenInit     | A                | (none, none)       | (INIT, none)           |
+| Relayer   | ChanOpenTry      | B                | (INIT, none)       | (INIT, TRYOPEN)        |
+| Relayer   | ChanOpenAck      | A                | (INIT, TRYOPEN)    | (OPEN, TRYOPEN)        |
+| Relayer   | ChanOpenConfirm  | B                | (OPEN, TRYOPEN)    | (OPEN, OPEN)           |
+
+| Initiator | Datagram         | Chain acted upon | Prior state (A, B) | Posterior state (A, B) |
+| --------- | ---------------- | ---------------- | ------------------ | ---------------------- |
+| Actor     | ChanCloseInit    | A                | (OPEN, OPEN)       | (CLOSED, OPEN)         |
+| Relayer   | ChanCloseConfirm | B                | (CLOSED, OPEN)     | (CLOSED, CLOSED)       |
+
 ##### Opening handshake
 
 The `chanOpenInit` function is called by a module to initiate a channel opening handshake with a module on another chain.
