@@ -1,4 +1,4 @@
-personal_ws-1.1 en 438 
+personal_ws-1.1 en 439 
 unescrow
 onChanCloseConfirm
 clientKey
@@ -69,6 +69,7 @@ callbackPath
 handleChanOpenAck
 unescrows
 ERC
+parameterised
 validator
 authenticationPath
 liveness
