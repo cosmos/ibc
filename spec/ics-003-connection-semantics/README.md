@@ -144,6 +144,18 @@ to negotiate encodings, priorities, or connection-specific metadata related to c
 
 Host state machines MAY also safely ignore the version data or specify an empty string.
 
+`checkVersion` is an opaque function defined by the host state machine which determines if two versions are compatible, returning a boolean:
+
+```typescript
+function checkVersion(
+  version: string,
+  counterpartyVersion: string): boolean {
+    // defined by host state machine
+}
+```
+
+Future versions of this specification may also define this function.
+
 ### Sub-protocols
 
 This ICS defines two sub-protocols: opening handshake and closing handshake. Header tracking and closing-by-misbehaviour are defined in [ICS 2](../ics-002-client-semantics). Datagrams defined herein are handled as external messages by the IBC relayer module defined in [ICS 26](../ics-026-relayer-module).
@@ -171,6 +183,7 @@ At the end of an opening handshake between two chains implementing the sub-proto
 - Each chain has knowledge of and has agreed to its identifier on the other chain.
 
 This sub-protocol need not be permissioned, modulo anti-spam measures.
+
 
 *ConnOpenInit* initialises a connection attempt on chain A.
 
@@ -216,6 +229,7 @@ function connOpenTry(
                               consensusStatePath(counterpartyClientIdentifier),
                               expectedConsensusState))
     abortTransactionUnless(provableStore.get(connectionPath(desiredIdentifier)) === null)
+    abortTransactionUnless(checkVersion(version, counterpartyVersion))
     identifier = desiredIdentifier
     state = TRYOPEN
     connection = ConnectionEnd{state, counterpartyConnectionIdentifier, clientIdentifier,
@@ -237,6 +251,7 @@ function connOpenAck(
     abortTransactionUnless(consensusHeight <= getCurrentHeight())
     connection = provableStore.get(connectionPath(identifier))
     abortTransactionUnless(connection.state === INIT)
+    abortTransactionUnless(checkVersion(connection.version, version))
     client = queryClient(connection.clientIdentifier)
     expectedConsensusState = getConsensusState(consensusHeight)
     expected = ConnectionEnd{TRYOPEN, identifier, connection.counterpartyClientIdentifier,
