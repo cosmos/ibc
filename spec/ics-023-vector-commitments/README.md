@@ -156,7 +156,7 @@ A commitment construction MAY provide the following functions:
 The `batchVerifyMembership` function verifies a proof that many paths have been set to specific values in a commitment.
 
 ```typescript
-function batchVerifyMembership(root: CommitmentRoot, proof: CommitmentProof, items: Map<Path, Value>): boolean
+type batchVerifyMembership = (root: CommitmentRoot, proof: CommitmentProof, items: Map<Path, Value>) => boolean
 ```
 
 The `batchVerifyNonMembership` function verifies a proof that many paths have not been set to any value in a commitment.
