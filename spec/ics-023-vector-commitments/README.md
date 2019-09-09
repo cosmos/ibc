@@ -59,18 +59,18 @@ In certain commitment constructions with constant-size states, `CommitmentState`
 type CommitmentRoot = object
 ```
 
-#### Path
+#### Prefix
 
-A `CommitmentPath` defines a substate of the commitment. It is passed to the proof verification functions with the key to provide the substate context information. 
+A `CommitmentPrefix` defines a substate of the commitment. It is passed to the proof verification functions with the path to provide the substate context information. 
 
 ```typescript
-type CommitmentPath = object
+type CommitmentPrefix = object
 ```
 
-The function `applyPath` constructs a new key from the arguments. It interprets the key argument in the context of the path argument. For two `(path, key)` tuples, `applyPath(path, key)` should return the same key only if the tuple elements are equal.
+The function `applyPrefix` constructs a new path from the arguments. It interprets the path argument in the context of the prefix argument. For two `(prefix, path)` tuples, `applyPath(prefix, path)` MUST return the same key only if the tuple elements are equal.
 
 ```typescript
-type applyPath = (path: CommitmentPath, key: Key) => Key
+type applyPrefix = (prefix: CommitmentPrefix, path: Path) => Path
 ```
 
 #### Proof

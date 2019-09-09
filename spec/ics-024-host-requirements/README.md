@@ -19,7 +19,7 @@ IBC is designed to be a common standard which will be hosted by a variety of blo
 
 ### Definitions
 
-`CommitmentPath` is as defined in [ICS 23](../ics-023-vector-commitments).
+`CommitmentPrefix` is as defined in [ICS 23](../ics-023-vector-commitments).
 
 ### Desired Properties
 
@@ -151,13 +151,27 @@ type getStoredRecentConsensusStateCount = () => uint64
 
 ### Commitment Path Introspection
 
-Host chains are RECOMMENDED to provide the ability to inspect their commitment path, with `getCommitmentPath`:
+Host chains are RECOMMENDED to provide the ability to inspect their commitment path, with `getCommitmentPrefix`:
 
 ```
-type getCommitmentPath = () => CommitmentPath
+type getCommitmentPrefix = () => CommitmentPrefix
 ```
 
-The result `CommitmentPath` is the definition of the key-value store's substate definition. The pair of the `CommitmentPath` and a key should form a full key string under the entire key-value store with `applyPath`. For a key-value store, the `getCommitmentPath` RECOMMENDED to be constant.
+The result `CommitmentPrefix` is the definition of the key-value store's substate definition. 
+With the `root: CommitmentRoot` and `state: CommitmentState` of the host state machine, the following property MUST be preserved:
+
+```
+if provableStore.get(path) == value {
+  prefixedPath = applyPrefix(getCommitmentPrefix(), path)
+  if value != nil {
+    assert(verifyMembership(root, createMembershipProof(state, prefixedPath, value), prefixedPath, value))
+  } else {
+    assert(verifyNonMembership(root, createNonMembershipProof(state, prefixedPath), prefixedPath))
+  }
+}
+```
+
+For a key-value store, the `getCommitmentPrefix` RECOMMENDED to be constant.
 
 ### Port system
 

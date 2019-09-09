@@ -275,8 +275,7 @@ function chanOpenTry(
     connection = provableStore.get(connectionPath(connectionHops[0]))
     abortTransactionUnless(connection !== null)
     abortTransactionUnless(connection.state === OPEN)
-    client = queryClient(connection.clientIdentifier)
-    abortTransactionUnless(client.verifyMembership(
+    abortTransactionUnless(connection.verifyMembership(
       proofHeight,
       proofInit,
       channelPath(counterpartyPortIdentifier, counterpartyChannelIdentifier),
@@ -304,11 +303,10 @@ function chanOpenAck(
     channel = provableStore.get(channelPath(portIdentifier, channelIdentifier))
     abortTransactionUnless(channel.state === INIT)
     abortTransactionUnless(authenticate(provableStore.get(portPath(portIdentifier))))
-    connection = provableStore.get(connectionPath(channel.connectionHops[0]))
+    connection = provableStore.get(connectionPath(channel.ConnectionHops[0]))
     abortTransactionUnless(connection !== null)
     abortTransactionUnless(connection.state === OPEN)
-    client = queryClient(connection.clientIdentifier)
-    abortTransactionUnless(client.verifyMembership(
+    abortTransactionUnless(connection.verifyMembership(
       proofHeight,
       proofTry,
       channelPath(channel.counterpartyPortIdentifier, channel.counterpartyChannelIdentifier),
@@ -337,8 +335,7 @@ function chanOpenConfirm(
     connection = provableStore.get(connectionPath(channel.connectionHops[0]))
     abortTransactionUnless(connection !== null)
     abortTransactionUnless(connection.state === OPEN)
-    client = queryClient(connection.clientIdentifier)
-    abortTransactionUnless(client.verifyMembership(
+    abortTransactionUnless(connection.verifyMembership(
       proofHeight,
       proofAck,
       channelPath(channel.counterpartyPortIdentifier, channel.counterpartyChannelIdentifier),
@@ -395,8 +392,7 @@ function chanCloseConfirm(
     abortTransactionUnless(connection.state === OPEN)
     expected = Channel{CLOSED, channel.order, portIdentifier,
                        channelIdentifier, channel.connectionHops.reverse(), channel.version}
-    client = queryClient(connection.clientIdentifier)
-    abortTransactionUnless(client.verifyMembership(
+    abortTransactionUnless(connection.verifyMembership(
       proofHeight,
       proofInit,
       channelPath(channel.counterpartyPortIdentifier, channel.counterpartyChannelIdentifier),
@@ -519,8 +515,7 @@ function recvPacket(
 
     abortTransactionUnless(getConsensusHeight() < packet.timeoutHeight)
 
-    client = queryClient(connection.clientIdentifier)
-    abortTransactionUnless(client.verifyMembership(
+    abortTransactionUnless(connection.verifyMembership(
       proofHeight,
       proof,
       packetCommitmentPath(packet.sourcePort, packet.sourceChannel, packet.sequence),
@@ -579,8 +574,7 @@ function acknowledgePacket(
            === hash(packet.data))
 
     // abort transaction unless correct acknowledgement on counterparty chain
-    client = queryClient(connection.clientIdentifier)
-    abortTransactionUnless(client.verifyMembership(
+    abortTransactionUnless(connection.verifyMembership(
       proofHeight,
       proof,
       packetAcknowledgementPath(packet.destPort, packet.destChannel, packet.sequence),
@@ -645,8 +639,7 @@ function timeoutPacketOrdered(
            === hash(packet.data))
 
     // check that the recv sequence is as claimed
-    client = queryClient(connection.clientIdentifier)
-    abortTransactionUnless(client.verifyMembership(
+    abortTransactionUnless(connection.verifyMembership(
       proofHeight,
       proof,
       nextSequenceRecvPath(packet.destPort, packet.destChannel),
@@ -698,8 +691,7 @@ function timeoutPacketUnordered(
            === hash(packet.data))
 
     // verify absence of acknowledgement at packet index
-    client = queryClient(connection.clientIdentifier)
-    abortTransactionUnless(client.verifyNonMembership(
+    abortTransactionUnless(connection.verifyNonMembership(
       proofHeight,
       proof,
       packetAcknowledgementPath(packet.sourcePort, packet.sourceChannel, packet.sequence)
@@ -742,10 +734,9 @@ function timeoutOnClose(
            === hash(packet.data))
 
     // check that the opposing channel end has closed
-    client = queryClient(connection.clientIdentifier)
     expected = Channel{CLOSED, channel.order, channel.portIdentifier,
                        channel.channelIdentifier, channel.connectionHops.reverse(), channel.version}
-    abortTransactionUnless(client.verifyMembership(
+    abortTransactionUnless(connection.verifyMembership(
       proofHeight,
       proofClosed,
       channelPath(channel.counterpartyPortIdentifier, channel.counterpartyChannelIdentifier),
@@ -753,7 +744,7 @@ function timeoutOnClose(
     ))
 
     // verify absence of acknowledgement at packet index
-    abortTransactionUnless(client.verifyNonMembership(
+    abortTransactionUnless(connection.verifyNonMembership(
       proofHeight,
       proofNonMembership,
       packetAcknowledgementPath(packet.sourcePort, packet.sourceChannel, packet.sequence)
@@ -800,8 +791,7 @@ function timeoutClose(
 
     abortTransactionUnless(proofHeight >= packet.timeoutHeight)
 
-    client = queryClient(connection.clientIdentifier)
-    abortTransactionUnless(client.verifyMembership(
+    abortTransactionUnless(connection.verifyMembership(
       proofHeight,
       proof,
       packetCommitmentPath(packet.sourcePort, packet.sourceChannel, packet.sequence),
@@ -850,8 +840,7 @@ function cleanupPacketOrdered(
                === hash(packet.data))
 
     // check that the recv sequence is as claimed
-    client = queryClient(connection.clientIdentifier)
-    abortTransactionUnless(client.verifyMembership(
+    abortTransactionUnless(connection.verifyMembership(
       proofHeight,
       proof,
       nextSequenceRecvPath(packet.destPort, packet.destChannel),
@@ -889,8 +878,7 @@ function cleanupPacketUnordered(
     abortTransactionUnless(packet.destPort === channel.counterpartyPortIdentifier)
 
     // abortTransactionUnless acknowledgement on the other end
-    client = queryClient(connection.clientIdentifier)
-    abortTransactionUnless(client.verifyMembership(
+    abortTransactionUnless(connection.verifyMembership(
       proofHeight,
       proof,
       packetAcknowledgementPath(packet.destPort, packet.destChannel, packet.sequence),
