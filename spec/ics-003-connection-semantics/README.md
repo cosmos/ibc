@@ -137,7 +137,7 @@ function removeConnectionFromClient(
 }
 ```
 
-Two helper functions are defined to provide automatic `CommitmentPath` prefixing. These functions are recommended to be used
+Two helper functions are defined to provide automatic application of `CommitmentPrefix`. These functions are recommended to be used
 instead of directly calling the `verifyMembership` with the clients in the specifications.
 
 ```typescript
@@ -311,7 +311,7 @@ function connOpenConfirm(
   proofHeight: uint64) {
     connection = provableStore.get(connectionPath(identifier))
     abortTransactionUnless(connection.state === TRYOPEN)
-    expected = ConnectionEnd{OPEN, identifier, getCommitmentPath(), connection.counterpartyClientIdentifier,
+    expected = ConnectionEnd{OPEN, identifier, getCommitmentPrefix(), connection.counterpartyClientIdentifier,
                              connection.clientIdentifier, connection.version}
     abortTransactionUnless(
       connection.verifyMembership(proofHeight, proofAck,

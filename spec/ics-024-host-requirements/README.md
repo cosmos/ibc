@@ -3,7 +3,8 @@ ics: 24
 title: Host State Machine Requirements
 stage: draft
 category: IBC/TAO
-required-by: 2, 3, 4, 5, 18, 23
+requires: 23
+required-by: 2, 3, 4, 5, 18
 author: Christopher Goes <cwgoes@tendermint.com>
 created: 2019-04-16
 modified: 2019-08-25
@@ -151,11 +152,13 @@ type getStoredRecentConsensusStateCount = () => uint64
 
 ### Commitment Path Introspection
 
-Host chains are RECOMMENDED to provide the ability to inspect their commitment path, with `getCommitmentPrefix`:
+Host chains MUST provide the ability to inspect their commitment path, with `getCommitmentPrefix`:
 
 ```
 type getCommitmentPrefix = () => CommitmentPrefix
 ```
+
+If there is no substate used within the host chain, `getCommitmentPrefix` can be defined as identity function.
 
 The result `CommitmentPrefix` is the definition of the key-value store's substate definition. 
 With the `root: CommitmentRoot` and `state: CommitmentState` of the host state machine, the following property MUST be preserved:
