@@ -89,7 +89,7 @@ type CommitmentProof = object
 A commitment construction MUST provide the following functions, defined over paths as serialisable objects and values as byte arrays:
 
 ```typescript
-type Path = object
+type Path = string
 
 type Value = string
 ```
