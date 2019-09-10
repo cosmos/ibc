@@ -170,12 +170,12 @@ The opening handshake defines four datagrams: *ConnOpenInit*, *ConnOpenTry*, *Co
 
 A correct protocol execution flows as follows (note that all calls are made through modules per ICS 25):
 
-| Initiator | Datagram          | Chain acted upon | Prior state (A, B) | Post state (A, B) |
-| --------- | ----------------- | ---------------- | ------------------ | ----------------- |
-| Actor     | `ConnOpenInit`    | A                | (none, none)       | (INIT, none)      |
-| Relayer   | `ConnOpenTry`     | B                | (INIT, none)       | (INIT, TRYOPEN)   |
-| Relayer   | `ConnOpenAck`     | A                | (INIT, TRYOPEN)    | (OPEN, TRYOPEN)   |
-| Relayer   | `ConnOpenConfirm` | B                | (OPEN, TRYOPEN)    | (OPEN, OPEN)      |
+| Initiator | Datagram          | Chain acted upon | Prior state (A, B) | Posterior state (A, B) |
+| --------- | ----------------- | ---------------- | ------------------ | ---------------------- |
+| Actor     | `ConnOpenInit`    | A                | (none, none)       | (INIT, none)           |
+| Relayer   | `ConnOpenTry`     | B                | (INIT, none)       | (INIT, TRYOPEN)        |
+| Relayer   | `ConnOpenAck`     | A                | (INIT, TRYOPEN)    | (OPEN, TRYOPEN)        |
+| Relayer   | `ConnOpenConfirm` | B                | (OPEN, TRYOPEN)    | (OPEN, OPEN)           |
 
 At the end of an opening handshake between two chains implementing the sub-protocol, the following properties hold:
 

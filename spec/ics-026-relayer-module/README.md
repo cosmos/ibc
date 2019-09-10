@@ -588,43 +588,23 @@ function handlePacketAcknowledgement(datagram: PacketAcknowledgement) {
 #### Packet timeouts
 
 ```typescript
-interface PacketTimeoutOrdered {
+interface PacketTimeout {
   packet: Packet
   proof: CommitmentProof
   proofHeight: uint64
-  nextSequenceRecv: uint64
+  nextSequenceRecv: Maybe<uint64>
 }
 ```
 
 ```typescript
-function handlePacketTimeoutOrdered(datagram: PacketTimeoutOrdered) {
+function handlePacketTimeout(datagram: PacketTimeout) {
     module = lookupModule(datagram.packet.sourcePort)
     module.onTimeoutPacket(datagram.packet)
-    handler.timeoutPacketOrdered(
+    handler.timeoutPacket(
       datagram.packet,
       datagram.proof,
       datagram.proofHeight,
       datagram.nextSequenceRecv
-    )
-}
-```
-
-```typescript
-interface PacketTimeoutUnordered {
-  packet: Packet
-  proof: CommitmentProof
-  proofHeight: uint64
-}
-```
-
-```typescript
-function handlePacketTimeoutUnordered(datagram: PacketTimeoutUnordered) {
-    module = lookupModule(datagram.packet.sourcePort)
-    module.onTimeoutPacket(datagram.packet)
-    handler.timeoutPacketUnordered(
-      datagram.packet,
-      datagram.proof,
-      datagram.proofHeight
     )
 }
 ```
@@ -652,61 +632,21 @@ function handlePacketTimeoutOnClose(datagram: PacketTimeoutOnClose) {
 #### Closure-by-timeout & packet cleanup
 
 ```typescript
-interface PacketTimeoutClose {
+interface PacketCleanup {
   packet: Packet
   proof: CommitmentProof
   proofHeight: uint64
+  nextSequenceRecvOrAcknowledgement: Either<uint64, bytes>
 }
 ```
 
 ```typescript
-function handlePacketTimeoutClose(datagram: PacketTimeoutClose) {
-    module = lookupModule(datagram.packet.sourcePort)
-    module.onTimeoutPacketClose(datagram.packet)
-    handler.timeoutPacketClose(
-      datagram.packet,
-      datagram.proof,
-      datagram.proofHeight
-    )
-}
-```
-
-```typescript
-interface PacketCleanupOrdered {
-  packet: Packet
-  proof: CommitmentProof
-  proofHeight: uint64
-  nextSequenceRecv: uint64
-}
-```
-
-```typescript
-function handlePacketCleanupOrdered(datagram: PacketCleanupOrdered) {
-    handler.cleanupPacketOrdered(
+function handlePacketCleanup(datagram: PacketCleanup) {
+    handler.cleanupPacket(
       datagram.packet,
       datagram.proof,
       datagram.proofHeight,
-      datagram.nextSequenceRecv
-    )
-}
-```
-
-```typescript
-interface PacketCleanupUnordered {
-  packet: Packet
-  proof: CommitmentProof
-  proofHeight: uint64
-  acknowledgement: bytes
-}
-```
-
-```typescript
-function handlePacketCleanupUnordered(datagram: PacketCleanupUnordered) {
-    handler.cleanupPacketUnordered(
-      datagram.packet,
-      datagram.proof,
-      datagram.proofHeight,
-      datagram.acknowledgement
+      datagram.nextSequenceRecvOrAcknowledgement
     )
 }
 ```
