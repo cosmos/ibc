@@ -61,13 +61,15 @@ type CommitmentRoot = object
 
 #### Prefix
 
-A `CommitmentPrefix` defines a substate of the commitment. It is passed to the proof verification functions with the path to provide the substate context information. 
+A `CommitmentPrefix` defines a store prefix of the commitment proof. It is applied to the path before it passed to the proof verification functions. 
 
 ```typescript
 type CommitmentPrefix = object
 ```
 
-The function `applyPrefix` constructs a new path from the arguments. It interprets the path argument in the context of the prefix argument. For two `(prefix, path)` tuples, `applyPrefix(prefix, path)` MUST return the same key only if the tuple elements are equal.
+The function `applyPrefix` constructs a new path from the arguments. It interprets the path argument in the context of the prefix argument. 
+For two `(prefix, path)` tuples, `applyPrefix(prefix, path)` MUST return the same key only if the tuple elements are equal.
+The function MUST be implemented per commitment construction scheme, but does not need to be serialisable.
 
 ```typescript
 type applyPrefix = (prefix: CommitmentPrefix, path: Path) => Path

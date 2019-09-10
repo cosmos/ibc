@@ -137,12 +137,12 @@ function removeConnectionFromClient(
 }
 ```
 
-Two helper functions are defined to provide automatic application of `CommitmentPrefix`. These functions are recommended to be used
-instead of directly calling the `verifyMembership` with the clients in the specifications.
+Two helper functions are defined to provide automatic application of `CommitmentPrefix`. In the other parts of the specifications,
+these functions should be used for introspecting other chains' state, instead of directly calling the `verifyMembership` with the clients.
 
 ```typescript
 function verifyMembership(
-  connection: ConnectionEnd
+  connection: ConnectionEnd,
   height: uint64,
   proof: CommitmentProof,
   path: Path,

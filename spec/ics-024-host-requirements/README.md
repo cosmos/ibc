@@ -154,27 +154,27 @@ type getStoredRecentConsensusStateCount = () => uint64
 
 Host chains MUST provide the ability to inspect their commitment path, with `getCommitmentPrefix`:
 
-```
+```typescript
 type getCommitmentPrefix = () => CommitmentPrefix
 ```
 
-If there is no substate used within the host chain, `getCommitmentPrefix` can be defined as identity function.
+The result `CommitmentPrefix` is the prefix used by the host state machine's key-value store.
+With the `CommitmentRoot root` and `CommitmentState state` of the host state machine, the following property MUST be preserved:
 
-The result `CommitmentPrefix` is the definition of the key-value store's substate definition. 
-With the `root: CommitmentRoot` and `state: CommitmentState` of the host state machine, the following property MUST be preserved:
-
-```
-if provableStore.get(path) == value {
+```typescript
+if provableStore.get(path) === value {
   prefixedPath = applyPrefix(getCommitmentPrefix(), path)
-  if value != nil {
-    assert(verifyMembership(root, createMembershipProof(state, prefixedPath, value), prefixedPath, value))
+  if value !== nil {
+    proof = createMembershipProof(state, prefixedPath, value)
+    assert(verifyMembership(root, proof, prefixedPath, value))
   } else {
-    assert(verifyNonMembership(root, createNonMembershipProof(state, prefixedPath), prefixedPath))
+    proof = createNonMembershipProof(state, prefixedPath)
+    assert(verifyNonMembership(root, proof, prefixedPath))
   }
 }
 ```
 
-For a key-value store, the `getCommitmentPrefix` RECOMMENDED to be constant.
+For a host state machine, the `getCommitmentPrefix` MUST be constant.
 
 ### Port system
 
