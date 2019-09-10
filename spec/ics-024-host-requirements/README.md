@@ -3,6 +3,7 @@ ics: 24
 title: Host State Machine Requirements
 stage: draft
 category: IBC/TAO
+requires: 23
 required-by: 2, 3, 4, 5, 18
 author: Christopher Goes <cwgoes@tendermint.com>
 created: 2019-04-16
@@ -148,6 +149,32 @@ Host state machines MUST provide the ability to introspect this stored recent co
 ```typescript
 type getStoredRecentConsensusStateCount = () => uint64
 ```
+
+### Commitment Path Introspection
+
+Host chains MUST provide the ability to inspect their commitment path, with `getCommitmentPrefix`:
+
+```typescript
+type getCommitmentPrefix = () => CommitmentPrefix
+```
+
+The result `CommitmentPrefix` is the prefix used by the host state machine's key-value store.
+With the `CommitmentRoot root` and `CommitmentState state` of the host state machine, the following property MUST be preserved:
+
+```typescript
+if provableStore.get(path) === value {
+  prefixedPath = applyPrefix(getCommitmentPrefix(), path)
+  if value !== nil {
+    proof = createMembershipProof(state, prefixedPath, value)
+    assert(verifyMembership(root, proof, prefixedPath, value))
+  } else {
+    proof = createNonMembershipProof(state, prefixedPath)
+    assert(verifyNonMembership(root, proof, prefixedPath))
+  }
+}
+```
+
+For a host state machine, the return value of `getCommitmentPrefix` MUST be constant.
 
 ### Port system
 

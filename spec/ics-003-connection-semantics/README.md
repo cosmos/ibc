@@ -22,6 +22,8 @@ The core IBC protocol provides *authorisation* and *ordering* semantics for pack
 
 Client-related types & functions are as defined in [ICS 2](../ics-002-client-semantics).
 
+Commitment proof related types & functions are defined in [ICS 23](../ics-023-vector-commitments)
+
 `Identifier` and other host state machine requirements are as defined in [ICS 24](../ics-024-host-requirements). The identifier is not necessarily intended to be a human-readable name (and likely should not be, to discourage squatting or racing for identifiers).
 
 The opening handshake protocol allows each chain to verify the identifier used to reference the connection on the other chain, enabling modules on each chain to reason about the reference on the other chain.
@@ -78,6 +80,7 @@ enum ConnectionState {
 interface ConnectionEnd {
   state: ConnectionState
   counterpartyConnectionIdentifier: Identifier
+  counterpartyPrefix: CommitmentPrefix
   clientIdentifier: Identifier
   counterpartyClientIdentifier: Identifier
   version: string
@@ -134,6 +137,33 @@ function removeConnectionFromClient(
 }
 ```
 
+Two helper functions are defined to provide automatic application of `CommitmentPrefix`. In the other parts of the specifications,
+these functions MUST be used for introspecting other chains' state, instead of directly calling the `verifyMembership` or `verifyNonMembership` function on the client.
+
+```typescript
+function verifyMembership(
+  connection: ConnectionEnd,
+  height: uint64,
+  proof: CommitmentProof,
+  path: Path,
+  value: Value): bool {
+    client = queryClient(connection.clientIdentifier)
+    client.verifyMembership(height, proof, applyPrefix(connection.counterpartyPrefix, path), value)
+}
+```
+
+```typescript
+function verifyNonMembership(
+  connection: ConnectionEnd,
+  height: uint64,
+  proof: CommitmentProof,
+  path: Path): bool {
+    client = queryClient(connection.clientIdentifier)
+    client.verifyNonMembership(height, proof, applyPrefix(connection.counterpartyPrefix, path))
+}
+```
+
+
 ### Versioning
 
 During the handshake process, two ends of a connection come to agreement on a version bytestring associated
@@ -161,6 +191,8 @@ Future versions of this specification may also define this function.
 This ICS defines two sub-protocols: opening handshake and closing handshake. Header tracking and closing-by-misbehaviour are defined in [ICS 2](../ics-002-client-semantics). Datagrams defined herein are handled as external messages by the IBC relayer module defined in [ICS 26](../ics-026-relayer-module).
 
 ![State Machine Diagram](state.png)
+
+
 
 #### Opening Handshake
 
@@ -191,13 +223,14 @@ This sub-protocol need not be permissioned, modulo anti-spam measures.
 function connOpenInit(
   identifier: Identifier,
   desiredCounterpartyConnectionIdentifier: Identifier,
+  counterpartyPrefix: CommitmentPrefix,
   clientIdentifier: Identifier,
   counterpartyClientIdentifier: Identifier,
   version: string) {
     abortTransactionUnless(provableStore.get(connectionPath(identifier)) == null)
     state = INIT
-    connection = ConnectionEnd{state, desiredCounterpartyConnectionIdentifier, clientIdentifier,
-      counterpartyClientIdentifier, version}
+    connection = ConnectionEnd{state, desiredCounterpartyConnectionIdentifier, counterpartyPrefix,
+      clientIdentifier, counterpartyClientIdentifier, version}
     provableStore.set(connectionPath(identifier), connection)
     addConnectionToClient(clientIdentifier, identifier)
 }
@@ -209,6 +242,7 @@ function connOpenInit(
 function connOpenTry(
   desiredIdentifier: Identifier,
   counterpartyConnectionIdentifier: Identifier,
+  counterpartyPrefix: CommitmentPrefix,
   counterpartyClientIdentifier: Identifier,
   clientIdentifier: Identifier,
   version: string,
@@ -217,24 +251,24 @@ function connOpenTry(
   proofHeight: uint64,
   consensusHeight: uint64) {
     abortTransactionUnless(consensusHeight <= getCurrentHeight())
-    client = queryClient(connection.clientIdentifier)
     expectedConsensusState = getConsensusState(consensusHeight)
-    expected = ConnectionEnd{INIT, desiredIdentifier, counterpartyClientIdentifier,
+    expected = ConnectionEnd{INIT, desiredIdentifier, getCommitmentPrefix(), counterpartyClientIdentifier,
                              clientIdentifier, counterpartyVersion}
+    connection = ConnectionEnd{state, counterpartyConnectionIdentifier, counterpartyPrefix,
+                               clientIdentifier, counterpartyClientIdentifier, version}
     abortTransactionUnless(
-      client.verifyMembership(proofHeight, proofInit,
-                              connectionPath(counterpartyConnectionIdentifier), expected))
+      connection.verifyMembership(proofHeight, proofInit,
+                                  connectionPath(counterpartyConnectionIdentifier),
+                                  expected))
     abortTransactionUnless(
-      client.verifyMembership(proofHeight, proofInit,
-                              consensusStatePath(counterpartyClientIdentifier),
-                              expectedConsensusState))
+      connection.verifyMembership(proofHeight, proofInit,
+                                  consensusStatePath(counterpartyClientIdentifier),
+                                  expectedConsensusState))
     abortTransactionUnless(provableStore.get(connectionPath(desiredIdentifier)) === null)
     abortTransactionUnless(checkVersion(version, counterpartyVersion))
     identifier = desiredIdentifier
     state = TRYOPEN
-    connection = ConnectionEnd{state, counterpartyConnectionIdentifier, clientIdentifier,
-                               counterpartyClientIdentifier, version}
-    provableStore.set(connectionPath(identifier), connection)
+       provableStore.set(connectionPath(identifier), connection)
     addConnectionToClient(clientIdentifier, identifier)
 }
 ```
@@ -252,16 +286,18 @@ function connOpenAck(
     connection = provableStore.get(connectionPath(identifier))
     abortTransactionUnless(connection.state === INIT)
     abortTransactionUnless(checkVersion(connection.version, version))
-    client = queryClient(connection.clientIdentifier)
     expectedConsensusState = getConsensusState(consensusHeight)
-    expected = ConnectionEnd{TRYOPEN, identifier, connection.counterpartyClientIdentifier,
-                             connection.clientIdentifier, version}
+    expected = ConnectionEnd{TRYOPEN, identifier, getCommitmentPrefix(),
+                             connection.counterpartyClientIdentifier, connection.clientIdentifier,
+                             version}
     abortTransactionUnless(
-      client.verifyMembership(proofHeight, proofTry,
-                              connectionPath(connection.counterpartyConnectionIdentifier), expected))
+      connection.verifyMembership(proofHeight, proofTry,
+                                  connectionPath(connection.counterpartyConnectionIdentifier),
+                                  expected))
     abortTransactionUnless(
-      client.verifyMembership(proofHeight, proofTry,
-                              consensusStatePath(connection.counterpartyClientIdentifier), expectedConsensusState))
+      connection.verifyMembership(proofHeight, proofTry,
+                                  consensusStatePath(connection.counterpartyClientIdentifier),
+                                  expectedConsensusState))
     connection.state = OPEN
     connection.version = version
     provableStore.set(connectionPath(identifier), connection)
@@ -277,12 +313,12 @@ function connOpenConfirm(
   proofHeight: uint64) {
     connection = provableStore.get(connectionPath(identifier))
     abortTransactionUnless(connection.state === TRYOPEN)
-    expected = ConnectionEnd{OPEN, identifier, connection.counterpartyClientIdentifier,
+    expected = ConnectionEnd{OPEN, identifier, getCommitmentPrefix(), connection.counterpartyClientIdentifier,
                              connection.clientIdentifier, connection.version}
-    client = queryClient(connection.clientIdentifier)
     abortTransactionUnless(
-      client.verifyMembership(proofHeight, proofAck,
-                              connectionPath(connection.counterpartyConnectionIdentifier), expected))
+      connection.verifyMembership(proofHeight, proofAck,
+                                  connectionPath(connection.counterpartyConnectionIdentifier),
+                                  expected))
     connection.state = OPEN
     provableStore.set(connectionPath(identifier), connection)
 }

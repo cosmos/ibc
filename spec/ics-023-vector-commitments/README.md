@@ -2,7 +2,7 @@
 ics: 23
 title: Vector Commitments
 stage: draft
-required-by: 2
+required-by: 2, 24
 category: IBC/TAO
 author: Christopher Goes <cwgoes@tendermint.com>
 created: 2019-04-16
@@ -59,6 +59,23 @@ In certain commitment constructions with constant-size states, `CommitmentState`
 type CommitmentRoot = object
 ```
 
+#### Prefix
+
+A `CommitmentPrefix` defines a store prefix of the commitment proof. It is applied to the path before the path is passed to the proof verification functions. 
+
+```typescript
+type CommitmentPrefix = object
+```
+
+The function `applyPrefix` constructs a new path from the arguments. It interprets the path argument in the context of the prefix argument. 
+For two `(prefix, path)` tuples, `applyPrefix(prefix, path)` MUST return the same key only if the tuple elements are equal.
+`applyPrefix` MUST be implemented per `Path`, as `Path` can have different concrete structures. `applyPrefix` MAY accept multiple `CommitmentPrefix` types.
+`applyPrefix` does not need to be serialisable.
+
+```typescript
+type applyPrefix = (prefix: CommitmentPrefix, path: Path) => Path
+```
+
 #### Proof
 
 An `CommitmentProof` demonstrates membership or non-membership for an element or set of elements, verifiable in conjunction with a known commitment root. Proofs should be succinct.
@@ -69,7 +86,7 @@ type CommitmentProof = object
 
 ### Required functions
 
-A commitment construction MUST provide the following functions, defined over paths and values as byte arrays:
+A commitment construction MUST provide the following functions, defined over paths as serialisable objects and values as byte arrays:
 
 ```typescript
 type Path = string
