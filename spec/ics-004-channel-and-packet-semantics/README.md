@@ -667,7 +667,7 @@ function timeoutPacket(
            === hash(packet.data))
 
 
-    if channel.order === ORDERED {
+    if channel.order === ORDERED
       // ordered channel: check that the recv sequence is as claimed
       abortTransactionUnless(connection.verifyMembership(
         proofHeight,
@@ -675,14 +675,13 @@ function timeoutPacket(
         nextSequenceRecvPath(packet.destPort, packet.destChannel),
         nextSequenceRecv
       ))
-    } else {
+    else
       // unordered channel: verify absence of acknowledgement at packet index
       abortTransactionUnless(connection.verifyNonMembership(
         proofHeight,
         proof,
         packetAcknowledgementPath(packet.sourcePort, packet.sourceChannel, packet.sequence)
       ))
-    }
 
     // all assertions passed, we can alter state
 
@@ -785,7 +784,7 @@ function cleanupPacket(
     abortTransactionUnless(provableStore.get(packetCommitmentPath(packet.sourcePort, packet.sourceChannel, packet.sequence))
                === hash(packet.data))
 
-    if channel.order === ORDERED {
+    if channel.order === ORDERED
       // check that the recv sequence is as claimed
       abortTransactionUnless(connection.verifyMembership(
         proofHeight,
@@ -793,7 +792,7 @@ function cleanupPacket(
         nextSequenceRecvPath(packet.destPort, packet.destChannel),
         nextSequenceRecvOrAcknowledgement
       ))
-    } else {
+    else
       // abort transaction unless acknowledgement on the other end
       abortTransactionUnless(connection.verifyMembership(
         proofHeight,
@@ -801,7 +800,6 @@ function cleanupPacket(
         packetAcknowledgementPath(packet.destPort, packet.destChannel, packet.sequence),
         nextSequenceRecvOrAcknowledgement
       ))
-    }
 
     // all assertions passed, we can alter state
 

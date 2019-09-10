@@ -143,9 +143,9 @@ instead of directly calling the `verifyMembership` with the clients in the speci
 ```typescript
 function verifyMembership(
   connection: ConnectionEnd
-  height: uint64, 
-  proof: CommitmentProof, 
-  path: Path, 
+  height: uint64,
+  proof: CommitmentProof,
+  path: Path,
   value: Value): bool {
     client = queryClient(connection.clientIdentifier)
     client.verifyMembership(height, proof, applyPrefix(connection.counterpartyPrefix, path), value)
@@ -155,8 +155,8 @@ function verifyMembership(
 ```typescript
 function verifyNonMembership(
   connection: ConnectionEnd,
-  height: uint64, 
-  proof: CommitmentProof, 
+  height: uint64,
+  proof: CommitmentProof,
   path: Path): bool {
     client = queryClient(connection.clientIdentifier)
     client.verifyNonMembership(height, proof, applyPrefix(connection.counterpartyPrefix, path))
@@ -254,16 +254,16 @@ function connOpenTry(
     expectedConsensusState = getConsensusState(consensusHeight)
     expected = ConnectionEnd{INIT, desiredIdentifier, getCommitmentPrefix(), counterpartyClientIdentifier,
                              clientIdentifier, counterpartyVersion}
-    connection = ConnectionEnd{state, counterpartyConnectionIdentifier, counterpartyPrefix, 
+    connection = ConnectionEnd{state, counterpartyConnectionIdentifier, counterpartyPrefix,
                                clientIdentifier, counterpartyClientIdentifier, version}
     abortTransactionUnless(
       connection.verifyMembership(proofHeight, proofInit,
-                              connectionPath(counterpartyConnectionIdentifier), 
-                              expected))
+                                  connectionPath(counterpartyConnectionIdentifier),
+                                  expected))
     abortTransactionUnless(
       connection.verifyMembership(proofHeight, proofInit,
-                              consensusStatePath(counterpartyClientIdentifier),
-                              expectedConsensusState))
+                                  consensusStatePath(counterpartyClientIdentifier),
+                                  expectedConsensusState))
     abortTransactionUnless(provableStore.get(connectionPath(desiredIdentifier)) === null)
     abortTransactionUnless(checkVersion(version, counterpartyVersion))
     identifier = desiredIdentifier
@@ -288,14 +288,16 @@ function connOpenAck(
     abortTransactionUnless(checkVersion(connection.version, version))
     expectedConsensusState = getConsensusState(consensusHeight)
     expected = ConnectionEnd{TRYOPEN, identifier, getCommitmentPrefix(),
-                             connection.counterpartyClientIdentifier, connection.clientIdentifier, 
+                             connection.counterpartyClientIdentifier, connection.clientIdentifier,
                              version}
     abortTransactionUnless(
       connection.verifyMembership(proofHeight, proofTry,
-                       connectionPath(connection.counterpartyConnectionIdentifier), expected)
+                                  connectionPath(connection.counterpartyConnectionIdentifier),
+                                  expected))
     abortTransactionUnless(
       connection.verifyMembership(proofHeight, proofTry,
-                       consensusStatePath(connection.counterpartyClientIdentifier), expectedConsensusState))
+                                  consensusStatePath(connection.counterpartyClientIdentifier),
+                                  expectedConsensusState))
     connection.state = OPEN
     connection.version = version
     provableStore.set(connectionPath(identifier), connection)
@@ -315,7 +317,8 @@ function connOpenConfirm(
                              connection.clientIdentifier, connection.version}
     abortTransactionUnless(
       connection.verifyMembership(proofHeight, proofAck,
-                       connectionPath(connection.counterpartyConnectionIdentifier), expected))
+                                  connectionPath(connection.counterpartyConnectionIdentifier),
+                                  expected))
     connection.state = OPEN
     provableStore.set(connectionPath(identifier), connection)
 }
