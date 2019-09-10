@@ -169,6 +169,14 @@ function channelPath(portIdentifier: Identifier, channelIdentifier: Identifier):
 }
 ```
 
+The capability key associated with a channel is stored under the `channelCapabilityPath`:
+
+```typescript
+function channelCapabilityPath(portIdentifier: Identifier, channelIdentifier: Identifier): Path {
+  return "{channelPath(portIdentifier, channelIdentifier)}/key"
+}
+```
+
 The `nextSequenceSend` and `nextSequenceRecv` unsigned integer counters are stored separately so they can be proved individually:
 
 ```typescript
@@ -248,7 +256,7 @@ function chanOpenInit(
   channelIdentifier: Identifier,
   counterpartyPortIdentifier: Identifier,
   counterpartyChannelIdentifier: Identifier,
-  version: string) {
+  version: string): CapabilityKey {
 
     abortTransactionUnless(connectionHops.length === 1) // for v1 of the IBC protocol
 
@@ -258,12 +266,15 @@ function chanOpenInit(
     // optimistic channel handshakes are allowed
     abortTransactionUnless(connection !== null)
     abortTransactionUnless(connection.state !== CLOSED)
-    abortTransactionUnless(authenticate(provableStore.get(portPath(portIdentifier))))
+    abortTransactionUnless(authenticate(privateStore.get(portPath(portIdentifier))))
     channel = Channel{INIT, order, counterpartyPortIdentifier,
                       counterpartyChannelIdentifier, connectionHops, version}
     provableStore.set(channelPath(portIdentifier, channelIdentifier), channel)
+    key = generate()
+    provableStore.set(channelCapabilityPath(portIdentifier, channelIdentifier), key)
     provableStore.set(nextSequenceSendPath(portIdentifier, channelIdentifier), 1)
     provableStore.set(nextSequenceRecvPath(portIdentifier, channelIdentifier), 1)
+    return key
 }
 ```
 
@@ -280,10 +291,10 @@ function chanOpenTry(
   version: string,
   counterpartyVersion: string,
   proofInit: CommitmentProof,
-  proofHeight: uint64) {
+  proofHeight: uint64): CapabilityKey {
     abortTransactionUnless(connectionHops.length === 1) // for v1 of the IBC protocol
     abortTransactionUnless(provableStore.get(channelPath(portIdentifier, channelIdentifier)) === null)
-    abortTransactionUnless(authenticate(provableStore.get(portPath(portIdentifier))))
+    abortTransactionUnless(authenticate(privateStore.get(portPath(portIdentifier))))
     connection = provableStore.get(connectionPath(connectionHops[0]))
     abortTransactionUnless(connection !== null)
     abortTransactionUnless(connection.state === OPEN)
@@ -298,8 +309,11 @@ function chanOpenTry(
     channel = Channel{OPENTRY, order, counterpartyPortIdentifier,
                       counterpartyChannelIdentifier, connectionHops, version}
     provableStore.set(channelPath(portIdentifier, channelIdentifier), channel)
+    key = generate()
+    provableStore.set(channelCapabilityPath(portIdentifier, channelIdentifier), key)
     provableStore.set(nextSequenceSendPath(portIdentifier, channelIdentifier), 1)
     provableStore.set(nextSequenceRecvPath(portIdentifier, channelIdentifier), 1)
+    return key
 }
 ```
 
@@ -315,7 +329,7 @@ function chanOpenAck(
   proofHeight: uint64) {
     channel = provableStore.get(channelPath(portIdentifier, channelIdentifier))
     abortTransactionUnless(channel.state === INIT)
-    abortTransactionUnless(authenticate(provableStore.get(portPath(portIdentifier))))
+    abortTransactionUnless(authenticate(privateStore.get(channelCapabilityPath(portIdentifier, channelIdentifier))))
     connection = provableStore.get(connectionPath(channel.connectionHops[0]))
     abortTransactionUnless(connection !== null)
     abortTransactionUnless(connection.state === OPEN)
@@ -345,7 +359,7 @@ function chanOpenConfirm(
     channel = provableStore.get(channelPath(portIdentifier, channelIdentifier))
     abortTransactionUnless(channel !== null)
     abortTransactionUnless(channel.state === OPENTRY)
-    abortTransactionUnless(authenticate(provableStore.get(portPath(portIdentifier))))
+    abortTransactionUnless(authenticate(privateStore.get(channelCapabilityPath(portIdentifier, channelIdentifier))))
     connection = provableStore.get(connectionPath(channel.connectionHops[0]))
     abortTransactionUnless(connection !== null)
     abortTransactionUnless(connection.state === OPEN)
@@ -374,7 +388,7 @@ Any in-flight packets can be timed-out as soon as a channel is closed.
 function chanCloseInit(
   portIdentifier: Identifier,
   channelIdentifier: Identifier) {
-
+    abortTransactionUnless(authenticate(privateStore.get(channelCapabilityPath(portIdentifier, channelIdentifier))))
     channel = provableStore.get(channelPath(portIdentifier, channelIdentifier))
     abortTransactionUnless(channel !== null)
     abortTransactionUnless(channel.state !== CLOSED)
@@ -399,6 +413,7 @@ function chanCloseConfirm(
   channelIdentifier: Identifier,
   proofInit: CommitmentProof,
   proofHeight: uint64) {
+    abortTransactionUnless(authenticate(privateStore.get(channelCapabilityPath(portIdentifier, channelIdentifier))))
     channel = provableStore.get(channelPath(portIdentifier, channelIdentifier))
     abortTransactionUnless(channel !== null)
     abortTransactionUnless(channel.state !== CLOSED)
@@ -472,7 +487,7 @@ function sendPacket(packet: Packet) {
     // optimistic sends are permitted once the handshake has started
     abortTransactionUnless(channel !== null)
     abortTransactionUnless(channel.state !== CLOSED)
-    abortTransactionUnless(authenticate(provableStore.get(portPath(packet.sourcePort))))
+    abortTransactionUnless(authenticate(privateStore.get(channelCapabilityPath(packet.sourcePort, packet.sourceChannel))))
     abortTransactionUnless(packet.destPort === channel.counterpartyPortIdentifier)
     abortTransactionUnless(packet.destChannel === channel.counterpartyChannelIdentifier)
     connection = provableStore.get(connectionPath(channel.connectionHops[0]))
@@ -521,7 +536,7 @@ function recvPacket(
     channel = provableStore.get(channelPath(packet.destPort, packet.destChannel))
     abortTransactionUnless(channel !== null)
     abortTransactionUnless(channel.state === OPEN)
-    abortTransactionUnless(authenticate(provableStore.get(portPath(packet.destPort))))
+    abortTransactionUnless(authenticate(privateStore.get(channelCapabilityPath(packet.destPort, packet.destChannel))))
     abortTransactionUnless(packet.sourcePort === channel.counterpartyPortIdentifier)
     abortTransactionUnless(packet.sourceChannel === channel.counterpartyChannelIdentifier)
 
@@ -578,7 +593,7 @@ function acknowledgePacket(
     channel = provableStore.get(channelPath(packet.sourcePort, packet.sourceChannel))
     abortTransactionUnless(channel !== null)
     abortTransactionUnless(channel.state === OPEN)
-    abortTransactionUnless(authenticate(provableStore.get(portPath(packet.sourcePort))))
+    abortTransactionUnless(authenticate(privateStore.get(channelCapabilityPath(packet.sourcePort, packet.sourceChannel))))
     abortTransactionUnless(packet.sourceChannel === channel.counterpartyChannelIdentifier)
 
     connection = provableStore.get(connectionPath(channel.connectionHops[0]))
@@ -640,7 +655,7 @@ function timeoutPacket(
     abortTransactionUnless(channel !== null)
     abortTransactionUnless(channel.state === OPEN)
 
-    abortTransactionUnless(authenticate(provableStore.get(portPath(packet.sourcePort))))
+    abortTransactionUnless(authenticate(privateStore.get(channelCapabilityPath(packet.sourcePort, packet.sourceChannel))))
     abortTransactionUnless(packet.destChannel === channel.counterpartyChannelIdentifier)
 
     connection = provableStore.get(connectionPath(channel.connectionHops[0]))
@@ -707,7 +722,7 @@ function timeoutOnClose(
 
     channel = provableStore.get(channelPath(packet.sourcePort, packet.sourceChannel))
     // note: the channel may have been closed
-    abortTransactionUnless(authenticate(provableStore.get(portPath(packet.sourcePort))))
+    abortTransactionUnless(authenticate(privateStore.get(channelCapabilityPath(packet.sourcePort, packet.sourceChannel))))
     abortTransactionUnless(packet.destChannel === channel.counterpartyChannelIdentifier)
 
     connection = provableStore.get(connectionPath(channel.connectionHops[0]))
@@ -764,7 +779,7 @@ function cleanupPacket(
     channel = provableStore.get(channelPath(packet.sourcePort, packet.sourceChannel))
     abortTransactionUnless(channel !== null)
     abortTransactionUnless(channel.state === OPEN)
-    abortTransactionUnless(authenticate(provableStore.get(portPath(packet.sourcePort))))
+    abortTransactionUnless(authenticate(privateStore.get(channelCapabilityPath(packet.sourcePort, packet.sourceChannel))))
     abortTransactionUnless(packet.destChannel === channel.counterpartyChannelIdentifier)
 
     connection = provableStore.get(connectionPath(channel.connectionHops[0]))
