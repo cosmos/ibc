@@ -29,7 +29,8 @@ Modules may bind to multiple ports and connect to multiple ports bound to by ano
 port simultaneously. Channels are end-to-end between two ports, each of which must have been previously bound to by a module, which will then control that end of the channel.
 
 Optionally, the host state machine can elect to expose port binding only to a specially-permissioned module manager,
-which can control which ports modules can bind to with a custom rule-set, and transfer ports to modules only when it
+by generating a capability key specifically for the ability to bind ports. The module manager
+can then control which ports modules can bind to with a custom rule-set, and transfer ports to modules only when it
 has validated the port name & module. This role can be played by the relayer module (see [ICS 26](../ics-026-relayer-module)).
 
 ### Definitions
@@ -143,9 +144,9 @@ If the host state machine does not implement a special module manager to control
 
 ```typescript
 function bindPort(id: Identifier) {
-    abortTransactionUnless(provableStore.get(portPath(id)) === null)
+    abortTransactionUnless(privateStore.get(portPath(id)) === null)
     key = generate()
-    provableStore.set(portPath(id), key)
+    privateStore.set(portPath(id), key)
     return key
 }
 ```
@@ -158,9 +159,9 @@ If the host state machine supports object-capabilities, no additional protocol i
 
 ```typescript
 function transferPort(id: Identifier) {
-    abortTransactionUnless(authenticate(provableStore.get(portPath(id))))
+    abortTransactionUnless(authenticate(privateStore.get(portPath(id))))
     key = generate()
-    provableStore.set(portPath(id), key)
+    privateStore.set(portPath(id), key)
 }
 ```
 
@@ -172,8 +173,8 @@ The IBC handler MUST implement the `releasePort` function, which allows a module
 
 ```typescript
 function releasePort(id: Identifier) {
-    abortTransactionUnless(authenticate(provableStore.get(portPath(id))))
-    provableStore.delete(portPath(id))
+    abortTransactionUnless(authenticate(privateStore.get(portPath(id))))
+    privateStore.delete(portPath(id))
 }
 ```
 
