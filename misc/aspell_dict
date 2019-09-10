@@ -1,4 +1,4 @@
-personal_ws-1.1 en 433 
+personal_ws-1.1 en 439 
 unescrow
 onChanCloseConfirm
 clientKey
@@ -31,6 +31,7 @@ submitMisbehaviourToClient
 Dev
 proto
 chanOpenAck
+substate
 escrowAccount
 proofNonMembership
 LightClient
@@ -58,6 +59,7 @@ CommitmentProof
 getVerifiedRoot
 OPENTRY
 PacketTimeoutClose
+counterpartyPrefix
 provableStore
 clientState
 chanOpenInit
@@ -88,6 +90,7 @@ nextSequenceRecvKey
 Protobuf
 ics
 README
+applyPrefix
 interblockchain
 CryptoKitties
 namespaced
@@ -224,6 +227,7 @@ channelEscrowAddresses
 Pre
 privateStore
 sdk
+prefixedPath
 blockchain
 implementers
 Tezos
@@ -300,6 +304,7 @@ sharding
 scalability
 untrusted
 unfreezeClient
+getCommitmentPrefix
 onChanOpenConfirm
 counterintuitive
 ClientUpdate
@@ -404,6 +409,7 @@ checkValidityAndUpdateState
 acc
 interoperable
 ABI
+CommitmentPrefix
 recvSequence
 onTimeoutPropose
 permissioned
@@ -432,9 +438,3 @@ chanId
 positionally
 OpHeaderProof
 CryptoKitty
-CommitmentPrefix
-getCommitmentPrefix
-applyPrefix
-counterpartyPrefix
-substate
-prefixedPath
