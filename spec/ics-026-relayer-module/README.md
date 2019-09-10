@@ -632,41 +632,21 @@ function handlePacketTimeoutOnClose(datagram: PacketTimeoutOnClose) {
 #### Closure-by-timeout & packet cleanup
 
 ```typescript
-interface PacketCleanupOrdered {
+interface PacketCleanup {
   packet: Packet
   proof: CommitmentProof
   proofHeight: uint64
-  nextSequenceRecv: uint64
+  nextSequenceRecvOrAcknowledgement: Either<uint64, bytes>
 }
 ```
 
 ```typescript
-function handlePacketCleanupOrdered(datagram: PacketCleanupOrdered) {
-    handler.cleanupPacketOrdered(
+function handlePacketCleanup(datagram: PacketCleanup) {
+    handler.cleanupPacket(
       datagram.packet,
       datagram.proof,
       datagram.proofHeight,
-      datagram.nextSequenceRecv
-    )
-}
-```
-
-```typescript
-interface PacketCleanupUnordered {
-  packet: Packet
-  proof: CommitmentProof
-  proofHeight: uint64
-  acknowledgement: bytes
-}
-```
-
-```typescript
-function handlePacketCleanupUnordered(datagram: PacketCleanupUnordered) {
-    handler.cleanupPacketUnordered(
-      datagram.packet,
-      datagram.proof,
-      datagram.proofHeight,
-      datagram.acknowledgement
+      datagram.nextSequenceRecvOrAcknowledgement
     )
 }
 ```

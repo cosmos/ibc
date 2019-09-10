@@ -1,4 +1,4 @@
-personal_ws-1.1 en 438 
+personal_ws-1.1 en 432 
 unescrow
 onChanCloseConfirm
 clientKey
@@ -29,7 +29,6 @@ submitDatagram
 nextTimeoutHeight
 submitMisbehaviourToClient
 Dev
-handlePacketTimeoutOrdered
 proto
 chanOpenAck
 escrowAccount
@@ -82,7 +81,6 @@ handleChanOpenConfirm
 ICSs
 getHeight
 EVM
-cleanupPacketOrdered
 handleConnOpenTry
 unowned
 clientType
@@ -97,8 +95,6 @@ deleteClient
 createNonMembershipProof
 commited
 sourceChannel
-handlePacketTimeoutUnordered
-handlePacketCleanupUnordered
 onChanOpenTry
 stateful
 namespaces
@@ -155,8 +151,6 @@ newState
 batchVerifyMembership
 queryClientRoot
 privateKey
-PacketTimeoutUnordered
-PacketCleanupUnordered
 clientConnectionsKey
 loopback
 repudiability
@@ -175,6 +169,7 @@ bool
 cryptographic
 counterpartyClientIdentifier
 KVStore
+cleanupPacket
 deps
 frozenKey
 ChannelOrder
@@ -196,7 +191,6 @@ pubkey
 PubKey
 handleChanCloseInit
 Agoric
-cleanupPacketUnordered
 connectionHops
 auth
 unreceived
@@ -214,6 +208,7 @@ handleChanCloseConfirm
 proofInit
 checkMisbehaviourAndUpdateState
 nextSequenceSendPath
+nextSequenceRecvOrAcknowledgement
 getConsensusState
 abortSystemUnless
 png
@@ -244,7 +239,6 @@ expectedConsensusState
 handleChanOpenInit
 YYYY
 slashable
-PacketCleanupOrdered
 verifier
 bindPort
 IOPs
@@ -316,7 +310,6 @@ txs
 Composability
 sendPacket
 connectionKey
-PacketTimeoutOrdered
 RootOfTrust
 nextSequenceRecv
 desiredIdentifier
@@ -376,9 +369,11 @@ Yun
 md
 counterpartyConnectionIdentifier
 OpCommitmentRoot
+handlePacketCleanup
 onTimeoutPacketClose
 transactional
 counterpartyPortIdentifier
+PacketCleanup
 packetCommitmentKey
 handleConnOpenConfirm
 counterpartyChannelIdentifier
@@ -392,7 +387,6 @@ unallocated
 portIdentifier
 enum
 handleConnCloseConfirm
-handlePacketCleanupOrdered
 collateralisation
 datapipe
 ConnCloseAck

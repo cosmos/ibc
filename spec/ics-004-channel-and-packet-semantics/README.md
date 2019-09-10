@@ -748,21 +748,22 @@ function timeoutOnClose(
 
 ##### Cleaning up state
 
-`cleanupPacketOrdered` and `cleanupPacketUnordered`, variants for ordered and unordered channels respectively, are called by a module to remove a received packet commitment from storage. The receiving end must have already processed the packet (whether regularly or past timeout).
+`cleanupPacket` is called by a module to remove a received packet commitment from storage. The receiving end must have already processed the packet (whether regularly or past timeout).
 
-`cleanupPacketOrdered` cleans-up a packet on an ordered channel by proving that the packet has been received on the other end.
+In the ordered channel case, `cleanupPacket` cleans-up a packet on an ordered channel by proving that the packet has been received on the other end.
+
+In the unordered channel case, `cleanupPacket` cleans-up a packet on an unordered channel by proving that the associated acknowledgement has been written.
 
 ```typescript
-function cleanupPacketOrdered(
+function cleanupPacket(
   packet: OpaquePacket,
   proof: CommitmentProof,
   proofHeight: uint64,
-  nextSequenceRecv: uint64): Packet {
+  nextSequenceRecvOrAcknowledgement: Either<uint64, bytes>): Packet {
 
     channel = provableStore.get(channelPath(packet.sourcePort, packet.sourceChannel))
     abortTransactionUnless(channel !== null)
     abortTransactionUnless(channel.state === OPEN)
-    abortTransactionUnless(channel.order === ORDERED)
     abortTransactionUnless(authenticate(provableStore.get(portPath(packet.sourcePort))))
     abortTransactionUnless(packet.destChannel === channel.counterpartyChannelIdentifier)
 
@@ -777,57 +778,25 @@ function cleanupPacketOrdered(
     abortTransactionUnless(provableStore.get(packetCommitmentPath(packet.sourcePort, packet.sourceChannel, packet.sequence))
                === hash(packet.data))
 
-    // check that the recv sequence is as claimed
-    client = queryClient(connection.clientIdentifier)
-    abortTransactionUnless(client.verifyMembership(
-      proofHeight,
-      proof,
-      nextSequenceRecvPath(packet.destPort, packet.destChannel),
-      nextSequenceRecv
-    ))
-
-    // all assertions passed, we can alter state
-
-    // clear the store
-    provableStore.delete(packetCommitmentPath(packet.sourcePort, packet.sourceChannel, packet.sequence))
-
-    // return transparent packet
-    return packet
-}
-```
-
-`cleanupPacketUnordered` cleans-up a packet on an unordered channel by proving that the associated acknowledgement has been written.
-
-```typescript
-function cleanupPacketUnordered(
-  packet: OpaquePacket,
-  proof: CommitmentProof,
-  proofHeight: uint64,
-  acknowledgement: bytes): Packet {
-
-    channel = provableStore.get(channelPath(packet.sourcePort, packet.sourceChannel))
-    abortTransactionUnless(channel !== null)
-    abortTransactionUnless(channel.state === OPEN)
-    abortTransactionUnless(channel.order === UNORDERED)
-    abortTransactionUnless(authenticate(provableStore.get(portPath(packet.sourcePort))))
-    abortTransactionUnless(packet.destChannel === channel.counterpartyChannelIdentifier)
-
-    connection = provableStore.get(connectionPath(channel.connectionHops[0]))
-    // note: the connection may have been closed
-    abortTransactionUnless(packet.destPort === channel.counterpartyPortIdentifier)
-
-    // abortTransactionUnless acknowledgement on the other end
-    client = queryClient(connection.clientIdentifier)
-    abortTransactionUnless(client.verifyMembership(
-      proofHeight,
-      proof,
-      packetAcknowledgementPath(packet.destPort, packet.destChannel, packet.sequence),
-      acknowledgement
-    ))
-
-    // verify we actually sent the packet, check the store
-    abortTransactionUnless(provableStore.get(packetCommitmentPath(packet.sourcePort, packet.sourceChannel, packet.sequence))
-               === hash(packet.data))
+    if channel.order === ORDERED {
+      // check that the recv sequence is as claimed
+      client = queryClient(connection.clientIdentifier)
+      abortTransactionUnless(client.verifyMembership(
+        proofHeight,
+        proof,
+        nextSequenceRecvPath(packet.destPort, packet.destChannel),
+        nextSequenceRecvOrAcknowledgement
+      ))
+    } else {
+      // abort transaction unless acknowledgement on the other end
+      client = queryClient(connection.clientIdentifier)
+      abortTransactionUnless(client.verifyMembership(
+        proofHeight,
+        proof,
+        packetAcknowledgementPath(packet.destPort, packet.destChannel, packet.sequence),
+        nextSequenceRecvOrAcknowledgement
+      ))
+    }
 
     // all assertions passed, we can alter state
 
