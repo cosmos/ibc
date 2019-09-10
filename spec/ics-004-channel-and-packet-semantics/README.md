@@ -621,23 +621,24 @@ The `timeoutPacket` function is called by a module which originally attempted to
 where the timeout height has passed on the counterparty chain without the packet being committed, to prove that the packet
 can no longer be executed and to allow the calling module to safely perform appropriate state transitions.
 
-There are two variants, for ordered & unordered channels: `timeoutPacketOrdered` and `timeoutPacketUnordered`.
+Calling modules MAY atomically execute appropriate application timeout-handling logic in conjunction with calling `timeoutPacket`.
 
-Calling modules MAY atomically execute appropriate application timeout-handling logic in conjunction with calling `timeoutPacketOrdered` or `timeoutPacketUnordered`.
+In the case of an ordered channel, `timeoutPacket` checks the recvSequence of the receiving channel end and closes the channel if a packet has timed out.
 
-`timeoutPacketOrdered`, the variant for ordered channels, checks the recvSequence of the receiving channel end and closes the channel if a packet has timed out.
+In the case of an unordered channel, `timeoutPacket` checks the absence of an acknowledgement (which will have been written if the packet was received). Unordered channels are expected to continue in the face of timed-out packets.
+
+If relations are enforced between timeout heights of subsequent packets, safe bulk timeouts of all packets prior to a timed-out packet can be performed. This specification omits details for now.
 
 ```typescript
-function timeoutPacketOrdered(
+function timeoutPacket(
   packet: OpaquePacket,
   proof: CommitmentProof,
   proofHeight: uint64,
-  nextSequenceRecv: uint64): Packet {
+  nextSequenceRecv: Maybe<uint64>): Packet {
 
     channel = provableStore.get(channelPath(packet.sourcePort, packet.sourceChannel))
     abortTransactionUnless(channel !== null)
     abortTransactionUnless(channel.state === OPEN)
-    abortTransactionUnless(channel.order === ORDERED)
 
     abortTransactionUnless(authenticate(provableStore.get(portPath(packet.sourcePort))))
     abortTransactionUnless(packet.destChannel === channel.counterpartyChannelIdentifier)
@@ -656,71 +657,35 @@ function timeoutPacketOrdered(
     abortTransactionUnless(provableStore.get(packetCommitmentPath(packet.sourcePort, packet.sourceChannel, packet.sequence))
            === hash(packet.data))
 
-    // check that the recv sequence is as claimed
-    client = queryClient(connection.clientIdentifier)
-    abortTransactionUnless(client.verifyMembership(
-      proofHeight,
-      proof,
-      nextSequenceRecvPath(packet.destPort, packet.destChannel),
-      nextSequenceRecv
-    ))
+    if channel.order === ORDERED {
+      // ordered channel: check that the recv sequence is as claimed
+      client = queryClient(connection.clientIdentifier)
+      abortTransactionUnless(client.verifyMembership(
+        proofHeight,
+        proof,
+        nextSequenceRecvPath(packet.destPort, packet.destChannel),
+        nextSequenceRecv
+      ))
+    } else {
+      // unordered channel: verify absence of acknowledgement at packet index
+      client = queryClient(connection.clientIdentifier)
+      abortTransactionUnless(client.verifyNonMembership(
+        proofHeight,
+        proof,
+        packetAcknowledgementPath(packet.sourcePort, packet.sourceChannel, packet.sequence)
+      ))
+    }
 
     // all assertions passed, we can alter state
 
     // delete our commitment
     provableStore.delete(packetCommitmentPath(packet.sourcePort, packet.sourceChannel, packet.sequence))
 
-    // close the channel
-    channel.state = CLOSED
-    provableStore.set(channelPath(packet.sourcePort, packet.sourceChannel), channel)
-
-    // return transparent packet
-    return packet
-}
-```
-
-If relations are enforced between timeout heights of subsequent packets, safe bulk timeouts of all packets prior to a timed-out packet can be performed.
-This specification omits details for now.
-
-`timeoutPacketUnordered`, the variant for unordered channels, checks the absence of an acknowledgement (which will have been written if the packet was received).
-
-`timeoutPacketUnordered` does not close the channel; unordered channels are expected to continue in the face of timed-out packets.
-
-```typescript
-function timeoutPacketUnordered(
-  packet: OpaquePacket,
-  proof: CommitmentProof,
-  proofHeight: uint64): Packet {
-    channel = provableStore.get(channelPath(packet.sourcePort, packet.sourceChannel))
-    abortTransactionUnless(channel !== null)
-    abortTransactionUnless(channel.state === OPEN)
-    abortTransactionUnless(channel.order === UNORDERED)
-    abortTransactionUnless(authenticate(provableStore.get(portPath(packet.sourcePort))))
-    abortTransactionUnless(packet.destChannel === channel.counterpartyChannelIdentifier)
-
-    connection = provableStore.get(connectionPath(channel.connectionHops[0]))
-    // note: the connection may have been closed
-    abortTransactionUnless(packet.destPort === channel.counterpartyPortIdentifier)
-
-    // check that timeout height has passed on the other end
-    abortTransactionUnless(proofHeight >= packet.timeoutHeight)
-
-    // verify we actually sent this packet, check the store
-    abortTransactionUnless(provableStore.get(packetCommitmentPath(packet.sourcePort, packet.sourceChannel, packet.sequence))
-           === hash(packet.data))
-
-    // verify absence of acknowledgement at packet index
-    client = queryClient(connection.clientIdentifier)
-    abortTransactionUnless(client.verifyNonMembership(
-      proofHeight,
-      proof,
-      packetAcknowledgementPath(packet.sourcePort, packet.sourceChannel, packet.sequence)
-    ))
-  
-    // all assertions passed, we can alter state
-
-    // delete our commitment
-    provableStore.delete(packetCommitmentPath(packet.sourcePort, packet.sourceChannel, packet.sequence))
+    if channel.order === ORDERED {
+      // ordered channel: close the channel
+      channel.state = CLOSED
+      provableStore.set(channelPath(packet.sourcePort, packet.sourceChannel), channel)
+    }
 
     // return transparent packet
     return packet
@@ -775,55 +740,6 @@ function timeoutOnClose(
 
     // delete our commitment
     provableStore.delete(packetCommitmentPath(packet.sourcePort, packet.sourceChannel, packet.sequence))
-
-    // return transparent packet
-    return packet
-}
-```
-
-##### Closing on timeout
-
-The `timeoutClose` function is called by a module in order to prove that a packet which ought to have
-been received on a particular ordered channel has timed out, and the channel must be closed.
-
-This is an alternative to closing the other end of the channel and proving that closure. Either works.
-
-Calling modules MAY atomically execute any application logic associated with channel closure in conjunction with calling `recvTimeoutPacket`.
-
-```typescript
-function timeoutClose(
-  packet: OpaquePacket,
-  proof: CommitmentProof,
-  proofHeight: uint64): Packet {
-
-    channel = provableStore.get(channelPath(packet.destPort, packet.destChannel))
-    abortTransactionUnless(channel !== null)
-    abortTransactionUnless(channel.state === OPEN)
-    abortTransactionUnless(channel.order === ORDERED)
-    abortTransactionUnless(authenticate(provableStore.get(portPath(packet.destPort))))
-    abortTransactionUnless(packet.sourceChannel === channel.counterpartyChannelIdentifier)
-
-    connection = provableStore.get(connectionPath(channel.connectionHops[0]))
-    // note: the connection may have been closed
-    abortTransactionUnless(packet.sourcePort === channel.counterpartyPortIdentifier)
-
-    nextSequenceRecv = provableStore.get(nextSequenceRecvPath(packet.destPort, packet.destChannel))
-    abortTransactionUnless(packet.sequence === nextSequenceRecv)
-
-    abortTransactionUnless(proofHeight >= packet.timeoutHeight)
-
-    client = queryClient(connection.clientIdentifier)
-    abortTransactionUnless(client.verifyMembership(
-      proofHeight,
-      proof,
-      packetCommitmentPath(packet.sourcePort, packet.sourceChannel, packet.sequence),
-      hash(packet.data)
-    ))
-
-    // all assertions passed, we can alter state
-
-    channel.state = CLOSED
-    provableStore.set(channelPath(packet.destPort, packet.destChannel), channel)
 
     // return transparent packet
     return packet
