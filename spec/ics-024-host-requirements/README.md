@@ -174,7 +174,7 @@ if provableStore.get(path) === value {
 }
 ```
 
-For a host state machine, the `getCommitmentPrefix` MUST be constant.
+For a host state machine, the return value of `getCommitmentPrefix` MUST be constant.
 
 ### Port system
 
