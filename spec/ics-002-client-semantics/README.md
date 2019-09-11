@@ -405,7 +405,7 @@ function checkValidityAndUpdateState(
 function verifyMembership(
   clientState: ClientState,
   sequence: uint64,
-  proof: CommitmentProof
+  proof: CommitmentProof,
   path: Path,
   value: Value) {
     abortTransactionUnless(!clientState.frozen)
