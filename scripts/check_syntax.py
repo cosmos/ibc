@@ -4,6 +4,7 @@ import re, os, sys, subprocess, glob
 
 specs = [f.path for f in os.scandir('./spec') if f.is_dir()]
 files = [f.path for spec in specs for f in os.scandir(spec) if f.is_file() and f.path[-3:] == '.md']
+files = sorted(files)
 
 requires_regex = re.compile('requires: (.*)\n')
 

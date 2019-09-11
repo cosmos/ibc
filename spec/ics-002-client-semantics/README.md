@@ -378,13 +378,17 @@ function commit(
   sequence: uint64,
   newPublicKey: Maybe<PublicKey>): Header {
     signature = privateKey.sign(root, sequence, newPublicKey)
-    header = Header{sequence, root, signature, newPublicKey}
+    header = {sequence, root, signature, newPublicKey}
     return header
 }
 
 // initialisation function defined by the client type
 function initialize(consensusState: ConsensusState): ClientState {
-  return ClientState{false, Set.singleton(consensusState.publicKey), Map.empty()}
+  return {
+    frozen: false,
+    pastPublicKeys: Set.singleton(consensusState.publicKey),
+    verifiedRoots: Map.empty()
+  }
 }
 
 // validity predicate function defined by the client type
