@@ -438,3 +438,7 @@ chanId
 positionally
 OpHeaderProof
 CryptoKitty
+validatePortIdentifier
+validateChannelIdentifier
+validateClientIdentifier
+validateConnectionIdentifier

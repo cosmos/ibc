@@ -139,7 +139,7 @@ function portPath(id: Identifier): Path {
 
 #### Identifier Validation
 
-Port ownerships are stored under a unique `Identifier` prefix.
+Owner module identifier for ports are stored under a unique `Identifier` prefix.
 The validation function `validatePortIdentifier` MAY be provided.
 
 ```typescript
