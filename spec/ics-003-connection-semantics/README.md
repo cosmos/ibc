@@ -188,11 +188,21 @@ Future versions of this specification may also define this function.
 
 ### Sub-protocols
 
-This ICS defines two sub-protocols: opening handshake and closing handshake. Header tracking and closing-by-misbehaviour are defined in [ICS 2](../ics-002-client-semantics). Datagrams defined herein are handled as external messages by the IBC relayer module defined in [ICS 26](../ics-026-relayer-module).
+This ICS defines two sub-protocols: identifier validation, opening handshake and closing handshake. 
+Header tracking and closing-by-misbehaviour are defined in [ICS 2](../ics-002-client-semantics). Datagrams defined herein are handled as external messages by the IBC relayer module defined in [ICS 26](../ics-026-relayer-module).
 
 ![State Machine Diagram](state.png)
 
+#### Identifier Validation
 
+Connections are stored under a unique `Identifier` prefix.
+The validation function `validateConnectionIdentifier` MAY be provided.
+
+```typescript
+type validateConnectionIdentifier = (id: Identifier) => boolean
+```
+
+If not provided, the `validateConnectionIdentifier` will always return `true` by default. 
 
 #### Opening Handshake
 
@@ -227,6 +237,7 @@ function connOpenInit(
   clientIdentifier: Identifier,
   counterpartyClientIdentifier: Identifier,
   version: string) {
+    abortTransactionUnless(validateConnectionIdentifier(identifier))
     abortTransactionUnless(provableStore.get(connectionPath(identifier)) == null)
     state = INIT
     connection = ConnectionEnd{state, desiredCounterpartyConnectionIdentifier, counterpartyPrefix,
@@ -250,6 +261,7 @@ function connOpenTry(
   proofInit: CommitmentProof,
   proofHeight: uint64,
   consensusHeight: uint64) {
+    abortTransactionUnless(validateConnectionIdentifier(desiredIdentifier))
     abortTransactionUnless(consensusHeight <= getCurrentHeight())
     expectedConsensusState = getConsensusState(consensusHeight)
     expected = ConnectionEnd{INIT, desiredIdentifier, getCommitmentPrefix(), counterpartyClientIdentifier,
