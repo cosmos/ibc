@@ -222,6 +222,17 @@ Host state machines MAY also safely ignore the version data or specify an empty 
 
 > Note: If the host state machine is utilising object capability authentication (see [ICS 005](../ics-005-port-allocation)), all functions utilising ports take an additional capability parameter.
 
+#### Identifier Validation
+
+Channels are stored under a unique `(portIdentifier, channelIdentifier)` prefix.
+The validation function `validatePortIdentifier` MAY be provided.
+
+```typescript
+type validateChannelIdentifier = (portIdentifier: Identifier, channelIdentifier: Identifier) => boolean
+```
+
+If not provided, the `validateChannelIdentifier` will always return `true` by default. 
+
 #### Channel lifecycle management
 
 ![Channel State Machine](channel-state-machine.png)
@@ -257,6 +268,7 @@ function chanOpenInit(
   counterpartyPortIdentifier: Identifier,
   counterpartyChannelIdentifier: Identifier,
   version: string): CapabilityKey {
+    abortTransactionUnless(validateChannelIdentifier(portIdentifier, channelIdentifier))
 
     abortTransactionUnless(connectionHops.length === 1) // for v1 of the IBC protocol
 
@@ -292,6 +304,7 @@ function chanOpenTry(
   counterpartyVersion: string,
   proofInit: CommitmentProof,
   proofHeight: uint64): CapabilityKey {
+    abortTransactionUnless(validateChannelIdentifier(portIdentifier, channelIdentifier))
     abortTransactionUnless(connectionHops.length === 1) // for v1 of the IBC protocol
     abortTransactionUnless(provableStore.get(channelPath(portIdentifier, channelIdentifier)) === null)
     abortTransactionUnless(authenticate(privateStore.get(portPath(portIdentifier))))
