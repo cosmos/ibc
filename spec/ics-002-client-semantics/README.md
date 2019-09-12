@@ -225,18 +225,18 @@ type verifyNonMembership = (ClientState, uint64, CommitmentProof, Path) => boole
 
 IBC handlers MUST implement the functions defined below.
 
-#### Identifier Validation
+#### Identifier validation
 
 Clients are stored under a unique `Identifier` prefix.
 This ICS does not require that client identifiers be generated in a particular manner, only that they be unique.
-However, it is possible to restrict the `Identifier`s if required.
+However, it is possible to restrict the space of `Identifier`s if required.
 The validation function `validateClientIdentifier` MAY be provided.
 
 ```typescript
 type validateClientIdentifier = (id: Identifier) => boolean
 ```
 
-If not provided, the `validateClientIdentifier` will always return `true` by default. 
+If not provided, the default `validateClientIdentifier` will always return `true`. 
 
 #### Path-space
 

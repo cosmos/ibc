@@ -137,7 +137,7 @@ function portPath(id: Identifier): Path {
 
 ### Sub-protocols
 
-#### Identifier Validation
+#### Identifier validation
 
 Owner module identifier for ports are stored under a unique `Identifier` prefix.
 The validation function `validatePortIdentifier` MAY be provided.
@@ -146,7 +146,7 @@ The validation function `validatePortIdentifier` MAY be provided.
 type validatePortIdentifier = (id: Identifier) => boolean
 ```
 
-If not provided, the `validatePortIdentifier` will always return `true` by default. 
+If not provided, the default `validatePortIdentifier` function will always return `true`. 
 
 
 #### Binding to a port

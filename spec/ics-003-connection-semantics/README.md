@@ -188,12 +188,12 @@ Future versions of this specification may also define this function.
 
 ### Sub-protocols
 
-This ICS defines two sub-protocols: identifier validation, opening handshake and closing handshake. 
-Header tracking and closing-by-misbehaviour are defined in [ICS 2](../ics-002-client-semantics). Datagrams defined herein are handled as external messages by the IBC relayer module defined in [ICS 26](../ics-026-relayer-module).
+This ICS defines two sub-protocols: opening handshake and closing handshake. 
+Header tracking and closing-by-misbehaviour are defined in [ICS 2](../ics-002-client-semantics).
 
 ![State Machine Diagram](state.png)
 
-#### Identifier Validation
+#### Identifier validation
 
 Connections are stored under a unique `Identifier` prefix.
 The validation function `validateConnectionIdentifier` MAY be provided.
@@ -202,7 +202,7 @@ The validation function `validateConnectionIdentifier` MAY be provided.
 type validateConnectionIdentifier = (id: Identifier) => boolean
 ```
 
-If not provided, the `validateConnectionIdentifier` will always return `true` by default. 
+If not provided, the default `validateConnectionIdentifier` function will always return `true`. 
 
 #### Opening Handshake
 

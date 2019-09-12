@@ -222,7 +222,7 @@ Host state machines MAY also safely ignore the version data or specify an empty 
 
 > Note: If the host state machine is utilising object capability authentication (see [ICS 005](../ics-005-port-allocation)), all functions utilising ports take an additional capability parameter.
 
-#### Identifier Validation
+#### Identifier validation
 
 Channels are stored under a unique `(portIdentifier, channelIdentifier)` prefix.
 The validation function `validatePortIdentifier` MAY be provided.
@@ -231,7 +231,7 @@ The validation function `validatePortIdentifier` MAY be provided.
 type validateChannelIdentifier = (portIdentifier: Identifier, channelIdentifier: Identifier) => boolean
 ```
 
-If not provided, the `validateChannelIdentifier` will always return `true` by default. 
+If not provided, the default `validateChannelIdentifier` function will always return `true`. 
 
 #### Channel lifecycle management
 
