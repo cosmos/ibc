@@ -1,4 +1,4 @@
-personal_ws-1.1 en 439 
+personal_ws-1.1 en 443 
 unescrow
 onChanCloseConfirm
 clientKey
@@ -12,6 +12,7 @@ stablecoins
 packetAcknowledgementPath
 ClientSubmitMisbehaviour
 encodings
+Kadena
 addConnectionToClient
 exfiltration
 relayer
@@ -143,6 +144,7 @@ ValidatorUpdate
 releasePort
 onChanOpenInit
 ClientCreate
+Golang
 batchVerifyNonMembership
 HeaderProof
 timeoutOnClose
@@ -190,8 +192,8 @@ atomicity
 lookupModule
 recvTimeoutPacket
 namespacing
-pubkey
 PubKey
+pubkey
 handleChanCloseInit
 Agoric
 connectionHops
@@ -232,6 +234,7 @@ blockchain
 implementers
 Tezos
 FungibleTokenPacketData
+SpeckleOS
 pseudocode
 proofAck
 nextSequenceSendKey
@@ -356,6 +359,7 @@ Multichain
 connId
 blockchain's
 blockchains
+Nomic
 serialisable
 chanOpenTry
 onAcknowledgePacket

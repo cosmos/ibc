@@ -1,10 +1,12 @@
 ## Interblockchain Communication Protocol Ecosystem
 
-### Implementations
+### Handler implementations
 
-Implementations of the canonical IBC protocol as defined in the specification, suitable for integration with blockchains written in the respective client languages.
+Implementations of the canonical IBC protocol & handler as defined in the specification.
 
-| Status    | Language    | Implementor            | Links                     |
+Suitable for integration with blockchains written in the respective client languages.
+
+| Status    | Language    | Implementer            | Links                     |
 | --------- | ----------- | ---------------------- | ------------------------- |
 | Alpha     | Golang      | All in Bits            | [Tracking issue](https://github.com/cosmos/ics/issues/145), [source code](https://github.com/cosmos/cosmos-sdk/pull/4548) |
 | Upcoming  | Rust        | Interchain Foundation  | TBA |
@@ -13,10 +15,28 @@ Implementations of the canonical IBC protocol as defined in the specification, s
 
 ### Bridges
 
-Specialised bridges which do or will integrate with the IBC protocol.
+Specialised bridges which integrate neatly with the IBC protocol.
 
-| Status    | Blockchain | Implementor | Links                |
+| Status    | Blockchain | Implementer | Links                |
 | --------- | ---------- | ----------- | -------------------- |
 | Alpha     | Bitcoin    | Nomic       | [Source code](https://github.com/nomic-io/bitcoin-peg) |
 | Alpha     | Ethereum   | Swish Labs  | [Source code](https://github.com/swishlabsco/peggy) |
 | Upcoming  | Substrate  | SpeckleOS   | TBA |
+
+### Relayers
+
+Relayer implementations, as standalone processes or integrated into wallets.
+
+(coming soon)
+
+### Ledgers
+
+Operational distributed ledgers which speak IBC.
+
+(coming soon)
+
+### Applications
+
+Decentralised applications which utilise IBC.
+
+(coming soon)
