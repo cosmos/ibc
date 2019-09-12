@@ -6,22 +6,22 @@ Implementations of the canonical IBC protocol & handler as defined in the specif
 
 Suitable for integration with blockchains written in the respective client languages.
 
-| Status    | Language    | Implementer            | Links                     |
-| --------- | ----------- | ---------------------- | ------------------------- |
-| Alpha     | Golang      | All in Bits            | [Tracking issue](https://github.com/cosmos/ics/issues/145), [source code](https://github.com/cosmos/cosmos-sdk/pull/4548) |
-| Upcoming  | Rust        | Interchain Foundation  | TBA |
-| Upcoming  | Haskell     | Kadena                 | TBA |
-| Upcoming  | Javascript  | Agoric                 | TBA |
+| Status    | Language    | Implementer                                     | Links                     |
+| --------- | ----------- | ----------------------                          | ------------------------- |
+| Alpha     | Golang      | [All in Bits](https://tendermint.com)           | [Tracking issue](https://github.com/cosmos/ics/issues/145), [source code](https://github.com/cosmos/cosmos-sdk/pull/4548) |
+| Upcoming  | Rust        | [Interchain Foundation](https://interchain.io)  | TBA |
+| Upcoming  | Haskell     | [Kadena](https://kadena.io)                     | TBA |
+| Upcoming  | Javascript  | [Agoric](https://agoric.com)                    | TBA |
 
 ### Bridges
 
 Specialised bridges which integrate neatly with the IBC protocol.
 
-| Status    | Blockchain | Implementer | Links                |
-| --------- | ---------- | ----------- | -------------------- |
-| Alpha     | Bitcoin    | Nomic       | [Source code](https://github.com/nomic-io/bitcoin-peg) |
-| Alpha     | Ethereum   | Swish Labs  | [Source code](https://github.com/swishlabsco/peggy) |
-| Upcoming  | Substrate  | SpeckleOS   | TBA |
+| Status    | Blockchain | Implementer                              | Links                |
+| --------- | ---------- | -----------                              | -------------------- |
+| Alpha     | Bitcoin    | [Nomic](https://nomic.io)                | [Source code](https://github.com/nomic-io/bitcoin-peg) |
+| Alpha     | Ethereum   | [Swish Labs](http://www.swishlabs.com/)  | [Source code](https://github.com/swishlabsco/peggy) |
+| Upcoming  | Substrate  | [SpeckleOS](https://www.speckleos.io/)   | TBA |
 
 ### Relayers
 
