@@ -225,10 +225,20 @@ type verifyNonMembership = (ClientState, uint64, CommitmentProof, Path) => boole
 
 IBC handlers MUST implement the functions defined below.
 
-#### Path-space
+#### Identifier validation
 
 Clients are stored under a unique `Identifier` prefix.
 This ICS does not require that client identifiers be generated in a particular manner, only that they be unique.
+However, it is possible to restrict the space of `Identifier`s if required.
+The validation function `validateClientIdentifier` MAY be provided.
+
+```typescript
+type validateClientIdentifier = (id: Identifier) => boolean
+```
+
+If not provided, the default `validateClientIdentifier` will always return `true`. 
+
+#### Path-space
 
 `clientStatePath` takes an `Identifier` and returns a `Path` under which to store a particular client state.
 
@@ -273,8 +283,9 @@ function createClient(
   id: Identifier,
   clientType: ClientType,
   consensusState: ConsensusState) {
+    abortTransactionUnless(validateClientIdentifier(id))
     abortTransactionUnless(privateStore.get(clientStatePath(id)) === null)
-    abortSystemUnless(privateStore.get(clientTypePath(id)) === null)
+    abortSystemUnless(provableStore.get(clientTypePath(id)) === null)
     clientState = clientType.initialize(consensusState)
     privateStore.set(clientStatePath(id), clientState)
     provableStore.set(clientTypePath(id), clientType)
