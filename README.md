@@ -12,6 +12,12 @@ Contributions are welcome.
 
 The rendered, ordered set of all interchain standards written so far can be read as [a single PDF](./spec.pdf).
 
+## Ecosystem
+
+For a list of IBC implementations, IBC-supporting blockchains, and special IBC bridges, see [ECOSYSTEM.md](./ECOSYSTEM.md).
+
+To add your project to this list, submit a pull request.
+
 ## Standardisation
 
 Please see [ICS 1](spec/ics-001-ics-standard) for a description of what a standard entails.
