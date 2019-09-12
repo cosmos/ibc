@@ -40,3 +40,9 @@ Operational distributed ledgers which speak IBC.
 Decentralised applications which utilise IBC.
 
 (coming soon)
+
+### Explorers
+
+Block explorers which can parse & trace IBC transactions.
+
+(coming soon)
