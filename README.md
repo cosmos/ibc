@@ -12,6 +12,12 @@ Contributions are welcome.
 
 The rendered, ordered set of all interchain standards written so far can be read as [a single PDF](./spec.pdf).
 
+## Ecosystem
+
+For a list of IBC implementations, IBC-supporting blockchains, and special IBC bridges, see [ECOSYSTEM.md](./ECOSYSTEM.md).
+
+To add your project to this list, submit a pull request.
+
 ## Standardisation
 
 Please see [ICS 1](spec/ics-001-ics-standard) for a description of what a standard entails.
@@ -24,11 +30,11 @@ See [PROCESS.md](PROCESS.md) for a description of the standardisation process.
 
 If you are planning to review inter-blockchain communication protocol specifications, the following are required reading:
 
-- [IBC Architecture](./ibc/1_IBC_ARCHITECTURE.md)
-- [IBC Design Principles](./ibc/2_IBC_DESIGN_PRINCIPLES.md)
-- [IBC Terminology](./ibc/3_IBC_TERMINOLOGY.md)
-- [IBC Usecases](./ibc/4_IBC_USECASES.md)
-- [IBC Design Patterns](./ibc/5_IBC_DESIGN_PATTERNS.md)
+-   [IBC Terminology](./ibc/1_IBC_TERMINOLOGY.md)
+-   [IBC Architecture](./ibc/2_IBC_ARCHITECTURE.md)
+-   [IBC Design Principles](./ibc/3_IBC_DESIGN_PRINCIPLES.md)
+-   [IBC Usecases](./ibc/4_IBC_USECASES.md)
+-   [IBC Design Patterns](./ibc/5_IBC_DESIGN_PATTERNS.md)
 
 ## Interchain Standards
 
@@ -42,17 +48,17 @@ All standards at or past the "Draft" stage are listed here in order of their ICS
 
 ### IBC/TAO
 
-| Interchain Standard Number                          | Standard Title                     | Stage |
-| --------------------------------------------------- | ---------------------------------- | ----- |
-| [2](spec/ics-002-client-semantics)                | Validity Predicate                 | Draft |
-| [3](spec/ics-003-connection-semantics)              | Connection Semantics               | Draft |
-| [4](spec/ics-004-channel-and-packet-semantics)      | Channel & Packet Semantics         | Draft |
-| [5](spec/ics-005-port-allocation)                   | Port Allocation                    | Draft |
-| [18](spec/ics-018-relayer-algorithms)               | Relayer Algorithms                 | Draft |
-| [23](spec/ics-023-vector-commitments)               | Vector Commitments                 | Draft |
-| [24](spec/ics-024-host-requirements)                | Host Requirements                  | Draft |
-| [25](spec/ics-025-handler-interface)                | Handler Interface                  | Draft |
-| [26](spec/ics-026-relayer-module)                   | Relayer Module                     | Draft |
+| Interchain Standard Number                     | Standard Title             | Stage |
+| ---------------------------------------------- | -------------------------- | ----- |
+| [2](spec/ics-002-client-semantics)             | Validity Predicate         | Draft |
+| [3](spec/ics-003-connection-semantics)         | Connection Semantics       | Draft |
+| [4](spec/ics-004-channel-and-packet-semantics) | Channel & Packet Semantics | Draft |
+| [5](spec/ics-005-port-allocation)              | Port Allocation            | Draft |
+| [18](spec/ics-018-relayer-algorithms)          | Relayer Algorithms         | Draft |
+| [23](spec/ics-023-vector-commitments)          | Vector Commitments         | Draft |
+| [24](spec/ics-024-host-requirements)           | Host Requirements          | Draft |
+| [25](spec/ics-025-handler-interface)           | Handler Interface          | Draft |
+| [26](spec/ics-026-relayer-module)              | Relayer Module             | Draft |
 
 ### IBC/APP
 

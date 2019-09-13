@@ -124,9 +124,7 @@ function authenticate(id: SourceIdentifier): boolean {
 }
 ```
 
-### Sub-protocols
-
-#### Preliminaries
+#### Store paths
 
 `portPath` takes an `Identifier` and returns the store path under which the object-capability reference or owner module identifier associated with a port should be stored.
 
@@ -136,6 +134,21 @@ function portPath(id: Identifier): Path {
 }
 ```
 
+
+### Sub-protocols
+
+#### Identifier validation
+
+Owner module identifier for ports are stored under a unique `Identifier` prefix.
+The validation function `validatePortIdentifier` MAY be provided.
+
+```typescript
+type validatePortIdentifier = (id: Identifier) => boolean
+```
+
+If not provided, the default `validatePortIdentifier` function will always return `true`. 
+
+
 #### Binding to a port
 
 The IBC handler MUST implement `bindPort`. `bindPort` binds to an unallocated port, failing if the port has already been allocated.
@@ -144,6 +157,7 @@ If the host state machine does not implement a special module manager to control
 
 ```typescript
 function bindPort(id: Identifier) {
+    abortTransactionUnless(validatePortIdentifier(id))
     abortTransactionUnless(privateStore.get(portPath(id)) === null)
     key = generate()
     privateStore.set(portPath(id), key)
