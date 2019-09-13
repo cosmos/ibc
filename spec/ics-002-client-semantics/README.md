@@ -260,13 +260,9 @@ type initialize = (state: ConsensusState) => ClientState
 
 #### CommitmentProof
 
-`CommitmentProof` is an opaque data structure defined by a client type.
+`CommitmentProof` is an opaque data structure defined by a client type in accordance with [ICS 23](../ics-023-vector-commitments).
 It is utilised to verify presence or absence of a particular key/value pair in state
 at a particular finalised height (necessarily associated with a particular commitment root).
-
-```typescript
-type CommitmentProof = bytes
-```
 
 #### State verification
 

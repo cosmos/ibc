@@ -112,10 +112,10 @@ type calculateRoot = (state: CommitmentState) => CommitmentRoot
 
 #### Adding & removing elements
 
-The `set` function sets a path to a value in the commitment.
+The `update` function sets a path to a value in the commitment.
 
 ```typescript
-type set = (state: CommitmentState, path: Path, value: Value) => CommitmentState
+type update = (state: CommitmentState, path: Path, value: Value) => CommitmentState
 ```
 
 The `remove` function removes a path and associated value from a commitment.
