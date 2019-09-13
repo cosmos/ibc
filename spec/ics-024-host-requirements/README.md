@@ -58,17 +58,17 @@ type set = (path: Path, value: Value) => void
 ```
 
 ```typescript
-type delete = (path: Path) => void
+type del = (path: Path) => void
 ```
 
 `Path` is as defined above. `Value` is an arbitrary bytestring encoding of a particular data structure. Encoding details are left to separate ICSs.
 
-These functions MUST be permissioned to the IBC handler module (the implementation of which is described in separate standards) only, so only the IBC handler module can `set` or `delete` the paths that can be read by `get`. This can possibly be implemented as a sub-store (prefixed key-space) of a larger key/value store used by the entire state machine.
+These functions MUST be permissioned to the IBC handler module (the implementation of which is described in separate standards) only, so only the IBC handler module can `set` or `del` (delete) the paths that can be read by `get`. This can possibly be implemented as a sub-store (prefixed key-space) of a larger key/value store used by the entire state machine.
 
 Host state machines MUST provide two instances of this interface -
 a `provableStore` for storage read by (i.e. proven to) other chains,
 and a `privateStore` for storage local to the host, upon which `get`
-, `set`, and `delete` can be called, e.g. `provableStore.set('some/path', 'value')`.
+, `set`, and `del` can be called, e.g. `provableStore.set('some/path', 'value')`.
 
 The `provableStore`:
 
@@ -81,7 +81,7 @@ The `privateStore`:
 - MAY use canonical proto3 data structures, but is not required to - it can use
   whatever format is preferred by the application environment.
 
-> Note: any key/value store interface which provides these methods & properties is sufficient for IBC. Host state machines may implement "proxy stores" with path & value mappings which do not directly match the path & value pairs set and retrieved through the store interface — paths could be grouped into buckets & values stored in pages which could be proved in a single commitment, path-spaces could be remapped non-contiguously in some bijective manner, etc — as long as `get`, `set`, and `delete` behave as expected and other machines can verify commitment proofs of path & value pairs (or their absence) in the provable store. If applicable, the store must expose this mapping externally so that clients (including relayers) can determine the store layout & how to construct proofs. Clients of a machine using such a proxy store must also understand the mapping, so it will require either a new client type or a parameterised client.
+> Note: any key/value store interface which provides these methods & properties is sufficient for IBC. Host state machines may implement "proxy stores" with path & value mappings which do not directly match the path & value pairs set and retrieved through the store interface — paths could be grouped into buckets & values stored in pages which could be proved in a single commitment, path-spaces could be remapped non-contiguously in some bijective manner, etc — as long as `get`, `set`, and `del` behave as expected and other machines can verify commitment proofs of path & value pairs (or their absence) in the provable store. If applicable, the store must expose this mapping externally so that clients (including relayers) can determine the store layout & how to construct proofs. Clients of a machine using such a proxy store must also understand the mapping, so it will require either a new client type or a parameterised client.
 
 > Note: this interface does not necessitate any particular storage backend or backend data layout. State machines may elect to use a storage backend configured in accordance with their needs, as long as the store on top fulfils the specified interface and provides commitment proofs.
 
@@ -162,9 +162,9 @@ The result `CommitmentPrefix` is the prefix used by the host state machine's key
 With the `CommitmentRoot root` and `CommitmentState state` of the host state machine, the following property MUST be preserved:
 
 ```typescript
-if provableStore.get(path) === value {
+if (provableStore.get(path) === value) {
   prefixedPath = applyPrefix(getCommitmentPrefix(), path)
-  if value !== nil {
+  if (value !== nil) {
     proof = createMembershipProof(state, prefixedPath, value)
     assert(verifyMembership(root, proof, prefixedPath, value))
   } else {

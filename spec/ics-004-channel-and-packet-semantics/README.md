@@ -624,7 +624,7 @@ function acknowledgePacket(
     // all assertions passed, we can alter state
 
     // delete our commitment so we can't "acknowledge" again
-    provableStore.delete(packetCommitmentPath(packet.sourcePort, packet.sourceChannel, packet.sequence))
+    provableStore.del(packetCommitmentPath(packet.sourcePort, packet.sourceChannel, packet.sequence))
 
     // return transparent packet
     return packet
@@ -699,7 +699,7 @@ function timeoutPacket(
     // all assertions passed, we can alter state
 
     // delete our commitment
-    provableStore.delete(packetCommitmentPath(packet.sourcePort, packet.sourceChannel, packet.sequence))
+    provableStore.del(packetCommitmentPath(packet.sourcePort, packet.sourceChannel, packet.sequence))
 
     if channel.order === ORDERED {
       // ordered channel: close the channel
@@ -758,7 +758,7 @@ function timeoutOnClose(
     // all assertions passed, we can alter state
 
     // delete our commitment
-    provableStore.delete(packetCommitmentPath(packet.sourcePort, packet.sourceChannel, packet.sequence))
+    provableStore.del(packetCommitmentPath(packet.sourcePort, packet.sourceChannel, packet.sequence))
 
     // return transparent packet
     return packet
@@ -817,7 +817,7 @@ function cleanupPacket(
     // all assertions passed, we can alter state
 
     // clear the store
-    provableStore.delete(packetCommitmentPath(packet.sourcePort, packet.sourceChannel, packet.sequence))
+    provableStore.del(packetCommitmentPath(packet.sourcePort, packet.sourceChannel, packet.sequence))
 
     // return transparent packet
     return packet

@@ -184,8 +184,8 @@ The function `releasePort` can be called by a module in order to release a port 
 function releasePort(id: Identifier) {
     abortTransactionUnless(authenticate(privateStore.get(authenticationPath(id))))
     handler.releasePort(id)
-    privateStore.delete(callbackPath(id))
-    privateStore.delete(authenticationPath(id))
+    privateStore.del(callbackPath(id))
+    privateStore.del(authenticationPath(id))
 }
 ```
 
