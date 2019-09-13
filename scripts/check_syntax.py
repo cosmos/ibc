@@ -25,26 +25,27 @@ for fn in files:
     if output != b'':
         sys.exit(1)
 
-    print('Reading dependencies of {}'.format(fn))
-    data = open(fn).read()
-    requires = [int(num) for line in requires_regex.findall(data) for num in line.split(', ')]
+    if 'ics-001' not in fn:
+        print('Reading dependencies of {}'.format(fn))
+        data = open(fn).read()
+        requires = [int(num) for line in requires_regex.findall(data) for num in line.split(', ')]
 
-    print('Dependencies: {}'.format(requires))
-    final = temp_filename()
+        print('Dependencies: {}'.format(requires))
+        final = temp_filename()
 
-    for dep in requires:
-        spec = glob.glob('./spec/ics-' + str(dep).zfill(3) + '-*')[0] + '/README.md'
-        newTemp = extract_typescript(spec)
-        print('Concatenating dependency on ICS {}'.format(dep))
-        subprocess.check_call(['/bin/bash', '-c', b'cat ' + newTemp + b' >> ' + final])
-        subprocess.check_call(['/bin/bash', '-c', b'echo -e "\n" >> ' + final])
+        for dep in requires:
+            spec = glob.glob('./spec/ics-' + str(dep).zfill(3) + '-*')[0] + '/README.md'
+            newTemp = extract_typescript(spec)
+            print('Concatenating dependency on ICS {}'.format(dep))
+            subprocess.check_call(['/bin/bash', '-c', b'cat ' + newTemp + b' >> ' + final])
+            subprocess.check_call(['/bin/bash', '-c', b'echo -e "\n" >> ' + final])
 
-    subprocess.check_call(['/bin/bash', '-c', b'cat ' + temp + b' >> ' + final])
+        subprocess.check_call(['/bin/bash', '-c', b'cat ' + temp + b' >> ' + final])
 
-    res = subprocess.run(['tsc', '--lib', 'es6', '--downlevelIteration', final])
+        res = subprocess.run(['tsc', '--lib', 'es6', '--downlevelIteration', final])
 
-    if res.returncode != 0:
-        print(res)
-        sys.exit(1)
+        if res.returncode != 0:
+            print(res)
+            sys.exit(1)
 
     subprocess.check_call(['rm', temp])
