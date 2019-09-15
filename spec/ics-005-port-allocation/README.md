@@ -188,7 +188,7 @@ The IBC handler MUST implement the `releasePort` function, which allows a module
 ```typescript
 function releasePort(id: Identifier) {
     abortTransactionUnless(authenticate(privateStore.get(portPath(id))))
-    privateStore.del(portPath(id))
+    privateStore.delete(portPath(id))
 }
 ```
 

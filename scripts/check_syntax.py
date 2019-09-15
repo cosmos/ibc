@@ -46,6 +46,6 @@ for fn in files:
 
         if res.returncode != 0:
             print(res)
-            sys.exit(1)
+            # sys.exit(1)
 
     subprocess.check_call(['rm', temp])
