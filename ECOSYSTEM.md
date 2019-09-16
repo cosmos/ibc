@@ -12,6 +12,7 @@ Suitable for integration with blockchains written in the respective client langu
 | Upcoming  | Rust        | [Interchain Foundation](https://interchain.io)  | TBA |
 | Upcoming  | Haskell     | [Kadena](https://kadena.io)                     | TBA |
 | Upcoming  | Javascript  | [Agoric](https://agoric.com)                    | TBA |
+| Upcoming  | Rust        | [CodeChain](https://codechain.io)               | [Source code](https://github.com/CodeChain-io/codechain) |
 
 ### Bridges
 
