@@ -27,11 +27,11 @@
   \textcolor{red}{Timeout Flow} \\
   \end{tabular}};
 
-	\draw[->, blue](start) edge node[yshift=3mm, xshift=1mm] {\tiny{\textsc{sendPacket}}} (send);
-  \draw[->, blue](send) edge node {\tiny{\textsc{recvPacket}}} (recv);
+	\draw[->, blue](start) edge node[yshift=3mm, xshift=1mm] {\textsc{sendPacket}} (send);
+  \draw[->, blue](send) edge node {\textsc{recvPacket}} (recv);
 
-  \draw[->, red](send) edge node {\tiny{\textsc{timeoutPacket}}} (timeout);
-  \draw[->, red](timeout) edge node {\tiny{\textsc{recvTimeoutPacket}}} (timeoutfinal);
+  \draw[->, red](send) edge node {\textsc{timeoutPacket}} (timeout);
+  \draw[->, red](timeout) edge node {\textsc{recvTimeoutPacket}} (timeoutfinal);
 
 	\draw[color=black,thick](-1.5,-8) rectangle (20,2);
 

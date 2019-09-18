@@ -42,25 +42,25 @@
 \draw[arrow, bend left] (chan0x4b.east) to (conn123b.east);
 
 \draw[arrow] (conn123a) -- (conn123b);
-\draw[arrow] (conn123b) -- node[anchor=south] {\textsc{\tiny{Connection Handshake (once)}}} (conn123a);
+\draw[arrow] (conn123b) -- node[anchor=south] {\textsc{Connection Handshake (once)}} (conn123a);
 
-\draw[arrow] (conn123a) -- node[anchor=east] {\textsc{\tiny{Verification}}} (clientB);
-\draw[arrow] (conn123b) -- node[anchor=west] {\textsc{\tiny{Verification}}} (clientA);
+\draw[arrow] (conn123a) -- node[anchor=east] {\textsc{Verification}} (clientB);
+\draw[arrow] (conn123b) -- node[anchor=west] {\textsc{Verification}} (clientA);
 
-\draw[arrow] (10,1) -- node[anchor=south east] {\textsc{\tiny{Headers from 'A'}}} (clientA);
-\draw[arrow] (8,1) -- node[anchor=south west] {\textsc{\tiny{Headers from 'B'}}} (clientB);
+\draw[arrow] (10,1) -- node[anchor=south east] {\textsc{Headers from 'A'}} (clientA);
+\draw[arrow] (8,1) -- node[anchor=south west] {\textsc{Headers from 'B'}} (clientB);
 
 \draw[arrow] (chan0x1b) -- (chan0x1a);
-\draw[arrow] (chan0x1a) -- node[anchor=south] {\textsc{\tiny{Channel Handshake (once), packets (many)}}} (chan0x1b);
+\draw[arrow] (chan0x1a) -- node[anchor=south] {\textsc{Channel Handshake (once), packets (many)}} (chan0x1b);
 
 \draw[arrow] (chan0x2b) -- (chan0x2a);
-\draw[arrow] (chan0x2a) -- node[anchor=south] {\textsc{\tiny{Channel Handshake (once), packets (many)}}} (chan0x2b);
+\draw[arrow] (chan0x2a) -- node[anchor=south] {\textsc{Channel Handshake (once), packets (many)}} (chan0x2b);
 
 \draw[arrow] (chan0x3b) -- (chan0x3a);
-\draw[arrow] (chan0x3a) -- node[anchor=south] {\textsc{\tiny{Channel Handshake (once), packets (many)}}} (chan0x3b);
+\draw[arrow] (chan0x3a) -- node[anchor=south] {\textsc{Channel Handshake (once), packets (many)}} (chan0x3b);
 
 \draw[arrow] (chan0x4b) -- (chan0x4a);
-\draw[arrow] (chan0x4a) -- node[anchor=south] {\textsc{\tiny{Channel Handshake (once), packets (many)}}} (chan0x4b);
+\draw[arrow] (chan0x4a) -- node[anchor=south] {\textsc{Channel Handshake (once), packets (many)}} (chan0x4b);
 
 \end{tikzpicture}
 \end{document}

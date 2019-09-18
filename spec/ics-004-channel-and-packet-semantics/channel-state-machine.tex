@@ -29,13 +29,13 @@
   \textcolor{green}{Closing Handshake} \\
   \end{tabular}};
 
-	\draw[->, blue, bend right](empty) edge node[yshift=3mm, xshift=1mm] {\tiny{\textsc{ChanInit}}} (init);
-  \draw[->, blue](init) edge node {\tiny{\textsc{ChanOpenTry}}} (tryopen);
-	\draw[->, blue](tryopen) edge node {\tiny{\textsc{ChanOpenAck}}} (tryopen1);
-	\draw[->, blue](tryopen1) edge node {\tiny{\textsc{ChanOpenConfirm}}} (open);
+	\draw[->, blue, bend right](empty) edge node[yshift=3mm, xshift=1mm] {\textsc{ChanInit}} (init);
+  \draw[->, blue](init) edge node {\textsc{ChanOpenTry}} (tryopen);
+	\draw[->, blue](tryopen) edge node {\textsc{ChanOpenAck}} (tryopen1);
+	\draw[->, blue](tryopen1) edge node {\textsc{ChanOpenConfirm}} (open);
 
-  \draw[->, green, bend right](open) edge node[yshift=3mm, xshift=1mm] {\tiny{\textsc{ChanCloseInit}}} (tryclose);
-  \draw[->, green](tryclose) edge node {\tiny{\textsc{ChanCloseConfirm}}} (tryclose1);
+  \draw[->, green, bend right](open) edge node[yshift=3mm, xshift=1mm] {\textsc{ChanCloseInit}} (tryclose);
+  \draw[->, green](tryclose) edge node {\textsc{ChanCloseConfirm}} (tryclose1);
 
 	\draw[color=black,thick](-0.5,-14) rectangle (22,2.8);
 
