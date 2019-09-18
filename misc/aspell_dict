@@ -1,4 +1,4 @@
-personal_ws-1.1 en 447 
+personal_ws-1.1 en 448 
 unescrow
 onChanCloseConfirm
 clientKey
@@ -121,6 +121,7 @@ interchain
 Ethereum
 PacketTimeout
 Zcash
+subprotocol
 verifyNonMembership
 runtime
 connOpenConfirm

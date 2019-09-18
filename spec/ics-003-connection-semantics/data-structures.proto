@@ -4,7 +4,6 @@ enum ConnectionState {
   INIT = 1;
   TRYOPEN = 2;
   OPEN = 3;
-  CLOSED = 4;
 }
 
 message ConnectionEnd {

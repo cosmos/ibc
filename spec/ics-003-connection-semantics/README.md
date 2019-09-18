@@ -12,7 +12,7 @@ modified: 2019-08-25
 
 ## Synopsis
 
-This standards document describes the abstraction of an IBC *connection*: two stateful objects (*connection ends*) on two separate chains, each associated with a light client of the other chain, which together facilitate cross-chain sub-state verification and packet association (through channels). Protocols for safely establishing a connection between two chains and cleanly closing a connection are described.
+This standards document describes the abstraction of an IBC *connection*: two stateful objects (*connection ends*) on two separate chains, each associated with a light client of the other chain, which together facilitate cross-chain sub-state verification and packet association (through channels). A protocol for safely establishing a connection between two chains is described.
 
 ### Motivation
 
@@ -58,8 +58,6 @@ Once a negotiation handshake has completed:
 
 - The created connection objects on both chains contain the consensus states specified by the initiating actor.
 - No other connection objects can be maliciously created on other chains by replaying datagrams.
-- The connection should be able to be voluntarily & cleanly closed by either blockchain.
-- The connection should be able to be immediately closed upon discovery of a consensus misbehaviour.
 
 ## Technical Specification
 
@@ -72,7 +70,6 @@ enum ConnectionState {
   INIT,
   TRYOPEN,
   OPEN,
-  CLOSED,
 }
 ```
 
@@ -188,8 +185,9 @@ Future versions of this specification may also define this function.
 
 ### Sub-protocols
 
-This ICS defines two sub-protocols: opening handshake and closing handshake. 
-Header tracking and closing-by-misbehaviour are defined in [ICS 2](../ics-002-client-semantics).
+This ICS defines the opening handshake subprotocol. Once opened, connections cannot be closed and identifiers cannot be reallocated (this prevents packet replay or authorisation confusion).
+
+Header tracking and misbehaviour detection are defined in [ICS 2](../ics-002-client-semantics).
 
 ![State Machine Diagram](state.png)
 
