@@ -107,23 +107,24 @@ At present, IBC/TAO utilises the following path prefixes for the `provableStore`
 Represented spatially, the layout of modules & their included specifications on a host state machine looks like so (Aardvark, Betazoid, and Cephalopod are arbitrary modules):
 
 ```
-+----------------------------------------------------------------------------------------------------------+
-|                                                                                                          |
-| Host State Machine                                                                                       |
-|                                                                                                          |
-| +-------------------+       +--------------------+      +----------------------------------------------+ |
-| | Module Aardvark   | <-->  | IBC Relayer Module |      | IBC Handler Module                           | |
-| +-------------------+       |                    |      |                                              | |
-|                             | Implements ICS 26. |      | Implements ICS 2, 3, 4, 5 internally.        | |
-| +-------------------+       |                    |      |                                              | |
-| | Module Betazoid   | <-->  |                    | -->  | Exposes interface defined in ICS 25.         | |
-| +-------------------+       |                    |      |                                              | |
-|                             |                    |      |                                              | |
-| +-------------------+       |                    |      |                                              | |
-| | Module Cephalopod | <-->  |                    |      |                                              | |
-| +-------------------+       +--------------------+      +----------------------------------------------+ |
-|                                                                                                          |
-+----------------------------------------------------------------------------------------------------------+
++----------------------------------------------------------------------------------+
+|                                                                                  |
+| Host State Machine                                                               |
+|                                                                                  |
+| +-------------------+       +--------------------+      +----------------------+ |
+| | Module Aardvark   | <-->  | IBC Relayer Module |      | IBC Handler Module   | |
+| +-------------------+       |                    |      |                      | |
+|                             | Implements ICS 26. |      | Implements ICS 2, 3, | |
+|                             |                    |      | 4, 5 internally.     | |
+| +-------------------+       |                    |      |                      | |
+| | Module Betazoid   | <-->  |                    | -->  | Exposes interface    | |
+| +-------------------+       |                    |      | defined in ICS 25.   | |
+|                             |                    |      |                      | |
+| +-------------------+       |                    |      |                      | |
+| | Module Cephalopod | <-->  |                    |      |                      | |
+| +-------------------+       +--------------------+      +----------------------+ |
+|                                                                                  |
++----------------------------------------------------------------------------------+
 ```
 
 ### Consensus state introspection
