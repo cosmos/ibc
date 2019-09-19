@@ -41,7 +41,7 @@ This document only defines desired properties, not a concrete implementation —
 
 A commitment construction MUST specify the following datatypes, which are otherwise opaque (need not be introspected) but MUST be serialisable:
 
-#### State
+#### Commitment State
 
 An `CommitmentState` is the full state of the commitment, which will be stored by the manager.
 
@@ -49,7 +49,7 @@ An `CommitmentState` is the full state of the commitment, which will be stored b
 type CommitmentState = object
 ```
 
-#### Root
+#### Commitment Root
 
 An `CommitmentRoot` commits to a particular commitment state and should be constant-size.
 
@@ -57,6 +57,14 @@ In certain commitment constructions with constant-size states, `CommitmentState`
 
 ```typescript
 type CommitmentRoot = object
+```
+
+#### Commitment Path
+
+A `CommitmentPath` is the path used to verify commitment proofs, which can be an arbitrary structured object (defined by a commitment type). It must be computed by `applyPrefix` (defined below).
+
+```typescript
+type CommitmentPath = object
 ```
 
 #### Prefix
@@ -67,13 +75,16 @@ A `CommitmentPrefix` defines a store prefix of the commitment proof. It is appli
 type CommitmentPrefix = object
 ```
 
-The function `applyPrefix` constructs a new path from the arguments. It interprets the path argument in the context of the prefix argument. 
+The function `applyPrefix` constructs a new commitment path from the arguments. It interprets the path argument in the context of the prefix argument. 
+
 For two `(prefix, path)` tuples, `applyPrefix(prefix, path)` MUST return the same key only if the tuple elements are equal.
+
 `applyPrefix` MUST be implemented per `Path`, as `Path` can have different concrete structures. `applyPrefix` MAY accept multiple `CommitmentPrefix` types.
-`applyPrefix` does not need to be serialisable.
+
+The `CommitmentPath` returned by `applyPrefix` does not need to be serialisable (e.g. it might be a list of tree node identifiers), but it does need an equality comparison.
 
 ```typescript
-type applyPrefix = (prefix: CommitmentPrefix, path: Path) => Path
+type applyPrefix = (prefix: CommitmentPrefix, path: Path) => CommitmentPath
 ```
 
 #### Proof
@@ -126,16 +137,16 @@ type remove = (state: CommitmentState, path: Path) => CommitmentState
 
 #### Proof generation
 
-The `createMembershipProof` function generates a proof that a particular path has been set to a particular value in a commitment.
+The `createMembershipProof` function generates a proof that a particular commitment path has been set to a particular value in a commitment.
 
 ```typescript
-type createMembershipProof = (state: CommitmentState, path: Path, value: Value) => CommitmentProof
+type createMembershipProof = (state: CommitmentState, path: CommitmentPath, value: Value) => CommitmentProof
 ```
 
-The `createNonMembershipProof` function generates a proof that a path has not been set to any value in a commitment.
+The `createNonMembershipProof` function generates a proof that a commitment path has not been set to any value in a commitment.
 
 ```typescript
-type createNonMembershipProof = (state: CommitmentState, path: Path) => CommitmentProof
+type createNonMembershipProof = (state: CommitmentState, path: CommitmentPath) => CommitmentProof
 ```
 
 #### Proof verification
@@ -143,13 +154,13 @@ type createNonMembershipProof = (state: CommitmentState, path: Path) => Commitme
 The `verifyMembership` function verifies a proof that a path has been set to a particular value in a commitment.
 
 ```typescript
-type verifyMembership = (root: CommitmentRoot, proof: CommitmentProof, path: Path, value: Value) => boolean
+type verifyMembership = (root: CommitmentRoot, proof: CommitmentProof, path: CommitmentPath, value: Value) => boolean
 ```
 
 The `verifyNonMembership` function verifies a proof that a path has not been set to any value in a commitment.
 
 ```typescript
-type verifyNonMembership = (root: CommitmentRoot, proof: CommitmentProof, path: Path) => boolean
+type verifyNonMembership = (root: CommitmentRoot, proof: CommitmentProof, path: CommitmentPath) => boolean
 ```
 
 ### Optional functions
@@ -159,13 +170,13 @@ A commitment construction MAY provide the following functions:
 The `batchVerifyMembership` function verifies a proof that many paths have been set to specific values in a commitment.
 
 ```typescript
-type batchVerifyMembership = (root: CommitmentRoot, proof: CommitmentProof, items: Map<Path, Value>) => boolean
+type batchVerifyMembership = (root: CommitmentRoot, proof: CommitmentProof, items: Map<CommitmentPath, Value>) => boolean
 ```
 
 The `batchVerifyNonMembership` function verifies a proof that many paths have not been set to any value in a commitment.
 
 ```typescript
-type batchVerifyNonMembership = (root: CommitmentRoot, proof: CommitmentProof, paths: Set<Path>) => boolean
+type batchVerifyNonMembership = (root: CommitmentRoot, proof: CommitmentProof, paths: Set<CommitmentPath>) => boolean
 ```
 
 If defined, these functions MUST produce the same result as the conjunctive union of `verifyMembership` and `verifyNonMembership` respectively (efficiency may vary):
@@ -190,63 +201,63 @@ Commitments MUST be *complete*, *sound*, and *position binding*. These propertie
 
 Commitment proofs MUST be *complete*: path => value mappings which have been added to the commitment can always be proved to have been included, and paths which have not been included can always be proved to have been excluded, except with probability negligible in `k`.
 
-For any path `path` last set to a value `value` in the commitment `acc`,
+For any prefix `prefix` and any path `path` last set to a value `value` in the commitment `acc`,
 
 ```typescript
 root = getRoot(acc)
-proof = createMembershipProof(acc, path, value)
+proof = createMembershipProof(acc, applyPrefix(prefix, path), value)
 ```
 
 ```
-Probability(verifyMembership(root, proof, path, value) === false) negligible in k
+Probability(verifyMembership(root, proof, applyPrefix(prefix, path), value) === false) negligible in k
 ```
 
-For any path `path` not set in the commitment `acc`, for all values of `proof` and all values of `value`,
+For any prefix `prefix` and any path `path` not set in the commitment `acc`, for all values of `proof` and all values of `value`,
 
 ```typescript
 root = getRoot(acc)
-proof = createNonMembershipProof(acc, path)
+proof = createNonMembershipProof(acc, applyPrefix(prefix, path))
 ```
 
 ```
-Probability(verifyNonMembership(root, proof, path) === false) negligible in k
+Probability(verifyNonMembership(root, proof, applyPrefix(prefix, path)) === false) negligible in k
 ```
 
 #### Soundness
 
 Commitment proofs MUST be *sound*: path => value mappings which have not been added to the commitment cannot be proved to have been included, or paths which have been added to the commitment excluded, except with probability negligible in a configurable security parameter `k`.
 
-For any path `path` last set to a value `value` in the commitment `acc`, for all values of `proof`,
+For any prefix `prefix` and any path `path` last set to a value `value` in the commitment `acc`, for all values of `proof`,
 
 ```
-Probability(verifyNonMembership(root, proof, path) === true) negligible in k
+Probability(verifyNonMembership(root, proof, applyPrefix(prefix, path)) === true) negligible in k
 ```
 
-For any path `path` not set in the commitment `acc`, for all values of `proof` and all values of `value`,
+For any prefix `prefix` and any path `path` not set in the commitment `acc`, for all values of `proof` and all values of `value`,
 
 ```
-Probability(verifyMembership(root, proof, path, value) === true) negligible in k
+Probability(verifyMembership(root, proof, applyPrefix(prefix, path), value) === true) negligible in k
 ```
 
 #### Position binding
 
-Commitment proofs MUST be *position binding*: a given path can only map to one value, and a commitment proof cannot prove that the same path opens to a different value except with probability negligible in k.
+Commitment proofs MUST be *position binding*: a given commitment path can only map to one value, and a commitment proof cannot prove that the same path opens to a different value except with probability negligible in k.
 
-For any path `path` set in the commitment `acc`, there is one `value` for which:
+For any prefix `prefix` and any path `path` set in the commitment `acc`, there is one `value` for which:
 
 ```typescript
 root = getRoot(acc)
-proof = createMembershipProof(acc, path, value)
+proof = createMembershipProof(acc, applyPrefix(prefix, path), value)
 ```
 
 ```
-Probability(verifyMembership(root, proof, path, value) === false) negligible in k
+Probability(verifyMembership(root, proof, applyPrefix(prefix, path), value) === false) negligible in k
 ```
 
 For all other values `otherValue` where `value !== otherValue`, for all values of `proof`,
 
 ```
-Probability(verifyMembership(root, proof, path, otherValue) === true) negligible in k
+Probability(verifyMembership(root, proof, applyPrefix(prefix, path), otherValue) === true) negligible in k
 ```
 
 ## Backwards Compatibility
