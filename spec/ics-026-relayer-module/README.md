@@ -180,6 +180,8 @@ function updatePort(
 
 The function `releasePort` can be called by a module in order to release a port previously in use.
 
+> Warning: releasing a port will allow other modules to bind to that port and possibly intercept incoming channel opening handshakes. Modules should release ports only when doing so is safe.
+
 ```typescript
 function releasePort(id: Identifier) {
     abortTransactionUnless(authenticate(privateStore.get(authenticationPath(id))))
