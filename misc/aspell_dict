@@ -1,4 +1,4 @@
-personal_ws-1.1 en 449 
+personal_ws-1.1 en 453 
 unescrow
 onChanCloseConfirm
 clientKey
@@ -239,6 +239,7 @@ FungibleTokenPacketData
 SpeckleOS
 pseudocode
 proofAck
+getCompatibleVersions
 nextSequenceSendKey
 datatypes
 getRoot
@@ -395,6 +396,7 @@ validatePortIdentifier
 Merkle
 clientIdentifier
 handleChanOpenTry
+pickVersion
 chanOpenTimeout
 th
 unallocated
@@ -406,6 +408,7 @@ datapipe
 ConnCloseAck
 VM
 ModuleState
+indexOf
 Strawman
 tx
 bytestring
@@ -430,6 +433,7 @@ escrowAddress
 UpdateLightClient
 newPublicKey
 newCapabilityKey
+counterpartyVersions
 validateChannelIdentifier
 Uniswap
 onTimeoutPacket
