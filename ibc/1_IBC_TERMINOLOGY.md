@@ -54,13 +54,13 @@ A *commitment proof* is the proof structure which proves whether a particular ke
 
 The IBC *handler module* is the module within the state machine which implements [ICS 25](../spec/ics-025-handler-module), managing clients, connections, & channels, verifying proofs, and storing appropriate commitments for packets.
 
-### Relayer Module
+### Routing Module
 
-The IBC *relayer module* is the module within the state machine which implements [ICS 26](../spec/ics-026-relayer-module), routing packets between the handler module and other modules on the host state machine which utilise the relayer module's external interface.
+The IBC *routing module* is the module within the state machine which implements [ICS 26](../spec/ics-026-routing-module), routing packets between the handler module and other modules on the host state machine which utilise the routing module's external interface.
 
 ### Datagram
 
-A *datagram* is an opaque bytestring transmitted over some physical network, and handled by the IBC relayer module implemented in the ledger's state machine. In some implementations, the datagram may be a field in a ledger-specific transaction or message data structure which also contains other information (e.g. a fee for spam prevention, nonce for replay prevention, type identifier to route to the IBC handler, etc.). All IBC sub-protocols (such as opening a connection, creating a channel, sending a packet) are defined in terms of sets of datagrams and protocols for handling them through the relayer module.
+A *datagram* is an opaque bytestring transmitted over some physical network, and handled by the IBC routing module implemented in the ledger's state machine. In some implementations, the datagram may be a field in a ledger-specific transaction or message data structure which also contains other information (e.g. a fee for spam prevention, nonce for replay prevention, type identifier to route to the IBC handler, etc.). All IBC sub-protocols (such as opening a connection, creating a channel, sending a packet) are defined in terms of sets of datagrams and protocols for handling them through the routing module.
 
 ### Connection
 

@@ -61,18 +61,18 @@ It also has one notable disadvantage:
   relayer processes will need to track the state of multiple modules to determine when packets
   can be submitted.
 
-For this reason, there is an additional IBC "relayer module" which exposes a call dispatch interface.
+For this reason, there is an additional IBC "routing module" which exposes a call dispatch interface.
 
 ## Call dispatch
 
-For common relay patterns, an "IBC relayer module" can be implemented which maintains a module dispatch table and simplifies the job of relayers.
+For common relay patterns, an "IBC routing module" can be implemented which maintains a module dispatch table and simplifies the job of relayers.
 
 In the call dispatch pattern, datagrams (contained within transaction types defined by the host state machine) are relayed directly
-to the relayer module, which then looks up the appropriate module (owning the channel & port to which the datagram was addressed)
-and calls an appropriate function (which must have been previously registered with the relayer module). This allows modules to 
+to the routing module, which then looks up the appropriate module (owning the channel & port to which the datagram was addressed)
+and calls an appropriate function (which must have been previously registered with the routing module). This allows modules to 
 avoid handling datagrams directly, and makes it harder to accidentally screw-up the atomic state transition execution which must
 happen in conjunction with sending or receiving a packet (since the module never handles packets directly, but rather exposes
-functions which are called by the relayer module upon receipt of a valid packet).
+functions which are called by the routing module upon receipt of a valid packet).
 
-Additionally, the relayer module can implement default logic for handshake datagram handling (accepting incoming handshakes
+Additionally, the routing module can implement default logic for handshake datagram handling (accepting incoming handshakes
 on behalf of modules), which is convenient for modules which do not need to implement their own custom logic.

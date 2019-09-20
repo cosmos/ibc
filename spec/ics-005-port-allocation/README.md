@@ -31,7 +31,7 @@ port simultaneously. Channels are end-to-end between two ports, each of which mu
 Optionally, the host state machine can elect to expose port binding only to a specially-permissioned module manager,
 by generating a capability key specifically for the ability to bind ports. The module manager
 can then control which ports modules can bind to with a custom rule-set, and transfer ports to modules only when it
-has validated the port name & module. This role can be played by the relayer module (see [ICS 26](../ics-026-relayer-module)).
+has validated the port name & module. This role can be played by the routing module (see [ICS 26](../ics-026-routing-module)).
 
 ### Definitions
 
@@ -96,7 +96,7 @@ function callingModuleIdentifier(): SourceIdentifier {
 
 `generate` and `authenticate` functions are then defined as follows.
 
-In the former case, `generate` returns a new object-capability key, which must be returned by the outer-layer function, and `authenticate` requires that the outer-layer function take an extra argument `capability`, which is an object-capability key with uniqueness enforced by the host state machine. Outer-layer functions are any functions exposed by the IBC handler ([ICS 25](../ics-025-handler-interface)) or relayer module ([ICS 26](../ics-026-relayer-module)) to modules.
+In the former case, `generate` returns a new object-capability key, which must be returned by the outer-layer function, and `authenticate` requires that the outer-layer function take an extra argument `capability`, which is an object-capability key with uniqueness enforced by the host state machine. Outer-layer functions are any functions exposed by the IBC handler ([ICS 25](../ics-025-handler-interface)) or routing module ([ICS 26](../ics-026-routing-module)) to modules.
 
 ```
 function generate(): CapabilityKey {

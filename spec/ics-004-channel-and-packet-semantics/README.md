@@ -451,7 +451,7 @@ function chanCloseConfirm(
 
 The following sequence of steps must occur for a packet to be sent from module *1* on machine *A* to module *2* on machine *B*, starting from scratch.
 
-The module can interface with the IBC handler through [ICS 25](../ics-025-handler-interface) or [ICS 26](../ics-026-relayer-module).
+The module can interface with the IBC handler through [ICS 25](../ics-025-handler-interface) or [ICS 26](../ics-026-routing-module).
 
 1. Initial client & port setup, in any order
     1. Client created on *A* for *B* (see [ICS 2](../ics-002-client-semantics))

@@ -41,7 +41,7 @@ The handler interface exposes `createClient`, `updateClient`, `queryClientConsen
 
 The handler interface exposes `connOpenInit`, `connOpenTry`, `connOpenAck`, `connOpenConfirm`, and `queryConnection`, as defined in [ICS 3](../ics-003-connection-semantics).
 
-The default IBC relayer module SHALL allow external calls to `connOpenTry`, `connOpenAck`, and `connOpenConfirm`.
+The default IBC routing module SHALL allow external calls to `connOpenTry`, `connOpenAck`, and `connOpenConfirm`.
 
 ### Channel lifecycle management
 
@@ -49,7 +49,7 @@ By default, channels are owned by the creating port, meaning only the module bou
 
 The handler interface exposes `chanOpenInit`, `chanOpenTry`, `chanOpenAck`, `chanOpenConfirm`, `chanCloseInit`, `chanCloseConfirm`, and `queryChannel`, as defined in [ICS 4](../ics-004-channel-and-packet-semantics).
 
-The default IBC relayer module SHALL allow external calls to `chanOpenTry`, `chanOpenAck`, `chanOpenConfirm`, and `chanCloseConfirm`.
+The default IBC routing module SHALL allow external calls to `chanOpenTry`, `chanOpenAck`, `chanOpenConfirm`, and `chanCloseConfirm`.
 
 ### Packet relay
 
@@ -57,7 +57,7 @@ Packets are permissioned by channel (only a port which owns a channel can send o
 
 The handler interface exposes `sendPacket`, `recvPacket`, `acknowledgePacket`, `timeoutPacket`, `timeoutOnClose`, and `cleanupPacket` as defined in [ICS 4](../ics-004-channel-and-packet-semantics).
 
-The default IBC relayer module SHALL allow external calls to `sendPacket`, `recvPacket`, `acknowledgePacket`, `timeoutPacket`, `timeoutOnClose`, and `cleanupPacket`.
+The default IBC routing module SHALL allow external calls to `sendPacket`, `recvPacket`, `acknowledgePacket`, `timeoutPacket`, `timeoutOnClose`, and `cleanupPacket`.
 
 ### Properties & Invariants
 

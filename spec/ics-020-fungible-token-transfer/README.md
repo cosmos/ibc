@@ -11,7 +11,7 @@ modified: 2019-08-25
 
 ## Synopsis
 
-This standard document specifies packet data structure, state machine handling logic, and encoding details for the transfer of fungible tokens over an IBC channel between two modules on separate chains. The state machine logic presented allows for safe multi-chain denomination handling with permissionless channel opening. This logic constitutes a "fungible token transfer bridge module", interfacing between the IBC relayer module and an existing asset tracking module on the host state machine.
+This standard document specifies packet data structure, state machine handling logic, and encoding details for the transfer of fungible tokens over an IBC channel between two modules on separate chains. The state machine logic presented allows for safe multi-chain denomination handling with permissionless channel opening. This logic constitutes a "fungible token transfer bridge module", interfacing between the IBC routing module and an existing asset tracking module on the host state machine.
 
 ### Motivation
 
@@ -19,7 +19,7 @@ Users of a set of chains connected over the IBC protocol might wish to utilise a
 
 ### Definitions
 
-The IBC handler interface & IBC relayer module interface are as defined in [ICS 25](../ics-025-handler-interface) and [ICS 26](../ics-026-relayer-module), respectively.
+The IBC handler interface & IBC routing module interface are as defined in [ICS 25](../ics-025-handler-interface) and [ICS 26](../ics-026-routing-module), respectively.
 
 ### Desired Properties
 
@@ -55,7 +55,7 @@ interface ModuleState {
 
 ### Sub-protocols
 
-The sub-protocols described herein should be implemented in a "fungible token transfer bridge" module with access to a bank module and to the IBC relayer module.
+The sub-protocols described herein should be implemented in a "fungible token transfer bridge" module with access to a bank module and to the IBC routing module.
 
 #### Port & channel setup
 
@@ -63,7 +63,7 @@ The `setup` function must be called exactly once when the module is created (per
 
 ```typescript
 function setup() {
-  relayerModule.bindPort("bank", ModuleCallbacks{
+  routingModule.bindPort("bank", ModuleCallbacks{
     onChanOpenInit,
     onChanOpenTry,
     onChanOpenAck,
@@ -78,13 +78,13 @@ function setup() {
 }
 ```
 
-Once the `setup` function has been called, channels can be created through the IBC relayer module between instances of the fungible token transfer module on separate chains.
+Once the `setup` function has been called, channels can be created through the IBC routing module between instances of the fungible token transfer module on separate chains.
 
 An administrator (with the permissions to create connections & channels on the host state machine) is responsible for setting up connections to other state machines & creating channels
 to other instances of this module (or another module supporting this interface) on other chains. This specification defines packet handling semantics only, and defines them in such a fashion
 that the module itself doesn't need to worry about what connections or channels might or might not exist at any point in time.
 
-#### Relayer module callbacks
+#### routing module callbacks
 
 ##### Channel lifecycle management
 
@@ -211,7 +211,7 @@ function createOutgoingPacket(
 }
 ```
 
-`onRecvPacket` is called by the relayer module when a packet addressed to this module has been received.
+`onRecvPacket` is called by the routing module when a packet addressed to this module has been received.
 
 ```typescript
 function onRecvPacket(packet: Packet): bytes {
@@ -237,7 +237,7 @@ function onRecvPacket(packet: Packet): bytes {
 }
 ```
 
-`onAcknowledgePacket` is called by the relayer module when a packet sent by this module has been acknowledged.
+`onAcknowledgePacket` is called by the routing module when a packet sent by this module has been acknowledged.
 
 ```typescript
 function onAcknowledgePacket(
@@ -247,7 +247,7 @@ function onAcknowledgePacket(
 }
 ```
 
-`onTimeoutPacket` is called by the relayer module when a packet sent by this module has timed-out (such that it will not be received on the destination chain).
+`onTimeoutPacket` is called by the routing module when a packet sent by this module has timed-out (such that it will not be received on the destination chain).
 
 ```typescript
 function onTimeoutPacket(packet: Packet) {

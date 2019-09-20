@@ -127,7 +127,6 @@ runtime
 connOpenConfirm
 mempools
 whitelist
-relayerModule
 Ojha
 updateConsensusState
 consensusStateKey
@@ -258,6 +257,7 @@ Sig
 portKey
 computable
 TCP
+routingModule
 counterpartyVersion
 portPath
 createClient

@@ -1,6 +1,6 @@
 ---
 ics: 26
-title: Relayer Module
+title: Routing Module
 stage: Draft
 category: IBC/TAO
 author: Christopher Goes <cwgoes@tendermint.com>
@@ -10,15 +10,15 @@ modified: 2019-08-25
 
 ## Synopsis
 
-The relayer module is a default implementation of a secondary module which will accept external datagrams and call into the interblockchain communication protocol handler to deal with handshakes and packet relay.
-The relayer module keeps a lookup table of modules, which it can use to look up and call a module when a packet is received, so that external relayers need only ever relay packets to the relayer module.
+The routing module is a default implementation of a secondary module which will accept external datagrams and call into the interblockchain communication protocol handler to deal with handshakes and packet relay.
+The routing module keeps a lookup table of modules, which it can use to look up and call a module when a packet is received, so that external relayers need only ever relay packets to the routing module.
 
 ### Motivation
 
 The default IBC handler uses a receiver call pattern, where modules must individually call the IBC handler in order to bind to ports, start handshakes, accept handshakes, send and receive packets, etc. This is flexible and simple (see [Design Patterns](../../ibc/5_IBC_DESIGN_PATTERNS.md))
-but is a bit tricky to understand and may require extra work on the part of relayer processes, who must track the state of many modules. This standard describes an IBC "relayer module" to automate most common functionality, route packets, and simplify the task of relayers.
+but is a bit tricky to understand and may require extra work on the part of relayer processes, who must track the state of many modules. This standard describes an IBC "routing module" to automate most common functionality, route packets, and simplify the task of relayers.
 
-The relayer module can also play the role of the module manager as discussed in [ICS 5](../ics-005-port-allocation) and implement
+The routing module can also play the role of the module manager as discussed in [ICS 5](../ics-005-port-allocation) and implement
 logic to determine when modules are allowed to bind to ports and what those ports can be named.
 
 ### Definitions
@@ -29,9 +29,9 @@ The functions `generate` & `authenticate` are defined as in [ICS 5](../ics-005-p
 
 ### Desired Properties
 
-- Modules should be able to bind to ports and own channels through the relayer module.
+- Modules should be able to bind to ports and own channels through the routing module.
 - No overhead should be added for packet sends and receives other than the layer of call indirection.
-- The relayer module should call specified handler functions on modules when they need to act upon packets.
+- The routing module should call specified handler functions on modules when they need to act upon packets.
 
 ## Technical Specification
 
@@ -39,7 +39,7 @@ The functions `generate` & `authenticate` are defined as in [ICS 5](../ics-005-p
 
 ### Module callback interface
 
-Modules must expose the following function signatures to the relayer module, which are called upon the receipt of various datagrams:
+Modules must expose the following function signatures to the routing module, which are called upon the receipt of various datagrams:
 
 ```typescript
 function onChanOpenInit(
@@ -143,17 +143,17 @@ function authenticationPath(portIdentifier: Identifier): Path {
 
 ### Port binding as module manager
 
-The IBC relayer module sits in-between the handler module ([ICS 25](../ics-025-handler-interface)) and individual modules on the host state machine.
+The IBC routing module sits in-between the handler module ([ICS 25](../ics-025-handler-interface)) and individual modules on the host state machine.
 
-The relayer module, acting as a module manager, differentiates between two kinds of ports:
+The routing module, acting as a module manager, differentiates between two kinds of ports:
 
 - "Existing name” ports: e.g. “bank”, with standardised prior meanings, which should not be first-come-first-serve
 - “Fresh name” ports: new identity (perhaps a smart contract) w/no prior relationships, new random number port, post-generation port name can be communicated over another channel
 
-A set of existing names are allocated, along with corresponding modules, when the relayer module is instantiated by the host state machine.
-The relayer module then allows allocation of fresh ports at any time by modules, but they must use a specific standardised prefix.
+A set of existing names are allocated, along with corresponding modules, when the routing module is instantiated by the host state machine.
+The routing module then allows allocation of fresh ports at any time by modules, but they must use a specific standardised prefix.
 
-The function `bindPort` can be called by a module in order to bind to a port, through the relayer module, and set up callbacks.
+The function `bindPort` can be called by a module in order to bind to a port, through the routing module, and set up callbacks.
 
 ```typescript
 function bindPort(
@@ -191,7 +191,7 @@ function releasePort(id: Identifier) {
 }
 ```
 
-The function `lookupModule` can be used by the relayer module to lookup the callbacks bound to a particular port.
+The function `lookupModule` can be used by the routing module to lookup the callbacks bound to a particular port.
 
 ```typescript
 function lookupModule(portId: Identifier) {
@@ -201,10 +201,10 @@ function lookupModule(portId: Identifier) {
 
 ### Datagram handlers (write)
 
-*Datagrams* are external data blobs accepted as transactions by the relayer module. This section defines a *handler function* for each datagram,
-which is executed when the associated datagram is submitted to the relayer module in a transaction.
+*Datagrams* are external data blobs accepted as transactions by the routing module. This section defines a *handler function* for each datagram,
+which is executed when the associated datagram is submitted to the routing module in a transaction.
 
-All datagrams can also be safely submitted by other modules to the relayer module.
+All datagrams can also be safely submitted by other modules to the routing module.
 
 No message signatures or data validity checks are assumed beyond those which are explicitly indicated.
 
@@ -663,7 +663,7 @@ See [ICS 20](../ics-020-fungible-token-transfer) for a usage example.
 
 ### Properties & Invariants
 
-- Proxy port binding is first-come-first-serve: once a module binds to a port through the IBC relayer module, only that module can utilise that port until the module releases it.
+- Proxy port binding is first-come-first-serve: once a module binds to a port through the IBC routing module, only that module can utilise that port until the module releases it.
 
 ## Backwards Compatibility
 
@@ -671,7 +671,7 @@ Not applicable.
 
 ## Forwards Compatibility
 
-Relayer modules are closely tied to the IBC handler interface.
+routing modules are closely tied to the IBC handler interface.
 
 ## Example Implementation
 

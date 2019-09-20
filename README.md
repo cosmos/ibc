@@ -58,7 +58,7 @@ All standards at or past the "Draft" stage are listed here in order of their ICS
 | [23](spec/ics-023-vector-commitments)          | Vector Commitments         | Draft |
 | [24](spec/ics-024-host-requirements)           | Host Requirements          | Draft |
 | [25](spec/ics-025-handler-interface)           | Handler Interface          | Draft |
-| [26](spec/ics-026-relayer-module)              | Relayer Module             | Draft |
+| [26](spec/ics-026-routing-module)              | Routing Module             | Draft |
 
 ### IBC/APP
 

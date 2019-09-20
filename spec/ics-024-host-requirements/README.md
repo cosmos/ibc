@@ -30,7 +30,7 @@ IBC should require as simple an interface from the underlying state machine as p
 
 The host state machine must support a module system, whereby self-contained, potentially mutually distrusted packages of code can safely execute on the same ledger, control how and when they allow other modules to communicate with them, and be identified and manipulated by a "master module" or execution environment.
 
-The IBC/TAO specifications define the implementations of two modules: the core "IBC handler" module and the "IBC relayer" module. IBC/APP specifications further define other modules for particular packet handling application logic. IBC requires that the "master module" or execution environment can be used to grant other modules on the host state machine access to the IBC handler module and/or the IBC relayer module, but otherwise does not impose requirements on the functionality or communication abilities of any other modules which may be co-located on the state machine.
+The IBC/TAO specifications define the implementations of two modules: the core "IBC handler" module and the "IBC relayer" module. IBC/APP specifications further define other modules for particular packet handling application logic. IBC requires that the "master module" or execution environment can be used to grant other modules on the host state machine access to the IBC handler module and/or the IBC routing module, but otherwise does not impose requirements on the functionality or communication abilities of any other modules which may be co-located on the state machine.
 
 ### Paths, identifiers, separators
 
@@ -106,7 +106,7 @@ actually used in the private store implementation.
 | provableStore  | "ports/{identifier}/channels/{identifier}/nextSequenceRecv"              | uint64            | [ICS 4](../ics-004-channel-and-packet-semantics) |
 | provableStore  | "ports/{identifier}/channels/{identifier}/packets/{sequence}"            | bytes             | [ICS 4](../ics-004-channel-and-packet-semantics) |
 | provableStore  | "ports/{identifier}channels/{identifier}/acknowledgements/{sequence}"    | bytes             | [ICS 4](../ics-004-channel-and-packet-semantics) |
-| privateStore   | "callbacks/{identifier}"                                                 | ModuleCallbacks   | [ICS 26](../ics-026-relayer-module) |
+| privateStore   | "callbacks/{identifier}"                                                 | ModuleCallbacks   | [ICS 26](../ics-026-routing-module) |
 
 ### Module layout
 
@@ -118,7 +118,7 @@ Represented spatially, the layout of modules & their included specifications on 
 | Host State Machine                                                               |
 |                                                                                  |
 | +-------------------+       +--------------------+      +----------------------+ |
-| | Module Aardvark   | <-->  | IBC Relayer Module |      | IBC Handler Module   | |
+| | Module Aardvark   | <-->  | IBC Routing Module |      | IBC Handler Module   | |
 | +-------------------+       |                    |      |                      | |
 |                             | Implements ICS 26. |      | Implements ICS 2, 3, | |
 |                             |                    |      | 4, 5 internally.     | |
@@ -199,13 +199,13 @@ Modules that wish to make use of particular IBC features MAY implement certain h
 
 ### Datagram submission
 
-Host state machines which implement the relayer module MAY define a `submitDatagram` function to submit [datagrams](../../docs/ibc/2_IBC_TERMINOLOGY.md), which will be included in transactions, directly to the relayer module (defined in [ICS 26](../ics-026-relayer-module):
+Host state machines which implement the routing module MAY define a `submitDatagram` function to submit [datagrams](../../docs/ibc/2_IBC_TERMINOLOGY.md), which will be included in transactions, directly to the routing module (defined in [ICS 26](../ics-026-routing-module):
 
 ```typescript
 type submitDatagram = (datagram: Datagram) => void
 ```
 
-`submitDatagram` allows relayer processes to submit IBC datagrams directly to the relayer module on the host state machine. Host state machines MAY require that the relayer process submitting the datagram has an account to pay transaction fees, signs over the datagram in a larger transaction structure, etc — `submitDatagram` MUST define & construct any such packaging required.
+`submitDatagram` allows relayer processes to submit IBC datagrams directly to the routing module on the host state machine. Host state machines MAY require that the relayer process submitting the datagram has an account to pay transaction fees, signs over the datagram in a larger transaction structure, etc — `submitDatagram` MUST define & construct any such packaging required.
 
 ### Exception system
 

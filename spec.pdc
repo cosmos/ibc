@@ -85,9 +85,9 @@ header-includes:
 
 !include spec/ics-025-handler-interface/README.md.xfm
 
-# ICS 026 - Relayer Module
+# ICS 026 - Routing Module
 
-!include spec/ics-026-relayer-module/README.md.xfm
+!include spec/ics-026-routing-module/README.md.xfm
 
 # ICS 018 - Relayer Algorithms
 
