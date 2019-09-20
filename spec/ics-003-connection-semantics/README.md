@@ -80,7 +80,7 @@ interface ConnectionEnd {
   counterpartyPrefix: CommitmentPrefix
   clientIdentifier: Identifier
   counterpartyClientIdentifier: Identifier
-  version: string
+  version: string | []string
 }
 ```
 
@@ -202,6 +202,20 @@ type validateConnectionIdentifier = (id: Identifier) => boolean
 
 If not provided, the default `validateConnectionIdentifier` function will always return `true`. 
 
+#### Versioning
+
+An implementation must define a function `getCompatibleVersions` which returns the list of versions it supports, ranked by descending preference order.
+
+```typescript
+type getCompatibleVersions = () => []string
+```
+
+An implementation must define a function `pickVersion` to choose a version from a list of versions proposed by a counterparty.
+
+```typescript
+type pickVersion = ([]string) => string
+```
+
 #### Opening Handshake
 
 The opening handshake sub-protocol serves to initialise consensus states for two chains on each other.
@@ -233,13 +247,12 @@ function connOpenInit(
   desiredCounterpartyConnectionIdentifier: Identifier,
   counterpartyPrefix: CommitmentPrefix,
   clientIdentifier: Identifier,
-  counterpartyClientIdentifier: Identifier,
-  version: string) {
+  counterpartyClientIdentifier: Identifier) {
     abortTransactionUnless(validateConnectionIdentifier(identifier))
     abortTransactionUnless(provableStore.get(connectionPath(identifier)) == null)
     state = INIT
     connection = ConnectionEnd{state, desiredCounterpartyConnectionIdentifier, counterpartyPrefix,
-      clientIdentifier, counterpartyClientIdentifier, version}
+      clientIdentifier, counterpartyClientIdentifier, getCompatibleVersions()}
     provableStore.set(connectionPath(identifier), connection)
     addConnectionToClient(clientIdentifier, identifier)
 }
@@ -254,8 +267,7 @@ function connOpenTry(
   counterpartyPrefix: CommitmentPrefix,
   counterpartyClientIdentifier: Identifier,
   clientIdentifier: Identifier,
-  version: string,
-  counterpartyVersion: string
+  counterpartyVersions: string[],
   proofInit: CommitmentProof,
   proofHeight: uint64,
   consensusHeight: uint64) {
@@ -263,7 +275,8 @@ function connOpenTry(
     abortTransactionUnless(consensusHeight <= getCurrentHeight())
     expectedConsensusState = getConsensusState(consensusHeight)
     expected = ConnectionEnd{INIT, desiredIdentifier, getCommitmentPrefix(), counterpartyClientIdentifier,
-                             clientIdentifier, counterpartyVersion}
+                             clientIdentifier, counterpartyVersions}
+    version = pickVersion(counterpartyVersions)
     connection = ConnectionEnd{state, counterpartyConnectionIdentifier, counterpartyPrefix,
                                clientIdentifier, counterpartyClientIdentifier, version}
     abortTransactionUnless(
@@ -309,6 +322,7 @@ function connOpenAck(
                                   consensusStatePath(connection.counterpartyClientIdentifier),
                                   expectedConsensusState))
     connection.state = OPEN
+    abortTransactionUnless(getCompatibleVersions().indexOf(version) !== -1)
     connection.version = version
     provableStore.set(connectionPath(identifier), connection)
 }
