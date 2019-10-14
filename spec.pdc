@@ -10,7 +10,7 @@ toc-own-page: true
 mainfont: DejaVuSerifCondensed
 fontsize: 8pt
 author: IBC Specification Team
-date: \today \ — \textbf{1.0.0-rc4}
+date: \today \ — \textbf{1.0.0-rc5}
 urlcolor: cyan
 header-includes:
     - \usepackage{graphicx}
