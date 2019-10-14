@@ -160,7 +160,7 @@ Generic serialisation formats, such as Amino, RLP, Protobuf, JSON.
 
 #### Implementation
 
-An arbitrary-depth IBC-connection-linked-list of chains, with the first chain optimised for compute and later chains optimised for cheaper storage, can implement a hierarchical cache, where data unused for a period of time on any chain is migrated to the next chain in the list. When data is necessary (e.g. for a contract call or storage access), if it not stored on the chain looking it up, it must be relayed over an IBC packet back to that chain (which can then re-cache it for some period).
+An arbitrary-depth IBC-connection-linked-list of chains, with the first chain optimised for compute and later chains optimised for cheaper storage, can implement a hierarchical cache, where data unused for a period of time on any chain is migrated to the next chain in the list. When data is necessary (e.g. for a contract call or storage access), if it is not stored on the chain looking it up, it must be relayed over an IBC packet back to that chain (which can then re-cache it for some period).
 
 #### Invariants
 
