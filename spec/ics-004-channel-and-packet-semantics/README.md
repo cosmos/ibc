@@ -721,9 +721,10 @@ to which an unreceived packet was addressed has been closed, so the packet will 
 ```typescript
 function timeoutOnClose(
   packet: Packet,
-  proofNonMembership: CommitmentProof,
+  proof: CommitmentProof,
   proofClosed: CommitmentProof,
-  proofHeight: uint64) {
+  proofHeight: uint64,
+  nextSequenceRecv: Maybe<uint64>): Packet {
 
     channel = provableStore.get(channelPath(packet.sourcePort, packet.sourceChannel))
     // note: the channel may have been closed
@@ -748,12 +749,21 @@ function timeoutOnClose(
       expected
     ))
 
-    // verify absence of acknowledgement at packet index
-    abortTransactionUnless(connection.verifyNonMembership(
-      proofHeight,
-      proofNonMembership,
-      packetAcknowledgementPath(packet.sourcePort, packet.sourceChannel, packet.sequence)
-    ))
+    if channel.order === ORDERED
+      // ordered channel: check that the recv sequence is as claimed
+      abortTransactionUnless(connection.verifyMembership(
+        proofHeight,
+        proof,
+        nextSequenceRecvPath(packet.destPort, packet.destChannel),
+        nextSequenceRecv
+      ))
+    else
+      // unordered channel: verify absence of acknowledgement at packet index
+      abortTransactionUnless(connection.verifyNonMembership(
+        proofHeight,
+        proof,
+        packetAcknowledgementPath(packet.sourcePort, packet.sourceChannel, packet.sequence)
+      ))
 
     // all assertions passed, we can alter state
 
