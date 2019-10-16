@@ -9,7 +9,8 @@ enum ConnectionState {
 message ConnectionEnd {
   ConnectionState state = 1;
   string counterpartyConnectionIdentifier = 2;
-  string clientIdentifier = 3;
-  string counterpartyClientIdentifier = 4;
-  uint64 nextTimeoutHeight = 5;
+  string counterpartyPrefix = 3;
+  string clientIdentifier = 4;
+  string counterpartyClientIdentifier = 5;
+  string version = 6;
 }

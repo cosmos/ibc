@@ -18,5 +18,5 @@ message ChannelEnd {
   string counterpartyPortIdentifier = 3;
   string counterpartyChannelIdentifier = 4;
   repeated string connectionHops = 5;
-  uint64 nextTimeoutHeight = 6;
+  string version = 6;
 } 
