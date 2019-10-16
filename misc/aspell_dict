@@ -1,4 +1,4 @@
-personal_ws-1.1 en 453 
+personal_ws-1.1 en 455 
 unescrow
 onChanCloseConfirm
 clientKey
@@ -120,6 +120,7 @@ tokenize
 interchain
 Ethereum
 PacketTimeout
+endian
 Zcash
 subprotocol
 verifyNonMembership
@@ -350,6 +351,7 @@ rootKey
 Privkey
 acknowledgePacket
 interoperability
+Booleans
 Betazoid
 callingModuleIdentifier
 LogStore

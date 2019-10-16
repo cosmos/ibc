@@ -160,29 +160,6 @@ function verifyNonMembership(
 }
 ```
 
-
-### Versioning
-
-During the handshake process, two ends of a connection come to agreement on a version bytestring associated
-with that connection. At the moment, the contents of this version bytestring are opaque to the IBC core protocol.
-In the future, it might be used to indicate what kinds of channels can utilise the connection in question, or
-what encoding formats channel-related datagrams will use. At present, host state machine MAY utilise the version data
-to negotiate encodings, priorities, or connection-specific metadata related to custom logic on top of IBC.
-
-Host state machines MAY also safely ignore the version data or specify an empty string.
-
-`checkVersion` is an opaque function defined by the host state machine which determines if two versions are compatible, returning a boolean:
-
-```typescript
-function checkVersion(
-  version: string,
-  counterpartyVersion: string): boolean {
-    // defined by host state machine
-}
-```
-
-Future versions of this specification may also define this function.
-
 ### Sub-protocols
 
 This ICS defines the opening handshake subprotocol. Once opened, connections cannot be closed and identifiers cannot be reallocated (this prevents packet replay or authorisation confusion).
@@ -204,13 +181,21 @@ If not provided, the default `validateConnectionIdentifier` function will always
 
 #### Versioning
 
-An implementation must define a function `getCompatibleVersions` which returns the list of versions it supports, ranked by descending preference order.
+During the handshake process, two ends of a connection come to agreement on a version bytestring associated
+with that connection. At the moment, the contents of this version bytestring are opaque to the IBC core protocol.
+In the future, it might be used to indicate what kinds of channels can utilise the connection in question, or
+what encoding formats channel-related datagrams will use. At present, host state machine MAY utilise the version data
+to negotiate encodings, priorities, or connection-specific metadata related to custom logic on top of IBC.
+
+Host state machines MAY also safely ignore the version data or specify an empty string.
+
+An implementation MUST define a function `getCompatibleVersions` which returns the list of versions it supports, ranked by descending preference order.
 
 ```typescript
 type getCompatibleVersions = () => []string
 ```
 
-An implementation must define a function `pickVersion` to choose a version from a list of versions proposed by a counterparty.
+An implementation MUST define a function `pickVersion` to choose a version from a list of versions proposed by a counterparty.
 
 ```typescript
 type pickVersion = ([]string) => string
@@ -288,7 +273,6 @@ function connOpenTry(
                                   consensusStatePath(counterpartyClientIdentifier),
                                   expectedConsensusState))
     abortTransactionUnless(provableStore.get(connectionPath(desiredIdentifier)) === null)
-    abortTransactionUnless(checkVersion(version, counterpartyVersion))
     identifier = desiredIdentifier
     state = TRYOPEN
        provableStore.set(connectionPath(identifier), connection)
@@ -308,7 +292,6 @@ function connOpenAck(
     abortTransactionUnless(consensusHeight <= getCurrentHeight())
     connection = provableStore.get(connectionPath(identifier))
     abortTransactionUnless(connection.state === INIT)
-    abortTransactionUnless(checkVersion(connection.version, version))
     expectedConsensusState = getConsensusState(consensusHeight)
     expected = ConnectionEnd{TRYOPEN, identifier, getCommitmentPrefix(),
                              connection.counterpartyClientIdentifier, connection.clientIdentifier,

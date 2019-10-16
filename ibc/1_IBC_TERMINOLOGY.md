@@ -151,4 +151,4 @@ All equivocations are misbehaviours.
 
 ### Succinct
 
-*Succinct*, when referring to space or time complexity, means `O(log n)` or better.
+*Succinct*, when referring to space or time complexity, means `O(poly(log n))` or better.
