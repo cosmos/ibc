@@ -102,6 +102,7 @@ actually used in the private store implementation.
 | provableStore  | "clients/{identifier}/type"                                              | ClientType        | [ICS 2](../ics-002-client-semantics) |
 | provableStore  | "connections/{identifier}"                                               | ConnectionEnd     | [ICS 3](../ics-003-connection-semantics) |
 | privateStore   | "ports/{identifier}"                                                     | CapabilityKey     | [ICS 5](../ics-005-port-allocation) |
+| provableStore  | "ports/{identifier}/channels/{identifier}"                               | ChannelEnd        | [ICS 4](../ics-004-channel-and-packet-semantics) |
 | provableStore  | "ports/{identifier}/channels/{identifier}/key"                           | CapabilityKey     | [ICS 4](../ics-004-channel-and-packet-semantics) |
 | provableStore  | "ports/{identifier}/channels/{identifier}/nextSequenceRecv"              | uint64            | [ICS 4](../ics-004-channel-and-packet-semantics) |
 | provableStore  | "ports/{identifier}/channels/{identifier}/packets/{sequence}"            | bytes             | [ICS 4](../ics-004-channel-and-packet-semantics) |

@@ -279,8 +279,8 @@ function chanOpenInit(
     abortTransactionUnless(connection !== null)
     abortTransactionUnless(connection.state !== CLOSED)
     abortTransactionUnless(authenticate(privateStore.get(portPath(portIdentifier))))
-    channel = Channel{INIT, order, counterpartyPortIdentifier,
-                      counterpartyChannelIdentifier, connectionHops, version}
+    channel = ChannelEnd{INIT, order, counterpartyPortIdentifier,
+                         counterpartyChannelIdentifier, connectionHops, version}
     provableStore.set(channelPath(portIdentifier, channelIdentifier), channel)
     key = generate()
     provableStore.set(channelCapabilityPath(portIdentifier, channelIdentifier), key)
@@ -315,11 +315,11 @@ function chanOpenTry(
       proofHeight,
       proofInit,
       channelPath(counterpartyPortIdentifier, counterpartyChannelIdentifier),
-      Channel{INIT, order, portIdentifier,
-              channelIdentifier, connectionHops.reverse(), counterpartyVersion}
+      ChannelEnd{INIT, order, portIdentifier,
+                 channelIdentifier, connectionHops.reverse(), counterpartyVersion}
     ))
-    channel = Channel{OPENTRY, order, counterpartyPortIdentifier,
-                      counterpartyChannelIdentifier, connectionHops, version}
+    channel = ChannelEnd{OPENTRY, order, counterpartyPortIdentifier,
+                         counterpartyChannelIdentifier, connectionHops, version}
     provableStore.set(channelPath(portIdentifier, channelIdentifier), channel)
     key = generate()
     provableStore.set(channelCapabilityPath(portIdentifier, channelIdentifier), key)
@@ -349,8 +349,8 @@ function chanOpenAck(
       proofHeight,
       proofTry,
       channelPath(channel.counterpartyPortIdentifier, channel.counterpartyChannelIdentifier),
-      Channel{OPENTRY, channel.order, portIdentifier,
-              channelIdentifier, channel.connectionHops.reverse(), counterpartyVersion}
+      ChannelEnd{OPENTRY, channel.order, portIdentifier,
+                 channelIdentifier, channel.connectionHops.reverse(), counterpartyVersion}
     ))
     channel.state = OPEN
     channel.version = counterpartyVersion
@@ -378,8 +378,8 @@ function chanOpenConfirm(
       proofHeight,
       proofAck,
       channelPath(channel.counterpartyPortIdentifier, channel.counterpartyChannelIdentifier),
-      Channel{OPEN, channel.order, portIdentifier,
-              channelIdentifier, channel.connectionHops.reverse(), channel.version}
+      ChannelEnd{OPEN, channel.order, portIdentifier,
+                 channelIdentifier, channel.connectionHops.reverse(), channel.version}
     ))
     channel.state = OPEN
     provableStore.set(channelPath(portIdentifier, channelIdentifier), channel)
@@ -430,8 +430,8 @@ function chanCloseConfirm(
     connection = provableStore.get(connectionPath(channel.connectionHops[0]))
     abortTransactionUnless(connection !== null)
     abortTransactionUnless(connection.state === OPEN)
-    expected = Channel{CLOSED, channel.order, portIdentifier,
-                       channelIdentifier, channel.connectionHops.reverse(), channel.version}
+    expected = ChannelEnd{CLOSED, channel.order, portIdentifier,
+                          channelIdentifier, channel.connectionHops.reverse(), channel.version}
     abortTransactionUnless(connection.verifyMembership(
       proofHeight,
       proofInit,
@@ -740,8 +740,8 @@ function timeoutOnClose(
            === hash(packet.data))
 
     // check that the opposing channel end has closed
-    expected = Channel{CLOSED, channel.order, channel.portIdentifier,
-                       channel.channelIdentifier, channel.connectionHops.reverse(), channel.version}
+    expected = ChannelEnd{CLOSED, channel.order, channel.portIdentifier,
+                          channel.channelIdentifier, channel.connectionHops.reverse(), channel.version}
     abortTransactionUnless(connection.verifyMembership(
       proofHeight,
       proofClosed,
