@@ -102,7 +102,7 @@ A commitment construction MUST provide the following functions, defined over pat
 ```typescript
 type Path = string
 
-type Value = string
+type Value = []byte
 ```
 
 #### Initialisation
