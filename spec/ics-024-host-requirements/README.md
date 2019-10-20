@@ -188,7 +188,7 @@ For a host state machine, the return value of `getCommitmentPrefix` MUST be cons
 
 Host state machines MUST implement a port system, where the IBC handler can allow different modules in the host state machine to bind to uniquely named ports. Ports are identified by an `Identifier`.
 
-Host state machines MUST permission interaction with the IBC handler such that:
+Host state machines MUST implement permission interaction with the IBC handler such that:
 
 - Once a module has bound to a port, no other modules can use that port until the module releases it
 - A single module can bind to multiple ports
@@ -200,7 +200,7 @@ Modules that wish to make use of particular IBC features MAY implement certain h
 
 ### Datagram submission
 
-Host state machines which implement the routing module MAY define a `submitDatagram` function to submit [datagrams](../../docs/ibc/2_IBC_TERMINOLOGY.md), which will be included in transactions, directly to the routing module (defined in [ICS 26](../ics-026-routing-module):
+Host state machines which implement the routing module MAY define a `submitDatagram` function to submit [datagrams](../../ibc/1_IBC_TERMINOLOGY.md), which will be included in transactions, directly to the routing module (defined in [ICS 26](../ics-026-routing-module)):
 
 ```typescript
 type submitDatagram = (datagram: Datagram) => void

@@ -27,7 +27,7 @@ The IBC handler interface & IBC routing module interface are as defined in [ICS 
 - Preservation of total supply (constant or inflationary on a single source chain & module).
 - Permissionless token transfers, no need to whitelist connections, modules, or denominations.
 - Symmetric (all chains implement the same logic, no in-protocol differentiation of hubs & zones).
-- Fault containment: prevents Byzantine-inflation of tokens originating on chain `A`, on chain `A`, as a result of chain `B`'s Byzantine behaviour (though any users who sent tokens to chain `B` may be at risk).
+- Fault containment: prevents Byzantine-inflation of tokens originating on chain `A`, as a result of chain `B`'s Byzantine behaviour (though any users who sent tokens to chain `B` may be at risk).
 
 ## Technical Specification
 
@@ -84,7 +84,7 @@ An administrator (with the permissions to create connections & channels on the h
 to other instances of this module (or another module supporting this interface) on other chains. This specification defines packet handling semantics only, and defines them in such a fashion
 that the module itself doesn't need to worry about what connections or channels might or might not exist at any point in time.
 
-#### routing module callbacks
+#### Routing module callbacks
 
 ##### Channel lifecycle management
 

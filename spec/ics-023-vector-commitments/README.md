@@ -43,7 +43,7 @@ A commitment construction MUST specify the following datatypes, which are otherw
 
 #### Commitment State
 
-An `CommitmentState` is the full state of the commitment, which will be stored by the manager.
+A `CommitmentState` is the full state of the commitment, which will be stored by the manager.
 
 ```typescript
 type CommitmentState = object
@@ -51,7 +51,7 @@ type CommitmentState = object
 
 #### Commitment Root
 
-An `CommitmentRoot` commits to a particular commitment state and should be constant-size.
+A `CommitmentRoot` commits to a particular commitment state and should be constant-size.
 
 In certain commitment constructions with constant-size states, `CommitmentState` and `CommitmentRoot` may be the same type.
 
@@ -89,7 +89,7 @@ type applyPrefix = (prefix: CommitmentPrefix, path: Path) => CommitmentPath
 
 #### Proof
 
-An `CommitmentProof` demonstrates membership or non-membership for an element or set of elements, verifiable in conjunction with a known commitment root. Proofs should be succinct.
+A `CommitmentProof` demonstrates membership or non-membership for an element or set of elements, verifiable in conjunction with a known commitment root. Proofs should be succinct.
 
 ```typescript
 type CommitmentProof = object
