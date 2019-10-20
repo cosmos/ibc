@@ -275,7 +275,7 @@ function connOpenTry(
     abortTransactionUnless(provableStore.get(connectionPath(desiredIdentifier)) === null)
     identifier = desiredIdentifier
     state = TRYOPEN
-       provableStore.set(connectionPath(identifier), connection)
+    provableStore.set(connectionPath(identifier), connection)
     addConnectionToClient(clientIdentifier, identifier)
 }
 ```

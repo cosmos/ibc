@@ -477,7 +477,7 @@ interface ChanOpenConfirm {
 
 ```typescript
 function handleChanOpenConfirm(datagram: ChanOpenConfirm) {
-    module = lookupModule(portIdentifier)
+    module = lookupModule(datagram.portIdentifier)
     module.onChanOpenConfirm(
       datagram.portIdentifier,
       datagram.channelIdentifier
@@ -500,7 +500,7 @@ interface ChanCloseInit {
 
 ```typescript
 function handleChanCloseInit(datagram: ChanCloseInit) {
-    module = lookupModule(portIdentifier)
+    module = lookupModule(datagram.portIdentifier)
     module.onChanCloseInit(
       datagram.portIdentifier,
       datagram.channelIdentifier

@@ -188,7 +188,7 @@ For a host state machine, the return value of `getCommitmentPrefix` MUST be cons
 
 Host state machines MUST implement a port system, where the IBC handler can allow different modules in the host state machine to bind to uniquely named ports. Ports are identified by an `Identifier`.
 
-Host state machines MUST permission interaction with the IBC handler such that:
+Host state machines MUST implement permission interaction with the IBC handler such that:
 
 - Once a module has bound to a port, no other modules can use that port until the module releases it
 - A single module can bind to multiple ports

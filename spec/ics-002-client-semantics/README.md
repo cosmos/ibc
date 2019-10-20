@@ -187,14 +187,14 @@ The headers generated from a `Blockchain` are expected to satisfy the following:
 * Satisfied if: correct block generation & state machine
 * Possible violation scenario: invariant break, super-majority validator cartel
 
-If the blockchain does not satisfy any of the above then the IBC protocol
+Unless the blockchain satisfies all of the above the IBC protocol
 may not work as intended: the chain can receive multiple conflicting
 packets, the chain cannot recover from the timeout event, the chain can
 steal the user's asset, etc.
 
 The validity of the validity predicate is dependent on the security model of the
 `Consensus`. For example, the `Consensus` can be a proof of authority with
-a trusted operator, or the a proof of stake but with
+a trusted operator, or a proof of stake but with
 insufficient value of stake. In such cases, it is possible that the
 security assumptions break, the correspondence between `Consensus` and
 the validity predicate no longer exists, and the behaviour of the validity predicate becomes
@@ -520,7 +520,7 @@ Not applicable.
 
 ## Forwards Compatibility
 
-New client types can be added by IBC implementations at-will as long as they confirm to this interface.
+New client types can be added by IBC implementations at-will as long as they conform to this interface.
 
 ## Example Implementation
 

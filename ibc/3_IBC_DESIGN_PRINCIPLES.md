@@ -1,4 +1,4 @@
-# 2: IBC Design Principles
+# 3: IBC Design Principles
 
 **This is an explanation of the "design principles" of IBC.**
 

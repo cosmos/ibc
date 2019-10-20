@@ -1,4 +1,4 @@
-# 3: IBC Terminology
+# 1: IBC Terminology
 
 **This is an overview of terms used in IBC specifications.**
 
