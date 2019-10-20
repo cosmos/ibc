@@ -200,7 +200,7 @@ Modules that wish to make use of particular IBC features MAY implement certain h
 
 ### Datagram submission
 
-Host state machines which implement the routing module MAY define a `submitDatagram` function to submit [datagrams](../../docs/ibc/2_IBC_TERMINOLOGY.md), which will be included in transactions, directly to the routing module (defined in [ICS 26](../ics-026-routing-module):
+Host state machines which implement the routing module MAY define a `submitDatagram` function to submit [datagrams](../../ibc/1_IBC_TERMINOLOGY.md), which will be included in transactions, directly to the routing module (defined in [ICS 26](../ics-026-routing-module)):
 
 ```typescript
 type submitDatagram = (datagram: Datagram) => void

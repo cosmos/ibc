@@ -67,7 +67,7 @@ As a helpful comparison, the following analogies to TCP are roughly accurate:
 The host state machine MUST support either object-capability reference or source authentication for modules.
 
 In the former object-capability case, the IBC handler must have the ability to generate *object-capabilities*, unique, opaque references
-which can be passed to a module and will not be duplicable by other modules. Two examples are store keys as used in the Cosmos SDK ([reference](https://github.com/cosmos/cosmos-sdk/blob/master/store/types/store.go#L224))
+which can be passed to a module and will not be duplicable by other modules. Two examples are store keys as used in the Cosmos SDK ([reference](https://github.com/cosmos/cosmos-sdk/blob/97eac176a5d533838333f7212cbbd79beb0754bc/store/types/store.go#L275))
 and object references as used in Agoric's Javascript runtime ([reference](https://github.com/Agoric/SwingSet)).
 
 ```typescript
