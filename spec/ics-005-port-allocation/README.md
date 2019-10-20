@@ -98,13 +98,13 @@ function callingModuleIdentifier(): SourceIdentifier {
 
 In the former case, `generate` returns a new object-capability key, which must be returned by the outer-layer function, and `authenticate` requires that the outer-layer function take an extra argument `capability`, which is an object-capability key with uniqueness enforced by the host state machine. Outer-layer functions are any functions exposed by the IBC handler ([ICS 25](../ics-025-handler-interface)) or routing module ([ICS 26](../ics-026-routing-module)) to modules.
 
-```
+```typescript
 function generate(): CapabilityKey {
     return newCapabilityPath()
 }
 ```
 
-```
+```typescript
 function authenticate(key: CapabilityKey): boolean {
     return capability === key
 }
@@ -112,13 +112,13 @@ function authenticate(key: CapabilityKey): boolean {
 
 In the latter case, `generate` returns the calling module's identifier and `authenticate` merely checks it.
 
-```
+```typescript
 function generate(): SourceIdentifier {
     return callingModuleIdentifier()
 }
 ```
 
-```
+```typescript
 function authenticate(id: SourceIdentifier): boolean {
     return callingModuleIdentifier() === id
 }

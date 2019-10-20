@@ -645,7 +645,7 @@ can no longer be executed and to allow the calling module to safely perform appr
 
 Calling modules MAY atomically execute appropriate application timeout-handling logic in conjunction with calling `timeoutPacket`.
 
-In the case of an ordered channel, `timeoutPacket` checks the recvSequence of the receiving channel end and closes the channel if a packet has timed out.
+In the case of an ordered channel, `timeoutPacket` checks the `recvSequence` of the receiving channel end and closes the channel if a packet has timed out.
 
 In the case of an unordered channel, `timeoutPacket` checks the absence of an acknowledgement (which will have been written if the packet was received). Unordered channels are expected to continue in the face of timed-out packets.
 
