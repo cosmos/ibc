@@ -31,7 +31,11 @@ spellcheck:
 spellcheck_noninteractive:
 	find . -type f -name "*.md" | xargs -n 1 -I % ./scripts/spellcheck.sh %
 
+# due to https://github.com/golang/protobuf/issues/39 this requires multiple commands
 protoc:
-	protoc --go_out=compliance/shims/go `find . -type f -name "*.proto"`
+	protoc --go_out=compliance/shims/go `find ./spec/ics-002-client-semantics -type f -name "*.proto"`
+	protoc --go_out=compliance/shims/go `find ./spec/ics-003-connection-semantics -type f -name "*.proto"`
+	protoc --go_out=compliance/shims/go `find ./spec/ics-004-channel-and-packet-semantics -type f -name "*.proto"`
+	protoc --go_out=compliance/shims/go `find ./spec/ics-020-fungible-token-transfer -type f -name "*.proto"`
 
 .PHONY: $(TOPTARGETS) $(SUBDIRS) all check check_links check_dependencies check_syntax check_sections spec_pdf spellcheck spellcheck_noninteractive
