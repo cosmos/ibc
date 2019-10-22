@@ -32,13 +32,6 @@ jobs:
       - run: sudo apt-get update && sudo apt-get -y install nodejs npm && sudo npm install codedown typescript tslint -g
       - run: make check_syntax
 
-  check_proto:
-    <<: *linux_defaults
-    steps:
-      - checkout
-      - run: sudo apt-get update && sudo apt-get -y install protobuf-compiler
-      - run: make check_proto
-
   spellcheck:
     <<: *linux_defaults
     steps:
@@ -54,5 +47,4 @@ workflows:
       - check_links
       - check_sections
       - check_syntax
-      - check_proto
       - spellcheck
