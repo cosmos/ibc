@@ -1,15 +1,17 @@
 syntax = 'proto3';
 
 enum ChannelOrder {
-  ORDERED = 1;
-  UNORDERED = 2;
+  CHANNEL_ORDER_NONE = 0;
+  CHANNEL_ORDER_ORDERED = 1;
+  CHANNEL_ORDER_UNORDERED = 2;
 }
 
 enum ChannelState {
-  INIT = 1;
-  OPENTRY = 2;
-  OPEN = 3;
-  CLOSED = 4;
+  CHANNEL_STATE_NONE = 0;
+  CHANNEL_STATE_INIT = 1;
+  CHANNEL_STATE_OPENTRY = 2;
+  CHANNEL_STATE_OPEN = 3;
+  CHANNEL_STATE_CLOSED = 4;
 }
 
 message ChannelEnd {

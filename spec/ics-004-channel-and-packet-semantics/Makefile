@@ -14,7 +14,4 @@ cleanup:
 clean:
 	rm -f *.png
 
-check_proto:
-	/bin/bash -c 'TEMP=$$(mktemp); protoc data-structures.proto -o $$TEMP; rm -f $$TEMP'
-
-.PHONY: build clean cleanup check_proto
+.PHONY: build clean cleanup
