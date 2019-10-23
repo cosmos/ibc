@@ -264,14 +264,8 @@ function connOpenTry(
     version = pickVersion(counterpartyVersions)
     connection = ConnectionEnd{state, counterpartyConnectionIdentifier, counterpartyPrefix,
                                clientIdentifier, counterpartyClientIdentifier, version}
-    abortTransactionUnless(
-      connection.verifyMembership(proofHeight, proofInit,
-                                  connectionPath(counterpartyConnectionIdentifier),
-                                  expected))
-    abortTransactionUnless(
-      connection.verifyMembership(proofHeight, proofInit,
-                                  consensusStatePath(counterpartyClientIdentifier),
-                                  expectedConsensusState))
+    abortTransactionUnless(connection.verifyConnectionState(proofHeight, proofInit, counterpartyConnectionIdentifier, expected))
+    abortTransactionUnless(connection.verifyClientConsensusState(proofHeight, proofInit, counterpartyClientIdentifier, expectedConsensusState))
     abortTransactionUnless(provableStore.get(connectionPath(desiredIdentifier)) === null)
     identifier = desiredIdentifier
     state = TRYOPEN
@@ -296,14 +290,8 @@ function connOpenAck(
     expected = ConnectionEnd{TRYOPEN, identifier, getCommitmentPrefix(),
                              connection.counterpartyClientIdentifier, connection.clientIdentifier,
                              version}
-    abortTransactionUnless(
-      connection.verifyMembership(proofHeight, proofTry,
-                                  connectionPath(connection.counterpartyConnectionIdentifier),
-                                  expected))
-    abortTransactionUnless(
-      connection.verifyMembership(proofHeight, proofTry,
-                                  consensusStatePath(connection.counterpartyClientIdentifier),
-                                  expectedConsensusState))
+    abortTransactionUnless(connection.verifyConnectionState(proofHeight, proofTry, connection.counterpartyConnectionIdentifier, expected))
+    abortTransactionUnless(connection.verifyClientConsensusState(proofHeight, proofTry, connection.counterpartyClientIdentifier, expectedConsensusState))
     connection.state = OPEN
     abortTransactionUnless(getCompatibleVersions().indexOf(version) !== -1)
     connection.version = version
@@ -322,10 +310,7 @@ function connOpenConfirm(
     abortTransactionUnless(connection.state === TRYOPEN)
     expected = ConnectionEnd{OPEN, identifier, getCommitmentPrefix(), connection.counterpartyClientIdentifier,
                              connection.clientIdentifier, connection.version}
-    abortTransactionUnless(
-      connection.verifyMembership(proofHeight, proofAck,
-                                  connectionPath(connection.counterpartyConnectionIdentifier),
-                                  expected))
+    abortTransactionUnless(connection.verifyConnectionState(proofHeight, proofAck, connection.counterpartyConnectionIdentifier, expected))
     connection.state = OPEN
     provableStore.set(connectionPath(identifier), connection)
 }

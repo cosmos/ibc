@@ -13,7 +13,7 @@
       "interface-name": false,
       "object-literal-sort-keys": false,
       "trailing-comma": false,
-      "max-line-length": [true, 140]
+      "max-line-length": [true, 160]
     },
     "rulesDirectory": []
 }
