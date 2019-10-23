@@ -266,9 +266,46 @@ at a particular finalised height (necessarily associated with a particular commi
 
 #### State verification
 
-Client types must define functions, in accordance with [ICS 23](../ics-023-vector-commitments), to verify presence or absence of particular key/value pairs
-in state at particular heights. The behaviour of these functions MUST comply with the properties defined in [ICS 23](../ics-023-vector-commitments); however,
-internal implementation details may differ (for example, a loopback client could simply read directly from the state and require no proofs).
+Client types must define functions to authenticate internal state of the state machine which the client tracks.
+Internal implementation details may differ (for example, a loopback client could simply read directly from the state and require no proofs).
+
+Example kinds of implementation
+- Verify Merkle proof
+- Verify signature from single private key
+- Verify signature from threshold or multi-signature key
+- Proxy to other client(s)
+
+##### Required functions
+
+```typescript
+type verifyClientConsensusState = (ClientState, uint64, CommitmentProof, Identifier, ConsensusState) => boolean
+```
+
+```typescript
+type verifyConnectionState = (ClientState, uint64, CommitmentProof, Identifier, ConnectionEnd) => boolean
+```
+
+```typescript
+type verifyChannelState = (ClientState, uint64, CommitmentProof, Identifier, ChannelEnd) => boolean
+```
+
+```typescript
+type verifyOutgoingPacket = (ClientState, uint64, CommitmentProof, Identifier, Identifier, uint64, bytes) => boolean
+```
+
+```typescript
+type verifyPacketAcknowledgement = (ClientState, uint64, CommitmentProof, Identifier, Identifier, uint64, bytes) => boolean
+```
+
+```typescript
+type verifyNextSequenceRecv = (ClientState, uint64, CommitmentProof, Identifier, Identifier, uint64) => boolean
+```
+
+##### Merklized state trees
+
+For clients of state machines with Merklized state trees, these can be constructed in accordance with [ICS 23](../ics-023-vector-commitments),
+by calling `verifyMembership` or `verifyNonMembership` to verify presence or absence of particular key/value pairs
+in state at particular heights. The behaviour of these functions MUST comply with the properties defined in [ICS 23](../ics-023-vector-commitments).
 
 ```typescript
 type verifyMembership = (ClientState, uint64, CommitmentProof, Path, Value) => boolean
