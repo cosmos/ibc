@@ -290,11 +290,15 @@ type verifyChannelState = (ClientState, uint64, CommitmentProof, Identifier, Cha
 ```
 
 ```typescript
-type verifyOutgoingPacket = (ClientState, uint64, CommitmentProof, Identifier, Identifier, uint64, bytes) => boolean
+type verifyPacketCommitment = (ClientState, uint64, CommitmentProof, Identifier, Identifier, uint64, bytes) => boolean
 ```
 
 ```typescript
 type verifyPacketAcknowledgement = (ClientState, uint64, CommitmentProof, Identifier, Identifier, uint64, bytes) => boolean
+```
+
+```typescript
+type verifyPacketAcknowledgementAbsence = (ClientState, uint64, CommitmentProof, Identifier, Identifier, uint64) => boolean
 ```
 
 ```typescript

@@ -1,4 +1,4 @@
-personal_ws-1.1 en 462 
+personal_ws-1.1 en 464 
 unescrow
 onChanCloseConfirm
 clientKey
@@ -42,6 +42,7 @@ handleClientFreeze
 validRound
 recvPacket
 duplicable
+verifyPacketCommitment
 collateralising
 OpValidityPredicate
 packetCommitmentPath
@@ -110,6 +111,7 @@ handlePacketTimeout
 PacketSend
 unescrowing
 InitialPubkey
+verifyPacketAcknowledgementAbsence
 handlePacketRecv
 verifiedRoots
 coffeescript

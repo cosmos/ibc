@@ -311,12 +311,14 @@ function chanOpenTry(
     connection = provableStore.get(connectionPath(connectionHops[0]))
     abortTransactionUnless(connection !== null)
     abortTransactionUnless(connection.state === OPEN)
-    abortTransactionUnless(connection.verifyMembership(
+    expected = ChannelEnd{INIT, order, portIdentifier,
+                          channelIdentifier, connectionHops.reverse(), counterpartyVersion}
+    abortTransactionUnless(connection.verifyChannelState(
       proofHeight,
       proofInit,
-      channelPath(counterpartyPortIdentifier, counterpartyChannelIdentifier),
-      ChannelEnd{INIT, order, portIdentifier,
-                 channelIdentifier, connectionHops.reverse(), counterpartyVersion}
+      counterpartyPortIdentifier,
+      counterpartyChannelIdentifier,
+      expected
     ))
     channel = ChannelEnd{OPENTRY, order, counterpartyPortIdentifier,
                          counterpartyChannelIdentifier, connectionHops, version}
@@ -345,12 +347,14 @@ function chanOpenAck(
     connection = provableStore.get(connectionPath(channel.connectionHops[0]))
     abortTransactionUnless(connection !== null)
     abortTransactionUnless(connection.state === OPEN)
-    abortTransactionUnless(connection.verifyMembership(
+    expected = ChannelEnd{OPENTRY, channel.order, portIdentifier,
+                          channelIdentifier, channel.connectionHops.reverse(), counterpartyVersion}
+    abortTransactionUnless(connection.verifyChannelState(
       proofHeight,
       proofTry,
-      channelPath(channel.counterpartyPortIdentifier, channel.counterpartyChannelIdentifier),
-      ChannelEnd{OPENTRY, channel.order, portIdentifier,
-                 channelIdentifier, channel.connectionHops.reverse(), counterpartyVersion}
+      channel.counterpartyPortIdentifier,
+      channel.counterpartyChannelIdentifier,
+      expected
     ))
     channel.state = OPEN
     channel.version = counterpartyVersion
@@ -374,12 +378,14 @@ function chanOpenConfirm(
     connection = provableStore.get(connectionPath(channel.connectionHops[0]))
     abortTransactionUnless(connection !== null)
     abortTransactionUnless(connection.state === OPEN)
-    abortTransactionUnless(connection.verifyMembership(
+    expected = ChannelEnd{OPEN, channel.order, portIdentifier,
+                          channelIdentifier, channel.connectionHops.reverse(), channel.version}
+    abortTransactionUnless(connection.verifyChannelState(
       proofHeight,
       proofAck,
-      channelPath(channel.counterpartyPortIdentifier, channel.counterpartyChannelIdentifier),
-      ChannelEnd{OPEN, channel.order, portIdentifier,
-                 channelIdentifier, channel.connectionHops.reverse(), channel.version}
+      channel.counterpartyPortIdentifier,
+      channel.counterpartyChannelIdentifier,
+      expected
     ))
     channel.state = OPEN
     provableStore.set(channelPath(portIdentifier, channelIdentifier), channel)
@@ -432,10 +438,11 @@ function chanCloseConfirm(
     abortTransactionUnless(connection.state === OPEN)
     expected = ChannelEnd{CLOSED, channel.order, portIdentifier,
                           channelIdentifier, channel.connectionHops.reverse(), channel.version}
-    abortTransactionUnless(connection.verifyMembership(
+    abortTransactionUnless(connection.verifyChannelState(
       proofHeight,
       proofInit,
-      channelPath(channel.counterpartyPortIdentifier, channel.counterpartyChannelIdentifier),
+      channel.counterpartyPortIdentifier,
+      channel.counterpartyChannelIdentifier,
       expected
     ))
     channel.state = CLOSED
@@ -555,10 +562,12 @@ function recvPacket(
 
     abortTransactionUnless(getConsensusHeight() < packet.timeoutHeight)
 
-    abortTransactionUnless(connection.verifyMembership(
+    abortTransactionUnless(connection.verifyPacketCommitment(
       proofHeight,
       proof,
-      packetCommitmentPath(packet.sourcePort, packet.sourceChannel, packet.sequence),
+      packet.sourcePort,
+      packet.sourceChannel,
+      packet.sequence,
       hash(packet.data)
     ))
 
@@ -614,10 +623,12 @@ function acknowledgePacket(
            === hash(packet.data))
 
     // abort transaction unless correct acknowledgement on counterparty chain
-    abortTransactionUnless(connection.verifyMembership(
+    abortTransactionUnless(connection.verifyPacketAcknowledgement(
       proofHeight,
       proof,
-      packetAcknowledgementPath(packet.destPort, packet.destChannel, packet.sequence),
+      packet.destPort,
+      packet.destChannel,
+      packet.sequence,
       hash(acknowledgement)
     ))
 
@@ -679,21 +690,23 @@ function timeoutPacket(
     abortTransactionUnless(provableStore.get(packetCommitmentPath(packet.sourcePort, packet.sourceChannel, packet.sequence))
            === hash(packet.data))
 
-
     if channel.order === ORDERED
       // ordered channel: check that the recv sequence is as claimed
-      abortTransactionUnless(connection.verifyMembership(
+      abortTransactionUnless(connection.verifyNextSequenceRecv(
         proofHeight,
         proof,
-        nextSequenceRecvPath(packet.destPort, packet.destChannel),
+        packet.destPort,
+        packet.destChannel,
         nextSequenceRecv
       ))
     else
       // unordered channel: verify absence of acknowledgement at packet index
-      abortTransactionUnless(connection.verifyNonMembership(
+      abortTransactionUnless(connection.verifyPacketAcknowledgementAbsence(
         proofHeight,
         proof,
-        packetAcknowledgementPath(packet.sourcePort, packet.sourceChannel, packet.sequence)
+        packet.sourcePort,
+        packet.sourceChannel,
+        packet.sequence
       ))
 
     // all assertions passed, we can alter state
@@ -742,27 +755,31 @@ function timeoutOnClose(
     // check that the opposing channel end has closed
     expected = ChannelEnd{CLOSED, channel.order, channel.portIdentifier,
                           channel.channelIdentifier, channel.connectionHops.reverse(), channel.version}
-    abortTransactionUnless(connection.verifyMembership(
+    abortTransactionUnless(connection.verifyChannelState(
       proofHeight,
       proofClosed,
-      channelPath(channel.counterpartyPortIdentifier, channel.counterpartyChannelIdentifier),
+      channel.counterpartyPortIdentifier,
+      channel.counterpartyChannelIdentifier,
       expected
     ))
 
     if channel.order === ORDERED
       // ordered channel: check that the recv sequence is as claimed
-      abortTransactionUnless(connection.verifyMembership(
+      abortTransactionUnless(connection.verifyNextSequenceRecv(
         proofHeight,
         proof,
-        nextSequenceRecvPath(packet.destPort, packet.destChannel),
+        packet.destPort,
+        packet.destChannel,
         nextSequenceRecv
       ))
     else
       // unordered channel: verify absence of acknowledgement at packet index
-      abortTransactionUnless(connection.verifyNonMembership(
+      abortTransactionUnless(connection.verifyPacketAcknowledgementAbsence(
         proofHeight,
         proof,
-        packetAcknowledgementPath(packet.sourcePort, packet.sourceChannel, packet.sequence)
+        packet.sourcePort,
+        packet.sourceChannel,
+        packet.sequence
       ))
 
     // all assertions passed, we can alter state
@@ -809,18 +826,21 @@ function cleanupPacket(
 
     if channel.order === ORDERED
       // check that the recv sequence is as claimed
-      abortTransactionUnless(connection.verifyMembership(
+      abortTransactionUnless(connection.verifyNextSequenceRecv(
         proofHeight,
         proof,
-        nextSequenceRecvPath(packet.destPort, packet.destChannel),
+        packet.destPort,
+        packet.destChannel,
         nextSequenceRecvOrAcknowledgement
       ))
     else
       // abort transaction unless acknowledgement on the other end
-      abortTransactionUnless(connection.verifyMembership(
+      abortTransactionUnless(connection.verifyPacketAcknowledgement(
         proofHeight,
         proof,
-        packetAcknowledgementPath(packet.destPort, packet.destChannel, packet.sequence),
+        packet.destPort,
+        packet.destChannel,
+        packet.sequence,
         nextSequenceRecvOrAcknowledgement
       ))
 
