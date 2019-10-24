@@ -139,7 +139,7 @@ pendingDatagrams
 len
 handlePacketTimeoutClose
 startRound
-ChannelEnd
+channelEnd
 timeoutPropose
 counterparty
 connectionPath
@@ -247,7 +247,7 @@ nextSequenceSendKey
 datatypes
 getRoot
 Ethereum's
-ConnectionEnd
+connectionEnd
 expectedConsensusState
 handleChanOpenInit
 YYYY

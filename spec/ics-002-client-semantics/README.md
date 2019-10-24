@@ -272,31 +272,79 @@ Internal implementation details may differ (for example, a loopback client could
 ##### Required functions
 
 ```typescript
-type verifyClientConsensusState = (ClientState, uint64, CommitmentProof, Identifier, ConsensusState) => boolean
+type verifyClientConsensusState = (
+  clientState: ClientState,
+  height: uint64,
+  proof: CommitmentProof,
+  clientIdentifier: Identifier,
+  consensusState: ConsensusState)
+  => boolean
 ```
 
 ```typescript
-type verifyConnectionState = (ClientState, uint64, CommitmentProof, Identifier, ConnectionEnd) => boolean
+type verifyConnectionState = (
+  clientState: ClientState,
+  height: uint64,
+  proof: CommitmentProof,
+  connectionIdentifier: Identifier,
+  connectionEnd: ConnectionEnd)
+  => boolean
 ```
 
 ```typescript
-type verifyChannelState = (ClientState, uint64, CommitmentProof, Identifier, ChannelEnd) => boolean
+type verifyChannelState = (
+  clientState: ClientState,
+  height: uint64,
+  proof: CommitmentProof,
+  connectionIdentifier: Identifier,
+  channelEnd: ChannelEnd)
+  => boolean
 ```
 
 ```typescript
-type verifyPacketCommitment = (ClientState, uint64, CommitmentProof, Identifier, Identifier, uint64, bytes) => boolean
+type verifyPacketCommitment = (
+  clientState: ClientState,
+  height: uint64,
+  proof: CommitmentProof,
+  portIdentifier: Identifier,
+  channelIdentifier: Identifier,
+  sequence: uint64,
+  commitment: bytes)
+  => boolean
 ```
 
 ```typescript
-type verifyPacketAcknowledgement = (ClientState, uint64, CommitmentProof, Identifier, Identifier, uint64, bytes) => boolean
+type verifyPacketAcknowledgement = (
+  clientState: ClientState,
+  height: uint64,
+  proof: CommitmentProof,
+  portIdentifier: Identifier,
+  channelIdentifier: Identifier,
+  sequence: uint64,
+  acknowledgement: bytes)
+  => boolean
 ```
 
 ```typescript
-type verifyPacketAcknowledgementAbsence = (ClientState, uint64, CommitmentProof, Identifier, Identifier, uint64) => boolean
+type verifyPacketAcknowledgementAbsence = (
+  clientState: ClientState,
+  height: uint64,
+  proof: CommitmentProof,
+  portIdentifier: Identifier,
+  channelIdentifier: Identifier,
+  sequence: uint64)
+  => boolean
 ```
 
 ```typescript
-type verifyNextSequenceRecv = (ClientState, uint64, CommitmentProof, Identifier, Identifier, uint64) => boolean
+type verifyNextSequenceRecv = (
+  clientState: ClientState,
+  height: uint64,
+  proof: CommitmentProof,
+  portIdentifier: Identifier,
+  channelIdentifier: Identifier,
+  nextSequenceRecv: uint64)
+  => boolean
 ```
 
 ##### Implementation strategies
