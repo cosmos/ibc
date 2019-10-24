@@ -271,6 +271,8 @@ Internal implementation details may differ (for example, a loopback client could
 
 ##### Required functions
 
+`verifyClientConsensusState` verifies a proof of the consensus state of the specified client stored on the target machine.
+
 ```typescript
 type verifyClientConsensusState = (
   clientState: ClientState,
@@ -280,6 +282,8 @@ type verifyClientConsensusState = (
   consensusState: ConsensusState)
   => boolean
 ```
+
+`verifyConnectionState` verifies a proof of the connection state of the specified connection end stored on the target machine.
 
 ```typescript
 type verifyConnectionState = (
@@ -291,6 +295,8 @@ type verifyConnectionState = (
   => boolean
 ```
 
+`verifyChannelState` verifies a proof of the channel state of the specified channel end, under the specified port, stored on the target machine.
+
 ```typescript
 type verifyChannelState = (
   clientState: ClientState,
@@ -300,6 +306,8 @@ type verifyChannelState = (
   channelEnd: ChannelEnd)
   => boolean
 ```
+
+`verifyPacketCommitment` verifies a proof of an outgoing packet commitment at the specified port, specified channel, and specified sequence.
 
 ```typescript
 type verifyPacketCommitment = (
@@ -313,6 +321,8 @@ type verifyPacketCommitment = (
   => boolean
 ```
 
+`verifyPacketAcknowledgement` verifies a proof of an incoming packet acknowledgement at the specified port, specified channel, and specified sequence.
+
 ```typescript
 type verifyPacketAcknowledgement = (
   clientState: ClientState,
@@ -325,6 +335,8 @@ type verifyPacketAcknowledgement = (
   => boolean
 ```
 
+`verifyPacketAcknowledgementAbsence` verifies a proof of the absence of an incoming packet acknowledgement at the specified port, specified channel, and specified sequence.
+
 ```typescript
 type verifyPacketAcknowledgementAbsence = (
   clientState: ClientState,
@@ -335,6 +347,8 @@ type verifyPacketAcknowledgementAbsence = (
   sequence: uint64)
   => boolean
 ```
+
+`verifyNextSequenceRecv` verifies a proof of the next sequence number to be received of the specified channel at the specified port.
 
 ```typescript
 type verifyNextSequenceRecv = (
@@ -362,11 +376,15 @@ Multi-signature or threshold signature schemes can also be used in such a fashio
 
 ###### Proxy clients
 
-Proxy clients verify another (proxy) machine's verification of the machine of interest.
+Proxy clients verify another (proxy) machine's verification of the target machine, by including in the
+proof first a proof of the client state on the proxy machine, and then a secondary proof of the sub-state of
+the target machine with respect to the client state on the proxy machine. This allows the proxy client to
+avoid storing and tracking the consensus state of the target machine itself, at the cost of adding
+security assumptions of proxy machine correctness.
 
 ###### Merklized state trees
 
-For clients of state machines with Merklized state trees, these can be constructed by calling `verifyMembership` or `verifyNonMembership`, using a verified Merkle
+For clients of state machines with Merklized state trees, these functions can be implemented by calling `verifyMembership` or `verifyNonMembership`, using a verified Merkle
 root stored in the `ClientState`, to verify presence or absence of particular key/value pairs in state at particular heights in accordance with [ICS 23](../ics-023-vector-commitments).
 
 ```typescript
