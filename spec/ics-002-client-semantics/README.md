@@ -269,12 +269,6 @@ at a particular finalised height (necessarily associated with a particular commi
 Client types must define functions to authenticate internal state of the state machine which the client tracks.
 Internal implementation details may differ (for example, a loopback client could simply read directly from the state and require no proofs).
 
-Example kinds of implementation
-- Verify Merkle proof
-- Verify signature from single private key
-- Verify signature from threshold or multi-signature key
-- Proxy to other client(s)
-
 ##### Required functions
 
 ```typescript
@@ -305,11 +299,27 @@ type verifyPacketAcknowledgementAbsence = (ClientState, uint64, CommitmentProof,
 type verifyNextSequenceRecv = (ClientState, uint64, CommitmentProof, Identifier, Identifier, uint64) => boolean
 ```
 
-##### Merklized state trees
+##### Implementation strategies
 
-For clients of state machines with Merklized state trees, these can be constructed in accordance with [ICS 23](../ics-023-vector-commitments),
-by calling `verifyMembership` or `verifyNonMembership` to verify presence or absence of particular key/value pairs
-in state at particular heights. The behaviour of these functions MUST comply with the properties defined in [ICS 23](../ics-023-vector-commitments).
+###### Loopback
+
+A loopback client of a local machine merely reads from the local state, to which it must have access.
+
+###### Simple signatures
+
+A client of a solo machine with a known public key checks signatures on messages sent by that local machine,
+which are provided as the `Proof` parameter. The `height` parameter can be used as a replay protection nonce.
+
+Multi-signature or threshold signature schemes can also be used in such a fashion.
+
+###### Proxy clients
+
+Proxy clients verify another (proxy) machine's verification of the machine of interest.
+
+###### Merklized state trees
+
+For clients of state machines with Merklized state trees, these can be constructed by calling `verifyMembership` or `verifyNonMembership`, using a verified Merkle
+root stored in the `ClientState`, to verify presence or absence of particular key/value pairs in state at particular heights in accordance with [ICS 23](../ics-023-vector-commitments).
 
 ```typescript
 type verifyMembership = (ClientState, uint64, CommitmentProof, Path, Value) => boolean
