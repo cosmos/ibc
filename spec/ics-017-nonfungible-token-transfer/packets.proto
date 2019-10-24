@@ -1,0 +1,9 @@
+syntax = 'proto3';
+
+message FungibleTokenPacketData {
+  string id = 1;
+  string tokenMetadataUri = 2;
+  string sender = 3;
+  string receiver = 4;
+  bool source = 5;
+}
