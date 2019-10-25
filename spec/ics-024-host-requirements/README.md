@@ -87,9 +87,12 @@ The `privateStore`:
 
 ### Path-space
 
-At present, IBC/TAO utilises the following path prefixes for the `provableStore` and `privateStore`.
+At present, IBC/TAO recommends the following path prefixes for the `provableStore` and `privateStore`.
 
 Future paths may be used in future versions of the protocol, so the entire key-space in the provable store MUST be reserved for the IBC handler.
+
+Keys used in the provable store MAY safely vary on a per-client-type basis as long as there exists a bipartite mapping between the key formats
+defined herein and the ones actually used in the machine's implementation.
 
 Parts of the private store MAY safely be used for other purposes as long as the IBC handler has exclusive access to the specific keys required.
 Keys used in the private store MAY safely vary as long as there exists a bipartite mapping between the key formats defined herein and the ones
