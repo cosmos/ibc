@@ -302,7 +302,8 @@ type verifyChannelState = (
   clientState: ClientState,
   height: uint64,
   proof: CommitmentProof,
-  connectionIdentifier: Identifier,
+  portIdentifier: Identifier,
+  channelIdentifier: Identifier,
   channelEnd: ChannelEnd)
   => boolean
 ```
@@ -590,25 +591,88 @@ function checkValidityAndUpdateState(
     clientState.verifiedRoots[sequence] = header.commitmentRoot
 }
 
-// state membership verification function defined by the client type
-function verifyMembership(
+function verifyClientConsensusState(
   clientState: ClientState,
-  sequence: uint64,
+  height: uint64,
   proof: CommitmentProof,
-  path: Path,
-  value: Value) {
+  clientIdentifier: Identifier,
+  consensusState: ConsensusState) {
+    path = "clients/{clientIdentifier}/consensusState"
     abortTransactionUnless(!clientState.frozen)
-    return clientState.verifiedRoots[sequence].verifyMembership(path, value, proof)
+    return clientState.verifiedRoots[sequence].verifyMembership(path, consensusState, proof)
 }
 
-// state non-membership function defined by the client type
-function verifyNonMembership(
+function verifyConnectionState(
   clientState: ClientState,
-  sequence: uint64,
+  height: uint64,
   proof: CommitmentProof,
-  path: Path) {
+  connectionIdentifier: Identifier,
+  connectionEnd: ConnectionEnd) {
+    path = "connection/{connectionIdentifier}"
+    abortTransactionUnless(!clientState.frozen)
+    return clientState.verifiedRoots[sequence].verifyMembership(path, connectionEnd, proof)
+}
+
+function verifyChannelState(
+  clientState: ClientState,
+  height: uint64,
+  proof: CommitmentProof,
+  portIdentifier: Identifier,
+  channelIdentifier: Identifier,
+  channelEnd: ChannelEnd) {
+    path = "ports/{portIdentifier}/channels/{channelIdentifier}"
+    abortTransactionUnless(!clientState.frozen)
+    return clientState.verifiedRoots[sequence].verifyMembership(path, channelEnd, proof)
+}
+
+function verifyPacketCommitment(
+  clientState: ClientState,
+  height: uint64,
+  proof: CommitmentProof,
+  portIdentifier: Identifier,
+  channelIdentifier: Identifier,
+  sequence: uint64,
+  commitment: bytes) {
+    path = "ports/{portIdentifier}/channels/{channelIdentifier}/packets/{sequence}"
+    abortTransactionUnless(!clientState.frozen)
+    return clientState.verifiedRoots[sequence].verifyMembership(path, commitment, proof)
+}
+
+function verifyPacketAcknowledgement(
+  clientState: ClientState,
+  height: uint64,
+  proof: CommitmentProof,
+  portIdentifier: Identifier,
+  channelIdentifier: Identifier,
+  sequence: uint64,
+  acknowledgement: bytes) {
+    path = "ports/{portIdentifier}/channels/{channelIdentifier}/acknowledgements/{sequence}"
+    abortTransactionUnless(!clientState.frozen)
+    return clientState.verifiedRoots[sequence].verifyMembership(path, acknowledgement, proof)
+}
+
+function verifyPacketAcknowledgementAbsence(
+  clientState: ClientState,
+  height: uint64,
+  proof: CommitmentProof,
+  portIdentifier: Identifier,
+  channelIdentifier: Identifier,
+  sequence: uint64) {
+    path = "ports/{portIdentifier}/channels/{channelIdentifier}/acknowledgements/{sequence}"
     abortTransactionUnless(!clientState.frozen)
     return clientState.verifiedRoots[sequence].verifyNonMembership(path, proof)
+}
+
+function verifyNextSequenceRecv(
+  clientState: ClientState,
+  height: uint64,
+  proof: CommitmentProof,
+  portIdentifier: Identifier,
+  channelIdentifier: Identifier,
+  nextSequenceRecv: uint64) {
+    path = "ports/{portIdentifier}/channels/{channelIdentifier}/nextSequenceRecv"
+    abortTransactionUnless(!clientState.frozen)
+    return clientState.verifiedRoots[sequence].verifyMembership(path, nextSequenceRecv, proof)
 }
 
 // misbehaviour verification function defined by the client type
