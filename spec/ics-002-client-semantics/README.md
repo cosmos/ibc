@@ -289,6 +289,7 @@ type verifyClientConsensusState = (
 type verifyConnectionState = (
   clientState: ClientState,
   height: uint64,
+  prefix: CommitmentPrefix,
   proof: CommitmentProof,
   connectionIdentifier: Identifier,
   connectionEnd: ConnectionEnd)
@@ -301,6 +302,7 @@ type verifyConnectionState = (
 type verifyChannelState = (
   clientState: ClientState,
   height: uint64,
+  prefix: CommitmentPrefix,
   proof: CommitmentProof,
   portIdentifier: Identifier,
   channelIdentifier: Identifier,
@@ -314,6 +316,7 @@ type verifyChannelState = (
 type verifyPacketCommitment = (
   clientState: ClientState,
   height: uint64,
+  prefix: CommitmentPrefix,
   proof: CommitmentProof,
   portIdentifier: Identifier,
   channelIdentifier: Identifier,
@@ -328,6 +331,7 @@ type verifyPacketCommitment = (
 type verifyPacketAcknowledgement = (
   clientState: ClientState,
   height: uint64,
+  prefix: CommitmentPrefix,
   proof: CommitmentProof,
   portIdentifier: Identifier,
   channelIdentifier: Identifier,
@@ -342,6 +346,7 @@ type verifyPacketAcknowledgement = (
 type verifyPacketAcknowledgementAbsence = (
   clientState: ClientState,
   height: uint64,
+  prefix: CommitmentPrefix,
   proof: CommitmentProof,
   portIdentifier: Identifier,
   channelIdentifier: Identifier,
@@ -355,6 +360,7 @@ type verifyPacketAcknowledgementAbsence = (
 type verifyNextSequenceRecv = (
   clientState: ClientState,
   height: uint64,
+  prefix: CommitmentPrefix,
   proof: CommitmentProof,
   portIdentifier: Identifier,
   channelIdentifier: Identifier,
@@ -594,10 +600,11 @@ function checkValidityAndUpdateState(
 function verifyClientConsensusState(
   clientState: ClientState,
   height: uint64,
+  prefix: CommitmentPrefix,
   proof: CommitmentProof,
   clientIdentifier: Identifier,
   consensusState: ConsensusState) {
-    path = "clients/{clientIdentifier}/consensusState"
+    path = applyPrefix(prefix, "clients/{clientIdentifier}/consensusState")
     abortTransactionUnless(!clientState.frozen)
     return clientState.verifiedRoots[sequence].verifyMembership(path, consensusState, proof)
 }
@@ -605,10 +612,11 @@ function verifyClientConsensusState(
 function verifyConnectionState(
   clientState: ClientState,
   height: uint64,
+  prefix: CommitmentPrefix,
   proof: CommitmentProof,
   connectionIdentifier: Identifier,
   connectionEnd: ConnectionEnd) {
-    path = "connection/{connectionIdentifier}"
+    path = applyPrefix(prefix, "connection/{connectionIdentifier}")
     abortTransactionUnless(!clientState.frozen)
     return clientState.verifiedRoots[sequence].verifyMembership(path, connectionEnd, proof)
 }
@@ -616,11 +624,12 @@ function verifyConnectionState(
 function verifyChannelState(
   clientState: ClientState,
   height: uint64,
+  prefix: CommitmentPrefix,
   proof: CommitmentProof,
   portIdentifier: Identifier,
   channelIdentifier: Identifier,
   channelEnd: ChannelEnd) {
-    path = "ports/{portIdentifier}/channels/{channelIdentifier}"
+    path = applyPrefix(prefix, "ports/{portIdentifier}/channels/{channelIdentifier}")
     abortTransactionUnless(!clientState.frozen)
     return clientState.verifiedRoots[sequence].verifyMembership(path, channelEnd, proof)
 }
@@ -628,12 +637,13 @@ function verifyChannelState(
 function verifyPacketCommitment(
   clientState: ClientState,
   height: uint64,
+  prefix: CommitmentPrefix,
   proof: CommitmentProof,
   portIdentifier: Identifier,
   channelIdentifier: Identifier,
   sequence: uint64,
   commitment: bytes) {
-    path = "ports/{portIdentifier}/channels/{channelIdentifier}/packets/{sequence}"
+    path = applyPrefix(prefix, "ports/{portIdentifier}/channels/{channelIdentifier}/packets/{sequence}")
     abortTransactionUnless(!clientState.frozen)
     return clientState.verifiedRoots[sequence].verifyMembership(path, commitment, proof)
 }
@@ -641,12 +651,13 @@ function verifyPacketCommitment(
 function verifyPacketAcknowledgement(
   clientState: ClientState,
   height: uint64,
+  prefix: CommitmentPrefix,
   proof: CommitmentProof,
   portIdentifier: Identifier,
   channelIdentifier: Identifier,
   sequence: uint64,
   acknowledgement: bytes) {
-    path = "ports/{portIdentifier}/channels/{channelIdentifier}/acknowledgements/{sequence}"
+    path = applyPrefix(prefix, "ports/{portIdentifier}/channels/{channelIdentifier}/acknowledgements/{sequence}")
     abortTransactionUnless(!clientState.frozen)
     return clientState.verifiedRoots[sequence].verifyMembership(path, acknowledgement, proof)
 }
@@ -654,11 +665,12 @@ function verifyPacketAcknowledgement(
 function verifyPacketAcknowledgementAbsence(
   clientState: ClientState,
   height: uint64,
+  prefix: CommitmentPrefix,
   proof: CommitmentProof,
   portIdentifier: Identifier,
   channelIdentifier: Identifier,
   sequence: uint64) {
-    path = "ports/{portIdentifier}/channels/{channelIdentifier}/acknowledgements/{sequence}"
+    path = applyPrefix(prefix, "ports/{portIdentifier}/channels/{channelIdentifier}/acknowledgements/{sequence}")
     abortTransactionUnless(!clientState.frozen)
     return clientState.verifiedRoots[sequence].verifyNonMembership(path, proof)
 }
@@ -666,11 +678,12 @@ function verifyPacketAcknowledgementAbsence(
 function verifyNextSequenceRecv(
   clientState: ClientState,
   height: uint64,
+  prefix: CommitmentPrefix,
   proof: CommitmentProof,
   portIdentifier: Identifier,
   channelIdentifier: Identifier,
   nextSequenceRecv: uint64) {
-    path = "ports/{portIdentifier}/channels/{channelIdentifier}/nextSequenceRecv"
+    path = applyPrefix(prefix, "ports/{portIdentifier}/channels/{channelIdentifier}/nextSequenceRecv")
     abortTransactionUnless(!clientState.frozen)
     return clientState.verifiedRoots[sequence].verifyMembership(path, nextSequenceRecv, proof)
 }
