@@ -492,9 +492,9 @@ The IBC handler performs the following steps in order:
 - Checks that the packet metadata matches the channel & connection information
 - Checks that the timeout height specified has not already passed on the destination chain
 - Increments the send sequence counter associated with the channel
-- Stores a constant-size commitment to the packet data
+- Stores a constant-size commitment to the packet data & packet timeout
 
-Note that the full packet is not stored in the state of the chain - merely a short hash-commitment. The packet data can be calculated from the transaction execution and possibly returned as log output which relayers can index.
+Note that the full packet is not stored in the state of the chain - merely a short hash-commitment to the data & timeout value. The packet data can be calculated from the transaction execution and possibly returned as log output which relayers can index.
 
 ```typescript
 function sendPacket(packet: Packet) {
@@ -521,7 +521,7 @@ function sendPacket(packet: Packet) {
 
     nextSequenceSend = nextSequenceSend + 1
     provableStore.set(nextSequenceSendPath(packet.sourcePort, packet.sourceChannel), nextSequenceSend)
-    provableStore.set(packetCommitmentPath(packet.sourcePort, packet.sourceChannel, packet.sequence), hash(packet.data))
+    provableStore.set(packetCommitmentPath(packet.sourcePort, packet.sourceChannel, packet.sequence), hash(packet.data, packet.timeout))
 }
 ```
 
@@ -568,7 +568,7 @@ function recvPacket(
       packet.sourcePort,
       packet.sourceChannel,
       packet.sequence,
-      hash(packet.data)
+      hash(packet.data, packet.timeout)
     ))
 
     // all assertions passed (except sequence check), we can alter state
@@ -620,7 +620,7 @@ function acknowledgePacket(
 
     // verify we sent the packet and haven't cleared it out yet
     abortTransactionUnless(provableStore.get(packetCommitmentPath(packet.sourcePort, packet.sourceChannel, packet.sequence))
-           === hash(packet.data))
+           === hash(packet.data, packet.timeout))
 
     // abort transaction unless correct acknowledgement on counterparty chain
     abortTransactionUnless(connection.verifyPacketAcknowledgement(
@@ -688,7 +688,7 @@ function timeoutPacket(
 
     // verify we actually sent this packet, check the store
     abortTransactionUnless(provableStore.get(packetCommitmentPath(packet.sourcePort, packet.sourceChannel, packet.sequence))
-           === hash(packet.data))
+           === hash(packet.data, packet.timeout))
 
     if channel.order === ORDERED
       // ordered channel: check that the recv sequence is as claimed
@@ -750,7 +750,7 @@ function timeoutOnClose(
 
     // verify we actually sent this packet, check the store
     abortTransactionUnless(provableStore.get(packetCommitmentPath(packet.sourcePort, packet.sourceChannel, packet.sequence))
-           === hash(packet.data))
+           === hash(packet.data, packet.timeout))
 
     // check that the opposing channel end has closed
     expected = ChannelEnd{CLOSED, channel.order, channel.portIdentifier,
@@ -822,7 +822,7 @@ function cleanupPacket(
 
     // verify we actually sent the packet, check the store
     abortTransactionUnless(provableStore.get(packetCommitmentPath(packet.sourcePort, packet.sourceChannel, packet.sequence))
-               === hash(packet.data))
+               === hash(packet.data, packet.timeout))
 
     if channel.order === ORDERED
       // check that the recv sequence is as claimed
