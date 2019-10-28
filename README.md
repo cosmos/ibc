@@ -50,7 +50,7 @@ All standards at or past the "Draft" stage are listed here in order of their ICS
 
 | Interchain Standard Number                     | Standard Title             | Stage |
 | ---------------------------------------------- | -------------------------- | ----- |
-| [2](spec/ics-002-client-semantics)             | Validity Predicate         | Draft |
+| [2](spec/ics-002-client-semantics)             | Client Semantics           | Draft |
 | [3](spec/ics-003-connection-semantics)         | Connection Semantics       | Draft |
 | [4](spec/ics-004-channel-and-packet-semantics) | Channel & Packet Semantics | Draft |
 | [5](spec/ics-005-port-allocation)              | Port Allocation            | Draft |
