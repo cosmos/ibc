@@ -1,4 +1,4 @@
-personal_ws-1.1 en 455 
+personal_ws-1.1 en 464 
 unescrow
 onChanCloseConfirm
 clientKey
@@ -42,6 +42,7 @@ handleClientFreeze
 validRound
 recvPacket
 duplicable
+verifyPacketCommitment
 collateralising
 OpValidityPredicate
 packetCommitmentPath
@@ -110,6 +111,7 @@ handlePacketTimeout
 PacketSend
 unescrowing
 InitialPubkey
+verifyPacketAcknowledgementAbsence
 handlePacketRecv
 verifiedRoots
 coffeescript
@@ -117,6 +119,7 @@ proofTry
 escrowing
 publicKey
 tokenize
+verifyPacketAcknowledgement
 interchain
 Ethereum
 PacketTimeout
@@ -136,7 +139,7 @@ pendingDatagrams
 len
 handlePacketTimeoutClose
 startRound
-ChannelEnd
+channelEnd
 timeoutPropose
 counterparty
 connectionPath
@@ -244,7 +247,7 @@ nextSequenceSendKey
 datatypes
 getRoot
 Ethereum's
-ConnectionEnd
+connectionEnd
 expectedConsensusState
 handleChanOpenInit
 YYYY
@@ -317,6 +320,7 @@ onChanOpenConfirm
 counterintuitive
 ClientUpdate
 ClientFreeze
+verifyOutgoingPacket
 VMs
 ConnectionState
 txs
@@ -337,6 +341,7 @@ channelIdentifier
 handleClientCreate
 channelSet
 ABCI
+verifyConnectionState
 struct
 consensusState
 Automatability
@@ -365,6 +370,7 @@ Multichain
 connId
 blockchain's
 blockchains
+Merklized
 Nomic
 serialisable
 chanOpenTry
@@ -379,6 +385,7 @@ keyspaces
 counterpartyStateRoot
 JSON
 PacketAcknowledgement
+verifyClientConsensusState
 consensusHeight
 createMembershipProof
 Yun
@@ -400,6 +407,7 @@ clientIdentifier
 handleChanOpenTry
 pickVersion
 chanOpenTimeout
+verifyNextSequenceRecv
 th
 unallocated
 portIdentifier
@@ -415,6 +423,7 @@ Strawman
 tx
 bytestring
 validateConnectionIdentifier
+verifyChannelState
 updatePort
 incentivisation
 datastream

@@ -134,29 +134,86 @@ function removeConnectionFromClient(
 }
 ```
 
-Two helper functions are defined to provide automatic application of `CommitmentPrefix`. In the other parts of the specifications,
-these functions MUST be used for introspecting other chains' state, instead of directly calling the `verifyMembership` or `verifyNonMembership` function on the client.
+Helper functions are defined by the connection to pass the `CommitmentPrefix` associated with the connection to the verification function
+provided by the client. In the other parts of the specifications, these functions MUST be used for introspecting other chains' state,
+instead of directly calling the verification functions on the client.
 
 ```typescript
-function verifyMembership(
+function verifyClientConsensusState(
   connection: ConnectionEnd,
   height: uint64,
   proof: CommitmentProof,
-  path: Path,
-  value: Value): bool {
+  clientIdentifier: Identifier,
+  consensusState: ConsensusState) {
     client = queryClient(connection.clientIdentifier)
-    client.verifyMembership(height, proof, applyPrefix(connection.counterpartyPrefix, path), value)
+    return client.verifyClientConsensusState(connection, height, connection.counterpartyPrefix, proof, clientIdentifier, consensusState)
 }
-```
 
-```typescript
-function verifyNonMembership(
+function verifyConnectionState(
   connection: ConnectionEnd,
   height: uint64,
   proof: CommitmentProof,
-  path: Path): bool {
+  connectionIdentifier: Identifier,
+  connectionEnd: ConnectionEnd) {
     client = queryClient(connection.clientIdentifier)
-    client.verifyNonMembership(height, proof, applyPrefix(connection.counterpartyPrefix, path))
+    return client.verifyConnectionState(connection, height, connection.counterpartyPrefix, proof, connectionIdentifier, connectionEnd)
+}
+
+function verifyChannelState(
+  connection: ConnectionEnd,
+  height: uint64,
+  proof: CommitmentProof,
+  portIdentifier: Identifier,
+  channelIdentifier: Identifier,
+  channelEnd: ChannelEnd) {
+    client = queryClient(connection.clientIdentifier)
+    return client.verifyChannelState(connection, height, connection.counterpartyPrefix, proof, portIdentifier, channelIdentifier, channelEnd)
+}
+
+function verifyPacketCommitment(
+  connection: ConnectionEnd,
+  height: uint64,
+  proof: CommitmentProof,
+  portIdentifier: Identifier,
+  channelIdentifier: Identifier,
+  sequence: uint64,
+  commitment: bytes) {
+    client = queryClient(connection.clientIdentifier)
+    return client.verifyPacketCommitment(connection, height, connection.counterpartyPrefix, proof, portIdentifier, channelIdentifier, commitment)
+}
+
+function verifyPacketAcknowledgement(
+  connection: ConnectionEnd,
+  height: uint64,
+  proof: CommitmentProof,
+  portIdentifier: Identifier,
+  channelIdentifier: Identifier,
+  sequence: uint64,
+  acknowledgement: bytes) {
+    client = queryClient(connection.clientIdentifier)
+    return client.verifyPacketAcknowledgement(connection, height, connection.counterpartyPrefix, proof, portIdentifier, channelIdentifier, acknowledgement)
+}
+
+function verifyPacketAcknowledgementAbsence(
+  connection: ConnectionEnd,
+  height: uint64,
+  proof: CommitmentProof,
+  portIdentifier: Identifier,
+  channelIdentifier: Identifier,
+  sequence: uint64) {
+    client = queryClient(connection.clientIdentifier)
+    return client.verifyPacketAcknowledgementAbsence(connection, height, connection.counterpartyPrefix, proof, portIdentifier, channelIdentifier)
+}
+
+function verifyNextSequenceRecv(
+  connection: ConnectionEnd,
+  height: uint64,
+  proof: CommitmentProof,
+  portIdentifier: Identifier,
+  channelIdentifier: Identifier,
+  nextSequenceRecv: uint64) {
+    client = queryClient(connection.clientIdentifier)
+    return client.verifyNextSequenceRecv(connection, height, connection.counterpartyPrefix, proof, portIdentifier, channelIdentifier, nextSequenceRecv)
 }
 ```
 
@@ -264,14 +321,8 @@ function connOpenTry(
     version = pickVersion(counterpartyVersions)
     connection = ConnectionEnd{state, counterpartyConnectionIdentifier, counterpartyPrefix,
                                clientIdentifier, counterpartyClientIdentifier, version}
-    abortTransactionUnless(
-      connection.verifyMembership(proofHeight, proofInit,
-                                  connectionPath(counterpartyConnectionIdentifier),
-                                  expected))
-    abortTransactionUnless(
-      connection.verifyMembership(proofHeight, proofInit,
-                                  consensusStatePath(counterpartyClientIdentifier),
-                                  expectedConsensusState))
+    abortTransactionUnless(connection.verifyConnectionState(proofHeight, proofInit, counterpartyConnectionIdentifier, expected))
+    abortTransactionUnless(connection.verifyClientConsensusState(proofHeight, proofInit, counterpartyClientIdentifier, expectedConsensusState))
     abortTransactionUnless(provableStore.get(connectionPath(desiredIdentifier)) === null)
     identifier = desiredIdentifier
     state = TRYOPEN
@@ -296,14 +347,8 @@ function connOpenAck(
     expected = ConnectionEnd{TRYOPEN, identifier, getCommitmentPrefix(),
                              connection.counterpartyClientIdentifier, connection.clientIdentifier,
                              version}
-    abortTransactionUnless(
-      connection.verifyMembership(proofHeight, proofTry,
-                                  connectionPath(connection.counterpartyConnectionIdentifier),
-                                  expected))
-    abortTransactionUnless(
-      connection.verifyMembership(proofHeight, proofTry,
-                                  consensusStatePath(connection.counterpartyClientIdentifier),
-                                  expectedConsensusState))
+    abortTransactionUnless(connection.verifyConnectionState(proofHeight, proofTry, connection.counterpartyConnectionIdentifier, expected))
+    abortTransactionUnless(connection.verifyClientConsensusState(proofHeight, proofTry, connection.counterpartyClientIdentifier, expectedConsensusState))
     connection.state = OPEN
     abortTransactionUnless(getCompatibleVersions().indexOf(version) !== -1)
     connection.version = version
@@ -322,10 +367,7 @@ function connOpenConfirm(
     abortTransactionUnless(connection.state === TRYOPEN)
     expected = ConnectionEnd{OPEN, identifier, getCommitmentPrefix(), connection.counterpartyClientIdentifier,
                              connection.clientIdentifier, connection.version}
-    abortTransactionUnless(
-      connection.verifyMembership(proofHeight, proofAck,
-                                  connectionPath(connection.counterpartyConnectionIdentifier),
-                                  expected))
+    abortTransactionUnless(connection.verifyConnectionState(proofHeight, proofAck, connection.counterpartyConnectionIdentifier, expected))
     connection.state = OPEN
     provableStore.set(connectionPath(identifier), connection)
 }

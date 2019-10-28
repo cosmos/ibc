@@ -266,9 +266,133 @@ at a particular finalised height (necessarily associated with a particular commi
 
 #### State verification
 
-Client types must define functions, in accordance with [ICS 23](../ics-023-vector-commitments), to verify presence or absence of particular key/value pairs
-in state at particular heights. The behaviour of these functions MUST comply with the properties defined in [ICS 23](../ics-023-vector-commitments); however,
-internal implementation details may differ (for example, a loopback client could simply read directly from the state and require no proofs).
+Client types must define functions to authenticate internal state of the state machine which the client tracks.
+Internal implementation details may differ (for example, a loopback client could simply read directly from the state and require no proofs).
+
+##### Required functions
+
+`verifyClientConsensusState` verifies a proof of the consensus state of the specified client stored on the target machine.
+
+```typescript
+type verifyClientConsensusState = (
+  clientState: ClientState,
+  height: uint64,
+  proof: CommitmentProof,
+  clientIdentifier: Identifier,
+  consensusState: ConsensusState)
+  => boolean
+```
+
+`verifyConnectionState` verifies a proof of the connection state of the specified connection end stored on the target machine.
+
+```typescript
+type verifyConnectionState = (
+  clientState: ClientState,
+  height: uint64,
+  prefix: CommitmentPrefix,
+  proof: CommitmentProof,
+  connectionIdentifier: Identifier,
+  connectionEnd: ConnectionEnd)
+  => boolean
+```
+
+`verifyChannelState` verifies a proof of the channel state of the specified channel end, under the specified port, stored on the target machine.
+
+```typescript
+type verifyChannelState = (
+  clientState: ClientState,
+  height: uint64,
+  prefix: CommitmentPrefix,
+  proof: CommitmentProof,
+  portIdentifier: Identifier,
+  channelIdentifier: Identifier,
+  channelEnd: ChannelEnd)
+  => boolean
+```
+
+`verifyPacketCommitment` verifies a proof of an outgoing packet commitment at the specified port, specified channel, and specified sequence.
+
+```typescript
+type verifyPacketCommitment = (
+  clientState: ClientState,
+  height: uint64,
+  prefix: CommitmentPrefix,
+  proof: CommitmentProof,
+  portIdentifier: Identifier,
+  channelIdentifier: Identifier,
+  sequence: uint64,
+  commitment: bytes)
+  => boolean
+```
+
+`verifyPacketAcknowledgement` verifies a proof of an incoming packet acknowledgement at the specified port, specified channel, and specified sequence.
+
+```typescript
+type verifyPacketAcknowledgement = (
+  clientState: ClientState,
+  height: uint64,
+  prefix: CommitmentPrefix,
+  proof: CommitmentProof,
+  portIdentifier: Identifier,
+  channelIdentifier: Identifier,
+  sequence: uint64,
+  acknowledgement: bytes)
+  => boolean
+```
+
+`verifyPacketAcknowledgementAbsence` verifies a proof of the absence of an incoming packet acknowledgement at the specified port, specified channel, and specified sequence.
+
+```typescript
+type verifyPacketAcknowledgementAbsence = (
+  clientState: ClientState,
+  height: uint64,
+  prefix: CommitmentPrefix,
+  proof: CommitmentProof,
+  portIdentifier: Identifier,
+  channelIdentifier: Identifier,
+  sequence: uint64)
+  => boolean
+```
+
+`verifyNextSequenceRecv` verifies a proof of the next sequence number to be received of the specified channel at the specified port.
+
+```typescript
+type verifyNextSequenceRecv = (
+  clientState: ClientState,
+  height: uint64,
+  prefix: CommitmentPrefix,
+  proof: CommitmentProof,
+  portIdentifier: Identifier,
+  channelIdentifier: Identifier,
+  nextSequenceRecv: uint64)
+  => boolean
+```
+
+##### Implementation strategies
+
+###### Loopback
+
+A loopback client of a local machine merely reads from the local state, to which it must have access.
+
+###### Simple signatures
+
+A client of a solo machine with a known public key checks signatures on messages sent by that local machine,
+which are provided as the `Proof` parameter. The `height` parameter can be used as a replay protection nonce.
+
+Multi-signature or threshold signature schemes can also be used in such a fashion.
+
+###### Proxy clients
+
+Proxy clients verify another (proxy) machine's verification of the target machine, by including in the
+proof first a proof of the client state on the proxy machine, and then a secondary proof of the sub-state of
+the target machine with respect to the client state on the proxy machine. This allows the proxy client to
+avoid storing and tracking the consensus state of the target machine itself, at the cost of adding
+security assumptions of proxy machine correctness.
+
+###### Merklized state trees
+
+For clients of state machines with Merklized state trees, these functions can be implemented by calling `verifyMembership` or `verifyNonMembership`, using a verified Merkle
+root stored in the `ClientState`, to verify presence or absence of particular key/value pairs in state at particular heights in accordance with [ICS 23](../ics-023-vector-commitments).
 
 ```typescript
 type verifyMembership = (ClientState, uint64, CommitmentProof, Path, Value) => boolean
@@ -473,25 +597,95 @@ function checkValidityAndUpdateState(
     clientState.verifiedRoots[sequence] = header.commitmentRoot
 }
 
-// state membership verification function defined by the client type
-function verifyMembership(
+function verifyClientConsensusState(
   clientState: ClientState,
-  sequence: uint64,
+  height: uint64,
+  prefix: CommitmentPrefix,
   proof: CommitmentProof,
-  path: Path,
-  value: Value) {
+  clientIdentifier: Identifier,
+  consensusState: ConsensusState) {
+    path = applyPrefix(prefix, "clients/{clientIdentifier}/consensusState")
     abortTransactionUnless(!clientState.frozen)
-    return clientState.verifiedRoots[sequence].verifyMembership(path, value, proof)
+    return clientState.verifiedRoots[sequence].verifyMembership(path, consensusState, proof)
 }
 
-// state non-membership function defined by the client type
-function verifyNonMembership(
+function verifyConnectionState(
   clientState: ClientState,
-  sequence: uint64,
+  height: uint64,
+  prefix: CommitmentPrefix,
   proof: CommitmentProof,
-  path: Path) {
+  connectionIdentifier: Identifier,
+  connectionEnd: ConnectionEnd) {
+    path = applyPrefix(prefix, "connection/{connectionIdentifier}")
+    abortTransactionUnless(!clientState.frozen)
+    return clientState.verifiedRoots[sequence].verifyMembership(path, connectionEnd, proof)
+}
+
+function verifyChannelState(
+  clientState: ClientState,
+  height: uint64,
+  prefix: CommitmentPrefix,
+  proof: CommitmentProof,
+  portIdentifier: Identifier,
+  channelIdentifier: Identifier,
+  channelEnd: ChannelEnd) {
+    path = applyPrefix(prefix, "ports/{portIdentifier}/channels/{channelIdentifier}")
+    abortTransactionUnless(!clientState.frozen)
+    return clientState.verifiedRoots[sequence].verifyMembership(path, channelEnd, proof)
+}
+
+function verifyPacketCommitment(
+  clientState: ClientState,
+  height: uint64,
+  prefix: CommitmentPrefix,
+  proof: CommitmentProof,
+  portIdentifier: Identifier,
+  channelIdentifier: Identifier,
+  sequence: uint64,
+  commitment: bytes) {
+    path = applyPrefix(prefix, "ports/{portIdentifier}/channels/{channelIdentifier}/packets/{sequence}")
+    abortTransactionUnless(!clientState.frozen)
+    return clientState.verifiedRoots[sequence].verifyMembership(path, commitment, proof)
+}
+
+function verifyPacketAcknowledgement(
+  clientState: ClientState,
+  height: uint64,
+  prefix: CommitmentPrefix,
+  proof: CommitmentProof,
+  portIdentifier: Identifier,
+  channelIdentifier: Identifier,
+  sequence: uint64,
+  acknowledgement: bytes) {
+    path = applyPrefix(prefix, "ports/{portIdentifier}/channels/{channelIdentifier}/acknowledgements/{sequence}")
+    abortTransactionUnless(!clientState.frozen)
+    return clientState.verifiedRoots[sequence].verifyMembership(path, acknowledgement, proof)
+}
+
+function verifyPacketAcknowledgementAbsence(
+  clientState: ClientState,
+  height: uint64,
+  prefix: CommitmentPrefix,
+  proof: CommitmentProof,
+  portIdentifier: Identifier,
+  channelIdentifier: Identifier,
+  sequence: uint64) {
+    path = applyPrefix(prefix, "ports/{portIdentifier}/channels/{channelIdentifier}/acknowledgements/{sequence}")
     abortTransactionUnless(!clientState.frozen)
     return clientState.verifiedRoots[sequence].verifyNonMembership(path, proof)
+}
+
+function verifyNextSequenceRecv(
+  clientState: ClientState,
+  height: uint64,
+  prefix: CommitmentPrefix,
+  proof: CommitmentProof,
+  portIdentifier: Identifier,
+  channelIdentifier: Identifier,
+  nextSequenceRecv: uint64) {
+    path = applyPrefix(prefix, "ports/{portIdentifier}/channels/{channelIdentifier}/nextSequenceRecv")
+    abortTransactionUnless(!clientState.frozen)
+    return clientState.verifiedRoots[sequence].verifyMembership(path, nextSequenceRecv, proof)
 }
 
 // misbehaviour verification function defined by the client type
