@@ -1,4 +1,5 @@
 # IBC Working Group
+
 Join and contribute to the IBC working group 
 
 The evolution of IBC requires cross-industry collaboration to support developing standards that are secure, open, and deployable. The IBC working group is a growing team of contributors supporting the standardization of blockchain development from protocol level to applications. 
