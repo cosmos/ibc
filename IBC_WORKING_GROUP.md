@@ -22,12 +22,12 @@ The founding IBC team
 
  
 
-IBC working group bi-weekly calls:
+IBC working group bi-weekly calls
 
-- November 14th https://docs.google.com/document/d/1ip5IMIb00vK0nZ0ZvYjshN1U0RXmHijHsRSSK4CeHFA/edit
+- November 14th, 2019 17:00 UTC 
+- November 28th, 2019 17:00 UTC
+- December 12th, 2019 17: 00 UTC 
 
-  https://tendermint.zoom.us/j/937790906
 
 
 
-https://docs.google.com/document/d/1ip5IMIb00vK0nZ0ZvYjshN1U0RXmHijHsRSSK4CeHFA/view
