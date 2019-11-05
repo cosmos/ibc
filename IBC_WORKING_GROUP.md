@@ -1,12 +1,10 @@
-# IBC Working Group
+**Join and contribute to the IBC working group** 
 
-Join and contribute to the IBC working group 
-
-Purpose: The evolution of IBC requires cross-industry collaboration to support developing standards that are secure, open, and deployable. The IBC working group is a growing team of contributors supporting the standardization of blockchain development from protocol level to applications. Join the IBC [Working Group](https://zc.vg/sf/giAEr) for email and meeting updates.
+Purpose: The evolution of IBC requires cross-industry collaboration to support developing standards that are secure, open, and deployable. The IBC working group is a growing team of contributors supporting the standardization of blockchain development from protocol level to applications. Join the IBC [Working Group](https://zc.vg/sf/giAEr) list for email and meeting updates.
 
 The IBC working group is technical in nature as the goal is to propose, implement and design templates for cross-chain interoperability.  
 
-IBC working group bi-weekly calls
+Upcoming IBC working group calls (usually held bi-weekly)
 
 - November 14th, 2019 17:00 UTC 
 - November 28th, 2019 17:00 UTC
@@ -14,7 +12,7 @@ IBC working group bi-weekly calls
 
 Currently the IBC working group is being actively led and managed by Tendermint (All in Bits), Agoric and the Interchain Foundation. Over time, we anticipate this will shift into breakout working groups and a more decentralized way of managing the interoperability standards developement process. 
 
-Pior to each meeting, an issue will be created with a proposed agenda that the larger working group can comment on. Proposers of comments, topics and agenda items should join the call to discuss with the IBC working group 
+Pior to each meeting, an issue will be created with a proposed agenda for comments and collaboration from the larger working group. We invite IBC working group members to contribute to agenda items and  join the bi-weekly call to discuss them in conjunction with the founding IBC team.
 
 The founding IBC team
 
@@ -27,6 +25,7 @@ The founding IBC team
 - Chris Hibbert, Software Developer at Agoric
 - Brian Warner, Software Developer at Agoric
 - Jae Kwon, Founder of Tendermint and Cosmos Network
+- Anca Zamfir, Distributed systems engineer at the Interchain Foundation
 
 
 
