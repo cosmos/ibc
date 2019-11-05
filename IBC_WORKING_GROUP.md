@@ -2,10 +2,19 @@
 
 Join and contribute to the IBC working group 
 
-The evolution of IBC requires cross-industry collaboration to support developing standards that are secure, open, and deployable. The IBC working group is a growing team of contributors supporting the standardization of blockchain development from protocol level to applications. 
+Purpose: The evolution of IBC requires cross-industry collaboration to support developing standards that are secure, open, and deployable. The IBC working group is a growing team of contributors supporting the standardization of blockchain development from protocol level to applications. Join the IBC [Working Group](https://zc.vg/sf/giAEr) for email and meeting updates.
 
-Join the IBC [Working Group](https://zc.vg/sf/giAEr) for email and meeting updates 
+The IBC working group is technical in nature as the goal is to propose, implement and design templates for cross-chain interoperability.  
 
+IBC working group bi-weekly calls
+
+- November 14th, 2019 17:00 UTC 
+- November 28th, 2019 17:00 UTC
+- December 12th, 2019 17: 00 UTC 
+
+Currently the IBC working group is being actively led and managed by Tendermint (All in Bits), Agoric and the Interchain Foundation. Over time, we anticipate this will shift into breakout working groups and a more decentralized way of managing the interoperability standards developement process. 
+
+Pior to each meeting, an issue will be created with a proposed agenda that the larger working group can comment on. Proposers of comments, topics and agenda items should join the call to discuss with the IBC working group 
 
 The founding IBC team
 
@@ -21,11 +30,7 @@ The founding IBC team
 
 
 
-IBC working group bi-weekly calls
 
-- November 14th, 2019 17:00 UTC 
-- November 28th, 2019 17:00 UTC
-- December 12th, 2019 17: 00 UTC 
 
 
 
