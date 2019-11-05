@@ -4,9 +4,8 @@ Join and contribute to the IBC working group
 
 The evolution of IBC requires cross-industry collaboration to support developing standards that are secure, open, and deployable. The IBC working group is a growing team of contributors supporting the standardization of blockchain development from protocol level to applications. 
 
-Join the IBC [Working Group](https://zc.vg/sf/giAEr) email updates
+Join the IBC [Working Group](https://zc.vg/sf/giAEr) for email and meeting updates 
 
-Join the IBC Telegram channel
 
 The founding IBC team
 
@@ -20,7 +19,7 @@ The founding IBC team
 - Brian Warner, Software Developer at Agoric
 - Jae Kwon, Founder of Tendermint and Cosmos Network
 
- 
+
 
 IBC working group bi-weekly calls
 
