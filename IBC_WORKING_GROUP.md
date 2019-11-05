@@ -4,15 +4,17 @@ Purpose: The evolution of IBC requires cross-industry collaboration to support d
 
 The IBC working group is technical in nature as the goal is to propose, implement and design templates for cross-chain interoperability.  
 
-Upcoming IBC working group calls (usually held bi-weekly)
+Upcoming IBC working group calls (Dial in details are provided in the issue for the upcoming meeting)
 
 - November 14th, 2019 17:00 UTC 
 - November 28th, 2019 17:00 UTC
 - December 12th, 2019 17: 00 UTC 
 
+What is the IBC working goup:
 Currently the IBC working group is being actively led and managed by Tendermint (All in Bits), Agoric and the Interchain Foundation. Over time, we anticipate this will shift into breakout working groups and a more decentralized way of managing the interoperability standards developement process. 
 
-Pior to each meeting, an issue will be created with a proposed agenda for comments and collaboration from the larger working group. We invite IBC working group members to contribute to agenda items and  join the bi-weekly call to discuss them in conjunction with the founding IBC team.
+How is works:
+Following each IBC working group meeting, an new issue for the next meeting will be created with a proposed agenda for comments and collaboration from the larger working group. During the two week timeframe between calls, we invite IBC working group members to contribute to agenda  and  join the bi-weekly call to discuss the topics in conjunction with the founding IBC team. Upon concluding a meeting, a recording will be posted and the details and notes will be published in the associated issue. 
 
 The founding IBC team
 
