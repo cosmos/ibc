@@ -13,7 +13,7 @@ Upcoming IBC working group calls (Dial in details are provided in the issue for 
 What is the IBC working goup:
 Currently the IBC working group is being actively led and managed by Tendermint (All in Bits), Agoric and the Interchain Foundation. Over time, we anticipate this will shift into breakout working groups and a more decentralized way of managing the interoperability standards developement process. 
 
-How is works:
+How it works:
 Following each IBC working group meeting, an new issue for the next meeting will be created with a proposed agenda for comments and collaboration from the larger working group. During the two week timeframe between calls, we invite IBC working group members to contribute to the next meeting's agenda and  join the bi-weekly call to discuss the topics in conjunction with the founding IBC team. Upon concluding a meeting, a recording will be posted and the details and notes will be published in the associated issue. 
 
 The founding IBC team:
