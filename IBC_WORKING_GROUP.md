@@ -19,7 +19,7 @@ Following each IBC working group meeting, an new issue for the next meeting will
 The founding IBC team:
 
 - Mark S. Miller, Chief Scientist at Agoric
-- Chris Goes, Research and Engineering at Tendermint/Cosmos contributor
+- Christopher Goes, Research and Engineering at Tendermint/Cosmos contributor
 - Joon Yun, Research and Engineering at Tendermint/Cosmos contributor
 - Dean Tribble, CEO of Agoric
 - Ethan Buchman, Technical Director at the Interchain Foundation
