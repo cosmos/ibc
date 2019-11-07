@@ -16,7 +16,7 @@ Currently the IBC working group is being actively led and managed by Tendermint 
 How is works:
 Following each IBC working group meeting, an new issue for the next meeting will be created with a proposed agenda for comments and collaboration from the larger working group. During the two week timeframe between calls, we invite IBC working group members to contribute to agenda  and  join the bi-weekly call to discuss the topics in conjunction with the founding IBC team. Upon concluding a meeting, a recording will be posted and the details and notes will be published in the associated issue. 
 
-The founding IBC team
+The founding IBC team:
 
 - Mark S. Miller, Chief Scientist at Agoric
 - Chris Goes, Research and Engineering at Tendermint/Cosmos contributor
