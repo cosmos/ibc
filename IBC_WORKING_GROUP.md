@@ -10,7 +10,7 @@ Upcoming IBC working group calls (Dial in details are provided in the issue for 
 - November 28th, 2019 17:00 UTC
 - December 12th, 2019 17:00 UTC 
 
-What is the IBC working goup:
+What is the IBC working group:
 Currently the IBC working group is being actively led and managed by Tendermint (All in Bits), Agoric and the Interchain Foundation. Over time, we anticipate this will shift into breakout working groups and a more decentralized way of managing the interoperability standards developement process. 
 
 How it works:
@@ -29,4 +29,4 @@ The founding IBC team:
 - Jae Kwon, Founder of Tendermint and Cosmos Network
 - Anca Zamfir, Distributed systems engineer at the Interchain Foundation
 
-* The meeting and format of this working group uses a similar structure (inspired by) the Ethereum All Core Devs working group
+* The meeting and format of this working group uses a similar structure (inspired by) the [Ethereum All Core Devs working group](https://github.com/ethereum/pm)

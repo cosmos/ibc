@@ -18,6 +18,8 @@ For a list of IBC implementations, IBC-supporting blockchains, and special IBC b
 
 To add your project to this list, submit a pull request.
 
+Learn more about the [IBC Working Group](./IBC_WORKING_GROUP.md).
+
 ## Standardisation
 
 Please see [ICS 1](spec/ics-001-ics-standard) for a description of what a standard entails.
