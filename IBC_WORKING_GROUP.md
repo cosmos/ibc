@@ -8,7 +8,7 @@ Upcoming IBC working group calls (Dial in details are provided in the issue for 
 
 - November 14th, 2019 17:00 UTC 
 - November 28th, 2019 17:00 UTC
-- December 12th, 2019 17: 00 UTC 
+- December 12th, 2019 17:00 UTC 
 
 What is the IBC working goup:
 Currently the IBC working group is being actively led and managed by Tendermint (All in Bits), Agoric and the Interchain Foundation. Over time, we anticipate this will shift into breakout working groups and a more decentralized way of managing the interoperability standards developement process. 
