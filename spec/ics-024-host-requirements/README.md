@@ -109,7 +109,7 @@ actually used in the private store implementation.
 | provableStore  | "ports/{identifier}/channels/{identifier}/key"                           | CapabilityKey     | [ICS 4](../ics-004-channel-and-packet-semantics) |
 | provableStore  | "ports/{identifier}/channels/{identifier}/nextSequenceRecv"              | uint64            | [ICS 4](../ics-004-channel-and-packet-semantics) |
 | provableStore  | "ports/{identifier}/channels/{identifier}/packets/{sequence}"            | bytes             | [ICS 4](../ics-004-channel-and-packet-semantics) |
-| provableStore  | "ports/{identifier}/channels/{identifier}/acknowledgements/{sequence}"    | bytes             | [ICS 4](../ics-004-channel-and-packet-semantics) |
+| provableStore  | "ports/{identifier}/channels/{identifier}/acknowledgements/{sequence}"   | bytes             | [ICS 4](../ics-004-channel-and-packet-semantics) |
 | privateStore   | "callbacks/{identifier}"                                                 | ModuleCallbacks   | [ICS 26](../ics-026-routing-module) |
 
 ### Module layout
