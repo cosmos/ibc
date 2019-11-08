@@ -1,4 +1,4 @@
-personal_ws-1.1 en 464 
+personal_ws-1.1 en 478 
 unescrow
 onChanCloseConfirm
 clientKey
@@ -48,6 +48,7 @@ OpValidityPredicate
 packetCommitmentPath
 getCurrentHeight
 EIP
+Anca
 Cephalopod
 modularity
 EmptyLogStore
@@ -55,6 +56,7 @@ checkVersion
 handleConnOpenInit
 connOpenTry
 boolean
+Kwon
 LaTeX
 handlePacketTimeoutOnClose
 CommitmentProof
@@ -91,6 +93,7 @@ clientType
 nextSequenceRecvKey
 Protobuf
 ics
+Jae
 README
 applyPrefix
 interblockchain
@@ -110,6 +113,7 @@ consensusStatePath
 handlePacketTimeout
 PacketSend
 unescrowing
+Tendermint
 InitialPubkey
 verifyPacketAcknowledgementAbsence
 handlePacketRecv
@@ -161,6 +165,7 @@ newState
 batchVerifyMembership
 queryClientRoot
 privateKey
+Buchman
 clientConnectionsKey
 loopback
 repudiability
@@ -201,6 +206,7 @@ PubKey
 pubkey
 handleChanCloseInit
 Agoric
+Devs
 connectionHops
 auth
 unreceived
@@ -211,6 +217,7 @@ chanCloseInit
 prover
 CommitmentState
 Javascript
+Zamfir
 channelKey
 INIT
 handlePacketSend
@@ -230,6 +237,7 @@ destChannel
 updateClient
 connectionChannelsPath
 onChanOpenAck
+Tribble
 channelEscrowAddresses
 Pre
 privateStore
@@ -270,6 +278,7 @@ subprotocols
 validityPredicate
 topologies
 newCapabilityPath
+Hibbert
 multiprocess
 lifecycle
 desiredCounterpartyConnectionIdentifier
@@ -325,6 +334,7 @@ VMs
 ConnectionState
 txs
 Composability
+Joon
 sendPacket
 connectionKey
 RootOfTrust
@@ -361,6 +371,7 @@ Betazoid
 callingModuleIdentifier
 LogStore
 PacketTimeoutOnClose
+timeframe
 introspectable
 channelCapabilityPath
 unescrowed
@@ -377,6 +388,7 @@ chanOpenTry
 onAcknowledgePacket
 incrementing
 queryConnection
+Zaki
 validValue
 nextSequenceRecvPath
 freezeClient
@@ -395,6 +407,7 @@ OpCommitmentRoot
 handlePacketCleanup
 onTimeoutPacketClose
 transactional
+Manian
 counterpartyPortIdentifier
 PacketCleanup
 packetCommitmentKey
@@ -429,6 +442,7 @@ incentivisation
 datastream
 nextSequenceSend
 checkValidityAndUpdateState
+deployable
 acc
 interoperable
 ABI

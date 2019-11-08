@@ -1,6 +1,6 @@
 **Join and contribute to the IBC working group** 
 
-Purpose: The evolution of IBC requires cross-industry collaboration to support developing standards that are secure, open, and deployable. The IBC working group is a growing team of contributors supporting the standardization of blockchain development from protocol level to applications. Join the IBC [Working Group](https://zc.vg/sf/giAEr) list for email and meeting updates.
+Purpose: The evolution of IBC requires cross-industry collaboration to support developing standards that are secure, open, and deployable. The IBC working group is a growing team of contributors supporting the standardisation of blockchain development from protocol level to applications. Join the IBC [Working Group](https://zc.vg/sf/giAEr) list for email and meeting updates.
 
 The IBC working group is technical in nature as the goal is to propose, implement and design templates for cross-chain interoperability.  
 
@@ -11,7 +11,7 @@ Upcoming IBC working group calls (Dial in details are provided in the issue for 
 - December 12th, 2019 17:00 UTC 
 
 What is the IBC working group:
-Currently the IBC working group is being actively led and managed by Tendermint (All in Bits), Agoric and the Interchain Foundation. Over time, we anticipate this will shift into breakout working groups and a more decentralized way of managing the interoperability standards developement process. 
+Currently the IBC working group is being actively led and managed by Tendermint (All in Bits), Agoric and the Interchain Foundation. Over time, we anticipate this will shift into breakout working groups and a more decentralised way of managing the interoperability standards development process. 
 
 How it works:
 Following each IBC working group meeting, an new issue for the next meeting will be created with a proposed agenda for comments and collaboration from the larger working group. During the two week timeframe between calls, we invite IBC working group members to contribute to the next meeting's agenda and  join the bi-weekly call to discuss the topics in conjunction with the founding IBC team. Upon concluding a meeting, a recording will be posted and the details and notes will be published in the associated issue. 

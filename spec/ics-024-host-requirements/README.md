@@ -98,19 +98,19 @@ Parts of the private store MAY safely be used for other purposes as long as the 
 Keys used in the private store MAY safely vary as long as there exists a bipartite mapping between the key formats defined herein and the ones
 actually used in the private store implementation.
 
-| Store          | Path format                                                              | Value type        | Defined in |
-| -------------- | ------------------------------------------------------------------------ | ----------------- | ---------------------- |
-| privateStore   | "clients/{identifier}"                                                   | ClientState       | [ICS 2](../ics-002-client-semantics) |
-| provableStore  | "clients/{identifier}/consensusState"                                    | ConsensusState    | [ICS 2](../ics-002-client-semantics) |
-| provableStore  | "clients/{identifier}/type"                                              | ClientType        | [ICS 2](../ics-002-client-semantics) |
-| provableStore  | "connections/{identifier}"                                               | ConnectionEnd     | [ICS 3](../ics-003-connection-semantics) |
-| privateStore   | "ports/{identifier}"                                                     | CapabilityKey     | [ICS 5](../ics-005-port-allocation) |
-| provableStore  | "ports/{identifier}/channels/{identifier}"                               | ChannelEnd        | [ICS 4](../ics-004-channel-and-packet-semantics) |
-| provableStore  | "ports/{identifier}/channels/{identifier}/key"                           | CapabilityKey     | [ICS 4](../ics-004-channel-and-packet-semantics) |
-| provableStore  | "ports/{identifier}/channels/{identifier}/nextSequenceRecv"              | uint64            | [ICS 4](../ics-004-channel-and-packet-semantics) |
-| provableStore  | "ports/{identifier}/channels/{identifier}/packets/{sequence}"            | bytes             | [ICS 4](../ics-004-channel-and-packet-semantics) |
-| provableStore  | "ports/{identifier}/channels/{identifier}/acknowledgements/{sequence}"   | bytes             | [ICS 4](../ics-004-channel-and-packet-semantics) |
-| privateStore   | "callbacks/{identifier}"                                                 | ModuleCallbacks   | [ICS 26](../ics-026-routing-module) |
+| Store          | Path format                                                                    | Value type        | Defined in |
+| -------------- | ------------------------------------------------------------------------------ | ----------------- | ---------------------- |
+| privateStore   | "clients/{identifier}"                                                         | ClientState       | [ICS 2](../ics-002-client-semantics) |
+| provableStore  | "clients/{identifier}/consensusState"                                          | ConsensusState    | [ICS 2](../ics-002-client-semantics) |
+| provableStore  | "clients/{identifier}/type"                                                    | ClientType        | [ICS 2](../ics-002-client-semantics) |
+| provableStore  | "connections/{identifier}"                                                     | ConnectionEnd     | [ICS 3](../ics-003-connection-semantics) |
+| privateStore   | "ports/{identifier}"                                                           | CapabilityKey     | [ICS 5](../ics-005-port-allocation) |
+| provableStore  | "ports/{identifier}/channels/{identifier}"                                     | ChannelEnd        | [ICS 4](../ics-004-channel-and-packet-semantics) |
+| provableStore  | "ports/{identifier}/channels/{identifier}/key"                                 | CapabilityKey     | [ICS 4](../ics-004-channel-and-packet-semantics) |
+| provableStore  | "ports/{identifier}/channels/{identifier}/nextSequenceRecv"                    | uint64            | [ICS 4](../ics-004-channel-and-packet-semantics) |
+| provableStore  | "ports/{identifier}/channels/{identifier}/packets/{sequence}"                  | bytes             | [ICS 4](../ics-004-channel-and-packet-semantics) |
+| provableStore  | "ports/{identifier}/channels/{identifier}/acknowledgements/{sequence}"         | bytes             | [ICS 4](../ics-004-channel-and-packet-semantics) |
+| privateStore   | "callbacks/{identifier}"                                                       | ModuleCallbacks   | [ICS 26](../ics-026-routing-module) |
 
 ### Module layout
 
