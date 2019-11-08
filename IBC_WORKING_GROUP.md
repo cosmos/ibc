@@ -29,4 +29,4 @@ The founding IBC team:
 - Jae Kwon, Founder of Tendermint and Cosmos Network
 - Anca Zamfir, Distributed systems engineer at the Interchain Foundation
 
-* The meeting and format of this working group uses a similar structure (inspired by) the [Ethereum All Core Devs working group](https://github.com/ethereum/pm)
+* The meeting and format of this working group uses a similar structure (inspired by) to the [Ethereum All Core Devs working group](https://github.com/ethereum/pm)
