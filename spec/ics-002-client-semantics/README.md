@@ -566,11 +566,11 @@ interface Evidence {
 
 // algorithm run by operator to commit a new block
 function commit(
-  root: CommitmentRoot,
+  commitmentRoot: CommitmentRoot,
   sequence: uint64,
   newPublicKey: Maybe<PublicKey>): Header {
-    signature = privateKey.sign(root, sequence, newPublicKey)
-    header = {sequence, root, signature, newPublicKey}
+    signature = privateKey.sign(commitmentRoot, sequence, newPublicKey)
+    header = {sequence, commitmentRoot, signature, newPublicKey}
     return header
 }
 
