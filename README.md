@@ -24,7 +24,9 @@ Learn more about the [IBC Ecosystem Working Group](./org/ecosystem/README.md).
 
 Please see [ICS 1](spec/ics-001-ics-standard) for a description of what a standard entails.
 
-To propose a new standard, [open an issue](https://github.com/cosmos/ics/issues/new). To start a new standardisation document, copy the [template](spec/ics-template.md) and open a PR.
+To propose a new standard, [open an issue](https://github.com/cosmos/ics/issues/new).
+
+To start a new standardisation document, copy the [template](spec/ics-template.md) and open a PR.
 
 See [PROCESS.md](PROCESS.md) for a description of the standardisation process.
 
