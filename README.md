@@ -28,6 +28,8 @@ To propose a new standard, [open an issue](https://github.com/cosmos/ics/issues/
 
 See [PROCESS.md](PROCESS.md) for a description of the standardisation process.
 
+Learn more about the [IBC Steering Committee](./org/steering/README.md).
+
 ## IBC Quick References
 
 If you are planning to review inter-blockchain communication protocol specifications, the following are required reading:
