@@ -35,7 +35,7 @@ A *relayer* is an off-chain process with the ability to read the state of and su
 
 The relayer algorithm is defined over a set `C` of chains implementing the IBC protocol. Each relayer may not necessarily have access to read state from and write datagrams to all chains in the interchain network (especially in the case of permissioned or private chains) — different relayers may relay between different subsets.
 
-`pendingDatagrams` calculates the set of all valid datagrams to be relayed from one chain to another based on the state of both chains. Sub-components of this function are defined in individual ICSs. The relayer must possess prior knowledge of what subset of the IBC protocol is implemented by the blockchains in the set for which they are relaying (e.g. by reading the source code).
+`pendingDatagrams` calculates the set of all valid datagrams to be relayed from one chain to another based on the state of both chains. The relayer must possess prior knowledge of what subset of the IBC protocol is implemented by the blockchains in the set for which they are relaying (e.g. by reading the source code). An example is defined below.
 
 `submitDatagram` is a procedure defined per-chain (submitting a transaction of some sort).
 
@@ -48,6 +48,18 @@ function relay(C: Set<Chain>) {
         for (const datagram of datagrams)
           counterparty.submitDatagram(datagram)
       }
+}
+```
+
+### Pending datagrams
+
+`pendingDatagrams` collates datagrams to be sent from one machine to another. The implementation of this function will depend on the subset of the IBC protocol supported by both machines & the state layout of the source machine.
+
+An example implementation:
+
+```typescript
+function pendingDatagrams(chain: Chain, counterparty: Chain): Set<Datagram> {
+  return []
 }
 ```
 
