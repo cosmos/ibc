@@ -53,13 +53,43 @@ function relay(C: Set<Chain>) {
 
 ### Pending datagrams
 
-`pendingDatagrams` collates datagrams to be sent from one machine to another. The implementation of this function will depend on the subset of the IBC protocol supported by both machines & the state layout of the source machine.
+`pendingDatagrams` collates datagrams to be sent from one machine to another. The implementation of this function will depend on the subset of the IBC protocol supported by both machines & the state layout of the source machine. Particular relayers will likely also want to implement their own filter functions in order to relay only a subset of the datagrams which could possibly be relayed (e.g. the subset for which they have been paid to relay in some off-chain manner).
 
 An example implementation:
 
 ```typescript
 function pendingDatagrams(chain: Chain, counterparty: Chain): Set<Datagram> {
-  return []
+  const datagrams = []
+
+  // [ICS 2]
+  // - Determine if light client needs to be updated
+  height = chain.latestHeight()
+  client = counterparty.queryClientConsensusState(chain)
+  if client.height < height {
+    header = chain.latestHeader()
+    datagrams.push(ClientUpdate{chain, header})
+  }
+
+  // [ICS 3]
+  // - Determine if any connection handshakes are in progress
+  connections = chain.getConnectionsUsingClient(counterparty)
+  for (const localEnd of connections) {
+    remoteEnd = counterparty.getConnection(localEnd.counterpartyIdentifier)
+    // TODO logic based on respective states
+    datagrams.push(Connection{})
+  }
+
+  // [ICS 4]
+  // - Determine if any channel handshakes are in progress
+  // - Determine if any packets, acknowledgements, or timeouts need to be relayed
+  channels = chain.getChannelsUsingConnections(connections)
+  for (const localEnd of channels) {
+    remoteEnd = counterparty.getConnection(localEnd.counterpartyIdentifier)
+    // TODO logic based on respective states
+    datagrams.push(Channel{})
+  }
+
+  return datagrams
 }
 ```
 
