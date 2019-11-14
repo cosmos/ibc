@@ -128,9 +128,9 @@ function addConnectionToClient(
 function removeConnectionFromClient(
   clientIdentifier: Identifier,
   connectionIdentifier: Identifier) {
-    conns = privateStore.get(clientConnectionsPath(clientIdentifier, connectionIdentifier))
+    conns = privateStore.get(clientConnectionsPath(clientIdentifier))
     conns.remove(connectionIdentifier)
-    privateStore.set(clientConnectionsPath(clientIdentifier, connectionIdentifier), conns)
+    privateStore.set(clientConnectionsPath(clientIdentifier), conns)
 }
 ```
 
