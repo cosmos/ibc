@@ -14,8 +14,12 @@ Inspired by [ethereum/pm](https://github.com/ethereum/pm).
 
 ### Previous Meetings
 
+| №  | Date                             | Notes          | Recording            |
+| -- | -------------------------------- | -------------- | -------------------- |
+| 1  | November 14th, 2019 17:00 UTC    | [notes](./meetings/2019-11-14.md) | N/A |
+
+
 ### Upcoming Meetings
 
-- November 14th, 2019 17:00 CET
 - November 28th, 2019 17:00 CET
 - December 12th, 2019 17:00 CET
