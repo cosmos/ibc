@@ -18,7 +18,7 @@ For a list of IBC implementations, IBC-supporting blockchains, and special IBC b
 
 To add your project to this list, submit a pull request.
 
-Learn more about the [IBC Ecosystem Working Group](./org/ecosystem/README.md).
+Learn more about the [IBC Ecosystem Working Group](./ecosystem/README.md).
 
 ## Standardisation
 
