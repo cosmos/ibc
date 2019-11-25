@@ -156,6 +156,21 @@ function pendingDatagrams(chain: Chain, counterparty: Chain): List<Set<Datagram>
     // Deal with packets
     // - For ordered channels, check local sequence & remote sequence
     // - For unordered channels, check presence or absence of acknowledgement
+    if (localEnd.order === ORDERED) {
+      const sequenceSend = localEnd.nextSequenceSend
+      const sequenceRecv = remoteEnd.nextSequenceRecv
+      let sequence = 0
+      for (sequence = sequenceRecv; sequence <= sequenceSend - 1; sequence++) {
+        // relay packet with this sequence number
+        // TODO: need log access for commitment and timeout height!
+        const packetData = Packet{sequence, timeoutHeight, sourcePort: localEnd.portIdentifier, sourceChannel: localEnd.channelIdentifier, destPort: remoteEnd.portIdentifier, destChannel: remoteEnd.channelIdentifier, data}
+        counterpartyDatagrams.push(PacketRecv{
+          packet: packetData,
+          proof: packet.proof(),
+          proofHeight: height,
+        })
+      }
+    }
   }
 
   return [localDatagrams, counterpartyDatagrams]
