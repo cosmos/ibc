@@ -58,16 +58,23 @@ function relay(C: Set<Chain>) {
 An example implementation which performs bidirection relay between two chains:
 
 ```typescript
-function pendingDatagrams(chain: Chain, counterparty: Chain): Set<Datagram> {
-  const datagrams = []
+function pendingDatagrams(chain: Chain, counterparty: Chain): List<Set<Datagram>> {
+  const localDatagrams = []
+  const counterpartyDatagrams = []
 
   // [ICS 2 : Clients]
-  // - Determine if light client needs to be updated
+  // - Determine if light client needs to be updated (local & counterparty)
   height = chain.latestHeight()
   client = counterparty.queryClientConsensusState(chain)
   if client.height < height {
     header = chain.latestHeader()
-    datagrams.push(ClientUpdate{chain, header})
+    counterpartyDatagrams.push(ClientUpdate{chain, header})
+  }
+  counterpartyHeight = counterparty.latestHeight()
+  client = chain.queryClientConsensusState(counterparty)
+  if client.height < counterpartyHeight {
+    header = counterparty.latestHeader()
+    localDatagrams.push(ClientUpdate{counterparty, header})
   }
 
   // [ICS 3 : Connections]
@@ -75,9 +82,9 @@ function pendingDatagrams(chain: Chain, counterparty: Chain): Set<Datagram> {
   connections = chain.getConnectionsUsingClient(counterparty)
   for (const localEnd of connections) {
     remoteEnd = counterparty.getConnection(localEnd.counterpartyIdentifier)
-    if (localEnd.state === INIT && remoteEnd === null) {
+    if (localEnd.state === INIT && remoteEnd === null)
       // Handshake has started locally (1 step done), relay `connOpenTry` to the remote end
-      datagrams.push(ConnOpenTry{
+      counterpartyDatagrams.push(ConnOpenTry{
         desiredIdentifier: localEnd.counterpartyConnectionIdentifier,
         counterpartyConnectionIdentifier: localEnd.identifier,
         counterpartyClientIdentifier: localEnd.clientIdentifier,
@@ -89,9 +96,9 @@ function pendingDatagrams(chain: Chain, counterparty: Chain): Set<Datagram> {
         proofHeight: height,
         consensusHeight: localEnd.client.height,
       })
-    } else if (localEnd.state === INIT && remoteEnd.state === TRYOPEN) {
+    else if (localEnd.state === INIT && remoteEnd.state === TRYOPEN)
       // Handshake has started on the other end (2 steps done), relay `connOpenAck` to the local end
-      datagrams.push(ConnOpenAck{
+      localDatagrams.push(ConnOpenAck{
         identifier: localEnd.identifier,
         version: remoteEnd.version,
         proofTry: remoteEnd.proof(),
@@ -99,14 +106,13 @@ function pendingDatagrams(chain: Chain, counterparty: Chain): Set<Datagram> {
         proofHeight: remoteEnd.client.height,
         consensusHeight: remoteEnd.client.height,
       })
-    } else if (localEnd.state === OPEN && remoteEnd.state === TRYOPEN) {
+    else if (localEnd.state === OPEN && remoteEnd.state === TRYOPEN)
       // Handshake has confirmed locally (3 steps done), relay `connOpenConfirm` to the remote end
-      datagrams.push(ConnOpenConfirm{
+      counterpartyDatagrams.push(ConnOpenConfirm{
         identifier: remoteEnd.identifier,
         proofAck: localEnd.proof(),
         proofHeight: height,
       })
-    }
   }
 
   // [ICS 4 : Channels & Packets]
@@ -116,9 +122,9 @@ function pendingDatagrams(chain: Chain, counterparty: Chain): Set<Datagram> {
   for (const localEnd of channels) {
     remoteEnd = counterparty.getConnection(localEnd.counterpartyIdentifier)
     // Deal with handshakes in progress
-    if (localEnd.state === INIT && remoteEnd === null) {
+    if (localEnd.state === INIT && remoteEnd === null)
       // Handshake has started locally (1 step done), relay `chanOpenTry` to the remote end
-      datagrams.push(ChanOpenTry{
+      counterpartyDatagrams.push(ChanOpenTry{
         order: localEnd.order,
         connectionHops: localEnd.connectionHops.reverse(),
         portIdentifier: localEnd.counterpartyPortIdentifier,
@@ -130,30 +136,29 @@ function pendingDatagrams(chain: Chain, counterparty: Chain): Set<Datagram> {
         proofInit: localEnd.proof(),
         proofHeight: height,
       })
-    } else if (localEnd.state === INIT && remoteEnd.state === TRYOPEN) {
+    else if (localEnd.state === INIT && remoteEnd.state === TRYOPEN)
       // Handshake has started on the other end (2 steps done), relay `chanOpenAck` to the local end
-      datagrams.push(ChanOpenAck{
+      localDatagrams.push(ChanOpenAck{
         portIdentifier: localEnd.portIdentifier,
         channelIdentifier: localEnd.channelIdentifier,
         version: remoteEnd.version,
         proofTry: remoteEnd.proof(),
         proofHeight: localEnd.client.height,
       })
-    } else if (localEnd.state === OPEN && remoteEnd.state === TRYOPEN) {
+    else if (localEnd.state === OPEN && remoteEnd.state === TRYOPEN)
       // Handshake has confirmed locally (3 steps done), relay `chanOpenConfirm` to the remote end
-      datagrams.push(ChanOpenConfirm{
+      counterpartyDatagrams.push(ChanOpenConfirm{
         portIdentifier: remoteEnd.portIdentifier,
         channelIdentifier: remoteEnd.channelIdentifier,
         proofAck: localEnd.proof(),
         proofHeight: height
       })
-    }
     // Deal with packets
     // - For ordered channels, check local sequence & remote sequence
     // - For unordered channels, check presence or absence of acknowledgement
   }
 
-  return datagrams
+  return [localDatagrams, counterpartyDatagrams]
 }
 ```
 
