@@ -61,7 +61,7 @@ An example implementation:
 function pendingDatagrams(chain: Chain, counterparty: Chain): Set<Datagram> {
   const datagrams = []
 
-  // [ICS 2]
+  // [ICS 2 : Clients]
   // - Determine if light client needs to be updated
   height = chain.latestHeight()
   client = counterparty.queryClientConsensusState(chain)
@@ -70,23 +70,43 @@ function pendingDatagrams(chain: Chain, counterparty: Chain): Set<Datagram> {
     datagrams.push(ClientUpdate{chain, header})
   }
 
-  // [ICS 3]
+  // [ICS 3 : Connections]
   // - Determine if any connection handshakes are in progress
   connections = chain.getConnectionsUsingClient(counterparty)
   for (const localEnd of connections) {
     remoteEnd = counterparty.getConnection(localEnd.counterpartyIdentifier)
-    // TODO logic based on respective states
-    datagrams.push(Connection{})
+    if (localEnd.state === INIT && remoteEnd === null) {
+      // Handshake has started locally (1 step done), relay `connOpenTry` to the remote end
+      datagrams.push(Connection{})
+    } else if (localEnd.state === INIT && remoteEnd.state === TRYOPEN) {
+      // Handshake has started on the other end (2 steps done), relay `connOpenAck` to the local end
+      datagrams.push(Connection{})
+    } else if (localEnd.state === OPEN && remoteEnd.state === TRYOPEN) {
+      // Handshake has confirmed locally (3 steps done), relay `connOpenConfirm` to the remote end
+      datagrams.push(Connection{})
+    }
   }
 
-  // [ICS 4]
+  // [ICS 4 : Channels & Packets]
   // - Determine if any channel handshakes are in progress
   // - Determine if any packets, acknowledgements, or timeouts need to be relayed
   channels = chain.getChannelsUsingConnections(connections)
   for (const localEnd of channels) {
     remoteEnd = counterparty.getConnection(localEnd.counterpartyIdentifier)
-    // TODO logic based on respective states
-    datagrams.push(Channel{})
+    // Deal with handshakes in progress
+    if (localEnd.state === INIT && remoteEnd === null) {
+      // Handshake has started locally (1 step done), relay `chanOpenTry` to the remote end
+      datagrams.push(Channel{})
+    } else if (localEnd.state === INIT && remoteEnd.state === TRYOPEN) {
+      // Handshake has started on the other end (2 steps done), relay `chanOpenAck` to the local end
+      datagrams.push(Channel{})
+    } else if (localEnd.state === OPEN && remoteEnd.state === TRYOPEN) {
+      // Handshake has confirmed locally (3 steps done), relay `chanOpenConfirm` to the remote end
+      datagrams.push(Channel{})
+    }
+    // Deal with packets
+    // - For ordered channels, check local sequence & remote sequence
+    // - For unordered channels, check presence or absence of acknowledgement
   }
 
   return datagrams
