@@ -77,7 +77,18 @@ function pendingDatagrams(chain: Chain, counterparty: Chain): Set<Datagram> {
     remoteEnd = counterparty.getConnection(localEnd.counterpartyIdentifier)
     if (localEnd.state === INIT && remoteEnd === null) {
       // Handshake has started locally (1 step done), relay `connOpenTry` to the remote end
-      datagrams.push(Connection{})
+      datagrams.push(ConnOpenTry{
+        desiredIdentifier: localEnd.counterpartyConnectionIdentifier,
+        counterpartyConnectionIdentifier: localEnd.identifier,
+        counterpartyClientIdentifier: localEnd.clientIdentifier,
+        clientIdentifier: localEnd.counterpartyClientIdentifier,
+        version: localEnd.version,
+        counterpartyVersion: localEnd.version,
+        proofInit: localEnd.proof(),
+        proofConsensus: localEnd.client.consensusState.proof(),
+        proofHeight: height,
+        consensusHeight: localEnd.client.height,
+      })
     } else if (localEnd.state === INIT && remoteEnd.state === TRYOPEN) {
       // Handshake has started on the other end (2 steps done), relay `connOpenAck` to the local end
       datagrams.push(Connection{})
