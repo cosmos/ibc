@@ -1,5 +1,7 @@
 ## Interblockchain Communication Protocol Ecosystem
 
+If you are interested in contributing to the IBC ecosystem, please join the [Ecosystem Working Group](./ecosystem).
+
 ### Handler implementations
 
 Implementations of the canonical IBC protocol & handler as defined in the specification.
