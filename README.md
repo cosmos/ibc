@@ -42,6 +42,8 @@ If you are planning to review inter-blockchain communication protocol specificat
 -   [IBC Usecases](./ibc/4_IBC_USECASES.md)
 -   [IBC Design Patterns](./ibc/5_IBC_DESIGN_PATTERNS.md)
 
+Translated versions of some of these documents can be found in the [translation](./translation) folder.
+
 ## Interchain Standards
 
 All standards at or past the "Draft" stage are listed here in order of their ICS numbers, sorted by category.
