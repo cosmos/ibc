@@ -293,6 +293,7 @@ interface ConnOpenTry {
   version: string
   counterpartyVersion: string
   proofInit: CommitmentProof
+  proofConsensus: CommitmentProof
   proofHeight: uint64
   consensusHeight: uint64
 }
@@ -308,6 +309,7 @@ function handleConnOpenTry(datagram: ConnOpenTry) {
       datagram.version,
       datagram.counterpartyVersion,
       datagram.proofInit,
+      datagram.proofConsensus,
       datagram.proofHeight,
       datagram.consensusHeight
     )
@@ -321,6 +323,7 @@ interface ConnOpenAck {
   identifier: Identifier
   version: string
   proofTry: CommitmentProof
+  proofConsensus: CommitmentProof
   proofHeight: uint64
   consensusHeight: uint64
 }
@@ -332,6 +335,7 @@ function handleConnOpenAck(datagram: ConnOpenAck) {
       datagram.identifier,
       datagram.version,
       datagram.proofTry,
+      datagram.proofConsensus,
       datagram.proofHeight,
       datagram.consensusHeight
     )

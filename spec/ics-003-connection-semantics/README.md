@@ -311,6 +311,7 @@ function connOpenTry(
   clientIdentifier: Identifier,
   counterpartyVersions: string[],
   proofInit: CommitmentProof,
+  proofConsensus: CommitmentProof,
   proofHeight: uint64,
   consensusHeight: uint64) {
     abortTransactionUnless(validateConnectionIdentifier(desiredIdentifier))
@@ -322,7 +323,7 @@ function connOpenTry(
     connection = ConnectionEnd{state, counterpartyConnectionIdentifier, counterpartyPrefix,
                                clientIdentifier, counterpartyClientIdentifier, version}
     abortTransactionUnless(connection.verifyConnectionState(proofHeight, proofInit, counterpartyConnectionIdentifier, expected))
-    abortTransactionUnless(connection.verifyClientConsensusState(proofHeight, proofInit, counterpartyClientIdentifier, expectedConsensusState))
+    abortTransactionUnless(connection.verifyClientConsensusState(proofHeight, proofConsensus, counterpartyClientIdentifier, expectedConsensusState))
     abortTransactionUnless(provableStore.get(connectionPath(desiredIdentifier)) === null)
     identifier = desiredIdentifier
     state = TRYOPEN
@@ -338,6 +339,7 @@ function connOpenAck(
   identifier: Identifier,
   version: string,
   proofTry: CommitmentProof,
+  proofConsensus: CommitmentProof,
   proofHeight: uint64,
   consensusHeight: uint64) {
     abortTransactionUnless(consensusHeight <= getCurrentHeight())
@@ -348,7 +350,7 @@ function connOpenAck(
                              connection.counterpartyClientIdentifier, connection.clientIdentifier,
                              version}
     abortTransactionUnless(connection.verifyConnectionState(proofHeight, proofTry, connection.counterpartyConnectionIdentifier, expected))
-    abortTransactionUnless(connection.verifyClientConsensusState(proofHeight, proofTry, connection.counterpartyClientIdentifier, expectedConsensusState))
+    abortTransactionUnless(connection.verifyClientConsensusState(proofHeight, proofConsensus, connection.counterpartyClientIdentifier, expectedConsensusState))
     connection.state = OPEN
     abortTransactionUnless(getCompatibleVersions().indexOf(version) !== -1)
     connection.version = version
