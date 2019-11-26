@@ -1,4 +1,4 @@
-personal_ws-1.1 en 483 
+personal_ws-1.1 en 484 
 ABCI
 ABI
 Agoric
@@ -403,6 +403,7 @@ removeConnectionFromClient
 renderer
 repudiability
 repudiable
+rivalrous
 rootKey
 routingModule
 runtime

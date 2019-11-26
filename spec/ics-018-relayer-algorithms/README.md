@@ -55,7 +55,7 @@ function relay(C: Set<Chain>) {
 
 `pendingDatagrams` collates datagrams to be sent from one machine to another. The implementation of this function will depend on the subset of the IBC protocol supported by both machines & the state layout of the source machine. Particular relayers will likely also want to implement their own filter functions in order to relay only a subset of the datagrams which could possibly be relayed (e.g. the subset for which they have been paid to relay in some off-chain manner).
 
-An example implementation which performs bidirection relay between two chains:
+An example implementation which performs bidirectional relay between two chains:
 
 ```typescript
 function pendingDatagrams(chain: Chain, counterparty: Chain): List<Set<Datagram>> {
