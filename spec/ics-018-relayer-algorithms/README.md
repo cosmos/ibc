@@ -62,7 +62,7 @@ function pendingDatagrams(chain: Chain, counterparty: Chain): List<Set<Datagram>
   const localDatagrams = []
   const counterpartyDatagrams = []
 
-  // [ICS 2 : Clients]
+  // ICS2 : Clients
   // - Determine if light client needs to be updated (local & counterparty)
   height = chain.latestHeight()
   client = counterparty.queryClientConsensusState(chain)
@@ -77,7 +77,7 @@ function pendingDatagrams(chain: Chain, counterparty: Chain): List<Set<Datagram>
     localDatagrams.push(ClientUpdate{counterparty, header})
   }
 
-  // [ICS 3 : Connections]
+  // ICS3 : Connections
   // - Determine if any connection handshakes are in progress
   connections = chain.getConnectionsUsingClient(counterparty)
   for (const localEnd of connections) {
@@ -115,7 +115,7 @@ function pendingDatagrams(chain: Chain, counterparty: Chain): List<Set<Datagram>
       })
   }
 
-  // [ICS 4 : Channels & Packets]
+  // ICS4 : Channels & Packets
   // - Determine if any channel handshakes are in progress
   // - Determine if any packets, acknowledgements, or timeouts need to be relayed
   channels = chain.getChannelsUsingConnections(connections)
