@@ -6,6 +6,9 @@ category: (ics category)
 author: (primary & additional authors)
 created: (creation date)
 modified: (modification date)
+requires: (optional list of ics numbers)
+required-by: (optional list of ics numbers)
+implements: (optional list of ics numbers)
 ---
 
 ## Synopsis
