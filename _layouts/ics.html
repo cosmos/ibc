@@ -13,6 +13,9 @@ layout: default
     <tr><th>Author</th><td>{{ page.author | xml_escape }}</td></tr>
     <tr><th>Created</th><td>{{ page.created | xml_escape }}</td></tr>
     <tr><th>Modified</th><td>{{ page.modified | xml_escape }}</td></tr>
+    <tr><th>Requires</th><td>{{ page.requires | xml_escape }}</td></tr>
+    <tr><th>Required By</th><td>{{ page.required-by | xml_escape }}</td></tr>
+    <tr><th>Implements</th><td>{{ page.implements | xml_escape }}</td></tr>
   </table>
 
   {{ content }}
