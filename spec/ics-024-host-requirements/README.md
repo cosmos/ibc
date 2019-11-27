@@ -161,7 +161,7 @@ Host state machines MUST provide the ability to introspect this stored recent co
 type getStoredRecentConsensusStateCount = () => uint64
 ```
 
-### Commitment Path Introspection
+### Commitment path introspection
 
 Host chains MUST provide the ability to inspect their commitment path, with `getCommitmentPrefix`:
 
@@ -238,6 +238,26 @@ For liveness of packet relay, host state machines MUST have bounded transactiona
 IBC packet data, and other data which is not directly stored in the state vector but is relied upon by relayers, MUST be available to & efficiently computable by relayer processes.
 
 Light clients of particular consensus algorithms may have different and/or more strict data availability requirements.
+
+### Event logging system
+
+The host state machine MUST provide an event logging system whereby arbitrary data can be logged in the course of transaction execution which can be stored, indexed, and later queried by processes executing the state machine. These event logs are utilised by relayers to read IBC packet data & timeouts, which are not stored directly in the chain state (as this storage is presumed to be expensive) but are instead committed to with a succinct cryptographic commitment (only the commitment is stored).
+
+This system is expected to have at minimum one function for emitting log entries and one function for querying past logs, approximately as follows.
+
+The function `emitLogEntry` can be called by the state machine during transaction execution to write a log entry:
+
+```typescript
+type emitLogEntry = (topic: string, data: []byte) => void
+```
+
+The function `queryByTopic` can be called by an external process (such as a relayer) to retrieve all log entries associated with a given topic written by transactions which were executed at a given height.
+
+```typescript
+type queryByTopic = (height: uint64, topic: string) => Array< []byte >
+```
+
+More complex query functionality MAY also be supported, and may allow for more efficient relayer process queries, but is not required.
 
 ## Backwards Compatibility
 

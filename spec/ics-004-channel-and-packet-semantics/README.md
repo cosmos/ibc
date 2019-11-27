@@ -522,6 +522,9 @@ function sendPacket(packet: Packet) {
     nextSequenceSend = nextSequenceSend + 1
     provableStore.set(nextSequenceSendPath(packet.sourcePort, packet.sourceChannel), nextSequenceSend)
     provableStore.set(packetCommitmentPath(packet.sourcePort, packet.sourceChannel, packet.sequence), hash(packet.data, packet.timeout))
+
+    // log that a packet has been sent
+    emitLogEntry("sendPacket", {sequence: packet.sequence, data: packet.data, timeout: packet.timeout})
 }
 ```
 
@@ -585,6 +588,9 @@ function recvPacket(
       nextSequenceRecv = nextSequenceRecv + 1
       provableStore.set(nextSequenceRecvPath(packet.destPort, packet.destChannel), nextSequenceRecv)
     }
+
+    // log that a packet has been received & acknowledged
+    emitLogEntry("recvPacket", {sequence: packet.sequence, timeout: packet.timeout, data: packet.data, acknowledgement})
 
     // return transparent packet
     return packet

@@ -55,7 +55,8 @@ function relay(C: Set<Chain>) {
 
 `pendingDatagrams` collates datagrams to be sent from one machine to another. The implementation of this function will depend on the subset of the IBC protocol supported by both machines & the state layout of the source machine. Particular relayers will likely also want to implement their own filter functions in order to relay only a subset of the datagrams which could possibly be relayed (e.g. the subset for which they have been paid to relay in some off-chain manner).
 
-An example implementation which performs bidirectional relay between two chains:
+An example implementation which performs unidirectional relay between two chains is outlined below. It can be altered to perform bidirectional relay by switching `chain` and `counterparty`.
+Which relayer process is responsible for which datagrams is a flexible choice - in this example, the relayer process relays all handshakes which started on `chain` (sending datagrams to both chains), relays all packets sent from `chain` to `counterparty`, and relays all acknowledgements of packets sent from `counterparty` to `chain`.
 
 ```typescript
 function pendingDatagrams(chain: Chain, counterparty: Chain): List<Set<Datagram>> {
@@ -153,29 +154,29 @@ function pendingDatagrams(chain: Chain, counterparty: Chain): List<Set<Datagram>
         proofAck: localEnd.proof(),
         proofHeight: height
       })
+
     // Deal with packets
-    // - For ordered channels, check local sequence & remote sequence
-    // - For unordered channels, check presence or absence of acknowledgement
-    if (localEnd.order === ORDERED) {
-      const sequenceSend = localEnd.nextSequenceSend
-      const sequenceRecv = remoteEnd.nextSequenceRecv
-      let sequence = 0
-      for (sequence = sequenceRecv; sequence <= sequenceSend - 1; sequence++) {
-        // relay packet with this sequence number
-        // TODO: need log access for commitment and timeout height!
-        packetData = Packet{sequence, timeoutHeight, localEnd.portIdentifier, localEnd.channelIdentifier,
-                            remoteEnd.portIdentifier, remoteEnd.channelIdentifier, data}
-        counterpartyDatagrams.push(PacketRecv{
-          packet: packetData,
-          proof: packet.proof(),
-          proofHeight: height,
-        })
-      }
-    } else if (localEnd.order === UNORDERED) {
-      // todo: should just read the logs, not scan the state (scanning state is super inefficient)
-      packetData = Packet{data}
+    // First, scan logs for sent packets and relay all of them
+    sentPacketLogs = queryByTopic(height, "sendPacket")
+    for (const logEntry of sentPacketLogs) {
+      // relay packet with this sequence number
+      packetData = Packet{logEntry.sequence, logEntry.timeout, localEnd.portIdentifier, localEnd.channelIdentifier,
+                          remoteEnd.portIdentifier, remoteEnd.channelIdentifier, logEntry.data}
       counterpartyDatagrams.push(PacketRecv{
         packet: packetData,
+        proof: packet.proof(),
+        proofHeight: height,
+      })
+    }
+    // Then, scan logs for received packets and relay acknowledgements
+    recvPacketLogs = queryByTopic(height, "recvPacket")
+    for (const logEntry of recvPacketLogs) {
+      // relay packet acknowledgement with this sequence number
+      packetData = Packet{logEntry.sequence, logEntry.timeout, localEnd.portIdentifier, localEnd.channelIdentifier,
+                          remoteEnd.portIdentifier, remoteEnd.channelIdentifier, logEntry.data}
+      counterpartyDatagrams.push(PacketAcknowledgement{
+        packet: packetData,
+        acknowledgement: logEntry.acknowledgement,
         proof: packet.proof(),
         proofHeight: height,
       })
