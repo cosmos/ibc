@@ -153,29 +153,29 @@ function pendingDatagrams(chain: Chain, counterparty: Chain): List<Set<Datagram>
         proofAck: localEnd.proof(),
         proofHeight: height
       })
+
     // Deal with packets
-    // - For ordered channels, check local sequence & remote sequence
-    // - For unordered channels, check presence or absence of acknowledgement
-    if (localEnd.order === ORDERED) {
-      const sequenceSend = localEnd.nextSequenceSend
-      const sequenceRecv = remoteEnd.nextSequenceRecv
-      let sequence = 0
-      for (sequence = sequenceRecv; sequence <= sequenceSend - 1; sequence++) {
-        // relay packet with this sequence number
-        // TODO: need log access for commitment and timeout height!
-        packetData = Packet{sequence, timeoutHeight, localEnd.portIdentifier, localEnd.channelIdentifier,
-                            remoteEnd.portIdentifier, remoteEnd.channelIdentifier, data}
-        counterpartyDatagrams.push(PacketRecv{
-          packet: packetData,
-          proof: packet.proof(),
-          proofHeight: height,
-        })
-      }
-    } else if (localEnd.order === UNORDERED) {
-      // todo: should just read the logs, not scan the state (scanning state is super inefficient)
-      packetData = Packet{data}
+    // First, scan logs for sent packets and relay all of them
+    sentPacketLogs = queryByTopic(height, "sendPacket")
+    for (const logEntry of sentPacketLogs) {
+      // relay packet with this sequence number
+      packetData = Packet{logEntry.sequence, logEntry.timeout, localEnd.portIdentifier, localEnd.channelIdentifier,
+                          remoteEnd.portIdentifier, remoteEnd.channelIdentifier, logEntry.data}
       counterpartyDatagrams.push(PacketRecv{
         packet: packetData,
+        proof: packet.proof(),
+        proofHeight: height,
+      })
+    }
+    // Then, scan logs for received packets and relay acknowledgements
+    recvPacketLogs = queryByTopic(height, "recvPacket")
+    for (const logEntry of recvPacketLogs) {
+      // relay packet acknowledgement with this sequence number
+      packetData = Packet{logEntry.sequence, logEntry.timeout, localEnd.portIdentifier, localEnd.channelIdentifier,
+                          remoteEnd.portIdentifier, remoteEnd.channelIdentifier, logEntry.data}
+      counterpartyDatagrams.push(PacketAcknowledgement{
+        packet: packetData,
+        acknowledgement: logEntry.acknowledgement,
         proof: packet.proof(),
         proofHeight: height,
       })
