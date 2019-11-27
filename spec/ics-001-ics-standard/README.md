@@ -3,6 +3,7 @@ ics: 1
 title: ICS Specification Standard
 stage: draft
 category: meta
+kind: meta
 author: Christopher Goes <cwgoes@tendermint.com>
 created: 2019-02-12
 modified: 2019-08-25

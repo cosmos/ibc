@@ -3,6 +3,7 @@ ics: 24
 title: Host State Machine Requirements
 stage: draft
 category: IBC/TAO
+kind: interface
 requires: 23
 required-by: 2, 3, 4, 5, 18
 author: Christopher Goes <cwgoes@tendermint.com>

@@ -3,6 +3,7 @@ ics: 4
 title: Channel & Packet Semantics
 stage: draft
 category: IBC/TAO
+kind: instantiation
 requires: 2, 3, 5, 24
 author: Christopher Goes <cwgoes@tendermint.com>
 created: 2019-03-07

@@ -3,6 +3,7 @@ ics: 25
 title: Handler Interface
 stage: draft
 category: IBC/TAO
+kind: instantiation
 requires: 2, 3, 4, 23, 24
 author: Christopher Goes <cwgoes@tendermint.com>
 created: 2019-04-23

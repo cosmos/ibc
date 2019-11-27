@@ -3,6 +3,7 @@ ics: 2
 title: Client Semantics
 stage: draft
 category: IBC/TAO
+kind: interface
 requires: 23, 24
 required-by: 3
 author: Juwoon Yun <joon@tendermint.com>, Christopher Goes <cwgoes@tendermint.com>

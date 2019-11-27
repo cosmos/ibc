@@ -3,6 +3,7 @@ ics: 3
 title: Connection Semantics
 stage: draft
 category: IBC/TAO
+kind: instantiation
 requires: 2, 24
 required-by: 4, 25
 author: Christopher Goes <cwgoes@tendermint.com>, Juwoon Yun <joon@tendermint.com>

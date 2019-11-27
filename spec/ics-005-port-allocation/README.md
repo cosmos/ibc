@@ -5,6 +5,7 @@ stage: Draft
 requires: 24
 required-by: 4
 category: IBC/TAO
+kind: interface
 author: Christopher Goes <cwgoes@tendermint.com>
 created: 2019-06-20
 modified: 2019-08-25

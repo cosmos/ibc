@@ -4,6 +4,7 @@ title: Vector Commitments
 stage: draft
 required-by: 2, 24
 category: IBC/TAO
+kind: interface
 author: Christopher Goes <cwgoes@tendermint.com>
 created: 2019-04-16
 modified: 2019-08-25

@@ -3,6 +3,7 @@ ics: 26
 title: Routing Module
 stage: Draft
 category: IBC/TAO
+kind: instantiation
 author: Christopher Goes <cwgoes@tendermint.com>
 created: 2019-06-09
 modified: 2019-08-25

@@ -4,6 +4,7 @@ title: Fungible Token Transfer
 stage: draft
 category: IBC/APP
 requires: 25, 26
+kind: instantiation
 author: Christopher Goes <cwgoes@tendermint.com>
 created: 2019-07-15 
 modified: 2019-08-25
