@@ -254,7 +254,7 @@ type emitLogEntry = (topic: string, data: []byte) => void
 The function `queryByTopic` can be called by an external process (such as a relayer) to retrieve all log entries associated with a given topic written by transactions which were executed at a given height.
 
 ```typescript
-type queryByTopic = (height: uint64, topic: string) => [][]byte
+type queryByTopic = (height: uint64, topic: string) => Array< []byte >
 ```
 
 More complex query functionality MAY also be supported, and may allow for more efficient relayer process queries, but is not required.
