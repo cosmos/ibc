@@ -4,7 +4,7 @@ title: Relayer 알고리즘
 stage: 초안
 category: IBC/TAO
 requires: 24, 25, 26
-author: 'Christopher Goes '
+author: Christopher Goes <cwgoes@tendermint.com>
 created: '2019-03-07'
 modified: '2019-08-25'
 ---
