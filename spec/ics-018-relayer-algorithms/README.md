@@ -46,8 +46,10 @@ function relay(C: Set<Chain>) {
     for (const counterparty of C)
       if (counterparty !== chain) {
         const datagrams = chain.pendingDatagrams(counterparty)
-        for (const datagram of datagrams)
-          counterparty.submitDatagram(datagram)
+        for (const localDatagram of datagrams[0])
+          chain.submitDatagram(localDatagram)
+        for (const counterpartyDatagram of datagrams[1])
+          counterparty.submitDatagram(counterpartyDatagram)
       }
 }
 ```
