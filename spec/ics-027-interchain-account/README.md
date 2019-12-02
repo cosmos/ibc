@@ -273,7 +273,8 @@ Not applicable.
 
 ## Example Implementation  
 
-Pseudocode for cosmos-sdk: https://github.com/everett-protocol/everett-hackathon/tree/master/x/interchain-account
+Pseudocode for cosmos-sdk: https://github.com/everett-protocol/everett-hackathon/tree/master/x/interchain-account  
+POC for Interchain account on Ethereum: https://github.com/everett-protocol/ethereum-interchain-account
 
 ## Other Implementations  
 
