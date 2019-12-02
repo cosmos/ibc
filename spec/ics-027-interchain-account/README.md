@@ -20,7 +20,7 @@ On Ethereum, there are two types of accounts: externally owned accounts, control
 
 ### Definitions  
 
-The IBC handler interface & IBC relayer module interface are as defined in [ICS 25](https://github.com/cosmos/ics/blob/bez/15-ics-cosmos-signed-messages/spec/ics-025-handler-interface) and [ICS 26](https://github.com/cosmos/ics/blob/bez/15-ics-cosmos-signed-messages/spec/ics-026-relayer-module), respectively.  
+The IBC handler interface & IBC relayer module interface are as defined in [ICS 25](https://github.com/cosmos/ics/tree/master/spec/ics-025-handler-interface) and [ICS 26](https://github.com/cosmos/ics/tree/master/spec/ics-026-routing-module), respectively.  
 
 ### Desired Properties  
 
