@@ -82,7 +82,7 @@ interface RunTxPacketData {
 interface InterchainTxHandler {
   onAccountCreated(identifier: Identifier, address: Address)
   onTxSucceeded(identifier: Identifier, txBytes: Uint8Array)
-  onTxFailed(identifier: Identifier, txBytes: Uint8Array)
+  onTxFailed(identifier: Identifier, txBytes: Uint8Array, errorCode: Uint8Array)
 }
 ```
 
@@ -236,7 +236,11 @@ function onAcknowledgePacket(
   }
   if (packet.data is RunTxPacketData) {
     identifier = "{packet/destPort}/{packet.destChannel}"  
-    onTxSucceeded(identifier: Identifier, packet.data.txBytes)
+    if (acknowledgement === 0x) {
+        onTxSucceeded(identifier: Identifier, packet.data.txBytes)
+    } else {
+        onTxFailed(identifier: Identifier, packet.data.txBytes, acknowledgement)
+    }
   }
 }  
 ```
@@ -246,7 +250,8 @@ function onTimeoutPacket(packet: Packet) {
   // Receiving chain should handle this event as if the tx in packet has failed  
   if (packet.data is RunTxPacketData) {
     identifier = "{packet/destPort}/{packet.destChannel}"  
-    onTxFailed(identifier: Identifier, packet.data.txBytes)
+    // 0x99 error code means timeout.
+    onTxFailed(identifier: Identifier, packet.data.txBytes, 0x99)
   }
 }  
 ```
