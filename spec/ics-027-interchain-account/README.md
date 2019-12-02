@@ -29,7 +29,8 @@ The IBC handler interface & IBC relayer module interface are as defined in [ICS 
 
 ## Technical Specification  
 
-The implementation of interchain account is non-symmetric. This means that each chain must define the way to create a interchain account for counterparty chain deterministically.
+The implementation of interchain account is non-symmetric. This means that each chain can have a different way to generate an interchain account and deserialize the transaction bytes and a different set of transactions that they can execute. For example, chains that use cosmos-sdk will deserialize tx bytes by Amino, but if counterparty chain is a smart contract on Ethereum, it may deserialize tx bytes by ABI that is minimal serializing algorithm for smart contract.  
+Interchain account specification defines the general way to register interchain account and transfer tx bytes, and counterparty chain is responsible to deserialize and execute the tx bytes, and sending chain should know how counterparty chain handle tx bytes in advance.
 
 Each chain must satisfy following features to create a interchain account:
 
