@@ -44,6 +44,8 @@ The chain must reject the transaction and must not make a state transition in th
 - The IBC transaction fails to be deserialized.
 - The IBC transaction requests for signers that was not made by counterparty chain.
 
+It does not restrict how you can distinguish signers that was not made by the counterparty chain. But the most common way would be to record the account in state when the interchain account is registered and to verify that signers are recorded interchain account.
+
 ### Data Structures
 
 Each chain must implement below interfaces to support interchain account. ```createOutgoingPacket``` method in ```IBCAccountModule``` interface defines the way how to create an outgoing packet for a specific type. Type indicates how IBC account transaction should be constructed and serialized for the host chain. Generally, type indicates what framework the host chain was built from.  
