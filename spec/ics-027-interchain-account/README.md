@@ -3,9 +3,11 @@ ics: 27
 title: Interchain Account  
 stage: Draft  
 category: IBC/TAO  
+requires: 25, 26  
+kind: instantiation  
 author: Tony Yun <yunjh1994@everett.zone>, Dogemos <josh@tendermint.com>  
 created: 2019-08-01  
-modified: 2019-11-08  
+modified: 2019-12-02  
 ---  
 
 ## Synopsis  
