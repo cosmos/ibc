@@ -325,7 +325,15 @@ function connOpenTry(
                                clientIdentifier, counterpartyClientIdentifier, version}
     abortTransactionUnless(connection.verifyConnectionState(proofHeight, proofInit, counterpartyConnectionIdentifier, expected))
     abortTransactionUnless(connection.verifyClientConsensusState(proofHeight, proofConsensus, counterpartyClientIdentifier, expectedConsensusState))
-    abortTransactionUnless(provableStore.get(connectionPath(desiredIdentifier)) === null)
+    previous = provableStore.get(connectionPath(desiredIdentifier))
+    abortTransactionUnless(
+      (previous === null) ||
+      (previous.state === INIT &&
+        previous.counterpartyConnectionIdentifier === counterpartyConnectionIdentifier &&
+        previous.counterpartyPrefix === counterpartyPrefix &&
+        previous.clientIdentifier === clientIdentifier &&
+        previous.counterpartyClientIdentifier === counterpartyClientIdentifier &&
+        previous.version === version))
     identifier = desiredIdentifier
     state = TRYOPEN
     provableStore.set(connectionPath(identifier), connection)
