@@ -55,6 +55,8 @@ Each chain must implement the below interfaces to support interchain account. ``
 ```authenticateTx``` validates a transaction and checks that the signers in the transaction have the right permissions. ```runTx``` executes a transaction after it was authenticated successfully.
 
 ```typescript
+type Tx = obejct
+
 interface IBCAccountModule {
   createOutgoingPacket(chainType: Uint8Array, data: any)
   createAccount(address: Uint8Array)
