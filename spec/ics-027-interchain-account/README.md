@@ -24,8 +24,8 @@ The IBC handler interface & IBC relayer module interface are as defined in [ICS 
 
 - Permissionless  
 - Fault containment: Interchain account must follow rules of its host chain, even in times of Byzantine behavior by the counterparty chain (the chain that manages the account)  
-- The chain that controls the account must process the results asynchronously and according to the chain's logic.  
-- Sending and receiving transactions will be processed in an ordered manner.  
+- The chain that controls the account must process the results asynchronously and according to the chain's logic. The result should be 0x0 if the transaction was successful and an error code other than 0x0 if the transaction failed.
+- Sending and receiving transactions will be processed in an ordered channel where packets are delivered exactly in the order which they were sent.  
 
 ## Technical Specification  
 
