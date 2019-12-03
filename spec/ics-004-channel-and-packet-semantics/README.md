@@ -307,7 +307,16 @@ function chanOpenTry(
   proofHeight: uint64): CapabilityKey {
     abortTransactionUnless(validateChannelIdentifier(portIdentifier, channelIdentifier))
     abortTransactionUnless(connectionHops.length === 1) // for v1 of the IBC protocol
-    abortTransactionUnless(provableStore.get(channelPath(portIdentifier, channelIdentifier)) === null)
+    previous = provableStore.get(channelPath(portIdentifier, channelIdentifier))
+    abortTransactionUnless(
+      (previous === null) ||
+      (previous.state === INIT &&
+       previous.order === order &&
+       previous.counterpartyPortIdentifier === counterpartyPortIdentifier &&
+       previous.counterpartyChannelIdentifier === counterpartyChannelIdentifier &&
+       previous.connectionHops === connectionHops &&
+       previous.version === version)
+      )
     abortTransactionUnless(authenticate(privateStore.get(portPath(portIdentifier))))
     connection = provableStore.get(connectionPath(connectionHops[0]))
     abortTransactionUnless(connection !== null)
