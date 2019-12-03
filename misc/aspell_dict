@@ -65,7 +65,6 @@ LaTeX
 handlePacketTimeoutOnClose
 CommitmentProof
 getVerifiedRoot
-OPENTRY
 PacketTimeoutClose
 counterpartyPrefix
 provableStore

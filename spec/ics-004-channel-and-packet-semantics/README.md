@@ -86,14 +86,14 @@ Channel ends have a *state*:
 ```typescript
 enum ChannelState {
   INIT,
-  OPENTRY,
+  TRYOPEN,
   OPEN,
   CLOSED,
 }
 ```
 
 - A channel end in `INIT` state has just started the opening handshake.
-- A channel end in `OPENTRY` state has acknowledged the handshake step on the counterparty chain.
+- A channel end in `TRYOPEN` state has acknowledged the handshake step on the counterparty chain.
 - A channel end in `OPEN` state has completed the handshake and is ready to send and receive packets.
 - A channel end in `CLOSED` state has been closed and can no longer be used to send or receive packets.
 
@@ -330,7 +330,7 @@ function chanOpenTry(
       counterpartyChannelIdentifier,
       expected
     ))
-    channel = ChannelEnd{OPENTRY, order, counterpartyPortIdentifier,
+    channel = ChannelEnd{TRYOPEN, order, counterpartyPortIdentifier,
                          counterpartyChannelIdentifier, connectionHops, version}
     provableStore.set(channelPath(portIdentifier, channelIdentifier), channel)
     key = generate()
@@ -352,12 +352,12 @@ function chanOpenAck(
   proofTry: CommitmentProof,
   proofHeight: uint64) {
     channel = provableStore.get(channelPath(portIdentifier, channelIdentifier))
-    abortTransactionUnless(channel.state === INIT)
+    abortTransactionUnless(channel.state === INIT || channel.state === TRYOPEN)
     abortTransactionUnless(authenticate(privateStore.get(channelCapabilityPath(portIdentifier, channelIdentifier))))
     connection = provableStore.get(connectionPath(channel.connectionHops[0]))
     abortTransactionUnless(connection !== null)
     abortTransactionUnless(connection.state === OPEN)
-    expected = ChannelEnd{OPENTRY, channel.order, portIdentifier,
+    expected = ChannelEnd{TRYOPEN, channel.order, portIdentifier,
                           channelIdentifier, channel.connectionHops.reverse(), counterpartyVersion}
     abortTransactionUnless(connection.verifyChannelState(
       proofHeight,
@@ -383,7 +383,7 @@ function chanOpenConfirm(
   proofHeight: uint64) {
     channel = provableStore.get(channelPath(portIdentifier, channelIdentifier))
     abortTransactionUnless(channel !== null)
-    abortTransactionUnless(channel.state === OPENTRY)
+    abortTransactionUnless(channel.state === TRYOPEN)
     abortTransactionUnless(authenticate(privateStore.get(channelCapabilityPath(portIdentifier, channelIdentifier))))
     connection = provableStore.get(connectionPath(channel.connectionHops[0]))
     abortTransactionUnless(connection !== null)
