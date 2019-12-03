@@ -75,7 +75,7 @@ interface RegisterIBCAccountPacketData {
 }  
 ```
 
-`RunTxPacketData` is used to execute a transaction on an interchain account. The transaction bytes contain the transaction itself & the appropriate signatures, and are serialised in a manner appropriate for the destination chain.
+`RunTxPacketData` is used to execute a transaction on an interchain account. The transaction bytes contain the transaction itself and are serialised in a manner appropriate for the destination chain.
 
 ```typescript  
 interface RunTxPacketData {  
