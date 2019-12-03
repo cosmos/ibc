@@ -44,7 +44,7 @@ Also, each chain must know how the counterparty chains serialize/deserialize tra
 The chain must reject the transaction and must not make a state transition in the following cases:
 
 - The IBC transaction fails to be deserialized.
-- The IBC transaction expects signers other than the interchain accounts made by the counterparty chain..
+- The IBC transaction expects signers other than the interchain accounts made by the counterparty chain.
 
 It does not restrict how you can distinguish signers that was not made by the counterparty chain. But the most common way would be to record the account in state when the interchain account is registered and to verify that signers are recorded interchain account.
 
@@ -75,7 +75,7 @@ interface RegisterIBCAccountPacketData {
 }  
 ```
 
-`RunTxPacketData` is used to execute a transaction on an interchain account. The transaction bytes contain the transaction itself & the appropriate signatures, and are serialised in a manner appropriate for the destination chain.
+`RunTxPacketData` is used to execute a transaction on an interchain account. The transaction bytes contain the transaction itself and are serialised in a manner appropriate for the destination chain.
 
 ```typescript  
 interface RunTxPacketData {  
