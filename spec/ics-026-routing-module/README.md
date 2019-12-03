@@ -688,9 +688,11 @@ Coming soon.
 
 ## History
 
-June 9 2019 - Draft submitted
-July 28 2019 - Major revisions
-August 25 2019 - Major revisions
+Jun 9, 2019 - Draft submitted
+
+Jul 28, 2019 - Major revisions
+
+Aug 25, 2019 - Major revisions
 
 ## Copyright
 

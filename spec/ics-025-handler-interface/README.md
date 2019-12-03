@@ -82,8 +82,9 @@ Coming soon.
 
 ## History
 
-9 June 2019 - Draft written
-24 August 2019 - Revisions, cleanup
+Jun 9, 2019 - Draft written
+
+Aug 24, 2019 - Revisions, cleanup
 
 ## Copyright
 

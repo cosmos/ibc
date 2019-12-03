@@ -217,7 +217,7 @@ Coming soon.
 
 ## History
 
-29 June 2019 - Initial draft
+Jun 29, 2019 - Initial draft
 
 ## Copyright
 

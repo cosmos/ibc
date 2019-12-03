@@ -917,12 +917,17 @@ Coming soon.
 
 ## History
 
-5 June 2019 - Draft submitted
-4 July 2019 - Modifications for unordered channels & acknowledgements
-16 July 2019 - Alterations for multi-hop routing future compatibility
-29 July 2019 - Revisions to handle timeouts after connection closure
-13 August 2019 - Various edits
-25 August 2019 - Cleanup
+Jun 5, 2019 - Draft submitted
+
+Jul 4, 2019 - Modifications for unordered channels & acknowledgements
+
+Jul 16, 2019 - Alterations for multi-hop routing future compatibility
+
+Jul 29, 2019 - Revisions to handle timeouts after connection closure
+
+Aug 13, 2019 - Various edits
+
+Aug 25, 2019 - Cleanup
 
 ## Copyright
 

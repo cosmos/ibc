@@ -421,9 +421,11 @@ Coming soon.
 
 Parts of this document were inspired by the [previous IBC specification](https://github.com/cosmos/cosmos-sdk/tree/master/docs/spec/ibc).
 
-29 March 2019 - Initial draft version submitted
-17 May 2019 - Draft finalised
-29 July 2019 - Revisions to track connection set associated with client
+Mar 29, 2019 - Initial draft version submitted
+
+May 17, 2019 - Draft finalised
+
+Jul 29, 2019 - Revisions to track connection set associated with client
 
 ## Copyright
 

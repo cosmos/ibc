@@ -226,9 +226,11 @@ Coming soon.
 
 ## History
 
-30 March 2019 - Initial draft submitted
-15 April 2019 - Revisions for formatting and clarity
-23 April 2019 - Revisions from comments; draft merged
+Mar 30, 2019 - Initial draft submitted
+
+Apr 15, 2019 - Revisions for formatting and clarity
+
+Apr 23, 2019 - Revisions from comments; draft merged
 
 ## Copyright
 
