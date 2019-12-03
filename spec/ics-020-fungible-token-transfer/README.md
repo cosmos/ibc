@@ -316,9 +316,11 @@ Coming soon.
 
 ## History
 
-15 July 2019 - Draft written
-29 July 2019 - Major revisions; cleanup
-25 August 2019 - Major revisions, more cleanup
+Jul 15, 2019 - Draft written
+
+Jul 29, 2019 - Major revisions; cleanup
+
+Aug 25, 2019 - Major revisions, more cleanup
 
 ## Copyright
 

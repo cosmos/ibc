@@ -288,10 +288,13 @@ POC for Interchain account on Ethereum: https://github.com/everett-protocol/ethe
 
 ## History  
 
-01 August 2019 - Concept discussed  
-24 September 2019 - Draft suggested  
-8  November 2019 - Major revisions  
-2 December 2019 - Minor revisions (Add more specific description & Add interchain account on Ethereum)
+Aug 1, 2019 - Concept discussed
+
+Sep 24, 2019 - Draft suggested
+
+Nov 8, 2019 - Major revisions
+
+Dec 2, 2019 - Minor revisions (Add more specific description & Add interchain account on Ethereum)
 
 ## Copyright  
 

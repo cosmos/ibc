@@ -286,7 +286,7 @@ Security definitions are mostly sourced from these papers (and simplified somewh
 
 Thanks to Dev Ojha for extensive comments on this specification.
 
-25 April 2019 - Draft submitted
+Apr 25, 2019 - Draft submitted
 
 ## Copyright
 
