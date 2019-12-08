@@ -10,26 +10,26 @@ created: 2019-08-01
 modified: 2019-12-02  
 ---  
 
-## Synopsis  
+## Synopsis
 
 This standard document specifies packet data structure, state machine handling logic, and encoding details for the account management system over an IBC channel between separate chains.  
 
-### Motivation  
+### Motivation
 
 On Ethereum, there are two types of accounts: externally owned accounts, controlled by private keys, and contract accounts, controlled by their contract code [[ref](https://github.com/ethereum/wiki/wiki/White-Paper)]. Similar to Ethereum's CA (contract accounts), interchain accounts are managed by another chain while retaining all the capabilities of a normal account (i.e. stake, send, vote, etc). While an Ethereum CA's contract logic is performed within Ethereum's EVM, interchain accounts are managed by another chain via IBC in a way such that the owner of the account retains full control over how it behaves.  
 
-### Definitions  
+### Definitions
 
-The IBC handler interface & IBC relayer module interface are as defined in [ICS 25](https://github.com/cosmos/ics/tree/master/spec/ics-025-handler-interface) and [ICS 26](https://github.com/cosmos/ics/tree/master/spec/ics-026-routing-module), respectively.  
+The IBC handler interface & IBC relayer module interface are as defined in [ICS 25](../ics-025-handler-interface) and [ICS 26](../ics-026-routing-module), respectively.  
 
-### Desired Properties  
+### Desired Properties
 
 - Permissionless  
-- Fault containment: Interchain account must follow rules of its host chain, even in times of Byzantine behavior by the counterparty chain (the chain that manages the account)  
+- Fault containment: Interchain account must follow rules of its host chain, even in times of Byzantine behaviour by the counterparty chain (the chain that manages the account)  
 - The chain that controls the account must process the results asynchronously and according to the chain's logic. The result should be 0x0 if the transaction was successful and an error code other than 0x0 if the transaction failed.
 - Sending and receiving transactions will be processed in an ordered channel where packets are delivered exactly in the order which they were sent.  
 
-## Technical Specification  
+## Technical Specification
 
 The implementation of interchain account is non-symmetric. This means that each chain can have a different way to generate an interchain account and deserialise the transaction bytes and a different set of transactions that they can execute. For example, chains that use the Cosmos SDK will deserialise tx bytes using Amino, but if the counterparty chain is a smart contract on Ethereum, it may deserialise tx bytes by an ABI that is a minimal serialisation algorithm for the smart contract.
 The interchain account specification defines the general way to register an interchain account and transfer tx bytes. The counterparty chain is responsible for deserialising and executing the tx bytes, and the sending chain should know how counterparty chain will handle the tx bytes in advance.
@@ -39,7 +39,7 @@ Each chain must satisfy following features to create a interchain account:
 - New interchain accounts must not conflict with existing ones.
 - Each chain must keep track of which counterparty chain created each new interchain account.
 
-Also, each chain must know how the counterparty chains serialise/deserialise transaction bytes in order to send transactions via IBC. And the counterparty chain must implement the process of safely exececuting IBC transactions by verifying the authority of the transaction's signers.
+Also, each chain must know how the counterparty chains serialise/deserialise transaction bytes in order to send transactions via IBC. And the counterparty chain must implement the process of safely executing IBC transactions by verifying the authority of the transaction's signers.
 
 The chain must reject the transaction and must not make a state transition in the following cases:
 
@@ -67,7 +67,7 @@ interface IBCAccountModule {
 }
 ```
 
-`RegisterIBCAccountPacketData` is used by the counterparty chain to register an account. An interchain account's address is defined deterministically with the channel identifier and salt. The ```generateAccount``` method is used to generate a new interchain account's address. It is recommended to generate address by ```hash(identifier+salt)```, but other methods may be used. This function must generate a unique and deterministic address by utilizing identifier and salt.
+`RegisterIBCAccountPacketData` is used by the counterparty chain to register an account. An interchain account's address is defined deterministically with the channel identifier and salt. The ```generateAccount``` method is used to generate a new interchain account's address. It is recommended to generate address by ```hash(identifier+salt)```, but other methods may be used. This function must generate a unique and deterministic address by utilising identifier and salt.
 
 ```typescript  
 interface RegisterIBCAccountPacketData {  
@@ -93,13 +93,13 @@ interface InterchainTxHandler {
 }
 ```
 
-### Subprotocols  
+### Subprotocols
 
 The subprotocols described herein should be implemented in a "interchain-account-bridge" module with access to a router and codec (decoder or unmarshaller) for the application and access to the IBC relayer module.  
 
-### Port & channel setup  
+### Port & channel setup
 
-The `setup` function must be called exactly once when the module is created (perhaps when the blockchain itself is initialized) to bind to the appropriate port and create an escrow address (owned by the module).  
+The `setup` function must be called exactly once when the module is created (perhaps when the blockchain itself is initialised) to bind to the appropriate port and create an escrow address (owned by the module).  
 
 ```typescript  
 function setup() {  
@@ -123,9 +123,9 @@ Once the `setup` function has been called, channels can be created through the I
 
 An administrator (with the permissions to create connections & channels on the host state machine) is responsible for setting up connections to other state machines & creating channels to other instances of this module (or another module supporting this interface) on other chains. This specification defines packet handling semantics only, and defines them in such a fashion that the module itself doesn't need to worry about what connections or channels might or might not exist at any point in time.
 
-### Routing module callbacks  
+### Routing module callbacks
 
-### Channel lifecycle management  
+### Channel lifecycle management
 
 Both machines `A` and `B` accept new channels from any module on another machine, if and only if:  
 
@@ -206,7 +206,7 @@ function onChanCloseConfirm(
 }  
 ```
 
-### Packet relay  
+### Packet relay
 
 In plain English, between chains `A` and `B`. It will describe only the case that chain A wants to register an Interchain account on chain B and control it. Moreover, this system can also be applied the other way around.  
 
@@ -269,24 +269,24 @@ function onTimeoutPacketClose(packet: Packet) {
 }  
 ```
 
-## Backwards Compatibility  
+## Backwards Compatibility
 
 Not applicable.
 
-## Forwards Compatibility  
+## Forwards Compatibility
 
 Not applicable.
 
-## Example Implementation  
+## Example Implementation
 
 Pseudocode for cosmos-sdk: https://github.com/everett-protocol/everett-hackathon/tree/master/x/interchain-account  
 POC for Interchain account on Ethereum: https://github.com/everett-protocol/ethereum-interchain-account
 
-## Other Implementations  
+## Other Implementations
 
 (links to or descriptions of other implementations)  
 
-## History  
+## History
 
 Aug 1, 2019 - Concept discussed
 
@@ -296,6 +296,6 @@ Nov 8, 2019 - Major revisions
 
 Dec 2, 2019 - Minor revisions (Add more specific description & Add interchain account on Ethereum)
 
-## Copyright  
+## Copyright
 
 All content herein is licensed under [Apache 2.0](https://www.apache.org/licenses/LICENSE-2.0).
