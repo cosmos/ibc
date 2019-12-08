@@ -75,6 +75,7 @@ All standards at or past the "Draft" stage are listed here in order of their ICS
 | Interchain Standard Number                 | Standard Title          | Stage |
 | ------------------------------------------ | ----------------------- | ----- |
 | [20](spec/ics-020-fungible-token-transfer) | Fungible Token Transfer | Draft |
+| [27](spec/ics-027-interchain-accounts)     | Interchain Accounts     | Draft |
 
 ## Standard Dependency Visualisation
 
