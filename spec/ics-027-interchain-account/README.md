@@ -1,33 +1,33 @@
 ---
-ics: 27  
-title: Interchain Account  
-stage: Draft  
-category: IBC/TAO  
-requires: 25, 26  
-kind: instantiation  
-author: Tony Yun <yunjh1994@everett.zone>, Dogemos <josh@tendermint.com>  
-created: 2019-08-01  
-modified: 2019-12-02  
----  
+ics: 27
+title: Interchain Account
+stage: Draft
+category: IBC/TAO
+requires: 25, 26
+kind: instantiation
+author: Tony Yun <yunjh1994@everett.zone>, Dogemos <josh@tendermint.com>
+created: 2019-08-01
+modified: 2019-12-02
+---
 
 ## Synopsis
 
-This standard document specifies packet data structure, state machine handling logic, and encoding details for the account management system over an IBC channel between separate chains.  
+This standard document specifies packet data structure, state machine handling logic, and encoding details for the account management system over an IBC channel between separate chains.
 
 ### Motivation
 
-On Ethereum, there are two types of accounts: externally owned accounts, controlled by private keys, and contract accounts, controlled by their contract code [[ref](https://github.com/ethereum/wiki/wiki/White-Paper)]. Similar to Ethereum's CA (contract accounts), interchain accounts are managed by another chain while retaining all the capabilities of a normal account (i.e. stake, send, vote, etc). While an Ethereum CA's contract logic is performed within Ethereum's EVM, interchain accounts are managed by another chain via IBC in a way such that the owner of the account retains full control over how it behaves.  
+On Ethereum, there are two types of accounts: externally owned accounts, controlled by private keys, and contract accounts, controlled by their contract code [[ref](https://github.com/ethereum/wiki/wiki/White-Paper)]. Similar to Ethereum's CA (contract accounts), interchain accounts are managed by another chain while retaining all the capabilities of a normal account (i.e. stake, send, vote, etc). While an Ethereum CA's contract logic is performed within Ethereum's EVM, interchain accounts are managed by another chain via IBC in a way such that the owner of the account retains full control over how it behaves.
 
 ### Definitions
 
-The IBC handler interface & IBC relayer module interface are as defined in [ICS 25](../ics-025-handler-interface) and [ICS 26](../ics-026-routing-module), respectively.  
+The IBC handler interface & IBC relayer module interface are as defined in [ICS 25](../ics-025-handler-interface) and [ICS 26](../ics-026-routing-module), respectively.
 
 ### Desired Properties
 
-- Permissionless  
-- Fault containment: Interchain account must follow rules of its host chain, even in times of Byzantine behaviour by the counterparty chain (the chain that manages the account)  
+- Permissionless
+- Fault containment: Interchain account must follow rules of its host chain, even in times of Byzantine behaviour by the counterparty chain (the chain that manages the account)
 - The chain that controls the account must process the results asynchronously and according to the chain's logic. The result should be 0x0 if the transaction was successful and an error code other than 0x0 if the transaction failed.
-- Sending and receiving transactions will be processed in an ordered channel where packets are delivered exactly in the order which they were sent.  
+- Sending and receiving transactions will be processed in an ordered channel where packets are delivered exactly in the order which they were sent.
 
 ## Technical Specification
 
@@ -69,18 +69,18 @@ interface IBCAccountModule {
 
 `RegisterIBCAccountPacketData` is used by the counterparty chain to register an account. An interchain account's address is defined deterministically with the channel identifier and salt. The ```generateAccount``` method is used to generate a new interchain account's address. It is recommended to generate address by ```hash(identifier+salt)```, but other methods may be used. This function must generate a unique and deterministic address by utilising identifier and salt.
 
-```typescript  
-interface RegisterIBCAccountPacketData {  
-  salt: Uint8Array  
-}  
+```typescript
+interface RegisterIBCAccountPacketData {
+  salt: Uint8Array
+}
 ```
 
 `RunTxPacketData` is used to execute a transaction on an interchain account. The transaction bytes contain the transaction itself and are serialised in a manner appropriate for the destination chain.
 
-```typescript  
-interface RunTxPacketData {  
-  txBytes: Uint8Array  
-}  
+```typescript
+interface RunTxPacketData {
+  txBytes: Uint8Array
+}
 ```
 
 The ```IBCAccountHandler``` interface allows the source chain to receive results of executing transactions on an interchain account.
@@ -95,31 +95,31 @@ interface InterchainTxHandler {
 
 ### Subprotocols
 
-The subprotocols described herein should be implemented in a "interchain-account-bridge" module with access to a router and codec (decoder or unmarshaller) for the application and access to the IBC relayer module.  
+The subprotocols described herein should be implemented in a "interchain-account-bridge" module with access to a router and codec (decoder or unmarshaller) for the application and access to the IBC relayer module.
 
 ### Port & channel setup
 
-The `setup` function must be called exactly once when the module is created (perhaps when the blockchain itself is initialised) to bind to the appropriate port and create an escrow address (owned by the module).  
+The `setup` function must be called exactly once when the module is created (perhaps when the blockchain itself is initialised) to bind to the appropriate port and create an escrow address (owned by the module).
 
-```typescript  
-function setup() {  
-  relayerModule.bindPort("interchain-account", ModuleCallbacks{  
-    onChanOpenInit,  
-    onChanOpenTry,  
-    onChanOpenAck,  
-    onChanOpenConfirm,  
-    onChanCloseInit,  
-    onChanCloseConfirm,  
-    onSendPacket,  
-    onRecvPacket,  
-    onTimeoutPacket,  
-    onAcknowledgePacket,  
-    onTimeoutPacketClose  
-  })  
-}  
+```typescript
+function setup() {
+  relayerModule.bindPort("interchain-account", ModuleCallbacks{
+    onChanOpenInit,
+    onChanOpenTry,
+    onChanOpenAck,
+    onChanOpenConfirm,
+    onChanCloseInit,
+    onChanCloseConfirm,
+    onSendPacket,
+    onRecvPacket,
+    onTimeoutPacket,
+    onAcknowledgePacket,
+    onTimeoutPacketClose
+  })
+}
 ```
 
-Once the `setup` function has been called, channels can be created through the IBC relayer module between instances of the interchain account module on separate chains.  
+Once the `setup` function has been called, channels can be created through the IBC relayer module between instances of the interchain account module on separate chains.
 
 An administrator (with the permissions to create connections & channels on the host state machine) is responsible for setting up connections to other state machines & creating channels to other instances of this module (or another module supporting this interface) on other chains. This specification defines packet handling semantics only, and defines them in such a fashion that the module itself doesn't need to worry about what connections or channels might or might not exist at any point in time.
 
@@ -127,146 +127,144 @@ An administrator (with the permissions to create connections & channels on the h
 
 ### Channel lifecycle management
 
-Both machines `A` and `B` accept new channels from any module on another machine, if and only if:  
+Both machines `A` and `B` accept new channels from any module on another machine, if and only if:
 
-- The other module is bound to the "interchain account" port.  
-- The channel being created is ordered.  
-- The version string is empty.  
+- The other module is bound to the "interchain account" port.
+- The channel being created is ordered.
+- The version string is empty.
 
-```typescript  
-function onChanOpenInit(  
-  order: ChannelOrder,  
-  connectionHops: [Identifier],  
-  portIdentifier: Identifier,  
-  channelIdentifier: Identifier,  
-  counterpartyPortIdentifier: Identifier,  
-  counterpartyChannelIdentifier: Identifier,  
-  version: string) {  
-  // only ordered channels allowed  
-  abortTransactionUnless(order === ORDERED)  
-  // only allow channels to "interchain-account" port on counterparty chain  
-  abortTransactionUnless(counterpartyPortIdentifier === "interchain-account")  
-  // version not used at present  
-  abortTransactionUnless(version === "")  
-}  
+```typescript
+function onChanOpenInit(
+  order: ChannelOrder,
+  connectionHops: [Identifier],
+  portIdentifier: Identifier,
+  channelIdentifier: Identifier,
+  counterpartyPortIdentifier: Identifier,
+  counterpartyChannelIdentifier: Identifier,
+  version: string) {
+  // only ordered channels allowed
+  abortTransactionUnless(order === ORDERED)
+  // only allow channels to "interchain-account" port on counterparty chain
+  abortTransactionUnless(counterpartyPortIdentifier === "interchain-account")
+  // version not used at present
+  abortTransactionUnless(version === "")
+}
 ```
 
-```typescript  
-function onChanOpenTry(  
-  order: ChannelOrder,  
-  connectionHops: [Identifier],  
-  portIdentifier: Identifier,  
-  channelIdentifier: Identifier,  
-  counterpartyPortIdentifier: Identifier,  
-  counterpartyChannelIdentifier: Identifier,  
-  version: string,  
-  counterpartyVersion: string) {  
-  // only ordered channels allowed  
-  abortTransactionUnless(order === ORDERED)  
-  // version not used at present  
-  abortTransactionUnless(version === "")  
-  abortTransactionUnless(counterpartyVersion === "")  
-  // only allow channels to "interchain-account" port on counterparty chain  
-  abortTransactionUnless(counterpartyPortIdentifier === "interchain-account")  
-}  
+```typescript
+function onChanOpenTry(
+  order: ChannelOrder,
+  connectionHops: [Identifier],
+  portIdentifier: Identifier,
+  channelIdentifier: Identifier,
+  counterpartyPortIdentifier: Identifier,
+  counterpartyChannelIdentifier: Identifier,
+  version: string,
+  counterpartyVersion: string) {
+  // only ordered channels allowed
+  abortTransactionUnless(order === ORDERED)
+  // version not used at present
+  abortTransactionUnless(version === "")
+  abortTransactionUnless(counterpartyVersion === "")
+  // only allow channels to "interchain-account" port on counterparty chain
+  abortTransactionUnless(counterpartyPortIdentifier === "interchain-account")
+}
 ```
 
-```typescript  
-function onChanOpenAck(  
-  portIdentifier: Identifier,  
-  channelIdentifier: Identifier,  
-  version: string) {  
-  // version not used at present  
-  abortTransactionUnless(version === "")  
-  // port has already been validated  
-}  
+```typescript
+function onChanOpenAck(
+  portIdentifier: Identifier,
+  channelIdentifier: Identifier,
+  version: string) {
+  // version not used at present
+  abortTransactionUnless(version === "")
+  // port has already been validated
+}
 ```
 
-```typescript  
-function onChanOpenConfirm(  
-  portIdentifier: Identifier,  
-  channelIdentifier: Identifier) {  
-  // accept channel confirmations, port has already been validated  
-}  
+```typescript
+function onChanOpenConfirm(
+  portIdentifier: Identifier,
+  channelIdentifier: Identifier) {
+  // accept channel confirmations, port has already been validated
+}
 ```
 
-```typescript  
-function onChanCloseInit(  
-  portIdentifier: Identifier,  
-  channelIdentifier: Identifier) {  
-  // no action necessary  
-}  
+```typescript
+function onChanCloseInit(
+  portIdentifier: Identifier,
+  channelIdentifier: Identifier) {
+  // no action necessary
+}
 ```
 
-```typescript  
-function onChanCloseConfirm(  
-  portIdentifier: Identifier,  
-  channelIdentifier: Identifier) {  
-  // no action necessary  
-}  
+```typescript
+function onChanCloseConfirm(
+  portIdentifier: Identifier,
+  channelIdentifier: Identifier) {
+  // no action necessary
+}
 ```
 
 ### Packet relay
 
-In plain English, between chains `A` and `B`. It will describe only the case that chain A wants to register an Interchain account on chain B and control it. Moreover, this system can also be applied the other way around.  
+In plain English, between chains `A` and `B`. It will describe only the case that chain A wants to register an Interchain account on chain B and control it. Moreover, this system can also be applied the other way around.
 
-```typescript  
-function onRecvPacket(packet: Packet): bytes {  
-  if (packet.data is RunTxPacketData) {  
+```typescript
+function onRecvPacket(packet: Packet): bytes {
+  if (packet.data is RunTxPacketData) {
     const tx = deserialiseTx(packet.data.txBytes)
-    abortTransactionUnless(authenticateTx(tx) == true)
+    abortTransactionUnless(authenticateTx(tx))
     return runTx(tx)
-  }  
-      
-  if (packet.data is RegisterIBCAccountPacketData) {  
-    RegisterIBCAccountPacketData data = packet.data  
-    identifier = "{packet/sourcePort}/{packet.sourceChannel}"  
+  }
+
+  if (packet.data is RegisterIBCAccountPacketData) {
+    RegisterIBCAccountPacketData data = packet.data
+    identifier = "{packet/sourcePort}/{packet.sourceChannel}"
     const address = generateAddress(identifier, packet.salt)
     createAccount(address)
     // Return generated address.
     return address
-  }   
-      
-  return 0x  
-}  
+  }
+
+  return 0x
+}
 ```
 
-```typescript  
-function onAcknowledgePacket(  
-  packet: Packet,  
-  acknowledgement: bytes) {  
-  if (packet.data is RegisterIBCAccountPacketData) {
+```typescript
+function onAcknowledgePacket(
+  packet: Packet,
+  acknowledgement: bytes) {
+  if (packet.data is RegisterIBCAccountPacketData)
     if (acknowledgement !== 0x) {
       identifier = "{packet/sourcePort}/{packet.sourceChannel}"
       onAccountCreated(identifier, acknowledgement)
     }
-  }
   if (packet.data is RunTxPacketData) {
-    identifier = "{packet/destPort}/{packet.destChannel}"  
-    if (acknowledgement === 0x) {
+    identifier = "{packet/destPort}/{packet.destChannel}"
+    if (acknowledgement === 0x)
         onTxSucceeded(identifier: Identifier, packet.data.txBytes)
-    } else {
+    else
         onTxFailed(identifier: Identifier, packet.data.txBytes, acknowledgement)
-    }
   }
-}  
+}
 ```
 
-```typescript  
-function onTimeoutPacket(packet: Packet) {  
-  // Receiving chain should handle this event as if the tx in packet has failed  
+```typescript
+function onTimeoutPacket(packet: Packet) {
+  // Receiving chain should handle this event as if the tx in packet has failed
   if (packet.data is RunTxPacketData) {
-    identifier = "{packet/destPort}/{packet.destChannel}"  
+    identifier = "{packet/destPort}/{packet.destChannel}"
     // 0x99 error code means timeout.
     onTxFailed(identifier: Identifier, packet.data.txBytes, 0x99)
   }
-}  
+}
 ```
 
-```typescript  
-function onTimeoutPacketClose(packet: Packet) {  
-  // nothing is necessary  
-}  
+```typescript
+function onTimeoutPacketClose(packet: Packet) {
+  // nothing is necessary
+}
 ```
 
 ## Backwards Compatibility
@@ -279,12 +277,12 @@ Not applicable.
 
 ## Example Implementation
 
-Pseudocode for cosmos-sdk: https://github.com/everett-protocol/everett-hackathon/tree/master/x/interchain-account  
+Pseudocode for cosmos-sdk: https://github.com/everett-protocol/everett-hackathon/tree/master/x/interchain-account
 POC for Interchain account on Ethereum: https://github.com/everett-protocol/ethereum-interchain-account
 
 ## Other Implementations
 
-(links to or descriptions of other implementations)  
+(links to or descriptions of other implementations)
 
 ## History
 
