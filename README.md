@@ -20,6 +20,8 @@ To add your project to this list, submit a pull request.
 
 Learn more about the [IBC Ecosystem Working Group](./ecosystem/README.md).
 
+Check out a list of [frequently asked questions](./ibc/6_IBC_FAQ.md).
+
 ## Standardisation
 
 Please see [ICS 1](spec/ics-001-ics-standard) for a description of what a standard entails.
