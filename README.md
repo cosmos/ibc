@@ -52,30 +52,30 @@ All standards at or past the "Draft" stage are listed here in order of their ICS
 
 ### Meta
 
-| Interchain Standard Number     | Standard Title             | Stage |
-| ------------------------------ | -------------------------- | ----- |
-| [1](spec/ics-001-ics-standard) | ICS Specification Standard | Draft |
+| Interchain Standard Number     | Kind | Standard Title             | Stage |
+| ------------------------------ | ---- | -------------------------- | ----- |
+| [1](spec/ics-001-ics-standard) | Meta | ICS Specification Standard | Draft |
 
 ### IBC/TAO
 
-| Interchain Standard Number                     | Standard Title             | Stage |
-| ---------------------------------------------- | -------------------------- | ----- |
-| [2](spec/ics-002-client-semantics)             | Client Semantics           | Draft |
-| [3](spec/ics-003-connection-semantics)         | Connection Semantics       | Draft |
-| [4](spec/ics-004-channel-and-packet-semantics) | Channel & Packet Semantics | Draft |
-| [5](spec/ics-005-port-allocation)              | Port Allocation            | Draft |
-| [18](spec/ics-018-relayer-algorithms)          | Relayer Algorithms         | Draft |
-| [23](spec/ics-023-vector-commitments)          | Vector Commitments         | Draft |
-| [24](spec/ics-024-host-requirements)           | Host Requirements          | Draft |
-| [25](spec/ics-025-handler-interface)           | Handler Interface          | Draft |
-| [26](spec/ics-026-routing-module)              | Routing Module             | Draft |
+| Interchain Standard Number                     | Kind           | Standard Title             | Stage |
+| ---------------------------------------------- | -------------- | -------------------------- | ----- |
+| [2](spec/ics-002-client-semantics)             | Interface      | Client Semantics           | Draft |
+| [3](spec/ics-003-connection-semantics)         | Instantiation  | Connection Semantics       | Draft |
+| [4](spec/ics-004-channel-and-packet-semantics) | Instantiation  | Channel & Packet Semantics | Draft |
+| [5](spec/ics-005-port-allocation)              | Interface      | Port Allocation            | Draft |
+| [18](spec/ics-018-relayer-algorithms)          | Interface      | Relayer Algorithms         | Draft |
+| [23](spec/ics-023-vector-commitments)          | Interface      | Vector Commitments         | Draft |
+| [24](spec/ics-024-host-requirements)           | Interface      | Host Requirements          | Draft |
+| [25](spec/ics-025-handler-interface)           | Interface      | Handler Interface          | Draft |
+| [26](spec/ics-026-routing-module)              | Interface      | Routing Module             | Draft |
 
 ### IBC/APP
 
-| Interchain Standard Number                 | Standard Title          | Stage |
-| ------------------------------------------ | ----------------------- | ----- |
-| [20](spec/ics-020-fungible-token-transfer) | Fungible Token Transfer | Draft |
-| [27](spec/ics-027-interchain-accounts)     | Interchain Accounts     | Draft |
+| Interchain Standard Number                 | Kind           | Standard Title          | Stage |
+| ------------------------------------------ | -------------- |----------------------- | ----- |
+| [20](spec/ics-020-fungible-token-transfer) | Instantiation  | Fungible Token Transfer | Draft |
+| [27](spec/ics-027-interchain-accounts)     | Instantiation  | Interchain Accounts     | Draft |
 
 ## Standard Dependency Visualisation
 
