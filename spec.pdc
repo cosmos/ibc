@@ -112,3 +112,7 @@ header-includes:
 # Appendix C: Canonical Encoding
 
 !include ibc/CANONICAL_ENCODING.md.xfm
+
+# Appendix D: Frequently-Asked Questions
+
+!include ibc/6_IBC_FAQ.md.xfm
