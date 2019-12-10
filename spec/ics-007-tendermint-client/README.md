@@ -39,22 +39,27 @@ This specification must satisfy the client interface defined in ICS 2.
 ### Sub-protocols
 
 ```typescript
+interface Header {
+  height: uint64
+  commitmentRoot: []byte
+  signatures: []Signature
+}
+
+interface StoredHeader {
+  validatorSetHash: []byte
+  commitmentRoot: []byte
+}
+
 interface ClientState {
-  frozen: boolean
-  pastPublicKeys: Set<PublicKey>
-  verifiedRoots: Map<uint64, CommitmentRoot>
+  consensusState: ConsensusState
+  pastHeaders: Map<uint64, StoredHeader>
+  frozenHeight: Maybe<uint64>
 }
 
 interface ConsensusState {
-  sequence: uint64
-  publicKey: PublicKey
-}
-
-interface Header {
-  sequence: uint64
-  commitmentRoot: CommitmentRoot
-  signature: Signature
-  newPublicKey: Maybe<PublicKey>
+  validatorSet: List<Pair<Address, uint64>>
+  latestHeight: uint64
+  latestHeader: StoredHeader
 }
 
 interface Evidence {
@@ -62,22 +67,12 @@ interface Evidence {
   h2: Header
 }
 
-// algorithm run by operator to commit a new block
-function commit(
-  commitmentRoot: CommitmentRoot,
-  sequence: uint64,
-  newPublicKey: Maybe<PublicKey>): Header {
-    signature = privateKey.sign(commitmentRoot, sequence, newPublicKey)
-    header = {sequence, commitmentRoot, signature, newPublicKey}
-    return header
-}
-
 // initialisation function defined by the client type
 function initialize(consensusState: ConsensusState): ClientState {
   return {
-    frozen: false,
-    pastPublicKeys: Set.singleton(consensusState.publicKey),
-    verifiedRoots: Map.empty()
+    consensusState: consensusState,
+    frozenHeight: null,
+    pastHeaders: Map.singleton(consensusState.latestHeight, consensusState.latestHeader)
   }
 }
 
@@ -85,14 +80,11 @@ function initialize(consensusState: ConsensusState): ClientState {
 function checkValidityAndUpdateState(
   clientState: ClientState,
   header: Header) {
-    abortTransactionUnless(consensusState.sequence + 1 === header.sequence)
-    abortTransactionUnless(consensusState.publicKey.verify(header.signature))
-    if (header.newPublicKey !== null) {
-      consensusState.publicKey = header.newPublicKey
-      clientState.pastPublicKeys.add(header.newPublicKey)
-    }
-    consensusState.sequence = header.sequence
-    clientState.verifiedRoots[sequence] = header.commitmentRoot
+    // TODO: check height
+    // TODO: call verify function, performing bisection
+    // TODO: update latest height
+    // TODO: update latest header
+    // TODO: store verified header info
 }
 
 function verifyClientConsensusState(
@@ -103,8 +95,8 @@ function verifyClientConsensusState(
   clientIdentifier: Identifier,
   consensusState: ConsensusState) {
     path = applyPrefix(prefix, "clients/{clientIdentifier}/consensusState")
-    abortTransactionUnless(!clientState.frozen)
-    return clientState.verifiedRoots[sequence].verifyMembership(path, consensusState, proof)
+    // TODO: check frozen height
+    // TODO: return root.verifyMembership
 }
 
 function verifyConnectionState(
@@ -115,8 +107,8 @@ function verifyConnectionState(
   connectionIdentifier: Identifier,
   connectionEnd: ConnectionEnd) {
     path = applyPrefix(prefix, "connection/{connectionIdentifier}")
-    abortTransactionUnless(!clientState.frozen)
-    return clientState.verifiedRoots[sequence].verifyMembership(path, connectionEnd, proof)
+    // TODO: check frozen height
+    // TODO: return root.verifyMembership
 }
 
 function verifyChannelState(
@@ -128,8 +120,8 @@ function verifyChannelState(
   channelIdentifier: Identifier,
   channelEnd: ChannelEnd) {
     path = applyPrefix(prefix, "ports/{portIdentifier}/channels/{channelIdentifier}")
-    abortTransactionUnless(!clientState.frozen)
-    return clientState.verifiedRoots[sequence].verifyMembership(path, channelEnd, proof)
+    // TODO: check frozen height
+    // TODO: return root.verifyMembership
 }
 
 function verifyPacketCommitment(
@@ -142,8 +134,8 @@ function verifyPacketCommitment(
   sequence: uint64,
   commitment: bytes) {
     path = applyPrefix(prefix, "ports/{portIdentifier}/channels/{channelIdentifier}/packets/{sequence}")
-    abortTransactionUnless(!clientState.frozen)
-    return clientState.verifiedRoots[sequence].verifyMembership(path, commitment, proof)
+    // TODO: check frozen height
+    // TODO: return root.verifyMembership
 }
 
 function verifyPacketAcknowledgement(
@@ -156,8 +148,8 @@ function verifyPacketAcknowledgement(
   sequence: uint64,
   acknowledgement: bytes) {
     path = applyPrefix(prefix, "ports/{portIdentifier}/channels/{channelIdentifier}/acknowledgements/{sequence}")
-    abortTransactionUnless(!clientState.frozen)
-    return clientState.verifiedRoots[sequence].verifyMembership(path, acknowledgement, proof)
+    // TODO: check frozen height
+    // TODO: return root.verifyMembership
 }
 
 function verifyPacketAcknowledgementAbsence(
@@ -169,8 +161,8 @@ function verifyPacketAcknowledgementAbsence(
   channelIdentifier: Identifier,
   sequence: uint64) {
     path = applyPrefix(prefix, "ports/{portIdentifier}/channels/{channelIdentifier}/acknowledgements/{sequence}")
-    abortTransactionUnless(!clientState.frozen)
-    return clientState.verifiedRoots[sequence].verifyNonMembership(path, proof)
+    // TODO: check frozen height
+    // TODO: return root.verifyMembership
 }
 
 function verifyNextSequenceRecv(
@@ -182,8 +174,8 @@ function verifyNextSequenceRecv(
   channelIdentifier: Identifier,
   nextSequenceRecv: uint64) {
     path = applyPrefix(prefix, "ports/{portIdentifier}/channels/{channelIdentifier}/nextSequenceRecv")
-    abortTransactionUnless(!clientState.frozen)
-    return clientState.verifiedRoots[sequence].verifyMembership(path, nextSequenceRecv, proof)
+    // TODO: check frozen height
+    // TODO: return root.verifyMembership
 }
 
 // misbehaviour verification function defined by the client type
@@ -191,20 +183,14 @@ function verifyNextSequenceRecv(
 function checkMisbehaviourAndUpdateState(
   clientState: ClientState,
   evidence: Evidence) {
-    h1 = evidence.h1
-    h2 = evidence.h2
-    abortTransactionUnless(clientState.pastPublicKeys.contains(h1.publicKey))
-    abortTransactionUnless(h1.sequence === h2.sequence)
-    abortTransactionUnless(h1.commitmentRoot !== h2.commitmentRoot || h1.publicKey !== h2.publicKey)
-    abortTransactionUnless(h1.publicKey.verify(h1.signature))
-    abortTransactionUnless(h2.publicKey.verify(h2.signature))
-    clientState.frozen = true
+    // TODO: check equivocation or "would have been fooled"
+    // TODO: set frozen height accordingly
 }
 ```
 
 ### Properties & Invariants
 
-(properties & invariants maintained by the protocols specified, if applicable)
+Correctness guarantees as provided by the Tendermint light client algorithm.
 
 ## Backwards Compatibility
 
