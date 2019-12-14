@@ -3,6 +3,7 @@ ics: '18'
 title: Relayer 알고리즘
 stage: 초안
 category: IBC/TAO
+kind: interface
 requires: 24, 25, 26
 author: Christopher Goes <cwgoes@tendermint.com>
 created: '2019-03-07'
@@ -35,9 +36,13 @@ IBC 프로토콜에서, 블록체인은 다른 체인으로 특정 정보를 보
 
 Relayer 알고리즘은 IBC 프로토콜로 구현된 체인 집합 `C`에서 정의됩니다. 각 relayer는 꼭 인터체인 네트워크의 모든 체인의 상태를 읽거나 데이터그램을 쓸 필요는 없습니다 (특히 허가형 또는 프라이빗 체인의 경우) — 다른 relayer는 다른 부분집합 사이를 중계할 것입니다.
 
-`pendingDatagrams`은 두 체인에 상태에 따라서 한 체인에서 다른 체인으로 전달되는 모든 유효한 데이터그램 집합을 계산합니다. 이 함수의 하위 구성요소는 개별 ICS에 정의됩니다. Relayer는 중계하려는 블록체인이 IBC 프로토콜의 어떤 부분을 구현했는지에 대한 사전 지식을 가지고 있어야 합니다 (예. 소스 코드를 읽음).
+`pendingDatagrams`은 한 체인에서 다른 체인으로 전달되는 모든 유효한 데이터그램 집합을 두 체인의 상태에 기반하여 계산합니다. Relayer는 중계하려는 블록체인이 IBC 프로토콜의 어떤 부분을 구현했는지 사전에 알고 있어야 합니다 (예. 소스 코드를 읽음). 이 예시는 아래에 정의됩니다.
 
-`submitDatagram`은 체인마다 정의된 (일종의 트랜잭션을 제출하는) 절차입니다.
+`submitDatagram`은 체인마다 정의된 (일종의 트랜잭션을 제출하는) 절차입니다. 여러 데이터그램은 각각 하나의 트랜잭션으로, 또는 체인이 지원하는 경우 원자성을 가지고 하나의 트랜잭션으로 제출될 수 있습니다.
+
+Relayer는 `relay`를 자주 호출합니다. 어떤 체인에서든 블록당 한번 이상 발생하지는 않으며, relayer가 얼마나 자주 중계하는지에 따라 아마 이보다는 덜 자주 발생합니다.
+
+다른 relayer는 다른 체인들 사이를 중계합니다. 체인의 쌍이 각각 최소 하나의 올바르고 live한 relayer를 가지고 체인은 계속 live 상태이기만 하면, 네트워크에서 체인 간에 흐르는 모든 패킷은 결국 중계됩니다.
 
 ```typescript
 function relay(C: Set<Chain>) {
@@ -45,11 +50,151 @@ function relay(C: Set<Chain>) {
     for (const counterparty of C)
       if (counterparty !== chain) {
         const datagrams = chain.pendingDatagrams(counterparty)
-        for (const datagram of datagrams)
-          counterparty.submitDatagram(datagram)
+        for (const localDatagram of datagrams[0])
+          chain.submitDatagram(localDatagram)
+        for (const counterpartyDatagram of datagrams[1])
+          counterparty.submitDatagram(counterpartyDatagram)
       }
 }
 ```
+
+### 보류 중인 데이터그램 (pending datagrams)
+
+`pendingDatagrams`은 한 machine에서 다른 machine으로 전송되는 데이터그램을 수집합니다. 이 기능의 구현은 두 machine이 지원하는 IBC 프로토콜의 범위와 보내는 machine의 상태 형식(state layout)에 따라 다릅니다. 특정한 relayer는 중계할 수 있는 일부 데이터그램만 중계하기 위해 자체 필터 기능을 구현하고자 할 수 있습니다. (예, off-chain 방식으로 중계하도록 지불된 데이터그램만 중계)
+
+두 체인간 단방향 중계를 수행하는 구현의 예시는 다음과 같습니다. 이 구현은 `chain`와 `counterparty`를 수정하여 양방향 중계를 수행하도록 변경될 수 있습니다.
+어떤 relayer 프로세스가 어떤 데이터그램을 맡을지는 유연하게 선택합니다. 이 예시에서, relayer 프로세스는 `chain`에서 시작된 모든 (양 체인에 데이터그램을 보내는) handshake를 중계하고, `chain`에서 `counterparty`로 보내는 모든 패킷을 중계하며, `counterparty`에서 `chain`로 보내는 모든 패킷의 승인을 중계합니다.
+
+```typescript
+function pendingDatagrams(chain: Chain, counterparty: Chain): List<Set<Datagram>> {
+  const localDatagrams = []
+  const counterpartyDatagrams = []
+
+  // ICS2 : Clients
+  // - light client가 업데이트 될 필요가 있는지 결정 (local & counterparty)
+  height = chain.latestHeight()
+  client = counterparty.queryClientConsensusState(chain)
+  if client.height < height {
+    header = chain.latestHeader()
+    counterpartyDatagrams.push(ClientUpdate{chain, header})
+  }
+  counterpartyHeight = counterparty.latestHeight()
+  client = chain.queryClientConsensusState(counterparty)
+  if client.height < counterpartyHeight {
+    header = counterparty.latestHeader()
+    localDatagrams.push(ClientUpdate{counterparty, header})
+  }
+
+  // ICS3 : Connections
+  // - connection handshake가 진행 중인지 확인
+  connections = chain.getConnectionsUsingClient(counterparty)
+  for (const localEnd of connections) {
+    remoteEnd = counterparty.getConnection(localEnd.counterpartyIdentifier)
+    if (localEnd.state === INIT && remoteEnd === null)
+      // Handshake가 local에서 시작되고(1단계 완료), `connOpenTry`를 remote end으로 전달
+      counterpartyDatagrams.push(ConnOpenTry{
+        desiredIdentifier: localEnd.counterpartyConnectionIdentifier,
+        counterpartyConnectionIdentifier: localEnd.identifier,
+        counterpartyClientIdentifier: localEnd.clientIdentifier,
+        clientIdentifier: localEnd.counterpartyClientIdentifier,
+        version: localEnd.version,
+        counterpartyVersion: localEnd.version,
+        proofInit: localEnd.proof(),
+        proofConsensus: localEnd.client.consensusState.proof(),
+        proofHeight: height,
+        consensusHeight: localEnd.client.height,
+      })
+    else if (localEnd.state === INIT && remoteEnd.state === TRYOPEN)
+      // Handshake가 다른쪽 말단에서 시작되고(2단계 완료), `connOpenAck`를 local end로 전달
+      localDatagrams.push(ConnOpenAck{
+        identifier: localEnd.identifier,
+        version: remoteEnd.version,
+        proofTry: remoteEnd.proof(),
+        proofConsensus: remoteEnd.client.consensusState.proof(),
+        proofHeight: remoteEnd.client.height,
+        consensusHeight: remoteEnd.client.height,
+      })
+    else if (localEnd.state === OPEN && remoteEnd.state === TRYOPEN)
+      // Handshake는 local에서 확정되고(3단계 완료), `connOpenConfirm`를 remote end에 전달
+      counterpartyDatagrams.push(ConnOpenConfirm{
+        identifier: remoteEnd.identifier,
+        proofAck: localEnd.proof(),
+        proofHeight: height,
+      })
+  }
+
+  // ICS4 : Channels & Packets
+  // - channel handshake가 진행 중인지 확인
+  // - 패킷, 인증, 또는 타임아웃을 전달할 필요가 있는지 결정
+  channels = chain.getChannelsUsingConnections(connections)
+  for (const localEnd of channels) {
+    remoteEnd = counterparty.getConnection(localEnd.counterpartyIdentifier)
+    // 진행 중인 handshakes 처리
+    if (localEnd.state === INIT && remoteEnd === null)
+      // Handshake가 local에서 시작되고(1단계 완료), `chanOpenTry`를 remote end로 전달
+      counterpartyDatagrams.push(ChanOpenTry{
+        order: localEnd.order,
+        connectionHops: localEnd.connectionHops.reverse(),
+        portIdentifier: localEnd.counterpartyPortIdentifier,
+        channelIdentifier: localEnd.counterpartyChannelIdentifier,
+        counterpartyPortIdentifier: localEnd.portIdentifier,
+        counterpartyChannelIdentifier: localEnd.channelIdentifier,
+        version: localEnd.version,
+        counterpartyVersion: localEnd.version,
+        proofInit: localEnd.proof(),
+        proofHeight: height,
+      })
+    else if (localEnd.state === INIT && remoteEnd.state === TRYOPEN)
+      // Handshake가 다른 말단에서 시작되고(2단계 완료), `chanOpenAck`를 local end로 전달
+      localDatagrams.push(ChanOpenAck{
+        portIdentifier: localEnd.portIdentifier,
+        channelIdentifier: localEnd.channelIdentifier,
+        version: remoteEnd.version,
+        proofTry: remoteEnd.proof(),
+        proofHeight: localEnd.client.height,
+      })
+    else if (localEnd.state === OPEN && remoteEnd.state === TRYOPEN)
+      // Handshake가 local에서 확정되고(3단계 완료), `chanOpenConfirm`을 remote end로 전달
+      counterpartyDatagrams.push(ChanOpenConfirm{
+        portIdentifier: remoteEnd.portIdentifier,
+        channelIdentifier: remoteEnd.channelIdentifier,
+        proofAck: localEnd.proof(),
+        proofHeight: height
+      })
+
+    // 패킷 처리
+    // 먼저, 보낸 패킷의 로그를 살펴보고 모두 전달
+    sentPacketLogs = queryByTopic(height, "sendPacket")
+    for (const logEntry of sentPacketLogs) {
+      // 패킷을 시퀀스 번호와 함께 전달
+      packetData = Packet{logEntry.sequence, logEntry.timeout, localEnd.portIdentifier, localEnd.channelIdentifier,
+                          remoteEnd.portIdentifier, remoteEnd.channelIdentifier, logEntry.data}
+      counterpartyDatagrams.push(PacketRecv{
+        packet: packetData,
+        proof: packet.proof(),
+        proofHeight: height,
+      })
+    }
+    // 그 다음, 받은 패킷의 로그를 살펴보고 인증을 전달
+    recvPacketLogs = queryByTopic(height, "recvPacket")
+    for (const logEntry of recvPacketLogs) {
+      // 패킷 인증을 시퀀스 번호와 함께 전달
+      packetData = Packet{logEntry.sequence, logEntry.timeout, localEnd.portIdentifier, localEnd.channelIdentifier,
+                          remoteEnd.portIdentifier, remoteEnd.channelIdentifier, logEntry.data}
+      counterpartyDatagrams.push(PacketAcknowledgement{
+        packet: packetData,
+        acknowledgement: logEntry.acknowledgement,
+        proof: packet.proof(),
+        proofHeight: height,
+      })
+    }
+  }
+
+  return [localDatagrams, counterpartyDatagrams]
+}
+```
+
+Relayer는 수수료 지불 모델(이는 달라질 수 있으므로, 이 문서에서 특정하지 않음)에 따라 특정한 클라이언트, 특정한 연결, 특정한 채널, 또는 심지어 특정한 종류의 패킷을 중계하기 위해 이 데이터그램을 필터하여 선택할 수도 있습니다.
 
 ### 순서 결정의 제약 사항
 
@@ -87,9 +232,11 @@ Relay 프로세스는 트랜잭션 수수료를 지불해야 하기 때문에 �
 
 ## 역사
 
-2019년 3월 30일 - 초안 제출
+2019년 5월 30일 - 초안 제출
+
 2019년 4월 15일 - 형식과 명확성을 위한 수정
-2019년 4월 23일 - 코멘트에 따른 수정; 초안 병합
+
+2019년 4월 23일 - 의견에 따른 수정; 초안 병합
 
 ## 저작권
 
