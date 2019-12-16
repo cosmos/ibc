@@ -3,7 +3,7 @@ ics: 6
 title: Solo Machine Client
 stage: draft
 category: IBC/TAO
-kind: instantation
+kind: instantiation
 implements: 2
 author: Christopher Goes <cwgoes@tendermint.com>
 created: 2019-12-09
