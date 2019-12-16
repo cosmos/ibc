@@ -3,7 +3,7 @@ ics: 7
 title: Tendermint Client
 stage: draft
 category: IBC/TAO
-kind: instantation
+kind: instantiation
 implements: 2
 author: Christopher Goes <cwgoes@tendermint.com>
 created: 2019-12-10
@@ -70,7 +70,7 @@ interface Evidence {
 // initialisation function defined by the client type
 function initialize(consensusState: ConsensusState): ClientState {
   return {
-    consensusState: consensusState,
+    consensusState,
     frozenHeight: null,
     pastHeaders: Map.singleton(consensusState.latestHeight, consensusState.latestHeader)
   }
