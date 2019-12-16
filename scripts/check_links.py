@@ -9,6 +9,7 @@ specs = [f.path for f in os.scandir('./spec') if f.is_dir()]
 files = [f.path for spec in specs for f in os.scandir(spec) if f.is_file() and f.path[-3:] == '.md']
 
 specs_cut = set([spec[7:] for spec in specs])
+print(specs_cut)
 
 for fn in files:
     print('Checking links in {}'.format(fn))

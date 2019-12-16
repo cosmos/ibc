@@ -38,7 +38,11 @@ The relayer algorithm is defined over a set `C` of chains implementing the IBC p
 
 `pendingDatagrams` calculates the set of all valid datagrams to be relayed from one chain to another based on the state of both chains. The relayer must possess prior knowledge of what subset of the IBC protocol is implemented by the blockchains in the set for which they are relaying (e.g. by reading the source code). An example is defined below.
 
-`submitDatagram` is a procedure defined per-chain (submitting a transaction of some sort).
+`submitDatagram` is a procedure defined per-chain (submitting a transaction of some sort). Datagrams can be submitted individually as single transactions or atomically as a single transaction if the chain supports it.
+
+`relay` is called by the relayer every so often — no more frequently than once per block on either chain, and possibly less frequently, according to how often the relayer wishes to relay.
+
+Different relayers may relay between different chains — as long as each pair of chains has at least one correct & live relayer and the chains remain live, all packets flowing between chains in the network will eventually be relayed.
 
 ```typescript
 function relay(C: Set<Chain>) {
@@ -190,6 +194,8 @@ function pendingDatagrams(chain: Chain, counterparty: Chain): List<Set<Datagram>
 }
 ```
 
+Relayers may elect to filter these datagrams in order to relay particular clients, particular connections, particular channels, or even particular kinds of packets, perhaps in accordance with the fee payment model (which this document does not specify, as it may vary).
+
 ### Ordering constraints
 
 There are implicit ordering constraints imposed on the relayer process determining which datagrams must be submitted in what order. For example, a header must be submitted to finalise the stored consensus state & commitment root for a particular height in a light client before a packet can be relayed. The relayer process is responsible for frequently querying the state of the chains between which they are relaying in order to determine what must be relayed when.
@@ -226,9 +232,11 @@ Coming soon.
 
 ## History
 
-30 March 2019 - Initial draft submitted
-15 April 2019 - Revisions for formatting and clarity
-23 April 2019 - Revisions from comments; draft merged
+Mar 30, 2019 - Initial draft submitted
+
+Apr 15, 2019 - Revisions for formatting and clarity
+
+Apr 23, 2019 - Revisions from comments; draft merged
 
 ## Copyright
 

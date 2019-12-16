@@ -1,46 +1,43 @@
 ---
-ics: 26
-title: Routing Module
-stage: Draft
+ics: '26'
+title: 라우팅 모듈
+stage: 초안
 category: IBC/TAO
-kind: instantiation
 author: Christopher Goes <cwgoes@tendermint.com>
-created: 2019-06-09
-modified: 2019-08-25
+created: '2019-06-09'
+modified: '2019-08-25'
 ---
 
-## Synopsis
+## 개요
 
-The routing module is a default implementation of a secondary module which will accept external datagrams and call into the interblockchain communication protocol handler to deal with handshakes and packet relay.
-The routing module keeps a lookup table of modules, which it can use to look up and call a module when a packet is received, so that external relayers need only ever relay packets to the routing module.
+라우팅 모듈은 외부 데이터그램을 수신하고 IBC 프로토콜 핸들러를 호출하여 핸드셰이크 및 패킷 중계를 처리하는 보조 모듈의 기본 구현체입니다.
+라우팅 모듈은 패킷을 수신할 때 모듈을 조회하고 호출하는데 사용할 수 있는 모듈의 룩업 테이블을 유지하므로 외부 relayer는 라우팅 모듈에게만 패킷을 중계만 하면 됩니다.
 
-### Motivation
+### 의도
 
-The default IBC handler uses a receiver call pattern, where modules must individually call the IBC handler in order to bind to ports, start handshakes, accept handshakes, send and receive packets, etc. This is flexible and simple (see [Design Patterns](../../ibc/5_IBC_DESIGN_PATTERNS.md))
-but is a bit tricky to understand and may require extra work on the part of relayer processes, who must track the state of many modules. This standard describes an IBC "routing module" to automate most common functionality, route packets, and simplify the task of relayers.
+기본 IBC 핸들러는 포트 바인딩, 핸드셰이크 시작, 핸드셰이크 수락, 패킷 송수신 등을 위해 모듈이 개별적으로 IBC 핸들러를 호출해야 하는 수신자 호출(receiver call) 패턴을 사용합니다. 이 방법은 유연하고 간단하지만([디자인 패턴](../../ibc/5_IBC_DESIGN_PATTERNS.md)참고) 이해하기 다소 어려울 수 있으며 다수 모듈의 상태를 추적하는 relayer 과정에서 추가 작업이 필요할 수 있습니다. 이 표준은 가장 보편적인 기능들을 자동화하고, 패킷들을 라우팅하며, relayer들의 작업을 단순화하는 IBC "라우팅 모듈"을 설명합니다.
 
-The routing module can also play the role of the module manager as discussed in [ICS 5](../ics-005-port-allocation) and implement
-logic to determine when modules are allowed to bind to ports and what those ports can be named.
+라우팅 모듈은 [ICS 5](../ics-005-port-allocation)에서 논의된 것과 같이 모듈 관리자 역할을 수행할 수 있으며 모듈을 포트에 바인딩할 수 있는 시기와 해당 포트의 명칭을 지정하는 로직을 구현할 수 있습니다.
 
-### Definitions
+### 정의
 
-All functions provided by the IBC handler interface are defined as in [ICS 25](../ics-025-handler-interface).
+IBC 핸들러 인터페이스가 제공하는 모든 함수는 [ICS 25](../ics-025-handler-interface)와 같이 정의됩니다.
 
-The functions `generate` & `authenticate` are defined as in [ICS 5](../ics-005-port-allocation).
+`generate` 및 `authenticate` 함수는 [ICS 5](../ics-005-port-allocation)와 같이 정의됩니다.
 
-### Desired Properties
+### 지향 속성
 
-- Modules should be able to bind to ports and own channels through the routing module.
-- No overhead should be added for packet sends and receives other than the layer of call indirection.
-- The routing module should call specified handler functions on modules when they need to act upon packets.
+- 모듈들은 라우팅 모듈을 통해 포트 및 자체 채널에 바인딩할 수 있어야 합니다.
+- 패킷 송수신에는 간접 호출(call indirection) 계층 이외의 오버헤드가 추가되어서는 안됩니다.
+- 라우팅 모듈은 패킷을 처리할 때 지정된 핸들러 함수를 모듈에서 호출해야 합니다.
 
-## Technical Specification
+## 기술 사양
 
-> Note: If the host state machine is utilising object capability authentication (see [ICS 005](../ics-005-port-allocation)), all functions utilising ports take an additional capability parameter.
+> 참고: 만약 호스트 상태머신이 obejct capability 인증([ICS 005](../ics-005-port-allocation) 참고)을 경우, 포트를 사용하는 모든 함수는 추가 capability 매개변수를 사용합니다.
 
-### Module callback interface
+### 모듈 콜백 인터페이스
 
-Modules must expose the following function signatures to the routing module, which are called upon the receipt of various datagrams:
+다양한 데이터그램들을 수신할 때 호출되는 모듈들은 다음과 같은 함수 시그니처들을 라우팅 모듈에 노출해야 합니다.
 
 ```typescript
 function onChanOpenInit(
@@ -108,9 +105,9 @@ function onTimeoutPacketClose(packet: Packet) {
 }
 ```
 
-Exceptions MUST be thrown to indicate failure and reject the handshake, incoming packet, etc.
+실패를 표시하고 핸드셰이크, 패킷 수신 등을 거부할 때는 반드시 예외가 발생해야 합니다.
 
-These are combined together in a `ModuleCallbacks` interface:
+위에서 나열한 함수 시그니처들은 `ModuleCallbacks` 인터페이스에서 함께 결합됩니다:
 
 ```typescript
 interface ModuleCallbacks {
@@ -126,7 +123,7 @@ interface ModuleCallbacks {
 }
 ```
 
-Callbacks are provided when the module binds to a port.
+콜백은 모듈이 포트에 바인딩될 때 호출됩니다.
 
 ```typescript
 function callbackPath(portIdentifier: Identifier): Path {
@@ -134,7 +131,7 @@ function callbackPath(portIdentifier: Identifier): Path {
 }
 ```
 
-The calling module identifier is also stored for future authentication should the callbacks need to be altered.
+콜백을 변경해야할 경우 향후 인증을 위해 호출 모듈 식별자도 저장됩니다.
 
 ```typescript
 function authenticationPath(portIdentifier: Identifier): Path {
@@ -142,19 +139,19 @@ function authenticationPath(portIdentifier: Identifier): Path {
 }
 ```
 
-### Port binding as module manager
+### 모듈 매니저로서의 포트 바인딩
 
-The IBC routing module sits in-between the handler module ([ICS 25](../ics-025-handler-interface)) and individual modules on the host state machine.
+IBC 라우팅 모듈은 핸들러 모듈([ICS 25](../ics-025-handler-interface))과 호스트 상태 머신의 개별 모듈들 사이에 위치합니다.
 
-The routing module, acting as a module manager, differentiates between two kinds of ports:
+모듈 관리자 역할을 하는 라우팅 모듈은 두 종류의 포트를 구분합니다.
 
-- "Existing name” ports: e.g. “bank”, with standardised prior meanings, which should not be first-come-first-serve
-- “Fresh name” ports: new identity (perhaps a smart contract) w/no prior relationships, new random number port, post-generation port name can be communicated over another channel
+- "기존 이름" 포트: "bank"와 같이 사전에 표준화된 의미를 갖고 있는 명칭은 선착순으로 지정할 수 없어야 합니다.
+- "새로운 이름" 포트 : (스마트 컨트랙트와 같이) 이전과는 관계가 없는 새로운 존재, 새로운 랜덤 넘버 포트, 생성 후 포트 이름은 다른 채널을 통해 통신할 수 있습니다
 
-A set of existing names are allocated, along with corresponding modules, when the routing module is instantiated by the host state machine.
-The routing module then allows allocation of fresh ports at any time by modules, but they must use a specific standardised prefix.
+라우팅 모듈이 호스트 상태 머신에 의해 인스턴스화되면 기존에 존재한 이름 세트와 관련 모듈이 함께 할당됩니다.
+라우팅 모듈은 모듈별로 언제든지 새로운 포트를 할당할 수 있지만 특정 표준화된 접두사를 사용해야 합니다.
 
-The function `bindPort` can be called by a module in order to bind to a port, through the routing module, and set up callbacks.
+모듈은 포트에 바인딩하고 콜백을 설정하기 위해  `bindPort` 함수를 라우팅 모듈을 통해 호출할 수 있습니다.
 
 ```typescript
 function bindPort(
@@ -168,7 +165,7 @@ function bindPort(
 }
 ```
 
-The function `updatePort` can be called by a module in order to alter the callbacks.
+모듈은 콜백을 변경하기 위해 `updatePort` 함수를 호출할 수 있습니다.
 
 ```typescript
 function updatePort(
@@ -179,9 +176,9 @@ function updatePort(
 }
 ```
 
-The function `releasePort` can be called by a module in order to release a port previously in use.
+모듈은 이전에 사용중인 포트를 해제하기 위해 `releasePort` 함수를 호출할 수 있습니다.
 
-> Warning: releasing a port will allow other modules to bind to that port and possibly intercept incoming channel opening handshakes. Modules should release ports only when doing so is safe.
+> 경고 : 포트를 해제하면 다른 모듈이 해당 포트에 바인딩되어 들어오는 채널 오프닝 핸드셰이크를 가로챌 수 있습니다. 모듈은 안전한 경우에만 포트를 해제해야 합니다.
 
 ```typescript
 function releasePort(id: Identifier) {
@@ -192,7 +189,7 @@ function releasePort(id: Identifier) {
 }
 ```
 
-The function `lookupModule` can be used by the routing module to lookup the callbacks bound to a particular port.
+라우팅 모듈은 특정 포트에 바인딩된 콜백을 조회하기 위해  `lookupModule` 함수를 사용할 수 있습니다.
 
 ```typescript
 function lookupModule(portId: Identifier) {
@@ -200,18 +197,17 @@ function lookupModule(portId: Identifier) {
 }
 ```
 
-### Datagram handlers (write)
+### 데이터그램 핸들러 (쓰기)
 
-*Datagrams* are external data blobs accepted as transactions by the routing module. This section defines a *handler function* for each datagram,
-which is executed when the associated datagram is submitted to the routing module in a transaction.
+*데이터그램*은 라우팅 모듈에서 트랜잭션으로 허용되는 외부 데이터(대용량 바이너리 객체)입니다. 이 섹션은 각 데이터그램에 대한 *핸들러 함수*를 정의하며, 관련 데이터그램이 트랜잭션으로 라우팅 모듈에 제출될 때 실행됩니다.
 
-All datagrams can also be safely submitted by other modules to the routing module.
+모든 데이터그램은 다른 모듈을 통해 라우팅 모듈로 안전하게 제출될 수 있습니다.
 
-No message signatures or data validity checks are assumed beyond those which are explicitly indicated.
+명시적으로 표시된 것 외의 메시지 서명이나 데이터 유효성 검사는 가정하고 있지 않습니다.
 
-#### Client lifecycle management
+#### 클라이언트 생명주기 관리
 
-`ClientCreate` creates a new light client with the specified identifier & consensus state.
+`ClientCreate`는 지정된 식별자 및 합의 상태로 새로운 라이트 클라이언트를 만듭니다.
 
 ```typescript
 interface ClientCreate {
@@ -227,7 +223,7 @@ function handleClientCreate(datagram: ClientCreate) {
 }
 ```
 
-`ClientUpdate` updates an existing light client with the specified identifier & new header.
+`ClientUpdate`는 지정된 식별자 및 새로운 헤더로 기존 라이트 클라이언트를 업데이트합니다.
 
 ```typescript
 interface ClientUpdate {
@@ -242,7 +238,7 @@ function handleClientUpdate(datagram: ClientUpdate) {
 }
 ```
 
-`ClientSubmitMisbehaviour` submits proof-of-misbehaviour to an existing light client with the specified identifier.
+`ClientSubmitMisbehaviour`는 지정된 식별자를 사용하여 기존의 라이트 클라이언트에 악의적 행동의 증거을 제출합니다.
 
 ```typescript
 interface ClientMisbehaviour {
@@ -257,9 +253,9 @@ function handleClientMisbehaviour(datagram: ClientUpdate) {
 }
 ```
 
-#### Connection lifecycle management
+#### 커넥션 생명주기 관리
 
-The `ConnOpenInit` datagram starts the connection handshake process with an IBC module on another chain.
+`ConnOpenInit` 데이터그램은 다른 체인의 IBC 모듈과의 커넥션 핸드셰이크 프로세스를 시작합니다.
 
 ```typescript
 interface ConnOpenInit {
@@ -283,7 +279,7 @@ function handleConnOpenInit(datagram: ConnOpenInit) {
 }
 ```
 
-The `ConnOpenTry` datagram accepts a handshake request from an IBC module on another chain.
+`ConnOpenTry` 데이터그램은 다른 체인의 IBC 모듈에서 핸드셰이크 요청을 수락합니다.
 
 ```typescript
 interface ConnOpenTry {
@@ -294,7 +290,6 @@ interface ConnOpenTry {
   version: string
   counterpartyVersion: string
   proofInit: CommitmentProof
-  proofConsensus: CommitmentProof
   proofHeight: uint64
   consensusHeight: uint64
 }
@@ -310,21 +305,19 @@ function handleConnOpenTry(datagram: ConnOpenTry) {
       datagram.version,
       datagram.counterpartyVersion,
       datagram.proofInit,
-      datagram.proofConsensus,
       datagram.proofHeight,
       datagram.consensusHeight
     )
 }
 ```
 
-The `ConnOpenAck` datagram confirms a handshake acceptance by the IBC module on another chain.
+`ConnOpenAck` 데이터그램은 다른 체인의 IBC 모듈이 핸드셰이크를 수락했음을 확인합니다.
 
 ```typescript
 interface ConnOpenAck {
   identifier: Identifier
   version: string
   proofTry: CommitmentProof
-  proofConsensus: CommitmentProof
   proofHeight: uint64
   consensusHeight: uint64
 }
@@ -336,14 +329,13 @@ function handleConnOpenAck(datagram: ConnOpenAck) {
       datagram.identifier,
       datagram.version,
       datagram.proofTry,
-      datagram.proofConsensus,
       datagram.proofHeight,
       datagram.consensusHeight
     )
 }
 ```
 
-The `ConnOpenConfirm` datagram acknowledges a handshake acknowledgement by an IBC module on another chain & finalises the connection.
+`ConnOpenConfirm` 데이터그램은 다른 체인의 IBC 모듈에 의한 핸드셰이크 수락을 인지하고 연결을 마무리합니다.
 
 ```typescript
 interface ConnOpenConfirm {
@@ -363,7 +355,7 @@ function handleConnOpenConfirm(datagram: ConnOpenConfirm) {
 }
 ```
 
-#### Channel lifecycle management
+#### 채널 생명주기 관리
 
 ```typescript
 interface ChanOpenInit {
@@ -482,7 +474,7 @@ interface ChanOpenConfirm {
 
 ```typescript
 function handleChanOpenConfirm(datagram: ChanOpenConfirm) {
-    module = lookupModule(datagram.portIdentifier)
+    module = lookupModule(portIdentifier)
     module.onChanOpenConfirm(
       datagram.portIdentifier,
       datagram.channelIdentifier
@@ -505,7 +497,7 @@ interface ChanCloseInit {
 
 ```typescript
 function handleChanCloseInit(datagram: ChanCloseInit) {
-    module = lookupModule(datagram.portIdentifier)
+    module = lookupModule(portIdentifier)
     module.onChanCloseInit(
       datagram.portIdentifier,
       datagram.channelIdentifier
@@ -542,9 +534,9 @@ function handleChanCloseConfirm(datagram: ChanCloseConfirm) {
 }
 ```
 
-#### Packet relay
+#### 패킷 중계
 
-Packets are sent by the module directly (by the module calling the IBC handler).
+패킷은 IBC 핸들러를 호출하는 모듈이 직접 전송됩니다.
 
 ```typescript
 interface PacketRecv {
@@ -592,7 +584,7 @@ function handlePacketAcknowledgement(datagram: PacketAcknowledgement) {
 }
 ```
 
-#### Packet timeouts
+#### 패킷 타임아웃
 
 ```typescript
 interface PacketTimeout {
@@ -636,7 +628,7 @@ function handlePacketTimeoutOnClose(datagram: PacketTimeoutOnClose) {
 }
 ```
 
-#### Closure-by-timeout & packet cleanup
+#### 타임아웃에 의한 클로저 & 패킷 정리
 
 ```typescript
 interface PacketCleanup {
@@ -658,42 +650,40 @@ function handlePacketCleanup(datagram: PacketCleanup) {
 }
 ```
 
-### Query (read-only) functions
+### (읽기 전용) 쿼리 함수들
 
-All query functions for clients, connections, and channels should be exposed (read-only) directly by the IBC handler module.
+클라이언트, 연결 및 채널에 대한 모든 (읽기 전용) 쿼리 함수들은 IBC 핸들러 모듈에 의해 직접 노출되어야합니다.
 
-### Interface usage example
+### 인터페이스 활용 예제
 
-See [ICS 20](../ics-020-fungible-token-transfer) for a usage example.
+사용 예시는 [ICS 20](../ics-020-fungible-token-transfer) 을 참조하십시오.
 
-### Properties & Invariants
+### 속성 및 불변량
 
-- Proxy port binding is first-come-first-serve: once a module binds to a port through the IBC routing module, only that module can utilise that port until the module releases it.
+- 프록시 포트 바인딩은 선입선출입니다. 일단 모듈이 IBC 라우팅 모듈을 통해 포트에 바인딩되면 포트를 해제하기 전까지 해당 모듈만이 해당 포트를 사용할 수 있습니다.
 
-## Backwards Compatibility
+## 하위 호환성
 
-Not applicable.
+적용되지 않습니다.
 
-## Forwards Compatibility
+## 상위 호환성
 
-routing modules are closely tied to the IBC handler interface.
+라우팅 모듈은 IBC 핸들러 인터페이스와 밀접한 관련이 있습니다.
 
-## Example Implementation
+## 구현 예제
 
-Coming soon.
+향후 추가.
 
-## Other Implementations
+## 다른 구현
 
-Coming soon.
+향후 추가.
 
-## History
+## 히스토리
 
-Jun 9, 2019 - Draft submitted
+2019년 6월 9일 - 초안 제출
+2019년 7월 28일 - 주요 개정
+2019년 8월 25일 - 주요 개정
 
-Jul 28, 2019 - Major revisions
+## 저작권
 
-Aug 25, 2019 - Major revisions
-
-## Copyright
-
-All content herein is licensed under [Apache 2.0](https://www.apache.org/licenses/LICENSE-2.0).
+이 게시물의 모든 내용은 [Apache 2.0](https://www.apache.org/licenses/LICENSE-2.0) 라이센스에 의해 보호받습니다.

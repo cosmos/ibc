@@ -26,10 +26,10 @@ spec_pdf:
 	scripts/make_pdf.sh
 
 spellcheck:
-	find . -type f -name "*.md" -exec aspell -p ./misc/aspell_dict -x -d en_GB -c {} \;
+	find ./spec ./ibc -type f -name "*.md" -exec aspell -p ./misc/aspell_dict -x -d en_GB -c {} \;
 
 spellcheck_noninteractive:
-	find . -type f -name "*.md" | xargs -n 1 -I % ./scripts/spellcheck.sh %
+	find ./spec ./ibc -type f -name "*.md" | xargs -n 1 -I % ./scripts/spellcheck.sh %
 
 # due to https://github.com/golang/protobuf/issues/39 this requires multiple commands
 protoc:

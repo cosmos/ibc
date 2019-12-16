@@ -16,7 +16,7 @@ find $DIR2 -type f -name "*.md.xfm" -exec awk -i inplace '/^##/{p=1}p' {} \;
 
 # pdf generation
 
-pandoc --pdf-engine=xelatex --template eisvogel --filter pandoc-include --mathjax --toc --number-sections --listings -t latex -o spec.pdf spec.pdc
+pandoc --pdf-engine=xelatex --template eisvogel --filter pandoc-include --mathjax --toc --number-sections --listings --include-in-header=misc/header.tex -t latex -o spec.pdf spec.pdc
 
 # cleanup
 

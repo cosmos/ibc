@@ -280,10 +280,13 @@ Coming soon.
 
 ## History
 
-29 April 2019 - Initial draft
-11 May 2019 - Rename "RootOfTrust" to "ConsensusState"
-25 June 2019 - Use "ports" instead of module names
-18 August 2019 - Revisions to module system, definitions
+Apr 29, 2019 - Initial draft
+
+May 11, 2019 - Rename "RootOfTrust" to "ConsensusState"
+
+Jun 25, 2019 - Use "ports" instead of module names
+
+Aug 18, 2019 - Revisions to module system, definitions
 
 ## Copyright
 

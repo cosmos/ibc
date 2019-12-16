@@ -727,9 +727,11 @@ Coming soon.
 
 ## History
 
-March 5th 2019: Initial draft finished and submitted as a PR
-May 29 2019: Various revisions, notably multiple commitment-roots
-Aug 15 2019: Major rework for clarity around client interface
+Mar 5, 2019 - Initial draft finished and submitted as a PR
+
+May 29, 2019 - Various revisions, notably multiple commitment-roots
+
+Aug 15, 2019 - Major rework for clarity around client interface
 
 ## Copyright
 
