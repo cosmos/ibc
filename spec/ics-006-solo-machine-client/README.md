@@ -41,8 +41,6 @@ This specification must satisfy the client interface defined in ICS 2.
 ```typescript
 interface ClientState {
   frozen: boolean
-  pastPublicKeys: Set<PublicKey>
-  verifiedRoots: Map<uint64, CommitmentRoot>
 }
 
 interface ConsensusState {
@@ -52,14 +50,14 @@ interface ConsensusState {
 
 interface Header {
   sequence: uint64
-  commitmentRoot: CommitmentRoot
   signature: Signature
-  newPublicKey: Maybe<PublicKey>
+  newPublicKey: PublicKey
 }
 
 interface Evidence {
-  h1: Header
-  h2: Header
+  sequence: uint64
+  signatureOne: Signature
+  signatureTwo: Signature
 }
 
 // algorithm run by operator to commit a new block
