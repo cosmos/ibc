@@ -76,8 +76,7 @@ function commit(
 function initialize(consensusState: ConsensusState): ClientState {
   return {
     frozen: false,
-    pastPublicKeys: Set.singleton(consensusState.publicKey),
-    verifiedRoots: Map.empty()
+    publicKey: consensusState.publicKey,
   }
 }
 
@@ -85,14 +84,8 @@ function initialize(consensusState: ConsensusState): ClientState {
 function checkValidityAndUpdateState(
   clientState: ClientState,
   header: Header) {
-    abortTransactionUnless(consensusState.sequence + 1 === header.sequence)
-    abortTransactionUnless(consensusState.publicKey.verify(header.signature))
-    if (header.newPublicKey !== null) {
-      consensusState.publicKey = header.newPublicKey
-      clientState.pastPublicKeys.add(header.newPublicKey)
-    }
-    consensusState.sequence = header.sequence
-    clientState.verifiedRoots[sequence] = header.commitmentRoot
+    // check signature over new public key & sequence
+    // increment sequence
 }
 
 function verifyClientConsensusState(
@@ -104,7 +97,8 @@ function verifyClientConsensusState(
   consensusState: ConsensusState) {
     path = applyPrefix(prefix, "clients/{clientIdentifier}/consensusState")
     abortTransactionUnless(!clientState.frozen)
-    return clientState.verifiedRoots[sequence].verifyMembership(path, consensusState, proof)
+    // check signature over sequence, path, consensus state
+    // increment sequence
 }
 
 function verifyConnectionState(
@@ -116,7 +110,8 @@ function verifyConnectionState(
   connectionEnd: ConnectionEnd) {
     path = applyPrefix(prefix, "connection/{connectionIdentifier}")
     abortTransactionUnless(!clientState.frozen)
-    return clientState.verifiedRoots[sequence].verifyMembership(path, connectionEnd, proof)
+    // check signature over sequence, path, connection end
+    // increment sequence
 }
 
 function verifyChannelState(
@@ -129,7 +124,8 @@ function verifyChannelState(
   channelEnd: ChannelEnd) {
     path = applyPrefix(prefix, "ports/{portIdentifier}/channels/{channelIdentifier}")
     abortTransactionUnless(!clientState.frozen)
-    return clientState.verifiedRoots[sequence].verifyMembership(path, channelEnd, proof)
+    // check signature over sequence, path, channel end
+    // increment sequence
 }
 
 function verifyPacketCommitment(
@@ -143,7 +139,8 @@ function verifyPacketCommitment(
   commitment: bytes) {
     path = applyPrefix(prefix, "ports/{portIdentifier}/channels/{channelIdentifier}/packets/{sequence}")
     abortTransactionUnless(!clientState.frozen)
-    return clientState.verifiedRoots[sequence].verifyMembership(path, commitment, proof)
+    // check signature over sequence, path, packet commitment
+    // increment sequence
 }
 
 function verifyPacketAcknowledgement(
@@ -157,7 +154,8 @@ function verifyPacketAcknowledgement(
   acknowledgement: bytes) {
     path = applyPrefix(prefix, "ports/{portIdentifier}/channels/{channelIdentifier}/acknowledgements/{sequence}")
     abortTransactionUnless(!clientState.frozen)
-    return clientState.verifiedRoots[sequence].verifyMembership(path, acknowledgement, proof)
+    // check signature over sequence, path, packet commitment
+    // increment sequence
 }
 
 function verifyPacketAcknowledgementAbsence(
@@ -170,7 +168,8 @@ function verifyPacketAcknowledgementAbsence(
   sequence: uint64) {
     path = applyPrefix(prefix, "ports/{portIdentifier}/channels/{channelIdentifier}/acknowledgements/{sequence}")
     abortTransactionUnless(!clientState.frozen)
-    return clientState.verifiedRoots[sequence].verifyNonMembership(path, proof)
+    // check signature over sequence, path, packet commitment
+    // increment sequence
 }
 
 function verifyNextSequenceRecv(
@@ -183,7 +182,8 @@ function verifyNextSequenceRecv(
   nextSequenceRecv: uint64) {
     path = applyPrefix(prefix, "ports/{portIdentifier}/channels/{channelIdentifier}/nextSequenceRecv")
     abortTransactionUnless(!clientState.frozen)
-    return clientState.verifiedRoots[sequence].verifyMembership(path, nextSequenceRecv, proof)
+    // check signature over sequence, path, next sequence recv
+    // increment sequence
 }
 
 // misbehaviour verification function defined by the client type
@@ -193,11 +193,7 @@ function checkMisbehaviourAndUpdateState(
   evidence: Evidence) {
     h1 = evidence.h1
     h2 = evidence.h2
-    abortTransactionUnless(clientState.pastPublicKeys.contains(h1.publicKey))
-    abortTransactionUnless(h1.sequence === h2.sequence)
-    abortTransactionUnless(h1.commitmentRoot !== h2.commitmentRoot || h1.publicKey !== h2.publicKey)
-    abortTransactionUnless(h1.publicKey.verify(h1.signature))
-    abortTransactionUnless(h2.publicKey.verify(h2.signature))
+    // freeze iff. different signed bytes, same sequence
     clientState.frozen = true
 }
 ```
