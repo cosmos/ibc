@@ -77,7 +77,7 @@ interface Evidence {
 
 ### Client initialisation
 
-Tendermint client initialisation
+Tendermint client initialisation requires a (subjectively chosen) latest consensus state, including the full validator set.
 
 ```typescript
 function initialize(consensusState: ConsensusState, validatorSet: List<Pair<Address, uint64>>, latestHeight: uint64): ClientState {
@@ -90,6 +90,8 @@ function initialize(consensusState: ConsensusState, validatorSet: List<Pair<Addr
 ```
 
 ### Validity predicate
+
+Tendermint client validity checking uses the bisection algorithm described in the [Tendermint spec](https://github.com/tendermint/spec/blob/master/spec/consensus/light-client.md).
 
 ```typescript
 function checkValidityAndUpdateState(
@@ -105,6 +107,8 @@ function checkValidityAndUpdateState(
 
 ### Misbehaviour predicate
 
+Tendermint client misbehaviour checking determines whether or not two headers at the same height would have convinced the light client.
+
 ```typescript
 // misbehaviour verification function defined by the client type
 // any duplicate signature by a past or current key freezes the client
@@ -117,6 +121,8 @@ function checkMisbehaviourAndUpdateState(
 ```
 
 ### State verification functions
+
+Tendermint client state verification functions check a Merkle proof against a previously validated commitment root.
 
 ```typescript
 function verifyClientConsensusState(
