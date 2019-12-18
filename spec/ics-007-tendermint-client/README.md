@@ -30,42 +30,43 @@ This specification must satisfy the client interface defined in ICS 2.
 
 ### Client state
 
+The Tendermint client state tracks the current validator set, latest height, and a possible frozen height.
+
 ```typescript
 interface ClientState {
-  consensusState: ConsensusState
-  pastHeaders: Map<uint64, StoredHeader>
+  validatorSet: List<Pair<Address, uint64>>
+  latestHeight: uint64
   frozenHeight: Maybe<uint64>
 }
 ```
 
 ### Consensus state
 
+The Tendermint client tracks the validator set hash & commitment root for all previously verified consensus states (these can be pruned after awhile).
+
 ```typescript
 interface ConsensusState {
-  validatorSet: List<Pair<Address, uint64>>
-  latestHeight: uint64
-  latestHeader: StoredHeader
-}
-```
-
-### Headers
-
-```typescript
-interface Header {
-  height: uint64
-  commitmentRoot: []byte
-  signatures: []Signature
-}
-```
-
-```typescript
-interface StoredHeader {
   validatorSetHash: []byte
   commitmentRoot: []byte
 }
 ```
 
+### Headers
+
+The Tendermint client headers include a height, the commitment root, the complete validator set, and the signatures by the validators who committed the block.
+
+```typescript
+interface Header {
+  height: uint64
+  commitmentRoot: []byte
+  validatorSet: List<Pair<Address, uint64>>
+  signatures: []Signature
+}
+```
+
 ### Evidence
+
+Tendermint client `Evidence` consists of two headers at the same height both of which the light client would have considered valid.
 
 ```typescript
 interface Evidence {
