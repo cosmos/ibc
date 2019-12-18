@@ -77,12 +77,14 @@ interface Evidence {
 
 ### Client initialisation
 
+Tendermint client initialisation
+
 ```typescript
-function initialize(consensusState: ConsensusState): ClientState {
+function initialize(consensusState: ConsensusState, validatorSet: List<Pair<Address, uint64>>, latestHeight: uint64): ClientState {
   return {
-    consensusState,
-    frozenHeight: null,
-    pastHeaders: Map.singleton(consensusState.latestHeight, consensusState.latestHeader)
+    validatorSet,
+    latestHeight,
+    pastHeaders: Map.singleton(latestHeight, consensusState)
   }
 }
 ```
