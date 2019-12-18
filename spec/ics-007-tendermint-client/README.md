@@ -7,20 +7,20 @@ kind: instantiation
 implements: 2
 author: Christopher Goes <cwgoes@tendermint.com>
 created: 2019-12-10
-modified: 2019-12-10
+modified: 2019-12-18
 ---
 
 ## Synopsis
 
-Client for Tendermint consensus.
+This specification document describes a client (verification algorithm) for a blockchain using Tendermint consensus.
 
 ### Motivation
 
-(rationale for existence of standard)
+State machines of various sorts replicated using the Tendermint consensus algorithm might like to interface with other replicated state machines or solo machines over IBC.
 
 ### Definitions
 
-(definitions of any new terms not defined in common documentation)
+Functions & terms are as defined in [ICS 2](../ics-002-client-semantics).
 
 ### Desired Properties
 
@@ -28,15 +28,27 @@ This specification must satisfy the client interface defined in ICS 2.
 
 ## Technical Specification
 
-(main part of standard document - not all subsections are required)
+### Client state
 
-(detailed technical specification: syntax, semantics, sub-protocols, algorithms, data structures, etc)
+```typescript
+interface ClientState {
+  consensusState: ConsensusState
+  pastHeaders: Map<uint64, StoredHeader>
+  frozenHeight: Maybe<uint64>
+}
+```
 
-### Data Structures
+### Consensus state
 
-(new data structures, if applicable)
+```typescript
+interface ConsensusState {
+  validatorSet: List<Pair<Address, uint64>>
+  latestHeight: uint64
+  latestHeader: StoredHeader
+}
+```
 
-### Sub-protocols
+### Headers
 
 ```typescript
 interface Header {
@@ -44,30 +56,27 @@ interface Header {
   commitmentRoot: []byte
   signatures: []Signature
 }
+```
 
+```typescript
 interface StoredHeader {
   validatorSetHash: []byte
   commitmentRoot: []byte
 }
+```
 
-interface ClientState {
-  consensusState: ConsensusState
-  pastHeaders: Map<uint64, StoredHeader>
-  frozenHeight: Maybe<uint64>
-}
+### Evidence
 
-interface ConsensusState {
-  validatorSet: List<Pair<Address, uint64>>
-  latestHeight: uint64
-  latestHeader: StoredHeader
-}
-
+```typescript
 interface Evidence {
   h1: Header
   h2: Header
 }
+```
 
-// initialisation function defined by the client type
+### Client initialisation
+
+```typescript
 function initialize(consensusState: ConsensusState): ClientState {
   return {
     consensusState,
@@ -75,8 +84,11 @@ function initialize(consensusState: ConsensusState): ClientState {
     pastHeaders: Map.singleton(consensusState.latestHeight, consensusState.latestHeader)
   }
 }
+```
 
-// validity predicate function defined by the client type
+### Validity predicate
+
+```typescript
 function checkValidityAndUpdateState(
   clientState: ClientState,
   header: Header) {
@@ -86,7 +98,24 @@ function checkValidityAndUpdateState(
     // TODO: update latest header
     // TODO: store verified header info
 }
+```
 
+### Misbehaviour predicate
+
+```typescript
+// misbehaviour verification function defined by the client type
+// any duplicate signature by a past or current key freezes the client
+function checkMisbehaviourAndUpdateState(
+  clientState: ClientState,
+  evidence: Evidence) {
+    // TODO: check equivocation or "would have been fooled"
+    // TODO: set frozen height accordingly
+}
+```
+
+### State verification functions
+
+```typescript
 function verifyClientConsensusState(
   clientState: ClientState,
   height: uint64,
@@ -177,15 +206,6 @@ function verifyNextSequenceRecv(
     // TODO: check frozen height
     // TODO: return root.verifyMembership
 }
-
-// misbehaviour verification function defined by the client type
-// any duplicate signature by a past or current key freezes the client
-function checkMisbehaviourAndUpdateState(
-  clientState: ClientState,
-  evidence: Evidence) {
-    // TODO: check equivocation or "would have been fooled"
-    // TODO: set frozen height accordingly
-}
 ```
 
 ### Properties & Invariants
@@ -202,7 +222,7 @@ Not applicable. Alterations to the client verification algorithm will require a 
 
 ## Example Implementation
 
-(link to or description of concrete example implementation)
+None yet.
 
 ## Other Implementations
 
@@ -211,6 +231,7 @@ None at present.
 ## History
 
 December 10th, 2019 - Initial version
+December 18th, 2019 - Final first draft
 
 ## Copyright
 
