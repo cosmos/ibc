@@ -99,41 +99,45 @@ Tendermint client validity checking uses the bisection algorithm described in th
 function checkValidityAndUpdateState(
   clientState: ClientState,
   header: Header) {
-  // assert that header is newer than any we know
-  assert(header.height < clientState.latestHeight)
-  // call the `verify` function
-  assert(verify(clientState.validatorSet, clientState.latestHeight, header))
-  // update latest height
-  clientState.latestHeight = header.height
-  // create recorded consensus state, save it
-  consensusState = ConsensusState{validatorSet.hash(), header.commitmentRoot}
-  set("consensusStates/{identifier}/{header.height}", consensusState)
-  // save the client
-  set("clients/{identifier}", clientState)
+    // assert that header is newer than any we know
+    assert(header.height < clientState.latestHeight)
+    // call the `verify` function
+    assert(verify(clientState.validatorSet, clientState.latestHeight, header))
+    // update latest height
+    clientState.latestHeight = header.height
+    // create recorded consensus state, save it
+    consensusState = ConsensusState{validatorSet.hash(), header.commitmentRoot}
+    set("consensusStates/{identifier}/{header.height}", consensusState)
+    // save the client
+    set("clients/{identifier}", clientState)
 }
 ```
 
 ### Misbehaviour predicate
 
-Tendermint client misbehaviour checking determines whether or not two headers at the same height would have convinced the light client.
+Tendermint client misbehaviour checking determines whether or not two conflicting headers at the same height would have convinced the light client.
 
 ```typescript
 function checkMisbehaviourAndUpdateState(
   clientState: ClientState,
   evidence: Evidence) {
-  // fetch the previously verified commitment root & validator set hash
-  consensusState = get("consensusStates/{identifier}/{evidence.fromHeight}")
-  // check that the validator set matches
-  assert(consensusState.validatorSetHash === evidence.fromValidatorSet.hash())
-  // check if the light client "would have been fooled"
-  assert(
-    verify(evidence.fromValidatorSet, evidence.fromHeight, h1) &&
-    verify(evidence.fromValidatorSet, evidence.fromHeight, h2)
-    )
-  // set the frozen height
-  clientState.frozenHeight = min(h1.height, h2.height)
-  // save the client
-  set("clients/{identifier}", clientState)
+    // assert that the heights are the same
+    assert(h1.height === h2.height)
+    // assert that the commitments are different
+    assert(h1.commitmentRoot !== h2.commitmentRoot)
+    // fetch the previously verified commitment root & validator set hash
+    consensusState = get("consensusStates/{identifier}/{evidence.fromHeight}")
+    // check that the validator set matches
+    assert(consensusState.validatorSetHash === evidence.fromValidatorSet.hash())
+    // check if the light client "would have been fooled"
+    assert(
+      verify(evidence.fromValidatorSet, evidence.fromHeight, h1) &&
+      verify(evidence.fromValidatorSet, evidence.fromHeight, h2)
+      )
+    // set the frozen height
+    clientState.frozenHeight = min(h1.height, h2.height)
+    // save the client
+    set("clients/{identifier}", clientState)
 }
 ```
 
