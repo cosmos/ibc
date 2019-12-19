@@ -70,6 +70,8 @@ Tendermint client `Evidence` consists of two headers at the same height both of 
 
 ```typescript
 interface Evidence {
+  fromValidatorSet: List<Pair<Address, uint64>>
+  fromHeight: uint64
   h1: Header
   h2: Header
 }
@@ -105,7 +107,7 @@ function checkValidityAndUpdateState(
   clientState.latestHeight = header.height
   // create recorded consensus state, save it
   consensusState = ConsensusState{validatorSet.hash(), header.commitmentRoot}
-  set("consensusStates/{identifier}", consensusState)
+  set("consensusStates/{identifier}/{header.height}", consensusState)
   // save the client
   set("clients/{identifier}", clientState)
 }
@@ -116,13 +118,22 @@ function checkValidityAndUpdateState(
 Tendermint client misbehaviour checking determines whether or not two headers at the same height would have convinced the light client.
 
 ```typescript
-// misbehaviour verification function defined by the client type
-// any duplicate signature by a past or current key freezes the client
 function checkMisbehaviourAndUpdateState(
   clientState: ClientState,
   evidence: Evidence) {
-    // TODO: check equivocation or "would have been fooled"
-    // TODO: set frozen height accordingly
+  // fetch the previously verified commitment root & validator set hash
+  consensusState = get("consensusStates/{identifier}/{evidence.fromHeight}")
+  // check that the validator set matches
+  assert(consensusState.validatorSetHash === evidence.fromValidatorSet.hash())
+  // check if the light client "would have been fooled"
+  assert(
+    verify(evidence.fromValidatorSet, evidence.fromHeight, h1) &&
+    verify(evidence.fromValidatorSet, evidence.fromHeight, h2)
+    )
+  // set the frozen height
+  clientState.frozenHeight = min(h1.height, h2.height)
+  // save the client
+  set("clients/{identifier}", clientState)
 }
 ```
 
