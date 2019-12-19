@@ -97,11 +97,17 @@ Tendermint client validity checking uses the bisection algorithm described in th
 function checkValidityAndUpdateState(
   clientState: ClientState,
   header: Header) {
-  // TODO: check height
-  // TODO: call verify function, performing bisection
-  // TODO: update latest height
-  // TODO: update latest header
-  // TODO: store verified header info
+  // assert that header is newer than any we know
+  assert(header.height < clientState.latestHeight)
+  // call the `verify` function
+  assert(verify(clientState.validatorSet, clientState.latestHeight, header))
+  // update latest height
+  clientState.latestHeight = header.height
+  // create recorded consensus state, save it
+  consensusState = ConsensusState{validatorSet.hash(), header.commitmentRoot}
+  set("consensusStates/{identifier}", consensusState)
+  // save the client
+  set("clients/{identifier}", clientState)
 }
 ```
 
