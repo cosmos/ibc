@@ -58,17 +58,18 @@ All standards at or past the "Draft" stage are listed here in order of their ICS
 
 ### IBC/TAO
 
-| Interchain Standard Number                     | Kind           | Standard Title             | Stage |
-| ---------------------------------------------- | -------------- | -------------------------- | ----- |
-| [2](spec/ics-002-client-semantics)             | Interface      | Client Semantics           | Draft |
-| [3](spec/ics-003-connection-semantics)         | Instantiation  | Connection Semantics       | Draft |
-| [4](spec/ics-004-channel-and-packet-semantics) | Instantiation  | Channel & Packet Semantics | Draft |
-| [5](spec/ics-005-port-allocation)              | Interface      | Port Allocation            | Draft |
-| [18](spec/ics-018-relayer-algorithms)          | Interface      | Relayer Algorithms         | Draft |
-| [23](spec/ics-023-vector-commitments)          | Interface      | Vector Commitments         | Draft |
-| [24](spec/ics-024-host-requirements)           | Interface      | Host Requirements          | Draft |
-| [25](spec/ics-025-handler-interface)           | Interface      | Handler Interface          | Draft |
-| [26](spec/ics-026-routing-module)              | Interface      | Routing Module             | Draft |
+| Interchain Standard Number                          | Kind           | Standard Title                   | Stage |
+| --------------------------------------------------- | -------------- | -------------------------------- | ----- |
+| [2](spec/ics-002-client-semantics)                  | Interface      | Client Semantics                 | Draft |
+| [3](spec/ics-003-connection-semantics)              | Instantiation  | Connection Semantics             | Draft |
+| [4](spec/ics-004-channel-and-packet-semantics)      | Instantiation  | Channel & Packet Semantics       | Draft |
+| [5](spec/ics-005-port-allocation)                   | Interface      | Port Allocation                  | Draft |
+| [8](spec/ics-008-generalised-merkle-proof-format)   | Instantiation  | Generalised Merkle Proof Format  | Draft |
+| [18](spec/ics-018-relayer-algorithms)               | Interface      | Relayer Algorithms               | Draft |
+| [23](spec/ics-023-vector-commitments)               | Interface      | Vector Commitments               | Draft |
+| [24](spec/ics-024-host-requirements)                | Interface      | Host Requirements                | Draft |
+| [25](spec/ics-025-handler-interface)                | Interface      | Handler Interface                | Draft |
+| [26](spec/ics-026-routing-module)                   | Interface      | Routing Module                   | Draft |
 
 ### IBC/APP
 
