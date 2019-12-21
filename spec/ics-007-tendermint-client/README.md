@@ -22,6 +22,8 @@ State machines of various sorts replicated using the Tendermint consensus algori
 
 Functions & terms are as defined in [ICS 2](../ics-002-client-semantics).
 
+The Tendermint light client uses the generalised Merkle proof format as defined in [ICS 8](../ics-008-generalised-merkle-proof-format).
+
 ### Desired Properties
 
 This specification must satisfy the client interface defined in ICS 2.
