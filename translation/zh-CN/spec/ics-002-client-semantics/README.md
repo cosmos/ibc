@@ -13,57 +13,32 @@ modified: '2019-08-25'
 
 ## 概览
 
-该标准规定了实现区块链间通信协议的机器的共识算法必须满足的特性。 这些属性对于高层协议抽象中的有效和安全验证是必需的。 IBC 中用于验证另一台机器的共有记录和状态子组件的算法称为“有效性断言”，并将其与验证者认为正确的状态配对形成“轻客户端”（简称为“客户端”）。
+该标准规定了实现区块链间通信协议的状态机的共识算法必须满足的特性。 这些属性对高层协议抽象中的有效安全的验证而言是必需的。IBC 中用于验证另一台状态机的共识记录子组件及状态子组件的算法称为“有效性断言”，并将其与验证者认为正确的状态配对形成“轻客户端”（简称为“客户端”）。
 
 该标准还规定了如何在规范的 IBC 处理程序中存储、注册和更新轻客户端。 所存储的客户端实例将由第三方参与者进行内省，例如，用户检查链的状态并确定是否发送 IBC 数据包。
 
-### Motivation
+### 动机
 
-In the IBC protocol, an actor, which may be an end user, an off-chain process, or a machine,
-needs to be able to verify updates to the state of another machine
-which the other machine's consensus algorithm has agreed upon, and reject any possible updates
-which the other machine's consensus algorithm has not agreed upon. A light client is the algorithm
-with which a machine can do so. This standard formalises the light client model and requirements,
-so that the IBC protocol can easily integrate with new machines which are running new consensus algorithms
-as long as associated light client algorithms fulfilling the listed requirements are provided.
+在 IBC 协议中，参与者可以是终端用户、链下进程或状态机，这需要能够对另一台状态机共识算法认同的状态更新进行验证，以及拒绝其共识算法不认同的任何潜在状态更新。轻客户端是状态机可以执行的算法。该标准规范了轻客户端的模型和要求，因此，只要提供满足所列要求的相关轻客户端算法，IBC 协议就可以轻松地与运行新共识算法的新状态机集成。
 
-Beyond the properties described in this specification, IBC does not impose any requirements on
-the internal operation of machines and their consensus algorithms. A machine may consist of a
-single process signing operations with a private key, a quorum of processes signing in unison,
-many processes operating a Byzantine fault-tolerant consensus algorithm, or other configurations yet to be invented
-— from the perspective of IBC, a machine is defined entirely by its light client validation & equivocation detection logic.
-Clients will generally not include validation of the state transition logic in general
-(as that would be equivalent to simply executing the other state machine), but may
-elect to validate parts of state transitions in particular cases.
+除了本规范中描述的属性外，IBC 对状态机的内部操作及其共识算法没有任何要求。 从 IBC 的角度来看，一台状态机可能包括一个私钥签名流程、统一签名流程仲裁、多个运行拜占庭容错共识算法的流程或其他尚未发明的配置——从 IBC 的角度来看，一个状态机完全由其轻客户端的验证和自相矛盾行为检测逻辑来定义。
+客户通常将通常不包括对状态转换逻辑的验证（因为这将与其他状态机无异），但是在特定情况下，客户可以选择验证部分状态转换。
 
-Clients could also act as thresholding views of other clients. In the case where
-modules utilising the IBC protocol to interact with probabilistic-finality consensus algorithms
-which might require different finality thresholds for different applications, one write-only
-client could be created to track headers and many read-only clients with different finality
-thresholds (confirmation depths after which state roots are considered final) could use that same state.
+客户端还可以为其他客户端提供阈值视角。 如果模块利用 IBC 协议与概率性最终一致性算法（probabilistic-finality）进行交互，对于不同的应用可能需要不同的最终确定性阈值，那么可以创建一个只允许写入的客户端来跟踪不同区块头，其状态供其他具有不同最终确定性阀值的只读客户端来使用。
 
-The client protocol should also support third-party introduction. Alice, a module on a machine,
-wants to introduce Bob, a second module on a second machine who Alice knows (and who knows Alice),
-to Carol, a third module on a third machine, who Alice knows but Bob does not. Alice must utilise
-an existing channel to Bob to communicate the canonically-serialisable validity predicate for
-Carol, with which Bob can then open a connection and channel so that Bob and Carol can talk directly.
-If necessary, Alice may also communicate to Carol the validity predicate for Bob, prior to Bob's
-connection attempt, so that Carol knows to accept the incoming request.
+客户端协议还应该支持第三方引接。 Alice是一台状态机上的一个模块，希望将 Bob（第二台状态机上的第二个模块，与 Alice 彼此已知）介绍给Carol（第三台状态机上的第三个模块，Alice 知道但 Bob 却不知道）。 Alice 必须利用现有的通道与鲍勃通信，以向 Carol 传递规范串行化的合法性判定式，然后 Bob 可以与之建立连接和通道，以便 Bob 和 Carol 可以直接通信。
+如有必要，在 Bob 进行连接尝试之前，Alice 还可以向 Carol 传达 Bob 的合法性判定式，使得 Carol 获悉并接受引接请求。
 
-Client interfaces should also be constructed so that custom validation logic can be provided safely
-to define a custom client at runtime, as long as the underlying state machine can provide an
-appropriate gas metering mechanism to charge for compute and storage. On a host state machine
-which supports WASM execution, for example, the validity predicate and equivocation predicate
-could be provided as executable WASM functions when the client instance is created.
+客户端接口也应该被构建为：只要底层状态机可以提供恰当的计算和存储燃料的计量机制，那么在运行时可以安全地提供定制验证逻辑来自定义一个轻客户端。例如，在支持运行 WASM 的状态机主机上，在创建客户端实例时，可以提供合法性判定式和矛盾行为判定式作为可执行的 WASM 函数。
 
 ### 定义
 
-- `get`, `set`, `Path`, 和 `Identifier` 在 [ICS 24](../ics-024-host-requirements)中被定义.
+- `get`, `set`, `Path`, 和 `Identifier` 在 [ICS 24](../ics-024-host-requirements) 中被定义.
 
-- `CommitmentRoot` 如同在 [ICS 23](../ics-023-vector-commitments)中被定义的那样，它必须提供为下游逻辑提供一种廉价方式，去验证键值对是否在特定高度的世界状态中存在。
+- `CommitmentRoot` 如同在 [ICS 23](../ics-023-vector-commitments) 中被定义的那样，它必须提供为下游逻辑提供一种廉价方式，去验证键值对是否在特定高度的世界状态中存在。
 
-- `共识状态` 是代表有效性述词的不透明类型。
-    `ConsensusState` 必须能够验证相关共识算法所同意的状态更新。 它也必须以规范的方式实现可序列化，以便第三方（例如对应方的机器）可以检查特定机器是否存储了特定的共识状态。 它最终必须由它所针对的状态机进行自省，以便状态机可以在过去的高度查找其自己的共识状态。
+- `共识状态` 是代表合法性判定式的不透明类型。
+    `ConsensusState` 必须能够验证相关共识算法所同意的状态更新。 它也必须以规范的方式实现可序列化，以便第三方（例如对应方的状态）可以检查特定状态机是否存储了特定的共识状态。 它最终必须由它所针对的状态机进行自省，以便状态机可以在过去的高度查找其自己的共识状态。
 
 - `客户端状态` 是代表一个客户端状态的不透明类型。
     `ClientState` 必须公开查询函数，以验证处于特定高度的状态下键/值对的成员身份或非成员身份，并且能够提取当前的共识状态.
@@ -102,9 +77,9 @@ Machines implementing the IBC protocol are expected to respect these client type
 
 #### 共识状态
 
-`共识状态` 是一个由客户端类型来定义的不透明数据结构，被有效性谓词用来验证新的区块提交和根状态。该结构可能包含共识过程产生的最后一次提交，包括签名和验证者集合元数据。
+`共识状态` 是一个由客户端类型来定义的不透明数据结构，被合法性判定式用来验证新的区块提交和根状态。该结构可能包含共识过程产生的最后一次提交，包括签名和验证者集合元数据。
 
-`共识状态` 必须由一个 `共识`实例生成，该实例为每个 `共识状态`分配唯一的高度（这样，每个高度恰好具有一个关联的共识状态）。如果没有一致的承诺根，则同一链上的两个`共识状态`不应具有相同的高度。此类事件称为“存疑行为”，必须归类为不当行为。 如果发生这种情况，则应生成并提交证明，以便可以冻结客户端，并根据需要使先前的状态根无效。
+`共识状态` 必须由一个 `共识`实例生成，该实例为每个 `共识状态`分配唯一的高度（这样，每个高度恰好具有一个关联的共识状态）。如果没有一致的承诺根，则同一链上的两个`共识状态`不应具有相同的高度。此类事件称为“自相矛盾行为”，必须归类为不当行为。 如果发生这种情况，则应生成并提交证明，以便可以冻结客户端，并根据需要使先前的状态根无效。
 
 链的 `共识状态` 必须可以被规范地序列化，以便其他链可以检查存储的共识状态是否与另一个共识状态相等（请参见 [ICS 24](../ics-024-host-requirements) 了解密钥空间表）。
 
@@ -114,10 +89,9 @@ type ConsensusState = bytes
 
 `共识状态` 必须存储在下面定义的特定密钥下，这样其他链可以验证一个特定的共识状态是否已存储。
 
-#### 报头
+#### 区块头
 
-`报头` 是由客户端类型定义的不透明数据结构，它提供信息以用来更新`共识状态`.
-。可以将报头提交给关联的客户端以更新存储的`共识状态`. 。 报头可能包含高度、证明、承诺根，并可能更新有效性谓词。
+`区块头` 是由客户端类型定义的不透明数据结构，它提供信息以用来更新`共识状态`。可以将区块头提交给关联的客户端以更新存储的`共识状态` 。区块头可能包含高度、证明、承诺根，并可能更新合法性判定式。
 
 ```typescript
 type Header = bytes
@@ -125,7 +99,7 @@ type Header = bytes
 
 #### 共识
 
-`共识` 是一个 `报头` 生成函数，它利用之前的
+`共识` 是一个 `区块头` 生成函数，它利用之前的
 `共识状态` 和消息并返回结果。
 
 ```typescript
@@ -134,7 +108,7 @@ type Consensus = (ConsensusState, [Message]) => Header
 
 ### 区块链
 
-区块链是一个生成有效`标头`的共识算法。它由创世文件`共识状态` 生成带有任意消息的唯一的标头列表。
+区块链是一个生成有效`区块头`的共识算法。它由创世文件`共识状态` 生成带有任意消息的唯一的区块头列表。
 
 `区块链` 被定义为
 
@@ -184,25 +158,25 @@ protocol. In cases of attributable faults, a misbehaviour proof can be generated
 chain storing the client to safely freeze the light client and
 prevent further IBC packet relay.
 
-#### 有效性谓词
+#### 合法性判定式
 
-一个有效性谓词是由客户端类型定义的一个不透明函数，用与根据当前`共识状态`来验证 `标头` 。使用有效性谓词应该比给定父`标头` 和网络消息列表的完全共识重放算法拥有高得多的计算效率。
+一个合法性判定式是由客户端类型定义的一个不透明函数，用与根据当前`共识状态`来验证 `区块头` 。使用合法性判定式应该比给定父`区块头` 和网络消息列表的完全共识重放算法拥有高得多的计算效率。
 
-有效性谓词和客户端状态更新逻辑是绑定在一个单独的 `checkValidityAndUpdateState`类型中的，它的定义如下：
+合法性判定式和客户端状态更新逻辑是绑定在一个单独的 `checkValidityAndUpdateState`类型中的，它的定义如下：
 
 ```typescript
 type checkValidityAndUpdateState = (Header) => Void
 ```
 
-`checkValidityAndUpdateState` 必须在输入非有效标头的情况下抛出一个异常。
+`checkValidityAndUpdateState` 必须在输入非有效区块头的情况下抛出一个异常。
 
-如果给定的标头有效，客户端必须改变内部状态以存储立即确认的状态根，以及更新必要的签名权限跟踪（例如对验证者集合的更新）以供后续对有效性谓词的调用。
+如果给定的区块头有效，客户端必须改变内部状态以存储立即确认的状态根，以及更新必要的签名权限跟踪（例如对验证者集合的更新）以供后续对合法性判定式的调用。
 
-#### Misbehaviour predicate
+#### 不良行为判定式
 
-一个非有效性谓词是由客户端类型定义的不透明函数，用于检查数据是否对共识协议的构成违规。这可能是出现两个拥有不同状态根但在同一个区块高度的签名的标头、一个包含无效状态转换签名的标头或这其他由共识算法定义的不良行为的证据。
+一个不良行为判定式是由客户端类型定义的不透明函数，用于检查数据是否对共识协议的构成违规。这可能是出现两个拥有不同状态根但在同一个区块高度的签名的区块头、一个包含无效状态转换签名的区块头或这其他由共识算法定义的不良行为的证据。
 
-非有效性谓词和客户端状态更新逻辑是绑定在一个单独的`checkMisbehaviourAndUpdateState`类型中的，它的定义如下：
+不良行为判定式和客户端状态更新逻辑是绑定在一个单独的`checkMisbehaviourAndUpdateState`类型中的，它的定义如下：
 
 ```typescript
 type checkMisbehaviourAndUpdateState = (bytes) => Void
@@ -456,7 +430,7 @@ function queryClient(id: Identifier): ClientState {
 
 #### 更新
 
-通过提交新的`标头`来完成客户端的更新。`标识符`用于指向逻辑将被更新的客户端状态。 当使用存存储`客户端状态`的有效性谓词和`共识状态`验证新的`报头`时，客户端必须相应地更新其内部状态，可能最终确定承诺根并更新存储的`共识状态`中的签名授权逻辑。
+通过提交新的`区块头`来完成客户端的更新。`标识符`用于指向逻辑将被更新的客户端状态。 当使用存存储`客户端状态`的合法性判定式和`共识状态`验证新的`区块头`时，客户端必须相应地更新其内部状态，可能最终确定承诺根并更新存储的`共识状态`中的签名授权逻辑。
 
 ```typescript
 function updateClient(
@@ -488,14 +462,14 @@ function submitMisbehaviourToClient(
 
 ### 实现示例
 
-一个有效性谓词示例是构建在运行单一运营者的共识算法的区块链上的，其中有效区块由这个运营者进行签名。在该区块链运行过程中可以更改运营者的签名密钥。
+一个合法性判定式示例是构建在运行单一运营者的共识算法的区块链上的，其中有效区块由这个运营者进行签名。在该区块链运行过程中可以更改运营者的签名密钥。
 
 客户端特定的类型定义如下：
 
 - `ConsensusState` 存储最新的区块高度和最新的公钥
 - `Header`包含一个高度、一个新的承诺根、一个操作者的签名以及可能还包括一个新的公钥
 - `checkValidityAndUpdateState` 检查已经提交的区块高度是否是单调递增的以及签名是否正确，并更改内部状态
-- `checkMisbehaviourAndUpdateState` 被用于检查两个相同块高但不同承诺根的标头，并更改内部状态
+- `checkMisbehaviourAndUpdateState` 被用于检查两个相同块高但不同承诺根的区块头，并更改内部状态
 
 ```typescript
 interface ClientState {
@@ -540,7 +514,7 @@ function initialize(consensusState: ConsensusState): ClientState {
   }
 }
 
-// 有效性谓词函数由客户端类型来定义
+// 合法性判定式函数由客户端类型来定义
 function checkValidityAndUpdateState(
   clientState: ClientState,
   header: Header) {
