@@ -30,6 +30,8 @@ This specification must satisfy the client interface defined in ICS 2.
 
 ## Technical Specification
 
+This specification depends on correct instantiation of the [Tendermint consensus algorithm](https://github.com/tendermint/spec/blob/master/spec/consensus/consensus.md) and [light client algorithm](https://github.com/tendermint/spec/blob/master/spec/consensus/light-client.md).
+
 ### Client state
 
 The Tendermint client state tracks the current validator set, latest height, and a possible frozen height.
