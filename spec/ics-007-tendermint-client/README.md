@@ -68,6 +68,7 @@ interface Header {
 
 ### Evidence
 
+The `Evidence` type is used for detecting misbehaviour and freezing the client - to prevent further packet flow - if applicable.
 Tendermint client `Evidence` consists of two headers at the same height both of which the light client would have considered valid.
 
 ```typescript
@@ -85,7 +86,7 @@ Tendermint client initialisation requires a (subjectively chosen) latest consens
 
 ```typescript
 function initialize(consensusState: ConsensusState, validatorSet: List<Pair<Address, uint64>>, latestHeight: uint64): ClientState {
-  return {
+  return ClientState{
     validatorSet,
     latestHeight,
     pastHeaders: Map.singleton(latestHeight, consensusState)
