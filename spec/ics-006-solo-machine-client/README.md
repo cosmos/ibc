@@ -26,6 +26,8 @@ Functions & terms are as defined in [ICS 2](../ics-002-client-semantics).
 
 This specification must satisfy the client interface defined in [ICS 2](../ics-002-client-semantics).
 
+Conceptually, we assume "big table of signatures in the universe" - that signatures produced are public - and incorporate replay protection accordingly.
+
 ## Technical Specification
 
 This specification contains implementations for all of the functions defined by [ICS 2](../ics-002-client-semantics).
