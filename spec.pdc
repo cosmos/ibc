@@ -91,9 +91,17 @@ urlcolor: cyan
 
 !include spec/ics-020-fungible-token-transfer/README.md.xfm
 
-# ICS 27 - Interchain Accounts
+# ICS 027 - Interchain Accounts
 
 !include spec/ics-027-interchain-accounts/README.md.xfm
+
+# ICS 006 - Solo Machine Client
+
+!include spec/ics-006-solo-machine-client/README.md.xfm
+
+# ICS 007 - Tendermint Client
+
+!include spec/ics-007-tendermint-client/README.md.xfm
 
 # Appendix A: Use-case Descriptions
 
