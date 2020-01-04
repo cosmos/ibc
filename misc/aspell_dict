@@ -1,4 +1,4 @@
-personal_ws-1.1 en 533 
+personal_ws-1.1 en 534 
 ABCI
 ABI
 Agoric
@@ -508,6 +508,7 @@ untrusted
 updateClient
 updateConsensusState
 updatePort
+updateable
 validRound
 validValue
 validateChannelIdentifier

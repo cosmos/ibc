@@ -16,11 +16,10 @@ Inspired by [ethereum/pm](https://github.com/ethereum/pm).
 
 | №  | Date                             | Notes          | Recording            |
 | -- | -------------------------------- | -------------- | -------------------- |
-| 1  | November 14th, 2019 17:00 UTC    | [notes](./meetings/2019-11-14.md) | N/A |
-| 2  | December 5th, 2019 17:00 UTC     | [notes](./meetings/2019-12-05.md) | [Recording](https://drive.google.com/drive/folders/1ide4LhkAY8exFaGaPcH2Eeg9L4_bmFOk?usp=sharing) |
+| 1  | November 14th, 2019 17:00 CET    | [notes](./meetings/2019-11-14.md) | N/A |
+| 2  | December 5th, 2019 17:00 CET     | [notes](./meetings/2019-12-05.md) | [Recording](https://drive.google.com/drive/folders/1ide4LhkAY8exFaGaPcH2Eeg9L4_bmFOk?usp=sharing) |
 
 
 ### Upcoming Meetings
 
-- November 28th, 2019 17:00 CET
-- December 12th, 2019 17:00 CET
+- January 16th, 2020 17:00 CET.
