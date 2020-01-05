@@ -11,7 +11,7 @@ Exchange consists of three core components.
 2. Order matching
 3. Execution and delivery
 
-A DEX chain like Binance combines these 3 functions into a single synchronous environment. This comes with risks including asset peg risks, and trusting the validator set of faithfully execute your order.	
+A DEX chain like Binance combines these 3 functions into a single synchronous environment. This comes with risks including asset peg risks, and trusting the validator set of faithfully executing your order.	
 
 We propose an alternative model.  In this model, each of the 3 phases is asynchronously executed on independent blockchains.
 
