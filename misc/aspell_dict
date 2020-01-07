@@ -1,4 +1,4 @@
-personal_ws-1.1 en 534 
+personal_ws-1.1 en 544 
 ABCI
 ABI
 Agoric
@@ -175,6 +175,7 @@ channelKey
 channelPath
 channelSet
 checkMisbehaviourAndUpdateState
+checkSignature
 checkValidityAndUpdateState
 checkVersion
 cleanupPacket
@@ -215,6 +216,7 @@ consensusHeight
 consensusState
 consensusStateKey
 consensusStatePath
+consensusStates
 const
 counterintuitive
 counterparty
@@ -271,6 +273,9 @@ exfiltration
 expectedConsensusState
 firstHeader
 freezeClient
+fromHeight
+fromValidatorSet
+frozenHeight
 frozenKey
 fungibility
 generateAccount
@@ -391,6 +396,7 @@ packetCommitmentKey
 packetCommitmentPath
 packetData
 parameterised
+pastHeaders
 pastPublicKeys
 pendingDatagrams
 permissioned
@@ -458,6 +464,8 @@ sendPacket
 sentPacketLogs
 serialisable
 sharding
+signatureOne
+signatureTwo
 slashable
 sourceChannel
 sourcePort
@@ -516,6 +524,8 @@ validateClientIdentifier
 validateConnectionIdentifier
 validatePortIdentifier
 validator
+validatorSet
+validatorSetHash
 validators
 validityPredicate
 verifications
