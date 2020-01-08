@@ -1,6 +1,5 @@
 # Cosmos Direct Interchain Exchange Protocol (DIEP)
 
-
 #### Core Idea:
 
 Asynchronous liquidity available with IBC that is resistant to theft by misbehaving validators. This eliminates the need to concentrate liquidity (limit orders) in a third party blockchain/venue. Price discovery and execution becomes native between Cosmos zones (e.g. N^2 IBC connections for N zones). There is a cost in terms of higher latency from this architecture.
