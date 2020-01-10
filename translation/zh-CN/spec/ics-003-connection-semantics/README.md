@@ -2,7 +2,7 @@
 ics: '3'
 title: 连接语义
 stage: 草案
-category: IBC / TAO
+category: IBC/TAO
 kind: 实例化
 requires: 2、24
 required-by: 4、25
@@ -13,26 +13,26 @@ modified: '2019-08-25'
 
 ## 概要
 
-这个标准文档对 IBC *连接*的抽象进行描述：两条独立链上的两个有状态的对象（ *连接端* ），彼此与另一条链上的轻客户端关联，并共同来促进跨链子状态的验证和数据包的关联（通过通道）。描述了用于在两条链上安全地建立客户端的协议。
+这个标准文档对 IBC *连接*的抽象进行描述：两条独立链上的两个有状态的对象（*连接端* ），彼此与另一条链上的轻客户端关联，并共同来促进跨链子状态的验证和数据包的关联（通过通道）。描述了用于在两条链上安全的建立连接的协议。
 
 ### 动机
 
-核心 IBC 协议对数据包提供了*授权*和*排序*语义：一旦数据包分别已经在发送链上被有且仅有一次地按特定的顺序提交（并根据执行的交易的状态，例如通证托管），则可以确保这些数据包会以相同的顺序有且只有一次被递送到接收链。本标准中的*连接*抽象与 [ICS 2](../ics-002-client-semantics) 中定义的*客户端*抽象一同定义了 IBC 的*授权*语义。排序语义在 [ICS 4](../ics-004-channel-and-packet-semantics) 中进行了定义。
+核心 IBC 协议对数据包提供了*授权*和*排序*语义：确保对各自来说，数据包在发送链上被提交（根据状态转换的执行，例如通证托管），并且数据包被有且仅有一次地按特定的顺序提交和有且仅有一次的被递送到接收链。本标准中的*连接*抽象与 {a3}ICS 2{/a3} 中定义的{em4}客户端{/em4}抽象一同定义了 IBC 的*授权*语义。排序语义在 [ICS 4](../ics-004-channel-and-packet-semantics) 中进行了描述。
 
 ### 定义
 
 客户端相关的类型和函数被定义在 [ICS 2](../ics-002-client-semantics) 中。
 
-客户端相关的类型和函数被定义在 [ICS 23](../ics-023-vector-commitments) 中。
+加密承诺证明相关的类型和函数被定义在 [ICS 23](../ics-023-vector-commitments) 中。
 
-标识符和其他状态机主机的要求如 {a0}ICS 24{/a0} 所示。标识符不一定要是人类可读的名称（有可能地，不应阻止对标识符的抢注或争夺）。
+`Identifier`和其他主机状态机的要求如 {a0}ICS 24{/a0} 所示。标识符不一定要是人类可读的名称（基本上也不应该是，来防止对标识符的抢注或争夺）。
 
-开放式握手协议允许每个链验证用于引用另一个链上的连接的标识符，从而使每个链上的模块可以推出另一个链上的引用。
+开放式握手协议允许每个链验证用于引用另一个链上的连接的标识符，从而使每个链上的模块可以使用另一个链上的引用。
 
-本规范中提到的*参与者*是能够执行数据报的实体，该数据报需要为计算/存储付费（通过 gas 或类似的机制），否则是不被信任的。 可能的参与者包括：
+本规范中提到的*参与者*是能够执行数据报的实体，并为计算/存储付费（通过 gas 或类似的机制），但是是不被信任的。 可能的参与者包括：
 
-- 最终用户使用帐户密钥签名
-- 自主执行或响应另一笔交易的链上智能合约
+- 使用帐户密钥签名的最终用户
+- 自主或响应另一笔交易的链上智能合约
 - 响应其他事务或按计划方式运行的链上模块
 
 ### 所需属性
@@ -43,22 +43,22 @@ modified: '2019-08-25'
 
 在建立连接之前：
 
-- 不能再使用IBC子协议，因为无法验证跨链子状态。
-- 发起方（创建连接方）必须能够为要连接的链和连接的链指定初始共识状态（隐式地，例如通过发送交易）。
+- 连接阶段之后的 IBC 子协议不应该能被操作，因为跨链子状态还没被验证。
+- 发起方（创建连接方）必须能够为要连接的链和连接的链指定初始共识状态（隐式的，例如通过发送交易）。
 
 #### 握手期间
 
-一旦握手协商开始后：
+一旦握手协商开始：
 
 - 只有相关的握手数据报才可以按顺序被执行。
-- 第三条链不可能伪装成正在发生握手的两条链链中的一条
+- 没有第三条链可以伪装成正在发生握手的两条链中的一条
 
 #### 完成握手后阶段
 
 一旦握手协商完成：
 
-- 已经在两条链上建立的连接对象包括由初始参与者指定的共识状态。
-- 通过重放数据报，无法在其他链上恶意地建立其他的连接对象。
+- 在两个链上创建的连接对象均包含发起方指定的共识状态。
+- 其他连接对象不能通过重放数据报的方式在其他链上恶意的被创建。
 
 ## 技术指标
 
@@ -86,9 +86,9 @@ interface ConnectionEnd {
 ```
 
 - `state`字段描述连接端的当前状态。
-- `counterpartyConnectionIdentifier`字段标识了与这个连接相关的对方链的连接端。
-- `clientIdentifier`字段标识了与这个连接相关的对方链的连接端。
-- `counterpartyClientIdentifier`字段标识与此连接关联的客户端。
+- `counterpartyConnectionIdentifier`字段标识与此连接关联的对方链上的连接端。
+- `clientIdentifier`字段标识与此连接关联的客户端。
+- `counterpartyClientIdentifier`字段标识与此连接关联的对方链上的客户端。
 - `version`字段是不透明的字符串，可用于确定使用此连接的通道或数据包的编码或协议。
 
 ### 储存路径
@@ -135,7 +135,7 @@ function removeConnectionFromClient(
 }
 ```
 
-辅助函数由连接所定义，以将与连接关联的`CommitmentPrefix`传递给客户端提供的验证函数。 在规范的其他部分，这些功能必须用于内省其他链的状态，而不是直接在客户端上调用验证功能。
+辅助函数由连接所定义，以将与连接关联的`CommitmentPrefix`传递给客户端提供的验证函数。 在规范的其他部分，这些功能必须用于检视其他链的状态，而不是直接在客户端上调用验证函数。
 
 ```typescript
 function verifyClientConsensusState(
@@ -220,7 +220,7 @@ function verifyNextSequenceRecv(
 
 本 ICS 定义了建立握手子协议。一旦握手建立，连接将不能被关闭，标识符也无法被重新分配（这防止了数据包重放或者授权混乱）。
 
-数据头追踪和不良行为检测在 [ICS 2](../ics-002-client-semantics) 中被定义。
+区块头追踪和不良行为检测在 [ICS 2](../ics-002-client-semantics) 中被定义。
 
 ![State Machine Diagram](../../../../spec/ics-003-connection-semantics/state.png)
 
@@ -237,7 +237,7 @@ type validateConnectionIdentifier = (id: Identifier) => boolean
 
 #### 版本控制
 
-在握手过程中，连接的两端需要保持连接相关的版本字节串一致。目前，此版本字节串的内容对于 IBC 核心协议是不透明的。将来，它可能被用于指示哪些类型的通道可以使用特定的连接，或者指示信道相关的数据报将使用哪种编码格式。目前，主机状态机可以利用版本数据来协商与 IBC 之上的自定义逻辑有关的编码、优先级或特定与连接的元数据。
+在握手过程中，连接的两端需要对连接关联的版本字节串达成一致。目前，版本字节串的内容对于 IBC 核心协议是不透明的。将来，它可能被用于指示哪些类型的通道可以使用特定的连接，或者通道相关的数据报将使用哪种编码格式。目前，主机状态机可以利用版本数据来协商与 IBC 之上的自定义逻辑有关的编码、优先级或特定与连接的元数据。
 
 主机状态机还可以安全地忽略版本数据或指定一个空字符串。
 
@@ -247,7 +247,7 @@ type validateConnectionIdentifier = (id: Identifier) => boolean
 type getCompatibleVersions = () => []string
 ```
 
-实现必须定义一个函数 `pickVersion` 来从合约双方提议的版本列表中选择一个版本。
+实现必须定义一个函数 `pickVersion` 来从对方提议的版本列表中选择一个版本。
 
 ```typescript
 type pickVersion = ([]string) => string
@@ -255,25 +255,25 @@ type pickVersion = ([]string) => string
 
 #### 建立握手
 
-建立握手子协议用于初始化两条链彼此的共识状态。
+建立握手子协议用于在两条链上初始化彼此的共识状态。
 
-建立握手定义了 4 种数据报： *ConnOpenInit* ， *ConnOpenTry* ， *ConnOpenAck*和*ConnOpenConfirm* 。
+建立握手定义了四种数据报： *ConnOpenInit* ， *ConnOpenTry* ， *ConnOpenAck*和*ConnOpenConfirm* 。
 
 一个正确的协议执行流程如下：（注意所有的请求都是按照 ICS 25 来制定的）
 
-发起人 | 数据报 | 作用链 | 先前状态（A，B） | 连接建立后状态（A，B）
+发起人 | 数据报 | 作用链 | 先前状态（A，B） | 后状态（A，B）
 --- | --- | --- | --- | ---
 参与者 | `ConnOpenInit` | A | (none, none) | （INIT，none）
 中继器 | `ConnOpenTry` | B | （INIT，none） | （INIT，TRYOPEN）
 中继器 | `ConnOpenAck` | A | （INIT，TRYOPEN） | (OPEN, TRYOPEN)
 中继器 | `ConnOpenConfirm` | B | (OPEN, TRYOPEN) | (OPEN, OPEN)
 
-在实现子协议的两个链之间的开放握手结束时，具有以下属性：
+在实现子协议的两个链之间的建立握手结束时，具有以下属性：
 
-- 每条链都具有如同发起方所指定的对方链正确共识状态。
+- 每条链都具有原自发起方所指定的对方链正确共识状态。
 - 每条链都知道且认同另一链上的标识符。
 
-该子协议不需要经过授权，以及反垃圾信息模块化处理。
+该子协议不需要经过授权，除了考虑反垃圾信息。
 
 *ConnOpenInit* 初始化链 A 上的连接尝试。
 
@@ -294,7 +294,7 @@ function connOpenInit(
 }
 ```
 
-*ConnOpenTry* 将链 A 到链 B 的连接尝试通知转发（此代码在链 B 上执行）。
+*ConnOpenTry* 中继链 A 到链 B 的连接尝试的通知（此代码在链 B 上执行）。
 
 ```typescript
 function connOpenTry(
@@ -334,7 +334,7 @@ function connOpenTry(
 }
 ```
 
-*ConnOpenAck* 对从链 B 返回链 A 的连接打开尝试的确认消息进行中继（此代码在链A上执行）。
+*ConnOpenAck* 对从链 B 返回链 A 的连接建立尝试的确认消息进行中继（此代码在链 A 上执行）。
 
 ```typescript
 function connOpenAck(
@@ -360,7 +360,7 @@ function connOpenAck(
 }
 ```
 
-*ConnOpenConfirm* 确认链 A 与链 B 的连接的建立，然后在两个链上打开连接（此代码在链 B 上执行）。
+*ConnOpenConfirm* 在两条链上都建立链接后确认链 A 与链 B 的连接的建立（此代码在链 B 上执行）。
 
 ```typescript
 function connOpenConfirm(
@@ -377,9 +377,9 @@ function connOpenConfirm(
 }
 ```
 
-#### 查询方式
+#### 查询
 
-可以使用`queryConnection`通过标识符来查询连接。
+可以使用标识符和`queryConnection`来查询连接。
 
 ```typescript
 function queryConnection(id: Identifier): ConnectionEnd | void {
@@ -387,7 +387,7 @@ function queryConnection(id: Identifier): ConnectionEnd | void {
 }
 ```
 
-可以使用`queryClientConnections`和客户端标识符来查询与特定客户端关联的连接。
+可以使用客户端标识符和`queryClientConnections`来查询与特定客户端关联的连接。
 
 ```typescript
 function queryClientConnections(id: Identifier): Set<Identifier> {
@@ -406,7 +406,7 @@ function queryClientConnections(id: Identifier): Set<Identifier> {
 
 ## 向前兼容性
 
-此 ICS 的未来版本将在开放式握手中包括版本协商。建立连接并协商版本后，可以根据 ICS 6 协商将来的版本更新。
+此 ICS 的未来版本将在建立握手中包括版本协商。建立连接并协商版本后，可以根据 ICS 6 协商将来的版本更新。
 
 只能在建立连接时选择的共识协议定义的`updateConsensusState`函数允许的情况下更新共识状态。
 
