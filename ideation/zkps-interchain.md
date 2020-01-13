@@ -2,12 +2,21 @@
 
 ### ZKPs for cross-chain communication
 
+No (new) state at all.
+
+- Compute compression.
 - Slotting in to replace existing verification primitives which could be done without ZK.
 - Primarily: Zero-knowledge light clients (light client covers wide category)
 - Not part of the state machine itself.
 - Examples: Celo light client, Coda light client (could also be used over IBC easily)
+- Celo light client: header verification only.
+- Coda light client: full state transition verification.
+- There is design space in between (verify part of state transition, verify some invariants).
+- Light client isn't a great term (category too wide), we need better ones.
 
 ### ZKPs as part of a state machine on the interchain
+
+No cross-chain state.
 
 #### A shielded pool on the interchain / B - Many shielded pools on the interchain
 
@@ -31,6 +40,10 @@
   - There might not be enough at stake to secure it
   - May be harder to upgrade, add custom asset-specific rules
 
-#### A shielded pool across the interchain
+### ZKPs as part of many state machines on the interchain
+
+Cross-chain state.
+
+#### shielded pool across the interchain
 
 - Daira scaling proposal for Zcash.
