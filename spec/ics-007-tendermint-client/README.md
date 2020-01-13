@@ -176,7 +176,7 @@ function verifyConnectionState(
   proof: CommitmentProof,
   connectionIdentifier: Identifier,
   connectionEnd: ConnectionEnd) {
-    path = applyPrefix(prefix, "connection/{connectionIdentifier}")
+    path = applyPrefix(prefix, "connections/{connectionIdentifier}")
     // check that the client is at a sufficient height
     assert(clientState.latestHeight >= height)
     // check that the client is unfrozen or frozen at a higher height

@@ -8,7 +8,7 @@ requires: 23, 24
 required-by: 3
 author: Juwoon Yun <joon@tendermint.com>, Christopher Goes <cwgoes@tendermint.com>
 created: 2019-02-25
-modified: 2019-08-25
+modified: 2020-01-13
 ---
 
 ## Synopsis
@@ -420,34 +420,6 @@ type validateClientIdentifier = (id: Identifier) => boolean
 
 If not provided, the default `validateClientIdentifier` will always return `true`. 
 
-#### Path-space
-
-`clientStatePath` takes an `Identifier` and returns a `Path` under which to store a particular client state.
-
-```typescript
-function clientStatePath(id: Identifier): Path {
-    return "clients/{id}/state"
-}
-```
-
-`clientTypePath` takes an `Identifier` and returns `Path` under which to store the type of a particular client.
-
-```typescript
-function clientTypePath(id: Identifier): Path {
-    return "clients/{id}/type"
-}
-```
-
-Consensus states MUST be stored separately so that they can be independently verified.
-
-`consensusStatePath` takes an `Identifier` and returns a `Path` under which to store the consensus state of a client.
-
-```typescript
-function consensusStatePath(id: Identifier): Path {
-    return "clients/{id}/consensusState"
-}
-```
-
 ##### Utilising past roots
 
 To avoid race conditions between client updates (which change the state root) and proof-carrying
@@ -605,7 +577,7 @@ function verifyClientConsensusState(
   proof: CommitmentProof,
   clientIdentifier: Identifier,
   consensusState: ConsensusState) {
-    path = applyPrefix(prefix, "clients/{clientIdentifier}/consensusState")
+    path = applyPrefix(prefix, "consensusStates/{clientIdentifier}/" + height)
     abortTransactionUnless(!clientState.frozen)
     return clientState.verifiedRoots[sequence].verifyMembership(path, consensusState, proof)
 }
@@ -617,7 +589,7 @@ function verifyConnectionState(
   proof: CommitmentProof,
   connectionIdentifier: Identifier,
   connectionEnd: ConnectionEnd) {
-    path = applyPrefix(prefix, "connection/{connectionIdentifier}")
+    path = applyPrefix(prefix, "connections/{connectionIdentifier}")
     abortTransactionUnless(!clientState.frozen)
     return clientState.verifiedRoots[sequence].verifyMembership(path, connectionEnd, proof)
 }
@@ -732,6 +704,8 @@ Mar 5, 2019 - Initial draft finished and submitted as a PR
 May 29, 2019 - Various revisions, notably multiple commitment-roots
 
 Aug 15, 2019 - Major rework for clarity around client interface
+
+Jan 13, 2020 - Revisions for client type separation & path alterations
 
 ## Copyright
 
