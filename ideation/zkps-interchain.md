@@ -39,6 +39,14 @@ No cross-chain state.
   - Then you have to move out every time you want to do something, tx costs.
   - There might not be enough at stake to secure it.
   - May be harder to upgrade, add custom asset-specific rules.
+- Costs of inflation for proof-of-stake
+  - Have single shielded pool, pool delegates to a validator (known supply) - how to choose which validator? How to distribute rewards?
+  - Try to implement PoS logic in circuit.
+    - Need accounts system or large modifications.
+    - Should proof-of-stake really be private? Knowledge of e.g. if there is a validator > 33% seems useful to have.
+- Private governance might be desirable / interesting.
+  - Less transparent? Pretty separate problem from vote buying (possible either way).
+  - Maybe there are ways to make vote buying expensive, e.g. same spending/viewing/voting key, so if you prove vote the receipient can spend - but always another ZKP is possible.
 
 #### A shielded exchange on the interchain
 
