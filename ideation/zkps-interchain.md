@@ -51,7 +51,7 @@ No cross-chain state.
 #### A shielded exchange on the interchain
 
 - Zexe-style? Any implementers?
-- What does Onther Tech have?
+- Onther Tech: https://github.com/Onther-Tech/zk-dex.
 - What is shielded / unshielded here?
 - Any complexities from the multi-chain use case?
 - Mostly not different than many ERC20 token contracts & an Ethereum DEX.
@@ -66,6 +66,9 @@ Cross-chain state.
 - Needs finality on each chain, some transactions must wait a block or two to be sequenced.
 - Shared anonymity set across all chains (presumably multi-asset), can scale.
 - Daira scaling proposal for Zcash.
+  - Shard the note (commitment) set & nullifier set.
+  - Synchronisation of the commitment tree (subtrees) after each block.
+- Accept incoming transfers in zero-knowledge (w/finality).
 
 ##### Complexities
 
@@ -73,3 +76,7 @@ Cross-chain state.
 - Chains must agree on circuit construction.
 - Finality is required, if finality is high-latency UX may be problematic.
 - Have to balance state across chains (depends on specifics).
+- Would like some way to limit risk.
+  - Give a validator a viewing key, they can see amounts.
+  - Rotate the key, stake the validator, slash if revealed.
+  - Alternative: some sort of MPC, sharded shares of secret.
