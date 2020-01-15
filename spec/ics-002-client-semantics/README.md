@@ -253,10 +253,10 @@ but they must expose this common set of query functions to the IBC handler.
 type ClientState = bytes
 ```
 
-Client types must also define a method to initialize a client state with a provided consensus state:
+Client types must also define a method to initialize a client state with a provided consensus state, writing to state as appropriate.
 
 ```typescript
-type initialize = (state: ConsensusState) => ClientState
+type initialize = (state: ConsensusState) => ()
 ```
 
 #### CommitmentProof
@@ -440,28 +440,15 @@ function createClient(
     abortTransactionUnless(validateClientIdentifier(id))
     abortTransactionUnless(privateStore.get(clientStatePath(id)) === null)
     abortSystemUnless(provableStore.get(clientTypePath(id)) === null)
-    clientState = clientType.initialize(consensusState)
-    privateStore.set(clientStatePath(id), clientState)
+    clientType.initialise(consensusState)
     provableStore.set(clientTypePath(id), clientType)
 }
 ```
 
 #### Query
 
-Client consensus state and client internal state can be queried by identifier. The returned
-client state must fulfil an interface allowing membership / non-membership verification.
-
-```typescript
-function queryClientConsensusState(id: Identifier): ConsensusState {
-    return provableStore.get(consensusStatePath(id))
-}
-```
-
-```typescript
-function queryClient(id: Identifier): ClientState {
-    return privateStore.get(clientStatePath(id))
-}
-```
+Client consensus state and client internal state can be queried by identifier, but
+the specific paths which must be queried are defined by each client type.
 
 #### Update
 
@@ -548,12 +535,13 @@ function commit(
 }
 
 // initialisation function defined by the client type
-function initialize(consensusState: ConsensusState): ClientState {
-  return {
+function initialize(consensusState: ConsensusState): () {
+  clientState = {
     frozen: false,
     pastPublicKeys: Set.singleton(consensusState.publicKey),
     verifiedRoots: Map.empty()
   }
+  privateStore.set(identifier, clientState)
 }
 
 // validity predicate function defined by the client type
