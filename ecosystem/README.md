@@ -18,7 +18,7 @@ Inspired by [ethereum/pm](https://github.com/ethereum/pm).
 | -- | -------------------------------- | -------------- | -------------------- |
 | 1  | November 14th, 2019 17:00 CET    | [notes](./meetings/2019-11-14.md) | N/A |
 | 2  | December 5th, 2019 17:00 CET     | [notes](./meetings/2019-12-05.md) | [Recording](https://drive.google.com/drive/folders/1ide4LhkAY8exFaGaPcH2Eeg9L4_bmFOk?usp=sharing) |
-
+| 4  | January 16th, 2020 17:00 CET     | [notes](./meetings/2020-01-16.md) | [Recording](https://drive.google.com/drive/folders/1zlx_WuAccwhqouzp6PeZYi4QsghY43k7?usp=sharing) |
 
 ### Upcoming Meetings
 
