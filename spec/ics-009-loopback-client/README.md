@@ -48,7 +48,7 @@ type Evidence object
 No initialisation is necessary for a loopback client; an empty state is returned.
 
 ```typescript
-function initialize(): ClientState {
+function initialise(): ClientState {
   return {}
 }
 ```
