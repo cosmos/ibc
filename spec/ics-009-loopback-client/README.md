@@ -7,62 +7,189 @@ kind: instantiation
 author: Christopher Goes <cwgoes@tendermint.com>
 created: 2020-01-17
 modified: 2020-01-17
+requires: 2
 implements: 2
 ---
 
 ## Synopsis
 
-(high-level description of and rationale for specification)
+This specification describes a loop-back client, designed to be used for interaction over the IBC interface with modules present on the same ledger.
 
 ### Motivation
 
-(rationale for existence of standard)
+Loop-back clients may be useful in cases where the calling module does not have prior knowledge of where precisely the destination module lives and would like to use the uniform IBC message-passing interface.
 
 ### Definitions
 
-(definitions of any new terms not defined in common documentation)
+Functions & terms are as defined in [ICS 2](../ics-002-client-semantics).
 
 ### Desired Properties
 
-(desired characteristics / properties of protocol, effects if properties are violated)
+Intended client semantics should be preserved, and loop-back abstractions should be negligible cost.
 
 ## Technical Specification
 
-(main part of standard document - not all subsections are required)
+### Data structures
 
-(detailed technical specification: syntax, semantics, sub-protocols, algorithms, data structures, etc)
+No client state, consensus state, headers, or evidence data structures are required for a loopback client.
 
-### Data Structures
+```typescript
+type ClientState object
 
-(new data structures, if applicable)
+type ConsensusState object
 
-### Sub-protocols
+type Header object
 
-(sub-protocols, if applicable)
+type Evidence object
+```
+
+### Client initialisation
+
+No initialisation is necessary for a loopback client; an empty state is returned.
+
+```typescript
+function initialize(): ClientState {
+  return {}
+}
+```
+
+### Validity predicate
+
+No validity checking is necessary in a loopback client; the function should never be called.
+
+```typescript
+function checkValidityAndUpdateState(
+  clientState: ClientState,
+  header: Header) {
+    assert(false)
+}
+```
+
+### Misbehaviour predicate
+
+No misbehaviour checking is necessary in a loopback client; the function should never be called.
+
+```typescript
+function checkMisbehaviourAndUpdateState(
+  clientState: ClientState,
+  evidence: Evidence) {
+    return
+}
+```
+
+### State verification functions
+
+Tendermint client state verification functions check a Merkle proof against a previously validated commitment root.
+
+```typescript
+function verifyClientConsensusState(
+  clientState: ClientState,
+  height: uint64,
+  prefix: CommitmentPrefix,
+  proof: CommitmentProof,
+  clientIdentifier: Identifier,
+  consensusState: ConsensusState) {
+    path = applyPrefix(prefix, "consensusStates/{clientIdentifier}")
+    assert(get(path) === consensusState)
+}
+
+function verifyConnectionState(
+  clientState: ClientState,
+  height: uint64,
+  prefix: CommitmentPrefix,
+  proof: CommitmentProof,
+  connectionIdentifier: Identifier,
+  connectionEnd: ConnectionEnd) {
+    path = applyPrefix(prefix, "connection/{connectionIdentifier}")
+    assert(get(path) === connectionEnd)
+}
+
+function verifyChannelState(
+  clientState: ClientState,
+  height: uint64,
+  prefix: CommitmentPrefix,
+  proof: CommitmentProof,
+  portIdentifier: Identifier,
+  channelIdentifier: Identifier,
+  channelEnd: ChannelEnd) {
+    path = applyPrefix(prefix, "ports/{portIdentifier}/channels/{channelIdentifier}")
+    assert(get(path) === channelEnd)
+}
+
+function verifyPacketCommitment(
+  clientState: ClientState,
+  height: uint64,
+  prefix: CommitmentPrefix,
+  proof: CommitmentProof,
+  portIdentifier: Identifier,
+  channelIdentifier: Identifier,
+  sequence: uint64,
+  commitment: bytes) {
+    path = applyPrefix(prefix, "ports/{portIdentifier}/channels/{channelIdentifier}/packets/{sequence}")
+    assert(get(path) === commitment)
+}
+
+function verifyPacketAcknowledgement(
+  clientState: ClientState,
+  height: uint64,
+  prefix: CommitmentPrefix,
+  proof: CommitmentProof,
+  portIdentifier: Identifier,
+  channelIdentifier: Identifier,
+  sequence: uint64,
+  acknowledgement: bytes) {
+    path = applyPrefix(prefix, "ports/{portIdentifier}/channels/{channelIdentifier}/acknowledgements/{sequence}")
+    assert(get(path) === acknowledgement)
+}
+
+function verifyPacketAcknowledgementAbsence(
+  clientState: ClientState,
+  height: uint64,
+  prefix: CommitmentPrefix,
+  proof: CommitmentProof,
+  portIdentifier: Identifier,
+  channelIdentifier: Identifier,
+  sequence: uint64) {
+    path = applyPrefix(prefix, "ports/{portIdentifier}/channels/{channelIdentifier}/acknowledgements/{sequence}")
+    assert(get(path) === nil)
+}
+
+function verifyNextSequenceRecv(
+  clientState: ClientState,
+  height: uint64,
+  prefix: CommitmentPrefix,
+  proof: CommitmentProof,
+  portIdentifier: Identifier,
+  channelIdentifier: Identifier,
+  nextSequenceRecv: uint64) {
+    path = applyPrefix(prefix, "ports/{portIdentifier}/channels/{channelIdentifier}/nextSequenceRecv")
+    assert(get(path) === nextSequenceRecv)
+}
+```
 
 ### Properties & Invariants
 
-(properties & invariants maintained by the protocols specified, if applicable)
+Semantics are as if this were a remote client of the local ledger.
 
 ## Backwards Compatibility
 
-(discussion of compatibility or lack thereof with previous standards)
+Not applicable.
 
 ## Forwards Compatibility
 
-(discussion of compatibility or lack thereof with expected future standards)
+Not applicable. Alterations to the client algorithm will require a new client standard.
 
 ## Example Implementation
 
-(link to or description of concrete example implementation)
+Coming soon.
 
 ## Other Implementations
 
-(links to or descriptions of other implementations)
+None at present.
 
 ## History
 
-(changelog and notable inspirations / references)
+2020-01-17 - Initial version
 
 ## Copyright
 
