@@ -112,7 +112,7 @@ function checkValidityAndUpdateState(
     clientState.latestHeight = header.height
     // create recorded consensus state, save it
     consensusState = ConsensusState{validatorSet.hash(), header.commitmentRoot}
-    set("consensusStates/{identifier}/{header.height}", consensusState)
+    set("clients/{identifier}/consensusStates/{header.height}", consensusState)
     // save the client
     set("clients/{identifier}", clientState)
 }
@@ -131,7 +131,7 @@ function checkMisbehaviourAndUpdateState(
     // assert that the commitments are different
     assert(h1.commitmentRoot !== h2.commitmentRoot)
     // fetch the previously verified commitment root & validator set hash
-    consensusState = get("consensusStates/{identifier}/{evidence.fromHeight}")
+    consensusState = get("clients/{identifier}/consensusStates/{evidence.fromHeight}")
     // check that the validator set matches
     assert(consensusState.validatorSetHash === evidence.fromValidatorSet.hash())
     // check if the light client "would have been fooled"
@@ -158,13 +158,14 @@ function verifyClientConsensusState(
   proof: CommitmentProof,
   clientIdentifier: Identifier,
   consensusState: ConsensusState) {
-    path = applyPrefix(prefix, "consensusStates/{clientIdentifier}")
+    // TODO FIXME height
+    path = applyPrefix(prefix, "clients/{clientIdentifier}/consensusState")
     // check that the client is at a sufficient height
     assert(clientState.latestHeight >= height)
     // check that the client is unfrozen or frozen at a higher height
     assert(clientState.frozenHeight === null || clientState.frozenHeight > height)
     // fetch the previously verified commitment root & verify membership
-    root = get("consensusStates/{identifier}/{height}")
+    root = get("clients/{identifier}/consensusStates/{height}")
     // verify that the provided consensus state has been stored
     assert(root.verifyMembership(path, consensusState, proof))
 }
@@ -182,7 +183,7 @@ function verifyConnectionState(
     // check that the client is unfrozen or frozen at a higher height
     assert(clientState.frozenHeight === null || clientState.frozenHeight > height)
     // fetch the previously verified commitment root & verify membership
-    root = get("consensusStates/{identifier}/{height}")
+    root = get("clients/{identifier}/consensusStates/{height}")
     // verify that the provided connection end has been stored
     assert(root.verifyMembership(path, connectionEnd, proof))
 }
@@ -201,7 +202,7 @@ function verifyChannelState(
     // check that the client is unfrozen or frozen at a higher height
     assert(clientState.frozenHeight === null || clientState.frozenHeight > height)
     // fetch the previously verified commitment root & verify membership
-    root = get("consensusStates/{identifier}/{height}")
+    root = get("clients/{identifier}/consensusStates/{height}")
     // verify that the provided channel end has been stored
     assert(root.verifyMembership(path, channelEnd, proof))
 }
@@ -221,7 +222,7 @@ function verifyPacketCommitment(
     // check that the client is unfrozen or frozen at a higher height
     assert(clientState.frozenHeight === null || clientState.frozenHeight > height)
     // fetch the previously verified commitment root & verify membership
-    root = get("consensusStates/{identifier}/{height}")
+    root = get("clients/{identifier}/consensusStates/{height}")
     // verify that the provided commitment has been stored
     assert(root.verifyMembership(path, commitment, proof))
 }
@@ -241,7 +242,7 @@ function verifyPacketAcknowledgement(
     // check that the client is unfrozen or frozen at a higher height
     assert(clientState.frozenHeight === null || clientState.frozenHeight > height)
     // fetch the previously verified commitment root & verify membership
-    root = get("consensusStates/{identifier}/{height}")
+    root = get("clients/{identifier}/consensusStates/{height}")
     // verify that the provided acknowledgement has been stored
     assert(root.verifyMembership(path, acknowledgement, proof))
 }
@@ -260,7 +261,7 @@ function verifyPacketAcknowledgementAbsence(
     // check that the client is unfrozen or frozen at a higher height
     assert(clientState.frozenHeight === null || clientState.frozenHeight > height)
     // fetch the previously verified commitment root & verify membership
-    root = get("consensusStates/{identifier}/{height}")
+    root = get("clients/{identifier}/consensusStates/{height}")
     // verify that no acknowledgement has been stored
     assert(root.verifyNonMembership(path, proof))
 }
@@ -279,7 +280,7 @@ function verifyNextSequenceRecv(
     // check that the client is unfrozen or frozen at a higher height
     assert(clientState.frozenHeight === null || clientState.frozenHeight > height)
     // fetch the previously verified commitment root & verify membership
-    root = get("consensusStates/{identifier}/{height}")
+    root = get("clients/{identifier}/consensusStates/{height}")
     // verify that the nextSequenceRecv is as claimed
     assert(root.verifyMembership(path, nextSequenceRecv, proof))
 }
