@@ -142,8 +142,9 @@ function verifyClientConsensusState(
   prefix: CommitmentPrefix,
   proof: CommitmentProof,
   clientIdentifier: Identifier,
+  consensusStateHeight: uint64,
   consensusState: ConsensusState) {
-    path = applyPrefix(prefix, "clients/{clientIdentifier}/consensusState")
+    path = applyPrefix(prefix, "clients/{clientIdentifier}/consensusState/{consensusStateHeight}")
     abortTransactionUnless(!clientState.frozen)
     value = clientState.consensusState.sequence + path + consensusState
     assert(checkSignature(clientState.consensusState.pubKey, value, proof))

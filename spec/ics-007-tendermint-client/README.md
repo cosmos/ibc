@@ -165,9 +165,9 @@ function verifyClientConsensusState(
   prefix: CommitmentPrefix,
   proof: CommitmentProof,
   clientIdentifier: Identifier,
+  consensusStateHeight: uint64,
   consensusState: ConsensusState) {
-    // TODO FIXME height
-    path = applyPrefix(prefix, "clients/{clientIdentifier}/consensusState")
+    path = applyPrefix(prefix, "clients/{clientIdentifier}/consensusState/{consensusStateHeight}")
     // check that the client is at a sufficient height
     assert(clientState.latestHeight >= height)
     // check that the client is unfrozen or frozen at a higher height

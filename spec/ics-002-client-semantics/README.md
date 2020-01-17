@@ -288,6 +288,7 @@ type verifyClientConsensusState = (
   height: uint64,
   proof: CommitmentProof,
   clientIdentifier: Identifier,
+  consensusStateHeight: uint64,
   consensusState: ConsensusState)
   => boolean
 ```
