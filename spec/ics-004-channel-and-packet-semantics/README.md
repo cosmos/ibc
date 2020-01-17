@@ -521,8 +521,9 @@ function sendPacket(packet: Packet) {
     abortTransactionUnless(connection !== null)
     abortTransactionUnless(connection.state !== CLOSED)
 
-    consensusState = provableStore.get(consensusStatePath(connection.clientIdentifier))
-    abortTransactionUnless(consensusState.getHeight() < packet.timeoutHeight)
+    // sanity-check that the timeout height hasn't already passed in our local client tracking the receiving chain
+    latestHeight = provableStore.get(clientPath(connection.clientIdentifier)).latestHeight()
+    abortTransactionUnless(latestHeight < packet.timeoutHeight)
 
     nextSequenceSend = provableStore.get(nextSequenceSendPath(packet.sourcePort, packet.sourceChannel))
     abortTransactionUnless(packet.sequence === nextSequenceSend)

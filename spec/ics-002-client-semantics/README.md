@@ -253,10 +253,18 @@ but they must expose this common set of query functions to the IBC handler.
 type ClientState = bytes
 ```
 
-Client types must also define a method to initialize a client state with a provided consensus state, writing to state as appropriate.
+Client types MUST define a method to initialize a client state with a provided consensus state, writing to state as appropriate.
 
 ```typescript
 type initialize = (state: ConsensusState) => ()
+```
+
+Client types MUST define a method to fetch the current height (height of the most recent validated header).
+
+```typescript
+type latestHeight = (
+  clientState: ClientState)
+  => uint64
 ```
 
 #### CommitmentProof

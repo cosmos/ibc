@@ -96,6 +96,14 @@ function initialize(consensusState: ConsensusState, validatorSet: List<Pair<Addr
 }
 ```
 
+The Tendermint client `latestHeight` function returns the latest stored height, which is updated every time a new (more recent) header is validated.
+
+```typescript
+function latestHeight(clientState: ClientState): uint64 {
+  return clientState.latestHeight
+}
+```
+
 ### Validity predicate
 
 Tendermint client validity checking uses the bisection algorithm described in the [Tendermint spec](https://github.com/tendermint/spec/blob/master/spec/consensus/light-client.md). If the provided header is valid, the client state is updated & the newly verified commitment written to the store.

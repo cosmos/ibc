@@ -90,6 +90,14 @@ function initialise(consensusState: ConsensusState): ClientState {
 }
 ```
 
+The solo machine client `latestHeight` function returns the latest sequence.
+
+```typescript
+function latestHeight(clientState: ClientState): uint64 {
+  return clientState.consensusState.sequence
+}
+```
+
 ### Validity predicate
 
 The solo machine client `checkValidityAndUpdateState` function checks that the currently registered public key has signed over the new public key with the correct sequence.
