@@ -573,7 +573,7 @@ function verifyClientConsensusState(
   proof: CommitmentProof,
   clientIdentifier: Identifier,
   consensusState: ConsensusState) {
-    path = applyPrefix(prefix, "consensusStates/{clientIdentifier}/" + height)
+    path = applyPrefix(prefix, "clients/{clientIdentifier}/consensusStates/{height}")
     abortTransactionUnless(!clientState.frozen)
     return clientState.verifiedRoots[sequence].verifyMembership(path, consensusState, proof)
 }
