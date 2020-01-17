@@ -79,7 +79,7 @@ function checkMisbehaviourAndUpdateState(
 
 ### State verification functions
 
-Tendermint client state verification functions check a Merkle proof against a previously validated commitment root.
+Loop-back client state verification functions simply read the local state. Note that they will need (read-only) access to keys outside the client prefix.
 
 ```typescript
 function verifyClientConsensusState(
