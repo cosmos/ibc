@@ -90,10 +90,10 @@ function initialise(consensusState: ConsensusState): ClientState {
 }
 ```
 
-The solo machine client `latestHeight` function returns the latest sequence.
+The solo machine client `latestClientHeight` function returns the latest sequence.
 
 ```typescript
-function latestHeight(clientState: ClientState): uint64 {
+function latestClientHeight(clientState: ClientState): uint64 {
   return clientState.consensusState.sequence
 }
 ```

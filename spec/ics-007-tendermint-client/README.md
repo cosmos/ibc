@@ -96,10 +96,10 @@ function initialize(consensusState: ConsensusState, validatorSet: List<Pair<Addr
 }
 ```
 
-The Tendermint client `latestHeight` function returns the latest stored height, which is updated every time a new (more recent) header is validated.
+The Tendermint client `latestClientHeight` function returns the latest stored height, which is updated every time a new (more recent) header is validated.
 
 ```typescript
-function latestHeight(clientState: ClientState): uint64 {
+function latestClientHeight(clientState: ClientState): uint64 {
   return clientState.latestHeight
 }
 ```
