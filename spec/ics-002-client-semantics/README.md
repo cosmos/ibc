@@ -262,7 +262,7 @@ type initialize = (state: ConsensusState) => ()
 Client types MUST define a method to fetch the current height (height of the most recent validated header).
 
 ```typescript
-type latestHeight = (
+type latestClientHeight = (
   clientState: ClientState)
   => uint64
 ```
