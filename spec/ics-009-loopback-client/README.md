@@ -17,7 +17,7 @@ This specification describes a loop-back client, designed to be used for interac
 
 ### Motivation
 
-Loop-back clients may be useful in cases where the calling module does not have prior knowledge of where precisely the destination module lives and would like to use the uniform IBC message-passing interface.
+Loop-back clients may be useful in cases where the calling module does not have prior knowledge of where precisely the destination module lives and would like to use the uniform IBC message-passing interface (similar to `127.0.0.1` in TCP/IP).
 
 ### Definitions
 
