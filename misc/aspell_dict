@@ -1,4 +1,4 @@
-personal_ws-1.1 en 546 
+personal_ws-1.1 en 545 
 ABCI
 ABI
 Agoric
@@ -326,7 +326,6 @@ implementers
 incentivisation
 incrementing
 indexOf
-initialize
 instantiation
 interblockchain
 interchain
