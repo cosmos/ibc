@@ -70,10 +70,15 @@ interface Header {
 `Evidence` of solo machine misbehaviour consists of a sequence and two signatures over different messages at that sequence.
 
 ```typescript
+interface SignatureAndData {
+  sig: Signature
+  data: []byte
+}
+
 interface Evidence {
   sequence: uint64
-  signatureOne: Signature
-  signatureTwo: Signature
+  signatureOne: SignatureAndData
+  signatureTwo: SignatureAndData
 }
 ```
 
@@ -125,8 +130,8 @@ function checkMisbehaviourAndUpdateState(
     h2 = evidence.h2
     pubkey = clientState.consensusState.publicKey
     assert(evidence.h1.signature.data !== evidence.h2.signature.data)
-    assert(checkSignature(pubkey, evidence.sequence, evidence.h1.signature))
-    assert(checkSignature(pubkey, evidence.sequence, evidence.h2.signature))
+    assert(checkSignature(pubkey, evidence.sequence, evidence.h1.signature.sig))
+    assert(checkSignature(pubkey, evidence.sequence, evidence.h2.signature.sig))
     clientState.frozen = true
 }
 ```

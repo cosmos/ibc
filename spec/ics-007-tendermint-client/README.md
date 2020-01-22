@@ -135,20 +135,20 @@ function checkMisbehaviourAndUpdateState(
   clientState: ClientState,
   evidence: Evidence) {
     // assert that the heights are the same
-    assert(h1.height === h2.height)
+    assert(evidence.h1.height === evidence.h2.height)
     // assert that the commitments are different
-    assert(h1.commitmentRoot !== h2.commitmentRoot)
+    assert(evidence.h1.commitmentRoot !== evidence.h2.commitmentRoot)
     // fetch the previously verified commitment root & validator set hash
     consensusState = get("clients/{identifier}/consensusStates/{evidence.fromHeight}")
     // check that the validator set matches
     assert(consensusState.validatorSetHash === evidence.fromValidatorSet.hash())
     // check if the light client "would have been fooled"
     assert(
-      verify(evidence.fromValidatorSet, evidence.fromHeight, h1) &&
-      verify(evidence.fromValidatorSet, evidence.fromHeight, h2)
+      verify(evidence.fromValidatorSet, evidence.fromHeight, evidence.h1) &&
+      verify(evidence.fromValidatorSet, evidence.fromHeight, evidence.h2)
       )
     // set the frozen height
-    clientState.frozenHeight = min(h1.height, h2.height)
+    clientState.frozenHeight = evidence.h1.height // which is same as h2.height
     // save the client
     set("clients/{identifier}", clientState)
 }
