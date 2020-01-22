@@ -24,6 +24,8 @@ Functions & terms are as defined in [ICS 2](../ics-002-client-semantics).
 
 The Tendermint light client uses the generalised Merkle proof format as defined in ICS 8.
 
+`hash` is a generic collision-resistant hash function, and can easily be configured.
+
 ### Desired Properties
 
 This specification must satisfy the client interface defined in ICS 2.
@@ -252,7 +254,7 @@ function verifyPacketAcknowledgement(
     // fetch the previously verified commitment root & verify membership
     root = get("clients/{identifier}/consensusStates/{height}")
     // verify that the provided acknowledgement has been stored
-    assert(root.verifyMembership(path, acknowledgement, proof))
+    assert(root.verifyMembership(path, hash(acknowledgement), proof))
 }
 
 function verifyPacketAcknowledgementAbsence(

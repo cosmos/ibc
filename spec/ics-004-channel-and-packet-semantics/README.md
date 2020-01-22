@@ -32,7 +32,7 @@ In order to provide the desired ordering, exactly-once delivery, and module perm
 
 `Port` and `authenticate` are as defined in [ICS 5](../ics-005-port-allocation).
 
-`hash` is a generic collision-resistant hash function, the specifics of which must be agreed on by the modules utilising the channel.
+`hash` is a generic collision-resistant hash function, the specifics of which must be agreed on by the modules utilising the channel. `hash` can be defined differently by different chains.
 
 `Identifier`, `get`, `set`, `delete`, `getCurrentHeight`, and module-system related primitives are as defined in [ICS 24](../ics-024-host-requirements).
 
@@ -576,13 +576,13 @@ function recvPacket(
 
     abortTransactionUnless(getConsensusHeight() < packet.timeoutHeight)
 
-    abortTransactionUnless(connection.verifyPacketCommitment(
+    abortTransactionUnless(connection.verifyPacketData(
       proofHeight,
       proof,
       packet.sourcePort,
       packet.sourceChannel,
       packet.sequence,
-      hash(packet.data, packet.timeout)
+      concat(packet.data, packet.timeout)
     ))
 
     // all assertions passed (except sequence check), we can alter state
@@ -646,7 +646,7 @@ function acknowledgePacket(
       packet.destPort,
       packet.destChannel,
       packet.sequence,
-      hash(acknowledgement)
+      acknowledgement
     ))
 
     // all assertions passed, we can alter state
