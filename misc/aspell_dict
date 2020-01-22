@@ -1,4 +1,4 @@
-personal_ws-1.1 en 545 
+personal_ws-1.1 en 546 
 ABCI
 ABI
 Agoric
@@ -214,6 +214,7 @@ connectionPath
 conns
 consensusHeight
 consensusState
+consensusStateHeight
 consensusStateKey
 consensusStatePath
 consensusStates
@@ -325,7 +326,6 @@ implementers
 incentivisation
 incrementing
 indexOf
-initialize
 instantiation
 interblockchain
 interchain
@@ -337,6 +337,7 @@ introspectable
 invariants
 keyspace
 keyspaces
+latestClientHeight
 latestHeader
 latestHeight
 len

@@ -145,9 +145,10 @@ function verifyClientConsensusState(
   height: uint64,
   proof: CommitmentProof,
   clientIdentifier: Identifier,
+  consensusStateHeight: uint64,
   consensusState: ConsensusState) {
     client = queryClient(connection.clientIdentifier)
-    return client.verifyClientConsensusState(connection, height, connection.counterpartyPrefix, proof, clientIdentifier, consensusState)
+    return client.verifyClientConsensusState(connection, height, connection.counterpartyPrefix, proof, clientIdentifier, consensusStateHeight, consensusState)
 }
 
 function verifyConnectionState(
@@ -324,7 +325,8 @@ function connOpenTry(
     connection = ConnectionEnd{state, counterpartyConnectionIdentifier, counterpartyPrefix,
                                clientIdentifier, counterpartyClientIdentifier, version}
     abortTransactionUnless(connection.verifyConnectionState(proofHeight, proofInit, counterpartyConnectionIdentifier, expected))
-    abortTransactionUnless(connection.verifyClientConsensusState(proofHeight, proofConsensus, counterpartyClientIdentifier, expectedConsensusState))
+    abortTransactionUnless(connection.verifyClientConsensusState(
+      proofHeight, proofConsensus, counterpartyClientIdentifier, consensusHeight, expectedConsensusState))
     previous = provableStore.get(connectionPath(desiredIdentifier))
     abortTransactionUnless(
       (previous === null) ||
@@ -359,7 +361,8 @@ function connOpenAck(
                              connection.counterpartyClientIdentifier, connection.clientIdentifier,
                              version}
     abortTransactionUnless(connection.verifyConnectionState(proofHeight, proofTry, connection.counterpartyConnectionIdentifier, expected))
-    abortTransactionUnless(connection.verifyClientConsensusState(proofHeight, proofConsensus, connection.counterpartyClientIdentifier, expectedConsensusState))
+    abortTransactionUnless(connection.verifyClientConsensusState(
+      proofHeight, proofConsensus, connection.counterpartyClientIdentifier, consensusHeight, expectedConsensusState))
     connection.state = OPEN
     abortTransactionUnless(getCompatibleVersions().indexOf(version) !== -1)
     connection.version = version

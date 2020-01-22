@@ -95,6 +95,14 @@ function initialise(consensusState: ConsensusState): ClientState {
 }
 ```
 
+The solo machine client `latestClientHeight` function returns the latest sequence.
+
+```typescript
+function latestClientHeight(clientState: ClientState): uint64 {
+  return clientState.consensusState.sequence
+}
+```
+
 ### Validity predicate
 
 The solo machine client `checkValidityAndUpdateState` function checks that the currently registered public key has signed over the new public key with the correct sequence.
@@ -139,8 +147,9 @@ function verifyClientConsensusState(
   prefix: CommitmentPrefix,
   proof: CommitmentProof,
   clientIdentifier: Identifier,
+  consensusStateHeight: uint64,
   consensusState: ConsensusState) {
-    path = applyPrefix(prefix, "clients/{clientIdentifier}/consensusState")
+    path = applyPrefix(prefix, "clients/{clientIdentifier}/consensusState/{consensusStateHeight}")
     abortTransactionUnless(!clientState.frozen)
     value = clientState.consensusState.sequence + path + consensusState
     assert(checkSignature(clientState.consensusState.pubKey, value, proof))
