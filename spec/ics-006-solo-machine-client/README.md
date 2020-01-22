@@ -185,7 +185,7 @@ function verifyChannelState(
     clientState.consensusState.sequence++
 }
 
-function verifyPacketCommitment(
+function verifyPacketData(
   clientState: ClientState,
   height: uint64,
   prefix: CommitmentPrefix,
@@ -193,10 +193,10 @@ function verifyPacketCommitment(
   portIdentifier: Identifier,
   channelIdentifier: Identifier,
   sequence: uint64,
-  commitment: bytes) {
+  data: bytes) {
     path = applyPrefix(prefix, "ports/{portIdentifier}/channels/{channelIdentifier}/packets/{sequence}")
     abortTransactionUnless(!clientState.frozen)
-    value = clientState.consensusState.sequence + path + commitment
+    value = clientState.consensusState.sequence + path + data
     assert(checkSignature(clientState.consensusState.pubKey, value, proof))
     clientState.consensusState.sequence++
 }

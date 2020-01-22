@@ -215,7 +215,7 @@ function verifyChannelState(
     assert(root.verifyMembership(path, channelEnd, proof))
 }
 
-function verifyPacketCommitment(
+function verifyPacketData(
   clientState: ClientState,
   height: uint64,
   prefix: CommitmentPrefix,
@@ -223,7 +223,7 @@ function verifyPacketCommitment(
   portIdentifier: Identifier,
   channelIdentifier: Identifier,
   sequence: uint64,
-  commitment: bytes) {
+  data: bytes) {
     path = applyPrefix(prefix, "ports/{portIdentifier}/channels/{channelIdentifier}/packets/{sequence}")
     // check that the client is at a sufficient height
     assert(clientState.latestHeight >= height)
@@ -232,7 +232,7 @@ function verifyPacketCommitment(
     // fetch the previously verified commitment root & verify membership
     root = get("clients/{identifier}/consensusStates/{height}")
     // verify that the provided commitment has been stored
-    assert(root.verifyMembership(path, commitment, proof))
+    assert(root.verifyMembership(path, hash(data), proof))
 }
 
 function verifyPacketAcknowledgement(
