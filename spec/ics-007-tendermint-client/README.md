@@ -24,6 +24,8 @@ Functions & terms are as defined in [ICS 2](../ics-002-client-semantics).
 
 The Tendermint light client uses the generalised Merkle proof format as defined in ICS 8.
 
+`hash` is a generic collision-resistant hash function, and can easily be configured.
+
 ### Desired Properties
 
 This specification must satisfy the client interface defined in ICS 2.
@@ -215,7 +217,7 @@ function verifyChannelState(
     assert(root.verifyMembership(path, channelEnd, proof))
 }
 
-function verifyPacketCommitment(
+function verifyPacketData(
   clientState: ClientState,
   height: uint64,
   prefix: CommitmentPrefix,
@@ -223,7 +225,7 @@ function verifyPacketCommitment(
   portIdentifier: Identifier,
   channelIdentifier: Identifier,
   sequence: uint64,
-  commitment: bytes) {
+  data: bytes) {
     path = applyPrefix(prefix, "ports/{portIdentifier}/channels/{channelIdentifier}/packets/{sequence}")
     // check that the client is at a sufficient height
     assert(clientState.latestHeight >= height)
@@ -232,7 +234,7 @@ function verifyPacketCommitment(
     // fetch the previously verified commitment root & verify membership
     root = get("clients/{identifier}/consensusStates/{height}")
     // verify that the provided commitment has been stored
-    assert(root.verifyMembership(path, commitment, proof))
+    assert(root.verifyMembership(path, hash(data), proof))
 }
 
 function verifyPacketAcknowledgement(
@@ -252,7 +254,7 @@ function verifyPacketAcknowledgement(
     // fetch the previously verified commitment root & verify membership
     root = get("clients/{identifier}/consensusStates/{height}")
     // verify that the provided acknowledgement has been stored
-    assert(root.verifyMembership(path, acknowledgement, proof))
+    assert(root.verifyMembership(path, hash(acknowledgement), proof))
 }
 
 function verifyPacketAcknowledgementAbsence(

@@ -320,10 +320,10 @@ type verifyChannelState = (
   => boolean
 ```
 
-`verifyPacketCommitment` verifies a proof of an outgoing packet commitment at the specified port, specified channel, and specified sequence.
+`verifyPacketData` verifies a proof of an outgoing packet commitment at the specified port, specified channel, and specified sequence.
 
 ```typescript
-type verifyPacketCommitment = (
+type verifyPacketData = (
   clientState: ClientState,
   height: uint64,
   prefix: CommitmentPrefix,
@@ -331,7 +331,7 @@ type verifyPacketCommitment = (
   portIdentifier: Identifier,
   channelIdentifier: Identifier,
   sequence: uint64,
-  commitment: bytes)
+  data: bytes)
   => boolean
 ```
 
@@ -604,7 +604,7 @@ function verifyChannelState(
     return clientState.verifiedRoots[sequence].verifyMembership(path, channelEnd, proof)
 }
 
-function verifyPacketCommitment(
+function verifyPacketData(
   clientState: ClientState,
   height: uint64,
   prefix: CommitmentPrefix,
@@ -612,10 +612,10 @@ function verifyPacketCommitment(
   portIdentifier: Identifier,
   channelIdentifier: Identifier,
   sequence: uint64,
-  commitment: bytes) {
+  data: bytes) {
     path = applyPrefix(prefix, "ports/{portIdentifier}/channels/{channelIdentifier}/packets/{sequence}")
     abortTransactionUnless(!clientState.frozen)
-    return clientState.verifiedRoots[sequence].verifyMembership(path, commitment, proof)
+    return clientState.verifiedRoots[sequence].verifyMembership(path, data, proof)
 }
 
 function verifyPacketAcknowledgement(
