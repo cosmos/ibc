@@ -8,7 +8,7 @@ requires: 23, 24
 required-by: 3
 author: Juwoon Yun <joon@tendermint.com>, Christopher Goes <cwgoes@tendermint.com>
 created: 2019-02-25
-modified: 2019-08-25
+modified: 2020-01-13
 ---
 
 ## Synopsis
@@ -253,10 +253,18 @@ but they must expose this common set of query functions to the IBC handler.
 type ClientState = bytes
 ```
 
-Client types must also define a method to initialize a client state with a provided consensus state:
+Client types MUST define a method to initialise a client state with a provided consensus state, writing to state as appropriate.
 
 ```typescript
-type initialize = (state: ConsensusState) => ClientState
+type initialise = (consensusState: ConsensusState) => ClientState
+```
+
+Client types MUST define a method to fetch the current height (height of the most recent validated header).
+
+```typescript
+type latestClientHeight = (
+  clientState: ClientState)
+  => uint64
 ```
 
 #### CommitmentProof
@@ -280,6 +288,7 @@ type verifyClientConsensusState = (
   height: uint64,
   proof: CommitmentProof,
   clientIdentifier: Identifier,
+  consensusStateHeight: uint64,
   consensusState: ConsensusState)
   => boolean
 ```
@@ -311,10 +320,10 @@ type verifyChannelState = (
   => boolean
 ```
 
-`verifyPacketCommitment` verifies a proof of an outgoing packet commitment at the specified port, specified channel, and specified sequence.
+`verifyPacketData` verifies a proof of an outgoing packet commitment at the specified port, specified channel, and specified sequence.
 
 ```typescript
-type verifyPacketCommitment = (
+type verifyPacketData = (
   clientState: ClientState,
   height: uint64,
   prefix: CommitmentPrefix,
@@ -322,7 +331,7 @@ type verifyPacketCommitment = (
   portIdentifier: Identifier,
   channelIdentifier: Identifier,
   sequence: uint64,
-  commitment: bytes)
+  data: bytes)
   => boolean
 ```
 
@@ -420,34 +429,6 @@ type validateClientIdentifier = (id: Identifier) => boolean
 
 If not provided, the default `validateClientIdentifier` will always return `true`. 
 
-#### Path-space
-
-`clientStatePath` takes an `Identifier` and returns a `Path` under which to store a particular client state.
-
-```typescript
-function clientStatePath(id: Identifier): Path {
-    return "clients/{id}/state"
-}
-```
-
-`clientTypePath` takes an `Identifier` and returns `Path` under which to store the type of a particular client.
-
-```typescript
-function clientTypePath(id: Identifier): Path {
-    return "clients/{id}/type"
-}
-```
-
-Consensus states MUST be stored separately so that they can be independently verified.
-
-`consensusStatePath` takes an `Identifier` and returns a `Path` under which to store the consensus state of a client.
-
-```typescript
-function consensusStatePath(id: Identifier): Path {
-    return "clients/{id}/consensusState"
-}
-```
-
 ##### Utilising past roots
 
 To avoid race conditions between client updates (which change the state root) and proof-carrying
@@ -468,28 +449,15 @@ function createClient(
     abortTransactionUnless(validateClientIdentifier(id))
     abortTransactionUnless(privateStore.get(clientStatePath(id)) === null)
     abortSystemUnless(provableStore.get(clientTypePath(id)) === null)
-    clientState = clientType.initialize(consensusState)
-    privateStore.set(clientStatePath(id), clientState)
+    clientType.initialise(consensusState)
     provableStore.set(clientTypePath(id), clientType)
 }
 ```
 
 #### Query
 
-Client consensus state and client internal state can be queried by identifier. The returned
-client state must fulfil an interface allowing membership / non-membership verification.
-
-```typescript
-function queryClientConsensusState(id: Identifier): ConsensusState {
-    return provableStore.get(consensusStatePath(id))
-}
-```
-
-```typescript
-function queryClient(id: Identifier): ClientState {
-    return privateStore.get(clientStatePath(id))
-}
-```
+Client consensus state and client internal state can be queried by identifier, but
+the specific paths which must be queried are defined by each client type.
 
 #### Update
 
@@ -576,12 +544,13 @@ function commit(
 }
 
 // initialisation function defined by the client type
-function initialize(consensusState: ConsensusState): ClientState {
-  return {
+function initialise(consensusState: ConsensusState): () {
+  clientState = {
     frozen: false,
     pastPublicKeys: Set.singleton(consensusState.publicKey),
     verifiedRoots: Map.empty()
   }
+  privateStore.set(identifier, clientState)
 }
 
 // validity predicate function defined by the client type
@@ -605,7 +574,7 @@ function verifyClientConsensusState(
   proof: CommitmentProof,
   clientIdentifier: Identifier,
   consensusState: ConsensusState) {
-    path = applyPrefix(prefix, "clients/{clientIdentifier}/consensusState")
+    path = applyPrefix(prefix, "clients/{clientIdentifier}/consensusStates/{height}")
     abortTransactionUnless(!clientState.frozen)
     return clientState.verifiedRoots[sequence].verifyMembership(path, consensusState, proof)
 }
@@ -617,7 +586,7 @@ function verifyConnectionState(
   proof: CommitmentProof,
   connectionIdentifier: Identifier,
   connectionEnd: ConnectionEnd) {
-    path = applyPrefix(prefix, "connection/{connectionIdentifier}")
+    path = applyPrefix(prefix, "connections/{connectionIdentifier}")
     abortTransactionUnless(!clientState.frozen)
     return clientState.verifiedRoots[sequence].verifyMembership(path, connectionEnd, proof)
 }
@@ -635,7 +604,7 @@ function verifyChannelState(
     return clientState.verifiedRoots[sequence].verifyMembership(path, channelEnd, proof)
 }
 
-function verifyPacketCommitment(
+function verifyPacketData(
   clientState: ClientState,
   height: uint64,
   prefix: CommitmentPrefix,
@@ -643,10 +612,10 @@ function verifyPacketCommitment(
   portIdentifier: Identifier,
   channelIdentifier: Identifier,
   sequence: uint64,
-  commitment: bytes) {
+  data: bytes) {
     path = applyPrefix(prefix, "ports/{portIdentifier}/channels/{channelIdentifier}/packets/{sequence}")
     abortTransactionUnless(!clientState.frozen)
-    return clientState.verifiedRoots[sequence].verifyMembership(path, commitment, proof)
+    return clientState.verifiedRoots[sequence].verifyMembership(path, data, proof)
 }
 
 function verifyPacketAcknowledgement(
@@ -732,6 +701,8 @@ Mar 5, 2019 - Initial draft finished and submitted as a PR
 May 29, 2019 - Various revisions, notably multiple commitment-roots
 
 Aug 15, 2019 - Major rework for clarity around client interface
+
+Jan 13, 2020 - Revisions for client type separation & path alterations
 
 ## Copyright
 

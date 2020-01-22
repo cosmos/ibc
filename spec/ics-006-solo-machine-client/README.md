@@ -70,10 +70,15 @@ interface Header {
 `Evidence` of solo machine misbehaviour consists of a sequence and two signatures over different messages at that sequence.
 
 ```typescript
+interface SignatureAndData {
+  sig: Signature
+  data: []byte
+}
+
 interface Evidence {
   sequence: uint64
-  signatureOne: Signature
-  signatureTwo: Signature
+  signatureOne: SignatureAndData
+  signatureTwo: SignatureAndData
 }
 ```
 
@@ -87,6 +92,14 @@ function initialise(consensusState: ConsensusState): ClientState {
     frozen: false,
     consensusState
   }
+}
+```
+
+The solo machine client `latestClientHeight` function returns the latest sequence.
+
+```typescript
+function latestClientHeight(clientState: ClientState): uint64 {
+  return clientState.consensusState.sequence
 }
 ```
 
@@ -117,8 +130,8 @@ function checkMisbehaviourAndUpdateState(
     h2 = evidence.h2
     pubkey = clientState.consensusState.publicKey
     assert(evidence.h1.signature.data !== evidence.h2.signature.data)
-    assert(checkSignature(pubkey, evidence.sequence, evidence.h1.signature))
-    assert(checkSignature(pubkey, evidence.sequence, evidence.h2.signature))
+    assert(checkSignature(pubkey, evidence.sequence, evidence.h1.signature.sig))
+    assert(checkSignature(pubkey, evidence.sequence, evidence.h2.signature.sig))
     clientState.frozen = true
 }
 ```
@@ -134,8 +147,9 @@ function verifyClientConsensusState(
   prefix: CommitmentPrefix,
   proof: CommitmentProof,
   clientIdentifier: Identifier,
+  consensusStateHeight: uint64,
   consensusState: ConsensusState) {
-    path = applyPrefix(prefix, "clients/{clientIdentifier}/consensusState")
+    path = applyPrefix(prefix, "clients/{clientIdentifier}/consensusState/{consensusStateHeight}")
     abortTransactionUnless(!clientState.frozen)
     value = clientState.consensusState.sequence + path + consensusState
     assert(checkSignature(clientState.consensusState.pubKey, value, proof))
@@ -171,7 +185,7 @@ function verifyChannelState(
     clientState.consensusState.sequence++
 }
 
-function verifyPacketCommitment(
+function verifyPacketData(
   clientState: ClientState,
   height: uint64,
   prefix: CommitmentPrefix,
@@ -179,10 +193,10 @@ function verifyPacketCommitment(
   portIdentifier: Identifier,
   channelIdentifier: Identifier,
   sequence: uint64,
-  commitment: bytes) {
+  data: bytes) {
     path = applyPrefix(prefix, "ports/{portIdentifier}/channels/{channelIdentifier}/packets/{sequence}")
     abortTransactionUnless(!clientState.frozen)
-    value = clientState.consensusState.sequence + path + commitment
+    value = clientState.consensusState.sequence + path + data
     assert(checkSignature(clientState.consensusState.pubKey, value, proof))
     clientState.consensusState.sequence++
 }

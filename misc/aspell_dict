@@ -1,4 +1,4 @@
-personal_ws-1.1 en 544 
+personal_ws-1.1 en 546 
 ABCI
 ABI
 Agoric
@@ -100,7 +100,7 @@ RegisterIBCAccountPacketData
 RegisterLightClient
 RootOfTrust
 RunTxPacketData
-Sig
+SignatureAndData
 SourceIdentifier
 SpeckleOS
 Statefulness
@@ -214,6 +214,7 @@ connectionPath
 conns
 consensusHeight
 consensusState
+consensusStateHeight
 consensusStateKey
 consensusStatePath
 consensusStates
@@ -325,7 +326,6 @@ implementers
 incentivisation
 incrementing
 indexOf
-initialize
 instantiation
 interblockchain
 interchain
@@ -337,6 +337,7 @@ introspectable
 invariants
 keyspace
 keyspaces
+latestClientHeight
 latestHeader
 latestHeight
 len
@@ -464,6 +465,7 @@ sendPacket
 sentPacketLogs
 serialisable
 sharding
+sig
 signatureOne
 signatureTwo
 slashable
