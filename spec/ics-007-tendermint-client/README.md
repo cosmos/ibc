@@ -48,11 +48,11 @@ interface ClientState {
 
 ### Consensus state
 
-The Tendermint client tracks the validator set hash & commitment root for all previously verified consensus states (these can be pruned after awhile).
+The Tendermint client tracks the validator set & commitment root for all previously verified consensus states (these can be pruned after awhile).
 
 ```typescript
 interface ConsensusState {
-  validatorSetHash: []byte
+  validatorSet: List<Pair<Address, uint64>>
   commitmentRoot: []byte
 }
 ```
@@ -77,7 +77,6 @@ Tendermint client `Evidence` consists of two headers at the same height both of 
 
 ```typescript
 interface Evidence {
-  fromValidatorSet: List<Pair<Address, uint64>>
   fromHeight: uint64
   h1: Header
   h2: Header
@@ -121,7 +120,7 @@ function checkValidityAndUpdateState(
     // update latest height
     clientState.latestHeight = header.height
     // create recorded consensus state, save it
-    consensusState = ConsensusState{validatorSet.hash(), header.commitmentRoot}
+    consensusState = ConsensusState{validatorSet, header.commitmentRoot}
     set("clients/{identifier}/consensusStates/{header.height}", consensusState)
     // save the client
     set("clients/{identifier}", clientState)
@@ -140,14 +139,12 @@ function checkMisbehaviourAndUpdateState(
     assert(evidence.h1.height === evidence.h2.height)
     // assert that the commitments are different
     assert(evidence.h1.commitmentRoot !== evidence.h2.commitmentRoot)
-    // fetch the previously verified commitment root & validator set hash
+    // fetch the previously verified commitment root & validator set
     consensusState = get("clients/{identifier}/consensusStates/{evidence.fromHeight}")
-    // check that the validator set matches
-    assert(consensusState.validatorSetHash === evidence.fromValidatorSet.hash())
     // check if the light client "would have been fooled"
     assert(
-      verify(evidence.fromValidatorSet, evidence.fromHeight, evidence.h1) &&
-      verify(evidence.fromValidatorSet, evidence.fromHeight, evidence.h2)
+      verify(consensusState.validatorSet, evidence.fromHeight, evidence.h1) &&
+      verify(consensusState.validatorSet, evidence.fromHeight, evidence.h2)
       )
     // set the frozen height
     clientState.frozenHeight = evidence.h1.height // which is same as h2.height
