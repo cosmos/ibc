@@ -168,7 +168,7 @@ function checkMisbehaviourAndUpdateState(
       verify(consensusState.validatorSet, evidence.fromHeight, evidence.h2)
       )
     // set the frozen height
-    clientState.frozenHeight = evidence.h1.height // which is same as h2.height
+    clientState.frozenHeight = min(clientState.frozenHeight, evidence.h1.height) // which is same as h2.height
     // save the client
     set("clients/{identifier}", clientState)
 }
