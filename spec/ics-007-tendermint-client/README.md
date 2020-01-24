@@ -93,15 +93,17 @@ interface Evidence {
 Tendermint client initialisation requires a (subjectively chosen) latest consensus state, including the full validator set.
 
 ```typescript
-function initialise(consensusState: ConsensusState, validatorSet: List<Pair<Address, uint64>>, height: uint64, trustingPeriod: uint64, unbondingPeriod: uint64): ClientState {
-  return ClientState{
-    validatorSet,
-    latestHeight: height,
-    latestTimestamp: consensusState.timestamp,
-    trustingPeriod,
-    unbondingPeriod,
-    pastHeaders: Map.singleton(latestHeight, consensusState)
-  }
+function initialise(
+  consensusState: ConsensusState, validatorSet: List<Pair<Address, uint64>>,
+  height: uint64, trustingPeriod: uint64, unbondingPeriod: uint64): ClientState {
+    return ClientState{
+      validatorSet,
+      latestHeight: height,
+      latestTimestamp: consensusState.timestamp,
+      trustingPeriod,
+      unbondingPeriod,
+      pastHeaders: Map.singleton(latestHeight, consensusState)
+    }
 }
 ```
 
