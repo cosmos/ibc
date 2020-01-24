@@ -36,7 +36,7 @@ This specification depends on correct instantiation of the [Tendermint consensus
 
 ### Client state
 
-The Tendermint client state tracks the current validator set, latest height, and a possible frozen height.
+The Tendermint client state tracks the current validator set, trusting period, unbonding period, latest height, latest timestamp (block time), and a possible frozen height.
 
 ```typescript
 interface ClientState {
@@ -51,7 +51,7 @@ interface ClientState {
 
 ### Consensus state
 
-The Tendermint client tracks the validator set & commitment root for all previously verified consensus states (these can be pruned after awhile).
+The Tendermint client tracks the timestamp (block time), validator set, and commitment root for all previously verified consensus states (these can be pruned after awhile).
 
 ```typescript
 interface ConsensusState {
@@ -63,7 +63,7 @@ interface ConsensusState {
 
 ### Headers
 
-The Tendermint client headers include a height, the commitment root, the complete validator set, and the signatures by the validators who committed the block.
+The Tendermint client headers include the height, the timestamp, the commitment root, the complete validator set, and the signatures by the validators who committed the block.
 
 ```typescript
 interface Header {
@@ -96,6 +96,7 @@ Tendermint client initialisation requires a (subjectively chosen) latest consens
 function initialise(
   consensusState: ConsensusState, validatorSet: List<Pair<Address, uint64>>,
   height: uint64, trustingPeriod: uint64, unbondingPeriod: uint64): ClientState {
+  assert(trustingPeriod < unbondingPeriod)
     return ClientState{
       validatorSet,
       latestHeight: height,
