@@ -41,7 +41,10 @@ The Tendermint client state tracks the current validator set, latest height, and
 ```typescript
 interface ClientState {
   validatorSet: List<Pair<Address, uint64>>
+  trustingPeriod: uint64
+  unbondingPeriod: uint64
   latestHeight: uint64
+  latestTimestamp: uint64
   frozenHeight: Maybe<uint64>
 }
 ```
@@ -52,6 +55,7 @@ The Tendermint client tracks the validator set & commitment root for all previou
 
 ```typescript
 interface ConsensusState {
+  timestamp: uint64
   validatorSet: List<Pair<Address, uint64>>
   commitmentRoot: []byte
 }
@@ -64,6 +68,7 @@ The Tendermint client headers include a height, the commitment root, the complet
 ```typescript
 interface Header {
   height: uint64
+  timestamp: uint64
   commitmentRoot: []byte
   validatorSet: List<Pair<Address, uint64>>
   signatures: []Signature
@@ -88,10 +93,13 @@ interface Evidence {
 Tendermint client initialisation requires a (subjectively chosen) latest consensus state, including the full validator set.
 
 ```typescript
-function initialise(consensusState: ConsensusState, validatorSet: List<Pair<Address, uint64>>, height: uint64): ClientState {
+function initialise(consensusState: ConsensusState, validatorSet: List<Pair<Address, uint64>>, height: uint64, trustingPeriod: uint64, unbondingPeriod: uint64): ClientState {
   return ClientState{
     validatorSet,
     latestHeight: height,
+    latestTimestamp: consensusState.timestamp,
+    trustingPeriod,
+    unbondingPeriod,
     pastHeaders: Map.singleton(latestHeight, consensusState)
   }
 }
@@ -113,14 +121,20 @@ Tendermint client validity checking uses the bisection algorithm described in th
 function checkValidityAndUpdateState(
   clientState: ClientState,
   header: Header) {
-    // assert that header is newer than any we know
-    assert(header.height < clientState.latestHeight)
+    // assert trusting period has not yet passed
+    assert(now - clientState.latestTimestamp < trustingPeriod)
+    // assert header timestamp is not in the future (& transitively that is not past the trusting period)
+    assert(header.timestamp <= now)
+    // assert header timestamp is past current timestamp
+    assert(header.timestamp > clientState.latestTimestamp)
+    // assert header height is newer than any we know
+    assert(header.height > clientState.latestHeight)
     // call the `verify` function
     assert(verify(clientState.validatorSet, clientState.latestHeight, header))
     // update latest height
     clientState.latestHeight = header.height
     // create recorded consensus state, save it
-    consensusState = ConsensusState{validatorSet, header.commitmentRoot}
+    consensusState = ConsensusState{validatorSet, header.commitmentRoot, header.timestamp}
     set("clients/{identifier}/consensusStates/{header.height}", consensusState)
     // save the client
     set("clients/{identifier}", clientState)
@@ -141,6 +155,8 @@ function checkMisbehaviourAndUpdateState(
     assert(evidence.h1.commitmentRoot !== evidence.h2.commitmentRoot)
     // fetch the previously verified commitment root & validator set
     consensusState = get("clients/{identifier}/consensusStates/{evidence.fromHeight}")
+    // assert that the timestamp is not from more than an unbonding period ago
+    assert(now - consensusState.timestamp < clientState.unbondingPeriod)
     // check if the light client "would have been fooled"
     assert(
       verify(consensusState.validatorSet, evidence.fromHeight, evidence.h1) &&
