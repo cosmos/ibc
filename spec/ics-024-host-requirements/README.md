@@ -191,6 +191,14 @@ if provableStore.get(path) === value {
 
 For a host state machine, the return value of `getCommitmentPrefix` MUST be constant.
 
+### Timestamp access
+
+Host chains MUST provide a current Unix timestamp, accessible with `currentTimestamp()`:
+
+```typescript
+type currentTimestamp = () => uint64
+```
+
 ### Port system
 
 Host state machines MUST implement a port system, where the IBC handler can allow different modules in the host state machine to bind to uniquely named ports. Ports are identified by an `Identifier`.

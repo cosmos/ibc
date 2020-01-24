@@ -22,6 +22,8 @@ State machines of various sorts replicated using the Tendermint consensus algori
 
 Functions & terms are as defined in [ICS 2](../ics-002-client-semantics).
 
+`currentTimestamp` is as defined in [ICS 24](../ics-024-host-requirements).
+
 The Tendermint light client uses the generalised Merkle proof format as defined in ICS 8.
 
 `hash` is a generic collision-resistant hash function, and can easily be configured.
@@ -125,9 +127,9 @@ function checkValidityAndUpdateState(
   clientState: ClientState,
   header: Header) {
     // assert trusting period has not yet passed
-    assert(now - clientState.latestTimestamp < trustingPeriod)
+    assert(currentTimestamp() - clientState.latestTimestamp < trustingPeriod)
     // assert header timestamp is not in the future (& transitively that is not past the trusting period)
-    assert(header.timestamp <= now)
+    assert(header.timestamp <= currentTimestamp())
     // assert header timestamp is past current timestamp
     assert(header.timestamp > clientState.latestTimestamp)
     // assert header height is newer than any we know
@@ -159,7 +161,7 @@ function checkMisbehaviourAndUpdateState(
     // fetch the previously verified commitment root & validator set
     consensusState = get("clients/{identifier}/consensusStates/{evidence.fromHeight}")
     // assert that the timestamp is not from more than an unbonding period ago
-    assert(now - consensusState.timestamp < clientState.unbondingPeriod)
+    assert(currentTimestamp() - consensusState.timestamp < clientState.unbondingPeriod)
     // check if the light client "would have been fooled"
     assert(
       verify(consensusState.validatorSet, evidence.fromHeight, evidence.h1) &&
