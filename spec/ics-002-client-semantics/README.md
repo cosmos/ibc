@@ -401,9 +401,11 @@ type queryChainConsensusState = (height: uint64) => ConsensusState
 
 Note that retrieval of past consensus states by height (as opposed to just the current consensus state) is convenient but not required.
 
+`queryChainConsensusState` MAY also return other data necessary to create clients, such as the "unbonding period" for certain proof-of-stake security models. This data MUST also be verified by the querying entity.
+
 ##### On-chain state queries
 
-ICS 2 itself defines a single function to query the state of a client by-identifier.
+This specification defines a single function to query the state of a client by-identifier.
 
 ```typescript
 function queryClientState(identifier: Identifier): ClientState {
@@ -442,7 +444,7 @@ type constructProofOfConnectionState = (
 type constructProofOfChannelState = (
   portIdentifier: Identifier,
   channelIdentifier: Identifier,
-  height: uint64.
+  height: uint64,
   prefix: CommitmentPrefix) => Proof
 
 type constructProofOfPacketData = (
