@@ -48,7 +48,7 @@ IBC is an end-to-end, connection-oriented, stateful protocol for reliable, optio
 
 ## Scope
 
-IBC handles authentication, transport, and ordering of structured data packets relayed between modules on separate machines. The protocol is defined between modules on two machines, but designed for safe simultaneous use between any number of modules on any number of machines connected in arbitrarily topologies.
+IBC handles authentication, transport, and ordering of structured data packets relayed between modules on separate machines. The protocol is defined between modules on two machines, but designed for safe simultaneous use between any number of modules on any number of machines connected in arbitrary topologies.
 
 ## Interfaces
 
