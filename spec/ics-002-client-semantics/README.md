@@ -424,7 +424,53 @@ type queryConsensusState = (
 
 ##### Proof construction
 
+Each client type SHOULD define functions to allow relayers to construct the proofs required by the client's state verification algorithms. These may take different forms depending on the client type.
+For example, Tendermint client proofs may be returned along with key-value data from store queries, and solo client proofs may need to be constructed interactively on the solo machine in question (since the user will need to sign the message).
+
 ```typescript
+type constructProofOfClientConsensusState = (
+  clientIdentifier: Identifier,
+  height: uint64,
+  prefix: CommitmentPrefix,
+  consensusStateHeight: uint64) => Proof
+
+type constructProofOfConnectionState = (
+  connectionIdentifier: Identifier,
+  height: uint64,
+  prefix: CommitmentPrefix) => Proof
+
+type constructProofOfChannelState = (
+  portIdentifier: Identifier,
+  channelIdentifier: Identifier,
+  height: uint64.
+  prefix: CommitmentPrefix) => Proof
+
+type constructProofOfPacketData = (
+  portIdentifier: Identifier,
+  channelIdentifier: Identifier,
+  height: uint64,
+  prefix: CommitmentPrefix,
+  sequence: uint64) => Proof
+
+type constructProofOfPacketAcknowledgement = (
+  portIdentifier: Identifier,
+  channelIdentifier: Identifier,
+  height: uint64,
+  prefix: CommitmentPrefix,
+  sequence: uint64) => Proof
+
+type constructProofOfPacketAcknowledgementAbsence = (
+  portIdentifier: Identifier,
+  channelIdentifier: Identifier,
+  height: uint64,
+  prefix: CommitmentPrefix,
+  sequence: uint64) => Proof
+
+type constructProofOfNextSequenceRecv = (
+  portIdentifier: Identifier,
+  channelIdentifier: Identifier,
+  height: uint64,
+  prefix: CommitmentPrefix) => Proof
 ```
 
 ##### Implementation strategies
@@ -752,6 +798,8 @@ May 29, 2019 - Various revisions, notably multiple commitment-roots
 Aug 15, 2019 - Major rework for clarity around client interface
 
 Jan 13, 2020 - Revisions for client type separation & path alterations
+
+Jan 26, 2020 - Addition of query interface
 
 ## Copyright
 
