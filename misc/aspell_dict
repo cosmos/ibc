@@ -1,4 +1,4 @@
-personal_ws-1.1 en 547 
+personal_ws-1.1 en 560 
 ABCI
 ABI
 Agoric
@@ -198,6 +198,7 @@ collateralising
 commited
 commitmentRoot
 computable
+concat
 connId
 connOpenAck
 connOpenConfirm
@@ -220,6 +221,13 @@ consensusStateKey
 consensusStatePath
 consensusStates
 const
+constructProofOfChannelState
+constructProofOfClientConsensusState
+constructProofOfConnectionState
+constructProofOfNextSequenceRecv
+constructProofOfPacketAcknowledgement
+constructProofOfPacketAcknowledgementAbsence
+constructProofOfPacketData
 counterintuitive
 counterparty
 counterpartyChannelIdentifier
@@ -432,13 +440,17 @@ pseudorandom
 pubkey
 publicKey
 queryByTopic
+queryChainConsensusState
 queryChannel
 queryClient
 queryClientConnections
 queryClientConsensusState
 queryClientFrozen
 queryClientRoot
+queryClientState
 queryConnection
+queryConsensusState
+queryHeader
 recv
 recvPacket
 recvPacketLogs
@@ -545,4 +557,5 @@ verifyOutgoingPacket
 verifyPacketAcknowledgement
 verifyPacketAcknowledgementAbsence
 verifyPacketCommitment
+verifyPacketData
 whitelist
