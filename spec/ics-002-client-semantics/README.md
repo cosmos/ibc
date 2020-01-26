@@ -413,6 +413,12 @@ function queryClientState(identifier: Identifier): ClientState {
 }
 ```
 
+The `ClientState` type SHOULD expose its latest verified height (from which the consensus state can then be retrieved using `queryConsensusState` if desired).
+
+```typescript
+type latestHeight = (state: ClientState) => uint64
+```
+
 Client types SHOULD define the following standardised query functions in order to allow relayers & other off-chain entities to interface with on-chain state in a standard API.
 
 `queryConsensusState` allows stored consensus states to be retrieved by height.
