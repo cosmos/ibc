@@ -378,6 +378,55 @@ type verifyNextSequenceRecv = (
   => boolean
 ```
 
+#### Query interface
+
+##### Chain queries
+
+These query endpoints are assumed to be exposed over HTTP or an equivalent RPC API by nodes of the chain associated with a particular client.
+
+`queryHeader` MUST be defined by the chain which is validated by a particular client, and should allow for retrieval of headers by height. This endpoint is assumed to be untrusted.
+
+```typescript
+type queryHeader = (
+  height: uint64
+) => Header
+```
+
+`queryChainConsensusState` MAY be defined by the chain which is validated by a particular client, to allow for the retrieval of the current consensus state which can be used to construct a new client.
+When used in this fashion, the returned `ConsensusState` MUST be manually confirmed by the querying entity, since it is subjective. This endpoint is assumed to be untrusted.
+
+```typescript
+type queryChainConsensusState = (height: uint64) => ConsensusState
+```
+
+Note that retrieval of past consensus states by height (as opposed to just the current consensus state) is convenient but not required.
+
+##### On-chain state queries
+
+ICS 2 itself defines a single function to query the state of a client by-identifier.
+
+```typescript
+function queryClientState(identifier: Identifier): ClientState {
+  return privateStore.get(clientStatePath(identifier))
+}
+```
+
+Client types SHOULD define the following standardised query functions in order to allow relayers & other off-chain entities to interface with on-chain state in a standard API.
+
+`queryConsensusState` allows stored consensus states to be retrieved by height.
+
+```typescript
+type queryConsensusState = (
+  identifier: Identifier,
+  height: uint64
+) => ConsensusState
+```
+
+##### Proof construction
+
+```typescript
+```
+
 ##### Implementation strategies
 
 ###### Loopback
