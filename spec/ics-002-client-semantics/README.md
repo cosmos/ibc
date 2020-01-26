@@ -434,51 +434,52 @@ type queryConsensusState = (
 
 Each client type SHOULD define functions to allow relayers to construct the proofs required by the client's state verification algorithms. These may take different forms depending on the client type.
 For example, Tendermint client proofs may be returned along with key-value data from store queries, and solo client proofs may need to be constructed interactively on the solo machine in question (since the user will need to sign the message).
+These functions may constitute external queries over RPC to a full node as well as local computation or verification.
 
 ```typescript
-type constructProofOfClientConsensusState = (
+type queryAndProveClientConsensusState = (
   clientIdentifier: Identifier,
   height: uint64,
   prefix: CommitmentPrefix,
-  consensusStateHeight: uint64) => Proof
+  consensusStateHeight: uint64) => ConsensusState, Proof
 
-type constructProofOfConnectionState = (
+type queryAndProveConnectionState = (
   connectionIdentifier: Identifier,
   height: uint64,
-  prefix: CommitmentPrefix) => Proof
+  prefix: CommitmentPrefix) => ConnectionEnd, Proof
 
-type constructProofOfChannelState = (
+type queryAndProveChannelState = (
   portIdentifier: Identifier,
   channelIdentifier: Identifier,
   height: uint64,
-  prefix: CommitmentPrefix) => Proof
+  prefix: CommitmentPrefix) => ChannelEnd, Proof
 
-type constructProofOfPacketData = (
+type queryAndProvePacketData = (
+  portIdentifier: Identifier,
+  channelIdentifier: Identifier,
+  height: uint64,
+  prefix: CommitmentPrefix,
+  sequence: uint64) => []byte, Proof
+
+type queryAndProvePacketAcknowledgement = (
+  portIdentifier: Identifier,
+  channelIdentifier: Identifier,
+  height: uint64,
+  prefix: CommitmentPrefix,
+  sequence: uint64) => []byte, Proof
+
+type queryAndProvePacketAcknowledgementAbsence = (
   portIdentifier: Identifier,
   channelIdentifier: Identifier,
   height: uint64,
   prefix: CommitmentPrefix,
   sequence: uint64) => Proof
 
-type constructProofOfPacketAcknowledgement = (
+type queryAndProveNextSequenceRecv = (
   portIdentifier: Identifier,
   channelIdentifier: Identifier,
   height: uint64,
-  prefix: CommitmentPrefix,
-  sequence: uint64) => Proof
-
-type constructProofOfPacketAcknowledgementAbsence = (
-  portIdentifier: Identifier,
-  channelIdentifier: Identifier,
-  height: uint64,
-  prefix: CommitmentPrefix,
-  sequence: uint64) => Proof
-
-type constructProofOfNextSequenceRecv = (
-  portIdentifier: Identifier,
-  channelIdentifier: Identifier,
-  height: uint64,
-  prefix: CommitmentPrefix) => Proof
+  prefix: CommitmentPrefix) => uint64, Proof
 ```
 
 ##### Implementation strategies

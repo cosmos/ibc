@@ -221,13 +221,6 @@ consensusStateKey
 consensusStatePath
 consensusStates
 const
-constructProofOfChannelState
-constructProofOfClientConsensusState
-constructProofOfConnectionState
-constructProofOfNextSequenceRecv
-constructProofOfPacketAcknowledgement
-constructProofOfPacketAcknowledgementAbsence
-constructProofOfPacketData
 counterintuitive
 counterparty
 counterpartyChannelIdentifier
@@ -439,6 +432,13 @@ pseudocode
 pseudorandom
 pubkey
 publicKey
+queryAndProveChannelState
+queryAndProveClientConsensusState
+queryAndProveConnectionState
+queryAndProveNextSequenceRecv
+queryAndProvePacketAcknowledgement
+queryAndProvePacketAcknowledgementAbsence
+queryAndProvePacketData
 queryByTopic
 queryChainConsensusState
 queryChannel
