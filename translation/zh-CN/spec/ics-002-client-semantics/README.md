@@ -1,14 +1,14 @@
 ---
-ics: '2'
+ics: 2
 title: 客户端语义
 stage: 草案
 category: IBC/TAO
 kind: 接口
 requires: 23, 24
-required-by: '3'
+required-by: 3
 author: Juwoon Yun <joon@tendermint.com>, Christopher Goes <cwgoes@tendermint.com>
-created: '2019-02-25'
-modified: '2019-08-25'
+created: 2019-02-25
+modified: 2020-01-13
 ---
 
 ## 概要
@@ -172,10 +172,18 @@ type checkMisbehaviourAndUpdateState = (bytes) => Void
 type ClientState = bytes
 ```
 
-客户端类型必须定义一个方法用提供的共识状态去初始化一个客户端状态：
+客户端类型必须定义一种方法用提供的共识状态初始化客户端状态，并根据情况写入状态。
 
 ```typescript
-type initialize = (state: ConsensusState) => ClientState
+type initialise = (consensusState: ConsensusState) => ClientState
+```
+
+客户断类型必须定义一种方法来获取当前高度（最近验证的区块头的高度）。
+
+```typescript
+type latestClientHeight = (
+  clientState: ClientState)
+  => uint64
 ```
 
 #### 承诺根
@@ -196,6 +204,7 @@ type verifyClientConsensusState = (
   height: uint64,
   proof: CommitmentProof,
   clientIdentifier: Identifier,
+  consensusStateHeight: uint64,
   consensusState: ConsensusState)
   => boolean
 ```
@@ -227,10 +236,10 @@ type verifyChannelState = (
   => boolean
 ```
 
-`verifyPacketCommitment` 验证在指定端口、指定通道和指定序号的对外发送数据包的加密承诺的证明。
+`verifyPacketData`验证在指定的端口，指定的通道和指定的序列的向外发送的数据包承诺的证明。
 
 ```typescript
-type verifyPacketCommitment = (
+type verifyPacketData = (
   clientState: ClientState,
   height: uint64,
   prefix: CommitmentPrefix,
@@ -238,7 +247,7 @@ type verifyPacketCommitment = (
   portIdentifier: Identifier,
   channelIdentifier: Identifier,
   sequence: uint64,
-  commitment: bytes)
+  data: bytes)
   => boolean
 ```
 
@@ -328,34 +337,6 @@ type validateClientIdentifier = (id: Identifier) => boolean
 
 如果没有提供以上函数，默认的`validateClientIdentifier`会永远返回`true` 。
 
-#### 路径空间
-
-`clientStatePath` 接受一个`Identifier`并返回一个存储特定客户端状态的`Path`。
-
-```typescript
-function clientStatePath(id: Identifier): Path {
-    return "clients/{id}/state"
-}
-```
-
-`clientTypePath` 接受一个`标识符`并返回一个存储特定客户端类型的`Path` 。
-
-```typescript
-function clientTypePath(id: Identifier): Path {
-    return "clients/{id}/type"
-}
-```
-
-共识状态必须分开存储，以便可以独立验证它们。
-
-`ConsensusStatePath`接受一个`Identifier`并返回一个`Path`来存储客户端的共识状态。
-
-```typescript
-function consensusStatePath(id: Identifier): Path {
-    return "clients/{id}/consensusState"
-}
-```
-
 ##### 利用过去的状态根
 
 为了避免客户端更新（更改状态根）与握手中携带证明的交易或数据包收据之间的竞争条件，许多 IBC 处理程序允许调用方指定一个之前的状态根作为参考，这类 IBC 处理程序必须确保它们对调用者传入的区块高度执行任何必要的检查，以确保逻辑上的正确性。
@@ -372,27 +353,14 @@ function createClient(
     abortTransactionUnless(validateClientIdentifier(id))
     abortTransactionUnless(privateStore.get(clientStatePath(id)) === null)
     abortSystemUnless(provableStore.get(clientTypePath(id)) === null)
-    clientState = clientType.initialize(consensusState)
-    privateStore.set(clientStatePath(id), clientState)
+    clientType.initialise(consensusState)
     provableStore.set(clientTypePath(id), clientType)
 }
 ```
 
 #### 查询
 
-客户端共识状态和客户端内部状态能够通过标识符来进行查询。返回的客户端状态必须满足一个能够进行成员关系/非成员关系验证的接口。
-
-```typescript
-function queryClientConsensusState(id: Identifier): ConsensusState {
-    return provableStore.get(consensusStatePath(id))
-}
-```
-
-```typescript
-function queryClient(id: Identifier): ClientState {
-    return privateStore.get(clientStatePath(id))
-}
-```
+可以通过标识符查询客户端共识状态和客户端内部状态，但是查询的特定路径由每种客户端类型定义。
 
 #### 更新
 
@@ -461,7 +429,7 @@ interface Evidence {
   h2: Header
 }
 
-// 操作员运行的用来提交新块的算法
+// algorithm run by operator to commit a new block
 function commit(
   commitmentRoot: CommitmentRoot,
   sequence: uint64,
@@ -471,16 +439,17 @@ function commit(
     return header
 }
 
-// 客户端类型定义的初始化函数
-function initialize(consensusState: ConsensusState): ClientState {
-  return {
+// initialisation function defined by the client type
+function initialise(consensusState: ConsensusState): () {
+  clientState = {
     frozen: false,
     pastPublicKeys: Set.singleton(consensusState.publicKey),
     verifiedRoots: Map.empty()
   }
+  privateStore.set(identifier, clientState)
 }
 
-// 客户端类型定义的合法性判定式
+// validity predicate function defined by the client type
 function checkValidityAndUpdateState(
   clientState: ClientState,
   header: Header) {
@@ -501,7 +470,7 @@ function verifyClientConsensusState(
   proof: CommitmentProof,
   clientIdentifier: Identifier,
   consensusState: ConsensusState) {
-    path = applyPrefix(prefix, "clients/{clientIdentifier}/consensusState")
+    path = applyPrefix(prefix, "clients/{clientIdentifier}/consensusStates/{height}")
     abortTransactionUnless(!clientState.frozen)
     return clientState.verifiedRoots[sequence].verifyMembership(path, consensusState, proof)
 }
@@ -513,7 +482,7 @@ function verifyConnectionState(
   proof: CommitmentProof,
   connectionIdentifier: Identifier,
   connectionEnd: ConnectionEnd) {
-    path = applyPrefix(prefix, "connection/{connectionIdentifier}")
+    path = applyPrefix(prefix, "connections/{connectionIdentifier}")
     abortTransactionUnless(!clientState.frozen)
     return clientState.verifiedRoots[sequence].verifyMembership(path, connectionEnd, proof)
 }
@@ -531,7 +500,7 @@ function verifyChannelState(
     return clientState.verifiedRoots[sequence].verifyMembership(path, channelEnd, proof)
 }
 
-function verifyPacketCommitment(
+function verifyPacketData(
   clientState: ClientState,
   height: uint64,
   prefix: CommitmentPrefix,
@@ -539,10 +508,10 @@ function verifyPacketCommitment(
   portIdentifier: Identifier,
   channelIdentifier: Identifier,
   sequence: uint64,
-  commitment: bytes) {
+  data: bytes) {
     path = applyPrefix(prefix, "ports/{portIdentifier}/channels/{channelIdentifier}/packets/{sequence}")
     abortTransactionUnless(!clientState.frozen)
-    return clientState.verifiedRoots[sequence].verifyMembership(path, commitment, proof)
+    return clientState.verifiedRoots[sequence].verifyMembership(path, data, proof)
 }
 
 function verifyPacketAcknowledgement(
@@ -585,8 +554,8 @@ function verifyNextSequenceRecv(
     return clientState.verifiedRoots[sequence].verifyMembership(path, nextSequenceRecv, proof)
 }
 
-// 客户端类型定义的不良行为验证函数
-// 任何重复的过去或当前密钥的签名都会冻结客户端
+// misbehaviour verification function defined by the client type
+// any duplicate signature by a past or current key freezes the client
 function checkMisbehaviourAndUpdateState(
   clientState: ClientState,
   evidence: Evidence) {
@@ -615,11 +584,11 @@ function checkMisbehaviourAndUpdateState(
 
 ## 示例实现
 
-即将发布。
+即将到来。
 
 ## 其他实现
 
-即将发布。
+即将到来。
 
 ## 历史
 
@@ -629,6 +598,8 @@ function checkMisbehaviourAndUpdateState(
 
 2019年8月15日-进行大量返工以使客户端界面更加清晰
 
+2020年1月13日-客户端类型分离和路径更改的修订
+
 ## 版权
 
-本文中的所有内容均遵守 [Apache 2.0](https://www.apache.org/licenses/LICENSE-2.0)许可。
+本文中的所有内容均根据 [Apache 2.0](https://www.apache.org/licenses/LICENSE-2.0) 获得许可。

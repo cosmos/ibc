@@ -1,13 +1,13 @@
 ---
-ics: '4'
+ics: 4
 title: 通道和数据包语义
 stage: 草案
 category: IBC/TAO
 kind: 实例化
 requires: 2, 3, 5, 24
 author: Christopher Goes <cwgoes@tendermint.com>
-created: '2019-03-07'
-modified: '2019-08-25'
+created: 2019-03-07
+modified: 2019-08-25
 ---
 
 ## 概要
@@ -32,7 +32,7 @@ modified: '2019-08-25'
 
 `Port`和`authenticate`在 [ICS 5](../ics-005-port-allocation) 中被定义。
 
-`hash`是一种通用的抗碰撞哈希函数，其细节必须由使用通道的模块商定。
+`hash`是一种通用的抗碰撞哈希函数，其细节必须由使用通道的模块商定。 `hash`在不同的链可以有不同的定义。
 
 `Identifier` ， `get` ， `set` ， `delete` ， `getCurrentHeight`和模块系统相关的原语在 [ICS 24](../ics-024-host-requirements) 中被定义。
 
@@ -501,7 +501,7 @@ IBC 处理程序按顺序执行以下步骤：
 function sendPacket(packet: Packet) {
     channel = provableStore.get(channelPath(packet.sourcePort, packet.sourceChannel))
 
-    // 一旦握手开始，允许乐观发送
+    // optimistic sends are permitted once the handshake has started
     abortTransactionUnless(channel !== null)
     abortTransactionUnless(channel.state !== CLOSED)
     abortTransactionUnless(authenticate(privateStore.get(channelCapabilityPath(packet.sourcePort, packet.sourceChannel))))
@@ -512,19 +512,20 @@ function sendPacket(packet: Packet) {
     abortTransactionUnless(connection !== null)
     abortTransactionUnless(connection.state !== CLOSED)
 
-    consensusState = provableStore.get(consensusStatePath(connection.clientIdentifier))
-    abortTransactionUnless(consensusState.getHeight() < packet.timeoutHeight)
+    // sanity-check that the timeout height hasn't already passed in our local client tracking the receiving chain
+    latestClientHeight = provableStore.get(clientPath(connection.clientIdentifier)).latestClientHeight()
+    abortTransactionUnless(latestClientHeight < packet.timeoutHeight)
 
     nextSequenceSend = provableStore.get(nextSequenceSendPath(packet.sourcePort, packet.sourceChannel))
     abortTransactionUnless(packet.sequence === nextSequenceSend)
 
-    // 所有断言都通过了，我们可以改变状态
+    // all assertions passed, we can alter state
 
     nextSequenceSend = nextSequenceSend + 1
     provableStore.set(nextSequenceSendPath(packet.sourcePort, packet.sourceChannel), nextSequenceSend)
     provableStore.set(packetCommitmentPath(packet.sourcePort, packet.sourceChannel, packet.sequence), hash(packet.data, packet.timeout))
 
-    // 记录数据包已经发送的日志
+    // log that a packet has been sent
     emitLogEntry("sendPacket", {sequence: packet.sequence, data: packet.data, timeout: packet.timeout})
 }
 ```
@@ -566,16 +567,16 @@ function recvPacket(
 
     abortTransactionUnless(getConsensusHeight() < packet.timeoutHeight)
 
-    abortTransactionUnless(connection.verifyPacketCommitment(
+    abortTransactionUnless(connection.verifyPacketData(
       proofHeight,
       proof,
       packet.sourcePort,
       packet.sourceChannel,
       packet.sequence,
-      hash(packet.data, packet.timeout)
+      concat(packet.data, packet.timeout)
     ))
 
-    // 通过了所有断言（除了序号检查），我们可以更改状态
+    // all assertions passed (except sequence check), we can alter state
 
     if (acknowledgement.length > 0 || channel.order === UNORDERED)
       provableStore.set(
@@ -590,10 +591,10 @@ function recvPacket(
       provableStore.set(nextSequenceRecvPath(packet.destPort, packet.destChannel), nextSequenceRecv)
     }
 
-    // 记录数据包已经接受和确认的日志
+    // log that a packet has been received & acknowledged
     emitLogEntry("recvPacket", {sequence: packet.sequence, timeout: packet.timeout, data: packet.data, acknowledgement})
 
-    // 返回透明的数据包
+    // return transparent packet
     return packet
 }
 ```
@@ -612,38 +613,38 @@ function acknowledgePacket(
   proof: CommitmentProof,
   proofHeight: uint64): Packet {
 
-    // 除非通道已经创建，调用模块拥有关联的端口，并且数据包字段匹配，否则终止交易
+    // abort transaction unless that channel is open, calling module owns the associated port, and the packet fields match
     channel = provableStore.get(channelPath(packet.sourcePort, packet.sourceChannel))
     abortTransactionUnless(channel !== null)
     abortTransactionUnless(channel.state === OPEN)
     abortTransactionUnless(authenticate(privateStore.get(channelCapabilityPath(packet.sourcePort, packet.sourceChannel))))
-    abortTransactionUnless(packet.sourceChannel === channel.counterpartyChannelIdentifier)
+    abortTransactionUnless(packet.destChannel === channel.counterpartyChannelIdentifier)
 
     connection = provableStore.get(connectionPath(channel.connectionHops[0]))
     abortTransactionUnless(connection !== null)
     abortTransactionUnless(connection.state === OPEN)
-    abortTransactionUnless(packet.sourcePort === channel.counterpartyPortIdentifier)
+    abortTransactionUnless(packet.destPort === channel.counterpartyPortIdentifier)
 
-    // 验证我们发送了数据包并且没有清除加密承诺
+    // verify we sent the packet and haven't cleared it out yet
     abortTransactionUnless(provableStore.get(packetCommitmentPath(packet.sourcePort, packet.sourceChannel, packet.sequence))
            === hash(packet.data, packet.timeout))
 
-    // 验证对方链上的确认信息正确，否者终止交易
+    // abort transaction unless correct acknowledgement on counterparty chain
     abortTransactionUnless(connection.verifyPacketAcknowledgement(
       proofHeight,
       proof,
       packet.destPort,
       packet.destChannel,
       packet.sequence,
-      hash(acknowledgement)
+      acknowledgement
     ))
 
-    // 通过了所有断言，我们可以改变状态
+    // all assertions passed, we can alter state
 
-    // 删除加密承诺，使我们不可以再一次确认
+    // delete our commitment so we can't "acknowledge" again
     provableStore.delete(packetCommitmentPath(packet.sourcePort, packet.sourceChannel, packet.sequence))
 
-    // 返回透明数据包
+    // return transparent packet
     return packet
 }
 ```
@@ -905,11 +906,11 @@ function queryChannel(connId: Identifier, chanId: Identifier): ChannelEnd | void
 
 ## 示例实现
 
-即将发布。
+即将到来。
 
 ## 其他实现
 
-即将发布。
+即将到来。
 
 ## 发布历史
 

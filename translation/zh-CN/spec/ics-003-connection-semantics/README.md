@@ -1,14 +1,14 @@
 ---
-ics: '3'
+ics: 3
 title: 连接语义
 stage: 草案
 category: IBC/TAO
 kind: 实例化
-requires: 2、24
-required-by: 4、25
-author: Christopher Gos <cwgoes@tendermint.com>，Juwoon Yun <joon@tendermint.com>
-created: '2019-03-07'
-modified: '2019-08-25'
+requires: 2, 24
+required-by: 4, 25
+author: Christopher Goes <cwgoes@tendermint.com>, Juwoon Yun <joon@tendermint.com>
+created: 2019-03-07
+modified: 2019-08-25
 ---
 
 ## 概要
@@ -17,7 +17,7 @@ modified: '2019-08-25'
 
 ### 动机
 
-核心 IBC 协议对数据包提供了*授权*和*排序*语义：确保对各自来说，数据包在发送链上被提交（根据状态转换的执行，例如通证托管），并且数据包被有且仅有一次地按特定的顺序提交和有且仅有一次的被递送到接收链。本标准中的*连接*抽象与 {a3}ICS 2{/a3} 中定义的{em4}客户端{/em4}抽象一同定义了 IBC 的*授权*语义。排序语义在 [ICS 4](../ics-004-channel-and-packet-semantics) 中进行了描述。
+核心 IBC 协议对数据包提供了*授权*和*排序*语义：确保对各自来说，数据包在发送链上被提交（根据状态转换的执行，例如通证托管），并且数据包被有且仅有一次地按特定的顺序提交和有且仅有一次的被递送到接收链。本标准中的*连接*抽象与 *ICS 2* 中定义的[客户端](../ics-002-client-semantics)抽象一同定义了 IBC 的*授权*语义。排序语义在 [ICS 4](../ics-004-channel-and-packet-semantics) 中进行了描述。
 
 ### 定义
 
@@ -25,7 +25,7 @@ modified: '2019-08-25'
 
 加密承诺证明相关的类型和函数被定义在 [ICS 23](../ics-023-vector-commitments) 中。
 
-`Identifier`和其他主机状态机的要求如 {a0}ICS 24{/a0} 所示。标识符不一定要是人类可读的名称（基本上也不应该是，来防止对标识符的抢注或争夺）。
+`Identifier`和其他主机状态机的要求如 [ICS 24](../ics-024-host-requirements) 所示。标识符不一定要是人类可读的名称（基本上也不应该是，来防止对标识符的抢注或争夺）。
 
 开放式握手协议允许每个链验证用于引用另一个链上的连接的标识符，从而使每个链上的模块可以使用另一个链上的引用。
 
@@ -143,9 +143,10 @@ function verifyClientConsensusState(
   height: uint64,
   proof: CommitmentProof,
   clientIdentifier: Identifier,
+  consensusStateHeight: uint64,
   consensusState: ConsensusState) {
     client = queryClient(connection.clientIdentifier)
-    return client.verifyClientConsensusState(connection, height, connection.counterpartyPrefix, proof, clientIdentifier, consensusState)
+    return client.verifyClientConsensusState(connection, height, connection.counterpartyPrefix, proof, clientIdentifier, consensusStateHeight, consensusState)
 }
 
 function verifyConnectionState(
@@ -226,7 +227,7 @@ function verifyNextSequenceRecv(
 
 #### 标识符验证
 
-连接存储在唯一的`Identifier`前缀下。 
+连接存储在唯一的`Identifier`前缀下。
 可以提供验证函数`validateConnectionIdentifier`。
 
 ```typescript
@@ -317,7 +318,8 @@ function connOpenTry(
     connection = ConnectionEnd{state, counterpartyConnectionIdentifier, counterpartyPrefix,
                                clientIdentifier, counterpartyClientIdentifier, version}
     abortTransactionUnless(connection.verifyConnectionState(proofHeight, proofInit, counterpartyConnectionIdentifier, expected))
-    abortTransactionUnless(connection.verifyClientConsensusState(proofHeight, proofConsensus, counterpartyClientIdentifier, expectedConsensusState))
+    abortTransactionUnless(connection.verifyClientConsensusState(
+      proofHeight, proofConsensus, counterpartyClientIdentifier, consensusHeight, expectedConsensusState))
     previous = provableStore.get(connectionPath(desiredIdentifier))
     abortTransactionUnless(
       (previous === null) ||
@@ -352,7 +354,8 @@ function connOpenAck(
                              connection.counterpartyClientIdentifier, connection.clientIdentifier,
                              version}
     abortTransactionUnless(connection.verifyConnectionState(proofHeight, proofTry, connection.counterpartyConnectionIdentifier, expected))
-    abortTransactionUnless(connection.verifyClientConsensusState(proofHeight, proofConsensus, connection.counterpartyClientIdentifier, expectedConsensusState))
+    abortTransactionUnless(connection.verifyClientConsensusState(
+      proofHeight, proofConsensus, connection.counterpartyClientIdentifier, consensusHeight, expectedConsensusState))
     connection.state = OPEN
     abortTransactionUnless(getCompatibleVersions().indexOf(version) !== -1)
     connection.version = version
@@ -412,11 +415,11 @@ function queryClientConnections(id: Identifier): Set<Identifier> {
 
 ## 示例实现
 
-即将发布。
+即将到来。
 
 ## 其他实现
 
-即将发布。
+即将到来。
 
 ## 历史
 
