@@ -127,7 +127,7 @@ function checkValidityAndUpdateState(
   clientState: ClientState,
   header: Header) {
     // assert trusting period has not yet passed
-    assert(currentTimestamp() - clientState.latestTimestamp < trustingPeriod)
+    assert(currentTimestamp() - clientState.latestTimestamp < clientState.trustingPeriod)
     // assert header timestamp is not in the future (& transitively that is not past the trusting period)
     assert(header.timestamp <= currentTimestamp())
     // assert header timestamp is past current timestamp
