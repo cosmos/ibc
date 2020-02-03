@@ -7,7 +7,7 @@ requires: 25, 26
 kind: instantiation
 author: Christopher Goes <cwgoes@tendermint.com>
 created: 2019-07-15 
-modified: 2019-08-25
+modified: 2020-02-03
 ---
 
 ## Synopsis
@@ -215,26 +215,37 @@ function createOutgoingPacket(
 `onRecvPacket` is called by the routing module when a packet addressed to this module has been received.
 
 ```typescript
-function onRecvPacket(packet: Packet): bytes {
+function onRecvPacket(packet: Packet) {
   FungibleTokenPacketData data = packet.data
+  ack = "ok"
   if data.source {
     // sender was source chain: mint vouchers
     // construct receiving denomination, check correctness
     prefix = "{packet/destPort}/{packet.destChannel}"
-    abortTransactionUnless(data.denomination.slice(0, len(prefix)) === prefix)
-    // mint vouchers to receiver (assumed to fail if balance insufficient)
-    bank.MintCoins(data.receiver, data.denomination, data.amount)
+    if (data.denomination.slice(0, len(prefix)) !== prefix)
+      ack = "err:invalid denomination"
+    else {
+      // mint vouchers to receiver (assumed to fail if balance insufficient)
+      err = bank.MintCoins(data.receiver, data.denomination, data.amount)
+      if (err !== nil)
+        ack = "err:" + err
+    }
   } else {
     // receiver is source chain: unescrow tokens
     // determine escrow account
     escrowAccount = channelEscrowAddresses[packet.destChannel]
     // construct receiving denomination, check correctness
     prefix = "{packet/sourcePort}/{packet.sourceChannel}"
-    abortTransactionUnless(data.denomination.slice(0, len(prefix)) === prefix)
-    // unescrow tokens to receiver (assumed to fail if balance insufficient)
-    bank.TransferCoins(escrowAccount, data.receiver, data.denomination.slice(len(prefix)), data.amount)
+    if (data.denomination.slice(0, len(prefix)) !== prefix)
+      ack = "err:invalid denomination"
+    else {
+      // unescrow tokens to receiver (assumed to fail if balance insufficient)
+      err = bank.TransferCoins(escrowAccount, data.receiver, data.denomination.slice(len(prefix)), data.amount)
+      if (err !== nil)
+        ack = "err:" + err
+    }
   }
-  return 0x
+  return ack
 }
 ```
 
@@ -244,7 +255,10 @@ function onRecvPacket(packet: Packet): bytes {
 function onAcknowledgePacket(
   packet: Packet,
   acknowledgement: bytes) {
-  // nothing is necessary, likely this will never be called since it's a no-op
+  if ack.slice(0, 3) === "err" {
+    // treat exactly the same as a timeout
+    onTimeoutPacket(packet)
+  }
 }
 ```
 
@@ -321,6 +335,8 @@ Jul 15, 2019 - Draft written
 Jul 29, 2019 - Major revisions; cleanup
 
 Aug 25, 2019 - Major revisions, more cleanup
+
+Feb 3, 2020 - Revisions to handle acknowledgements of success & failure
 
 ## Copyright
 
