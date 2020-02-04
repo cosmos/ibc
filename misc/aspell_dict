@@ -1,4 +1,4 @@
-personal_ws-1.1 en 546 
+personal_ws-1.1 en 551 
 ABCI
 ABI
 Agoric
@@ -197,6 +197,7 @@ collateralising
 commited
 commitmentRoot
 computable
+concat
 connId
 connOpenAck
 connOpenConfirm
@@ -340,6 +341,7 @@ keyspaces
 latestClientHeight
 latestHeader
 latestHeight
+latestTimestamp
 len
 lifecycle
 liveness
@@ -498,6 +500,7 @@ topologies
 tradeoff
 transactional
 transferPort
+trustingPeriod
 tx
 txBytes
 txs
@@ -505,6 +508,7 @@ uint
 un
 unallocated
 unbonding
+unbondingPeriod
 unescrow
 unescrowed
 unescrowing
@@ -544,4 +548,5 @@ verifyOutgoingPacket
 verifyPacketAcknowledgement
 verifyPacketAcknowledgementAbsence
 verifyPacketCommitment
+verifyPacketData
 whitelist

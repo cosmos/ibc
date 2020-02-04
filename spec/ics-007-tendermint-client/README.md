@@ -22,6 +22,8 @@ State machines of various sorts replicated using the Tendermint consensus algori
 
 Functions & terms are as defined in [ICS 2](../ics-002-client-semantics).
 
+`currentTimestamp` is as defined in [ICS 24](../ics-024-host-requirements).
+
 The Tendermint light client uses the generalised Merkle proof format as defined in ICS 8.
 
 `hash` is a generic collision-resistant hash function, and can easily be configured.
@@ -36,34 +38,39 @@ This specification depends on correct instantiation of the [Tendermint consensus
 
 ### Client state
 
-The Tendermint client state tracks the current validator set, latest height, and a possible frozen height.
+The Tendermint client state tracks the current validator set, trusting period, unbonding period, latest height, latest timestamp (block time), and a possible frozen height.
 
 ```typescript
 interface ClientState {
   validatorSet: List<Pair<Address, uint64>>
+  trustingPeriod: uint64
+  unbondingPeriod: uint64
   latestHeight: uint64
+  latestTimestamp: uint64
   frozenHeight: Maybe<uint64>
 }
 ```
 
 ### Consensus state
 
-The Tendermint client tracks the validator set hash & commitment root for all previously verified consensus states (these can be pruned after awhile).
+The Tendermint client tracks the timestamp (block time), validator set, and commitment root for all previously verified consensus states (these can be pruned after the unbonding period has passed, but should not be pruned beforehand).
 
 ```typescript
 interface ConsensusState {
-  validatorSetHash: []byte
+  timestamp: uint64
+  validatorSet: List<Pair<Address, uint64>>
   commitmentRoot: []byte
 }
 ```
 
 ### Headers
 
-The Tendermint client headers include a height, the commitment root, the complete validator set, and the signatures by the validators who committed the block.
+The Tendermint client headers include the height, the timestamp, the commitment root, the complete validator set, and the signatures by the validators who committed the block.
 
 ```typescript
 interface Header {
   height: uint64
+  timestamp: uint64
   commitmentRoot: []byte
   validatorSet: List<Pair<Address, uint64>>
   signatures: []Signature
@@ -77,7 +84,6 @@ Tendermint client `Evidence` consists of two headers at the same height both of 
 
 ```typescript
 interface Evidence {
-  fromValidatorSet: List<Pair<Address, uint64>>
   fromHeight: uint64
   h1: Header
   h2: Header
@@ -89,12 +95,18 @@ interface Evidence {
 Tendermint client initialisation requires a (subjectively chosen) latest consensus state, including the full validator set.
 
 ```typescript
-function initialise(consensusState: ConsensusState, validatorSet: List<Pair<Address, uint64>>, height: uint64): ClientState {
-  return ClientState{
-    validatorSet,
-    latestHeight: height,
-    pastHeaders: Map.singleton(latestHeight, consensusState)
-  }
+function initialise(
+  consensusState: ConsensusState, validatorSet: List<Pair<Address, uint64>>,
+  height: uint64, trustingPeriod: uint64, unbondingPeriod: uint64): ClientState {
+  assert(trustingPeriod < unbondingPeriod)
+    return ClientState{
+      validatorSet,
+      latestHeight: height,
+      latestTimestamp: consensusState.timestamp,
+      trustingPeriod,
+      unbondingPeriod,
+      pastHeaders: Map.singleton(latestHeight, consensusState)
+    }
 }
 ```
 
@@ -114,14 +126,20 @@ Tendermint client validity checking uses the bisection algorithm described in th
 function checkValidityAndUpdateState(
   clientState: ClientState,
   header: Header) {
-    // assert that header is newer than any we know
-    assert(header.height < clientState.latestHeight)
+    // assert trusting period has not yet passed
+    assert(currentTimestamp() - clientState.latestTimestamp < clientState.trustingPeriod)
+    // assert header timestamp is not in the future (& transitively that is not past the trusting period)
+    assert(header.timestamp <= currentTimestamp())
+    // assert header timestamp is past current timestamp
+    assert(header.timestamp > clientState.latestTimestamp)
+    // assert header height is newer than any we know
+    assert(header.height > clientState.latestHeight)
     // call the `verify` function
     assert(verify(clientState.validatorSet, clientState.latestHeight, header))
     // update latest height
     clientState.latestHeight = header.height
     // create recorded consensus state, save it
-    consensusState = ConsensusState{validatorSet.hash(), header.commitmentRoot}
+    consensusState = ConsensusState{validatorSet, header.commitmentRoot, header.timestamp}
     set("clients/{identifier}/consensusStates/{header.height}", consensusState)
     // save the client
     set("clients/{identifier}", clientState)
@@ -140,17 +158,17 @@ function checkMisbehaviourAndUpdateState(
     assert(evidence.h1.height === evidence.h2.height)
     // assert that the commitments are different
     assert(evidence.h1.commitmentRoot !== evidence.h2.commitmentRoot)
-    // fetch the previously verified commitment root & validator set hash
+    // fetch the previously verified commitment root & validator set
     consensusState = get("clients/{identifier}/consensusStates/{evidence.fromHeight}")
-    // check that the validator set matches
-    assert(consensusState.validatorSetHash === evidence.fromValidatorSet.hash())
+    // assert that the timestamp is not from more than an unbonding period ago
+    assert(currentTimestamp() - consensusState.timestamp < clientState.unbondingPeriod)
     // check if the light client "would have been fooled"
     assert(
-      verify(evidence.fromValidatorSet, evidence.fromHeight, evidence.h1) &&
-      verify(evidence.fromValidatorSet, evidence.fromHeight, evidence.h2)
+      verify(consensusState.validatorSet, evidence.fromHeight, evidence.h1) &&
+      verify(consensusState.validatorSet, evidence.fromHeight, evidence.h2)
       )
     // set the frozen height
-    clientState.frozenHeight = evidence.h1.height // which is same as h2.height
+    clientState.frozenHeight = min(clientState.frozenHeight, evidence.h1.height) // which is same as h2.height
     // save the client
     set("clients/{identifier}", clientState)
 }
