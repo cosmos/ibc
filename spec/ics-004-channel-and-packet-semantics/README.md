@@ -628,12 +628,12 @@ function acknowledgePacket(
     abortTransactionUnless(channel !== null)
     abortTransactionUnless(channel.state === OPEN)
     abortTransactionUnless(authenticate(privateStore.get(channelCapabilityPath(packet.sourcePort, packet.sourceChannel))))
-    abortTransactionUnless(packet.sourceChannel === channel.counterpartyChannelIdentifier)
+    abortTransactionUnless(packet.destChannel === channel.counterpartyChannelIdentifier)
 
     connection = provableStore.get(connectionPath(channel.connectionHops[0]))
     abortTransactionUnless(connection !== null)
     abortTransactionUnless(connection.state === OPEN)
-    abortTransactionUnless(packet.sourcePort === channel.counterpartyPortIdentifier)
+    abortTransactionUnless(packet.destPort === channel.counterpartyPortIdentifier)
 
     // verify we sent the packet and haven't cleared it out yet
     abortTransactionUnless(provableStore.get(packetCommitmentPath(packet.sourcePort, packet.sourceChannel, packet.sequence))
