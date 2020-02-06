@@ -179,7 +179,9 @@ In plain English, between chains `A` and `B`:
 - When acting as the source zone, the bridge module escrows an existing local asset denomination on the sending chain and mints vouchers on the receiving chain.
 - When acting as the sink zone, the bridge module burns local vouchers on the sending chains and unescrows the local asset denomination on the receiving chain.
 - When a packet times-out, local assets are unescrowed back to the sender or vouchers minted back to the sender appropriately.
-- No acknowledgement data is necessary.
+- Acknowledgement data is used to handle failures, such as invalid denominations or invalid destination accounts. Returning
+  an acknowledgement of failure is preferable to aborting the transaction since it more easily enables the sending chain
+  to take appropriate action based on the nature of the failure.
 
 `createOutgoingPacket` must be called by a transaction handler in the module which performs appropriate signature checks, specific to the account owner on the host state machine.
 
