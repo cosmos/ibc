@@ -275,6 +275,7 @@ function onTimeoutPacket(packet: Packet) {
     escrowAccount = channelEscrowAddresses[packet.destChannel]
     // construct receiving denomination, check correctness
     prefix = "{packet/sourcePort}/{packet.sourceChannel}"
+    // we abort here because we couldn't have sent this packet
     abortTransactionUnless(data.denomination.slice(0, len(prefix)) === prefix)
     // unescrow tokens back to sender
     bank.TransferCoins(escrowAccount, data.sender, data.denomination.slice(len(prefix)), data.amount)
@@ -282,6 +283,7 @@ function onTimeoutPacket(packet: Packet) {
     // receiver was source chain, mint vouchers
     // construct receiving denomination, check correctness
     prefix = "{packet/sourcePort}/{packet.sourceChannel}"
+    // we abort here because we couldn't have sent this packet
     abortTransactionUnless(data.denomination.slice(0, len(prefix)) === prefix)
     // mint vouchers back to sender
     bank.MintCoins(data.sender, data.denomination, data.amount)
