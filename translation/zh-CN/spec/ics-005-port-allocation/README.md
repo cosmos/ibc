@@ -23,15 +23,15 @@ modified: 2019-08-25
 
 模块可以绑定到多个端口，并连接到单独计算机上另一个模块绑定的多个端口。任何数量的（唯一标识的）通道都可以同时使用一个端口。通道是在两个端口之间的端到端的，每个端口必须事先已被模块绑定，然后模块将控制该通道的一端。
 
-（可选）主机状态机可以选择将端口绑定通过生成专门用于绑定端口的功能键的方式暴露给特别允许的模块管理器 。然后模块管理器可以使用自定义规则集控制模块可以绑定到哪些端口，和转移端口到仅已验证端口名称和模块的模块。路由模块可以扮演这个角色（请参阅 [ICS 26](../ics-026-routing-module) ）。
+（可选）主机状态机可以选择将端口绑定通过生成专门用于绑定端口的能力键的方式暴露给特别允许的模块管理器 。然后模块管理器可以使用自定义规则集控制模块可以绑定到哪些端口，和转移端口到仅已验证端口名称和模块的模块。路由模块可以扮演这个角色（请参阅 [ICS 26](../ics-026-routing-module) ）。
 
 ### 定义
 
 `Identifier` ， `get` ， `set`和`delete`的定义与 [ICS 24](../ics-024-host-requirements) 中的相同。
 
-*端口*是一种特殊的标识符，用于许可模块创建和对使用通道。
+*端口*是一种特殊的标识符，用于许可模块创建和使用通道。
 
-*模块*是主机状态机的子组件，独立于 IBC 处理程序。示例包括以太坊智能合约和  Cosmos SDK和 Substrate 的模块。 除了主机状态机可以使用对象功能或源身份验证来访问模块的许可端口的能力之外，IBC 规范不对模块功能进行任何假设。
+*模块*是主机状态机的子组件，独立于 IBC 处理程序。示例包括以太坊智能合约和  Cosmos SDK 和 Substrate 的模块。 除了主机状态机可以使用对象能力或源身份验证来访问模块的许可端口的能力之外，IBC 规范不对模块功能进行任何假设。
 
 ### 所需属性
 
@@ -40,7 +40,7 @@ modified: 2019-08-25
 - 单个模块可以一次绑定到多个端口
 - 分配端口时，先到先得，先绑定先服务，链可以在第一次启动时将已知模块绑定“保留”端口。
 
-作为一个有用的比较，以下对 TCP 的类比大致准确：
+作为一个有帮助的比较，以下 TCP 的类比大致准确：
 
 IBC 概念 | TCP/IP 概念 | 差异性
 --- | --- | ---
@@ -57,7 +57,7 @@ IBC | TCP | 很多，请参阅描述 IBC 的体系结构文档
 
 主机状态机务必支持对象能力引用或模块的源认证。
 
-在前一种支持对象能力的情况下，IBC 处理程序必须支持生成*对象能力* ，唯一，不透明引用的能力可以传递给某个模块，而其他模块则无法复制。两个示例是 Cosmos SDK（ [参考](https://github.com/cosmos/cosmos-sdk/blob/97eac176a5d533838333f7212cbbd79beb0754bc/store/types/store.go#L275) ）中使用的存储密钥和 Agoric 的 Javascript 运行时中使用的对象引用（ [参考](https://github.com/Agoric/SwingSet) ）。
+在前一种支持对象能力的情况下，IBC 处理程序必须支持生成唯一的，不透明的*对象能力*引用的能力，它可以传递给某个模块，而其他模块则无法复制。两个示例是 Cosmos SDK（ [参考](https://github.com/cosmos/cosmos-sdk/blob/97eac176a5d533838333f7212cbbd79beb0754bc/store/types/store.go#L275) ）中使用的存储密钥和 Agoric 的 Javascript 运行时中使用的对象引用（ [参考](https://github.com/Agoric/SwingSet) ）。
 
 ```typescript
 type CapabilityKey object
@@ -97,7 +97,7 @@ function authenticate(key: CapabilityKey): boolean {
 }
 ```
 
-在后一种情况下， `generate`返回调用模块的标识符，`authenticate`仅对其进行 检查。
+在后一种情况下， `generate`返回调用模块的标识符，`authenticate`仅对其进行检查。
 
 ```typescript
 function generate(): SourceIdentifier {
@@ -135,7 +135,7 @@ type validatePortIdentifier = (id: Identifier) => boolean
 
 #### 绑定到端口
 
-IBC 处理程序必须实现`bindPort` 。 `bindPort`绑定到未分配的端口，如果该端口已被分配，则失败。
+IBC 处理程序必须实现`bindPort` 。 `bindPort`绑定到未分配的端口，如果该端口已被分配，则绑定失败。
 
 如果主机状态机未实现特殊的模块管理器来控制端口分配，则`bindPort`应该对所有模块都可用。否则`bindPort`应该只能由模块管理器调用。
 
@@ -151,7 +151,7 @@ function bindPort(id: Identifier) {
 
 #### 转让端口所有权
 
-如果主机状态机支持对象能力，则不需要附加协议，因为端口引用是承载能力。否则 IBC 处理程序可以实现以下`transferPort`函数。
+如果主机状态机支持对象能力，则不需要附加协议，因为端口引用一种承载式能力。否则 IBC 处理程序可以实现以下`transferPort`函数。
 
 `transferPort`应该对所有模块都可用。
 

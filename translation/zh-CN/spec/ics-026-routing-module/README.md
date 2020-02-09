@@ -11,25 +11,25 @@ modified: 2019-08-25
 
 ## 概要
 
-路由模块是辅助模块的默认实现，该模块将接受外部数据报并调用区块链间通信协议处理程序来处理握手和数据包中继。 路由模块维护一个模块的查找表，当收到数据包时，该表可用于查找和调用模块，因此外部中继器仅需要将数据包中继到路由模块。
+路由模块是一个辅助模块的默认实现，该模块将接受外部数据报并调用区块链间通信协议处理程序来处理握手和数据包中继。 路由模块维护一个模块的查找表，当收到数据包时，该表可用于查找和调用模块，因此外部中继器仅需要将数据包中继到路由模块。
 
 ### 动机
 
-默认的 IBC 处理程序使用接收方调用模式，其中模块必须单独调用 IBC 处理程序才能绑定到端口，启动握手，接受握手，发送和接收数据包等。这是灵活而简单的（请参阅[设计模式](../../ibc/5_IBC_DESIGN_PATTERNS.md) ）。 但是理解起来有些棘手，中继器进程可能需要额外的工作，中继器进程必须跟踪许多模块的状态。该标准描述了一个 IBC“路由模块”，以自动执行大多数常用功能，路由数据包并简化中继器的任务。
+默认的 IBC 处理程序使用接收方调用模式，其中模块必须单独调用 IBC 处理程序才能绑定到端口，启动握手，接受握手，发送和接收数据包等。这是灵活而简单的（请参阅[设计模式](../../ibc/5_IBC_DESIGN_PATTERNS.md) ）。 但是理解起来有些棘手，中继器进程可能需要额外的工作，中继器进程必须跟踪多个模块的状态。该标准描述了一个 IBC“路由模块”，以自动执行大部分常用功能，路由数据包并简化中继器的任务。
 
 路由模块还可以扮演 [ICS 5](../ics-005-port-allocation) 中讨论的模块管理器的角色，并实现确定何时允许模块绑定到端口以及可以命名哪些端口的逻辑。
 
 ### 定义
 
-IBC 处理程序接口提供的所有功能均在 [ICS 25](../ics-025-handler-interface) 中定义。
+IBC 处理程序接口提供的所有函数均在 [ICS 25](../ics-025-handler-interface) 中定义。
 
-`generate`和`authenticate`的功能在 [ICS 5](../ics-005-port-allocation) 中定义。
+`generate`和`authenticate`的函数在 [ICS 5](../ics-005-port-allocation) 中定义。
 
 ### 所需属性
 
 - 模块应该能够通过路由模块绑定到端口和获得通道。
 - 除了调用中间层外，不应为数据包发送和接收增加任何开销。
-- 当路由模块需要对操作数据包时，路由模块应在模块上调用指定的处理程序功能。
+- 当路由模块需要对数据包操作时，路由模块应在模块上调用指定的处理程序函数。
 
 ## 技术指标
 
@@ -105,7 +105,7 @@ function onTimeoutPacketClose(packet: Packet) {
 }
 ```
 
-出现失败必须抛出异常以拒绝握手和传入的数据包等。
+如果出现失败，必须抛出异常以拒绝握手和传入的数据包等。
 
 它们在`ModuleCallbacks`接口中组合在一起：
 
@@ -131,7 +131,7 @@ function callbackPath(portIdentifier: Identifier): Path {
 }
 ```
 
-还将存储调用模块标识符以供将来更改回调时进行身份验证。
+还将存储调用模块标识符以供将来更改回调时进行身份认证。
 
 ```typescript
 function authenticationPath(portIdentifier: Identifier): Path {
@@ -278,7 +278,7 @@ function handleConnOpenInit(datagram: ConnOpenInit) {
 }
 ```
 
-`ConnOpenTry`数据报接受从另一个链上的IBC模块发来的握手请求。
+`ConnOpenTry`数据报接受从另一个链上的 IBC 模块发来的握手请求。
 
 ```typescript
 interface ConnOpenTry {
@@ -312,7 +312,7 @@ function handleConnOpenTry(datagram: ConnOpenTry) {
 }
 ```
 
-`ConnOpenAck`数据报确认另一条链上的  IBC模块接受了握手。
+`ConnOpenAck`数据报确认另一条链上的 IBC 模块接受了握手。
 
 ```typescript
 interface ConnOpenAck {
@@ -338,7 +338,7 @@ function handleConnOpenAck(datagram: ConnOpenAck) {
 }
 ```
 
-`ConnOpenConfirm`数据报确认另一个链上的 IBC 模块的确认握手并完成连接。
+`ConnOpenConfirm`数据报确认另一个链上的 IBC 模块的握手确认并完成连接。
 
 ```typescript
 interface ConnOpenConfirm {

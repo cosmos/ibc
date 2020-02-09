@@ -16,13 +16,15 @@ modified: 2019-12-19
 
 ### 动机
 
-使用 Tendermint 共识算法的各种状态机可能希望与其他使用 IBC 的状态机或单机交互。
+使用 Tendermint 共识算法的各种状态机可能希望与其他使用 IBC 的状态机或单机进行交互。
 
 ### 定义
 
 函数和术语如 [ICS 2](../ics-002-client-semantics) 中所定义。
 
-Tendermint 轻客户端使用 ICS 8 中定义的通用莫克尔证明格式。
+`currentTimestamp`如 [ICS 24](../ics-024-host-requirements) 中所定义。
+
+Tendermint 轻客户端使用 ICS 8 中定义的通用默克尔证明格式。
 
 `hash`是一种通用的抗碰撞哈希函数，可以轻松的配置。
 
@@ -36,34 +38,39 @@ Tendermint 轻客户端使用 ICS 8 中定义的通用莫克尔证明格式。
 
 ### 客户端状态
 
-Tendermint 客户端状态跟踪当前的验证人集合，最新高度以及可能的冻结高度。
+Tendermint 客户端状态跟踪当前的验证人集合，信任期，解除绑定期，最新区块高度，最新时间戳（区块时间）以及可能的冻结区块高度。
 
 ```typescript
 interface ClientState {
   validatorSet: List<Pair<Address, uint64>>
+  trustingPeriod: uint64
+  unbondingPeriod: uint64
   latestHeight: uint64
+  latestTimestamp: uint64
   frozenHeight: Maybe<uint64>
 }
 ```
 
 ### 共识状态
 
-Tendermint 客户端会跟踪所有先前已验证的共识状态的验证人集合哈希和承诺根（可以在一段时间后将其删除）。
+Tendermint 客户端会跟踪所有先前已验证的共识状态的时间戳（区块时间），验证人集和和承诺根（在取消绑定期之后可以将其清除，但不应该在之前清除）。
 
 ```typescript
 interface ConsensusState {
-  validatorSetHash: []byte
+  timestamp: uint64
+  validatorSet: List<Pair<Address, uint64>>
   commitmentRoot: []byte
 }
 ```
 
 ### 区块头
 
-Tendermint 客户端区块头包括高度，承诺根，完整的验证人集合以及提交块的验证人的签名。
+Tendermint 客户端头包括区块高度，时间戳，承诺根，完整的验证人集合以及提交该块的验证人的签名。
 
 ```typescript
 interface Header {
   height: uint64
+  timestamp: uint64
   commitmentRoot: []byte
   validatorSet: List<Pair<Address, uint64>>
   signatures: []Signature
@@ -72,11 +79,10 @@ interface Header {
 
 ### 证据
 
-`Evidence`类型用于检测不良行为并冻结客户端-以防止进一步的数据包流。 Tendermint 客户端`Evidence`包括两个相同高度并且轻客户端认为都是有效的区块头。
+`Evidence`类型用于检测不良行为并冻结客户端-以防止进一步的数据包流。 Tendermint 客户端的`Evidence`包括两个相同高度并且轻客户端认为都是有效的区块头。
 
 ```typescript
 interface Evidence {
-  fromValidatorSet: List<Pair<Address, uint64>>
   fromHeight: uint64
   h1: Header
   h2: Header
@@ -88,12 +94,18 @@ interface Evidence {
 Tendermint 客户初始化要求（主观选择的）最新的共识状态，包括完整的验证人集合。
 
 ```typescript
-function initialise(consensusState: ConsensusState, validatorSet: List<Pair<Address, uint64>>, height: uint64): ClientState {
-  return ClientState{
-    validatorSet,
-    latestHeight: height,
-    pastHeaders: Map.singleton(latestHeight, consensusState)
-  }
+function initialise(
+  consensusState: ConsensusState, validatorSet: List<Pair<Address, uint64>>,
+  height: uint64, trustingPeriod: uint64, unbondingPeriod: uint64): ClientState {
+  assert(trustingPeriod < unbondingPeriod)
+    return ClientState{
+      validatorSet,
+      latestHeight: height,
+      latestTimestamp: consensusState.timestamp,
+      trustingPeriod,
+      unbondingPeriod,
+      pastHeaders: Map.singleton(latestHeight, consensusState)
+    }
 }
 ```
 
@@ -105,22 +117,28 @@ function latestClientHeight(clientState: ClientState): uint64 {
 }
 ```
 
-### 有效性判定式
+### 合法性判定式
 
-Tendermint 客户端有效性检查使用 [Tendermint 规范中](https://github.com/tendermint/spec/blob/master/spec/consensus/light-client.md)描述的二分算法。如果提供的区块头有效，那么将更新客户端状态并将新验证的承诺写入存储。
+Tendermint 客户端合法性检查使用 [Tendermint 规范中](https://github.com/tendermint/spec/blob/master/spec/consensus/light-client.md)描述的二分算法。如果提供的区块头有效，那么将更新客户端状态并将新验证的承诺写入存储。
 
 ```typescript
 function checkValidityAndUpdateState(
   clientState: ClientState,
   header: Header) {
-    // assert that header is newer than any we know
-    assert(header.height < clientState.latestHeight)
+    // assert trusting period has not yet passed
+    assert(currentTimestamp() - clientState.latestTimestamp < clientState.trustingPeriod)
+    // assert header timestamp is not in the future (& transitively that is not past the trusting period)
+    assert(header.timestamp <= currentTimestamp())
+    // assert header timestamp is past current timestamp
+    assert(header.timestamp > clientState.latestTimestamp)
+    // assert header height is newer than any we know
+    assert(header.height > clientState.latestHeight)
     // call the `verify` function
     assert(verify(clientState.validatorSet, clientState.latestHeight, header))
     // update latest height
     clientState.latestHeight = header.height
     // create recorded consensus state, save it
-    consensusState = ConsensusState{validatorSet.hash(), header.commitmentRoot}
+    consensusState = ConsensusState{validatorSet, header.commitmentRoot, header.timestamp}
     set("clients/{identifier}/consensusStates/{header.height}", consensusState)
     // save the client
     set("clients/{identifier}", clientState)
@@ -129,7 +147,7 @@ function checkValidityAndUpdateState(
 
 ### 不良行为判定式
 
-Tendermint 客户端的不良行为检查将确定在相同高度的两个冲突区块头是否都会通过轻客户端的验证。
+Tendermint 客户端的不良行为检查决定于在相同高度的两个冲突区块头是否都会通过轻客户端的验证。
 
 ```typescript
 function checkMisbehaviourAndUpdateState(
@@ -139,17 +157,17 @@ function checkMisbehaviourAndUpdateState(
     assert(evidence.h1.height === evidence.h2.height)
     // assert that the commitments are different
     assert(evidence.h1.commitmentRoot !== evidence.h2.commitmentRoot)
-    // fetch the previously verified commitment root & validator set hash
+    // fetch the previously verified commitment root & validator set
     consensusState = get("clients/{identifier}/consensusStates/{evidence.fromHeight}")
-    // check that the validator set matches
-    assert(consensusState.validatorSetHash === evidence.fromValidatorSet.hash())
+    // assert that the timestamp is not from more than an unbonding period ago
+    assert(currentTimestamp() - consensusState.timestamp < clientState.unbondingPeriod)
     // check if the light client "would have been fooled"
     assert(
-      verify(evidence.fromValidatorSet, evidence.fromHeight, evidence.h1) &&
-      verify(evidence.fromValidatorSet, evidence.fromHeight, evidence.h2)
+      verify(consensusState.validatorSet, evidence.fromHeight, evidence.h1) &&
+      verify(consensusState.validatorSet, evidence.fromHeight, evidence.h2)
       )
     // set the frozen height
-    clientState.frozenHeight = evidence.h1.height // which is same as h2.height
+    clientState.frozenHeight = min(clientState.frozenHeight, evidence.h1.height) // which is same as h2.height
     // save the client
     set("clients/{identifier}", clientState)
 }
@@ -157,7 +175,7 @@ function checkMisbehaviourAndUpdateState(
 
 ### 状态验证函数
 
-Tendermint 客户端状态验证函数对照先前已验证的承诺根检查莫克尔证明。
+Tendermint 客户端状态验证函数对照先前已验证的承诺根检查默克尔证明。
 
 ```typescript
 function verifyClientConsensusState(

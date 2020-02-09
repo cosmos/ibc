@@ -16,7 +16,7 @@ modified: 2019-08-25
 
 ### 动机
 
-IBC 是一种模块间通信协议，旨在促进可靠的，经过身份验证的消息在独立的区块链上的模块之间传递。模块应该能够推理出与之交互的接口以及为了安全地使用接口而必须遵守的要求。
+IBC 是一种模块间通信协议，旨在促进可靠的，经过身份验证的消息在独立的区块链上的模块之间传递。模块应该能够推理出与之交互的接口以及为了安全的使用接口而必须遵守的要求。
 
 ### 定义
 
@@ -25,7 +25,7 @@ IBC 是一种模块间通信协议，旨在促进可靠的，经过身份验证�
 ### 所需属性
 
 - 客户端，连接和通道的创建应尽可能的不需许可。
-- 模块集应该是动态的：链应该能够添加和销毁模块，这些模块本身可以使用持久性 IBC 处理程序任意绑定到端口或从端口取消绑定。
+- 模块集应该是动态的：链应该能够添加和删除模块，这些模块本身可以使用持久性 IBC 处理程序任意绑定到端口或从端口取消绑定。
 - 模块应该能够在 IBC 之上编写自己的更复杂的抽象，以提供附加的语义或保证。
 
 ## 技术指标
@@ -34,7 +34,7 @@ IBC 是一种模块间通信协议，旨在促进可靠的，经过身份验证�
 
 ### 客户端生命周期管理
 
-默认情况下，客户端是无主的：任何模块都可以创建新客户端，查询任何现有客户端，更新任何现有客户端以及删除任何未使用的现有客户端。
+默认情况下，客户端是没有所有者的：任何模块都可以创建新客户端，查询任何现有客户端，更新任何现有客户端以及删除任何未使用的现有客户端。
 
 处理程序接口暴露 [ICS 2](../ics-002-client-semantics) 中定义的`createClient` ， `updateClient` ， `queryClientConsensusState` ， `queryClient`和`submitMisbehaviourToClient` 。
 
@@ -46,7 +46,7 @@ IBC 是一种模块间通信协议，旨在促进可靠的，经过身份验证�
 
 ### 通道生命周期管理
 
-默认情况下，通道归创建端口所有，这意味着只允许绑定到该端口的模块检查，关闭或在通道上发送。模块可以使用同一端口创建任意数量的通道。
+默认情况下，通道归创建的端口所有，这意味着只允许绑定到该端口的模块检视，关闭或在通道上发送。模块可以使用同一端口创建任意数量的通道。
 
 处理程序接口暴露了 [ICS 4](../ics-004-channel-and-packet-semantics) 中定义的`chanOpenInit` ， `chanOpenTry` ， `chanOpenAck` ， `chanOpenConfirm` ， `chanCloseInit` ， `chanCloseConfirm`和`queryChannel` 。
 
@@ -58,7 +58,7 @@ IBC 是一种模块间通信协议，旨在促进可靠的，经过身份验证�
 
 该处理程序接口暴露`sendPacket` ， `recvPacket` ， `acknowledgePacket` ， `timeoutPacket` ， `timeoutOnClose`和`cleanupPacket`，如 [ICS 4](../ics-004-channel-and-packet-semantics)中定义 。
 
-默认  IBC路由模块应允许外部调用`sendPacket` ， `recvPacket` ， `acknowledgePacket` ， `timeoutPacket` ， `timeoutOnClose`和`cleanupPacket` 。
+默认  IBC 路由模块应允许外部调用`sendPacket` ， `recvPacket` ， `acknowledgePacket` ， `timeoutPacket` ， `timeoutOnClose`和`cleanupPacket` 。
 
 ### 属性和不变量
 

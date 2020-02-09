@@ -12,7 +12,7 @@ modified: 2019-08-25
 
 ## 概要
 
-*向量承诺*是一种构造，它对向量中任何索引和元素的存在/不存在的成员关系的短证明产生恒定大小的绑定承诺。 本规范列举了 IBC 协议中使用的承诺构造所需的函数和特性。特别是，IBC 中使用的承诺必须具有*位置约束力* ：它们必须能够证明在特定位置（索引）的值存在或不存在。
+*向量承诺*是一种构造，它对向量中任何索引和元素的成员资格/非成员资格的短证明产生恒定大小的绑定承诺。 本规范列举了 IBC 协议中使用的承诺构造所需的函数和特性。特别是，IBC 中使用的承诺必须具有*位置约束力* ：它们必须能够证明在特定位置（索引）的值存在或不存在。
 
 ### 动机
 
@@ -20,7 +20,7 @@ modified: 2019-08-25
 
 ### 定义
 
-向量承诺的*管理者*是具有在承诺中添加或删除项目的能力和责任的参与者。通常，这将是区块链的状态机。
+向量承诺的*管理者*是具有在承诺中添加或删除条目的能力和责任的参与者。通常，这将是区块链的状态机。
 
 *证明者*是负责生成包含或不包含特定元素的证明的参与者。通常，这将是一个中继器（请参阅 [ICS 18](../ics-018-relayer-algorithms) ）。
 
@@ -28,7 +28,7 @@ modified: 2019-08-25
 
 使用特定的*路径*和*值*类型实例化承诺，它们的类型假定为任意可序列化的数据。
 
-一个*微不足道的函数*是增长速度比任何正多项式的倒数更慢的函数，如[这里](https://en.wikipedia.org/wiki/Negligible_function)中的定义 。
+一个*微不足道的函数*是增长速度比任何正多项式的倒数更慢的函数，如[这里](https://en.wikipedia.org/wiki/Negligible_function)的定义 。
 
 ### 所需属性
 
@@ -38,7 +38,7 @@ modified: 2019-08-25
 
 ### 数据类型
 
-承诺构造必须指定以下数据类型，这些数据类型可是不透明的（不需要外部检视），但必须是可序列化的：
+承诺构造必须指定以下数据类型，这些数据类型可以是不透明的（不需要外部检视），但必须是可序列化的：
 
 #### 承诺状态
 
@@ -60,7 +60,7 @@ type CommitmentRoot = object
 
 #### 承诺路径
 
-`CommitmentPath`是用于验证承诺证明的路径，该路径可以是任意结构化对象（由承诺类型定义）。它必须由`applyPrefix` （定义如下）计算。
+`CommitmentPath`是用于验证承诺证明的路径，该路径可以是任意结构化对象（由承诺类型定义）。它必须由通过`applyPrefix` （定义如下）计算出来。
 
 ```typescript
 type CommitmentPath = object
@@ -68,7 +68,7 @@ type CommitmentPath = object
 
 #### 前缀
 
-`CommitmentPrefix`定义承诺证明的存储前缀。它在将路径传递到证明验证功能之前应用于路径。
+`CommitmentPrefix`定义承诺证明的存储前缀。它在将路径传递到证明验证函数之前应用于路径。
 
 ```typescript
 type CommitmentPrefix = object
@@ -164,21 +164,21 @@ type verifyNonMembership = (root: CommitmentRoot, proof: CommitmentProof, path: 
 
 ### 可选函数
 
-承诺构造可以提供以下功能：
+承诺构造可以提供以下函数：
 
-`batchVerifyMembership`函数验证在承诺中已将许多路径设置为特定值的证明。
+`batchVerifyMembership`函数验证在承诺中已将多个路径设置为特定值的证明。
 
 ```typescript
 type batchVerifyMembership = (root: CommitmentRoot, proof: CommitmentProof, items: Map<CommitmentPath, Value>) => boolean
 ```
 
-`batchVerifyNonMembership`函数可验证证明在承诺中尚未将许多路径设置为任何值的证明。
+`batchVerifyNonMembership`函数可验证证明在承诺中尚未将多个路径设置为任何值的证明。
 
 ```typescript
 type batchVerifyNonMembership = (root: CommitmentRoot, proof: CommitmentProof, paths: Set<CommitmentPath>) => boolean
 ```
 
-如果定义这些函数，必须和使用`verifyMembership`和`verifyNonMembership`的联合在一起的结果相同（效率可能有所不同）：
+如果定义这些函数，必须和使用`verifyMembership`和`verifyNonMembership`联合在一起的结果相同（效率可能有所不同）：
 
 ```typescript
 batchVerifyMembership(root, proof, items) ===
@@ -190,7 +190,7 @@ batchVerifyNonMembership(root, proof, items) ===
   all(items.map((item) => verifyNonMembership(root, proof, item.path)))
 ```
 
-如果批量验证是可行的并且比单独验证每个元素的证明更有效，则承诺构造应定义批量验证功能。
+如果批量验证是可行的并且比单独验证每个元素的证明更有效，则承诺构造应定义批量验证函数。
 
 ### 属性和不变量
 
@@ -200,7 +200,7 @@ batchVerifyNonMembership(root, proof, items) ===
 
 承诺证明必须是*完整的* ：已添加到承诺中的路径/值映射始终可以被证明已包含在内，未包含的路径始终可以被证明已被排除，除非是`k`定义的可以忽略的概率。
 
-对于任何前缀`prefix`和任何路径`path`最后一个设置承诺`acc`中的值`value`，
+对于最后一个设置承诺`acc`中的值`value`的任何前缀`prefix`和任何路径`path`，
 
 ```typescript
 root = getRoot(acc)
@@ -211,7 +211,7 @@ proof = createMembershipProof(acc, applyPrefix(prefix, path), value)
 Probability(verifyMembership(root, proof, applyPrefix(prefix, path), value) === false) negligible in k
 ```
 
-对于任何前缀`prefix`和任何路径`path`都没有在承诺`acc`中设置的`proof`的所有值和`value`的所有值 ，
+对于没有在承诺`acc`中设置的任何前缀`prefix`和任何路径`path` ，对于`proof`的所有值和`value`的所有值的
 
 ```typescript
 root = getRoot(acc)
@@ -226,13 +226,13 @@ Probability(verifyNonMembership(root, proof, applyPrefix(prefix, path)) === fals
 
 承诺证明必须是*合理的* ：除非在可配置安全性参数`k`概率下可以忽略不计，否则不能将未添加到承诺中的路径/值映射证明为已包含，或者将已经添加到承诺中的路径证明为已排除。
 
-对于任何前缀`prefix`和任何路径`path`最后一个设置值`value`在承诺`acc`的所有`proof` 的值，
+对于最后一个设置值`value`在承诺`acc`中的任何前缀`prefix`和任何路径`path`，对于`proof` 的所有值，
 
 ```
 Probability(verifyNonMembership(root, proof, applyPrefix(prefix, path)) === true) negligible in k
 ```
 
-对于任何前缀`prefix`和任何路径`path`没有在承诺`acc`中设置的 `proof`的所有值和`value`的所有值 ，
+对于没有在承诺`acc`中设置的任何前缀`prefix`和任何路径`path`，对于`proof`的所有值和`value`的所有值 ，
 
 ```
 Probability(verifyMembership(root, proof, applyPrefix(prefix, path), value) === true) negligible in k
@@ -242,7 +242,7 @@ Probability(verifyMembership(root, proof, applyPrefix(prefix, path), value) === 
 
 承诺证明必须是*有位置约束的* ：给定的承诺路径只能映射到一个值，并且承诺证明不能证明同一路径适用于不同的值，除非在概率k下可以被忽略。
 
-对于承诺`acc`设置的任何前缀`prefix`和任何路径`path` ，都有一个`value` ：
+对于在承诺`acc`设置的任何前缀`prefix`和任何路径`path` ，都有一个`value` ：
 
 ```typescript
 root = getRoot(acc)
