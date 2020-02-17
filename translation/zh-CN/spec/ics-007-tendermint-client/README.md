@@ -79,7 +79,7 @@ interface Header {
 
 ### 证据
 
-`Evidence`类型用于检测不良行为并冻结客户端-以防止进一步的数据包流。 Tendermint 客户端的`Evidence`包括两个相同高度并且轻客户端认为都是有效的区块头。
+`Evidence`类型用于检测不良行为并冻结客户端，以防止进一步的数据包流。 Tendermint 客户端的`Evidence`包括两个相同高度并且轻客户端认为都是有效的区块头。
 
 ```typescript
 interface Evidence {
@@ -91,7 +91,7 @@ interface Evidence {
 
 ### 客户端初始化
 
-Tendermint 客户初始化要求（主观选择的）最新的共识状态，包括完整的验证人集合。
+Tendermint 客户端初始化要求（主观选择的）最新的共识状态，包括完整的验证人集合。
 
 ```typescript
 function initialise(
