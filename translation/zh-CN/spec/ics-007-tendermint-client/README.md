@@ -1,44 +1,44 @@
 ---
 ics: 7
-title: Tendermint Client
-stage: draft
+title: Tendermint 客户端
+stage: 草案
 category: IBC/TAO
-kind: instantiation
+kind: 实例化
 implements: 2
 author: Christopher Goes <cwgoes@tendermint.com>
 created: 2019-12-10
 modified: 2019-12-19
 ---
 
-## Synopsis
+## 概要
 
-This specification document describes a client (verification algorithm) for a blockchain using Tendermint consensus.
+本规范文档描述了使用 Tendermint 共识的区块链客户端（验证算法）。
 
-### Motivation
+### 动机
 
-State machines of various sorts replicated using the Tendermint consensus algorithm might like to interface with other replicated state machines or solo machines over IBC.
+使用 Tendermint 共识算法的各种状态机可能希望与其他使用 IBC 的状态机或单机进行交互。
 
-### Definitions
+### 定义
 
-Functions & terms are as defined in [ICS 2](../ics-002-client-semantics).
+函数和术语如 [ICS 2](../ics-002-client-semantics) 中所定义。
 
-`currentTimestamp` is as defined in [ICS 24](../ics-024-host-requirements).
+`currentTimestamp`如 [ICS 24](../ics-024-host-requirements) 中所定义。
 
-The Tendermint light client uses the generalised Merkle proof format as defined in ICS 8.
+Tendermint 轻客户端使用 ICS 8 中定义的通用默克尔证明格式。
 
-`hash` is a generic collision-resistant hash function, and can easily be configured.
+`hash`是一种通用的抗碰撞哈希函数，可以轻松的配置。
 
-### Desired Properties
+### 所需属性
 
-This specification must satisfy the client interface defined in ICS 2.
+该规范必须满足 ICS 2 中定义的客户端接口。
 
-## Technical Specification
+## 技术指标
 
-This specification depends on correct instantiation of the [Tendermint consensus algorithm](https://github.com/tendermint/spec/blob/master/spec/consensus/consensus.md) and [light client algorithm](https://github.com/tendermint/spec/blob/master/spec/consensus/light-client.md).
+该规范依赖于 [Tendermint 共识算法](https://github.com/tendermint/spec/blob/master/spec/consensus/consensus.md)和[轻客户端算法](https://github.com/tendermint/spec/blob/master/spec/consensus/light-client.md)的正确实例化。
 
-### Client state
+### 客户端状态
 
-The Tendermint client state tracks the current validator set, trusting period, unbonding period, latest height, latest timestamp (block time), and a possible frozen height.
+Tendermint 客户端状态跟踪当前的验证人集合，信任期，解除绑定期，最新区块高度，最新时间戳（区块时间）以及可能的冻结区块高度。
 
 ```typescript
 interface ClientState {
@@ -51,9 +51,9 @@ interface ClientState {
 }
 ```
 
-### Consensus state
+### 共识状态
 
-The Tendermint client tracks the timestamp (block time), validator set, and commitment root for all previously verified consensus states (these can be pruned after the unbonding period has passed, but should not be pruned beforehand).
+Tendermint 客户端会跟踪所有先前已验证的共识状态的时间戳（区块时间），验证人集和和承诺根（在取消绑定期之后可以将其清除，但不应该在之前清除）。
 
 ```typescript
 interface ConsensusState {
@@ -63,9 +63,9 @@ interface ConsensusState {
 }
 ```
 
-### Headers
+### 区块头
 
-The Tendermint client headers include the height, the timestamp, the commitment root, the complete validator set, and the signatures by the validators who committed the block.
+Tendermint 客户端头包括区块高度，时间戳，承诺根，完整的验证人集合以及提交该块的验证人的签名。
 
 ```typescript
 interface Header {
@@ -77,10 +77,9 @@ interface Header {
 }
 ```
 
-### Evidence
+### 证据
 
-The `Evidence` type is used for detecting misbehaviour and freezing the client - to prevent further packet flow - if applicable.
-Tendermint client `Evidence` consists of two headers at the same height both of which the light client would have considered valid.
+`Evidence`类型用于检测不良行为并冻结客户端，以防止进一步的数据包流。 Tendermint 客户端的`Evidence`包括两个相同高度并且轻客户端认为都是有效的区块头。
 
 ```typescript
 interface Evidence {
@@ -90,9 +89,9 @@ interface Evidence {
 }
 ```
 
-### Client initialisation
+### 客户端初始化
 
-Tendermint client initialisation requires a (subjectively chosen) latest consensus state, including the full validator set.
+Tendermint 客户端初始化要求（主观选择的）最新的共识状态，包括完整的验证人集合。
 
 ```typescript
 function initialise(
@@ -110,7 +109,7 @@ function initialise(
 }
 ```
 
-The Tendermint client `latestClientHeight` function returns the latest stored height, which is updated every time a new (more recent) header is validated.
+Tendermint 客户端的`latestClientHeight`函数返回最新存储的高度，该高度在每次验证了新的（较新的）区块头时都会更新。
 
 ```typescript
 function latestClientHeight(clientState: ClientState): uint64 {
@@ -118,9 +117,9 @@ function latestClientHeight(clientState: ClientState): uint64 {
 }
 ```
 
-### Validity predicate
+### 合法性判定式
 
-Tendermint client validity checking uses the bisection algorithm described in the [Tendermint spec](https://github.com/tendermint/spec/blob/master/spec/consensus/light-client.md). If the provided header is valid, the client state is updated & the newly verified commitment written to the store.
+Tendermint 客户端合法性检查使用 [Tendermint 规范中](https://github.com/tendermint/spec/blob/master/spec/consensus/light-client.md)描述的二分算法。如果提供的区块头有效，那么将更新客户端状态并将新验证的承诺写入存储。
 
 ```typescript
 function checkValidityAndUpdateState(
@@ -146,9 +145,9 @@ function checkValidityAndUpdateState(
 }
 ```
 
-### Misbehaviour predicate
+### 不良行为判定式
 
-Tendermint client misbehaviour checking determines whether or not two conflicting headers at the same height would have convinced the light client.
+Tendermint 客户端的不良行为检查决定于在相同高度的两个冲突区块头是否都会通过轻客户端的验证。
 
 ```typescript
 function checkMisbehaviourAndUpdateState(
@@ -174,9 +173,9 @@ function checkMisbehaviourAndUpdateState(
 }
 ```
 
-### State verification functions
+### 状态验证函数
 
-Tendermint client state verification functions check a Merkle proof against a previously validated commitment root.
+Tendermint 客户端状态验证函数对照先前已验证的承诺根检查默克尔证明。
 
 ```typescript
 function verifyClientConsensusState(
@@ -314,31 +313,30 @@ function verifyNextSequenceRecv(
 }
 ```
 
-### Properties & Invariants
+### 属性和不变量
 
-Correctness guarantees as provided by the Tendermint light client algorithm.
+正确性保证和 Tendermint 轻客户端算法相同。
 
-## Backwards Compatibility
+## 向后兼容性
 
-Not applicable.
+不适用。
 
-## Forwards Compatibility
+## 向前兼容性
 
-Not applicable. Alterations to the client verification algorithm will require a new client standard.
+不适用。更改客户端验证算法将需要新的客户端标准。
 
-## Example Implementation
+## 示例实现
 
-None yet.
+还没有。
 
-## Other Implementations
+## 其他实现
 
-None at present.
+目前没有。
 
-## History
+## 历史
 
-December 10th, 2019 - Initial version
-December 19th, 2019 - Final first draft
+2019年12月10日-初始版本 2019年12月19日-最终初稿
 
-## Copyright
+## 版权
 
-All content herein is licensed under [Apache 2.0](https://www.apache.org/licenses/LICENSE-2.0).
+本文中的所有内容均根据 [Apache 2.0](https://www.apache.org/licenses/LICENSE-2.0) 获得许可。
