@@ -257,10 +257,9 @@ function onRecvPacket(packet: Packet) {
 function onAcknowledgePacket(
   packet: Packet,
   acknowledgement: bytes) {
-  if ack.slice(0, 3) === "err" {
+  if (ack.slice(0, 3) === "err")
     // treat exactly the same as a timeout
     onTimeoutPacket(packet)
-  }
 }
 ```
 

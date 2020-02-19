@@ -1,4 +1,4 @@
-personal_ws-1.1 en 551 
+personal_ws-1.1 en 556 
 ABCI
 ABI
 Agoric
@@ -172,6 +172,8 @@ channelEscrowAddresses
 channelId
 channelIdentifier
 channelKey
+channelOnB
+channelOnD
 channelPath
 channelSet
 checkMisbehaviourAndUpdateState
@@ -248,6 +250,7 @@ datastream
 datatypes
 del
 deleteClient
+denom
 deployable
 deps
 deserialise
@@ -411,6 +414,8 @@ png
 portId
 portIdentifier
 portKey
+portOnB
+portOnD
 portPath
 positionally
 prefixedPath
