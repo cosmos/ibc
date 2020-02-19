@@ -191,26 +191,30 @@ function createOutgoingPacket(
   amount: uint256,
   sender: string,
   receiver: string,
+  destPort: string,
+  destChannel: string,
+  sourcePort: string,
+  sourceChannel: string,
   source: boolean) {
   if source {
     // sender is source chain: escrow tokens
     // determine escrow account
     escrowAccount = channelEscrowAddresses[packet.sourceChannel]
     // construct receiving denomination, check correctness
-    prefix = "{packet/destPort}/{packet.destChannel}"
+    prefix = "{destPort}/{destChannel}"
     abortTransactionUnless(denomination.slice(0, len(prefix)) === prefix)
     // escrow source tokens (assumed to fail if balance insufficient)
     bank.TransferCoins(sender, escrowAccount, denomination.slice(len(prefix)), amount)
   } else {
     // receiver is source chain, burn vouchers
     // construct receiving denomination, check correctness
-    prefix = "{packet/sourcePort}/{packet.sourceChannel}"
+    prefix = "{sourcePort}/{sourceChannel}"
     abortTransactionUnless(denomination.slice(0, len(prefix)) === prefix)
     // burn vouchers (assumed to fail if balance insufficient)
     bank.BurnCoins(sender, denomination, amount)
   }
   FungibleTokenPacketData data = FungibleTokenPacketData{denomination, amount, sender, receiver, source}
-  handler.sendPacket(packet)
+  handler.sendPacket(Packet{destPort, destChannel, sourcePort, sourceChannel, data})
 }
 ```
 
