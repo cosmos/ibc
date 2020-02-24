@@ -5,9 +5,9 @@ stage: draft
 category: IBC/APP
 requires: 25, 26
 kind: instantiation
-author: Christopher Goes <cwgoes@tendermint.com>
+author: Christopher Goes <cwgoes@interchain.berlin>
 created: 2019-07-15 
-modified: 2020-02-03
+modified: 2020-02-24
 ---
 
 ## Synopsis
@@ -43,6 +43,15 @@ interface FungibleTokenPacketData {
   sender: string
   receiver: string
   source: boolean
+}
+```
+
+The acknowledgement data type describes whether the transfer succeeded or failed, and the reason for failure (if any).
+
+```typescript
+interface FungibleTokenPacketAcknowledgement {
+  success: boolean
+  error: Maybe<string>
 }
 ```
 
@@ -223,18 +232,18 @@ function createOutgoingPacket(
 ```typescript
 function onRecvPacket(packet: Packet) {
   FungibleTokenPacketData data = packet.data
-  ack = "ok"
+  ack = FungibleTokenPacketAcknowledgement{success: true, error: null}
   if data.source {
     // sender was source chain: mint vouchers
     // construct receiving denomination, check correctness
     prefix = "{packet/destPort}/{packet.destChannel}"
     if (data.denomination.slice(0, len(prefix)) !== prefix)
-      ack = "err:invalid denomination"
+      ack = FungibleTokenPacketAcknowledgement{success: false, error: "invalid denomination"}
     else {
       // mint vouchers to receiver (assumed to fail if balance insufficient)
       err = bank.MintCoins(data.receiver, data.denomination, data.amount)
       if (err !== nil)
-        ack = "err:" + err
+        ack = FungibleTokenPacketAcknowledgement{success: false, error: "mint coins failed"}
     }
   } else {
     // receiver is source chain: unescrow tokens
@@ -243,12 +252,12 @@ function onRecvPacket(packet: Packet) {
     // construct receiving denomination, check correctness
     prefix = "{packet/sourcePort}/{packet.sourceChannel}"
     if (data.denomination.slice(0, len(prefix)) !== prefix)
-      ack = "err:invalid denomination"
+      ack = FungibleTokenPacketAcknowledgement{success: false, error: "invalid denomination"}
     else {
       // unescrow tokens to receiver (assumed to fail if balance insufficient)
       err = bank.TransferCoins(escrowAccount, data.receiver, data.denomination.slice(len(prefix)), data.amount)
       if (err !== nil)
-        ack = "err:" + err
+        ack = FungibleTokenPacketAcknowledgement{success: false, error: "transfer coins failed"}
     }
   }
   return ack
@@ -261,9 +270,9 @@ function onRecvPacket(packet: Packet) {
 function onAcknowledgePacket(
   packet: Packet,
   acknowledgement: bytes) {
-  if (ack.slice(0, 3) === "err")
-    // treat exactly the same as a timeout
-    onTimeoutPacket(packet)
+  // if the transfer failed, refund the tokens
+  if (!ack.success)
+    refundTokens(packet)
 }
 ```
 
@@ -271,6 +280,15 @@ function onAcknowledgePacket(
 
 ```typescript
 function onTimeoutPacket(packet: Packet) {
+  // the packet timed-out, so refund the tokens
+  refundTokens(packet)
+}
+```
+
+`refundTokens` is called by both `onAcknowledgePacket`, on failure, and `onTimeoutPacket`, to refund escrowed tokens to the original sender.
+
+```typescript
+function refundTokens(packet: Packet) {
   FungibleTokenPacketData data = packet.data
   if data.source {
     // sender was source chain, unescrow tokens
