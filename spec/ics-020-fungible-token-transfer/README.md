@@ -231,7 +231,7 @@ function createOutgoingPacket(
 function onRecvPacket(packet: Packet) {
   FungibleTokenPacketData data = packet.data
   // inspect the denomination to determine whether or not we are the source chain
-  prefix = "{packet/destPort}/{packet.destChannel}"
+  prefix = "{packet.destPort}/{packet.destChannel}"
   source = denomination.slice(0, len(prefix)) === prefix
   // construct default acknowledgement of success
   FungibleTokenPacketAcknowledgement ack = FungibleTokenPacketAcknowledgement{true, null}
@@ -285,7 +285,7 @@ function onTimeoutPacket(packet: Packet) {
 ```typescript
 function refundTokens(packet: Packet) {
   FungibleTokenPacketData data = packet.data
-  prefix = "{packet/sourcePort}/{packet.sourceChannel}"
+  prefix = "{packet.sourcePort}/{packet.sourceChannel}"
   source = data.denomination.slice(0, len(prefix)) === prefix
   if source {
     // sender was source chain, unescrow tokens
@@ -297,7 +297,7 @@ function refundTokens(packet: Packet) {
   } else {
     // receiver was source chain, mint vouchers
     // construct receiving denomination, check correctness
-    prefix = "{packet/sourcePort}/{packet.sourceChannel}"
+    prefix = "{packet.sourcePort}/{packet.sourceChannel}"
     // we abort here because we couldn't have sent this packet
     abortTransactionUnless(data.denomination.slice(0, len(prefix)) === prefix)
     // mint vouchers back to sender
