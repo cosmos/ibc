@@ -42,7 +42,6 @@ interface FungibleTokenPacketData {
   amount: uint256
   sender: string
   receiver: string
-  source: boolean
 }
 ```
 
@@ -203,15 +202,14 @@ function createOutgoingPacket(
   destPort: string,
   destChannel: string,
   sourcePort: string,
-  sourceChannel: string,
-  source: boolean) {
+  sourceChannel: string) {
+  // inspect the denomination to determine whether or not we are the source chain
+  prefix = "{destPort}/{destChannel}"
+  source = denomination.slice(0, len(prefix)) === prefix
   if source {
     // sender is source chain: escrow tokens
     // determine escrow account
     escrowAccount = channelEscrowAddresses[packet.sourceChannel]
-    // construct receiving denomination, check correctness
-    prefix = "{destPort}/{destChannel}"
-    abortTransactionUnless(denomination.slice(0, len(prefix)) === prefix)
     // escrow source tokens (assumed to fail if balance insufficient)
     bank.TransferCoins(sender, escrowAccount, denomination.slice(len(prefix)), amount)
   } else {
@@ -222,7 +220,7 @@ function createOutgoingPacket(
     // burn vouchers (assumed to fail if balance insufficient)
     bank.BurnCoins(sender, denomination, amount)
   }
-  FungibleTokenPacketData data = FungibleTokenPacketData{denomination, amount, sender, receiver, source}
+  FungibleTokenPacketData data = FungibleTokenPacketData{denomination, amount, sender, receiver}
   handler.sendPacket(Packet{destPort, destChannel, sourcePort, sourceChannel, data})
 }
 ```
@@ -232,19 +230,16 @@ function createOutgoingPacket(
 ```typescript
 function onRecvPacket(packet: Packet) {
   FungibleTokenPacketData data = packet.data
+  // inspect the denomination to determine whether or not we are the source chain
+  prefix = "{packet/destPort}/{packet.destChannel}"
+  source = denomination.slice(0, len(prefix)) === prefix
+  // construct default acknowledgement of success
   ack = FungibleTokenPacketAcknowledgement{success: true, error: null}
-  if data.source {
-    // sender was source chain: mint vouchers
-    // construct receiving denomination, check correctness
-    prefix = "{packet/destPort}/{packet.destChannel}"
-    if (data.denomination.slice(0, len(prefix)) !== prefix)
-      ack = FungibleTokenPacketAcknowledgement{success: false, error: "invalid denomination"}
-    else {
-      // mint vouchers to receiver (assumed to fail if balance insufficient)
-      err = bank.MintCoins(data.receiver, data.denomination, data.amount)
-      if (err !== nil)
-        ack = FungibleTokenPacketAcknowledgement{success: false, error: "mint coins failed"}
-    }
+  if source {
+    // sender was source, mint vouchers to receiver (assumed to fail if balance insufficient)
+    err = bank.MintCoins(data.receiver, data.denomination, data.amount)
+    if (err !== nil)
+      ack = FungibleTokenPacketAcknowledgement{success: false, error: "mint coins failed"}
   } else {
     // receiver is source chain: unescrow tokens
     // determine escrow account
