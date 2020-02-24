@@ -108,8 +108,8 @@ function onChanOpenInit(
   abortTransactionUnless(order === UNORDERED)
   // only allow channels to "bank" port on counterparty chain
   abortTransactionUnless(counterpartyPortIdentifier === "bank")
-  // version not used at present
-  abortTransactionUnless(version === "")
+  // assert that version is "ics20-1"
+  abortTransactionUnless(version === "ics20-1")
   // allocate an escrow address
   channelEscrowAddresses[channelIdentifier] = newAddress()
 }
@@ -127,9 +127,9 @@ function onChanOpenTry(
   counterpartyVersion: string) {
   // only unordered channels allowed
   abortTransactionUnless(order === UNORDERED)
-  // version not used at present
-  abortTransactionUnless(version === "")
-  abortTransactionUnless(counterpartyVersion === "")
+  // assert that version is "ics20-1"
+  abortTransactionUnless(version === "ics20-1")
+  abortTransactionUnless(counterpartyVersion === "ics20-1")
   // only allow channels to "bank" port on counterparty chain
   abortTransactionUnless(counterpartyPortIdentifier === "bank")
   // allocate an escrow address
@@ -142,9 +142,9 @@ function onChanOpenAck(
   portIdentifier: Identifier,
   channelIdentifier: Identifier,
   version: string) {
-  // version not used at present
-  abortTransactionUnless(version === "")
   // port has already been validated
+  // assert that version is "ics20-1"
+  abortTransactionUnless(version === "ics20-1")
 }
 ```
 
@@ -152,7 +152,7 @@ function onChanOpenAck(
 function onChanOpenConfirm(
   portIdentifier: Identifier,
   channelIdentifier: Identifier) {
-  // accept channel confirmations, port has already been validated
+  // accept channel confirmations, port has already been validated, version has already been validated
 }
 ```
 
@@ -325,7 +325,10 @@ Not applicable.
 
 ## Forwards Compatibility
 
-A future version of this standard could use a different version in the channel handshake.
+This initial standard uses version "ics20-1" in the channel handshake.
+
+A future version of this standard could use a different version in the channel handshake,
+and safely alter the packet data format & packet handler semantics.
 
 ## Example Implementation
 
