@@ -116,7 +116,7 @@ function verifyChannelState(
     assert(get(path) === channelEnd)
 }
 
-function verifyPacketCommitment(
+function verifyPacketData(
   clientState: ClientState,
   height: uint64,
   prefix: CommitmentPrefix,
@@ -124,9 +124,9 @@ function verifyPacketCommitment(
   portIdentifier: Identifier,
   channelIdentifier: Identifier,
   sequence: uint64,
-  commitment: bytes) {
+  data: bytes) {
     path = applyPrefix(prefix, "ports/{portIdentifier}/channels/{channelIdentifier}/packets/{sequence}")
-    assert(get(path) === commitment)
+    assert(get(path) === commit(data))
 }
 
 function verifyPacketAcknowledgement(
