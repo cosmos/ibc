@@ -98,14 +98,16 @@ Tendermint client initialisation requires a (subjectively chosen) latest consens
 function initialise(
   consensusState: ConsensusState, validatorSet: List<Pair<Address, uint64>>,
   height: uint64, trustingPeriod: uint64, unbondingPeriod: uint64): ClientState {
-  assert(trustingPeriod < unbondingPeriod)
+    assert(trustingPeriod < unbondingPeriod)
+    assert(height > 0)
+    set("clients/{identifier}/consensusStates/{height}", consensusState)
     return ClientState{
       validatorSet,
       latestHeight: height,
       latestTimestamp: consensusState.timestamp,
       trustingPeriod,
       unbondingPeriod,
-      pastHeaders: Map.singleton(latestHeight, consensusState)
+      frozenHeight: null
     }
 }
 ```

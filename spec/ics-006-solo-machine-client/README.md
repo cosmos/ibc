@@ -39,6 +39,7 @@ The `ClientState` of a solo machine is simply whether or not the client is froze
 ```typescript
 interface ClientState {
   frozen: boolean
+  consensusState: ConsensusState
 }
 ```
 
