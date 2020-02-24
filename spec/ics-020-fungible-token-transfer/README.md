@@ -285,14 +285,13 @@ function onTimeoutPacket(packet: Packet) {
 ```typescript
 function refundTokens(packet: Packet) {
   FungibleTokenPacketData data = packet.data
-  if data.source {
+  prefix = "{packet/sourcePort}/{packet.sourceChannel}"
+  source = data.denomination.slice(0, len(prefix)) === prefix
+  if source {
     // sender was source chain, unescrow tokens
     // determine escrow account
     escrowAccount = channelEscrowAddresses[packet.destChannel]
     // construct receiving denomination, check correctness
-    prefix = "{packet/sourcePort}/{packet.sourceChannel}"
-    // we abort here because we couldn't have sent this packet
-    abortTransactionUnless(data.denomination.slice(0, len(prefix)) === prefix)
     // unescrow tokens back to sender
     bank.TransferCoins(escrowAccount, data.sender, data.denomination.slice(len(prefix)), data.amount)
   } else {
@@ -360,6 +359,8 @@ Jul 29, 2019 - Major revisions; cleanup
 Aug 25, 2019 - Major revisions, more cleanup
 
 Feb 3, 2020 - Revisions to handle acknowledgements of success & failure
+
+Feb 24, 2020 - Revisions to infer source field, inclusion of version string
 
 ## Copyright
 
