@@ -234,12 +234,12 @@ function onRecvPacket(packet: Packet) {
   prefix = "{packet/destPort}/{packet.destChannel}"
   source = denomination.slice(0, len(prefix)) === prefix
   // construct default acknowledgement of success
-  ack = FungibleTokenPacketAcknowledgement{success: true, error: null}
+  FungibleTokenPacketAcknowledgement ack = FungibleTokenPacketAcknowledgement{true, null}
   if source {
     // sender was source, mint vouchers to receiver (assumed to fail if balance insufficient)
     err = bank.MintCoins(data.receiver, data.denomination, data.amount)
     if (err !== nil)
-      ack = FungibleTokenPacketAcknowledgement{success: false, error: "mint coins failed"}
+      ack = FungibleTokenPacketAcknowledgement{false, "mint coins failed"}
   } else {
     // receiver is source chain: unescrow tokens
     // determine escrow account
@@ -247,12 +247,12 @@ function onRecvPacket(packet: Packet) {
     // construct receiving denomination, check correctness
     prefix = "{packet/sourcePort}/{packet.sourceChannel}"
     if (data.denomination.slice(0, len(prefix)) !== prefix)
-      ack = FungibleTokenPacketAcknowledgement{success: false, error: "invalid denomination"}
+      ack = FungibleTokenPacketAcknowledgement{false, "invalid denomination"}
     else {
       // unescrow tokens to receiver (assumed to fail if balance insufficient)
       err = bank.TransferCoins(escrowAccount, data.receiver, data.denomination.slice(len(prefix)), data.amount)
       if (err !== nil)
-        ack = FungibleTokenPacketAcknowledgement{success: false, error: "transfer coins failed"}
+        ack = FungibleTokenPacketAcknowledgement{false, "transfer coins failed"}
     }
   }
   return ack
