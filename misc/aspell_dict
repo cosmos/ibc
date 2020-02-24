@@ -1,4 +1,4 @@
-personal_ws-1.1 en 557 
+personal_ws-1.1 en 561 
 ABCI
 ABI
 Agoric
@@ -42,6 +42,7 @@ ERC
 EVM
 EmptyLogStore
 Ethereum's
+FungibleTokenPacketAcknowledgement
 FungibleTokenPacketData
 Golang
 HeaderProof
@@ -131,6 +132,7 @@ Zcash
 abortSystemUnless
 abortTransactionUnless
 acc
+ack
 acknowledgePacket
 addChannelToConnection
 addConnectionToClient
@@ -243,6 +245,7 @@ createMembershipProof
 createNonMembershipProof
 createOutgoingPacket
 cryptographic
+currentTimestamp
 dataflow
 datagram
 datagrams
@@ -451,6 +454,7 @@ recvPacket
 recvPacketLogs
 recvSequence
 recvTimeoutPacket
+refundTokens
 relayer
 relayerModule
 relayers
