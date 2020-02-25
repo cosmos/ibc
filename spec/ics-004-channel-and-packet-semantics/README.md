@@ -278,7 +278,6 @@ function chanOpenInit(
 
     // optimistic channel handshakes are allowed
     abortTransactionUnless(connection !== null)
-    abortTransactionUnless(connection.state !== CLOSED)
     abortTransactionUnless(authenticate(privateStore.get(portPath(portIdentifier))))
     channel = ChannelEnd{INIT, order, counterpartyPortIdentifier,
                          counterpartyChannelIdentifier, connectionHops, version}
@@ -519,7 +518,6 @@ function sendPacket(packet: Packet) {
     connection = provableStore.get(connectionPath(channel.connectionHops[0]))
 
     abortTransactionUnless(connection !== null)
-    abortTransactionUnless(connection.state !== CLOSED)
 
     // sanity-check that the timeout height hasn't already passed in our local client tracking the receiving chain
     latestClientHeight = provableStore.get(clientPath(connection.clientIdentifier)).latestClientHeight()
