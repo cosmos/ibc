@@ -253,7 +253,7 @@ but they must expose this common set of query functions to the IBC handler.
 type ClientState = bytes
 ```
 
-Client types MUST define a method to initialise a client state with a provided consensus state, writing to state as appropriate.
+Client types MUST define a method to initialise a client state with a provided consensus state, writing to internal state as appropriate.
 
 ```typescript
 type initialise = (consensusState: ConsensusState) => ClientState
