@@ -1,4 +1,4 @@
-personal_ws-1.1 en 561 
+personal_ws-1.1 en 562 
 ABCI
 ABI
 Agoric
@@ -225,6 +225,7 @@ consensusStateKey
 consensusStatePath
 consensusStates
 const
+costless
 counterintuitive
 counterparty
 counterpartyChannelIdentifier
