@@ -128,10 +128,10 @@ Tendermint client validity checking uses the bisection algorithm described in th
 function checkValidityAndUpdateState(
   clientState: ClientState,
   header: Header) {
-    // assert trusting period has not yet passed
+    // assert trusting period has not yet passed. This should fatally terminate a connection.
     assert(currentTimestamp() - clientState.latestTimestamp < clientState.trustingPeriod)
-    // assert header timestamp is not in the future (& transitively that is not past the trusting period)
-    assert(header.timestamp <= currentTimestamp())
+    // assert header timestamp is less than trust period in the future. This should be resolved with an intermediate header.
+    assert(header.timestamp - clientState.latestTimeStamp < trustingPeriod)
     // assert header timestamp is past current timestamp
     assert(header.timestamp > clientState.latestTimestamp)
     // assert header height is newer than any we know
