@@ -615,7 +615,7 @@ function verifyPacketData(
   data: bytes) {
     path = applyPrefix(prefix, "ports/{portIdentifier}/channels/{channelIdentifier}/packets/{sequence}")
     abortTransactionUnless(!clientState.frozen)
-    return clientState.verifiedRoots[sequence].verifyMembership(path, data, proof)
+    return clientState.verifiedRoots[sequence].verifyMembership(path, hash(data), proof)
 }
 
 function verifyPacketAcknowledgement(
@@ -629,7 +629,7 @@ function verifyPacketAcknowledgement(
   acknowledgement: bytes) {
     path = applyPrefix(prefix, "ports/{portIdentifier}/channels/{channelIdentifier}/acknowledgements/{sequence}")
     abortTransactionUnless(!clientState.frozen)
-    return clientState.verifiedRoots[sequence].verifyMembership(path, acknowledgement, proof)
+    return clientState.verifiedRoots[sequence].verifyMembership(path, hash(acknowledgement), proof)
 }
 
 function verifyPacketAcknowledgementAbsence(
