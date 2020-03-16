@@ -15,7 +15,7 @@ Suitable for integration with blockchains written in the respective client langu
 | Upcoming  | Haskell     | [Kadena](https://kadena.io)                     | TBA |
 | Upcoming  | Javascript  | [Agoric](https://agoric.com)                    | TBA |
 | Upcoming  | Rust        | [CodeChain](https://codechain.io)               | [Source code](https://github.com/CodeChain-io/codechain) |
-| Upcoming  | Rust        | [Cdot Network](https://cdot.network)               | [Source code](https://github.com/cdot-network/frame) |
+| Upcoming  | Rust        | [Cdot Network](https://cdot.network)               | [Source code](https://github.com/cdot-network/substrate-ibc) |
 
 
 ### Bridges
