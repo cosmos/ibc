@@ -161,7 +161,7 @@ function checkValidityAndUpdateState(
     // update latest height
     clientState.latestHeight = header.height
     // create recorded consensus state, save it
-    consensusState = ConsensusState{validatorSet, header.commitmentRoot, header.timestamp}
+    consensusState = ConsensusState{header.validatorSet, header.commitmentRoot, header.timestamp}
     set("clients/{identifier}/consensusStates/{header.height}", consensusState)
     // save the client
     set("clients/{identifier}", clientState)
