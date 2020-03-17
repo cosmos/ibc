@@ -158,8 +158,12 @@ function checkValidityAndUpdateState(
     assert(header.height > clientState.latestHeight)
     // call the `verify` function
     assert(verify(clientState.validatorSet, clientState.latestHeight, header))
+    // update validator set
+    clientState.validatorSet = header.validatorSet
     // update latest height
     clientState.latestHeight = header.height
+    // update latest timestamp
+    clientState.latestTimestamp = header.timestamp
     // create recorded consensus state, save it
     consensusState = ConsensusState{header.validatorSet, header.commitmentRoot, header.timestamp}
     set("clients/{identifier}/consensusStates/{header.height}", consensusState)
