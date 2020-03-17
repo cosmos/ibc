@@ -142,7 +142,7 @@ function latestClientHeight(clientState: ClientState): uint64 {
 
 ### Validity predicate
 
-Tendermint client validity checking uses the bisection algorithm described in the [Tendermint spec](https://github.com/tendermint/spec/blob/master/spec/consensus/light-client.md). If the provided header is valid, the client state is updated & the newly verified commitment written to the store.
+Tendermint client validity checking uses the bisection algorithm described in the [Tendermint spec](https://github.com/tendermint/spec/tree/master/spec/consensus/light-client). If the provided header is valid, the client state is updated & the newly verified commitment written to the store.
 
 ```typescript
 function checkValidityAndUpdateState(
@@ -158,10 +158,14 @@ function checkValidityAndUpdateState(
     assert(header.height > clientState.latestHeight)
     // call the `verify` function
     assert(verify(clientState.validatorSet, clientState.latestHeight, header))
+    // update validator set
+    clientState.validatorSet = header.validatorSet
     // update latest height
     clientState.latestHeight = header.height
+    // update latest timestamp
+    clientState.latestTimestamp = header.timestamp
     // create recorded consensus state, save it
-    consensusState = ConsensusState{validatorSet, header.commitmentRoot, header.timestamp}
+    consensusState = ConsensusState{header.validatorSet, header.commitmentRoot, header.timestamp}
     set("clients/{identifier}/consensusStates/{header.height}", consensusState)
     // save the client
     set("clients/{identifier}", clientState)
