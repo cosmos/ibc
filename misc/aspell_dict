@@ -1,4 +1,4 @@
-personal_ws-1.1 en 562 
+personal_ws-1.1 en 564 
 ABCI
 ABI
 Agoric
@@ -200,6 +200,7 @@ collateralisation
 collateralised
 collateralising
 commited
+commitmentPrefix
 commitmentRoot
 computable
 concat
@@ -349,6 +350,7 @@ keyspaces
 latestClientHeight
 latestHeader
 latestHeight
+latestTimeStamp
 latestTimestamp
 len
 lifecycle
