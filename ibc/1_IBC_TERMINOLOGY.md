@@ -52,7 +52,7 @@ A *commitment proof* is the proof structure which proves whether a particular ke
 
 ### Handler Module
 
-The IBC *handler module* is the module within the state machine which implements [ICS 25](../spec/ics-025-handler-module), managing clients, connections, & channels, verifying proofs, and storing appropriate commitments for packets.
+The IBC *handler module* is the module within the state machine which implements [ICS 25](../spec/ics-025-handler-interface), managing clients, connections, & channels, verifying proofs, and storing appropriate commitments for packets.
 
 ### Routing Module
 
