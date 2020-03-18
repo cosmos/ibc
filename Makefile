@@ -2,7 +2,7 @@ all:
 	./scripts/all.sh
 
 SUBDIRS := $(filter-out $(wildcard ./spec/*.md),$(wildcard ./spec/*))
-TOPTARGETS := typecheck build clean
+TOPTARGETS := build clean
 
 $(TOPTARGETS): $(SUBDIRS)
 $(SUBDIRS):
