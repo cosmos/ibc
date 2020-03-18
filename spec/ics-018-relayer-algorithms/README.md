@@ -96,6 +96,7 @@ function pendingDatagrams(chain: Chain, counterparty: Chain): List<Set<Datagram>
         desiredIdentifier: localEnd.counterpartyConnectionIdentifier,
         counterpartyConnectionIdentifier: localEnd.identifier,
         counterpartyClientIdentifier: localEnd.clientIdentifier,
+        counterpartyPrefix: localEnd.commitmentPrefix,
         clientIdentifier: localEnd.counterpartyClientIdentifier,
         version: localEnd.version,
         counterpartyVersion: localEnd.version,
