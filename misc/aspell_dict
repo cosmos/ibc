@@ -1,4 +1,4 @@
-personal_ws-1.1 en 565 
+personal_ws-1.1 en 567 
 ABCI
 ABI
 Agoric
@@ -302,6 +302,8 @@ getHeight
 getMerkleRoot
 getRoot
 getStoredRecentConsensusStateCount
+getTimestamp
+getTimestampAtHeight
 getValue
 getVerifiedRoot
 handleChanCloseConfirm
