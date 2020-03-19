@@ -103,6 +103,7 @@ A `Packet`, in the interblockchain communication protocol, is a particular inter
 interface Packet {
   sequence: uint64
   timeoutHeight: uint64
+  timeoutTimestamp: uint64
   sourcePort: Identifier
   sourceChannel: Identifier
   destPort: Identifier
@@ -113,6 +114,7 @@ interface Packet {
 
 - The `sequence` number corresponds to the order of sends and receives, where a packet with an earlier sequence number must be sent and received before a packet with a later sequence number.
 - The `timeoutHeight` indicates a consensus height on the destination chain after which the packet will no longer be processed, and will instead count as having timed-out.
+- The `timeoutTimestamp` indicates a timestamp on the destination chain after which the packet will no longer be processed, and will instead count as having timed-out.
 - The `sourcePort` identifies the port on the sending chain.
 - The `sourceChannel` identifies the channel end on the sending chain.
 - The `destPort` identifies the port on the receiving chain.
@@ -530,10 +532,11 @@ function sendPacket(packet: Packet) {
 
     nextSequenceSend = nextSequenceSend + 1
     provableStore.set(nextSequenceSendPath(packet.sourcePort, packet.sourceChannel), nextSequenceSend)
-    provableStore.set(packetCommitmentPath(packet.sourcePort, packet.sourceChannel, packet.sequence), hash(packet.data, packet.timeoutHeight))
+    provableStore.set(packetCommitmentPath(packet.sourcePort, packet.sourceChannel, packet.sequence),
+                      hash(packet.data, packet.timeoutHeight, packet.timeoutTimestamp))
 
     // log that a packet has been sent
-    emitLogEntry("sendPacket", {sequence: packet.sequence, data: packet.data, timeout: packet.timeoutHeight})
+    emitLogEntry("sendPacket", {sequence: packet.sequence, data: packet.data, timeoutHeight: packet.timeoutHeight, timeoutTimestamp: packet.timeoutTimestamp})
 }
 ```
 
@@ -573,6 +576,7 @@ function recvPacket(
     abortTransactionUnless(connection.state === OPEN)
 
     abortTransactionUnless(getConsensusHeight() < packet.timeoutHeight)
+    abortTransactionUnless(packet.timeoutTimestamp === 0 || getCurrentTimestamp() < packet.timeoutTimestamp)
 
     abortTransactionUnless(connection.verifyPacketData(
       proofHeight,
@@ -580,7 +584,7 @@ function recvPacket(
       packet.sourcePort,
       packet.sourceChannel,
       packet.sequence,
-      concat(packet.data, packet.timeoutHeight)
+      concat(packet.data, packet.timeoutHeight, packet.timeoutTimestamp)
     ))
 
     // all assertions passed (except sequence check), we can alter state
@@ -599,7 +603,8 @@ function recvPacket(
     }
 
     // log that a packet has been received & acknowledged
-    emitLogEntry("recvPacket", {sequence: packet.sequence, timeout: packet.timeoutHeight, data: packet.data, acknowledgement})
+    emitLogEntry("recvPacket", {sequence: packet.sequence, timeoutHeight: packet.timeoutHeight,
+                                timeoutTimestamp: packet.timeoutTimestamp, data: packet.data, acknowledgement})
 
     // return transparent packet
     return packet
@@ -635,7 +640,7 @@ function acknowledgePacket(
 
     // verify we sent the packet and haven't cleared it out yet
     abortTransactionUnless(provableStore.get(packetCommitmentPath(packet.sourcePort, packet.sourceChannel, packet.sequence))
-           === hash(packet.data, packet.timeoutHeight))
+           === hash(packet.data, packet.timeoutHeight, packet.timeoutTimestamp))
 
     // abort transaction unless correct acknowledgement on counterparty chain
     abortTransactionUnless(connection.verifyPacketAcknowledgement(
@@ -666,7 +671,7 @@ Note that in order to avoid any possible "double-spend" attacks, the timeout alg
 ##### Sending end
 
 The `timeoutPacket` function is called by a module which originally attempted to send a packet to a counterparty module,
-where the timeout height has passed on the counterparty chain without the packet being committed, to prove that the packet
+where the timeout height or timeout timestamp has passed on the counterparty chain without the packet being committed, to prove that the packet
 can no longer be executed and to allow the calling module to safely perform appropriate state transitions.
 
 Calling modules MAY atomically execute appropriate application timeout-handling logic in conjunction with calling `timeoutPacket`.
@@ -697,13 +702,14 @@ function timeoutPacket(
 
     // check that timeout height has passed on the other end
     abortTransactionUnless(proofHeight >= packet.timeoutHeight)
+    // TODO handle timestamp timeout
 
     // check that packet has not been received
     abortTransactionUnless(nextSequenceRecv < packet.sequence)
 
     // verify we actually sent this packet, check the store
     abortTransactionUnless(provableStore.get(packetCommitmentPath(packet.sourcePort, packet.sourceChannel, packet.sequence))
-           === hash(packet.data, packet.timeoutHeight))
+           === hash(packet.data, packet.timeoutHeight, packet.timeoutTimestamp))
 
     if channel.order === ORDERED
       // ordered channel: check that the recv sequence is as claimed
@@ -744,7 +750,7 @@ function timeoutPacket(
 
 The `timeoutOnClose` function is called by a module in order to prove that the channel
 to which an unreceived packet was addressed has been closed, so the packet will never be received
-(even if the `timeoutHeight` has not yet been reached).
+(even if the `timeoutHeight` or `timeoutTimestamp` has not yet been reached).
 
 ```typescript
 function timeoutOnClose(
@@ -765,7 +771,7 @@ function timeoutOnClose(
 
     // verify we actually sent this packet, check the store
     abortTransactionUnless(provableStore.get(packetCommitmentPath(packet.sourcePort, packet.sourceChannel, packet.sequence))
-           === hash(packet.data, packet.timeoutHeight))
+           === hash(packet.data, packet.timeoutHeight, packet.timeoutTimestamp))
 
     // check that the opposing channel end has closed
     expected = ChannelEnd{CLOSED, channel.order, channel.portIdentifier,
@@ -837,7 +843,7 @@ function cleanupPacket(
 
     // verify we actually sent the packet, check the store
     abortTransactionUnless(provableStore.get(packetCommitmentPath(packet.sourcePort, packet.sourceChannel, packet.sequence))
-               === hash(packet.data, packet.timeoutHeight))
+               === hash(packet.data, packet.timeoutHeight, packet.timeoutTimestamp))
 
     if channel.order === ORDERED
       // check that the recv sequence is as claimed
