@@ -523,7 +523,7 @@ function sendPacket(packet: Packet) {
 
     // sanity-check that the timeout height hasn't already passed in our local client tracking the receiving chain
     latestClientHeight = provableStore.get(clientPath(connection.clientIdentifier)).latestClientHeight()
-    abortTransactionUnless(latestClientHeight < packet.timeoutHeight)
+    abortTransactionUnless(packet.timeoutHeight === 0 || latestClientHeight < packet.timeoutHeight)
 
     nextSequenceSend = provableStore.get(nextSequenceSendPath(packet.sourcePort, packet.sourceChannel))
     abortTransactionUnless(packet.sequence === nextSequenceSend)
@@ -575,7 +575,7 @@ function recvPacket(
     abortTransactionUnless(connection !== null)
     abortTransactionUnless(connection.state === OPEN)
 
-    abortTransactionUnless(getConsensusHeight() < packet.timeoutHeight)
+    abortTransactionUnless(packet.timeoutHeight === 0 || getConsensusHeight() < packet.timeoutHeight)
     abortTransactionUnless(packet.timeoutTimestamp === 0 || currentTimestamp() < packet.timeoutTimestamp)
 
     abortTransactionUnless(connection.verifyPacketData(
@@ -702,7 +702,7 @@ function timeoutPacket(
 
     // check that timeout height or timeout timestamp has passed on the other end
     abortTransactionUnless(
-      (proofHeight >= packet.timeoutHeight) ||
+      (packet.timeoutHeight > 0 && proofHeight >= packet.timeoutHeight) ||
       (packet.timeoutTimestamp > 0 && connection.getTimestampAtHeight(proofHeight) > packet.timeoutTimestamp))
 
     // check that packet has not been received
