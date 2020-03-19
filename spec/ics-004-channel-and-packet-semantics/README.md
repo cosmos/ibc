@@ -576,7 +576,7 @@ function recvPacket(
     abortTransactionUnless(connection.state === OPEN)
 
     abortTransactionUnless(getConsensusHeight() < packet.timeoutHeight)
-    abortTransactionUnless(packet.timeoutTimestamp === 0 || getCurrentTimestamp() < packet.timeoutTimestamp)
+    abortTransactionUnless(packet.timeoutTimestamp === 0 || currentTimestamp() < packet.timeoutTimestamp)
 
     abortTransactionUnless(connection.verifyPacketData(
       proofHeight,
@@ -700,9 +700,10 @@ function timeoutPacket(
     // note: the connection may have been closed
     abortTransactionUnless(packet.destPort === channel.counterpartyPortIdentifier)
 
-    // check that timeout height has passed on the other end
-    abortTransactionUnless(proofHeight >= packet.timeoutHeight)
-    // TODO handle timestamp timeout
+    // check that timeout height or timeout timestamp has passed on the other end
+    abortTransactionUnless(
+      (proofHeight >= packet.timeoutHeight) ||
+      (packet.timeoutTimestamp > 0 && connection.getTimestampAtHeight(proofHeight) > packet.timeoutTimestamp))
 
     // check that packet has not been received
     abortTransactionUnless(nextSequenceRecv < packet.sequence)

@@ -134,6 +134,12 @@ type ConsensusState = bytes
 
 The `ConsensusState` MUST be stored under a particular key, defined below, so that other chains can verify that a particular consensus state has been stored.
 
+The `ConsensusState` MUST define a `getTimestamp()` method which returns the timestamp associated with that consensus state:
+
+```typescript
+type getTimestamp = ConsensusState => uint64
+```
+
 #### Header
 
 A `Header` is an opaque data structure defined by a client type which provides information to update a `ConsensusState`.

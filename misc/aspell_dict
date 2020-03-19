@@ -1,4 +1,4 @@
-personal_ws-1.1 en 564 
+personal_ws-1.1 en 565 
 ABCI
 ABI
 Agoric
@@ -506,6 +506,7 @@ timeoutOnClose
 timeoutPacket
 timeoutPacketClose
 timeoutPropose
+timeoutTimestamp
 tokenising
 tokenize
 tokenized
