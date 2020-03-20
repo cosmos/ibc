@@ -1,5 +1,3 @@
-typecheck:
-
 build: $(addsuffix .png, $(basename $(wildcard *.tex))) cleanup
 
 %.png : %.tex
@@ -14,4 +12,4 @@ cleanup:
 clean:
 	rm -f *.png
 
-.PHONY: typecheck build clean cleanup
+.PHONY: build clean cleanup

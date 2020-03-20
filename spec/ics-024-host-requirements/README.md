@@ -191,6 +191,16 @@ if provableStore.get(path) === value {
 
 For a host state machine, the return value of `getCommitmentPrefix` MUST be constant.
 
+### Timestamp access
+
+Host chains MUST provide a current Unix timestamp, accessible with `currentTimestamp()`:
+
+```typescript
+type currentTimestamp = () => uint64
+```
+
+In order for timestamps to be used safely in timeouts, timestamps in subsequent headers MUST be non-decreasing.
+
 ### Port system
 
 Host state machines MUST implement a port system, where the IBC handler can allow different modules in the host state machine to bind to uniquely named ports. Ports are identified by an `Identifier`.
@@ -258,7 +268,7 @@ type emitLogEntry = (topic: string, data: []byte) => void
 The function `queryByTopic` can be called by an external process (such as a relayer) to retrieve all log entries associated with a given topic written by transactions which were executed at a given height.
 
 ```typescript
-type queryByTopic = (height: uint64, topic: string) => Array< []byte >
+type queryByTopic = (height: uint64, topic: string) => []byte[]
 ```
 
 More complex query functionality MAY also be supported, and may allow for more efficient relayer process queries, but is not required.

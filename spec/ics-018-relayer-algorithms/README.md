@@ -96,6 +96,7 @@ function pendingDatagrams(chain: Chain, counterparty: Chain): List<Set<Datagram>
         desiredIdentifier: localEnd.counterpartyConnectionIdentifier,
         counterpartyConnectionIdentifier: localEnd.identifier,
         counterpartyClientIdentifier: localEnd.clientIdentifier,
+        counterpartyPrefix: localEnd.commitmentPrefix,
         clientIdentifier: localEnd.counterpartyClientIdentifier,
         version: localEnd.version,
         counterpartyVersion: localEnd.version,
@@ -167,7 +168,8 @@ function pendingDatagrams(chain: Chain, counterparty: Chain): List<Set<Datagram>
     sentPacketLogs = queryByTopic(height, "sendPacket")
     for (const logEntry of sentPacketLogs) {
       // relay packet with this sequence number
-      packetData = Packet{logEntry.sequence, logEntry.timeout, localEnd.portIdentifier, localEnd.channelIdentifier,
+      packetData = Packet{logEntry.sequence, logEntry.timeoutHeight, logEntry.timeoutTimestamp,
+                          localEnd.portIdentifier, localEnd.channelIdentifier,
                           remoteEnd.portIdentifier, remoteEnd.channelIdentifier, logEntry.data}
       counterpartyDatagrams.push(PacketRecv{
         packet: packetData,
@@ -179,7 +181,8 @@ function pendingDatagrams(chain: Chain, counterparty: Chain): List<Set<Datagram>
     recvPacketLogs = queryByTopic(height, "recvPacket")
     for (const logEntry of recvPacketLogs) {
       // relay packet acknowledgement with this sequence number
-      packetData = Packet{logEntry.sequence, logEntry.timeout, localEnd.portIdentifier, localEnd.channelIdentifier,
+      packetData = Packet{logEntry.sequence, logEntry.timeoutHeight, logEntry.timeoutTimestamp,
+                          localEnd.portIdentifier, localEnd.channelIdentifier,
                           remoteEnd.portIdentifier, remoteEnd.channelIdentifier, logEntry.data}
       counterpartyDatagrams.push(PacketAcknowledgement{
         packet: packetData,

@@ -8,7 +8,7 @@ Currently the IBC working group is being actively led and managed by Tendermint 
 
 ### Structure
 
-Following each IBC working group meeting, an new issue for the next meeting will be created with a proposed agenda for comments and collaboration from the larger working group. During the two week timeframe between calls, we invite IBC working group members to contribute to the next meeting's agenda and join the bi-weekly call to discuss the topics in conjunction with the IBC core team. Upon concluding a meeting, a recording will be posted and the details and notes will be published in the associated issue and linked to in this file.
+Following each IBC working group meeting, a new issue for the next meeting will be created with a proposed agenda for comments and collaboration from the larger working group. During the two-week timeframe between calls, we invite IBC working group members to contribute to the next meeting's agenda and join the bi-weekly call to discuss the topics in conjunction with the IBC core team. Upon concluding a meeting, a recording will be posted and the details and notes will be published in the associated issue and linked to in this file.
 
 Inspired by [ethereum/pm](https://github.com/ethereum/pm).
 
@@ -19,7 +19,9 @@ Inspired by [ethereum/pm](https://github.com/ethereum/pm).
 | 1  | November 14th, 2019 17:00 CET    | [notes](./meetings/2019-11-14.md) | N/A |
 | 2  | December 5th, 2019 17:00 CET     | [notes](./meetings/2019-12-05.md) | [Recording](https://drive.google.com/drive/folders/1ide4LhkAY8exFaGaPcH2Eeg9L4_bmFOk?usp=sharing) |
 | 4  | January 16th, 2020 17:00 CET     | [notes](./meetings/2020-01-16.md) | [Recording](https://drive.google.com/drive/folders/1zlx_WuAccwhqouzp6PeZYi4QsghY43k7?usp=sharing) |
+| 6  | February 13th, 2020 17:00 CET    | [notes](https://github.com/cosmos/ics/issues/377) | [Recording](https://www.youtube.com/watch?v=_xP6xxvqTMM) |
+| 7  | February 27th, 2020 17:00 CET    | [notes](https://github.com/cosmos/ics/issues/385) | |
 
 ### Upcoming Meetings
 
-- January 16th, 2020 17:00 CET.
+- TBD

@@ -1,4 +1,4 @@
-personal_ws-1.1 en 560 
+personal_ws-1.1 en 579 
 ABCI
 ABI
 Agoric
@@ -42,6 +42,7 @@ ERC
 EVM
 EmptyLogStore
 Ethereum's
+FungibleTokenPacketAcknowledgement
 FungibleTokenPacketData
 Golang
 HeaderProof
@@ -116,6 +117,7 @@ Tribble
 UDP
 UITs
 UTXO
+UX
 Uniswap
 UpdateLightClient
 Usecases
@@ -131,6 +133,7 @@ Zcash
 abortSystemUnless
 abortTransactionUnless
 acc
+ack
 acknowledgePacket
 addChannelToConnection
 addConnectionToClient
@@ -173,6 +176,8 @@ channelEscrowAddresses
 channelId
 channelIdentifier
 channelKey
+channelOnB
+channelOnD
 channelPath
 channelSet
 checkMisbehaviourAndUpdateState
@@ -196,6 +201,7 @@ collateralisation
 collateralised
 collateralising
 commited
+commitmentPrefix
 commitmentRoot
 computable
 concat
@@ -221,6 +227,7 @@ consensusStateKey
 consensusStatePath
 consensusStates
 const
+costless
 counterintuitive
 counterparty
 counterpartyChannelIdentifier
@@ -241,6 +248,7 @@ createMembershipProof
 createNonMembershipProof
 createOutgoingPacket
 cryptographic
+currentTimestamp
 dataflow
 datagram
 datagrams
@@ -249,6 +257,7 @@ datastream
 datatypes
 del
 deleteClient
+denom
 deployable
 deps
 deserialise
@@ -294,6 +303,8 @@ getHeight
 getMerkleRoot
 getRoot
 getStoredRecentConsensusStateCount
+getTimestamp
+getTimestampAtHeight
 getValue
 getVerifiedRoot
 handleChanCloseConfirm
@@ -342,6 +353,8 @@ keyspaces
 latestClientHeight
 latestHeader
 latestHeight
+latestTimeStamp
+latestTimestamp
 len
 lifecycle
 liveness
@@ -411,6 +424,8 @@ png
 portId
 portIdentifier
 portKey
+portOnB
+portOnD
 portPath
 positionally
 prefixedPath
@@ -456,6 +471,7 @@ recvPacket
 recvPacketLogs
 recvSequence
 recvTimeoutPacket
+refundTokens
 relayer
 relayerModule
 relayers
@@ -504,6 +520,7 @@ timeoutOnClose
 timeoutPacket
 timeoutPacketClose
 timeoutPropose
+timeoutTimestamp
 tokenising
 tokenize
 tokenized
@@ -511,6 +528,7 @@ topologies
 tradeoff
 transactional
 transferPort
+trustingPeriod
 tx
 txBytes
 txs
@@ -518,6 +536,7 @@ uint
 un
 unallocated
 unbonding
+unbondingPeriod
 unescrow
 unescrowed
 unescrowing

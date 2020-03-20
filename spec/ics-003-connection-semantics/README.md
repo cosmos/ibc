@@ -172,16 +172,16 @@ function verifyChannelState(
     return client.verifyChannelState(connection, height, connection.counterpartyPrefix, proof, portIdentifier, channelIdentifier, channelEnd)
 }
 
-function verifyPacketCommitment(
+function verifyPacketData(
   connection: ConnectionEnd,
   height: uint64,
   proof: CommitmentProof,
   portIdentifier: Identifier,
   channelIdentifier: Identifier,
   sequence: uint64,
-  commitment: bytes) {
+  data: bytes) {
     client = queryClient(connection.clientIdentifier)
-    return client.verifyPacketCommitment(connection, height, connection.counterpartyPrefix, proof, portIdentifier, channelIdentifier, commitment)
+    return client.verifyPacketData(connection, height, connection.counterpartyPrefix, proof, portIdentifier, channelIdentifier, data)
 }
 
 function verifyPacketAcknowledgement(
@@ -216,6 +216,13 @@ function verifyNextSequenceRecv(
   nextSequenceRecv: uint64) {
     client = queryClient(connection.clientIdentifier)
     return client.verifyNextSequenceRecv(connection, height, connection.counterpartyPrefix, proof, portIdentifier, channelIdentifier, nextSequenceRecv)
+}
+
+function getTimestampAtHeight(
+  connection: ConnectionEnd,
+  height: uint64) {
+    client = queryClient(connection.clientIdentifier)
+    return client.queryConsensusState(height).getTimestamp()
 }
 ```
 

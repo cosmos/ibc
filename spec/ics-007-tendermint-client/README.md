@@ -22,6 +22,8 @@ State machines of various sorts replicated using the Tendermint consensus algori
 
 Functions & terms are as defined in [ICS 2](../ics-002-client-semantics).
 
+`currentTimestamp` is as defined in [ICS 24](../ics-024-host-requirements).
+
 The Tendermint light client uses the generalised Merkle proof format as defined in ICS 8.
 
 `hash` is a generic collision-resistant hash function, and can easily be configured.
@@ -30,40 +32,65 @@ The Tendermint light client uses the generalised Merkle proof format as defined 
 
 This specification must satisfy the client interface defined in ICS 2.
 
+#### Note on "would-have-been-fooled logic
+
+The basic idea of "would-have-been-fooled" detection is that it allows us to be a bit more conservative, and freeze our light client when we know that another light client somewhere else on the network with a slightly different update pattern could have been fooled, even though we weren't.
+
+Consider a topology of three chains - `A`, `B`, and `C`, and two clients for chain `A`, `A_1` and `A_2`, running on chains `B` and `C` respectively. The following sequence of events occurs:
+
+- Chain `A` produces a block at height `h_0` (correctly).
+- Clients `A_1` and `A_2` are updated to the block at height `h_0`.
+- Chain `A` produces a block at height `h_0 + n` (correctly).
+- Client `A_1` is updated to the block at height `h_0 + n` (client `A_2` is not yet updated).
+- Chain `A` produces a second (equivocating) block at height `h_0 + k`, where `k <= n`.
+
+*Without* "would-have-been-fooled", it will be possible to freeze client `A_2` (since there are two valid blocks at height `h_0 + k` which are newer than the latest header `A_2` knows), but it will *not*  be possible to freeze `A_1`, since `A_1` has already progressed beyond `h_0 + k`.
+
+Arguably, this is disadvantageous, since `A_1` was just "lucky" in having been updated when `A_2` was not, and clearly some Byzantine fault has happened that should probably be deal with by human or governance system intervention. The idea of "would-have-been-fooled" is to allow this to be detected by having `A_1` start from a configurable past header to detect misbehaviour (so in this case, `A_1` would be able to start from `h_0` and would also be frozen).
+
+There is a free parameter here - namely, how far back is `A_1` willing to go (how big can `n` be where `A_1` will still be willing to look up `h_0`, having been updated to `h_0 + n`)? There is also a countervailing concern, in and of that double-signing is presumed to be costless after the unbonding period has passed, and we don't want to open up a denial-of-service vector for IBC clients.
+
+The necessary condition is thus that `A_1` should be willing to look up headers as old as it has stored, but should also enforce the "unbonding period" check on the evidence, and avoid freezing the client if the evidence is older than the unbonding period (relative to the client's local timestamp). If there are concerns about clock skew a slight delta could be added.
+
 ## Technical Specification
 
 This specification depends on correct instantiation of the [Tendermint consensus algorithm](https://github.com/tendermint/spec/blob/master/spec/consensus/consensus.md) and [light client algorithm](https://github.com/tendermint/spec/blob/master/spec/consensus/light-client.md).
 
 ### Client state
 
-The Tendermint client state tracks the current validator set, latest height, and a possible frozen height.
+The Tendermint client state tracks the current validator set, trusting period, unbonding period, latest height, latest timestamp (block time), and a possible frozen height.
 
 ```typescript
 interface ClientState {
   validatorSet: List<Pair<Address, uint64>>
+  trustingPeriod: uint64
+  unbondingPeriod: uint64
   latestHeight: uint64
+  latestTimestamp: uint64
   frozenHeight: Maybe<uint64>
 }
 ```
 
 ### Consensus state
 
-The Tendermint client tracks the validator set hash & commitment root for all previously verified consensus states (these can be pruned after awhile).
+The Tendermint client tracks the timestamp (block time), validator set, and commitment root for all previously verified consensus states (these can be pruned after the unbonding period has passed, but should not be pruned beforehand).
 
 ```typescript
 interface ConsensusState {
-  validatorSetHash: []byte
+  timestamp: uint64
+  validatorSet: List<Pair<Address, uint64>>
   commitmentRoot: []byte
 }
 ```
 
 ### Headers
 
-The Tendermint client headers include a height, the commitment root, the complete validator set, and the signatures by the validators who committed the block.
+The Tendermint client headers include the height, the timestamp, the commitment root, the complete validator set, and the signatures by the validators who committed the block.
 
 ```typescript
 interface Header {
   height: uint64
+  timestamp: uint64
   commitmentRoot: []byte
   validatorSet: List<Pair<Address, uint64>>
   signatures: []Signature
@@ -77,7 +104,6 @@ Tendermint client `Evidence` consists of two headers at the same height both of 
 
 ```typescript
 interface Evidence {
-  fromValidatorSet: List<Pair<Address, uint64>>
   fromHeight: uint64
   h1: Header
   h2: Header
@@ -89,12 +115,20 @@ interface Evidence {
 Tendermint client initialisation requires a (subjectively chosen) latest consensus state, including the full validator set.
 
 ```typescript
-function initialise(consensusState: ConsensusState, validatorSet: List<Pair<Address, uint64>>, height: uint64): ClientState {
-  return ClientState{
-    validatorSet,
-    latestHeight: height,
-    pastHeaders: Map.singleton(latestHeight, consensusState)
-  }
+function initialise(
+  consensusState: ConsensusState, validatorSet: List<Pair<Address, uint64>>,
+  height: uint64, trustingPeriod: uint64, unbondingPeriod: uint64): ClientState {
+    assert(trustingPeriod < unbondingPeriod)
+    assert(height > 0)
+    set("clients/{identifier}/consensusStates/{height}", consensusState)
+    return ClientState{
+      validatorSet,
+      latestHeight: height,
+      latestTimestamp: consensusState.timestamp,
+      trustingPeriod,
+      unbondingPeriod,
+      frozenHeight: null
+    }
 }
 ```
 
@@ -108,20 +142,30 @@ function latestClientHeight(clientState: ClientState): uint64 {
 
 ### Validity predicate
 
-Tendermint client validity checking uses the bisection algorithm described in the [Tendermint spec](https://github.com/tendermint/spec/blob/master/spec/consensus/light-client.md). If the provided header is valid, the client state is updated & the newly verified commitment written to the store.
+Tendermint client validity checking uses the bisection algorithm described in the [Tendermint spec](https://github.com/tendermint/spec/tree/master/spec/consensus/light-client). If the provided header is valid, the client state is updated & the newly verified commitment written to the store.
 
 ```typescript
 function checkValidityAndUpdateState(
   clientState: ClientState,
   header: Header) {
-    // assert that header is newer than any we know
-    assert(header.height < clientState.latestHeight)
+    // assert trusting period has not yet passed. This should fatally terminate a connection.
+    assert(currentTimestamp() - clientState.latestTimestamp < clientState.trustingPeriod)
+    // assert header timestamp is less than trust period in the future. This should be resolved with an intermediate header.
+    assert(header.timestamp - clientState.latestTimeStamp < trustingPeriod)
+    // assert header timestamp is past current timestamp
+    assert(header.timestamp > clientState.latestTimestamp)
+    // assert header height is newer than any we know
+    assert(header.height > clientState.latestHeight)
     // call the `verify` function
     assert(verify(clientState.validatorSet, clientState.latestHeight, header))
+    // update validator set
+    clientState.validatorSet = header.validatorSet
     // update latest height
     clientState.latestHeight = header.height
+    // update latest timestamp
+    clientState.latestTimestamp = header.timestamp
     // create recorded consensus state, save it
-    consensusState = ConsensusState{validatorSet.hash(), header.commitmentRoot}
+    consensusState = ConsensusState{header.validatorSet, header.commitmentRoot, header.timestamp}
     set("clients/{identifier}/consensusStates/{header.height}", consensusState)
     // save the client
     set("clients/{identifier}", clientState)
@@ -140,17 +184,17 @@ function checkMisbehaviourAndUpdateState(
     assert(evidence.h1.height === evidence.h2.height)
     // assert that the commitments are different
     assert(evidence.h1.commitmentRoot !== evidence.h2.commitmentRoot)
-    // fetch the previously verified commitment root & validator set hash
+    // fetch the previously verified commitment root & validator set
     consensusState = get("clients/{identifier}/consensusStates/{evidence.fromHeight}")
-    // check that the validator set matches
-    assert(consensusState.validatorSetHash === evidence.fromValidatorSet.hash())
+    // assert that the timestamp is not from more than an unbonding period ago
+    assert(currentTimestamp() - evidence.timestamp < clientState.unbondingPeriod)
     // check if the light client "would have been fooled"
     assert(
-      verify(evidence.fromValidatorSet, evidence.fromHeight, evidence.h1) &&
-      verify(evidence.fromValidatorSet, evidence.fromHeight, evidence.h2)
+      verify(consensusState.validatorSet, evidence.fromHeight, evidence.h1) &&
+      verify(consensusState.validatorSet, evidence.fromHeight, evidence.h2)
       )
     // set the frozen height
-    clientState.frozenHeight = evidence.h1.height // which is same as h2.height
+    clientState.frozenHeight = min(clientState.frozenHeight, evidence.h1.height) // which is same as h2.height
     // save the client
     set("clients/{identifier}", clientState)
 }

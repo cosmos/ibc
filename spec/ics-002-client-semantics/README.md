@@ -134,6 +134,12 @@ type ConsensusState = bytes
 
 The `ConsensusState` MUST be stored under a particular key, defined below, so that other chains can verify that a particular consensus state has been stored.
 
+The `ConsensusState` MUST define a `getTimestamp()` method which returns the timestamp associated with that consensus state:
+
+```typescript
+type getTimestamp = ConsensusState => uint64
+```
+
 #### Header
 
 A `Header` is an opaque data structure defined by a client type which provides information to update a `ConsensusState`.
@@ -253,7 +259,7 @@ but they must expose this common set of query functions to the IBC handler.
 type ClientState = bytes
 ```
 
-Client types MUST define a method to initialise a client state with a provided consensus state, writing to state as appropriate.
+Client types MUST define a method to initialise a client state with a provided consensus state, writing to internal state as appropriate.
 
 ```typescript
 type initialise = (consensusState: ConsensusState) => ClientState
@@ -571,6 +577,15 @@ the stored `ClientState`'s validity predicate and `ConsensusState`, the client M
 update its internal state accordingly, possibly finalising commitment roots and
 updating the signature authority logic in the stored consensus state.
 
+If a client can no longer be updated (if, for example, the trusting period has passed),
+it will no longer be possible to send any packets over connections & channels associated
+with that client, or timeout any packets in-flight (since the height & timestamp on the
+destination chain can no longer be verified). Manual intervention must take place to
+reset the client state or migrate the connections & channels to another client. This
+cannot safely be done completely automatically, but chains implementing IBC could elect
+to allow governance mechanisms to perform these actions
+(perhaps even per-client/connection/channel in a multi-sig or contract).
+
 ```typescript
 function updateClient(
   id: Identifier,
@@ -719,7 +734,7 @@ function verifyPacketData(
   data: bytes) {
     path = applyPrefix(prefix, "ports/{portIdentifier}/channels/{channelIdentifier}/packets/{sequence}")
     abortTransactionUnless(!clientState.frozen)
-    return clientState.verifiedRoots[sequence].verifyMembership(path, data, proof)
+    return clientState.verifiedRoots[sequence].verifyMembership(path, hash(data), proof)
 }
 
 function verifyPacketAcknowledgement(
@@ -733,7 +748,7 @@ function verifyPacketAcknowledgement(
   acknowledgement: bytes) {
     path = applyPrefix(prefix, "ports/{portIdentifier}/channels/{channelIdentifier}/acknowledgements/{sequence}")
     abortTransactionUnless(!clientState.frozen)
-    return clientState.verifiedRoots[sequence].verifyMembership(path, acknowledgement, proof)
+    return clientState.verifiedRoots[sequence].verifyMembership(path, hash(acknowledgement), proof)
 }
 
 function verifyPacketAcknowledgementAbsence(

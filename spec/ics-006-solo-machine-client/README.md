@@ -18,6 +18,8 @@ This specification document describes a client (verification algorithm) for a so
 
 Solo machines — which might be devices such as phones, browsers, or laptops — might like to interface with other machines & replicated ledgers which speak IBC, and they can do so through the uniform client interface.
 
+Solo machine clients are roughly analogous to "implicit accounts" and can be used in lieu of "regular transactions" on a ledger, allowing all transactions to work through the unified interface of IBC.
+
 ### Definitions
 
 Functions & terms are as defined in [ICS 2](../ics-002-client-semantics).
@@ -39,6 +41,7 @@ The `ClientState` of a solo machine is simply whether or not the client is froze
 ```typescript
 interface ClientState {
   frozen: boolean
+  consensusState: ConsensusState
 }
 ```
 

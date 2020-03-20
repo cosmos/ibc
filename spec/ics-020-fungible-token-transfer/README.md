@@ -5,9 +5,9 @@ stage: draft
 category: IBC/APP
 requires: 25, 26
 kind: instantiation
-author: Christopher Goes <cwgoes@tendermint.com>
+author: Christopher Goes <cwgoes@interchain.berlin>
 created: 2019-07-15 
-modified: 2019-08-25
+modified: 2020-02-24
 ---
 
 ## Synopsis
@@ -42,7 +42,15 @@ interface FungibleTokenPacketData {
   amount: uint256
   sender: string
   receiver: string
-  source: boolean
+}
+```
+
+The acknowledgement data type describes whether the transfer succeeded or failed, and the reason for failure (if any).
+
+```typescript
+interface FungibleTokenPacketAcknowledgement {
+  success: boolean
+  error: Maybe<string>
 }
 ```
 
@@ -108,8 +116,8 @@ function onChanOpenInit(
   abortTransactionUnless(order === UNORDERED)
   // only allow channels to "bank" port on counterparty chain
   abortTransactionUnless(counterpartyPortIdentifier === "bank")
-  // version not used at present
-  abortTransactionUnless(version === "")
+  // assert that version is "ics20-1"
+  abortTransactionUnless(version === "ics20-1")
   // allocate an escrow address
   channelEscrowAddresses[channelIdentifier] = newAddress()
 }
@@ -127,9 +135,9 @@ function onChanOpenTry(
   counterpartyVersion: string) {
   // only unordered channels allowed
   abortTransactionUnless(order === UNORDERED)
-  // version not used at present
-  abortTransactionUnless(version === "")
-  abortTransactionUnless(counterpartyVersion === "")
+  // assert that version is "ics20-1"
+  abortTransactionUnless(version === "ics20-1")
+  abortTransactionUnless(counterpartyVersion === "ics20-1")
   // only allow channels to "bank" port on counterparty chain
   abortTransactionUnless(counterpartyPortIdentifier === "bank")
   // allocate an escrow address
@@ -142,9 +150,9 @@ function onChanOpenAck(
   portIdentifier: Identifier,
   channelIdentifier: Identifier,
   version: string) {
-  // version not used at present
-  abortTransactionUnless(version === "")
   // port has already been validated
+  // assert that version is "ics20-1"
+  abortTransactionUnless(version === "ics20-1")
 }
 ```
 
@@ -152,7 +160,7 @@ function onChanOpenAck(
 function onChanOpenConfirm(
   portIdentifier: Identifier,
   channelIdentifier: Identifier) {
-  // accept channel confirmations, port has already been validated
+  // accept channel confirmations, port has already been validated, version has already been validated
 }
 ```
 
@@ -179,7 +187,9 @@ In plain English, between chains `A` and `B`:
 - When acting as the source zone, the bridge module escrows an existing local asset denomination on the sending chain and mints vouchers on the receiving chain.
 - When acting as the sink zone, the bridge module burns local vouchers on the sending chains and unescrows the local asset denomination on the receiving chain.
 - When a packet times-out, local assets are unescrowed back to the sender or vouchers minted back to the sender appropriately.
-- No acknowledgement data is necessary.
+- Acknowledgement data is used to handle failures, such as invalid denominations or invalid destination accounts. Returning
+  an acknowledgement of failure is preferable to aborting the transaction since it more easily enables the sending chain
+  to take appropriate action based on the nature of the failure.
 
 `createOutgoingPacket` must be called by a transaction handler in the module which performs appropriate signature checks, specific to the account owner on the host state machine.
 
@@ -189,52 +199,63 @@ function createOutgoingPacket(
   amount: uint256,
   sender: string,
   receiver: string,
-  source: boolean) {
+  destPort: string,
+  destChannel: string,
+  sourcePort: string,
+  sourceChannel: string) {
+  // inspect the denomination to determine whether or not we are the source chain
+  prefix = "{destPort}/{destChannel}"
+  source = denomination.slice(0, len(prefix)) === prefix
   if source {
     // sender is source chain: escrow tokens
     // determine escrow account
     escrowAccount = channelEscrowAddresses[packet.sourceChannel]
-    // construct receiving denomination, check correctness
-    prefix = "{packet/destPort}/{packet.destChannel}"
-    abortTransactionUnless(denomination.slice(0, len(prefix)) === prefix)
     // escrow source tokens (assumed to fail if balance insufficient)
     bank.TransferCoins(sender, escrowAccount, denomination.slice(len(prefix)), amount)
   } else {
     // receiver is source chain, burn vouchers
     // construct receiving denomination, check correctness
-    prefix = "{packet/sourcePort}/{packet.sourceChannel}"
+    prefix = "{sourcePort}/{sourceChannel}"
     abortTransactionUnless(denomination.slice(0, len(prefix)) === prefix)
     // burn vouchers (assumed to fail if balance insufficient)
     bank.BurnCoins(sender, denomination, amount)
   }
-  FungibleTokenPacketData data = FungibleTokenPacketData{denomination, amount, sender, receiver, source}
-  handler.sendPacket(packet)
+  FungibleTokenPacketData data = FungibleTokenPacketData{denomination, amount, sender, receiver}
+  handler.sendPacket(Packet{destPort, destChannel, sourcePort, sourceChannel, data})
 }
 ```
 
 `onRecvPacket` is called by the routing module when a packet addressed to this module has been received.
 
 ```typescript
-function onRecvPacket(packet: Packet): bytes {
+function onRecvPacket(packet: Packet) {
   FungibleTokenPacketData data = packet.data
-  if data.source {
-    // sender was source chain: mint vouchers
-    // construct receiving denomination, check correctness
-    prefix = "{packet/destPort}/{packet.destChannel}"
-    abortTransactionUnless(data.denomination.slice(0, len(prefix)) === prefix)
-    // mint vouchers to receiver (assumed to fail if balance insufficient)
-    bank.MintCoins(data.receiver, data.denomination, data.amount)
+  // inspect the denomination to determine whether or not we are the source chain
+  prefix = "{packet.destPort}/{packet.destChannel}"
+  source = denomination.slice(0, len(prefix)) === prefix
+  // construct default acknowledgement of success
+  FungibleTokenPacketAcknowledgement ack = FungibleTokenPacketAcknowledgement{true, null}
+  if source {
+    // sender was source, mint vouchers to receiver (assumed to fail if balance insufficient)
+    err = bank.MintCoins(data.receiver, data.denomination, data.amount)
+    if (err !== nil)
+      ack = FungibleTokenPacketAcknowledgement{false, "mint coins failed"}
   } else {
     // receiver is source chain: unescrow tokens
     // determine escrow account
     escrowAccount = channelEscrowAddresses[packet.destChannel]
     // construct receiving denomination, check correctness
     prefix = "{packet/sourcePort}/{packet.sourceChannel}"
-    abortTransactionUnless(data.denomination.slice(0, len(prefix)) === prefix)
-    // unescrow tokens to receiver (assumed to fail if balance insufficient)
-    bank.TransferCoins(escrowAccount, data.receiver, data.denomination.slice(len(prefix)), data.amount)
+    if (data.denomination.slice(0, len(prefix)) !== prefix)
+      ack = FungibleTokenPacketAcknowledgement{false, "invalid denomination"}
+    else {
+      // unescrow tokens to receiver (assumed to fail if balance insufficient)
+      err = bank.TransferCoins(escrowAccount, data.receiver, data.denomination.slice(len(prefix)), data.amount)
+      if (err !== nil)
+        ack = FungibleTokenPacketAcknowledgement{false, "transfer coins failed"}
+    }
   }
-  return 0x
+  return ack
 }
 ```
 
@@ -244,7 +265,9 @@ function onRecvPacket(packet: Packet): bytes {
 function onAcknowledgePacket(
   packet: Packet,
   acknowledgement: bytes) {
-  // nothing is necessary, likely this will never be called since it's a no-op
+  // if the transfer failed, refund the tokens
+  if (!ack.success)
+    refundTokens(packet)
 }
 ```
 
@@ -252,20 +275,30 @@ function onAcknowledgePacket(
 
 ```typescript
 function onTimeoutPacket(packet: Packet) {
+  // the packet timed-out, so refund the tokens
+  refundTokens(packet)
+}
+```
+
+`refundTokens` is called by both `onAcknowledgePacket`, on failure, and `onTimeoutPacket`, to refund escrowed tokens to the original sender.
+
+```typescript
+function refundTokens(packet: Packet) {
   FungibleTokenPacketData data = packet.data
-  if data.source {
+  prefix = "{packet.sourcePort}/{packet.sourceChannel}"
+  source = data.denomination.slice(0, len(prefix)) === prefix
+  if source {
     // sender was source chain, unescrow tokens
     // determine escrow account
     escrowAccount = channelEscrowAddresses[packet.destChannel]
     // construct receiving denomination, check correctness
-    prefix = "{packet/sourcePort}/{packet.sourceChannel}"
-    abortTransactionUnless(data.denomination.slice(0, len(prefix)) === prefix)
     // unescrow tokens back to sender
     bank.TransferCoins(escrowAccount, data.sender, data.denomination.slice(len(prefix)), data.amount)
   } else {
     // receiver was source chain, mint vouchers
     // construct receiving denomination, check correctness
-    prefix = "{packet/sourcePort}/{packet.sourceChannel}"
+    prefix = "{packet.sourcePort}/{packet.sourceChannel}"
+    // we abort here because we couldn't have sent this packet
     abortTransactionUnless(data.denomination.slice(0, len(prefix)) === prefix)
     // mint vouchers back to sender
     bank.MintCoins(data.sender, data.denomination, data.amount)
@@ -291,7 +324,9 @@ Supply: Redefine supply as unlocked tokens. All send-recv pairs sum to net zero.
 
 ##### Multi-chain notes
 
-This does not yet handle the "diamond problem", where a user sends a token originating on chain A to chain B, then to chain D, and wants to return it through D -> C -> A — since the supply is tracked as owned by chain B, chain C cannot serve as the intermediary. It is not yet clear whether that case should be dealt with in-protocol or not — it may be fine to just require the original path of redemption (and if there is frequent liquidity and some surplus on both paths the diamond path will work most of the time). Complexities arising from long redemption paths may lead to the emergence of central chains in the network topology.
+This specification does not directly handle the "diamond problem", where a user sends a token originating on chain A to chain B, then to chain D, and wants to return it through D -> C -> A — since the supply is tracked as owned by chain B (and the denomination will be "{portOnD}/{channelOnD}/{portOnB}/{channelOnB}/denom"), chain C cannot serve as the intermediary. It is not yet clear whether that case should be dealt with in-protocol or not — it may be fine to just require the original path of redemption (and if there is frequent liquidity and some surplus on both paths the diamond path will work most of the time). Complexities arising from long redemption paths may lead to the emergence of central chains in the network topology.
+
+In order to track all of the denominations moving around the network of chains in various paths, it may be helpful for a particular chain to implement a registry which will track the "global" source chain for each denomination. End-user service providers (such as wallet authors) may want to integrate such a registry or keep their own mapping of canonical source chains and human-readable names in order to improve UX.
 
 #### Optional addenda
 
@@ -304,7 +339,10 @@ Not applicable.
 
 ## Forwards Compatibility
 
-A future version of this standard could use a different version in the channel handshake.
+This initial standard uses version "ics20-1" in the channel handshake.
+
+A future version of this standard could use a different version in the channel handshake,
+and safely alter the packet data format & packet handler semantics.
 
 ## Example Implementation
 
@@ -321,6 +359,10 @@ Jul 15, 2019 - Draft written
 Jul 29, 2019 - Major revisions; cleanup
 
 Aug 25, 2019 - Major revisions, more cleanup
+
+Feb 3, 2020 - Revisions to handle acknowledgements of success & failure
+
+Feb 24, 2020 - Revisions to infer source field, inclusion of version string
 
 ## Copyright
 
