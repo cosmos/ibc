@@ -217,6 +217,13 @@ function verifyNextSequenceRecv(
     client = queryClient(connection.clientIdentifier)
     return client.verifyNextSequenceRecv(connection, height, connection.counterpartyPrefix, proof, portIdentifier, channelIdentifier, nextSequenceRecv)
 }
+
+function getTimestampAtHeight(
+  connection: ConnectionEnd,
+  height: uint64) {
+    client = queryClient(connection.clientIdentifier)
+    return client.queryConsensusState(height).getTimestamp()
+}
 ```
 
 ### Sub-protocols

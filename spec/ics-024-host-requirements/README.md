@@ -199,6 +199,8 @@ Host chains MUST provide a current Unix timestamp, accessible with `currentTimes
 type currentTimestamp = () => uint64
 ```
 
+In order for timestamps to be used safely in timeouts, timestamps in subsequent headers MUST be non-decreasing.
+
 ### Port system
 
 Host state machines MUST implement a port system, where the IBC handler can allow different modules in the host state machine to bind to uniquely named ports. Ports are identified by an `Identifier`.
