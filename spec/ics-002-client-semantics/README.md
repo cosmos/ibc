@@ -399,7 +399,8 @@ type queryHeader = (
 ```
 
 `queryChainConsensusState` MAY be defined by the chain which is validated by a particular client, to allow for the retrieval of the current consensus state which can be used to construct a new client.
-When used in this fashion, the returned `ConsensusState` MUST be manually confirmed by the querying entity, since it is subjective. This endpoint is assumed to be untrusted.
+When used in this fashion, the returned `ConsensusState` MUST be manually confirmed by the querying entity, since it is subjective. This endpoint is assumed to be untrusted. The precise nature of the
+`ConsensusState` may vary per client type.
 
 ```typescript
 type queryChainConsensusState = (height: uint64) => ConsensusState
