@@ -473,6 +473,15 @@ the stored `ClientState`'s validity predicate and `ConsensusState`, the client M
 update its internal state accordingly, possibly finalising commitment roots and
 updating the signature authority logic in the stored consensus state.
 
+If a client can no longer be updated (if, for example, the trusting period has passed),
+it will no longer be possible to send any packets over connections & channels associated
+with that client, or timeout any packets in-flight (since the height & timestamp on the
+destination chain can no longer be verified). Manual intervention must take place to
+reset the client state or migrate the connections & channels to another client. This
+cannot safely be done completely automatically, but chains implementing IBC could elect
+to allow governance mechanisms to perform these actions
+(perhaps even per-client/connection/channel in a multi-sig or contract).
+
 ```typescript
 function updateClient(
   id: Identifier,
