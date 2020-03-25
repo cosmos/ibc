@@ -384,6 +384,109 @@ type verifyNextSequenceRecv = (
   => boolean
 ```
 
+#### Query interface
+
+##### Chain queries
+
+These query endpoints are assumed to be exposed over HTTP or an equivalent RPC API by nodes of the chain associated with a particular client.
+
+`queryHeader` MUST be defined by the chain which is validated by a particular client, and should allow for retrieval of headers by height. This endpoint is assumed to be untrusted.
+
+```typescript
+type queryHeader = (height: uint64) => Header
+```
+
+`queryChainConsensusState` MAY be defined by the chain which is validated by a particular client, to allow for the retrieval of the current consensus state which can be used to construct a new client.
+When used in this fashion, the returned `ConsensusState` MUST be manually confirmed by the querying entity, since it is subjective. This endpoint is assumed to be untrusted. The precise nature of the
+`ConsensusState` may vary per client type.
+
+```typescript
+type queryChainConsensusState = (height: uint64) => ConsensusState
+```
+
+Note that retrieval of past consensus states by height (as opposed to just the current consensus state) is convenient but not required.
+
+`queryChainConsensusState` MAY also return other data necessary to create clients, such as the "unbonding period" for certain proof-of-stake security models. This data MUST also be verified by the querying entity.
+
+##### On-chain state queries
+
+This specification defines a single function to query the state of a client by-identifier.
+
+```typescript
+function queryClientState(identifier: Identifier): ClientState {
+  return privateStore.get(clientStatePath(identifier))
+}
+```
+
+The `ClientState` type SHOULD expose its latest verified height (from which the consensus state can then be retrieved using `queryConsensusState` if desired).
+
+```typescript
+type latestHeight = (state: ClientState) => uint64
+```
+
+Client types SHOULD define the following standardised query functions in order to allow relayers & other off-chain entities to interface with on-chain state in a standard API.
+
+`queryConsensusState` allows stored consensus states to be retrieved by height.
+
+```typescript
+type queryConsensusState = (
+  identifier: Identifier,
+  height: uint64
+) => ConsensusState
+```
+
+##### Proof construction
+
+Each client type SHOULD define functions to allow relayers to construct the proofs required by the client's state verification algorithms. These may take different forms depending on the client type.
+For example, Tendermint client proofs may be returned along with key-value data from store queries, and solo client proofs may need to be constructed interactively on the solo machine in question (since the user will need to sign the message).
+These functions may constitute external queries over RPC to a full node as well as local computation or verification.
+
+```typescript
+type queryAndProveClientConsensusState = (
+  clientIdentifier: Identifier,
+  height: uint64,
+  prefix: CommitmentPrefix,
+  consensusStateHeight: uint64) => ConsensusState, Proof
+
+type queryAndProveConnectionState = (
+  connectionIdentifier: Identifier,
+  height: uint64,
+  prefix: CommitmentPrefix) => ConnectionEnd, Proof
+
+type queryAndProveChannelState = (
+  portIdentifier: Identifier,
+  channelIdentifier: Identifier,
+  height: uint64,
+  prefix: CommitmentPrefix) => ChannelEnd, Proof
+
+type queryAndProvePacketData = (
+  portIdentifier: Identifier,
+  channelIdentifier: Identifier,
+  height: uint64,
+  prefix: CommitmentPrefix,
+  sequence: uint64) => []byte, Proof
+
+type queryAndProvePacketAcknowledgement = (
+  portIdentifier: Identifier,
+  channelIdentifier: Identifier,
+  height: uint64,
+  prefix: CommitmentPrefix,
+  sequence: uint64) => []byte, Proof
+
+type queryAndProvePacketAcknowledgementAbsence = (
+  portIdentifier: Identifier,
+  channelIdentifier: Identifier,
+  height: uint64,
+  prefix: CommitmentPrefix,
+  sequence: uint64) => Proof
+
+type queryAndProveNextSequenceRecv = (
+  portIdentifier: Identifier,
+  channelIdentifier: Identifier,
+  height: uint64,
+  prefix: CommitmentPrefix) => uint64, Proof
+```
+
 ##### Implementation strategies
 
 ###### Loopback
@@ -718,6 +821,8 @@ May 29, 2019 - Various revisions, notably multiple commitment-roots
 Aug 15, 2019 - Major rework for clarity around client interface
 
 Jan 13, 2020 - Revisions for client type separation & path alterations
+
+Jan 26, 2020 - Addition of query interface
 
 ## Copyright
 

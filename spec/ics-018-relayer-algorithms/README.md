@@ -58,6 +58,45 @@ function relay(C: Set<Chain>) {
 }
 ```
 
+### Packets, acknowledgements, timeouts
+
+#### Relaying packets in an ordered channel
+
+Packets in an ordered channel can be relayed in either an event-based fashion or a query-based fashion.
+For the former, the relayer should watch the source chain for events emitted whenever packets are sent,
+then compose the packet using the data in the event log. For the latter, the relayer should periodically
+query the send sequence on the source chain, and keep the last sequence number relayed, so that any sequences
+in between the two are packets that need to be queried & then relayed. In either case, subsequently, the relayer process
+should check that the destination chain has not yet received the packet by checking the receive sequence, and then relay it.
+
+#### Relaying packets in an unordered channel
+
+Packets in an unordered channel can be relayed in an event-based fashion.
+The relayer should watch the source chain for events emitted whenever packets
+are send, then compose the packet using the data in the event log. Subsequently,
+the relayer should check whether the destination chain has received the packet
+already by querying for the presence of an acknowledgement at the packet's sequence
+number, and if one is not yet present the relayer should relay the packet.
+
+#### Relaying acknowledgements
+
+Acknowledgements can be relayed in an event-based fashion. The relayer should
+watch the destination chain for events emitted whenever packets are received & acknowledgements
+are written, then compose the acknowledgement using the data in the event log,
+check whether the packet commitment still exists on the source chain (it will be
+deleted once the acknowledgement is relayed), and if so relay the acknowledgement to
+the source chain.
+
+#### Relaying timeouts
+
+Timeout relay is slightly more complex since there is no specific event emitted when
+a packet times-out - it is simply the case that the packet can no longer be relayed,
+since the timeout height or timestamp has passed on the destination chain. The relayer
+process must elect to track a set of packets (which can be constructed by scanning event logs),
+and as soon as the height or timestamp of the destination chain exceeds that of a tracked
+packet, check whether the packet commitment still exists on the source chain (it will
+be deleted once the timeout is relayed), and if so relay a timeout to the source chain.
+
 ### Pending datagrams
 
 `pendingDatagrams` collates datagrams to be sent from one machine to another. The implementation of this function will depend on the subset of the IBC protocol supported by both machines & the state layout of the source machine. Particular relayers will likely also want to implement their own filter functions in order to relay only a subset of the datagrams which could possibly be relayed (e.g. the subset for which they have been paid to relay in some off-chain manner).
