@@ -393,9 +393,7 @@ These query endpoints are assumed to be exposed over HTTP or an equivalent RPC A
 `queryHeader` MUST be defined by the chain which is validated by a particular client, and should allow for retrieval of headers by height. This endpoint is assumed to be untrusted.
 
 ```typescript
-type queryHeader = (
-  height: uint64
-) => Header
+type queryHeader = (height: uint64) => Header
 ```
 
 `queryChainConsensusState` MAY be defined by the chain which is validated by a particular client, to allow for the retrieval of the current consensus state which can be used to construct a new client.
