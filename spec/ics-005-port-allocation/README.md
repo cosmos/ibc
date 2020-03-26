@@ -107,6 +107,14 @@ function getCapability(name: string): CapabilityKey {
 }
 ```
 
+`releaseCapability` must allow a module to release a capability which it owns.
+
+```typescript
+function releaseCapability(capability: CapabilityKey) {
+  // provided by host state machine, e.g. ADR 3 / ScopedCapabilityKeeper in Cosmos SDK
+}
+```
+
 In the latter source authentication case, the IBC handler must have the ability to securely read the *source identifier* of the calling module,
 a unique string for each module in the host state machine, which cannot be altered by the module or faked by another module.
 An example is smart contract addresses as used by Ethereum ([reference](https://ethereum.github.io/yellowpaper/paper.pdf)).
@@ -121,7 +129,7 @@ function callingModuleIdentifier(): SourceIdentifier {
 }
 ```
 
-`newCapability`, `authenticateCapability`, `claimCapability`, and `getCapability` are then implemented as follows:
+`newCapability`, `authenticateCapability`, `claimCapability`, `getCapability`, and `releaseCapability` are then implemented as follows:
 
 ```typescript
 function newCapability(name: string): CapabilityKey {
@@ -145,6 +153,12 @@ function claimCapability(name: string, capability: CapabilityKey) {
 function getCapability(name: string): CapabilityKey {
   // not actually used
   return nil
+}
+```
+
+```typescript
+function releaseCapability(capability: CapabilityKey) {
+  // no-op
 }
 ```
 
@@ -179,28 +193,17 @@ The IBC handler MUST implement `bindPort`. `bindPort` binds to an unallocated po
 If the host state machine does not implement a special module manager to control port allocation, `bindPort` SHOULD be available to all modules. If it does, `bindPort` SHOULD only be callable by the module manager.
 
 ```typescript
-function bindPort(id: Identifier) {
+function bindPort(id: Identifier): CapabilityKey {
     abortTransactionUnless(validatePortIdentifier(id))
     abortTransactionUnless(privateStore.get(portPath(id)) === null)
-    key = generate()
-    privateStore.set(portPath(id), key)
+    key = newCapability(portPath(id))
     return key
 }
 ```
 
 #### Transferring ownership of a port
 
-If the host state machine supports object-capabilities, no additional protocol is necessary, since the port reference is a bearer capability. If it does not, the IBC handler MAY implement the following `transferPort` function.
-
-`transferPort` SHOULD be available to all modules.
-
-```typescript
-function transferPort(id: Identifier) {
-    abortTransactionUnless(authenticate(privateStore.get(portPath(id))))
-    key = generate()
-    privateStore.set(portPath(id), key)
-}
-```
+If the host state machine supports object-capabilities, no additional protocol is necessary, since the port reference is a bearer capability.
 
 #### Releasing a port
 
@@ -211,9 +214,9 @@ The IBC handler MUST implement the `releasePort` function, which allows a module
 > Warning: releasing a port will allow other modules to bind to that port and possibly intercept incoming channel opening handshakes. Modules should release ports only when doing so is safe.
 
 ```typescript
-function releasePort(id: Identifier) {
+function releasePort(capability: CapabilityKey) {
     abortTransactionUnless(authenticate(privateStore.get(portPath(id))))
-    privateStore.delete(portPath(id))
+    releaseCapability(capability)
 }
 ```
 
