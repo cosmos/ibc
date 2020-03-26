@@ -195,9 +195,9 @@ If the host state machine does not implement a special module manager to control
 ```typescript
 function bindPort(id: Identifier): CapabilityKey {
     abortTransactionUnless(validatePortIdentifier(id))
-    abortTransactionUnless(privateStore.get(portPath(id)) === null)
-    key = newCapability(portPath(id))
-    return key
+    abortTransactionUnless(getCapability(portPath(id)) === null)
+    capability = newCapability(portPath(id))
+    return capability
 }
 ```
 
