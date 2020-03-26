@@ -75,9 +75,35 @@ and object references as used in Agoric's Javascript runtime ([reference](https:
 type CapabilityKey object
 ```
 
+`newCapability` must take a name and generate a unique capability key, such that the name is locally mapped to the capability key and can be used with `getCapability` later.
+
 ```typescript
-function newCapabilityPath(): CapabilityKey {
-  // provided by host state machine, e.g. pointer address in Cosmos SDK
+function newCapability(name: string): CapabilityKey {
+  // provided by host state machine, e.g. ADR 3 / ScopedCapabilityKeeper in Cosmos SDK
+}
+```
+
+`authenticateCapability` must take a name & a capability and check whether the name is locally mapped to the provided capability. The name can be untrusted user input.
+
+```typescript
+function authenticateCapability(name: string, capability: CapabilityKey): bool {
+  // provided by host state machine, e.g. ADR 3 / ScopedCapabilityKeeper in Cosmos SDK
+}
+```
+
+`claimCapability` must take a name & a capability (provided by another module) and locally map the name to the capability, "claiming" it for future usage.
+
+```typescript
+function claimCapability(name: string, capability: CapabilityKey) {
+  // provided by host state machine, e.g. ADR 3 / ScopedCapabilityKeeper in Cosmos SDK
+}
+```
+
+`getCapability` must allow a module to lookup a capability which it has previously created or claimed by name.
+
+```typescript
+function getCapability(name: string): CapabilityKey {
+  // provided by host state machine, e.g. ADR 3 / ScopedCapabilityKeeper in Cosmos SDK
 }
 ```
 
@@ -95,33 +121,30 @@ function callingModuleIdentifier(): SourceIdentifier {
 }
 ```
 
-`generate` and `authenticate` functions are then defined as follows.
-
-In the former case, `generate` returns a new object-capability key, which must be returned by the outer-layer function, and `authenticate` requires that the outer-layer function take an extra argument `capability`, which is an object-capability key with uniqueness enforced by the host state machine. Outer-layer functions are any functions exposed by the IBC handler ([ICS 25](../ics-025-handler-interface)) or routing module ([ICS 26](../ics-026-routing-module)) to modules.
-
-```
-function generate(): CapabilityKey {
-    return newCapabilityPath()
-}
-```
-
-```
-function authenticate(key: CapabilityKey): boolean {
-    return capability === key
-}
-```
-
-In the latter case, `generate` returns the calling module's identifier and `authenticate` merely checks it.
+`newCapability`, `authenticateCapability`, `claimCapability`, and `getCapability` are then implemented as follows:
 
 ```typescript
-function generate(): SourceIdentifier {
-    return callingModuleIdentifier()
+function newCapability(name: string): CapabilityKey {
+  return callingModuleIdentifier()
 }
 ```
 
 ```typescript
-function authenticate(id: SourceIdentifier): boolean {
-    return callingModuleIdentifier() === id
+function authenticateCapability(name: string, capability: CapabilityKey) {
+  return callingModuleIdentifier() === name
+}
+```
+
+```typescript
+function claimCapability(name: string, capability: CapabilityKey) {
+  // no-op
+}
+```
+
+```typescript
+function getCapability(name: string): CapabilityKey {
+  // not actually used
+  return nil
 }
 ```
 
@@ -134,7 +157,6 @@ function portPath(id: Identifier): Path {
     return "ports/{id}"
 }
 ```
-
 
 ### Sub-protocols
 
