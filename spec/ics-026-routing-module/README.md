@@ -159,12 +159,12 @@ The function `bindPort` can be called by a module in order to bind to a port, th
 ```typescript
 function bindPort(
   id: Identifier,
-  callbacks: Callbacks) {
+  callbacks: Callbacks): CapabilityKey {
     abortTransactionUnless(privateStore.get(callbackPath(id)) === null)
-    handler.bindPort(id)
-    capability = generate()
-    privateStore.set(authenticationPath(id), capability)
     privateStore.set(callbackPath(id), callbacks)
+    capability = handler.bindPort(id)
+    claimCapability(authenticationPath(id), capability)
+    return capability
 }
 ```
 

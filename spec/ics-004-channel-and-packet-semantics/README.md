@@ -284,8 +284,7 @@ function chanOpenInit(
     channel = ChannelEnd{INIT, order, counterpartyPortIdentifier,
                          counterpartyChannelIdentifier, connectionHops, version}
     provableStore.set(channelPath(portIdentifier, channelIdentifier), channel)
-    key = generate()
-    provableStore.set(channelCapabilityPath(portIdentifier, channelIdentifier), key)
+    key = newCapability(channelCapabilityPath(portIdentifier, channelIdentifier))
     provableStore.set(nextSequenceSendPath(portIdentifier, channelIdentifier), 1)
     provableStore.set(nextSequenceRecvPath(portIdentifier, channelIdentifier), 1)
     return key
@@ -334,8 +333,7 @@ function chanOpenTry(
     channel = ChannelEnd{TRYOPEN, order, counterpartyPortIdentifier,
                          counterpartyChannelIdentifier, connectionHops, version}
     provableStore.set(channelPath(portIdentifier, channelIdentifier), channel)
-    key = generate()
-    provableStore.set(channelCapabilityPath(portIdentifier, channelIdentifier), key)
+    key = newCapability(channelCapabilityPath(portIdentifier, channelIdentifier))
     provableStore.set(nextSequenceSendPath(portIdentifier, channelIdentifier), 1)
     provableStore.set(nextSequenceRecvPath(portIdentifier, channelIdentifier), 1)
     return key
