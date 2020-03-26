@@ -1,4 +1,4 @@
-personal_ws-1.1 en 585 
+personal_ws-1.1 en 586 
 ABCI
 ABI
 ADR
@@ -296,6 +296,7 @@ frozenKey
 fungibility
 generateAccount
 generateAddress
+getCapability
 getChannelsUsingConnections
 getCommitmentPrefix
 getCompatibleVersions
