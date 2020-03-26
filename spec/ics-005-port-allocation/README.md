@@ -131,32 +131,32 @@ function callingModuleIdentifier(): SourceIdentifier {
 
 `newCapability`, `authenticateCapability`, `claimCapability`, `getCapability`, and `releaseCapability` are then implemented as follows:
 
-```typescript
+```
 function newCapability(name: string): CapabilityKey {
   return callingModuleIdentifier()
 }
 ```
 
-```typescript
+```
 function authenticateCapability(name: string, capability: CapabilityKey) {
   return callingModuleIdentifier() === name
 }
 ```
 
-```typescript
+```
 function claimCapability(name: string, capability: CapabilityKey) {
   // no-op
 }
 ```
 
-```typescript
+```
 function getCapability(name: string): CapabilityKey {
   // not actually used
   return nil
 }
 ```
 
-```typescript
+```
 function releaseCapability(capability: CapabilityKey) {
   // no-op
 }
