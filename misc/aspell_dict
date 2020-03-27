@@ -1,4 +1,4 @@
-personal_ws-1.1 en 586 
+personal_ws-1.1 en 588 
 ABCI
 ABI
 ADR
@@ -173,6 +173,7 @@ chanOpenInit
 chanOpenTimeout
 chanOpenTry
 changelog
+channelCapability
 channelCapabilityPath
 channelEnd
 channelEscrowAddresses
@@ -427,6 +428,7 @@ permissionless
 pickVersion
 plaintext
 png
+portCapability
 portId
 portIdentifier
 portKey
