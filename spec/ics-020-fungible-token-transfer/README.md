@@ -72,7 +72,7 @@ The `setup` function must be called exactly once when the module is created (per
 
 ```typescript
 function setup() {
-  routingModule.bindPort("bank", ModuleCallbacks{
+  capability = routingModule.bindPort("bank", ModuleCallbacks{
     onChanOpenInit,
     onChanOpenTry,
     onChanOpenAck,
@@ -84,6 +84,7 @@ function setup() {
     onAcknowledgePacket,
     onTimeoutPacketClose
   })
+  claimCapability("port", capability)
 }
 ```
 
@@ -221,7 +222,7 @@ function createOutgoingPacket(
     bank.BurnCoins(sender, denomination, amount)
   }
   FungibleTokenPacketData data = FungibleTokenPacketData{denomination, amount, sender, receiver}
-  handler.sendPacket(Packet{destPort, destChannel, sourcePort, sourceChannel, data})
+  handler.sendPacket(Packet{destPort, destChannel, sourcePort, sourceChannel, data}, getCapability("port"))
 }
 ```
 

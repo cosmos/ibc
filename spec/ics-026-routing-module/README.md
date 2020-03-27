@@ -26,7 +26,7 @@ logic to determine when modules are allowed to bind to ports and what those port
 
 All functions provided by the IBC handler interface are defined as in [ICS 25](../ics-025-handler-interface).
 
-The functions `generate` & `authenticate` are defined as in [ICS 5](../ics-005-port-allocation).
+The functions `newCapability` & `authenticateCapability` are defined as in [ICS 5](../ics-005-port-allocation).
 
 ### Desired Properties
 
@@ -159,12 +159,12 @@ The function `bindPort` can be called by a module in order to bind to a port, th
 ```typescript
 function bindPort(
   id: Identifier,
-  callbacks: Callbacks) {
+  callbacks: Callbacks): CapabilityKey {
     abortTransactionUnless(privateStore.get(callbackPath(id)) === null)
-    handler.bindPort(id)
-    capability = generate()
-    privateStore.set(authenticationPath(id), capability)
     privateStore.set(callbackPath(id), callbacks)
+    capability = handler.bindPort(id)
+    claimCapability(authenticationPath(id), capability)
+    return capability
 }
 ```
 
@@ -173,8 +173,9 @@ The function `updatePort` can be called by a module in order to alter the callba
 ```typescript
 function updatePort(
   id: Identifier,
+  capability: CapabilityKey,
   newCallbacks: Callbacks) {
-    abortTransactionUnless(authenticate(privateStore.get(authenticationPath(id))))
+    abortTransactionUnless(authenticateCapability(authenticationPath(id), capability))
     privateStore.set(callbackPath(id), newCallbacks)
 }
 ```
@@ -184,8 +185,10 @@ The function `releasePort` can be called by a module in order to release a port 
 > Warning: releasing a port will allow other modules to bind to that port and possibly intercept incoming channel opening handshakes. Modules should release ports only when doing so is safe.
 
 ```typescript
-function releasePort(id: Identifier) {
-    abortTransactionUnless(authenticate(privateStore.get(authenticationPath(id))))
+function releasePort(
+  id: Identifier,
+  capability: CapabilityKey) {
+    abortTransactionUnless(authenticateCapability(authenticationPath(id), capability))
     handler.releasePort(id)
     privateStore.delete(callbackPath(id))
     privateStore.delete(authenticationPath(id))

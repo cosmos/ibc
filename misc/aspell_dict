@@ -1,6 +1,7 @@
-personal_ws-1.1 en 579 
+personal_ws-1.1 en 588 
 ABCI
 ABI
+ADR
 Agoric
 Agoric's
 Anca
@@ -102,6 +103,7 @@ RegisterIBCAccountPacketData
 RegisterLightClient
 RootOfTrust
 RunTxPacketData
+ScopedCapabilityKeeper
 SignatureAndData
 SourceIdentifier
 SpeckleOS
@@ -140,6 +142,7 @@ addConnectionToClient
 applyPrefix
 atomicity
 auth
+authenticateCapability
 authenticateTx
 authenticationKey
 authenticationPath
@@ -170,6 +173,7 @@ chanOpenInit
 chanOpenTimeout
 chanOpenTry
 changelog
+channelCapability
 channelCapabilityPath
 channelEnd
 channelEscrowAddresses
@@ -184,6 +188,7 @@ checkMisbehaviourAndUpdateState
 checkSignature
 checkValidityAndUpdateState
 checkVersion
+claimCapability
 cleanupPacket
 clientConnectionsKey
 clientConnectionsPath
@@ -292,6 +297,7 @@ frozenKey
 fungibility
 generateAccount
 generateAddress
+getCapability
 getChannelsUsingConnections
 getCommitmentPrefix
 getCompatibleVersions
@@ -376,6 +382,7 @@ namespaces
 namespacing
 newAddress
 newCallbacks
+newCapability
 newCapabilityKey
 newCapabilityPath
 newPublicKey
@@ -421,6 +428,7 @@ permissionless
 pickVersion
 plaintext
 png
+portCapability
 portId
 portIdentifier
 portKey
@@ -475,6 +483,7 @@ refundTokens
 relayer
 relayerModule
 relayers
+releaseCapability
 releasePort
 remoteEnd
 removeChannelFromConnection

@@ -75,9 +75,43 @@ and object references as used in Agoric's Javascript runtime ([reference](https:
 type CapabilityKey object
 ```
 
+`newCapability` must take a name and generate a unique capability key, such that the name is locally mapped to the capability key and can be used with `getCapability` later.
+
 ```typescript
-function newCapabilityPath(): CapabilityKey {
-  // provided by host state machine, e.g. pointer address in Cosmos SDK
+function newCapability(name: string): CapabilityKey {
+  // provided by host state machine, e.g. ADR 3 / ScopedCapabilityKeeper in Cosmos SDK
+}
+```
+
+`authenticateCapability` must take a name & a capability and check whether the name is locally mapped to the provided capability. The name can be untrusted user input.
+
+```typescript
+function authenticateCapability(name: string, capability: CapabilityKey): bool {
+  // provided by host state machine, e.g. ADR 3 / ScopedCapabilityKeeper in Cosmos SDK
+}
+```
+
+`claimCapability` must take a name & a capability (provided by another module) and locally map the name to the capability, "claiming" it for future usage.
+
+```typescript
+function claimCapability(name: string, capability: CapabilityKey) {
+  // provided by host state machine, e.g. ADR 3 / ScopedCapabilityKeeper in Cosmos SDK
+}
+```
+
+`getCapability` must allow a module to lookup a capability which it has previously created or claimed by name.
+
+```typescript
+function getCapability(name: string): CapabilityKey {
+  // provided by host state machine, e.g. ADR 3 / ScopedCapabilityKeeper in Cosmos SDK
+}
+```
+
+`releaseCapability` must allow a module to release a capability which it owns.
+
+```typescript
+function releaseCapability(capability: CapabilityKey) {
+  // provided by host state machine, e.g. ADR 3 / ScopedCapabilityKeeper in Cosmos SDK
 }
 ```
 
@@ -95,33 +129,36 @@ function callingModuleIdentifier(): SourceIdentifier {
 }
 ```
 
-`generate` and `authenticate` functions are then defined as follows.
-
-In the former case, `generate` returns a new object-capability key, which must be returned by the outer-layer function, and `authenticate` requires that the outer-layer function take an extra argument `capability`, which is an object-capability key with uniqueness enforced by the host state machine. Outer-layer functions are any functions exposed by the IBC handler ([ICS 25](../ics-025-handler-interface)) or routing module ([ICS 26](../ics-026-routing-module)) to modules.
+`newCapability`, `authenticateCapability`, `claimCapability`, `getCapability`, and `releaseCapability` are then implemented as follows:
 
 ```
-function generate(): CapabilityKey {
-    return newCapabilityPath()
+function newCapability(name: string): CapabilityKey {
+  return callingModuleIdentifier()
 }
 ```
 
 ```
-function authenticate(key: CapabilityKey): boolean {
-    return capability === key
+function authenticateCapability(name: string, capability: CapabilityKey) {
+  return callingModuleIdentifier() === name
 }
 ```
 
-In the latter case, `generate` returns the calling module's identifier and `authenticate` merely checks it.
-
-```typescript
-function generate(): SourceIdentifier {
-    return callingModuleIdentifier()
+```
+function claimCapability(name: string, capability: CapabilityKey) {
+  // no-op
 }
 ```
 
-```typescript
-function authenticate(id: SourceIdentifier): boolean {
-    return callingModuleIdentifier() === id
+```
+function getCapability(name: string): CapabilityKey {
+  // not actually used
+  return nil
+}
+```
+
+```
+function releaseCapability(capability: CapabilityKey) {
+  // no-op
 }
 ```
 
@@ -134,7 +171,6 @@ function portPath(id: Identifier): Path {
     return "ports/{id}"
 }
 ```
-
 
 ### Sub-protocols
 
@@ -157,28 +193,17 @@ The IBC handler MUST implement `bindPort`. `bindPort` binds to an unallocated po
 If the host state machine does not implement a special module manager to control port allocation, `bindPort` SHOULD be available to all modules. If it does, `bindPort` SHOULD only be callable by the module manager.
 
 ```typescript
-function bindPort(id: Identifier) {
+function bindPort(id: Identifier): CapabilityKey {
     abortTransactionUnless(validatePortIdentifier(id))
-    abortTransactionUnless(privateStore.get(portPath(id)) === null)
-    key = generate()
-    privateStore.set(portPath(id), key)
-    return key
+    abortTransactionUnless(getCapability(portPath(id)) === null)
+    capability = newCapability(portPath(id))
+    return capability
 }
 ```
 
 #### Transferring ownership of a port
 
-If the host state machine supports object-capabilities, no additional protocol is necessary, since the port reference is a bearer capability. If it does not, the IBC handler MAY implement the following `transferPort` function.
-
-`transferPort` SHOULD be available to all modules.
-
-```typescript
-function transferPort(id: Identifier) {
-    abortTransactionUnless(authenticate(privateStore.get(portPath(id))))
-    key = generate()
-    privateStore.set(portPath(id), key)
-}
-```
+If the host state machine supports object-capabilities, no additional protocol is necessary, since the port reference is a bearer capability.
 
 #### Releasing a port
 
@@ -189,9 +214,9 @@ The IBC handler MUST implement the `releasePort` function, which allows a module
 > Warning: releasing a port will allow other modules to bind to that port and possibly intercept incoming channel opening handshakes. Modules should release ports only when doing so is safe.
 
 ```typescript
-function releasePort(id: Identifier) {
-    abortTransactionUnless(authenticate(privateStore.get(portPath(id))))
-    privateStore.delete(portPath(id))
+function releasePort(capability: CapabilityKey) {
+    abortTransactionUnless(authenticateCapability(portPath(id), capability))
+    releaseCapability(capability)
 }
 ```
 
