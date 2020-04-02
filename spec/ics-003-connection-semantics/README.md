@@ -87,6 +87,7 @@ interface ConnectionEnd {
 
 - The `state` field describes the current state of the connection end.
 - The `counterpartyConnectionIdentifier` field identifies the connection end on the counterparty chain associated with this connection.
+- The `counterpartyPrefix` field contains the prefix used for state verification on the counterparty chain associated with this connection.
 - The `clientIdentifier` field identifies the client associated with this connection.
 - The `counterpartyClientIdentifier` field identifies the client on the counterparty chain associated with this connection.
 - The `version` field is an opaque string which can be utilised to determine encodings or protocols for channels or packets utilising this connection.
