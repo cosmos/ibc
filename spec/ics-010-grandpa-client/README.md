@@ -67,14 +67,16 @@ interface ConsensusState {
 
 ### Headers
 
-The GRANDPA client headers include the height, the commitment root, a justification of block and a proof of authority set.
+The GRANDPA client headers include the height, the commitment root, a justification of block and authority set.
+(In fact, here is a proof of authority set rather than the authority set itself, but we can using a fixed key to verify
+the proof and extract the real set, the details are ignored here)
 
 ```typescript
 interface Header {
   height: uint64
   commitmentRoot: []byte
   justification: Justification
-  authoritySetProof: []byte
+  authoritySet: AuthoritySet
 }
 ```
 
@@ -87,6 +89,22 @@ interface Justification {
   round: uint64
   commit: Commit
   votesAncestries: []Header
+}
+```
+
+### Commit
+
+A commit message which is an aggregate of signed precommits.
+
+```typescript
+interface Commit {
+  precommits: []SignedPrecommit
+}
+
+interface SignedPrecommit {
+  targetHash: Hash
+  signature: Signature
+  id: AuthorityId
 }
 ```
 
@@ -137,16 +155,26 @@ function checkValidityAndUpdateState(
     assert(header.height > clientState.latestHeight)
     consensusState = get("clients/{identifier}/consensusStates/{clientState.latestHeight}")
     // verify that the provided header is valid
-    assert(verify(header.justification, consensusState.authoritySet))
+    assert(verify(consensusState.authoritySet, header))
     // update latest height
     clientState.latestHeight = header.height
-    // verify that the authority set has been stored
-    assert(header.commitmentRoot.verifyMembership(path, authoritySet, header.authoritySetProof))
     // create recorded consensus state, save it
-    consensusState = ConsensusState{authoritySet, header.commitmentRoot}
+    consensusState = ConsensusState{header.authoritySet, header.commitmentRoot}
     set("clients/{identifier}/consensusStates/{header.height}", consensusState)
     // save the client
     set("clients/{identifier}", clientState)
+}
+
+function verify(
+  authoritySet: AuthoritySet,
+  header: Header): boolean {
+  let visitedHashes: Hash[]
+  for (const signedPrecommit of Header.justification.commit.precommits) {
+    if (checkSignature(authoritySet, signedPrecommit)) {
+      visitedHashes.push(signedPrecommit.targetHash)
+    }
+  }
+  return visitedHashes.equals(Header.justification.votesAncestries.map(hash))
 }
 ```
 
@@ -162,12 +190,12 @@ function checkMisbehaviourAndUpdateState(
     assert(evidence.h1.height === evidence.h2.height)
     // assert that the commitments are different
     assert(evidence.h1.commitmentRoot !== evidence.h2.commitmentRoot)
-    // fetch the previously verified commitment root & validator set
+    // fetch the previously verified commitment root & authority set
     consensusState = get("clients/{identifier}/consensusStates/{evidence.fromHeight}")
     // check if the light client "would have been fooled"
     assert(
-      verify(consensusState.authoritySet, evidence.fromHeight, evidence.h1) &&
-      verify(consensusState.authoritySet, evidence.fromHeight, evidence.h2)
+      verify(consensusState.authoritySet, evidence.h1) &&
+      verify(consensusState.authoritySet, evidence.h2)
       )
     // set the frozen height
     clientState.frozenHeight = min(clientState.frozenHeight, evidence.h1.height) // which is same as h2.height
