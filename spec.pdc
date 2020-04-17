@@ -103,6 +103,10 @@ urlcolor: cyan
 
 !include spec/ics-007-tendermint-client/README.md.xfm
 
+# ICS 010 - GRANDPA Client
+
+!include spec/ics-010-grandpa-client/README.md.xfm
+
 # Appendix A: Use-case Descriptions
 
 !include ibc/4_IBC_USECASES.md.xfm

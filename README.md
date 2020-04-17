@@ -67,6 +67,7 @@ All standards at or past the "Draft" stage are listed here in order of their ICS
 | [6](spec/ics-006-solo-machine-client)          | Instantiation  | Solo Machine Client        | Draft |
 | [7](spec/ics-007-tendermint-client)            | Instantiation  | Tendermint Client          | Draft |
 | [9](spec/ics-009-loopback-client)              | Instantiation  | Loopback Client            | Draft |
+| [10](spec/ics-010-grandpa-client)              | Instantiation  | GRANDPA Client             | Draft |
 | [18](spec/ics-018-relayer-algorithms)          | Interface      | Relayer Algorithms         | Draft |
 | [23](spec/ics-023-vector-commitments)          | Interface      | Vector Commitments         | Draft |
 | [24](spec/ics-024-host-requirements)           | Interface      | Host Requirements          | Draft |
