@@ -13,7 +13,7 @@ implements: 2
 
 This specification document describes a client (verification algorithm) for a blockchain using GRANDPA.
 
-GRANDPA (GHOST-based Recursive ANcestor Deriving Prefix Agreement) is a finality gadget that will be used by the Polkadot relay chain. It now has a Rust implementation and is part of the Substrate, so likely blockchains built using Substrate will use GRANDPA as its finality gadget.
+GRANDPA (GHOST-based Recursive Ancestor Deriving Prefix Agreement) is a finality gadget that will be used by the Polkadot relay chain. It now has a Rust implementation and is part of the Substrate, so likely blockchains built using Substrate will use GRANDPA as its finality gadget.
 
 ### Motivation
 
@@ -83,7 +83,7 @@ interface Header {
 ### Justification
 
 A GRANDPA justification for block finality, it includes a commit message and an ancestry proof including all headers routing all precommit target blocks to the commit target block.
-For example, the latest blocks are A - B - C - D - E - F, where A is the last finalized block, F is the point where a majority for vote (they may on B, C, D, E, F) can be collected. Then the proof need to include all headers from F back to A.
+For example, the latest blocks are A - B - C - D - E - F, where A is the last finalised block, F is the point where a majority for vote (they may on B, C, D, E, F) can be collected. Then the proof need to include all headers from F back to A.
 
 ```typescript
 interface Justification {

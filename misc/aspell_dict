@@ -1,4 +1,4 @@
-personal_ws-1.1 en 588 
+personal_ws-1.1 en 592 
 ABCI
 ABI
 ADR
@@ -91,6 +91,7 @@ PacketSend
 PacketTimeout
 PacketTimeoutClose
 PacketTimeoutOnClose
+Polkadot
 Pre
 Privkey
 Protobuf
@@ -128,6 +129,7 @@ VMs
 ValidatorUpdate
 WASM
 YYYY
+Yuanchao
 Yun
 Zaki
 Zamfir
@@ -436,6 +438,8 @@ portOnB
 portOnD
 portPath
 positionally
+precommit
+precommits
 prefixedPath
 priori
 privateKey
