@@ -1,4 +1,4 @@
-personal_ws-1.1 en 592 
+personal_ws-1.1 en 593 
 ABCI
 ABI
 ADR
@@ -390,6 +390,7 @@ newCapabilityPath
 newPublicKey
 newState
 newpubkey
+nextSequenceAck
 nextSequenceRecv
 nextSequenceRecvKey
 nextSequenceRecvOrAcknowledgement

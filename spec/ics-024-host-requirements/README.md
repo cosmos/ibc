@@ -110,8 +110,9 @@ Note that the client-related paths listed below reflect the Tendermint client as
 | provableStore  | "connections/{identifier}"                                                     | ConnectionEnd     | [ICS 3](../ics-003-connection-semantics) |
 | privateStore   | "ports/{identifier}"                                                           | CapabilityKey     | [ICS 5](../ics-005-port-allocation) |
 | provableStore  | "ports/{identifier}/channels/{identifier}"                                     | ChannelEnd        | [ICS 4](../ics-004-channel-and-packet-semantics) |
-| provableStore  | "ports/{identifier}/channels/{identifier}/key"                                 | CapabilityKey     | [ICS 4](../ics-004-channel-and-packet-semantics) |
+| provableStore  | "ports/{identifier}/channels/{identifier}/nextSequenceSend"                    | uint64            | [ICS 4](../ics-004-channel-and-packet-semantics) |
 | provableStore  | "ports/{identifier}/channels/{identifier}/nextSequenceRecv"                    | uint64            | [ICS 4](../ics-004-channel-and-packet-semantics) |
+| provableStore  | "ports/{identifier}/channels/{identifier}/nextSequenceAck"                     | uint64            | [ICS 4](../ics-004-channel-and-packet-semantics) |
 | provableStore  | "ports/{identifier}/channels/{identifier}/packets/{sequence}"                  | bytes             | [ICS 4](../ics-004-channel-and-packet-semantics) |
 | provableStore  | "ports/{identifier}/channels/{identifier}/acknowledgements/{sequence}"         | bytes             | [ICS 4](../ics-004-channel-and-packet-semantics) |
 | privateStore   | "callbacks/{identifier}"                                                       | ModuleCallbacks   | [ICS 26](../ics-026-routing-module) |
