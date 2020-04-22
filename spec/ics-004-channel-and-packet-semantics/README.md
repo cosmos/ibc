@@ -78,6 +78,7 @@ interface ChannelEnd {
 - The `counterpartyChannelIdentifier` identifies the channel end on the counterparty chain.
 - The `nextSequenceSend`, stored separately, tracks the sequence number for the next packet to be sent.
 - The `nextSequenceRecv`, stored separately, tracks the sequence number for the next packet to be received.
+- The `nextSequenceAck`, stored separately, tracks the sequence number for the next packet to be acknowledged.
 - The `connectionHops` stores the list of connection identifiers, in order, along which packets sent on this channel will travel. At the moment this list must be of length 1. In the future multi-hop channels may be supported.
 - The `version` string stores an opaque channel version, which is agreed upon during the handshake. This can determine module-level configuration such as which packet encoding is used for the channel. This version is not used by the core IBC protocol.
 
@@ -180,7 +181,7 @@ function channelCapabilityPath(portIdentifier: Identifier, channelIdentifier: Id
 }
 ```
 
-The `nextSequenceSend` and `nextSequenceRecv` unsigned integer counters are stored separately so they can be proved individually:
+The `nextSequenceSend`, `nextSequenceRecv`, and `nextSequenceAck` unsigned integer counters are stored separately so they can be proved individually:
 
 ```typescript
 function nextSequenceSendPath(portIdentifier: Identifier, channelIdentifier: Identifier): Path {
@@ -189,6 +190,10 @@ function nextSequenceSendPath(portIdentifier: Identifier, channelIdentifier: Ide
 
 function nextSequenceRecvPath(portIdentifier: Identifier, channelIdentifier: Identifier): Path {
     return "{channelPath(portIdentifier, channelIdentifier)}/nextSequenceRecv"
+}
+
+function nextSequenceAckPath(portIdentifier: Identifier, channelIdentifier: Identifier): Path {
+    return "{channelPath(portIdentifier, channelIdentifier)}/nextSequenceAck"
 }
 ```
 
@@ -287,6 +292,7 @@ function chanOpenInit(
     channelCapability = newCapability(channelCapabilityPath(portIdentifier, channelIdentifier))
     provableStore.set(nextSequenceSendPath(portIdentifier, channelIdentifier), 1)
     provableStore.set(nextSequenceRecvPath(portIdentifier, channelIdentifier), 1)
+    provableStore.set(nextSequenceAckPath(portIdentifier, channelIdentifier), 1)
     return channelCapability
 }
 ```
@@ -336,6 +342,7 @@ function chanOpenTry(
     channelCapability = newCapability(channelCapabilityPath(portIdentifier, channelIdentifier))
     provableStore.set(nextSequenceSendPath(portIdentifier, channelIdentifier), 1)
     provableStore.set(nextSequenceRecvPath(portIdentifier, channelIdentifier), 1)
+    provableStore.set(nextSequenceAckPath(portIdentifier, channelIdentifier), 1)
     return channelCapability
 }
 ```
@@ -649,6 +656,14 @@ function acknowledgePacket(
       packet.sequence,
       acknowledgement
     ))
+
+    // abort transaction unless acknowledgement is processed in order
+    if (channel.order === ORDERED) {
+      nextSequenceAck = provableStore.get(nextSequenceAckPath(packet.destPort, packet.destChannel))
+      abortTransactionUnless(packet.sequence === nextSequenceAck)
+      nextSequenceAck = nextSequenceAck + 1
+      provableStore.set(nextSequenceAckPath(packet.destPort, packet.destChannel), nextSequenceAck)
+    }
 
     // all assertions passed, we can alter state
 
