@@ -35,9 +35,16 @@ The IBC/TAO specifications define the implementations of two modules: the core "
 
 ### Paths, identifiers, separators
 
-An `Identifier` is a bytestring used as a key for an object stored in state, such as a connection, channel, or light client. Identifiers MUST consist of alphanumeric characters only. Identifiers MUST be non-empty (of positive integer length).
+An `Identifier` is a bytestring used as a key for an object stored in state, such as a connection, channel, or light client.
 
-A `Path` is a bytestring used as the key for an object stored in state. Paths MUST contain only identifiers, constant alphanumeric strings, and the separator `"/"`. 
+Identifiers MUST be non-empty (of positive integer length).
+
+Identifiers MUST consist of characters in one of the following categories only:
+- Alphanumeric
+- `.`, `_`, `+`, `-`, `#`
+- `[`, `]`, `<`, `>`
+
+A `Path` is a bytestring used as the key for an object stored in state. Paths MUST contain only identifiers, constant strings, and the separator `"/"`.
 
 Identifiers are not intended to be valuable resources — to prevent name squatting, minimum length requirements or pseudorandom generation MAY be implemented, but particular restrictions are not imposed by this specification.
 
