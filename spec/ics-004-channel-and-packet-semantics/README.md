@@ -718,14 +718,13 @@ function timeoutPacket(
       (packet.timeoutHeight > 0 && proofHeight >= packet.timeoutHeight) ||
       (packet.timeoutTimestamp > 0 && connection.getTimestampAtHeight(proofHeight) > packet.timeoutTimestamp))
 
-    // check that packet has not been received
-    abortTransactionUnless(nextSequenceRecv < packet.sequence)
-
     // verify we actually sent this packet, check the store
     abortTransactionUnless(provableStore.get(packetCommitmentPath(packet.sourcePort, packet.sourceChannel, packet.sequence))
            === hash(packet.data, packet.timeoutHeight, packet.timeoutTimestamp))
 
-    if channel.order === ORDERED
+    if channel.order === ORDERED {
+      // ordered channel: check that packet has not been received
+      abortTransactionUnless(nextSequenceRecv <= packet.sequence)
       // ordered channel: check that the recv sequence is as claimed
       abortTransactionUnless(connection.verifyNextSequenceRecv(
         proofHeight,
@@ -734,7 +733,7 @@ function timeoutPacket(
         packet.destChannel,
         nextSequenceRecv
       ))
-    else
+    } else
       // unordered channel: verify absence of acknowledgement at packet index
       abortTransactionUnless(connection.verifyPacketAcknowledgementAbsence(
         proofHeight,

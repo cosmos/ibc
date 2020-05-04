@@ -286,7 +286,7 @@ function onTimeoutPacket(packet: Packet) {
 ```typescript
 function refundTokens(packet: Packet) {
   FungibleTokenPacketData data = packet.data
-  prefix = "{packet.sourcePort}/{packet.sourceChannel}"
+  prefix = "{packet.destPort}/{packet.destChannel}"
   source = data.denomination.slice(0, len(prefix)) === prefix
   if source {
     // sender was source chain, unescrow tokens
