@@ -636,12 +636,12 @@ function acknowledgePacket(
     abortTransactionUnless(channel !== null)
     abortTransactionUnless(channel.state === OPEN)
     abortTransactionUnless(authenticateCapability(channelCapabilityPath(packet.sourcePort, packet.sourceChannel), capability))
+    abortTransactionUnless(packet.destPort === channel.counterpartyPortIdentifier)
     abortTransactionUnless(packet.destChannel === channel.counterpartyChannelIdentifier)
 
     connection = provableStore.get(connectionPath(channel.connectionHops[0]))
     abortTransactionUnless(connection !== null)
     abortTransactionUnless(connection.state === OPEN)
-    abortTransactionUnless(packet.destPort === channel.counterpartyPortIdentifier)
 
     // verify we sent the packet and haven't cleared it out yet
     abortTransactionUnless(provableStore.get(packetCommitmentPath(packet.sourcePort, packet.sourceChannel, packet.sequence))
@@ -659,10 +659,10 @@ function acknowledgePacket(
 
     // abort transaction unless acknowledgement is processed in order
     if (channel.order === ORDERED) {
-      nextSequenceAck = provableStore.get(nextSequenceAckPath(packet.destPort, packet.destChannel))
+      nextSequenceAck = provableStore.get(nextSequenceAckPath(packet.sourcePort, packet.sourceChannel))
       abortTransactionUnless(packet.sequence === nextSequenceAck)
       nextSequenceAck = nextSequenceAck + 1
-      provableStore.set(nextSequenceAckPath(packet.destPort, packet.destChannel), nextSequenceAck)
+      provableStore.set(nextSequenceAckPath(packet.sourcePort, packet.sourceChannel), nextSequenceAck)
     }
 
     // all assertions passed, we can alter state
