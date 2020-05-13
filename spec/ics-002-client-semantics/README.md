@@ -229,6 +229,11 @@ If the provided header was valid, the client MUST also mutate internal state to 
 now-finalised consensus roots and update any necessary signature authority tracking (e.g.
 changes to the validator set) for future calls to the validity predicate.
 
+Clients MAY have time-sensitive validity predicates, such that if no header is provided for a period of time
+(e.g. an unbonding period of three weeks) it will no longer be possible to update the client.
+In this case, a permissioned entity such as a chain governance system or trusted multi-signature MAY be allowed
+to intervene to unfreeze a frozen client & provide a new correct header.
+
 #### Misbehaviour predicate
 
 A misbehaviour predicate is an opaque function defined by a client type, used to check if data
@@ -246,6 +251,10 @@ type checkMisbehaviourAndUpdateState = (bytes) => Void
 
 If misbehaviour was valid, the client MUST also mutate internal state to mark appropriate heights which
 were previously considered valid as invalid, according to the nature of the misbehaviour.
+
+Once misbehaviour is detected, clients SHOULD be frozen so that no future updates can be submitted.
+A permissioned entity such as a chain governance system or trusted multi-signature MAY be allowed
+to intervene to unfreeze a frozen client & provide a new correct header.
 
 #### ClientState
 
