@@ -1,10 +1,13 @@
-personal_ws-1.1 en 593 
+personal_ws-1.1 en 604 
 ABCI
 ABI
 ADR
 Agoric
 Agoric's
 Anca
+AuthorityId
+AuthoritySet
+AuthorityWeight
 Automatability
 BIP
 Betazoid
@@ -106,6 +109,7 @@ RootOfTrust
 RunTxPacketData
 ScopedCapabilityKeeper
 SignatureAndData
+SignedPrecommit
 SourceIdentifier
 SpeckleOS
 Statefulness
@@ -148,6 +152,7 @@ authenticateCapability
 authenticateTx
 authenticationKey
 authenticationPath
+authoritySet
 backend
 batchVerifyMembership
 batchVerifyNonMembership
@@ -391,6 +396,7 @@ newPublicKey
 newState
 newpubkey
 nextSequenceAck
+nextSequenceAckPath
 nextSequenceRecv
 nextSequenceRecvKey
 nextSequenceRecvOrAcknowledgement
@@ -507,10 +513,12 @@ secondHeader
 sendPacket
 sentPacketLogs
 serialisable
+setId
 sharding
 sig
 signatureOne
 signatureTwo
+signedPrecommit
 slashable
 sourceChannel
 sourcePort
@@ -526,6 +534,7 @@ subprotocol
 subprotocols
 substate
 synchrony
+targetHash
 th
 thresholding
 timeframe
@@ -591,4 +600,6 @@ verifyPacketAcknowledgement
 verifyPacketAcknowledgementAbsence
 verifyPacketCommitment
 verifyPacketData
+visitedHashes
+votesAncestries
 whitelist
