@@ -52,6 +52,8 @@ The separator `"/"` is used to separate and concatenate two identifiers or an id
 
 Variable interpolation, denoted by curly braces, is used throughout this specification as shorthand to define path formats, e.g. `client/{clientIdentifier}/consensusState`.
 
+All identifiers, and all strings listed in this specification, must be encoded as ASCII unless otherwise specified.
+
 ### Key/value Store
 
 The host state machine MUST provide a key/value store interface 
