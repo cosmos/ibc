@@ -1,4 +1,4 @@
-personal_ws-1.1 en 603 
+personal_ws-1.1 en 604 
 ABCI
 ABI
 ADR
@@ -518,6 +518,7 @@ sharding
 sig
 signatureOne
 signatureTwo
+signedPrecommit
 slashable
 sourceChannel
 sourcePort
