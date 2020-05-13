@@ -330,7 +330,7 @@ function connOpenTry(
     expected = ConnectionEnd{INIT, desiredIdentifier, getCommitmentPrefix(), counterpartyClientIdentifier,
                              clientIdentifier, counterpartyVersions}
     version = pickVersion(counterpartyVersions)
-    connection = ConnectionEnd{state, counterpartyConnectionIdentifier, counterpartyPrefix,
+    connection = ConnectionEnd{TRYOPEN, counterpartyConnectionIdentifier, counterpartyPrefix,
                                clientIdentifier, counterpartyClientIdentifier, version}
     abortTransactionUnless(connection.verifyConnectionState(proofHeight, proofInit, counterpartyConnectionIdentifier, expected))
     abortTransactionUnless(connection.verifyClientConsensusState(
@@ -345,7 +345,6 @@ function connOpenTry(
         previous.counterpartyClientIdentifier === counterpartyClientIdentifier &&
         previous.version === version))
     identifier = desiredIdentifier
-    state = TRYOPEN
     provableStore.set(connectionPath(identifier), connection)
     addConnectionToClient(clientIdentifier, identifier)
 }
