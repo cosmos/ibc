@@ -437,7 +437,13 @@ since the other end has been closed.
 
 Calling modules MAY atomically execute appropriate application logic in conjunction with calling `chanCloseConfirm`.
 
-Once closed, channels cannot be reopened.
+Once closed, channels cannot be reopened and identifiers cannot be reused. Identifier reuse is prevented because
+we want to prevent potential replay of previously sent packets. The replay problem is analogous to using sequence
+numbers with signed messages, except where the light client algorithm "signs" the messages (IBC packets), and the replay
+prevention sequence is the combination of port identifier, channel identifier, and packet sequence - hence we cannot
+allow the same port identifier & channel identifier to be reused again with a sequence reset to zero, since this
+might allow packets to be replayed. It would be possible to safely reuse identifiers if timeouts of a particular
+maximum height/time were mandated & tracked, and future specification versions may incorporate this feature.
 
 ```typescript
 function chanCloseConfirm(
