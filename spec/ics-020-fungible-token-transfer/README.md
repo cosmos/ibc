@@ -203,7 +203,9 @@ function createOutgoingPacket(
   destPort: string,
   destChannel: string,
   sourcePort: string,
-  sourceChannel: string) {
+  sourceChannel: string,
+  timeoutHeight: uint64,
+  timeoutTimestamp: uint64) {
   // inspect the denomination to determine whether or not we are the source chain
   prefix = "{destPort}/{destChannel}"
   source = denomination.slice(0, len(prefix)) === prefix
@@ -222,7 +224,7 @@ function createOutgoingPacket(
     bank.BurnCoins(sender, denomination, amount)
   }
   FungibleTokenPacketData data = FungibleTokenPacketData{denomination, amount, sender, receiver}
-  handler.sendPacket(Packet{destPort, destChannel, sourcePort, sourceChannel, data}, getCapability("port"))
+  handler.sendPacket(Packet{timeoutHeight, timeoutTimestamp, destPort, destChannel, sourcePort, sourceChannel, data}, getCapability("port"))
 }
 ```
 
