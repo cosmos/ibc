@@ -1,4 +1,4 @@
-personal_ws-1.1 en 604 
+personal_ws-1.1 en 609 
 ABCI
 ABI
 ADR
@@ -143,6 +143,7 @@ abortTransactionUnless
 acc
 ack
 acknowledgePacket
+acks
 addChannelToConnection
 addConnectionToClient
 applyPrefix
@@ -183,6 +184,7 @@ changelog
 channelCapability
 channelCapabilityPath
 channelEnd
+channelEnds
 channelEscrowAddresses
 channelId
 channelIdentifier
@@ -512,6 +514,9 @@ sdk
 secondHeader
 sendPacket
 sentPacketLogs
+seqAcks
+seqRecvs
+seqSends
 serialisable
 setId
 sharding
