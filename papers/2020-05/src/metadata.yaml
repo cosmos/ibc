@@ -5,14 +5,6 @@ author:
     affiliation: Interchain GmbH
     location: Berlin, Germany
     email: cwgoes@interchain.berlin
-  - name: Ethan Buchman
-    affiliation: Informal Systems
-    location: Toronto, Ontario
-    email: ethan@informal.systems
-  - name: Dean Tribble
-    affiliation: Agoric Systems
-    location: San Francisco, California
-    email: tribble@agoric.com
 keywords:
   - ibc
   - interblockchain

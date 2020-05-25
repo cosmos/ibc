@@ -40,9 +40,13 @@
 
 !include src/fungible-token-transfer.md
 
-# Conclusion
+# Testing & deployment
 
-!include src/conclusion.md
+!include src/testing-and-deployment.md
+
+# Future work
+
+!include src/future-work.md
 
 # Acknowledgements
 
