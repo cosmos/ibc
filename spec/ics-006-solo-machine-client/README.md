@@ -114,7 +114,7 @@ The solo machine client `checkValidityAndUpdateState` function checks that the c
 function checkValidityAndUpdateState(
   clientState: ClientState,
   header: Header) {
-  assert(sequence === clientState.consensusState.sequence)
+  assert(header.sequence === clientState.consensusState.sequence)
   assert(checkSignature(header.newPublicKey, header.sequence, header.signature))
   clientState.consensusState.publicKey = header.newPublicKey
   clientState.consensusState.sequence++
