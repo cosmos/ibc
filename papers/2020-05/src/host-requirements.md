@@ -222,5 +222,3 @@ type queryByTopic = (height: uint64, topic: string) => []byte[]
 ```
 
 More complex query functionality MAY also be supported, and may allow for more efficient relayer process queries, but is not required.
-
-

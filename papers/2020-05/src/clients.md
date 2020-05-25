@@ -101,17 +101,9 @@ and previous state roots invalidated as necessary.
 The `ConsensusState` of a chain MUST have a canonical serialisation, so that other chains can check
 that a stored consensus state is equal to another (see [ICS 24](../ics-024-host-requirements) for the keyspace table).
 
-```typescript
-type ConsensusState = bytes
-```
-
 The `ConsensusState` MUST be stored under a particular key, defined below, so that other chains can verify that a particular consensus state has been stored.
 
 The `ConsensusState` MUST define a `getTimestamp()` method which returns the timestamp associated with that consensus state:
-
-```typescript
-type getTimestamp = ConsensusState => uint64
-```
 
 #### Header
 
@@ -119,37 +111,10 @@ A `Header` is an opaque data structure defined by a client type which provides i
 Headers can be submitted to an associated client to update the stored `ConsensusState`. They likely contain a height, a proof,
 a commitment root, and possibly updates to the validity predicate.
 
-```typescript
-type Header = bytes
-```
-
 #### Consensus
 
 `Consensus` is a `Header` generating function which takes the previous
 `ConsensusState` with the messages and returns the result.
-
-```typescript
-type Consensus = (ConsensusState, [Message]) => Header
-```
-
-
-### Blockchain
-
-A blockchain is a consensus algorithm which generates valid `Header`s.
-It generates a unique list of headers starting from a genesis `ConsensusState` with arbitrary
-messages.
-
-`Blockchain` is defined as
-
-```typescript
-interface Blockchain {
-  genesis: ConsensusState
-  consensus: Consensus
-}
-```
-where
-  * `Genesis` is the genesis `ConsensusState`
-  * `Consensus` is the header generating function
 
 The headers generated from a `Blockchain` are expected to satisfy the following:
 
@@ -193,10 +158,6 @@ for the given parent `Header` and the list of network messages.
 
 The validity predicate & client state update logic are combined into a single `checkValidityAndUpdateState` type, which is defined as
 
-```typescript
-type checkValidityAndUpdateState = (Header) => Void
-```
-
 `checkValidityAndUpdateState` MUST throw an exception if the provided header was not valid.
 
 If the provided header was valid, the client MUST also mutate internal state to store
@@ -217,10 +178,6 @@ state transitions, or other evidence of malfeasance as defined by the consensus 
 
 The misbehaviour predicate & client state update logic are combined into a single `checkMisbehaviourAndUpdateState` type, which is defined as
 
-```typescript
-type checkMisbehaviourAndUpdateState = (bytes) => Void
-```
-
 `checkMisbehaviourAndUpdateState` MUST throw an exception if the provided evidence was not valid.
 
 If misbehaviour was valid, the client MUST also mutate internal state to mark appropriate heights which
@@ -238,134 +195,16 @@ It may keep arbitrary internal state to track verified roots and past misbehavio
 Light clients are representation-opaque — different consensus algorithms can define different light client update algorithms —
 but they must expose this common set of query functions to the IBC handler.
 
-```typescript
-type ClientState = bytes
-```
-
 Client types MUST define a method to initialise a client state with a provided consensus state, writing to internal state as appropriate.
 
-```typescript
-type initialise = (consensusState: ConsensusState) => ClientState
-```
-
-Client types MUST define a method to fetch the current height (height of the most recent validated header).
-
-```typescript
-type latestClientHeight = (
-  clientState: ClientState)
-  => uint64
-```
-
-#### CommitmentProof
-
-`CommitmentProof` is an opaque data structure defined by a client type in accordance with [ICS 23](../ics-023-vector-commitments).
-It is utilised to verify presence or absence of a particular key/value pair in state
-at a particular finalised height (necessarily associated with a particular commitment root).
+Client types MUST define a method to fetch the current height (height of the most recent validated header) & current timestamp.
 
 #### State verification
 
 Client types must define functions to authenticate internal state of the state machine which the client tracks.
 Internal implementation details may differ (for example, a loopback client could simply read directly from the state and require no proofs).
 
-`verifyClientConsensusState` verifies a proof of the consensus state of the specified client stored on the target machine.
-
-```typescript
-type verifyClientConsensusState = (
-  clientState: ClientState,
-  height: uint64,
-  proof: CommitmentProof,
-  clientIdentifier: Identifier,
-  consensusStateHeight: uint64,
-  consensusState: ConsensusState)
-  => boolean
-```
-
-`verifyConnectionState` verifies a proof of the connection state of the specified connection end stored on the target machine.
-
-```typescript
-type verifyConnectionState = (
-  clientState: ClientState,
-  height: uint64,
-  prefix: CommitmentPrefix,
-  proof: CommitmentProof,
-  connectionIdentifier: Identifier,
-  connectionEnd: ConnectionEnd)
-  => boolean
-```
-
-`verifyChannelState` verifies a proof of the channel state of the specified channel end, under the specified port, stored on the target machine.
-
-```typescript
-type verifyChannelState = (
-  clientState: ClientState,
-  height: uint64,
-  prefix: CommitmentPrefix,
-  proof: CommitmentProof,
-  portIdentifier: Identifier,
-  channelIdentifier: Identifier,
-  channelEnd: ChannelEnd)
-  => boolean
-```
-
-`verifyPacketData` verifies a proof of an outgoing packet commitment at the specified port, specified channel, and specified sequence.
-
-```typescript
-type verifyPacketData = (
-  clientState: ClientState,
-  height: uint64,
-  prefix: CommitmentPrefix,
-  proof: CommitmentProof,
-  portIdentifier: Identifier,
-  channelIdentifier: Identifier,
-  sequence: uint64,
-  data: bytes)
-  => boolean
-```
-
-`verifyPacketAcknowledgement` verifies a proof of an incoming packet acknowledgement at the specified port, specified channel, and specified sequence.
-
-```typescript
-type verifyPacketAcknowledgement = (
-  clientState: ClientState,
-  height: uint64,
-  prefix: CommitmentPrefix,
-  proof: CommitmentProof,
-  portIdentifier: Identifier,
-  channelIdentifier: Identifier,
-  sequence: uint64,
-  acknowledgement: bytes)
-  => boolean
-```
-
-`verifyPacketAcknowledgementAbsence` verifies a proof of the absence of an incoming packet acknowledgement at the specified port, specified channel, and specified sequence.
-
-```typescript
-type verifyPacketAcknowledgementAbsence = (
-  clientState: ClientState,
-  height: uint64,
-  prefix: CommitmentPrefix,
-  proof: CommitmentProof,
-  portIdentifier: Identifier,
-  channelIdentifier: Identifier,
-  sequence: uint64)
-  => boolean
-```
-
-`verifyNextSequenceRecv` verifies a proof of the next sequence number to be received of the specified channel at the specified port.
-
-```typescript
-type verifyNextSequenceRecv = (
-  clientState: ClientState,
-  height: uint64,
-  prefix: CommitmentPrefix,
-  proof: CommitmentProof,
-  portIdentifier: Identifier,
-  channelIdentifier: Identifier,
-  nextSequenceRecv: uint64)
-  => boolean
-```
-
-### Implementation strategies
+### Example client instantiations
 
 #### Loopback
 
@@ -391,30 +230,12 @@ security assumptions of proxy machine correctness.
 For clients of state machines with Merklized state trees, these functions can be implemented by calling `verifyMembership` or `verifyNonMembership`, using a verified Merkle
 root stored in the `ClientState`, to verify presence or absence of particular key/value pairs in state at particular heights in accordance with [ICS 23](../ics-023-vector-commitments).
 
-```typescript
-type verifyMembership = (ClientState, uint64, CommitmentProof, Path, Value) => boolean
-```
-
-```typescript
-type verifyNonMembership = (ClientState, uint64, CommitmentProof, Path) => boolean
-```
-
-### Sub-protocols
-
-IBC handlers MUST implement the functions defined below.
-
 #### Identifier validation
 
 Clients are stored under a unique `Identifier` prefix.
 This ICS does not require that client identifiers be generated in a particular manner, only that they be unique.
 However, it is possible to restrict the space of `Identifier`s if required.
 The validation function `validateClientIdentifier` MAY be provided.
-
-```typescript
-type validateClientIdentifier = (id: Identifier) => boolean
-```
-
-If not provided, the default `validateClientIdentifier` will always return `true`.
 
 #### Utilising past roots
 
@@ -424,22 +245,11 @@ a particular past root to reference, which is looked up by height. IBC handler f
 must ensure that they also perform any requisite checks on the height passed in by the caller to ensure
 logical correctness.
 
+### Client lifecycle
+
 #### Create
 
 Calling `createClient` with the specified identifier & initial consensus state creates a new client.
-
-```typescript
-function createClient(
-  id: Identifier,
-  clientType: ClientType,
-  consensusState: ConsensusState) {
-    abortTransactionUnless(validateClientIdentifier(id))
-    abortTransactionUnless(privateStore.get(clientStatePath(id)) === null)
-    abortSystemUnless(provableStore.get(clientTypePath(id)) === null)
-    clientType.initialise(consensusState)
-    provableStore.set(clientTypePath(id), clientType)
-}
-```
 
 #### Update
 
@@ -458,7 +268,31 @@ cannot safely be done completely automatically, but chains implementing IBC coul
 to allow governance mechanisms to perform these actions
 (perhaps even per-client/connection/channel in a multi-sig or contract).
 
-```typescript
+#### Misbehaviour
+
+If the client detects evidence of misbehaviour, the client can be alerted, possibly invalidating
+previously valid state roots & preventing future updates.
+
+\begin{figure*}[!h]
+
+\begin{subfigure}{1.0\textwidth}
+\begin{lstlisting}[language=JavaScript]
+function createClient(
+  id: Identifier,
+  clientType: ClientType,
+  consensusState: ConsensusState) {
+    abortTransactionUnless(validateClientIdentifier(id))
+    abortTransactionUnless(privateStore.get(clientStatePath(id)) === null)
+    abortSystemUnless(provableStore.get(clientTypePath(id)) === null)
+    clientType.initialise(consensusState)
+    provableStore.set(clientTypePath(id), clientType)
+}
+\end{lstlisting}
+\caption{Client creation}
+\end{subfigure}
+
+\begin{subfigure}{1.0\textwidth}
+\begin{lstlisting}[language=JavaScript]
 function updateClient(
   id: Identifier,
   header: Header) {
@@ -468,14 +302,12 @@ function updateClient(
     abortTransactionUnless(clientState !== null)
     clientType.checkValidityAndUpdateState(clientState, header)
 }
-```
+\end{lstlisting}
+\caption{Client update handling}
+\end{subfigure}
 
-#### Misbehaviour
-
-If the client detects evidence of misbehaviour, the client can be alerted, possibly invalidating
-previously valid state roots & preventing future updates.
-
-```typescript
+\begin{subfigure}{1.0\textwidth}
+\begin{lstlisting}[language=JavaScript]
 function submitMisbehaviourToClient(
   id: Identifier,
   evidence: bytes) {
@@ -485,5 +317,121 @@ function submitMisbehaviourToClient(
     abortTransactionUnless(clientState !== null)
     clientType.checkMisbehaviourAndUpdateState(clientState, evidence)
 }
-```
+\end{lstlisting}
+\caption{Misbehaviour submission}
+\end{subfigure}
 
+\caption{Client algorithm pseudocode}
+
+\end{figure*}
+
+\begin{figure*}[!h]
+
+\begin{subfigure}{1.0\textwidth}
+\begin{lstlisting}[language=JavaScript]
+type verifyClientConsensusState = (
+  clientState: ClientState,
+  height: uint64,
+  proof: CommitmentProof,
+  clientIdentifier: Identifier,
+  consensusStateHeight: uint64,
+  consensusState: ConsensusState)
+  => boolean
+\end{lstlisting}
+\caption{verifyClientConsensusState verifies a proof of the consensus state of the specified client stored on the target machine}
+\end{subfigure}
+
+\begin{subfigure}{1.0\textwidth}
+\begin{lstlisting}[language=JavaScript]
+type verifyConnectionState = (
+  clientState: ClientState,
+  height: uint64,
+  prefix: CommitmentPrefix,
+  proof: CommitmentProof,
+  connectionIdentifier: Identifier,
+  connectionEnd: ConnectionEnd)
+  => boolean
+\end{lstlisting}
+\caption{verifyConnectionState verifies a proof of the connection state of the specified connection end stored on the target machine}
+\end{subfigure}
+
+\begin{subfigure}{1.0\textwidth}
+\begin{lstlisting}[language=JavaScript]
+type verifyChannelState = (
+  clientState: ClientState,
+  height: uint64,
+  prefix: CommitmentPrefix,
+  proof: CommitmentProof,
+  portIdentifier: Identifier,
+  channelIdentifier: Identifier,
+  channelEnd: ChannelEnd)
+  => boolean
+\end{lstlisting}
+\caption{verifyChannelState verifies a proof of the channel state of the specified channel end, under the specified port, stored on the target machine}
+\end{subfigure}
+
+\begin{subfigure}{1.0\textwidth}
+\begin{lstlisting}[language=JavaScript]
+type verifyPacketData = (
+  clientState: ClientState,
+  height: uint64,
+  prefix: CommitmentPrefix,
+  proof: CommitmentProof,
+  portIdentifier: Identifier,
+  channelIdentifier: Identifier,
+  sequence: uint64,
+  data: bytes)
+  => boolean
+\end{lstlisting}
+\caption{verifyPacketData verifies a proof of an outgoing packet commitment at the specified port, specified channel, and specified sequence}
+\end{subfigure}
+
+\begin{subfigure}{1.0\textwidth}
+\begin{lstlisting}[language=JavaScript]
+type verifyPacketAcknowledgement = (
+  clientState: ClientState,
+  height: uint64,
+  prefix: CommitmentPrefix,
+  proof: CommitmentProof,
+  portIdentifier: Identifier,
+  channelIdentifier: Identifier,
+  sequence: uint64,
+  acknowledgement: bytes)
+  => boolean
+\end{lstlisting}
+\caption{verifyPacketAcknowledgement verifies a proof of an incoming packet acknowledgement at the specified port, specified channel, and specified sequence}
+\end{subfigure}
+
+\begin{subfigure}{1.0\textwidth}
+\begin{lstlisting}[language=JavaScript]
+type verifyPacketAcknowledgementAbsence = (
+  clientState: ClientState,
+  height: uint64,
+  prefix: CommitmentPrefix,
+  proof: CommitmentProof,
+  portIdentifier: Identifier,
+  channelIdentifier: Identifier,
+  sequence: uint64)
+  => boolean
+\end{lstlisting}
+\caption{verifyPacketAcknowledgementAbsence verifies a proof of the absence of an incoming packet acknowledgement at the specified port, specified channel, and specified sequence}
+\end{subfigure}
+
+\begin{subfigure}{1.0\textwidth}
+\begin{lstlisting}[language=JavaScript]
+type verifyNextSequenceRecv = (
+  clientState: ClientState,
+  height: uint64,
+  prefix: CommitmentPrefix,
+  proof: CommitmentProof,
+  portIdentifier: Identifier,
+  channelIdentifier: Identifier,
+  nextSequenceRecv: uint64)
+  => boolean
+\end{lstlisting}
+\caption{verifyNextSequenceRecv verifies a proof of the next sequence number to be received of the specified channel at the specified port}
+\end{subfigure}
+
+\caption{Client state verification functions}
+
+\end{figure*}

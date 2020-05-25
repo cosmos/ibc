@@ -2,6 +2,10 @@
 
 !include src/introduction.md
 
+# Prior work
+
+!include src/prior-work.md
+
 # Protocol structure
 
 !include src/structure.md
