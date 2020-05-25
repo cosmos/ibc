@@ -40,5 +40,9 @@
 
 !include src/conclusion.md
 
+# Acknowledgements
+
+!include src/acknowledgements.md
+
 # References
 
