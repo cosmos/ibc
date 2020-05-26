@@ -188,6 +188,177 @@ it specifies will own the other end of the created channel on the counterparty c
 could be implemented to provide this).
 
 ```typescript
+
+```
+
+The `chanOpenTry` function is called by a module to accept the first step of a channel opening handshake initiated by a module on another chain.
+
+```typescript
+
+```
+
+The `chanOpenAck` is called by the handshake-originating module to acknowledge the acceptance of the initial request by the
+counterparty module on the other chain.
+
+```typescript
+```
+
+The `chanOpenConfirm` function is called by the handshake-accepting module to acknowledge the acknowledgement
+of the handshake-originating module on the other chain and finish the channel opening handshake.
+
+```typescript
+
+```
+
+#### Closing handshake
+
+The `chanCloseInit` function is called by either module to close their end of the channel. Once closed, channels cannot be reopened.
+
+Calling modules MAY atomically execute appropriate application logic in conjunction with calling `chanCloseInit`.
+
+Any in-flight packets can be timed-out as soon as a channel is closed.
+
+```typescript
+
+```
+
+The `chanCloseConfirm` function is called by the counterparty module to close their end of the channel,
+since the other end has been closed.
+
+Calling modules MAY atomically execute appropriate application logic in conjunction with calling `chanCloseConfirm`.
+
+Once closed, channels cannot be reopened and identifiers cannot be reused. Identifier reuse is prevented because
+we want to prevent potential replay of previously sent packets. The replay problem is analogous to using sequence
+numbers with signed messages, except where the light client algorithm "signs" the messages (IBC packets), and the replay
+prevention sequence is the combination of port identifier, channel identifier, and packet sequence - hence we cannot
+allow the same port identifier & channel identifier to be reused again with a sequence reset to zero, since this
+might allow packets to be replayed. It would be possible to safely reuse identifiers if timeouts of a particular
+maximum height/time were mandated & tracked, and future specification versions may incorporate this feature.
+
+```typescript
+```
+
+#### Sending packets
+
+The `sendPacket` function is called by a module in order to send an IBC packet on a channel end owned by the calling module to the corresponding module on the counterparty chain.
+
+Calling modules MUST execute application logic atomically in conjunction with calling `sendPacket`.
+
+The IBC handler performs the following steps in order:
+
+- Checks that the channel & connection are open to send packets
+- Checks that the calling module owns the sending port
+- Checks that the packet metadata matches the channel & connection information
+- Checks that the timeout height specified has not already passed on the destination chain
+- Increments the send sequence counter associated with the channel
+- Stores a constant-size commitment to the packet data & packet timeout
+
+Note that the full packet is not stored in the state of the chain - merely a short hash-commitment to the data & timeout value. The packet data can be calculated from the transaction execution and possibly returned as log output which relayers can index.
+
+```typescript
+
+```
+
+### Receiving packets
+
+The `recvPacket` function is called by a module in order to receive & process an IBC packet sent on the corresponding channel end on the counterparty chain.
+
+Calling modules MUST execute application logic atomically in conjunction with calling `recvPacket`, likely beforehand to calculate the acknowledgement value.
+
+The IBC handler performs the following steps in order:
+
+- Checks that the channel & connection are open to receive packets
+- Checks that the calling module owns the receiving port
+- Checks that the packet metadata matches the channel & connection information
+- Checks that the packet sequence is the next sequence the channel end expects to receive (for ordered channels)
+- Checks that the timeout height has not yet passed
+- Checks the inclusion proof of packet data commitment in the outgoing chain's state
+- Sets the opaque acknowledgement value at a store path unique to the packet (if the acknowledgement is non-empty or the channel is unordered)
+- Increments the packet receive sequence associated with the channel end (ordered channels only)
+
+```typescript
+
+```
+
+#### Acknowledgements
+
+The `acknowledgePacket` function is called by a module to process the acknowledgement of a packet previously sent by
+the calling module on a channel to a counterparty module on the counterparty chain.
+`acknowledgePacket` also cleans up the packet commitment, which is no longer necessary since the packet has been received and acted upon.
+
+Calling modules MAY atomically execute appropriate application acknowledgement-handling logic in conjunction with calling `acknowledgePacket`.
+
+```typescript
+
+```
+
+### Timeouts
+
+Application semantics may require some timeout: an upper limit to how long the chain will wait for a transaction to be processed before considering it an error. Since the two chains have different local clocks, this is an obvious attack vector for a double spend - an attacker may delay the relay of the receipt or wait to send the packet until right after the timeout - so applications cannot safely implement naive timeout logic themselves.
+
+Note that in order to avoid any possible "double-spend" attacks, the timeout algorithm requires that the destination chain is running and reachable. One can prove nothing in a complete network partition, and must wait to connect; the timeout must be proven on the recipient chain, not simply the absence of a response on the sending chain.
+
+#### Sending end
+
+The `timeoutPacket` function is called by a module which originally attempted to send a packet to a counterparty module,
+where the timeout height or timeout timestamp has passed on the counterparty chain without the packet being committed, to prove that the packet
+can no longer be executed and to allow the calling module to safely perform appropriate state transitions.
+
+Calling modules MAY atomically execute appropriate application timeout-handling logic in conjunction with calling `timeoutPacket`.
+
+In the case of an ordered channel, `timeoutPacket` checks the `recvSequence` of the receiving channel end and closes the channel if a packet has timed out.
+
+In the case of an unordered channel, `timeoutPacket` checks the absence of an acknowledgement (which will have been written if the packet was received). Unordered channels are expected to continue in the face of timed-out packets.
+
+If relations are enforced between timeout heights of subsequent packets, safe bulk timeouts of all packets prior to a timed-out packet can be performed. This specification omits details for now.
+
+```typescript
+
+```
+
+#### Timing-out on close
+
+The `timeoutOnClose` function is called by a module in order to prove that the channel
+to which an unreceived packet was addressed has been closed, so the packet will never be received
+(even if the `timeoutHeight` or `timeoutTimestamp` has not yet been reached).
+
+#### Cleaning up state
+
+`cleanupPacket` is called by a module to remove a received packet commitment from storage. The receiving end must have already processed the packet (whether regularly or past timeout).
+
+In the ordered channel case, `cleanupPacket` cleans-up a packet on an ordered channel by proving that the packet has been received on the other end.
+
+In the unordered channel case, `cleanupPacket` cleans-up a packet on an unordered channel by proving that the associated acknowledgement has been written.
+
+```typescript
+```
+
+### Reasoning about race conditions
+
+#### Simultaneous handshake attempts
+
+If two machines simultaneously initiate channel opening handshakes with each other, attempting to use the same identifiers, both will fail and new identifiers must be used.
+
+#### Identifier allocation
+
+There is an unavoidable race condition on identifier allocation on the destination chain. Modules would be well-advised to utilise pseudo-random, non-valuable identifiers. Managing to claim the identifier that another module wishes to use, however, while annoying, cannot man-in-the-middle a handshake since the receiving module must already own the port to which the handshake was targeted.
+
+#### Timeouts / packet confirmation
+
+There is no race condition between a packet timeout and packet confirmation, as the packet will either have passed the timeout height prior to receipt or not.
+
+#### Man-in-the-middle attacks during handshakes
+
+Verification of cross-chain state prevents man-in-the-middle attacks for both connection handshakes & channel handshakes since all information (source, destination client, channel, etc.) is known by the module which starts the handshake and confirmed prior to handshake completion.
+
+#### Connection / channel closure with in-flight packets
+
+If a connection or channel is closed while packets are in-flight, the packets can no longer be received on the destination chain and can be timed-out on the source chain.
+
+\begin{figure*}[!h]
+
+\begin{subfigure}{1.0\textwidth}
+\begin{lstlisting}[language=JavaScript]
 function chanOpenInit(
   order: ChannelOrder,
   connectionHops: [Identifier],
@@ -215,11 +386,11 @@ function chanOpenInit(
     provableStore.set(nextSequenceAckPath(portIdentifier, channelIdentifier), 1)
     return channelCapability
 }
-```
+\end{lstlisting}
+\end{subfigure}
 
-The `chanOpenTry` function is called by a module to accept the first step of a channel opening handshake initiated by a module on another chain.
-
-```typescript
+\begin{subfigure}{1.0\textwidth}
+\begin{lstlisting}[language=JavaScript]
 function chanOpenTry(
   order: ChannelOrder,
   connectionHops: [Identifier],
@@ -265,12 +436,11 @@ function chanOpenTry(
     provableStore.set(nextSequenceAckPath(portIdentifier, channelIdentifier), 1)
     return channelCapability
 }
-```
+\end{lstlisting}
+\end{subfigure}
 
-The `chanOpenAck` is called by the handshake-originating module to acknowledge the acceptance of the initial request by the
-counterparty module on the other chain.
-
-```typescript
+\begin{subfigure}{1.0\textwidth}
+\begin{lstlisting}[language=JavaScript]
 function chanOpenAck(
   portIdentifier: Identifier,
   channelIdentifier: Identifier,
@@ -296,12 +466,11 @@ function chanOpenAck(
     channel.version = counterpartyVersion
     provableStore.set(channelPath(portIdentifier, channelIdentifier), channel)
 }
-```
+\end{lstlisting}
+\end{subfigure}
 
-The `chanOpenConfirm` function is called by the handshake-accepting module to acknowledge the acknowledgement
-of the handshake-originating module on the other chain and finish the channel opening handshake.
-
-```typescript
+\begin{subfigure}{1.0\textwidth}
+\begin{lstlisting}[language=JavaScript]
 function chanOpenConfirm(
   portIdentifier: Identifier,
   channelIdentifier: Identifier,
@@ -326,17 +495,17 @@ function chanOpenConfirm(
     channel.state = OPEN
     provableStore.set(channelPath(portIdentifier, channelIdentifier), channel)
 }
-```
+\end{lstlisting}
+\end{subfigure}
 
-#### Closing handshake
+\caption{Channel opening handshake algorithm}
 
-The `chanCloseInit` function is called by either module to close their end of the channel. Once closed, channels cannot be reopened.
+\end{figure*}
 
-Calling modules MAY atomically execute appropriate application logic in conjunction with calling `chanCloseInit`.
+\begin{figure*}[!h]
 
-Any in-flight packets can be timed-out as soon as a channel is closed.
-
-```typescript
+\begin{subfigure}{1.0\textwidth}
+\begin{lstlisting}[language=JavaScript]
 function chanCloseInit(
   portIdentifier: Identifier,
   channelIdentifier: Identifier) {
@@ -350,22 +519,11 @@ function chanCloseInit(
     channel.state = CLOSED
     provableStore.set(channelPath(portIdentifier, channelIdentifier), channel)
 }
-```
+\end{lstlisting}
+\end{subfigure}
 
-The `chanCloseConfirm` function is called by the counterparty module to close their end of the channel,
-since the other end has been closed.
-
-Calling modules MAY atomically execute appropriate application logic in conjunction with calling `chanCloseConfirm`.
-
-Once closed, channels cannot be reopened and identifiers cannot be reused. Identifier reuse is prevented because
-we want to prevent potential replay of previously sent packets. The replay problem is analogous to using sequence
-numbers with signed messages, except where the light client algorithm "signs" the messages (IBC packets), and the replay
-prevention sequence is the combination of port identifier, channel identifier, and packet sequence - hence we cannot
-allow the same port identifier & channel identifier to be reused again with a sequence reset to zero, since this
-might allow packets to be replayed. It would be possible to safely reuse identifiers if timeouts of a particular
-maximum height/time were mandated & tracked, and future specification versions may incorporate this feature.
-
-```typescript
+\begin{subfigure}{1.0\textwidth}
+\begin{lstlisting}[language=JavaScript]
 function chanCloseConfirm(
   portIdentifier: Identifier,
   channelIdentifier: Identifier,
@@ -390,26 +548,18 @@ function chanCloseConfirm(
     channel.state = CLOSED
     provableStore.set(channelPath(portIdentifier, channelIdentifier), channel)
 }
-```
+\end{lstlisting}
+\end{subfigure}
 
-#### Sending packets
+\caption{Channel closing handshake algorithm}
 
-The `sendPacket` function is called by a module in order to send an IBC packet on a channel end owned by the calling module to the corresponding module on the counterparty chain.
+\end{figure*}
 
-Calling modules MUST execute application logic atomically in conjunction with calling `sendPacket`.
 
-The IBC handler performs the following steps in order:
+\begin{figure*}[!h]
 
-- Checks that the channel & connection are open to send packets
-- Checks that the calling module owns the sending port
-- Checks that the packet metadata matches the channel & connection information
-- Checks that the timeout height specified has not already passed on the destination chain
-- Increments the send sequence counter associated with the channel
-- Stores a constant-size commitment to the packet data & packet timeout
-
-Note that the full packet is not stored in the state of the chain - merely a short hash-commitment to the data & timeout value. The packet data can be calculated from the transaction execution and possibly returned as log output which relayers can index.
-
-```typescript
+\begin{subfigure}{1.0\textwidth}
+\begin{lstlisting}[language=JavaScript]
 function sendPacket(packet: Packet) {
     channel = provableStore.get(channelPath(packet.sourcePort, packet.sourceChannel))
 
@@ -440,26 +590,11 @@ function sendPacket(packet: Packet) {
     // log that a packet has been sent
     emitLogEntry("sendPacket", {sequence: packet.sequence, data: packet.data, timeoutHeight: packet.timeoutHeight, timeoutTimestamp: packet.timeoutTimestamp})
 }
-```
+\end{lstlisting}
+\end{subfigure}
 
-### Receiving packets
-
-The `recvPacket` function is called by a module in order to receive & process an IBC packet sent on the corresponding channel end on the counterparty chain.
-
-Calling modules MUST execute application logic atomically in conjunction with calling `recvPacket`, likely beforehand to calculate the acknowledgement value.
-
-The IBC handler performs the following steps in order:
-
-- Checks that the channel & connection are open to receive packets
-- Checks that the calling module owns the receiving port
-- Checks that the packet metadata matches the channel & connection information
-- Checks that the packet sequence is the next sequence the channel end expects to receive (for ordered channels)
-- Checks that the timeout height has not yet passed
-- Checks the inclusion proof of packet data commitment in the outgoing chain's state
-- Sets the opaque acknowledgement value at a store path unique to the packet (if the acknowledgement is non-empty or the channel is unordered)
-- Increments the packet receive sequence associated with the channel end (ordered channels only)
-
-```typescript
+\begin{subfigure}{1.0\textwidth}
+\begin{lstlisting}[language=JavaScript]
 function recvPacket(
   packet: OpaquePacket,
   proof: CommitmentProof,
@@ -511,17 +646,11 @@ function recvPacket(
     // return transparent packet
     return packet
 }
-```
+\end{lstlisting}
+\end{subfigure}
 
-#### Acknowledgements
-
-The `acknowledgePacket` function is called by a module to process the acknowledgement of a packet previously sent by
-the calling module on a channel to a counterparty module on the counterparty chain.
-`acknowledgePacket` also cleans up the packet commitment, which is no longer necessary since the packet has been received and acted upon.
-
-Calling modules MAY atomically execute appropriate application acknowledgement-handling logic in conjunction with calling `acknowledgePacket`.
-
-```typescript
+\begin{subfigure}{1.0\textwidth}
+\begin{lstlisting}[language=JavaScript]
 function acknowledgePacket(
   packet: OpaquePacket,
   acknowledgement: bytes,
@@ -570,29 +699,20 @@ function acknowledgePacket(
     // return transparent packet
     return packet
 }
-```
+\end{lstlisting}
+\end{subfigure}
 
-### Timeouts
+\begin{subfigure}{1.0\textwidth}
+\begin{lstlisting}[language=JavaScript]
 
-Application semantics may require some timeout: an upper limit to how long the chain will wait for a transaction to be processed before considering it an error. Since the two chains have different local clocks, this is an obvious attack vector for a double spend - an attacker may delay the relay of the receipt or wait to send the packet until right after the timeout - so applications cannot safely implement naive timeout logic themselves.
+\caption{Packet transmission, receipt, and acknowledgement}
 
-Note that in order to avoid any possible "double-spend" attacks, the timeout algorithm requires that the destination chain is running and reachable. One can prove nothing in a complete network partition, and must wait to connect; the timeout must be proven on the recipient chain, not simply the absence of a response on the sending chain.
+\end{figure*}
 
-#### Sending end
+\begin{figure*}[!h]
 
-The `timeoutPacket` function is called by a module which originally attempted to send a packet to a counterparty module,
-where the timeout height or timeout timestamp has passed on the counterparty chain without the packet being committed, to prove that the packet
-can no longer be executed and to allow the calling module to safely perform appropriate state transitions.
-
-Calling modules MAY atomically execute appropriate application timeout-handling logic in conjunction with calling `timeoutPacket`.
-
-In the case of an ordered channel, `timeoutPacket` checks the `recvSequence` of the receiving channel end and closes the channel if a packet has timed out.
-
-In the case of an unordered channel, `timeoutPacket` checks the absence of an acknowledgement (which will have been written if the packet was received). Unordered channels are expected to continue in the face of timed-out packets.
-
-If relations are enforced between timeout heights of subsequent packets, safe bulk timeouts of all packets prior to a timed-out packet can be performed. This specification omits details for now.
-
-```typescript
+\begin{subfigure}{1.0\textwidth}
+\begin{lstlisting}[language=JavaScript]
 function timeoutPacket(
   packet: OpaquePacket,
   proof: CommitmentProof,
@@ -654,23 +774,11 @@ function timeoutPacket(
     // return transparent packet
     return packet
 }
-```
+\end{lstlisting}
+\end{subfigure}
 
-#### Timing-out on close
-
-The `timeoutOnClose` function is called by a module in order to prove that the channel
-to which an unreceived packet was addressed has been closed, so the packet will never be received
-(even if the `timeoutHeight` or `timeoutTimestamp` has not yet been reached).
-
-#### Cleaning up state
-
-`cleanupPacket` is called by a module to remove a received packet commitment from storage. The receiving end must have already processed the packet (whether regularly or past timeout).
-
-In the ordered channel case, `cleanupPacket` cleans-up a packet on an ordered channel by proving that the packet has been received on the other end.
-
-In the unordered channel case, `cleanupPacket` cleans-up a packet on an unordered channel by proving that the associated acknowledgement has been written.
-
-```typescript
+\begin{subfigure}{1.0\textwidth}
+\begin{lstlisting}[language=JavaScript]
 function cleanupPacket(
   packet: OpaquePacket,
   proof: CommitmentProof,
@@ -722,28 +830,9 @@ function cleanupPacket(
     // return transparent packet
     return packet
 }
-```
+\end{lstlisting}
+\end{subfigure}
 
-### Reasoning about race conditions
+\caption{Packet timeout handling \& cleanup}
 
-#### Simultaneous handshake attempts
-
-If two machines simultaneously initiate channel opening handshakes with each other, attempting to use the same identifiers, both will fail and new identifiers must be used.
-
-#### Identifier allocation
-
-There is an unavoidable race condition on identifier allocation on the destination chain. Modules would be well-advised to utilise pseudo-random, non-valuable identifiers. Managing to claim the identifier that another module wishes to use, however, while annoying, cannot man-in-the-middle a handshake since the receiving module must already own the port to which the handshake was targeted.
-
-#### Timeouts / packet confirmation
-
-There is no race condition between a packet timeout and packet confirmation, as the packet will either have passed the timeout height prior to receipt or not.
-
-#### Man-in-the-middle attacks during handshakes
-
-Verification of cross-chain state prevents man-in-the-middle attacks for both connection handshakes & channel handshakes since all information (source, destination client, channel, etc.) is known by the module which starts the handshake and confirmed prior to handshake completion.
-
-#### Connection / channel closure with in-flight packets
-
-If a connection or channel is closed while packets are in-flight, the packets can no longer be received on the destination chain and can be timed-out on the source chain.
-
-
+\end{figure*}
