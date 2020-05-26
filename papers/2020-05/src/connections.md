@@ -24,25 +24,6 @@ An *actor*, as referred to in this specification, is an entity capable of execut
 
 This ICS defines the `ConnectionState` and `ConnectionEnd` types:
 
-```typescript
-enum ConnectionState {
-  INIT,
-  TRYOPEN,
-  OPEN,
-}
-```
-
-```typescript
-interface ConnectionEnd {
-  state: ConnectionState
-  counterpartyConnectionIdentifier: Identifier
-  counterpartyPrefix: CommitmentPrefix
-  clientIdentifier: Identifier
-  counterpartyClientIdentifier: Identifier
-  version: string | []string
-}
-```
-
 - The `state` field describes the current state of the connection end.
 - The `counterpartyConnectionIdentifier` field identifies the connection end on the counterparty chain associated with this connection.
 - The `counterpartyPrefix` field contains the prefix used for state verification on the counterparty chain associated with this connection.
@@ -105,7 +86,6 @@ An implementation MUST define a function `pickVersion` to choose a version from 
 type pickVersion = ([]string) => string
 ```
 
-
 #### Opening Handshake
 
 The opening handshake sub-protocol serves to initialise consensus states for two chains on each other.
@@ -128,10 +108,42 @@ At the end of an opening handshake between two chains implementing the sub-proto
 
 This sub-protocol need not be permissioned, modulo anti-spam measures.
 
-
 *ConnOpenInit* initialises a connection attempt on chain A.
 
-```typescript
+*ConnOpenTry* relays notice of a connection attempt on chain A to chain B (this code is executed on chain B).
+
+*ConnOpenAck* relays acceptance of a connection open attempt from chain B back to chain A (this code is executed on chain A).
+
+*ConnOpenConfirm* confirms opening of a connection on chain A to chain B, after which the connection is open on both chains (this code is executed on chain B).
+
+\begin{figure*}[!h]
+
+\begin{subfigure}{1.0\textwidth}
+\begin{lstlisting}[language=JavaScript]
+enum ConnectionState {
+  INIT,
+  TRYOPEN,
+  OPEN,
+}
+
+interface ConnectionEnd {
+  state: ConnectionState
+  counterpartyConnectionIdentifier: Identifier
+  counterpartyPrefix: CommitmentPrefix
+  clientIdentifier: Identifier
+  counterpartyClientIdentifier: Identifier
+  version: string | []string
+}
+\end{lstlisting}
+\end{subfigure}
+
+\caption{Connection types}
+\end{figure*}
+
+\begin{figure*}[!h]
+
+\begin{subfigure}{1.0\textwidth}
+\begin{lstlisting}[language=JavaScript]
 function connOpenInit(
   identifier: Identifier,
   desiredCounterpartyConnectionIdentifier: Identifier,
@@ -146,11 +158,11 @@ function connOpenInit(
     provableStore.set(connectionPath(identifier), connection)
     addConnectionToClient(clientIdentifier, identifier)
 }
-```
+\end{lstlisting}
+\end{subfigure}
 
-*ConnOpenTry* relays notice of a connection attempt on chain A to chain B (this code is executed on chain B).
-
-```typescript
+\begin{subfigure}{1.0\textwidth}
+\begin{lstlisting}[language=JavaScript]
 function connOpenTry(
   desiredIdentifier: Identifier,
   counterpartyConnectionIdentifier: Identifier,
@@ -186,11 +198,11 @@ function connOpenTry(
     provableStore.set(connectionPath(identifier), connection)
     addConnectionToClient(clientIdentifier, identifier)
 }
-```
+\end{lstlisting}
+\end{subfigure}
 
-*ConnOpenAck* relays acceptance of a connection open attempt from chain B back to chain A (this code is executed on chain A).
-
-```typescript
+\begin{subfigure}{1.0\textwidth}
+\begin{lstlisting}[language=JavaScript]
 function connOpenAck(
   identifier: Identifier,
   version: string,
@@ -213,11 +225,11 @@ function connOpenAck(
     connection.version = version
     provableStore.set(connectionPath(identifier), connection)
 }
-```
-  
-*ConnOpenConfirm* confirms opening of a connection on chain A to chain B, after which the connection is open on both chains (this code is executed on chain B).
+\end{lstlisting}
+\end{subfigure}
 
-```typescript
+\begin{subfigure}{1.0\textwidth}
+\begin{lstlisting}[language=JavaScript]
 function connOpenConfirm(
   identifier: Identifier,
   proofAck: CommitmentProof,
@@ -230,4 +242,9 @@ function connOpenConfirm(
     connection.state = OPEN
     provableStore.set(connectionPath(identifier), connection)
 }
-```
+\end{lstlisting}
+\end{subfigure}
+
+\caption{Connection handshake algorithm}
+
+\end{figure*}
