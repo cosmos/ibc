@@ -44,10 +44,6 @@
 
 !include src/testing-and-deployment.md
 
-# Future work
-
-!include src/future-work.md
-
 # Acknowledgements
 
 !include src/acknowledgements.md

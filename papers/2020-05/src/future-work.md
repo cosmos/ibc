@@ -1,4 +1,0 @@
-## Client instantiations
-
-## Interchain collateralisation
-
