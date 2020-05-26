@@ -16,8 +16,6 @@ A *relayer* is an off-chain process with the ability to read the state of and su
 - Requisite communication between the IBC user and the relayer should be minimised.
 - Provision for relayer incentivisation should be possible at the application layer.
 
-## Technical Specification
-
 ### Basic relayer algorithm
 
 The relayer algorithm is defined over a set `C` of chains implementing the IBC protocol. Each relayer may not necessarily have access to read state from and write datagrams to all chains in the interchain network (especially in the case of permissioned or private chains) — different relayers may relay between different subsets.
@@ -31,17 +29,6 @@ The relayer algorithm is defined over a set `C` of chains implementing the IBC p
 Different relayers may relay between different chains — as long as each pair of chains has at least one correct & live relayer and the chains remain live, all packets flowing between chains in the network will eventually be relayed.
 
 ```typescript
-function relay(C: Set<Chain>) {
-  for (const chain of C)
-    for (const counterparty of C)
-      if (counterparty !== chain) {
-        const datagrams = chain.pendingDatagrams(counterparty)
-        for (const localDatagram of datagrams[0])
-          chain.submitDatagram(localDatagram)
-        for (const counterpartyDatagram of datagrams[1])
-          counterparty.submitDatagram(counterpartyDatagram)
-      }   
-}
 ```
 
 ### Packets, acknowledgements, timeouts
@@ -100,5 +87,3 @@ Multiple relayers relaying between the same pair of modules & chains may attempt
 The relay process must have access to accounts on both chains with sufficient balance to pay for transaction fees. Relayers may employ application-level methods to recoup these fees, such by including a small payment to themselves in the packet data — protocols for relayer fee payment will be described in future versions of this ICS or in separate ICSs.
 
 Any number of relayer processes may be safely run in parallel (and indeed, it is expected that separate relayers will serve separate subsets of the interchain). However, they may consume unnecessary fees if they submit the same proof multiple times, so some minimal coordination may be ideal (such as assigning particular relayers to particular packets or scanning mempools for pending transactions).
-
-
