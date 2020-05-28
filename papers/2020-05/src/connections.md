@@ -26,7 +26,7 @@ The opening handshake sub-protocol serves to initialise consensus states for two
 
 The opening handshake defines four datagrams: *ConnOpenInit*, *ConnOpenTry*, *ConnOpenAck*, and *ConnOpenConfirm*.
 
-A correct protocol execution flows as follows (note that all calls are made through modules per ICS 25):
+A correct protocol execution flows as follows:
 
 | Initiator | Datagram          | Chain acted upon | Prior state (A, B) | Posterior state (A, B) |
 | --------- | ----------------- | ---------------- | ------------------ | ---------------------- |
