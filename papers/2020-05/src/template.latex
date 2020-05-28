@@ -7,7 +7,7 @@ $endif$
 \usepackage{subcaption}
 \usepackage{listings}
 \lstdefinelanguage{JavaScript}{
-  basicstyle=\ttfamily\tiny,
+  basicstyle=\ttfamily\small,
   morekeywords=[1]{break, continue, delete, else, for, function, if, in,
     new, return, this, typeof, var, void, while, with},
   % Literals, primitive types, and reference types.
