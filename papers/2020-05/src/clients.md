@@ -1,4 +1,4 @@
-The client abstraction encapsulates the properties that consensus algorithms of machines implementing the interblockchain
+The client abstraction encapsulates the properties that consensus algorithms of chains implementing the interblockchain
 communication protocol are required to satisfy. These properties are necessary for efficient and safe
 verification in the higher-level protocol abstractions. The algorithm utilised in IBC to verify the 
 consensus transcript & state sub-components of another machine is referred to as a "validity predicate",
@@ -11,11 +11,11 @@ needs to be able to verify updates to the state of another machine
 which the other machine's consensus algorithm has agreed upon, and reject any possible updates
 which the other machine's consensus algorithm has not agreed upon. A light client is the algorithm
 with which a machine can do so. The client abstraction formalises this model's interface & requirements,
-so that the IBC protocol can easily integrate with new machines which are running new consensus algorithms
+so that the IBC protocol can easily integrate with new chains which are running new consensus algorithms
 as long as associated light client algorithms fulfilling the listed requirements are provided.
 
 Beyond the properties described in this specification, IBC does not impose any requirements on
-the internal operation of machines and their consensus algorithms. A machine may consist of a
+the internal operation of chains and their consensus algorithms. A machine may consist of a
 single process signing operations with a private key, a quorum of processes signing in unison,
 many processes operating a Byzantine fault-tolerant consensus algorithm, or other configurations yet to be invented
 — from the perspective of IBC, a machine is defined entirely by its light client validation & equivocation detection logic.
@@ -50,7 +50,7 @@ pairs are present in a state at a particular height. Often this will be instanti
 
 A *consensus state* is an opaque type representing the state of a validity predicate.
 The light client validity predicate in combination with a consensus state must be able to verify state updates agreed upon by the associated consensus algorithm.
-The consensus state must also be serialisable in a canonical fashion so that third parties, such as counterparty machines,
+The consensus state must also be serialisable in a canonical fashion so that third parties, such as counterparty chains,
 can check that a particular machine has stored a particular state. It must finally be
 introspectable by the state machine which it is for, such that the state machine can look up its
 own consensus state at a past height.

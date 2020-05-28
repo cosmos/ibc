@@ -4,44 +4,19 @@ Channels are payload-agnostic. The modules which send and receive IBC packets de
 
 ### Motivation
 
-The interblockchain communication protocol uses a cross-chain message passing model. IBC *packets* are relayed from one blockchain to the other by external relayer processes. Chain `A` and chain `B` confirm new blocks independently, and packets from one chain to the other may be delayed, censored, or re-ordered arbitrarily. Packets are visible to relayers and can be read from a blockchain by any relayer process and submitted to any other blockchain. 
+The interblockchain communication protocol uses a cross-chain message passing model. IBC *packets* are relayed from one blockchain to the other by external relayer processes. Two chains, `A` and `B`, confirm new blocks independently, and packets from one chain to the other may be delayed, censored, or re-ordered arbitrarily. Packets are visible to relayers and can be read from a blockchain by any relayer process and submitted to any other blockchain.
 
-> The IBC protocol must provide ordering (for ordered channels) and exactly-once delivery guarantees to allow applications to reason about the combined state of connected modules on two chains. For example, an application may wish to allow a single tokenized asset to be transferred between and held on multiple blockchains while preserving fungibility and conservation of supply. The application can mint asset vouchers on chain `B` when a particular IBC packet is committed to chain `B`, and require outgoing sends of that packet on chain `A` to escrow an equal amount of the asset on chain `A` until the vouchers are later redeemed back to chain `A` with an IBC packet in the reverse direction. This ordering guarantee along with correct application logic can ensure that total supply is preserved across both chains and that any vouchers minted on chain `B` can later be redeemed back to chain `A`.
+The IBC protocol must provide ordering (for ordered channels) and exactly-once delivery guarantees to allow applications to reason about the combined state of connected modules on two chains. For example, an application may wish to allow a single tokenized asset to be transferred between and held on multiple blockchains while preserving fungibility and conservation of supply. The application can mint asset vouchers on chain `B` when a particular IBC packet is committed to chain `B`, and require outgoing sends of that packet on chain `A` to escrow an equal amount of the asset on chain `A` until the vouchers are later redeemed back to chain `A` with an IBC packet in the reverse direction. This ordering guarantee along with correct application logic can ensure that total supply is preserved across both chains and that any vouchers minted on chain `B` can later be redeemed back to chain `A`.
 
-In order to provide the desired ordering, exactly-once delivery, and module permissioning semantics to the application layer, the interblockchain communication protocol must implement an abstraction to enforce these semantics — channels are this abstraction.
-
-`ConsensusState` is as defined in [ICS 2](../ics-002-client-semantics).
-
-`Connection` is as defined in [ICS 3](../ics-003-connection-semantics).
-
-`Port` and `authenticateCapability` are as defined in [ICS 5](../ics-005-port-allocation).
-
-`hash` is a generic collision-resistant hash function, the specifics of which must be agreed on by the modules utilising the channel. `hash` can be defined differently by different chains.
-
-`Identifier`, `get`, `set`, `delete`, `getCurrentHeight`, and module-system related primitives are as defined in [ICS 24](../ics-024-host-requirements).
+### Definitions
 
 A *channel* is a pipeline for exactly-once packet delivery between specific modules on separate blockchains, which has at least one end capable of sending packets and one end capable of receiving packets.
-
-A *bidirectional* channel is a channel where packets can flow in both directions: from `A` to `B` and from `B` to `A`.
-
-A *unidirectional* channel is a channel where packets can only flow in one direction: from `A` to `B` (or from `B` to `A`, the order of naming is arbitrary).
 
 An *ordered* channel is a channel where packets are delivered exactly in the order which they were sent.
 
 An *unordered* channel is a channel where packets can be delivered in any order, which may differ from the order in which they were sent.
 
-```typescript
-enum ChannelOrder {
-  ORDERED,
-  UNORDERED,
-}
-```
-
-Directionality and ordering are independent, so one can speak of a bidirectional unordered channel, a unidirectional ordered channel, etc.
-
 All channels provide exactly-once packet delivery, meaning that a packet sent on one end of a channel is delivered no more and no less than once, eventually, to the other end.
-
-This specification only concerns itself with *bidirectional* channels. *Unidirectional* channels can use almost exactly the same protocol and will be outlined in a future ICS.
 
 An end of a channel is a data structure on one chain storing channel metadata:
 
@@ -108,62 +83,30 @@ interface Packet {
 
 Note that a `Packet` is never directly serialised. Rather it is an intermediary structure used in certain function calls that may need to be created or processed by modules calling the IBC handler.
 
-An `OpaquePacket` is a packet, but cloaked in an obscuring data type by the host state machine, such that a module cannot act upon it other than to pass it to the IBC handler. The IBC handler can cast a `Packet` to an `OpaquePacket` and vice versa.
-
-```typescript
-type OpaquePacket = object
-```
-
-### Desired Properties
+### Properties
 
 #### Efficiency
 
-- The speed of packet transmission and confirmation should be limited only by the speed of the underlying chains.
-  Proofs should be batchable where possible.
+The speed of packet transmission and confirmation is limited only by the speed of the underlying chains.
 
 #### Exactly-once delivery
 
-- IBC packets sent on one end of a channel should be delivered exactly once to the other end.
-- No network synchrony assumptions should be required for exactly-once safety.
-  If one or both of the chains halt, packets may be delivered no more than once, and once the chains resume packets should be able to flow again.
+IBC packets sent on one end of a channel are delivered no more than exactly once to the other end.
+No network synchrony assumptions are required for exactly-once safety.
+If one or both of the chains halt, packets may be delivered no more than once, and once the chains resume packets will be able to flow again.
 
 #### Ordering
 
-- On ordered channels, packets should be sent and received in the same order: if packet *x* is sent before packet *y* by a channel end on chain `A`, packet *x* must be received before packet *y* by the corresponding channel end on chain `B`.
-- On unordered channels, packets may be sent and received in any order. Unordered packets, like ordered packets, have individual timeouts specified in terms of the destination chain's height.
+On ordered channels, packets should be sent and received in the same order: if packet *x* is sent before packet *y* by a channel end on chain `A`, packet *x* must be received before packet *y* by the corresponding channel end on chain `B`.
+
+On unordered channels, packets may be sent and received in any order. Unordered packets, like ordered packets, have individual timeouts specified in terms of the destination chain's height or timestamp.
 
 #### Permissioning
 
-- Channels should be permissioned to one module on each end, determined during the handshake and immutable afterwards (higher-level logic could tokenize channel ownership by tokenising ownership of the port).
-  Only the module associated with a channel end should be able to send or receive on it.
+Channels are permissioned to one module on each end, determined during the handshake and immutable afterwards (higher-level logic could tokenize channel ownership by tokenising ownership of the port).
+Only the module associated with a channel end is able to send or receive on it.
 
-### Versioning
-
-During the handshake process, two ends of a channel come to agreement on a version bytestring associated
-with that channel. The contents of this version bytestring are and will remain opaque to the IBC core protocol.
-Host state machines MAY utilise the version data to indicate supported IBC/APP protocols, agree on packet
-encoding formats, or negotiate other channel-related metadata related to custom logic on top of IBC.
-
-Host state machines MAY also safely ignore the version data or specify an empty string.
-
-### Sub-protocols
-
-> Note: If the host state machine is utilising object capability authentication (see [ICS 005](../ics-005-port-allocation)), all functions utilising ports take an additional capability parameter.
-
-#### Identifier validation
-
-Channels are stored under a unique `(portIdentifier, channelIdentifier)` prefix.
-The validation function `validatePortIdentifier` MAY be provided.
-
-```typescript
-type validateChannelIdentifier = (portIdentifier: Identifier, channelIdentifier: Identifier) => boolean
-```
-
-If not provided, the default `validateChannelIdentifier` function will always return `true`.
-
-#### Channel lifecycle management
-
-![Channel State Machine](channel-state-machine.png)
+### Channel lifecycle management
 
 | Initiator | Datagram         | Chain acted upon | Prior state (A, B) | Posterior state (A, B) |
 | --------- | ---------------- | ---------------- | ------------------ | ---------------------- |
@@ -187,28 +130,24 @@ When the opening handshake is complete, the module which initiates the handshake
 it specifies will own the other end of the created channel on the counterparty chain. Once a channel is created, ownership cannot be changed (although higher-level abstractions
 could be implemented to provide this).
 
-```typescript
-
-```
-
 The `chanOpenTry` function is called by a module to accept the first step of a channel opening handshake initiated by a module on another chain.
-
-```typescript
-
-```
 
 The `chanOpenAck` is called by the handshake-originating module to acknowledge the acceptance of the initial request by the
 counterparty module on the other chain.
 
-```typescript
-```
-
 The `chanOpenConfirm` function is called by the handshake-accepting module to acknowledge the acknowledgement
 of the handshake-originating module on the other chain and finish the channel opening handshake.
 
-```typescript
 
-```
+#### Versioning
+
+During the handshake process, two ends of a channel come to agreement on a version bytestring associated
+with that channel. The contents of this version bytestring are and will remain opaque to the IBC core protocol.
+Host state machines MAY utilise the version data to indicate supported IBC/APP protocols, agree on packet
+encoding formats, or negotiate other channel-related metadata related to custom logic on top of IBC.
+
+Host state machines MAY also safely ignore the version data or specify an empty string.
+
 
 #### Closing handshake
 
@@ -217,10 +156,6 @@ The `chanCloseInit` function is called by either module to close their end of th
 Calling modules MAY atomically execute appropriate application logic in conjunction with calling `chanCloseInit`.
 
 Any in-flight packets can be timed-out as soon as a channel is closed.
-
-```typescript
-
-```
 
 The `chanCloseConfirm` function is called by the counterparty module to close their end of the channel,
 since the other end has been closed.
@@ -235,10 +170,7 @@ allow the same port identifier & channel identifier to be reused again with a se
 might allow packets to be replayed. It would be possible to safely reuse identifiers if timeouts of a particular
 maximum height/time were mandated & tracked, and future specification versions may incorporate this feature.
 
-```typescript
-```
-
-#### Sending packets
+### Sending packets
 
 The `sendPacket` function is called by a module in order to send an IBC packet on a channel end owned by the calling module to the corresponding module on the counterparty chain.
 
@@ -254,10 +186,6 @@ The IBC handler performs the following steps in order:
 - Stores a constant-size commitment to the packet data & packet timeout
 
 Note that the full packet is not stored in the state of the chain - merely a short hash-commitment to the data & timeout value. The packet data can be calculated from the transaction execution and possibly returned as log output which relayers can index.
-
-```typescript
-
-```
 
 ### Receiving packets
 
@@ -276,10 +204,6 @@ The IBC handler performs the following steps in order:
 - Sets the opaque acknowledgement value at a store path unique to the packet (if the acknowledgement is non-empty or the channel is unordered)
 - Increments the packet receive sequence associated with the channel end (ordered channels only)
 
-```typescript
-
-```
-
 #### Acknowledgements
 
 The `acknowledgePacket` function is called by a module to process the acknowledgement of a packet previously sent by
@@ -287,10 +211,6 @@ the calling module on a channel to a counterparty module on the counterparty cha
 `acknowledgePacket` also cleans up the packet commitment, which is no longer necessary since the packet has been received and acted upon.
 
 Calling modules MAY atomically execute appropriate application acknowledgement-handling logic in conjunction with calling `acknowledgePacket`.
-
-```typescript
-
-```
 
 ### Timeouts
 
@@ -312,10 +232,6 @@ In the case of an unordered channel, `timeoutPacket` checks the absence of an ac
 
 If relations are enforced between timeout heights of subsequent packets, safe bulk timeouts of all packets prior to a timed-out packet can be performed. This specification omits details for now.
 
-```typescript
-
-```
-
 #### Timing-out on close
 
 The `timeoutOnClose` function is called by a module in order to prove that the channel
@@ -329,31 +245,6 @@ to which an unreceived packet was addressed has been closed, so the packet will 
 In the ordered channel case, `cleanupPacket` cleans-up a packet on an ordered channel by proving that the packet has been received on the other end.
 
 In the unordered channel case, `cleanupPacket` cleans-up a packet on an unordered channel by proving that the associated acknowledgement has been written.
-
-```typescript
-```
-
-### Reasoning about race conditions
-
-#### Simultaneous handshake attempts
-
-If two machines simultaneously initiate channel opening handshakes with each other, attempting to use the same identifiers, both will fail and new identifiers must be used.
-
-#### Identifier allocation
-
-There is an unavoidable race condition on identifier allocation on the destination chain. Modules would be well-advised to utilise pseudo-random, non-valuable identifiers. Managing to claim the identifier that another module wishes to use, however, while annoying, cannot man-in-the-middle a handshake since the receiving module must already own the port to which the handshake was targeted.
-
-#### Timeouts / packet confirmation
-
-There is no race condition between a packet timeout and packet confirmation, as the packet will either have passed the timeout height prior to receipt or not.
-
-#### Man-in-the-middle attacks during handshakes
-
-Verification of cross-chain state prevents man-in-the-middle attacks for both connection handshakes & channel handshakes since all information (source, destination client, channel, etc.) is known by the module which starts the handshake and confirmed prior to handshake completion.
-
-#### Connection / channel closure with in-flight packets
-
-If a connection or channel is closed while packets are in-flight, the packets can no longer be received on the destination chain and can be timed-out on the source chain.
 
 \begin{figure*}[!h]
 
