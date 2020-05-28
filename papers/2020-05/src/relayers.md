@@ -28,9 +28,6 @@ The relayer algorithm is defined over a set `C` of chains implementing the IBC p
 
 Different relayers may relay between different chains — as long as each pair of chains has at least one correct & live relayer and the chains remain live, all packets flowing between chains in the network will eventually be relayed.
 
-```typescript
-```
-
 ### Packets, acknowledgements, timeouts
 
 #### Relaying packets in an ordered channel

@@ -259,13 +259,9 @@ function chanOpenInit(
   counterpartyChannelIdentifier: Identifier,
   version: string): CapabilityKey {
     abortTransactionUnless(validateChannelIdentifier(portIdentifier, channelIdentifier))
-
-    abortTransactionUnless(connectionHops.length === 1) // for v1 of the IBC protocol
-
+    abortTransactionUnless(connectionHops.length === 1)
     abortTransactionUnless(provableStore.get(channelPath(portIdentifier, channelIdentifier)) === null)
     connection = provableStore.get(connectionPath(connectionHops[0]))
-
-    // optimistic channel handshakes are allowed
     abortTransactionUnless(connection !== null)
     abortTransactionUnless(authenticateCapability(portPath(portIdentifier), portCapability))
     channel = ChannelEnd{INIT, order, counterpartyPortIdentifier,
@@ -294,7 +290,7 @@ function chanOpenTry(
   proofInit: CommitmentProof,
   proofHeight: uint64): CapabilityKey {
     abortTransactionUnless(validateChannelIdentifier(portIdentifier, channelIdentifier))
-    abortTransactionUnless(connectionHops.length === 1) // for v1 of the IBC protocol
+    abortTransactionUnless(connectionHops.length === 1)
     previous = provableStore.get(channelPath(portIdentifier, channelIdentifier))
     abortTransactionUnless(
       (previous === null) ||
@@ -446,66 +442,48 @@ function chanCloseConfirm(
 
 \end{figure*}
 
-
 \begin{figure*}[!h]
-
-\begin{subfigure}{1.0\textwidth}
 \begin{lstlisting}[language=JavaScript]
 function sendPacket(packet: Packet) {
     channel = provableStore.get(channelPath(packet.sourcePort, packet.sourceChannel))
-
-    // optimistic sends are permitted once the handshake has started
     abortTransactionUnless(channel !== null)
     abortTransactionUnless(channel.state !== CLOSED)
     abortTransactionUnless(authenticateCapability(channelCapabilityPath(packet.sourcePort, packet.sourceChannel), capability))
     abortTransactionUnless(packet.destPort === channel.counterpartyPortIdentifier)
     abortTransactionUnless(packet.destChannel === channel.counterpartyChannelIdentifier)
     connection = provableStore.get(connectionPath(channel.connectionHops[0]))
-
     abortTransactionUnless(connection !== null)
-
-    // sanity-check that the timeout height hasn't already passed in our local client tracking the receiving chain
     latestClientHeight = provableStore.get(clientPath(connection.clientIdentifier)).latestClientHeight()
     abortTransactionUnless(packet.timeoutHeight === 0 || latestClientHeight < packet.timeoutHeight)
-
     nextSequenceSend = provableStore.get(nextSequenceSendPath(packet.sourcePort, packet.sourceChannel))
     abortTransactionUnless(packet.sequence === nextSequenceSend)
-
-    // all assertions passed, we can alter state
-
     nextSequenceSend = nextSequenceSend + 1
     provableStore.set(nextSequenceSendPath(packet.sourcePort, packet.sourceChannel), nextSequenceSend)
     provableStore.set(packetCommitmentPath(packet.sourcePort, packet.sourceChannel, packet.sequence),
                       hash(packet.data, packet.timeoutHeight, packet.timeoutTimestamp))
-
-    // log that a packet has been sent
-    emitLogEntry("sendPacket", {sequence: packet.sequence, data: packet.data, timeoutHeight: packet.timeoutHeight, timeoutTimestamp: packet.timeoutTimestamp})
 }
 \end{lstlisting}
-\end{subfigure}
+\caption{Packet transmission}
+\end{figure*}
 
-\begin{subfigure}{1.0\textwidth}
+\begin{figure*}[!h]
 \begin{lstlisting}[language=JavaScript]
 function recvPacket(
   packet: OpaquePacket,
   proof: CommitmentProof,
   proofHeight: uint64,
   acknowledgement: bytes): Packet {
-
     channel = provableStore.get(channelPath(packet.destPort, packet.destChannel))
     abortTransactionUnless(channel !== null)
     abortTransactionUnless(channel.state === OPEN)
     abortTransactionUnless(authenticateCapability(channelCapabilityPath(packet.destPort, packet.destChannel), capability))
     abortTransactionUnless(packet.sourcePort === channel.counterpartyPortIdentifier)
     abortTransactionUnless(packet.sourceChannel === channel.counterpartyChannelIdentifier)
-
     connection = provableStore.get(connectionPath(channel.connectionHops[0]))
     abortTransactionUnless(connection !== null)
     abortTransactionUnless(connection.state === OPEN)
-
     abortTransactionUnless(packet.timeoutHeight === 0 || getConsensusHeight() < packet.timeoutHeight)
     abortTransactionUnless(packet.timeoutTimestamp === 0 || currentTimestamp() < packet.timeoutTimestamp)
-
     abortTransactionUnless(connection.verifyPacketData(
       proofHeight,
       proof,
@@ -514,57 +492,41 @@ function recvPacket(
       packet.sequence,
       concat(packet.data, packet.timeoutHeight, packet.timeoutTimestamp)
     ))
-
-    // all assertions passed (except sequence check), we can alter state
-
     if (acknowledgement.length > 0 || channel.order === UNORDERED)
       provableStore.set(
         packetAcknowledgementPath(packet.destPort, packet.destChannel, packet.sequence),
         hash(acknowledgement)
       )
-
     if (channel.order === ORDERED) {
       nextSequenceRecv = provableStore.get(nextSequenceRecvPath(packet.destPort, packet.destChannel))
       abortTransactionUnless(packet.sequence === nextSequenceRecv)
       nextSequenceRecv = nextSequenceRecv + 1
       provableStore.set(nextSequenceRecvPath(packet.destPort, packet.destChannel), nextSequenceRecv)
     }
-
-    // log that a packet has been received & acknowledged
-    emitLogEntry("recvPacket", {sequence: packet.sequence, timeoutHeight: packet.timeoutHeight,
-                                timeoutTimestamp: packet.timeoutTimestamp, data: packet.data, acknowledgement})
-
-    // return transparent packet
     return packet
 }
 \end{lstlisting}
-\end{subfigure}
+\caption{Packet receipt}
+\end{figure*}
 
-\begin{subfigure}{1.0\textwidth}
+\begin{figure*}[!h]
 \begin{lstlisting}[language=JavaScript]
 function acknowledgePacket(
   packet: OpaquePacket,
   acknowledgement: bytes,
   proof: CommitmentProof,
   proofHeight: uint64): Packet {
-
-    // abort transaction unless that channel is open, calling module owns the associated port, and the packet fields match
     channel = provableStore.get(channelPath(packet.sourcePort, packet.sourceChannel))
     abortTransactionUnless(channel !== null)
     abortTransactionUnless(channel.state === OPEN)
     abortTransactionUnless(authenticateCapability(channelCapabilityPath(packet.sourcePort, packet.sourceChannel), capability))
     abortTransactionUnless(packet.destPort === channel.counterpartyPortIdentifier)
     abortTransactionUnless(packet.destChannel === channel.counterpartyChannelIdentifier)
-
     connection = provableStore.get(connectionPath(channel.connectionHops[0]))
     abortTransactionUnless(connection !== null)
     abortTransactionUnless(connection.state === OPEN)
-
-    // verify we sent the packet and haven't cleared it out yet
     abortTransactionUnless(provableStore.get(packetCommitmentPath(packet.sourcePort, packet.sourceChannel, packet.sequence))
            === hash(packet.data, packet.timeoutHeight, packet.timeoutTimestamp))
-
-    // abort transaction unless correct acknowledgement on counterparty chain
     abortTransactionUnless(connection.verifyPacketAcknowledgement(
       proofHeight,
       proof,
@@ -573,67 +535,40 @@ function acknowledgePacket(
       packet.sequence,
       acknowledgement
     ))
-
-    // abort transaction unless acknowledgement is processed in order
     if (channel.order === ORDERED) {
       nextSequenceAck = provableStore.get(nextSequenceAckPath(packet.sourcePort, packet.sourceChannel))
       abortTransactionUnless(packet.sequence === nextSequenceAck)
       nextSequenceAck = nextSequenceAck + 1
       provableStore.set(nextSequenceAckPath(packet.sourcePort, packet.sourceChannel), nextSequenceAck)
     }
-
-    // all assertions passed, we can alter state
-
-    // delete our commitment so we can't "acknowledge" again
     provableStore.delete(packetCommitmentPath(packet.sourcePort, packet.sourceChannel, packet.sequence))
-
-    // return transparent packet
     return packet
 }
 \end{lstlisting}
-\end{subfigure}
-
-\begin{subfigure}{1.0\textwidth}
-\begin{lstlisting}[language=JavaScript]
-
 \caption{Packet transmission, receipt, and acknowledgement}
-
 \end{figure*}
 
 \begin{figure*}[!h]
-
-\begin{subfigure}{1.0\textwidth}
 \begin{lstlisting}[language=JavaScript]
 function timeoutPacket(
   packet: OpaquePacket,
   proof: CommitmentProof,
   proofHeight: uint64,
   nextSequenceRecv: Maybe<uint64>): Packet {
-
     channel = provableStore.get(channelPath(packet.sourcePort, packet.sourceChannel))
     abortTransactionUnless(channel !== null)
     abortTransactionUnless(channel.state === OPEN)
-
     abortTransactionUnless(authenticateCapability(channelCapabilityPath(packet.sourcePort, packet.sourceChannel), capability))
     abortTransactionUnless(packet.destChannel === channel.counterpartyChannelIdentifier)
-
     connection = provableStore.get(connectionPath(channel.connectionHops[0]))
-    // note: the connection may have been closed
     abortTransactionUnless(packet.destPort === channel.counterpartyPortIdentifier)
-
-    // check that timeout height or timeout timestamp has passed on the other end
     abortTransactionUnless(
       (packet.timeoutHeight > 0 && proofHeight >= packet.timeoutHeight) ||
       (packet.timeoutTimestamp > 0 && connection.getTimestampAtHeight(proofHeight) > packet.timeoutTimestamp))
-
-    // verify we actually sent this packet, check the store
     abortTransactionUnless(provableStore.get(packetCommitmentPath(packet.sourcePort, packet.sourceChannel, packet.sequence))
            === hash(packet.data, packet.timeoutHeight, packet.timeoutTimestamp))
-
     if channel.order === ORDERED {
-      // ordered channel: check that packet has not been received
       abortTransactionUnless(nextSequenceRecv <= packet.sequence)
-      // ordered channel: check that the recv sequence is as claimed
       abortTransactionUnless(connection.verifyNextSequenceRecv(
         proofHeight,
         proof,
@@ -642,7 +577,6 @@ function timeoutPacket(
         nextSequenceRecv
       ))
     } else
-      // unordered channel: verify absence of acknowledgement at packet index
       abortTransactionUnless(connection.verifyPacketAcknowledgementAbsence(
         proofHeight,
         proof,
@@ -650,51 +584,35 @@ function timeoutPacket(
         packet.sourceChannel,
         packet.sequence
       ))
-
-    // all assertions passed, we can alter state
-
-    // delete our commitment
     provableStore.delete(packetCommitmentPath(packet.sourcePort, packet.sourceChannel, packet.sequence))
-
     if channel.order === ORDERED {
-      // ordered channel: close the channel
       channel.state = CLOSED
       provableStore.set(channelPath(packet.sourcePort, packet.sourceChannel), channel)
     }
-
-    // return transparent packet
     return packet
 }
 \end{lstlisting}
-\end{subfigure}
+\caption{Packet cleanup}
+\end{figure*}
 
-\begin{subfigure}{1.0\textwidth}
+\begin{figure*}[!h]
 \begin{lstlisting}[language=JavaScript]
 function cleanupPacket(
   packet: OpaquePacket,
   proof: CommitmentProof,
   proofHeight: uint64,
   nextSequenceRecvOrAcknowledgement: Either<uint64, bytes>): Packet {
-
     channel = provableStore.get(channelPath(packet.sourcePort, packet.sourceChannel))
     abortTransactionUnless(channel !== null)
     abortTransactionUnless(channel.state === OPEN)
     abortTransactionUnless(authenticateCapability(channelCapabilityPath(packet.sourcePort, packet.sourceChannel), capability))
     abortTransactionUnless(packet.destChannel === channel.counterpartyChannelIdentifier)
-
     connection = provableStore.get(connectionPath(channel.connectionHops[0]))
-    // note: the connection may have been closed
     abortTransactionUnless(packet.destPort === channel.counterpartyPortIdentifier)
-
-    // abortTransactionUnless packet has been received on the other end
     abortTransactionUnless(nextSequenceRecv > packet.sequence)
-
-    // verify we actually sent the packet, check the store
     abortTransactionUnless(provableStore.get(packetCommitmentPath(packet.sourcePort, packet.sourceChannel, packet.sequence))
                === hash(packet.data, packet.timeoutHeight, packet.timeoutTimestamp))
-
     if channel.order === ORDERED
-      // check that the recv sequence is as claimed
       abortTransactionUnless(connection.verifyNextSequenceRecv(
         proofHeight,
         proof,
@@ -703,7 +621,6 @@ function cleanupPacket(
         nextSequenceRecvOrAcknowledgement
       ))
     else
-      // abort transaction unless acknowledgement on the other end
       abortTransactionUnless(connection.verifyPacketAcknowledgement(
         proofHeight,
         proof,
@@ -712,18 +629,9 @@ function cleanupPacket(
         packet.sequence,
         nextSequenceRecvOrAcknowledgement
       ))
-
-    // all assertions passed, we can alter state
-
-    // clear the store
     provableStore.delete(packetCommitmentPath(packet.sourcePort, packet.sourceChannel, packet.sequence))
-
-    // return transparent packet
     return packet
 }
 \end{lstlisting}
-\end{subfigure}
-
-\caption{Packet timeout handling \& cleanup}
-
+\caption{Packet cleanup}
 \end{figure*}

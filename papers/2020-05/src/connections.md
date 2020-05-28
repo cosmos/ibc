@@ -8,7 +8,7 @@ The IBC protocol provides *authorisation* and *ordering* semantics for packets: 
 
 The opening handshake protocol allows each chain to verify the identifier used to reference the connection on the other chain, enabling modules on each chain to reason about the reference on the other chain.
 
-This ICS defines the `ConnectionState` and `ConnectionEnd` types:
+A *connection end* is state tracked for an end of a connection on one chian, with the following fields:
 
 - The `state` field describes the current state of the connection end.
 - The `counterpartyConnectionIdentifier` field identifies the connection end on the counterparty chain associated with this connection.
@@ -58,30 +58,6 @@ In the future, it might be used to indicate what kinds of channels can utilise t
 what encoding formats channel-related datagrams will use. Host state machines may utilise the version data
 to negotiate encodings, priorities, or connection-specific metadata related to custom logic on top of IBC.
 Host state machines may also safely ignore the version data or specify an empty string.
-
-\begin{figure*}[!h]
-
-\begin{subfigure}{1.0\textwidth}
-\begin{lstlisting}[language=JavaScript]
-enum ConnectionState {
-  INIT,
-  TRYOPEN,
-  OPEN,
-}
-
-interface ConnectionEnd {
-  state: ConnectionState
-  counterpartyConnectionIdentifier: Identifier
-  counterpartyPrefix: CommitmentPrefix
-  clientIdentifier: Identifier
-  counterpartyClientIdentifier: Identifier
-  version: string | []string
-}
-\end{lstlisting}
-\end{subfigure}
-
-\caption{Connection types}
-\end{figure*}
 
 \begin{figure*}[!h]
 
