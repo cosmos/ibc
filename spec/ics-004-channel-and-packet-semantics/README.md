@@ -744,8 +744,8 @@ function timeoutPacket(
       abortTransactionUnless(connection.verifyPacketAcknowledgementAbsence(
         proofHeight,
         proof,
-        packet.sourcePort,
-        packet.sourceChannel,
+        packet.destPort,
+        packet.destChannel,
         packet.sequence
       ))
 
@@ -819,8 +819,8 @@ function timeoutOnClose(
       abortTransactionUnless(connection.verifyPacketAcknowledgementAbsence(
         proofHeight,
         proof,
-        packet.sourcePort,
-        packet.sourceChannel,
+        packet.destPort,
+        packet.destChannel,
         packet.sequence
       ))
 
