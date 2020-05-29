@@ -856,6 +856,7 @@ function cleanupPacket(
     abortTransactionUnless(packet.destChannel === channel.counterpartyChannelIdentifier)
 
     connection = provableStore.get(connectionPath(channel.connectionHops[0]))
+    abortTransactionUnless(connection !== null)
     // note: the connection may have been closed
     abortTransactionUnless(packet.destPort === channel.counterpartyPortIdentifier)
 
