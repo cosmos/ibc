@@ -803,7 +803,7 @@ function timeoutOnClose(
       expected
     ))
 
-    if channel.order === ORDERED
+    if channel.order === ORDERED {
       // ordered channel: check that the recv sequence is as claimed
       abortTransactionUnless(connection.verifyNextSequenceRecv(
         proofHeight,
@@ -812,7 +812,9 @@ function timeoutOnClose(
         packet.destChannel,
         nextSequenceRecv
       ))
-    else
+      // ordered channel: check that packet has not been received
+      abortTransactionUnless(nextSequenceRecv <= packet.sequence)
+    } else
       // unordered channel: verify absence of acknowledgement at packet index
       abortTransactionUnless(connection.verifyPacketAcknowledgementAbsence(
         proofHeight,
