@@ -48,7 +48,7 @@ interface ConnectionEnd {
 
 The opening handshake subprotocol allows each chain to verify the identifier used to reference the connection on the other chain, enabling modules on each chain to reason about the reference on the other chain.
 
-The opening handshake defines four datagrams: `ConnOpenInit`, `ConnOpenTry`, `ConnOpenAck`, and `ConnOpenConfirm`.
+The opening handshake consists of four datagrams: `ConnOpenInit`, `ConnOpenTry`, `ConnOpenAck`, and `ConnOpenConfirm`.
 
 A correct protocol execution, between two chains `A` and `B`, with connection states formatted as `(A, B)`, flows as follows:
 
@@ -69,13 +69,14 @@ Connection handshakes can safely be performed permissionlessly, modulo anti-spam
 
 `ConnOpenInit`, executed on chain A, initialises a connection attempt on chain A, specifying a pair of identifiers
 for the connection on both chains and a pair of identifiers for existing light clients (one for
-each chain).
+each chain). Chain A stores a connection end object in its state.
 
 `ConnOpenTry`, executed on chain B, relays notice of a connection attempt on chain A to chain B,
 providing the pair of connection identifiers, the pair of client identifiers, and a desired version.
 Chain B verifies that these identifiers are valid, checks that the version is compatible, verifies
 a proof that chain A has stored these identifiers, and verifies a proof that the light client chain A
-is using to validate chain B has the correct consensus state for chain B.
+is using to validate chain B has the correct consensus state for chain B. Chain B stores a connection
+end object in its state.
 
 `ConnOpenAck`, executed on chain A, relays acceptance of a connection open attempt from chain B back to chain A,
 providing the identifier which can now be used to look up the connection end object. Chain A verifies
