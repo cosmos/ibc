@@ -10,7 +10,7 @@ The IBC protocol provides *authorisation* and *ordering* semantics for packets: 
 
 ### Definitions
 
-\
+&nbsp;
 
 A *connection end* is state tracked for an end of a connection on one chain, defined as follows:
 
@@ -44,7 +44,7 @@ interface ConnectionEnd {
 
 #### Opening Handshake
 
-\
+&nbsp;
 
 The opening handshake subprotocol allows each chain to verify the identifier used to reference the connection on the other chain, enabling modules on each chain to reason about the reference on the other chain.
 

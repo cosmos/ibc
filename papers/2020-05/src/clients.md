@@ -50,7 +50,7 @@ could be provided as executable WASM functions when the client instance is creat
 
 ### Definitions
 
-\
+&nbsp;
 
 A *validity predicate* is an opaque function defined by a client type to verify headers depending on the current consensus state. Using the validity predicate should be far more computationally efficient than replaying the full consensus algorithm & state machine for the given parent header and the list of network messages.
 
@@ -74,7 +74,7 @@ A *misbehaviour predicate* is an opaque function defined by a client type, used 
 
 ### Desired properties
 
-\
+&nbsp;
 
 Light clients must provide a secure algorithm to verify other chains' canonical headers,
 using the existing consensus state. The higher level abstractions will then be able to verify
@@ -104,7 +104,7 @@ Clients may have time-sensitive validity predicates, such that if no header is p
 
 ### State verification
 
-\
+&nbsp;
 
 Client types must define functions to authenticate internal state of the state machine which the client tracks.
 Internal implementation details may differ (for example, a loopback client could simply read directly from the state and require no proofs).
@@ -114,7 +114,7 @@ Externally-facing clients will likely verify signature or vector commitment proo
 
 ### Example client instantiations
 
-\
+&nbsp;
 
 #### Loopback
 
@@ -147,7 +147,7 @@ The most common and most useful client type will be light clients for instances 
 
 ### Client lifecycle
 
-\
+&nbsp;
 
 #### Creation
 

@@ -6,7 +6,7 @@ Channels are payload-agnostic. The modules which send and receive IBC packets de
 
 ### Motivation
 
-\
+&nbsp;
 
 The interblockchain communication protocol uses a cross-chain message passing model. IBC *packets* are relayed from one blockchain to the other by external relayer processes. Two chains, A and B, confirm new blocks independently, and packets from one chain to the other may be delayed, censored, or re-ordered arbitrarily. Packets are visible to relayers and can be read from a blockchain by any relayer process and submitted to any other blockchain.
 
@@ -16,7 +16,7 @@ The IBC protocol must provide ordering (for ordered channels) and exactly-once d
 
 ### Definitions
 
-\
+&nbsp;
 
 A *channel* is a pipeline for exactly-once packet delivery between specific modules on separate blockchains, which has at least one end capable of sending packets and one end capable of receiving packets.
 
@@ -98,7 +98,7 @@ Note that a `Packet` is never directly serialised. Rather it is an intermediary 
 
 ### Properties
 
-\
+&nbsp;
 
 #### Efficiency
 
@@ -131,7 +131,7 @@ Only the module which owns the port associated with a channel end is able to sen
 
 ### Channel lifecycle management
 
-\
+&nbsp;
 
 #### Opening handshake
 

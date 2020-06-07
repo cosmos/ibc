@@ -1,10 +1,14 @@
 ### Module system
 
+&nbsp;
+
 The host state machine must support a module system, whereby self-contained, potentially mutually distrusted packages of code can safely execute on the same ledger, control how and when they allow other modules to communicate with them, and be identified and manipulated by a "master module" or execution environment.
 
 \vspace{3mm}
 
 ### Key/value Store
+
+&nbsp;
 
 The host state machine must provide a key/value store interface allowing values to be read, written, and deleted.
 
@@ -20,6 +24,8 @@ This interface does not necessitate any particular storage backend or backend da
 
 ### Consensus state introspection
 
+&nbsp;
+
 Host state machines must provide the ability to introspect their current height, current
 consensus state (as utilised by the host machine's light client algorithm), and a bounded
 number of recent consensus states (e.g. past headers). These are used to prevent man-in-the-middle
@@ -30,12 +36,16 @@ chain is in fact authenticating data using its consensus state.
 
 ### Timestamp access
 
+&nbsp;
+
 In order to support timestamp-based timeouts, host machines must provide a current Unix-style timestamp.
 Timeouts in subsequent headers must be non-decreasing.
 
 \vspace{3mm}
 
 ### Port system
+
+&nbsp;
 
 Host state machines must implement a port system, where the IBC handler can allow different modules in the host state machine to bind to uniquely named ports. Ports are identified by an identifier, and must be permissioned so that:
 
@@ -50,11 +60,15 @@ This permissioning can be implemented with unique references (object capabilitie
 
 ### Exception/rollback system
 
+&nbsp;
+
 Host state machines must support an exception or rollback system, whereby a transaction can abort execution and revert any previously made state changes (including state changes in other modules happening within the same transaction), excluding gas consumed & fee payments as appropriate.
 
 \vspace{3mm}
 
 ### Data availability
+
+&nbsp;
 
 For deliver-or-timeout safety, host state machines must have eventual data availability, such that any key/value pairs in state can be eventually retrieved by relayers. For exactly-once safety, data availability is not required.
 

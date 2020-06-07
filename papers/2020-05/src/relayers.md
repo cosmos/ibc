@@ -4,7 +4,7 @@ Relayer algorithms are the "physical" connection layer of IBC — off-chain proc
 
 ### Motivation
 
-\
+&nbsp;
 
 In the IBC protocol, a blockchain can only record the intention to send particular data to another chain — it does not have direct access to a network transport layer. Physical datagram relay must be performed by off-chain infrastructure with access to a transport layer such as TCP/IP. This standard defines the concept of a *relayer* algorithm, executable by an off-chain process with the ability to query chain state, to perform this relay. 
 
@@ -24,7 +24,7 @@ A *relayer* is an off-chain process with the ability to read the state of and su
 
 ### Basic relayer algorithm
 
-\
+&nbsp;
 
 The relayer algorithm is defined over a set of chains implementing the IBC protocol. Each relayer may not necessarily have access to read state from and write datagrams to all chains in the interchain network (especially in the case of permissioned or private chains) — different relayers may relay between different subsets.
 
@@ -36,7 +36,7 @@ Different relayers may relay between different chains — as long as each pair o
 
 ### Packets, acknowledgements, timeouts
 
-\
+&nbsp;
 
 #### Relaying packets in an ordered channel
 
