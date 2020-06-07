@@ -1,4 +1,6 @@
-## Appendix C: Packet Handling
+## Packet Handling
+
+### Sending a packet
 
 ```typescript
 function sendPacket(packet: Packet) {
@@ -21,6 +23,8 @@ function sendPacket(packet: Packet) {
 }
 ```
 
+### Receiving a packet
+
 ```typescript
 function recvPacket(
   packet: OpaquePacket,
@@ -33,6 +37,7 @@ function recvPacket(
     abortTransactionUnless(authenticateCapability(channelCapabilityPath(packet.destPort, packet.destChannel), capability))
     abortTransactionUnless(packet.sourcePort === channel.counterpartyPortIdentifier)
     abortTransactionUnless(packet.sourceChannel === channel.counterpartyChannelIdentifier)
+    abortTransactionUnless(provableStore.get(packetAcknowledgementPath(packet.destPort, packet.destChannel, packet.sequence) === null))
     connection = provableStore.get(connectionPath(channel.connectionHops[0]))
     abortTransactionUnless(connection !== null)
     abortTransactionUnless(connection.state === OPEN)
@@ -60,6 +65,8 @@ function recvPacket(
     return packet
 }
 ```
+
+### Acknowleding a packet
 
 ```typescript
 function acknowledgePacket(
@@ -97,6 +104,8 @@ function acknowledgePacket(
 }
 ```
 
+### Handling a timed-out packet
+
 ```typescript
 function timeoutPacket(
   packet: OpaquePacket,
@@ -128,8 +137,8 @@ function timeoutPacket(
       abortTransactionUnless(connection.verifyPacketAcknowledgementAbsence(
         proofHeight,
         proof,
-        packet.sourcePort,
-        packet.sourceChannel,
+        packet.destPort,
+        packet.destChannel,
         packet.sequence
       ))
     provableStore.delete(packetCommitmentPath(packet.sourcePort, packet.sourceChannel, packet.sequence))
@@ -140,6 +149,8 @@ function timeoutPacket(
     return packet
 }
 ```
+
+### Cleaning up packet data
 
 ```typescript
 function cleanupPacket(
@@ -153,6 +164,7 @@ function cleanupPacket(
     abortTransactionUnless(authenticateCapability(channelCapabilityPath(packet.sourcePort, packet.sourceChannel), capability))
     abortTransactionUnless(packet.destChannel === channel.counterpartyChannelIdentifier)
     connection = provableStore.get(connectionPath(channel.connectionHops[0]))
+    abortTransactionUnless(connection !== null)
     abortTransactionUnless(packet.destPort === channel.counterpartyPortIdentifier)
     abortTransactionUnless(nextSequenceRecv > packet.sequence)
     abortTransactionUnless(provableStore.get(packetCommitmentPath(packet.sourcePort, packet.sourceChannel, packet.sequence))

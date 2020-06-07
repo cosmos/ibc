@@ -1,4 +1,6 @@
-## Appendix A: Connection Handshake
+## Connection handshake
+
+### Initiating a handshake
 
 ```typescript
 function connOpenInit(
@@ -16,6 +18,8 @@ function connOpenInit(
     addConnectionToClient(clientIdentifier, identifier)
 }
 ```
+
+### Responding to a handshake initiation
 
 ```typescript
 function connOpenTry(
@@ -55,6 +59,8 @@ function connOpenTry(
 }
 ```
 
+### Acknowledging the response
+
 ```typescript
 function connOpenAck(
   identifier: Identifier,
@@ -79,6 +85,8 @@ function connOpenAck(
     provableStore.set(connectionPath(identifier), connection)
 }
 ```
+
+### Finalising the connection
 
 ```typescript
 function connOpenConfirm(

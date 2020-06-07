@@ -1,4 +1,6 @@
-## Appendix B: Channel Handshake 
+## Channel handshake
+
+### Initiating a handshake
 
 ```typescript
 function chanOpenInit(
@@ -25,6 +27,8 @@ function chanOpenInit(
     return channelCapability
 }
 ```
+
+### Responding to a handshake initiation
 
 ```typescript
 function chanOpenTry(
@@ -74,6 +78,8 @@ function chanOpenTry(
 }
 ```
 
+### Acknowledging the response
+
 ```typescript
 function chanOpenAck(
   portIdentifier: Identifier,
@@ -102,6 +108,8 @@ function chanOpenAck(
 }
 ```
 
+### Finalising a channel
+
 ```typescript
 function chanOpenConfirm(
   portIdentifier: Identifier,
@@ -129,6 +137,8 @@ function chanOpenConfirm(
 }
 ```
 
+### Initiating channel closure
+
 ```typescript
 function chanCloseInit(
   portIdentifier: Identifier,
@@ -144,6 +154,8 @@ function chanCloseInit(
     provableStore.set(channelPath(portIdentifier, channelIdentifier), channel)
 }
 ```
+
+### Confirming channel closure
 
 ```typescript
 function chanCloseConfirm(
