@@ -108,17 +108,21 @@ Only the module associated with a channel end is able to send or receive on it.
 
 ### Channel lifecycle management
 
-| Initiator | Datagram         | Chain acted upon | Prior state (A, B) | Posterior state (A, B) |
-| --------- | ---------------- | ---------------- | ------------------ | ---------------------- |
-| Actor     | ChanOpenInit     | A                | (none, none)       | (INIT, none)           |
-| Relayer   | ChanOpenTry      | B                | (INIT, none)       | (INIT, TRYOPEN)        |
-| Relayer   | ChanOpenAck      | A                | (INIT, TRYOPEN)    | (OPEN, TRYOPEN)        |
-| Relayer   | ChanOpenConfirm  | B                | (OPEN, TRYOPEN)    | (OPEN, OPEN)           |
+The channel opening handshake, between two chains `A` and `B`, with state formatted as `(A, B)`, flows as follows:
 
-| Initiator | Datagram         | Chain acted upon | Prior state (A, B) | Posterior state (A, B) |
-| --------- | ---------------- | ---------------- | ------------------ | ---------------------- |
-| Actor     | ChanCloseInit    | A                | (OPEN, OPEN)       | (CLOSED, OPEN)         |
-| Relayer   | ChanCloseConfirm | B                | (CLOSED, OPEN)     | (CLOSED, CLOSED)       |
+| Ch | Datagram         | Prior state     | Posterior state  |
+| -- | ---------------- | --------------- | ---------------- |
+| A  | `ChanOpenInit`     | `(-, -)`    | `(INIT, -)`     |
+| B  | `ChanOpenTry`      | `(INIT, -)`    | `(INIT, TRYOPEN)`  |
+| A  | `ChanOpenAck`      | `(INIT, TRYOPEN)` | `(OPEN, TRYOPEN)`  |
+| B  | `ChanOpenConfirm`  | `(OPEN, TRYOPEN)` | `(OPEN, OPEN)`     |
+
+The channel closing handshake, between two chains `A` and `B`, with state formatted as `(A, B)`, flows as follows:
+
+| Ch | Datagram         | Prior state | Posterior state  |
+| -- | ---------------- | -------------- | ----------------- |
+| A  | `ChanCloseInit`    | `(OPEN, OPEN)`   | `(CLOSED, OPEN)`    |
+| B  | `ChanCloseConfirm` | `(CLOSED, OPEN)` | `(CLOSED, CLOSED)`  |
 
 #### Opening handshake
 
@@ -138,7 +142,6 @@ counterparty module on the other chain.
 The `chanOpenConfirm` function is called by the handshake-accepting module to acknowledge the acknowledgement
 of the handshake-originating module on the other chain and finish the channel opening handshake.
 
-
 #### Versioning
 
 During the handshake process, two ends of a channel come to agreement on a version bytestring associated
@@ -146,8 +149,7 @@ with that channel. The contents of this version bytestring are and will remain o
 Host state machines MAY utilise the version data to indicate supported IBC/APP protocols, agree on packet
 encoding formats, or negotiate other channel-related metadata related to custom logic on top of IBC.
 
-Host state machines MAY also safely ignore the version data or specify an empty string.
-
+Host state machines may also safely ignore the version data or specify an empty string.
 
 #### Closing handshake
 

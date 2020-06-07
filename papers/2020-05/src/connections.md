@@ -10,6 +10,25 @@ The opening handshake protocol allows each chain to verify the identifier used t
 
 A *connection end* is state tracked for an end of a connection on one chain, with the following fields:
 
+```typescript
+enum ConnectionState {
+  INIT,
+  TRYOPEN,
+  OPEN,
+}
+```
+
+```typescript
+interface ConnectionEnd {
+  state: ConnectionState
+  counterpartyConnectionIdentifier: Identifier
+  counterpartyPrefix: CommitmentPrefix
+  clientIdentifier: Identifier
+  counterpartyClientIdentifier: Identifier
+  version: string | []string
+}
+```
+
 - The `state` field describes the current state of the connection end.
 - The `counterpartyConnectionIdentifier` field identifies the connection end on the counterparty chain associated with this connection.
 - The `counterpartyPrefix` field contains the prefix used for state verification on the counterparty chain associated with this connection.
@@ -26,14 +45,14 @@ The opening handshake sub-protocol serves to initialise consensus states for two
 
 The opening handshake defines four datagrams: *ConnOpenInit*, *ConnOpenTry*, *ConnOpenAck*, and *ConnOpenConfirm*.
 
-A correct protocol execution flows as follows:
+A correct protocol execution, between two chains `A` and `B`, with connection states formatted as `(A, B)`, flows as follows:
 
-| Initiator | Datagram          | Chain acted upon | Prior state (A, B) | Posterior state (A, B) |
-| --------- | ----------------- | ---------------- | ------------------ | ---------------------- |
-| Actor     | `ConnOpenInit`    | A                | (none, none)       | (INIT, none)           |
-| Relayer   | `ConnOpenTry`     | B                | (INIT, none)       | (INIT, TRYOPEN)        |
-| Relayer   | `ConnOpenAck`     | A                | (INIT, TRYOPEN)    | (OPEN, TRYOPEN)        |
-| Relayer   | `ConnOpenConfirm` | B                | (OPEN, TRYOPEN)    | (OPEN, OPEN)           |
+| Chain | Datagram          | Prior state       | Posterior state   |
+| ----- | ----------------- | ----------------- | ----------------- |
+| A     | `ConnOpenInit`    | `(-, -)`          | `(INIT, -)`       |
+| B     | `ConnOpenTry`     | `(INIT, none)`    | `(INIT, TRYOPEN)` |
+| A     | `ConnOpenAck`     | `(INIT, TRYOPEN)` | `(OPEN, TRYOPEN)` |
+| B     | `ConnOpenConfirm` | `(OPEN, TRYOPEN)` | `(OPEN, OPEN)`    |
 
 At the end of an opening handshake between two chains implementing the sub-protocol, the following properties hold:
 
