@@ -1,4 +1,4 @@
-The client abstraction encapsulates the properties that consensus algorithms of chains implementing the interblockchain
+The *client* abstraction encapsulates the properties that consensus algorithms of chains implementing the interblockchain
 communication protocol are required to satisfy. These properties are necessary for efficient and safe
 state verification in the higher-level protocol abstractions. The algorithm utilised in IBC to verify the 
 consensus transcript & state sub-components of another machine is referred to as a "validity predicate",

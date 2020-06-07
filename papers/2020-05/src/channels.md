@@ -1,14 +1,22 @@
-The "channel" abstraction provides message delivery semantics to the interblockchain communication protocol, in three categories: ordering, exactly-once delivery, and module permissioning. A channel serves as a conduit for packets passing between a module on one chain and a module on another, ensuring that packets are executed only once, delivered in the order in which they were sent (if necessary), and delivered only to the corresponding module owning the other end of the channel on the destination chain. Each channel is associated with a particular connection, and a connection may have any number of associated channels, allowing the use of common identifiers and amortising the cost of header verification across all the channels utilising a connection & light client.
+The *channel* abstraction provides message delivery semantics to the interblockchain communication protocol, in three categories: ordering, exactly-once delivery, and module permissioning. A channel serves as a conduit for packets passing between a module on one chain and a module on another, ensuring that packets are executed only once, delivered in the order in which they were sent (if necessary), and delivered only to the corresponding module owning the other end of the channel on the destination chain. Each channel is associated with a particular connection, and a connection may have any number of associated channels, allowing the use of common identifiers and amortising the cost of header verification across all the channels utilising a connection & light client.
 
 Channels are payload-agnostic. The modules which send and receive IBC packets decide how to construct packet data and how to act upon the incoming packet data, and must utilise their own application logic to determine which state transactions to apply according to what data the packet contains.
 
+\vspace{3mm}
+
 ### Motivation
+
+\
 
 The interblockchain communication protocol uses a cross-chain message passing model. IBC *packets* are relayed from one blockchain to the other by external relayer processes. Two chains, `A` and `B`, confirm new blocks independently, and packets from one chain to the other may be delayed, censored, or re-ordered arbitrarily. Packets are visible to relayers and can be read from a blockchain by any relayer process and submitted to any other blockchain.
 
 The IBC protocol must provide ordering (for ordered channels) and exactly-once delivery guarantees to allow applications to reason about the combined state of connected modules on two chains. For example, an application may wish to allow a single tokenised asset to be transferred between and held on multiple blockchains while preserving fungibility and conservation of supply. The application can mint asset vouchers on chain `B` when a particular IBC packet is committed to chain `B`, and require outgoing sends of that packet on chain `A` to escrow an equal amount of the asset on chain `A` until the vouchers are later redeemed back to chain `A` with an IBC packet in the reverse direction. This ordering guarantee along with correct application logic can ensure that total supply is preserved across both chains and that any vouchers minted on chain `B` can later be redeemed back to chain `A`.
 
+\vspace{3mm}
+
 ### Definitions
+
+\
 
 A *channel* is a pipeline for exactly-once packet delivery between specific modules on separate blockchains, which has at least one end capable of sending packets and one end capable of receiving packets.
 
@@ -83,11 +91,17 @@ interface Packet {
 
 Note that a `Packet` is never directly serialised. Rather it is an intermediary structure used in certain function calls that may need to be created or processed by modules calling the IBC handler.
 
+\vspace{3mm}
+
 ### Properties
+
+\
 
 #### Efficiency
 
 The speed of packet transmission and confirmation is limited only by the speed of the underlying chains.
+
+\vspace{3mm}
 
 #### Exactly-once delivery
 
@@ -95,36 +109,37 @@ IBC packets sent on one end of a channel are delivered no more than exactly once
 No network synchrony assumptions are required for exactly-once safety.
 If one or both of the chains halt, packets may be delivered no more than once, and once the chains resume packets will be able to flow again.
 
+\vspace{3mm}
+
 #### Ordering
 
 On ordered channels, packets should be sent and received in the same order: if packet *x* is sent before packet *y* by a channel end on chain `A`, packet *x* must be received before packet *y* by the corresponding channel end on chain `B`.
 
 On unordered channels, packets may be sent and received in any order. Unordered packets, like ordered packets, have individual timeouts specified in terms of the destination chain's height or timestamp.
 
+\vspace{3mm}
+
 #### Permissioning
 
 Channels are permissioned to one module on each end, determined during the handshake and immutable afterwards (higher-level logic could tokenise channel ownership by tokenising ownership of the port).
 Only the module associated with a channel end is able to send or receive on it.
 
+\vspace{3mm}
+
 ### Channel lifecycle management
+
+\
+
+#### Opening handshake
 
 The channel opening handshake, between two chains `A` and `B`, with state formatted as `(A, B)`, flows as follows:
 
-| Ch | Datagram         | Prior state     | Posterior state  |
-| -- | ---------------- | --------------- | ---------------- |
-| A  | `ChanOpenInit`     | `(-, -)`    | `(INIT, -)`     |
-| B  | `ChanOpenTry`      | `(INIT, -)`    | `(INIT, TRYOPEN)`  |
-| A  | `ChanOpenAck`      | `(INIT, TRYOPEN)` | `(OPEN, TRYOPEN)`  |
-| B  | `ChanOpenConfirm`  | `(OPEN, TRYOPEN)` | `(OPEN, OPEN)`     |
-
-The channel closing handshake, between two chains `A` and `B`, with state formatted as `(A, B)`, flows as follows:
-
-| Ch | Datagram         | Prior state | Posterior state  |
-| -- | ---------------- | -------------- | ----------------- |
-| A  | `ChanCloseInit`    | `(OPEN, OPEN)`   | `(CLOSED, OPEN)`    |
-| B  | `ChanCloseConfirm` | `(CLOSED, OPEN)` | `(CLOSED, CLOSED)`  |
-
-#### Opening handshake
+| Datagram         | Prior state     | Posterior state  |
+| ---------------- | --------------- | ---------------- |
+| `ChanOpenInit`     | `(-, -)`    | `(INIT, -)`     |
+| `ChanOpenTry`      | `(INIT, -)`    | `(INIT, TRYOPEN)`  |
+| `ChanOpenAck`      | `(INIT, TRYOPEN)` | `(OPEN, TRYOPEN)`  |
+| `ChanOpenConfirm`  | `(OPEN, TRYOPEN)` | `(OPEN, OPEN)`     |
 
 The `chanOpenInit` function is called by a module to initiate a channel opening handshake with a module on another chain.
 
@@ -152,6 +167,13 @@ encoding formats, or negotiate other channel-related metadata related to custom 
 Host state machines may also safely ignore the version data or specify an empty string.
 
 #### Closing handshake
+
+The channel closing handshake, between two chains `A` and `B`, with state formatted as `(A, B)`, flows as follows:
+
+| Datagram         | Prior state | Posterior state  |
+| ---------------- | -------------- | ----------------- |
+| `ChanCloseInit`    | `(OPEN, OPEN)`   | `(CLOSED, OPEN)`    |
+| `ChanCloseConfirm` | `(CLOSED, OPEN)` | `(CLOSED, CLOSED)`  |
 
 The `chanCloseInit` function is called by either module to close their end of the channel. Once closed, channels cannot be reopened.
 
