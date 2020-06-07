@@ -44,5 +44,17 @@
 
 !include src/acknowledgements.md
 
+\onecolumn
+
+# Appendices
+
+!include src/appendix-a.md
+
+!include src/appendix-b.md
+
+!include src/appendix-c.md
+
 # References
+
+\twocolumn
 
