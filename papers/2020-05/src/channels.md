@@ -215,7 +215,7 @@ The IBC handler performs the following steps in order:
 - Checks that the calling module owns the sending port
 - Checks that the packet metadata matches the channel & connection information
 - Checks that the timeout height specified has not already passed on the destination chain
-- Increments the send sequence counter associated with the channel
+- Increments the send sequence counter associated with the channel (in the case of ordered channels)
 - Stores a constant-size commitment to the packet data & packet timeout
 
 Note that the full packet is not stored in the state of the chain — merely a short hash-commitment to the data & timeout value. The packet data can be calculated from the transaction execution and possibly returned as log output which relayers can index.
@@ -237,25 +237,34 @@ The IBC handler performs the following steps in order:
 - Checks that the timeout height has not yet passed
 - Checks the inclusion proof of packet data commitment in the outgoing chain's state
 - Sets the opaque acknowledgement value at a store path unique to the packet (if the acknowledgement is non-empty or the channel is unordered)
-- Increments the packet receive sequence associated with the channel end (ordered channels only)
+- Increments the packet receive sequence associated with the channel end (for ordered channels)
 
 \vspace{3mm}
 
 #### Acknowledgements
 
 The `acknowledgePacket` function is called by a module to process the acknowledgement of a packet previously sent by
-the calling module on a channel to a counterparty module on the counterparty chain.
-`acknowledgePacket` also cleans up the packet commitment, which is no longer necessary since the packet has been received and acted upon.
+the calling module on a channel to a counterparty module on the counterparty chain. `acknowledgePacket` also cleans up the packet commitment,
+which is no longer necessary since the packet has been received and acted upon.
 
 Calling modules may atomically execute appropriate application acknowledgement-handling logic in conjunction with calling `acknowledgePacket`.
+
+The IBC handler performs the following steps in order:
+
+- Checks that the channel & connection are open to acknowledge packets
+- Checks that the calling module owns the sending port
+- Checks that the packet metadata matches the channel & connection information
+- Checks that the packet was actually sent on this channel
+- Checks that the packet sequence is the next sequence the channel end expects to acknowledge (for ordered channels)
+- Checks the inclusion proof of the packet acknowledgement data in the receiving chain's state
+- Deletes the packet commitment (cleaning up state & preventing replay)
+- Increments the next acknowledgement sequence (for ordered channels)
 
 \vspace{3mm}
 
 ### Timeouts
 
-Application semantics may require some timeout: an upper limit to how long the chain will wait for a transaction to be processed before considering it an error. Since the two chains have different local clocks, this is an obvious attack vector for a double spend — an attacker may delay the relay of the receipt or wait to send the packet until right after the timeout — so applications cannot safely implement naive timeout logic themselves.
-
-Note that in order to avoid any possible "double-spend" attacks, the timeout algorithm requires that the destination chain is running and reachable. One can prove nothing in a complete network partition, and must wait to connect; the timeout must be proven on the recipient chain, not simply the absence of a response on the sending chain.
+Application semantics may require some timeout: an upper limit to how long the chain will wait for a transaction to be processed before considering it an error. Since the two chains have different local clocks, this is an obvious attack vector for a double spend — an attacker may delay the relay of the receipt or wait to send the packet until right after the timeout — so applications cannot safely implement naive timeout logic themselves. In order to avoid any possible "double-spend" attacks, the timeout algorithm requires that the destination chain is running and reachable. The timeout must be proven on the recipient chain, not simply the absence of a response on the sending chain.
 
 \vspace{3mm}
 
@@ -267,26 +276,36 @@ can no longer be executed and to allow the calling module to safely perform appr
 
 Calling modules may atomically execute appropriate application timeout-handling logic in conjunction with calling `timeoutPacket`.
 
-In the case of an ordered channel, `timeoutPacket` checks the `recvSequence` of the receiving channel end and closes the channel if a packet has timed out.
+The IBC handler performs the following steps in order:
 
-In the case of an unordered channel, `timeoutPacket` checks the absence of an acknowledgement (which will have been written if the packet was received). Unordered channels are expected to continue in the face of timed-out packets.
+- Checks that the channel & connection are open to timeout packets
+- Checks that the calling module owns the sending port
+- Checks that the packet metadata matches the channel & connection information
+- Checks that the packet was actually sent on this channel
+- Checks a proof that the packet has not been confirmed on the destination chain
+- Checks a proof that the destination chain has exceeded the timeout height or timestamp
+- Deletes the packet commitment (cleaning up state & preventing replay)
 
-If relations are enforced between timeout heights of subsequent packets, safe bulk timeouts of all packets prior to a timed-out packet can be performed. This specification omits details for now.
+In the case of an ordered channel, `timeoutPacket` additionally closes the channel if a packet has timed out. Unordered channels are expected to continue in the face of timed-out packets.
+
+If relations are enforced between timeout heights of subsequent packets, safe bulk timeouts of all packets prior to a timed-out packet can be performed.
 
 \vspace{3mm}
 
 #### Timing-out on close
 
+If a channel is closed, in-flight packets can never be received and thus can be safely timed-out.
 The `timeoutOnClose` function is called by a module in order to prove that the channel
 to which an unreceived packet was addressed has been closed, so the packet will never be received
-(even if the `timeoutHeight` or `timeoutTimestamp` has not yet been reached).
+(even if the `timeoutHeight` or `timeoutTimestamp` has not yet been reached). Appropriate
+application-specific logic may then safely be executed.
 
 \vspace{3mm}
 
 #### Cleaning up state
 
-`cleanupPacket` is called by a module to remove a received packet commitment from storage. The receiving end must have already processed the packet (whether regularly or past timeout).
+If an acknowledgement is not written (as handling the acknowledgement would clean up state in that case), `cleanupPacket` may be called by a module in order to remove a received packet commitment from storage. The receiving end must have already processed the packet (whether regularly or past timeout).
 
-In the ordered channel case, `cleanupPacket` cleans-up a packet on an ordered channel by proving that the packet has been received on the other end.
+In the ordered channel case, `cleanupPacket` cleans-up a packet on an ordered channel by proving that the receive sequence has passed the packet's sequence on the other end.
 
 In the unordered channel case, `cleanupPacket` cleans-up a packet on an unordered channel by proving that the associated acknowledgement has been written.
