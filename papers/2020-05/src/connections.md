@@ -4,6 +4,8 @@ The *connection* abstraction encapsulates two stateful objects (*connection ends
 
 ### Motivation
 
+&nbsp;
+
 The IBC protocol provides *authorisation* and *ordering* semantics for packets: guarantees, respectively, that packets have been committed on the sending blockchain (and according state transitions executed, such as escrowing tokens), and that they have been committed exactly once in a particular order and can be delivered exactly once in that same order. The *connection* abstraction in conjunction with the *client* abstraction  defines the *authorisation* semantics of IBC. Ordering semantics are provided by channels.
 
 \vspace{3mm}

@@ -8,6 +8,8 @@ and pairing it with a state that the verifier assumes to be correct forms a "lig
 
 ### Motivation
 
+&nbsp;
+
 In the IBC protocol, an actor, which may be an end user, an off-chain process, or a chain,
 needs to be able to verify updates to the state of another chain
 which the other chain's consensus algorithm has agreed upon, and reject any possible updates

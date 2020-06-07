@@ -205,6 +205,8 @@ maximum height/time were mandated & tracked, and future protocol versions may in
 
 ### Sending packets
 
+&nbsp;
+
 The `sendPacket` function is called by a module in order to send an IBC packet on a channel end owned by the calling module to the corresponding module on the counterparty chain.
 
 Calling modules must execute application logic atomically in conjunction with calling `sendPacket`.
@@ -224,6 +226,8 @@ Note that the full packet is not stored in the state of the chain — merely a s
 
 ### Receiving packets
 
+&nbsp;
+
 The `recvPacket` function is called by a module in order to receive & process an IBC packet sent on the corresponding channel end on the counterparty chain.
 
 Calling modules must execute application logic atomically in conjunction with calling `recvPacket`, likely beforehand to calculate the acknowledgement value.
@@ -242,6 +246,8 @@ The IBC handler performs the following steps in order:
 \vspace{3mm}
 
 #### Acknowledgements
+
+&nbsp;
 
 The `acknowledgePacket` function is called by a module to process the acknowledgement of a packet previously sent by
 the calling module on a channel to a counterparty module on the counterparty chain. `acknowledgePacket` also cleans up the packet commitment,
@@ -263,6 +269,8 @@ The IBC handler performs the following steps in order:
 \vspace{3mm}
 
 ### Timeouts
+
+&nbsp;
 
 Application semantics may require some timeout: an upper limit to how long the chain will wait for a transaction to be processed before considering it an error. Since the two chains have different local clocks, this is an obvious attack vector for a double spend — an attacker may delay the relay of the receipt or wait to send the packet until right after the timeout — so applications cannot safely implement naive timeout logic themselves. In order to avoid any possible "double-spend" attacks, the timeout algorithm requires that the destination chain is running and reachable. The timeout must be proven on the recipient chain, not simply the absence of a response on the sending chain.
 
