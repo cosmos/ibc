@@ -54,7 +54,10 @@
 
 !include src/appendix-c.md
 
-# References
+\pagebreak
 
 \twocolumn
+
+# References
+
 
