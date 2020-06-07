@@ -8,7 +8,7 @@ The IBC protocol provides *authorisation* and *ordering* semantics for packets: 
 
 The opening handshake protocol allows each chain to verify the identifier used to reference the connection on the other chain, enabling modules on each chain to reason about the reference on the other chain.
 
-A *connection end* is state tracked for an end of a connection on one chian, with the following fields:
+A *connection end* is state tracked for an end of a connection on one chain, with the following fields:
 
 - The `state` field describes the current state of the connection end.
 - The `counterpartyConnectionIdentifier` field identifies the connection end on the counterparty chain associated with this connection.

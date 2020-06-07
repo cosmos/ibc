@@ -66,7 +66,7 @@ function recvPacket(
 }
 ```
 
-### Acknowleding a packet
+### Acknowledging a packet
 
 ```typescript
 function acknowledgePacket(

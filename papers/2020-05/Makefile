@@ -19,6 +19,9 @@ pdf:
 wc:
 	wc src/*.md
 
+spellcheck:
+	find ./src -type f -name "*.md" -exec aspell -p ./aspell_dict -x -d en_GB -c {} \;
+
 clean:
 	rm -rf build/*
 

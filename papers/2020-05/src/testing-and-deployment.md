@@ -1,3 +1,3 @@
 A full version of the interblockchain protocol has been implemented in Go in the Cosmos SDK [@ibc_cosmos_sdk], an implementation is in progress in Rust [@ibc_rust], and implementations are planned for other languages in the future. An off-chain relayer daemon has also been implemented in Go [@relayer_go]. Game of Zones [@game_of_zones], a live test of the initial software release, is currently in progress. Over one hundred simulated zones (separate consensus instances) have been successfully linked together [@map_of_zones].
 
-Production release & deployment to the Cosmos Network is planned for later this summer.
+Production release & deployment to the Cosmos Network is planned for later this summer. As IBC is a permissionless, opt-in protocol, adoption will be dependent on chains voluntarily electing to support the specification, in full or in part.
