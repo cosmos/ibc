@@ -1,4 +1,4 @@
-personal_ws-1.1 en 108 
+personal_ws-1.1 en 114 
 Aditya
 Agoric
 Anca
@@ -17,8 +17,11 @@ ConnOpenInit
 ConnOpenTry
 Datagram
 Dev
+Ethereum
 GmbH
 Hibbert
+HotStuff
+IAVL
 IBC
 INIT
 Jae
@@ -84,6 +87,7 @@ permissionless
 permissionlessly
 portOnB
 portOnD
+pseudocode
 recv
 relayer
 relayers
@@ -92,6 +96,7 @@ src
 stateful
 statefulness
 subprotocol
+subprotocols
 thresholding
 tokenholder
 tokenise
@@ -106,4 +111,5 @@ unescrows
 unreceived
 validator
 verifier
+vspace
 whitepaper
