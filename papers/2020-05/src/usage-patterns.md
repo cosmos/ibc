@@ -26,11 +26,9 @@ Although a bit counterintuitive to reason about at first, this pattern has a few
   `recvPacket`. If the routing logic were implemented in the IBC handler, the handler would need to deal
   with the failure of the module, which is tricky to interpret.
 
-It also has one notable disadvantage:
-
-- Without an additional abstraction, the relayer logic becomes more complex, since off-chain
-  relayer processes will need to track the state of multiple modules to determine when packets
-  can be submitted.
+It also has one notable disadvantage: without an additional abstraction, the relayer logic becomes more complex, since off-chain
+relayer processes will need to track the state of multiple modules to determine when packets
+can be submitted.
 
 For this reason, chains may implement an additional IBC "routing module" which exposes a call dispatch interface.
 
@@ -40,12 +38,10 @@ For common relay patterns, an "IBC routing module" can be implemented which main
 
 In the call dispatch pattern, datagrams (contained within transaction types defined by the host state machine) are relayed directly
 to the routing module, which then looks up the appropriate module (owning the channel & port to which the datagram was addressed)
-and calls an appropriate function (which must have been previously registered with the routing module). This allows modules to  
+and calls an appropriate function (which must have been previously registered with the routing module). This allows modules to
 avoid handling datagrams directly, and makes it harder to accidentally screw-up the atomic state transition execution which must
 happen in conjunction with sending or receiving a packet (since the module never handles packets directly, but rather exposes
 functions which are called by the routing module upon receipt of a valid packet).
 
 Additionally, the routing module can implement default logic for handshake datagram handling (accepting incoming handshakes
 on behalf of modules), which is convenient for modules which do not need to implement their own custom logic.
-
-
