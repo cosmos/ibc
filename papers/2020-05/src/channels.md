@@ -218,7 +218,7 @@ The IBC handler performs the following steps in order:
 - Increments the send sequence counter associated with the channel
 - Stores a constant-size commitment to the packet data & packet timeout
 
-Note that the full packet is not stored in the state of the chain - merely a short hash-commitment to the data & timeout value. The packet data can be calculated from the transaction execution and possibly returned as log output which relayers can index.
+Note that the full packet is not stored in the state of the chain — merely a short hash-commitment to the data & timeout value. The packet data can be calculated from the transaction execution and possibly returned as log output which relayers can index.
 
 \vspace{3mm}
 
@@ -226,7 +226,7 @@ Note that the full packet is not stored in the state of the chain - merely a sho
 
 The `recvPacket` function is called by a module in order to receive & process an IBC packet sent on the corresponding channel end on the counterparty chain.
 
-Calling modules MUST execute application logic atomically in conjunction with calling `recvPacket`, likely beforehand to calculate the acknowledgement value.
+Calling modules must execute application logic atomically in conjunction with calling `recvPacket`, likely beforehand to calculate the acknowledgement value.
 
 The IBC handler performs the following steps in order:
 
@@ -247,13 +247,13 @@ The `acknowledgePacket` function is called by a module to process the acknowledg
 the calling module on a channel to a counterparty module on the counterparty chain.
 `acknowledgePacket` also cleans up the packet commitment, which is no longer necessary since the packet has been received and acted upon.
 
-Calling modules MAY atomically execute appropriate application acknowledgement-handling logic in conjunction with calling `acknowledgePacket`.
+Calling modules may atomically execute appropriate application acknowledgement-handling logic in conjunction with calling `acknowledgePacket`.
 
 \vspace{3mm}
 
 ### Timeouts
 
-Application semantics may require some timeout: an upper limit to how long the chain will wait for a transaction to be processed before considering it an error. Since the two chains have different local clocks, this is an obvious attack vector for a double spend - an attacker may delay the relay of the receipt or wait to send the packet until right after the timeout - so applications cannot safely implement naive timeout logic themselves.
+Application semantics may require some timeout: an upper limit to how long the chain will wait for a transaction to be processed before considering it an error. Since the two chains have different local clocks, this is an obvious attack vector for a double spend — an attacker may delay the relay of the receipt or wait to send the packet until right after the timeout — so applications cannot safely implement naive timeout logic themselves.
 
 Note that in order to avoid any possible "double-spend" attacks, the timeout algorithm requires that the destination chain is running and reachable. One can prove nothing in a complete network partition, and must wait to connect; the timeout must be proven on the recipient chain, not simply the absence of a response on the sending chain.
 
@@ -265,7 +265,7 @@ The `timeoutPacket` function is called by a module which originally attempted to
 where the timeout height or timeout timestamp has passed on the counterparty chain without the packet being committed, to prove that the packet
 can no longer be executed and to allow the calling module to safely perform appropriate state transitions.
 
-Calling modules MAY atomically execute appropriate application timeout-handling logic in conjunction with calling `timeoutPacket`.
+Calling modules may atomically execute appropriate application timeout-handling logic in conjunction with calling `timeoutPacket`.
 
 In the case of an ordered channel, `timeoutPacket` checks the `recvSequence` of the receiving channel end and closes the channel if a packet has timed out.
 

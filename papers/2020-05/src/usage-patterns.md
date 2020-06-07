@@ -32,7 +32,7 @@ It also has one notable disadvantage:
   relayer processes will need to track the state of multiple modules to determine when packets
   can be submitted.
 
-For this reason, there is an additional IBC "routing module" which exposes a call dispatch interface.
+For this reason, chains may implement an additional IBC "routing module" which exposes a call dispatch interface.
 
 ## Call dispatch
 

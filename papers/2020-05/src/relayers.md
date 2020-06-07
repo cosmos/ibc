@@ -1,14 +1,18 @@
 Relayer algorithms are the "physical" connection layer of IBC — off-chain processes responsible for relaying data between two chains running the IBC protocol by scanning the state of each chain, constructing appropriate datagrams, and executing them on the opposite chain as allowed by the protocol.
 
+\vspace{3mm}
+
 ### Motivation
+
+\
 
 In the IBC protocol, a blockchain can only record the *intention* to send particular data to another chain — it does not have direct access to a network transport layer. Physical datagram relay must be performed by off-chain infrastructure with access to a transport layer such as TCP/IP. This standard defines the concept of a *relayer* algorithm, executable by an off-chain process with the ability to query chain state, to perform this relay. 
 
-### Definitions
-
 A *relayer* is an off-chain process with the ability to read the state of and submit transactions to some set of ledgers utilising the IBC protocol.
 
-### Desired Properties
+\vspace{3mm}
+
+### Properties
 
 - No exactly-once or deliver-or-timeout safety properties of IBC should depend on relayer behaviour (assume Byzantine relayers).
 - Packet relay liveness properties of IBC should depend only on the existence of at least one correct, live relayer.
@@ -17,6 +21,8 @@ A *relayer* is an off-chain process with the ability to read the state of and su
 - Provision for relayer incentivisation should be possible at the application layer.
 
 ### Basic relayer algorithm
+
+\
 
 The relayer algorithm is defined over a set `C` of chains implementing the IBC protocol. Each relayer may not necessarily have access to read state from and write datagrams to all chains in the interchain network (especially in the case of permissioned or private chains) — different relayers may relay between different subsets.
 
@@ -27,6 +33,8 @@ The relayer algorithm is defined over a set `C` of chains implementing the IBC p
 `relay` is called by the relayer every so often — no more frequently than once per block on either chain, and possibly less frequently, according to how often the relayer wishes to relay.
 
 Different relayers may relay between different chains — as long as each pair of chains has at least one correct & live relayer and the chains remain live, all packets flowing between chains in the network will eventually be relayed.
+
+\vspace{3mm}
 
 ### Packets, acknowledgements, timeouts
 
@@ -39,6 +47,8 @@ query the send sequence on the source chain, and keep the last sequence number r
 in between the two are packets that need to be queried & then relayed. In either case, subsequently, the relayer process
 should check that the destination chain has not yet received the packet by checking the receive sequence, and then relay it.
 
+\vspace{3mm}
+
 #### Relaying packets in an unordered channel
 
 Packets in an unordered channel can be relayed in an event-based fashion.
@@ -48,6 +58,8 @@ the relayer should check whether the destination chain has received the packet
 already by querying for the presence of an acknowledgement at the packet's sequence
 number, and if one is not yet present the relayer should relay the packet.
 
+\vspace{3mm}
+
 #### Relaying acknowledgements
 
 Acknowledgements can be relayed in an event-based fashion. The relayer should
@@ -56,6 +68,8 @@ are written, then compose the acknowledgement using the data in the event log,
 check whether the packet commitment still exists on the source chain (it will be
 deleted once the acknowledgement is relayed), and if so relay the acknowledgement to
 the source chain.
+
+\vspace{3mm}
 
 #### Relaying timeouts
 
@@ -67,17 +81,25 @@ and as soon as the height or timestamp of the destination chain exceeds that of 
 packet, check whether the packet commitment still exists on the source chain (it will
 be deleted once the timeout is relayed), and if so relay a timeout to the source chain.
 
+\vspace{3mm}
+
 #### Ordering constraints
 
 There are implicit ordering constraints imposed on the relayer process determining which datagrams must be submitted in what order. For example, a header must be submitted to finalise the stored consensus state & commitment root for a particular height in a light client before a packet can be relayed. The relayer process is responsible for frequently querying the state of the chains between which they are relaying in order to determine what must be relayed when.
+
+\vspace{3mm}
 
 #### Bundling
 
 If the host state machine supports it, the relayer process can bundle many datagrams into a single transaction, which will cause them to be executed in sequence, and amortise any overhead costs (e.g. signature checks for fee payment).
 
+\vspace{3mm}
+
 #### Race conditions
 
 Multiple relayers relaying between the same pair of modules & chains may attempt to relay the same packet (or submit the same header) at the same time. If two relayers do so, the first transaction will succeed and the second will fail. Out-of-band coordination between the relayers or between the actors who sent the original packets and the relayers is necessary to mitigate this. Further discussion is out of scope of this standard.
+
+\vspace{3mm}
 
 #### Incentivisation
 

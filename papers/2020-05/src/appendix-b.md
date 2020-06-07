@@ -59,7 +59,9 @@ function chanOpenTry(
     abortTransactionUnless(connection !== null)
     abortTransactionUnless(connection.state === OPEN)
     expected = ChannelEnd{INIT, order, portIdentifier,
-                          channelIdentifier, [connection.counterpartyConnectionIdentifier], counterpartyVersion}
+                          channelIdentifier,
+                          [connection.counterpartyConnectionIdentifier],
+                          counterpartyVersion}
     abortTransactionUnless(connection.verifyChannelState(
       proofHeight,
       proofInit,
@@ -94,7 +96,9 @@ function chanOpenAck(
     abortTransactionUnless(connection !== null)
     abortTransactionUnless(connection.state === OPEN)
     expected = ChannelEnd{TRYOPEN, channel.order, portIdentifier,
-                          channelIdentifier, [connection.counterpartyConnectionIdentifier], counterpartyVersion}
+                          channelIdentifier,
+                          [connection.counterpartyConnectionIdentifier],
+                          counterpartyVersion}
     abortTransactionUnless(connection.verifyChannelState(
       proofHeight,
       proofTry,
@@ -124,7 +128,9 @@ function chanOpenConfirm(
     abortTransactionUnless(connection !== null)
     abortTransactionUnless(connection.state === OPEN)
     expected = ChannelEnd{OPEN, channel.order, portIdentifier,
-                          channelIdentifier, [connection.counterpartyConnectionIdentifier], channel.version}
+                          channelIdentifier,
+                          [connection.counterpartyConnectionIdentifier],
+                          channel.version}
     abortTransactionUnless(connection.verifyChannelState(
       proofHeight,
       proofAck,
@@ -171,7 +177,9 @@ function chanCloseConfirm(
     abortTransactionUnless(connection !== null)
     abortTransactionUnless(connection.state === OPEN)
     expected = ChannelEnd{CLOSED, channel.order, portIdentifier,
-                          channelIdentifier, [connection.counterpartyConnectionIdentifier], channel.version}
+                          channelIdentifier,
+                          [connection.counterpartyConnectionIdentifier],
+                          channel.version}
     abortTransactionUnless(connection.verifyChannelState(
       proofHeight,
       proofInit,
