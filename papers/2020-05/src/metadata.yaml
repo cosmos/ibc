@@ -13,7 +13,7 @@ numbersections: yes
 lang: en
 babel-lang: english
 abstract: |
-  The inter-blockchain communication protocol (IBC) is an end-to-end, connection-oriented, stateful protocol for reliable, ordered, and authenticated communication between modules executed on separate distributed ledgers.
+  The interblockchain communication protocol (IBC) is an end-to-end, connection-oriented, stateful protocol for reliable, ordered, and authenticated communication between modules executed on separate distributed ledgers.
   IBC is designed for interoperation between heterogenous ledgers arranged in an unknown, dynamic topology, operating with varied consensus algorithms & state machines. The protocol realises this by specifying
   the sufficient set of data structures, encoding, and semantics of a communication protocol which once implemented by participating ledgers & machines will allow them to safely communicate. IBC is payload-agnostic
   and provides a cross-chain asynchronous communication primitive which can be used as a constituent building block by a wide variety of applications.
