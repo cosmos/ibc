@@ -235,8 +235,13 @@ $for(header-includes)$
 $header-includes$
 $endfor$
 
+\newcommand*{\TitleFont}{%
+      \usefont{\encodingdefault}{\rmdefault}{b}{n}%
+      \fontsize{18}{20}%
+      \selectfont}
+
 $if(title)$
-\title{$title$$if(thanks)$\thanks{$thanks$}$endif$}
+\title{\TitleFont $title$$if(thanks)$\thanks{$thanks$}$endif$}
 $endif$
 $if(subtitle)$
 \providecommand{\subtitle}[1]{}
