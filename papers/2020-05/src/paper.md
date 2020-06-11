@@ -2,15 +2,15 @@
 
 !include src/introduction.md
 
-# Protocol structure
+# Scope & properties
 
 !include src/structure.md
 
-# Protocol details
-
-## Host requirements
+# Host requirements
 
 !include src/host-requirements.md
+
+# Protocol structure
 
 ## Clients
 
@@ -36,7 +36,7 @@
 
 !include src/fungible-token-transfer.md
 
-# Testing and deployment
+# Testing & deployment
 
 !include src/testing-and-deployment.md
 
