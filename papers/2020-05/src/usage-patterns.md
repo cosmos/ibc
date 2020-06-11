@@ -37,7 +37,7 @@ For this reason, chains may implement an additional IBC "routing module" which e
 For common relay patterns, an "IBC routing module" can be implemented which maintains a module dispatch table and simplifies the job of relayers.
 
 In the call dispatch pattern, datagrams (contained within transaction types defined by the host state machine) are relayed directly
-to the routing module, which then looks up the appropriate module (owning the channel & port to which the datagram was addressed)
+to the routing module, which then looks up the appropriate module (owning the channel and port to which the datagram was addressed)
 and calls an appropriate function (which must have been previously registered with the routing module). This allows modules to
 avoid handling datagrams directly, and makes it harder to accidentally screw-up the atomic state transition execution which must
 happen in conjunction with sending or receiving a packet (since the module never handles packets directly, but rather exposes

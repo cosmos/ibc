@@ -62,7 +62,7 @@ This permissioning can be implemented with unique references (object capabilitie
 
 &nbsp;
 
-Host state machines must support an exception or rollback system, whereby a transaction can abort execution and revert any previously made state changes (including state changes in other modules happening within the same transaction), excluding gas consumed & fee payments as appropriate.
+Host state machines must support an exception or rollback system, whereby a transaction can abort execution and revert any previously made state changes (including state changes in other modules happening within the same transaction), excluding gas consumed and fee payments as appropriate.
 
 \vspace{3mm}
 
@@ -74,4 +74,4 @@ For deliver-or-timeout safety, host state machines must have eventual data avail
 
 For liveness of packet relay, host state machines must have bounded transactional liveness, such that incoming transactions are confirmed within a block height or timestamp bound (in particular, less than the timeouts assigned to the packets).
 
-IBC packet data, and other data which is not directly stored in the Merklized state but is relied upon by relayers, must be available to & efficiently computable by relayer processes.
+IBC packet data, and other data which is not directly stored in the Merklized state but is relied upon by relayers, must be available to and efficiently computable by relayer processes.

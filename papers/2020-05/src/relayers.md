@@ -30,7 +30,7 @@ The relayer algorithm is defined over a set of chains implementing the IBC proto
 
 Every so often, although no more frequently than once per block on either chain, a relayer calculates the set of all valid datagrams to be relayed from one chain to another based on the state of both chains. The relayer must possess prior knowledge of what subset of the IBC protocol is implemented by the blockchains in the set for which they are relaying (e.g. by reading the source code). Datagrams can be submitted individually as single transactions or atomically as a single transaction if the chain supports it. 
 
-Different relayers may relay between different chains — as long as each pair of chains has at least one correct & live relayer and the chains remain live, all packets flowing between chains in the network will eventually be relayed.
+Different relayers may relay between different chains — as long as each pair of chains has at least one correct and live relayer and the chains remain live, all packets flowing between chains in the network will eventually be relayed.
 
 \vspace{3mm}
 
@@ -44,7 +44,7 @@ Packets in an ordered channel can be relayed in either an event-based fashion or
 For the former, the relayer should watch the source chain for events emitted whenever packets are sent,
 then compose the packet using the data in the event log. For the latter, the relayer should periodically
 query the send sequence on the source chain, and keep the last sequence number relayed, so that any sequences
-in between the two are packets that need to be queried & then relayed. In either case, subsequently, the relayer process
+in between the two are packets that need to be queried and then relayed. In either case, subsequently, the relayer process
 should check that the destination chain has not yet received the packet by checking the receive sequence, and then relay it.
 
 \vspace{3mm}
@@ -63,7 +63,7 @@ number, and if one is not yet present the relayer should relay the packet.
 #### Relaying acknowledgements
 
 Acknowledgements can most easily be relayed in an event-based fashion. The relayer should
-watch the destination chain for events emitted whenever packets are received & acknowledgements
+watch the destination chain for events emitted whenever packets are received and acknowledgements
 are written, then compose the acknowledgement using the data in the event log,
 check whether the packet commitment still exists on the source chain (it will be
 deleted once the acknowledgement is relayed), and if so relay the acknowledgement to
@@ -85,7 +85,7 @@ be deleted once the timeout is relayed), and if so relay a timeout to the source
 
 #### Ordering constraints
 
-There are implicit ordering constraints imposed on the relayer process determining which datagrams must be submitted in what order. For example, a header must be submitted to finalise the stored consensus state & commitment root for a particular height in a light client before a packet can be relayed. The relayer process is responsible for frequently querying the state of the chains between which they are relaying in order to determine what must be relayed when.
+There are implicit ordering constraints imposed on the relayer process determining which datagrams must be submitted in what order. For example, a header must be submitted to finalise the stored consensus state and commitment root for a particular height in a light client before a packet can be relayed. The relayer process is responsible for frequently querying the state of the chains between which they are relaying in order to determine what must be relayed when.
 
 \vspace{3mm}
 
@@ -97,7 +97,7 @@ If the host state machine supports it, the relayer process can bundle many datag
 
 #### Race conditions
 
-Multiple relayers relaying between the same pair of modules & chains may attempt to relay the same packet (or submit the same header) at the same time. If two relayers do so, the first transaction will succeed and the second will fail. Out-of-band coordination between the relayers or between the actors who sent the original packets and the relayers is necessary to mitigate this.
+Multiple relayers relaying between the same pair of modules and chains may attempt to relay the same packet (or submit the same header) at the same time. If two relayers do so, the first transaction will succeed and the second will fail. Out-of-band coordination between the relayers or between the actors who sent the original packets and the relayers is necessary to mitigate this.
 
 \vspace{3mm}
 

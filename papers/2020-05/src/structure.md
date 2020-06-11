@@ -6,7 +6,7 @@ IBC handles authentication, transport, and ordering of opaque data packets relay
 
 IBC sits between modules — smart contracts, other state machine components, or otherwise independently executed pieces of application logic on state machines — on one side, and underlying consensus protocols, blockchains, and network infrastructure (e.g. TCP/IP), on the other side.
 
-IBC provides to modules a set of functions much like the functions which might be provided to a module for interacting with another module on the same state machine: sending data packets and receiving data packets on an established connection & channel, in addition to calls to manage the protocol state: opening and closing connections and channels, choosing connection, channel, and packet delivery options, and inspecting connection & channel status.
+IBC provides to modules a set of functions much like the functions which might be provided to a module for interacting with another module on the same state machine: sending data packets and receiving data packets on an established connection and channel, in addition to calls to manage the protocol state: opening and closing connections and channels, choosing connection, channel, and packet delivery options, and inspecting connection and channel status.
 
 IBC requires certain functionalities and properties of the underlying chains, primarily finality (or thresholding finality gadgets), cheaply-verifiable consensus transcripts, and simple key/value store functionality. On the network side, IBC requires only eventual data delivery — no authentication, synchrony, or ordering properties are assumed (these properties are defined precisely later on).
 
@@ -24,11 +24,11 @@ In the IBC architecture, modules are not directly sending messages to each other
 
 \vspace{3mm}
 
-### Data confidentiality & legibility
+### Data confidentiality and legibility
 
 &nbsp;
 
-The IBC protocol requires only that the minimum data necessary for correct operation of the IBC protocol be made available & legible (serialised in a standardised format) to relayer processes, and the state machine may elect to make that data available only to specific relayers. This data consists of consensus state, client, connection, channel, and packet information, and any auxiliary state structure necessary to construct proofs of inclusion or exclusion of particular key/value pairs in state. All data which must be proved to another chain must also be legible; i.e., it must be serialised in a standardised format agreed upon by the two chains.
+The IBC protocol requires only that the minimum data necessary for correct operation of the IBC protocol be made available and legible (serialised in a standardised format) to relayer processes, and the state machine may elect to make that data available only to specific relayers. This data consists of consensus state, client, connection, channel, and packet information, and any auxiliary state structure necessary to construct proofs of inclusion or exclusion of particular key/value pairs in state. All data which must be proved to another chain must also be legible; i.e., it must be serialised in a standardised format agreed upon by the two chains.
 
 \vspace{3mm}
 
@@ -60,7 +60,7 @@ All data sent over IBC are authenticated: a block finalised by the consensus alg
 
 &nbsp;
 
-Reliability, flow control, and authentication as described above require that IBC initialises and maintains certain status information for each datastream. This information is split between three abstractions: clients, connections, and channels. Each client object contains information about the consensus state of the counterparty chain. Each connection object contains a specific pair of named identifiers agreed to by both chains in a handshake protocol, which uniquely identifies a connection between the two chains. Each channel, specific to a pair of modules, contains information concerning negotiated encoding & multiplexing options and state & sequence numbers. When two modules wish to communicate, they must locate an existing connection & channel between their two chains, or initialise a new connection & channel(s) if none yet exist. Initialising connections & channels requires a multi-step handshake which, once complete, ensures that only the two intended chains are connected, in the case of connections, and ensures that two modules are connected and that future datagrams relayed will be authenticated, encoded, and sequenced as desired, in the case of channels.
+Reliability, flow control, and authentication as described above require that IBC initialises and maintains certain status information for each datastream. This information is split between three abstractions: clients, connections, and channels. Each client object contains information about the consensus state of the counterparty chain. Each connection object contains a specific pair of named identifiers agreed to by both chains in a handshake protocol, which uniquely identifies a connection between the two chains. Each channel, specific to a pair of modules, contains information concerning negotiated encoding and multiplexing options and state and sequence numbers. When two modules wish to communicate, they must locate an existing connection and channel between their two chains, or initialise a new connection and channel(s) if none yet exist. Initialising connections and channels requires a multi-step handshake which, once complete, ensures that only the two intended chains are connected, in the case of connections, and ensures that two modules are connected and that future datagrams relayed will be authenticated, encoded, and sequenced as desired, in the case of channels.
 
 \vspace{3mm}
 
@@ -68,4 +68,4 @@ Reliability, flow control, and authentication as described above require that IB
 
 &nbsp;
 
-To allow for many modules within a single host chain to use an IBC connection simultaneously, IBC allows any number of channels to be associated with a single connection. Each channel uniquely identifies a datastream over which packets can be sent in order (in the case of an ordered channel), and always exactly once, to a destination module on the receiving chain. Channels are usually expected to be associated with a single module on each chain, but one-to-many and many-to-one channels are also possible. The number of channels is unbounded, facilitating concurrent throughput limited only by the throughput of the underlying chains with only a single connection & pair of clients necessary to track consensus information (and consensus transcript verification cost thus amortised across all channels using the connection).
+To allow for many modules within a single host chain to use an IBC connection simultaneously, IBC allows any number of channels to be associated with a single connection. Each channel uniquely identifies a datastream over which packets can be sent in order (in the case of an ordered channel), and always exactly once, to a destination module on the receiving chain. Channels are usually expected to be associated with a single module on each chain, but one-to-many and many-to-one channels are also possible. The number of channels is unbounded, facilitating concurrent throughput limited only by the throughput of the underlying chains with only a single connection and pair of clients necessary to track consensus information (and consensus transcript verification cost thus amortised across all channels using the connection).

@@ -1,4 +1,4 @@
-The *channel* abstraction provides message delivery semantics to the interblockchain communication protocol in three categories: ordering, exactly-once delivery, and module permissioning. A channel serves as a conduit for packets passing between a module on one chain and a module on another, ensuring that packets are executed only once, delivered in the order in which they were sent (if necessary), and delivered only to the corresponding module owning the other end of the channel on the destination chain. Each channel is associated with a particular connection, and a connection may have any number of associated channels, allowing the use of common identifiers and amortising the cost of header verification across all the channels utilising a connection & light client.
+The *channel* abstraction provides message delivery semantics to the interblockchain communication protocol in three categories: ordering, exactly-once delivery, and module permissioning. A channel serves as a conduit for packets passing between a module on one chain and a module on another, ensuring that packets are executed only once, delivered in the order in which they were sent (if necessary), and delivered only to the corresponding module owning the other end of the channel on the destination chain. Each channel is associated with a particular connection, and a connection may have any number of associated channels, allowing the use of common identifiers and amortising the cost of header verification across all the channels utilising a connection and light client.
 
 Channels are payload-agnostic. The modules which send and receive IBC packets decide how to construct packet data and how to act upon the incoming packet data, and must utilise their own application logic to determine which state transactions to apply according to what data the packet contains.
 
@@ -197,9 +197,9 @@ Once closed, channels cannot be reopened and identifiers cannot be reused. Ident
 we want to prevent potential replay of previously sent packets. The replay problem is analogous to using sequence
 numbers with signed messages, except where the light client algorithm "signs" the messages (IBC packets), and the replay
 prevention sequence is the combination of port identifier, channel identifier, and packet sequence — hence we cannot
-allow the same port identifier & channel identifier to be reused again with a sequence reset to zero, since this
+allow the same port identifier and channel identifier to be reused again with a sequence reset to zero, since this
 might allow packets to be replayed. It would be possible to safely reuse identifiers if timeouts of a particular
-maximum height/time were mandated & tracked, and future protocol versions may incorporate this feature.
+maximum height/time were mandated and tracked, and future protocol versions may incorporate this feature.
 
 \vspace{3mm}
 
@@ -213,14 +213,14 @@ Calling modules must execute application logic atomically in conjunction with ca
 
 The IBC handler performs the following steps in order:
 
-- Checks that the channel & connection are open to send packets
+- Checks that the channel and connection are open to send packets
 - Checks that the calling module owns the sending port
-- Checks that the packet metadata matches the channel & connection information
+- Checks that the packet metadata matches the channel and connection information
 - Checks that the timeout height specified has not already passed on the destination chain
 - Increments the send sequence counter associated with the channel (in the case of ordered channels)
-- Stores a constant-size commitment to the packet data & packet timeout
+- Stores a constant-size commitment to the packet data and packet timeout
 
-Note that the full packet is not stored in the state of the chain — merely a short hash-commitment to the data & timeout value. The packet data can be calculated from the transaction execution and possibly returned as log output which relayers can index.
+Note that the full packet is not stored in the state of the chain — merely a short hash-commitment to the data and timeout value. The packet data can be calculated from the transaction execution and possibly returned as log output which relayers can index.
 
 \vspace{3mm}
 
@@ -228,15 +228,15 @@ Note that the full packet is not stored in the state of the chain — merely a s
 
 &nbsp;
 
-The `recvPacket` function is called by a module in order to receive & process an IBC packet sent on the corresponding channel end on the counterparty chain.
+The `recvPacket` function is called by a module in order to receive and process an IBC packet sent on the corresponding channel end on the counterparty chain.
 
 Calling modules must execute application logic atomically in conjunction with calling `recvPacket`, likely beforehand to calculate the acknowledgement value.
 
 The IBC handler performs the following steps in order:
 
-- Checks that the channel & connection are open to receive packets
+- Checks that the channel and connection are open to receive packets
 - Checks that the calling module owns the receiving port
-- Checks that the packet metadata matches the channel & connection information
+- Checks that the packet metadata matches the channel and connection information
 - Checks that the packet sequence is the next sequence the channel end expects to receive (for ordered channels)
 - Checks that the timeout height has not yet passed
 - Checks the inclusion proof of packet data commitment in the outgoing chain's state
@@ -257,13 +257,13 @@ Calling modules may atomically execute appropriate application acknowledgement-h
 
 The IBC handler performs the following steps in order:
 
-- Checks that the channel & connection are open to acknowledge packets
+- Checks that the channel and connection are open to acknowledge packets
 - Checks that the calling module owns the sending port
-- Checks that the packet metadata matches the channel & connection information
+- Checks that the packet metadata matches the channel and connection information
 - Checks that the packet was actually sent on this channel
 - Checks that the packet sequence is the next sequence the channel end expects to acknowledge (for ordered channels)
 - Checks the inclusion proof of the packet acknowledgement data in the receiving chain's state
-- Deletes the packet commitment (cleaning up state & preventing replay)
+- Deletes the packet commitment (cleaning up state and preventing replay)
 - Increments the next acknowledgement sequence (for ordered channels)
 
 \vspace{3mm}
@@ -286,13 +286,13 @@ Calling modules may atomically execute appropriate application timeout-handling 
 
 The IBC handler performs the following steps in order:
 
-- Checks that the channel & connection are open to timeout packets
+- Checks that the channel and connection are open to timeout packets
 - Checks that the calling module owns the sending port
-- Checks that the packet metadata matches the channel & connection information
+- Checks that the packet metadata matches the channel and connection information
 - Checks that the packet was actually sent on this channel
 - Checks a proof that the packet has not been confirmed on the destination chain
 - Checks a proof that the destination chain has exceeded the timeout height or timestamp
-- Deletes the packet commitment (cleaning up state & preventing replay)
+- Deletes the packet commitment (cleaning up state and preventing replay)
 
 In the case of an ordered channel, `timeoutPacket` additionally closes the channel if a packet has timed out. Unordered channels are expected to continue in the face of timed-out packets.
 

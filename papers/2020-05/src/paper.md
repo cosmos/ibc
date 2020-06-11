@@ -36,7 +36,7 @@
 
 !include src/fungible-token-transfer.md
 
-# Testing & deployment
+# Testing and deployment
 
 !include src/testing-and-deployment.md
 

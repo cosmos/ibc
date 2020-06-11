@@ -1,4 +1,4 @@
-The section specifies packet data structure & state machine handling logic for the transfer of fungible tokens over an IBC channel between two modules on separate chains. The state machine logic presented allows for safe multi-chain denomination handling with permissionless channel opening. This logic constitutes a "fungible token transfer bridge module", interfacing between the IBC routing module and an existing asset tracking module on the host state machine.
+The section specifies packet data structure and state machine handling logic for the transfer of fungible tokens over an IBC channel between two modules on separate chains. The state machine logic presented allows for safe multi-chain denomination handling with permissionless channel opening. This logic constitutes a "fungible token transfer bridge module", interfacing between the IBC routing module and an existing asset tracking module on the host state machine.
 
 \vspace{3mm}
 
@@ -13,7 +13,7 @@ Users of a set of chains connected over the IBC protocol might wish to utilise a
 ### Properties
 
 - Preservation of fungibility (two-way peg)
-- Preservation of total supply (constant or inflationary on a single source chain & module)
+- Preservation of total supply (constant or inflationary on a single source chain and module)
 - Permissionless token transfers, no need to whitelist connections, modules, or denominations
 - Symmetric (all chains implement the same logic)
 - Fault containment: prevents Byzantine-inflation of tokens originating on chain A, as a result of chain B's Byzantine behaviour (though any users who sent tokens to chain B may be at risk)
@@ -60,8 +60,8 @@ The protocol logic is symmetric, so that denominations originating on either cha
   an acknowledgement of failure is preferable to aborting the transaction since it more easily enables the sending chain
   to take appropriate action based on the nature of the failure.
 
-This implementation preserves both fungibility & supply. If tokens have been sent to the counterparty chain, they can be redeemed back in the same denomination & amount on the source chain.
-The combined supply of unlocked tokens of a particular on both chains is constant, since each send-receive packet pair locks & mints the same amount (although the source chain of a particular
+This implementation preserves both fungibility and supply. If tokens have been sent to the counterparty chain, they can be redeemed back in the same denomination and amount on the source chain.
+The combined supply of unlocked tokens of a particular on both chains is constant, since each send-receive packet pair locks and mints the same amount (although the source chain of a particular
 asset could change the supply outside of the scope of this protocol).
 
 \vspace{3mm}
