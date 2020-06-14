@@ -2,11 +2,11 @@
 
 !include src/introduction.md
 
-# Scope & properties
+# Protocol scope & properties
 
 !include src/structure.md
 
-# Host requirements
+# Host ledger requirements
 
 !include src/host-requirements.md
 
