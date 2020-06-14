@@ -56,6 +56,8 @@ Host ledgers must implement a port system, where the IBC handler can allow diffe
 
 This permissioning can be implemented with unique references (object capabilities [@object_capabilities]) for each port, with source-based authentication(a la `msg.sender` in Ethereum contracts), or with some other method of access control, in any case enforced by the host ledger.
 
+Ports are not generally intended to be human-readable identifiers — just as DNS name resolution and standardised port numbers for particular applications exist to abstract away the details of IP addresses and ports from TCP/IP users, ledger name resolution and standardised ports for particular applications may be created in order to abstract away the details of ledger identification and port selection. Such an addressing system could easily be built on top of IBC itself, such that an initial connection to the addressing system over IBC would then enable name resolution for subsequent connections to other ledgers and applications.
+
 \vspace{3mm}
 
 ### Exception/rollback system
