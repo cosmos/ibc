@@ -3,7 +3,7 @@
 Essential to the functionality of the IBC handler is an interface to other modules
 running on the same machine, so that it can accept requests to send packets and can 
 route incoming packets to modules. This interface should be as minimal as possible
-in order to reduce implementation complexity and requirements imposed on host state machines.
+in order to reduce implementation complexity and requirements imposed on host ledgers.
 
 For this reason, the core IBC logic uses a receive-only call pattern that differs
 slightly from the intuitive dataflow. As one might expect, modules call into the IBC handler to create
@@ -18,7 +18,7 @@ The IBC handler never calls into modules directly.
 
 Although a bit counterintuitive to reason about at first, this pattern has a few notable advantages:
 
-- It minimises requirements of the host state machine, since the IBC handler need not understand how to call
+- It minimises requirements of the host ledger, since the IBC handler need not understand how to call
   into other modules or store any references to them.
 - It avoids the necessity of managing a module lookup table in the handler state.
 - It avoids the necessity of dealing with module return data or failures. If a module does not want to  
@@ -36,7 +36,7 @@ For this reason, chains may implement an additional IBC "routing module" which e
 
 For common relay patterns, an "IBC routing module" can be implemented which maintains a module dispatch table and simplifies the job of relayers.
 
-In the call dispatch pattern, datagrams (contained within transaction types defined by the host state machine) are relayed directly
+In the call dispatch pattern, datagrams (contained within transaction types defined by the host ledger) are relayed directly
 to the routing module, which then looks up the appropriate module (owning the channel and port to which the datagram was addressed)
 and calls an appropriate function (which must have been previously registered with the routing module). This allows modules to
 avoid handling datagrams directly, and makes it harder to accidentally screw-up the atomic state transition execution which must

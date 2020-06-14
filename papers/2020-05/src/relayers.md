@@ -91,7 +91,7 @@ There are implicit ordering constraints imposed on the relayer process determini
 
 #### Bundling
 
-If the host state machine supports it, the relayer process can bundle many datagrams into a single transaction, which will cause them to be executed in sequence, and amortise any overhead costs (e.g. signature checks for fee payment).
+If the host ledger supports it, the relayer process can bundle many datagrams into a single transaction, which will cause them to be executed in sequence, and amortise any overhead costs (e.g. signature checks for fee payment).
 
 \vspace{3mm}
 

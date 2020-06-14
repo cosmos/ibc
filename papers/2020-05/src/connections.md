@@ -98,6 +98,6 @@ the connection is open on both ends and can be used immediately.
 During the handshake process, two ends of a connection come to agreement on a version bytestring associated
 with that connection. At the moment, the contents of this version bytestring are opaque to the IBC core protocol.
 In the future, it might be used to indicate what kinds of channels can utilise the connection in question, or
-what encoding formats channel-related datagrams will use. Host state machines may utilise the version data
+what encoding formats channel-related datagrams will use. Host ledgers may utilise the version data
 to negotiate encodings, priorities, or connection-specific metadata related to custom logic on top of IBC.
-Host state machines may also safely ignore the version data or specify an empty string.
+Host ledgers may also safely ignore the version data or specify an empty string.

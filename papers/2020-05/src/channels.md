@@ -171,9 +171,9 @@ it specifies will own the other end of the created channel on the counterparty c
 
 During the handshake process, two ends of a channel come to agreement on a version bytestring associated
 with that channel. The contents of this version bytestring are opaque to the IBC core protocol.
-Host state machines may utilise the version data to indicate supported application-layer protocols, agree on packet
+Host ledgers may utilise the version data to indicate supported application-layer protocols, agree on packet
 encoding formats, or negotiate other channel-related metadata related to custom logic on top of IBC.
-Host state machines may also safely ignore the version data or specify an empty string.
+Host ledgers may also safely ignore the version data or specify an empty string.
 
 \vspace{3mm}
 

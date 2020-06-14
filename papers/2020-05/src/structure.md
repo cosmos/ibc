@@ -4,9 +4,9 @@ IBC handles authentication, transport, and ordering of opaque data packets relay
 
 ## Interfaces
 
-IBC sits between modules — smart contracts, other state machine components, or otherwise independently executed pieces of application logic on state machines — on one side, and underlying consensus protocols, blockchains, and network infrastructure (e.g. TCP/IP), on the other side.
+IBC sits between modules — smart contracts, other ledger components, or otherwise independently executed pieces of application logic on ledgers — on one side, and underlying consensus protocols, blockchains, and network infrastructure (e.g. TCP/IP), on the other side.
 
-IBC provides to modules a set of functions much like the functions which might be provided to a module for interacting with another module on the same state machine: sending data packets and receiving data packets on an established connection and channel, in addition to calls to manage the protocol state: opening and closing connections and channels, choosing connection, channel, and packet delivery options, and inspecting connection and channel status.
+IBC provides to modules a set of functions much like the functions which might be provided to a module for interacting with another module on the same ledger: sending data packets and receiving data packets on an established connection and channel, in addition to calls to manage the protocol state: opening and closing connections and channels, choosing connection, channel, and packet delivery options, and inspecting connection and channel status.
 
 IBC requires certain functionalities and properties of the underlying chains, primarily finality (or thresholding finality gadgets), cheaply-verifiable consensus transcripts (such that a light client algorithm can verify the results of the consensus process with much less computation & storage than a full node), and simple key/value store functionality. On the network side, IBC requires only eventual data delivery — no authentication, synchrony, or ordering properties are assumed (these properties are defined precisely later on).
 
@@ -28,7 +28,7 @@ In the IBC architecture, modules are not directly sending messages to each other
 
 &nbsp;
 
-The IBC protocol requires only that the minimum data necessary for correct operation of the IBC protocol be made available and legible (serialised in a standardised format) to relayer processes, and the state machine may elect to make that data available only to specific relayers. This data consists of consensus state, client, connection, channel, and packet information, and any auxiliary state structure necessary to construct proofs of inclusion or exclusion of particular key/value pairs in state. All data which must be proved to another chain must also be legible; i.e., it must be serialised in a standardised format agreed upon by the two chains.
+The IBC protocol requires only that the minimum data necessary for correct operation of the IBC protocol be made available and legible (serialised in a standardised format) to relayer processes, and the ledger may elect to make that data available only to specific relayers. This data consists of consensus state, client, connection, channel, and packet information, and any auxiliary state structure necessary to construct proofs of inclusion or exclusion of particular key/value pairs in state. All data which must be proved to another chain must also be legible; i.e., it must be serialised in a standardised format agreed upon by the two chains.
 
 \vspace{3mm}
 
@@ -36,7 +36,7 @@ The IBC protocol requires only that the minimum data necessary for correct opera
 
 &nbsp;
 
-The network layer and relayer processes may behave in arbitrary ways, dropping, reordering, or duplicating packets, purposely attempting to send invalid transactions, or otherwise acting in a Byzantine fashion, without compromising the safety or liveness of IBC. This is achieved by assigning a sequence number to each packet sent over an IBC channel, which is checked by the IBC handler (the part of the state machine implementing the IBC protocol) on the receiving chain, and providing a method for the sending chain to check that the receiving chain has in fact received and handled a packet before sending more packets or taking further action. Cryptographic commitments are used to prevent datagram forgery: the sending chain commits to outgoing packets, and the receiving chain checks these commitments, so datagrams altered in transit by a relayer will be rejected. IBC also supports unordered channels, which do not enforce ordering of packet receives relative to sends but still enforce exactly-once delivery.
+The network layer and relayer processes may behave in arbitrary ways, dropping, reordering, or duplicating packets, purposely attempting to send invalid transactions, or otherwise acting in a Byzantine fashion, without compromising the safety or liveness of IBC. This is achieved by assigning a sequence number to each packet sent over an IBC channel, which is checked by the IBC handler (the part of the ledger implementing the IBC protocol) on the receiving chain, and providing a method for the sending chain to check that the receiving chain has in fact received and handled a packet before sending more packets or taking further action. Cryptographic commitments are used to prevent datagram forgery: the sending chain commits to outgoing packets, and the receiving chain checks these commitments, so datagrams altered in transit by a relayer will be rejected. IBC also supports unordered channels, which do not enforce ordering of packet receives relative to sends but still enforce exactly-once delivery.
 
 \vspace{3mm}
 

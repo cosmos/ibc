@@ -51,8 +51,8 @@ If necessary, Alice may also communicate to Carol the validity predicate for Bob
 connection attempt, so that Carol knows to accept the incoming request.
 
 Client interfaces are constructed so that custom validation logic can be provided safely
-to define a custom client at runtime, as long as the underlying state machine can provide an
-appropriate gas metering mechanism to charge for compute and storage. On a host state machine
+to define a custom client at runtime, as long as the underlying ledger can provide an
+appropriate gas metering mechanism to charge for compute and storage. On a host ledger
 which supports WASM execution, for example, the validity predicate and equivocation predicate
 could be provided as executable WASM functions when the client instance is created.
 
@@ -68,7 +68,7 @@ A *consensus state* is an opaque type representing the state of a validity predi
 The light client validity predicate algorithm in combination with a particular consensus state must be able to verify state updates agreed upon by the associated consensus algorithm.
 The consensus state must also be serialisable in a canonical fashion so that third parties, such as counterparty chains,
 can check that a particular machine has stored a particular state. It must also be
-introspectable by the state machine which it is for, such that the state machine can look up its
+introspectable by the ledger which it is for, such that the ledger can look up its
 own consensus state at a past height and compare it to a stored consensus state in another chain's client.
 
 A *commitment root* is an inexpensive way for downstream logic to verify whether key/value
@@ -116,7 +116,7 @@ Clients may have time-sensitive validity predicates, such that if no header is p
 
 &nbsp;
 
-Client types must define functions to authenticate internal state of the state machine which the client tracks.
+Client types must define functions to authenticate internal state of the ledger which the client tracks.
 Internal implementation details may differ (for example, a loopback client could simply read directly from the state and require no proofs).
 Externally-facing clients will likely verify signature or vector commitment proofs.
 
@@ -151,7 +151,7 @@ security assumptions of proxy chain correctness.
 
 #### BFT consensus and verifiable state
 
-For the immediate application of interoperability between sovereign, fault-tolerant blockchains, the most common and most useful client type will be light clients for instances of BFT consensus algorithms such as Tendermint [@tendermint_consensus_without_mining], GRANDPA [@grandpa_consensus], or HotStuff [@hotstuff_consensus], with state machines utilising Merklized state trees such as an IAVL+ tree [@iavl_plus_tree] or a Merkle Patricia tree [@patricia_tree]. The client algorithm for such instances will utilise the BFT consensus algorithm's light client validity predicate and treat at minimum consensus equivocation (double-signing) as misbehaviour, along with other possible misbehaviour types specific to the proof-of-authority or proof-of-stake system involved.
+For the immediate application of interoperability between sovereign, fault-tolerant blockchains, the most common and most useful client type will be light clients for instances of BFT consensus algorithms such as Tendermint [@tendermint_consensus_without_mining], GRANDPA [@grandpa_consensus], or HotStuff [@hotstuff_consensus], with ledgers utilising Merklized state trees such as an IAVL+ tree [@iavl_plus_tree] or a Merkle Patricia tree [@patricia_tree]. The client algorithm for such instances will utilise the BFT consensus algorithm's light client validity predicate and treat at minimum consensus equivocation (double-signing) as misbehaviour, along with other possible misbehaviour types specific to the proof-of-authority or proof-of-stake system involved.
 
 \vspace{3mm}
 
