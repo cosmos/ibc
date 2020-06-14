@@ -66,8 +66,18 @@ asset could change the supply outside of the scope of this protocol).
 
 \vspace{3mm}
 
-#### Multi-ledger notes
+### Fault containment
 
-This specification does not directly handle the "diamond problem", where a user sends a token originating on ledger A to ledger B, then to ledger D, and wants to return it through the path `D -> C -> A` — since the supply is tracked as owned by ledger B (and the voucher denomination will be `"{portD}/{channelD}/{portB}/{channelB}/denom"`), ledger C cannot serve as the intermediary. It is not yet clear whether that case should be dealt with in-protocol or not — it may be fine to just require the original path of redemption (and if there is frequent liquidity and some surplus on both paths the diamond path will work most of the time). Complexities arising from long redemption paths may lead to the emergence of central ledgers in the network topology.
+&nbsp;
+
+Ledgers could fail to follow the fungible transfer token protocol outlined here in one of two ways: the full nodes running the consensus algorithm could diverge from the light client, or the ledger's state machine could incorrectly implement the escrow & voucher logic (whether inadvertently or intentionally). Consensus divergence should eventually result in evidence of misbehaviour which can be used to freeze the client, but may not immediately do so (and no guarantee can be made that such evidence would be submitted before more packets), so from the perspective of the protocol's goal of isolating faults these cases must be handled in the same way. No guarantees can be made about asset recovery — users electing to transfer tokens to a ledger take on the risk of that ledger failing — but containment logic can easily be implemented on the interface boundary by tracking ingoing and outgoing supply of each asset, and ensuring that no ledger is allowed to redeem vouchers for more tokens than it had initially escrowed. In essence, particular channels can be treated as accounts, where a module on the other end of a channel cannot spend more than it has received. Since isolated Byzantine subgraphs of a multi-ledger fungible token transfer system will be unable to transfer out any more tokens than they had initially received, this prevents any supply inflation of source assets, and ensures that users only take on the consensus risk of ledgers they intentionally connect to.
+
+\vspace{3mm}
+
+### Multi-ledger transfer paths
+
+&nbsp;
+
+This protocol does not directly handle the "diamond problem", where a user sends a token originating on ledger A to ledger B, then to ledger D, and wants to return it through the path `D -> C -> A` — since the supply is tracked as owned by ledger B (and the voucher denomination will be `"{portD}/{channelD}/{portB}/{channelB}/denom"`), ledger C cannot serve as the intermediary. This is necessary due to the fault containment desiderata outlined above. Complexities arising from long redemption paths may lead to the emergence of central ledgers in the network topology or automated markets to exchange assets with different redemption paths.
 
 In order to track all of the denominations moving around the network of ledgers in various paths, it may be helpful for a particular ledger to implement a registry which will track the "global" source ledger for each denomination. End-user service providers (such as wallet authors) may want to integrate such a registry or keep their own mapping of canonical source ledgers and human-readable names in order to improve UX.
