@@ -43,7 +43,7 @@ interface ChannelEnd {
 ```
 
 - The `state` is the current state of the channel end.
-- The `ordering` field indicates whether the channel is ordered or unordered.
+- The `ordering` field indicates whether the channel is ordered or unordered. This is an enumeration instead of a boolean in order to allow additional kinds of ordering to be easily supported in the future.
 - The `counterpartyPortIdentifier` identifies the port on the counterparty chain which owns the other end of the channel.
 - The `counterpartyChannelIdentifier` identifies the channel end on the counterparty chain.
 - The `nextSequenceSend`, stored separately, tracks the sequence number for the next packet to be sent.

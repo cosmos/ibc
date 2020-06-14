@@ -8,7 +8,7 @@ IBC sits between modules — smart contracts, other state machine components, or
 
 IBC provides to modules a set of functions much like the functions which might be provided to a module for interacting with another module on the same state machine: sending data packets and receiving data packets on an established connection and channel, in addition to calls to manage the protocol state: opening and closing connections and channels, choosing connection, channel, and packet delivery options, and inspecting connection and channel status.
 
-IBC requires certain functionalities and properties of the underlying chains, primarily finality (or thresholding finality gadgets), cheaply-verifiable consensus transcripts, and simple key/value store functionality. On the network side, IBC requires only eventual data delivery — no authentication, synchrony, or ordering properties are assumed (these properties are defined precisely later on).
+IBC requires certain functionalities and properties of the underlying chains, primarily finality (or thresholding finality gadgets), cheaply-verifiable consensus transcripts (such that a light client algorithm can verify the results of the consensus process with much less computation & storage than a full node), and simple key/value store functionality. On the network side, IBC requires only eventual data delivery — no authentication, synchrony, or ordering properties are assumed (these properties are defined precisely later on).
 
 ## Operation
 

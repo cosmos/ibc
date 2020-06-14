@@ -151,7 +151,7 @@ security assumptions of proxy chain correctness.
 
 #### BFT consensus and verifiable state
 
-The most common and most useful client type will be light clients for instances of BFT consensus algorithms such as Tendermint [@tendermint_consensus_without_mining], GRANDPA [@grandpa_consensus], or HotStuff [@hotstuff_consensus], with state machines utilising Merklized state trees such as an IAVL+ tree [@iavl_plus_tree] or a Merkle Patricia tree [@patricia_tree]. The client algorithm for such instances will utilise the BFT consensus algorithm's light client validity predicate and treat at minimum consensus equivocation (double-signing) as misbehaviour, along with other possible misbehaviour types specific to the proof-of-authority or proof-of-stake system involved.
+For the immediate application of interoperability between sovereign, fault-tolerant blockchains, the most common and most useful client type will be light clients for instances of BFT consensus algorithms such as Tendermint [@tendermint_consensus_without_mining], GRANDPA [@grandpa_consensus], or HotStuff [@hotstuff_consensus], with state machines utilising Merklized state trees such as an IAVL+ tree [@iavl_plus_tree] or a Merkle Patricia tree [@patricia_tree]. The client algorithm for such instances will utilise the BFT consensus algorithm's light client validity predicate and treat at minimum consensus equivocation (double-signing) as misbehaviour, along with other possible misbehaviour types specific to the proof-of-authority or proof-of-stake system involved.
 
 \vspace{3mm}
 
