@@ -15,7 +15,7 @@ The host ledger must provide a key/value store interface allowing values to be r
 These functions must be permissioned to the IBC handler module only, so only the IBC handler module can write or delete a certain subset of paths.
 This will likely be implemented as a sub-store (prefixed key-space) of a larger key/value store used by the entire ledger.
 
-Host ledgers must provide an instance of this interface which is "provable", such that the light client algorithm for the host chain
+Host ledgers must provide an instance of this interface which is "provable", such that the light client algorithm for the host ledger
 can verify presence or absence of particular key-value pairs which have been written to it.
 
 This interface does not necessitate any particular storage backend or backend data layout. ledgers may elect to use a storage backend configured in accordance with their needs, as long as the store on top fulfils the specified interface and provides commitment proofs.
@@ -27,10 +27,10 @@ This interface does not necessitate any particular storage backend or backend da
 &nbsp;
 
 Host ledgers must provide the ability to introspect their current height, current
-consensus state (as utilised by the host machine's light client algorithm), and a bounded
+consensus state (as utilised by the host ledger's light client algorithm), and a bounded
 number of recent consensus states (e.g. past headers). These are used to prevent man-in-the-middle
-attacks during handshakes to set up connections with other chains — each chain checks that the other
-chain is in fact authenticating data using its consensus state.
+attacks during handshakes to set up connections with other ledgers — each ledger checks that the other
+ledger is in fact authenticating data using its consensus state.
 
 \vspace{3mm}
 
@@ -38,7 +38,7 @@ chain is in fact authenticating data using its consensus state.
 
 &nbsp;
 
-In order to support timestamp-based timeouts, host machines must provide a current Unix-style timestamp.
+In order to support timestamp-based timeouts, host ledgers must provide a current Unix-style timestamp.
 Timeouts in subsequent headers must be non-decreasing.
 
 \vspace{3mm}

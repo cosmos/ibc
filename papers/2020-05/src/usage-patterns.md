@@ -1,14 +1,14 @@
 ## Call receiver
 
 Essential to the functionality of the IBC handler is an interface to other modules
-running on the same machine, so that it can accept requests to send packets and can 
+running on the same ledger, so that it can accept requests to send packets and can 
 route incoming packets to modules. This interface should be as minimal as possible
 in order to reduce implementation complexity and requirements imposed on host ledgers.
 
 For this reason, the core IBC logic uses a receive-only call pattern that differs
 slightly from the intuitive dataflow. As one might expect, modules call into the IBC handler to create
 connections, channels, and send packets. However, instead of the IBC handler, upon receipt
-of a packet from another chain, selecting and calling into the appropriate module,
+of a packet from another ledger, selecting and calling into the appropriate module,
 the module itself must call `recvPacket` on the IBC handler (likewise for accepting
 channel creation handshakes). When `recvPacket` is called, the IBC handler will check
 that the calling module is authorised to receive and process the packet (based on included proofs and 
@@ -26,11 +26,11 @@ Although a bit counterintuitive to reason about at first, this pattern has a few
   `recvPacket`. If the routing logic were implemented in the IBC handler, the handler would need to deal
   with the failure of the module, which is tricky to interpret.
 
-It also has one notable disadvantage: without an additional abstraction, the relayer logic becomes more complex, since off-chain
+It also has one notable disadvantage: without an additional abstraction, the relayer logic becomes more complex, since off-ledger
 relayer processes will need to track the state of multiple modules to determine when packets
 can be submitted.
 
-For this reason, chains may implement an additional IBC "routing module" which exposes a call dispatch interface.
+For this reason, ledgers may implement an additional IBC "routing module" which exposes a call dispatch interface.
 
 ## Call dispatch
 

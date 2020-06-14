@@ -1,4 +1,4 @@
-The *channel* abstraction provides message delivery semantics to the interblockchain communication protocol in three categories: ordering, exactly-once delivery, and module permissioning. A channel serves as a conduit for packets passing between a module on one chain and a module on another, ensuring that packets are executed only once, delivered in the order in which they were sent (if necessary), and delivered only to the corresponding module owning the other end of the channel on the destination chain. Each channel is associated with a particular connection, and a connection may have any number of associated channels, allowing the use of common identifiers and amortising the cost of header verification across all the channels utilising a connection and light client.
+The *channel* abstraction provides message delivery semantics to the interblockchain communication protocol in three categories: ordering, exactly-once delivery, and module permissioning. A channel serves as a conduit for packets passing between a module on one ledger and a module on another, ensuring that packets are executed only once, delivered in the order in which they were sent (if necessary), and delivered only to the corresponding module owning the other end of the channel on the destination ledger. Each channel is associated with a particular connection, and a connection may have any number of associated channels, allowing the use of common identifiers and amortising the cost of header verification across all the channels utilising a connection and light client.
 
 Channels are payload-agnostic. The modules which send and receive IBC packets decide how to construct packet data and how to act upon the incoming packet data, and must utilise their own application logic to determine which state transactions to apply according to what data the packet contains.
 
@@ -8,9 +8,9 @@ Channels are payload-agnostic. The modules which send and receive IBC packets de
 
 &nbsp;
 
-The interblockchain communication protocol uses a cross-chain message passing model. IBC *packets* are relayed from one blockchain to the other by external relayer processes. Two chains, A and B, confirm new blocks independently, and packets from one chain to the other may be delayed, censored, or re-ordered arbitrarily. Packets are visible to relayers and can be read from a blockchain by any relayer process and submitted to any other blockchain.
+The interblockchain communication protocol uses a cross-ledger message passing model. IBC *packets* are relayed from one ledger to the other by external relayer processes. Two ledgers, A and B, confirm new blocks independently, and packets from one ledger to the other may be delayed, censored, or re-ordered arbitrarily. Packets are visible to relayers and can be read from a ledger by any relayer process and submitted to any other ledger.
 
-The IBC protocol must provide ordering (for ordered channels) and exactly-once delivery guarantees to allow applications to reason about the combined state of connected modules on two chains. For example, an application may wish to allow a single tokenised asset to be transferred between and held on multiple blockchains while preserving fungibility and conservation of supply. The application can mint asset vouchers on chain B when a particular IBC packet is committed to chain B, and require outgoing sends of that packet on chain A to escrow an equal amount of the asset on chain A until the vouchers are later redeemed back to chain A with an IBC packet in the reverse direction. This ordering guarantee along with correct application logic can ensure that total supply is preserved across both chains and that any vouchers minted on chain B can later be redeemed back to chain A. A more detailed explanation of this example is provided later on.
+The IBC protocol must provide ordering (for ordered channels) and exactly-once delivery guarantees to allow applications to reason about the combined state of connected modules on two ledgers. For example, an application may wish to allow a single tokenised asset to be transferred between and held on multiple blockledgers while preserving fungibility and conservation of supply. The application can mint asset vouchers on ledger B when a particular IBC packet is committed to ledger B, and require outgoing sends of that packet on ledger A to escrow an equal amount of the asset on ledger A until the vouchers are later redeemed back to ledger A with an IBC packet in the reverse direction. This ordering guarantee along with correct application logic can ensure that total supply is preserved across both ledgers and that any vouchers minted on ledger B can later be redeemed back to ledger A. A more detailed explanation of this example is provided later on.
 
 \vspace{3mm}
 
@@ -18,7 +18,7 @@ The IBC protocol must provide ordering (for ordered channels) and exactly-once d
 
 &nbsp;
 
-A *channel* is a pipeline for exactly-once packet delivery between specific modules on separate blockchains, which has at least one end capable of sending packets and one end capable of receiving packets.
+A *channel* is a pipeline for exactly-once packet delivery between specific modules on separate blockledgers, which has at least one end capable of sending packets and one end capable of receiving packets.
 
 An *ordered* channel is a channel where packets are delivered exactly in the order which they were sent.
 
@@ -26,7 +26,7 @@ An *unordered* channel is a channel where packets can be delivered in any order,
 
 All channels provide exactly-once packet delivery, meaning that a packet sent on one end of a channel is delivered no more and no less than once, eventually, to the other end.
 
-A *channel end* is a data structure storing metadata associated with one end of a channel on one of the participating chains, defined as follows:
+A *channel end* is a data structure storing metadata associated with one end of a channel on one of the participating ledgers, defined as follows:
 
 ```typescript 
 interface ChannelEnd {
@@ -44,8 +44,8 @@ interface ChannelEnd {
 
 - The `state` is the current state of the channel end.
 - The `ordering` field indicates whether the channel is ordered or unordered. This is an enumeration instead of a boolean in order to allow additional kinds of ordering to be easily supported in the future.
-- The `counterpartyPortIdentifier` identifies the port on the counterparty chain which owns the other end of the channel.
-- The `counterpartyChannelIdentifier` identifies the channel end on the counterparty chain.
+- The `counterpartyPortIdentifier` identifies the port on the counterparty ledger which owns the other end of the channel.
+- The `counterpartyChannelIdentifier` identifies the channel end on the counterparty ledger.
 - The `nextSequenceSend`, stored separately, tracks the sequence number for the next packet to be sent.
 - The `nextSequenceRecv`, stored separately, tracks the sequence number for the next packet to be received.
 - The `nextSequenceAck`, stored separately, tracks the sequence number for the next packet to be acknowledged.
@@ -64,7 +64,7 @@ enum ChannelState {
 ```
 
 - A channel end in `INIT` state has just started the opening handshake.
-- A channel end in `TRYOPEN` state has acknowledged the handshake step on the counterparty chain.
+- A channel end in `TRYOPEN` state has acknowledged the handshake step on the counterparty ledger.
 - A channel end in `OPEN` state has completed the handshake and is ready to send and receive packets.
 - A channel end in `CLOSED` state has been closed and can no longer be used to send or receive packets.
 
@@ -84,12 +84,12 @@ interface Packet {
 ```
 
 - The `sequence` number corresponds to the order of sends and receives, where a packet with an earlier sequence number must be sent and received before a packet with a later sequence number.
-- The `timeoutHeight` indicates a consensus height on the destination chain after which the packet will no longer be processed, and will instead count as having timed-out.
-- The `timeoutTimestamp` indicates a timestamp on the destination chain after which the packet will no longer be processed, and will instead count as having timed-out.
-- The `sourcePort` identifies the port on the sending chain.
-- The `sourceChannel` identifies the channel end on the sending chain.
-- The `destPort` identifies the port on the receiving chain.
-- The `destChannel` identifies the channel end on the receiving chain.
+- The `timeoutHeight` indicates a consensus height on the destination ledger after which the packet will no longer be processed, and will instead count as having timed-out.
+- The `timeoutTimestamp` indicates a timestamp on the destination ledger after which the packet will no longer be processed, and will instead count as having timed-out.
+- The `sourcePort` identifies the port on the sending ledger.
+- The `sourceChannel` identifies the channel end on the sending ledger.
+- The `destPort` identifies the port on the receiving ledger.
+- The `destChannel` identifies the channel end on the receiving ledger.
 - The `data` is an opaque value which can be defined by the application logic of the associated modules.
 
 Note that a `Packet` is never directly serialised. Rather it is an intermediary structure used in certain function calls that may need to be created or processed by modules calling the IBC handler.
@@ -102,7 +102,7 @@ Note that a `Packet` is never directly serialised. Rather it is an intermediary 
 
 #### Efficiency
 
-As channels impose no flow control of their own, the speed of packet transmission and confirmation is limited only by the speed of the underlying chains.
+As channels impose no flow control of their own, the speed of packet transmission and confirmation is limited only by the speed of the underlying ledgers.
 
 \vspace{3mm}
 
@@ -110,15 +110,15 @@ As channels impose no flow control of their own, the speed of packet transmissio
 
 IBC packets sent on one end of a channel are delivered no more than exactly once to the other end.
 No network synchrony assumptions are required for exactly-once safety.
-If one or both of the chains halt, packets may be delivered no more than once, and once the chains resume packets will be able to flow again.
+If one or both of the ledgers halt, packets may be delivered no more than once, and once the ledgers resume packets will be able to flow again.
 
 \vspace{3mm}
 
 #### Ordering
 
-On ordered channels, packets are be sent and received in the same order: if packet `x` is sent before packet `y` by a channel end on chain A, packet `x` will be received before packet `y` by the corresponding channel end on chain B.
+On ordered channels, packets are be sent and received in the same order: if packet `x` is sent before packet `y` by a channel end on ledger A, packet `x` will be received before packet `y` by the corresponding channel end on ledger B.
 
-On unordered channels, packets may be sent and received in any order. Unordered packets, like ordered packets, have individual timeouts specified in terms of the destination chain's height or timestamp.
+On unordered channels, packets may be sent and received in any order. Unordered packets, like ordered packets, have individual timeouts specified in terms of the destination ledger's height or timestamp.
 
 \vspace{3mm}
 
@@ -135,7 +135,7 @@ Only the module which owns the port associated with a channel end is able to sen
 
 #### Opening handshake
 
-The channel opening handshake, between two chains `A` and `B`, with state formatted as `(A, B)`, flows as follows:
+The channel opening handshake, between two ledgers `A` and `B`, with state formatted as `(A, B)`, flows as follows:
 
 | Datagram         | Prior state     | Posterior state  |
 | ---------------- | --------------- | ---------------- |
@@ -144,26 +144,26 @@ The channel opening handshake, between two chains `A` and `B`, with state format
 | `ChanOpenAck`      | `(INIT, TRYOPEN)` | `(OPEN, TRYOPEN)`  |
 | `ChanOpenConfirm`  | `(OPEN, TRYOPEN)` | `(OPEN, OPEN)`     |
 
-`ChanOpenInit`, executed on chain A, initiates a channel opening handshake from a module on chain A to a module on chain B,
-providing the identifiers of the local channel identifier, local port, remote port, and remote channel identifier. Chain A
+`ChanOpenInit`, executed on ledger A, initiates a channel opening handshake from a module on ledger A to a module on ledger B,
+providing the identifiers of the local channel identifier, local port, remote port, and remote channel identifier. ledger A
 stores a channel end object in its state.
 
-`ChanOpenTry`, executed on chain B, relays notice of a channel handshake attempt to the module on chain B, providing the
-pair of channel identifiers, a pair of port identifiers, and a desired version. Chain B verifies a proof that chain A has stored these identifiers
+`ChanOpenTry`, executed on ledger B, relays notice of a channel handshake attempt to the module on ledger B, providing the
+pair of channel identifiers, a pair of port identifiers, and a desired version. ledger B verifies a proof that ledger A has stored these identifiers
 as claimed, looks up the module which owns the destination port, calls that module to check that the version requested is compatible,
 and stores a channel end object in its state.
 
-`ChanOpenAck`, executed on chain A, relays acceptance of a channel handshake attempt back to the module on chain A,
-providing the identifier which can now be used to look up the channel end. Chain A verifies a proof that chain B
+`ChanOpenAck`, executed on ledger A, relays acceptance of a channel handshake attempt back to the module on ledger A,
+providing the identifier which can now be used to look up the channel end. ledger A verifies a proof that ledger B
 has stored the channel metadata as claimed and marks its end of the channel as `OPEN`.
 
-`ChanOpenConfirm`, executed on chain B, confirms opening of a channel from chain A to chain B.
-Chain B simply checks that chain A has executed `ChanOpenAck` and marked the channel as `OPEN`.
-Chain B subsequently marks its end of the channel as `OPEN`. After execution of `ChanOpenConfirm`,
+`ChanOpenConfirm`, executed on ledger B, confirms opening of a channel from ledger A to ledger B.
+Ledger B simply checks that ledger A has executed `ChanOpenAck` and marked the channel as `OPEN`.
+Ledger B subsequently marks its end of the channel as `OPEN`. After execution of `ChanOpenConfirm`,
 the channel is open on both ends and can be used immediately.
 
 When the opening handshake is complete, the module which initiates the handshake will own the end of the created channel on the host ledger, and the counterparty module which
-it specifies will own the other end of the created channel on the counterparty chain. Once a channel is created, ownership can only be changed by changing ownership of the associated ports.
+it specifies will own the other end of the created channel on the counterparty ledger. Once a channel is created, ownership can only be changed by changing ownership of the associated ports.
 
 \vspace{3mm}
 
@@ -179,17 +179,17 @@ Host ledgers may also safely ignore the version data or specify an empty string.
 
 #### Closing handshake
 
-The channel closing handshake, between two chains `A` and `B`, with state formatted as `(A, B)`, flows as follows:
+The channel closing handshake, between two ledgers `A` and `B`, with state formatted as `(A, B)`, flows as follows:
 
 | Datagram         | Prior state | Posterior state  |
 | ---------------- | -------------- | ----------------- |
 | `ChanCloseInit`    | \texttt{\small{(OPEN, OPEN)}}  | \texttt{\small{(CLOSED, OPEN)}}   |
 | `ChanCloseConfirm` | \texttt{\small{(CLOSED, OPEN)}} | \texttt{\small{(CLOSED, CLOSED)}}  |
 
-`ChanCloseInit`, executed on chain A, closes the end of the channel on chain A.
+`ChanCloseInit`, executed on ledger A, closes the end of the channel on ledger A.
 
-`ChanCloseInit`, executed on chain B, simply verifies that the channel has been
-marked as closed on chain A and closes the end on chain B.
+`ChanCloseInit`, executed on ledger B, simply verifies that the channel has been
+marked as closed on ledger A and closes the end on ledger B.
 
 Any in-flight packets can be timed-out as soon as a channel is closed.
 
@@ -207,7 +207,7 @@ maximum height/time were mandated and tracked, and future protocol versions may 
 
 &nbsp;
 
-The `sendPacket` function is called by a module in order to send an IBC packet on a channel end owned by the calling module to the corresponding module on the counterparty chain.
+The `sendPacket` function is called by a module in order to send an IBC packet on a channel end owned by the calling module to the corresponding module on the counterparty ledger.
 
 Calling modules must execute application logic atomically in conjunction with calling `sendPacket`.
 
@@ -216,11 +216,11 @@ The IBC handler performs the following steps in order:
 - Checks that the channel and connection are open to send packets
 - Checks that the calling module owns the sending port
 - Checks that the packet metadata matches the channel and connection information
-- Checks that the timeout height specified has not already passed on the destination chain
+- Checks that the timeout height specified has not already passed on the destination ledger
 - Increments the send sequence counter associated with the channel (in the case of ordered channels)
 - Stores a constant-size commitment to the packet data and packet timeout
 
-Note that the full packet is not stored in the state of the chain — merely a short hash-commitment to the data and timeout value. The packet data can be calculated from the transaction execution and possibly returned as log output which relayers can index.
+Note that the full packet is not stored in the state of the ledger — merely a short hash-commitment to the data and timeout value. The packet data can be calculated from the transaction execution and possibly returned as log output which relayers can index.
 
 \vspace{3mm}
 
@@ -228,7 +228,7 @@ Note that the full packet is not stored in the state of the chain — merely a s
 
 &nbsp;
 
-The `recvPacket` function is called by a module in order to receive and process an IBC packet sent on the corresponding channel end on the counterparty chain.
+The `recvPacket` function is called by a module in order to receive and process an IBC packet sent on the corresponding channel end on the counterparty ledger.
 
 Calling modules must execute application logic atomically in conjunction with calling `recvPacket`, likely beforehand to calculate the acknowledgement value.
 
@@ -239,7 +239,7 @@ The IBC handler performs the following steps in order:
 - Checks that the packet metadata matches the channel and connection information
 - Checks that the packet sequence is the next sequence the channel end expects to receive (for ordered channels)
 - Checks that the timeout height has not yet passed
-- Checks the inclusion proof of packet data commitment in the outgoing chain's state
+- Checks the inclusion proof of packet data commitment in the outgoing ledger's state
 - Sets the opaque acknowledgement value at a store path unique to the packet (if the acknowledgement is non-empty or the channel is unordered)
 - Increments the packet receive sequence associated with the channel end (for ordered channels)
 
@@ -250,7 +250,7 @@ The IBC handler performs the following steps in order:
 &nbsp;
 
 The `acknowledgePacket` function is called by a module to process the acknowledgement of a packet previously sent by
-the calling module on a channel to a counterparty module on the counterparty chain. `acknowledgePacket` also cleans up the packet commitment,
+the calling module on a channel to a counterparty module on the counterparty ledger. `acknowledgePacket` also cleans up the packet commitment,
 which is no longer necessary since the packet has been received and acted upon.
 
 Calling modules may atomically execute appropriate application acknowledgement-handling logic in conjunction with calling `acknowledgePacket`.
@@ -262,7 +262,7 @@ The IBC handler performs the following steps in order:
 - Checks that the packet metadata matches the channel and connection information
 - Checks that the packet was actually sent on this channel
 - Checks that the packet sequence is the next sequence the channel end expects to acknowledge (for ordered channels)
-- Checks the inclusion proof of the packet acknowledgement data in the receiving chain's state
+- Checks the inclusion proof of the packet acknowledgement data in the receiving ledger's state
 - Deletes the packet commitment (cleaning up state and preventing replay)
 - Increments the next acknowledgement sequence (for ordered channels)
 
@@ -272,14 +272,14 @@ The IBC handler performs the following steps in order:
 
 &nbsp;
 
-Application semantics may require some timeout: an upper limit to how long the chain will wait for a transaction to be processed before considering it an error. Since the two chains have different local clocks, this is an obvious attack vector for a double spend — an attacker may delay the relay of the receipt or wait to send the packet until right after the timeout — so applications cannot safely implement naive timeout logic themselves. In order to avoid any possible "double-spend" attacks, the timeout algorithm requires that the destination chain is running and reachable. The timeout must be proven on the recipient chain, not simply the absence of a response on the sending chain.
+Application semantics may require some timeout: an upper limit to how long the ledger will wait for a transaction to be processed before considering it an error. Since the two ledgers have different local clocks, this is an obvious attack vector for a double spend — an attacker may delay the relay of the receipt or wait to send the packet until right after the timeout — so applications cannot safely implement naive timeout logic themselves. In order to avoid any possible "double-spend" attacks, the timeout algorithm requires that the destination ledger is running and reachable. The timeout must be proven on the recipient ledger, not simply the absence of a response on the sending ledger.
 
 \vspace{3mm}
 
 #### Sending end
 
 The `timeoutPacket` function is called by a module which originally attempted to send a packet to a counterparty module,
-where the timeout height or timeout timestamp has passed on the counterparty chain without the packet being committed, to prove that the packet
+where the timeout height or timeout timestamp has passed on the counterparty ledger without the packet being committed, to prove that the packet
 can no longer be executed and to allow the calling module to safely perform appropriate state transitions.
 
 Calling modules may atomically execute appropriate application timeout-handling logic in conjunction with calling `timeoutPacket`.
@@ -290,8 +290,8 @@ The IBC handler performs the following steps in order:
 - Checks that the calling module owns the sending port
 - Checks that the packet metadata matches the channel and connection information
 - Checks that the packet was actually sent on this channel
-- Checks a proof that the packet has not been confirmed on the destination chain
-- Checks a proof that the destination chain has exceeded the timeout height or timestamp
+- Checks a proof that the packet has not been confirmed on the destination ledger
+- Checks a proof that the destination ledger has exceeded the timeout height or timestamp
 - Deletes the packet commitment (cleaning up state and preventing replay)
 
 In the case of an ordered channel, `timeoutPacket` additionally closes the channel if a packet has timed out. Unordered channels are expected to continue in the face of timed-out packets.
