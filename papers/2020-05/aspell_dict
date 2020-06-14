@@ -1,5 +1,7 @@
-personal_ws-1.1 en 114 
+personal_ws-1.1 en 126 
+Adi
 Aditya
+Aggarwal
 Agoric
 Anca
 Axner
@@ -15,6 +17,7 @@ ConnOpenAck
 ConnOpenConfirm
 ConnOpenInit
 ConnOpenTry
+DNS
 Datagram
 Dev
 Ethereum
@@ -29,11 +32,15 @@ Juwoon
 Kunze
 Kwon
 Manian
+Meher
 Merkle
 Merklized
+Nakamoto
 Ojha
+Polkadot's
 QUIC
 SDK
+Seredinschi
 Sripal
 TCP
 TRYOPEN
@@ -42,6 +49,7 @@ Tribble
 UDP
 UX
 WASM
+XCMP
 Yun
 Zaki
 Zamfir
@@ -64,6 +72,7 @@ datastream
 dba
 denom
 encodings
+escrowed
 escrowing
 exfiltration
 fungibility
@@ -91,12 +100,15 @@ pseudocode
 recv
 relayer
 relayers
+ruleset
+sharded
 sig
 src
 stateful
 statefulness
 subprotocol
 subprotocols
+texttt
 thresholding
 tokenholder
 tokenise

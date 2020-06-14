@@ -10,7 +10,7 @@ Channels are payload-agnostic. The modules which send and receive IBC packets de
 
 The interblockchain communication protocol uses a cross-ledger message passing model. IBC *packets* are relayed from one ledger to the other by external relayer processes. Two ledgers, A and B, confirm new blocks independently, and packets from one ledger to the other may be delayed, censored, or re-ordered arbitrarily. Packets are visible to relayers and can be read from a ledger by any relayer process and submitted to any other ledger.
 
-The IBC protocol must provide ordering (for ordered channels) and exactly-once delivery guarantees to allow applications to reason about the combined state of connected modules on two ledgers. For example, an application may wish to allow a single tokenised asset to be transferred between and held on multiple blockledgers while preserving fungibility and conservation of supply. The application can mint asset vouchers on ledger B when a particular IBC packet is committed to ledger B, and require outgoing sends of that packet on ledger A to escrow an equal amount of the asset on ledger A until the vouchers are later redeemed back to ledger A with an IBC packet in the reverse direction. This ordering guarantee along with correct application logic can ensure that total supply is preserved across both ledgers and that any vouchers minted on ledger B can later be redeemed back to ledger A. A more detailed explanation of this example is provided later on.
+The IBC protocol must provide ordering (for ordered channels) and exactly-once delivery guarantees to allow applications to reason about the combined state of connected modules on two ledgers. For example, an application may wish to allow a single tokenised asset to be transferred between and held on multiple ledgers while preserving fungibility and conservation of supply. The application can mint asset vouchers on ledger B when a particular IBC packet is committed to ledger B, and require outgoing sends of that packet on ledger A to escrow an equal amount of the asset on ledger A until the vouchers are later redeemed back to ledger A with an IBC packet in the reverse direction. This ordering guarantee along with correct application logic can ensure that total supply is preserved across both ledgers and that any vouchers minted on ledger B can later be redeemed back to ledger A. A more detailed explanation of this example is provided later on.
 
 \vspace{3mm}
 
@@ -18,7 +18,7 @@ The IBC protocol must provide ordering (for ordered channels) and exactly-once d
 
 \vspace{3mm}
 
-A *channel* is a pipeline for exactly-once packet delivery between specific modules on separate blockledgers, which has at least one end capable of sending packets and one end capable of receiving packets.
+A *channel* is a pipeline for exactly-once packet delivery between specific modules on separate ledgers, which has at least one end capable of sending packets and one end capable of receiving packets.
 
 An *ordered* channel is a channel where packets are delivered exactly in the order which they were sent.
 
