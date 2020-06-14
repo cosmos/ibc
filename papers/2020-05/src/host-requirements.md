@@ -1,6 +1,6 @@
 ### Module system
 
-&nbsp;
+\vspace{3mm}
 
 The host ledger must support a module system, whereby self-contained, potentially mutually distrusted packages of code can safely execute on the same ledger, control how and when they allow other modules to communicate with them, and be identified and manipulated by a "controller module" or execution environment.
 
@@ -8,7 +8,7 @@ The host ledger must support a module system, whereby self-contained, potentiall
 
 ### Key/value Store
 
-&nbsp;
+\vspace{3mm}
 
 The host ledger must provide a key/value store interface allowing values to be read, written, and deleted.
 
@@ -24,7 +24,7 @@ This interface does not necessitate any particular storage backend or backend da
 
 ### Consensus state introspection
 
-&nbsp;
+\vspace{3mm}
 
 Host ledgers must provide the ability to introspect their current height, current
 consensus state (as utilised by the host ledger's light client algorithm), and a bounded
@@ -36,7 +36,7 @@ ledger is in fact authenticating data using its consensus state.
 
 ### Timestamp access
 
-&nbsp;
+\vspace{3mm}
 
 In order to support timestamp-based timeouts, host ledgers must provide a current Unix-style timestamp.
 Timeouts in subsequent headers must be non-decreasing.
@@ -45,7 +45,7 @@ Timeouts in subsequent headers must be non-decreasing.
 
 ### Port system
 
-&nbsp;
+\vspace{3mm}
 
 Host ledgers must implement a port system, where the IBC handler can allow different modules in the host ledger to bind to uniquely named ports. Ports are identified by an identifier, and must be permissioned so that:
 
@@ -62,7 +62,7 @@ Ports are not generally intended to be human-readable identifiers — just as DN
 
 ### Exception/rollback system
 
-&nbsp;
+\vspace{3mm}
 
 Host ledgers must support an exception or rollback system, whereby a transaction can abort execution and revert any previously made state changes (including state changes in other modules happening within the same transaction), excluding gas consumed and fee payments as appropriate.
 
@@ -70,7 +70,7 @@ Host ledgers must support an exception or rollback system, whereby a transaction
 
 ### Data availability
 
-&nbsp;
+\vspace{3mm}
 
 For deliver-or-timeout safety, host ledgers must have eventual data availability, such that any key/value pairs in state can be eventually retrieved by relayers. For exactly-once safety, data availability is not required.
 

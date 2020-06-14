@@ -8,7 +8,7 @@ and pairing it with a state that the verifier assumes to be correct forms a "lig
 
 ### Motivation
 
-&nbsp;
+\vspace{3mm}
 
 In the IBC protocol, an actor, which may be an end user, an off-ledger process, or ledger,
 needs to be able to verify updates to the state of another ledger 
@@ -60,7 +60,7 @@ could be provided as executable WASM functions when the client instance is creat
 
 ### Definitions
 
-&nbsp;
+\vspace{3mm}
 
 A *validity predicate* is an opaque function defined by a client type to verify headers depending on the current consensus state. Using the validity predicate should be far more computationally efficient than replaying the full consensus algorithm and state machine for the given parent header and the list of network messages.
 
@@ -84,7 +84,7 @@ A *misbehaviour predicate* is an opaque function defined by a client type, used 
 
 ### Desired properties
 
-&nbsp;
+\vspace{3mm}
 
 Light clients must provide a secure algorithm to verify other ledgers' canonical headers,
 using the existing consensus state. The higher level abstractions will then be able to verify
@@ -114,7 +114,7 @@ Clients may have time-sensitive validity predicates, such that if no header is p
 
 ### State verification
 
-&nbsp;
+\vspace{3mm}
 
 Client types must define functions to authenticate internal state of the ledger which the client tracks.
 Internal implementation details may differ (for example, a loopback client could simply read directly from the state and require no proofs).
@@ -124,7 +124,7 @@ Externally-facing clients will likely verify signature or vector commitment proo
 
 ### Example client instantiations
 
-&nbsp;
+\vspace{3mm}
 
 #### Loopback
 
@@ -157,7 +157,7 @@ For the immediate application of interoperability between sovereign, fault-toler
 
 ### Client lifecycle
 
-&nbsp;
+\vspace{3mm}
 
 #### Creation
 

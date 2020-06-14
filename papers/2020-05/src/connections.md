@@ -4,7 +4,7 @@ The *connection* abstraction encapsulates two stateful objects (*connection ends
 
 ### Motivation
 
-&nbsp;
+\vspace{3mm}
 
 The IBC protocol provides *authorisation* and *ordering* semantics for packets: guarantees, respectively, that packets have been committed on the sending ledger (and according state transitions executed, such as escrowing tokens), and that they have been committed exactly once in a particular order and can be delivered exactly once in that same order. The *connection* abstraction in conjunction with the *client* abstraction  defines the *authorisation* semantics of IBC. Ordering semantics are provided by channels.
 
@@ -12,7 +12,7 @@ The IBC protocol provides *authorisation* and *ordering* semantics for packets: 
 
 ### Definitions
 
-&nbsp;
+\vspace{3mm}
 
 A *connection end* is state tracked for an end of a connection on one ledger, defined as follows:
 
@@ -44,9 +44,9 @@ interface ConnectionEnd {
 
 \vspace{3mm}
 
-#### Opening Handshake
+### Opening handshake
 
-&nbsp;
+\vspace{3mm}
 
 The opening handshake subprotocol allows each ledger to verify the identifier used to reference the connection on the other ledger, enabling modules on each ledger to reason about the reference on the other ledger.
 
@@ -93,7 +93,7 @@ the connection is open on both ends and can be used immediately.
 
 \vspace{3mm}
 
-#### Versioning
+### Versioning
 
 During the handshake process, two ends of a connection come to agreement on a version bytestring associated
 with that connection. At the moment, the contents of this version bytestring are opaque to the IBC core protocol.

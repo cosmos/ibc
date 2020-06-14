@@ -6,7 +6,7 @@ Channels are payload-agnostic. The modules which send and receive IBC packets de
 
 ### Motivation
 
-&nbsp;
+\vspace{3mm}
 
 The interblockchain communication protocol uses a cross-ledger message passing model. IBC *packets* are relayed from one ledger to the other by external relayer processes. Two ledgers, A and B, confirm new blocks independently, and packets from one ledger to the other may be delayed, censored, or re-ordered arbitrarily. Packets are visible to relayers and can be read from a ledger by any relayer process and submitted to any other ledger.
 
@@ -16,7 +16,7 @@ The IBC protocol must provide ordering (for ordered channels) and exactly-once d
 
 ### Definitions
 
-&nbsp;
+\vspace{3mm}
 
 A *channel* is a pipeline for exactly-once packet delivery between specific modules on separate blockledgers, which has at least one end capable of sending packets and one end capable of receiving packets.
 
@@ -98,7 +98,7 @@ Note that a `Packet` is never directly serialised. Rather it is an intermediary 
 
 ### Properties
 
-&nbsp;
+\vspace{3mm}
 
 #### Efficiency
 
@@ -131,7 +131,7 @@ Only the module which owns the port associated with a channel end is able to sen
 
 ### Channel lifecycle management
 
-&nbsp;
+\vspace{3mm}
 
 #### Opening handshake
 
@@ -205,7 +205,7 @@ maximum height/time were mandated and tracked, and future protocol versions may 
 
 ### Sending packets
 
-&nbsp;
+\vspace{3mm}
 
 The `sendPacket` function is called by a module in order to send an IBC packet on a channel end owned by the calling module to the corresponding module on the counterparty ledger.
 
@@ -226,7 +226,7 @@ Note that the full packet is not stored in the state of the ledger — merely a 
 
 ### Receiving packets
 
-&nbsp;
+\vspace{3mm}
 
 The `recvPacket` function is called by a module in order to receive and process an IBC packet sent on the corresponding channel end on the counterparty ledger.
 
@@ -247,7 +247,7 @@ The IBC handler performs the following steps in order:
 
 #### Acknowledgements
 
-&nbsp;
+\vspace{3mm}
 
 The `acknowledgePacket` function is called by a module to process the acknowledgement of a packet previously sent by
 the calling module on a channel to a counterparty module on the counterparty ledger. `acknowledgePacket` also cleans up the packet commitment,
@@ -270,7 +270,7 @@ The IBC handler performs the following steps in order:
 
 ### Timeouts
 
-&nbsp;
+\vspace{3mm}
 
 Application semantics may require some timeout: an upper limit to how long the ledger will wait for a transaction to be processed before considering it an error. Since the two ledgers have different local clocks, this is an obvious attack vector for a double spend — an attacker may delay the relay of the receipt or wait to send the packet until right after the timeout — so applications cannot safely implement naive timeout logic themselves. In order to avoid any possible "double-spend" attacks, the timeout algorithm requires that the destination ledger is running and reachable. The timeout must be proven on the recipient ledger, not simply the absence of a response on the sending ledger.
 

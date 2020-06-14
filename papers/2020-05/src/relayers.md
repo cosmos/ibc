@@ -4,7 +4,7 @@ Relayer algorithms are the "physical" connection layer of IBC — off-ledger pro
 
 ### Motivation
 
-&nbsp;
+\vspace{3mm}
 
 In the IBC protocol, one ledger can only record the intention to send particular data to another ledger — it does not have direct access to a network transport layer. Physical datagram relay must be performed by off-ledger infrastructure with access to a transport layer such as TCP/IP. This standard defines the concept of a *relayer* algorithm, executable by an off-ledger process with the ability to query ledger state, to perform this relay. 
 
@@ -24,7 +24,7 @@ A *relayer* is an off-ledger process with the ability to read the state of and s
 
 ### Basic relayer algorithm
 
-&nbsp;
+\vspace{3mm}
 
 The relayer algorithm is defined over a set of ledgers implementing the IBC protocol. Each relayer may not necessarily have access to read state from and write datagrams to all ledgers in the multi-ledger network (especially in the case of permissioned or private ledgers) — different relayers may relay between different subsets.
 
@@ -36,7 +36,7 @@ Different relayers may relay between different ledgers — as long as each pair 
 
 ### Packets, acknowledgements, timeouts
 
-&nbsp;
+\vspace{3mm}
 
 #### Relaying packets in an ordered channel
 

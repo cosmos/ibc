@@ -4,7 +4,7 @@ The section specifies packet data structure and state machine handling logic for
 
 ### Motivation
 
-&nbsp;
+\vspace{3mm}
 
 Users of a set of ledgers connected over the IBC protocol might wish to utilise an asset issued on one ledger on another ledger, perhaps to make use of additional features such as exchange or privacy protection, while retaining fungibility with the original asset on the issuing ledger. This application-layer protocol allows for transferring fungible tokens between ledgers connected with IBC in a way which preserves asset fungibility, preserves asset ownership, limits the impact of Byzantine faults, and requires no additional permissioning.
 
@@ -22,7 +22,7 @@ Users of a set of ledgers connected over the IBC protocol might wish to utilise 
 
 ### Packet definition
 
-&nbsp;
+\vspace{3mm}
 
 Only one packet data type, `FungibleTokenPacketData`, which specifies the denomination, amount, sending account, receiving account, and whether the sending ledger is the source of the asset, is required:
 
@@ -49,7 +49,7 @@ interface FungibleTokenPacketAcknowledgement {
 
 ### Packet handling semantics
 
-&nbsp;
+\vspace{3mm}
 
 The protocol logic is symmetric, so that denominations originating on either ledger can be converted to vouchers on the other, and then redeemed back again later.
 
@@ -68,7 +68,7 @@ asset could change the supply outside of the scope of this protocol).
 
 ### Fault containment
 
-&nbsp;
+\vspace{3mm}
 
 Ledgers could fail to follow the fungible transfer token protocol outlined here in one of two ways: the full nodes running the consensus algorithm could diverge from the light client, or the ledger's state machine could incorrectly implement the escrow & voucher logic (whether inadvertently or intentionally). Consensus divergence should eventually result in evidence of misbehaviour which can be used to freeze the client, but may not immediately do so (and no guarantee can be made that such evidence would be submitted before more packets), so from the perspective of the protocol's goal of isolating faults these cases must be handled in the same way. No guarantees can be made about asset recovery — users electing to transfer tokens to a ledger take on the risk of that ledger failing — but containment logic can easily be implemented on the interface boundary by tracking ingoing and outgoing supply of each asset, and ensuring that no ledger is allowed to redeem vouchers for more tokens than it had initially escrowed. In essence, particular channels can be treated as accounts, where a module on the other end of a channel cannot spend more than it has received. Since isolated Byzantine subgraphs of a multi-ledger fungible token transfer system will be unable to transfer out any more tokens than they had initially received, this prevents any supply inflation of source assets, and ensures that users only take on the consensus risk of ledgers they intentionally connect to.
 
@@ -76,7 +76,7 @@ Ledgers could fail to follow the fungible transfer token protocol outlined here 
 
 ### Multi-ledger transfer paths
 
-&nbsp;
+\vspace{3mm}
 
 This protocol does not directly handle the "diamond problem", where a user sends a token originating on ledger A to ledger B, then to ledger D, and wants to return it through the path `D -> C -> A` — since the supply is tracked as owned by ledger B (and the voucher denomination will be `"{portD}/{channelD}/{portB}/{channelB}/denom"`), ledger C cannot serve as the intermediary. This is necessary due to the fault containment desiderata outlined above. Complexities arising from long redemption paths may lead to the emergence of central ledgers in the network topology or automated markets to exchange assets with different redemption paths.
 
