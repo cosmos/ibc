@@ -12,6 +12,8 @@ Users of a set of ledgers connected over the IBC protocol might wish to utilise 
 
 ### Properties
 
+\vspace{3mm}
+
 - Preservation of fungibility (two-way peg)
 - Preservation of total supply (constant or inflationary on a single source ledger and module)
 - Permissionless token transfers, no need to whitelist connections, modules, or denominations

@@ -31,10 +31,10 @@ the entire state transition if doing so is asymptotically efficient, perhaps thr
 Externally, however, the light client verification functions used by IBC clients
 must have *finality*, such that verified blocks (subject to the usual consensus safety assumptions),
 once verified, cannot be reverted. The safety of higher abstraction layers of the IBC protocol
-and guarantees provided to the applications using the protocol depends on this property of finality.
+and guarantees provided to the applications using the protocol depend on this property of finality.
 
 In order to graft finality onto Nakamoto consensus algorithms, such as used in Bitcoin [@bitcoin],
-clients can act as thresholding views of internal, non-final clients. In the case where
+clients can act as thresholding views of internal, non-finalising clients. In the case where
 modules utilising the IBC protocol to interact with probabilistic-finality consensus algorithms
 which might require different finality thresholds for different applications, one write-only
 client could be created to track headers and many read-only clients with different finality

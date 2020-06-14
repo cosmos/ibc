@@ -5,7 +5,7 @@ $endif$
 
 \usepackage{titlesec}
 \titleformat*{\subsection}{\sc}
-\titlespacing*{\paragraph}{0pt}{0.2ex}{-3ex}
+\titlespacing*{\paragraph}{0pt}{-0.5ex}{-3ex}
 
 \usepackage{graphicx}
 \usepackage{subcaption}

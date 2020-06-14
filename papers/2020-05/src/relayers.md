@@ -14,6 +14,8 @@ A *relayer* is an off-ledger process with the ability to read the state of and s
 
 ### Properties
 
+\vspace{3mm}
+
 - No exactly-once or deliver-or-timeout safety properties of IBC depend on relayer behaviour (Byzantine relayers are assumed)
 - Packet relay liveness properties of IBC depend only on the existence of at least one correct, live relayer
 - Relaying can safely be permissionless, all requisite verification is performed by the ledger itself

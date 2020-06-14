@@ -95,6 +95,8 @@ the connection is open on both ends and can be used immediately.
 
 ### Versioning
 
+\vspace{3mm}
+
 During the handshake process, two ends of a connection come to agreement on a version bytestring associated
 with that connection. At the moment, the contents of this version bytestring are opaque to the IBC core protocol.
 In the future, it might be used to indicate what kinds of channels can utilise the connection in question, or

@@ -2,7 +2,7 @@
 
 \vspace{3mm}
 
-The host ledger must support a module system, whereby self-contained, potentially mutually distrusted packages of code can safely execute on the same ledger, control how and when they allow other modules to communicate with them, and be identified and manipulated by a "controller module" or execution environment.
+The host ledger must support a module system, whereby self-contained, potentially mutually distrusted packages of code can safely execute on the same ledger, control how and when they allow other modules to communicate with them, and be identified and manipulated by a controller module or execution environment.
 
 \vspace{3mm}
 
@@ -12,10 +12,10 @@ The host ledger must support a module system, whereby self-contained, potentiall
 
 The host ledger must provide a key/value store interface allowing values to be read, written, and deleted.
 
-These functions must be permissioned to the IBC handler module only, so only the IBC handler module can write or delete a certain subset of paths.
+These functions must be permissioned to the IBC handler module so that only the IBC handler module can write or delete a certain subset of paths.
 This will likely be implemented as a sub-store (prefixed key-space) of a larger key/value store used by the entire ledger.
 
-Host ledgers must provide an instance of this interface which is "provable", such that the light client algorithm for the host ledger
+Host ledgers must provide an instance of this interface which is provable, such that the light client algorithm for the host ledger
 can verify presence or absence of particular key-value pairs which have been written to it.
 
 This interface does not necessitate any particular storage backend or backend data layout. ledgers may elect to use a storage backend configured in accordance with their needs, as long as the store on top fulfils the specified interface and provides commitment proofs.
