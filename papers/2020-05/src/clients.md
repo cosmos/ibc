@@ -28,11 +28,19 @@ Clients will generally not include validation of the state transition logic in g
 elect to validate parts of state transitions in particular cases, and can validate
 the entire state transition if doing so is asymptotically efficient, perhaps through compression using a SNARK [@coda_protocol].
 
-Clients could also act as thresholding views of other clients. In the case where
+Externally, however, the light client verification functions used by IBC clients
+must have *finality*, such that verified blocks (subject to the usual consensus safety assumptions),
+once verified, cannot be reverted. The safety of higher abstraction layers of the IBC protocol
+and guarantees provided to the applications using the protocol depends on this property of finality.
+
+In order to graft finality onto Nakamoto consensus algorithms, such as used in Bitcoin [@bitcoin],
+clients can act as thresholding views of internal, non-final clients. In the case where
 modules utilising the IBC protocol to interact with probabilistic-finality consensus algorithms
 which might require different finality thresholds for different applications, one write-only
 client could be created to track headers and many read-only clients with different finality
 thresholds (confirmation depths after which state roots are considered final) could use that same state.
+Of course, this will introduce different security assumptions than those required of full nodes running the consensus algorithm,
+and trade-offs which must be balanced by the user on the basis of their application-specific security needs.
 
 The client protocol is designed to support third-party introduction. Consider the general example:
 Alice, a module on a machine, wants to introduce Bob, a second module on a second machine who Alice knows (and who knows Alice),
