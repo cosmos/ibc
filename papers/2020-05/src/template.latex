@@ -3,6 +3,9 @@ $if(beamerarticle)$
 \usepackage{beamerarticle} % needs to be loaded first
 $endif$
 
+\usepackage{titlesec}
+\titleformat*{\subsection}{\sc}
+
 \usepackage{graphicx}
 \usepackage{subcaption}
 \usepackage{listings}
@@ -22,6 +25,8 @@ $endif$
   morestring=[b]',
   morestring=[b]"
 }[keywords, comments, strings]
+
+
 
 $if(csl-refs)$
 \newlength{\cslhangindent}
