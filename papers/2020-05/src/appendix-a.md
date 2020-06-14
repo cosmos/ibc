@@ -2,6 +2,8 @@
 
 ### Initiating a handshake
 
+\vspace{3mm}
+
 ```typescript
 function connOpenInit(
   identifier: Identifier,
@@ -19,6 +21,8 @@ function connOpenInit(
 ```
 
 ### Responding to a handshake initiation
+
+\vspace{3mm}
 
 ```typescript
 function connOpenTry(
@@ -60,6 +64,8 @@ function connOpenTry(
 
 ### Acknowledging the response
 
+\vspace{3mm}
+
 ```typescript
 function connOpenAck(
   identifier: Identifier,
@@ -88,6 +94,8 @@ function connOpenAck(
 ```
 
 ### Finalising the connection
+
+\vspace{3mm}
 
 ```typescript
 function connOpenConfirm(

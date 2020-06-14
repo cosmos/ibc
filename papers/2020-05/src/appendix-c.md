@@ -2,6 +2,8 @@
 
 ### Sending a packet
 
+\vspace{3mm}
+
 ```typescript
 function sendPacket(packet: Packet) {
     channel = provableStore.get(channelPath(packet.sourcePort, packet.sourceChannel))
@@ -25,6 +27,8 @@ function sendPacket(packet: Packet) {
 ```
 
 ### Receiving a packet
+
+\vspace{3mm}
 
 ```typescript
 function recvPacket(
@@ -71,6 +75,8 @@ function recvPacket(
 
 ### Acknowledging a packet
 
+\vspace{3mm}
+
 ```typescript
 function acknowledgePacket(
   packet: OpaquePacket,
@@ -110,6 +116,8 @@ function acknowledgePacket(
 ```
 
 ### Handling a timed-out packet
+
+\vspace{3mm}
 
 ```typescript
 function timeoutPacket(
@@ -159,6 +167,8 @@ function timeoutPacket(
 ```
 
 ### Cleaning up packet data
+
+\vspace{3mm}
 
 ```typescript
 function cleanupPacket(

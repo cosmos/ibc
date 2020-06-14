@@ -2,6 +2,8 @@
 
 ### Initiating a handshake
 
+\vspace{3mm}
+
 ```typescript
 function chanOpenInit(
   order: ChannelOrder,
@@ -29,6 +31,8 @@ function chanOpenInit(
 ```
 
 ### Responding to a handshake initiation
+
+\vspace{3mm}
 
 ```typescript
 function chanOpenTry(
@@ -82,6 +86,8 @@ function chanOpenTry(
 
 ### Acknowledging the response
 
+\vspace{3mm}
+
 ```typescript
 function chanOpenAck(
   portIdentifier: Identifier,
@@ -114,6 +120,8 @@ function chanOpenAck(
 
 ### Finalising a channel
 
+\vspace{3mm}
+
 ```typescript
 function chanOpenConfirm(
   portIdentifier: Identifier,
@@ -145,6 +153,8 @@ function chanOpenConfirm(
 
 ### Initiating channel closure
 
+\vspace{3mm}
+
 ```typescript
 function chanCloseInit(
   portIdentifier: Identifier,
@@ -162,6 +172,8 @@ function chanCloseInit(
 ```
 
 ### Confirming channel closure
+
+\vspace{3mm}
 
 ```typescript
 function chanCloseConfirm(
