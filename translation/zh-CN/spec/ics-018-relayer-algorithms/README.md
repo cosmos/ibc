@@ -58,6 +58,24 @@ function relay(C: Set<Chain>) {
 }
 ```
 
+### 数据包，确认，超时
+
+#### 在有序通道中中继数据包
+
+可以基于事件的方式或基于查询的方式中继有序通道中的数据包。对于前者，中继器应监视源链，每当发送数据包发出事件时，使用事件日志中的数据来组成数据包。对于后者，中继器应定期查询源链上的发送序列号，并保持中继的最后一个序列号，两者之间的任何序列号都是需要查询然后中继的数据包。无论哪种情况，中继器进程都应通过检查接收序列号来检查目的链是否尚未接收到这个数据包，然后才进行中继。
+
+#### 在无序通道中中继数据包
+
+可以基于事件的方式中继无序通道中的数据包。中继器应监视源链中每个发送数据包发出的事件，然后使用事件日志中的数据来组成数据包。随后，中继器应通过查询数据包的序列号是否存在对应的确认来检查目的链是否已接收到过该数据包，如果尚未出现，中继器才中继该数据包。
+
+#### 中继确认
+
+确认可以基于事件的方式进行中继。中继器应该监视目标链，每当接收数据包并写入确认发出事件时，使用事件日志中的数据组成确认数据包，检查数据包承诺在源链上是否存在（一旦确认被中继，它将被删除），如果是，则将确认中继到源链。
+
+#### 中继超时
+
+超时中继稍微复杂一些，因为当数据包超时时没有特定事件发出，这是简单的情况，由于目标链已经超过超时高度或时间戳，因此无法再中继数据包。中继器进程必须选择跟踪一组数据包（可以通过扫描事件日志来构造），并且一旦目的链的高度或时间戳超过跟踪的数据包的高度或时间戳，就检查数据包承诺是否仍存在于源链（一旦超时被中继，它将被删除），如果是，则将超时中继到源链。
+
 ### 待处理的数据报
 
 `pendingDatagrams`整理要从一台机器发送到另一台机器的数据报。此功能的实现将取决于两台机器都支持的 IBC 协议的子集以及源机器的状态布局。特定的中继器可能还会实现其自己的过滤器功能，以便仅中继可被中继的数据报的子集（例如，一个为了能中继而链下付过费的子集）。
@@ -95,6 +113,7 @@ function pendingDatagrams(chain: Chain, counterparty: Chain): List<Set<Datagram>
         desiredIdentifier: localEnd.counterpartyConnectionIdentifier,
         counterpartyConnectionIdentifier: localEnd.identifier,
         counterpartyClientIdentifier: localEnd.clientIdentifier,
+        counterpartyPrefix: localEnd.commitmentPrefix,
         clientIdentifier: localEnd.counterpartyClientIdentifier,
         version: localEnd.version,
         counterpartyVersion: localEnd.version,
@@ -166,7 +185,8 @@ function pendingDatagrams(chain: Chain, counterparty: Chain): List<Set<Datagram>
     sentPacketLogs = queryByTopic(height, "sendPacket")
     for (const logEntry of sentPacketLogs) {
       // relay packet with this sequence number
-      packetData = Packet{logEntry.sequence, logEntry.timeout, localEnd.portIdentifier, localEnd.channelIdentifier,
+      packetData = Packet{logEntry.sequence, logEntry.timeoutHeight, logEntry.timeoutTimestamp,
+                          localEnd.portIdentifier, localEnd.channelIdentifier,
                           remoteEnd.portIdentifier, remoteEnd.channelIdentifier, logEntry.data}
       counterpartyDatagrams.push(PacketRecv{
         packet: packetData,
@@ -178,7 +198,8 @@ function pendingDatagrams(chain: Chain, counterparty: Chain): List<Set<Datagram>
     recvPacketLogs = queryByTopic(height, "recvPacket")
     for (const logEntry of recvPacketLogs) {
       // relay packet acknowledgement with this sequence number
-      packetData = Packet{logEntry.sequence, logEntry.timeout, localEnd.portIdentifier, localEnd.channelIdentifier,
+      packetData = Packet{logEntry.sequence, logEntry.timeoutHeight, logEntry.timeoutTimestamp,
+                          localEnd.portIdentifier, localEnd.channelIdentifier,
                           remoteEnd.portIdentifier, remoteEnd.channelIdentifier, logEntry.data}
       counterpartyDatagrams.push(PacketAcknowledgement{
         packet: packetData,

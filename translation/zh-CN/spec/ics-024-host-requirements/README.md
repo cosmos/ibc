@@ -35,15 +35,25 @@ IBC/TAO 规范定义了两个模块的实现：核心“ IBC 处理程序”模�
 
 ### 路径，标识符，分隔符
 
-`Identifier`是一个字节字符串，用作存储在状态中的对象（例如连接，通道或轻客户端）的键。标识符必须仅由字母、数字、字符组成。标识符必须为非空（正整数长度）。
+`Identifier`是一个字节字符串，用作状态存储的对象（例如连接，通道或轻客户端）的键。
 
-`Path`是用作状态存储对象的键的字节串。路径必须仅包含标识符，常数字母、数字、字符串和分隔符`"/"` 。
+标识符必须为非空（正整数长度）。
+
+标识符只能由以下类别之一中的字符组成：
+
+- 字母数字
+- `.`, `_`, `+`, `-`, `#`
+- `[`, `]`, `<`, `>`
+
+`Path`是用作状态存储对象的键的字节串。路径必须仅包含标识符，常量字符串和分隔符`"/"` 。
 
 标识符并不意图成为有价值的资源，以防止名字抢注，可能需要实现最小长度要求或伪随机生成，但本规范未施加特别限制。
 
 分隔符`"/"`用于分隔和连接两个标识符或一个标识符和一个常量字节串。标识符不得包含`"/"`字符，以防止歧义。
 
 在整个说明书中，大括号表示的变量插值，用作定义路径格式的简写，例如`client/{clientIdentifier}/consensusState` 。
+
+除非另有说明，否则本规范中列出的所有标识符和所有字符串都必须编码为 ASCII。
 
 ### 键/值存储
 
@@ -95,18 +105,18 @@ type delete = (path: Path) => void
 
 存储 | 路径格式 | 值格式 | 定义在
 --- | --- | --- | ---
-provableStore | "clients/{identifier}/type" | ClientType | [ICS 2](../ics-002-client-semantics)
-privateStore | "clients/{identifier}" | ClientState | [ICS 2](../ics-007-tendermint-client)
-provableStore | "clients/{identifier}/consensusStates/{height}" | ConsensusState | [ICS 7](../ics-007-tendermint-client)
+provableStore | "clients/{identifier}/clientType" | ClientType | [ICS 2](../ics-002-client-semantics)
+privateStore | "clients/{identifier}/clientState" | ClientState | [ICS 2](../ics-007-tendermint-client)
+provableStore | "clients/{identifier}/consensusState/{height}" | ConsensusState | [ICS 7](../ics-007-tendermint-client)
 privateStore | "clients/{identifier}/connections | []Identifier | [ICS 3](../ics-003-connection-semantics)
 provableStore | "connections/{identifier}" | ConnectionEnd | [ICS 3](../ics-003-connection-semantics)
 privateStore | "ports/{identifier}" | CapabilityKey | [ICS 5](../ics-005-port-allocation)
-provableStore | "ports/{identifier}/channels/{identifier}" | ChannelEnd | [ICS 4](../ics-004-channel-and-packet-semantics)
-provableStore | "ports/{identifier}/channels/{identifier}/key" | CapabilityKey | [ICS 4](../ics-004-channel-and-packet-semantics)
-provableStore | "ports/{identifier}/channels/{identifier}/nextSequenceRecv" | uint64 | [ICS 4](../ics-004-channel-and-packet-semantics)
-provableStore | "ports/{identifier}/channels/{identifier}/packets/{sequence}" | bytes | [ICS 4](../ics-004-channel-and-packet-semantics)
-provableStore | "ports/{identifier}/channels/{identifier}/acknowledgements/{sequence}" | bytes | [ICS 4](../ics-004-channel-and-packet-semantics)
-privateStore | "callbacks/{identifier}" | ModuleCallbacks | [ICS 26](../ics-026-routing-module)
+provableStore | "channelEnds/ports/{identifier}/channels/{identifier}" | ChannelEnd | [ICS 4](../ics-004-channel-and-packet-semantics)
+provableStore | "seqSends/ports/{identifier}/channels/{identifier}/nextSequenceSend" | uint64 | [ICS 4](../ics-004-channel-and-packet-semantics)
+provableStore | "seqRecvs/ports/{identifier}/channels/{identifier}/nextSequenceRecv" | uint64 | [ICS 4](../ics-004-channel-and-packet-semantics)
+provableStore | "seqAcks/ports/{identifier}/channels/{identifier}/nextSequenceAck" | uint64 | [ICS 4](../ics-004-channel-and-packet-semantics)
+provableStore | "commitments/ports/{identifier}/channels/{identifier}/packets/{sequence}" | bytes | [ICS 4](../ics-004-channel-and-packet-semantics)
+provableStore | "acks/ports/{identifier}/channels/{identifier}/acknowledgements/{sequence}" | bytes | [ICS 4](../ics-004-channel-and-packet-semantics)
 
 ### 模块布局
 
@@ -190,6 +200,8 @@ if provableStore.get(path) === value {
 type currentTimestamp = () => uint64
 ```
 
+为了在超时机制中安全使用时间戳，后续区块头中的时间戳必须不能是递减的。
+
 ### 端口系统
 
 主机状态机必须实现一个端口系统，其中 IBC 处理程序可以允许主机状态机中的不同模块绑定到唯一命名的端口。端口使用`Identifier`标示 。
@@ -257,7 +269,7 @@ type emitLogEntry = (topic: string, data: []byte) => void
 `queryByTopic`函数可以被外部进程（例如中继器）调用，以检索在给定高度执行的交易写入的与查询主题关联的所有日志条目。
 
 ```typescript
-type queryByTopic = (height: uint64, topic: string) => Array< []byte >
+type queryByTopic = (height: uint64, topic: string) => []byte[]
 ```
 
 也可以支持更复杂的查询功能，并且可以允许更高效的中继器进程查询，但不是必需的。

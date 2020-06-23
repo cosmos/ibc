@@ -69,6 +69,12 @@ type ConsensusState = bytes
 
 `ConsensusState` 必须存储在下面定义的指定的键下，这样其他链可以验证一个特定的共识状态是否已存储。
 
+`ConsensusState` 必须定义一个 `getTimestamp()` 方法，该方法返回与该共识状态关联的时间戳：
+
+```typescript
+type getTimestamp = ConsensusState => uint64
+```
+
 #### 区块头
 
 `Header` 是由客户端类型定义的不透明数据结构，它提供用来更新`ConsensusState`的信息。可以将区块头提交给关联的客户端以更新存储的`ConsensusState` 。区块头可能包含一个高度、一个证明、一个加密承诺根，还有可能的合法性判定式更新。
@@ -138,6 +144,8 @@ type checkValidityAndUpdateState = (Header) => Void
 
 如果给定的区块头有效，客户端必须改变内部状态来存储当前确认的共识根，以及更新必要的签名权威跟踪（例如对验证人集合的更新）以供后续的合法性判定式调用。
 
+客户端的合法性判定式可能是时间敏感的，因此，如果一段时间内（例如三周的解除绑定时间）都未提供区块头，将无法再更新客户端。在这种情况下，可以允许一个被许可的实体，例如链治理系统或可信多重签名介入以解冻冻结的客户端并提供新的正确区块头。
+
 #### 不良行为判定式
 
 一个不良行为判定式是由一种客户端类型定义的不透明函数，用于检查数据是否对共识协议构成违规。可能是出现两个拥有不同状态根但在同一个区块高度的签名的区块头、一个包含无效状态转换的签名的区块头或其他由共识算法定义的不良行为的证据。
@@ -152,6 +160,8 @@ type checkMisbehaviourAndUpdateState = (bytes) => Void
 
 如果一个不良行为是有效的，客户端还必须根据不良行为的性质去更改内部状态，来标记先前认为有效的区块高度为无效。
 
+一旦检测到不良行为，客户端应该被冻结，之后未来的任何更新都不能被提交。诸如链治理系统或可信多重签名之类的被许可的实体可能被允许干预以解冻冻结的客户端并提供新的正确的区块头。
+
 #### 客户端状态
 
 客户端状态是由一种客户端类型定义的不透明数据结构。它或将保留任意的内部状态去追踪已经被验证过的状态根和发生过的不良行为。
@@ -162,7 +172,7 @@ type checkMisbehaviourAndUpdateState = (bytes) => Void
 type ClientState = bytes
 ```
 
-客户端类型必须定义一种方法用提供的共识状态初始化客户端状态，并根据情况写入状态。
+客户类型必须定义一个方法用提供的共识状态初始化一个客户端状态，并根据情况写入到内部状态中。
 
 ```typescript
 type initialise = (consensusState: ConsensusState) => ClientState
@@ -284,6 +294,105 @@ type verifyNextSequenceRecv = (
   => boolean
 ```
 
+#### 查询接口
+
+##### 链信息查询
+
+假定这些查询端点是由与特定客户端关联的链的节点通过 HTTP 或等效的 RPC API 公开的。
+
+链必须定义 `queryHeader`，并由特定客户端验证，而且应允许按高度检索区块头。假定此端点是不受信任的。
+
+```typescript
+type queryHeader = (height: uint64) => Header
+```
+
+链必须定义 `queryChainConsensusState`，并由特定客户端验证，以允许检索当前共识状态，该状态可用于构建新客户端。以这种方式使用时，返回的 `ConsensusState` 必须由查询实体手动确认，因为它是主观的。假定此端点是不受信任的。 `ConsensusState` 的确切性质可能因客户端类型而异。
+
+```typescript
+type queryChainConsensusState = (height: uint64) => ConsensusState
+```
+
+请注意，按高度检索过去的共识状态（而不仅仅是当前的共识状态）会很方便，但不是必需的。
+
+`queryChainConsensusState` 还可以返回创建客户端所需的其他数据，例如某些权益证明安全模型的“解除绑定期”。该数据也必须由查询实体进行验证。
+
+##### 链上状态查询
+
+该规范定义了一个通过标识符查询客户端状态的函数。
+
+```typescript
+function queryClientState(identifier: Identifier): ClientState {
+  return privateStore.get(clientStatePath(identifier))
+}
+```
+
+`ClientState` 类型应该公开其最新的已验证高度（如果需要，可以再使用 `queryConsensusState` 获取其共识状态）。
+
+```typescript
+type latestHeight = (state: ClientState) => uint64
+```
+
+客户端类型应该定义以下标准化查询函数，以允许中继器和其他链下实体以标准API和链上状态进行对接。
+
+`queryConsensusState` 允许按高度检索存储的共识状态。
+
+```typescript
+type queryConsensusState = (
+  identifier: Identifier,
+  height: uint64
+) => ConsensusState
+```
+
+##### 证明的构造
+
+每个客户端类型都应该定义一些函数，以允许中继器构造客户端状态验证算法所需的证明。构造方法可能采用不同的形式，具体取决于客户端类型。例如，Tendermint 客户端的证明可能与存储查询的键值数据一起返回，而单机客户端证明可能需要在单机上以交互式询问的方式构造（因为需要用户签名消息）。这些函数可以由通过 RPC 到全节点的外部查询以及本地计算或验证构成。
+
+```typescript
+type queryAndProveClientConsensusState = (
+  clientIdentifier: Identifier,
+  height: uint64,
+  prefix: CommitmentPrefix,
+  consensusStateHeight: uint64) => ConsensusState, Proof
+
+type queryAndProveConnectionState = (
+  connectionIdentifier: Identifier,
+  height: uint64,
+  prefix: CommitmentPrefix) => ConnectionEnd, Proof
+
+type queryAndProveChannelState = (
+  portIdentifier: Identifier,
+  channelIdentifier: Identifier,
+  height: uint64,
+  prefix: CommitmentPrefix) => ChannelEnd, Proof
+
+type queryAndProvePacketData = (
+  portIdentifier: Identifier,
+  channelIdentifier: Identifier,
+  height: uint64,
+  prefix: CommitmentPrefix,
+  sequence: uint64) => []byte, Proof
+
+type queryAndProvePacketAcknowledgement = (
+  portIdentifier: Identifier,
+  channelIdentifier: Identifier,
+  height: uint64,
+  prefix: CommitmentPrefix,
+  sequence: uint64) => []byte, Proof
+
+type queryAndProvePacketAcknowledgementAbsence = (
+  portIdentifier: Identifier,
+  channelIdentifier: Identifier,
+  height: uint64,
+  prefix: CommitmentPrefix,
+  sequence: uint64) => Proof
+
+type queryAndProveNextSequenceRecv = (
+  portIdentifier: Identifier,
+  channelIdentifier: Identifier,
+  height: uint64,
+  prefix: CommitmentPrefix) => uint64, Proof
+```
+
 ##### 实现策略
 
 ###### 回环
@@ -349,11 +458,13 @@ function createClient(
 
 #### 查询
 
-可以通过标识符查询客户端共识状态和客户端内部状态，但是查询的特定路径由每种客户端类型定义。
+可以通过标识符查询客户端共识状态和客户端内部状态，但是必须被查询的特定路径应由每种客户端类型定义。
 
 #### 更新
 
 客户端的更新是通过提交新的`Header`来完成的。`Identifier`用于指向逻辑将被更新的客户端状态。 当使用`ClientState`的合法性判定式和`ConsensusState`验证新的`Header`时，客户端必须相应的更新其内部状态，还可能更新最终性承诺根和`ConsensusState`中的签名授权逻辑。
+
+如果一个客户端无法继续更新（例如，如果超过了信任期），则将不能通过与该客户端关联的连接和通道再发送任何数据包，或者使在传输过程中的任何数据包超时（因为无法再验证目标链上的高度和时间戳）。必须进行手动干预才能重置客户端状态或将连接和通道迁移到另一个客户端。无法安全的完全自动完成此操作，但是实施 IBC 的链可以选择允许治理机制执行这些操作（甚至可能操作多签或合约中的单个客户端/连接/通道）。
 
 ```typescript
 function updateClient(
@@ -500,7 +611,7 @@ function verifyPacketData(
   data: bytes) {
     path = applyPrefix(prefix, "ports/{portIdentifier}/channels/{channelIdentifier}/packets/{sequence}")
     abortTransactionUnless(!clientState.frozen)
-    return clientState.verifiedRoots[sequence].verifyMembership(path, data, proof)
+    return clientState.verifiedRoots[sequence].verifyMembership(path, hash(data), proof)
 }
 
 function verifyPacketAcknowledgement(
@@ -514,7 +625,7 @@ function verifyPacketAcknowledgement(
   acknowledgement: bytes) {
     path = applyPrefix(prefix, "ports/{portIdentifier}/channels/{channelIdentifier}/acknowledgements/{sequence}")
     abortTransactionUnless(!clientState.frozen)
-    return clientState.verifiedRoots[sequence].verifyMembership(path, acknowledgement, proof)
+    return clientState.verifiedRoots[sequence].verifyMembership(path, hash(acknowledgement), proof)
 }
 
 function verifyPacketAcknowledgementAbsence(
@@ -585,9 +696,11 @@ function checkMisbehaviourAndUpdateState(
 
 2019年5月29日-进行了各种修订，尤其是多个承诺根
 
-2019年8月15日-进行大量返工以使客户端界面更加清晰
+2019年8月15日-进行大量返工以使客户端接口更加清晰
 
 2020年1月13日-客户端类型分离和路径更改的修订
+
+2020年1月26日-添加查询接口
 
 ## 版权
 

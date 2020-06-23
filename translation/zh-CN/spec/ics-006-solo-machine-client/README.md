@@ -18,6 +18,8 @@ modified: 2019-12-09
 
 单机，可能是诸如手机，浏览器或笔记本电脑之类的设备，它们希望与使用 IBC 的其他机器和多副本帐本进行交互，并且可以通过统一的客户端接口来实现。
 
+单机客户端大致类似于“隐式帐户”，可以用来代替账本上的“常规交易”，从而允许所有交易通过 IBC 的统一接口进行。
+
 ### 定义
 
 函数和术语如 [ICS 2](../ics-002-client-semantics) 中所定义。
@@ -39,6 +41,7 @@ modified: 2019-12-09
 ```typescript
 interface ClientState {
   frozen: boolean
+  consensusState: ConsensusState
 }
 ```
 
@@ -111,7 +114,7 @@ function latestClientHeight(clientState: ClientState): uint64 {
 function checkValidityAndUpdateState(
   clientState: ClientState,
   header: Header) {
-  assert(sequence === clientState.consensusState.sequence)
+  assert(header.sequence === clientState.consensusState.sequence)
   assert(checkSignature(header.newPublicKey, header.sequence, header.signature))
   clientState.consensusState.publicKey = header.newPublicKey
   clientState.consensusState.sequence++

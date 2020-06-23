@@ -5,9 +5,9 @@ stage: 草案
 category: IBC/APP
 requires: 25, 26
 kind: 实例化
-author: Christopher Goes <cwgoes@tendermint.com>
+author: Christopher Goes <cwgoes@interchain.berlin>
 created: 2019-07-15
-modified: 2019-08-25
+modified: 2020-02-24
 ---
 
 ## 概览
@@ -42,7 +42,15 @@ interface FungibleTokenPacketData {
   amount: uint256
   sender: string
   receiver: string
-  source: boolean
+}
+```
+
+确认数据类型描述转账是成功还是失败，以及失败的原因（如果有）。
+
+```typescript
+interface FungibleTokenPacketAcknowledgement {
+  success: boolean
+  error: Maybe<string>
 }
 ```
 
@@ -64,7 +72,7 @@ interface ModuleState {
 
 ```typescript
 function setup() {
-  routingModule.bindPort("bank", ModuleCallbacks{
+  capability = routingModule.bindPort("bank", ModuleCallbacks{
     onChanOpenInit,
     onChanOpenTry,
     onChanOpenAck,
@@ -76,6 +84,7 @@ function setup() {
     onAcknowledgePacket,
     onTimeoutPacketClose
   })
+  claimCapability("port", capability)
 }
 ```
 
@@ -102,13 +111,13 @@ function onChanOpenInit(
   counterpartyPortIdentifier: Identifier,
   counterpartyChannelIdentifier: Identifier,
   version: string) {
-  // 只允许无序的通道
+  // only unordered channels allowed
   abortTransactionUnless(order === UNORDERED)
-  // 只允许对方链使用绑定"bank"端口的通道
+  // only allow channels to "bank" port on counterparty chain
   abortTransactionUnless(counterpartyPortIdentifier === "bank")
-  // 目前还未使用版本
-  abortTransactionUnless(version === "")
-  // 分配托管地址
+  // assert that version is "ics20-1"
+  abortTransactionUnless(version === "ics20-1")
+  // allocate an escrow address
   channelEscrowAddresses[channelIdentifier] = newAddress()
 }
 ```
@@ -123,14 +132,14 @@ function onChanOpenTry(
   counterpartyChannelIdentifier: Identifier,
   version: string,
   counterpartyVersion: string) {
-  // 只允许无序的通道
+  // only unordered channels allowed
   abortTransactionUnless(order === UNORDERED)
-  // 目前还未使用版本
-  abortTransactionUnless(version === "")
-  abortTransactionUnless(counterpartyVersion === "")
-  // 只允许对方链使用绑定"bank"端口的通道
+  // assert that version is "ics20-1"
+  abortTransactionUnless(version === "ics20-1")
+  abortTransactionUnless(counterpartyVersion === "ics20-1")
+  // only allow channels to "bank" port on counterparty chain
   abortTransactionUnless(counterpartyPortIdentifier === "bank")
-  // 分配托管地址
+  // allocate an escrow address
   channelEscrowAddresses[channelIdentifier] = newAddress()
 }
 ```
@@ -140,9 +149,9 @@ function onChanOpenAck(
   portIdentifier: Identifier,
   channelIdentifier: Identifier,
   version: string) {
-  // 目前还未使用版本
-  abortTransactionUnless(version === "")
-  // 完成端口验证
+  // port has already been validated
+  // assert that version is "ics20-1"
+  abortTransactionUnless(version === "ics20-1")
 }
 ```
 
@@ -150,7 +159,7 @@ function onChanOpenAck(
 function onChanOpenConfirm(
   portIdentifier: Identifier,
   channelIdentifier: Identifier) {
-  // 完成端口验证，接受通道确认
+  // accept channel confirmations, port has already been validated, version has already been validated
 }
 ```
 
@@ -158,7 +167,7 @@ function onChanOpenConfirm(
 function onChanCloseInit(
   portIdentifier: Identifier,
   channelIdentifier: Identifier) {
-  // 无需任何操作
+  // no action necessary
 }
 ```
 
@@ -166,7 +175,7 @@ function onChanCloseInit(
 function onChanCloseConfirm(
   portIdentifier: Identifier,
   channelIdentifier: Identifier) {
-  // 无需任何操作
+  // no action necessary
 }
 ```
 
@@ -177,7 +186,7 @@ function onChanCloseConfirm(
 - 在源 zone 上，桥接模块会在发送链上托管现有的本地资产面额，并在接收链上生成凭证。
 - 在目标 zone 上，桥接模块会在发送链上销毁本地凭证，并在接收链上解除对本地资产面额的托管。
 - 当数据包超时时，本地资产将解除托管并退还给发送者，或将凭证发回给发送者。
-- 无需数据确认。
+- 确认数据用于处理失败，例如无效面额或无效目标帐户。返回失败的确认比终止交易更可取，因为它更容易使发送链根据失败的本质而采取适当的措施。
 
 模块中对节点状态机上的账户所有者进行签名检查的交易处理程序必须调用`createOutgoingPacket`。
 
@@ -187,52 +196,65 @@ function createOutgoingPacket(
   amount: uint256,
   sender: string,
   receiver: string,
-  source: boolean) {
+  destPort: string,
+  destChannel: string,
+  sourcePort: string,
+  sourceChannel: string,
+  timeoutHeight: uint64,
+  timeoutTimestamp: uint64) {
+  // inspect the denomination to determine whether or not we are the source chain
+  prefix = "{destPort}/{destChannel}"
+  source = denomination.slice(0, len(prefix)) === prefix
   if source {
-    // 发送者在源链上: 托管通证
-    // 确定托管账户
+    // sender is source chain: escrow tokens
+    // determine escrow account
     escrowAccount = channelEscrowAddresses[packet.sourceChannel]
-    // 构造收款面额并做正确性检查
-    prefix = "{packet/destPort}/{packet.destChannel}"
-    abortTransactionUnless(denomination.slice(0, len(prefix)) === prefix)
-    // 托管源链通证（如果余额不足则失败）
+    // escrow source tokens (assumed to fail if balance insufficient)
     bank.TransferCoins(sender, escrowAccount, denomination.slice(len(prefix)), amount)
   } else {
-    // 如果接受者是源链上的账户则销毁付款凭单
-    // 构造收款面额并做正确性检查
-    prefix = "{packet/sourcePort}/{packet.sourceChannel}"
+    // receiver is source chain, burn vouchers
+    // construct receiving denomination, check correctness
+    prefix = "{sourcePort}/{sourceChannel}"
     abortTransactionUnless(denomination.slice(0, len(prefix)) === prefix)
-    // 销毁付款凭单（如果余额不足则失败）
+    // burn vouchers (assumed to fail if balance insufficient)
     bank.BurnCoins(sender, denomination, amount)
   }
-  FungibleTokenPacketData data = FungibleTokenPacketData{denomination, amount, sender, receiver, source}
-  handler.sendPacket(packet)
+  FungibleTokenPacketData data = FungibleTokenPacketData{denomination, amount, sender, receiver}
+  handler.sendPacket(Packet{timeoutHeight, timeoutTimestamp, destPort, destChannel, sourcePort, sourceChannel, data}, getCapability("port"))
 }
 ```
 
 当路由模块收到一个数据包后调用`onRecvPacket`。
 
 ```typescript
-function onRecvPacket(packet: Packet): bytes {
+function onRecvPacket(packet: Packet) {
   FungibleTokenPacketData data = packet.data
-  if data.source {
-    // 发送者是源链上的账户: 创建付款凭单
-    // 构造收款面额并做正确性检查
-    prefix = "{packet/destPort}/{packet.destChannel}"
-    abortTransactionUnless(data.denomination.slice(0, len(prefix)) === prefix)
-    // 为接受者创建付款凭单（如果余额不足则失败）
-    bank.MintCoins(data.receiver, data.denomination, data.amount)
+  // inspect the denomination to determine whether or not we are the source chain
+  prefix = "{packet.destPort}/{packet.destChannel}"
+  source = denomination.slice(0, len(prefix)) === prefix
+  // construct default acknowledgement of success
+  FungibleTokenPacketAcknowledgement ack = FungibleTokenPacketAcknowledgement{true, null}
+  if source {
+    // sender was source, mint vouchers to receiver (assumed to fail if balance insufficient)
+    err = bank.MintCoins(data.receiver, data.denomination, data.amount)
+    if (err !== nil)
+      ack = FungibleTokenPacketAcknowledgement{false, "mint coins failed"}
   } else {
-    // 接收者是源链上的账户：解除托管通证
-    // 获取托管账户
+    // receiver is source chain: unescrow tokens
+    // determine escrow account
     escrowAccount = channelEscrowAddresses[packet.destChannel]
-    // 构造收款面额并做正确性检查
+    // construct receiving denomination, check correctness
     prefix = "{packet/sourcePort}/{packet.sourceChannel}"
-    abortTransactionUnless(data.denomination.slice(0, len(prefix)) === prefix)
-    // 解除通证托管并返还给接收者（如果余额不足则失败）
-    bank.TransferCoins(escrowAccount, data.receiver, data.denomination.slice(len(prefix)), data.amount)
+    if (data.denomination.slice(0, len(prefix)) !== prefix)
+      ack = FungibleTokenPacketAcknowledgement{false, "invalid denomination"}
+    else {
+      // unescrow tokens to receiver (assumed to fail if balance insufficient)
+      err = bank.TransferCoins(escrowAccount, data.receiver, data.denomination.slice(len(prefix)), data.amount)
+      if (err !== nil)
+        ack = FungibleTokenPacketAcknowledgement{false, "transfer coins failed"}
+    }
   }
-  return 0x
+  return ack
 }
 ```
 
@@ -242,7 +264,9 @@ function onRecvPacket(packet: Packet): bytes {
 function onAcknowledgePacket(
   packet: Packet,
   acknowledgement: bytes) {
-  // 可能永远不会被调用，因此是一个空操作
+  // if the transfer failed, refund the tokens
+  if (!ack.success)
+    refundTokens(packet)
 }
 ```
 
@@ -250,22 +274,32 @@ function onAcknowledgePacket(
 
 ```typescript
 function onTimeoutPacket(packet: Packet) {
+  // the packet timed-out, so refund the tokens
+  refundTokens(packet)
+}
+```
+
+`refundTokens`会在两处被调用，失败时的`onAcknowledgePacket` 和`onTimeoutPacket`，用来退还托管的通证给原始发送者。
+
+```typescript
+function refundTokens(packet: Packet) {
   FungibleTokenPacketData data = packet.data
-  if data.source {
-    // 如果发送者是源链上的账户，解除通证托管
-    // 获取托管账户
+  prefix = "{packet.destPort}/{packet.destChannel}"
+  source = data.denomination.slice(0, len(prefix)) === prefix
+  if source {
+    // sender was source chain, unescrow tokens
+    // determine escrow account
     escrowAccount = channelEscrowAddresses[packet.destChannel]
-    // 构造收款面额并做正确性检查
-    prefix = "{packet/sourcePort}/{packet.sourceChannel}"
-    abortTransactionUnless(data.denomination.slice(0, len(prefix)) === prefix)
-    // 解除通证托管并返还给发送者
+    // construct receiving denomination, check correctness
+    // unescrow tokens back to sender
     bank.TransferCoins(escrowAccount, data.sender, data.denomination.slice(len(prefix)), data.amount)
   } else {
-    // 如果接收者是源链上的账户，创建付款凭单
-    // 构造收款面额并做正确性检查
-    prefix = "{packet/sourcePort}/{packet.sourceChannel}"
+    // receiver was source chain, mint vouchers
+    // construct receiving denomination, check correctness
+    prefix = "{packet.sourcePort}/{packet.sourceChannel}"
+    // we abort here because we couldn't have sent this packet
     abortTransactionUnless(data.denomination.slice(0, len(prefix)) === prefix)
-    // 创建付款凭单返回给发送者
+    // mint vouchers back to sender
     bank.MintCoins(data.sender, data.denomination, data.amount)
   }
 }
@@ -273,7 +307,7 @@ function onTimeoutPacket(packet: Packet) {
 
 ```typescript
 function onTimeoutPacketClose(packet: Packet) {
-  // 不会发生，仅允许无序通道
+  // can't happen, only unordered channels allowed
 }
 ```
 
@@ -289,7 +323,9 @@ function onTimeoutPacketClose(packet: Packet) {
 
 ##### 多链注意事项
 
-还无法处理“菱形问题”，即用户将在链 A 上发行的通证跨链转移到链 B，然后又转移到链 D，并想通过 D -> C -> A 的路径将通证转移回链 A，由于此时通证的供应量被认为是由链 B 控制，链 C 无法作为中介。目前尚不确定该场景是否应该在协议内处理，可能只需原路返回即可（如果两条路径上都有频繁的流动性和结余，菱形路径会更有效）。长的赎回路径产生的复杂性会导致网络拓扑中中心链的出现。
+此规范不能直接处理“菱形问题”，在该问题中，用户将源自链 A 的通证发送到链 B，然后又发送给链 D，并希望通过 D-> C-> A 归还它，由于此时通证的供应量被认为是由链 B 控制（面额将为“ {portOnD} / {channelOnD} / {portOnB} / {channelOnB} / denom”），链 C 不能充当中介。尚不清楚该场景是否应按协议处理—可能只需要原路返回就可以了（如果在这两个途径上都有频繁的流动性和一定的结余，菱形路径将在大多数情况下适用）。较长的赎回路径引起的复杂性可能导致网络拓扑结构中出现中心链。
+
+为了跟踪沿着各种路径在链网络中移动的所有面额，对于特定的链实现一个注册表将有助于跟踪每个面额的“全局”源链。最终用户服务提供商（例如钱包作者）可能希望集成这样的注册表，或保留自己的典范源链和人类可读名称的映射，以改善 UX。
 
 #### 可选附录
 
@@ -302,7 +338,9 @@ function onTimeoutPacketClose(packet: Packet) {
 
 ## 向前兼容性
 
-该标准的未来版本可能使用不同的通道创建版本。
+此初始标准在通道握手中使用版本“ ics20-1”。
+
+该标准的未来版本可以在通道握手中使用其他版本，并安全的更改数据包数据格式和数据包处理程序的语义。
 
 ## 示例实现
 
@@ -319,6 +357,10 @@ function onTimeoutPacketClose(packet: Packet) {
 2019年7月29 - 主要修订；整理
 
 2019年8月25 - 主要修订；进一步整理
+
+2020年2月3日-进行修订，以处理对成功和失败的确认
+
+2020年2月24日-用来推断来源字段的修订，包括版本字符串
 
 ## 版权
 

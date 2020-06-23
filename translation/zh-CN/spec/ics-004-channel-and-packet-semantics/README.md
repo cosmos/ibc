@@ -30,7 +30,7 @@ modified: 2019-08-25
 
 `Connection` 在 [ICS 3](../ics-003-connection-semantics) 中被定义.
 
-`Port`和`authenticate`在 [ICS 5](../ics-005-port-allocation) 中被定义。
+`Port`和`authenticateCapability`在 [ICS 5](../ics-005-port-allocation) 中被定义。
 
 `hash`是一种通用的抗碰撞哈希函数，其细节必须由使用通道的模块商定。 `hash`在不同的链可以有不同的定义。
 
@@ -78,6 +78,7 @@ interface ChannelEnd {
 - `counterpartyChannelIdentifier`标识对应链的通道端。
 - `nextSequenceSend`是单独存储的，追踪下一个要发送的数据包的序号。
 - `nextSequenceRecv`是单独存储的，追踪要接收的下一个数据包的序号。
+- `nextSequenceAck`是单独存储的，追踪要确认的下一个数据包的序号。
 - `connectionHops`按顺序的存储在此通道上发送的数据包将途径的连接标识符列表。目前，此列表的长度必须为 1。将来可能会支持多跳通道。
 - `version`字符串存储一个不透明的通道版本号，该版本号在握手期间已达成共识。这可以确定模块级别的配置，例如通道使用哪种数据包编码。核心 IBC 协议不会使用该版本号。
 
@@ -103,6 +104,7 @@ enum ChannelState {
 interface Packet {
   sequence: uint64
   timeoutHeight: uint64
+  timeoutTimestamp: uint64
   sourcePort: Identifier
   sourceChannel: Identifier
   destPort: Identifier
@@ -113,6 +115,7 @@ interface Packet {
 
 - `sequence`对应于发送和接收的顺序，其中序号靠前的数据包必须比序号靠后的数据包先发送或接收。
 - `timeoutHeight`指示目标链上的一个共识高度，此高度后不再处理数据包，而是计为已超时。
+- `timeoutTimestamp`指示目标链上的一个时间戳，此后将不再处理数据包，而是计为已超时。
 - `sourcePort`标识发送链上的端口。
 - `sourceChannel`标识发送链上的通道端。
 - `destPort`标识接收链上的端口。
@@ -175,7 +178,7 @@ function channelCapabilityPath(portIdentifier: Identifier, channelIdentifier: Id
 }
 ```
 
-无符号整数计数器`nextSequenceSend`和`nextSequenceRecv`是分开存储的，因此可以单独证明它们：
+无符号整数计数器`nextSequenceSend` ， `nextSequenceRecv`和`nextSequenceAck`是分别存储的，因此可以单独证明它们：
 
 ```typescript
 function nextSequenceSendPath(portIdentifier: Identifier, channelIdentifier: Identifier): Path {
@@ -184,6 +187,10 @@ function nextSequenceSendPath(portIdentifier: Identifier, channelIdentifier: Ide
 
 function nextSequenceRecvPath(portIdentifier: Identifier, channelIdentifier: Identifier): Path {
     return "{channelPath(portIdentifier, channelIdentifier)}/nextSequenceRecv"
+}
+
+function nextSequenceAckPath(portIdentifier: Identifier, channelIdentifier: Identifier): Path {
+    return "{channelPath(portIdentifier, channelIdentifier)}/nextSequenceAck"
 }
 ```
 
@@ -229,7 +236,7 @@ type validateChannelIdentifier = (portIdentifier: Identifier, channelIdentifier:
 
 #### 通道生命周期管理
 
-![Channel State Machine](../../../../spec/ics-004-channel-and-packet-semantics/channel-state-machine.png)
+![Channel State Machine](channel-state-machine.png)
 
 发起人 | 数据报 | 作用链 | 之前状态 (A, B) | 之后状态 (A, B)
 --- | --- | --- | --- | ---
@@ -269,16 +276,15 @@ function chanOpenInit(
 
     // optimistic channel handshakes are allowed
     abortTransactionUnless(connection !== null)
-    abortTransactionUnless(connection.state !== CLOSED)
-    abortTransactionUnless(authenticate(privateStore.get(portPath(portIdentifier))))
+    abortTransactionUnless(authenticateCapability(portPath(portIdentifier), portCapability))
     channel = ChannelEnd{INIT, order, counterpartyPortIdentifier,
                          counterpartyChannelIdentifier, connectionHops, version}
     provableStore.set(channelPath(portIdentifier, channelIdentifier), channel)
-    key = generate()
-    provableStore.set(channelCapabilityPath(portIdentifier, channelIdentifier), key)
+    channelCapability = newCapability(channelCapabilityPath(portIdentifier, channelIdentifier))
     provableStore.set(nextSequenceSendPath(portIdentifier, channelIdentifier), 1)
     provableStore.set(nextSequenceRecvPath(portIdentifier, channelIdentifier), 1)
-    return key
+    provableStore.set(nextSequenceAckPath(portIdentifier, channelIdentifier), 1)
+    return channelCapability
 }
 ```
 
@@ -308,12 +314,12 @@ function chanOpenTry(
        previous.connectionHops === connectionHops &&
        previous.version === version)
       )
-    abortTransactionUnless(authenticate(privateStore.get(portPath(portIdentifier))))
+    abortTransactionUnless(authenticateCapability(portPath(portIdentifier), portCapability))
     connection = provableStore.get(connectionPath(connectionHops[0]))
     abortTransactionUnless(connection !== null)
     abortTransactionUnless(connection.state === OPEN)
     expected = ChannelEnd{INIT, order, portIdentifier,
-                          channelIdentifier, connectionHops.reverse(), counterpartyVersion}
+                          channelIdentifier, [connection.counterpartyConnectionIdentifier], counterpartyVersion}
     abortTransactionUnless(connection.verifyChannelState(
       proofHeight,
       proofInit,
@@ -324,11 +330,11 @@ function chanOpenTry(
     channel = ChannelEnd{TRYOPEN, order, counterpartyPortIdentifier,
                          counterpartyChannelIdentifier, connectionHops, version}
     provableStore.set(channelPath(portIdentifier, channelIdentifier), channel)
-    key = generate()
-    provableStore.set(channelCapabilityPath(portIdentifier, channelIdentifier), key)
+    channelCapability = newCapability(channelCapabilityPath(portIdentifier, channelIdentifier))
     provableStore.set(nextSequenceSendPath(portIdentifier, channelIdentifier), 1)
     provableStore.set(nextSequenceRecvPath(portIdentifier, channelIdentifier), 1)
-    return key
+    provableStore.set(nextSequenceAckPath(portIdentifier, channelIdentifier), 1)
+    return channelCapability
 }
 ```
 
@@ -343,12 +349,12 @@ function chanOpenAck(
   proofHeight: uint64) {
     channel = provableStore.get(channelPath(portIdentifier, channelIdentifier))
     abortTransactionUnless(channel.state === INIT || channel.state === TRYOPEN)
-    abortTransactionUnless(authenticate(privateStore.get(channelCapabilityPath(portIdentifier, channelIdentifier))))
+    abortTransactionUnless(authenticateCapability(channelCapabilityPath(portIdentifier, channelIdentifier), capability))
     connection = provableStore.get(connectionPath(channel.connectionHops[0]))
     abortTransactionUnless(connection !== null)
     abortTransactionUnless(connection.state === OPEN)
     expected = ChannelEnd{TRYOPEN, channel.order, portIdentifier,
-                          channelIdentifier, channel.connectionHops.reverse(), counterpartyVersion}
+                          channelIdentifier, [connection.counterpartyConnectionIdentifier], counterpartyVersion}
     abortTransactionUnless(connection.verifyChannelState(
       proofHeight,
       proofTry,
@@ -373,12 +379,12 @@ function chanOpenConfirm(
     channel = provableStore.get(channelPath(portIdentifier, channelIdentifier))
     abortTransactionUnless(channel !== null)
     abortTransactionUnless(channel.state === TRYOPEN)
-    abortTransactionUnless(authenticate(privateStore.get(channelCapabilityPath(portIdentifier, channelIdentifier))))
+    abortTransactionUnless(authenticateCapability(channelCapabilityPath(portIdentifier, channelIdentifier), capability))
     connection = provableStore.get(connectionPath(channel.connectionHops[0]))
     abortTransactionUnless(connection !== null)
     abortTransactionUnless(connection.state === OPEN)
     expected = ChannelEnd{OPEN, channel.order, portIdentifier,
-                          channelIdentifier, channel.connectionHops.reverse(), channel.version}
+                          channelIdentifier, [connection.counterpartyConnectionIdentifier], channel.version}
     abortTransactionUnless(connection.verifyChannelState(
       proofHeight,
       proofAck,
@@ -403,7 +409,7 @@ function chanOpenConfirm(
 function chanCloseInit(
   portIdentifier: Identifier,
   channelIdentifier: Identifier) {
-    abortTransactionUnless(authenticate(privateStore.get(channelCapabilityPath(portIdentifier, channelIdentifier))))
+    abortTransactionUnless(authenticateCapability(channelCapabilityPath(portIdentifier, channelIdentifier), capability))
     channel = provableStore.get(channelPath(portIdentifier, channelIdentifier))
     abortTransactionUnless(channel !== null)
     abortTransactionUnless(channel.state !== CLOSED)
@@ -419,7 +425,7 @@ function chanCloseInit(
 
 在调用`chanCloseConfirm`的同时，模块可以原子性的执行其他适当的应用逻辑。
 
-一旦通道关闭，通道将无法重新打开。
+关闭通道后，将无法重新打开通道，并且不能重复使用标识符。防止标识符重用是因为我们要防止潜在的重放先前发送的数据包。重放问题类似于直接使用序列号与带签名的消息，而不是用轻客户端算法对消息（IBC 数据包）进行“签名”，防止重放的序列是端口标识符，通道标识符和数据包序列号的组合-因此我们不允许在序列号重置为零的情况下，再次使用相同的端口标识符和通道标识符，因为这可能允许重放数据包。如果要求并跟踪特定最大高度/时间的超时，则可以安全的重用标识符，将来版本的规范可能包含此功能。
 
 ```typescript
 function chanCloseConfirm(
@@ -427,7 +433,7 @@ function chanCloseConfirm(
   channelIdentifier: Identifier,
   proofInit: CommitmentProof,
   proofHeight: uint64) {
-    abortTransactionUnless(authenticate(privateStore.get(channelCapabilityPath(portIdentifier, channelIdentifier))))
+    abortTransactionUnless(authenticateCapability(channelCapabilityPath(portIdentifier, channelIdentifier), capability))
     channel = provableStore.get(channelPath(portIdentifier, channelIdentifier))
     abortTransactionUnless(channel !== null)
     abortTransactionUnless(channel.state !== CLOSED)
@@ -435,7 +441,7 @@ function chanCloseConfirm(
     abortTransactionUnless(connection !== null)
     abortTransactionUnless(connection.state === OPEN)
     expected = ChannelEnd{CLOSED, channel.order, portIdentifier,
-                          channelIdentifier, channel.connectionHops.reverse(), channel.version}
+                          channelIdentifier, [connection.counterpartyConnectionIdentifier], channel.version}
     abortTransactionUnless(connection.verifyChannelState(
       proofHeight,
       proofInit,
@@ -475,7 +481,7 @@ function chanCloseConfirm(
 
 从空间上表示，两台机器之间的数据包传输可以表示如下：
 
-![Packet Transit](../../../../spec/ics-004-channel-and-packet-semantics/packet-transit.png)
+![Packet Transit](packet-transit.png)
 
 ##### 发送数据包
 
@@ -501,17 +507,16 @@ function sendPacket(packet: Packet) {
     // optimistic sends are permitted once the handshake has started
     abortTransactionUnless(channel !== null)
     abortTransactionUnless(channel.state !== CLOSED)
-    abortTransactionUnless(authenticate(privateStore.get(channelCapabilityPath(packet.sourcePort, packet.sourceChannel))))
+    abortTransactionUnless(authenticateCapability(channelCapabilityPath(packet.sourcePort, packet.sourceChannel), capability))
     abortTransactionUnless(packet.destPort === channel.counterpartyPortIdentifier)
     abortTransactionUnless(packet.destChannel === channel.counterpartyChannelIdentifier)
     connection = provableStore.get(connectionPath(channel.connectionHops[0]))
 
     abortTransactionUnless(connection !== null)
-    abortTransactionUnless(connection.state !== CLOSED)
 
     // sanity-check that the timeout height hasn't already passed in our local client tracking the receiving chain
     latestClientHeight = provableStore.get(clientPath(connection.clientIdentifier)).latestClientHeight()
-    abortTransactionUnless(latestClientHeight < packet.timeoutHeight)
+    abortTransactionUnless(packet.timeoutHeight === 0 || latestClientHeight < packet.timeoutHeight)
 
     nextSequenceSend = provableStore.get(nextSequenceSendPath(packet.sourcePort, packet.sourceChannel))
     abortTransactionUnless(packet.sequence === nextSequenceSend)
@@ -520,10 +525,11 @@ function sendPacket(packet: Packet) {
 
     nextSequenceSend = nextSequenceSend + 1
     provableStore.set(nextSequenceSendPath(packet.sourcePort, packet.sourceChannel), nextSequenceSend)
-    provableStore.set(packetCommitmentPath(packet.sourcePort, packet.sourceChannel, packet.sequence), hash(packet.data, packet.timeout))
+    provableStore.set(packetCommitmentPath(packet.sourcePort, packet.sourceChannel, packet.sequence),
+                      hash(packet.data, packet.timeoutHeight, packet.timeoutTimestamp))
 
     // log that a packet has been sent
-    emitLogEntry("sendPacket", {sequence: packet.sequence, data: packet.data, timeout: packet.timeout})
+    emitLogEntry("sendPacket", {sequence: packet.sequence, data: packet.data, timeoutHeight: packet.timeoutHeight, timeoutTimestamp: packet.timeoutTimestamp})
 }
 ```
 
@@ -554,15 +560,15 @@ function recvPacket(
     channel = provableStore.get(channelPath(packet.destPort, packet.destChannel))
     abortTransactionUnless(channel !== null)
     abortTransactionUnless(channel.state === OPEN)
-    abortTransactionUnless(authenticate(privateStore.get(channelCapabilityPath(packet.destPort, packet.destChannel))))
+    abortTransactionUnless(authenticateCapability(channelCapabilityPath(packet.destPort, packet.destChannel), capability))
     abortTransactionUnless(packet.sourcePort === channel.counterpartyPortIdentifier)
     abortTransactionUnless(packet.sourceChannel === channel.counterpartyChannelIdentifier)
 
-    connection = provableStore.get(connectionPath(channel.connectionHops[0]))
     abortTransactionUnless(connection !== null)
     abortTransactionUnless(connection.state === OPEN)
 
-    abortTransactionUnless(getConsensusHeight() < packet.timeoutHeight)
+    abortTransactionUnless(packet.timeoutHeight === 0 || getConsensusHeight() < packet.timeoutHeight)
+    abortTransactionUnless(packet.timeoutTimestamp === 0 || currentTimestamp() < packet.timeoutTimestamp)
 
     abortTransactionUnless(connection.verifyPacketData(
       proofHeight,
@@ -570,7 +576,7 @@ function recvPacket(
       packet.sourcePort,
       packet.sourceChannel,
       packet.sequence,
-      concat(packet.data, packet.timeout)
+      concat(packet.data, packet.timeoutHeight, packet.timeoutTimestamp)
     ))
 
     // all assertions passed (except sequence check), we can alter state
@@ -586,10 +592,13 @@ function recvPacket(
       abortTransactionUnless(packet.sequence === nextSequenceRecv)
       nextSequenceRecv = nextSequenceRecv + 1
       provableStore.set(nextSequenceRecvPath(packet.destPort, packet.destChannel), nextSequenceRecv)
+    } else {
+      abortTransactionUnless(provableStore.get(packetAcknowledgementPath(packet.destPort, packet.destChannel, packet.sequence) === null))
     }
 
     // log that a packet has been received & acknowledged
-    emitLogEntry("recvPacket", {sequence: packet.sequence, timeout: packet.timeout, data: packet.data, acknowledgement})
+    emitLogEntry("recvPacket", {sequence: packet.sequence, timeoutHeight: packet.timeoutHeight,
+                                timeoutTimestamp: packet.timeoutTimestamp, data: packet.data, acknowledgement})
 
     // return transparent packet
     return packet
@@ -613,17 +622,17 @@ function acknowledgePacket(
     channel = provableStore.get(channelPath(packet.sourcePort, packet.sourceChannel))
     abortTransactionUnless(channel !== null)
     abortTransactionUnless(channel.state === OPEN)
-    abortTransactionUnless(authenticate(privateStore.get(channelCapabilityPath(packet.sourcePort, packet.sourceChannel))))
+    abortTransactionUnless(authenticateCapability(channelCapabilityPath(packet.sourcePort, packet.sourceChannel), capability))
+    abortTransactionUnless(packet.destPort === channel.counterpartyPortIdentifier)
     abortTransactionUnless(packet.destChannel === channel.counterpartyChannelIdentifier)
 
     connection = provableStore.get(connectionPath(channel.connectionHops[0]))
     abortTransactionUnless(connection !== null)
     abortTransactionUnless(connection.state === OPEN)
-    abortTransactionUnless(packet.destPort === channel.counterpartyPortIdentifier)
 
     // verify we sent the packet and haven't cleared it out yet
     abortTransactionUnless(provableStore.get(packetCommitmentPath(packet.sourcePort, packet.sourceChannel, packet.sequence))
-           === hash(packet.data, packet.timeout))
+           === hash(packet.data, packet.timeoutHeight, packet.timeoutTimestamp))
 
     // abort transaction unless correct acknowledgement on counterparty chain
     abortTransactionUnless(connection.verifyPacketAcknowledgement(
@@ -634,6 +643,14 @@ function acknowledgePacket(
       packet.sequence,
       acknowledgement
     ))
+
+    // abort transaction unless acknowledgement is processed in order
+    if (channel.order === ORDERED) {
+      nextSequenceAck = provableStore.get(nextSequenceAckPath(packet.sourcePort, packet.sourceChannel))
+      abortTransactionUnless(packet.sequence === nextSequenceAck)
+      nextSequenceAck = nextSequenceAck + 1
+      provableStore.set(nextSequenceAckPath(packet.sourcePort, packet.sourceChannel), nextSequenceAck)
+    }
 
     // all assertions passed, we can alter state
 
@@ -653,7 +670,7 @@ function acknowledgePacket(
 
 ##### 发送端
 
-`timeoutPacket`函数由最初尝试将数据包发送到对方链的模块调用， 如果在没有提交数据包的情况下对方链达到超时区块高度，证明该数据包无法再执行，并允许调用模块安全的执行适当的状态转换。
+`timeoutPacket`函数由最初尝试将数据包发送到对方链的模块在没有提交数据包的情况下对方链达到超时区块高度或超过超时时间戳的情况下调用，以证明该数据包无法再执行，并允许调用模块安全的执行适当的状态转换。
 
 在调用`timeoutPacket`的同时，调用模块可以原子性的执行适当的应用超时处理逻辑。
 
@@ -674,25 +691,26 @@ function timeoutPacket(
     abortTransactionUnless(channel !== null)
     abortTransactionUnless(channel.state === OPEN)
 
-    abortTransactionUnless(authenticate(privateStore.get(channelCapabilityPath(packet.sourcePort, packet.sourceChannel))))
+    abortTransactionUnless(authenticateCapability(channelCapabilityPath(packet.sourcePort, packet.sourceChannel), capability))
     abortTransactionUnless(packet.destChannel === channel.counterpartyChannelIdentifier)
 
     connection = provableStore.get(connectionPath(channel.connectionHops[0]))
-    // 注意：连接可能已经关闭了
+    // note: the connection may have been closed
     abortTransactionUnless(packet.destPort === channel.counterpartyPortIdentifier)
 
-    // 检查对端已经超过了超时高度
-    abortTransactionUnless(proofHeight >= packet.timeoutHeight)
+    // check that timeout height or timeout timestamp has passed on the other end
+    abortTransactionUnless(
+      (packet.timeoutHeight > 0 && proofHeight >= packet.timeoutHeight) ||
+      (packet.timeoutTimestamp > 0 && connection.getTimestampAtHeight(proofHeight) > packet.timeoutTimestamp))
 
-    // 检查数据包还没被收到
-    abortTransactionUnless(nextSequenceRecv < packet.sequence)
-
-    // 验证确实发送了数据包，检查存储
+    // verify we actually sent this packet, check the store
     abortTransactionUnless(provableStore.get(packetCommitmentPath(packet.sourcePort, packet.sourceChannel, packet.sequence))
-           === hash(packet.data, packet.timeout))
+           === hash(packet.data, packet.timeoutHeight, packet.timeoutTimestamp))
 
-    if channel.order === ORDERED
-      // 有序通道：检查接收序号和声称的一样
+    if channel.order === ORDERED {
+      // ordered channel: check that packet has not been received
+      abortTransactionUnless(nextSequenceRecv <= packet.sequence)
+      // ordered channel: check that the recv sequence is as claimed
       abortTransactionUnless(connection.verifyNextSequenceRecv(
         proofHeight,
         proof,
@@ -700,35 +718,35 @@ function timeoutPacket(
         packet.destChannel,
         nextSequenceRecv
       ))
-    else
-      // 无序通道：验证数据包索引的确认信息是缺失的
+    } else
+      // unordered channel: verify absence of acknowledgement at packet index
       abortTransactionUnless(connection.verifyPacketAcknowledgementAbsence(
         proofHeight,
         proof,
-        packet.sourcePort,
-        packet.sourceChannel,
+        packet.destPort,
+        packet.destChannel,
         packet.sequence
       ))
 
-    // 所有断言通过，我们可以改变状态
+    // all assertions passed, we can alter state
 
-    // 删除我们的加密承诺
+    // delete our commitment
     provableStore.delete(packetCommitmentPath(packet.sourcePort, packet.sourceChannel, packet.sequence))
 
     if channel.order === ORDERED {
-      // 有序通道：关闭通道
+      // ordered channel: close the channel
       channel.state = CLOSED
       provableStore.set(channelPath(packet.sourcePort, packet.sourceChannel), channel)
     }
 
-    // 返回透明数据包
+    // return transparent packet
     return packet
 }
 ```
 
 ##### 关闭时超时
 
-该模块调用`timeoutOnClose`函数以证明未被收到的数据包的地址的通道已经关闭，因此永远不会收到该数据包（即使尚未达到`timeoutHeight` ）。
+模块调用`timeoutOnClose`函数，以证明一个未接收到数据包所寻址的通道已关闭，因此将永远不会接收到该数据包（即使尚未达到`timeoutHeight`或`timeoutTimestamp` ）。
 
 ```typescript
 function timeoutOnClose(
@@ -739,19 +757,19 @@ function timeoutOnClose(
   nextSequenceRecv: Maybe<uint64>): Packet {
 
     channel = provableStore.get(channelPath(packet.sourcePort, packet.sourceChannel))
-    // 注意：通道可能已经关闭了
-    abortTransactionUnless(authenticate(privateStore.get(channelCapabilityPath(packet.sourcePort, packet.sourceChannel))))
+    // note: the channel may have been closed
+    abortTransactionUnless(authenticateCapability(channelCapabilityPath(packet.sourcePort, packet.sourceChannel), capability))
     abortTransactionUnless(packet.destChannel === channel.counterpartyChannelIdentifier)
 
     connection = provableStore.get(connectionPath(channel.connectionHops[0]))
-    // 注意：连接可能已经关闭了
+    // note: the connection may have been closed
     abortTransactionUnless(packet.destPort === channel.counterpartyPortIdentifier)
 
-    // 验证我们确实发送了数据包，检查存储
+    // verify we actually sent this packet, check the store
     abortTransactionUnless(provableStore.get(packetCommitmentPath(packet.sourcePort, packet.sourceChannel, packet.sequence))
-           === hash(packet.data, packet.timeout))
+           === hash(packet.data, packet.timeoutHeight, packet.timeoutTimestamp))
 
-    // 检查对方通道端已经关闭
+    // check that the opposing channel end has closed
     expected = ChannelEnd{CLOSED, channel.order, channel.portIdentifier,
                           channel.channelIdentifier, channel.connectionHops.reverse(), channel.version}
     abortTransactionUnless(connection.verifyChannelState(
@@ -762,8 +780,8 @@ function timeoutOnClose(
       expected
     ))
 
-    if channel.order === ORDERED
-      // 有序通道：检查接受序号和声称的一致
+    if channel.order === ORDERED {
+      // ordered channel: check that the recv sequence is as claimed
       abortTransactionUnless(connection.verifyNextSequenceRecv(
         proofHeight,
         proof,
@@ -771,22 +789,24 @@ function timeoutOnClose(
         packet.destChannel,
         nextSequenceRecv
       ))
-    else
-      // 无序通道：验证数据包索引的确认信息是缺失的
+      // ordered channel: check that packet has not been received
+      abortTransactionUnless(nextSequenceRecv <= packet.sequence)
+    } else
+      // unordered channel: verify absence of acknowledgement at packet index
       abortTransactionUnless(connection.verifyPacketAcknowledgementAbsence(
         proofHeight,
         proof,
-        packet.sourcePort,
-        packet.sourceChannel,
+        packet.destPort,
+        packet.destChannel,
         packet.sequence
       ))
 
-    // 通过了所有断言，我们可以修改状态
+    // all assertions passed, we can alter state
 
-    // 删除我们的加密承诺
+    // delete our commitment
     provableStore.delete(packetCommitmentPath(packet.sourcePort, packet.sourceChannel, packet.sequence))
 
-    // 返回透明数据包
+    // return transparent packet
     return packet
 }
 ```
@@ -809,22 +829,23 @@ function cleanupPacket(
     channel = provableStore.get(channelPath(packet.sourcePort, packet.sourceChannel))
     abortTransactionUnless(channel !== null)
     abortTransactionUnless(channel.state === OPEN)
-    abortTransactionUnless(authenticate(privateStore.get(channelCapabilityPath(packet.sourcePort, packet.sourceChannel))))
+    abortTransactionUnless(authenticateCapability(channelCapabilityPath(packet.sourcePort, packet.sourceChannel), capability))
     abortTransactionUnless(packet.destChannel === channel.counterpartyChannelIdentifier)
 
     connection = provableStore.get(connectionPath(channel.connectionHops[0]))
-    // 注意：连接可能已经关闭
+    abortTransactionUnless(connection !== null)
+    // note: the connection may have been closed
     abortTransactionUnless(packet.destPort === channel.counterpartyPortIdentifier)
 
-    // 终止交易除非对端已经收到数据包
+    // abortTransactionUnless packet has been received on the other end
     abortTransactionUnless(nextSequenceRecv > packet.sequence)
 
-    // 验证我们确实发送了数据包，检查存储
+    // verify we actually sent the packet, check the store
     abortTransactionUnless(provableStore.get(packetCommitmentPath(packet.sourcePort, packet.sourceChannel, packet.sequence))
-               === hash(packet.data, packet.timeout))
+               === hash(packet.data, packet.timeoutHeight, packet.timeoutTimestamp))
 
     if channel.order === ORDERED
-      // 检查接收序号和声称的一致
+      // check that the recv sequence is as claimed
       abortTransactionUnless(connection.verifyNextSequenceRecv(
         proofHeight,
         proof,
@@ -833,7 +854,7 @@ function cleanupPacket(
         nextSequenceRecvOrAcknowledgement
       ))
     else
-      // 终止交易除非对端有确认信息
+      // abort transaction unless acknowledgement on the other end
       abortTransactionUnless(connection.verifyPacketAcknowledgement(
         proofHeight,
         proof,
@@ -843,12 +864,12 @@ function cleanupPacket(
         nextSequenceRecvOrAcknowledgement
       ))
 
-    // 通过了所有断言，我们可以改变状态
+    // all assertions passed, we can alter state
 
-    // 清理存储
+    // clear the store
     provableStore.delete(packetCommitmentPath(packet.sourcePort, packet.sourceChannel, packet.sequence))
 
-    // 返回透明数据包
+    // return transparent packet
     return packet
 }
 ```

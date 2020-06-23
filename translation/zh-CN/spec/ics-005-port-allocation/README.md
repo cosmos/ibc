@@ -63,9 +63,43 @@ IBC | TCP | 很多，请参阅描述 IBC 的体系结构文档
 type CapabilityKey object
 ```
 
+`newCapability`必须使用一个名称生成唯一的能力键，这样该名称将本地映射到能力键，并且以后可以与`getCapability`一起使用。
+
 ```typescript
-function newCapabilityPath(): CapabilityKey {
-  // provided by host state machine, e.g. pointer address in Cosmos SDK
+function newCapability(name: string): CapabilityKey {
+  // provided by host state machine, e.g. ADR 3 / ScopedCapabilityKeeper in Cosmos SDK
+}
+```
+
+`authenticateCapability`必须接受一个名称和能力键，并检查名称是否在本地映射到所提供的能力。该名称可以是不受信任的用户输入。
+
+```typescript
+function authenticateCapability(name: string, capability: CapabilityKey): bool {
+  // provided by host state machine, e.g. ADR 3 / ScopedCapabilityKeeper in Cosmos SDK
+}
+```
+
+`claimCapability`必须接受一个名称和能力键（由另一个模块提供），并将其本地映射到能力，“声明”该能力以备将来使用。
+
+```typescript
+function claimCapability(name: string, capability: CapabilityKey) {
+  // provided by host state machine, e.g. ADR 3 / ScopedCapabilityKeeper in Cosmos SDK
+}
+```
+
+`getCapability`必须允许模块查找其先前创建的能力或按名称声明的能力。
+
+```typescript
+function getCapability(name: string): CapabilityKey {
+  // provided by host state machine, e.g. ADR 3 / ScopedCapabilityKeeper in Cosmos SDK
+}
+```
+
+`releaseCapability`必须允许模块释放其拥有的能力。
+
+```typescript
+function releaseCapability(capability: CapabilityKey) {
+  // provided by host state machine, e.g. ADR 3 / ScopedCapabilityKeeper in Cosmos SDK
 }
 ```
 
@@ -81,33 +115,36 @@ function callingModuleIdentifier(): SourceIdentifier {
 }
 ```
 
-`generate`和`authenticate`函数的定义如下。
-
-在前一种情况下， `generate`返回一个新的对象能力键，该键必须由外层函数返回，并且`authenticate`需要外层函数接受一个额外的参数`capability` ，这是由主机状态机规定的唯一性的对象能力键。外层函数是 IBC 处理程序（ [ICS 25](../ics-025-handler-interface) ）或路由模块（ [ICS 26](../ics-026-routing-module) ）公开给模块的任何函数。
+然后按以下方式实现`newCapability` ， `authenticateCapability` ， `claimCapability` ， `getCapability`和`releaseCapability` ：
 
 ```
-function generate(): CapabilityKey {
-    return newCapabilityPath()
+function newCapability(name: string): CapabilityKey {
+  return callingModuleIdentifier()
 }
 ```
 
 ```
-function authenticate(key: CapabilityKey): boolean {
-    return capability === key
+function authenticateCapability(name: string, capability: CapabilityKey) {
+  return callingModuleIdentifier() === name
 }
 ```
 
-在后一种情况下， `generate`返回调用模块的标识符，`authenticate`仅对其进行检查。
-
-```typescript
-function generate(): SourceIdentifier {
-    return callingModuleIdentifier()
+```
+function claimCapability(name: string, capability: CapabilityKey) {
+  // no-op
 }
 ```
 
-```typescript
-function authenticate(id: SourceIdentifier): boolean {
-    return callingModuleIdentifier() === id
+```
+function getCapability(name: string): CapabilityKey {
+  // not actually used
+  return nil
+}
+```
+
+```
+function releaseCapability(capability: CapabilityKey) {
+  // no-op
 }
 ```
 
@@ -140,28 +177,17 @@ IBC 处理程序必须实现`bindPort` 。 `bindPort`绑定到未分配的端口
 如果主机状态机未实现特殊的模块管理器来控制端口分配，则`bindPort`应该对所有模块都可用。否则`bindPort`应该只能由模块管理器调用。
 
 ```typescript
-function bindPort(id: Identifier) {
+function bindPort(id: Identifier): CapabilityKey {
     abortTransactionUnless(validatePortIdentifier(id))
-    abortTransactionUnless(privateStore.get(portPath(id)) === null)
-    key = generate()
-    privateStore.set(portPath(id), key)
-    return key
+    abortTransactionUnless(getCapability(portPath(id)) === null)
+    capability = newCapability(portPath(id))
+    return capability
 }
 ```
 
 #### 转让端口所有权
 
-如果主机状态机支持对象能力，则不需要附加协议，因为端口引用一种承载式能力。否则 IBC 处理程序可以实现以下`transferPort`函数。
-
-`transferPort`应该对所有模块都可用。
-
-```typescript
-function transferPort(id: Identifier) {
-    abortTransactionUnless(authenticate(privateStore.get(portPath(id))))
-    key = generate()
-    privateStore.set(portPath(id), key)
-}
-```
+如果主机状态机支持对象能力，则不需要增加此协议，因为端口的引用承载了能力。
 
 #### 释放端口
 
@@ -172,9 +198,9 @@ IBC 处理程序必须实现`releasePort`函数，该函数允许模块释放端
 > 警告：释放端口将允许其他模块绑定到该端口，并可能拦截传入的通道创建握手请求。仅在安全的情况下，模块才应释放端口。
 
 ```typescript
-function releasePort(id: Identifier) {
-    abortTransactionUnless(authenticate(privateStore.get(portPath(id))))
-    privateStore.delete(portPath(id))
+function releasePort(capability: CapabilityKey) {
+    abortTransactionUnless(authenticateCapability(portPath(id), capability))
+    releaseCapability(capability)
 }
 ```
 
