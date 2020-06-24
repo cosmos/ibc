@@ -17,7 +17,7 @@ modified: 2019-08-25
 
 ### 动机
 
-核心 IBC 协议对数据包提供了*身份认证*和*排序*语义：确保对各自来说，数据包在发送链上被提交（根据状态转换的执行，例如通证托管），并且数据包被有且仅有一次的按特定的顺序提交和有且仅有一次的被传递到接收链。本标准中的*连接*抽象与 *ICS 2* 中定义的[客户端](../ics-002-client-semantics)抽象一同定义了 IBC 的*身份认证*语义。排序语义在 [ICS 4](../ics-004-channel-and-packet-semantics) 中进行了描述。
+核心 IBC 协议对数据包提供了*身份认证*和*排序*语义：确保对各自来说，数据包在发送链上被提交（根据状态转换的执行，例如通证托管），并且数据包被有且仅有一次的按特定的顺序提交和有且仅有一次的被传递到接收链。本标准中的*连接*抽象与 [ICS 2](../ics-002-client-semantics) 中定义的*客户端*抽象一同定义了 IBC 的*身份认证*语义。排序语义在 [ICS 4](../ics-004-channel-and-packet-semantics) 中进行了描述。
 
 ### 定义
 
@@ -87,9 +87,10 @@ interface ConnectionEnd {
 
 - `state`字段描述连接端的当前状态。
 - `counterpartyConnectionIdentifier`字段标识与此连接关联的对方链上的连接端。
+- `counterpartyPrefix`字段包含用于与此连接关联的对方链上的状态验证的前缀。链应该公开一个端点，以允许中继器查询连接前缀。如果没有指定，默认`counterpartyPrefix`的`"ibc"`应该被使用。
 - `clientIdentifier`字段标识与此连接关联的客户端。
 - `counterpartyClientIdentifier`字段标识与此连接关联的对方链上的客户端。
-- `version`字段是不透明的字符串，可用于确定使用此连接的通道或数据包的编码或协议。
+- `version`字段是不透明的字符串，可用于确定使用此连接的通道或数据包的编码或协议。如果未指定，则应使用默认`version` `""` 。
 
 ### 储存路径
 
@@ -170,16 +171,16 @@ function verifyChannelState(
     return client.verifyChannelState(connection, height, connection.counterpartyPrefix, proof, portIdentifier, channelIdentifier, channelEnd)
 }
 
-function verifyPacketCommitment(
+function verifyPacketData(
   connection: ConnectionEnd,
   height: uint64,
   proof: CommitmentProof,
   portIdentifier: Identifier,
   channelIdentifier: Identifier,
   sequence: uint64,
-  commitment: bytes) {
+  data: bytes) {
     client = queryClient(connection.clientIdentifier)
-    return client.verifyPacketCommitment(connection, height, connection.counterpartyPrefix, proof, portIdentifier, channelIdentifier, commitment)
+    return client.verifyPacketData(connection, height, connection.counterpartyPrefix, proof, portIdentifier, channelIdentifier, data)
 }
 
 function verifyPacketAcknowledgement(
@@ -215,6 +216,13 @@ function verifyNextSequenceRecv(
     client = queryClient(connection.clientIdentifier)
     return client.verifyNextSequenceRecv(connection, height, connection.counterpartyPrefix, proof, portIdentifier, channelIdentifier, nextSequenceRecv)
 }
+
+function getTimestampAtHeight(
+  connection: ConnectionEnd,
+  height: uint64) {
+    client = queryClient(connection.clientIdentifier)
+    return client.queryConsensusState(height).getTimestamp()
+}
 ```
 
 ### 子协议
@@ -223,7 +231,7 @@ function verifyNextSequenceRecv(
 
 区块头追踪和不良行为检测在 [ICS 2](../ics-002-client-semantics) 中被定义。
 
-![State Machine Diagram](../../../../spec/ics-003-connection-semantics/state.png)
+![State Machine Diagram](state.png)
 
 #### 标识符验证
 
@@ -314,7 +322,7 @@ function connOpenTry(
     expected = ConnectionEnd{INIT, desiredIdentifier, getCommitmentPrefix(), counterpartyClientIdentifier,
                              clientIdentifier, counterpartyVersions}
     version = pickVersion(counterpartyVersions)
-    connection = ConnectionEnd{state, counterpartyConnectionIdentifier, counterpartyPrefix,
+    connection = ConnectionEnd{TRYOPEN, counterpartyConnectionIdentifier, counterpartyPrefix,
                                clientIdentifier, counterpartyClientIdentifier, version}
     abortTransactionUnless(connection.verifyConnectionState(proofHeight, proofInit, counterpartyConnectionIdentifier, expected))
     abortTransactionUnless(connection.verifyClientConsensusState(
@@ -329,7 +337,6 @@ function connOpenTry(
         previous.counterpartyClientIdentifier === counterpartyClientIdentifier &&
         previous.version === version))
     identifier = desiredIdentifier
-    state = TRYOPEN
     provableStore.set(connectionPath(identifier), connection)
     addConnectionToClient(clientIdentifier, identifier)
 }

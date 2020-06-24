@@ -23,7 +23,7 @@ modified: 2019-08-25
 
 IBC 处理程序接口提供的所有函数均在 [ICS 25](../ics-025-handler-interface) 中定义。
 
-`generate`和`authenticate`的函数在 [ICS 5](../ics-005-port-allocation) 中定义。
+函数 `newCapability` 和 `authenticateCapability` 在 [ICS 5](../ics-005-port-allocation) 中定义。
 
 ### 所需属性
 
@@ -155,12 +155,12 @@ IBC 路由模块位于处理程序模块（ [ICS 25](../ics-025-handler-interfac
 ```typescript
 function bindPort(
   id: Identifier,
-  callbacks: Callbacks) {
+  callbacks: Callbacks): CapabilityKey {
     abortTransactionUnless(privateStore.get(callbackPath(id)) === null)
-    handler.bindPort(id)
-    capability = generate()
-    privateStore.set(authenticationPath(id), capability)
     privateStore.set(callbackPath(id), callbacks)
+    capability = handler.bindPort(id)
+    claimCapability(authenticationPath(id), capability)
+    return capability
 }
 ```
 
@@ -169,8 +169,9 @@ function bindPort(
 ```typescript
 function updatePort(
   id: Identifier,
+  capability: CapabilityKey,
   newCallbacks: Callbacks) {
-    abortTransactionUnless(authenticate(privateStore.get(authenticationPath(id))))
+    abortTransactionUnless(authenticateCapability(authenticationPath(id), capability))
     privateStore.set(callbackPath(id), newCallbacks)
 }
 ```
@@ -180,8 +181,10 @@ function updatePort(
 > 警告：释放端口将允许其他模块绑定到该端口，并可能拦截传入的通道创建握手请求。只有在安全的情况下，模块才应释放端口。
 
 ```typescript
-function releasePort(id: Identifier) {
-    abortTransactionUnless(authenticate(privateStore.get(authenticationPath(id))))
+function releasePort(
+  id: Identifier,
+  capability: CapabilityKey) {
+    abortTransactionUnless(authenticateCapability(authenticationPath(id), capability))
     handler.releasePort(id)
     privateStore.delete(callbackPath(id))
     privateStore.delete(authenticationPath(id))
