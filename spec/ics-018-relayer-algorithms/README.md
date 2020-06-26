@@ -129,7 +129,8 @@ function pendingDatagrams(chain: Chain, counterparty: Chain): List<Set<Datagram>
   connections = chain.getConnectionsUsingClient(counterparty)
   for (const localEnd of connections) {
     remoteEnd = counterparty.getConnection(localEnd.counterpartyIdentifier)
-    if (localEnd.state === INIT && remoteEnd === null)
+    if (localEnd.state === INIT &&
+          (remoteEnd === null || remoteEnd.state === INIT))
       // Handshake has started locally (1 step done), relay `connOpenTry` to the remote end
       counterpartyDatagrams.push(ConnOpenTry{
         desiredIdentifier: localEnd.counterpartyConnectionIdentifier,
@@ -170,7 +171,8 @@ function pendingDatagrams(chain: Chain, counterparty: Chain): List<Set<Datagram>
   for (const localEnd of channels) {
     remoteEnd = counterparty.getConnection(localEnd.counterpartyIdentifier)
     // Deal with handshakes in progress
-    if (localEnd.state === INIT && remoteEnd === null)
+    if (localEnd.state === INIT &&
+          (remoteEnd === null || remoteEnd.state === INIT))
       // Handshake has started locally (1 step done), relay `chanOpenTry` to the remote end
       counterpartyDatagrams.push(ChanOpenTry{
         order: localEnd.order,
