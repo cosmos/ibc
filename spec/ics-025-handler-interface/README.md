@@ -56,9 +56,9 @@ The default IBC routing module SHALL allow external calls to `chanOpenTry`, `cha
 
 Packets are permissioned by channel (only a port which owns a channel can send or receive on it).
 
-The handler interface exposes `sendPacket`, `recvPacket`, `acknowledgePacket`, `timeoutPacket`, `timeoutOnClose`, and `cleanupPacket` as defined in [ICS 4](../ics-004-channel-and-packet-semantics).
+The handler interface exposes `sendPacket`, `recvPacket`, `acknowledgePacket`, `timeoutPacket`, and `timeoutOnClose` as defined in [ICS 4](../ics-004-channel-and-packet-semantics).
 
-The default IBC routing module SHALL allow external calls to `sendPacket`, `recvPacket`, `acknowledgePacket`, `timeoutPacket`, `timeoutOnClose`, and `cleanupPacket`.
+The default IBC routing module SHALL allow external calls to `sendPacket`, `recvPacket`, `acknowledgePacket`, `timeoutPacket`, and `timeoutOnClose`.
 
 ### Properties & Invariants
 

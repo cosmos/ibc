@@ -599,11 +599,11 @@ function recvPacket(
 
     // all assertions passed (except sequence check), we can alter state
 
-    if (acknowledgement.length > 0 || channel.order === UNORDERED)
-      provableStore.set(
-        packetAcknowledgementPath(packet.destPort, packet.destChannel, packet.sequence),
-        hash(acknowledgement)
-      )
+    // always set the acknowledgement so that it can be verified on the other side
+    provableStore.set(
+      packetAcknowledgementPath(packet.destPort, packet.destChannel, packet.sequence),
+      hash(acknowledgement)
+    )
 
     if (channel.order === ORDERED) {
       nextSequenceRecv = provableStore.get(nextSequenceRecvPath(packet.destPort, packet.destChannel))
@@ -837,66 +837,7 @@ function timeoutOnClose(
 
 ##### Cleaning up state
 
-`cleanupPacket` is called by a module to remove a received packet commitment from storage. The receiving end must have already processed the packet (whether regularly or past timeout).
-
-In the ordered channel case, `cleanupPacket` cleans-up a packet on an ordered channel by proving that the packet has been received on the other end.
-
-In the unordered channel case, `cleanupPacket` cleans-up a packet on an unordered channel by proving that the associated acknowledgement has been written.
-
-```typescript
-function cleanupPacket(
-  packet: OpaquePacket,
-  proof: CommitmentProof,
-  proofHeight: uint64,
-  nextSequenceRecvOrAcknowledgement: Either<uint64, bytes>): Packet {
-
-    channel = provableStore.get(channelPath(packet.sourcePort, packet.sourceChannel))
-    abortTransactionUnless(channel !== null)
-    abortTransactionUnless(channel.state === OPEN)
-    abortTransactionUnless(authenticateCapability(channelCapabilityPath(packet.sourcePort, packet.sourceChannel), capability))
-    abortTransactionUnless(packet.destChannel === channel.counterpartyChannelIdentifier)
-
-    connection = provableStore.get(connectionPath(channel.connectionHops[0]))
-    abortTransactionUnless(connection !== null)
-    // note: the connection may have been closed
-    abortTransactionUnless(packet.destPort === channel.counterpartyPortIdentifier)
-
-    // abortTransactionUnless packet has been received on the other end
-    abortTransactionUnless(nextSequenceRecv > packet.sequence)
-
-    // verify we actually sent the packet, check the store
-    abortTransactionUnless(provableStore.get(packetCommitmentPath(packet.sourcePort, packet.sourceChannel, packet.sequence))
-               === hash(packet.data, packet.timeoutHeight, packet.timeoutTimestamp))
-
-    if channel.order === ORDERED
-      // check that the recv sequence is as claimed
-      abortTransactionUnless(connection.verifyNextSequenceRecv(
-        proofHeight,
-        proof,
-        packet.destPort,
-        packet.destChannel,
-        nextSequenceRecvOrAcknowledgement
-      ))
-    else
-      // abort transaction unless acknowledgement on the other end
-      abortTransactionUnless(connection.verifyPacketAcknowledgement(
-        proofHeight,
-        proof,
-        packet.destPort,
-        packet.destChannel,
-        packet.sequence,
-        nextSequenceRecvOrAcknowledgement
-      ))
-
-    // all assertions passed, we can alter state
-
-    // clear the store
-    provableStore.delete(packetCommitmentPath(packet.sourcePort, packet.sourceChannel, packet.sequence))
-
-    // return transparent packet
-    return packet
-}
-```
+Packets must be acknowledged in order to be cleaned-up.
 
 #### Reasoning about race conditions
 
