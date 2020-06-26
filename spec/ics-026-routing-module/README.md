@@ -650,17 +650,6 @@ interface PacketCleanup {
 }
 ```
 
-```typescript
-function handlePacketCleanup(datagram: PacketCleanup) {
-    handler.cleanupPacket(
-      datagram.packet,
-      datagram.proof,
-      datagram.proofHeight,
-      datagram.nextSequenceRecvOrAcknowledgement
-    )
-}
-```
-
 ### Query (read-only) functions
 
 All query functions for clients, connections, and channels should be exposed (read-only) directly by the IBC handler module.
