@@ -85,6 +85,17 @@ interface Evidence {
 }
 ```
 
+### Signatures
+
+Signatures are provided in the `Proof` field of client state verification functions. They include data & a timestamp, which must also be signed over.
+
+```typescript
+interface Signature {
+  sig: []byte
+  timestamp: uint64
+}
+```
+
 ### Client initialisation
 
 The solo machine client `initialise` function starts an unfrozen client with the initial consensus state.
@@ -143,6 +154,8 @@ function checkMisbehaviourAndUpdateState(
 
 All solo machine client state verification functions simply check a signature, which must be provided by the solo machine.
 
+Note that value concatenation should be implemented in a state-machine-specific escaped fashion.
+
 ```typescript
 function verifyClientConsensusState(
   clientState: ClientState,
@@ -154,9 +167,11 @@ function verifyClientConsensusState(
   consensusState: ConsensusState) {
     path = applyPrefix(prefix, "clients/{clientIdentifier}/consensusState/{consensusStateHeight}")
     abortTransactionUnless(!clientState.frozen)
-    value = clientState.consensusState.sequence + path + consensusState
-    assert(checkSignature(clientState.consensusState.pubKey, value, proof))
+    abortTransactionUnless(proof.timestamp >= clientState.consensusState.timestamp)
+    value = clientState.consensusState.sequence + proof.timestamp + path + consensusState
+    assert(checkSignature(clientState.consensusState.pubKey, value, proof.sig))
     clientState.consensusState.sequence++
+    clientState.consensusState.timestamp = proof.timestamp
 }
 
 function verifyConnectionState(
@@ -168,9 +183,11 @@ function verifyConnectionState(
   connectionEnd: ConnectionEnd) {
     path = applyPrefix(prefix, "connection/{connectionIdentifier}")
     abortTransactionUnless(!clientState.frozen)
-    value = clientState.consensusState.sequence + path + connectionEnd
-    assert(checkSignature(clientState.consensusState.pubKey, value, proof))
+    abortTransactionUnless(proof.timestamp >= clientState.consensusState.timestamp)
+    value = clientState.consensusState.sequence + proof.timestamp + path + connectionEnd
+    assert(checkSignature(clientState.consensusState.pubKey, value, proof.sig))
     clientState.consensusState.sequence++
+    clientState.consensusState.timestamp = proof.timestamp
 }
 
 function verifyChannelState(
@@ -183,9 +200,11 @@ function verifyChannelState(
   channelEnd: ChannelEnd) {
     path = applyPrefix(prefix, "ports/{portIdentifier}/channels/{channelIdentifier}")
     abortTransactionUnless(!clientState.frozen)
-    value = clientState.consensusState.sequence + path + channelEnd
-    assert(checkSignature(clientState.consensusState.pubKey, value, proof))
+    abortTransactionUnless(proof.timestamp >= clientState.consensusState.timestamp)
+    value = clientState.consensusState.sequence + proof.timestamp + path + channelEnd
+    assert(checkSignature(clientState.consensusState.pubKey, value, proof.sig))
     clientState.consensusState.sequence++
+    clientState.consensusState.timestamp = proof.timestamp
 }
 
 function verifyPacketData(
@@ -199,9 +218,11 @@ function verifyPacketData(
   data: bytes) {
     path = applyPrefix(prefix, "ports/{portIdentifier}/channels/{channelIdentifier}/packets/{sequence}")
     abortTransactionUnless(!clientState.frozen)
-    value = clientState.consensusState.sequence + path + data
-    assert(checkSignature(clientState.consensusState.pubKey, value, proof))
+    abortTransactionUnless(proof.timestamp >= clientState.consensusState.timestamp)
+    value = clientState.consensusState.sequence + proof.timestamp + path + data
+    assert(checkSignature(clientState.consensusState.pubKey, value, proof.sig))
     clientState.consensusState.sequence++
+    clientState.consensusState.timestamp = proof.timestamp
 }
 
 function verifyPacketAcknowledgement(
@@ -215,9 +236,11 @@ function verifyPacketAcknowledgement(
   acknowledgement: bytes) {
     path = applyPrefix(prefix, "ports/{portIdentifier}/channels/{channelIdentifier}/acknowledgements/{sequence}")
     abortTransactionUnless(!clientState.frozen)
-    value = clientState.consensusState.sequence + path + acknowledgement
-    assert(checkSignature(clientState.consensusState.pubKey, value, proof))
+    abortTransactionUnless(proof.timestamp >= clientState.consensusState.timestamp)
+    value = clientState.consensusState.sequence + proof.timestamp + path + acknowledgement
+    assert(checkSignature(clientState.consensusState.pubKey, value, proof.sig))
     clientState.consensusState.sequence++
+    clientState.consensusState.timestamp = proof.timestamp
 }
 
 function verifyPacketAcknowledgementAbsence(
@@ -230,9 +253,11 @@ function verifyPacketAcknowledgementAbsence(
   sequence: uint64) {
     path = applyPrefix(prefix, "ports/{portIdentifier}/channels/{channelIdentifier}/acknowledgements/{sequence}")
     abortTransactionUnless(!clientState.frozen)
-    value = clientState.consensusState.sequence + path
-    assert(checkSignature(clientState.consensusState.pubKey, value, proof))
+    abortTransactionUnless(proof.timestamp >= clientState.consensusState.timestamp)
+    value = clientState.consensusState.sequence + proof.timestamp + path
+    assert(checkSignature(clientState.consensusState.pubKey, value, proof.sig))
     clientState.consensusState.sequence++
+    clientState.consensusState.timestamp = proof.timestamp
 }
 
 function verifyNextSequenceRecv(
@@ -245,9 +270,11 @@ function verifyNextSequenceRecv(
   nextSequenceRecv: uint64) {
     path = applyPrefix(prefix, "ports/{portIdentifier}/channels/{channelIdentifier}/nextSequenceRecv")
     abortTransactionUnless(!clientState.frozen)
-    value = clientState.consensusState.sequence + path + nextSequenceRecv
-    assert(checkSignature(clientState.consensusState.pubKey, value, proof))
+    abortTransactionUnless(proof.timestamp >= clientState.consensusState.timestamp)
+    value = clientState.consensusState.sequence + proof.timestamp + path + nextSequenceRecv
+    assert(checkSignature(clientState.consensusState.pubKey, value, proof.sig))
     clientState.consensusState.sequence++
+    clientState.consensusState.timestamp = proof.timestamp
 }
 ```
 
