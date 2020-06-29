@@ -53,6 +53,7 @@ The `ConsensusState` of a solo machine consists of the current public key & sequ
 interface ConsensusState {
   sequence: uint64
   publicKey: PublicKey
+  timestamp: uint64
 }
 ```
 
