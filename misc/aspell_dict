@@ -1,4 +1,4 @@
-personal_ws-1.1 en 609 
+personal_ws-1.1 en 608 
 ABCI
 ABI
 ADR
@@ -500,7 +500,6 @@ releaseCapability
 releasePort
 remoteEnd
 removeChannelFromConnection
-removeConnectionFromClient
 renderer
 repudiability
 repudiable

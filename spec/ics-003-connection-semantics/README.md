@@ -127,18 +127,6 @@ function addConnectionToClient(
 }
 ```
 
-`removeConnectionFromClient` is used to remove a connection identifier from the set of connections associated with a client.
-
-```typescript
-function removeConnectionFromClient(
-  clientIdentifier: Identifier,
-  connectionIdentifier: Identifier) {
-    conns = privateStore.get(clientConnectionsPath(clientIdentifier))
-    conns.remove(connectionIdentifier)
-    privateStore.set(clientConnectionsPath(clientIdentifier), conns)
-}
-```
-
 Helper functions are defined by the connection to pass the `CommitmentPrefix` associated with the connection to the verification function
 provided by the client. In the other parts of the specifications, these functions MUST be used for introspecting other chains' state,
 instead of directly calling the verification functions on the client.
