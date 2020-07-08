@@ -256,6 +256,27 @@ Once misbehaviour is detected, clients SHOULD be frozen so that no future update
 A permissioned entity such as a chain governance system or trusted multi-signature MAY be allowed
 to intervene to unfreeze a frozen client & provide a new correct header.
 
+#### Height
+
+`Height` is an opaque data structure defined by a client type.
+It must form a partially ordered set & provide operations for comparison.
+
+```typescript
+type Height
+```
+
+```typescript
+enum Ord {
+  LT
+  EQ
+  GT
+}
+
+type compare = (height: Height) => Ord
+```
+
+A height is either `LT` (less than), `EQ` (equal to), or `GT` (greater than) another height.
+
 #### ClientState
 
 `ClientState` is an opaque data structure defined by a client type.
@@ -279,7 +300,7 @@ Client types MUST define a method to fetch the current height (height of the mos
 ```typescript
 type latestClientHeight = (
   clientState: ClientState)
-  => uint64
+  => Height
 ```
 
 #### CommitmentProof
@@ -300,10 +321,10 @@ Internal implementation details may differ (for example, a loopback client could
 ```typescript
 type verifyClientConsensusState = (
   clientState: ClientState,
-  height: uint64,
+  height: Height,
   proof: CommitmentProof,
   clientIdentifier: Identifier,
-  consensusStateHeight: uint64,
+  consensusStateHeight: Height,
   consensusState: ConsensusState)
   => boolean
 ```
@@ -313,7 +334,7 @@ type verifyClientConsensusState = (
 ```typescript
 type verifyConnectionState = (
   clientState: ClientState,
-  height: uint64,
+  height: Height,
   prefix: CommitmentPrefix,
   proof: CommitmentProof,
   connectionIdentifier: Identifier,
@@ -326,7 +347,7 @@ type verifyConnectionState = (
 ```typescript
 type verifyChannelState = (
   clientState: ClientState,
-  height: uint64,
+  height: Height,
   prefix: CommitmentPrefix,
   proof: CommitmentProof,
   portIdentifier: Identifier,
@@ -340,7 +361,7 @@ type verifyChannelState = (
 ```typescript
 type verifyPacketData = (
   clientState: ClientState,
-  height: uint64,
+  height: Height,
   prefix: CommitmentPrefix,
   proof: CommitmentProof,
   portIdentifier: Identifier,
@@ -355,7 +376,7 @@ type verifyPacketData = (
 ```typescript
 type verifyPacketAcknowledgement = (
   clientState: ClientState,
-  height: uint64,
+  height: Height,
   prefix: CommitmentPrefix,
   proof: CommitmentProof,
   portIdentifier: Identifier,
@@ -370,7 +391,7 @@ type verifyPacketAcknowledgement = (
 ```typescript
 type verifyPacketAcknowledgementAbsence = (
   clientState: ClientState,
-  height: uint64,
+  height: Height,
   prefix: CommitmentPrefix,
   proof: CommitmentProof,
   portIdentifier: Identifier,
@@ -384,7 +405,7 @@ type verifyPacketAcknowledgementAbsence = (
 ```typescript
 type verifyNextSequenceRecv = (
   clientState: ClientState,
-  height: uint64,
+  height: Height,
   prefix: CommitmentPrefix,
   proof: CommitmentProof,
   portIdentifier: Identifier,
@@ -402,7 +423,7 @@ These query endpoints are assumed to be exposed over HTTP or an equivalent RPC A
 `queryHeader` MUST be defined by the chain which is validated by a particular client, and should allow for retrieval of headers by height. This endpoint is assumed to be untrusted.
 
 ```typescript
-type queryHeader = (height: uint64) => Header
+type queryHeader = (height: Height) => Header
 ```
 
 `queryChainConsensusState` MAY be defined by the chain which is validated by a particular client, to allow for the retrieval of the current consensus state which can be used to construct a new client.
@@ -410,7 +431,7 @@ When used in this fashion, the returned `ConsensusState` MUST be manually confir
 `ConsensusState` may vary per client type.
 
 ```typescript
-type queryChainConsensusState = (height: uint64) => ConsensusState
+type queryChainConsensusState = (height: Height) => ConsensusState
 ```
 
 Note that retrieval of past consensus states by height (as opposed to just the current consensus state) is convenient but not required.
@@ -430,7 +451,7 @@ function queryClientState(identifier: Identifier): ClientState {
 The `ClientState` type SHOULD expose its latest verified height (from which the consensus state can then be retrieved using `queryConsensusState` if desired).
 
 ```typescript
-type latestHeight = (state: ClientState) => uint64
+type latestHeight = (state: ClientState) => Height
 ```
 
 Client types SHOULD define the following standardised query functions in order to allow relayers & other off-chain entities to interface with on-chain state in a standard API.
@@ -440,7 +461,7 @@ Client types SHOULD define the following standardised query functions in order t
 ```typescript
 type queryConsensusState = (
   identifier: Identifier,
-  height: uint64
+  height: Height,
 ) => ConsensusState
 ```
 
@@ -453,46 +474,46 @@ These functions may constitute external queries over RPC to a full node as well 
 ```typescript
 type queryAndProveClientConsensusState = (
   clientIdentifier: Identifier,
-  height: uint64,
+  height: Height,
   prefix: CommitmentPrefix,
-  consensusStateHeight: uint64) => ConsensusState, Proof
+  consensusStateHeight: Height) => ConsensusState, Proof
 
 type queryAndProveConnectionState = (
   connectionIdentifier: Identifier,
-  height: uint64,
+  height: Height,
   prefix: CommitmentPrefix) => ConnectionEnd, Proof
 
 type queryAndProveChannelState = (
   portIdentifier: Identifier,
   channelIdentifier: Identifier,
-  height: uint64,
+  height: Height,
   prefix: CommitmentPrefix) => ChannelEnd, Proof
 
 type queryAndProvePacketData = (
   portIdentifier: Identifier,
   channelIdentifier: Identifier,
-  height: uint64,
+  height: Height,
   prefix: CommitmentPrefix,
   sequence: uint64) => []byte, Proof
 
 type queryAndProvePacketAcknowledgement = (
   portIdentifier: Identifier,
   channelIdentifier: Identifier,
-  height: uint64,
+  height: Height,
   prefix: CommitmentPrefix,
   sequence: uint64) => []byte, Proof
 
 type queryAndProvePacketAcknowledgementAbsence = (
   portIdentifier: Identifier,
   channelIdentifier: Identifier,
-  height: uint64,
+  height: Height,
   prefix: CommitmentPrefix,
   sequence: uint64) => Proof
 
 type queryAndProveNextSequenceRecv = (
   portIdentifier: Identifier,
   channelIdentifier: Identifier,
-  height: uint64,
+  height: Height,
   prefix: CommitmentPrefix) => uint64, Proof
 ```
 
@@ -523,11 +544,11 @@ For clients of state machines with Merklized state trees, these functions can be
 root stored in the `ClientState`, to verify presence or absence of particular key/value pairs in state at particular heights in accordance with [ICS 23](../ics-023-vector-commitments).
 
 ```typescript
-type verifyMembership = (ClientState, uint64, CommitmentProof, Path, Value) => boolean
+type verifyMembership = (ClientState, Height, CommitmentProof, Path, Value) => boolean
 ```
 
 ```typescript
-type verifyNonMembership = (ClientState, uint64, CommitmentProof, Path) => boolean
+type verifyNonMembership = (ClientState, Height, CommitmentProof, Path) => boolean
 ```
 
 ### Sub-protocols
@@ -637,6 +658,17 @@ The client-specific types are then defined as follows:
 - `checkMisbehaviourAndUpdateState` checks for two headers with the same height & different commitment roots, then mutates the internal state
 
 ```typescript
+type Height = uint64
+
+function compare(h1: Height, h2: Height): Ord {
+  if h1 < h2
+    return LT
+  else if h1 === h2
+    return EQ
+  else
+    return GT
+}
+
 interface ClientState {
   frozen: boolean
   pastPublicKeys: Set<PublicKey>
