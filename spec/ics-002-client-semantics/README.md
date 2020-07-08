@@ -272,7 +272,7 @@ enum Ord {
   GT
 }
 
-type compare = (height: Height) => Ord
+type compare = (h1: Height, h2: Height) => Ord
 ```
 
 A height is either `LT` (less than), `EQ` (equal to), or `GT` (greater than) another height.
