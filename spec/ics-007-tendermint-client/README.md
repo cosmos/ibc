@@ -58,14 +58,14 @@ This specification depends on correct instantiation of the [Tendermint consensus
 
 ### Client state
 
-The Tendermint client state tracks the current validator set, trusting period, unbonding period, latest height, latest timestamp (block time), and a possible frozen height.
+The Tendermint client state tracks the current epoch, current validator set, trusting period, unbonding period, latest height, latest timestamp (block time), and a possible frozen height.
 
 ```typescript
 interface ClientState {
   validatorSet: List<Pair<Address, uint64>>
   trustingPeriod: uint64
   unbondingPeriod: uint64
-  latestHeight: uint64
+  latestHeight: Height
   latestTimestamp: uint64
   frozenHeight: Maybe<uint64>
 }
@@ -85,7 +85,31 @@ interface ConsensusState {
 
 ### Height
 
-The height of a Tendermint client is just a `uint64`, with the usual comparison operations.
+The height of a Tendermint client consists of two `uint64`s: the epoch number, and the height in the epoch.
+
+```typescript
+interface Height {
+  epochNumber: uint64
+  epochHeight: uint64
+}
+```
+
+Comparison between heights is implemented as follows:
+
+```typescript
+function compare(a: TendermintHeight, b: TendermintHeight): Ord {
+  if (a.epochNumber < b.epochNumber)
+    return LT
+  else if (a.epochNumber === b.epochNumber)
+    if (a.epochHeight < b.epochHeight)
+      return LT
+    else if (a.epochHeight === b.epochHeight)
+      return EQ
+  return GT
+}
+```
+
+This is designed to allow the height to reset to `0` while the epoch number increases by one in order to preserve timeouts through zero-height upgrades.
 
 ### Headers
 
@@ -108,7 +132,7 @@ Tendermint client `Evidence` consists of two headers at the same height both of 
 
 ```typescript
 interface Evidence {
-  fromHeight: uint64
+  fromHeight: Height
   h1: Header
   h2: Header
 }
@@ -121,7 +145,7 @@ Tendermint client initialisation requires a (subjectively chosen) latest consens
 ```typescript
 function initialise(
   consensusState: ConsensusState, validatorSet: List<Pair<Address, uint64>>,
-  height: uint64, trustingPeriod: uint64, unbondingPeriod: uint64): ClientState {
+  height: Height, trustingPeriod: uint64, unbondingPeriod: uint64): ClientState {
     assert(trustingPeriod < unbondingPeriod)
     assert(height > 0)
     set("clients/{identifier}/consensusStates/{height}", consensusState)
@@ -139,7 +163,7 @@ function initialise(
 The Tendermint client `latestClientHeight` function returns the latest stored height, which is updated every time a new (more recent) header is validated.
 
 ```typescript
-function latestClientHeight(clientState: ClientState): uint64 {
+function latestClientHeight(clientState: ClientState): Height {
   return clientState.latestHeight
 }
 ```
@@ -151,7 +175,13 @@ Tendermint client validity checking uses the bisection algorithm described in th
 ```typescript
 function checkValidityAndUpdateState(
   clientState: ClientState,
+  epoch: uint64,
   header: Header) {
+    // assert epoch is correct
+    assert(epoch === clientState.currentHeight.epoch)
+
+    // TODO: check epoch encoded in chain ID ?
+
     // assert trusting period has not yet passed. This should fatally terminate a connection.
     assert(currentTimestamp() - clientState.latestTimestamp < clientState.trustingPeriod)
     // assert header timestamp is less than trust period in the future. This should be resolved with an intermediate header.
@@ -211,11 +241,11 @@ Tendermint client state verification functions check a Merkle proof against a pr
 ```typescript
 function verifyClientConsensusState(
   clientState: ClientState,
-  height: uint64,
+  height: Height,
   prefix: CommitmentPrefix,
   proof: CommitmentProof,
   clientIdentifier: Identifier,
-  consensusStateHeight: uint64,
+  consensusStateHeight: Height,
   consensusState: ConsensusState) {
     path = applyPrefix(prefix, "clients/{clientIdentifier}/consensusState/{consensusStateHeight}")
     // check that the client is at a sufficient height
@@ -230,7 +260,7 @@ function verifyClientConsensusState(
 
 function verifyConnectionState(
   clientState: ClientState,
-  height: uint64,
+  height: Height,
   prefix: CommitmentPrefix,
   proof: CommitmentProof,
   connectionIdentifier: Identifier,
@@ -248,7 +278,7 @@ function verifyConnectionState(
 
 function verifyChannelState(
   clientState: ClientState,
-  height: uint64,
+  height: Height,
   prefix: CommitmentPrefix,
   proof: CommitmentProof,
   portIdentifier: Identifier,
@@ -267,7 +297,7 @@ function verifyChannelState(
 
 function verifyPacketData(
   clientState: ClientState,
-  height: uint64,
+  height: Height,
   prefix: CommitmentPrefix,
   proof: CommitmentProof,
   portIdentifier: Identifier,
@@ -287,7 +317,7 @@ function verifyPacketData(
 
 function verifyPacketAcknowledgement(
   clientState: ClientState,
-  height: uint64,
+  height: Height,
   prefix: CommitmentPrefix,
   proof: CommitmentProof,
   portIdentifier: Identifier,
@@ -307,7 +337,7 @@ function verifyPacketAcknowledgement(
 
 function verifyPacketAcknowledgementAbsence(
   clientState: ClientState,
-  height: uint64,
+  height: Height,
   prefix: CommitmentPrefix,
   proof: CommitmentProof,
   portIdentifier: Identifier,
@@ -326,7 +356,7 @@ function verifyPacketAcknowledgementAbsence(
 
 function verifyNextSequenceRecv(
   clientState: ClientState,
-  height: uint64,
+  height: Height,
   prefix: CommitmentPrefix,
   proof: CommitmentProof,
   portIdentifier: Identifier,
