@@ -103,7 +103,7 @@ A `Packet`, in the interblockchain communication protocol, is a particular inter
 ```typescript
 interface Packet {
   sequence: uint64
-  timeoutHeight: uint64
+  timeoutHeight: Height
   timeoutTimestamp: uint64
   sourcePort: Identifier
   sourceChannel: Identifier
@@ -310,7 +310,7 @@ function chanOpenTry(
   version: string,
   counterpartyVersion: string,
   proofInit: CommitmentProof,
-  proofHeight: uint64): CapabilityKey {
+  proofHeight: Height): CapabilityKey {
     abortTransactionUnless(validateChannelIdentifier(portIdentifier, channelIdentifier))
     abortTransactionUnless(connectionHops.length === 1) // for v1 of the IBC protocol
     previous = provableStore.get(channelPath(portIdentifier, channelIdentifier))
@@ -356,7 +356,7 @@ function chanOpenAck(
   channelIdentifier: Identifier,
   counterpartyVersion: string,
   proofTry: CommitmentProof,
-  proofHeight: uint64) {
+  proofHeight: Height) {
     channel = provableStore.get(channelPath(portIdentifier, channelIdentifier))
     abortTransactionUnless(channel.state === INIT || channel.state === TRYOPEN)
     abortTransactionUnless(authenticateCapability(channelCapabilityPath(portIdentifier, channelIdentifier), capability))
@@ -386,7 +386,7 @@ function chanOpenConfirm(
   portIdentifier: Identifier,
   channelIdentifier: Identifier,
   proofAck: CommitmentProof,
-  proofHeight: uint64) {
+  proofHeight: Height) {
     channel = provableStore.get(channelPath(portIdentifier, channelIdentifier))
     abortTransactionUnless(channel !== null)
     abortTransactionUnless(channel.state === TRYOPEN)
@@ -450,7 +450,7 @@ function chanCloseConfirm(
   portIdentifier: Identifier,
   channelIdentifier: Identifier,
   proofInit: CommitmentProof,
-  proofHeight: uint64) {
+  proofHeight: Height) {
     abortTransactionUnless(authenticateCapability(channelCapabilityPath(portIdentifier, channelIdentifier), capability))
     channel = provableStore.get(channelPath(portIdentifier, channelIdentifier))
     abortTransactionUnless(channel !== null)
@@ -572,7 +572,7 @@ The IBC handler performs the following steps in order:
 function recvPacket(
   packet: OpaquePacket,
   proof: CommitmentProof,
-  proofHeight: uint64,
+  proofHeight: Height,
   acknowledgement: bytes): Packet {
 
     channel = provableStore.get(channelPath(packet.destPort, packet.destChannel))
@@ -635,7 +635,7 @@ function acknowledgePacket(
   packet: OpaquePacket,
   acknowledgement: bytes,
   proof: CommitmentProof,
-  proofHeight: uint64): Packet {
+  proofHeight: Height): Packet {
 
     // abort transaction unless that channel is open, calling module owns the associated port, and the packet fields match
     channel = provableStore.get(channelPath(packet.sourcePort, packet.sourceChannel))
@@ -705,7 +705,7 @@ If relations are enforced between timeout heights of subsequent packets, safe bu
 function timeoutPacket(
   packet: OpaquePacket,
   proof: CommitmentProof,
-  proofHeight: uint64,
+  proofHeight: Height,
   nextSequenceRecv: Maybe<uint64>): Packet {
 
     channel = provableStore.get(channelPath(packet.sourcePort, packet.sourceChannel))
@@ -776,7 +776,7 @@ function timeoutOnClose(
   packet: Packet,
   proof: CommitmentProof,
   proofClosed: CommitmentProof,
-  proofHeight: uint64,
+  proofHeight: Height,
   nextSequenceRecv: Maybe<uint64>): Packet {
 
     channel = provableStore.get(channelPath(packet.sourcePort, packet.sourceChannel))

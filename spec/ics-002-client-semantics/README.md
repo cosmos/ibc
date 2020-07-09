@@ -277,6 +277,10 @@ type compare = (h1: Height, h2: Height) => Ord
 
 A height is either `LT` (less than), `EQ` (equal to), or `GT` (greater than) another height.
 
+`>=`, `>`, `===`, `<`, `<=` are defined through the rest of this specification as aliases to `compare`.
+
+There must also be a zero-element for a height type, referred to as `0`, which is less than all non-zero heights.
+
 #### ClientState
 
 `ClientState` is an opaque data structure defined by a client type.
@@ -728,7 +732,7 @@ function checkValidityAndUpdateState(
 
 function verifyClientConsensusState(
   clientState: ClientState,
-  height: uint64,
+  height: Height,
   prefix: CommitmentPrefix,
   proof: CommitmentProof,
   clientIdentifier: Identifier,
@@ -740,7 +744,7 @@ function verifyClientConsensusState(
 
 function verifyConnectionState(
   clientState: ClientState,
-  height: uint64,
+  height: Height,
   prefix: CommitmentPrefix,
   proof: CommitmentProof,
   connectionIdentifier: Identifier,
@@ -752,7 +756,7 @@ function verifyConnectionState(
 
 function verifyChannelState(
   clientState: ClientState,
-  height: uint64,
+  height: Height,
   prefix: CommitmentPrefix,
   proof: CommitmentProof,
   portIdentifier: Identifier,
@@ -765,7 +769,7 @@ function verifyChannelState(
 
 function verifyPacketData(
   clientState: ClientState,
-  height: uint64,
+  height: Height,
   prefix: CommitmentPrefix,
   proof: CommitmentProof,
   portIdentifier: Identifier,
@@ -779,7 +783,7 @@ function verifyPacketData(
 
 function verifyPacketAcknowledgement(
   clientState: ClientState,
-  height: uint64,
+  height: Height,
   prefix: CommitmentPrefix,
   proof: CommitmentProof,
   portIdentifier: Identifier,
@@ -793,7 +797,7 @@ function verifyPacketAcknowledgement(
 
 function verifyPacketAcknowledgementAbsence(
   clientState: ClientState,
-  height: uint64,
+  height: Height,
   prefix: CommitmentPrefix,
   proof: CommitmentProof,
   portIdentifier: Identifier,
@@ -806,7 +810,7 @@ function verifyPacketAcknowledgementAbsence(
 
 function verifyNextSequenceRecv(
   clientState: ClientState,
-  height: uint64,
+  height: Height,
   prefix: CommitmentPrefix,
   proof: CommitmentProof,
   portIdentifier: Identifier,
