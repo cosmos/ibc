@@ -83,6 +83,10 @@ interface ConsensusState {
 }
 ```
 
+### Height
+
+The height of a Tendermint client is just a `uint64`, with the usual comparison operations.
+
 ### Headers
 
 The Tendermint client headers include the height, the timestamp, the commitment root, the complete validator set, and the signatures by the validators who committed the block.
