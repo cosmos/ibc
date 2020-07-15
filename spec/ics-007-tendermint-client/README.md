@@ -234,6 +234,19 @@ function checkMisbehaviourAndUpdateState(
 }
 ```
 
+### Upgrades
+
+The chain which this light client is tracking can elect to write a special pre-determined key in state to allow the light client to update its client state (e.g. with a new chain ID or epoch) in preparation for an upgrade.
+
+```typescript
+function upgradeClientState(
+  newClientState: ClientState,
+  proof: CommitmentPrefix) {
+    // check proof of updated client state in state at predetermined commitment prefix and key
+    // update client state
+}  
+```
+
 ### State verification functions
 
 Tendermint client state verification functions check a Merkle proof against a previously validated commitment root.
