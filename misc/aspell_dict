@@ -1,6 +1,16 @@
 personal_ws-1.1 en 611 
 ABCI
 ABI
+trustLevel
+upgradeCommitmentPrefix
+newClientState
+upgradeKey
+maxClockDrift
+proofSpecs
+ProofSpec
+epochNumber
+epochHeight
+TendermintHeight
 ADR
 Agoric
 Agoric's

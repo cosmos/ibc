@@ -62,6 +62,7 @@ The Tendermint client state tracks the current epoch, current validator set, tru
 
 ```typescript
 interface ClientState {
+  chainID: string
   validatorSet: List<Pair<Address, uint64>>
   trustLevel: Rational
   trustingPeriod: uint64
@@ -149,7 +150,8 @@ Tendermint client initialisation requires a (subjectively chosen) latest consens
 
 ```typescript
 function initialise(
-  consensusState: ConsensusState, validatorSet: List<Pair<Address, uint64>>, trustLevel: Fraction,
+  chainID: string, consensusState: ConsensusState,
+  validatorSet: List<Pair<Address, uint64>>, trustLevel: Fraction,
   height: Height, trustingPeriod: uint64, unbondingPeriod: uint64,
   upgradeCommitmentPrefix: CommitmentPrefix, upgradeKey: []byte,
   maxClockDrift: uint64, proofSpecs: []ProofSpec): ClientState {
@@ -158,6 +160,7 @@ function initialise(
     assert(trustLevel > 0 && trustLevel < 1)
     set("clients/{identifier}/consensusStates/{height}", consensusState)
     return ClientState{
+      chainID,
       validatorSet,
       trustLevel,
       latestHeight: height,
@@ -192,9 +195,8 @@ function checkValidityAndUpdateState(
   header: Header) {
     // assert epoch is correct
     assert(epoch === clientState.currentHeight.epoch)
-
-    // TODO: check epoch encoded in chain ID ?
-
+    // check that epoch is encoded correctly in chain ID
+    assert(epoch === clientState.chainID.regex('[a-z]*-(0)'))
     // assert trusting period has not yet passed. This should fatally terminate a connection.
     assert(currentTimestamp() - clientState.latestTimestamp < clientState.trustingPeriod)
     // assert header timestamp is less than trust period in the future. This should be resolved with an intermediate header.
