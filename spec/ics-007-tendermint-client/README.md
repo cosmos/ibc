@@ -63,11 +63,16 @@ The Tendermint client state tracks the current epoch, current validator set, tru
 ```typescript
 interface ClientState {
   validatorSet: List<Pair<Address, uint64>>
+  trustLevel: Rational
   trustingPeriod: uint64
   unbondingPeriod: uint64
   latestHeight: Height
   latestTimestamp: uint64
   frozenHeight: Maybe<uint64>
+  upgradeCommitmentPrefix: CommitmentPrefix
+  upgradeKey: []byte
+  maxClockDrift: uint64
+  proofSpecs: []ProofSpec
 }
 ```
 
@@ -144,18 +149,26 @@ Tendermint client initialisation requires a (subjectively chosen) latest consens
 
 ```typescript
 function initialise(
-  consensusState: ConsensusState, validatorSet: List<Pair<Address, uint64>>,
-  height: Height, trustingPeriod: uint64, unbondingPeriod: uint64): ClientState {
+  consensusState: ConsensusState, validatorSet: List<Pair<Address, uint64>>, trustLevel: Fraction,
+  height: Height, trustingPeriod: uint64, unbondingPeriod: uint64,
+  upgradeCommitmentPrefix: CommitmentPrefix, upgradeKey: []byte,
+  maxClockDrift: uint64, proofSpecs: []ProofSpec): ClientState {
     assert(trustingPeriod < unbondingPeriod)
     assert(height > 0)
+    assert(trustLevel > 0 && trustLevel < 1)
     set("clients/{identifier}/consensusStates/{height}", consensusState)
     return ClientState{
       validatorSet,
+      trustLevel,
       latestHeight: height,
       latestTimestamp: consensusState.timestamp,
       trustingPeriod,
       unbondingPeriod,
-      frozenHeight: null
+      frozenHeight: null,
+      upgradeCommitmentPrefix,
+      upgradeKey,
+      maxClockDrift,
+      proofSpecs
     }
 }
 ```
@@ -191,7 +204,7 @@ function checkValidityAndUpdateState(
     // assert header height is newer than any we know
     assert(header.height > clientState.latestHeight)
     // call the `verify` function
-    assert(verify(clientState.validatorSet, clientState.latestHeight, header))
+    assert(verify(clientState.validatorSet, clientState.latestHeight, clientState.trustingPeriod, maxClockDrift, header))
     // update validator set
     clientState.validatorSet = header.validatorSet
     // update latest height
@@ -238,18 +251,35 @@ function checkMisbehaviourAndUpdateState(
 
 The chain which this light client is tracking can elect to write a special pre-determined key in state to allow the light client to update its client state (e.g. with a new chain ID or epoch) in preparation for an upgrade.
 
+As the client state change will be performed immediately, once the new client state information is written to the predetermined key, the client will no longer be able to follow blocks on the old chain, so it must upgrade promptly.
+
 ```typescript
 function upgradeClientState(
+  clientState: ClientState,
   newClientState: ClientState,
+  height: Height,
   proof: CommitmentPrefix) {
     // check proof of updated client state in state at predetermined commitment prefix and key
+    path = applyPrefix(clientState.upgradeCommitmentPrefix, clientState.upgradeKey)
+     // check that the client is at a sufficient height
+    assert(clientState.latestHeight >= height)
+    // check that the client is unfrozen or frozen at a higher height
+    assert(clientState.frozenHeight === null || clientState.frozenHeight > height)
+    // fetch the previously verified commitment root & verify membership
+    root = get("clients/{identifier}/consensusStates/{height}")
+    // verify that the provided consensus state has been stored
+    assert(root.verifyMembership(path, clientState, proof))
     // update client state
-}  
+    clientState = newClientState
+    set("clients/{identifier}", clientState)
+}
 ```
 
 ### State verification functions
 
 Tendermint client state verification functions check a Merkle proof against a previously validated commitment root.
+
+These functions utilise the `proofSpecs` with which the client was initialised.
 
 ```typescript
 function verifyClientConsensusState(
@@ -305,7 +335,7 @@ function verifyChannelState(
     // fetch the previously verified commitment root & verify membership
     root = get("clients/{identifier}/consensusStates/{height}")
     // verify that the provided channel end has been stored
-    assert(root.verifyMembership(path, channelEnd, proof))
+    assert(root.verifyMembership(clientState.proofSpecs, path, channelEnd, proof))
 }
 
 function verifyPacketData(
@@ -325,7 +355,7 @@ function verifyPacketData(
     // fetch the previously verified commitment root & verify membership
     root = get("clients/{identifier}/consensusStates/{height}")
     // verify that the provided commitment has been stored
-    assert(root.verifyMembership(path, hash(data), proof))
+    assert(root.verifyMembership(clientState.proofSpecs, path, hash(data), proof))
 }
 
 function verifyPacketAcknowledgement(
@@ -345,7 +375,7 @@ function verifyPacketAcknowledgement(
     // fetch the previously verified commitment root & verify membership
     root = get("clients/{identifier}/consensusStates/{height}")
     // verify that the provided acknowledgement has been stored
-    assert(root.verifyMembership(path, hash(acknowledgement), proof))
+    assert(root.verifyMembership(clientState.proofSpecs, path, hash(acknowledgement), proof))
 }
 
 function verifyPacketAcknowledgementAbsence(
@@ -364,7 +394,7 @@ function verifyPacketAcknowledgementAbsence(
     // fetch the previously verified commitment root & verify membership
     root = get("clients/{identifier}/consensusStates/{height}")
     // verify that no acknowledgement has been stored
-    assert(root.verifyNonMembership(path, proof))
+    assert(root.verifyNonMembership(clientState.proofSpecs, path, proof))
 }
 
 function verifyNextSequenceRecv(
@@ -383,7 +413,7 @@ function verifyNextSequenceRecv(
     // fetch the previously verified commitment root & verify membership
     root = get("clients/{identifier}/consensusStates/{height}")
     // verify that the nextSequenceRecv is as claimed
-    assert(root.verifyMembership(path, nextSequenceRecv, proof))
+    assert(root.verifyMembership(clientState.proofSpecs, path, nextSequenceRecv, proof))
 }
 ```
 
