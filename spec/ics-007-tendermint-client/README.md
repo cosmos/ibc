@@ -261,9 +261,11 @@ function upgradeClientState(
   newClientState: ClientState,
   height: Height,
   proof: CommitmentPrefix) {
+    // check that the epoch has been incremented
+    assert(newClientState.latestHeight.epochNumber > clientState.latestHeight.epochNumber)
     // check proof of updated client state in state at predetermined commitment prefix and key
     path = applyPrefix(clientState.upgradeCommitmentPrefix, clientState.upgradeKey)
-     // check that the client is at a sufficient height
+    // check that the client is at a sufficient height
     assert(clientState.latestHeight >= height)
     // check that the client is unfrozen or frozen at a higher height
     assert(clientState.frozenHeight === null || clientState.frozenHeight > height)

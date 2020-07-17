@@ -1,16 +1,6 @@
-personal_ws-1.1 en 611 
+personal_ws-1.1 en 621 
 ABCI
 ABI
-trustLevel
-upgradeCommitmentPrefix
-newClientState
-upgradeKey
-maxClockDrift
-proofSpecs
-ProofSpec
-epochNumber
-epochHeight
-TendermintHeight
 ADR
 Agoric
 Agoric's
@@ -109,6 +99,7 @@ PacketTimeoutOnClose
 Polkadot
 Pre
 Privkey
+ProofSpec
 Protobuf
 PubKey
 QUIC
@@ -130,6 +121,7 @@ TCP
 TLS
 TRYOPEN
 Tendermint
+TendermintHeight
 Tezos
 TransferCoins
 Tribble
@@ -301,6 +293,8 @@ emitLogEntry
 encodings
 endian
 enum
+epochHeight
+epochNumber
 errorCode
 escrowAccount
 escrowAddress
@@ -391,6 +385,7 @@ localEnd
 logEntry
 lookupModule
 loopback
+maxClockDrift
 md
 mempools
 middled
@@ -406,6 +401,7 @@ newCallbacks
 newCapability
 newCapabilityKey
 newCapabilityPath
+newClientState
 newPublicKey
 newState
 newpubkey
@@ -472,6 +468,7 @@ proofConsensus
 proofHeight
 proofInit
 proofNonMembership
+proofSpecs
 proofTimeout
 proofTry
 proto
@@ -568,6 +565,7 @@ topologies
 tradeoff
 transactional
 transferPort
+trustLevel
 trustingPeriod
 tx
 txBytes
@@ -591,6 +589,8 @@ updateClient
 updateConsensusState
 updatePort
 updateable
+upgradeCommitmentPrefix
+upgradeKey
 validRound
 validValue
 validateChannelIdentifier
