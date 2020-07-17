@@ -270,7 +270,7 @@ function upgradeClientState(
     // fetch the previously verified commitment root & verify membership
     root = get("clients/{identifier}/consensusStates/{height}")
     // verify that the provided consensus state has been stored
-    assert(root.verifyMembership(path, clientState, proof))
+    assert(root.verifyMembership(path, newClientState, proof))
     // update client state
     clientState = newClientState
     set("clients/{identifier}", clientState)
