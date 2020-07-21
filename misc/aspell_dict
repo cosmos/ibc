@@ -1,4 +1,4 @@
-personal_ws-1.1 en 621 
+personal_ws-1.1 en 623 
 ABCI
 ABI
 ADR
@@ -175,6 +175,7 @@ callbackKey
 callbackPath
 calldata
 callingModuleIdentifier
+chainID
 chainType
 chanCloseConfirm
 chanCloseInit
@@ -589,6 +590,7 @@ updateClient
 updateConsensusState
 updatePort
 updateable
+upgradeClientState
 upgradeCommitmentPrefix
 upgradeKey
 validRound
