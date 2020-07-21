@@ -2,7 +2,7 @@
 
 set -xe
 
-make check
+# make check
 make spellcheck
 make build
 make spec_pdf

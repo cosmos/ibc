@@ -282,6 +282,10 @@ type queryByTopic = (height: Height, topic: string) => []byte[]
 
 More complex query functionality MAY also be supported, and may allow for more efficient relayer process queries, but is not required.
 
+### Handling upgrades
+
+Host machines may safely upgrade parts of their state machine without disruption to IBC functionality. In order to do this safely, the IBC handler logic must remain compliant with the specification, and all IBC-related state (in both the provable & private stores) must be persisted across the upgrade. If clients exist for an upgrading chain on other chains, and the upgrade will change the light client validation algorithm, these clients must be informed prior to the upgrade so that they can safely switch atomically and preserve continuity of connections & channels.
+
 ## Backwards Compatibility
 
 Not applicable.

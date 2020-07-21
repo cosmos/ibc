@@ -54,7 +54,7 @@ Each chain must implement the interfaces as defined in this section in order to 
 
 `tryRegisterIBCAccount` method in `IBCAccountModule` interface defines the way to request the creation of an IBC account on the host chain (or counterparty chain that the IBC account lives on). The host chain creates an IBC account using its account creation logic, which may use data within the packet (such as destination port, destination channel, etc) and other additional data for the process. The origin chain can receive the address of the account that was created from the acknowledge packet.
 
-`tryRunTx` method in `IBCAccountModule` interface defines the way to create an outgoing packet for a specific `type`. `Type` indicates how the IBC account transaction should be constructed and serialized for the host chain. Generally, `type` indicates what blockchain framework the host chain was built on.
+`tryRunTx` method in `IBCAccountModule` interface defines the way to create an outgoing packet for a specific `type`. `Type` indicates how the IBC account transaction should be constructed and serialised for the host chain. Generally, `type` indicates what blockchain framework the host chain was built on.
 
 `createAccount` defines the way to determine the account's address by using the packet. If the host chain doesn't support a deterministic way to generate an address with data, it can be generated using the internal logic of the host chain. A newly created interchain account must not conflict with an existing account. Therefore, the host chain (on that the interchain account lives in) must keep track of which blockchains have created an interchain account within the host chain in order to verify the transaction signing authority in `authenticateTx`.
 
@@ -92,7 +92,7 @@ interface IBCAccountPacketData {
 }
 ```
 
-The acknowledgment data type describes the type of packet data and chain id and whether the result code of processing and the data of result if it is needed, and the reason for failure (if any).
+The acknowledgement data type describes the type of packet data and chain id and whether the result code of processing and the data of result if it is needed, and the reason for failure (if any).
 
 ```typescript
 interface IBCAccountPacketAcknowledgement {
@@ -140,7 +140,7 @@ function setup() {
 }
 ```
 
-Once the `setup` function has been called, channels can be created through the IBC routing module between instances of the ib account module on separate chains.
+Once the `setup` function has been called, channels can be created through the IBC routing module between instances of the ibc account module on separate chains.
 
 An administrator (with the permissions to create connections & channels on the host state machine) is responsible for setting up connections to other state machines & creating channels
 to other instances of this module (or another module supporting this interface) on other chains. This specification defines packet handling semantics only, and defines them in such a fashion

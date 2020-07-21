@@ -1,4 +1,4 @@
-personal_ws-1.1 en 623 
+personal_ws-1.1 en 624 
 ABCI
 ABI
 ADR
@@ -356,6 +356,7 @@ handlePacketTimeout
 handlePacketTimeoutClose
 handlePacketTimeoutOnClose
 ibc
+ibcaccount
 ics
 implementers
 incentivisation
