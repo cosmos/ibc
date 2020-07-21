@@ -298,8 +298,8 @@ interface ConnOpenTry {
   counterpartyVersion: string
   proofInit: CommitmentProof
   proofConsensus: CommitmentProof
-  proofHeight: uint64
-  consensusHeight: uint64
+  proofHeight: Height
+  consensusHeight: Height
 }
 ```
 
@@ -328,8 +328,8 @@ interface ConnOpenAck {
   version: string
   proofTry: CommitmentProof
   proofConsensus: CommitmentProof
-  proofHeight: uint64
-  consensusHeight: uint64
+  proofHeight: Height
+  consensusHeight: Height
 }
 ```
 
@@ -352,7 +352,7 @@ The `ConnOpenConfirm` datagram acknowledges a handshake acknowledgement by an IB
 interface ConnOpenConfirm {
   identifier: Identifier
   proofAck: CommitmentProof
-  proofHeight: uint64
+  proofHeight: Height
 }
 ```
 
@@ -415,7 +415,7 @@ interface ChanOpenTry {
   version: string
   counterpartyVersion: string
   proofInit: CommitmentProof
-  proofHeight: uint64
+  proofHeight: Height
 }
 ```
 
@@ -453,7 +453,7 @@ interface ChanOpenAck {
   channelIdentifier: Identifier
   version: string
   proofTry: CommitmentProof
-  proofHeight: uint64
+  proofHeight: Height
 }
 ```
 
@@ -479,7 +479,7 @@ interface ChanOpenConfirm {
   portIdentifier: Identifier
   channelIdentifier: Identifier
   proofAck: CommitmentProof
-  proofHeight: uint64
+  proofHeight: Height
 }
 ```
 
@@ -525,7 +525,7 @@ interface ChanCloseConfirm {
   portIdentifier: Identifier
   channelIdentifier: Identifier
   proofInit: CommitmentProof
-  proofHeight: uint64
+  proofHeight: Height
 }
 ```
 
@@ -553,7 +553,7 @@ Packets are sent by the module directly (by the module calling the IBC handler).
 interface PacketRecv {
   packet: Packet
   proof: CommitmentProof
-  proofHeight: uint64
+  proofHeight: Height
 }
 ```
 
@@ -575,7 +575,7 @@ interface PacketAcknowledgement {
   packet: Packet
   acknowledgement: string
   proof: CommitmentProof
-  proofHeight: uint64
+  proofHeight: Height
 }
 ```
 
@@ -601,7 +601,7 @@ function handlePacketAcknowledgement(datagram: PacketAcknowledgement) {
 interface PacketTimeout {
   packet: Packet
   proof: CommitmentProof
-  proofHeight: uint64
+  proofHeight: Height
   nextSequenceRecv: Maybe<uint64>
 }
 ```
@@ -623,7 +623,7 @@ function handlePacketTimeout(datagram: PacketTimeout) {
 interface PacketTimeoutOnClose {
   packet: Packet
   proof: CommitmentProof
-  proofHeight: uint64
+  proofHeight: Height
 }
 ```
 
@@ -645,7 +645,7 @@ function handlePacketTimeoutOnClose(datagram: PacketTimeoutOnClose) {
 interface PacketCleanup {
   packet: Packet
   proof: CommitmentProof
-  proofHeight: uint64
+  proofHeight: Height
   nextSequenceRecvOrAcknowledgement: Either<uint64, bytes>
 }
 ```

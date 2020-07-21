@@ -155,7 +155,7 @@ Represented spatially, the layout of modules & their included specifications on 
 Host state machines MUST provide the ability to introspect their current height, with `getCurrentHeight`:
 
 ```
-type getCurrentHeight = () => uint64
+type getCurrentHeight = () => Height
 ```
 
 Host state machines MUST define a unique `ConsensusState` type fulfilling the requirements of [ICS 2](../ics-002-client-semantics), with a canonical binary serialisation.
@@ -163,7 +163,7 @@ Host state machines MUST define a unique `ConsensusState` type fulfilling the re
 Host state machines MUST provide the ability to introspect their own consensus state, with `getConsensusState`:
 
 ```typescript
-type getConsensusState = (height: uint64) => ConsensusState
+type getConsensusState = (height: Height) => ConsensusState
 ```
 
 `getConsensusState` MUST return the consensus state for at least some number `n` of contiguous recent heights, where `n` is constant for the host state machine. Heights older than `n` MAY be safely pruned (causing future calls to fail for those heights).
@@ -171,7 +171,7 @@ type getConsensusState = (height: uint64) => ConsensusState
 Host state machines MUST provide the ability to introspect this stored recent consensus state count `n`, with `getStoredRecentConsensusStateCount`:
 
 ```typescript
-type getStoredRecentConsensusStateCount = () => uint64
+type getStoredRecentConsensusStateCount = () => Height
 ```
 
 ### Commitment path introspection
@@ -277,7 +277,7 @@ type emitLogEntry = (topic: string, data: []byte) => void
 The function `queryByTopic` can be called by an external process (such as a relayer) to retrieve all log entries associated with a given topic written by transactions which were executed at a given height.
 
 ```typescript
-type queryByTopic = (height: uint64, topic: string) => []byte[]
+type queryByTopic = (height: Height, topic: string) => []byte[]
 ```
 
 More complex query functionality MAY also be supported, and may allow for more efficient relayer process queries, but is not required.

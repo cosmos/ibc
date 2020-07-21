@@ -204,7 +204,7 @@ function createOutgoingPacket(
   destChannel: string,
   sourcePort: string,
   sourceChannel: string,
-  timeoutHeight: uint64,
+  timeoutHeight: Height,
   timeoutTimestamp: uint64) {
   // inspect the denomination to determine whether or not we are the source chain
   prefix = "{destPort}/{destChannel}"

@@ -57,6 +57,10 @@ interface ConsensusState {
 }
 ```
 
+### Height
+
+The `Height` of a solo machine is just a `uint64`, with the usual comparison operations.
+
 ### Headers
 
 `Header`s must only be provided by a solo machine when the machine wishes to update the public key.
