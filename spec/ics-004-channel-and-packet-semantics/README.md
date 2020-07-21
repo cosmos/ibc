@@ -169,7 +169,7 @@ Channel structures are stored under a store path prefix unique to a combination 
 
 ```typescript
 function channelPath(portIdentifier: Identifier, channelIdentifier: Identifier): Path {
-    return "ports/{portIdentifier}/channels/{channelIdentifier}"
+    return "channelEnds/ports/{portIdentifier}/channels/{channelIdentifier}"
 }
 ```
 
@@ -185,15 +185,15 @@ The `nextSequenceSend`, `nextSequenceRecv`, and `nextSequenceAck` unsigned integ
 
 ```typescript
 function nextSequenceSendPath(portIdentifier: Identifier, channelIdentifier: Identifier): Path {
-    return "{channelPath(portIdentifier, channelIdentifier)}/nextSequenceSend"
+    return "seqSends/ports/{portIdentifier}/channels/{channelIdentifier}/nextSequenceSend"
 }
 
 function nextSequenceRecvPath(portIdentifier: Identifier, channelIdentifier: Identifier): Path {
-    return "{channelPath(portIdentifier, channelIdentifier)}/nextSequenceRecv"
+    return "seqRecvs/ports/{portIdentifier}/channels/{channelIdentifier}/nextSequenceRecv"
 }
 
 function nextSequenceAckPath(portIdentifier: Identifier, channelIdentifier: Identifier): Path {
-    return "{channelPath(portIdentifier, channelIdentifier)}/nextSequenceAck"
+    return "seqAcks/ports/{portIdentifier}/channels/{channelIdentifier}/nextSequenceAck"
 }
 ```
 
@@ -201,7 +201,7 @@ Constant-size commitments to packet data fields are stored under the packet sequ
 
 ```typescript
 function packetCommitmentPath(portIdentifier: Identifier, channelIdentifier: Identifier, sequence: uint64): Path {
-    return "{channelPath(portIdentifier, channelIdentifier)}/packets/" + sequence
+    return "commitments/ports/{portIdentifier}/channels/{channelIdentifier}/packets/" + sequence
 }
 ```
 
@@ -211,7 +211,7 @@ Packet acknowledgement data are stored under the `packetAcknowledgementPath`:
 
 ```typescript
 function packetAcknowledgementPath(portIdentifier: Identifier, channelIdentifier: Identifier, sequence: uint64): Path {
-    return "{channelPath(portIdentifier, channelIdentifier)}/acknowledgements/" + sequence
+    return "acks/ports/{portIdentifier}/channels/{channelIdentifier}/acknowledgements/" + sequence
 }
 ```
 
