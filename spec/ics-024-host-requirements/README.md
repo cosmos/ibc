@@ -54,6 +54,12 @@ Variable interpolation, denoted by curly braces, is used throughout this specifi
 
 All identifiers, and all strings listed in this specification, must be encoded as ASCII unless otherwise specified.
 
+By default, identifiers have the following minimum and maximum lengths in characters:
+
+| Port identifier | Client identifier | Connection identifier | Channel identifier |
+| --------------- | ----------------- | --------------------- | ------------------ |
+| 2 - 64          | 9 - 64            | 10 - 64               | 10 - 64            |
+
 ### Key/value Store
 
 The host state machine MUST provide a key/value store interface 
