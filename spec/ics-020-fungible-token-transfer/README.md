@@ -248,7 +248,7 @@ function onRecvPacket(packet: Packet) {
     // determine escrow account
     escrowAccount = channelEscrowAddresses[packet.destChannel]
     // construct receiving denomination, check correctness
-    prefix = "{packet/sourcePort}/{packet.sourceChannel}"
+    prefix = "{packet.sourcePort}/{packet.sourceChannel}"
     if (data.denomination.slice(0, len(prefix)) !== prefix)
       ack = FungibleTokenPacketAcknowledgement{false, "invalid denomination"}
     else {
