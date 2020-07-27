@@ -42,6 +42,7 @@ interface FungibleTokenPacketData {
   amount: uint256
   sender: string
   receiver: string
+  source: boolean
 }
 ```
 
@@ -200,17 +201,16 @@ function createOutgoingPacket(
   amount: uint256,
   sender: string,
   receiver: string,
+  source: boolean,
   destPort: string,
   destChannel: string,
   sourcePort: string,
   sourceChannel: string,
   timeoutHeight: Height,
   timeoutTimestamp: uint64) {
-  // inspect the denomination to determine whether or not we are the source chain
-  prefix = "{destPort}/{destChannel}"
-  source = denomination.slice(0, len(prefix)) === prefix
   if source {
     // sender is source chain: escrow tokens
+    prefix = "{destPort}/{destChannel}"
     // determine escrow account
     escrowAccount = channelEscrowAddresses[packet.sourceChannel]
     // escrow source tokens (assumed to fail if balance insufficient)
@@ -233,12 +233,10 @@ function createOutgoingPacket(
 ```typescript
 function onRecvPacket(packet: Packet) {
   FungibleTokenPacketData data = packet.data
-  // inspect the denomination to determine whether or not we are the source chain
-  prefix = "{packet.destPort}/{packet.destChannel}"
-  source = denomination.slice(0, len(prefix)) === prefix
   // construct default acknowledgement of success
   FungibleTokenPacketAcknowledgement ack = FungibleTokenPacketAcknowledgement{true, null}
-  if source {
+  if data.source {
+    prefix = "{packet.destPort}/{packet.destChannel}"
     // sender was source, mint vouchers to receiver (assumed to fail if balance insufficient)
     err = bank.MintCoins(data.receiver, data.denomination, data.amount)
     if (err !== nil)
@@ -288,10 +286,9 @@ function onTimeoutPacket(packet: Packet) {
 ```typescript
 function refundTokens(packet: Packet) {
   FungibleTokenPacketData data = packet.data
-  prefix = "{packet.destPort}/{packet.destChannel}"
-  source = data.denomination.slice(0, len(prefix)) === prefix
-  if source {
+  if data.source {
     // sender was source chain, unescrow tokens
+    prefix = "{packet.destPort}/{packet.destChannel}"
     // determine escrow account
     escrowAccount = channelEscrowAddresses[packet.destChannel]
     // construct receiving denomination, check correctness
@@ -366,6 +363,8 @@ Aug 25, 2019 - Major revisions, more cleanup
 Feb 3, 2020 - Revisions to handle acknowledgements of success & failure
 
 Feb 24, 2020 - Revisions to infer source field, inclusion of version string
+
+July 27, 2020 - Re-addition of source field
 
 ## Copyright
 
