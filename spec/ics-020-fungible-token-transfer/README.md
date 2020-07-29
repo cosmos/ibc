@@ -293,9 +293,10 @@ function refundTokens(packet: Packet) {
   if data.source {
     // sender was source chain, unescrow tokens
     prefix = "{packet.destPort}/{packet.destChannel}"
+    // we abort here because we couldn't have sent this packet
+    abortTransactionUnless(data.denomination.slice(0, len(prefix)) === prefix)
     // determine escrow account
     escrowAccount = channelEscrowAddresses[packet.destChannel]
-    // construct receiving denomination, check correctness
     // unescrow tokens back to sender
     bank.TransferCoins(escrowAccount, data.sender, data.denomination.slice(len(prefix)), data.amount)
   } else {
