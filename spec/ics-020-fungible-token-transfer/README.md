@@ -237,10 +237,14 @@ function onRecvPacket(packet: Packet) {
   FungibleTokenPacketAcknowledgement ack = FungibleTokenPacketAcknowledgement{true, null}
   if data.source {
     prefix = "{packet.destPort}/{packet.destChannel}"
-    // sender was source, mint vouchers to receiver (assumed to fail if balance insufficient)
-    err = bank.MintCoins(data.receiver, data.denomination, data.amount)
-    if (err !== nil)
-      ack = FungibleTokenPacketAcknowledgement{false, "mint coins failed"}
+    if (data.denomination.slice(0, len(prefix)) !== prefix)
+      ack = FungibleTokenPacketAcknowledgement{false, "invalid denomination"}
+    else {
+      // sender was source, mint vouchers to receiver (assumed to fail if balance insufficient)
+      err = bank.MintCoins(data.receiver, data.denomination, data.amount)
+      if (err !== nil)
+        ack = FungibleTokenPacketAcknowledgement{false, "mint coins failed"}
+    }
   } else {
     // receiver is source chain: unescrow tokens
     // determine escrow account
