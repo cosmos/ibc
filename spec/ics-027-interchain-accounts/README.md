@@ -97,7 +97,6 @@ The acknowledgement data type describes the type of packet data and chain id and
 ```typescript
 interface IBCAccountPacketAcknowledgement {
     type: Type
-    chainID: string
     code: uint32
     data: Uint8Array
     error: string
@@ -108,9 +107,9 @@ The ```IBCAccountHook``` interface allows the source chain to receive results of
 
 ```typescript
 interface IBCAccountHook {
-  onAccountCreated(chainID: string, address: Address)
-  onTxSucceeded(chainID: string, txBytes: Uint8Array)
-  onTxFailed(chainID: string, txBytes: Uint8Array)
+  onAccountCreated(sourcePort:string, sourceChannel:string, address: Address)
+  onTxSucceeded(sourcePort:string, sourceChannel:string, txBytes: Uint8Array)
+  onTxFailed(sourcePort:string, sourceChannel:string, txBytes: Uint8Array)
 }
 ```
 
@@ -248,7 +247,6 @@ function onRecvPacket(packet: Packet) {
       // Return ack with generated address.
       return IBCAccountPacketAcknowledgement{
         type: Type.REGISTER,
-        chainID,
         code: 0,
         data: address,
         error: "",
@@ -257,7 +255,6 @@ function onRecvPacket(packet: Packet) {
       // Return ack with error.
       return IBCAccountPacketAcknowledgement{
         type: Type.REGISTER,
-        chainID,
         code: 1,
         data: [],
         error: e.message,
@@ -271,7 +268,6 @@ function onRecvPacket(packet: Packet) {
 
       return IBCAccountPacketAcknowledgement{
         type: Type.RUNTX,
-        chainID,
         code: 0,
         data: result.data,
         error: "",
@@ -280,7 +276,6 @@ function onRecvPacket(packet: Packet) {
       // Return ack with error.
       return IBCAccountPacketAcknowledgement{
         type: Type.RUNTX,
-        chainID,
         code: e.code || 1,
         data: [],
         error: e.message,
@@ -299,15 +294,15 @@ function onAcknowledgePacket(
   switch (ack.type) {
   case Type.REGISTER:
     if (ack.code === 0) {
-      onAccountCreated(ack.chainID, ack.data)
+      onAccountCreated(packet.sourcePort, packet.sourceChannel, ack.data)
     }
     return
   }
   case Type.RUNTX:
     if (ack.code === 0) {
-      onTxSucceeded(ack.chainID, packet.data.data)
+      onTxSucceeded(packet.sourcePort, packet.sourceChannel, packet.data.data)
     } else {
-      onTxFailed(ack.chainID, packet.data.data)
+      onTxFailed(packet.sourcePort, packet.sourceChannel, packet.data.data)
     }
     return
 }
@@ -318,7 +313,7 @@ function onTimeoutPacket(packet: Packet) {
   // Receiving chain should handle this event as if the tx in packet has failed
   switch (ack.type) {
   case Type.RUNTX:
-    onTxFailed(clientState.getChainID(), packet.data.data)
+    onTxFailed(packet.sourcePort, packet.sourceChannel, packet.data.data)
     return
 }
 ```
