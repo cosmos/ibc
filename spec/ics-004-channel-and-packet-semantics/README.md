@@ -681,6 +681,30 @@ function acknowledgePacket(
 }
 ```
 
+##### Acknowledgement Envelope
+
+The acknowledgement returned from the remote chain is defined as arbitrary bytes in the ics protocol. This data
+may either encode a successful execution or a failure (anything besides a timeout). There is no generic way to
+distinguish the two cases, which require any client-side packet visualizer to understand every app-specific protocol
+in order to distinguish the case of successful or failed relay. In order to reduce this issue, we offer additional
+specification for acknowledgement formats, which [SHOULD](https://www.ietf.org/rfc/rfc2119.txt) be used by the 
+app-specific protocols.
+
+```proto
+message Acknowledgement {
+  oneof response {
+    bytes result = 21;
+    string error = 22;
+  }
+}
+```
+
+If an application uses a different format for acknowledge bytes, it MUST not deserialize to a valid protobuf message
+of this format. Note that all packets contain exactly one non-empty field, and it must be result or error.  The field
+numbers 21 and 22 were explicitly chosen to avoid accidental conflicts with other protobuf message formats used
+for acknowledgements. The first byte of any message with this format will be the non-ascii values `0xaa` (result) 
+or `0xb2` (error).
+
 #### Timeouts
 
 Application semantics may require some timeout: an upper limit to how long the chain will wait for a transaction to be processed before considering it an error. Since the two chains have different local clocks, this is an obvious attack vector for a double spend - an attacker may delay the relay of the receipt or wait to send the packet until right after the timeout - so applications cannot safely implement naive timeout logic themselves.
