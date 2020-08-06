@@ -1,4 +1,4 @@
-personal_ws-1.1 en 624 
+personal_ws-1.1 en 625 
 ABCI
 ABI
 ADR
@@ -474,6 +474,7 @@ proofSpecs
 proofTimeout
 proofTry
 proto
+protobuf
 provableStore
 prover
 pseudocode

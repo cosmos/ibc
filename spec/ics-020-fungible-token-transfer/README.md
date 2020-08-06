@@ -101,7 +101,6 @@ that the module itself doesn't need to worry about what connections or channels 
 
 Both machines `A` and `B` accept new channels from any module on another machine, if and only if:
 
-- The other module is bound to the "bank" port.
 - The channel being created is unordered.
 - The version string is empty.
 
@@ -116,8 +115,6 @@ function onChanOpenInit(
   version: string) {
   // only unordered channels allowed
   abortTransactionUnless(order === UNORDERED)
-  // only allow channels to "bank" port on counterparty chain
-  abortTransactionUnless(counterpartyPortIdentifier === "bank")
   // assert that version is "ics20-1"
   abortTransactionUnless(version === "ics20-1")
   // allocate an escrow address
@@ -140,8 +137,6 @@ function onChanOpenTry(
   // assert that version is "ics20-1"
   abortTransactionUnless(version === "ics20-1")
   abortTransactionUnless(counterpartyVersion === "ics20-1")
-  // only allow channels to "bank" port on counterparty chain
-  abortTransactionUnless(counterpartyPortIdentifier === "bank")
   // allocate an escrow address
   channelEscrowAddresses[channelIdentifier] = newAddress()
 }

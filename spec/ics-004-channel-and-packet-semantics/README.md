@@ -685,7 +685,7 @@ function acknowledgePacket(
 
 The acknowledgement returned from the remote chain is defined as arbitrary bytes in the IBC protocol. This data
 may either encode a successful execution or a failure (anything besides a timeout). There is no generic way to
-distinguish the two cases, which requires that any client-side packet visualizer understands every app-specific protocol
+distinguish the two cases, which requires that any client-side packet visualiser understands every app-specific protocol
 in order to distinguish the case of successful or failed relay. In order to reduce this issue, we offer an additional
 specification for acknowledgement formats, which [SHOULD](https://www.ietf.org/rfc/rfc2119.txt) be used by the 
 app-specific protocols.
@@ -699,7 +699,7 @@ message Acknowledgement {
 }
 ```
 
-If an application uses a different format for acknowledgement bytes, it MUST not deserialize to a valid protobuf message
+If an application uses a different format for acknowledgement bytes, it MUST not deserialise to a valid protobuf message
 of this format. Note that all packets contain exactly one non-empty field, and it must be result or error.  The field
 numbers 21 and 22 were explicitly chosen to avoid accidental conflicts with other protobuf message formats used
 for acknowledgements. The first byte of any message with this format will be the non-ASCII values `0xaa` (result) 
