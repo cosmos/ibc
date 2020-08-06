@@ -209,19 +209,17 @@ function createOutgoingPacket(
   timeoutHeight: Height,
   timeoutTimestamp: uint64) {
   if source {
-    // sender is source chain: escrow tokens
-    prefix = "{destPort}/{destChannel}"
     // determine escrow account
     escrowAccount = channelEscrowAddresses[packet.sourceChannel]
     // escrow source tokens (assumed to fail if balance insufficient)
-    bank.TransferCoins(sender, escrowAccount, denomination.slice(len(prefix)), amount)
+    bank.TransferCoins(sender, escrowAccount, denomination, amount)
   } else {
     // receiver is source chain, burn vouchers
-    // construct receiving denomination, check correctness
     prefix = "{sourcePort}/{sourceChannel}"
-    abortTransactionUnless(denomination.slice(0, len(prefix)) === prefix)
+    // construct receiving denomination
+    prefixedDenomination = prefix + denomination
     // burn vouchers (assumed to fail if balance insufficient)
-    bank.BurnCoins(sender, denomination, amount)
+    bank.BurnCoins(sender, prefixedDenomination, amount)
   }
   FungibleTokenPacketData data = FungibleTokenPacketData{denomination, amount, sender, receiver}
   handler.sendPacket(Packet{timeoutHeight, timeoutTimestamp, destPort, destChannel, sourcePort, sourceChannel, data}, getCapability("port"))
@@ -237,28 +235,19 @@ function onRecvPacket(packet: Packet) {
   FungibleTokenPacketAcknowledgement ack = FungibleTokenPacketAcknowledgement{true, null}
   if data.source {
     prefix = "{packet.destPort}/{packet.destChannel}"
-    if (data.denomination.slice(0, len(prefix)) !== prefix)
-      ack = FungibleTokenPacketAcknowledgement{false, "invalid denomination"}
-    else {
-      // sender was source, mint vouchers to receiver (assumed to fail if balance insufficient)
-      err = bank.MintCoins(data.receiver, data.denomination, data.amount)
-      if (err !== nil)
-        ack = FungibleTokenPacketAcknowledgement{false, "mint coins failed"}
-    }
+    prefixedDenomination = prefix + data.denomination
+    // sender was source, mint vouchers to receiver (assumed to fail if balance insufficient)
+    err = bank.MintCoins(data.receiver, prefixedDenomination, data.amount)
+    if (err !== nil)
+      ack = FungibleTokenPacketAcknowledgement{false, "mint coins failed"}
   } else {
     // receiver is source chain: unescrow tokens
     // determine escrow account
     escrowAccount = channelEscrowAddresses[packet.destChannel]
-    // construct receiving denomination, check correctness
-    prefix = "{packet.sourcePort}/{packet.sourceChannel}"
-    if (data.denomination.slice(0, len(prefix)) !== prefix)
-      ack = FungibleTokenPacketAcknowledgement{false, "invalid denomination"}
-    else {
-      // unescrow tokens to receiver (assumed to fail if balance insufficient)
-      err = bank.TransferCoins(escrowAccount, data.receiver, data.denomination.slice(len(prefix)), data.amount)
-      if (err !== nil)
-        ack = FungibleTokenPacketAcknowledgement{false, "transfer coins failed"}
-    }
+    // unescrow tokens to receiver (assumed to fail if balance insufficient)
+    err = bank.TransferCoins(escrowAccount, data.receiver, data.denomination, data.amount)
+    if (err !== nil)
+      ack = FungibleTokenPacketAcknowledgement{false, "transfer coins failed"}
   }
   return ack
 }
@@ -292,21 +281,17 @@ function refundTokens(packet: Packet) {
   FungibleTokenPacketData data = packet.data
   if data.source {
     // sender was source chain, unescrow tokens
-    prefix = "{packet.destPort}/{packet.destChannel}"
-    // we abort here because we couldn't have sent this packet
-    abortTransactionUnless(data.denomination.slice(0, len(prefix)) === prefix)
     // determine escrow account
     escrowAccount = channelEscrowAddresses[packet.destChannel]
     // unescrow tokens back to sender
-    bank.TransferCoins(escrowAccount, data.sender, data.denomination.slice(len(prefix)), data.amount)
+    bank.TransferCoins(escrowAccount, data.sender, data.denomination, data.amount)
   } else {
     // receiver was source chain, mint vouchers
-    // construct receiving denomination, check correctness
+    // construct receiving denomination
     prefix = "{packet.sourcePort}/{packet.sourceChannel}"
-    // we abort here because we couldn't have sent this packet
-    abortTransactionUnless(data.denomination.slice(0, len(prefix)) === prefix)
+    prefixedDenomination = prefix + denomination
     // mint vouchers back to sender
-    bank.MintCoins(data.sender, data.denomination, data.amount)
+    bank.MintCoins(data.sender, prefixedDenomination, data.amount)
   }
 }
 ```
