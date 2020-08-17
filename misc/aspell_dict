@@ -1,4 +1,4 @@
-personal_ws-1.1 en 625 
+personal_ws-1.1 en 626 
 ABCI
 ABI
 ADR
@@ -398,6 +398,7 @@ multiprocess
 namespaced
 namespaces
 namespacing
+natively
 newAddress
 newCallbacks
 newCapability

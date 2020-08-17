@@ -630,6 +630,10 @@ the calling module on a channel to a counterparty module on the counterparty cha
 
 Calling modules MAY atomically execute appropriate application acknowledgement-handling logic in conjunction with calling `acknowledgePacket`.
 
+This is a synchronous acknowledgement, the contents of which must be determined when the packet is received. If the packet is processed asynchronously,
+a short initial acknowledgement value just confirming receipt can be used, and a second packet can be sent back later with the (asynchronous) acknowledgement
+data. This packet must keep a sequence reference to the packet which it is acknowledging since IBC does not natively handle this sort of asynchronous acknowledgement.
+
 ```typescript
 function acknowledgePacket(
   packet: OpaquePacket,
