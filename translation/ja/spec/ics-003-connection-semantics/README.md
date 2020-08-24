@@ -21,15 +21,15 @@ IBCプロトコルの中心は、packet の *認可* と *順序付け* の基�
 
 ### 定義
 
-Client-related types & functions are as defined in [ICS 2](../ics-002-client-semantics).
+client 関連の型と機能は [ICS 2](../ics-002-client-semantics) で定義されているとおりです。
 
-Commitment proof related types & functions are defined in [ICS 23](../ics-023-vector-commitments)
+Commitment proof 関連の型と機能は [ICS 23](../ics-023-vector-commitments) で定義されているとおりです。
 
-`Identifier` and other host state machine requirements are as defined in [ICS 24](../ics-024-host-requirements). The identifier is not necessarily intended to be a human-readable name (and likely should not be, to discourage squatting or racing for identifiers).
+`Identifier` および他の host state machine の要件は、[ICS 24](../ics-024-host-requirements) で定義されている通りです。識別子は、必ずしも人間が読める名前であることを意図しているわけではありません（そして、識別子の占有や競合を防止するためとも限りません）。
 
-The opening handshake protocol allows each chain to verify the identifier used to reference the connection on the other chain, enabling modules on each chain to reason about the reference on the other chain.
+opening handshake プロトコルは、各 chain が他の chain 上の connection を参照するために用いる識別子を検証できるようにし、各 chain 上の module が他の chain 上の参照について判断できるようにします。
 
-An *actor*, as referred to in this specification, is an entity capable of executing datagrams who is paying for computation / storage (via gas or a similar mechanism) but is otherwise untrusted. Possible actors include:
+本仕様で言及されている *actor* とは、datagram を実行できる entity で、計算 / ストレージ (gas または同様の機構を介して) を負担していますが、それ以外は信頼されていません。可能な actor は以下の通りです。
 
 - アカウントの鍵で署名するエンドユーザー
 - 自律的に、または別のトランザクションに応答して動作する on-chain smart contract
@@ -37,7 +37,7 @@ An *actor*, as referred to in this specification, is an entity capable of execut
 
 ### 期待される性質
 
-- Implementing blockchains should be able to safely allow untrusted actors to open and update connections.
+- blockchain を実装することで、信頼されていない actor が connection を開いたり更新したりすることを安全に許可できるようにしなければなりません。
 
 #### 確立前
 
@@ -58,7 +58,7 @@ connection 確立の前に:
 一度 negotiation handshake が完了すると:
 
 - 両方の chain で作成された connection オブジェクトには、connection を開始する actor が指定した consensus stateが含まれています。
-- No other connection objects can be maliciously created on other chains by replaying datagrams.
+- datagram を再生することで、他の chain 上に悪意を持って他の connection オブジェクトを作成することはできません。
 
 ## 技術仕様
 
@@ -87,10 +87,10 @@ interface ConnectionEnd {
 
 - `state` は connection end の現在の状態を表しています。
 - `counterpartyConnectionIdentifier` は、この connection の相手 chain 上の connection end を示しています。
-- The `counterpartyPrefix` field contains the prefix used for state verification on the counterparty chain associated with this connection. Chains should expose an endpoint to allow relayers to query the connection prefix. If not specified, a default `counterpartyPrefix` of `"ibc"` should be used.
-- The `clientIdentifier` field identifies the client associated with this connection.
-- The `counterpartyClientIdentifier` field identifies the client on the counterparty chain associated with this connection.
-- The `version` field is an opaque string which can be utilised to determine encodings or protocols for channels or packets utilising this connection. If not specified, a default `version` of `""` should be used.
+- `counterpartyPrefix` には、この connection の相手 chain の状態検証に使用される prefix が含まれます。chain は、relayer が connection prefix を照会できるようにエンドポイントを公開する必要があります。指定されていない場合は、`「ibc」` のデフォルトの `counterpartyPrefix` が使用されるべきです。
+- `clientIdentifier` は、この connection に関連付けられた client を示しています。
+- `counterpartyClientIdentifier` は、この connection の<br>相手 chain 上の client を示しています。
+- `version` は opaque string で、この connection を利用する channel または packet のエンコーディングまたはプロトコルを決定するために利用できます。指定されていない場合は、デフォルトの`version` の `""` が使用されるべきです。
 
 ### パスの保存
 
@@ -102,7 +102,7 @@ function connectionPath(id: Identifier): Path {
 }
 ```
 
-A reverse mapping from clients to a set of connections (utilised to look up all connections using a client) is stored under a unique prefix per-client:
+client から一連の connetion への逆マッピング (clientを使用したすべての connetion を検索するために利用される) は、client 毎に一意の prefix の下に保存されます。
 
 ```typescript
 function clientConnectionsPath(clientIdentifier: Identifier): Path {
@@ -124,7 +124,7 @@ function addConnectionToClient(
 }
 ```
 
-Helper functions are defined by the connection to pass the `CommitmentPrefix` associated with the connection to the verification function provided by the client. In the other parts of the specifications, these functions MUST be used for introspecting other chains' state, instead of directly calling the verification functions on the client.
+ヘルパー関数は、client が提供する検証関数に connection に関連する `CommitmentPrefix` を渡すための connection によって定義されます。この仕様の他の部分では、これらの関数は、client 上の検証関数を直接呼び出すのではなく、他の chain の状態を確認するために使用されなければなりません。
 
 ```typescript
 function verifyClientConsensusState(
@@ -253,7 +253,7 @@ type pickVersion = ([]string) => string
 
 opening handshake サブプロトコルは、お互いの2つのチェーンの consensus stateを初期化するのに役立ちます。
 
-The opening handshake defines four datagrams: *ConnOpenInit*, *ConnOpenTry*, *ConnOpenAck*, and *ConnOpenConfirm*.
+opening handshake は4つの datagram を定義します: *ConnOpenInit*、*ConnOpenTry*、*ConnOpenAck*、*ConnOpenConfirm*。
 
 正しいプロトコルの実行は以下のような流れになります（すべての呼び出しは ICS 25 に従った module を介して行われることに注意してください）。
 
@@ -269,7 +269,7 @@ Relayer | `ConnOpenConfirm` | B | (OPEN, TRYOPEN) | (OPEN, OPEN)
 - 各 chain は、開始 actor が最初に指定した通りに、お互いの正しい consensus state を持っています。
 - 各 chain は、他の chain の識別子を知っており、それに同意しています。
 
-This sub-protocol need not be permissioned, modulo anti-spam measures.
+このサブプロトコルは、スパム防止策等を除いて、許可制である必要はありません。
 
 *ConnOpenInit* chain A の connection 試行を初期化します。
 
