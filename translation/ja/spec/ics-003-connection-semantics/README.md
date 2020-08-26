@@ -219,7 +219,7 @@ function getTimestampAtHeight(
 
 Headerの追跡と不正行為の検出は [ICS 2](../ics-002-client-semantics) で定義されています。
 
-![State Machine Diagram](state.png)
+![State Machine Diagram](../../../../spec/ics-003-connection-semantics/state.png)
 
 #### 識別子の検証
 

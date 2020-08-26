@@ -156,7 +156,7 @@ type OpaquePacket = object
 
 client、connection、channel、および packet のアーキテクチャ
 
-![Dataflow Visualisation](dataflow.png)
+![Dataflow Visualisation](../../../../spec/ics-004-channel-and-packet-semantics/dataflow.png)
 
 ### 準備
 
@@ -236,7 +236,7 @@ type validateChannelIdentifier = (portIdentifier: Identifier, channelIdentifier:
 
 #### channel のライフサイクル管理
 
-![Channel State Machine](../../../channel-state-machine.png)
+![Channel State Machine](../../../../spec/ics-004-channel-and-packet-semantics/channel-state-machine.png)
 
 開始者 | Datagram | 実行される chain | 事前 state (A, B) | 事後 state (A, B)
 --- | --- | --- | --- | ---
@@ -456,7 +456,7 @@ function chanCloseConfirm(
 
 #### packet フローと処理
 
-![Packet State Machine](packet-state-machine.png)
+![Packet State Machine](../../../../spec/ics-004-channel-and-packet-semantics/packet-state-machine.)
 
 ##### packet のとある1日
 
@@ -481,7 +481,7 @@ module は [ICS 25](.../ics-025-handler-interface) または [ICS 26](.../ics-02
 
 空間的に表現すると、2台のマシン間の packet 転送は次のように表すことができます。
 
-![Packet Transit](packet-transit.png)
+![Packet Transit](../../../../spec/ics-004-channel-and-packet-semantics/packet-transit.png)
 
 ##### packetの送信
 
