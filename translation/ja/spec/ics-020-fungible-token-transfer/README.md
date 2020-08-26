@@ -34,7 +34,7 @@ IBCハンドラインターフェースとIBCルーティングモジュール�
 
 ### データ構造
 
-Only one packet data type, `FungibleTokenPacketData`, which specifies the denomination, amount, sending account, receiving account, and whether the sending chain is the source of the asset, is required.
+denomination、金額、送信口座、受信口座、送信 chain が asset の発行元かどうかを指定する packet データ型 `FungibleTokenPacketData` のみが必要です。
 
 ```typescript
 interface FungibleTokenPacketData {
@@ -54,7 +54,7 @@ interface FungibleTokenPacketAcknowledgement {
 }
 ```
 
-The fungible token transfer bridge module tracks escrow addresses associated with particular channels in state. Fields of the `ModuleState` are assumed to be in scope.
+fungible token transfer bridge moduleは、特定 channel の state に関連付けられたエスクローアドレスを追跡します。`ModuleState`のフィールドはスコープ内にあることを前提としています。
 
 ```typescript
 interface ModuleState {
@@ -64,11 +64,11 @@ interface ModuleState {
 
 ### サブプロトコル
 
-The sub-protocols described herein should be implemented in a "fungible token transfer bridge" module with access to a bank module and to the IBC routing module.
+ここで説明するサブプロトコルは、bank module および IBC ルーティング module へのアクセスを有する "fungible token transfer bridge" module に実装されるべきです。
 
 #### Port & channel setup
 
-The `setup` function must be called exactly once when the module is created (perhaps when the blockchain itself is initialised) to bind to the appropriate port and create an escrow address (owned by the module).
+`setup` 関数は、適切な port にバインドして（module が所有する）エスクローアドレスを作成するために module が作成されたとき（おそらく blockchain 自体が初期化されたとき）に、一度だけ呼ばれなければなりません。
 
 ```typescript
 function setup() {
@@ -90,7 +90,7 @@ function setup() {
 
 <code>setup</code> 関数が呼び出されると、別の chain 上の fungible token transfer module のインスタンス間でIBCルーティング module を介して channel を作成することができます。
 
-An administrator (with the permissions to create connections & channels on the host state machine) is responsible for setting up connections to other state machines & creating channels to other instances of this module (or another module supporting this interface) on other chains. This specification defines packet handling semantics only, and defines them in such a fashion that the module itself doesn't need to worry about what connections or channels might or might not exist at any point in time.
+管理者（host state machine上で connection と channelの作成権限を所持している）は、他の state machine への connection を設定したり、他の chain 上のこの module の他のインスタンス（またはこのインターフェースを補助する他の module）への channel を作成する責任があります。この仕様は packet 処理のセマンティクスのみを定義し、module 自身がどの時点でどのような connection や channel が存在するかしないかを気にする必要がないような方法で定義しています。
 
 #### Routing module callbacks
 
@@ -186,7 +186,7 @@ function onChanCloseConfirm(
 - source zone として動作する場合、bridge module は送信 chain 上で既存のローカル asset denomination を預託し、受信 chain上で voucher を発行します。
 - sink zone として動作する場合, bridge module は送信 chain 上で local voucher を焼却し受信 chain 上でローカル asset denomination を取り戻します。
 - packet がタイムアウトすると、ローカル asset が送信者に戻されるか、または発行済み voucher が送信者に適切に戻されます。
-- Acknowledgement data is used to handle failures, such as invalid denominations or invalid destination accounts. Returning an acknowledgement of failure is preferable to aborting the transaction since it more easily enables the sending chain to take appropriate action based on the nature of the failure.
+- 確認応答データは、無効な denomination や宛先口座などの失敗を処理するために使用されています。失敗の確認応答を返すことは、トランザクションを中止するよりも、送信 chain が失敗の性質に基づいて適切な行動を取ることを容易にするために好ましいことです
 
 `createOutgoingPacket`は、host state machine 上のアカウント所有者に固有の、適切な署名確認を行う module 内のトランザクションハンドラによって呼び出されなければなりません。
 
@@ -318,13 +318,13 @@ function onTimeoutPacketClose(packet: Packet) {
 
 この実装では、互換性と供給の両方を保持します。
 
-Fungibility: If tokens have been sent to the counterparty chain, they can be redeemed back in the same denomination & amount on the source chain.
+互換性: トークンが相手 chain に送られた場合、そのトークンは送信元 chain と同じ denomination、トークン量で換金可能です。
 
 供給: ロックされていないトークンとして供給を再定義します。すべての送信-受信ペアの合計は正味ゼロになります。送信元 chain は供給を変更することができます。
 
 ##### Multi-chain の注意点
 
-This specification does not directly handle the "diamond problem", where a user sends a token originating on chain A to chain B, then to chain D, and wants to return it through D -> C -> A — since the supply is tracked as owned by chain B (and the denomination will be "{portOnD}/{channelOnD}/{portOnB}/{channelOnB}/denom"), chain C cannot serve as the intermediary. It is not yet clear whether that case should be dealt with in-protocol or not — it may be fine to just require the original path of redemption (and if there is frequent liquidity and some surplus on both paths the diamond path will work most of the time). Complexities arising from long redemption paths may lead to the emergence of central chains in the network topology.
+この仕様では「ダイアモンド問題」を直接扱うことはできません。つまり、あるユーザーが chain A から chain B へ、そして chain D へとトークンを送り、それを D -> C -> A 経由で返却したい場合のことですが、その供給は chain B が所有するものとして追跡されているので（denomination は"{portOnD}/{channelOnD}/{portOnB}/{channelOnB}/denom"になります）、chain C は仲介役にはなれないからです。このケースをプロトコル内で処理すべきかどうかはまだ明確ではありません。元の償還パスを要求するだけでも構わないかもしれません（そして、両方のパスに頻繁に流動性があり、多少の余剰がある場合、ダイヤモンドパスはほとんどの場合機能します）。長い償還パスから生じる複雑さは、ネットワークトポロジー内での中心的な chain の出現につながるかもしれません。
 
 様々なパスで chain のネットワーク上を移動するすべての denomination を追跡するためには、各 denomination の “global” 送信元 chain を追跡するレジストリを実装することが、特定の chain にとって有用であるかもしれません。エンドユーザーサービスプロバイダ（ウォレット作成者など）は、UXを向上させるために、このようなレジストリを組み込むか、または、標準的な送信元 chain と読みやすい名前の独自のマッピングを保持することを望むかもしれません。
 
