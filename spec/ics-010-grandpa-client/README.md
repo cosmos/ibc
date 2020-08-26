@@ -109,13 +109,13 @@ interface SignedPrecommit {
 }
 ```
 
-### Evidence
+### Misbehaviour
 
-The `Evidence` type is used for detecting misbehaviour and freezing the client - to prevent further packet flow - if applicable.
-GRANDPA client `Evidence` consists of two headers at the same height both of which the light client would have considered valid.
+The `Misbehaviour` type is used for detecting misbehaviour and freezing the client - to prevent further packet flow - if applicable.
+GRANDPA client `Misbehaviour` consists of two headers at the same height both of which the light client would have considered valid.
 
 ```typescript
-interface Evidence {
+interface Misbehaviour {
   fromHeight: uint64
   h1: Header
   h2: Header
@@ -186,20 +186,20 @@ GRANDPA client misbehaviour checking determines whether or not two conflicting h
 ```typescript
 function checkMisbehaviourAndUpdateState(
   clientState: ClientState,
-  evidence: Evidence) {
+  misbehaviour: Misbehaviour) {
     // assert that the heights are the same
-    assert(evidence.h1.height === evidence.h2.height)
+    assert(misbehaviour.h1.height === misbehaviour.h2.height)
     // assert that the commitments are different
-    assert(evidence.h1.commitmentRoot !== evidence.h2.commitmentRoot)
+    assert(misbehaviour.h1.commitmentRoot !== misbehaviour.h2.commitmentRoot)
     // fetch the previously verified commitment root & authority set
-    consensusState = get("clients/{identifier}/consensusStates/{evidence.fromHeight}")
+    consensusState = get("clients/{identifier}/consensusStates/{misbehaviour.fromHeight}")
     // check if the light client "would have been fooled"
     assert(
-      verify(consensusState.authoritySet, evidence.h1) &&
-      verify(consensusState.authoritySet, evidence.h2)
+      verify(consensusState.authoritySet, misbehaviour.h1) &&
+      verify(consensusState.authoritySet, misbehaviour.h2)
       )
     // set the frozen height
-    clientState.frozenHeight = min(clientState.frozenHeight, evidence.h1.height) // which is same as h2.height
+    clientState.frozenHeight = min(clientState.frozenHeight, misbehaviour.h1.height) // which is same as h2.height
     // save the client
     set("clients/{identifier}", clientState)
 }

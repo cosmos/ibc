@@ -239,7 +239,7 @@ to intervene to unfreeze a frozen client & provide a new correct header.
 A misbehaviour predicate is an opaque function defined by a client type, used to check if data
 constitutes a violation of the consensus protocol. This might be two signed headers
 with different state roots but the same height, a signed header containing invalid
-state transitions, or other evidence of malfeasance as defined by the consensus algorithm.
+state transitions, or other proof of malfeasance as defined by the consensus algorithm.
 
 The misbehaviour predicate & client state update logic are combined into a single `checkMisbehaviourAndUpdateState` type, which is defined as
 
@@ -247,7 +247,7 @@ The misbehaviour predicate & client state update logic are combined into a singl
 type checkMisbehaviourAndUpdateState = (bytes) => Void
 ```
 
-`checkMisbehaviourAndUpdateState` MUST throw an exception if the provided evidence was not valid.
+`checkMisbehaviourAndUpdateState` MUST throw an exception if the provided proof of misbehaviour was not valid.
 
 If misbehaviour was valid, the client MUST also mutate internal state to mark appropriate heights which
 were previously considered valid as invalid, according to the nature of the misbehaviour.
@@ -633,18 +633,18 @@ function updateClient(
 
 #### Misbehaviour
 
-If the client detects evidence of misbehaviour, the client can be alerted, possibly invalidating
+If the client detects proof of misbehaviour, the client can be alerted, possibly invalidating
 previously valid state roots & preventing future updates.
 
 ```typescript
 function submitMisbehaviourToClient(
   id: Identifier,
-  evidence: bytes) {
+  misbehaviour: bytes) {
     clientType = provableStore.get(clientTypePath(id))
     abortTransactionUnless(clientType !== null)
     clientState = privateStore.get(clientStatePath(id))
     abortTransactionUnless(clientState !== null)
-    clientType.checkMisbehaviourAndUpdateState(clientState, evidence)
+    clientType.checkMisbehaviourAndUpdateState(clientState, misbehaviour)
 }
 ```
 
@@ -691,7 +691,7 @@ interface Header {
   newPublicKey: Maybe<PublicKey>
 }
 
-interface Evidence {
+interface Misbehaviour {
   h1: Header
   h2: Header
 }
@@ -825,9 +825,9 @@ function verifyNextSequenceRecv(
 // any duplicate signature by a past or current key freezes the client
 function checkMisbehaviourAndUpdateState(
   clientState: ClientState,
-  evidence: Evidence) {
-    h1 = evidence.h1
-    h2 = evidence.h2
+  misbehaviour: Misbehaviour) {
+    h1 = misbehaviour.h1
+    h2 = misbehaviour.h2
     abortTransactionUnless(clientState.pastPublicKeys.contains(h1.publicKey))
     abortTransactionUnless(h1.sequence === h2.sequence)
     abortTransactionUnless(h1.commitmentRoot !== h2.commitmentRoot || h1.publicKey !== h2.publicKey)

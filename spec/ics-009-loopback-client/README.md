@@ -40,7 +40,7 @@ type ConsensusState object
 
 type Header object
 
-type Evidence object
+type Misbehaviour object
 ```
 
 ### Client initialisation
@@ -72,7 +72,7 @@ No misbehaviour checking is necessary in a loopback client; the function should 
 ```typescript
 function checkMisbehaviourAndUpdateState(
   clientState: ClientState,
-  evidence: Evidence) {
+  misbehaviour: Misbehaviour) {
     return
 }
 ```

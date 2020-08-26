@@ -73,9 +73,9 @@ interface Header {
 }
 ```
 
-### Evidence
+### Misbehaviour 
 
-`Evidence` of solo machine misbehaviour consists of a sequence and two signatures over different messages at that sequence.
+`Misbehaviour` for solo machines consists of a sequence and two signatures over different messages at that sequence.
 
 ```typescript
 interface SignatureAndData {
@@ -83,7 +83,7 @@ interface SignatureAndData {
   data: []byte
 }
 
-interface Evidence {
+interface Misbehaviour {
   sequence: uint64
   signatureOne: SignatureAndData
   signatureTwo: SignatureAndData
@@ -144,13 +144,13 @@ Any duplicate signature on different messages by the current public key freezes 
 ```typescript
 function checkMisbehaviourAndUpdateState(
   clientState: ClientState,
-  evidence: Evidence) {
-    h1 = evidence.h1
-    h2 = evidence.h2
+  misbehaviour: Misbehaviour) {
+    h1 = misbehaviour.h1
+    h2 = misbehaviour.h2
     pubkey = clientState.consensusState.publicKey
-    assert(evidence.h1.signature.data !== evidence.h2.signature.data)
-    assert(checkSignature(pubkey, evidence.sequence, evidence.h1.signature.sig))
-    assert(checkSignature(pubkey, evidence.sequence, evidence.h2.signature.sig))
+    assert(misbehaviour.h1.signature.data !== misbehaviour.h2.signature.data)
+    assert(checkSignature(pubkey, misbehaviour.sequence, misbehaviour.h1.signature.sig))
+    assert(checkSignature(pubkey, misbehaviour.sequence, misbehaviour.h2.signature.sig))
     clientState.frozen = true
 }
 ```

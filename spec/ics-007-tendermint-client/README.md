@@ -50,7 +50,7 @@ Arguably, this is disadvantageous, since `A_1` was just "lucky" in having been u
 
 There is a free parameter here - namely, how far back is `A_1` willing to go (how big can `n` be where `A_1` will still be willing to look up `h_0`, having been updated to `h_0 + n`)? There is also a countervailing concern, in and of that double-signing is presumed to be costless after the unbonding period has passed, and we don't want to open up a denial-of-service vector for IBC clients.
 
-The necessary condition is thus that `A_1` should be willing to look up headers as old as it has stored, but should also enforce the "unbonding period" check on the evidence, and avoid freezing the client if the evidence is older than the unbonding period (relative to the client's local timestamp). If there are concerns about clock skew a slight delta could be added.
+The necessary condition is thus that `A_1` should be willing to look up headers as old as it has stored, but should also enforce the "unbonding period" check on the misbehaviour, and avoid freezing the client if the misbehaviour is older than the unbonding period (relative to the client's local timestamp). If there are concerns about clock skew a slight delta could be added.
 
 ## Technical Specification
 
@@ -131,13 +131,13 @@ interface Header {
 }
 ```
 
-### Evidence
-
-The `Evidence` type is used for detecting misbehaviour and freezing the client - to prevent further packet flow - if applicable.
-Tendermint client `Evidence` consists of two headers at the same height both of which the light client would have considered valid.
+### Misbehaviour
+ 
+The `Misbehaviour` type is used for detecting misbehaviour and freezing the client - to prevent further packet flow - if applicable.
+Tendermint client `Misbehaviour` consists of two headers at the same height both of which the light client would have considered valid.
 
 ```typescript
-interface Evidence {
+interface Misbehaviour {
   fromHeight: Height
   h1: Header
   h2: Header
@@ -228,22 +228,22 @@ Tendermint client misbehaviour checking determines whether or not two conflictin
 ```typescript
 function checkMisbehaviourAndUpdateState(
   clientState: ClientState,
-  evidence: Evidence) {
+  misbehaviour: Misbehaviour) {
     // assert that the heights are the same
-    assert(evidence.h1.height === evidence.h2.height)
+    assert(misbehaviour.h1.height === misbehaviour.h2.height)
     // assert that the commitments are different
-    assert(evidence.h1.commitmentRoot !== evidence.h2.commitmentRoot)
+    assert(misbehaviour.h1.commitmentRoot !== misbehaviour.h2.commitmentRoot)
     // fetch the previously verified commitment root & validator set
-    consensusState = get("clients/{identifier}/consensusStates/{evidence.fromHeight}")
+    consensusState = get("clients/{identifier}/consensusStates/{misbehaviour.fromHeight}")
     // assert that the timestamp is not from more than an unbonding period ago
-    assert(currentTimestamp() - evidence.timestamp < clientState.unbondingPeriod)
+    assert(currentTimestamp() - misbehaviour.timestamp < clientState.unbondingPeriod)
     // check if the light client "would have been fooled"
     assert(
-      verify(consensusState.validatorSet, evidence.fromHeight, evidence.h1) &&
-      verify(consensusState.validatorSet, evidence.fromHeight, evidence.h2)
+      verify(consensusState.validatorSet, misbehaviour.fromHeight, misbehaviour.h1) &&
+      verify(consensusState.validatorSet, misbehaviour.fromHeight, misbehaviour.h2)
       )
     // set the frozen height
-    clientState.frozenHeight = min(clientState.frozenHeight, evidence.h1.height) // which is same as h2.height
+    clientState.frozenHeight = min(clientState.frozenHeight, misbehaviour.h1.height) // which is same as h2.height
     // save the client
     set("clients/{identifier}", clientState)
 }
