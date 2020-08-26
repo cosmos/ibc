@@ -12,8 +12,7 @@ message IBCAccountPacketData {
 
 message IBCAccountPacketAcknowledgement {
     Type type = 1;
-    string chainID = 2;
-    uint32 code = 3;
-    bytes data = 4;
-    string error = 5;
+    uint32 code = 2;
+    bytes data = 3;
+    string error = 4;
 }
