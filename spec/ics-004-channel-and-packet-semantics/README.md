@@ -799,6 +799,8 @@ The `timeoutOnClose` function is called by a module in order to prove that the c
 to which an unreceived packet was addressed has been closed, so the packet will never be received
 (even if the `timeoutHeight` or `timeoutTimestamp` has not yet been reached).
 
+Calling modules MAY atomically execute appropriate application timeout-handling logic in conjunction with calling `timeoutOnClose`.
+
 ```typescript
 function timeoutOnClose(
   packet: Packet,
@@ -856,6 +858,12 @@ function timeoutOnClose(
 
     // delete our commitment
     provableStore.delete(packetCommitmentPath(packet.sourcePort, packet.sourceChannel, packet.sequence))
+
+    if channel.order === ORDERED {
+      // ordered channel: close the channel
+      channel.state = CLOSED
+      provableStore.set(channelPath(packet.sourcePort, packet.sourceChannel), channel)
+    }
 
     // return transparent packet
     return packet
