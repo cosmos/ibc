@@ -200,7 +200,7 @@ function createOutgoingPacket(
   destChannel: string,
   sourcePort: string,
   sourceChannel: string,
-  timeoutHeight: uint64,
+  timeoutHeight: Height,
   timeoutTimestamp: uint64) {
   // 我々が source chain かどうかを決めるために denomination を調べる
   prefix = "{destPort}/{destChannel}"

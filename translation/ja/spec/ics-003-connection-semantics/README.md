@@ -129,10 +129,10 @@ function addConnectionToClient(
 ```typescript
 function verifyClientConsensusState(
   connection: ConnectionEnd,
-  height: uint64,
+  height: Height,
   proof: CommitmentProof,
   clientIdentifier: Identifier,
-  consensusStateHeight: uint64,
+  consensusStateHeight: Height,
   consensusState: ConsensusState) {
     client = queryClient(connection.clientIdentifier)
     return client.verifyClientConsensusState(connection, height, connection.counterpartyPrefix, proof, clientIdentifier, consensusStateHeight, consensusState)
@@ -140,7 +140,7 @@ function verifyClientConsensusState(
 
 function verifyConnectionState(
   connection: ConnectionEnd,
-  height: uint64,
+  height: Height,
   proof: CommitmentProof,
   connectionIdentifier: Identifier,
   connectionEnd: ConnectionEnd) {
@@ -150,7 +150,7 @@ function verifyConnectionState(
 
 function verifyChannelState(
   connection: ConnectionEnd,
-  height: uint64,
+  height: Height,
   proof: CommitmentProof,
   portIdentifier: Identifier,
   channelIdentifier: Identifier,
@@ -161,7 +161,7 @@ function verifyChannelState(
 
 function verifyPacketData(
   connection: ConnectionEnd,
-  height: uint64,
+  height: Height,
   proof: CommitmentProof,
   portIdentifier: Identifier,
   channelIdentifier: Identifier,
@@ -173,7 +173,7 @@ function verifyPacketData(
 
 function verifyPacketAcknowledgement(
   connection: ConnectionEnd,
-  height: uint64,
+  height: Height,
   proof: CommitmentProof,
   portIdentifier: Identifier,
   channelIdentifier: Identifier,
@@ -185,7 +185,7 @@ function verifyPacketAcknowledgement(
 
 function verifyPacketAcknowledgementAbsence(
   connection: ConnectionEnd,
-  height: uint64,
+  height: Height,
   proof: CommitmentProof,
   portIdentifier: Identifier,
   channelIdentifier: Identifier,
@@ -196,7 +196,7 @@ function verifyPacketAcknowledgementAbsence(
 
 function verifyNextSequenceRecv(
   connection: ConnectionEnd,
-  height: uint64,
+  height: Height,
   proof: CommitmentProof,
   portIdentifier: Identifier,
   channelIdentifier: Identifier,
@@ -207,7 +207,7 @@ function verifyNextSequenceRecv(
 
 function getTimestampAtHeight(
   connection: ConnectionEnd,
-  height: uint64) {
+  height: Height) {
     client = queryClient(connection.clientIdentifier)
     return client.queryConsensusState(height).getTimestamp()
 }
@@ -302,8 +302,8 @@ function connOpenTry(
   counterpartyVersions: string[],
   proofInit: CommitmentProof,
   proofConsensus: CommitmentProof,
-  proofHeight: uint64,
-  consensusHeight: uint64) {
+  proofHeight: Height,
+  consensusHeight: Height) {
     abortTransactionUnless(validateConnectionIdentifier(desiredIdentifier))
     abortTransactionUnless(consensusHeight < getCurrentHeight())
     expectedConsensusState = getConsensusState(consensusHeight)
@@ -338,8 +338,8 @@ function connOpenAck(
   version: string,
   proofTry: CommitmentProof,
   proofConsensus: CommitmentProof,
-  proofHeight: uint64,
-  consensusHeight: uint64) {
+  proofHeight: Height,
+  consensusHeight: Height) {
     abortTransactionUnless(consensusHeight < getCurrentHeight())
     connection = provableStore.get(connectionPath(identifier))
     abortTransactionUnless(connection.state === INIT || connection.state === TRYOPEN)
@@ -363,7 +363,7 @@ function connOpenAck(
 function connOpenConfirm(
   identifier: Identifier,
   proofAck: CommitmentProof,
-  proofHeight: uint64) {
+  proofHeight: Height) {
     connection = provableStore.get(connectionPath(identifier))
     abortTransactionUnless(connection.state === TRYOPEN)
     expected = ConnectionEnd{OPEN, identifier, getCommitmentPrefix(), connection.counterpartyClientIdentifier,

@@ -103,7 +103,7 @@ enum ChannelState {
 ```typescript
 interface Packet {
   sequence: uint64
-  timeoutHeight: uint64
+  timeoutHeight: Height
   timeoutTimestamp: uint64
   sourcePort: Identifier
   sourceChannel: Identifier
@@ -301,7 +301,7 @@ function chanOpenTry(
   version: string,
   counterpartyVersion: string,
   proofInit: CommitmentProof,
-  proofHeight: uint64): CapabilityKey {
+  proofHeight: Height): CapabilityKey {
     abortTransactionUnless(validateChannelIdentifier(portIdentifier, channelIdentifier))
     abortTransactionUnless(connectionHops.length === 1) // for v1 of the IBC protocol
     previous = provableStore.get(channelPath(portIdentifier, channelIdentifier))
@@ -346,7 +346,7 @@ function chanOpenAck(
   channelIdentifier: Identifier,
   counterpartyVersion: string,
   proofTry: CommitmentProof,
-  proofHeight: uint64) {
+  proofHeight: Height) {
     channel = provableStore.get(channelPath(portIdentifier, channelIdentifier))
     abortTransactionUnless(channel.state === INIT || channel.state === TRYOPEN)
     abortTransactionUnless(authenticateCapability(channelCapabilityPath(portIdentifier, channelIdentifier), capability))
@@ -375,7 +375,7 @@ function chanOpenConfirm(
   portIdentifier: Identifier,
   channelIdentifier: Identifier,
   proofAck: CommitmentProof,
-  proofHeight: uint64) {
+  proofHeight: Height) {
     channel = provableStore.get(channelPath(portIdentifier, channelIdentifier))
     abortTransactionUnless(channel !== null)
     abortTransactionUnless(channel.state === TRYOPEN)
@@ -432,7 +432,7 @@ function chanCloseConfirm(
   portIdentifier: Identifier,
   channelIdentifier: Identifier,
   proofInit: CommitmentProof,
-  proofHeight: uint64) {
+  proofHeight: Height) {
     abortTransactionUnless(authenticateCapability(channelCapabilityPath(portIdentifier, channelIdentifier), capability))
     channel = provableStore.get(channelPath(portIdentifier, channelIdentifier))
     abortTransactionUnless(channel !== null)
@@ -554,7 +554,7 @@ IBC ハンドラーは以下の手順を順に実行します。:
 function recvPacket(
   packet: OpaquePacket,
   proof: CommitmentProof,
-  proofHeight: uint64,
+  proofHeight: Height,
   acknowledgement: bytes): Packet {
 
     channel = provableStore.get(channelPath(packet.destPort, packet.destChannel))
@@ -615,7 +615,7 @@ function acknowledgePacket(
   packet: OpaquePacket,
   acknowledgement: bytes,
   proof: CommitmentProof,
-  proofHeight: uint64): Packet {
+  proofHeight: Height): Packet {
 
     // そのchannelが開いていなければトランザクションを中止し、呼び出し moduleは関連するportを所有し, そしてその packet フィールドは一致します
     channel = provableStore.get(channelPath(packet.sourcePort, packet.sourceChannel))
@@ -683,7 +683,7 @@ function acknowledgePacket(
 function timeoutPacket(
   packet: OpaquePacket,
   proof: CommitmentProof,
-  proofHeight: uint64,
+  proofHeight: Height,
   nextSequenceRecv: Maybe<uint64>): Packet {
 
     channel = provableStore.get(channelPath(packet.sourcePort, packet.sourceChannel))
@@ -752,7 +752,7 @@ function timeoutOnClose(
   packet: Packet,
   proof: CommitmentProof,
   proofClosed: CommitmentProof,
-  proofHeight: uint64,
+  proofHeight: Height,
   nextSequenceRecv: Maybe<uint64>): Packet {
 
     channel = provableStore.get(channelPath(packet.sourcePort, packet.sourceChannel))

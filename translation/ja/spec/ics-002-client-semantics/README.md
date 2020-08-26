@@ -162,6 +162,30 @@ type checkMisbehaviourAndUpdateState = (bytes) => Void
 
 不正動作が検出された場合、clientを無効化して、今後の更新を送信できないようにする必要があります。chain ガバナンスシステムや信頼されたマルチ署名などによって許可されたエンティティは、無効化された client の凍結を解除して新しく正しい header を提供するために介入することが許される場合があります。
 
+#### Height
+
+`Height` は client type によって定義される opaque なデータ構造です。部分的に順序付けられた集合であり、比較演算子を提供する必要があります。
+
+```typescript
+type Height
+```
+
+```typescript
+enum Ord {
+  LT
+  EQ
+  GT
+}
+
+type compare = (h1: Height, h2: Height) => Ord
+```
+
+ある Height は他の Heightに対して、`LT`（未満）、`EQ`（等しい）、`GT`（より大きい）のいずれかです。
+
+`>=`、`>`、`===`、`<`、`<=` はこれ以降この仕様内では `compare` のエイリアスとして定義されます。
+
+Height 型は `0` として参照されるゼロ要素を含む必要があり、これは他の非ゼロ要素のいずれと比べても小さいです。
+
 #### ClientState
 
 `ClientState` は client type によって定義される opaque なデータ構造です。所定の内部 state を保持し、検証された root と過去の不正行為を追跡することもできます。
@@ -183,7 +207,7 @@ client type は、現在の高さ（最新の検証済み header の高さ）を
 ```typescript
 type latestClientHeight = (
   clientState: ClientState)
-  => uint64
+  => Height
 ```
 
 #### CommitmentProof
@@ -201,10 +225,10 @@ client type は、client が追跡する state machine の内部 state を認証
 ```typescript
 type verifyClientConsensusState = (
   clientState: ClientState,
-  height: uint64,
+  height: Height,
   proof: CommitmentProof,
   clientIdentifier: Identifier,
-  consensusStateHeight: uint64,
+  consensusStateHeight: Height,
   consensusState: ConsensusState)
   => boolean
 ```
@@ -214,7 +238,7 @@ type verifyClientConsensusState = (
 ```typescript
 type verifyConnectionState = (
   clientState: ClientState,
-  height: uint64,
+  height: Height,
   prefix: CommitmentPrefix,
   proof: CommitmentProof,
   connectionIdentifier: Identifier,
@@ -227,7 +251,7 @@ type verifyConnectionState = (
 ```typescript
 type verifyChannelState = (
   clientState: ClientState,
-  height: uint64,
+  height: Height,
   prefix: CommitmentPrefix,
   proof: CommitmentProof,
   portIdentifier: Identifier,
@@ -241,7 +265,7 @@ type verifyChannelState = (
 ```typescript
 type verifyPacketData = (
   clientState: ClientState,
-  height: uint64,
+  height: Height,
   prefix: CommitmentPrefix,
   proof: CommitmentProof,
   portIdentifier: Identifier,
@@ -256,7 +280,7 @@ type verifyPacketData = (
 ```typescript
 type verifyPacketAcknowledgement = (
   clientState: ClientState,
-  height: uint64,
+  height: Height,
   prefix: CommitmentPrefix,
   proof: CommitmentProof,
   portIdentifier: Identifier,
@@ -271,7 +295,7 @@ type verifyPacketAcknowledgement = (
 ```typescript
 type verifyPacketAcknowledgementAbsence = (
   clientState: ClientState,
-  height: uint64,
+  height: Height,
   prefix: CommitmentPrefix,
   proof: CommitmentProof,
   portIdentifier: Identifier,
@@ -285,7 +309,7 @@ type verifyPacketAcknowledgementAbsence = (
 ```typescript
 type verifyNextSequenceRecv = (
   clientState: ClientState,
-  height: uint64,
+  height: Height,
   prefix: CommitmentPrefix,
   proof: CommitmentProof,
   portIdentifier: Identifier,
@@ -303,13 +327,13 @@ type verifyNextSequenceRecv = (
 `queryHeader`は、特定の client によって検証される chain によって定義される必要があり、ブロック高による header の取得を許可する必要があります。このエンドポイントは信頼されないものと見なされます。
 
 ```typescript
-type queryHeader = (height: uint64) => Header
+type queryHeader = (height: Height) => Header
 ```
 
 `queryChainConsensusState` は 特定の client によって検証される chain で定義される場合があります。これは、新しい client を構成するために用いることができる現在の consensus state の取得を可能にします。この関数が使用される場合、`ConsensusState` は主観的であるため、照会しているエンティティが手動で確認しなくてはなりません。このエンドポイントは信頼されないものと見なされます。`ConsensusState` の正確な性質については client type によって異なっているかもしれません。
 
 ```typescript
-type queryChainConsensusState = (height: uint64) => ConsensusState
+type queryChainConsensusState = (height: Height) => ConsensusState
 ```
 
 （現在の consensus state だけでなく）ブロック高による過去の consensus state の取得は便利ですが、必須ではないことに注意してください。
@@ -329,7 +353,7 @@ function queryClientState(identifier: Identifier): ClientState {
 `ClientState` 型は最新の検証済ブロック高（もし望むなら、このブロック高から `queryConsensusState` を用いて consensus state を取得できます）を公開すべきです。
 
 ```typescript
-type latestHeight = (state: ClientState) => uint64
+type latestHeight = (state: ClientState) => Height
 ```
 
 client type は、relayer およびその他のオフチェーンエンティティが標準 API のオンチェーン state と連携できるように、以下の標準化されたクエリ関数を定義すべきです。
@@ -339,7 +363,7 @@ client type は、relayer およびその他のオフチェーンエンティテ
 ```typescript
 type queryConsensusState = (
   identifier: Identifier,
-  height: uint64
+  height: Height
 ) => ConsensusState
 ```
 
@@ -350,46 +374,46 @@ type queryConsensusState = (
 ```typescript
 type queryAndProveClientConsensusState = (
   clientIdentifier: Identifier,
-  height: uint64,
+  height: Height,
   prefix: CommitmentPrefix,
-  consensusStateHeight: uint64) => ConsensusState, Proof
+  consensusStateHeight: Height) => ConsensusState, Proof
 
 type queryAndProveConnectionState = (
   connectionIdentifier: Identifier,
-  height: uint64,
+  height: Height,
   prefix: CommitmentPrefix) => ConnectionEnd, Proof
 
 type queryAndProveChannelState = (
   portIdentifier: Identifier,
   channelIdentifier: Identifier,
-  height: uint64,
+  height: Height,
   prefix: CommitmentPrefix) => ChannelEnd, Proof
 
 type queryAndProvePacketData = (
   portIdentifier: Identifier,
   channelIdentifier: Identifier,
-  height: uint64,
+  height: Height,
   prefix: CommitmentPrefix,
   sequence: uint64) => []byte, Proof
 
 type queryAndProvePacketAcknowledgement = (
   portIdentifier: Identifier,
   channelIdentifier: Identifier,
-  height: uint64,
+  height: Height,
   prefix: CommitmentPrefix,
   sequence: uint64) => []byte, Proof
 
 type queryAndProvePacketAcknowledgementAbsence = (
   portIdentifier: Identifier,
   channelIdentifier: Identifier,
-  height: uint64,
+  height: Height,
   prefix: CommitmentPrefix,
   sequence: uint64) => Proof
 
 type queryAndProveNextSequenceRecv = (
   portIdentifier: Identifier,
   channelIdentifier: Identifier,
-  height: uint64,
+  height: Height,
   prefix: CommitmentPrefix) => uint64, Proof
 ```
 
@@ -414,11 +438,11 @@ proxy client は、別の（proxy）machine による対象 machine の検証を
 マークル化された state ツリーを持つ state machine の clientでは、`verfiyMembership` や `verifyNonMembership` を呼び出すことで、`ClientState` に保存された検証済みマークルツリーを用いて、[ICS 23](../ics-023-vector-commitments) に従って特定ブロック高での state に特定のキー/値ペアが存在するかしないかを検証する関数を実装することができます。
 
 ```typescript
-type verifyMembership = (ClientState, uint64, CommitmentProof, Path, Value) => boolean
+type verifyMembership = (ClientState, Height, CommitmentProof, Path, Value) => boolean
 ```
 
 ```typescript
-type verifyNonMembership = (ClientState, uint64, CommitmentProof, Path) => boolean
+type verifyNonMembership = (ClientState, Height, CommitmentProof, Path) => boolean
 ```
 
 ### サブプロトコル
@@ -506,6 +530,17 @@ client 固有の型は次のように定義されます。
 - `checkMisbehaviourAndUpdateState` は高さが同じで commitment root が異なる2つの header をチェックし、内部 state を変更します
 
 ```typescript
+type Height = uint64
+
+function compare(h1: Height, h2: Height): Ord {
+  if h1 < h2
+    return LT
+  else if h1 === h2
+    return EQ
+  else
+    return GT
+}
+
 interface ClientState {
   frozen: boolean
   pastPublicKeys: Set<PublicKey>
@@ -565,7 +600,7 @@ function checkValidityAndUpdateState(
 
 function verifyClientConsensusState(
   clientState: ClientState,
-  height: uint64,
+  height: Height,
   prefix: CommitmentPrefix,
   proof: CommitmentProof,
   clientIdentifier: Identifier,
@@ -577,7 +612,7 @@ function verifyClientConsensusState(
 
 function verifyConnectionState(
   clientState: ClientState,
-  height: uint64,
+  height: Height,
   prefix: CommitmentPrefix,
   proof: CommitmentProof,
   connectionIdentifier: Identifier,
@@ -589,7 +624,7 @@ function verifyConnectionState(
 
 function verifyChannelState(
   clientState: ClientState,
-  height: uint64,
+  height: Height,
   prefix: CommitmentPrefix,
   proof: CommitmentProof,
   portIdentifier: Identifier,
@@ -602,7 +637,7 @@ function verifyChannelState(
 
 function verifyPacketData(
   clientState: ClientState,
-  height: uint64,
+  height: Height,
   prefix: CommitmentPrefix,
   proof: CommitmentProof,
   portIdentifier: Identifier,
@@ -616,7 +651,7 @@ function verifyPacketData(
 
 function verifyPacketAcknowledgement(
   clientState: ClientState,
-  height: uint64,
+  height: Height,
   prefix: CommitmentPrefix,
   proof: CommitmentProof,
   portIdentifier: Identifier,
@@ -630,7 +665,7 @@ function verifyPacketAcknowledgement(
 
 function verifyPacketAcknowledgementAbsence(
   clientState: ClientState,
-  height: uint64,
+  height: Height,
   prefix: CommitmentPrefix,
   proof: CommitmentProof,
   portIdentifier: Identifier,
@@ -643,7 +678,7 @@ function verifyPacketAcknowledgementAbsence(
 
 function verifyNextSequenceRecv(
   clientState: ClientState,
-  height: uint64,
+  height: Height,
   prefix: CommitmentPrefix,
   proof: CommitmentProof,
   portIdentifier: Identifier,
