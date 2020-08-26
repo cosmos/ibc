@@ -12,7 +12,7 @@ modified: 2019-08-25
 
 ## 概要
 
-The "channel" abstraction provides message delivery semantics to the interblockchain communication protocol, in three categories: ordering, exactly-once delivery, and module permissioning. A channel serves as a conduit for packets passing between a module on one chain and a module on another, ensuring that packets are executed only once, delivered in the order in which they were sent (if necessary), and delivered only to the corresponding module owning the other end of the channel on the destination chain. Each channel is associated with a particular connection, and a connection may have any number of associated channels, allowing the use of common identifiers and amortising the cost of header verification across all the channels utilising a connection & light client.
+「channel」の抽象化は、interblockchain 通信プロトコルにメッセージ配信のセマンティクスを提供します。channel は、ある chain 上の module と別の chain 上の module の間を通過する packet の導管として機能し、packet が一度だけ実行され、（必要に応じて）送信された順に配信され、宛先 chain 上 の channel 端に対応する module にのみ配信されることを保証します。各 channel は特定の connection に関連付けられます。また connection はいくつでも関連付けられた channel を持つことができ、共通の識別子を使用することができ、1つの connection と light client を利用するすべての channel で header 検証のコストを削減することができます。
 
 channel はペイロードに依存しません。IBC packet を送受信する module は、packet データをどのように構築し、どのように着信 packet データに対応するかを決定し、packet に含まれるデータに応じてどの state トランザクションを適用するかを決定するために、独自のアプリケーションロジックを利用しなければなりません。
 
@@ -80,7 +80,7 @@ interface ChannelEnd {
 - `nextSequenceRecv`は、別で保管され、次に受け取るべき packet のシーケンス番号を追跡します。
 - `nextSequenceAck`は、別で保管され、次に通知されるべき packet のシーケンス番号を追跡します。
 - `connectionHops` はこの channel で送信される packet が移動する connection 識別子のリストを順に保管します。現時点ではこのリストの長さは1でなければなりません。将来的にはマルチホップ channel がサポートされる可能性があります。
-- The `version` string stores an opaque channel version, which is agreed upon during the handshake. This can determine module-level configuration such as which packet encoding is used for the channel. This version is not used by the core IBC protocol.
+- `version` 文字列はハンドシェイク時に合意された opaque な channel バージョンを保管します。これはどの packet エンコーディングが channel で使用されるかといった module レベルでの設定を決定します。コアのIBC プロトコルはこのバージョンを用いません。
 
 Channel の終端は *state* を持ちます。
 
@@ -114,7 +114,7 @@ interface Packet {
 ```
 
 - `sequence` 番号は送受信の順序に対応しており、より早いシーケンス番号を持つ packet はより遅いシーケンス番号を持つ packet よりも前に送受信される必要があります。
-- The `timeoutHeight` indicates a consensus height on the destination chain after which the packet will no longer be processed, and will instead count as having timed-out.
+- `timeoutHeight` は 宛先 chain 上の consensus ブロックの高さを示し、これ以降では packet が処理されずに、タイムアウトがあったとみなされます。
 - `timeoutTimestamp` は宛先 chain上のタイムスタンプで、これ以降では packet が処理されずにタイムアウトがあったとみなされます。
 - `sourcePort` は送信元 chain の port を示します。
 - `sourceChannel` は送信元 chain の channel 終端を示します。
@@ -122,7 +122,7 @@ interface Packet {
 - `destChannel` は受信先 chain の channel 終端を示します。
 - `data` は関連付けられた module のアプリケーションロジックによって定義される opaque な値です。
 
-Note that a `Packet` is never directly serialised. Rather it is an intermediary structure used in certain function calls that may need to be created or processed by modules calling the IBC handler.
+`packet` は直接シリアライズされることはありません。むしろ、IBC ハンドラを呼び出す module が作成されたり処理されたりする必要があるかもしれない、ある種の関数呼び出しで使用される中間構造体です。
 
 `OpaquePacket` は packet ですが、ホストの state machine によってデータ型が隠蔽されているため、module は IBC ハンドラに渡す以外のことはできません。IBC ハンドラは `packet` を `OpaquePacket` と相互にキャストすることが可能です。
 
@@ -158,7 +158,7 @@ client、connection、channel、および packet のアーキテクチャ
 
 ![Dataflow Visualisation](dataflow.png)
 
-### Preliminaries
+### 準備
 
 #### Store パス
 
@@ -216,17 +216,17 @@ function packetAcknowledgementPath(portIdentifier: Identifier, channelIdentifier
 
 ### バージョニング
 
-During the handshake process, two ends of a channel come to agreement on a version bytestring associated with that channel. The contents of this version bytestring are and will remain opaque to the IBC core protocol. Host state machines MAY utilise the version data to indicate supported IBC/APP protocols, agree on packet encoding formats, or negotiate other channel-related metadata related to custom logic on top of IBC.
+ハンドシェイクプロセスの間に、channel の両端は、その channel に関連付けられたバージョンの byte 文字列に合意します。このバージョン byte 文字列の内容は、IBC のコアプロトコルには opaque なままです。host  state machine はバージョンデータを利用して、サポートされている IBC/APP プロトコルを示したり、packet エンコーディング形式に合意したり、IBC 上のカスタムロジックに関連する他の channel 関連のメタデータをネゴシエートしたりしてもよいです。
 
-Host state machines MAY also safely ignore the version data or specify an empty string.
+host state machine は、バージョンデータを安全に無視するか、空の文字列を指定してもよいです。
 
 ### サブプロトコル
 
-> Note: If the host state machine is utilising object capability authentication (see [ICS 005](../ics-005-port-allocation)), all functions utilising ports take an additional capability parameter.
+> 注意：host state machineがobject capability認証を利用している場合（[ICS 005](../ics-005-port-allocation)参照）、port を利用するすべての機能は追加のcapability引数を取ります。
 
 #### 識別子の検証
 
-Channels are stored under a unique `(portIdentifier, channelIdentifier)` prefix. The validation function `validatePortIdentifier` MAY be provided.
+Channels はユニークな `(portIdentifier, channelIdentifier)` <br> 接頭辞の下に保管されます。検証関数 `validatePortIdentifier` が提供されてもよいです。
 
 ```typescript
 type validateChannelIdentifier = (portIdentifier: Identifier, channelIdentifier: Identifier) => boolean
@@ -274,7 +274,7 @@ function chanOpenInit(
     abortTransactionUnless(provableStore.get(channelPath(portIdentifier, channelIdentifier)) === null)
     connection = provableStore.get(connectionPath(connectionHops[0]))
 
-    // optimistic channel handshakes are allowed
+    // 楽観的な channel ハンドシェイクは許可されています
     abortTransactionUnless(connection !== null)
     abortTransactionUnless(authenticateCapability(portPath(portIdentifier), portCapability))
     channel = ChannelEnd{INIT, order, counterpartyPortIdentifier,
@@ -425,7 +425,7 @@ function chanCloseInit(
 
 module 呼び出しは、`chanCloseConfirm` の呼び出しと連動して適切なアプリケーションロジックをアトミックに実行してもよいです。
 
-Once closed, channels cannot be reopened and identifiers cannot be reused. Identifier reuse is prevented because we want to prevent potential replay of previously sent packets. The replay problem is analogous to using sequence numbers with signed messages, except where the light client algorithm "signs" the messages (IBC packets), and the replay prevention sequence is the combination of port identifier, channel identifier, and packet sequence - hence we cannot allow the same port identifier & channel identifier to be reused again with a sequence reset to zero, since this might allow packets to be replayed. It would be possible to safely reuse identifiers if timeouts of a particular maximum height/time were mandated & tracked, and future specification versions may incorporate this feature.
+一度閉じてしまうと、channel を再開することはできず、識別子を再利用することもできません。識別子の再利用は、以前に送信された packet の再利用の可能性を防ぎたいために行われます。再利用の問題は、light client アルゴリズムがメッセージ（IBC packet）に "署名"している場合を除いて、署名付きメッセージでシーケンス番号を使用することに類似しており、再利用防止シーケンスはport識別子、channel識別子、packet識別子の組み合わせです。もし、特定の最大高さ/時間のタイムアウトが義務化され、追跡されていれば、安全に識別子を再利用することが可能になり、将来の仕様ではこの機能が含まれるかもしれません。
 
 ```typescript
 function chanCloseConfirm(
@@ -469,42 +469,42 @@ module は [ICS 25](.../ics-025-handler-interface) または [ICS 26](.../ics-02
     2. *B* 上で *A* のために作成された client（[ICS 2](.../ics-002-client-semantics) を参照）
     3. module *1* を port に割り当て（[ICS 5](../ics-005-port-allocation) を参照）
     4. module *2* を port に割り当て（[ICS 5](../ics-005-port-allocation) を参照）、この port は module *1* と帯域外で通信します
-2. Establishment of a connection & channel, optimistic send, in order
-    1. Connection opening handshake started from *A* to *B* by module *1* (see [ICS 3](../ics-003-connection-semantics))
-    2. Channel opening handshake started from *1* to *2* using the newly created connection (this ICS)
-    3. Packet sent over the newly created channel from *1* to *2* (this ICS)
-3. Successful completion of handshakes (if either handshake fails, the connection/channel can be closed & the packet timed-out)
-    1. Connection opening handshake completes successfully (see [ICS 3](../ics-003-connection-semantics)) (this will require participation of a relayer process)
-    2. Channel opening handshake completes successfully (this ICS) (this will require participation of a relayer process)
-4. Packet confirmation on machine *B*, module *2* (or packet timeout if the timeout height has passed) (this will require participation of a relayer process)
-5. Acknowledgement (possibly) relayed back from module *2* on machine *B* to module *1* on machine *A*
+2. 順番通りに connection と channel を確立し、楽観的に送信する
+    1. module *1* によって *A* から *B* への connection 開始ハンドシェイクが始まります（[ICS 3](../ics-003-connection-semantics)を参照）。
+    2. 新たに作成した connection を使用して *1* から *2* へのchannel開始ハンドシェイクが始まります。(本ICS)
+    3. packetは新たに作成されたchannelを経由して *1* から *2* に送信されます（本 ICS)
+3. ハンドシェイクの正常終了（どちらかのハンドシェイクに失敗した場合、connection/channelを閉じてpacketをタイムアウトさせることができます。）
+    1. connection 開始のハンドシェイクが正常に完了します（[ICS 3](../ics-003-connection-semantics)参照）（これにはrelayerプロセスの参加が必要です）
+    2. channel開始のハンドシェイクが正常に完了します。(本 ICS) (これにはrelayerプロセスの参加が必要です)
+4. マシン*B*、module *2*でのpacket確認(タイムアウトの高さを過ぎた場合はpacketタイムアウト) (これにはrelayerプロセスの参加が必要です)
+5. 確認応答はマシン*B*のmodule *2*からマシン*A*のmodule*1*に中継されます（可能性があります）
 
-Represented spatially, packet transit between two machines can be rendered as follows:
+空間的に表現すると、2台のマシン間の packet 転送は次のように表すことができます。
 
 ![Packet Transit](packet-transit.png)
 
-##### Sending packets
+##### packetの送信
 
-The `sendPacket` function is called by a module in order to send an IBC packet on a channel end owned by the calling module to the corresponding module on the counterparty chain.
+`sendPacket` 関数は、呼び出し側の module が所有するchannel end 上の IBC packet を相手 chain 上の対応する module に送信するために、module によって呼び出されます。
 
-Calling modules MUST execute application logic atomically in conjunction with calling `sendPacket`.
+呼び出し側のモジュールは、`sendPacket` の呼び出しと連動して、アプリケーションロジックをア トミックに実行しなければなりません。
 
-The IBC handler performs the following steps in order:
+IBC ハンドラーは以下の手順を順に実行します。:
 
-- Checks that the channel & connection are open to send packets
-- Checks that the calling module owns the sending port
-- Checks that the packet metadata matches the channel & connection information
-- Checks that the timeout height specified has not already passed on the destination chain
-- Increments the send sequence counter associated with the channel
-- Stores a constant-size commitment to the packet data & packet timeout
+- packetを送信するために、channel と connection が開いているかどうかを確認します。
+- 呼び出し側の module が送信 port を所有しているかどうかを確認します。
+- packet のメタデータが channel および connection 情報と一致しているかどうかを確認します。
+- 指定したタイムアウトの高さが、宛先 chain でまだ経過していないことを確認します。
+- channel に関連付けられた送信シーケンスカウンタを増やします。
+- packet データと packet タイムアウトに対する一定サイズの commitment を保管します。
 
-Note that the full packet is not stored in the state of the chain - merely a short hash-commitment to the data & timeout value. The packet data can be calculated from the transaction execution and possibly returned as log output which relayers can index.
+完全な packet は chain の状態には保存されないことに注意してください - データとタイムアウト値に対する短い hash-commitment に過ぎません。packet データはトランザクション実行から計算され、relayer がインデックスを作成できるログ出力として返される可能性があります。
 
 ```typescript
 function sendPacket(packet: Packet) {
     channel = provableStore.get(channelPath(packet.sourcePort, packet.sourceChannel))
 
-    // optimistic sends are permitted once the handshake has started
+    // 楽観的な送信はハンドシェイクが開始された後に許可されます。
     abortTransactionUnless(channel !== null)
     abortTransactionUnless(channel.state !== CLOSED)
     abortTransactionUnless(authenticateCapability(channelCapabilityPath(packet.sourcePort, packet.sourceChannel), capability))
@@ -514,41 +514,41 @@ function sendPacket(packet: Packet) {
 
     abortTransactionUnless(connection !== null)
 
-    // sanity-check that the timeout height hasn't already passed in our local client tracking the receiving chain
+    // 我々のlocal client が受信chainを追跡する際に、タイムアウトの高さが既に通過していないことを簡易に確認してください
     latestClientHeight = provableStore.get(clientPath(connection.clientIdentifier)).latestClientHeight()
     abortTransactionUnless(packet.timeoutHeight === 0 || latestClientHeight < packet.timeoutHeight)
 
     nextSequenceSend = provableStore.get(nextSequenceSendPath(packet.sourcePort, packet.sourceChannel))
     abortTransactionUnless(packet.sequence === nextSequenceSend)
 
-    // all assertions passed, we can alter state
+    // すべてのアサーションが問題ない場合、状態を変更することができます。
 
     nextSequenceSend = nextSequenceSend + 1
     provableStore.set(nextSequenceSendPath(packet.sourcePort, packet.sourceChannel), nextSequenceSend)
     provableStore.set(packetCommitmentPath(packet.sourcePort, packet.sourceChannel, packet.sequence),
                       hash(packet.data, packet.timeoutHeight, packet.timeoutTimestamp))
 
-    // log that a packet has been sent
+    // packet が送信されたことを記録します
     emitLogEntry("sendPacket", {sequence: packet.sequence, data: packet.data, timeoutHeight: packet.timeoutHeight, timeoutTimestamp: packet.timeoutTimestamp})
 }
 ```
 
-#### Receiving packets
+#### packetの受信
 
-The `recvPacket` function is called by a module in order to receive & process an IBC packet sent on the corresponding channel end on the counterparty chain.
+`recvPacket` 関数は、相手 chain 上の対応する channel end で送信された IBC packet を受信して処理するために、module によって呼び出されます。
 
-Calling modules MUST execute application logic atomically in conjunction with calling `recvPacket`, likely beforehand to calculate the acknowledgement value.
+呼び出し module は、おそらく事前に確認応答値を計算するために、`recvPacket`の呼び出しと連動してアプリケーションロジックをアトミックに実行しなければなりません。
 
-The IBC handler performs the following steps in order:
+IBC ハンドラーは以下の手順を順に実行します。:
 
-- Checks that the channel & connection are open to receive packets
-- Checks that the calling module owns the receiving port
-- Checks that the packet metadata matches the channel & connection information
-- Checks that the packet sequence is the next sequence the channel end expects to receive (for ordered channels)
-- Checks that the timeout height has not yet passed
-- Checks the inclusion proof of packet data commitment in the outgoing chain's state
-- Sets the opaque acknowledgement value at a store path unique to the packet (if the acknowledgement is non-empty or the channel is unordered)
-- Increments the packet receive sequence associated with the channel end (ordered channels only)
+- channel と connection が packet を受信するために開いているかどうかを確認します。
+- 呼び出し側の module が受信 port を所有しているかどうかを確認します。
+- packet のメタデータが channel および connection 情報と一致しているかどうかを確認します。
+- packet シーケンスが、channel end が受信すると期待している次のシーケンスであるかどうかをチェックします（順序付けられた channelの場合）。
+- タイムアウトの高さをまだ過ぎていないことを確認します。
+- 送信 chain の状態で packet data commitment の包含証明を確認します。
+- opaque な確認応答の値をpacket 固有の保存パスに設定します (確認応答が空でないか、チャネルが順不同の場合)。
+- channel endに関連付けられたpacket受信シーケンスを増やします（順序付けられたchannelのみ）。
 
 ```typescript
 function recvPacket(
@@ -579,9 +579,9 @@ function recvPacket(
       concat(packet.data, packet.timeoutHeight, packet.timeoutTimestamp)
     ))
 
-    // all assertions passed (except sequence check), we can alter state
+    // (シーケンスチェックを除く) すべてのアサーションが通過した場合、状態を変更することができます。
 
-    // always set the acknowledgement so that it can be verified on the other side
+    // 確認応答は常に相手側で確認できるように設定します。
     provableStore.set(
       packetAcknowledgementPath(packet.destPort, packet.destChannel, packet.sequence),
       hash(acknowledgement)
@@ -595,7 +595,7 @@ function recvPacket(
     } else
       abortTransactionUnless(provableStore.get(packetAcknowledgementPath(packet.destPort, packet.destChannel, packet.sequence) === null))
 
-    // log that a packet has been received & acknowledged
+    // packet を受信し、承認したことを記録します
     emitLogEntry("recvPacket", {sequence: packet.sequence, timeoutHeight: packet.timeoutHeight,
                                 timeoutTimestamp: packet.timeoutTimestamp, data: packet.data, acknowledgement})
 
@@ -604,11 +604,11 @@ function recvPacket(
 }
 ```
 
-#### Acknowledgements
+#### 確認応答
 
-The `acknowledgePacket` function is called by a module to process the acknowledgement of a packet previously sent by the calling module on a channel to a counterparty module on the counterparty chain. `acknowledgePacket` also cleans up the packet commitment, which is no longer necessary since the packet has been received and acted upon.
+`acknowledgePacket`関数は、呼び出し側の module が channel 上で相手 chain上の module に以前に送信した packet の確認応答を処理するために module から呼び出されます。`acknowledgePacket`は packet commitment を削除しますが、これは packetを受信して処理されたので必要ではなくなったからです。
 
-Calling modules MAY atomically execute appropriate application acknowledgement-handling logic in conjunction with calling `acknowledgePacket`.
+呼び出し module は、`acknowledgePacket`の呼び出しと連動して、適切なアプリケーションの確認応答処理ロジックをアトミックに実行してもよいです。
 
 ```typescript
 function acknowledgePacket(
@@ -617,7 +617,7 @@ function acknowledgePacket(
   proof: CommitmentProof,
   proofHeight: uint64): Packet {
 
-    // abort transaction unless that channel is open, calling module owns the associated port, and the packet fields match
+    // そのchannelが開いていなければトランザクションを中止し、呼び出し moduleは関連するportを所有し, そしてその packet フィールドは一致します
     channel = provableStore.get(channelPath(packet.sourcePort, packet.sourceChannel))
     abortTransactionUnless(channel !== null)
     abortTransactionUnless(channel.state === OPEN)
@@ -629,11 +629,11 @@ function acknowledgePacket(
     abortTransactionUnless(connection !== null)
     abortTransactionUnless(connection.state === OPEN)
 
-    // verify we sent the packet and haven't cleared it out yet
+    // packetを送信し、まだそれをクリアしていないことを確認します
     abortTransactionUnless(provableStore.get(packetCommitmentPath(packet.sourcePort, packet.sourceChannel, packet.sequence))
            === hash(packet.data, packet.timeoutHeight, packet.timeoutTimestamp))
 
-    // abort transaction unless correct acknowledgement on counterparty chain
+    // 相手chainの正しい確認応答がない場合はトランザクションを中止します
     abortTransactionUnless(connection.verifyPacketAcknowledgement(
       proofHeight,
       proof,
@@ -643,7 +643,7 @@ function acknowledgePacket(
       acknowledgement
     ))
 
-    // abort transaction unless acknowledgement is processed in order
+    // 確認応答が順番に処理されていなければトランザクションを中止します
     if (channel.order === ORDERED) {
       nextSequenceAck = provableStore.get(nextSequenceAckPath(packet.sourcePort, packet.sourceChannel))
       abortTransactionUnless(packet.sequence === nextSequenceAck)
@@ -651,9 +651,9 @@ function acknowledgePacket(
       provableStore.set(nextSequenceAckPath(packet.sourcePort, packet.sourceChannel), nextSequenceAck)
     }
 
-    // all assertions passed, we can alter state
+    // すべてのアサーションに問題がなかったので、状態を変更できます。
 
-    // delete our commitment so we can't "acknowledge" again
+    // 再度確認応答ができないように、commitmentを削除します
     provableStore.delete(packetCommitmentPath(packet.sourcePort, packet.sourceChannel, packet.sequence))
 
     // return transparent packet
@@ -661,23 +661,23 @@ function acknowledgePacket(
 }
 ```
 
-#### Timeouts
+#### タイムアウト
 
-Application semantics may require some timeout: an upper limit to how long the chain will wait for a transaction to be processed before considering it an error. Since the two chains have different local clocks, this is an obvious attack vector for a double spend - an attacker may delay the relay of the receipt or wait to send the packet until right after the timeout - so applications cannot safely implement naive timeout logic themselves.
+アプリケーションのセマンティクスでは、ある程度のタイムアウトが必要になる場合があります。これは、 chain がトランザクションをエラーとみなす前に、処理されるのをどれだけの時間待つかの上限のことです。2つのchainは異なるローカルクロックを持っているので、これは明らかに二重支払いの攻撃ベクトルとなります - 攻撃者はレシートの中継を遅らせたり、タイムアウト直後まで packet の送信を待ったりする可能性があります。そのため、アプリケーションは単純なタイムアウトロジックを自分自身で安全に実装することができません。
 
-Note that in order to avoid any possible "double-spend" attacks, the timeout algorithm requires that the destination chain is running and reachable. One can prove nothing in a complete network partition, and must wait to connect; the timeout must be proven on the recipient chain, not simply the absence of a response on the sending chain.
+「二重支払い」攻撃の可能性を避けるために、タイムアウトアルゴリズムは宛先 chain が動作していて到達可能であることを必要とすることに注意してください。完全なネットワークパーティションでは何も証明できず、接続するのを待たなければなりません。タイムアウトは受信側の chain で証明されなければならず、単に送信側の chain で応答がないだけではありません。
 
-##### Sending end
+##### 送信終了
 
-The `timeoutPacket` function is called by a module which originally attempted to send a packet to a counterparty module, where the timeout height or timeout timestamp has passed on the counterparty chain without the packet being committed, to prove that the packet can no longer be executed and to allow the calling module to safely perform appropriate state transitions.
+`timeoutPacket`関数は、最初に packet を 相手module に送信しようとした module によって呼び出されます。そこでは、タイムアウトの高さまたはタイムアウトのタイムスタンプは、packet がコミットされずに相手 chain で渡され、packet が実行できなくなったことを証明し、呼び出し module が適切な状態遷移を安全に実行できるようにします。
 
-Calling modules MAY atomically execute appropriate application timeout-handling logic in conjunction with calling `timeoutPacket`.
+呼び出し module は、`timeoutPacket`の呼び出しと連動して、適切なアプリケーションのタイムアウト処理ロジックをアトミックに実行してもよいです。
 
-In the case of an ordered channel, `timeoutPacket` checks the `recvSequence` of the receiving channel end and closes the channel if a packet has timed out.
+順序付けされたchannelの場合、`timeoutPacket` は受信 channel 端の`recvSequence`を確認し、packet がタイムアウトした場合は channel を閉じます。
 
-In the case of an unordered channel, `timeoutPacket` checks the absence of an acknowledgement (which will have been written if the packet was received). Unordered channels are expected to continue in the face of timed-out packets.
+順不同の channel の場合、`timeoutPacket`は、（packetを受信した場合には書き込まれていたであろう）確認応答がないことを確認します。順不同の channel は、タイムアウトした packet に直面しても継続することが期待されます。
 
-If relations are enforced between timeout heights of subsequent packets, safe bulk timeouts of all packets prior to a timed-out packet can be performed. This specification omits details for now.
+後続 packet のタイムアウトの高さに関係がある場合、タイムアウト packet の前のすべての packet の安全な一括タイムアウトを実行することができます。本仕様では、今のところ詳細は省略します。
 
 ```typescript
 function timeoutPacket(
@@ -694,22 +694,22 @@ function timeoutPacket(
     abortTransactionUnless(packet.destChannel === channel.counterpartyChannelIdentifier)
 
     connection = provableStore.get(connectionPath(channel.connectionHops[0]))
-    // note: the connection may have been closed
+    // 注意: connection が閉じられているかもしれません。
     abortTransactionUnless(packet.destPort === channel.counterpartyPortIdentifier)
 
-    // check that timeout height or timeout timestamp has passed on the other end
+    // 反対側でタイムアウトの高さまたはタイムアウトタイムスタンプが経過したことを確認します
     abortTransactionUnless(
       (packet.timeoutHeight > 0 && proofHeight >= packet.timeoutHeight) ||
       (packet.timeoutTimestamp > 0 && connection.getTimestampAtHeight(proofHeight) > packet.timeoutTimestamp))
 
-    // verify we actually sent this packet, check the store
+    // このpacketが実際に送信されたことを確認し、ストアを確認します
     abortTransactionUnless(provableStore.get(packetCommitmentPath(packet.sourcePort, packet.sourceChannel, packet.sequence))
            === hash(packet.data, packet.timeoutHeight, packet.timeoutTimestamp))
 
     if channel.order === ORDERED {
-      // ordered channel: check that packet has not been received
+      // 順序付けられた channel: packetを受信していないことを確認します
       abortTransactionUnless(nextSequenceRecv <= packet.sequence)
-      // ordered channel: check that the recv sequence is as claimed
+      // 順序付けられた channel: recvシーケンスが要求どおりであることを確認します
       abortTransactionUnless(connection.verifyNextSequenceRecv(
         proofHeight,
         proof,
@@ -718,7 +718,7 @@ function timeoutPacket(
         nextSequenceRecv
       ))
     } else
-      // unordered channel: verify absence of acknowledgement at packet index
+      // 順不同の channel: packet indexで確認応答がないことを確認します
       abortTransactionUnless(connection.verifyPacketAcknowledgementAbsence(
         proofHeight,
         proof,
@@ -727,13 +727,13 @@ function timeoutPacket(
         packet.sequence
       ))
 
-    // all assertions passed, we can alter state
+    // すべてのアサーションに問題がないので、状態を変更できます
 
-    // delete our commitment
+    // commitmentを削除します
     provableStore.delete(packetCommitmentPath(packet.sourcePort, packet.sourceChannel, packet.sequence))
 
     if channel.order === ORDERED {
-      // ordered channel: close the channel
+      // 順序付けられた channel: channelを閉じる
       channel.state = CLOSED
       provableStore.set(channelPath(packet.sourcePort, packet.sourceChannel), channel)
     }
@@ -743,9 +743,9 @@ function timeoutPacket(
 }
 ```
 
-##### Timing-out on close
+##### 閉じる際のタイムアウト
 
-The `timeoutOnClose` function is called by a module in order to prove that the channel to which an unreceived packet was addressed has been closed, so the packet will never be received (even if the `timeoutHeight` or `timeoutTimestamp` has not yet been reached).
+`timeoutOnClose` 関数は、未受信の packet が宛先とした channel が閉じられたことを証明するために、module によって呼び出され、packet は決して受信されません (たとえ  `timeoutHeight` や `timeoutTimestamp` がまだ到達していなくても)。
 
 ```typescript
 function timeoutOnClose(
@@ -756,19 +756,19 @@ function timeoutOnClose(
   nextSequenceRecv: Maybe<uint64>): Packet {
 
     channel = provableStore.get(channelPath(packet.sourcePort, packet.sourceChannel))
-    // note: the channel may have been closed
+    // 注意: channelは閉じているかもしれません
     abortTransactionUnless(authenticateCapability(channelCapabilityPath(packet.sourcePort, packet.sourceChannel), capability))
     abortTransactionUnless(packet.destChannel === channel.counterpartyChannelIdentifier)
 
     connection = provableStore.get(connectionPath(channel.connectionHops[0]))
-    // note: the connection may have been closed
+    // 注意: connection は閉じているかもしれません
     abortTransactionUnless(packet.destPort === channel.counterpartyPortIdentifier)
 
-    // verify we actually sent this packet, check the store
+    // このpacketが実際に送信されたことを確認し、ストアを確認します
     abortTransactionUnless(provableStore.get(packetCommitmentPath(packet.sourcePort, packet.sourceChannel, packet.sequence))
            === hash(packet.data, packet.timeoutHeight, packet.timeoutTimestamp))
 
-    // check that the opposing channel end has closed
+    // 反対側のchannel endが閉じていることを確認します
     expected = ChannelEnd{CLOSED, channel.order, channel.portIdentifier,
                           channel.channelIdentifier, channel.connectionHops.reverse(), channel.version}
     abortTransactionUnless(connection.verifyChannelState(
@@ -780,7 +780,7 @@ function timeoutOnClose(
     ))
 
     if channel.order === ORDERED {
-      // ordered channel: check that the recv sequence is as claimed
+      // 順序付けられた channel: recv シーケンスが要求通りであることを確認します
       abortTransactionUnless(connection.verifyNextSequenceRecv(
         proofHeight,
         proof,
@@ -788,10 +788,10 @@ function timeoutOnClose(
         packet.destChannel,
         nextSequenceRecv
       ))
-      // ordered channel: check that packet has not been received
+      // 順序付けられた channel: そのpacketを受信していないことを確認する
       abortTransactionUnless(nextSequenceRecv <= packet.sequence)
     } else
-      // unordered channel: verify absence of acknowledgement at packet index
+      // 順不同 channel: packet indexに確認応答がないことを確認する
       abortTransactionUnless(connection.verifyPacketAcknowledgementAbsence(
         proofHeight,
         proof,
@@ -800,9 +800,9 @@ function timeoutOnClose(
         packet.sequence
       ))
 
-    // all assertions passed, we can alter state
+    // すべてのアサーションに問題がないので、状態を変更できます
 
-    // delete our commitment
+    // commitmentを削除します
     provableStore.delete(packetCommitmentPath(packet.sourcePort, packet.sourceChannel, packet.sequence))
 
     // return transparent packet
@@ -810,35 +810,35 @@ function timeoutOnClose(
 }
 ```
 
-##### Cleaning up state
+##### 状態の削除
 
-Packets must be acknowledged in order to be cleaned-up.
+packet を片付けるためには必ず確認しなければなりません。
 
-#### Reasoning about race conditions
+#### 競合状態について推測する
 
-##### Simultaneous handshake attempts
+##### ハンドシェイクの同時試行
 
-If two machines simultaneously initiate channel opening handshakes with each other, attempting to use the same identifiers, both will fail and new identifiers must be used.
+2 台のマシンがchannel開始ハンドシェイクを同時に始め、同じ識別子を使用しようとした場合、両方とも失敗し、新しい識別子を使用しなければなりません。
 
-##### Identifier allocation
+##### 識別子の割当
 
-There is an unavoidable race condition on identifier allocation on the destination chain. Modules would be well-advised to utilise pseudo-random, non-valuable identifiers. Managing to claim the identifier that another module wishes to use, however, while annoying, cannot man-in-the-middle a handshake since the receiving module must already own the port to which the handshake was targeted.
+宛先 chain 上での識別子の割り当てには、避けられない競合条件があります。module は、疑似ランダムで意味のない識別子を利用することが賢明です。ただし、別の module が使用したい識別子への要求を管理することは、煩わしい一方で、ハンドシェイクの対象となる port を受信 module がすでに所有している必要があるため、ハンドシェイクを仲介することはできません。
 
-##### Timeouts / packet confirmation
+##### タイムアウト / packet 確認
 
 packet が受信前にタイムアウトの高さを通過したかどうかにかかわらず、packet のタイムアウトと packetの確認の間に競合状態はありません。
 
-##### Man-in-the-middle attacks during handshakes
+##### ハンドシェイク中の中間者攻撃
 
-Verification of cross-chain state prevents man-in-the-middle attacks for both connection handshakes & channel handshakes since all information (source, destination client, channel, etc.) is known by the module which starts the handshake and confirmed prior to handshake completion.
+cross-chain の状態を検証することで、connection ハンドシェイクと channel ハンドシェイクの両方で中間者攻撃を防ぐことができます。なぜなら、すべての情報（送信元、宛先 client 、channel など）はハンドシェイクを開始する module によって知られており、ハンドシェイクが完了する前に確認されるからです。
 
-##### Connection / channel closure with in-flight packets
+##### 通信中の packet によるconnection/channelの閉鎖
 
-If a connection or channel is closed while packets are in-flight, the packets can no longer be received on the destination chain and can be timed-out on the source chain.
+packet が通信中に connection や channel が閉じられた場合、宛先 chain では packet を受信できなくなり、送信元 chain ではタイムアウトする可能性があります。
 
-#### Querying channels
+#### channelsの問い合わせ
 
-Channels can be queried with `queryChannel`:
+Channelは `queryChannel` で問い合わせることができます:
 
 ```typescript
 function queryChannel(connId: Identifier, chanId: Identifier): ChannelEnd | void {
@@ -846,19 +846,19 @@ function queryChannel(connId: Identifier, chanId: Identifier): ChannelEnd | void
 }
 ```
 
-### Properties & Invariants
+### 特性と不変条件
 
-- The unique combinations of channel & port identifiers are first-come-first-serve: once a pair has been allocated, only the modules owning the ports in question can send or receive on that channel.
-- Packets are delivered exactly once, assuming that the chains are live within the timeout window, and in case of timeout can be timed-out exactly once on the sending chain.
-- The channel handshake cannot be man-in-the-middle attacked by another module on either blockchain or another blockchain's IBC handler.
+- channel と port 識別子のユニークな組み合わせは、先着順です。一旦ペアが割り当てられると、問題の port を所有するmoduleだけが、そのchannelで送受信できます。
+- packet は、chain がタイムアウトウィンドウ内で生きていると仮定して、正確に一度だけ配信され、タイムアウトした場合には、送信chainで正確に一度だけタイムアウトすることができます。
+- channel のハンドシェイクは、どちらかのブロックチェーン上の他のmoduleや他のブロックチェーンのIBCハンドラーによって中間者攻撃を受けることはありません。
 
 ## 後方互換性
 
 該当しません。
 
-## Forwards Compatibility
+## 前方互換性
 
-Data structures & encoding can be versioned at the connection or channel level. Channel logic is completely agnostic to packet data formats, which can be changed by the modules any way they like at any time.
+データ構造とエンコーディングは、connection または channel レベルでバージョン管理することができます。channel ロジックは packet データフォーマットに完全に依存しないため、module によっていつでも好きなように変更することができます。
 
 ## 実装例
 
@@ -870,17 +870,17 @@ Data structures & encoding can be versioned at the connection or channel level. 
 
 ## 変更履歴
 
-Jun 5, 2019 - Draft submitted
+2019年6月5日 - ドラフト提出
 
-Jul 4, 2019 - Modifications for unordered channels & acknowledgements
+2019年7月4日 - 順序付けされていない channel及び応答部分の修正
 
-Jul 16, 2019 - Alterations for multi-hop routing future compatibility
+2019年7月16日 - マルチホップルーティングの将来の互換性のための変更
 
-Jul 29, 2019 - Revisions to handle timeouts after connection closure
+2019年07月29日 - connection 終了後のタイムアウトを処理するための改訂
 
-Aug 13, 2019 - Various edits
+2019年8月13日 - 諸々編集
 
-Aug 25, 2019 - Cleanup
+2019年8月25日 - 整理
 
 ## Copyright
 
