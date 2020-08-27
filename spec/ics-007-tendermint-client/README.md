@@ -84,7 +84,7 @@ The Tendermint client tracks the timestamp (block time), validator set, and comm
 ```typescript
 interface ConsensusState {
   timestamp: uint64
-  validatorSet: List<Pair<Address, uint64>>
+  nextValidatorsHash: []byte
   commitmentRoot: []byte
 }
 ```
@@ -214,7 +214,7 @@ function checkValidityAndUpdateState(
     // update latest timestamp
     clientState.latestTimestamp = header.timestamp
     // create recorded consensus state, save it
-    consensusState = ConsensusState{header.validatorSet, header.commitmentRoot, header.timestamp}
+    consensusState = ConsensusState{header.validatorSet.hash(), header.commitmentRoot, header.timestamp}
     set("clients/{identifier}/consensusStates/{header.height}", consensusState)
     // save the client
     set("clients/{identifier}", clientState)
@@ -238,9 +238,10 @@ function checkMisbehaviourAndUpdateState(
     // assert that the timestamp is not from more than an unbonding period ago
     assert(currentTimestamp() - misbehaviour.timestamp < clientState.unbondingPeriod)
     // check if the light client "would have been fooled"
+    assert(misbehaviour.validatorSet.hash() === consensusState.nextValidatorsHash)
     assert(
-      verify(consensusState.validatorSet, misbehaviour.fromHeight, misbehaviour.h1) &&
-      verify(consensusState.validatorSet, misbehaviour.fromHeight, misbehaviour.h2)
+      verify(misbehaviour.validatorSet, misbehaviour.fromHeight, misbehaviour.h1) &&
+      verify(misbehaviour.validatorSet, misbehaviour.fromHeight, misbehaviour.h2)
       )
     // set the frozen height
     clientState.frozenHeight = min(clientState.frozenHeight, misbehaviour.h1.height) // which is same as h2.height
