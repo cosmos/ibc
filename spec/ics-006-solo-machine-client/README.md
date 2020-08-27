@@ -162,6 +162,22 @@ All solo machine client state verification functions simply check a signature, w
 Note that value concatenation should be implemented in a state-machine-specific escaped fashion.
 
 ```typescript
+function verifyClientState(
+  clientState: ClientState,
+  height: uint64,
+  prefix: CommitmentPrefix,
+  proof: CommitmentProof,
+  clientIdentifier: Identifier,
+  counterpartyClientState: ClientState) {
+    path = applyPrefix(prefix, "clients/{clientIdentifier}/clientState")
+    abortTransactionUnless(!clientState.frozen)
+    abortTransactionUnless(proof.timestamp >= clientState.consensusState.timestamp)
+    value = clientState.consensusState.sequence + proof.timestamp + path + counterpartyClientState
+    assert(checkSignature(clientState.consensusState.pubKey, value, proof.sig))
+    clientState.consensusState.sequence++
+    clientState.consensusState.timestamp = proof.timestamp
+}
+
 function verifyClientConsensusState(
   clientState: ClientState,
   height: uint64,
