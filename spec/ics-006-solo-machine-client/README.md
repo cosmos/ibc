@@ -69,6 +69,7 @@ The `Height` of a solo machine is just a `uint64`, with the usual comparison ope
 ```typescript
 interface Header {
   sequence: uint64
+  timestamp: uint64
   signature: Signature
   newPublicKey: PublicKey
   newDiversifier: string
@@ -136,6 +137,7 @@ function checkValidityAndUpdateState(
   assert(checkSignature(header.newPublicKey, header.sequence, header.diversifier, header.signature))
   clientState.consensusState.publicKey = header.newPublicKey
   clientState.consensusState.diversifier = header.newDiversifier
+  clientState.consensusState.timestamp = header.timestamp
   clientState.consensusState.sequence++
 }
 ```
