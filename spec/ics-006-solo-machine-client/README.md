@@ -47,12 +47,13 @@ interface ClientState {
 
 ### Consensus state
 
-The `ConsensusState` of a solo machine consists of the current public key & sequence number.
+The `ConsensusState` of a solo machine consists of the current public key, current diversifier, sequence number, and timestamp.
 
 ```typescript
 interface ConsensusState {
   sequence: uint64
   publicKey: PublicKey
+  diversifier: string
   timestamp: uint64
 }
 ```
@@ -63,13 +64,14 @@ The `Height` of a solo machine is just a `uint64`, with the usual comparison ope
 
 ### Headers
 
-`Header`s must only be provided by a solo machine when the machine wishes to update the public key.
+`Header`s must only be provided by a solo machine when the machine wishes to update the public key or diversifier.
 
 ```typescript
 interface Header {
   sequence: uint64
   signature: Signature
   newPublicKey: PublicKey
+  newDiversifier: string
 }
 ```
 
@@ -131,8 +133,9 @@ function checkValidityAndUpdateState(
   clientState: ClientState,
   header: Header) {
   assert(header.sequence === clientState.consensusState.sequence)
-  assert(checkSignature(header.newPublicKey, header.sequence, header.signature))
+  assert(checkSignature(header.newPublicKey, header.sequence, header.diversifier, header.signature))
   clientState.consensusState.publicKey = header.newPublicKey
+  clientState.consensusState.diversifier = header.newDiversifier
   clientState.consensusState.sequence++
 }
 ```
@@ -148,9 +151,10 @@ function checkMisbehaviourAndUpdateState(
     h1 = misbehaviour.h1
     h2 = misbehaviour.h2
     pubkey = clientState.consensusState.publicKey
+    diversifier = clientState.consensusState.diversifier
     assert(misbehaviour.h1.signature.data !== misbehaviour.h2.signature.data)
-    assert(checkSignature(pubkey, misbehaviour.sequence, misbehaviour.h1.signature.sig))
-    assert(checkSignature(pubkey, misbehaviour.sequence, misbehaviour.h2.signature.sig))
+    assert(checkSignature(pubkey, misbehaviour.sequence, diversifier, misbehaviour.h1.signature.sig))
+    assert(checkSignature(pubkey, misbehaviour.sequence, diversifier, misbehaviour.h2.signature.sig))
     clientState.frozen = true
 }
 ```
@@ -172,7 +176,7 @@ function verifyClientState(
     path = applyPrefix(prefix, "clients/{clientIdentifier}/clientState")
     abortTransactionUnless(!clientState.frozen)
     abortTransactionUnless(proof.timestamp >= clientState.consensusState.timestamp)
-    value = clientState.consensusState.sequence + proof.timestamp + path + counterpartyClientState
+    value = clientState.consensusState.sequence + clientState.consensusState.diversifier + proof.timestamp + path + counterpartyClientState
     assert(checkSignature(clientState.consensusState.pubKey, value, proof.sig))
     clientState.consensusState.sequence++
     clientState.consensusState.timestamp = proof.timestamp
@@ -189,7 +193,7 @@ function verifyClientConsensusState(
     path = applyPrefix(prefix, "clients/{clientIdentifier}/consensusState/{consensusStateHeight}")
     abortTransactionUnless(!clientState.frozen)
     abortTransactionUnless(proof.timestamp >= clientState.consensusState.timestamp)
-    value = clientState.consensusState.sequence + proof.timestamp + path + consensusState
+    value = clientState.consensusState.sequence + clientState.consensusState.diversifier + proof.timestamp + path + consensusState
     assert(checkSignature(clientState.consensusState.pubKey, value, proof.sig))
     clientState.consensusState.sequence++
     clientState.consensusState.timestamp = proof.timestamp
@@ -205,7 +209,7 @@ function verifyConnectionState(
     path = applyPrefix(prefix, "connection/{connectionIdentifier}")
     abortTransactionUnless(!clientState.frozen)
     abortTransactionUnless(proof.timestamp >= clientState.consensusState.timestamp)
-    value = clientState.consensusState.sequence + proof.timestamp + path + connectionEnd
+    value = clientState.consensusState.sequence + clientState.consensusState.diversifier + proof.timestamp + path + connectionEnd
     assert(checkSignature(clientState.consensusState.pubKey, value, proof.sig))
     clientState.consensusState.sequence++
     clientState.consensusState.timestamp = proof.timestamp
@@ -222,7 +226,7 @@ function verifyChannelState(
     path = applyPrefix(prefix, "ports/{portIdentifier}/channels/{channelIdentifier}")
     abortTransactionUnless(!clientState.frozen)
     abortTransactionUnless(proof.timestamp >= clientState.consensusState.timestamp)
-    value = clientState.consensusState.sequence + proof.timestamp + path + channelEnd
+    value = clientState.consensusState.sequence + clientState.consensusState.diversifier + proof.timestamp + path + channelEnd
     assert(checkSignature(clientState.consensusState.pubKey, value, proof.sig))
     clientState.consensusState.sequence++
     clientState.consensusState.timestamp = proof.timestamp
@@ -240,7 +244,7 @@ function verifyPacketData(
     path = applyPrefix(prefix, "ports/{portIdentifier}/channels/{channelIdentifier}/packets/{sequence}")
     abortTransactionUnless(!clientState.frozen)
     abortTransactionUnless(proof.timestamp >= clientState.consensusState.timestamp)
-    value = clientState.consensusState.sequence + proof.timestamp + path + data
+    value = clientState.consensusState.sequence + clientState.consensusState.diversifier + proof.timestamp + path + data
     assert(checkSignature(clientState.consensusState.pubKey, value, proof.sig))
     clientState.consensusState.sequence++
     clientState.consensusState.timestamp = proof.timestamp
@@ -258,7 +262,7 @@ function verifyPacketAcknowledgement(
     path = applyPrefix(prefix, "ports/{portIdentifier}/channels/{channelIdentifier}/acknowledgements/{sequence}")
     abortTransactionUnless(!clientState.frozen)
     abortTransactionUnless(proof.timestamp >= clientState.consensusState.timestamp)
-    value = clientState.consensusState.sequence + proof.timestamp + path + acknowledgement
+    value = clientState.consensusState.sequence + clientState.consensusState.diversifier + proof.timestamp + path + acknowledgement
     assert(checkSignature(clientState.consensusState.pubKey, value, proof.sig))
     clientState.consensusState.sequence++
     clientState.consensusState.timestamp = proof.timestamp
@@ -275,7 +279,7 @@ function verifyPacketAcknowledgementAbsence(
     path = applyPrefix(prefix, "ports/{portIdentifier}/channels/{channelIdentifier}/acknowledgements/{sequence}")
     abortTransactionUnless(!clientState.frozen)
     abortTransactionUnless(proof.timestamp >= clientState.consensusState.timestamp)
-    value = clientState.consensusState.sequence + proof.timestamp + path
+    value = clientState.consensusState.sequence + clientState.consensusState.diversifier + proof.timestamp + path
     assert(checkSignature(clientState.consensusState.pubKey, value, proof.sig))
     clientState.consensusState.sequence++
     clientState.consensusState.timestamp = proof.timestamp
@@ -292,7 +296,7 @@ function verifyNextSequenceRecv(
     path = applyPrefix(prefix, "ports/{portIdentifier}/channels/{channelIdentifier}/nextSequenceRecv")
     abortTransactionUnless(!clientState.frozen)
     abortTransactionUnless(proof.timestamp >= clientState.consensusState.timestamp)
-    value = clientState.consensusState.sequence + proof.timestamp + path + nextSequenceRecv
+    value = clientState.consensusState.sequence + clientState.consensusState.diversifier + proof.timestamp + path + nextSequenceRecv
     assert(checkSignature(clientState.consensusState.pubKey, value, proof.sig))
     clientState.consensusState.sequence++
     clientState.consensusState.timestamp = proof.timestamp
