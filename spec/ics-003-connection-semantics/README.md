@@ -245,7 +245,7 @@ In the future, it might be used to indicate what kinds of channels can utilise t
 what encoding formats channel-related datagrams will use. At present, host state machine MAY utilise the version data
 to negotiate encodings, priorities, or connection-specific metadata related to custom logic on top of IBC.
 
-Host state machines MAY also safely ignore the version data or specify an empty string.
+Host state machines MAY also safely ignore the version data or specify an empty string. It is assumed that the two chains running the opening handshake have at least once compatible version in common (i.e., the compatible versions at the two chains must have a non-empty intersection).
 
 An implementation MUST define a function `getCompatibleVersions` which returns the list of versions it supports, ranked by descending preference order.
 
@@ -253,7 +253,7 @@ An implementation MUST define a function `getCompatibleVersions` which returns t
 type getCompatibleVersions = () => []string
 ```
 
-An implementation MUST define a function `pickVersion` to choose a version from a list of versions proposed by a counterparty.
+An implementation MUST define a function `pickVersion` to choose a version from a list of versions.
 
 ```typescript
 type pickVersion = ([]string) => string
