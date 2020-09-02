@@ -49,6 +49,8 @@ interface ClientState {
 
 The `ConsensusState` of a solo machine consists of the current public key, current diversifier, sequence number, and timestamp.
 
+The diversifier is an arbitrary string, chosen when the client is created, designed to allow the same public key to be re-used across different solo machine clients (potentially on different chains) without being considered misbehaviour.
+
 ```typescript
 interface ConsensusState {
   sequence: uint64
