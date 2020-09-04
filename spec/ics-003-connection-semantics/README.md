@@ -245,7 +245,7 @@ In the future, it might be used to indicate what kinds of channels can utilise t
 what encoding formats channel-related datagrams will use. At present, host state machine MAY utilise the version data
 to negotiate encodings, priorities, or connection-specific metadata related to custom logic on top of IBC.
 
-Host state machines MAY also safely ignore the version data or specify an empty string.
+Host state machines MAY also safely ignore the version data or specify an empty string. It is assumed that the two chains running the opening handshake have at least one compatible version in common (i.e., the compatible versions of the two chains must have a non-empty intersection). If the two chains do not have any mutually acceptable versions, the handshake will fail.
 
 An implementation MUST define a function `getCompatibleVersions` which returns the list of versions it supports, ranked by descending preference order.
 
@@ -253,7 +253,7 @@ An implementation MUST define a function `getCompatibleVersions` which returns t
 type getCompatibleVersions = () => []string
 ```
 
-An implementation MUST define a function `pickVersion` to choose a version from a list of versions proposed by a counterparty.
+An implementation MUST define a function `pickVersion` to choose a version from a list of versions. Note that if the two chains performing the handshake implement different `pickVersion` functions, a (possibly misbehaving) relayer may be able to stall the handshake by executing `INIT` and `OPENTRY` on both chains, at which point they will pick different versions and be unable to continue.
 
 ```typescript
 type pickVersion = ([]string) => string
@@ -320,7 +320,8 @@ function connOpenTry(
     expectedConsensusState = getConsensusState(consensusHeight)
     expected = ConnectionEnd{INIT, desiredIdentifier, getCommitmentPrefix(), counterpartyClientIdentifier,
                              clientIdentifier, counterpartyVersions}
-    version = pickVersion(counterpartyVersions)
+    versionsIntersection = intersection(counterpartyVersions, getCompatibleVersions())
+    version = pickVersion(versionsIntersection)
     connection = ConnectionEnd{TRYOPEN, counterpartyConnectionIdentifier, counterpartyPrefix,
                                clientIdentifier, counterpartyClientIdentifier, version}
     abortTransactionUnless(connection.verifyConnectionState(proofHeight, proofInit, counterpartyConnectionIdentifier, expected))
@@ -334,7 +335,7 @@ function connOpenTry(
         previous.counterpartyPrefix === counterpartyPrefix &&
         previous.clientIdentifier === clientIdentifier &&
         previous.counterpartyClientIdentifier === counterpartyClientIdentifier &&
-        previous.version === version))
+        previous.version === getCompatibleVersions()))
     identifier = desiredIdentifier
     provableStore.set(connectionPath(identifier), connection)
     addConnectionToClient(clientIdentifier, identifier)
@@ -353,7 +354,9 @@ function connOpenAck(
   consensusHeight: Height) {
     abortTransactionUnless(consensusHeight < getCurrentHeight())
     connection = provableStore.get(connectionPath(identifier))
-    abortTransactionUnless(connection.state === INIT || connection.state === TRYOPEN)
+    abortTransactionUnless(
+        (connection.state === INIT && connection.version.indexOf(version) !== -1)
+        || (connection.state === TRYOPEN && connection.version === version))
     expectedConsensusState = getConsensusState(consensusHeight)
     expected = ConnectionEnd{TRYOPEN, identifier, getCommitmentPrefix(),
                              connection.counterpartyClientIdentifier, connection.clientIdentifier,
@@ -362,7 +365,6 @@ function connOpenAck(
     abortTransactionUnless(connection.verifyClientConsensusState(
       proofHeight, proofConsensus, connection.counterpartyClientIdentifier, consensusHeight, expectedConsensusState))
     connection.state = OPEN
-    abortTransactionUnless(getCompatibleVersions().indexOf(version) !== -1)
     connection.version = version
     provableStore.set(connectionPath(identifier), connection)
 }
