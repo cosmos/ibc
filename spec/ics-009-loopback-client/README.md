@@ -142,7 +142,7 @@ function verifyPacketAcknowledgement(
     assert(get(path) === acknowledgement)
 }
 
-function verifyPacketAcknowledgementAbsence(
+function verifyPacketReceiptAbsence(
   clientState: ClientState,
   height: uint64,
   prefix: CommitmentPrefix,
@@ -150,7 +150,7 @@ function verifyPacketAcknowledgementAbsence(
   portIdentifier: Identifier,
   channelIdentifier: Identifier,
   sequence: uint64) {
-    path = applyPrefix(prefix, "ports/{portIdentifier}/channels/{channelIdentifier}/acknowledgements/{sequence}")
+    path = applyPrefix(prefix, "ports/{portIdentifier}/channels/{channelIdentifier}/receipts/{sequence}")
     assert(get(path) === nil)
 }
 

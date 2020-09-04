@@ -382,7 +382,7 @@ function verifyPacketAcknowledgement(
     assert(root.verifyMembership(clientState.proofSpecs, path, hash(acknowledgement), proof))
 }
 
-function verifyPacketAcknowledgementAbsence(
+function verifyPacketReceiptAbsence(
   clientState: ClientState,
   height: Height,
   prefix: CommitmentPrefix,
@@ -390,7 +390,7 @@ function verifyPacketAcknowledgementAbsence(
   portIdentifier: Identifier,
   channelIdentifier: Identifier,
   sequence: uint64) {
-    path = applyPrefix(prefix, "ports/{portIdentifier}/channels/{channelIdentifier}/acknowledgements/{sequence}")
+    path = applyPrefix(prefix, "ports/{portIdentifier}/channels/{channelIdentifier}/receipts/{sequence}")
     // check that the client is at a sufficient height
     assert(clientState.latestHeight >= height)
     // check that the client is unfrozen or frozen at a higher height

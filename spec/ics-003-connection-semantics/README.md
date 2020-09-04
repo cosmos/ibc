@@ -188,7 +188,7 @@ function verifyPacketAcknowledgement(
     return client.verifyPacketAcknowledgement(connection, height, connection.counterpartyPrefix, proof, portIdentifier, channelIdentifier, acknowledgement)
 }
 
-function verifyPacketAcknowledgementAbsence(
+function verifyPacketReceiptAbsence(
   connection: ConnectionEnd,
   height: Height,
   proof: CommitmentProof,
@@ -196,7 +196,7 @@ function verifyPacketAcknowledgementAbsence(
   channelIdentifier: Identifier,
   sequence: uint64) {
     client = queryClient(connection.clientIdentifier)
-    return client.verifyPacketAcknowledgementAbsence(connection, height, connection.counterpartyPrefix, proof, portIdentifier, channelIdentifier)
+    return client.verifyPacketReceiptAbsence(connection, height, connection.counterpartyPrefix, proof, portIdentifier, channelIdentifier)
 }
 
 function verifyNextSequenceRecv(

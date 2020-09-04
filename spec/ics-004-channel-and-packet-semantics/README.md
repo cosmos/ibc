@@ -207,6 +207,14 @@ function packetCommitmentPath(portIdentifier: Identifier, channelIdentifier: Ide
 
 Absence of the path in the store is equivalent to a zero-bit.
 
+Packet receipt data are stored under the `packetReceiptPath`
+
+```typescript
+function packetReceiptPath(portIdentifier: Identifier, channelIdentifier: Identifier, sequence: uint64): Path {
+    return "acks/ports/{portIdentifier}/channels/{channelIdentifier}/receipts/" + sequence
+}
+```
+
 Packet acknowledgement data are stored under the `packetAcknowledgementPath`:
 
 ```typescript
@@ -599,19 +607,19 @@ function recvPacket(
 
     // all assertions passed (except sequence check), we can alter state
 
-    // always set the acknowledgement so that it can be verified on the other side
-    provableStore.set(
-      packetAcknowledgementPath(packet.destPort, packet.destChannel, packet.sequence),
-      hash(acknowledgement)
-    )
-
     if (channel.order === ORDERED) {
       nextSequenceRecv = provableStore.get(nextSequenceRecvPath(packet.destPort, packet.destChannel))
       abortTransactionUnless(packet.sequence === nextSequenceRecv)
       nextSequenceRecv = nextSequenceRecv + 1
       provableStore.set(nextSequenceRecvPath(packet.destPort, packet.destChannel), nextSequenceRecv)
-    } else
-      abortTransactionUnless(provableStore.get(packetAcknowledgementPath(packet.destPort, packet.destChannel, packet.sequence) === null))
+    } else {
+      // for unordered channels we must set the receipt so it can be verified on the other side
+      abortTransactionUnless(provableStore.get(packetReceiptPath(packet.destPort, packet.destChannel, packet.sequence) === null))
+      provableStore.set(
+        packetReceiptPath(packet.destPort, packet.destChannel, packet.sequence),
+        ""
+      )
+    }
 
     // log that a packet has been received & acknowledged
     emitLogEntry("recvPacket", {sequence: packet.sequence, timeoutHeight: packet.timeoutHeight,
@@ -619,6 +627,35 @@ function recvPacket(
 
     // return transparent packet
     return packet
+}
+```
+
+```typescript
+function writeAcknowledgement(
+  packet: Packet,
+  acknowledgement: bytes): Packet {
+
+    channel = provableStore.get(channelPath(packet.destPort, packet.destChannel))
+    abortTransactionUnless(channel !== null)
+    abortTransactionUnless(channel.state === OPEN)
+    abortTransactionUnless(authenticateCapability(channelCapabilityPath(packet.destPort, packet.destChannel), capability))
+    abortTransactionUnless(packet.sourcePort === channel.counterpartyPortIdentifier)
+    abortTransactionUnless(packet.sourceChannel === channel.counterpartyChannelIdentifier)
+
+    abortTransactionUnless(connection !== null)
+    abortTransactionUnless(connection.state === OPEN)
+
+    // cannot already have written the acknowledgement
+    abortTransactionUnless(provableStore.get(packetAcknowledgementPath(packet.destPort, packet.destChannel, packet.sequence) === null))
+
+    provableStore.set(
+      packetAcknowledgementPath(packet.destPort, packet.destChannel, packet.sequence),
+      hash(acknowledgement)
+    )
+
+    // log that a packet has been received & acknowledged
+    emitLogEntry("writeAcknowledgement", {sequence: packet.sequence, timeoutHeight: packet.timeoutHeight,
+                                timeoutTimestamp: packet.timeoutTimestamp, data: packet.data, acknowledgement})
 }
 ```
 
@@ -769,7 +806,7 @@ function timeoutPacket(
       ))
     } else
       // unordered channel: verify absence of acknowledgement at packet index
-      abortTransactionUnless(connection.verifyPacketAcknowledgementAbsence(
+      abortTransactionUnless(connection.verifyPacketReceiptAbsence(
         proofHeight,
         proof,
         packet.destPort,
@@ -846,7 +883,7 @@ function timeoutOnClose(
       abortTransactionUnless(nextSequenceRecv <= packet.sequence)
     } else
       // unordered channel: verify absence of acknowledgement at packet index
-      abortTransactionUnless(connection.verifyPacketAcknowledgementAbsence(
+      abortTransactionUnless(connection.verifyPacketReceiptAbsence(
         proofHeight,
         proof,
         packet.destPort,

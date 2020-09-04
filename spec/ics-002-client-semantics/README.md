@@ -390,10 +390,10 @@ type verifyPacketAcknowledgement = (
   => boolean
 ```
 
-`verifyPacketAcknowledgementAbsence` verifies a proof of the absence of an incoming packet acknowledgement at the specified port, specified channel, and specified sequence.
+`verifyPacketReceiptAbsence` verifies a proof of the absence of an incoming packet receipt at the specified port, specified channel, and specified sequence.
 
 ```typescript
-type verifyPacketAcknowledgementAbsence = (
+type verifyPacketReceiptAbsence = (
   clientState: ClientState,
   height: Height,
   prefix: CommitmentPrefix,
@@ -795,7 +795,7 @@ function verifyPacketAcknowledgement(
     return clientState.verifiedRoots[sequence].verifyMembership(path, hash(acknowledgement), proof)
 }
 
-function verifyPacketAcknowledgementAbsence(
+function verifyPacketReceiptAbsence(
   clientState: ClientState,
   height: Height,
   prefix: CommitmentPrefix,
@@ -803,7 +803,7 @@ function verifyPacketAcknowledgementAbsence(
   portIdentifier: Identifier,
   channelIdentifier: Identifier,
   sequence: uint64) {
-    path = applyPrefix(prefix, "ports/{portIdentifier}/channels/{channelIdentifier}/acknowledgements/{sequence}")
+    path = applyPrefix(prefix, "ports/{portIdentifier}/channels/{channelIdentifier}/receipts/{sequence}")
     abortTransactionUnless(!clientState.frozen)
     return clientState.verifiedRoots[sequence].verifyNonMembership(path, proof)
 }

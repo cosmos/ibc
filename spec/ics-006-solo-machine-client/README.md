@@ -272,7 +272,7 @@ function verifyPacketAcknowledgement(
     clientState.consensusState.timestamp = proof.timestamp
 }
 
-function verifyPacketAcknowledgementAbsence(
+function verifyPacketReceiptAbsence(
   clientState: ClientState,
   height: uint64,
   prefix: CommitmentPrefix,
@@ -280,7 +280,7 @@ function verifyPacketAcknowledgementAbsence(
   portIdentifier: Identifier,
   channelIdentifier: Identifier,
   sequence: uint64) {
-    path = applyPrefix(prefix, "ports/{portIdentifier}/channels/{channelIdentifier}/acknowledgements/{sequence}")
+    path = applyPrefix(prefix, "ports/{portIdentifier}/channels/{channelIdentifier}/receipts/{sequence}")
     abortTransactionUnless(!clientState.frozen)
     abortTransactionUnless(proof.timestamp >= clientState.consensusState.timestamp)
     value = clientState.consensusState.sequence + clientState.consensusState.diversifier + proof.timestamp + path
