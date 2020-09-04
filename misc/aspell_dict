@@ -1,4 +1,4 @@
-personal_ws-1.1 en 626 
+personal_ws-1.1 en 627 
 ABCI
 ABI
 ADR
@@ -289,6 +289,7 @@ desiredIdentifier
 destChannel
 destPort
 deterministically
+diversifier
 duplicable
 emitLogEntry
 encodings
