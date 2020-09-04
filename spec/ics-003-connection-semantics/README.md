@@ -253,7 +253,7 @@ An implementation MUST define a function `getCompatibleVersions` which returns t
 type getCompatibleVersions = () => []string
 ```
 
-An implementation MUST define a function `pickVersion` to choose a version from a list of versions.
+An implementation MUST define a function `pickVersion` to choose a version from a list of versions. Note that if the two chains performing the handshake implement different `pickVersion` functions, a (possibly misbehaving) relayer may be able to stall the handshake by executing `INIT` and `OPENTRY` on both chains, at which point they will pick different versions and be unable to continue.
 
 ```typescript
 type pickVersion = ([]string) => string
