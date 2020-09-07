@@ -218,8 +218,9 @@ function pendingDatagrams(chain: Chain, counterparty: Chain): List<Set<Datagram>
         proofHeight: height,
       })
     }
-    // Then, scan logs for received packets and relay acknowledgements
-    recvPacketLogs = queryByTopic(height, "recvPacket")
+
+    // Then, scan logs for acknowledgements, relay back to sending chain
+    recvPacketLogs = queryByTopic(height, "writeAcknowledgement")
     for (const logEntry of recvPacketLogs) {
       // relay packet acknowledgement with this sequence number
       packetData = Packet{logEntry.sequence, logEntry.timeoutHeight, logEntry.timeoutTimestamp,
