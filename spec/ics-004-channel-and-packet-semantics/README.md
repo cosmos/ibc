@@ -223,8 +223,6 @@ function packetAcknowledgementPath(portIdentifier: Identifier, channelIdentifier
 }
 ```
 
-Unordered channels MUST always write a acknowledgement (even an empty one) to this path so that the absence of such can be used as proof-of-timeout. Ordered channels MAY write an acknowledgement, but are not required to.
-
 ### Versioning
 
 During the handshake process, two ends of a channel come to agreement on a version bytestring associated
@@ -580,8 +578,7 @@ The IBC handler performs the following steps in order:
 function recvPacket(
   packet: OpaquePacket,
   proof: CommitmentProof,
-  proofHeight: Height,
-  acknowledgement: bytes): Packet {
+  proofHeight: Height): Packet {
 
     channel = provableStore.get(channelPath(packet.destPort, packet.destChannel))
     abortTransactionUnless(channel !== null)
@@ -767,7 +764,7 @@ Calling modules MAY atomically execute appropriate application timeout-handling 
 
 In the case of an ordered channel, `timeoutPacket` checks the `recvSequence` of the receiving channel end and closes the channel if a packet has timed out.
 
-In the case of an unordered channel, `timeoutPacket` checks the absence of an acknowledgement (which will have been written if the packet was received). Unordered channels are expected to continue in the face of timed-out packets.
+In the case of an unordered channel, `timeoutPacket` checks the absence of the receipt key (which will have been written if the packet was received). Unordered channels are expected to continue in the face of timed-out packets.
 
 If relations are enforced between timeout heights of subsequent packets, safe bulk timeouts of all packets prior to a timed-out packet can be performed. This specification omits details for now.
 
@@ -810,7 +807,7 @@ function timeoutPacket(
         nextSequenceRecv
       ))
     } else
-      // unordered channel: verify absence of acknowledgement at packet index
+      // unordered channel: verify absence of receipt at packet index
       abortTransactionUnless(connection.verifyPacketReceiptAbsence(
         proofHeight,
         proof,
@@ -887,7 +884,7 @@ function timeoutOnClose(
       // ordered channel: check that packet has not been received
       abortTransactionUnless(nextSequenceRecv <= packet.sequence)
     } else
-      // unordered channel: verify absence of acknowledgement at packet index
+      // unordered channel: verify absence of receipt at packet index
       abortTransactionUnless(connection.verifyPacketReceiptAbsence(
         proofHeight,
         proof,
