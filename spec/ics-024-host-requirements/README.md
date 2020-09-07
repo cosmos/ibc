@@ -129,6 +129,7 @@ Note that the client-related paths listed below reflect the Tendermint client as
 | provableStore  | "seqRecvs/ports/{identifier}/channels/{identifier}/nextSequenceRecv"           | uint64            | [ICS 4](../ics-004-channel-and-packet-semantics) |
 | provableStore  | "seqAcks/ports/{identifier}/channels/{identifier}/nextSequenceAck"             | uint64            | [ICS 4](../ics-004-channel-and-packet-semantics) |
 | provableStore  | "commitments/ports/{identifier}/channels/{identifier}/packets/{sequence}"      | bytes             | [ICS 4](../ics-004-channel-and-packet-semantics) |
+| provableStore  | "receipts/ports/{identifier}/channels/{identifier}/receipts/{sequence}"        | bytes             | [ICS 4](../ics-004-channel-and-packet-semantics) |
 | provableStore  | "acks/ports/{identifier}/channels/{identifier}/acknowledgements/{sequence}"    | bytes             | [ICS 4](../ics-004-channel-and-packet-semantics) |
 
 ### Module layout
