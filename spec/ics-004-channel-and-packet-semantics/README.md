@@ -561,9 +561,9 @@ function sendPacket(packet: Packet) {
 
 #### Receiving packets
 
-The `recvPacket` function is called by a module in order to receive & process an IBC packet sent on the corresponding channel end on the counterparty chain.
+The `recvPacket` function is called by a module in order to receive an IBC packet sent on the corresponding channel end on the counterparty chain.
 
-Calling modules MUST execute application logic atomically in conjunction with calling `recvPacket`, likely beforehand to calculate the acknowledgement value.
+Atomically in conjunction with calling `recvPacket`, calling modules MUST either execution application logic or queue the packet for future execution.
 
 The IBC handler performs the following steps in order:
 
@@ -573,7 +573,7 @@ The IBC handler performs the following steps in order:
 - Checks that the packet sequence is the next sequence the channel end expects to receive (for ordered channels)
 - Checks that the timeout height has not yet passed
 - Checks the inclusion proof of packet data commitment in the outgoing chain's state
-- Sets the opaque acknowledgement value at a store path unique to the packet (if the acknowledgement is non-empty or the channel is unordered)
+- Sets a store path to indicate that the packet has been received (unordered channels only)
 - Increments the packet receive sequence associated with the channel end (ordered channels only)
 
 ```typescript
@@ -621,55 +621,60 @@ function recvPacket(
       )
     }
 
-    // log that a packet has been received & acknowledged
+    // log that a packet has been received
     emitLogEntry("recvPacket", {sequence: packet.sequence, timeoutHeight: packet.timeoutHeight,
-                                timeoutTimestamp: packet.timeoutTimestamp, data: packet.data, acknowledgement})
+                                timeoutTimestamp: packet.timeoutTimestamp, data: packet.data})
 
     // return transparent packet
     return packet
 }
 ```
 
+#### Writing acknowledgements
+
+The `writeAcknowledgement` function is called by a module in order to write data which resulted from processing an IBC packet that the sending chain can then verify, a sort of "execution receipt" or "RPC call response".
+
+Calling modules MUST execute application logic atomically in conjunction with calling `writeAcknowledgement`.
+
+This is an asynchronous acknowledgement, the contents of which do not need to be determined when the packet is received, only when processing is complete. In the synchronous case, `writeAcknowledgement` can be called in the same transaction (atomically) with `recvPacket`.
+
+Acknowledging packets is not required; however, if an ordered channel uses acknowledgements, either all or no packets must be acknowledged (since the acknowledgements are processed in order).
+
+`writeAcknowledgement` *does not* check if the packet being acknowledged was actually received, because this would result in proofs being verified twice for acknowledged packets. This aspect of correctness is the responsibility of the calling module.
+The calling module MUST only call `writeAcknowledgement` with a packet previously received from `recvPacket`.
+
+The IBC handler performs the following steps in order:
+
+- Checks that an acknowledgement for this packet has not yet been written
+- Sets the opaque acknowledgement value at a store path unique to the packet
+
 ```typescript
 function writeAcknowledgement(
   packet: Packet,
   acknowledgement: bytes): Packet {
 
-    channel = provableStore.get(channelPath(packet.destPort, packet.destChannel))
-    abortTransactionUnless(channel !== null)
-    abortTransactionUnless(channel.state === OPEN)
-    abortTransactionUnless(authenticateCapability(channelCapabilityPath(packet.destPort, packet.destChannel), capability))
-    abortTransactionUnless(packet.sourcePort === channel.counterpartyPortIdentifier)
-    abortTransactionUnless(packet.sourceChannel === channel.counterpartyChannelIdentifier)
-
-    abortTransactionUnless(connection !== null)
-    abortTransactionUnless(connection.state === OPEN)
-
     // cannot already have written the acknowledgement
     abortTransactionUnless(provableStore.get(packetAcknowledgementPath(packet.destPort, packet.destChannel, packet.sequence) === null))
 
+    // write the acknowledgement
     provableStore.set(
       packetAcknowledgementPath(packet.destPort, packet.destChannel, packet.sequence),
       hash(acknowledgement)
     )
 
-    // log that a packet has been received & acknowledged
+    // log that a packet has been acknowledged
     emitLogEntry("writeAcknowledgement", {sequence: packet.sequence, timeoutHeight: packet.timeoutHeight,
                                 timeoutTimestamp: packet.timeoutTimestamp, data: packet.data, acknowledgement})
 }
 ```
 
-#### Acknowledgements
+#### Processing acknowledgements
 
 The `acknowledgePacket` function is called by a module to process the acknowledgement of a packet previously sent by
 the calling module on a channel to a counterparty module on the counterparty chain.
 `acknowledgePacket` also cleans up the packet commitment, which is no longer necessary since the packet has been received and acted upon.
 
 Calling modules MAY atomically execute appropriate application acknowledgement-handling logic in conjunction with calling `acknowledgePacket`.
-
-This is a synchronous acknowledgement, the contents of which must be determined when the packet is received. If the packet is processed asynchronously,
-a short initial acknowledgement value just confirming receipt can be used, and a second packet can be sent back later with the (asynchronous) acknowledgement
-data. This packet must keep a sequence reference to the packet which it is acknowledging since IBC does not natively handle this sort of asynchronous acknowledgement.
 
 ```typescript
 function acknowledgePacket(
