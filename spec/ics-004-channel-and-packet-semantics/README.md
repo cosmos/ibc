@@ -561,7 +561,7 @@ function sendPacket(packet: Packet) {
 
 The `recvPacket` function is called by a module in order to receive an IBC packet sent on the corresponding channel end on the counterparty chain.
 
-Atomically in conjunction with calling `recvPacket`, calling modules MUST either execution application logic or queue the packet for future execution.
+Atomically in conjunction with calling `recvPacket`, calling modules MUST either execute application logic or queue the packet for future execution.
 
 The IBC handler performs the following steps in order:
 
