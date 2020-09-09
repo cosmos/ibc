@@ -611,6 +611,8 @@ function recvPacket(
       provableStore.set(nextSequenceRecvPath(packet.destPort, packet.destChannel), nextSequenceRecv)
     } else {
       // for unordered channels we must set the receipt so it can be verified on the other side
+      // this receipt does not contain any data, since the packet has not yet been processed
+      // it's just a single store key set to an empty string to indicate that the packet has been received
       abortTransactionUnless(provableStore.get(packetReceiptPath(packet.destPort, packet.destChannel, packet.sequence) === null))
       provableStore.set(
         packetReceiptPath(packet.destPort, packet.destChannel, packet.sequence),
@@ -619,7 +621,7 @@ function recvPacket(
     }
 
     // log that a packet has been received
-    emitLogEntry("recvPacket", {sequence: packet.sequence, timeoutHeight: packet.timeoutHeight,
+    emitLogEntry("recvPacket", {sequence: packet.sequence, timeoutHeight: packet.timeoutHeight, port: packet.destPort, channel: packet.destChannel,
                                 timeoutTimestamp: packet.timeoutTimestamp, data: packet.data})
 
     // return transparent packet
@@ -635,7 +637,7 @@ Calling modules MUST execute application logic atomically in conjunction with ca
 
 This is an asynchronous acknowledgement, the contents of which do not need to be determined when the packet is received, only when processing is complete. In the synchronous case, `writeAcknowledgement` can be called in the same transaction (atomically) with `recvPacket`.
 
-Acknowledging packets is not required; however, if an ordered channel uses acknowledgements, either all or no packets must be acknowledged (since the acknowledgements are processed in order).
+Acknowledging packets is not required; however, if an ordered channel uses acknowledgements, either all or no packets must be acknowledged (since the acknowledgements are processed in order). Note that if packets are not acknowledged, packet commitments cannot be deleted on the source chain. Future versions of IBC may include ways for modules to specify whether or not they will be acknowledging packets in order to allow for cleanup.
 
 `writeAcknowledgement` *does not* check if the packet being acknowledged was actually received, because this would result in proofs being verified twice for acknowledged packets. This aspect of correctness is the responsibility of the calling module.
 The calling module MUST only call `writeAcknowledgement` with a packet previously received from `recvPacket`.
@@ -660,7 +662,7 @@ function writeAcknowledgement(
     )
 
     // log that a packet has been acknowledged
-    emitLogEntry("writeAcknowledgement", {sequence: packet.sequence, timeoutHeight: packet.timeoutHeight,
+    emitLogEntry("writeAcknowledgement", {sequence: packet.sequence, timeoutHeight: packet.timeoutHeight, port: packet.destPort, channel: packet.destChannel,
                                 timeoutTimestamp: packet.timeoutTimestamp, data: packet.data, acknowledgement})
 }
 ```
