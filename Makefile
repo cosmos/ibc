@@ -1,4 +1,4 @@
-all:
+all: clean_temp
 	./scripts/all.sh
 
 SUBDIRS := $(filter-out $(wildcard ./spec/*.md),$(wildcard ./spec/*))
@@ -30,6 +30,11 @@ spellcheck:
 
 spellcheck_noninteractive:
 	find ./spec ./ibc -type f -name "*.md" | xargs -n 1 -I % ./scripts/spellcheck.sh %
+
+clean_temp:
+	rm -f spec/ics-template.md.xfm
+	rm -f *.png
+	find ./ -type f -name '*.temp.pandoc-include' | xargs -n 1 -I % rm %
 
 # due to https://github.com/golang/protobuf/issues/39 this requires multiple commands
 protoc:
