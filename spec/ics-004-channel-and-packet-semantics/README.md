@@ -207,6 +207,14 @@ function packetCommitmentPath(portIdentifier: Identifier, channelIdentifier: Ide
 
 Absence of the path in the store is equivalent to a zero-bit.
 
+Packet receipt data are stored under the `packetReceiptPath`
+
+```typescript
+function packetReceiptPath(portIdentifier: Identifier, channelIdentifier: Identifier, sequence: uint64): Path {
+    return "acks/ports/{portIdentifier}/channels/{channelIdentifier}/receipts/" + sequence
+}
+```
+
 Packet acknowledgement data are stored under the `packetAcknowledgementPath`:
 
 ```typescript
@@ -214,8 +222,6 @@ function packetAcknowledgementPath(portIdentifier: Identifier, channelIdentifier
     return "acks/ports/{portIdentifier}/channels/{channelIdentifier}/acknowledgements/" + sequence
 }
 ```
-
-Unordered channels MUST always write a acknowledgement (even an empty one) to this path so that the absence of such can be used as proof-of-timeout. Ordered channels MAY write an acknowledgement, but are not required to.
 
 ### Versioning
 
@@ -553,9 +559,9 @@ function sendPacket(packet: Packet) {
 
 #### Receiving packets
 
-The `recvPacket` function is called by a module in order to receive & process an IBC packet sent on the corresponding channel end on the counterparty chain.
+The `recvPacket` function is called by a module in order to receive an IBC packet sent on the corresponding channel end on the counterparty chain.
 
-Calling modules MUST execute application logic atomically in conjunction with calling `recvPacket`, likely beforehand to calculate the acknowledgement value.
+Atomically in conjunction with calling `recvPacket`, calling modules MUST either execute application logic or queue the packet for future execution.
 
 The IBC handler performs the following steps in order:
 
@@ -565,15 +571,14 @@ The IBC handler performs the following steps in order:
 - Checks that the packet sequence is the next sequence the channel end expects to receive (for ordered channels)
 - Checks that the timeout height has not yet passed
 - Checks the inclusion proof of packet data commitment in the outgoing chain's state
-- Sets the opaque acknowledgement value at a store path unique to the packet (if the acknowledgement is non-empty or the channel is unordered)
+- Sets a store path to indicate that the packet has been received (unordered channels only)
 - Increments the packet receive sequence associated with the channel end (ordered channels only)
 
 ```typescript
 function recvPacket(
   packet: OpaquePacket,
   proof: CommitmentProof,
-  proofHeight: Height,
-  acknowledgement: bytes): Packet {
+  proofHeight: Height): Packet {
 
     channel = provableStore.get(channelPath(packet.destPort, packet.destChannel))
     abortTransactionUnless(channel !== null)
@@ -599,40 +604,76 @@ function recvPacket(
 
     // all assertions passed (except sequence check), we can alter state
 
-    // always set the acknowledgement so that it can be verified on the other side
-    provableStore.set(
-      packetAcknowledgementPath(packet.destPort, packet.destChannel, packet.sequence),
-      hash(acknowledgement)
-    )
-
     if (channel.order === ORDERED) {
       nextSequenceRecv = provableStore.get(nextSequenceRecvPath(packet.destPort, packet.destChannel))
       abortTransactionUnless(packet.sequence === nextSequenceRecv)
       nextSequenceRecv = nextSequenceRecv + 1
       provableStore.set(nextSequenceRecvPath(packet.destPort, packet.destChannel), nextSequenceRecv)
-    } else
-      abortTransactionUnless(provableStore.get(packetAcknowledgementPath(packet.destPort, packet.destChannel, packet.sequence) === null))
+    } else {
+      // for unordered channels we must set the receipt so it can be verified on the other side
+      // this receipt does not contain any data, since the packet has not yet been processed
+      // it's just a single store key set to an empty string to indicate that the packet has been received
+      abortTransactionUnless(provableStore.get(packetReceiptPath(packet.destPort, packet.destChannel, packet.sequence) === null))
+      provableStore.set(
+        packetReceiptPath(packet.destPort, packet.destChannel, packet.sequence),
+        ""
+      )
+    }
 
-    // log that a packet has been received & acknowledged
-    emitLogEntry("recvPacket", {sequence: packet.sequence, timeoutHeight: packet.timeoutHeight,
-                                timeoutTimestamp: packet.timeoutTimestamp, data: packet.data, acknowledgement})
+    // log that a packet has been received
+    emitLogEntry("recvPacket", {sequence: packet.sequence, timeoutHeight: packet.timeoutHeight, port: packet.destPort, channel: packet.destChannel,
+                                timeoutTimestamp: packet.timeoutTimestamp, data: packet.data})
 
     // return transparent packet
     return packet
 }
 ```
 
-#### Acknowledgements
+#### Writing acknowledgements
+
+The `writeAcknowledgement` function is called by a module in order to write data which resulted from processing an IBC packet that the sending chain can then verify, a sort of "execution receipt" or "RPC call response".
+
+Calling modules MUST execute application logic atomically in conjunction with calling `writeAcknowledgement`.
+
+This is an asynchronous acknowledgement, the contents of which do not need to be determined when the packet is received, only when processing is complete. In the synchronous case, `writeAcknowledgement` can be called in the same transaction (atomically) with `recvPacket`.
+
+Acknowledging packets is not required; however, if an ordered channel uses acknowledgements, either all or no packets must be acknowledged (since the acknowledgements are processed in order). Note that if packets are not acknowledged, packet commitments cannot be deleted on the source chain. Future versions of IBC may include ways for modules to specify whether or not they will be acknowledging packets in order to allow for cleanup.
+
+`writeAcknowledgement` *does not* check if the packet being acknowledged was actually received, because this would result in proofs being verified twice for acknowledged packets. This aspect of correctness is the responsibility of the calling module.
+The calling module MUST only call `writeAcknowledgement` with a packet previously received from `recvPacket`.
+
+The IBC handler performs the following steps in order:
+
+- Checks that an acknowledgement for this packet has not yet been written
+- Sets the opaque acknowledgement value at a store path unique to the packet
+
+```typescript
+function writeAcknowledgement(
+  packet: Packet,
+  acknowledgement: bytes): Packet {
+
+    // cannot already have written the acknowledgement
+    abortTransactionUnless(provableStore.get(packetAcknowledgementPath(packet.destPort, packet.destChannel, packet.sequence) === null))
+
+    // write the acknowledgement
+    provableStore.set(
+      packetAcknowledgementPath(packet.destPort, packet.destChannel, packet.sequence),
+      hash(acknowledgement)
+    )
+
+    // log that a packet has been acknowledged
+    emitLogEntry("writeAcknowledgement", {sequence: packet.sequence, timeoutHeight: packet.timeoutHeight, port: packet.destPort, channel: packet.destChannel,
+                                timeoutTimestamp: packet.timeoutTimestamp, data: packet.data, acknowledgement})
+}
+```
+
+#### Processing acknowledgements
 
 The `acknowledgePacket` function is called by a module to process the acknowledgement of a packet previously sent by
 the calling module on a channel to a counterparty module on the counterparty chain.
 `acknowledgePacket` also cleans up the packet commitment, which is no longer necessary since the packet has been received and acted upon.
 
 Calling modules MAY atomically execute appropriate application acknowledgement-handling logic in conjunction with calling `acknowledgePacket`.
-
-This is a synchronous acknowledgement, the contents of which must be determined when the packet is received. If the packet is processed asynchronously,
-a short initial acknowledgement value just confirming receipt can be used, and a second packet can be sent back later with the (asynchronous) acknowledgement
-data. This packet must keep a sequence reference to the packet which it is acknowledging since IBC does not natively handle this sort of asynchronous acknowledgement.
 
 ```typescript
 function acknowledgePacket(
@@ -725,7 +766,7 @@ Calling modules MAY atomically execute appropriate application timeout-handling 
 
 In the case of an ordered channel, `timeoutPacket` checks the `recvSequence` of the receiving channel end and closes the channel if a packet has timed out.
 
-In the case of an unordered channel, `timeoutPacket` checks the absence of an acknowledgement (which will have been written if the packet was received). Unordered channels are expected to continue in the face of timed-out packets.
+In the case of an unordered channel, `timeoutPacket` checks the absence of the receipt key (which will have been written if the packet was received). Unordered channels are expected to continue in the face of timed-out packets.
 
 If relations are enforced between timeout heights of subsequent packets, safe bulk timeouts of all packets prior to a timed-out packet can be performed. This specification omits details for now.
 
@@ -768,8 +809,8 @@ function timeoutPacket(
         nextSequenceRecv
       ))
     } else
-      // unordered channel: verify absence of acknowledgement at packet index
-      abortTransactionUnless(connection.verifyPacketAcknowledgementAbsence(
+      // unordered channel: verify absence of receipt at packet index
+      abortTransactionUnless(connection.verifyPacketReceiptAbsence(
         proofHeight,
         proof,
         packet.destPort,
@@ -845,8 +886,8 @@ function timeoutOnClose(
       // ordered channel: check that packet has not been received
       abortTransactionUnless(nextSequenceRecv <= packet.sequence)
     } else
-      // unordered channel: verify absence of acknowledgement at packet index
-      abortTransactionUnless(connection.verifyPacketAcknowledgementAbsence(
+      // unordered channel: verify absence of receipt at packet index
+      abortTransactionUnless(connection.verifyPacketReceiptAbsence(
         proofHeight,
         proof,
         packet.destPort,

@@ -488,8 +488,8 @@ queryAndProveClientConsensusState
 queryAndProveConnectionState
 queryAndProveNextSequenceRecv
 queryAndProvePacketAcknowledgement
-queryAndProvePacketAcknowledgementAbsence
 queryAndProvePacketData
+queryAndProvePacketReceiptAbsence
 queryByTopic
 queryChainConsensusState
 queryChannel

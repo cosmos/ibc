@@ -306,7 +306,7 @@ function verifyPacketAcknowledgement(
     assert(root.verifyMembership(path, hash(acknowledgement), proof))
 }
 
-function verifyPacketAcknowledgementAbsence(
+function verifyPacketReceiptAbsence(
   clientState: ClientState,
   height: uint64,
   prefix: CommitmentPrefix,
