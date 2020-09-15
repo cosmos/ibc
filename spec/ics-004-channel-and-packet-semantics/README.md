@@ -325,7 +325,7 @@ function chanOpenTry(
       provedIdentifier === channelIdentifier ||
       provedIdentifier === ""
       )
-    previous = provableStore.get(channelPath(portIdentifier, desiredIdentifier))
+    previous = provableStore.get(channelPath(portIdentifier, channelIdentifier))
     abortTransactionUnless(
       (previous === null) ||
       (previous.state === INIT &&
