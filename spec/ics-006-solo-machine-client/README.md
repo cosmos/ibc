@@ -136,6 +136,7 @@ function checkValidityAndUpdateState(
   clientState: ClientState,
   header: Header) {
   assert(header.sequence === clientState.consensusState.sequence)
+  assert(header.timestamp >= clientstate.consensusState.timestamp)
   assert(checkSignature(header.newPublicKey, header.sequence, header.diversifier, header.signature))
   clientState.consensusState.publicKey = header.newPublicKey
   clientState.consensusState.diversifier = header.newDiversifier
