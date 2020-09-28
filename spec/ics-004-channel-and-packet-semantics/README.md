@@ -211,7 +211,7 @@ Packet receipt data are stored under the `packetReceiptPath`
 
 ```typescript
 function packetReceiptPath(portIdentifier: Identifier, channelIdentifier: Identifier, sequence: uint64): Path {
-    return "acks/ports/{portIdentifier}/channels/{channelIdentifier}/receipts/" + sequence
+    return "receipts/ports/{portIdentifier}/channels/{channelIdentifier}/receipts/" + sequence
 }
 ```
 
