@@ -273,6 +273,8 @@ When the opening handshake is complete, the module which initiates the handshake
 it specifies will own the other end of the created channel on the counterparty chain. Once a channel is created, ownership cannot be changed (although higher-level abstractions
 could be implemented to provide this).
 
+A sentinel empty-string identifier can be used to allow the recipient chain to choose its own channel identifier.
+
 ```typescript
 function chanOpenInit(
   order: ChannelOrder,

@@ -281,6 +281,7 @@ At the end of an opening handshake between two chains implementing the sub-proto
 
 This sub-protocol need not be permissioned, modulo anti-spam measures.
 
+In `connOpenInit`, a sentinel empty-string identifier can be used to allow the recipient chain to choose its own connection identifier.
 
 *ConnOpenInit* initialises a connection attempt on chain A.
 
