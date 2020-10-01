@@ -299,6 +299,8 @@ function connOpenInit(
     abortTransactionUnless(provableStore.get(connectionPath(identifier)) == null)
     state = INIT
     if version != "" {
+      // manually selected version must be one we can support
+      abortTransactionUnless(getCompatibleVersions().indexOf(version) > -1)
       versions = [version]
     } else {
       versions = getCompatibleVersions()
