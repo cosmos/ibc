@@ -273,6 +273,8 @@ When the opening handshake is complete, the module which initiates the handshake
 it specifies will own the other end of the created channel on the counterparty chain. Once a channel is created, ownership cannot be changed (although higher-level abstractions
 could be implemented to provide this).
 
+A sentinel empty-string identifier can be used to allow the recipient chain to choose its own channel identifier.
+
 ```typescript
 function chanOpenInit(
   order: ChannelOrder,
@@ -311,6 +313,7 @@ function chanOpenTry(
   connectionHops: [Identifier],
   portIdentifier: Identifier,
   channelIdentifier: Identifier,
+  provedIdentifier: Identifier,
   counterpartyPortIdentifier: Identifier,
   counterpartyChannelIdentifier: Identifier,
   version: string,
@@ -319,6 +322,11 @@ function chanOpenTry(
   proofHeight: Height): CapabilityKey {
     abortTransactionUnless(validateChannelIdentifier(portIdentifier, channelIdentifier))
     abortTransactionUnless(connectionHops.length === 1) // for v1 of the IBC protocol
+    // empty-string is a sentinel value for "allow any identifier"
+    abortTransationUnless(
+      provedIdentifier === channelIdentifier ||
+      provedIdentifier === ""
+      )
     previous = provableStore.get(channelPath(portIdentifier, channelIdentifier))
     abortTransactionUnless(
       (previous === null) ||
@@ -334,7 +342,7 @@ function chanOpenTry(
     abortTransactionUnless(connection !== null)
     abortTransactionUnless(connection.state === OPEN)
     expected = ChannelEnd{INIT, order, portIdentifier,
-                          channelIdentifier, [connection.counterpartyConnectionIdentifier], counterpartyVersion}
+                          provedIdentifier, [connection.counterpartyConnectionIdentifier], counterpartyVersion}
     abortTransactionUnless(connection.verifyChannelState(
       proofHeight,
       proofInit,
@@ -361,11 +369,17 @@ function chanOpenAck(
   portIdentifier: Identifier,
   channelIdentifier: Identifier,
   counterpartyVersion: string,
+  counterpartyChannelIdentifier: string,
   proofTry: CommitmentProof,
   proofHeight: Height) {
     channel = provableStore.get(channelPath(portIdentifier, channelIdentifier))
     abortTransactionUnless(channel.state === INIT || channel.state === TRYOPEN)
     abortTransactionUnless(authenticateCapability(channelCapabilityPath(portIdentifier, channelIdentifier), capability))
+    // empty-string is a sentinel value for "allow any identifier"
+    abortTransactionUnless(
+      counterpartyChannelIdentifier === channel.counterpartyChannelIdentifier ||
+      channel.counterpartyChannelIdentifier === ""
+      )
     connection = provableStore.get(connectionPath(channel.connectionHops[0]))
     abortTransactionUnless(connection !== null)
     abortTransactionUnless(connection.state === OPEN)
@@ -375,11 +389,12 @@ function chanOpenAck(
       proofHeight,
       proofTry,
       channel.counterpartyPortIdentifier,
-      channel.counterpartyChannelIdentifier,
+      counterpartyChannelIdentifier,
       expected
     ))
     channel.state = OPEN
     channel.version = counterpartyVersion
+    channel.counterpartyChannelIdentifier = counterpartyChannelIdentifier
     provableStore.set(channelPath(portIdentifier, channelIdentifier), channel)
 }
 ```

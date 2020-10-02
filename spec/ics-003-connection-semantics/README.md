@@ -281,6 +281,13 @@ At the end of an opening handshake between two chains implementing the sub-proto
 
 This sub-protocol need not be permissioned, modulo anti-spam measures.
 
+In `connOpenInit`, a sentinel empty-string identifier can be used to allow the recipient chain to choose its own connection identifier. Chains may implement a function `desiredIdentifier` which chooses an identifier, e.g. by incrementing a counter:
+
+```typescript
+type desiredIdentifier = (provedIdentifier: Identifier) -> Identifier
+```
+
+A specific version can optionally be passed as `version` to ensure that the handshake will either complete with that version or fail.
 
 *ConnOpenInit* initialises a connection attempt on chain A.
 
@@ -290,12 +297,20 @@ function connOpenInit(
   desiredCounterpartyConnectionIdentifier: Identifier,
   counterpartyPrefix: CommitmentPrefix,
   clientIdentifier: Identifier,
-  counterpartyClientIdentifier: Identifier) {
+  counterpartyClientIdentifier: Identifier,
+  version: string) {
     abortTransactionUnless(validateConnectionIdentifier(identifier))
     abortTransactionUnless(provableStore.get(connectionPath(identifier)) == null)
     state = INIT
+    if version != "" {
+      // manually selected version must be one we can support
+      abortTransactionUnless(getCompatibleVersions().indexOf(version) > -1)
+      versions = [version]
+    } else {
+      versions = getCompatibleVersions()
+    }
     connection = ConnectionEnd{state, desiredCounterpartyConnectionIdentifier, counterpartyPrefix,
-      clientIdentifier, counterpartyClientIdentifier, getCompatibleVersions()}
+      clientIdentifier, counterpartyClientIdentifier, versions}
     provableStore.set(connectionPath(identifier), connection)
     addConnectionToClient(clientIdentifier, identifier)
 }
@@ -306,6 +321,7 @@ function connOpenInit(
 ```typescript
 function connOpenTry(
   desiredIdentifier: Identifier,
+  provedIdentifier: Identifier,
   counterpartyConnectionIdentifier: Identifier,
   counterpartyPrefix: CommitmentPrefix,
   counterpartyClientIdentifier: Identifier,
@@ -318,15 +334,12 @@ function connOpenTry(
     abortTransactionUnless(validateConnectionIdentifier(desiredIdentifier))
     abortTransactionUnless(consensusHeight < getCurrentHeight())
     expectedConsensusState = getConsensusState(consensusHeight)
-    expected = ConnectionEnd{INIT, desiredIdentifier, getCommitmentPrefix(), counterpartyClientIdentifier,
+    abortTransationUnless(
+      provedIdentifier === desiredIdentifier ||
+      provedIdentifier === ""
+      )
+    expected = ConnectionEnd{INIT, provedIdentifier, getCommitmentPrefix(), counterpartyClientIdentifier,
                              clientIdentifier, counterpartyVersions}
-    versionsIntersection = intersection(counterpartyVersions, getCompatibleVersions())
-    version = pickVersion(versionsIntersection)
-    connection = ConnectionEnd{TRYOPEN, counterpartyConnectionIdentifier, counterpartyPrefix,
-                               clientIdentifier, counterpartyClientIdentifier, version}
-    abortTransactionUnless(connection.verifyConnectionState(proofHeight, proofInit, counterpartyConnectionIdentifier, expected))
-    abortTransactionUnless(connection.verifyClientConsensusState(
-      proofHeight, proofConsensus, counterpartyClientIdentifier, consensusHeight, expectedConsensusState))
     previous = provableStore.get(connectionPath(desiredIdentifier))
     abortTransactionUnless(
       (previous === null) ||
@@ -334,8 +347,14 @@ function connOpenTry(
         previous.counterpartyConnectionIdentifier === counterpartyConnectionIdentifier &&
         previous.counterpartyPrefix === counterpartyPrefix &&
         previous.clientIdentifier === clientIdentifier &&
-        previous.counterpartyClientIdentifier === counterpartyClientIdentifier &&
-        previous.version === getCompatibleVersions()))
+        previous.counterpartyClientIdentifier === counterpartyClientIdentifier))
+    versionsIntersection = intersection(counterpartyVersions, previous !== null ? previous.version : getCompatibleVersions())
+    version = pickVersion(versionsIntersection) // throws if there is no intersection
+    connection = ConnectionEnd{TRYOPEN, counterpartyConnectionIdentifier, counterpartyPrefix,
+                               clientIdentifier, counterpartyClientIdentifier, version}
+    abortTransactionUnless(connection.verifyConnectionState(proofHeight, proofInit, counterpartyConnectionIdentifier, expected))
+    abortTransactionUnless(connection.verifyClientConsensusState(
+      proofHeight, proofConsensus, counterpartyClientIdentifier, consensusHeight, expectedConsensusState))
     identifier = desiredIdentifier
     provableStore.set(connectionPath(identifier), connection)
     addConnectionToClient(clientIdentifier, identifier)
@@ -348,6 +367,7 @@ function connOpenTry(
 function connOpenAck(
   identifier: Identifier,
   version: string,
+  counterpartyIdentifier: Identifier,
   proofTry: CommitmentProof,
   proofConsensus: CommitmentProof,
   proofHeight: Height,
@@ -355,17 +375,22 @@ function connOpenAck(
     abortTransactionUnless(consensusHeight < getCurrentHeight())
     connection = provableStore.get(connectionPath(identifier))
     abortTransactionUnless(
+      counterpartyIdentifier === connection.counterpartyConnectionIdentifier ||
+      connection.counterpartyConnectionIdentifier === ""
+      )
+    abortTransactionUnless(
         (connection.state === INIT && connection.version.indexOf(version) !== -1)
         || (connection.state === TRYOPEN && connection.version === version))
     expectedConsensusState = getConsensusState(consensusHeight)
     expected = ConnectionEnd{TRYOPEN, identifier, getCommitmentPrefix(),
                              connection.counterpartyClientIdentifier, connection.clientIdentifier,
                              version}
-    abortTransactionUnless(connection.verifyConnectionState(proofHeight, proofTry, connection.counterpartyConnectionIdentifier, expected))
+    abortTransactionUnless(connection.verifyConnectionState(proofHeight, proofTry, counterpartyIdentifier, expected))
     abortTransactionUnless(connection.verifyClientConsensusState(
       proofHeight, proofConsensus, connection.counterpartyClientIdentifier, consensusHeight, expectedConsensusState))
     connection.state = OPEN
     connection.version = version
+    connection.counterpartyConnectionIdentifier = counterpartyIdentifier
     provableStore.set(connectionPath(identifier), connection)
 }
 ```
