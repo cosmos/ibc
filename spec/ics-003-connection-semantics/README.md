@@ -281,7 +281,11 @@ At the end of an opening handshake between two chains implementing the sub-proto
 
 This sub-protocol need not be permissioned, modulo anti-spam measures.
 
-In `connOpenInit`, a sentinel empty-string identifier can be used to allow the recipient chain to choose its own connection identifier.
+In `connOpenInit`, a sentinel empty-string identifier can be used to allow the recipient chain to choose its own connection identifier. Chains may implement a function `desiredIdentifier` which chooses an identifier, e.g. by incrementing a counter:
+
+```typescript
+type desiredIdentifier = (provedIdentifier: Identifier) -> Identifier
+```
 
 A specific version can optionally be passed as `version` to ensure that the handshake will either complete with that version or fail.
 
