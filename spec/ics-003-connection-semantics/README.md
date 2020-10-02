@@ -381,12 +381,12 @@ function connOpenAck(
     expected = ConnectionEnd{TRYOPEN, identifier, getCommitmentPrefix(),
                              connection.counterpartyClientIdentifier, connection.clientIdentifier,
                              version}
-    abortTransactionUnless(connection.verifyConnectionState(proofHeight, proofTry, counterpartyConnectionIdentifier, expected))
+    abortTransactionUnless(connection.verifyConnectionState(proofHeight, proofTry, counterpartyIdentifier, expected))
     abortTransactionUnless(connection.verifyClientConsensusState(
       proofHeight, proofConsensus, connection.counterpartyClientIdentifier, consensusHeight, expectedConsensusState))
     connection.state = OPEN
     connection.version = version
-    connection.counterpartyConnectionIdentifier = counterpartyConnectionIdentifier
+    connection.counterpartyConnectionIdentifier = counterpartyIdentifier
     provableStore.set(connectionPath(identifier), connection)
 }
 ```
