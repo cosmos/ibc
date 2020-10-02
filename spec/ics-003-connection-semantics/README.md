@@ -345,7 +345,7 @@ function connOpenTry(
         previous.clientIdentifier === clientIdentifier &&
         previous.counterpartyClientIdentifier === counterpartyClientIdentifier))
     versionsIntersection = intersection(counterpartyVersions, previous !== null ? previous.version : getCompatibleVersions())
-    version = pickVersion(versionsIntersection)
+    version = pickVersion(versionsIntersection) // throws if there is no intersection
     connection = ConnectionEnd{TRYOPEN, counterpartyConnectionIdentifier, counterpartyPrefix,
                                clientIdentifier, counterpartyClientIdentifier, version}
     abortTransactionUnless(connection.verifyConnectionState(proofHeight, proofInit, counterpartyConnectionIdentifier, expected))
