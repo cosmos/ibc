@@ -313,7 +313,7 @@ function chanOpenTry(
   connectionHops: [Identifier],
   portIdentifier: Identifier,
   channelIdentifier: Identifier,
-  provedIdentifier: Identifier,
+  counterpartyChosenChannelIdentifer: Identifier,
   counterpartyPortIdentifier: Identifier,
   counterpartyChannelIdentifier: Identifier,
   version: string,
@@ -324,8 +324,8 @@ function chanOpenTry(
     abortTransactionUnless(connectionHops.length === 1) // for v1 of the IBC protocol
     // empty-string is a sentinel value for "allow any identifier"
     abortTransationUnless(
-      provedIdentifier === "" ||
-      provedIdentifier === channelIdentifier
+      counterpartyChosenChannelIdentifer === "" ||
+      counterpartyChosenChannelIdentifer === channelIdentifier
       )
     previous = provableStore.get(channelPath(portIdentifier, channelIdentifier))
     abortTransactionUnless(
@@ -342,7 +342,7 @@ function chanOpenTry(
     abortTransactionUnless(connection !== null)
     abortTransactionUnless(connection.state === OPEN)
     expected = ChannelEnd{INIT, order, portIdentifier,
-                          provedIdentifier, [connection.counterpartyConnectionIdentifier], counterpartyVersion}
+                          counterpartyChosenChannelIdentifer, [connection.counterpartyConnectionIdentifier], counterpartyVersion}
     abortTransactionUnless(connection.verifyChannelState(
       proofHeight,
       proofInit,

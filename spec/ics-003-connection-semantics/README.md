@@ -284,7 +284,7 @@ This sub-protocol need not be permissioned, modulo anti-spam measures.
 In `connOpenInit`, a sentinel empty-string identifier can be used to allow the recipient chain to choose its own connection identifier. Chains may implement a function `desiredIdentifier` which chooses an identifier, e.g. by incrementing a counter:
 
 ```typescript
-type desiredIdentifier = (provedIdentifier: Identifier) -> Identifier
+type desiredIdentifier = (counterpartyChosenConnectionIdentifer: Identifier) -> Identifier
 ```
 
 A specific version can optionally be passed as `version` to ensure that the handshake will either complete with that version or fail.
@@ -321,7 +321,7 @@ function connOpenInit(
 ```typescript
 function connOpenTry(
   desiredIdentifier: Identifier,
-  provedIdentifier: Identifier,
+  counterpartyChosenConnectionIdentifer: Identifier,
   counterpartyConnectionIdentifier: Identifier,
   counterpartyPrefix: CommitmentPrefix,
   counterpartyClientIdentifier: Identifier,
@@ -335,10 +335,10 @@ function connOpenTry(
     abortTransactionUnless(consensusHeight < getCurrentHeight())
     expectedConsensusState = getConsensusState(consensusHeight)
     abortTransationUnless(
-      provedIdentifier === "" ||
-      provedIdentifier === desiredIdentifier
+      counterpartyChosenConnectionIdentifer === "" ||
+      counterpartyChosenConnectionIdentifer === desiredIdentifier
       )
-    expected = ConnectionEnd{INIT, provedIdentifier, getCommitmentPrefix(), counterpartyClientIdentifier,
+    expected = ConnectionEnd{INIT, counterpartyChosenConnectionIdentifer, getCommitmentPrefix(), counterpartyClientIdentifier,
                              clientIdentifier, counterpartyVersions}
     previous = provableStore.get(connectionPath(desiredIdentifier))
     abortTransactionUnless(
