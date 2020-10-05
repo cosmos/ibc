@@ -335,8 +335,8 @@ function connOpenTry(
     abortTransactionUnless(consensusHeight < getCurrentHeight())
     expectedConsensusState = getConsensusState(consensusHeight)
     abortTransationUnless(
-      provedIdentifier === desiredIdentifier ||
-      provedIdentifier === ""
+      provedIdentifier === "" ||
+      provedIdentifier === desiredIdentifier
       )
     expected = ConnectionEnd{INIT, provedIdentifier, getCommitmentPrefix(), counterpartyClientIdentifier,
                              clientIdentifier, counterpartyVersions}
@@ -375,8 +375,8 @@ function connOpenAck(
     abortTransactionUnless(consensusHeight < getCurrentHeight())
     connection = provableStore.get(connectionPath(identifier))
     abortTransactionUnless(
-      counterpartyIdentifier === connection.counterpartyConnectionIdentifier ||
-      connection.counterpartyConnectionIdentifier === ""
+      connection.counterpartyConnectionIdentifier === "" ||
+      counterpartyIdentifier === connection.counterpartyConnectionIdentifier
       )
     abortTransactionUnless(
         (connection.state === INIT && connection.version.indexOf(version) !== -1)
