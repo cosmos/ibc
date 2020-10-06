@@ -197,7 +197,7 @@ function checkValidityAndUpdateState(
     assert(epoch === clientState.currentHeight.epoch)
     // check that epoch is encoded correctly in chain ID
     assert(epoch === clientState.chainID.regex('[a-z]*-(0)'))
-    // assert trusting period has not yet passed. This should fatally terminate a connection.
+    // assert trusting period has not yet passed
     assert(currentTimestamp() - clientState.latestTimestamp < clientState.trustingPeriod)
     // assert header timestamp is less than trust period in the future. This should be resolved with an intermediate header.
     assert(header.timestamp - clientState.latestTimeStamp < trustingPeriod)
@@ -261,6 +261,8 @@ function upgradeClientState(
   newClientState: ClientState,
   height: Height,
   proof: CommitmentPrefix) {
+    // assert trusting period has not yet passed
+    assert(currentTimestamp() - clientState.latestTimestamp < clientState.trustingPeriod)
     // check that the epoch has been incremented
     assert(newClientState.latestHeight.epochNumber > clientState.latestHeight.epochNumber)
     // check proof of updated client state in state at predetermined commitment prefix and key
