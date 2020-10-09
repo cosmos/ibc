@@ -101,7 +101,7 @@ that the module itself doesn't need to worry about what connections or channels 
 Both machines `A` and `B` accept new channels from any module on another machine, if and only if:
 
 - The channel being created is unordered.
-- The version string is empty.
+- The version string is `ics20-1`.
 
 ```typescript
 function onChanOpenInit(
@@ -202,12 +202,12 @@ function createOutgoingPacket(
   sourceChannel: string,
   timeoutHeight: Height,
   timeoutTimestamp: uint64) {
-  prefix = "{packet.sourcePort}/{packet.sourceChannel}"
+  prefix = "{sourcePort}/{sourceChannel}"
   // we are the source if the denomination is not prefixed
   source = denomination.slice(len(prefix)) !== prefix
   if source {
     // determine escrow account
-    escrowAccount = channelEscrowAddresses[packet.sourceChannel]
+    escrowAccount = channelEscrowAddresses[sourceChannel]
     // escrow source tokens (assumed to fail if balance insufficient)
     bank.TransferCoins(sender, escrowAccount, denomination, amount)
   } else {

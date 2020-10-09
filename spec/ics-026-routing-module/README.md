@@ -559,7 +559,7 @@ interface PacketRecv {
 
 ```typescript
 function handlePacketRecv(datagram: PacketRecv) {
-    module = lookupModule(datagram.packet.sourcePort)
+    module = lookupModule(datagram.packet.destPort)
     acknowledgement = module.onRecvPacket(datagram.packet)
     handler.recvPacket(
       datagram.packet,
