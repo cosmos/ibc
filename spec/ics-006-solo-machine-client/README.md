@@ -101,7 +101,7 @@ Signatures are provided in the `Proof` field of client state verification functi
 
 ```typescript
 interface Signature {
-  sig: []byte
+  data: []byte
   timestamp: uint64
 }
 ```
@@ -157,9 +157,16 @@ function checkMisbehaviourAndUpdateState(
     h2 = misbehaviour.h2
     pubkey = clientState.consensusState.publicKey
     diversifier = clientState.consensusState.diversifier
+    timestamp = clientState.consensusState.timestamp
+    // assert that timestamp could have fooled the light client
+    assert(misbehaviour.h1.signature.timestamp >= timestamp)
+    assert(misbehaviour.h2.signature.timestamp >= timestamp)
+    // assert that signature data is different
     assert(misbehaviour.h1.signature.data !== misbehaviour.h2.signature.data)
-    assert(checkSignature(pubkey, misbehaviour.sequence, diversifier, misbehaviour.h1.signature.sig))
-    assert(checkSignature(pubkey, misbehaviour.sequence, diversifier, misbehaviour.h2.signature.sig))
+    // assert that the signatures validate
+    assert(checkSignature(pubkey, misbehaviour.sequence, diversifier, misbehaviour.h1.signature.data))
+    assert(checkSignature(pubkey, misbehaviour.sequence, diversifier, misbehaviour.h2.signature.data))
+    // freeze the client
     clientState.frozen = true
 }
 ```
