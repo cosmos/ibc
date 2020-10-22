@@ -204,7 +204,7 @@ function createOutgoingPacket(
   timeoutTimestamp: uint64) {
   prefix = "{sourcePort}/{sourceChannel}"
   // we are the source if the denomination is not prefixed
-  source = denomination.slice(len(prefix)) !== prefix
+  source = denomination.slice(0, len(prefix)) !== prefix
   if source {
     // determine escrow account
     escrowAccount = channelEscrowAddresses[sourceChannel]
@@ -228,7 +228,7 @@ function onRecvPacket(packet: Packet) {
   FungibleTokenPacketAcknowledgement ack = FungibleTokenPacketAcknowledgement{true, null}
   prefix = "{packet.sourcePort}/{packet.sourceChannel}"
   // we are the source if the packets were prefixed by the sending chain
-  source = data.denomination.slice(len(prefix)) === prefix
+  source = data.denomination.slice(0, len(prefix)) === prefix
   if source {
     // receiver is source chain: unescrow tokens
     // determine escrow account
@@ -277,10 +277,10 @@ function refundTokens(packet: Packet) {
   FungibleTokenPacketData data = packet.data
   prefix = "{packet.sourcePort}/{packet.sourceChannel}"
   // we are the source if the denomination is not prefixed
-  source = denomination.slice(len(prefix)) !== prefix
+  source = denomination.slice(0, len(prefix)) !== prefix
   if source {
     // sender was source chain, unescrow tokens back to sender
-    escrowAccount = channelEscrowAddresses[packet.destChannel]
+    escrowAccount = channelEscrowAddresses[packet.srcChannel]
     bank.TransferCoins(escrowAccount, data.sender, data.denomination, data.amount)
   } else {
     // receiver was source chain, mint vouchers back to sender
