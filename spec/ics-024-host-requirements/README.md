@@ -125,9 +125,9 @@ Note that the client-related paths listed below reflect the Tendermint client as
 | provableStore  | "connections/{identifier}"                                                     | ConnectionEnd     | [ICS 3](../ics-003-connection-semantics) |
 | privateStore   | "ports/{identifier}"                                                           | CapabilityKey     | [ICS 5](../ics-005-port-allocation) |
 | provableStore  | "channelEnds/ports/{identifier}/channels/{identifier}"                         | ChannelEnd        | [ICS 4](../ics-004-channel-and-packet-semantics) |
-| provableStore  | "seqSends/ports/{identifier}/channels/{identifier}/nextSequenceSend"           | uint64            | [ICS 4](../ics-004-channel-and-packet-semantics) |
-| provableStore  | "seqRecvs/ports/{identifier}/channels/{identifier}/nextSequenceRecv"           | uint64            | [ICS 4](../ics-004-channel-and-packet-semantics) |
-| provableStore  | "seqAcks/ports/{identifier}/channels/{identifier}/nextSequenceAck"             | uint64            | [ICS 4](../ics-004-channel-and-packet-semantics) |
+| provableStore  | "seqSends/ports/{identifier}/channels/{identifier}"                            | uint64            | [ICS 4](../ics-004-channel-and-packet-semantics) |
+| provableStore  | "seqRecvs/ports/{identifier}/channels/{identifier}"                            | uint64            | [ICS 4](../ics-004-channel-and-packet-semantics) |
+| provableStore  | "seqAcks/ports/{identifier}/channels/{identifier}"                             | uint64            | [ICS 4](../ics-004-channel-and-packet-semantics) |
 | provableStore  | "commitments/ports/{identifier}/channels/{identifier}/packets/{sequence}"      | bytes             | [ICS 4](../ics-004-channel-and-packet-semantics) |
 | provableStore  | "receipts/ports/{identifier}/channels/{identifier}/receipts/{sequence}"        | bytes             | [ICS 4](../ics-004-channel-and-packet-semantics) |
 | provableStore  | "acks/ports/{identifier}/channels/{identifier}/acknowledgements/{sequence}"    | bytes             | [ICS 4](../ics-004-channel-and-packet-semantics) |
