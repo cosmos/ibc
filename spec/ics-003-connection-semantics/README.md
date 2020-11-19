@@ -294,7 +294,6 @@ A specific version can optionally be passed as `version` to ensure that the hand
 ```typescript
 function connOpenInit(
   identifier: Identifier,
-  desiredCounterpartyConnectionIdentifier: Identifier,
   counterpartyPrefix: CommitmentPrefix,
   clientIdentifier: Identifier,
   counterpartyClientIdentifier: Identifier,
@@ -309,7 +308,7 @@ function connOpenInit(
     } else {
       versions = getCompatibleVersions()
     }
-    connection = ConnectionEnd{state, desiredCounterpartyConnectionIdentifier, counterpartyPrefix,
+    connection = ConnectionEnd{state, "", counterpartyPrefix,
       clientIdentifier, counterpartyClientIdentifier, versions}
     provableStore.set(connectionPath(identifier), connection)
     addConnectionToClient(clientIdentifier, identifier)
@@ -334,11 +333,7 @@ function connOpenTry(
     abortTransactionUnless(validateConnectionIdentifier(desiredIdentifier))
     abortTransactionUnless(consensusHeight < getCurrentHeight())
     expectedConsensusState = getConsensusState(consensusHeight)
-    abortTransationUnless(
-      counterpartyChosenConnectionIdentifer === "" ||
-      counterpartyChosenConnectionIdentifer === desiredIdentifier
-      )
-    expected = ConnectionEnd{INIT, counterpartyChosenConnectionIdentifer, getCommitmentPrefix(), counterpartyClientIdentifier,
+    expected = ConnectionEnd{INIT, "", getCommitmentPrefix(), counterpartyClientIdentifier,
                              clientIdentifier, counterpartyVersions}
     previous = provableStore.get(connectionPath(desiredIdentifier))
     abortTransactionUnless(
@@ -374,10 +369,6 @@ function connOpenAck(
   consensusHeight: Height) {
     abortTransactionUnless(consensusHeight < getCurrentHeight())
     connection = provableStore.get(connectionPath(identifier))
-    abortTransactionUnless(
-      connection.counterpartyConnectionIdentifier === "" ||
-      counterpartyIdentifier === connection.counterpartyConnectionIdentifier
-      )
     abortTransactionUnless(
         (connection.state === INIT && connection.version.indexOf(version) !== -1)
         || (connection.state === TRYOPEN && connection.version === version))
