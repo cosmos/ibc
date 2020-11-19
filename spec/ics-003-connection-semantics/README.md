@@ -281,10 +281,10 @@ At the end of an opening handshake between two chains implementing the sub-proto
 
 This sub-protocol need not be permissioned, modulo anti-spam measures.
 
-In `connOpenInit`, a sentinel empty-string identifier can be used to allow the recipient chain to choose its own connection identifier. Chains may implement a function `desiredIdentifier` which chooses an identifier, e.g. by incrementing a counter:
+Chains MUST implement a function `generateIdentifier` which chooses an identifier, e.g. by incrementing a counter:
 
 ```typescript
-type desiredIdentifier = (counterpartyChosenConnectionIdentifer: Identifier) -> Identifier
+type generateIdentifier = () -> Identifier
 ```
 
 A specific version can optionally be passed as `version` to ensure that the handshake will either complete with that version or fail.
@@ -336,13 +336,17 @@ function connOpenTry(
     expected = ConnectionEnd{INIT, "", getCommitmentPrefix(), counterpartyClientIdentifier,
                              clientIdentifier, counterpartyVersions}
     previous = provableStore.get(connectionPath(desiredIdentifier))
-    abortTransactionUnless(
-      (previous === null) ||
-      (previous.state === INIT &&
-        previous.counterpartyConnectionIdentifier === counterpartyConnectionIdentifier &&
-        previous.counterpartyPrefix === counterpartyPrefix &&
-        previous.clientIdentifier === clientIdentifier &&
-        previous.counterpartyClientIdentifier === counterpartyClientIdentifier))
+    // use the provided identifier only if the handshake can progress with it
+    if ((previous === null) ||
+        !(previous.state === INIT &&
+          previous.counterpartyConnectionIdentifier === counterpartyConnectionIdentifier &&
+          previous.counterpartyPrefix === counterpartyPrefix &&
+          previous.clientIdentifier === clientIdentifier &&
+          previous.counterpartyClientIdentifier === counterpartyClientIdentifier)) {
+      identifier = generateIdentifier()
+    } else {
+      identifier = desiredIdentifier
+    }
     versionsIntersection = intersection(counterpartyVersions, previous !== null ? previous.version : getCompatibleVersions())
     version = pickVersion(versionsIntersection) // throws if there is no intersection
     connection = ConnectionEnd{TRYOPEN, counterpartyConnectionIdentifier, counterpartyPrefix,
@@ -350,7 +354,6 @@ function connOpenTry(
     abortTransactionUnless(connection.verifyConnectionState(proofHeight, proofInit, counterpartyConnectionIdentifier, expected))
     abortTransactionUnless(connection.verifyClientConsensusState(
       proofHeight, proofConsensus, counterpartyClientIdentifier, consensusHeight, expectedConsensusState))
-    identifier = desiredIdentifier
     provableStore.set(connectionPath(identifier), connection)
     addConnectionToClient(clientIdentifier, identifier)
 }

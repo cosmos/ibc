@@ -273,7 +273,11 @@ When the opening handshake is complete, the module which initiates the handshake
 it specifies will own the other end of the created channel on the counterparty chain. Once a channel is created, ownership cannot be changed (although higher-level abstractions
 could be implemented to provide this).
 
-A sentinel empty-string identifier can be used to allow the recipient chain to choose its own channel identifier.
+Chains MUST implement a function `generateIdentifier` which chooses an identifier, e.g. by incrementing a counter:
+
+```typescript
+type generateIdentifier = () -> Identifier
+```
 
 ```typescript
 function chanOpenInit(
@@ -323,15 +327,16 @@ function chanOpenTry(
     abortTransactionUnless(connectionHops.length === 1) // for v1 of the IBC protocol
     // empty-string is a sentinel value for "allow any identifier"
     previous = provableStore.get(channelPath(portIdentifier, channelIdentifier))
-    abortTransactionUnless(
-      (previous === null) ||
-      (previous.state === INIT &&
-       previous.order === order &&
-       previous.counterpartyPortIdentifier === counterpartyPortIdentifier &&
-       previous.counterpartyChannelIdentifier === counterpartyChannelIdentifier &&
-       previous.connectionHops === connectionHops &&
-       previous.version === version)
-      )
+    // use the provided identifier only if the handshake can progress with it
+    if ((previous === null) ||
+        !(previous.state === INIT &&
+          previous.order === order &&
+          previous.counterpartyPortIdentifier === counterpartyPortIdentifier &&
+          previous.counterpartyChannelIdentifier === counterpartyChannelIdentifier &&
+          previous.connectionHops === connectionHops &&
+          previous.version === version)) {
+      channelIdentifier = generateIdentifier()
+    }
     abortTransactionUnless(authenticateCapability(portPath(portIdentifier), portCapability))
     connection = provableStore.get(connectionPath(connectionHops[0]))
     abortTransactionUnless(connection !== null)
