@@ -332,7 +332,7 @@ function chanOpenTry(
         !(previous.state === INIT &&
           previous.order === order &&
           previous.counterpartyPortIdentifier === counterpartyPortIdentifier &&
-          previous.counterpartyChannelIdentifier === counterpartyChannelIdentifier &&
+          previous.counterpartyChannelIdentifier === "" &&
           previous.connectionHops === connectionHops &&
           previous.version === version)) {
       channelIdentifier = generateIdentifier()

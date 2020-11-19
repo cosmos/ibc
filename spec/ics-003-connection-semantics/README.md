@@ -339,7 +339,7 @@ function connOpenTry(
     // use the provided identifier only if the handshake can progress with it
     if ((previous === null) ||
         !(previous.state === INIT &&
-          previous.counterpartyConnectionIdentifier === counterpartyConnectionIdentifier &&
+          previous.counterpartyConnectionIdentifier === "" &&
           previous.counterpartyPrefix === counterpartyPrefix &&
           previous.clientIdentifier === clientIdentifier &&
           previous.counterpartyClientIdentifier === counterpartyClientIdentifier)) {
