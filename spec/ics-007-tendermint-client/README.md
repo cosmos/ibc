@@ -235,8 +235,8 @@ function checkMisbehaviourAndUpdateState(
     assert(misbehaviour.h1.commitmentRoot !== misbehaviour.h2.commitmentRoot)
     // fetch the previously verified commitment root & validator set
     consensusState = get("clients/{identifier}/consensusStates/{misbehaviour.fromHeight}")
-    // assert that the timestamp is not from more than an unbonding period ago
-    assert(currentTimestamp() - misbehaviour.timestamp < clientState.unbondingPeriod)
+    // assert that the timestamp is not from more than an trusting period ago
+    assert(currentTimestamp() - misbehaviour.timestamp < clientState.trustingPeriod)
     // check if the light client "would have been fooled"
     assert(
       verify(consensusState.validatorSet, misbehaviour.fromHeight, misbehaviour.h1) &&
