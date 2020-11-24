@@ -318,7 +318,7 @@ function connOpenInit(
 
 ```typescript
 function connOpenTry(
-  desiredIdentifier: Identifier,
+  previousIdentifier: Identifier,
   counterpartyConnectionIdentifier: Identifier,
   counterpartyPrefix: CommitmentPrefix,
   counterpartyClientIdentifier: Identifier,
@@ -328,22 +328,24 @@ function connOpenTry(
   proofConsensus: CommitmentProof,
   proofHeight: Height,
   consensusHeight: Height) {
-    // generate a new identifier if the passed identifier was the sentinel empty-string
-    if (desiredIdentifier === "") {
+    if (previousIdentifier !== "") {
+      previous = provableStore.get(connectionPath(identifier))
+      abortTransactionUnless(
+        (previous === null) ||
+        (previous.state === INIT &&
+         previous.counterpartyConnectionIdentifier === "" &&
+         previous.counterpartyPrefix === counterpartyPrefix &&
+         previous.clientIdentifier === clientIdentifier &&
+         previous.counterpartyClientIdentifier === counterpartyClientIdentifier))
+      identifier = previousIdentifier
+    } else {
+      // generate a new identifier if the passed identifier was the sentinel empty-string
       identifier = generateIdentifier()
     }
     abortTransactionUnless(consensusHeight < getCurrentHeight())
     expectedConsensusState = getConsensusState(consensusHeight)
     expected = ConnectionEnd{INIT, "", getCommitmentPrefix(), counterpartyClientIdentifier,
                              clientIdentifier, counterpartyVersions}
-    previous = provableStore.get(connectionPath(identifier))
-    abortTransactionUnless(
-      (previous === null) ||
-      (previous.state === INIT &&
-        previous.counterpartyConnectionIdentifier === "" &&
-        previous.counterpartyPrefix === counterpartyPrefix &&
-        previous.clientIdentifier === clientIdentifier &&
-        previous.counterpartyClientIdentifier === counterpartyClientIdentifier))
     versionsIntersection = intersection(counterpartyVersions, previous !== null ? previous.version : getCompatibleVersions())
     version = pickVersion(versionsIntersection) // throws if there is no intersection
     connection = ConnectionEnd{TRYOPEN, counterpartyConnectionIdentifier, counterpartyPrefix,
