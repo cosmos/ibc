@@ -284,9 +284,9 @@ function chanOpenInit(
   order: ChannelOrder,
   connectionHops: [Identifier],
   portIdentifier: Identifier,
-  channelIdentifier: Identifier,
   counterpartyPortIdentifier: Identifier,
   version: string): CapabilityKey {
+    channelIdentifier = generateIdentifier()
     abortTransactionUnless(validateChannelIdentifier(portIdentifier, channelIdentifier))
 
     abortTransactionUnless(connectionHops.length === 1) // for v1 of the IBC protocol
@@ -323,21 +323,24 @@ function chanOpenTry(
   counterpartyVersion: string,
   proofInit: CommitmentProof,
   proofHeight: Height): CapabilityKey {
+    // generate a new identifier if the provided identifier was the sentinel empty-string
+    if (channelIdentifier === "") {
+      channelIdentifier = generateIdentifier()
+    }
     abortTransactionUnless(validateChannelIdentifier(portIdentifier, channelIdentifier))
+    abortTransactionUnless(authenticateCapability(portPath(portIdentifier), portCapability))
     abortTransactionUnless(connectionHops.length === 1) // for v1 of the IBC protocol
     // empty-string is a sentinel value for "allow any identifier"
     previous = provableStore.get(channelPath(portIdentifier, channelIdentifier))
-    // use the provided identifier only if the handshake can progress with it
-    if ((previous === null) ||
-        !(previous.state === INIT &&
-          previous.order === order &&
-          previous.counterpartyPortIdentifier === counterpartyPortIdentifier &&
-          previous.counterpartyChannelIdentifier === "" &&
-          previous.connectionHops === connectionHops &&
-          previous.version === version)) {
-      channelIdentifier = generateIdentifier()
-    }
-    abortTransactionUnless(authenticateCapability(portPath(portIdentifier), portCapability))
+    abortTransactionUnless(
+      (previous === null) ||
+      (previous.state === INIT &&
+       previous.order === order &&
+       previous.counterpartyPortIdentifier === counterpartyPortIdentifier &&
+       previous.counterpartyChannelIdentifier === "" &&
+       previous.connectionHops === connectionHops &&
+       previous.version === version)
+      )
     connection = provableStore.get(connectionPath(connectionHops[0]))
     abortTransactionUnless(connection !== null)
     abortTransactionUnless(connection.state === OPEN)

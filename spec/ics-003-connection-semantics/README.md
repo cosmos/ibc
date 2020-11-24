@@ -293,12 +293,11 @@ A specific version can optionally be passed as `version` to ensure that the hand
 
 ```typescript
 function connOpenInit(
-  identifier: Identifier,
   counterpartyPrefix: CommitmentPrefix,
   clientIdentifier: Identifier,
   counterpartyClientIdentifier: Identifier,
   version: string) {
-    abortTransactionUnless(validateConnectionIdentifier(identifier))
+    identifier = generateIdentifier()
     abortTransactionUnless(provableStore.get(connectionPath(identifier)) == null)
     state = INIT
     if version != "" {
@@ -320,7 +319,6 @@ function connOpenInit(
 ```typescript
 function connOpenTry(
   desiredIdentifier: Identifier,
-  counterpartyChosenConnectionIdentifer: Identifier,
   counterpartyConnectionIdentifier: Identifier,
   counterpartyPrefix: CommitmentPrefix,
   counterpartyClientIdentifier: Identifier,
@@ -330,30 +328,23 @@ function connOpenTry(
   proofConsensus: CommitmentProof,
   proofHeight: Height,
   consensusHeight: Height) {
-    abortTransactionUnless(validateConnectionIdentifier(desiredIdentifier))
+    // generate a new identifier if the passed identifier was the sentinel empty-string
+    if (desiredIdentifier === "") {
+      identifier = generateIdentifier()
+    }
     abortTransactionUnless(consensusHeight < getCurrentHeight())
     expectedConsensusState = getConsensusState(consensusHeight)
     expected = ConnectionEnd{INIT, "", getCommitmentPrefix(), counterpartyClientIdentifier,
                              clientIdentifier, counterpartyVersions}
-    previous = provableStore.get(connectionPath(desiredIdentifier))
+    previous = provableStore.get(connectionPath(identifier))
     abortTransactionUnless(
-    	 (previous === null) ||	 
-          (previous.state === INIT &&	
-            previous.counterpartyConnectionIdentifier === "" &&  // unless there's some state corruption this should always be true since connOpenInit always stores ""
-            previous.counterpartyPrefix === counterpartyPrefix &&
-            previous.clientIdentifier === clientIdentifier  &&
-            previous.counterpartyClientIdentifier === counterpartyClientIdentifier))
-            
-    // we are here either with null previous or one stored under desiredIdentifier.
-    // previous can be null in two cases:
-    // 1. desiredIdentifier === "" or 
-    // 2. desiredIdentifier != "" and there is no stored connection with that id.
-    // We only want to generate the identifier in case 1 
-    if (previous === null) && (desiredIdentifier === "") {
-        identifier = generateIdentifier()
-    } else {
-        identifier = desiredIdentifier
-    }
+    	(previous === null) ||	 
+      (previous.state === INIT &&	
+        // unless there's some state corruption this should always be true since connOpenInit always stores ""
+        previous.counterpartyConnectionIdentifier === "" &&
+        previous.counterpartyPrefix === counterpartyPrefix &&
+        previous.clientIdentifier === clientIdentifier  &&
+        previous.counterpartyClientIdentifier === counterpartyClientIdentifier))
     versionsIntersection = intersection(counterpartyVersions, previous !== null ? previous.version : getCompatibleVersions())
     version = pickVersion(versionsIntersection) // throws if there is no intersection
     connection = ConnectionEnd{TRYOPEN, counterpartyConnectionIdentifier, counterpartyPrefix,
