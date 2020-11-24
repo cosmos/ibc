@@ -338,12 +338,11 @@ function connOpenTry(
                              clientIdentifier, counterpartyVersions}
     previous = provableStore.get(connectionPath(identifier))
     abortTransactionUnless(
-    	(previous === null) ||	 
+      (previous === null) ||	 
       (previous.state === INIT &&	
-        // unless there's some state corruption this should always be true since connOpenInit always stores ""
         previous.counterpartyConnectionIdentifier === "" &&
         previous.counterpartyPrefix === counterpartyPrefix &&
-        previous.clientIdentifier === clientIdentifier  &&
+        previous.clientIdentifier === clientIdentifier &&
         previous.counterpartyClientIdentifier === counterpartyClientIdentifier))
     versionsIntersection = intersection(counterpartyVersions, previous !== null ? previous.version : getCompatibleVersions())
     version = pickVersion(versionsIntersection) // throws if there is no intersection

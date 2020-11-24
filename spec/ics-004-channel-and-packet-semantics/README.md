@@ -328,7 +328,6 @@ function chanOpenTry(
       channelIdentifier = generateIdentifier()
     }
     abortTransactionUnless(validateChannelIdentifier(portIdentifier, channelIdentifier))
-    abortTransactionUnless(authenticateCapability(portPath(portIdentifier), portCapability))
     abortTransactionUnless(connectionHops.length === 1) // for v1 of the IBC protocol
     // empty-string is a sentinel value for "allow any identifier"
     previous = provableStore.get(channelPath(portIdentifier, channelIdentifier))
@@ -341,6 +340,7 @@ function chanOpenTry(
        previous.connectionHops === connectionHops &&
        previous.version === version)
       )
+    abortTransactionUnless(authenticateCapability(portPath(portIdentifier), portCapability))
     connection = provableStore.get(connectionPath(connectionHops[0]))
     abortTransactionUnless(connection !== null)
     abortTransactionUnless(connection.state === OPEN)
