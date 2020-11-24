@@ -84,7 +84,6 @@ The Tendermint client tracks the timestamp (block time), validator set, and comm
 ```typescript
 interface ConsensusState {
   timestamp: uint64
-  processedTime: uint64
   validatorSet: List<Pair<Address, uint64>>
   commitmentRoot: []byte
 }
@@ -215,8 +214,9 @@ function checkValidityAndUpdateState(
     // update latest timestamp
     clientState.latestTimestamp = header.timestamp
     // create recorded consensus state, save it
-    consensusState = ConsensusState{header.timestamp, currentTimestamp(), header.validatorSet, header.commitmentRoot}
+    consensusState = ConsensusState{header.timestamp, header.validatorSet, header.commitmentRoot}
     set("clients/{identifier}/consensusStates/{header.height}", consensusState)
+    set("clients/{identifier}/processedTimes/{header.height}", currentTimestamp())
     // save the client
     set("clients/{identifier}", clientState)
 }
@@ -360,10 +360,12 @@ function verifyPacketData(
     assert(clientState.latestHeight >= height)
     // check that the client is unfrozen or frozen at a higher height
     assert(clientState.frozenHeight === null || clientState.frozenHeight > height)
+    // fetch the processed time
+    processedTime = get("clients/{identifier}/processedTimes/{height}")
+    // assert that enough time has elapsed
+    assert(currentTimestamp() >= processedTime + delayPeriod)
     // fetch the previously verified commitment root & verify membership
     root = get("clients/{identifier}/consensusStates/{height}")
-    // assert that enough time has elapsed
-    assert(currentTimestamp() >= root.processedTime + delayPeriod)
     // verify that the provided commitment has been stored
     assert(root.verifyMembership(clientState.proofSpecs, path, hash(data), proof))
 }
@@ -383,10 +385,12 @@ function verifyPacketAcknowledgement(
     assert(clientState.latestHeight >= height)
     // check that the client is unfrozen or frozen at a higher height
     assert(clientState.frozenHeight === null || clientState.frozenHeight > height)
+    // fetch the processed time
+    processedTime = get("clients/{identifier}/processedTimes/{height}")
+    // assert that enough time has elapsed
+    assert(currentTimestamp() >= processedTime + delayPeriod)
     // fetch the previously verified commitment root & verify membership
     root = get("clients/{identifier}/consensusStates/{height}")
-    // assert that enough time has elapsed
-    assert(currentTimestamp() >= root.processedTime + delayPeriod)
     // verify that the provided acknowledgement has been stored
     assert(root.verifyMembership(clientState.proofSpecs, path, hash(acknowledgement), proof))
 }
@@ -405,10 +409,12 @@ function verifyPacketReceiptAbsence(
     assert(clientState.latestHeight >= height)
     // check that the client is unfrozen or frozen at a higher height
     assert(clientState.frozenHeight === null || clientState.frozenHeight > height)
+    // fetch the processed time
+    processedTime = get("clients/{identifier}/processedTimes/{height}")
+    // assert that enough time has elapsed
+    assert(currentTimestamp() >= processedTime + delayPeriod)
     // fetch the previously verified commitment root & verify membership
     root = get("clients/{identifier}/consensusStates/{height}")
-    // assert that enough time has elapsed
-    assert(currentTimestamp() >= root.processedTime + delayPeriod)
     // verify that no acknowledgement has been stored
     assert(root.verifyNonMembership(clientState.proofSpecs, path, proof))
 }
@@ -427,10 +433,12 @@ function verifyNextSequenceRecv(
     assert(clientState.latestHeight >= height)
     // check that the client is unfrozen or frozen at a higher height
     assert(clientState.frozenHeight === null || clientState.frozenHeight > height)
+    // fetch the processed time
+    processedTime = get("clients/{identifier}/processedTimes/{height}")
+    // assert that enough time has elapsed
+    assert(currentTimestamp() >= processedTime + delayPeriod)
     // fetch the previously verified commitment root & verify membership
     root = get("clients/{identifier}/consensusStates/{height}")
-    // assert that enough time has elapsed
-    assert(currentTimestamp() >= root.processedTime + delayPeriod)
     // verify that the nextSequenceRecv is as claimed
     assert(root.verifyMembership(clientState.proofSpecs, path, nextSequenceRecv, proof))
 }
