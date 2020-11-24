@@ -336,16 +336,23 @@ function connOpenTry(
     expected = ConnectionEnd{INIT, "", getCommitmentPrefix(), counterpartyClientIdentifier,
                              clientIdentifier, counterpartyVersions}
     previous = provableStore.get(connectionPath(desiredIdentifier))
-    // use the provided identifier only if the handshake can progress with it
-    if ((previous === null) ||
-        !(previous.state === INIT &&
-          previous.counterpartyConnectionIdentifier === "" &&
-          previous.counterpartyPrefix === counterpartyPrefix &&
-          previous.clientIdentifier === clientIdentifier &&
-          previous.counterpartyClientIdentifier === counterpartyClientIdentifier)) {
-      identifier = generateIdentifier()
+    abortTransactionUnless(
+    	 (previous === null) ||	 
+          (previous.state === INIT &&	
+            previous.counterpartyConnectionIdentifier === "" &&  // unless there's some state corruption this should always be true since connOpenInit always stores ""
+            previous.counterpartyPrefix === counterpartyPrefix &&
+            previous.clientIdentifier === clientIdentifier  &&
+            previous.counterpartyClientIdentifier === counterpartyClientIdentifier))
+            
+    // we are here either with null previous or one stored under desiredIdentifier.
+    // previous can be null in two cases:
+    // 1. desiredIdentifier === "" or 
+    // 2. desiredIdentifier != "" and there is no stored connection with that id.
+    // We only want to generate the identifier in case 1 
+    if (previous === null) && (desiredIdentifier === "") {
+        identifier = generateIdentifier()
     } else {
-      identifier = desiredIdentifier
+        identifier = desiredIdentifier
     }
     versionsIntersection = intersection(counterpartyVersions, previous !== null ? previous.version : getCompatibleVersions())
     version = pickVersion(versionsIntersection) // throws if there is no intersection
