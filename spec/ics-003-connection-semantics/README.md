@@ -167,47 +167,51 @@ function verifyChannelState(
 function verifyPacketData(
   connection: ConnectionEnd,
   height: Height,
+  delayPeriod: uint64,
   proof: CommitmentProof,
   portIdentifier: Identifier,
   channelIdentifier: Identifier,
   sequence: Height,
   data: bytes) {
     client = queryClient(connection.clientIdentifier)
-    return client.verifyPacketData(connection, height, connection.counterpartyPrefix, proof, portIdentifier, channelIdentifier, data)
+    return client.verifyPacketData(connection, height, delayPeriod, connection.counterpartyPrefix, proof, portIdentifier, channelIdentifier, data)
 }
 
 function verifyPacketAcknowledgement(
   connection: ConnectionEnd,
   height: Height,
+  delayPeriod: uint64,
   proof: CommitmentProof,
   portIdentifier: Identifier,
   channelIdentifier: Identifier,
   sequence: uint64,
   acknowledgement: bytes) {
     client = queryClient(connection.clientIdentifier)
-    return client.verifyPacketAcknowledgement(connection, height, connection.counterpartyPrefix, proof, portIdentifier, channelIdentifier, acknowledgement)
+    return client.verifyPacketAcknowledgement(connection, height, delayPeriod, connection.counterpartyPrefix, proof, portIdentifier, channelIdentifier, acknowledgement)
 }
 
 function verifyPacketReceiptAbsence(
   connection: ConnectionEnd,
   height: Height,
+  delayPeriod: uint64,
   proof: CommitmentProof,
   portIdentifier: Identifier,
   channelIdentifier: Identifier,
   sequence: uint64) {
     client = queryClient(connection.clientIdentifier)
-    return client.verifyPacketReceiptAbsence(connection, height, connection.counterpartyPrefix, proof, portIdentifier, channelIdentifier)
+    return client.verifyPacketReceiptAbsence(connection, height, delayPeriod, connection.counterpartyPrefix, proof, portIdentifier, channelIdentifier)
 }
 
 function verifyNextSequenceRecv(
   connection: ConnectionEnd,
   height: Height,
+  delayPeriod: uint64,
   proof: CommitmentProof,
   portIdentifier: Identifier,
   channelIdentifier: Identifier,
   nextSequenceRecv: uint64) {
     client = queryClient(connection.clientIdentifier)
-    return client.verifyNextSequenceRecv(connection, height, connection.counterpartyPrefix, proof, portIdentifier, channelIdentifier, nextSequenceRecv)
+    return client.verifyNextSequenceRecv(connection, height, delayPeriod, connection.counterpartyPrefix, proof, portIdentifier, channelIdentifier, nextSequenceRecv)
 }
 
 function getTimestampAtHeight(

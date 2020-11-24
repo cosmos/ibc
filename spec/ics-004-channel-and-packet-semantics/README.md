@@ -105,6 +105,7 @@ interface Packet {
   sequence: uint64
   timeoutHeight: Height
   timeoutTimestamp: uint64
+  delayPeriod: uint64
   sourcePort: Identifier
   sourceChannel: Identifier
   destPort: Identifier
@@ -116,6 +117,7 @@ interface Packet {
 - The `sequence` number corresponds to the order of sends and receives, where a packet with an earlier sequence number must be sent and received before a packet with a later sequence number.
 - The `timeoutHeight` indicates a consensus height on the destination chain after which the packet will no longer be processed, and will instead count as having timed-out.
 - The `timeoutTimestamp` indicates a timestamp on the destination chain after which the packet will no longer be processed, and will instead count as having timed-out.
+- The `delayPeriod` indicates a period that must elapse after validation of a header before a packet can be processed. It is only safe to allow the user to set this field when using unordered channels.
 - The `sourcePort` identifies the port on the sending chain.
 - The `sourceChannel` identifies the channel end on the sending chain.
 - The `destPort` identifies the port on the receiving chain.
@@ -568,7 +570,7 @@ function sendPacket(packet: Packet) {
     nextSequenceSend = nextSequenceSend + 1
     provableStore.set(nextSequenceSendPath(packet.sourcePort, packet.sourceChannel), nextSequenceSend)
     provableStore.set(packetCommitmentPath(packet.sourcePort, packet.sourceChannel, packet.sequence),
-                      hash(packet.data, packet.timeoutHeight, packet.timeoutTimestamp))
+                      hash(packet.data, packet.timeoutHeight, packet.timeoutTimestamp, packet.delayPeriod))
 
     // log that a packet has been sent
     emitLogEntry("sendPacket", {sequence: packet.sequence, data: packet.data, timeoutHeight: packet.timeoutHeight, timeoutTimestamp: packet.timeoutTimestamp})
@@ -613,6 +615,7 @@ function recvPacket(
 
     abortTransactionUnless(connection.verifyPacketData(
       proofHeight,
+      packet.delayPeriod,
       proof,
       packet.sourcePort,
       packet.sourceChannel,
@@ -714,11 +717,12 @@ function acknowledgePacket(
 
     // verify we sent the packet and haven't cleared it out yet
     abortTransactionUnless(provableStore.get(packetCommitmentPath(packet.sourcePort, packet.sourceChannel, packet.sequence))
-           === hash(packet.data, packet.timeoutHeight, packet.timeoutTimestamp))
+           === hash(packet.data, packet.timeoutHeight, packet.timeoutTimestamp, packet.delayPeriod))
 
     // abort transaction unless correct acknowledgement on counterparty chain
     abortTransactionUnless(connection.verifyPacketAcknowledgement(
       proofHeight,
+      packet.delayPeriod,
       proof,
       packet.destPort,
       packet.destChannel,
@@ -813,7 +817,7 @@ function timeoutPacket(
 
     // verify we actually sent this packet, check the store
     abortTransactionUnless(provableStore.get(packetCommitmentPath(packet.sourcePort, packet.sourceChannel, packet.sequence))
-           === hash(packet.data, packet.timeoutHeight, packet.timeoutTimestamp))
+           === hash(packet.data, packet.timeoutHeight, packet.timeoutTimestamp, packet.delayPeriod))
 
     if channel.order === ORDERED {
       // ordered channel: check that packet has not been received
@@ -821,6 +825,7 @@ function timeoutPacket(
       // ordered channel: check that the recv sequence is as claimed
       abortTransactionUnless(connection.verifyNextSequenceRecv(
         proofHeight,
+        packet.delayPeriod,
         proof,
         packet.destPort,
         packet.destChannel,
@@ -830,6 +835,7 @@ function timeoutPacket(
       // unordered channel: verify absence of receipt at packet index
       abortTransactionUnless(connection.verifyPacketReceiptAbsence(
         proofHeight,
+        packet.delayPeriod,
         proof,
         packet.destPort,
         packet.destChannel,
@@ -879,7 +885,7 @@ function timeoutOnClose(
 
     // verify we actually sent this packet, check the store
     abortTransactionUnless(provableStore.get(packetCommitmentPath(packet.sourcePort, packet.sourceChannel, packet.sequence))
-           === hash(packet.data, packet.timeoutHeight, packet.timeoutTimestamp))
+           === hash(packet.data, packet.timeoutHeight, packet.timeoutTimestamp, packet.delayPeriod))
 
     // check that the opposing channel end has closed
     expected = ChannelEnd{CLOSED, channel.order, channel.portIdentifier,
@@ -896,6 +902,7 @@ function timeoutOnClose(
       // ordered channel: check that the recv sequence is as claimed
       abortTransactionUnless(connection.verifyNextSequenceRecv(
         proofHeight,
+        packet.delayPeriod,
         proof,
         packet.destPort,
         packet.destChannel,
@@ -907,6 +914,7 @@ function timeoutOnClose(
       // unordered channel: verify absence of receipt at packet index
       abortTransactionUnless(connection.verifyPacketReceiptAbsence(
         proofHeight,
+        packet.delayPeriod,
         proof,
         packet.destPort,
         packet.destChannel,
