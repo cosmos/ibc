@@ -331,7 +331,7 @@ function connOpenTry(
     if (previousIdentifier !== "") {
       previous = provableStore.get(connectionPath(identifier))
       abortTransactionUnless(
-        (previous === null) ||
+        (previous !== null) &&
         (previous.state === INIT &&
          previous.counterpartyConnectionIdentifier === "" &&
          previous.counterpartyPrefix === counterpartyPrefix &&

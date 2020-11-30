@@ -326,7 +326,7 @@ function chanOpenTry(
     if (previousIdentifier !== "") {
       previous = provableStore.get(channelPath(portIdentifier, channelIdentifier))
       abortTransactionUnless(
-        (previous === null) ||
+        (previous !== null) &&
         (previous.state === INIT &&
          previous.order === order &&
          previous.counterpartyPortIdentifier === counterpartyPortIdentifier &&
