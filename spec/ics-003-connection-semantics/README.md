@@ -95,7 +95,7 @@ interface ConnectionEnd {
 - The `counterpartyClientIdentifier` field identifies the client on the counterparty chain associated with this connection.
 - The `version` field is an opaque string which can be utilised to determine encodings or protocols for channels or packets utilising this connection.
   If not specified, a default `version` of `""` should be used.
-- The `delayPeriod` indicates a period that must elapse after validation of a header before a packet can be processed.
+- The `delayPeriod` indicates a period that must elapse after validation of a header before a packet, acknowledgement, proof of receipt, or timeout can be processed.
 
 ### Store paths
 

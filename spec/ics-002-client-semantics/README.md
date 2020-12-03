@@ -318,7 +318,7 @@ at a particular finalised height (necessarily associated with a particular commi
 Client types must define functions to authenticate internal state of the state machine which the client tracks.
 Internal implementation details may differ (for example, a loopback client could simply read directly from the state and require no proofs).
 
-`currentTimestamp` and `delayPeriod` are passed to packet-related verification functions in order to allow packets to specify a period which must pass after a header is verified before the packet is allowed to be processed.
+- The `delayPeriod` is passed to packet-related verification functions in order to allow packets to specify a period which must pass after a header is verified before the packet is allowed to be processed.
 
 ##### Required functions
 
