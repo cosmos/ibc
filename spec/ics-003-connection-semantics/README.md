@@ -82,6 +82,7 @@ interface ConnectionEnd {
   clientIdentifier: Identifier
   counterpartyClientIdentifier: Identifier
   version: string | []string
+  delayPeriod: uint64
 }
 ```
 
@@ -94,6 +95,7 @@ interface ConnectionEnd {
 - The `counterpartyClientIdentifier` field identifies the client on the counterparty chain associated with this connection.
 - The `version` field is an opaque string which can be utilised to determine encodings or protocols for channels or packets utilising this connection.
   If not specified, a default `version` of `""` should be used.
+- The `delayPeriod` indicates a period that must elapse after validation of a header before a packet can be processed.
 
 ### Store paths
 
@@ -173,7 +175,7 @@ function verifyPacketData(
   sequence: Height,
   data: bytes) {
     client = queryClient(connection.clientIdentifier)
-    return client.verifyPacketData(connection, height, connection.counterpartyPrefix, proof, portIdentifier, channelIdentifier, data)
+    return client.verifyPacketData(connection, height, connection.delayPeriod, connection.counterpartyPrefix, proof, portIdentifier, channelIdentifier, data)
 }
 
 function verifyPacketAcknowledgement(
@@ -185,7 +187,7 @@ function verifyPacketAcknowledgement(
   sequence: uint64,
   acknowledgement: bytes) {
     client = queryClient(connection.clientIdentifier)
-    return client.verifyPacketAcknowledgement(connection, height, connection.counterpartyPrefix, proof, portIdentifier, channelIdentifier, acknowledgement)
+    return client.verifyPacketAcknowledgement(connection, height, connection.delayPeriod, connection.counterpartyPrefix, proof, portIdentifier, channelIdentifier, acknowledgement)
 }
 
 function verifyPacketReceiptAbsence(
@@ -196,7 +198,7 @@ function verifyPacketReceiptAbsence(
   channelIdentifier: Identifier,
   sequence: uint64) {
     client = queryClient(connection.clientIdentifier)
-    return client.verifyPacketReceiptAbsence(connection, height, connection.counterpartyPrefix, proof, portIdentifier, channelIdentifier)
+    return client.verifyPacketReceiptAbsence(connection, height, connection.delayPeriod, connection.counterpartyPrefix, proof, portIdentifier, channelIdentifier)
 }
 
 function verifyNextSequenceRecv(
@@ -207,7 +209,7 @@ function verifyNextSequenceRecv(
   channelIdentifier: Identifier,
   nextSequenceRecv: uint64) {
     client = queryClient(connection.clientIdentifier)
-    return client.verifyNextSequenceRecv(connection, height, connection.counterpartyPrefix, proof, portIdentifier, channelIdentifier, nextSequenceRecv)
+    return client.verifyNextSequenceRecv(connection, height, connection.delayPeriod, connection.counterpartyPrefix, proof, portIdentifier, channelIdentifier, nextSequenceRecv)
 }
 
 function getTimestampAtHeight(
@@ -298,7 +300,8 @@ function connOpenInit(
   counterpartyPrefix: CommitmentPrefix,
   clientIdentifier: Identifier,
   counterpartyClientIdentifier: Identifier,
-  version: string) {
+  version: string,
+  delayPeriod: uint64) {
     abortTransactionUnless(validateConnectionIdentifier(identifier))
     abortTransactionUnless(provableStore.get(connectionPath(identifier)) == null)
     state = INIT
@@ -310,7 +313,7 @@ function connOpenInit(
       versions = getCompatibleVersions()
     }
     connection = ConnectionEnd{state, desiredCounterpartyConnectionIdentifier, counterpartyPrefix,
-      clientIdentifier, counterpartyClientIdentifier, versions}
+      clientIdentifier, counterpartyClientIdentifier, versions, delayPeriod}
     provableStore.set(connectionPath(identifier), connection)
     addConnectionToClient(clientIdentifier, identifier)
 }
@@ -327,6 +330,7 @@ function connOpenTry(
   counterpartyClientIdentifier: Identifier,
   clientIdentifier: Identifier,
   counterpartyVersions: string[],
+  delayPeriod: uint64,
   proofInit: CommitmentProof,
   proofConsensus: CommitmentProof,
   proofHeight: Height,
@@ -339,7 +343,7 @@ function connOpenTry(
       counterpartyChosenConnectionIdentifer === desiredIdentifier
       )
     expected = ConnectionEnd{INIT, counterpartyChosenConnectionIdentifer, getCommitmentPrefix(), counterpartyClientIdentifier,
-                             clientIdentifier, counterpartyVersions}
+                             clientIdentifier, counterpartyVersions, delayPeriod}
     previous = provableStore.get(connectionPath(desiredIdentifier))
     abortTransactionUnless(
       (previous === null) ||
@@ -347,11 +351,12 @@ function connOpenTry(
         previous.counterpartyConnectionIdentifier === counterpartyConnectionIdentifier &&
         previous.counterpartyPrefix === counterpartyPrefix &&
         previous.clientIdentifier === clientIdentifier &&
-        previous.counterpartyClientIdentifier === counterpartyClientIdentifier))
+        previous.counterpartyClientIdentifier === counterpartyClientIdentifier &&
+        previous.delayPeriod === delayPeriod))
     versionsIntersection = intersection(counterpartyVersions, previous !== null ? previous.version : getCompatibleVersions())
     version = pickVersion(versionsIntersection) // throws if there is no intersection
     connection = ConnectionEnd{TRYOPEN, counterpartyConnectionIdentifier, counterpartyPrefix,
-                               clientIdentifier, counterpartyClientIdentifier, version}
+                               clientIdentifier, counterpartyClientIdentifier, version, delayPeriod}
     abortTransactionUnless(connection.verifyConnectionState(proofHeight, proofInit, counterpartyConnectionIdentifier, expected))
     abortTransactionUnless(connection.verifyClientConsensusState(
       proofHeight, proofConsensus, counterpartyClientIdentifier, consensusHeight, expectedConsensusState))
@@ -384,7 +389,7 @@ function connOpenAck(
     expectedConsensusState = getConsensusState(consensusHeight)
     expected = ConnectionEnd{TRYOPEN, identifier, getCommitmentPrefix(),
                              connection.counterpartyClientIdentifier, connection.clientIdentifier,
-                             version}
+                             version, connection.delayPeriod}
     abortTransactionUnless(connection.verifyConnectionState(proofHeight, proofTry, counterpartyIdentifier, expected))
     abortTransactionUnless(connection.verifyClientConsensusState(
       proofHeight, proofConsensus, connection.counterpartyClientIdentifier, consensusHeight, expectedConsensusState))
@@ -405,7 +410,7 @@ function connOpenConfirm(
     connection = provableStore.get(connectionPath(identifier))
     abortTransactionUnless(connection.state === TRYOPEN)
     expected = ConnectionEnd{OPEN, identifier, getCommitmentPrefix(), connection.counterpartyClientIdentifier,
-                             connection.clientIdentifier, connection.version}
+                             connection.clientIdentifier, connection.version, connection.delayPeriod}
     abortTransactionUnless(connection.verifyConnectionState(proofHeight, proofAck, connection.counterpartyConnectionIdentifier, expected))
     connection.state = OPEN
     provableStore.set(connectionPath(identifier), connection)
