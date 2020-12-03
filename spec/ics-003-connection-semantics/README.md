@@ -283,10 +283,10 @@ At the end of an opening handshake between two chains implementing the sub-proto
 
 This sub-protocol need not be permissioned, modulo anti-spam measures.
 
-In `connOpenInit`, a sentinel empty-string identifier can be used to allow the recipient chain to choose its own connection identifier. Chains may implement a function `desiredIdentifier` which chooses an identifier, e.g. by incrementing a counter:
+Chains MUST implement a function `generateIdentifier` which chooses an identifier, e.g. by incrementing a counter:
 
 ```typescript
-type desiredIdentifier = (counterpartyChosenConnectionIdentifer: Identifier) -> Identifier
+type generateIdentifier = () -> Identifier
 ```
 
 A specific version can optionally be passed as `version` to ensure that the handshake will either complete with that version or fail.
@@ -295,14 +295,12 @@ A specific version can optionally be passed as `version` to ensure that the hand
 
 ```typescript
 function connOpenInit(
-  identifier: Identifier,
-  desiredCounterpartyConnectionIdentifier: Identifier,
   counterpartyPrefix: CommitmentPrefix,
   clientIdentifier: Identifier,
   counterpartyClientIdentifier: Identifier,
   version: string,
   delayPeriod: uint64) {
-    abortTransactionUnless(validateConnectionIdentifier(identifier))
+    identifier = generateIdentifier()
     abortTransactionUnless(provableStore.get(connectionPath(identifier)) == null)
     state = INIT
     if version != "" {
@@ -312,7 +310,7 @@ function connOpenInit(
     } else {
       versions = getCompatibleVersions()
     }
-    connection = ConnectionEnd{state, desiredCounterpartyConnectionIdentifier, counterpartyPrefix,
+    connection = ConnectionEnd{state, "", counterpartyPrefix,
       clientIdentifier, counterpartyClientIdentifier, versions, delayPeriod}
     provableStore.set(connectionPath(identifier), connection)
     addConnectionToClient(clientIdentifier, identifier)
@@ -323,8 +321,7 @@ function connOpenInit(
 
 ```typescript
 function connOpenTry(
-  desiredIdentifier: Identifier,
-  counterpartyChosenConnectionIdentifer: Identifier,
+  previousIdentifier: Identifier,
   counterpartyConnectionIdentifier: Identifier,
   counterpartyPrefix: CommitmentPrefix,
   counterpartyClientIdentifier: Identifier,
@@ -335,24 +332,25 @@ function connOpenTry(
   proofConsensus: CommitmentProof,
   proofHeight: Height,
   consensusHeight: Height) {
-    abortTransactionUnless(validateConnectionIdentifier(desiredIdentifier))
+    if (previousIdentifier !== "") {
+      previous = provableStore.get(connectionPath(identifier))
+      abortTransactionUnless(
+        (previous !== null) &&
+        (previous.state === INIT &&
+         previous.counterpartyConnectionIdentifier === "" &&
+         previous.counterpartyPrefix === counterpartyPrefix &&
+         previous.clientIdentifier === clientIdentifier &&
+         previous.counterpartyClientIdentifier === counterpartyClientIdentifier &&
+         previous.delayPeriod === delayPeriod))
+      identifier = previousIdentifier
+    } else {
+      // generate a new identifier if the passed identifier was the sentinel empty-string
+      identifier = generateIdentifier()
+    }
     abortTransactionUnless(consensusHeight < getCurrentHeight())
     expectedConsensusState = getConsensusState(consensusHeight)
-    abortTransationUnless(
-      counterpartyChosenConnectionIdentifer === "" ||
-      counterpartyChosenConnectionIdentifer === desiredIdentifier
-      )
-    expected = ConnectionEnd{INIT, counterpartyChosenConnectionIdentifer, getCommitmentPrefix(), counterpartyClientIdentifier,
+    expected = ConnectionEnd{INIT, "", getCommitmentPrefix(), counterpartyClientIdentifier,
                              clientIdentifier, counterpartyVersions, delayPeriod}
-    previous = provableStore.get(connectionPath(desiredIdentifier))
-    abortTransactionUnless(
-      (previous === null) ||
-      (previous.state === INIT &&
-        previous.counterpartyConnectionIdentifier === counterpartyConnectionIdentifier &&
-        previous.counterpartyPrefix === counterpartyPrefix &&
-        previous.clientIdentifier === clientIdentifier &&
-        previous.counterpartyClientIdentifier === counterpartyClientIdentifier &&
-        previous.delayPeriod === delayPeriod))
     versionsIntersection = intersection(counterpartyVersions, previous !== null ? previous.version : getCompatibleVersions())
     version = pickVersion(versionsIntersection) // throws if there is no intersection
     connection = ConnectionEnd{TRYOPEN, counterpartyConnectionIdentifier, counterpartyPrefix,
@@ -360,7 +358,6 @@ function connOpenTry(
     abortTransactionUnless(connection.verifyConnectionState(proofHeight, proofInit, counterpartyConnectionIdentifier, expected))
     abortTransactionUnless(connection.verifyClientConsensusState(
       proofHeight, proofConsensus, counterpartyClientIdentifier, consensusHeight, expectedConsensusState))
-    identifier = desiredIdentifier
     provableStore.set(connectionPath(identifier), connection)
     addConnectionToClient(clientIdentifier, identifier)
 }
@@ -379,10 +376,6 @@ function connOpenAck(
   consensusHeight: Height) {
     abortTransactionUnless(consensusHeight < getCurrentHeight())
     connection = provableStore.get(connectionPath(identifier))
-    abortTransactionUnless(
-      connection.counterpartyConnectionIdentifier === "" ||
-      counterpartyIdentifier === connection.counterpartyConnectionIdentifier
-      )
     abortTransactionUnless(
         (connection.state === INIT && connection.version.indexOf(version) !== -1)
         || (connection.state === TRYOPEN && connection.version === version))

@@ -273,17 +273,20 @@ When the opening handshake is complete, the module which initiates the handshake
 it specifies will own the other end of the created channel on the counterparty chain. Once a channel is created, ownership cannot be changed (although higher-level abstractions
 could be implemented to provide this).
 
-A sentinel empty-string identifier can be used to allow the recipient chain to choose its own channel identifier.
+Chains MUST implement a function `generateIdentifier` which chooses an identifier, e.g. by incrementing a counter:
+
+```typescript
+type generateIdentifier = () -> Identifier
+```
 
 ```typescript
 function chanOpenInit(
   order: ChannelOrder,
   connectionHops: [Identifier],
   portIdentifier: Identifier,
-  channelIdentifier: Identifier,
   counterpartyPortIdentifier: Identifier,
-  counterpartyChannelIdentifier: Identifier,
   version: string): CapabilityKey {
+    channelIdentifier = generateIdentifier()
     abortTransactionUnless(validateChannelIdentifier(portIdentifier, channelIdentifier))
 
     abortTransactionUnless(connectionHops.length === 1) // for v1 of the IBC protocol
@@ -295,7 +298,7 @@ function chanOpenInit(
     abortTransactionUnless(connection !== null)
     abortTransactionUnless(authenticateCapability(portPath(portIdentifier), portCapability))
     channel = ChannelEnd{INIT, order, counterpartyPortIdentifier,
-                         counterpartyChannelIdentifier, connectionHops, version}
+                         "", connectionHops, version}
     provableStore.set(channelPath(portIdentifier, channelIdentifier), channel)
     channelCapability = newCapability(channelCapabilityPath(portIdentifier, channelIdentifier))
     provableStore.set(nextSequenceSendPath(portIdentifier, channelIdentifier), 1)
@@ -312,7 +315,7 @@ function chanOpenTry(
   order: ChannelOrder,
   connectionHops: [Identifier],
   portIdentifier: Identifier,
-  channelIdentifier: Identifier,
+  previousIdentifier: Identifier,
   counterpartyChosenChannelIdentifer: Identifier,
   counterpartyPortIdentifier: Identifier,
   counterpartyChannelIdentifier: Identifier,
@@ -320,29 +323,30 @@ function chanOpenTry(
   counterpartyVersion: string,
   proofInit: CommitmentProof,
   proofHeight: Height): CapabilityKey {
+    if (previousIdentifier !== "") {
+      previous = provableStore.get(channelPath(portIdentifier, channelIdentifier))
+      abortTransactionUnless(
+        (previous !== null) &&
+        (previous.state === INIT &&
+         previous.order === order &&
+         previous.counterpartyPortIdentifier === counterpartyPortIdentifier &&
+         previous.counterpartyChannelIdentifier === "" &&
+         previous.connectionHops === connectionHops &&
+         previous.version === version)
+        )
+      channelIdentifier = previousIdentifier
+    } else {
+      // generate a new identifier if the provided identifier was the sentinel empty-string
+      channelIdentifier = generateIdentifier()
+    }
     abortTransactionUnless(validateChannelIdentifier(portIdentifier, channelIdentifier))
     abortTransactionUnless(connectionHops.length === 1) // for v1 of the IBC protocol
-    // empty-string is a sentinel value for "allow any identifier"
-    abortTransationUnless(
-      counterpartyChosenChannelIdentifer === "" ||
-      counterpartyChosenChannelIdentifer === channelIdentifier
-      )
-    previous = provableStore.get(channelPath(portIdentifier, channelIdentifier))
-    abortTransactionUnless(
-      (previous === null) ||
-      (previous.state === INIT &&
-       previous.order === order &&
-       previous.counterpartyPortIdentifier === counterpartyPortIdentifier &&
-       previous.counterpartyChannelIdentifier === counterpartyChannelIdentifier &&
-       previous.connectionHops === connectionHops &&
-       previous.version === version)
-      )
     abortTransactionUnless(authenticateCapability(portPath(portIdentifier), portCapability))
     connection = provableStore.get(connectionPath(connectionHops[0]))
     abortTransactionUnless(connection !== null)
     abortTransactionUnless(connection.state === OPEN)
     expected = ChannelEnd{INIT, order, portIdentifier,
-                          counterpartyChosenChannelIdentifer, [connection.counterpartyConnectionIdentifier], counterpartyVersion}
+                          "", [connection.counterpartyConnectionIdentifier], counterpartyVersion}
     abortTransactionUnless(connection.verifyChannelState(
       proofHeight,
       proofInit,
@@ -378,11 +382,6 @@ function chanOpenAck(
     channel = provableStore.get(channelPath(portIdentifier, channelIdentifier))
     abortTransactionUnless(channel.state === INIT || channel.state === TRYOPEN)
     abortTransactionUnless(authenticateCapability(channelCapabilityPath(portIdentifier, channelIdentifier), capability))
-    // empty-string is a sentinel value for "allow any identifier"
-    abortTransactionUnless(
-      channel.counterpartyChannelIdentifier === "" ||
-      counterpartyChannelIdentifier === channel.counterpartyChannelIdentifier
-      )
     connection = provableStore.get(connectionPath(channel.connectionHops[0]))
     abortTransactionUnless(connection !== null)
     abortTransactionUnless(connection.state === OPEN)
