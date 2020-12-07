@@ -126,7 +126,7 @@ function initialise(
     codeHandle = getWASMCode(wasmCodeId)
     assert(codeHandle.isInitializationDataValid(initializationData, consensusState))
     set("clients/{identifier}/consensusStates/{height}", consensusState)
-    return codeHandle.initialise(initializationData)
+    return codeHandle.initialise(initializationData, consensusState)
 }
 ```
 
@@ -322,6 +322,97 @@ function verifyNextSequenceRecv(
     // verify that the nextSequenceRecv is as claimed
     assert(root.verifyMembership(codeHandle.getProofSpec(clientState), path, nextSequenceRecv, proof))
 }
+```
+
+### WASM Client Code Interface
+
+#### What is code handle?
+Code handle is an object that facilitates interaction between WASM code and go code. For example, consider the method `isValidClientState` which could be implemented like this:
+
+```go
+func (c *CodeHandle) isValidClientState(clientState ClientState, height u64) {
+    clientStateData := json.Serialize(clientState)
+    packedData := pack(clientStateData, height)
+    // VM specific code to call WASM contract
+}
+```
+
+#### WASM Client interface
+Every WASM client code need to support ingestion of below messages in order to be used as light client.
+
+```rust
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
+#[serde(rename_all = "snake_case")]
+pub struct MisbehaviourMessage {
+    pub client_state: Vec<byte>,
+    pub consensus_state: Vec<byte>,
+    pub height: u64,
+    pub header1: Vec<byte>,
+    pub header2: Vec<byte>,
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
+#[serde(rename_all = "snake_case")]
+pub struct CreateConsensusMessage {
+    pub client_state: Vec<byte>,
+    pub epoch: u64,
+    pub height: u64
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
+#[serde(rename_all = "snake_case")]
+pub struct InitializeClientStateMessage {
+    pub initialization_data: Vec<byte>,
+    pub consensus_state: Vec<byte>
+}
+
+
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum HandleMsg {
+    HandleMisbehaviour(MisbehaviourMessage),
+    TryCreateConsensusState(CreateConsensusMessage),
+    InitializeClientState(InitializeClientStateMessage)
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
+#[serde(rename_all = "snake_case")]
+pub struct ValidateClientStateMessage {
+    client_state: Vec<byte>,
+    height: u64
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
+#[serde(rename_all = "snake_case")]
+pub struct ValidateNewClientStateMessage {
+    client_state: Vec<byte>,
+    new_client_state: Vec<byte>,
+    height: u64
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
+#[serde(rename_all = "snake_case")]
+pub struct ValidateInitializationDataMessage {
+    init_data: Vec<byte>,
+    consensus_state: Vec<byte>
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum ValidityPredicate {
+    ClientState(ValidateClientStateMessage),
+    NewClientState(ValidateNewClientStateMessage),
+    InitializationData(ValidateInitializationDataMessage),
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum QueryMsg {
+   IsValid(ValidityPredicate),
+   LatestClientHeight(Vec<byte>),
+   ProofSpec(Vec<byte>)
+}
+
 ```
 
 ### Properties & Invariants
