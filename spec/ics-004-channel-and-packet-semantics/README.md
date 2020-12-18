@@ -633,7 +633,7 @@ function recvPacket(
       abortTransactionUnless(provableStore.get(packetReceiptPath(packet.destPort, packet.destChannel, packet.sequence) === null))
       provableStore.set(
         packetReceiptPath(packet.destPort, packet.destChannel, packet.sequence),
-        ""
+        "1"
       )
     }
 
