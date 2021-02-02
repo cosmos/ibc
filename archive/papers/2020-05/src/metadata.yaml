@@ -1,0 +1,22 @@
+---
+title: 'The Interblockchain Communication Protocol: An Overview'
+author:
+  - name: Christopher Goes
+    affiliation: Interchain GmbH
+    location: Berlin, Germany
+    email: cwgoes@interchain.berlin
+keywords:
+  - ibc
+  - interblockchain
+  - dlt
+numbersections: yes
+lang: en
+babel-lang: english
+abstract: |
+  The interblockchain communication protocol (IBC) is an end-to-end, connection-oriented, stateful protocol for reliable, ordered, and authenticated communication between modules on separate distributed ledgers.
+  IBC is designed for interoperation between heterogenous ledgers arranged in an unknown, dynamic topology, operating with varied consensus algorithms and state machines. The protocol realises this by specifying
+  the sufficient set of data structures, abstractions, and semantics of a communication protocol which once implemented by participating ledgers will allow them to safely communicate. IBC is payload-agnostic
+  and provides a cross-ledger asynchronous communication primitive which can be used as a constituent building block by a wide variety of applications.
+
+...
+
