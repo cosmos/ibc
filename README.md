@@ -18,7 +18,11 @@ To propose a new standard, [open an issue](https://github.com/cosmos/ics/issues/
 
 To start a new standardisation document, copy the [template](spec/ics-template.md) and open a PR.
 
-See [PROCESS.md](PROCESS.md) for a description of the standardisation process.
+See [PROCESS.md](meta/PROCESS.md) for a description of the standardisation process.
+
+See [STANDARDS_COMMITTEE.md](meta/STANDARDS_COMMITTEE.md) for the membership of the core standardisation committee.
+
+See [CONTRIBUTING.md](meta/CONTRIBUTING.md) for contribution guidelines.
 
 ## Interchain Standards
 
