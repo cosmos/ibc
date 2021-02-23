@@ -1,11 +1,11 @@
-## Interchain Standardisation Process
+## IBC Standardisation Process
 
-Inter-chain standardisation will follow an adaptation of the [TC 39](https://tc39.github.io/process-document/) process used by the ECMAScript steering committee.
+IBC standardisation will follow an adaptation of the [TC 39](https://tc39.github.io/process-document/) process used by the ECMAScript steering committee.
 
 #### Stage 1 - `Strawman`
 
 - _**Purpose**_: Start the specification process
-- _**Entrance Criteria**_: [Open an issue](https://github.com/cosmos/ics/issues/new) on this repository with a short outline of your proposal and a specification name.
+- _**Entrance Criteria**_: [Open an issue](https://github.com/cosmos/ibc/issues/new) on this repository with a short outline of your proposal and a specification name.
 - _**Acceptance Requirements**_: No acceptance required to move to the next stage. Keep the issue around to track the specification status, and close it when the final specification is merged or the proposal abandoned.
 - _**Spec Quality**_: Outline only. Link to any prior documentation, discussion, or reference materials.
 - _**Changes Expected Post-Acceptance**_: N/A
@@ -14,24 +14,24 @@ Inter-chain standardisation will follow an adaptation of the [TC 39](https://tc3
 #### Stage 2 - `Draft`
 
 - _**Purpose**_:
-  * Make the case for the addition of this specification to the Cosmos ecosystem
+  * Make the case for the addition of this specification to the IBC ecosystem
   * Describe the shape of a potential solution
   * Identify challenges to this proposal
 - _**Entrance Criteria**_:
-  * Prose outlining the problem or need and the general shape of a solution in a PR to a `./spec/ics-{{ .Spec.Number }}-{{ .Spec.Name }}/README.md` file in this repository.
+  * Prose outlining the problem or need and the general shape of a solution in a PR to a `./spec/{area}/ics-{{ .Spec.Number }}-{{ .Spec.Name }}/README.md` file in this repository.
     This file should contain:
     1. List of expected projects & users within the Cosmos ecosystem who might make use of the specification along with any particular requirements they have
     1. Discussion of key algorithms, abstractions, and semantics
     1. High-level application interface outline, where applicable
     1. Identification of potential design trade-offs and implementation challenges/complexity
-    See [ICS 1](spec/ics-1-ics-standard) for a more detailed description of standard requirements.
+    See [ICS 1](../spec/ics-1-ics-standard) for a more detailed description of standard requirements.
   * Identified `author(s)` who will advance the proposal in the header of the standard file
   * Any additional reference documentation or media in the `./spec/ics-{{ .Spec.Number }}-{{ .Spec.Name }}` directory
-  * The specification team expects that this proposal will be finalised and eventually included in the ICS standard set.
+  * The specification team expects that this proposal will be finalised and eventually included in the IBC standard set.
 - _**Spec Quality**_:
   * Follows the structure laid out in ICS 1 and provides a reasonable overview of the proposed addition.
 - _**Acceptance Requirements**_:
-  * The PR has received two approvals from members of the core specification team, at which point it can be merged into the ICS repository.
+  * The PR has received two approvals from members of the [core specification committee](./STANDARDS_COMMITTEE.md), at which point it can be merged into the IBC repository.
 - _**Changes Expected Post-Acceptance**_:
   * Changes to details but not to the key concepts are expected after a standard enters draft stage. Implementers should work with the spec authors as work continues on spec development.
 - _**Implementation Types Expected**_:
