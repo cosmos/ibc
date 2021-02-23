@@ -4,7 +4,7 @@
 
 ## Synopsis
 
-This repository is the canonical location for development and documentation of the inter-blockchain communication protocool (IBC).
+This repository is the canonical location for development and documentation of the inter-blockchain communication protocol (IBC).
 
 It shall be used to consolidate design rationale, protocol semantics, and encoding descriptions for IBC, including both the core transport, authentication, & ordering layer (IBC/TAO) and the application layers describing packet encoding & processing semantics (IBC/APP).
 
