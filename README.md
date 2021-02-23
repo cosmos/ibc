@@ -32,39 +32,39 @@ All standards at or past the "Draft" stage are listed here in order of their ICS
 
 | Interchain Standard Number     | Standard Title             | Stage |
 | ------------------------------ | -------------------------- | ----- |
-| [1](spec/ics-001-ics-standard) | ICS Specification Standard | Draft |
+| [1](spec/ics-001-ics-standard) | ICS Specification Standard | N/A   |
 
 ### Core
 
 | Interchain Standard Number     | Standard Title             | Stage |
 | ------------------------------ | -------------------------- | ----- |
-| [2](spec/core/ics-002-client-semantics)             | Client Semantics           | Draft |
-| [3](spec/core/ics-003-connection-semantics)         | Connection Semantics       | Draft |
-| [4](spec/core/ics-004-channel-and-packet-semantics) | Channel & Packet Semantics | Draft |
-| [5](spec/core/ics-005-port-allocation)              | Port Allocation            | Draft |
-| [23](spec/core/ics-023-vector-commitments)          | Vector Commitments         | Draft |
-| [24](spec/core/ics-024-host-requirements)           | Host Requirements          | Draft |
-| [25](spec/core/ics-025-handler-interface)           | Handler Interface          | Draft |
-| [26](spec/core/ics-026-routing-module)              | Routing Module             | Draft |
+| [2](spec/core/ics-002-client-semantics)             | Client Semantics           | Candidate |
+| [3](spec/core/ics-003-connection-semantics)         | Connection Semantics       | Candidate |
+| [4](spec/core/ics-004-channel-and-packet-semantics) | Channel & Packet Semantics | Candidate |
+| [5](spec/core/ics-005-port-allocation)              | Port Allocation            | Candidate |
+| [23](spec/core/ics-023-vector-commitments)          | Vector Commitments         | Candidate |
+| [24](spec/core/ics-024-host-requirements)           | Host Requirements          | Candidate |
+| [25](spec/core/ics-025-handler-interface)           | Handler Interface          | Candidate |
+| [26](spec/core/ics-026-routing-module)              | Routing Module             | Candidate |
 
 ### Client
 
 | Interchain Standard Number                     | Standard Title             | Stage |
 | ---------------------------------------------- | -------------------------- | ----- |
-| [6](spec/ics-006-solo-machine-client)          | Solo Machine Client        | Draft |
-| [7](spec/ics-007-tendermint-client)            | Tendermint Client          | Draft |
-| [9](spec/ics-009-loopback-client)              | Loopback Client            | Draft |
+| [6](spec/ics-006-solo-machine-client)          | Solo Machine Client        | Candidate |
+| [7](spec/ics-007-tendermint-client)            | Tendermint Client          | Candidate |
+| [9](spec/ics-009-loopback-client)              | Loopback Client            | Candidate |
 | [10](spec/ics-010-grandpa-client)              | GRANDPA Client             | Draft |
 
 ### Relayer
 
 | Interchain Standard Number                     | Standard Title             | Stage |
 | ---------------------------------------------- | -------------------------- | ----- |
-| [18](spec/ics-018-relayer-algorithms)          | Relayer Algorithms         | Draft |
+| [18](spec/ics-018-relayer-algorithms)          | Relayer Algorithms         | Candidate |
 
 ### App
 
 | Interchain Standard Number                 | Standard Title          | Stage |
 | ------------------------------------------ | ----------------------- | ----- |
-| [20](spec/ics-020-fungible-token-transfer) | Fungible Token Transfer | Draft |
+| [20](spec/ics-020-fungible-token-transfer) | Fungible Token Transfer | Candidate |
 | [27](spec/ics-027-interchain-accounts)     | Interchain Accounts     | Draft |
