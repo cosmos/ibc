@@ -58,7 +58,7 @@ This specification depends on correct instantiation of the [Tendermint consensus
 
 ### Client state
 
-The Tendermint client state tracks the current epoch, current validator set, trusting period, unbonding period, latest height, latest timestamp (block time), and a possible frozen height.
+The Tendermint client state tracks the current revision, current validator set, trusting period, unbonding period, latest height, latest timestamp (block time), and a possible frozen height.
 
 ```typescript
 interface ClientState {
@@ -91,12 +91,12 @@ interface ConsensusState {
 
 ### Height
 
-The height of a Tendermint client consists of two `uint64`s: the epoch number, and the height in the epoch.
+The height of a Tendermint client consists of two `uint64`s: the revision number, and the height in the revision.
 
 ```typescript
 interface Height {
-  epochNumber: uint64
-  epochHeight: uint64
+  revisionNumber: uint64
+  revisionHeight: uint64
 }
 ```
 
@@ -104,18 +104,18 @@ Comparison between heights is implemented as follows:
 
 ```typescript
 function compare(a: TendermintHeight, b: TendermintHeight): Ord {
-  if (a.epochNumber < b.epochNumber)
+  if (a.revisionNumber < b.revisionNumber)
     return LT
-  else if (a.epochNumber === b.epochNumber)
-    if (a.epochHeight < b.epochHeight)
+  else if (a.revisionNumber === b.revisionNumber)
+    if (a.revisionHeight < b.revisionHeight)
       return LT
-    else if (a.epochHeight === b.epochHeight)
+    else if (a.revisionHeight === b.revisionHeight)
       return EQ
   return GT
 }
 ```
 
-This is designed to allow the height to reset to `0` while the epoch number increases by one in order to preserve timeouts through zero-height upgrades.
+This is designed to allow the height to reset to `0` while the revision number increases by one in order to preserve timeouts through zero-height upgrades.
 
 ### Headers
 
@@ -191,12 +191,12 @@ Tendermint client validity checking uses the bisection algorithm described in th
 ```typescript
 function checkValidityAndUpdateState(
   clientState: ClientState,
-  epoch: uint64,
+  revision: uint64,
   header: Header) {
-    // assert epoch is correct
-    assert(epoch === clientState.currentHeight.epoch)
-    // check that epoch is encoded correctly in chain ID
-    assert(epoch === clientState.chainID.regex('[a-z]*-(0)'))
+    // assert revision is correct
+    assert(revision === clientState.currentHeight.revision)
+    // check that revision is encoded correctly in chain ID
+    assert(revision === clientState.chainID.regex('[a-z]*-(0)'))
     // assert trusting period has not yet passed
     assert(currentTimestamp() - clientState.latestTimestamp < clientState.trustingPeriod)
     // assert header timestamp is less than trust period in the future. This should be resolved with an intermediate header.
@@ -252,7 +252,7 @@ function checkMisbehaviourAndUpdateState(
 
 ### Upgrades
 
-The chain which this light client is tracking can elect to write a special pre-determined key in state to allow the light client to update its client state (e.g. with a new chain ID or epoch) in preparation for an upgrade.
+The chain which this light client is tracking can elect to write a special pre-determined key in state to allow the light client to update its client state (e.g. with a new chain ID or revision) in preparation for an upgrade.
 
 As the client state change will be performed immediately, once the new client state information is written to the predetermined key, the client will no longer be able to follow blocks on the old chain, so it must upgrade promptly.
 
@@ -264,8 +264,8 @@ function upgradeClientState(
   proof: CommitmentPrefix) {
     // assert trusting period has not yet passed
     assert(currentTimestamp() - clientState.latestTimestamp < clientState.trustingPeriod)
-    // check that the epoch has been incremented
-    assert(newClientState.latestHeight.epochNumber > clientState.latestHeight.epochNumber)
+    // check that the revision has been incremented
+    assert(newClientState.latestHeight.revisionNumber > clientState.latestHeight.revisionNumber)
     // check proof of updated client state in state at predetermined commitment prefix and key
     path = applyPrefix(clientState.upgradeCommitmentPrefix, clientState.upgradeKey)
     // check that the client is at a sufficient height
