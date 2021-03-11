@@ -41,7 +41,8 @@ This specification depends on correctness of the `WASM Client code` in context o
 
 ### Client state
 
-The wasm client state tracks location of the wasm bytecode via `codeId`. Binary data represented by `data` field is opaque and only interpreted by the WASM Client Code.
+The wasm client state tracks location of the wasm bytecode via `codeId`. Binary data represented by `data` field is opaque and only interpreted by the WASM Client Code. `type` represents client type.
+`type` and `codeId` both are immutable.
 
 ```typescript
 interface ClientState {
@@ -57,6 +58,7 @@ interface ClientState {
 ### Consensus state
 
 The WASM consensus state tracks the timestamp (block time), `WASM Client code` specific fields and commitment root for all previously verified consensus states.
+`type` and `codeId` both are immutable.
 
 ```typescript
 interface ConsensusState {
