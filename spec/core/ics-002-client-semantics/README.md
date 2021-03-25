@@ -318,7 +318,8 @@ at a particular finalised height (necessarily associated with a particular commi
 Client types must define functions to authenticate internal state of the state machine which the client tracks.
 Internal implementation details may differ (for example, a loopback client could simply read directly from the state and require no proofs).
 
-- The `delayPeriod` is passed to packet-related verification functions in order to allow packets to specify a period which must pass after a header is verified before the packet is allowed to be processed.
+- The `delayPeriodTime` is passed to packet-related verification functions in order to allow packets to specify a period of time which must pass after a header is verified before the packet is allowed to be processed.
+- The `delayPeriodBlocks` is passed to packet-related verification functions in order to allow packets to specify a period of blocks which must pass after a header is verified before the packet is allowed to be processed.
 
 ##### Required functions
 
@@ -368,7 +369,8 @@ type verifyChannelState = (
 type verifyPacketData = (
   clientState: ClientState,
   height: Height,
-  delayPeriod: uint64,
+  delayPeriodTime: uint64,
+  delayPeriodBlocks: uint64,
   prefix: CommitmentPrefix,
   proof: CommitmentProof,
   portIdentifier: Identifier,
@@ -384,7 +386,8 @@ type verifyPacketData = (
 type verifyPacketAcknowledgement = (
   clientState: ClientState,
   height: Height,
-  delayPeriod: uint64,
+  delayPeriodTime: uint64,
+  delayPeriodBlocks: uint64,
   prefix: CommitmentPrefix,
   proof: CommitmentProof,
   portIdentifier: Identifier,
@@ -400,7 +403,8 @@ type verifyPacketAcknowledgement = (
 type verifyPacketReceiptAbsence = (
   clientState: ClientState,
   height: Height,
-  delayPeriod: uint64,
+  delayPeriodTime: uint64,
+  delayPeriodBlocks: uint64,
   prefix: CommitmentPrefix,
   proof: CommitmentProof,
   portIdentifier: Identifier,
@@ -415,7 +419,8 @@ type verifyPacketReceiptAbsence = (
 type verifyNextSequenceRecv = (
   clientState: ClientState,
   height: Height,
-  delayPeriod: uint64,
+  delayPeriodTime: uint64,
+  delayPeriodBlocks: uint64,
   prefix: CommitmentPrefix,
   proof: CommitmentProof,
   portIdentifier: Identifier,
@@ -776,7 +781,8 @@ function verifyChannelState(
 function verifyPacketData(
   clientState: ClientState,
   height: Height,
-  delayPeriod: uint64,
+  delayPeriodTime: uint64,
+  delayPeriodBlocks: uint64,
   prefix: CommitmentPrefix,
   proof: CommitmentProof,
   portIdentifier: Identifier,
@@ -791,7 +797,8 @@ function verifyPacketData(
 function verifyPacketAcknowledgement(
   clientState: ClientState,
   height: Height,
-  delayPeriod: uint64,
+  delayPeriodTime: uint64,
+  delayPeriodBlocks: uint64,
   prefix: CommitmentPrefix,
   proof: CommitmentProof,
   portIdentifier: Identifier,
@@ -807,7 +814,8 @@ function verifyPacketReceiptAbsence(
   clientState: ClientState,
   height: Height,
   prefix: CommitmentPrefix,
-  delayPeriod: uint64,
+  delayPeriodTime: uint64,
+  delayPeriodBlocks: uint64,
   proof: CommitmentProof,
   portIdentifier: Identifier,
   channelIdentifier: Identifier,
@@ -820,7 +828,8 @@ function verifyPacketReceiptAbsence(
 function verifyNextSequenceRecv(
   clientState: ClientState,
   height: Height,
-  delayPeriod: uint64,
+  delayPeriodTime: uint64,
+  delayPeriodBlocks: uint64,
   prefix: CommitmentPrefix,
   proof: CommitmentProof,
   portIdentifier: Identifier,

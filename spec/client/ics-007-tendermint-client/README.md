@@ -348,7 +348,8 @@ function verifyChannelState(
 function verifyPacketData(
   clientState: ClientState,
   height: Height,
-  delayPeriod: uint64,
+  delayPeriodTime: uint64,
+  delayPeriodBlocks: uint64,
   prefix: CommitmentPrefix,
   proof: CommitmentProof,
   portIdentifier: Identifier,
@@ -363,7 +364,9 @@ function verifyPacketData(
     // fetch the processed time
     processedTime = get("clients/{identifier}/processedTimes/{height}")
     // assert that enough time has elapsed
-    assert(currentTimestamp() >= processedTime + delayPeriod)
+    assert(currentTimestamp() >= processedTime + delayPeriodTime)
+    // assert that enough blocks have elapsed
+    assert(currentHeight() >= height + delayPeriodBlocks)
     // fetch the previously verified commitment root & verify membership
     root = get("clients/{identifier}/consensusStates/{height}")
     // verify that the provided commitment has been stored
@@ -373,7 +376,8 @@ function verifyPacketData(
 function verifyPacketAcknowledgement(
   clientState: ClientState,
   height: Height,
-  delayPeriod: uint64,
+  delayPeriodTime: uint64,
+  delayPeriodBlocks: uint64,
   prefix: CommitmentPrefix,
   proof: CommitmentProof,
   portIdentifier: Identifier,
@@ -388,7 +392,9 @@ function verifyPacketAcknowledgement(
     // fetch the processed time
     processedTime = get("clients/{identifier}/processedTimes/{height}")
     // assert that enough time has elapsed
-    assert(currentTimestamp() >= processedTime + delayPeriod)
+    assert(currentTimestamp() >= processedTime + delayPeriodTime)
+    // assert that enough blocks have elapsed
+    assert(currentHeight() >= height + delayPeriodBlocks)
     // fetch the previously verified commitment root & verify membership
     root = get("clients/{identifier}/consensusStates/{height}")
     // verify that the provided acknowledgement has been stored
@@ -398,7 +404,8 @@ function verifyPacketAcknowledgement(
 function verifyPacketReceiptAbsence(
   clientState: ClientState,
   height: Height,
-  delayPeriod: uint64,
+  delayPeriodTime: uint64,
+  delayPeriodBlocks: uint64,
   prefix: CommitmentPrefix,
   proof: CommitmentProof,
   portIdentifier: Identifier,
@@ -412,7 +419,9 @@ function verifyPacketReceiptAbsence(
     // fetch the processed time
     processedTime = get("clients/{identifier}/processedTimes/{height}")
     // assert that enough time has elapsed
-    assert(currentTimestamp() >= processedTime + delayPeriod)
+    assert(currentTimestamp() >= processedTime + delayPeriodTime)
+    // assert that enough blocks have elapsed
+    assert(currentHeight() >= height + delayPeriodBlocks)
     // fetch the previously verified commitment root & verify membership
     root = get("clients/{identifier}/consensusStates/{height}")
     // verify that no acknowledgement has been stored
@@ -422,7 +431,8 @@ function verifyPacketReceiptAbsence(
 function verifyNextSequenceRecv(
   clientState: ClientState,
   height: Height,
-  delayPeriod: uint64,
+  delayPeriodTime: uint64,
+  delayPeriodBlocks: uint64,
   prefix: CommitmentPrefix,
   proof: CommitmentProof,
   portIdentifier: Identifier,
@@ -436,7 +446,9 @@ function verifyNextSequenceRecv(
     // fetch the processed time
     processedTime = get("clients/{identifier}/processedTimes/{height}")
     // assert that enough time has elapsed
-    assert(currentTimestamp() >= processedTime + delayPeriod)
+    assert(currentTimestamp() >= processedTime + delayPeriodTime)
+    // assert that enough blocks have elapsed
+    assert(currentHeight() >= height + delayPeriodBlocks)
     // fetch the previously verified commitment root & verify membership
     root = get("clients/{identifier}/consensusStates/{height}")
     // verify that the nextSequenceRecv is as claimed
