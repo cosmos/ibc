@@ -12,7 +12,7 @@ Contributions are welcome.
 
 ## Standardisation
 
-Please see [ICS 1](spec/ics-001-ics-standard) for a description of what a standard entails.
+Please see [ICS 1](spec/ics-001-ics-standard/README.md) for a description of what a standard entails.
 
 To propose a new standard, [open an issue](https://github.com/cosmos/ics/issues/new).
 
@@ -30,41 +30,41 @@ All standards at or past the "Draft" stage are listed here in order of their ICS
 
 ### Meta
 
-| Interchain Standard Number     | Standard Title             | Stage |
-| ------------------------------ | -------------------------- | ----- |
-| [1](spec/ics-001-ics-standard) | ICS Specification Standard | N/A   |
+| Interchain Standard Number               | Standard Title             | Stage |
+| ---------------------------------------- | -------------------------- | ----- |
+| [1](spec/ics-001-ics-standard/README.md) | ICS Specification Standard | N/A   |
 
 ### Core
 
-| Interchain Standard Number     | Standard Title             | Stage |
-| ------------------------------ | -------------------------- | ----- |
-| [2](spec/core/ics-002-client-semantics)             | Client Semantics           | Candidate |
-| [3](spec/core/ics-003-connection-semantics)         | Connection Semantics       | Candidate |
-| [4](spec/core/ics-004-channel-and-packet-semantics) | Channel & Packet Semantics | Candidate |
-| [5](spec/core/ics-005-port-allocation)              | Port Allocation            | Candidate |
-| [23](spec/core/ics-023-vector-commitments)          | Vector Commitments         | Candidate |
-| [24](spec/core/ics-024-host-requirements)           | Host Requirements          | Candidate |
-| [25](spec/core/ics-025-handler-interface)           | Handler Interface          | Candidate |
-| [26](spec/core/ics-026-routing-module)              | Routing Module             | Candidate |
+| Interchain Standard Number                                    | Standard Title             | Stage |
+| ------------------------------------------------------------- | -------------------------- | ----- |
+| [2](spec/core/ics-002-client-semantics/README.md)             | Client Semantics           | Candidate |
+| [3](spec/core/ics-003-connection-semantics/README.md)         | Connection Semantics       | Candidate |
+| [4](spec/core/ics-004-channel-and-packet-semantics/README.md) | Channel & Packet Semantics | Candidate |
+| [5](spec/core/ics-005-port-allocation/README.md)              | Port Allocation            | Candidate |
+| [23](spec/core/ics-023-vector-commitments/README.md)          | Vector Commitments         | Candidate |
+| [24](spec/core/ics-024-host-requirements/README.md)           | Host Requirements          | Candidate |
+| [25](spec/core/ics-025-handler-interface/README.md)           | Handler Interface          | Candidate |
+| [26](spec/core/ics-026-routing-module/README.md)              | Routing Module             | Candidate |
 
 ### Client
 
-| Interchain Standard Number                     | Standard Title             | Stage |
-| ---------------------------------------------- | -------------------------- | ----- |
-| [6](spec/ics-006-solo-machine-client)          | Solo Machine Client        | Candidate |
-| [7](spec/ics-007-tendermint-client)            | Tendermint Client          | Candidate |
-| [9](spec/ics-009-loopback-client)              | Loopback Client            | Candidate |
-| [10](spec/ics-010-grandpa-client)              | GRANDPA Client             | Draft |
+| Interchain Standard Number                                      | Standard Title             | Stage |
+| --------------------------------------------------------------- | -------------------------- | ----- |
+| [6](spec/client/ics-006-solo-machine-client/README.md)          | Solo Machine Client        | Candidate |
+| [7](spec/client/ics-007-tendermint-client/README.md)            | Tendermint Client          | Candidate |
+| [9](spec/client/ics-009-loopback-client/README.md)              | Loopback Client            | Candidate |
+| [10](spec/client/ics-010-grandpa-client/README.md)              | GRANDPA Client             | Draft |
 
 ### Relayer
 
-| Interchain Standard Number                     | Standard Title             | Stage |
-| ---------------------------------------------- | -------------------------- | ----- |
-| [18](spec/ics-018-relayer-algorithms)          | Relayer Algorithms         | Candidate |
+| Interchain Standard Number                                       | Standard Title             | Stage |
+| ---------------------------------------------------------------- | -------------------------- | ----- |
+| [18](spec/relayer/ics-018-relayer-algorithms/README.md)          | Relayer Algorithms         | Candidate |
 
 ### App
 
-| Interchain Standard Number                 | Standard Title          | Stage |
-| ------------------------------------------ | ----------------------- | ----- |
-| [20](spec/ics-020-fungible-token-transfer) | Fungible Token Transfer | Candidate |
-| [27](spec/ics-027-interchain-accounts)     | Interchain Accounts     | Draft |
+| Interchain Standard Number                               | Standard Title          | Stage |
+| -------------------------------------------------------- | ----------------------- | ----- |
+| [20](spec/app/ics-020-fungible-token-transfer/README.md) | Fungible Token Transfer | Candidate |
+| [27](spec/app/ics-027-interchain-accounts/README.md)     | Interchain Accounts     | Draft |
