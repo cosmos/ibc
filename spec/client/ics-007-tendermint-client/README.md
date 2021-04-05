@@ -217,6 +217,7 @@ function checkValidityAndUpdateState(
     consensusState = ConsensusState{header.timestamp, header.validatorSet, header.commitmentRoot}
     set("clients/{identifier}/consensusStates/{header.height}", consensusState)
     set("clients/{identifier}/processedTimes/{header.height}", currentTimestamp())
+    set("clients/{identifier}/processedHeights/{header.height}", currentHeight())
     // save the client
     set("clients/{identifier}", clientState)
 }
@@ -363,10 +364,12 @@ function verifyPacketData(
     assert(clientState.frozenHeight === null || clientState.frozenHeight > height)
     // fetch the processed time
     processedTime = get("clients/{identifier}/processedTimes/{height}")
+    // fetch the processed height
+    processedHeight = get("clients/{identifier}/processedHeights/{height}")
     // assert that enough time has elapsed
     assert(currentTimestamp() >= processedTime + delayPeriodTime)
     // assert that enough blocks have elapsed
-    assert(currentHeight() >= height + delayPeriodBlocks)
+    assert(currentHeight() >= processedHeight + delayPeriodBlocks)
     // fetch the previously verified commitment root & verify membership
     root = get("clients/{identifier}/consensusStates/{height}")
     // verify that the provided commitment has been stored
@@ -391,10 +394,12 @@ function verifyPacketAcknowledgement(
     assert(clientState.frozenHeight === null || clientState.frozenHeight > height)
     // fetch the processed time
     processedTime = get("clients/{identifier}/processedTimes/{height}")
+    // fetch the processed height
+    processedHeight = get("clients/{identifier}/processedHeights/{height}")
     // assert that enough time has elapsed
     assert(currentTimestamp() >= processedTime + delayPeriodTime)
     // assert that enough blocks have elapsed
-    assert(currentHeight() >= height + delayPeriodBlocks)
+    assert(currentHeight() >= processedHeight + delayPeriodBlocks)
     // fetch the previously verified commitment root & verify membership
     root = get("clients/{identifier}/consensusStates/{height}")
     // verify that the provided acknowledgement has been stored
@@ -418,10 +423,12 @@ function verifyPacketReceiptAbsence(
     assert(clientState.frozenHeight === null || clientState.frozenHeight > height)
     // fetch the processed time
     processedTime = get("clients/{identifier}/processedTimes/{height}")
+    // fetch the processed height
+    processedHeight = get("clients/{identifier}/processedHeights/{height}")
     // assert that enough time has elapsed
     assert(currentTimestamp() >= processedTime + delayPeriodTime)
     // assert that enough blocks have elapsed
-    assert(currentHeight() >= height + delayPeriodBlocks)
+    assert(currentHeight() >= processedHeight + delayPeriodBlocks)
     // fetch the previously verified commitment root & verify membership
     root = get("clients/{identifier}/consensusStates/{height}")
     // verify that no acknowledgement has been stored
@@ -445,10 +452,12 @@ function verifyNextSequenceRecv(
     assert(clientState.frozenHeight === null || clientState.frozenHeight > height)
     // fetch the processed time
     processedTime = get("clients/{identifier}/processedTimes/{height}")
+    // fetch the processed height
+    processedHeight = get("clients/{identifier}/processedHeights/{height}")
     // assert that enough time has elapsed
     assert(currentTimestamp() >= processedTime + delayPeriodTime)
     // assert that enough blocks have elapsed
-    assert(currentHeight() >= height + delayPeriodBlocks)
+    assert(currentHeight() >= processedHeight + delayPeriodBlocks)
     // fetch the previously verified commitment root & verify membership
     root = get("clients/{identifier}/consensusStates/{height}")
     // verify that the nextSequenceRecv is as claimed
