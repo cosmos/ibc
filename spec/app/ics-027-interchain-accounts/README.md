@@ -27,18 +27,18 @@ The IBC handler interface & IBC relayer module interface are as defined in [ICS 
 ### Desired Properties
 
 - Permissionless
-- Fault containment: An interchain account must follow rules of its host chain, even in times of Byzantine behaviour by the counterparty chain (the chain that manages the account)
-- The chain that controls the account must process the results asynchronously and according to the chain's logic. The acknowledgement message should contain a result or an error as described in [ics-4](https://github.com/cosmos/ibc/tree/master/spec/core/ics-004-channel-and-packet-semantics#acknowledgement-envelope).
-- Sending and receiving transactions will be processed in an ordered channel where packets are delivered exactly in the order which they were sent. 
-- Each ordered channel must only allow one interchain account to use it, otherwise malicious users may be able to block transactions from being recieved. Practically, N accounts per N channels can be achieved by creating a new port for each user (owner of the interchain account) and creating a unique channel for each new registration request. Future versions of ics-27 will use partially ordered channels to get around this security issue and make the process more straight forward
+- Fault containment: An interchain account must follow rules of its host chain, even in times of Byzantine behavior by the counterparty chain (the chain that manages the account)
+- The chain that controls the account must process the results asynchronously and according to the chain's logic. The acknowledgment message should contain a result of an error as described in [ics-4](https://github.com/cosmos/ibc/tree/master/spec/core/ics-004-channel-and-packet-semantics#acknowledgement-envelope).
+- Sending and receiving transactions will be processed in an ordered channel where packets are delivered exactly in the order in which they were sent. 
+- Each ordered channel must only allow one interchain account to use it, otherwise, malicious users may be able to block transactions from being received. Practically, N accounts per N channels can be achieved by creating a new port for each user (owner of the interchain account) and creating a unique channel for each new registration request. Future versions of ics-27 will use partially ordered channels to get around this security issue and make the process more straight forward
 
 ## Technical Specification
 
-The implementation of interchain accounts is non-symmetric. This means that each sending chain can have a different way to generate an interchain account and each recieving chain a different way to deserialise the transaction bytes and a different set of transactions that they can execute. For example, chains that use the Cosmos SDK will deserialise tx bytes using Protobuf, but if the counterparty chain is a smart contract on Ethereum, it may deserialise tx bytes by an ABI that is a minimal serialisation algorithm for the smart contract.
+The implementation of interchain accounts is non-symmetric. This means that each sending chain can have a different way to generate an interchain account and each receiving chain a different way to deserialise the transaction bytes and a different set of transactions that they can execute. For example, chains that use the Cosmos SDK will deserialise tx bytes using Protobuf, but if the counterparty chain is a smart contract on Ethereum, it may deserialise tx bytes by an ABI that is a minimal serialisation algorithm for the smart contract.
 
-A chain can implement one or both parts to the interchain accounts protocol (sending and recieving). A sending chain registering and controlling an account does not necessarily have to allow other chains to register accounts on its own chain, and vice versa. 
+A chain can implement one or both parts to the interchain accounts protocol (sending and receiving). A sending chain registering and controlling an account does not necessarily have to allow other chains to register accounts on its own chain, and vice versa. 
 
-The interchain account specification defines the general way to register an interchain account and transfer tx bytes. The counterparty chain is responsible for deserialising and executing the tx bytes, and the sending chain should know how the counterparty chain will handle the tx bytes in advance. Each chain specific implementation should clearly document how serialization/deserialization of transactions happens and ensure the required packet data format is clearly outlined. 
+The interchain account specification defines the general way to register an interchain account and transfer tx bytes. The counterparty chain is responsible for deserialising and executing the tx bytes, and the sending chain should know how the counterparty chain will handle the tx bytes in advance. Each chain-specific implementation should clearly document how serialization/deserialization of transactions happens and ensure the required packet data format is clearly outlined. 
 
 Each chain must satisfy the following features to create an interchain account:
 
@@ -48,17 +48,17 @@ Each chain must satisfy the following features to create an interchain account:
 The chain must reject the transaction and must not make a state transition in the following cases:
 
 - The IBC transaction fails to be deserialised
-- The authentication step on the recieving chain (where the interchain account is hosted) fails 
+- The authentication step on the receiving chain (where the interchain account is hosted) fails 
 
 #### Known Issues
 ##### Ordered Channels 
-In an ordered channel, packet 2 cannot be relayed until packet 1 has been relayed or a valid proof that packet 1 has timed out has been recieved. If multiple distrusting accounts are allowed to use a single ordered channel this creates an attack vector whereby malicious users can block packets from being recieved in a timely manner. An example of this may be a malicious user sending hundreds of packets that are never paid for. Other users trying to use this channel will have to wait for all of these packets to be fully relayed or recieve valid proof of these packets having timed out before their own packets can be relayed. Therefore, multiplexing N interchain accounts on 1 ordered channel is not viable. This specification assumes the following: N interchain accounts will exist on N ordered channels. 
+In an ordered channel, packet 2 cannot be relayed until packet 1 has been relayed or a valid proof that packet 1 has timed out has been received. If multiple distrusting accounts are allowed to use a single ordered channel this creates an attack vector whereby malicious users can block packets from being received in a timely manner. An example of this may be a malicious user sending hundreds of packets that are never paid for. Other users trying to use this channel will have to wait for all of these packets to be fully relayed or receive valid proof of these packets having timed out before their own packets can be relayed. Therefore, multiplexing N interchain accounts on 1 ordered channel is not viable. This specification assumes the following: N interchain accounts will exist on N ordered channels. 
 
 ##### Unordered Channels 
-An unordered channel lets packets be relayed in any order. A user can send 100 packets and never relay them. Another user submits one packet and can immediately relay just that one without having to relay all other packets. In theory interchain accounts can be implemented using an unordered channel so long as messages that are dependent on one another are packed into a single packet. However, this pattern differs from other standards such as how Tendermint's mempool operates. Rather than deviate from well defined standards for message processing it is recommended to not to use this approach or at a minimum clearly document how messages are processed on the recieving chain. 
+An unordered channel lets packets be relayed in any order. A user can send 100 packets and never relay them. Another user submits one packet and can immediately relay just that one without having to relay all other packets. In theory interchain accounts can be implemented using an unordered channel so long as messages that are dependent on one another are packed into a single packet. However, this pattern differs from other standards such as how Tendermint's mempool operates. Rather than deviate from well defined standards for message processing it is recommended to not to use this approach or at a minimum clearly document how messages are processed on the receiving chain. 
 
 ##### Partially Ordered Channels 
-Interchain accounts is a perfect use case for partially ordered channels, whereby the order is based on account sequences. However, this has yet to be implemented in IBC. As of the time of writing this specification the current progress can be tracked [here](https://github.com/cosmos/ibc/issues/550). 
+Interchain accounts are a perfect use case for partially ordered channels, whereby the order is based on account sequences. However, this has yet to be implemented in IBC. As of the time of writing this specification the current progress can be tracked [here](https://github.com/cosmos/ibc/issues/550). 
 
 ### Architecture Diagram
 ![](https://i.imgur.com/HX1h2u2.png)
@@ -66,9 +66,9 @@ Interchain accounts is a perfect use case for partially ordered channels, whereb
 
 
 ### Authentication & Authorization
-The sending chain (the chain registering and controlling an account) will implement it's own authentication and authorization, which will determine who can create an interchain account and what type of transactions the registered accounts can invoke. One example of this may be a cosmos SDK chain that only allows the creation of an interchain account on behalf of the chains distribution module (community pool), whereby actions this interchain account takes are determined by governance proposals voted on by the token holders of the sending chain. Another example may be a smart contract that registers an interchain account and has a specific set of actions it is authorized to take.  
+The sending chain (the chain registering and controlling an account) will implement its own authentication and authorization, which will determine who can create an interchain account and what type of transactions the registered accounts can invoke. One example of this may be a cosmos SDK chain that only allows the creation of an interchain account on behalf of the chains distribution module (community pool), whereby actions this interchain account takes are determined by governance proposals voted on by the token holders of the sending chain. Another example may be a smart contract that registers an interchain account and has a specific set of actions it is authorized to take.  
 
-The recieving chain must implement authentication with regards to ensuring that the incoming messages are sent by the owner of the targetted interchain account. With regards to authorization, it is up to each chain specific implementation to decide if the hosted interchain accounts have authority to invoke all of the chains message types or only a subset. This configuration may be set up at module initialization.
+The receiving chain must implement authentication with regard to ensuring that the incoming messages are sent by the owner of the targetted interchain account. With regards to authorization, it is up to each chain-specific implementation to decide if the hosted interchain accounts have the authority to invoke all of the chain's message types or only a subset. This configuration may be set up at module initialization.
 
 ### Data Structures
 
@@ -85,14 +85,14 @@ interface InterchainAccountModule {
 }
 ```
 
-**A chain can implement the entire interface, or decide to implement only the sending or recieving parts of the protocol.**
+**A chain can implement the entire interface, or decide to implement only the sending or receiving parts of the protocol.**
 
 
 #### Sending Interface
 The `tryRegisterInterchainAccount` method in the `InterchainAccountModule` interface defines the way to request the creation of an interchain account on a remote chain. The remote chain creates an interchain account using its own account creation logic. Due to the limitation of ordered channels, the recommended way to achieve this when calling `tryRegisterInterchainAccount` is to dynamically bind a new port with the port id set as the address of the owner of the account (if the port is not already bound), invoke `OpenChanInit` via an IBC module which will initiate the handshake process and emit an event signaling to a relayer to generate a new channel between both chains. The remote chain can then create the interchain account in the `ChanOpenTry` callback as part of the channel creation handshake process defined in [ics-4](https://github.com/cosmos/ibc/tree/master/spec/core/ics-004-channel-and-packet-semantics). Once the `chanOpenAck` callback fires the handshake-originating (sending) chain can assume the account registration is succesful.  
 
 
-The `tryRunTx` method in the`InterchainAccountModule` interface defines the way to create an outgoing packet for a specific chain type. The chain type determines how the IBC account transaction should be constructed and serialised for the recieving chain. The sending side should know in advance how the recieving side expects the incoming IBC packet to be structured. 
+The `tryRunTx` method in the`InterchainAccountModule` interface defines the way to create an outgoing packet for a specific chain type. The chain type determines how the IBC account transaction should be constructed and serialised for the receiving chain. The sending side should know in advance how the receiving side expects the incoming IBC packet to be structured. 
 
 #### Recieving Interfacce
 
@@ -103,7 +103,7 @@ The `tryRunTx` method in the`InterchainAccountModule` interface defines the way 
 `runTx` executes a transaction after the transaction has been successfully authenticated.
 
 ### Packet Data
-`InterchainAccountPacketData` contains an array of messages that an interchain account can run and a memo string that is sent to the recieving chain. The example below is defined as a proto encoded message but each chain can encode this differently. This should be clearly defined in the documentation for each chain specific implementation.
+`InterchainAccountPacketData` contains an array of messages that an interchain account can run and a memo string that is sent to the receiving chain. The example below is defined as a proto encoded message but each chain can encode this differently. This should be clearly defined in the documentation for each chain specific implementation.
 
 ```typescript
 message InterchainAccountPacketData  {
@@ -112,7 +112,7 @@ message InterchainAccountPacketData  {
 }
 ```
 
-The acknowledgement packet structure is defined as in [ics4](https://github.com/cosmos/cosmos-sdk/blob/v0.42.4/proto/ibc/core/channel/v1/channel.proto#L134-L147). The acknowledgement result should contain the chain-id and the address of the targetted interchain account. If an error occurs on the recieving chain the acknowledgement should contain the error message.
+The acknowledgement packet structure is defined as in [ics4](https://github.com/cosmos/cosmos-sdk/blob/v0.42.4/proto/ibc/core/channel/v1/channel.proto#L134-L147). The acknowledgement result should contain the chain-id and the address of the targetted interchain account. If an error occurs on the receiving chain the acknowledgement should contain the error message.
 
 ```typescript
 message Acknowledgement {
@@ -133,9 +133,9 @@ interface InterchainAccountHook {
 ```
 
 ### Port & channel setup
-Recieving chains (chains that will host interchain accounts) must always bind to a port with the id `interchain_account`. Sending chains will bind to ports dynamically, with each port id being the address of the interchain account owner.
+Receiving chains (chains that will host interchain accounts) must always bind to a port with the id `interchain_account`. Sending chains will bind to ports dynamically, with each port id being the address of the interchain account owner.
 
-The example below assumes a module is implementing the entire `InterchainAccountModule` interface. The `setup` function must be called exactly once when the module is created (perhaps when the blockchain itself is initialised) to bind to the appropriate port.
+The example below assumes a module is implementing the entire `InterchainAccountModule` interface. The `setup` function must be called exactly once when the module is created (perhaps when the blockchain itself is initialized) to bind to the appropriate port.
 
 ```typescript
 function setup() {
