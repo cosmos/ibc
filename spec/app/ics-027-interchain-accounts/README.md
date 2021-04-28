@@ -52,12 +52,13 @@ The chain must reject the transaction and must not make a state transition in th
 
 #### Known Issues
 ##### Ordered Channels 
-**TODO: Outline the security issue that exists with ordered channels**
+In an ordered channel, packet 2 cannot be relayed until packet 1 has been relayed or a valid proof that packet 1 has timed out has been recieved. If multiple distrusting accounts are allowed to use a single ordered channel this creates an attack vector whereby malicious users can block packets from being recieved in a timely manner. An example of this may be a malicious user sending hundreds of packets that are never paid for. Other users trying to use this channel will have to wait for all of these packets to be fully relayed or recieve valid proof of these packets having timed out before their own packets can be relayed. Therefore, multiplexing N interchain accounts on 1 ordered channel is not viable. This specification assumes the following: N interchain accounts will exist on N ordered channels. 
+
 ##### Unordered Channels 
-**TODO: Outline why unordered channels cannot be used** 
+An unordered channel lets packets be relayed in any order. A user can send 100 packets and never relay them. Another user submits one packet and can immediately relay just that one without having to relay all other packets. In theory interchain accounts can be implemented using an unordered channel so long as messages that are dependent on one another are packed into a single packet. However, this pattern differs from other standards such as how Tendermint's mempool operates. Rather than deviate from well defined standards for message processing it is recommended to not to use this approach or at a minimum clearly document how messages are processed on the recieving chain. 
 
 ##### Partially Ordered Channels 
-**TODO: Outline why interchain accounts should use partially ordered channels in the future**
+Interchain accounts is a perfect use case for partially ordered channels, whereby the order is based on account sequences. However, this has yet to be implemented in IBC. As of the time of writing this specification the current progress can be tracked [here](https://github.com/cosmos/ibc/issues/550). 
 
 ### Architecture Diagram
 **TODO: Diagram with flow for registration + RunTX**
