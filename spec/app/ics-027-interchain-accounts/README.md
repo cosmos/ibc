@@ -68,7 +68,7 @@ Interchain accounts are a perfect use case for partially ordered channels, where
 ### Authentication & Authorization
 The sending chain (the chain registering and controlling an account) will implement its own authentication and authorization, which will determine who can create an interchain account and what type of transactions the registered accounts can invoke. One example of this may be a cosmos SDK chain that only allows the creation of an interchain account on behalf of the chains distribution module (community pool), whereby actions this interchain account takes are determined by governance proposals voted on by the token holders of the sending chain. Another example may be a smart contract that registers an interchain account and has a specific set of actions it is authorized to take.  
 
-The receiving chain must implement authentication with regard to ensuring that the incoming messages are sent by the owner of the targetted interchain account. With regards to authorization, it is up to each chain-specific implementation to decide if the hosted interchain accounts have the authority to invoke all of the chain's message types or only a subset. This configuration may be set up at module initialization.
+The receiving chain must implement authentication with regard to ensuring that the incoming messages are sent by the owner of the targeted interchain account. With regards to authorization, it is up to each chain-specific implementation to decide if the hosted interchain accounts have the authority to invoke all of the chain's message types or only a subset. This configuration may be set up at module initialization.
 
 ### Data Structures
 
