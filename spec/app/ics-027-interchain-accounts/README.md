@@ -58,7 +58,7 @@ In an ordered channel, packet 2 cannot be relayed until packet 1 has been relaye
 An unordered channel lets packets be relayed in any order. A user can send 100 packets and never relay them. Another user submits one packet and can immediately relay just that one without having to relay all other packets. In theory interchain accounts can be implemented using an unordered channel so long as messages that are dependent on one another are packed into a single packet. However, this pattern differs from other standards such as how Tendermint's mempool operates. Rather than deviate from well defined standards for message processing it is recommended to not to use this approach or at a minimum clearly document how messages are processed on the receiving chain. 
 
 ##### Partially Ordered Channels 
-Interchain accounts are a perfect use case for partially ordered channels, whereby the order is based on account sequences. However, this has yet to be implemented in IBC. As of the time of writing this specification the current progress can be tracked [here](https://github.com/cosmos/ibc/issues/550). 
+Interchain accounts are a perfect use case for partially ordered channels, whereby the order is based on account sequences. However, this has yet to be specified and implemented in IBC. As of the time of writing this specification the current progress can be tracked [here](https://github.com/cosmos/ibc/issues/550). 
 
 ### Architecture Diagram
 ![](https://i.imgur.com/HX1h2u2.png)
