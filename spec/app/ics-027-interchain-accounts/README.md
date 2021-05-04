@@ -34,7 +34,7 @@ The IBC handler interface & IBC relayer module interface are as defined in [ICS 
 
 ## Technical Specification
 
-The implementation of interchain accounts is non-symmetric. This means that each sending chain can have a different way to generate an interchain account and each receiving chain a different way to deserialise the transaction bytes and a different set of transactions that they can execute. For example, chains that use the Cosmos SDK will deserialise tx bytes using Protobuf, but if the counterparty chain is a smart contract on Ethereum, it may deserialise tx bytes by an ABI that is a minimal serialisation algorithm for the smart contract.
+The implementation of interchain accounts is non-symmetric. This means that each sending chain can have a different way to generate an interchain account and each receiving chain can have a different set of transactions that may be deserialised in different ways. For example, chains that use the Cosmos SDK will deserialise tx bytes using Protobuf, but if the counterparty chain is a smart contract on Ethereum, it may deserialise tx bytes by an ABI that is a minimal serialisation algorithm for the smart contract.
 
 A chain can implement one or both parts to the interchain accounts protocol (sending and receiving). A sending chain registering and controlling an account does not necessarily have to allow other chains to register accounts on its own chain, and vice versa. 
 
