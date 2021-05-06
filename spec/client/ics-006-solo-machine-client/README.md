@@ -187,7 +187,7 @@ function verifyClientState(
   counterpartyClientState: ClientState) {
     path = applyPrefix(prefix, "clients/{clientIdentifier}/clientState")
     // ICS 003 will not increment the proof height after connection verification
-    // the solo machine must increment the proof height to ensure it matches 
+    // the solo machine client must increment the proof height to ensure it matches 
     // the expected sequence used in the signature
     abortTransactionUnless(height + 1 == clientState.consensusState.sequence)
     abortTransactionUnless(!clientState.frozen)
@@ -208,7 +208,7 @@ function verifyClientConsensusState(
   consensusState: ConsensusState) {
     path = applyPrefix(prefix, "clients/{clientIdentifier}/consensusState/{consensusStateHeight}")
     // ICS 003 will not increment the proof height after connection or client state verification
-    // the solo machine must increment the proof height by 2 to ensure it matches 
+    // the solo machine client must increment the proof height by 2 to ensure it matches 
     // the expected sequence used in the signature
     abortTransactionUnless(height + 2 == clientState.consensusState.sequence)
     abortTransactionUnless(!clientState.frozen)
