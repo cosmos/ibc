@@ -94,7 +94,7 @@ The `tryRegisterInterchainAccount` method in the `InterchainAccountModule` inter
 
 The `tryRunTx` method in the`InterchainAccountModule` interface defines the way to create an outgoing packet for a specific chain type. The chain type determines how the IBC account transaction should be constructed and serialised for the receiving chain. The sending side should know in advance how the receiving side expects the incoming IBC packet to be structured. 
 
-#### Recieving Interfacce
+#### Recieving Interface
 
 `createAccount` defines the way to determine the account's address by using the port & channel id. A newly created interchain account must not conflict with an existing account. Therefore, the host chain (the chain that the account will live on) must keep track of which blockchains have created an interchain account in order to verify the transaction signing authority in `authenticateTx`. `createAccount` should be called in the `chanOpenTry` callback as part of the channel creation handshake process defined in [ics-4](https://github.com/cosmos/ibc/tree/master/spec/core/ics-004-channel-and-packet-semantics).
 
