@@ -8,7 +8,7 @@ The stake bonded at the parent blockchain guarantees that a validator behaves co
 Otherwise, the validator is slashed on the parent blockchain.
 
 Therefore, at a high level, we can imagine the Cross-Chain Validation protocol to be concerned with following entities:
-  - Parent blockchain: This is a blockchain that "provides" validators. Namely, "provided" validators have some stake at the parent blockchain. Any misbehavior of a validator is slashed at the parent blockchain. Moreover, parent blockchain manipulates the validator set of a chain that "borrows" validators from it.
+  - Parent blockchain: This is a blockchain that "provides" validators. Namely, "provided" validators have some stake at the parent blockchain. Any misbehavior of a validator is slashed on the parent blockchain. Moreover, the parent blockchain manipulates the validator set of a chain that "borrows" validators from it.
   - Baby blockchain: Baby blockchain is a blockchain that is being secured by the parent blockchain. In other words, validators that secure and operate the baby blockchain are bonded on the parent blockchain. Any misbehavior of a validator at the baby blockchain is punished at the parent blockchain (i.e., the validator is slashed at the parent blockchain).
   - Causally consistent shared FIFO queue: This queue is used for communication among two blockchains, as we explain in the rest of the document.
 
