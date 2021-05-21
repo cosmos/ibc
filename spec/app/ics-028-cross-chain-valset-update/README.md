@@ -265,6 +265,7 @@ Recursively, we conclude that this holds for any two validator sets (irrespectiv
 
 ### Validator set change liveness
 
+<<<<<<< HEAD
 Since the demand V is not the last issued demand, we conclude that eventually the maturing period is started for V.
 The maturing period eventually elapses and the V is acknowledged at that moment.
 As soon as the acknowledgement is "observed" by the parent blockchain, the indication is triggered.
@@ -299,3 +300,8 @@ Hence, the parent blockchain needs to take into account the worst possible scena
 
 
 
+=======
+Since infinitely many demands are issued after the demand V, we conclude that eventually the unbonding period is started for V.
+The unbonding period eventually elapses and the V is dequeued at that moment.
+As soon as the dequeued is "observed" by the parent blockchain, the indication is triggered.
+>>>>>>> 5bdd01fb817b64a3a4369b6a019a2d3df282a823
