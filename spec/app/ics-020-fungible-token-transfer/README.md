@@ -29,6 +29,7 @@ The IBC handler interface & IBC routing module interface are as defined in [ICS 
 - Permissionless token transfers, no need to whitelist connections, modules, or denominations.
 - Symmetric (all chains implement the same logic, no in-protocol differentiation of hubs & zones).
 - Fault containment: prevents Byzantine-inflation of tokens originating on chain `A`, as a result of chain `B`'s Byzantine behaviour (though any users who sent tokens to chain `B` may be at risk).
+- Opt-in, decentralized, pseudonymous relayer incentivization ([See ICS20-2](#Extension-ICS20-2))
 
 ## Technical Specification
 
@@ -330,13 +331,146 @@ In order to track all of the denominations moving around the network of chains i
 - Each chain, locally, could elect to keep a lookup table to use short, user-friendly local denominations in state which are translated to and from the longer denominations when sending and receiving packets. 
 - Additional restrictions may be imposed on which other machines may be connected to & which channels may be established.
 
+## Extension: ICS20-2
+
+The above specifications defines `ics20-1`, which is the first version of the specification. Here we define
+ICS20-2 which 
+
+### Goals
+
+- Add support for opt-in, decentralized, pseudonymous relayer incentivization
+- Backwards compatibility with ics20-1
+- Minimal extra logic needed to maintain backwards compatibility
+- Fault-resilient: version implementation errors should not break invariants
+
+### Data Structures
+
+In order to help with backwards compatibility, we define a packet structure for ICS20-2, which is a superset of ICS20-1, such that any valid packet for one protocol, is also a valid packet for the other protocol. The only issue is that the `fee` info from a ICS20-2 packet will be ignored by a ICS20-1 handler.
+
+```typescript
+interface FungibleTokenPacketData {
+  denomination: string
+  amount: uint256
+  sender: string
+  receiver: string
+  fee: Maybe<uint256>
+}
+```
+
+Fee is defined here as some number of tokens to be sent to the address who submitted the IbcReceivePacket on the destination chain. The information of `signer` is available when submitting the packet, but discarded in the application-specific handlers for `ibc-go`. We can simply expose that information to the application to allow it to optionally take action based on who submitted the packet. Note that this means *anyone* can submit a valid packet and we do not hard code an allowed relayer nor force the token sender to select a relayer.
+
+In order to maintain maximum compatibility with `ics20-1`, we will define `amount` and `fee` in such a way that a valid `ics20-2` sender and a valid `ics20-1` recipient will not create or destroy any tokens (just ignore the fee field when set). That means:
+
+- `amount` is the total amount that is escrowed by the sending chain.
+- `amount - (fee || 0)` is the total amount to be sent to the `receiver` on the receiving chain
+- `fee || 0` is the total amount to be sent to the relayer account (`signer`)
+
+Defining `amount + fee` to be escrowed on the sending chain would potentially cause lost tokens if `fee` were set in the packet sender, but the recipient ignored the field.
+
+### Handshakes
+
+Handshakes work much like `ics20-1` with some extensions.
+
+Both machines `A` and `B` accept new channels from any module on another machine, if and only if:
+
+- The channel being created is unordered.
+- The version string is `ics20-1` OR `ics20-2`
+- Both version and counterparty_version string are the same
+
+The handshake implementation looks much like the above definition with the additional acceptance of `ics20-2` version string. Note that `ics20-2` implementations should store the channel version data to be used when creating packets to send (whether or not fee field is supported).
+
+### Implementation
+
+This is very similar to the `ics20-1` implementation, except for a few additions about fee handling. Note that `createOutgoingPacket` now needs both the extra `fee` information (set by the blockchain user), as well as the channel `version` (stored when the channel was created):
+
+```typescript
+function createOutgoingPacket(
+  denomination: string,
+  amount: uint256,
+  sender: string,
+  receiver: string,
+  source: boolean,
+  fee: Maybe<uint256>,
+  destPort: string,
+  destChannel: string,
+  sourcePort: string,
+  sourceChannel: string,
+  version: string,
+  timeoutHeight: Height,
+  timeoutTimestamp: uint64) {
+  prefix = "{sourcePort}/{sourceChannel}/"
+  // we are the source if the denomination is not prefixed
+  source = denomination.slice(0, len(prefix)) !== prefix
+  if source {
+    // determine escrow account
+    escrowAccount = channelEscrowAddresses[sourceChannel]
+    // escrow source tokens (assumed to fail if balance insufficient)
+    bank.TransferCoins(sender, escrowAccount, denomination, amount)
+  } else {
+    // receiver is source chain, burn vouchers
+    bank.BurnCoins(sender, denomination, amount)
+  }
+  // ADDED: we never set this field when talking with an ics20-1 chain
+  if version == "ics20-1"
+    fee = None
+  FungibleTokenPacketData data = FungibleTokenPacketData{denomination, amount, sender, receiver, fee}
+  handler.sendPacket(Packet{timeoutHeight, timeoutTimestamp, destPort, destChannel, sourcePort, sourceChannel, data}, getCapability("port"))
+}
+```
+
+Likewise, `onRecvPacket` must distribute the fee (if set). This requires passing in the message signer field into the application:
+
+```typescript
+function onRecvPacket(packet: Packet, singer: string) {
+  FungibleTokenPacketData data = packet.data
+  // construct default acknowledgement of success
+  FungibleTokenPacketAcknowledgement ack = FungibleTokenPacketAcknowledgement{true, null}
+  prefix = "{packet.sourcePort}/{packet.sourceChannel}/"
+  // we are the source if the packets were prefixed by the sending chain
+  source = data.denomination.slice(0, len(prefix)) === prefix
+  // ADDED: calculate recipient amount
+  toRcpt = data.amount - (data.fee || 0)
+  if source {
+    // receiver is source chain: unescrow tokens
+    // determine escrow account
+    escrowAccount = channelEscrowAddresses[packet.destChannel]
+    // unescrow tokens to receiver (assumed to fail if balance insufficient)
+    err = bank.TransferCoins(escrowAccount, data.receiver, data.denomination.slice(len(prefix)), toRcpt)
+    if (err !== nil)
+      ack = FungibleTokenPacketAcknowledgement{false, "transfer coins failed"}
+    // ADDED: handle fee distribution
+    if data.fee {
+      err = bank.TransferCoins(escrowAccount, signer, data.denomination.slice(len(prefix)), data.fee)
+      if (err !== nil)
+        ack = FungibleTokenPacketAcknowledgement{false, "transfer coins failed"}
+    }
+  } else {
+    prefix = "{packet.destPort}/{packet.destChannel}/"
+    prefixedDenomination = prefix + data.denomination
+    // sender was source, mint vouchers to receiver (assumed to fail if balance insufficient)
+    err = bank.MintCoins(data.receiver, prefixedDenomination, toRcpt)
+    if (err !== nil)
+      ack = FungibleTokenPacketAcknowledgement{false, "mint coins failed"}
+    // ADDED: handle fee distribution
+    if data.fee {
+      err = bank.MintCoins(signer, prefixedDenomination, data.fee)
+      if (err !== nil)
+        ack = FungibleTokenPacketAcknowledgement{false, "mint coins failed"}
+    }
+  }
+  return ack
+}
+```
+
+The rest of the logic can remain unchanged. Note that the biggest changes are simply providing the additional information to the packet handlers - channel version to the sending logic, and message signer to the receive logic. Both the acknowledgement and timeout handlers can remain unchanged, as `amount` remains the total amount locked up in the sending chain.
+
 ## Backwards Compatibility
 
-Not applicable.
+All `ics20-1` packets are valid `ics20-2` packets. An `ics20-2` packet received by an `ics20-1` handler may be incorrectly processed (no funds sent to the relayer), but will not break any invariants (total number of tokens escrowed on sender == total number of tokens issued on receiver).
 
 ## Forwards Compatibility
 
-This initial standard uses version "ics20-1" in the channel handshake.
+This initial standard uses version "ics20-1" in the channel handshake. We also define a backwards-compatible "ics20-2" extension with minimal changes to the handlers.
 
 A future version of this standard could use a different version in the channel handshake,
 and safely alter the packet data format & packet handler semantics.
@@ -362,6 +496,8 @@ Feb 3, 2020 - Revisions to handle acknowledgements of success & failure
 Feb 24, 2020 - Revisions to infer source field, inclusion of version string
 
 July 27, 2020 - Re-addition of source field
+
+May 24, 2020 - Added ICS20-2 extension
 
 ## Copyright
 
