@@ -34,7 +34,7 @@ The IBC handler interface & IBC routing module interface are as defined in [ICS 
 
 ### Data Structures
 
-Only one packet data type, `FungibleTokenPacketData`, which specifies the denomination, amount, sending account, receiving account, and whether the sending chain is the source of the asset, is required.
+Only one packet data type is required: `FungibleTokenPacketData`, which specifies the denomination, amount, sending account, and receiving account.
 
 ```typescript
 interface FungibleTokenPacketData {
@@ -45,14 +45,24 @@ interface FungibleTokenPacketData {
 }
 ```
 
+Whether the sending chain is the original source of funds, whether it is redeeming funds received over this channel, or whether it is relaying funds received from a 3rd chain is encoded in the `denomination` field. If the sending chain is the original source of funds, `denomination` must not contain the character `/`. If it contains `/`, then `denomination` must be of the form `{ics20Port}/{ics20Channel}/{remote_denom}`, where `ics20Port` and `ics20Channel` are the ics20 port and channel on the remote chain where the funds originated. If `ics20Port == packet.sourcePort` and `ics20Channel == packet.sourceChannel`, then the remote blockchain is returning/redeeming funds originally sent from this blockchain over this connection.
+
 The acknowledgement data type describes whether the transfer succeeded or failed, and the reason for failure (if any).
 
 ```typescript
-interface FungibleTokenPacketAcknowledgement {
-  success: boolean
-  error: Maybe<string>
+type FungibleTokenPacketAcknowledgement = FungibleTokenPacketSuccess | FungibleTokenPacketError;
+
+interface FungibleTokenPacketSuccess {
+  // This is binary 0x01 base64 encoded
+  success: "AQ=="
+}
+
+interface FungibleTokenPacketSuccess {
+  error: string
 }
 ```
+
+Note that both the `FungibleTokenPacketData` as well as `FungibleTokenPacketAcknowledgement` must be JSON-encoded (not Protobuf encoded) when they serialized into packet data.
 
 The fungible token transfer bridge module tracks escrow addresses associated with particular channels in state. Fields of the `ModuleState` are assumed to be in scope.
 
