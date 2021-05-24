@@ -212,7 +212,7 @@ function createOutgoingPacket(
   sourceChannel: string,
   timeoutHeight: Height,
   timeoutTimestamp: uint64) {
-  prefix = "{sourcePort}/{sourceChannel}"
+  prefix = "{sourcePort}/{sourceChannel}/"
   // we are the source if the denomination is not prefixed
   source = denomination.slice(0, len(prefix)) !== prefix
   if source {
@@ -236,7 +236,7 @@ function onRecvPacket(packet: Packet) {
   FungibleTokenPacketData data = packet.data
   // construct default acknowledgement of success
   FungibleTokenPacketAcknowledgement ack = FungibleTokenPacketAcknowledgement{true, null}
-  prefix = "{packet.sourcePort}/{packet.sourceChannel}"
+  prefix = "{packet.sourcePort}/{packet.sourceChannel}/"
   // we are the source if the packets were prefixed by the sending chain
   source = data.denomination.slice(0, len(prefix)) === prefix
   if source {
@@ -248,7 +248,7 @@ function onRecvPacket(packet: Packet) {
     if (err !== nil)
       ack = FungibleTokenPacketAcknowledgement{false, "transfer coins failed"}
   } else {
-    prefix = "{packet.destPort}/{packet.destChannel}"
+    prefix = "{packet.destPort}/{packet.destChannel}/"
     prefixedDenomination = prefix + data.denomination
     // sender was source, mint vouchers to receiver (assumed to fail if balance insufficient)
     err = bank.MintCoins(data.receiver, prefixedDenomination, data.amount)
@@ -285,7 +285,7 @@ function onTimeoutPacket(packet: Packet) {
 ```typescript
 function refundTokens(packet: Packet) {
   FungibleTokenPacketData data = packet.data
-  prefix = "{packet.sourcePort}/{packet.sourceChannel}"
+  prefix = "{packet.sourcePort}/{packet.sourceChannel}/"
   // we are the source if the denomination is not prefixed
   source = denomination.slice(0, len(prefix)) !== prefix
   if source {
