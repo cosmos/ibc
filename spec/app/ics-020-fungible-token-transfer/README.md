@@ -47,7 +47,7 @@ interface FungibleTokenPacketData {
 
 As tokens are sent across chains using the ICS 20 protocol, they begin to accrue a record of channels for which they have been transferred across. This information is encoded into the `denomination` field. 
 
-The ics20 token denominations are represented the form `{ics20Port}/{ics20Channel}/{denom}`, where `ics20Port` and `ics20Channel` are an ics20 port and channel on the current chain for which the funds exist. The prefixed port and channel pair indicate which channel the funds were previously sent through. If `{denom}` contains `/`, then it must also be in the ics20 form which indicates that this token has a multi-hop record. 
+The ics20 token denominations are represented the form `{ics20Port}/{ics20Channel}/{denom}`, where `ics20Port` and `ics20Channel` are an ics20 port and channel on the current chain for which the funds exist. The prefixed port and channel pair indicate which channel the funds were previously sent through. If `{denom}` contains `/`, then it must also be in the ics20 form which indicates that this token has a multi-hop record. Note that this requires that the `/` (slash character) is prohibited in non-IBC token denomination names.
 
 A sending chain may be acting as a source or sink zone. When a chain is sending tokens across a port and channel which are not equal to the last prefixed port and channel pair, it is acting as a source zone. When tokens are sent from a source zone, the destination port and channel will be prefixed onto the denomination adding another hop to a tokens record. When a chain is sending tokens across a port and channel which are equal to the last prefixed port and channel pair, it is acting as a sink zone. When tokens are sent from a sink zone, the last prefixed port and channel pair on the denomination is removed, undoing the last hop in the tokens record.
 
@@ -61,7 +61,7 @@ interface FungibleTokenPacketSuccess {
   success: "AQ=="
 }
 
-interface FungibleTokenPacketSuccess {
+interface FungibleTokenPacketError {
   error: string
 }
 ```
