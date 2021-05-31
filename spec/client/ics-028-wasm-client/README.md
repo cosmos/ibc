@@ -12,7 +12,7 @@ modified: 2020-10-13
 
 ## Synopsis
 
-This specification document describes an interface to a client (verification algorithm) stored as a wasm bytecode for a blockchain.
+This specification document describes an interface to a client (verification algorithm) stored as a WASM bytecode for a blockchain.
 
 ### Motivation
 
@@ -28,7 +28,7 @@ Functions & terms are as defined in [ICS 2](../ics-002-client-semantics).
 
 `WASM Client` refers to a particular instance of `WASM Client Code` defined as a tuple `(WASM Client Code, ClientID)`.
 
-`WASM VM` refers to a virtual machine capable of executing valid wasm bytecode.
+`WASM VM` refers to a virtual machine capable of executing valid WASM bytecode.
 
 
 ### Desired Properties
@@ -41,7 +41,7 @@ This specification depends on correctness of the `WASM Client code` in context o
 
 ### Client state
 
-The wasm client state tracks location of the wasm bytecode via `codeId`. Binary data represented by `data` field is opaque and only interpreted by the WASM Client Code. `type` represents client type.
+The WASM client state tracks location of the WASM bytecode via `codeId`. Binary data represented by `data` field is opaque and only interpreted by the WASM Client Code. `type` represents client type.
 `type` and `codeId` both are immutable.
 
 ```typescript
@@ -100,7 +100,7 @@ This is designed to allow the height to reset to `0` while the epoch number incr
 
 ### Headers
 
-Contents of wasm client headers depend upon `WASM Client Code`.
+Contents of WASM client headers depend upon `WASM Client Code`.
 
 ```typescript
 interface Header {
@@ -204,7 +204,7 @@ function upgradeClientState(
 }
 ```
 
-In case of wasm client, upgrade of `WASM Client Code` is also possible via blockchain specific management functionality.
+In case of WASM client, upgrade of `WASM Client Code` is also possible via blockchain specific management functionality.
 
 ### State verification functions
 
