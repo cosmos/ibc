@@ -591,11 +591,14 @@ The IBC handler performs the following steps in order:
 - Sets a store path to indicate that the packet has been received (unordered channels only)
 - Increments the packet receive sequence associated with the channel end (ordered channels only)
 
+We pass the address of the `relayer` that signed and submitted the packet to enable a module to optionally provide some rewards. This provides a foundation for fee payment, but can be used for other techniques as well (like calculating a leaderboard).
+
 ```typescript
 function recvPacket(
   packet: OpaquePacket,
   proof: CommitmentProof,
-  proofHeight: Height): Packet {
+  proofHeight: Height,
+  relayer: string): Packet {
 
     channel = provableStore.get(channelPath(packet.destPort, packet.destChannel))
     abortTransactionUnless(channel !== null)
@@ -692,12 +695,15 @@ the calling module on a channel to a counterparty module on the counterparty cha
 
 Calling modules MAY atomically execute appropriate application acknowledgement-handling logic in conjunction with calling `acknowledgePacket`.
 
+We pass the `relayer` address just as in [Receiving packets](#receiving-packets) to allow for possible incentivization here as well.
+
 ```typescript
 function acknowledgePacket(
   packet: OpaquePacket,
   acknowledgement: bytes,
   proof: CommitmentProof,
-  proofHeight: Height): Packet {
+  proofHeight: Height,
+  relayer: string): Packet {
 
     // abort transaction unless that channel is open, calling module owns the associated port, and the packet fields match
     channel = provableStore.get(channelPath(packet.sourcePort, packet.sourceChannel))
@@ -787,12 +793,15 @@ In the case of an unordered channel, `timeoutPacket` checks the absence of the r
 
 If relations are enforced between timeout heights of subsequent packets, safe bulk timeouts of all packets prior to a timed-out packet can be performed. This specification omits details for now.
 
+We pass the `relayer` address just as in [Receiving packets](#receiving-packets) to allow for possible incentivization here as well.
+
 ```typescript
 function timeoutPacket(
   packet: OpaquePacket,
   proof: CommitmentProof,
   proofHeight: Height,
-  nextSequenceRecv: Maybe<uint64>): Packet {
+  nextSequenceRecv: Maybe<uint64>,
+  relayer: string): Packet {
 
     channel = provableStore.get(channelPath(packet.sourcePort, packet.sourceChannel))
     abortTransactionUnless(channel !== null)
