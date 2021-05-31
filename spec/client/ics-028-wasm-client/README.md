@@ -24,7 +24,7 @@ Functions & terms are as defined in [ICS 2](../ics-002-client-semantics).
 
 `currentTimestamp` is as defined in [ICS 24](../ics-024-host-requirements).
 
-`WASM Client Code` refers to wasm bytecode stored in the client store, which provides target blockchain specific implementation of [ICS 2](../ics-002-client-semantics).
+`WASM Client Code` refers to WASM bytecode stored in the client store, which provides a target blockchain specific implementation of [ICS 2](../ics-002-client-semantics).
 
 `WASM Client` refers to a particular instance of `WASM Client Code` defined as a tuple `(WASM Client Code, ClientID)`.
 
