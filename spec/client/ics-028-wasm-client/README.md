@@ -1,6 +1,6 @@
 ---
 ics: 28
-title: WASM Client
+title: Wasm Client
 stage: draft
 category: IBC/TAO
 kind: instantiation
@@ -12,11 +12,11 @@ modified: 2020-10-13
 
 ## Synopsis
 
-This specification document describes an interface to a client (verification algorithm) stored as a WASM bytecode for a blockchain.
+This specification document describes an interface to a client (verification algorithm) stored as a Wasm bytecode for a blockchain.
 
 ### Motivation
 
-WASM based light clients are decoupled from SDK source code, which enables one to upgrade existing light client or add support for other blockchain without modifying SDK source code.
+Wasm based light clients are decoupled from SDK source code, which enables one to upgrade existing light client or add support for other blockchain without modifying SDK source code.
 
 ### Definitions
 
@@ -24,11 +24,11 @@ Functions & terms are as defined in [ICS 2](../ics-002-client-semantics).
 
 `currentTimestamp` is as defined in [ICS 24](../ics-024-host-requirements).
 
-`WASM Client Code` refers to WASM bytecode stored in the client store, which provides a target blockchain specific implementation of [ICS 2](../ics-002-client-semantics).
+`Wasm Client Code` refers to Wasm bytecode stored in the client store, which provides a target blockchain specific implementation of [ICS 2](../ics-002-client-semantics).
 
-`WASM Client` refers to a particular instance of `WASM Client Code` defined as a tuple `(WASM Client Code, ClientID)`.
+`Wasm Client` refers to a particular instance of `Wasm Client Code` defined as a tuple `(Wasm Client Code, ClientID)`.
 
-`WASM VM` refers to a virtual machine capable of executing valid WASM bytecode.
+`Wasm VM` refers to a virtual machine capable of executing valid Wasm bytecode.
 
 
 ### Desired Properties
@@ -37,11 +37,11 @@ This specification must satisfy the client interface defined in ICS 2.
 
 ## Technical Specification
 
-This specification depends on correctness of the `WASM Client code` in context of consensus algorithm of its target `blockchain`, as well as correct instantiation of `WASM Client`.
+This specification depends on correctness of the `Wasm Client code` in context of consensus algorithm of its target `blockchain`, as well as correct instantiation of `Wasm Client`.
 
 ### Client state
 
-The WASM client state tracks location of the WASM bytecode via `codeId`. Binary data represented by `data` field is opaque and only interpreted by the WASM Client Code. `type` represents client type.
+The Wasm client state tracks location of the Wasm bytecode via `codeId`. Binary data represented by `data` field is opaque and only interpreted by the Wasm Client Code. `type` represents client type.
 `type` and `codeId` both are immutable.
 
 ```typescript
@@ -57,7 +57,7 @@ interface ClientState {
 
 ### Consensus state
 
-The WASM consensus state tracks the timestamp (block time), `WASM Client code` specific fields and commitment root for all previously verified consensus states.
+The Wasm consensus state tracks the timestamp (block time), `Wasm Client code` specific fields and commitment root for all previously verified consensus states.
 `type` and `codeId` both are immutable.
 
 ```typescript
@@ -72,7 +72,7 @@ interface ConsensusState {
 
 ### Height
 
-The height of a WASM light client instance consists of two `uint64`s: the epoch number, and the height in the epoch.
+The height of a Wasm light client instance consists of two `uint64`s: the epoch number, and the height in the epoch.
 
 ```typescript
 interface Height {
@@ -100,7 +100,7 @@ This is designed to allow the height to reset to `0` while the epoch number incr
 
 ### Headers
 
-Contents of WASM client headers depend upon `WASM Client Code`.
+Contents of Wasm client headers depend upon `Wasm Client Code`.
 
 ```typescript
 interface Header {
@@ -111,7 +111,7 @@ interface Header {
 ### Misbehaviour
 
 The `Misbehaviour` type is used for detecting misbehaviour and freezing the client - to prevent further packet flow - if applicable.
-WASM client `Misbehaviour` consists of two headers at the same height both of which the light client would have considered valid.
+Wasm client `Misbehaviour` consists of two headers at the same height both of which the light client would have considered valid.
 
 ```typescript
 interface Misbehaviour {
@@ -123,7 +123,7 @@ interface Misbehaviour {
 
 ### Client initialisation
 
-WASM client initialisation requires a (subjectively chosen) latest consensus state interpretable by the target WASM Client Code. `wasmCodeId` field is unique identifier for `WASM Client Code`, and `initializationData` refers to opaque data required for initialization of the particular client managed by that WASM Client Code.
+Wasm client initialisation requires a (subjectively chosen) latest consensus state interpretable by the target Wasm Client Code. `wasmCodeId` field is unique identifier for `Wasm Client Code`, and `initializationData` refers to opaque data required for initialization of the particular client managed by that Wasm Client Code.
 
 ```typescript
 function initialise(
@@ -149,7 +149,7 @@ function latestClientHeight(clientState: ClientState): Height {
 
 ### Validity predicate
 
-WASM client validity checking uses underlying WASM Client code. If the provided header is valid, the client state is updated & the newly verified commitment written to the store.
+Wasm client validity checking uses underlying Wasm Client code. If the provided header is valid, the client state is updated & the newly verified commitment written to the store.
 
 ```typescript
 function checkValidityAndUpdateState(
@@ -166,7 +166,7 @@ function checkValidityAndUpdateState(
 
 ### Misbehaviour predicate
 
-WASM client misbehaviour checking determines whether or not two conflicting headers at the same height would have convinced the light client.
+Wasm client misbehaviour checking determines whether or not two conflicting headers at the same height would have convinced the light client.
 
 ```typescript
 function checkMisbehaviourAndUpdateState(
@@ -204,11 +204,11 @@ function upgradeClientState(
 }
 ```
 
-In case of WASM client, upgrade of `WASM Client Code` is also possible via blockchain specific management functionality.
+In case of Wasm client, upgrade of `Wasm Client Code` is also possible via blockchain specific management functionality.
 
 ### State verification functions
 
-WASM client state verification functions check a Merkle proof against a previously validated commitment root.
+Wasm client state verification functions check a Merkle proof against a previously validated commitment root.
 
 ```typescript
 function verifyClientConsensusState(
@@ -332,21 +332,21 @@ function verifyNextSequenceRecv(
 }
 ```
 
-### WASM Client Code Interface
+### Wasm Client Code Interface
 
 #### What is code handle?
-Code handle is an object that facilitates interaction between WASM code and go code. For example, consider the method `isValidClientState` which could be implemented like this:
+Code handle is an object that facilitates interaction between Wasm code and go code. For example, consider the method `isValidClientState` which could be implemented like this:
 
 ```go
 func (c *CodeHandle) isValidClientState(clientState ClientState, height u64) {
     clientStateData := json.Serialize(clientState)
     packedData := pack(clientStateData, height)
-    // VM specific code to call WASM contract
+    // VM specific code to call Wasm contract
 }
 ```
 
-#### WASM Client interface
-Every WASM client code need to support ingestion of below messages in order to be used as light client.
+#### Wasm Client interface
+Every Wasm client code need to support ingestion of below messages in order to be used as light client.
 
 ```rust
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
@@ -425,7 +425,7 @@ pub enum QueryMsg {
 
 ### Properties & Invariants
 
-Correctness guarantees as provided by the underlying algorithm implemented by `WASM Client Code`.
+Correctness guarantees as provided by the underlying algorithm implemented by `Wasm Client Code`.
 
 ## Backwards Compatibility
 
@@ -433,7 +433,7 @@ Not applicable.
 
 ## Forwards Compatibility
 
-As long as `WASM Client Code` keeps interface consistent with `ICS 02` it should be forward compatible
+As long as `Wasm Client Code` keeps interface consistent with `ICS 02` it should be forward compatible
 
 ## Example Implementation
 
