@@ -16,7 +16,7 @@ This specification document describes an interface to a client (verification alg
 
 ### Motivation
 
-WASM based light clients are decoupled from SDK source code, which enables one to upgrade existing light client or add support for other blockchain without modifying SDK source code.
+WASM-based light clients are decoupled from SDK source code, which enables one to upgrade an existing light client or add support for other blockchain without modifying SDK source code.
 
 ### Definitions
 
