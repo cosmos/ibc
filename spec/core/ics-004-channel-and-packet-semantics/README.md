@@ -868,13 +868,16 @@ to which an unreceived packet was addressed has been closed, so the packet will 
 
 Calling modules MAY atomically execute appropriate application timeout-handling logic in conjunction with calling `timeoutOnClose`.
 
+We pass the `relayer` address just as in [Receiving packets](#receiving-packets) to allow for possible incentivization here as well.
+
 ```typescript
 function timeoutOnClose(
   packet: Packet,
   proof: CommitmentProof,
   proofClosed: CommitmentProof,
   proofHeight: Height,
-  nextSequenceRecv: Maybe<uint64>): Packet {
+  nextSequenceRecv: Maybe<uint64>,
+  relayer: string): Packet {
 
     channel = provableStore.get(channelPath(packet.sourcePort, packet.sourceChannel))
     // note: the channel may have been closed
