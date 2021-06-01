@@ -44,11 +44,40 @@ define a clear interface that can be easily adopted by any application, but not 
 
 In order to avoid extra packets on the order of the number of fee packets, as well as provide an opt-in approach, we
 store all fee payment info only on the source chain. The source chain is the one location where the sender can provide tokens
-to incentivize the packet.
+to incentivize the packet. The fee distribution may be implementation specific and thus does not need to be in the ibc spec
+(just high-level requirements are needed in this doc).
 
 We require that the [relayer address is exposed to application modules](https://github.com/cosmos/ibc/pull/579) for
-all packet-related messages, so the modules are able to incentivize the packet relayer
+all packet-related messages, so the modules are able to incentivize the packet relayer. `OnAcknowledgement`, `OnTimeout`,
+and `OnTimeoutClose` messages will therefore have the relayer address and be capable of sending escrowed tokens to such address.
+However, we need a way to reliably get the address of the relayer that submitted `OnReceivePacket` on the destination chain to
+the source chain. In fact, we need a *source address* for this relayer to pay out to, not the *destination address* that signed
+the packet.
 
+Given this, the flow would be:
+
+1. User/module submits a send packet on the `source` chain, along with some tokens and fee information on how to distribute them
+2. Relayer submits `OnReceivePacket` on the `destination` chain. Along with this message, the *forward relayer* will submit a `payToOnSource` address where payment should be sent.
+3. Destination application includes this `payToOnSource` in the acknowledgement (there are multiple approaches to discuss below)
+4. Relayer submits `OnAcknowledgement` which provides the *return relayer* address on the source chain, along with the `payToOnSource` address
+5. Source application can distribute the tokens escrowed in (1) to both the *forward* and the *return* relayers.
+
+Alternate flow:
+
+1. User/module submits a send packet on the `source` chain, along with some tokens and fee information on how to distribute them
+2. Relayer submits `OnTimeout` which provides their address on the source chain
+3. Source application can distribute the tokens escrowed in (1) to this relayer, and potentially return extra tokens to the original packet sender.
+
+### Fee details
+
+For an example implementation in the Cosmos SDK, we consider 3 potential fee payments, which may be defined. Each one may be
+paid out in a different token. Imagine a connection between IrisNet and the Cosmos Hub. They may define:
+
+- ReceiveFee: 0.003 channel-7/ATOM vouchers (ATOMs already on IrisNet via ICS20)
+- AckFee: 0.001 IRIS
+- TimeoutFee: 0.002 IRIS
+
+Ideally the fees can easily be redeemed in native tokens on both sides, but relayers may select others. In this example, the relayer collects a fair bit of IRIS, covering it's costs there and more. It also collects channel-7/ATOM vouchers from many packets. After relaying a few thousand packets, the account on the Cosmos Hub is running low, so the relayer will send those channel-7/ATOM vouchers back over channel-7 to it's account on the Hub to replenish the supply there. 
 
 #### Reasoning
 
