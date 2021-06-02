@@ -79,6 +79,8 @@ paid out in a different token. Imagine a connection between IrisNet and the Cosm
 
 Ideally the fees can easily be redeemed in native tokens on both sides, but relayers may select others. In this example, the relayer collects a fair bit of IRIS, covering it's costs there and more. It also collects channel-7/ATOM vouchers from many packets. After relaying a few thousand packets, the account on the Cosmos Hub is running low, so the relayer will send those channel-7/ATOM vouchers back over channel-7 to it's account on the Hub to replenish the supply there. 
 
+The sender chain will escrow 0.003 channel-7/ATOM and 0.002 IRIS. In the case that a forward relayer submits the `MsgRecvPacket` and a reverse relayer submits the `MsgAckPacket`, the forward relayer is reqarded 0.003 channel-7/ATOM and the reverse relayer is rewarded 0.001 IRIS. In the case where the packet times out, the timeout relayer receives 0.002 IRIS and 0.003 channel-7/ATOM is refunded to the original fee payer.
+
 #### Reasoning
 
 ##### Correctness
