@@ -81,6 +81,70 @@ Ideally the fees can easily be redeemed in native tokens on both sides, but rela
 
 The sender chain will escrow 0.003 channel-7/ATOM and 0.002 IRIS. In the case that a forward relayer submits the `MsgRecvPacket` and a reverse relayer submits the `MsgAckPacket`, the forward relayer is reqarded 0.003 channel-7/ATOM and the reverse relayer is rewarded 0.001 IRIS. In the case where the packet times out, the timeout relayer receives 0.002 IRIS and 0.003 channel-7/ATOM is refunded to the original fee payer.
 
+The logic involved in collecting fees from users and then paying it out to the relevant relayers is encapsulated by a separate fee module and may vary between implementations. However, all fee modules must implement a uniform interface such that the ICS-4 handlers can correctly pay out fees to the right relayers, and so that relayers themselves can easily determine the fees they can expect for relaying a packet.
+
+```typescript
+function PayFee(packet: Packet, forward_relayer: string, reverse_relayer: string) {
+    // pay the forward fee to the forward relayer address
+    // pay the reverse fee to the reverse relayer address
+    // refund extra tokens to original fee payer(s)
+}
+
+function PayTimeoutFee(packet: Packet, timeout_relayer: string) {
+    // pay the timeout fee to the timeout relayer address
+    // refund extra tokens to original fee payer(s)
+}
+```
+
+These functions will then be utilized in the ICS-4 handlers like so:
+
+```typescript
+function acknowledgePacket(
+  packet: OpaquePacket,
+  acknowledgement: bytes,
+  proof: CommitmentProof,
+  proofHeight: Height,
+  relayer: string): Packet {
+    // ...
+    // get the forward relayer from the acknowledgement
+    // and pay fees to forward and reverse relayers.
+    // reverse_relayer is submitter of acknowledgement message
+    // provided in function arguments
+    // NOTE: Fee may be zero
+    forward_relayer = getForwardRelayer(acknowledgement)
+    PayFee(packet, forward_relayer, relayer)
+    // ...
+}
+
+function timeoutPacket(
+  packet: OpaquePacket,
+  proof: CommitmentProof,
+  proofHeight: Height,
+  nextSequenceRecv: Maybe<uint64>,
+  relayer: string): Packet {
+    // ...
+    // get the timeout relayer from function arguments
+    // and pay timeout fee.
+    // NOTE: Fee may be zero
+    PayTimeoutFee(packet, relayer)
+}
+```
+
+The fee module should also expose the following queries so that relayers may query their expected fee:
+
+```typescript
+// Gets the fee expected for submitting ReceivePacket msg for this packet
+function GetReceiveFee(packet) Fee
+
+// Gets the fee expected for submitting AcknowledgePacket msg for this packet
+function GetAckFee(packet) Fee
+
+// Gets the fee expected for submitting TimeoutPacket msg for this packet
+function GetTimeoutFee(packet) Fee
+```
+
+Since different chains may have different representations for fungible tokens and this information is not being sent to other chains; this ICS does not specify a particular representation for the `Fee`. Each chain may choose its own representation, it is incumbent on relayers to interpret the Fee correctly.
+
 #### Reasoning
 
 ##### Correctness
@@ -89,7 +153,7 @@ The sender chain will escrow 0.003 channel-7/ATOM and 0.002 IRIS. In the case th
 
 ## Backwards Compatibility
 
-This can be added to any existing protocol without break it on the other side.
+This can be added to any existing protocol without breaking it on the other side.
 
 ## Forwards Compatibility
 
