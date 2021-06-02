@@ -36,6 +36,7 @@ define a clear interface that can be easily adopted by any application, but not 
 - One direction works, even when one chain does not support concept of fungible tokens
 - Opt-in for each chain implementing this. eg. ICS27 with fee support on chain A could connect to ICS27 without fee support on chain B.
 - Standardized interface for each chain implementing this extension
+- Allow each chain/application to customize fee-handling logic
 - Permissionless relaying
 
 ## Technical Specification
@@ -83,6 +84,8 @@ The sender chain will escrow 0.003 channel-7/ATOM and 0.002 IRIS. In the case th
 
 The logic involved in collecting fees from users and then paying it out to the relevant relayers is encapsulated by a separate fee module and may vary between implementations. However, all fee modules must implement a uniform interface such that the ICS-4 handlers can correctly pay out fees to the right relayers, and so that relayers themselves can easily determine the fees they can expect for relaying a packet.
 
+### Fee Module Contract
+
 ```typescript
 function PayFee(packet: Packet, forward_relayer: string, reverse_relayer: string) {
     // pay the forward fee to the forward relayer address
@@ -96,39 +99,6 @@ function PayTimeoutFee(packet: Packet, timeout_relayer: string) {
 }
 ```
 
-These functions will then be utilized in the ICS-4 handlers like so:
-
-```typescript
-function acknowledgePacket(
-  packet: OpaquePacket,
-  acknowledgement: bytes,
-  proof: CommitmentProof,
-  proofHeight: Height,
-  relayer: string): Packet {
-    // ...
-    // get the forward relayer from the acknowledgement
-    // and pay fees to forward and reverse relayers.
-    // reverse_relayer is submitter of acknowledgement message
-    // provided in function arguments
-    // NOTE: Fee may be zero
-    forward_relayer = getForwardRelayer(acknowledgement)
-    PayFee(packet, forward_relayer, relayer)
-    // ...
-}
-
-function timeoutPacket(
-  packet: OpaquePacket,
-  proof: CommitmentProof,
-  proofHeight: Height,
-  nextSequenceRecv: Maybe<uint64>,
-  relayer: string): Packet {
-    // ...
-    // get the timeout relayer from function arguments
-    // and pay timeout fee.
-    // NOTE: Fee may be zero
-    PayTimeoutFee(packet, relayer)
-}
-```
 
 The fee module should also expose the following queries so that relayers may query their expected fee:
 
@@ -145,9 +115,58 @@ function GetTimeoutFee(packet) Fee
 
 Since different chains may have different representations for fungible tokens and this information is not being sent to other chains; this ICS does not specify a particular representation for the `Fee`. Each chain may choose its own representation, it is incumbent on relayers to interpret the Fee correctly.
 
+### Connection Negotiation
+
+The chains must agree to enable the incentivization feature during the connection handshake. This can be done by adding an incentivization feature to the connection version.
+
+```{"1", ["ORDER_ORDERED", "ORDER_UNORDERED", "INCENTIVE_V1"]}```
+
+If the negotiated connection includes the incentivization feature, then the ICS-4 `WriteAcknowledgement` function must write the forward relayer address into a structured acknowledgement and the ICS-4 handlers for `AcknowledgePacket` and `TimeoutPacket` must pay fees through the ibc fee module callbacks. If the negotiated connection does not include the incentivization feature, then the ICS-4 handlers must not modify the acknowledgement provided by the application and should not call any fee callbacks even if relayer incentivization is enabled on the chain.
+
+### Channel Changes
+
+The ibc-fee callbacks will then be utilized in the ICS-4 handlers like so:
+
+```typescript
+function acknowledgePacket(
+  packet: OpaquePacket,
+  acknowledgement: bytes,
+  proof: CommitmentProof,
+  proofHeight: Height,
+  relayer: string): Packet {
+    // get the forward relayer from the acknowledgement
+    // and pay fees to forward and reverse relayers.
+    // reverse_relayer is submitter of acknowledgement message
+    // provided in function arguments
+    // NOTE: Fee may be zero
+    forward_relayer = getForwardRelayer(acknowledgement)
+    PayFee(packet, forward_relayer, relayer)
+}
+
+function timeoutPacket(
+  packet: OpaquePacket,
+  proof: CommitmentProof,
+  proofHeight: Height,
+  nextSequenceRecv: Maybe<uint64>,
+  relayer: string): Packet {
+    // get the timeout relayer from function arguments
+    // and pay timeout fee.
+    // NOTE: Fee may be zero
+    PayTimeoutFee(packet, relayer)
+}
+```
+
 #### Reasoning
 
+This proposal satisfies the desired properties. All parts of the packet flow (receive/acknowledge/timeout) can be properly incentivized and rewarded. The protocol does not specify the relayer beforehand, thus the incentivization is permissionless. The escrowing and distribution of funds is completely handled on source chain, thus there is no need for additional IBC packets or the use of ICS-20 in the fee protocol. The fee protocol only assumes existence of fungible tokens on the source chain. Using the connection version, the protocol enables opt-in incentivization and backwards compatibility. The fee module can implement arbitrary custom logic so long as it respects the callback interfaces that IBC expects.
+
 ##### Correctness
+
+The fee module is responsible for correctly escrowing and distributing funds to the provided relayers. It is IBC's responsibility to provide the fee module with the correct relayers. The ack and timeout relayers are trivially retrievable since they are the senders of the acknowledgment and timeout message.
+
+The receive relayer submits the message to the counterparty chain. Thus the counterparty chain must communicate the knowledge of who relayed the receive packet to the source chain using the acknowledgement. The address that is sent back **must** be the address of the forward relayer on the source chain.
+
+With the forward relayer embedded in the acknowledgement, and the reverse and timeout relayers available directly in the message; IBC is able to provide the correct relayer addresses to the fee module for each step of the packet flow.
 
 #### Optional addenda
 
