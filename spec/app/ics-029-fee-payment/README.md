@@ -37,6 +37,7 @@ define a clear interface that can be easily adopted by any application, but not 
 - Opt-in for each chain implementing this. eg. ICS27 with fee support on chain A could connect to ICS27 without fee support on chain B.
 - Standardized interface for each chain implementing this extension
 - Allow each chain/application to customize fee-handling logic
+- Relayer addresses should not be forgable
 - Permissionless relaying
 
 ## Technical Specification
@@ -57,7 +58,7 @@ the packet.
 
 Given this, the flow would be:
 
-1. User/module submits a send packet on the `source` chain, along with some tokens and fee information on how to distribute them
+1. User/module submits a send packet on the `source` chain, along with some tokens and fee information on how to distribute them. The fee tokens are all escrowed by the fee module.
 2. Relayer submits `OnReceivePacket` on the `destination` chain. Along with this message, the *forward relayer* will submit a `payToOnSource` address where payment should be sent.
 3. Destination application includes this `payToOnSource` in the acknowledgement (there are multiple approaches to discuss below)
 4. Relayer submits `OnAcknowledgement` which provides the *return relayer* address on the source chain, along with the `payToOnSource` address
@@ -103,14 +104,14 @@ function PayTimeoutFee(packet: Packet, timeout_relayer: string) {
 The fee module should also expose the following queries so that relayers may query their expected fee:
 
 ```typescript
-// Gets the fee expected for submitting ReceivePacket msg for this packet
-function GetReceiveFee(packet) Fee
+// Gets the fee expected for submitting ReceivePacket msg for the given packet
+function GetReceiveFee(portID, channelID, sequence) Fee
 
-// Gets the fee expected for submitting AcknowledgePacket msg for this packet
-function GetAckFee(packet) Fee
+// Gets the fee expected for submitting AcknowledgePacket msg for the given packet
+function GetAckFee(portID, channelID, sequence) Fee
 
-// Gets the fee expected for submitting TimeoutPacket msg for this packet
-function GetTimeoutFee(packet) Fee
+// Gets the fee expected for submitting TimeoutPacket msg for the given packet
+function GetTimeoutFee(portID, channelID, sequence) Fee
 ```
 
 Since different chains may have different representations for fungible tokens and this information is not being sent to other chains; this ICS does not specify a particular representation for the `Fee`. Each chain may choose its own representation, it is incumbent on relayers to interpret the Fee correctly.
@@ -123,6 +124,8 @@ The chains must agree to enable the incentivization feature during the connectio
 
 If the negotiated connection includes the incentivization feature, then the ICS-4 `WriteAcknowledgement` function must write the forward relayer address into a structured acknowledgement and the ICS-4 handlers for `AcknowledgePacket` and `TimeoutPacket` must pay fees through the ibc fee module callbacks. If the negotiated connection does not include the incentivization feature, then the ICS-4 handlers must not modify the acknowledgement provided by the application and should not call any fee callbacks even if relayer incentivization is enabled on the chain.
 
+Thus, a chain can support incentivization while still maintaining connections that do not have the incentivization feature. This is crucial to enable a chain with incentivization to connect with a chain that does not have incentivization feature, as the acknowledgements need to be sent over the wire without the forward relayer.
+
 ### Channel Changes
 
 The ibc-fee callbacks will then be utilized in the ICS-4 handlers like so:
@@ -134,13 +137,18 @@ function acknowledgePacket(
   proof: CommitmentProof,
   proofHeight: Height,
   relayer: string): Packet {
-    // get the forward relayer from the acknowledgement
-    // and pay fees to forward and reverse relayers.
-    // reverse_relayer is submitter of acknowledgement message
-    // provided in function arguments
-    // NOTE: Fee may be zero
-    forward_relayer = getForwardRelayer(acknowledgement)
-    PayFee(packet, forward_relayer, relayer)
+    // get the underlying connection for this channel
+    connection = getConnection()
+    // only call the fee module callbacks if the connection supports incentivization.
+    if IsSupportedFeature(connection, "INCENTIVE_V1") {
+        // get the forward relayer from the acknowledgement
+        // and pay fees to forward and reverse relayers.
+        // reverse_relayer is submitter of acknowledgement message
+        // provided in function arguments
+        // NOTE: Fee may be zero
+        forward_relayer = getForwardRelayer(acknowledgement)
+        PayFee(packet, forward_relayer, relayer)
+    }
 }
 
 function timeoutPacket(
@@ -149,10 +157,15 @@ function timeoutPacket(
   proofHeight: Height,
   nextSequenceRecv: Maybe<uint64>,
   relayer: string): Packet {
-    // get the timeout relayer from function arguments
-    // and pay timeout fee.
-    // NOTE: Fee may be zero
-    PayTimeoutFee(packet, relayer)
+    // get the underlying connection for this channel
+    connection = getConnection()
+    // only call the fee module callbacks if the connection supports incentivization.
+    if IsSupportedFeature(connection, "INCENTIVE_V1") {
+        // get the timeout relayer from function arguments
+        // and pay timeout fee.
+        // NOTE: Fee may be zero
+        PayTimeoutFee(packet, relayer)
+    }
 }
 ```
 
@@ -166,7 +179,14 @@ The fee module is responsible for correctly escrowing and distributing funds to 
 
 The receive relayer submits the message to the counterparty chain. Thus the counterparty chain must communicate the knowledge of who relayed the receive packet to the source chain using the acknowledgement. The address that is sent back **must** be the address of the forward relayer on the source chain.
 
-With the forward relayer embedded in the acknowledgement, and the reverse and timeout relayers available directly in the message; IBC is able to provide the correct relayer addresses to the fee module for each step of the packet flow.
+The source chain will use a "best efforts" approach with regard to the forward relayer address. Since it is not verified directly by the counterparty and is instead just treated as a string to be passed back in the acknowledgement, the forward relayer `payOnSender` address may not be a valid source chain address. In this case, the invalid address is discarded, the receive fee is refunded, and the acknowledgement processing continues. It is incumbent on relayers to pass their `payOnSender` addresses to the counterparty chain correctly.
+In the event that the counterparty chain itself incorrectly sends the forward relayer address, this will cause relayers to not collect fees on source chain for relaying packets. The incentivize-driven relayers will stop relaying for the chain until the acknowledgement logic is fixed, however the channel remains functional.
+
+We cannot return an error on an invalid `payOnSender` address as this would permanently prevent the source chain from processing the acknowledgment of a packet that was otherwise correctly received, processed and acknowledged on the counterparty chain. The IBC protocol requires that incorrect or malicious relayers may at best affect the liveness of a user's packets. Preventing successful acknowledgement in this case would leave the packet flow at a permanently incomplete state, which may be very consequential for certain IBC applications like ICS-20.
+
+Thus, the forward relayer reward is contingent on it providing the correct `payOnSender` address when it sends the `receive_packet` message. The packet flow will continue processing successfully even if the fee payment is unsuccessful.
+
+With the forward relayer correctly embedded in the acknowledgement, and the reverse and timeout relayers available directly in the message; IBC is able to provide the correct relayer addresses to the fee module for each step of the packet flow.
 
 #### Optional addenda
 
