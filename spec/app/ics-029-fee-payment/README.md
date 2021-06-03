@@ -126,11 +126,13 @@ Since different chains may have different representations for fungible tokens an
 
 ### Connection Negotiation
 
-The chains must agree to enable the incentivization feature during the connection handshake. This can be done by adding an incentivization feature to the connection version.
+The chains must agree to enable the incentivization feature during the connection handshake. This can be done by bumping the connection version.
 
-```{"1", ["ORDER_ORDERED", "ORDER_UNORDERED", "INCENTIVE_V1"]}```
+```{"2", ["ORDER_ORDERED", "ORDER_UNORDERED"]}```
 
-If the negotiated connection includes the incentivization feature, then the ICS-4 `WriteAcknowledgement` function must write the forward relayer address into a structured acknowledgement and the ICS-4 handlers for `AcknowledgePacket` and `TimeoutPacket` must pay fees through the ibc fee module callbacks. If the negotiated connection does not include the incentivization feature, then the ICS-4 handlers must not modify the acknowledgement provided by the application and should not call any fee callbacks even if relayer incentivization is enabled on the chain.
+Since most chains that support incentivization will wish to be compatible with chains that do not, a chain with `V2` enabled will send its possible connection versions: `{{"1", ["ORDER_ORDERED", "ORDER_UNORDERED"]}, {"2", ["ORDER_ORDERED", "ORDER_UNORDERED"]}}` in `ConnOpenInit`. The counterparty chain will select the highest version that it can support.
+
+If the negotiated connection is `V2`, then the ICS-4 `WriteAcknowledgement` function must write the forward relayer address into a structured acknowledgement and the ICS-4 handlers for `AcknowledgePacket` and `TimeoutPacket` must pay fees through the ibc fee module callbacks. If the negotiated connection is on `V1`, then the ICS-4 handlers must not modify the acknowledgement provided by the application and should not call any fee callbacks even if relayer incentivization is enabled on the chain.
 
 Thus, a chain can support incentivization while still maintaining connections that do not have the incentivization feature. This is crucial to enable a chain with incentivization to connect with a chain that does not have incentivization feature, as the acknowledgements need to be sent over the wire without the forward relayer.
 
