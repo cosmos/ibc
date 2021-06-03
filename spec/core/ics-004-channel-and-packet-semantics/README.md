@@ -124,10 +124,52 @@ interface Packet {
 
 Note that a `Packet` is never directly serialised. Rather it is an intermediary structure used in certain function calls that may need to be created or processed by modules calling the IBC handler.
 
+Question: why is this here? Isn't there a protobuf definition for Packet serialization which must be understood by all
+chains that participate in IBC?
+
 An `OpaquePacket` is a packet, but cloaked in an obscuring data type by the host state machine, such that a module cannot act upon it other than to pass it to the IBC handler. The IBC handler can cast a `Packet` to an `OpaquePacket` and vice versa.
 
 ```typescript
 type OpaquePacket = object
+```
+
+**Update:**
+
+The first version of IBC considered `Acknowledgement` simple application dependent bytes. This stood in contrast to the
+`Packet` types, which includes a number of well-defined metadata fields in addition to an application-dependent
+`data` field, which contains the opaque binary data. While discussing relayer fee incentivization the lack of including
+any protocol-level information in the acknowledgement came up as a limiting factor. Thus, we propose the following format
+for a "V2" acknowledgement. Information on how to transition between the two will be discussed below during the packet
+samples.
+
+```typescript
+interface Acknowledgement {
+  data: bytes
+  payOnSource: string  // Maybe<string> ???
+  forwardRelayer: string
+}
+```
+
+- The `data` is an opaque value which can be defined by the application logic of the associated modules. The contents are
+  identical to a v1 acknowledgement.
+- The `payOnSource` indicates an address on the **source chain** that the *forward relayer* can specify, which should receive
+  any existing reward for relaying the IbcReceivePacket.
+- The `forwardRelayer` field represents the signer of the IbcReceivePacket message. This is always set and equal to the
+  address on the **destination chain** for the *forward relayer*.
+
+Open discussion:
+
+- Is `forwardRelayer` useful info? This information is available without any work by the *forward relayer* and seems
+  more generic than just fee incentivization.
+- Is `payOnSource` required? What happens if a relayer doesn't set this field? Is the packet rejected? What if it is an
+  invalid address on source (this is hard to validate on destination chain)
+
+Note that a `Acknowledgement` is never directly serialized. Rather it is an intermediary structure used in certain function calls that may need to be created or processed by modules calling the IBC handler.
+
+An `OpaqueAcknowledgement` is an acknowledgement, but cloaked in an obscuring data type by the host state machine, such that a module cannot act upon it other than to pass it to the IBC handler. The IBC handler can cast an `Acknowledgement` to an `OpaqueAcknowledgement` and vice versa.
+
+```typescript
+type OpaqueAcknowledgement = object
 ```
 
 ### Desired Properties
@@ -163,7 +205,7 @@ The architecture of clients, connections, channels and packets:
 
 ### Preliminaries
 
-#### Store paths 
+#### Store paths
 
 Channel structures are stored under a store path prefix unique to a combination of a port identifier and channel identifier:
 
@@ -215,7 +257,7 @@ function packetReceiptPath(portIdentifier: Identifier, channelIdentifier: Identi
 }
 ```
 
-Packet acknowledgement data are stored under the `packetAcknowledgementPath`:
+Constant-size commitments to packet acknowledgement data are stored under the `packetAcknowledgementPath`:
 
 ```typescript
 function packetAcknowledgementPath(portIdentifier: Identifier, channelIdentifier: Identifier, sequence: uint64): Path {
