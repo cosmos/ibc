@@ -36,7 +36,7 @@ define a clear interface that can be easily adopted by any application, but not 
 - One direction works, even when one chain does not support concept of fungible tokens
 - Opt-in for each chain implementing this. eg. ICS27 with fee support on chain A could connect to ICS27 without fee support on chain B.
 - Standardized interface for each chain implementing this extension
-- Allow each chain/application to customize fee-handling logic
+- Support custom fee-handling logic within the same framework
 - Relayer addresses should not be forgable
 - Permissionless relaying
 
@@ -86,6 +86,14 @@ The sender chain will escrow 0.003 channel-7/ATOM and 0.002 IRIS. In the case th
 The logic involved in collecting fees from users and then paying it out to the relevant relayers is encapsulated by a separate fee module and may vary between implementations. However, all fee modules must implement a uniform interface such that the ICS-4 handlers can correctly pay out fees to the right relayers, and so that relayers themselves can easily determine the fees they can expect for relaying a packet.
 
 ### Fee Module Contract
+
+While the details may vary between fee modules, all Fee modules **must** ensure it does the following:
+
+- It must have in escrow the maximum fees that all outstanding packets may pay out (or it must have ability to mint required amount of tokens)
+- It must pay the receive fee for a packet to the forward relayer specified in `PayFee` callback
+- It must pay the ack fee for a packet to the reverse relayer specified in `PayFee` callback
+- It must pay the timeout fee for a packet to the timeout relayer specified in `PayTimeoutFee` callback
+- It must refund any remainder fees in escrow to the original fee payer(s) if applicable
 
 ```typescript
 function PayFee(packet: Packet, forward_relayer: string, reverse_relayer: string) {
@@ -206,17 +214,7 @@ Coming soon.
 
 ## History
 
-Jul 15, 2019 - Draft written
-
-Jul 29, 2019 - Major revisions; cleanup
-
-Aug 25, 2019 - Major revisions, more cleanup
-
-Feb 3, 2020 - Revisions to handle acknowledgements of success & failure
-
-Feb 24, 2020 - Revisions to infer source field, inclusion of version string
-
-July 27, 2020 - Re-addition of source field
+June 1 2020 - Draft written
 
 ## Copyright
 
