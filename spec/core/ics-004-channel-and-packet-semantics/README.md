@@ -635,12 +635,16 @@ The IBC handler performs the following steps in order:
 
 We pass the address of the `relayer` that signed and submitted the packet to enable a module to optionally provide some rewards. This provides a foundation for fee payment, but can be used for other techniques as well (like calculating a leaderboard).
 
+Note: `relayer` and `payOnSource` were added in v2 (v1?) of the IBC spec. They will not be present on older implementations.
+`payOnSource` requires another field on the `IBCReceivePacketMsg` which can be set by the relayer to any value it chooses.
+
 ```typescript
 function recvPacket(
   packet: OpaquePacket,
   proof: CommitmentProof,
   proofHeight: Height,
-  relayer: string): Packet {
+  relayer: string,
+  payOnSource: string /* Maybe<string>? */): Packet {
 
     channel = provableStore.get(channelPath(packet.destPort, packet.destChannel))
     abortTransactionUnless(channel !== null)
@@ -712,20 +716,30 @@ The IBC handler performs the following steps in order:
 ```typescript
 function writeAcknowledgement(
   packet: Packet,
-  acknowledgement: bytes): Packet {
+  acknowledgement: Acknowledgement | bytes): Packet {
 
     // cannot already have written the acknowledgement
     abortTransactionUnless(provableStore.get(packetAcknowledgementPath(packet.destPort, packet.destChannel, packet.sequence) === null))
 
+    // we need some way to handle older formats?
+    if (typeof acknowledgement === "bytes") {
+      acknowledgement = Acknowledgement{
+        data: acknowledgement,
+      }
+    }
+
     // write the acknowledgement
+    commitment = hash(makeOpaque(acknowledgement))
     provableStore.set(
       packetAcknowledgementPath(packet.destPort, packet.destChannel, packet.sequence),
-      hash(acknowledgement)
+      commitment
     )
 
     // log that a packet has been acknowledged
-    emitLogEntry("writeAcknowledgement", {sequence: packet.sequence, timeoutHeight: packet.timeoutHeight, port: packet.destPort, channel: packet.destChannel,
-                                timeoutTimestamp: packet.timeoutTimestamp, data: packet.data, acknowledgement})
+    emitLogEntry("writeAcknowledgement", {sequence: packet.sequence, timeoutHeight: packet.timeoutHeight, port: packet.destPort, 
+                  channel: packet.destChannel, timeoutTimestamp: packet.timeoutTimestamp, data: packet.data,
+                  acknowledgement: acknowledgement.data, payOnSource: acknowledgement.payOnSource, forwardRelayer: acknowledgement.forwardRelayer
+                  })
 }
 ```
 
@@ -742,7 +756,7 @@ We pass the `relayer` address just as in [Receiving packets](#receiving-packets)
 ```typescript
 function acknowledgePacket(
   packet: OpaquePacket,
-  acknowledgement: bytes,
+  acknowledgement: bytes | Acknowledgement,
   proof: CommitmentProof,
   proofHeight: Height,
   relayer: string): Packet {
