@@ -96,12 +96,26 @@ While the details may vary between fee modules, all Fee modules **must** ensure 
 - It must refund any remainder fees in escrow to the original fee payer(s) if applicable
 
 ```typescript
+// SetPacketFee is an open callback that may be called by any module/user that wishes to escrow funds in order to
+// incentivize the relaying of the given packet. They may set a separate receiveFee, ackFee, and timeoutFee to be paid
+// for each step in the packet flow. The caller must send max(receiveFee+ackFee, timeoutFee) to the fee module to be locked
+// in escrow to provide payout for any potential packet flow.
+// The caller may optionally specify an array of relayer addresses. This MAY be used by the fee module to modify fee payment logic
+// based on ultimate relayer address. For example, fee module may choose to only pay out relayer if the relayer address was specified in
+// the `SetPacketFee`.
+function SetPacketFee(packet: Packet, receiveFee: Fee, ackFee: Fee, timeoutFee: Fee, relayers: []string) {
+    // escrow max(receiveFee+ackFee, timeoutFee) for this packet
+    // do custom logic with provided relayer addresses if necessary
+}
+
+// PayFee is a callback implemented by fee module called by the ICS-4 AcknowledgePacket handler.
 function PayFee(packet: Packet, forward_relayer: string, reverse_relayer: string) {
     // pay the forward fee to the forward relayer address
     // pay the reverse fee to the reverse relayer address
     // refund extra tokens to original fee payer(s)
 }
 
+// PayFee is a callback implemented by fee module called by the ICS-4 TimeoutPacket handler.
 function PayTimeoutFee(packet: Packet, timeout_relayer: string) {
     // pay the timeout fee to the timeout relayer address
     // refund extra tokens to original fee payer(s)
@@ -113,13 +127,16 @@ The fee module should also expose the following queries so that relayers may que
 
 ```typescript
 // Gets the fee expected for submitting ReceivePacket msg for the given packet
-function GetReceiveFee(portID, channelID, sequence) Fee
+// Caller should provide the intended relayer address in case the fee is dependent on specific relayer(s).
+function GetReceiveFee(portID, channelID, sequence, relayer) Fee
 
 // Gets the fee expected for submitting AcknowledgePacket msg for the given packet
-function GetAckFee(portID, channelID, sequence) Fee
+// Caller should provide the intended relayer address in case the fee is dependent on specific relayer(s).
+function GetAckFee(portID, channelID, sequence, relayer) Fee
 
 // Gets the fee expected for submitting TimeoutPacket msg for the given packet
-function GetTimeoutFee(portID, channelID, sequence) Fee
+// Caller should provide the intended relayer address in case the fee is dependent on specific relayer(s).
+function GetTimeoutFee(portID, channelID, sequence, relayer) Fee
 ```
 
 Since different chains may have different representations for fungible tokens and this information is not being sent to other chains; this ICS does not specify a particular representation for the `Fee`. Each chain may choose its own representation, it is incumbent on relayers to interpret the Fee correctly.
@@ -151,6 +168,10 @@ function acknowledgePacket(
     connection = getConnection()
     // only call the fee module callbacks if the connection supports incentivization.
     if IsSupportedFeature(connection, "INCENTIVE_V1") {
+        // If the INCENTIVE feature is enabled on the connection, then the acknowledgement
+        // is a marshalled struct containing the forward relayer address as  a string (called forward_relayer),
+        // and the raw acknowledgement bytes returned by the counterparty application module (called app_ack).
+
         // get the forward relayer from the acknowledgement
         // and pay fees to forward and reverse relayers.
         // reverse_relayer is submitter of acknowledgement message
@@ -158,7 +179,15 @@ function acknowledgePacket(
         // NOTE: Fee may be zero
         forward_relayer = getForwardRelayer(acknowledgement)
         PayFee(packet, forward_relayer, relayer)
+
+        // unwrap the raw acknowledgement bytes sent by counterparty application and pass it to the application callback.
+        app_ack = getAppAcknowledgement(acknowledgement)
+    } else {
+        // If INCENTIVE feature is not enabled for this connection, then the acknowledgement is just the raw
+        // acknowledgement bytes returned by application, so we can pass it through directly.
+        app_ack = acknowledgement
     }
+    app.OnAcknowledgePacket(packet, app_ack, relayer)
 }
 
 function timeoutPacket(
