@@ -33,7 +33,7 @@ define a clear interface that can be easily adopted by any application, but not 
 - Incentivize relaying acks for these packets (`OnAcknowledgement` called)
 - Incentivize relaying timeouts for these packets when the timeout has expired before packet is delivered (for example as receive fee was too low) (`OnTimeout` called)
 - Produces no extra IBC packets
-- One direction works, even when one chain does not support concept of fungible tokens
+- One direction works, even when destination chain does not support concept of fungible tokens
 - Opt-in for each chain implementing this. eg. ICS27 with fee support on chain A could connect to ICS27 without fee support on chain B.
 - Standardized interface for each chain implementing this extension
 - Support custom fee-handling logic within the same framework
@@ -59,9 +59,9 @@ the packet.
 Given this, the flow would be:
 
 1. User/module submits a send packet on the `source` chain, along with some tokens and fee information on how to distribute them. The fee tokens are all escrowed by the fee module.
-2. Relayer submits `OnReceivePacket` on the `destination` chain. Along with this message, the *forward relayer* will submit a `payToOnSource` address where payment should be sent.
+2. RelayerA submits `OnReceivePacket` on the `destination` chain. Along with this message, the *forward relayer* will submit a `payToOnSource` address where payment should be sent.
 3. Destination application includes this `payToOnSource` in the acknowledgement (there are multiple approaches to discuss below)
-4. Relayer submits `OnAcknowledgement` which provides the *return relayer* address on the source chain, along with the `payToOnSource` address
+4. RelayerB submits `OnAcknowledgement` which provides the *return relayer* address on the source chain, along with the `payToOnSource` address
 5. Source application can distribute the tokens escrowed in (1) to both the *forward* and the *return* relayers.
 
 Alternate flow:
