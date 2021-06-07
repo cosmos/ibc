@@ -37,7 +37,7 @@ define a clear interface that can be easily adopted by any application, but not 
 - Opt-in for each chain implementing this. eg. ICS27 with fee support on chain A could connect to ICS27 without fee support on chain B.
 - Standardized interface for each chain implementing this extension
 - Support custom fee-handling logic within the same framework
-- Relayer addresses should not be forgable
+- Relayer addresses should not be forgeable
 - Permissionless relaying
 
 ## Technical Specification
@@ -46,7 +46,7 @@ define a clear interface that can be easily adopted by any application, but not 
 
 In order to avoid extra packets on the order of the number of fee packets, as well as provide an opt-in approach, we
 store all fee payment info only on the source chain. The source chain is the one location where the sender can provide tokens
-to incentivize the packet. The fee distribution may be implementation specific and thus does not need to be in the ibc spec
+to incentivize the packet. The fee distribution may be implementation specific and thus does not need to be in the IBC spec
 (just high-level requirements are needed in this doc).
 
 We require that the [relayer address is exposed to application modules](https://github.com/cosmos/ibc/pull/579) for
@@ -79,7 +79,7 @@ paid out in a different token. Imagine a connection between IrisNet and the Cosm
 - AckFee: 0.001 IRIS
 - TimeoutFee: 0.002 IRIS
 
-Ideally the fees can easily be redeemed in native tokens on both sides, but relayers may select others. In this example, the relayer collects a fair bit of IRIS, covering it's costs there and more. It also collects channel-7/ATOM vouchers from many packets. After relaying a few thousand packets, the account on the Cosmos Hub is running low, so the relayer will send those channel-7/ATOM vouchers back over channel-7 to it's account on the Hub to replenish the supply there. 
+Ideally the fees can easily be redeemed in native tokens on both sides, but relayers may select others. In this example, the relayer collects a fair bit of IRIS, covering its costs there and more. It also collects channel-7/ATOM vouchers from many packets. After relaying a few thousand packets, the account on the Cosmos Hub is running low, so the relayer will send those channel-7/ATOM vouchers back over channel-7 to it's account on the Hub to replenish the supply there. 
 
 The sender chain will escrow 0.003 channel-7/ATOM and 0.002 IRIS. In the case that a forward relayer submits the `MsgRecvPacket` and a reverse relayer submits the `MsgAckPacket`, the forward relayer is reqarded 0.003 channel-7/ATOM and the reverse relayer is rewarded 0.001 IRIS. In the case where the packet times out, the timeout relayer receives 0.002 IRIS and 0.003 channel-7/ATOM is refunded to the original fee payer.
 
