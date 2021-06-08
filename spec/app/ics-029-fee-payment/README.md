@@ -96,14 +96,16 @@ While the details may vary between fee modules, all Fee modules **must** ensure 
 - It must refund any remainder fees in escrow to the original fee payer(s) if applicable
 
 ```typescript
-// SetPacketFee is an open callback that may be called by any module/user that wishes to escrow funds in order to
-// incentivize the relaying of the given packet. They may set a separate receiveFee, ackFee, and timeoutFee to be paid
+// EscrowPacketFee is an open callback that may be called by any module/user that wishes to escrow funds in order to
+// incentivize the relaying of the given packet.
+// NOTE: These fees are escrowed in addition to any previously escrowed amount for the packet.
+// They may set a separate receiveFee, ackFee, and timeoutFee to be paid
 // for each step in the packet flow. The caller must send max(receiveFee+ackFee, timeoutFee) to the fee module to be locked
 // in escrow to provide payout for any potential packet flow.
 // The caller may optionally specify an array of relayer addresses. This MAY be used by the fee module to modify fee payment logic
 // based on ultimate relayer address. For example, fee module may choose to only pay out relayer if the relayer address was specified in
-// the `SetPacketFee`.
-function SetPacketFee(packet: Packet, receiveFee: Fee, ackFee: Fee, timeoutFee: Fee, relayers: []string) {
+// the `EscrowPacketFee`.
+function EscrowPacketFee(packet: Packet, receiveFee: Fee, ackFee: Fee, timeoutFee: Fee, relayers: []string) {
     // escrow max(receiveFee+ackFee, timeoutFee) for this packet
     // do custom logic with provided relayer addresses if necessary
 }
@@ -141,34 +143,135 @@ function GetTimeoutFee(portID, channelID, sequence, relayer) Fee
 
 Since different chains may have different representations for fungible tokens and this information is not being sent to other chains; this ICS does not specify a particular representation for the `Fee`. Each chain may choose its own representation, it is incumbent on relayers to interpret the Fee correctly.
 
-### Connection Negotiation
+### IBC Module Wrapper
 
-The chains must agree to enable the incentivization feature during the connection handshake. This can be done by bumping the connection version.
+The fee module will implement its own ICS-26 callbacks that wrap the application-specific module callbacks. This fee module middleware will ensure that the counterparty module supports incentivization and will implement all fee-specific logic. It will then pass on the request to the embedded application module for further callback processing.
 
-```{"2", ["ORDER_ORDERED", "ORDER_UNORDERED"]}```
+In this way, custom fee-handling logic can be hooked up to the IBC packet flow logic without placing the code in the ICS-4 handlers or the application code. This is valuable since the ICS-4 handlers should only be concerned with IBC correctness, and the application handlers should not be handling fee logic that is universal amongst all other incentivized applications. In fact, a given application module should be able to be hooked up to any fee module with no further changes to the application itself.
 
-Since most chains that support incentivization will wish to be compatible with chains that do not, a chain with `V2` enabled will send its possible connection versions: `{{"1", ["ORDER_ORDERED", "ORDER_UNORDERED"]}, {"2", ["ORDER_ORDERED", "ORDER_UNORDERED"]}}` in `ConnOpenInit`. The counterparty chain will select the highest version that it can support.
+As mentioned above, the fee module will implement the ICS-26 callbacks, and can embed an application IBC Module. All ICS-26 callbacks in the fee module will call into the embedded application's callback. Thus, only the fee callbacks that do something additional are explicitly specified here.
 
-If the negotiated connection is `V2`, then the ICS-4 `WriteAcknowledgement` function must write the forward relayer address into a structured acknowledgement and the ICS-4 handlers for `AcknowledgePacket` and `TimeoutPacket` must pay fees through the ibc fee module callbacks. If the negotiated connection is on `V1`, then the ICS-4 handlers must not modify the acknowledgement provided by the application and should not call any fee callbacks even if relayer incentivization is enabled on the chain.
+#### Fee Protocol Negotiation
 
-Thus, a chain can support incentivization while still maintaining connections that do not have the incentivization feature. This is crucial to enable a chain with incentivization to connect with a chain that does not have incentivization feature, as the acknowledgements need to be sent over the wire without the forward relayer.
+The fee middleware will negotiate its fee protocol version with the counterparty module by prepending its own version to the application version. 
 
-### Channel Changes
+Channel Version: `fee_v{fee_protocol_version}:{application_version}`
 
-The ibc-fee callbacks will then be utilized in the ICS-4 handlers like so:
+Ex: `fee_v1:ics20-1`
+
+The fee middleware's handshake callbacks ensure that both modules agree on compatible fee protocol version(s), and then pass the application-specific version string to the embedded application's handshake callbacks.
+
+It is crucial that this proposal maintains backwards compatibility with a chain that does not support relayer incentivization. Thus, we must support the case where one side of the channel does not support the incentivization feature, the version will only contain the app-specific version. In the case, where `ChanOpenInit` is initiated on the chain that supports incentivization; the relayer must explicitly create the channel with just the app version (e.g. `ics20-1`), otherwise the handshake will fail on counterparty during channel version negotiation since counterparty module does not understand the fee version prefix. In the case, where `ChanOpenInit` is initiated on the chain that does not support incentivization, relayer for `ChanOpenTry` may choose to submit just application version or the fee-prefixed version. The fee middleware will inspect counterparty version and "downgrade" channel to unincentivized logic if the counterparty version does not have fee prefix.
 
 ```typescript
-function acknowledgePacket(
-  packet: OpaquePacket,
-  acknowledgement: bytes,
-  proof: CommitmentProof,
-  proofHeight: Height,
-  relayer: string): Packet {
-    // get the underlying connection for this channel
-    connection = getConnection()
-    // only call the fee module callbacks if the connection supports incentivization.
-    if IsSupportedFeature(connection, "INCENTIVE_V1") {
-        // If the INCENTIVE feature is enabled on the connection, then the acknowledgement
+function onChanOpenInit(
+  order: ChannelOrder,
+  connectionHops: [Identifier],
+  portIdentifier: Identifier,
+  channelIdentifier: Identifier,
+  counterpartyPortIdentifier: Identifier,
+  counterpartyChannelIdentifier: Identifier,
+  version: string) {
+      // if the version is prefixed by fee version,
+      // then remove the prefix and pass the app-specific version to app callback.
+      // otherwise, pass version directly to app callback.
+      feeVersion, appVersion = splitFeeVersion(version)
+      app.OnChanOpenInit(appVersion)
+}
+
+function OnChanOpenTry(
+  order: ChannelOrder,
+  connectionHops: [Identifier],
+  portIdentifier: Identifier,
+  channelIdentifier: Identifier,
+  counterpartyPortIdentifier: Identifier,
+  counterpartyChannelIdentifier: Identifier,
+  version: string,
+  counterpartyVersion: string) {
+      cpFeeVersion, cpAppVersion = splitFeeVersion(counterpartyVersion)
+      feeVersion, appVersion = splitFeeVersion(version)
+      // if counterparty version does not have fee prefix 
+      if !hasPrefix(counterpartyVersion, "fee") {
+          // create a backwards-compatible unincentivized channel
+          // set Incentivized flag to false so packet callbacks do not execute fee-handling logic and simply call app callback instead.
+          channel.Incentivized = false
+      } else if !isCompatible(cpFeeVersion, feeVersion) {
+          // both modules have incentivization enabled but are incompatible, so we end handshake.
+          // relayer must create new channel and either choose compatible versions or disable incentivization by not prefixing fee version.
+          return error
+      } else {
+          // both modules have compatible relayer incentivization protocols
+          // set the incentivized flag to true, so packet callbacks execute fee-handling logic.
+          channel.Incentivized = true
+      }
+
+      // call the underlying applications OnChanOpenTry callback
+      app.OnChanOpenTry(
+          order,
+          connectionHops,
+          portIdentifier,
+          channelIdentifier,
+          counterpartyPortIdentifier,
+          counterpartyChannelIdentifier,
+          cpAppVersion,
+          appVersion,
+      )
+}
+
+function onChanOpenAck(
+  portIdentifier: Identifier,
+  channelIdentifier: Identifier,
+  version: string) {
+      if hasPrefix(version, "fee") {
+          // both modules have compatible relayer incentivization protocols
+          // set the incentivized flag to true, so packet callbacks execute fee-handling logic.
+          channel.Incentivized = true     
+      } else {
+          // create a backwards-compatible unincentivized channel
+          // set Incentivized flag to false so packet callbacks do not execute fee-handling logic and simply call app callback instead.
+          channel.Incentivized = false
+      }
+}
+
+function splitFeeVersion(version: string): []string {
+    if hasPrefix(version, "fee") {
+        splitVersions = split(version,  ":")
+        feeVersion = version[0]
+        appVersion = join(version[1:], ":")
+        // if version has fee prefix
+        // return first split as fee version and the rest of the string as app version
+        return []string{feeVersion, appVersion}
+    }
+    // otherwise return an empty fee version and full version as app version
+    return []string{"", version}
+}
+```
+
+#### Packet Callbacks
+
+```typescript
+function onRecvPacket(packet: Packet, relayer: string): bytes {
+    app_acknowledgement = app.onRecvPacket(packet, relayer)
+
+    // in case of asynchronous acknowledgement, we must store the relayer address so that we can retrieve it later to write the acknowledgement.
+    if app_acknowledgement == nil {
+        privateStore.set(forwardRelayerPath(packet), relayer)
+    }
+
+    // if channel is incentivized, wrap the acknowledgement with forward relayer and return marshalled bytes
+    if channel.Incentivized {
+        // constructIncentivizedAck takes the app-specific acknowledgement and receive-packet relayer (forward relayer)
+        // and constructs the incentivized acknowledgement struct with the forward relayer and app-specific acknowledgement embedded.
+        ack = constructIncentivizedAck(app_acknowledgment, relayer)
+        return marshal(ack)
+    }
+    // otherwise just return the raw app acknowledgment.
+    return app_acknowledgement
+}
+
+function onAcknowledgePacket(packet: Packet, acknowledgement: bytes, relayer: string) {
+    if channel.Incentivized {
+        // If incentivization is enabled, then the acknowledgement
         // is a marshalled struct containing the forward relayer address as  a string (called forward_relayer),
         // and the raw acknowledgement bytes returned by the counterparty application module (called app_ack).
 
@@ -177,34 +280,70 @@ function acknowledgePacket(
         // reverse_relayer is submitter of acknowledgement message
         // provided in function arguments
         // NOTE: Fee may be zero
-        forward_relayer = getForwardRelayer(acknowledgement)
+        ack = unmarshal(acknowledgement)
+        forward_relayer = getForwardRelayer(ack)
         PayFee(packet, forward_relayer, relayer)
 
         // unwrap the raw acknowledgement bytes sent by counterparty application and pass it to the application callback.
         app_ack = getAppAcknowledgement(acknowledgement)
     } else {
-        // If INCENTIVE feature is not enabled for this connection, then the acknowledgement is just the raw
+        // If incentivization is not enabled, then the acknowledgement is just the raw
         // acknowledgement bytes returned by application, so we can pass it through directly.
         app_ack = acknowledgement
     }
     app.OnAcknowledgePacket(packet, app_ack, relayer)
 }
 
-function timeoutPacket(
-  packet: OpaquePacket,
-  proof: CommitmentProof,
-  proofHeight: Height,
-  nextSequenceRecv: Maybe<uint64>,
-  relayer: string): Packet {
-    // get the underlying connection for this channel
-    connection = getConnection()
-    // only call the fee module callbacks if the connection supports incentivization.
-    if IsSupportedFeature(connection, "INCENTIVE_V1") {
+function onTimeoutPacket(packet: Packet, relayer: string) {
+    if channel.Incentivized {
         // get the timeout relayer from function arguments
         // and pay timeout fee.
         // NOTE: Fee may be zero
         PayTimeoutFee(packet, relayer)
     }
+    app.OnTimeoutPacket(packet, relayer)
+}
+
+function onTimeoutPacketClose(packet: Packet, relayer: string) {
+if channel.Incentivized {
+        // get the timeout relayer from function arguments
+        // and pay timeout fee.
+        // NOTE: Fee may be zero
+        PayTimeoutFee(packet, relayer)
+    }
+    app.onTimeoutPacketClose(packet, relayer)
+}
+
+function constructIncentivizedAck(app_ack: bytes, forward_relayer: string): Acknowledgement {
+    // TODO: see https://github.com/cosmos/ibc/pull/582
+}
+
+function getForwardRelayer(ack: Acknowledgement): string {
+    // TODO: see https://github.com/cosmos/ibc/pull/582
+}
+
+function getAppAcknowledgement(ack: Acknowledgement): bytes {
+    // TODO: see https://github.com/cosmos/ibc/pull/582
+}
+```
+
+Note that if the embedded application uses asynchronous acks then, the `WriteAcknowledgement` call in the application must call the fee middleware's `WriteAcknowledgement` rather than calling the ICS-4 handler's `WriteAcknowledgement` function directly.
+
+```typescript
+// Fee Middleware writeAcknowledgement function
+function writeAcknowledgement(
+  packet: Packet,
+  acknowledgement: bytes) {
+    // if the channel is incentivized,
+    // retrieve the forward relayer that was stored in `onRecvPacket`
+    if channel.Incentivized {
+        relayer = privateStore.get(forwardRelayerPath(packet))
+        ack = constructIncentivizedAck(acknowledgment, relayer)
+        ack_bytes marshal(ack)
+        return ics4.writeAcknowledgement(packet, ack_bytes)
+    }
+    // otherwise just write the acknowledgement directly
+    return ics4.writeAcknowledgement(packet, ack_bytes)
 }
 ```
 

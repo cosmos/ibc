@@ -91,19 +91,19 @@ function onChanCloseConfirm(
     // defined by the module
 }
 
-function onRecvPacket(packet: Packet): bytes {
+function onRecvPacket(packet: Packet, relayer: string): bytes {
     // defined by the module, returns acknowledgement
 }
 
-function onTimeoutPacket(packet: Packet) {
+function onTimeoutPacket(packet: Packet, relayer: string) {
     // defined by the module
 }
 
-function onAcknowledgePacket(packet: Packet) {
+function onAcknowledgePacket(packet: Packet, acknowledgement: bytes, relayer: string) {
     // defined by the module
 }
 
-function onTimeoutPacketClose(packet: Packet) {
+function onTimeoutPacketClose(packet: Packet, relayer: string) {
     // defined by the module
 }
 ```
