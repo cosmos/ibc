@@ -5,9 +5,9 @@ stage: draft
 category: IBC/APP
 requires: 20, 25, 26
 kind: instantiation
-author: Ethan Frey <ethan@confio.tech>
+author: Aditya Sripal <aditya@interchain.berlin>, Ethan Frey <ethan@confio.tech>
 created: 2021-06-01
-modified: 2021-06-01
+modified: 2021-06-18
 ---
 
 ## Synopsis
@@ -397,7 +397,8 @@ Coming soon.
 
 ## History
 
-June 1 2020 - Draft written
+June 8 2021 - Switched to middleware solution from implementing callbacks in ICS-4 directly.
+June 1 2021 - Draft written
 
 ## Copyright
 
