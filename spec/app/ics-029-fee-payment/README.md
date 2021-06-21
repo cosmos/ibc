@@ -3,7 +3,7 @@ ics: 29
 title: General Fee Payment
 stage: draft
 category: IBC/APP
-requires: 20, 25, 26
+requires: 4, 25, 26, 30
 kind: instantiation
 author: Aditya Sripal <aditya@interchain.berlin>, Ethan Frey <ethan@confio.tech>
 created: 2021-06-01
