@@ -13,7 +13,7 @@ modified: 2021-06-18
 ## Synopsis
 
 This standard document specifies packet data structure, state machine handling logic, and encoding details for handling fee
-payments on top of any ICS application protocol. It requires some standard packet changes, but can be adopted by any
+payments on top of any ICS application protocol. It requires some changes to the acknowledgement, but can be adopted by any
 application, without forcing other applications to use this implementation.
 
 ### Motivation
@@ -29,39 +29,41 @@ define a clear interface that can be easily adopted by any application, but not 
 
 ### Desired Properties
 
-- Incentivize timely delivery of the packet (`OnReceivePacket` called)
-- Incentivize relaying acks for these packets (`OnAcknowledgement` called)
-- Incentivize relaying timeouts for these packets when the timeout has expired before packet is delivered (for example as receive fee was too low) (`OnTimeout` called)
+- Incentivize timely delivery of the packet (`recvPacket` called)
+- Incentivize relaying acks for these packets (`acknowledgePacket` called)
+- Incentivize relaying timeouts for these packets when the timeout has expired before packet is delivered (for example as receive fee was too low) (`timeoutPacket` called)
 - Produces no extra IBC packets
 - One direction works, even when destination chain does not support concept of fungible tokens
-- Opt-in for each chain implementing this. eg. ICS27 with fee support on chain A could connect to ICS27 without fee support on chain B.
+- Opt-in for each chain implementing this. e.g. ICS27 with fee support on chain A could connect to ICS27 without fee support on chain B.
 - Standardized interface for each chain implementing this extension
 - Support custom fee-handling logic within the same framework
 - Relayer addresses should not be forgeable
-- Permissionless relaying
+- Enable permissionless or permissioned relaying
 
 ## Technical Specification
 
 ### General Design
 
-In order to avoid extra packets on the order of the number of fee packets, as well as provide an opt-in approach, we
+In order to avoid extra fee packets on the order of the number of application packets, as well as provide an opt-in approach, we
 store all fee payment info only on the source chain. The source chain is the one location where the sender can provide tokens
 to incentivize the packet. The fee distribution may be implementation specific and thus does not need to be in the IBC spec
 (just high-level requirements are needed in this doc).
 
 We require that the [relayer address is exposed to application modules](https://github.com/cosmos/ibc/pull/579) for
-all packet-related messages, so the modules are able to incentivize the packet relayer. `OnAcknowledgement`, `OnTimeout`,
-and `OnTimeoutClose` messages will therefore have the relayer address and be capable of sending escrowed tokens to such address.
-However, we need a way to reliably get the address of the relayer that submitted `OnReceivePacket` on the destination chain to
+all packet-related messages, so the modules are able to incentivize the packet relayer. `acknowledgePacket`, `timeoutPacket`,
+and `timeoutOnClose` messages will therefore have the relayer address and be capable of sending escrowed tokens to such address.
+However, we need a way to reliably get the address of the relayer that submitted `recvPacket` on the destination chain to
 the source chain. In fact, we need a *source address* for this relayer to pay out to, not the *destination address* that signed
 the packet.
 
+The fee payment mechanism will be implemented as IBC Middleware (see ICS-30) in order to provide maximum flexibility for application developers and blockchains.
+
 Given this, the flow would be:
 
-1. User/module submits a send packet on the `source` chain, along with some tokens and fee information on how to distribute them. The fee tokens are all escrowed by the fee module.
-2. RelayerA submits `OnReceivePacket` on the `destination` chain. Along with this message, the *forward relayer* will submit a `payToOnSource` address where payment should be sent.
-3. Destination application includes this `payToOnSource` in the acknowledgement (there are multiple approaches to discuss below)
-4. RelayerB submits `OnAcknowledgement` which provides the *return relayer* address on the source chain, along with the `payToOnSource` address
+1. User/module submits a send packet on the `source` chain, along with a message to the fee middleware module with some tokens and fee information on how to distribute them. The fee tokens are all escrowed by the fee module.
+2. RelayerA submits `RecvPacket` on the `destination` chain. Along with the `RecvPacket` message, the *forward relayer* will submit a message to the fee middleware with the `payToOnSource` address where payment should be sent. The middleware message must be ordered first and both messages should commit atomically.
+3. Destination application includes this `payToOnSource` in the acknowledgement
+4. RelayerB submits `AcknowledgePacket` which provides the *return relayer* address on the source chain, along with the `payToOnSource` address
 5. Source application can distribute the tokens escrowed in (1) to both the *forward* and the *return* relayers.
 
 Alternate flow:
@@ -81,16 +83,16 @@ paid out in a different token. Imagine a connection between IrisNet and the Cosm
 
 Ideally the fees can easily be redeemed in native tokens on both sides, but relayers may select others. In this example, the relayer collects a fair bit of IRIS, covering its costs there and more. It also collects channel-7/ATOM vouchers from many packets. After relaying a few thousand packets, the account on the Cosmos Hub is running low, so the relayer will send those channel-7/ATOM vouchers back over channel-7 to it's account on the Hub to replenish the supply there. 
 
-The sender chain will escrow 0.003 channel-7/ATOM and 0.002 IRIS. In the case that a forward relayer submits the `MsgRecvPacket` and a reverse relayer submits the `MsgAckPacket`, the forward relayer is reqarded 0.003 channel-7/ATOM and the reverse relayer is rewarded 0.001 IRIS. In the case where the packet times out, the timeout relayer receives 0.002 IRIS and 0.003 channel-7/ATOM is refunded to the original fee payer.
+The sender chain will escrow 0.003 channel-7/ATOM and 0.002 IRIS from the fee payers' account. In the case that a forward relayer submits the `recvPacket` and a reverse relayer submits the `ackPacket`, the forward relayer is rewarded 0.003 channel-7/ATOM and the reverse relayer is rewarded 0.001 IRIS while 0.001 IRIS is refunded to the original fee payer. In the case where the packet times out, the timeout relayer receives 0.002 IRIS and 0.003 channel-7/ATOM is refunded to the original fee payer.
 
 The logic involved in collecting fees from users and then paying it out to the relevant relayers is encapsulated by a separate fee module and may vary between implementations. However, all fee modules must implement a uniform interface such that the ICS-4 handlers can correctly pay out fees to the right relayers, and so that relayers themselves can easily determine the fees they can expect for relaying a packet.
 
-### Fee Module Contract
+### Fee Middleware Contract
 
 While the details may vary between fee modules, all Fee modules **must** ensure it does the following:
 
 - It must have in escrow the maximum fees that all outstanding packets may pay out (or it must have ability to mint required amount of tokens)
-- It must pay the receive fee for a packet to the forward relayer specified in `PayFee` callback
+- It must pay the receive fee for a packet to the forward relayer specified in `PayFee` callback (if unspecified, it must refund forward fee to original fee payer(s))
 - It must pay the ack fee for a packet to the reverse relayer specified in `PayFee` callback
 - It must pay the timeout fee for a packet to the timeout relayer specified in `PayTimeoutFee` callback
 - It must refund any remainder fees in escrow to the original fee payer(s) if applicable
@@ -98,7 +100,8 @@ While the details may vary between fee modules, all Fee modules **must** ensure 
 ```typescript
 // EscrowPacketFee is an open callback that may be called by any module/user that wishes to escrow funds in order to
 // incentivize the relaying of the given packet.
-// NOTE: These fees are escrowed in addition to any previously escrowed amount for the packet.
+// NOTE: These fees are escrowed in addition to any previously escrowed amount for the packet. In the case where the previous amount is zero,
+// the provided fees are the initial escrow amount.
 // They may set a separate receiveFee, ackFee, and timeoutFee to be paid
 // for each step in the packet flow. The caller must send max(receiveFee+ackFee, timeoutFee) to the fee module to be locked
 // in escrow to provide payout for any potential packet flow.
@@ -115,6 +118,7 @@ function PayFee(packet: Packet, forward_relayer: string, reverse_relayer: string
     // pay the forward fee to the forward relayer address
     // pay the reverse fee to the reverse relayer address
     // refund extra tokens to original fee payer(s)
+    // NOTE: if forward relayer address is empty, then refund the forward fee to original fee payer(s).
 }
 
 // PayFee is a callback implemented by fee module called by the ICS-4 TimeoutPacket handler.
@@ -143,13 +147,20 @@ function GetTimeoutFee(portID, channelID, sequence, relayer) Fee
 
 Since different chains may have different representations for fungible tokens and this information is not being sent to other chains; this ICS does not specify a particular representation for the `Fee`. Each chain may choose its own representation, it is incumbent on relayers to interpret the Fee correctly.
 
+A default representation will have the following structure:
+
+```typescript
+interface Fee {
+  denom: string,
+  amount: uint256,
+}
+```
+
 ### IBC Module Wrapper
 
-The fee module will implement its own ICS-26 callbacks that wrap the application-specific module callbacks. This fee module middleware will ensure that the counterparty module supports incentivization and will implement all fee-specific logic. It will then pass on the request to the embedded application module for further callback processing.
+The fee middleware will implement its own ICS-26 callbacks that wrap the application-specific module callbacks as well as the ICS-4 handler functions called by the underlying application. This fee middleware will ensure that the counterparty module supports incentivization and will implement all fee-specific logic. It will then pass on the request to the embedded application module for further callback processing.
 
 In this way, custom fee-handling logic can be hooked up to the IBC packet flow logic without placing the code in the ICS-4 handlers or the application code. This is valuable since the ICS-4 handlers should only be concerned with correctness of core IBC (transport, authentication, and ordering), and the application handlers should not be handling fee logic that is universal amongst all other incentivized applications. In fact, a given application module should be able to be hooked up to any fee module with no further changes to the application itself.
-
-As mentioned above, the fee module will implement the ICS-26 callbacks, and can embed an application IBC Module. All ICS-26 callbacks in the fee module will call into the embedded application's callback. Thus, only the fee callbacks that do something additional are explicitly specified here.
 
 #### Fee Protocol Negotiation
 
@@ -161,15 +172,7 @@ Ex: `fee_v1:ics20-1`
 
 The fee middleware's handshake callbacks ensure that both modules agree on compatible fee protocol version(s), and then pass the application-specific version string to the embedded application's handshake callbacks.
 
-### Port
-
-The portID will similarly be nested like the channel version to allow all nested modules to negotiate their respective ports.
-
-Applications must note however, that the portID in its entirety will be contained in the packet.
-
-PortID: `fee:transfer`
-
-Once the fee module has done its own logic based on the full port, it will strip the fee prefix and pass along the nested `portID` to the nested module.
+#### Handshake Callbacks
 
 ```typescript
 function onChanOpenInit(
@@ -180,22 +183,19 @@ function onChanOpenInit(
   counterpartyPortIdentifier: Identifier,
   counterpartyChannelIdentifier: Identifier,
   version: string) {
-    // if the version and port is prefixed,
-    // then remove the prefix and pass the app-specific version to app callback.
+    // remove the prefix and pass the app-specific version to app callback.
     // otherwise, pass version directly to app callback.
-    // ensure fee ports are compatible (if they exist)
-    feePort, appPort = splitFeePort(portID)
     feeVersion, appVersion = splitFeeVersion(version)
-    cpFeePort, cpAppPort = splitFeePort(counterpartyPortIdentifier)
-    if !isCompatible(feePort, cpFeePort) {
+    // check that feeVersion is supported
+    if !isSupported(feeVersion) {
         return error
     }
     app.OnChanOpenInit(
         order,
         connectionHops,
-        appPort,
+        portIdentifier,
         channelIdentifier,
-        cpAppPort,
+        counterpartyPortIdentifier,
         counterpartyChannelIdentifier,
         appVersion,
     )
@@ -210,16 +210,13 @@ function OnChanOpenTry(
   counterpartyChannelIdentifier: Identifier,
   version: string,
   counterpartyVersion: string) {
+      // select mutually compatible fee version
       cpFeeVersion, cpAppVersion = splitFeeVersion(counterpartyVersion)
       feeVersion, appVersion = splitFeeVersion(version)
-      feePort, appPort = splitFeePort(portID)
-      cpFeePort, cpAppPort = splitFeePort(counterpartyPortIdentifier)
-      if !isCompatible(feePort, cpFeePort) {
-          return error
-      }
       if !isCompatible(cpFeeVersion, feeVersion) {
           return error
       }
+      selectFeeVersion(cpFeeVersion, feeVersion)
 
       // call the underlying applications OnChanOpenTry callback
       app.OnChanOpenTry(
@@ -238,10 +235,22 @@ function onChanOpenAck(
   portIdentifier: Identifier,
   channelIdentifier: Identifier,
   version: string) {
-      if !isCompatible(version) {
+      feeVersion, appVersion = splitFeeVersion(version)
+      if !isSupported(feeVersion) {
           return error
       }
+
+      // call the underlying applications OnChanOpenAck callback
+      app.OnChanOpenAck(portIdentifier, channelIdentifier, appVersion)
 }
+
+function onChanOpenConfirm(
+  portIdentifier: Identifier,
+  channelIdentifier: Identifier) {
+      // fee middleware performs no-op on ChanOpenConfirm,
+      // just call underlying callback
+      app.onChanOpenConfirm(portIdentifier, channelIdentifier)
+  }
 
 function splitFeeVersion(version: string): []string {
     if hasPrefix(version, "fee") {
@@ -254,10 +263,6 @@ function splitFeeVersion(version: string): []string {
     }
     // otherwise return an empty fee version and full version as app version
     return []string{"", version}
-}
-
-function splitFeePort(portID: string) []string {
-    // identical logic to splitFeeVersion
 }
 ```
 
@@ -272,7 +277,7 @@ function onRecvPacket(packet: Packet, relayer: string): bytes {
         privateStore.set(forwardRelayerPath(packet), relayer)
     }
 
-    // if channel is incentivized, wrap the acknowledgement with forward relayer and return marshalled bytes
+    // wrap the acknowledgement with forward relayer and return marshalled bytes
     // constructIncentivizedAck takes the app-specific acknowledgement and receive-packet relayer (forward relayer)
     // and constructs the incentivized acknowledgement struct with the forward relayer and app-specific acknowledgement embedded.
     ack = constructIncentivizedAck(app_acknowledgment, relayer)
@@ -280,8 +285,7 @@ function onRecvPacket(packet: Packet, relayer: string): bytes {
 }
 
 function onAcknowledgePacket(packet: Packet, acknowledgement: bytes, relayer: string) {
-    // If incentivization is enabled, then the acknowledgement
-    // is a marshalled struct containing the forward relayer address as  a string (called forward_relayer),
+    // the acknowledgement is a marshalled struct containing the forward relayer address as  a string (called forward_relayer),
     // and the raw acknowledgement bytes returned by the counterparty application module (called app_ack).
 
     // get the forward relayer from the acknowledgement
@@ -330,8 +334,6 @@ function getAppAcknowledgement(ack: Acknowledgement): bytes {
 
 #### Embedded applications calling into ICS-4
 
-Whenever embedded applications call into ICS-4, they must go through their parent application. For example, if ICS-20 wants to bind to the `transfer` port. Rather than calling `BindPort` directly, implementers must take care to ensure that this call passes through the top-level fee module first; which will then prepend `fee:` and cause ICS-4 to bind the top-level fee module to the `fee:transfer` port.
-
 Note that if the embedded application uses asynchronous acks then, the `WriteAcknowledgement` call in the application must call the fee middleware's `WriteAcknowledgement` rather than calling the ICS-4 handler's `WriteAcknowledgement` function directly.
 
 ```typescript
@@ -339,36 +341,52 @@ Note that if the embedded application uses asynchronous acks then, the `WriteAck
 function writeAcknowledgement(
   packet: Packet,
   acknowledgement: bytes) {
-    // if the channel is incentivized,
     // retrieve the forward relayer that was stored in `onRecvPacket`
     relayer = privateStore.get(forwardRelayerPath(packet))
     ack = constructIncentivizedAck(acknowledgment, relayer)
     ack_bytes marshal(ack)
     return ics4.writeAcknowledgement(packet, ack_bytes)
-    // otherwise just write the acknowledgement directly
-    return ics4.writeAcknowledgement(packet, ack_bytes)
+}
+
+// Fee Middleware sendPacket function just forwards message to ics-4 handler
+function sendPacket(packet: Packet) {
+    return ics4.sendPacket(packet)
+}
+```
+
+### User Interaction with Fee Middleware
+
+**User sending Packets**
+
+A user may specify a fee to incentivize the relaying during packet submission, by submitting a fee payment message atomically with the application-specific "send packet" message (e.g. ICS-20 MsgTransfer). The fee middleware will escrow the fee for the packet that is created atomically with the escrow. The fee payment message itself is not specified in this document as it may vary greatly across implementations. In some middleware, there may be no fee payment message at all if the fees are being paid out from an altruistic pool.
+
+**Relayers sending RecvPacket**
+
+However, the message the relayer sends to the fee middleware must be standardized so that relayers do not need to implement custom code for each middleware implementation. The forward relayer SHOULD submit a `PayOnSource` Message atomically with the `RecvPacket` message(s). The `PayOnSource` message must be ordered first before any `RecvPacket` messages. The fee middleware will save the `payOnSource` address embedded in the message, and encode it into the acknowledgements for any packets that are received atomically with the `PayOnSource` message. This allows the fee middleware to incorporate the relayer-provided input into the acknowledgement without changing the underlying application.
+
+If the relayer does not include the `PayOnSource` message before a `RecvPacket`, then the fee middleware will simply encode the empty string into the ack and the source chain will refund the forward fee to original fee payer(s).
+
+```typescript
+interface PayOnSourceMsg {
+    sourceAddress: string
 }
 ```
 
 #### Backwards Compatibility
 
-Maintaining backwards compatibility with an unincentivized chain directly in the fee module, would require the top-level fee module to negotiate versions that do not contain a fee version and bind to nested ports directly without a fee port prefix. This pattern causes unnecessary complexity as the layers of nested applications increase.
+Maintaining backwards compatibility with an unincentivized chain directly in the fee module, would require the top-level fee module to negotiate versions that do not contain a fee version and communicate with both incentivized and unincentivized modules. This pattern causes unnecessary complexity as the layers of nested applications increase.
 
 Instead, the fee module will only connect to a counterparty fee module. This simplifies the fee module logic, and doesn't require it to mimic the underlying nested application(s).
 
-In order for an incentivized chain to maintain backwards compatibility with an unincentivized chain for a given application (e.g. ICS-20), the incentivized chain should host both a top-level ICS-20 module and a top-level fee module that nests an ICS-20 application.
-
-Thus, a relayer looking to create an incentivized channel between two incentivized chains can do so by creating channel between their `fee:transfer` modules. A relayer looking to create an unincentivized channel on a backwards-compatible incentivized chain may do so by creating the channel on the `transfer` port.
+In order for an incentivized chain to maintain backwards compatibility with an unincentivized chain for a given application (e.g. ICS-20), the incentivized chain should host both a top-level ICS-20 module and a top-level fee module that nests an ICS-20 application each of which should bind to unique ports.
 
 #### Reasoning
 
-This proposal satisfies the desired properties. All parts of the packet flow (receive/acknowledge/timeout) can be properly incentivized and rewarded. The protocol does not specify the relayer beforehand, thus the incentivization is permissionless. The escrowing and distribution of funds is completely handled on source chain, thus there is no need for additional IBC packets or the use of ICS-20 in the fee protocol. The fee protocol only assumes existence of fungible tokens on the source chain. Using the connection version, the protocol enables opt-in incentivization and backwards compatibility. The fee module can implement arbitrary custom logic so long as it respects the callback interfaces that IBC expects.
+This proposal satisfies the desired properties. All parts of the packet flow (receive/acknowledge/timeout) can be properly incentivized and rewarded. The protocol does not specify the relayer beforehand, thus the incentivization can be permissionless or permissioned. The escrowing and distribution of funds is completely handled on source chain, thus there is no need for additional IBC packets or the use of ICS-20 in the fee protocol. The fee protocol only assumes existence of fungible tokens on the source chain. By creating application stacks for the same base application (one with fee middleware, one without), we can get backwards compatibility.
 
 ##### Correctness
 
-The fee module is responsible for correctly escrowing and distributing funds to the provided relayers. It is IBC's responsibility to provide the fee module with the correct relayers. The ack and timeout relayers are trivially retrievable since they are the senders of the acknowledgment and timeout message.
-
-The receive relayer submits the message to the counterparty chain. Thus the counterparty chain must communicate the knowledge of who relayed the receive packet to the source chain using the acknowledgement. The address that is sent back **must** be the address of the forward relayer on the source chain.
+The fee module is responsible for correctly escrowing and distributing funds to the provided relayers. The ack and timeout relayers are trivially retrievable since they are the senders of the acknowledgment and timeout message. The forward relayer is responsible for providing their `payOnSource` address before sending `recvPacket` messages, so that the destination fee middleware can embed this address in the acknowledgement. The fee middleware on source will then use the address in acknowledgement to pay the forward relayer on the source chain.
 
 The source chain will use a "best efforts" approach with regard to the forward relayer address. Since it is not verified directly by the counterparty and is instead just treated as a string to be passed back in the acknowledgement, the forward relayer `payOnSender` address may not be a valid source chain address. In this case, the invalid address is discarded, the receive fee is refunded, and the acknowledgement processing continues. It is incumbent on relayers to pass their `payOnSender` addresses to the counterparty chain correctly.
 In the event that the counterparty chain itself incorrectly sends the forward relayer address, this will cause relayers to not collect fees on source chain for relaying packets. The incentivize-driven relayers will stop relaying for the chain until the acknowledgement logic is fixed, however the channel remains functional.
@@ -377,15 +395,13 @@ We cannot return an error on an invalid `payOnSender` address as this would perm
 
 Thus, the forward relayer reward is contingent on it providing the correct `payOnSender` address when it sends the `receive_packet` message. The packet flow will continue processing successfully even if the fee payment is unsuccessful.
 
-With the forward relayer correctly embedded in the acknowledgement, and the reverse and timeout relayers available directly in the message; IBC is able to provide the correct relayer addresses to the fee module for each step of the packet flow.
+With the forward relayer correctly embedded in the acknowledgement, and the reverse and timeout relayers available directly in the message; the fee middleware will accurately escrow and distribute fee payments to the relevant relayers.
 
 #### Optional addenda
 
-## Backwards Compatibility
-
-This can be added to any existing protocol without breaking it on the other side.
-
 ## Forwards Compatibility
+
+Not applicable.
 
 ## Example Implementation
 

@@ -16,11 +16,21 @@ This standard documents specifies the interfaces and state machine logic that a 
 
 ### Motivation
 
-IBC applications are designed to be self-contained modules that implement their own application-specific logic through a set of interfaces with the core IBC handlers. These core IBC handlers, in turn, are designed to enforce the correctness properties of IBC (transport, authentication, ordering) while delegating all application-specific handling to the IBC application modules. However, there are cases where some functionality may be desired by many applications, yet not appropriate to place in core IBC. The most prescient example of this, is the generalized middleware payment protocol. Most applications will want to opt in to a protocol that incentivizes relayers to relay packets on their channel. However, some may not wish to enable this feature and yet others will want to implement their own custom logic.
+IBC applications are designed to be self-contained modules that implement their own application-specific logic through a set of interfaces with the core IBC handlers. These core IBC handlers, in turn, are designed to enforce the correctness properties of IBC (transport, authentication, ordering) while delegating all application-specific handling to the IBC application modules. However, there are cases where some functionality may be desired by many applications, yet not appropriate to place in core IBC. The most prescient example of this, is the generalized fee payment protocol. Most applications will want to opt in to a protocol that incentivizes relayers to relay packets on their channel. However, some may not wish to enable this feature and yet others will want to implement their own custom fee handler.
 
-Without a middleware approach, developers must choose whether to place this extension to application logic inside each relevant application; or place the logic in core IBC. Placing it in each application is redundant and prone to error. Placing the logic in core IBC requires an opt-in from all applications and violates the abstraction barrier between core IBC (tao) and the application. Either case is not scalable as the number of extensions increase, since this must either increase code bloat in applications or core IBC handlers.
+Without a middleware approach, developers must choose whether to place this extension in application logic inside each relevant application; or place the logic in core IBC. Placing it in each application is redundant and prone to error. Placing the logic in core IBC requires an opt-in from all applications and violates the abstraction barrier between core IBC (TAO) and the application. Either case is not scalable as the number of extensions increase, since this must either increase code bloat in applications or core IBC handlers.
 
-Middleware allows developers to define the extensions as seperate modules that can wrap over the end application. This middleware can thus perform its own custom logic, and pass data into the application so that it may run its logic without being aware of the middleware's existence. This allows both the application and the middleware to implement its own isolated logic while still being able to run as part of a single packet flow.
+Middleware allows developers to define the extensions as seperate modules that can wrap over the base application. This middleware can thus perform its own custom logic, and pass data into the application so that it may run its logic without being aware of the middleware's existence. This allows both the application and the middleware to implement its own isolated logic while still being able to run as part of a single packet flow.
+
+### Definitions
+
+`Middleware`: A self-contained module that sits between core IBC and an underlying IBC application during packet execution. All messages between core IBC and underlying application must flow through middleware, which may perform its own custom logic.
+
+`Underlying Application`: An underlying application is the application that is directly connected to the middleware in question. This underlying application may itself be middleware that is chained to a base application.
+
+`Base Application`: A base application is an IBC application that does not contain any middleware. It may be nested by 0 or multiple middleware to form an application stack.
+
+`Application Stack (or stack)`: A stack is the complete set of application logic (middleware(s) +  base application) that gets connected to core IBC. A stack may be just a base application, or it may be a series of middlewares that nest a base application.
 
 ### Desired Properties
 
@@ -37,11 +47,11 @@ In order to function as IBC Middleware, a module must implement the IBC applicat
 
 When nesting an application, the module must make sure that it is in the middle of communication between core IBC and the application in both directions. Developers should do this by registering the top-level module directly with the IBC router (not any nested applications). The nested applications in turn, must be given access only to the middleware's `WriteAcknowledgement` and `SendPacket` rather than to the core IBC handlers directly.
 
-Additionally, the middleware must take care to ensure that the application logic can execute its own port and version negotiation without interference from the nesting middleware. In order to do this, the middleware will prepend the portID and version with its own portID and version. In the application callbacks, the middleware must do its own version and port negotation and then strip out the prefixes before handing over the data to the nested application's callback. Middleware SHOULD always prepend the portID with its own port. This will allow the original application to also exist as a top-level module connected to the IBC Router.
-
-PortID: `{middleware_port}:{app_port}`
+Additionally, the middleware must take care to ensure that the application logic can execute its own version negotiation without interference from the nesting middleware. In order to do this, the middleware will prepend the version with its own middleware version string. In the application callbacks, the middleware must do its own version negotation on the prefix and then strip out the prefix before handing over the data to the nested application's callback. This is only relevant if the middleware expects a compatible counterparty middleware at the same level on the counterparty stack. Middleware that only executes on a single side of the channel MUST NOT modify the channel version.
 
 Version: `{middleware_version}:{app_version}`
+
+Each application stack must reserve its own unique port with core IBC. Thus two stacks with the same base application must bind to separate ports.
 
 #### Handshake Callbacks
 
@@ -54,20 +64,16 @@ function onChanOpenInit(
   counterpartyPortIdentifier: Identifier,
   counterpartyChannelIdentifier: Identifier,
   version: string) {
-    middlewarePort, appPort = splitMiddlewarePort(portID)
     middlewareVersion, appVersion = splitMiddlewareVersion(version)
-    cpMiddlewarePort, cpAppPort = splitMiddlewarePort(counterpartyPortIdentifier)
-    if !isCompatible(middlewarePort, cpMiddlewarePort) {
-        return error
-    }
+    doCustomLogic()
     app.OnChanOpenInit(
         order,
         connectionHops,
-        appPort,
+        portIdentifier,
         channelIdentifier,
-        cpAppPort,
+        counterpartyPortIdentifier,
         counterpartyChannelIdentifier,
-        appVersion,
+        appVersion, // note we only pass app version here
     )
 }
 
@@ -82,14 +88,10 @@ function OnChanOpenTry(
   counterpartyVersion: string) {
       cpMiddlewareVersion, cpAppVersion = splitMiddlewareVersion(counterpartyVersion)
       middlewareVersion, appVersion = splitMiddlewareVersion(version)
-      middlewarePort, appPort = splitMiddlewarePort(portID)
-      cpMiddlewarePort, cpAppPort = splitMiddlewarePort(counterpartyPortIdentifier)
-      if !isCompatible(middlewarePort, cpMiddlewarePort) {
-          return error
-      }
       if !isCompatible(cpMiddlewareVersion, middlewareVersion) {
           return error
       }
+      doCustomLogic()
 
       // call the underlying applications OnChanOpenTry callback
       app.OnChanOpenTry(
@@ -99,8 +101,8 @@ function OnChanOpenTry(
           channelIdentifier,
           counterpartyPortIdentifier,
           counterpartyChannelIdentifier,
-          cpAppVersion,
-          appVersion,
+          cpAppVersion, // note we only pass counterparty app version here
+          appVersion, // only pass app version
       )
 }
 
@@ -108,9 +110,22 @@ function onChanOpenAck(
   portIdentifier: Identifier,
   channelIdentifier: Identifier,
   version: string) {
-      if !isCompatible(version) {
+      middlewareVersion, appVersion = splitMiddlewareVersion(version)
+      if !isCompatible(middlewareVersion) {
           return error
       }
+      doCustomLogic()
+      
+      // call the underlying applications OnChanOpenTry callback
+      app.OnChanOpenAck(portIdentifier, channelIdentifier, appVersion)
+}
+
+function OnChanOpenConfirm(
+    portIdentifier: Identifier,
+    channelIdentifier: Identifier) {
+    doCustomLogic()
+
+    app.OnChanOpenConfirm(portIdentifier, channelIdentifier)
 }
 
 function splitMiddlewareVersion(version: string): []string {
@@ -119,11 +134,9 @@ function splitMiddlewareVersion(version: string): []string {
     appVersion = join(version[1:], ":")
     return []string{middlewareVersion, appVersion}
 }
-
-function splitMiddlewarePort(portID: string) []string {
-    // identical logic to splitMiddlewareVersion
-}
 ```
+
+NOTE: Middleware that does not need to negotiate with a counterparty middleware on the remote stack will not implement the version splitting and negotiation, and will simply perform its own custom logic on the callbacks without relying on the counterparty behaving similarly.
 
 #### Packet Callbacks
 
@@ -167,6 +180,8 @@ function onTimeoutPacketClose(packet: Packet, relayer: string) {
 }
 ```
 
+NOTE: Middleware may do pre- and post-processing on underlying application data for all IBC Module callbacks defined in ICS-26.
+
 #### ICS-4 Wrappers
 
 ```typescript
@@ -188,3 +203,35 @@ function sendPacket(app_packet: Packet) {
     return ics4.sendPacket(packet)
 }
 ```
+
+### User Interaction
+
+In the case where the middleware requires some user input in order to modify the outgoing packet messages from the underlying application, the middleware MUST get this information from the user before it receives the packet message from the underlying application. It must then do its own authentication of the user input, and ensure that the user input provided to the middleware is matched to the correct outgoing packet message. The middleware MAY accomplish this by requiring that the user input to middleware, and packet message to underlying application are sent atomically and ordered from outermost middleware to base application.
+
+### Security Model
+
+As seen above, IBC middleware may arbitrarily modify any incoming or outgoing data from an underlying application. Thus, developers should not use any untrusted middleware in their application stacks.
+
+## Backwards Compatibility
+
+The Middleware approach is a design pattern already enabled by current IBC. This ICS seeks to standardize a particular design pattern for IBC middleware. There are no changes required to core IBC or any existing application.
+
+## Forwards Compatibility
+
+Not applicable.
+
+## Example Implementation
+
+Coming soon.
+
+## Other Implementations
+
+Coming soon.
+
+## History
+
+June 22, 2021 - Draft submitted
+
+## Copyright
+
+All content herein is licensed under [Apache 2.0](https://www.apache.org/licenses/LICENSE-2.0).
