@@ -48,10 +48,8 @@ The Wasm client state tracks location of the Wasm bytecode via `codeId`. Binary 
 interface ClientState {
   codeId: []byte
   data: []byte
-  frozen: boolean
-  frozen_height: Height
-  latest_height: Height
-  type: String
+  latestHeight: Height
+  proofSpecs: []ProofSpec
 }
 ```
 
@@ -65,8 +63,6 @@ interface ConsensusState {
   codeId: []byte
   data: []byte
   timestamp: uint64
-  root: MerkleRoot
-  type: String
 }
 ```
 
@@ -105,6 +101,7 @@ Contents of Wasm client headers depend upon `Wasm Client Code`.
 ```typescript
 interface Header {
   data: []byte
+  height: Height
 }
 ```
 
@@ -115,7 +112,7 @@ Wasm client `Misbehaviour` consists of two headers at the same height both of wh
 
 ```typescript
 interface Misbehaviour {
-  fromHeight: Height
+  clientId: string
   h1: Header
   h2: Header
 }
@@ -131,7 +128,7 @@ function initialise(
     initializationData: []byte,
     consensusState: []byte,
   ): ClientState {
-    codeHandle = getWASMCode(wasmCodeId)
+    codeHandle = getWasmCode(wasmCodeId)
     assert(codeHandle.isInitializationDataValid(initializationData, consensusState))
     set("clients/{identifier}/consensusStates/{height}", consensusState)
     return codeHandle.initialise(initializationData, consensusState)
