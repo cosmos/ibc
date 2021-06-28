@@ -16,21 +16,23 @@ This standard document specifies packet data structure, state machine handling l
 
 ### Motivation
 
-On Ethereum, there are two types of accounts: externally owned accounts, controlled by private keys, and contract accounts, controlled by their contract code ([ref](https://github.com/ethereum/wiki/wiki/White-Paper)). Similar to Ethereum's CA (contract accounts), interchain accounts are managed by another chain while retaining all the capabilities of a normal account (i.e. stake, send, vote, etc). While an Ethereum CA's contract logic is performed within Ethereum's EVM, interchain accounts are managed by another chain via IBC in a way such that the owner of the account retains full control over how it behaves.
+On Ethereum, there are two types of accounts: externally owned accounts, controlled by private keys, and contract accounts, controlled by their contract code ([ref](https://github.com/ethereum/wiki/wiki/White-Paper)). Similar to Ethereum's contract accounts, interchain accounts are controlled by another chain (no private key) while retaining all the capabilities of a normal account (i.e. stake, send, vote, etc). While an Ethereum CA's contract logic is performed within Ethereum's EVM, interchain accounts are managed by a seperate chain via IBC in a way such that the owner of the account retains full control over how it behaves. ICS27-1 primarily targets the use cases of DAO investing and staking derivatives over IBC.
 
 ### Definitions
 
-**TODO: Make this a table and add more useful definitions for used keywords throughout the spec**
+- Interchain Account: An account on a host chain. An interchain account has all the capabilites of a normal account. However, rather than signing transactions with a private key, a controller chain will send IBC packets to the host chain which signal what transactions the interchain account should execute.
+- Controller Chain: The chain registering and controlling an account on a host chain. The controller chain sends IBC packets to the host chain in order to control the account.
+- Host Chain: The chain where the interchain account is registered. The host chain listens for IBC packets from a controller chain which should contain instructions (e.g. cosmos SDK messages) that the account will execute.
 
 The IBC handler interface & IBC relayer module interface are as defined in [ICS 25](../ics-025-handler-interface) and [ICS 26](../ics-026-routing-module), respectively.
 
 ### Desired Properties
 
 - Permissionless
-- Fault containment: An interchain account must follow rules of its host chain, even in times of Byzantine behavior by the counterparty chain (the chain that manages the account)
-- The chain that controls the account must process the results asynchronously and according to the chain's logic. The acknowledgment message should contain a result of an error as described in [ics-4](https://github.com/cosmos/ibc/tree/master/spec/core/ics-004-channel-and-packet-semantics#acknowledgement-envelope).
-- Sending and receiving transactions will be processed in an ordered channel where packets are delivered exactly in the order in which they were sent. 
-- Each ordered channel must only allow one interchain account to use it, otherwise, malicious users may be able to block transactions from being received. Practically, N accounts per N channels can be achieved by creating a new port for each user (owner of the interchain account) and creating a unique channel for each new registration request. Future versions of ics-27 will use partially ordered channels to allow multiple interchain accounts on the same channel to preserve account sequence ordering without being reliant on one another
+- Fault containment: An interchain account must follow rules of its host chain, even in times of Byzantine behavior by the controller chain (the chain that manages the account)
+- Sending and receiving transactions will be processed in an ordered channel where packets are delivered exactly in the order in which they were sent
+- If a channel closes, the controller chain must be able to regain access to registered interchain accounts by simply opening a new channel
+- Each interchain account is owned by a single account on the controller chain. Only the owner account on the controller chain is authorized to control the interchain account
 
 ## Technical Specification
 
