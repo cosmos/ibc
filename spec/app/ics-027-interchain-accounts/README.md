@@ -233,7 +233,6 @@ function onChanCloseConfirm(
 function onRecvPacket(packet: Packet) {
   InterchainAccountPacketData data = packet.data
     const tx = deserialiseTx(packet.data.txBytes)
-    abortTransactionUnless(authenticateTx(tx))
     try {
       const result = runTx(tx)
 
