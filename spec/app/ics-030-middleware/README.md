@@ -53,6 +53,26 @@ Version: `{middleware_version}:{app_version}`
 
 Each application stack must reserve its own unique port with core IBC. Thus two stacks with the same base application must bind to separate ports.
 
+#### Interfaces
+
+```typescript
+// Middleware implements the ICS26 Module interface
+interface Middleware extends ICS26Module {
+    app: ICS26Module // middleware has acccess to an underlying application which may be wrapped by more middleware
+    ics4Wrapper: ICS4Wrapper // middleware has access to ICS4Wrapper which may be core IBC Channel Handler or a higher-level middleware that wraps this middleware.
+}
+```
+
+```typescript
+// This is implemented by ICS4 and all middleware that are wrapping base application.
+// The base application will call `sendPacket` or `writeAcknowledgement` of the middleware directly above them
+// which will call the next middleware until it reaches the core IBC handler.
+interface ICS4Wrapper {
+    sendPacket(packet: Packet)
+    writeAcknowledgement(packet: Packet, ack: Acknowledgement)
+}
+```
+
 #### Handshake Callbacks
 
 ```typescript

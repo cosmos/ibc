@@ -68,17 +68,18 @@ The fee payment mechanism will be implemented as IBC Middleware (see ICS-30) in 
 
 Given this, the flow would be:
 
+1. Relayer registers their destination address to source address mapping on the destination chain's fee middleware.
 1. User/module submits a send packet on the `source` chain, along with a message to the fee middleware module with some tokens and fee information on how to distribute them. The fee tokens are all escrowed by the fee module.
-2. RelayerA submits `RecvPacket` on the `destination` chain. Along with the `RecvPacket` message, the *forward relayer* will submit a message to the fee middleware with the `payToOnSource` address where payment should be sent. The middleware message must be ordered first and both messages should commit atomically.
-3. Destination application includes this `payToOnSource` in the acknowledgement
-4. RelayerB submits `AcknowledgePacket` which provides the *return relayer* address on the source chain, along with the `payToOnSource` address
-5. Source application can distribute the tokens escrowed in (1) to both the *forward* and the *return* relayers.
+1. RelayerA submits `RecvPacket` on the `destination` chain.
+1. Destination fee middleware will retrieve the source address for the given relayer's destination address (this mapping is already registered) and include it in the acknowledgement.
+1. RelayerB submits `AcknowledgePacket` which provides the *return relayer* address on the source chain in the message sender, along with the source address of the *forward relayer* embedded in the acknowledgement.
+1. Source fee middleware can distribute the tokens escrowed in (1) to both the *forward* and the *return* relayers and refund remainder tokens to original fee payer(s).
 
 Alternate flow:
 
 1. User/module submits a send packet on the `source` chain, along with some tokens and fee information on how to distribute them
-2. Relayer submits `OnTimeout` which provides its address on the source chain
-3. Source application can distribute the tokens escrowed in (1) to this relayer, and potentially return remainder tokens to the original packet sender.
+1. Relayer submits `OnTimeout` which provides its address on the source chain
+1. Source application can distribute the tokens escrowed in (1) to this relayer, and potentially return remainder tokens to the original fee payer(s).
 
 ### Fee details
 
@@ -99,6 +100,7 @@ The logic involved in collecting fees from users and then paying it out to the r
 
 While the details may vary between fee modules, all Fee modules **must** ensure it does the following:
 
+- It must allow relayers to register their counterparty address.
 - It must have in escrow the maximum fees that all outstanding packets may pay out (or it must have ability to mint required amount of tokens)
 - It must pay the receive fee for a packet to the forward relayer specified in `PayFee` callback (if unspecified, it must refund forward fee to original fee payer(s))
 - It must pay the ack fee for a packet to the reverse relayer specified in `PayFee` callback
@@ -106,6 +108,13 @@ While the details may vary between fee modules, all Fee modules **must** ensure 
 - It must refund any remainder fees in escrow to the original fee payer(s) if applicable
 
 ```typescript
+// RegisterCounterpartyAddress is called by the relayer on each channelEnd and allows them to specify their counterparty address before relaying
+// This ensures they will be properly compensated for forward relaying since destination chain must send back relayer's source address (counterparty address) in acknowledgement
+// This function may be called more than once by relayer, in which case, latest counterparty address is always used.
+function RegisterCounterpartyAddress(address: string, counterPartyAddress: string) {
+    // set mapping between address and counterparty address
+}
+
 // EscrowPacketFee is an open callback that may be called by any module/user that wishes to escrow funds in order to
 // incentivize the relaying of the given packet.
 // NOTE: These fees are escrowed in addition to any previously escrowed amount for the packet. In the case where the previous amount is zero,
@@ -280,15 +289,20 @@ function splitFeeVersion(version: string): []string {
 function onRecvPacket(packet: Packet, relayer: string): bytes {
     app_acknowledgement = app.onRecvPacket(packet, relayer)
 
+    // get source address by retrieving counterparty address of this relayer stored in fee middleware.
+    // NOTE: source address may be empty or invalid, counterparty
+    // must refund fee in these cases
+    sourceAddress = getCounterpartyAddress(relayer)
+
     // in case of asynchronous acknowledgement, we must store the relayer address so that we can retrieve it later to write the acknowledgement.
     if app_acknowledgement == nil {
-        privateStore.set(forwardRelayerPath(packet), relayer)
+        privateStore.set(forwardRelayerPath(packet), sourceAddress)
     }
 
     // wrap the acknowledgement with forward relayer and return marshalled bytes
     // constructIncentivizedAck takes the app-specific acknowledgement and receive-packet relayer (forward relayer)
     // and constructs the incentivized acknowledgement struct with the forward relayer and app-specific acknowledgement embedded.
-    ack = constructIncentivizedAck(app_acknowledgment, relayer)
+    ack = constructIncentivizedAck(app_acknowledgment, sourceAddress)
     return marshal(ack)
 }
 
@@ -353,12 +367,14 @@ function writeAcknowledgement(
     relayer = privateStore.get(forwardRelayerPath(packet))
     ack = constructIncentivizedAck(acknowledgment, relayer)
     ack_bytes marshal(ack)
-    return ics4.writeAcknowledgement(packet, ack_bytes)
+    // ics4Wrapper may be core IBC or higher-level middleware
+    return ics4Wrapper.writeAcknowledgement(packet, ack_bytes)
 }
 
 // Fee Middleware sendPacket function just forwards message to ics-4 handler
 function sendPacket(packet: Packet) {
-    return ics4.sendPacket(packet)
+    // ics4Wrapper may be core IBC or higher-level middleware
+    return ics4Wrapper.sendPacket(packet)
 }
 ```
 
@@ -374,15 +390,20 @@ In case a user wants to pay fees on a packet after it has already been created, 
 
 **Relayers sending RecvPacket**
 
-However, the message the relayer sends to the fee middleware must be standardized so that relayers do not need to implement custom code for each middleware implementation. The forward relayer SHOULD submit a `PayOnSource` Message atomically with the `RecvPacket` message(s). The `PayOnSource` message must be ordered first before any `RecvPacket` messages. The fee middleware will save the `payOnSource` address embedded in the message, and encode it into the acknowledgements for any packets that are received atomically with the `PayOnSource` message. This allows the fee middleware to incorporate the relayer-provided input into the acknowledgement without changing the underlying application.
-
-If the relayer does not include the `PayOnSource` message before a `RecvPacket`, then the fee middleware will simply encode the empty string into the ack and the source chain will refund the forward fee to original fee payer(s).
+Before a relayer starts relaying on a channel, they should register their counterparty message using the standardized message:
 
 ```typescript
-interface PayOnSourceMsg {
-    sourceAddress: string
+interface RegisterCounterpartyAddressMsg {
+    channelID: string
+    portID: string
+    counterpartyAddress: string
+    address: string
 }
 ```
+
+It is the responsibility of the receiving chain to authenticate that the message was received from owner of `address`. The receiving chain must store the mapping from: `address -> counterpartyAddress` for the given channel. Then, `onRecvPacket` of the destination fee middleware can query for the counterparty address of the `recvPacket` message sender in order to get the source address of the forward relayer. This source address is what will get embedded in the acknowledgement.
+
+If the relayer does not register their counterparty address, or registers an invalid address; the acknowledgment will still be received and processed but the forward fee will be refunded to the original fee payer(s).
 
 #### Backwards Compatibility
 
