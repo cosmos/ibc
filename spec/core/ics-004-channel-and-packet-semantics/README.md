@@ -670,7 +670,7 @@ The IBC handler performs the following steps in order:
 ```typescript
 function writeAcknowledgement(
   packet: Packet,
-  acknowledgement: bytes): Packet {
+  acknowledgement: bytes) {
 
     // cannot already have written the acknowledgement
     abortTransactionUnless(provableStore.get(packetAcknowledgementPath(packet.destPort, packet.destChannel, packet.sequence) === null))
