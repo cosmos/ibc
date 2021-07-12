@@ -38,6 +38,9 @@ This document only defines desired properties, not a concrete implementation —
 
 ## Technical Specification
 
+Below we define a behaviour and an overview of datatypes. For data type definition look at [confio/ics23](https://github.com/confio/ics23/blob/master/go/ics23.go) repository.
+
+
 ### Datatypes
 
 A commitment construction MUST specify the following datatypes, which are otherwise opaque (need not be introspected) but MUST be serialisable:
