@@ -43,9 +43,13 @@ define a clear interface that can be easily adopted by any application, but not 
 ### Definitions
 
 `forward relayer`: The relayer that submits the `recvPacket` message for a given packet
+
 `reverse relayer`: The relayer that submits the `acknowledgePacket` message for a given packet
+
 `timeout relayer`: The relayer that submits the `timeoutPacket` or `timeoutOnClose` message for a given packet
+
 `source address`: The address of a relayer on the chain that sent the packet
+
 `destination address`: The address of a relayer on the chain that receives the packet
 
 ## Technical Specification
