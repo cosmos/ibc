@@ -76,8 +76,8 @@ Given this, the flow would be:
 1. User/module submits a send packet on the `source` chain, along with a message to the fee middleware module with some tokens and fee information on how to distribute them. The fee tokens are all escrowed by the fee module.
 1. RelayerA submits `RecvPacket` on the `destination` chain.
 1. Destination fee middleware will retrieve the source address for the given relayer's destination address (this mapping is already registered) and include it in the acknowledgement.
-1. RelayerB submits `AcknowledgePacket` which provides the *return relayer* address on the source chain in the message sender, along with the source address of the *forward relayer* embedded in the acknowledgement.
-1. Source fee middleware can distribute the tokens escrowed in (1) to both the *forward* and the *return* relayers and refund remainder tokens to original fee payer(s).
+1. RelayerB submits `AcknowledgePacket` which provides the *reverse relayer* address on the source chain in the message sender, along with the source address of the *forward relayer* embedded in the acknowledgement.
+1. Source fee middleware can distribute the tokens escrowed in (1) to both the *forward* and the *reverse* relayers and refund remainder tokens to original fee payer(s).
 
 Alternate flow:
 
