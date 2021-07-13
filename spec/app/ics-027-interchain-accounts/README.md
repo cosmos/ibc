@@ -166,8 +166,8 @@ function onChanOpenInit(
   version: string) {
   // only ordered channels allowed
   abortTransactionUnless(order === ORDERED)
-  // only allow channels to "ibcaccount" port on counterparty chain
-  abortTransactionUnless(counterpartyPortIdentifier === "ibcaccount")
+  // only allow channels to "interchain_account" port on counterparty chain
+  abortTransactionUnless(counterpartyPortIdentifier === "interchain_account")
   // version not used at present
   abortTransactionUnless(version === "ics27-1")
   // Only open the channel if there is no active channel already set (with status OPEN)
@@ -187,6 +187,7 @@ function onChanOpenTry(
   counterpartyVersion: string) {
   // only unordered channels allowed
   abortTransactionUnless(order === ORDERED)
+
   // assert that version is "ics27-1"
   abortTransactionUnless(version === "ics27-1")
   abortTransactionUnless(counterpartyVersion === "ics27-1")
@@ -220,7 +221,7 @@ function onChanOpenConfirm(
 function onChanCloseInit(
   portIdentifier: Identifier,
   channelIdentifier: Identifier) {
-  // no action necessary
+  unsetActiveChannel(CounterPartyPortId)
 }
 ```
 
@@ -228,7 +229,7 @@ function onChanCloseInit(
 function onChanCloseConfirm(
   portIdentifier: Identifier,
   channelIdentifier: Identifier) {
-  unsetActiveChannel(sourcePort)
+  unsetActiveChannel(SourcePort)
 }
 ```
 
@@ -270,6 +271,16 @@ function onAcknowledgePacket(
 }
 ```
 
+```typescript
+function onTimeoutPacket(packet: Packet) {
+  // Receiving chain should handle this event as if the tx in packet has failed
+  switch (ack.type) {
+  case Type.RUNTX:
+    onTxFailed(packet.sourcePort, packet.sourceChannel, packet.data.data)
+    return
+}
+```
+
 ## Example Implementation
 
 Repository for Cosmos-SDK implementation of ICS27: https://github.com/cosmos/interchain-accounts
@@ -291,4 +302,5 @@ April 27, 2021 - Redesign of ics27 specification
 ## Copyright
 
 All content herein is licensed under [Apache 2.0](https://www.apache.org/licenses/LICENSE-2.0).
+
 
