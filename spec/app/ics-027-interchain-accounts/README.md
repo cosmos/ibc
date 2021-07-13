@@ -16,13 +16,13 @@ This standard document specifies packet data structure, state machine handling l
 
 ### Motivation
 
-On Ethereum, there are two types of accounts: externally owned accounts, controlled by private keys, and contract accounts, controlled by their contract code ([ref](https://github.com/ethereum/wiki/wiki/White-Paper)). Similar to Ethereum's contract accounts, interchain accounts are controlled by another chain (not a private key) while retaining all the capabilities of a normal account (i.e. stake, send, vote, etc). While an Ethereum CA's contract logic is performed within Ethereum's EVM, interchain accounts are managed by a seperate chain via IBC in a way such that the owner of the account retains full control over how it behaves. ICS27-1 primarily targets the use cases of DAO investing and staking derivatives over IBC.
+On Ethereum, there are two types of accounts: externally owned accounts, controlled by private keys, and contract accounts, controlled by their contract code ([ref](https://github.com/ethereum/wiki/wiki/White-Paper)). Similar to Ethereum's contract accounts, interchain accounts are controlled by another chain (not a private key) while retaining all the capabilities of a normal account (i.e. stake, send, vote, etc). While an Ethereum CA's contract logic is performed within Ethereum's EVM, interchain accounts are managed by a separate chain via IBC in a way such that the owner of the account retains full control over how it behaves. ICS27-1 primarily targets the use cases of DAO investing and staking derivatives over IBC.
 
 ### Definitions 
 
-- Interchain Account: An account on a host chain. An interchain account has all the capabilites of a normal account. However, rather than signing transactions with a private key, a controller chain will send IBC packets to the host chain which signal what transactions the interchain account should execute 
+- Interchain Account: An account on a host chain. An interchain account has all the capabilities of a normal account. However, rather than signing transactions with a private key, a controller chain will send IBC packets to the host chain which signal what transactions the interchain account should execute 
 - Interchain Account Owner: An account on the controller chain. Every interchain account on a host chain has a respective owner account on the controller chain 
-- Controller Chain: The chain registering and controlling an account on a host chain. The controller chain sends IBC packets to the host chain in order to control the account
+- Controller Chain: The chain registering and controlling an account on a host chain. The controller chain sends IBC packets to the host chain to control the account
 - Host Chain: The chain where the interchain account is registered. The host chain listens for IBC packets from a controller chain which should contain instructions (e.g. cosmos SDK messages) that the interchain account will execute
 
 The IBC handler interface & IBC relayer module interface are as defined in [ICS 25](../ics-025-handler-interface) and [ICS 26](../ics-026-routing-module), respectively.
@@ -37,9 +37,9 @@ The IBC handler interface & IBC relayer module interface are as defined in [ICS 
 
 ## Technical Specification
 
-A chain can implement one or both parts to the interchain accounts protocol (controlling and hosting). A controller chain that registers accounts on other host chains (that support interchain accounts) does not necessarily have to allow other controller chains to register accounts on its own chain, and vice versa. 
+A chain can implement one or both parts of the interchain accounts protocol (controlling and hosting). A controller chain that registers accounts on other host chains (that support interchain accounts) does not necessarily have to allow other controller chains to register accounts on its chain, and vice versa. 
 
-This specification defines the general way to register an interchain account and transfer tx bytes. The host chain is responsible for deserialising and executing the tx bytes, and the controller chain should know how the host chain will handle the tx bytes in advance (Cosmos SDK chains will deserialize using Protobuf). 
+This specification defines the general way to register an interchain account and transfer tx bytes. The host chain is responsible for deserializing and executing the tx bytes, and the controller chain should know how the host chain will handle the tx bytes in advance (Cosmos SDK chains will deserialize using Protobuf). 
 
 ### Authentication & Authorization
 
@@ -48,7 +48,7 @@ For the controller chain to register an interchain account on a host chain, firs
 
 The controller and host chain should keep track of an `active-channel` for each registered interchain account. The `active-channel` is set during the channel creation handshake process. If a channel closes, the `active-channel` should be unset. A new channel can be opened with the same source port, allowing access to the interchain account on the host chain. 
 
-An active channel can look like:
+An active channel can look like this:
 
 
 ```typescript
@@ -72,6 +72,7 @@ interface InterchainAccountModule {
   // Host side
   createInterchainAccount(): Address 
   deserialiseTx(txBytes: Uint8Array): Tx
+  authenticateTx(messages: []sdk.Message, portId: string): Error
   executeTx(tx: Tx): Result
 }
 ```
@@ -80,16 +81,16 @@ interface InterchainAccountModule {
 
 
 #### Sending Interface
-The `initInterchainAccount` method in the `InterchainAccountModule` interface defines how the controller chain requests the creation of an interchain account on a host chain. Calling `initInterchainAccount`  binds a new port with id `ics27-1-{connection-number}-{owner-address}` and calls `OpenChanInit` via the IBC module which will initiate the handshake process and emit an event signaling to a relayer to create a new channel between both chains. The host chain can then create the interchain account in the `ChanOpenTry` callback as part of the channel creation handshake process defined in [ics-4](https://github.com/cosmos/ibc/tree/master/spec/core/ics-004-channel-and-packet-semantics). Once the `chanOpenAck` callback is successful the handshake-originating (controller) chain can assume the account registration is succesful.  
+The `initInterchainAccount` method in the `InterchainAccountModule` interface defines how the controller chain requests the creation of an interchain account on a host chain. Calling `initInterchainAccount`  binds a new port with id `ics27-1-{connection-number}-{owner-address}` and calls `OpenChanInit` via the IBC module which will initiate the handshake process and emit an event signaling to a relayer to create a new channel between both chains. The host chain can then create the interchain account in the `ChanOpenTry` callback as part of the channel creation handshake process defined in [ics-4](https://github.com/cosmos/ibc/tree/master/spec/core/ics-004-channel-and-packet-semantics). Once the `chanOpenAck` callback is successful the handshake-originating (controller) chain can assume the account registration is successful.  
 
 
-The `trySendTx` method in the`InterchainAccountModule` creates an outgoing IBC packet containing tx bytes (e.g. cosmos SDK messages) that a specifc interchain account should execute.  
+The `trySendTx` method in the`InterchainAccountModule` creates an outgoing IBC packet containing tx bytes (e.g. cosmos SDK messages) that a specific interchain account should execute.  
 
 #### Recieving Interfacce
 
 `createInterchainAccount`  A newly created interchain account must not conflict with an existing account. `createInterchainAccount` should be called in the `chanOpenTry` callback as part of the channel creation handshake process defined in [ics-4](https://github.com/cosmos/ibc/tree/master/spec/core/ics-004-channel-and-packet-semantics).
 
-`executeTx` executes a transaction based on the IBC packet recieved from the controller chain.
+`executeTx` executes a transaction based on the IBC packet received from the controller chain.
 
 ### Packet Data
 `InterchainAccountPacketData` contains an array of messages that an interchain account can execute and a memo string that is sent to the host chain.  
@@ -101,7 +102,7 @@ message InterchainAccountPacketData  {
 }
 ```
 
-The acknowledgement packet structure is defined as in [ics4](https://github.com/cosmos/cosmos-sdk/blob/v0.42.4/proto/ibc/core/channel/v1/channel.proto#L134-L147). If an error occurs on the host chain the acknowledgement should contain the error message.
+The acknowledgment packet structure is defined as in [ics4](https://github.com/cosmos/cosmos-sdk/blob/v0.42.4/proto/ibc/core/channel/v1/channel.proto#L134-L147). If an error occurs on the host chain the acknowledgment should contain the error message.
 
 ```typescript
 message Acknowledgement {
@@ -290,5 +291,4 @@ April 27, 2021 - Redesign of ics27 specification
 ## Copyright
 
 All content herein is licensed under [Apache 2.0](https://www.apache.org/licenses/LICENSE-2.0).
-
 
