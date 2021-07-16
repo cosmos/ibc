@@ -33,7 +33,7 @@ The IBC handler interface & IBC relayer module interface are as defined in [ICS 
 - The ordering of transactions sent to an interchain account on a host chain must be maintained. Transactions should be executed by an interchain account in the order in which they are sent by the controller chain
 - If a channel closes, the controller chain must be able to regain access to registered interchain accounts by simply opening a new channel
 - Each interchain account is owned by a single account on the controller chain. Only the owner account on the controller chain is authorized to control the interchain account
-- The controller chain must store the account address of the interchain account on the host chain 
+- The controller chain must store the account address of the interchain account
 
 ## Technical Specification
 
@@ -43,7 +43,7 @@ This specification defines the general way to register an interchain account and
 
 ### Authentication & Authorization
 
-For the controller chain to register an interchain account on a host chain, first the controlling side must bind a new port to the interchain account module with the id `ics27-1-{connection-number}-{owner-address}` where `{owner-address}` is the account address of the interchain account owner & connection number is the number parsed from the connection id (e.g. `connection-1` would have a connection number of `1`). This port will be used to create channels between the controller & host chain for a specific owner/interchain account pair. Only the account with `{owner-address}` matching the bound port will be authorized to send IBC packets over channels created with `SourcePort` `ics27-1-{connection-number}-{owner-address}`. The host chain trusts that each controller chain will enforce this port registration and access. 
+For the controller chain to register an interchain account on a host chain, first the controlling side must bind a new port to the interchain account module with the id `ics27-1-{connection-number}-{counterparty-connection-number}-{owner-address}` where `{owner-address}` is the account address of the interchain account owner & connection number is the number parsed from the connection id (e.g. `connection-1` would have a connection number of `1`). This port will be used to create channels between the controller & host chain for a specific owner/interchain account pair. Only the account with `{owner-address}` matching the bound port will be authorized to send IBC packets over channels created with `ics27-1-{connection-number}-{counterparty-connection-number}-{owner-address}`. The host chain trusts that each controller chain will enforce this port registration and access. 
 
 
 The controller and host chain should keep track of an `active-channel` for each registered interchain account. The `active-channel` is set during the channel creation handshake process. If a channel closes, the `active-channel` should be unset. A new channel can be opened with the same source port, allowing access to the interchain account on the host chain. 
@@ -81,7 +81,7 @@ interface InterchainAccountModule {
 
 
 #### Sending Interface
-The `initInterchainAccount` method in the `InterchainAccountModule` interface defines how the controller chain requests the creation of an interchain account on a host chain. Calling `initInterchainAccount`  binds a new port with id `ics27-1-{connection-number}-{owner-address}` and calls `OpenChanInit` via the IBC module which will initiate the handshake process and emit an event signaling to a relayer to create a new channel between both chains. The host chain can then create the interchain account in the `ChanOpenTry` callback as part of the channel creation handshake process defined in [ics-4](https://github.com/cosmos/ibc/tree/master/spec/core/ics-004-channel-and-packet-semantics). Once the `chanOpenAck` callback is successful the handshake-originating (controller) chain can assume the account registration is successful.  
+The `initInterchainAccount` method in the `InterchainAccountModule` interface defines how the controller chain requests the creation of an interchain account on a host chain. Calling `initInterchainAccount`  binds a new port with id `ics27-1-{connection-number}-{counterparty-connection-number}-{owner-address}` and calls `OpenChanInit` via the IBC module which will initiate the handshake process and emit an event signaling to a relayer to create a new channel between both chains. The host chain can then create the interchain account in the `ChanOpenTry` callback as part of the channel creation handshake process defined in [ics-4](https://github.com/cosmos/ibc/tree/master/spec/core/ics-004-channel-and-packet-semantics). Once the `chanOpenAck` callback is successful the handshake-originating (controller) chain can assume the account registration is successful.  
 
 
 The `trySendTx` method in the`InterchainAccountModule` creates an outgoing IBC packet containing tx bytes (e.g. cosmos SDK messages) that a specific interchain account should execute.  
@@ -90,7 +90,7 @@ The `trySendTx` method in the`InterchainAccountModule` creates an outgoing IBC p
 
 `createInterchainAccount`  A newly created interchain account must not conflict with an existing account. `createInterchainAccount` should be called in the `chanOpenTry` callback as part of the channel creation handshake process defined in [ics-4](https://github.com/cosmos/ibc/tree/master/spec/core/ics-004-channel-and-packet-semantics).
 
-`executeTx` executes a transaction based on the IBC packet received from the controller chain.
+`executeTx` executes a transaction based on the IBC packet received from the controller chain. `executeTx` should also check that the transaction signer is the interchain account address associated with the controller chain port-id. 
 
 ### Packet Data
 `InterchainAccountPacketData` contains an array of messages that an interchain account can execute and a memo string that is sent to the host chain.  
@@ -124,7 +124,7 @@ interface InterchainAccountHook {
 
 ### Port & channel setup
 
-The interchain account module on a host chain must always bind to a port with the id `interchain_account`. Controller chains will bind to ports dynamically, with each port id set as `ics27-1-{connection-id}-{owner-address}`.
+The interchain account module on a host chain must always bind to a port with the id `interchain_account`. Controller chains will bind to ports dynamically, with each port id set as `ics27-1-{connection-number}-{counterparty-connection-number}-{owner-address}`.
 
 The example below assumes a module is implementing the entire `InterchainAccountModule` interface. The `setup` function must be called exactly once when the module is created (perhaps when the blockchain itself is initialized) to bind to the appropriate port.
 
@@ -302,5 +302,6 @@ April 27, 2021 - Redesign of ics27 specification
 ## Copyright
 
 All content herein is licensed under [Apache 2.0](https://www.apache.org/licenses/LICENSE-2.0).
+
 
 
