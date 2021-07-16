@@ -241,10 +241,14 @@ function onRecvPacket(packet: Packet) {
   InterchainAccountPacketData data = packet.data
     const tx = deserialiseTx(packet.data.txBytes)
     try {
-      const result = executeTx(tx)
-
+      executeTx(tx)
+      
+      // Gets the interchain account address, and returns it to the controller chain
+      // This step is necessary in order for the controller chain to know the address of the registered interchain account 
+      // We should only return the interchain account on packet sequence 1
+      const interchainAccount = getInterchainAccount(ctx, SourcePortId)
       return Acknowledgement{
-        result: result
+        result: interchainAccount
       }
     } catch (e) {
       // Return ack with error.
