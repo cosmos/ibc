@@ -129,13 +129,13 @@ function RegisterCounterpartyAddress(address: string, counterPartyAddress: strin
 // The caller may optionally specify an array of relayer addresses. This MAY be used by the fee module to modify fee payment logic
 // based on ultimate relayer address. For example, fee module may choose to only pay out relayer if the relayer address was specified in
 // the `EscrowPacketFee`.
-function EscrowPacketFee(packet: Packet, receiveFee: Fee, ackFee: Fee, timeoutFee: Fee, relayers: []string) {
+function EscrowPacketFee(packetId: string, receiveFee: Fee, ackFee: Fee, timeoutFee: Fee, relayers: []string) {
     // escrow max(receiveFee+ackFee, timeoutFee) for this packet
     // do custom logic with provided relayer addresses if necessary
 }
 
 // PayFee is a callback implemented by fee module called by the ICS-4 AcknowledgePacket handler.
-function PayFee(packet: Packet, forward_relayer: string, reverse_relayer: string) {
+function PayFee(packetId: string, forward_relayer: string, reverse_relayer: string) {
     // pay the forward fee to the forward relayer address
     // pay the reverse fee to the reverse relayer address
     // refund extra tokens to original fee payer(s)
@@ -143,7 +143,7 @@ function PayFee(packet: Packet, forward_relayer: string, reverse_relayer: string
 }
 
 // PayFee is a callback implemented by fee module called by the ICS-4 TimeoutPacket handler.
-function PayTimeoutFee(packet: Packet, timeout_relayer: string) {
+function PayTimeoutFee(packetId: string, timeout_relayer: string) {
     // pay the timeout fee to the timeout relayer address
     // refund extra tokens to original fee payer(s)
 }
