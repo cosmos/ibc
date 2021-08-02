@@ -5,7 +5,7 @@ stage: draft
 category: IBC/TAO
 kind: instantiation
 implements: 2
-author: Parth Desai <parth@chorus.one>
+author: Parth Desai <parth@chorus.one>, Mateusz Kaczanowski <mateusz@chorus.one>
 created: 2020-10-13
 modified: 2020-10-13
 ---
@@ -37,7 +37,7 @@ This specification must satisfy the client interface defined in ICS 2.
 
 ## Technical Specification
 
-This specification depends on correctness of the `Wasm Client code` in context of consensus algorithm of its target `blockchain`, as well as correct instantiation of `Wasm Client`.
+This specification depends on the correct instantiation of the `Wasm client` and is decoupled from any specific implementation of the target `blockchain` consensus algorithm.
 
 ### Client state
 
@@ -130,8 +130,9 @@ function initialise(
   ): ClientState {
     codeHandle = getWasmCode(wasmCodeId)
     assert(codeHandle.isInitializationDataValid(initializationData, consensusState))
-    set("clients/{identifier}/consensusStates/{height}", consensusState)
-    return codeHandle.initialise(initializationData, consensusState)
+
+    store = getStore("clients/{identifier}")
+    return codeHandle.initialise(store, initializationData, consensusState)
 }
 ```
 
@@ -153,11 +154,11 @@ function checkValidityAndUpdateState(
   clientState: ClientState,
   epoch: uint64,
   header: Header) {
+    store = getStore("clients/{identifier}")
     codeHandle = clientState.codeHandle()
-    isValid, consensusState = codeHandle.validateHeaderAndCreateConsensusState(clientState, header, epoch)
-    set("clients/{identifier}/consensusStates/{header.height}", consensusState)
-    // save the client
-    set("clients/{identifier}", clientState)
+
+    // verify that provided header is valid and state is saved
+    assert(codeHandle.validateHeaderAndCreateConsensusState(store, clientState, header, epoch))
 }
 ```
 
@@ -169,11 +170,9 @@ Wasm client misbehaviour checking determines whether or not two conflicting head
 function checkMisbehaviourAndUpdateState(
   clientState: ClientState,
   misbehaviour: Misbehaviour) {
+    store = getStore("clients/{identifier}")
     codeHandle = clientState.codeHandle()
-    consensusState = get("clients/{identifier}/consensusStates/{misbehaviour.fromHeight}")
-    assert(codeHandle.handleMisbehaviour(clientState, consensusState, misbehaviour))
-    // save the client
-    set("clients/{identifier}", clientState)
+    assert(codeHandle.handleMisbehaviour(store, clientState, misbehaviour))
 }
 ```
 
