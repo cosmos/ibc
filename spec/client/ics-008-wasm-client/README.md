@@ -1,5 +1,5 @@
 ---
-ics: 28
+ics: 8
 title: Wasm Client
 stage: draft
 category: IBC/TAO
