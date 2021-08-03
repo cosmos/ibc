@@ -351,10 +351,14 @@ function OnRecvPacket(
         if err != nil {
             ack = channeltypes.NewErrorAcknowledgement(err.Error())
         }   
+        // If the packet sequence is 1 add the interchain account address to the 
+        if packet.Seqeunce = 1 {
+            var interchainAccountAddress = GetInterchainAccountAddress(packet.CounterPartyPortId)
+            ack = channeltypes.NewResultAcknowledgement([]byte{byte(interchainAccountAddress)})
+        }
     }
     
     // NOTE: acknowledgement will be written synchronously during IBC handler execution.
-    ack = channeltypes.NewResultAcknowledgement([]byte{byte(interchainAccountAddress)})
     return ack
 }
 ```
@@ -367,12 +371,10 @@ function onAcknowledgePacket(
   acknowledgement: bytes) {
     if (acknowledgement.result) {
       onTxSucceeded(packet.sourcePort, packet.sourceChannel, packet.data.data)
-   
-    // if the interchain account address has not been set, parse from the ack result and set in state
-    found = getInterchainAccountAddress(packet.sourcePort)
-    if(!found){
-        setInterchainAccountAddress(sourcePort, String(acknowledgement.result))
-    }
+      // If the packet sequence is 1 set the interchain account address in state
+      if packet.Sequence == 1 {
+          setInterchainAccountAddress(sourcePort, String(acknowledgement.result))
+      }
     } else {
       onTxFailed(packet.sourcePort, packet.sourceChannel, packet.data.data)
     }
@@ -409,6 +411,7 @@ April 27, 2021 - Redesign of ics27 specification
 ## Copyright
 
 All content herein is licensed under [Apache 2.0](https://www.apache.org/licenses/LICENSE-2.0).
+
 
 
 
