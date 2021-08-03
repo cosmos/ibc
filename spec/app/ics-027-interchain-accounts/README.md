@@ -75,6 +75,13 @@ function GetInterchainAccountAddressFromAck(connectionId: string, counterPartyCo
     // Sends a generic IBC packet to the host chain with the intention of parsing the interchain account address associated with this port/connection/channel from the Acknowledgement packet.
 }
 
+// Opens a new channel on a particular port given a connection
+// This is a helper function to open a new channel 
+// This is a safety function in case of a channel closing and the controller chain needs to regain access to an interchain account on the host chain 
+function InitChannel(portId: string, connectionId: string) returns (nil){
+  // An `OnChannelOpenInit` event is emitted which can be picked up by an offchain process such as a relayer which will finish the channel opening handshake
+}
+
 // * HOST CHAIN *
 
 // RegisterInterchainAccount is called on the OnOpenTry step during the channel creation handshake 
@@ -125,7 +132,7 @@ function GetInterchainAccountAddress(portId string) returns (string, error){
 ### Registering & Controlling flows
 **Active Channels**
 
-The controller and host chain should keep track of an `active-channel` for each registered interchain account. The `active-channel` is set during the channel creation handshake process. If a channel closes, the `active-channel` should be unset. A new channel can be opened with the same source port, allowing access to the interchain account on the host chain. This is a safety mechanism that allows a controller chain to regain access to an interchain account on a host chain in case of a channel closing.
+The controller and host chain should keep track of an `active-channel` for each registered interchain account. The `active-channel` is set during the channel creation handshake process. A new channel can be opened with the same source port, allowing access to the interchain account on the host chain. This is a safety mechanism that allows a controller chain to regain access to an interchain account on a host chain in case of a channel closing.
 
 An active channel can look like this:
 
@@ -309,7 +316,8 @@ function onChanOpenConfirm(
 function onChanCloseInit(
   portIdentifier: Identifier,
   channelIdentifier: Identifier) {
-  unsetActiveChannel(CounterPartyPortId)
+    // users should not be able to close channels
+    return nil
 }
 ```
 
@@ -317,7 +325,8 @@ function onChanCloseInit(
 function onChanCloseConfirm(
   portIdentifier: Identifier,
   channelIdentifier: Identifier) {
-  unsetActiveChannel(SourcePort)
+   // users should not be able to close channels
+   return nil
 }
 ```
 
@@ -325,24 +334,28 @@ function onChanCloseConfirm(
 `onRecvPacket` is called by the routing module when a packet addressed to this module has been received.
 
 ```typescript
-function onRecvPacket(packet: Packet) {
-  InterchainAccountPacketData data = packet.data
-    const tx = deserialiseTx(packet.data.txBytes)
-    try {
-      executeTx(tx)
-      
-      // Gets the interchain account address, and returns it to the controller chain
-      // This step is necessary in order for the controller chain to know the address of the registered interchain account 
-      // We should only return the interchain account on packet sequence 1
-      const interchainAccountAddress = GetInterchainAccountAddress(ctx, SourcePortId)
-      return Acknowledgement{
-        result: interchainAccountAddress
-      }
-    } catch (e) {
-      // Return ack with error.
-      return Acknowledgement{
-        error: e.message,
+function OnRecvPacket(
+	packet channeltypes.Packet,
+) {
+    ack = channeltypes.NewResultAcknowledgement([]byte{byte(1)})
+
+    var data types.IBCAccountPacketData
+    if err = UnmarshalJSON(packet.GetData(), &data); err != nil {
+	ack = channeltypes.NewErrorAcknowledgement(fmt.Sprintf("cannot unmarshal ICS-27 interchain account packet data: %s", err.Error()))
     }
+
+    // only attempt the application logic if the packet data
+    // was successfully decoded
+    if ack.Success() {
+        err = am.keeper.OnRecvPacket(ctx, packet)
+        if err != nil {
+            ack = channeltypes.NewErrorAcknowledgement(err.Error())
+        }   
+    }
+    
+    // NOTE: acknowledgement will be written synchronously during IBC handler execution.
+    ack = channeltypes.NewResultAcknowledgement([]byte{byte(interchainAccountAddress)})
+    return ack
 }
 ```
 
@@ -354,9 +367,12 @@ function onAcknowledgePacket(
   acknowledgement: bytes) {
     if (acknowledgement.result) {
       onTxSucceeded(packet.sourcePort, packet.sourceChannel, packet.data.data)
-      // Sets the interchainAccount address on the controller side for a given owner
-      // This should only be done on packet sequence 1
-      setInterchainAccountAddress(sourcePort, acknowledgement.result)
+   
+    // if the interchain account address has not been set, parse from the ack result and set in state
+    found = getInterchainAccountAddress(packet.sourcePort)
+    if(!found){
+        setInterchainAccountAddress(sourcePort, String(acknowledgement.result))
+    }
     } else {
       onTxFailed(packet.sourcePort, packet.sourceChannel, packet.data.data)
     }
@@ -367,8 +383,6 @@ function onAcknowledgePacket(
 ```typescript
 function onTimeoutPacket(packet: Packet) {
   // Receiving chain should handle this event as if the tx in packet has failed
-  switch (ack.type) {
-  case Type.RUNTX:
     onTxFailed(packet.sourcePort, packet.sourceChannel, packet.data.data)
     return
 }
@@ -395,6 +409,7 @@ April 27, 2021 - Redesign of ics27 specification
 ## Copyright
 
 All content herein is licensed under [Apache 2.0](https://www.apache.org/licenses/LICENSE-2.0).
+
 
 
 
