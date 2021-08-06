@@ -132,7 +132,7 @@ function GetInterchainAccountAddress(portId string) returns (string, error){
 ### Registering & Controlling flows
 **Active Channels**
 
-The controller and host chain should keep track of an `active-channel` for each registered interchain account. The `active-channel` is set during the channel creation handshake process. A new channel can be opened with the same source port, allowing access to the interchain account on the host chain. This is a safety mechanism that allows a controller chain to regain access to an interchain account on a host chain in case of a channel closing.
+The controller and host chain should keep track of an `active-channel` for each registered interchain account. The `active-channel` is set during the channel creation handshake process. This is a safety mechanism that allows a controller chain to regain access to an interchain account on a host chain in case of a channel closing. 
 
 An active channel can look like this:
 
@@ -140,7 +140,7 @@ An active channel can look like this:
 ```typescript
 {
  // Controller Chain
- SourcePortId: `ics-27-1-cosmos1mjk79fjjgpplak5wq838w0yd982gzkyfrk07am`,
+ SourcePortId: `ics-27-0-0-cosmos1mjk79fjjgpplak5wq838w0yd982gzkyfrk07am`,
  SourceChannelId: `channel-1`,
  // Host Chain
  CounterPartyPortId: `interchain_account`,
@@ -170,8 +170,8 @@ This port will be used to create channels between the controller & host chain fo
 
 Once an interchain account is registered on the host chain a controller chain can begin sending instructions (messages) to control this account. 
 
-1. The controlling chain calls `GetInterchainAccountAddressFromAck()` to get the address of the interchain account on the host chain and sets the address in state mapped to the respective portID. 
-2. The interchain account owner on the controller chain calls `TrySendTx` and passes message(s) that will be executed on the host side by the associated interchain account
+1. The controller chain calls `GetInterchainAccountAddressFromAck()` to get the address of the interchain account on the host chain and sets the address in state mapped to the respective portID. 
+2. The controller chain calls `TrySendTx` and passes message(s) that will be executed on the host side by the associated interchain account (determined by the source port identifer)
 
 Cosmos SDK psuedo code example:
 
@@ -183,7 +183,7 @@ TrySendTx(ownerAddress, connectionId, counterPartyConnectionId, msg)
 ```
 
 4. The host chain upon receiving the IBC packet will call `DeserializeTx` and then call `AuthenticateTx` for each message. If either of these steps fails an error will be returned.
-5. The host chain will then call `ExecuteTx` for each message and return a successful acknowledgment.
+5. The host chain will then call `ExecuteTx` for each message and return an acknowledgment
 
 
 
@@ -219,7 +219,7 @@ interface InterchainAccountHook {
 
 ### Port & channel setup
 
-The interchain account module on a host chain must always bind to a port with the id `interchain_account`. Controller chains will bind to ports dynamically, with each port id set as `ics27-1-{connection-number}-{counterparty-connection-number}-{owner-address}`.
+The interchain account module on a host chain must always bind to a port with the id `interchain-account`. Controller chains will bind to ports dynamically, with each port id set as `ics27-1-{connection-number}-{counterparty-connection-number}-{owner-address}`.
 
 The example below assumes a module is implementing the entire `InterchainAccountModule` interface. The `setup` function must be called exactly once when the module is created (perhaps when the blockchain itself is initialized) to bind to the appropriate port.
 
@@ -411,9 +411,3 @@ April 27, 2021 - Redesign of ics27 specification
 ## Copyright
 
 All content herein is licensed under [Apache 2.0](https://www.apache.org/licenses/LICENSE-2.0).
-
-
-
-
-
-
