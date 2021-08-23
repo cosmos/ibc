@@ -58,7 +58,7 @@ By default, identifiers have the following minimum and maximum lengths in charac
 
 | Port identifier | Client identifier | Connection identifier | Channel identifier |
 | --------------- | ----------------- | --------------------- | ------------------ |
-| 2 - 64          | 9 - 64            | 10 - 64               | 10 - 64            |
+| 2 - 128         | 9 - 64            | 10 - 64               | 10 - 64            |
 
 ### Key/value Store
 
