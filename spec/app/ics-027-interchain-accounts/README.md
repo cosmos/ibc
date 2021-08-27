@@ -269,7 +269,7 @@ function onChanOpenInit(
   abortTransactionUnless(version === "ics27-1")
   // Only open the channel if there is no active channel already set (with status OPEN)
   abortTransactionUnless(activeChannel === nil)
-  }
+}
 ```
 
 ```typescript
