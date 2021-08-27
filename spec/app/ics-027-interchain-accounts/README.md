@@ -261,13 +261,15 @@ function onChanOpenInit(
   version: string) {
   // only ordered channels allowed
   abortTransactionUnless(order === ORDERED)
+  // Host chain port address cannot be used for a controller account
+  abortTransactionUnless(portIdentifier !== "interchain-account")
   // only allow channels to "interchain_account" port on counterparty chain
   abortTransactionUnless(counterpartyPortIdentifier === "interchain-account")
   // version not used at present
   abortTransactionUnless(version === "ics27-1")
   // Only open the channel if there is no active channel already set (with status OPEN)
   abortTransactionUnless(activeChannel === nil)
-}
+  }
 ```
 
 ```typescript
