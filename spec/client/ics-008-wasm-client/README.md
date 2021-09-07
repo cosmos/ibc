@@ -189,11 +189,8 @@ function upgradeClientState(
   height: Height,
   proof: CommitmentPrefix) {
     codeHandle = clientState.codeHandle()
-    codeHandle.verifyNewClientState(oldClientState, newClientState, height)
-    // fetch the previously verified commitment root & verify membership
-    root = get("clients/{identifier}/consensusStates/{height}")
-    // verify that the provided consensus state has been stored
-    assert(root.verifyMembership(path, newClientState, proof))
+    assert(codeHandle.verifyNewClientState(clientState, newClientState, height, proof))
+
     // update client state
     clientState = newClientState
     set("clients/{identifier}", clientState)
@@ -215,13 +212,8 @@ function verifyClientConsensusState(
   clientIdentifier: Identifier,
   consensusStateHeight: Height,
   consensusState: ConsensusState) {
-    path = applyPrefix(prefix, "clients/{clientIdentifier}/consensusState/{consensusStateHeight}")
     codeHandle = getCodeHandleFromClientID(clientIdentifier)
-    assert(codeHandle.isValidClientState(clientState, height))
-    // fetch the previously verified commitment root & verify membership
-    root = get("clients/{identifier}/consensusStates/{height}")
-    // verify that the provided consensus state has been stored
-    assert(root.verifyMembership(path, consensusState, proof))
+    assert(codeHandle.isValidClientState(clientState, height, prefix, clientIdentifier, proof, consensusStateHeight, consensusState))
 }
 
 function verifyConnectionState(
@@ -231,13 +223,8 @@ function verifyConnectionState(
   proof: CommitmentProof,
   connectionIdentifier: Identifier,
   connectionEnd: ConnectionEnd) {
-    path = applyPrefix(prefix, "connections/{connectionIdentifier}")
     codeHandle = clientState.codeHandle()
-    assert(codeHandle.isValidClientState(clientState, height))
-    // fetch the previously verified commitment root & verify membership
-    root = get("clients/{identifier}/consensusStates/{height}")
-    // verify that the provided connection end has been stored
-    assert(root.verifyMembership(path, connectionEnd, proof))
+    assert(codeHandle.verifyConnectionState(clientState, height, prefix, proof, connectionIdentifier, connectionEnd))
 }
 
 function verifyChannelState(
@@ -248,13 +235,8 @@ function verifyChannelState(
   portIdentifier: Identifier,
   channelIdentifier: Identifier,
   channelEnd: ChannelEnd) {
-    path = applyPrefix(prefix, "ports/{portIdentifier}/channels/{channelIdentifier}")
     codeHandle = clientState.codeHandle()
-    assert(codeHandle.isValidClientState(clientState, height))
-    // fetch the previously verified commitment root & verify membership
-    root = get("clients/{identifier}/consensusStates/{height}")
-    // verify that the provided channel end has been stored
-    assert(root.verifyMembership(codeHandle.getProofSpec(clientState), path, channelEnd, proof))
+    assert(codeHandle.verifyChannelState(clientState, height, prefix, proof, porttIdentifier, channelIdentifier, channelEnd))
 }
 
 function verifyPacketData(
@@ -266,13 +248,8 @@ function verifyPacketData(
   channelIdentifier: Identifier,
   sequence: uint64,
   data: bytes) {
-    path = applyPrefix(prefix, "ports/{portIdentifier}/channels/{channelIdentifier}/packets/{sequence}")
     codeHandle = clientState.codeHandle()
-    assert(codeHandle.isValidClientState(clientState, height))
-    // fetch the previously verified commitment root & verify membership
-    root = get("clients/{identifier}/consensusStates/{height}")
-    // verify that the provided commitment has been stored
-    assert(root.verifyMembership(codeHandle.getProofSpec(clientState), path, hash(data), proof))
+    assert(codeHandle.verifyPacketData(clientState, height, prefix, proof, portportIdentifier, channelIdentifier, sequence, data))
 }
 
 function verifyPacketAcknowledgement(
@@ -284,13 +261,8 @@ function verifyPacketAcknowledgement(
   channelIdentifier: Identifier,
   sequence: uint64,
   acknowledgement: bytes) {
-    path = applyPrefix(prefix, "ports/{portIdentifier}/channels/{channelIdentifier}/acknowledgements/{sequence}")
     codeHandle = clientState.codeHandle()
-    assert(codeHandle.isValidClientState(clientState, height))
-    // fetch the previously verified commitment root & verify membership
-    root = get("clients/{identifier}/consensusStates/{height}")
-    // verify that the provided acknowledgement has been stored
-    assert(root.verifyMembership(codeHandle.getProofSpec(clientState), path, hash(acknowledgement), proof))
+    assert(codeHandle.verifyPacketAcknowledgement(clientState, height, prefix, proof, portportIdentifier, channelIdentifier, sequence, acknowledgement))
 }
 
 function verifyPacketReceiptAbsence(
@@ -301,13 +273,8 @@ function verifyPacketReceiptAbsence(
   portIdentifier: Identifier,
   channelIdentifier: Identifier,
   sequence: uint64) {
-    path = applyPrefix(prefix, "ports/{portIdentifier}/channels/{channelIdentifier}/receipts/{sequence}")
     codeHandle = clientState.codeHandle()
-    assert(codeHandle.isValidClientState(clientState, height))
-    // fetch the previously verified commitment root & verify membership
-    root = get("clients/{identifier}/consensusStates/{height}")
-    // verify that no acknowledgement has been stored
-    assert(root.verifyNonMembership(codeHandle.getProofSpec(clientState), path, proof))
+    assert(codeHandle.verifyPacketReceiptAbsence(clientState, height, prefix, proof, portIdentifier, channelIdentifier, sequence))
 }
 
 function verifyNextSequenceRecv(
@@ -318,13 +285,8 @@ function verifyNextSequenceRecv(
   portIdentifier: Identifier,
   channelIdentifier: Identifier,
   nextSequenceRecv: uint64) {
-    path = applyPrefix(prefix, "ports/{portIdentifier}/channels/{channelIdentifier}/nextSequenceRecv")
     codeHandle = clientState.codeHandle()
-    assert(codeHandle.isValidClientState(clientState, height))
-    // fetch the previously verified commitment root & verify membership
-    root = get("clients/{identifier}/consensusStates/{height}")
-    // verify that the nextSequenceRecv is as claimed
-    assert(root.verifyMembership(codeHandle.getProofSpec(clientState), path, nextSequenceRecv, proof))
+    assert(codeHandle.verifyNextSequenceRecv(clientState, height, prefix, proof, portIdentifier, channelIdentifier, nextSequenceRecv))
 }
 ```
 
