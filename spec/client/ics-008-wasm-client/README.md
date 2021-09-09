@@ -108,7 +108,7 @@ interface Header {
 ### Misbehaviour
 
 The `Misbehaviour` type is used for detecting misbehaviour and freezing the client - to prevent further packet flow - if applicable.
-Wasm client `Misbehaviour` consists of two headers at the same height both of which the light client would have considered valid.
+Wasm client `Misbehaviour` consists of two conflicting headers both of which the light client would have considered valid.
 
 ```typescript
 interface Misbehaviour {
