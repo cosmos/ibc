@@ -68,12 +68,12 @@ interface ConsensusState {
 
 ### Height
 
-The height of a Wasm light client instance consists of two `uint64`s: the epoch number, and the height in the epoch.
+The height of a Wasm light client instance consists of two `uint64`s: the revision number, and the height in the revision.
 
 ```typescript
 interface Height {
-  epochNumber: uint64
-  epochHeight: uint64
+  revisionNumber: uint64
+  revisionHeight: uint64
 }
 ```
 
@@ -81,18 +81,18 @@ Comparison between heights is implemented as follows:
 
 ```typescript
 function compare(a: Height, b: Height): Ord {
-  if (a.epochNumber < b.epochNumber)
+  if (a.revisionNumber < b.revisionNumber)
     return LT
-  else if (a.epochNumber === b.epochNumber)
-    if (a.epochHeight < b.epochHeight)
+  else if (a.revisionNumber === b.revisionNumber)
+    if (a.revisionHeight < b.revisionHeight)
       return LT
-    else if (a.epochHeight === b.epochHeight)
+    else if (a.revisionHeight === b.revisionHeight)
       return EQ
   return GT
 }
 ```
 
-This is designed to allow the height to reset to `0` while the epoch number increases by one in order to preserve timeouts through zero-height upgrades.
+This is designed to allow the height to reset to `0` while the revision number increases by one in order to preserve timeouts through zero-height upgrades.
 
 ### Headers
 
@@ -152,13 +152,13 @@ Wasm client validity checking uses underlying Wasm Client code. If the provided 
 ```typescript
 function checkValidityAndUpdateState(
   clientState: ClientState,
-  epoch: uint64,
+  revision: uint64,
   header: Header) {
     store = getStore("clients/{identifier}")
     codeHandle = clientState.codeHandle()
 
     // verify that provided header is valid and state is saved
-    assert(codeHandle.validateHeaderAndCreateConsensusState(store, clientState, header, epoch))
+    assert(codeHandle.validateHeaderAndCreateConsensusState(store, clientState, header, revision))
 }
 ```
 
@@ -178,7 +178,7 @@ function checkMisbehaviourAndUpdateState(
 
 ### Upgrades
 
-The chain which this light client is tracking can elect to write a special pre-determined key in state to allow the light client to update its client state (e.g. with a new chain ID or epoch) in preparation for an upgrade.
+The chain which this light client is tracking can elect to write a special pre-determined key in state to allow the light client to update its client state (e.g. with a new chain ID or revision) in preparation for an upgrade.
 
 As the client state change will be performed immediately, once the new client state information is written to the predetermined key, the client will no longer be able to follow blocks on the old chain, so it must upgrade promptly.
 
@@ -321,7 +321,7 @@ pub struct MisbehaviourMessage {
 #[serde(rename_all = "snake_case")]
 pub struct CreateConsensusMessage {
     pub client_state: Vec<byte>,
-    pub epoch: u64,
+    pub revision: u64,
     pub height: u64
 }
 
