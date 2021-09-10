@@ -68,12 +68,12 @@ interface ConsensusState {
 
 ### Height
 
-The height of a Wasm light client instance consists of two `uint64`s: the epoch number, and the height in the epoch.
+The height of a Wasm light client instance consists of two `uint64`s: the revision number, and the height in the revision.
 
 ```typescript
 interface Height {
-  epochNumber: uint64
-  epochHeight: uint64
+  revisionNumber: uint64
+  revisionHeight: uint64
 }
 ```
 
@@ -81,18 +81,18 @@ Comparison between heights is implemented as follows:
 
 ```typescript
 function compare(a: Height, b: Height): Ord {
-  if (a.epochNumber < b.epochNumber)
+  if (a.revisionNumber < b.revisionNumber)
     return LT
-  else if (a.epochNumber === b.epochNumber)
-    if (a.epochHeight < b.epochHeight)
+  else if (a.revisionNumber === b.revisionNumber)
+    if (a.revisionHeight < b.revisionHeight)
       return LT
-    else if (a.epochHeight === b.epochHeight)
+    else if (a.revisionHeight === b.revisionHeight)
       return EQ
   return GT
 }
 ```
 
-This is designed to allow the height to reset to `0` while the epoch number increases by one in order to preserve timeouts through zero-height upgrades.
+This is designed to allow the height to reset to `0` while the revision number increases by one in order to preserve timeouts through zero-height upgrades.
 
 ### Headers
 
@@ -108,7 +108,7 @@ interface Header {
 ### Misbehaviour
 
 The `Misbehaviour` type is used for detecting misbehaviour and freezing the client - to prevent further packet flow - if applicable.
-Wasm client `Misbehaviour` consists of two headers at the same height both of which the light client would have considered valid.
+Wasm client `Misbehaviour` consists of two conflicting headers both of which the light client would have considered valid.
 
 ```typescript
 interface Misbehaviour {
@@ -152,13 +152,13 @@ Wasm client validity checking uses underlying Wasm Client code. If the provided 
 ```typescript
 function checkValidityAndUpdateState(
   clientState: ClientState,
-  epoch: uint64,
+  revision: uint64,
   header: Header) {
     store = getStore("clients/{identifier}")
     codeHandle = clientState.codeHandle()
 
     // verify that provided header is valid and state is saved
-    assert(codeHandle.validateHeaderAndCreateConsensusState(store, clientState, header, epoch))
+    assert(codeHandle.validateHeaderAndCreateConsensusState(store, clientState, header, revision))
 }
 ```
 
@@ -178,7 +178,7 @@ function checkMisbehaviourAndUpdateState(
 
 ### Upgrades
 
-The chain which this light client is tracking can elect to write a special pre-determined key in state to allow the light client to update its client state (e.g. with a new chain ID or epoch) in preparation for an upgrade.
+The chain which this light client is tracking can elect to write a special pre-determined key in state to allow the light client to update its client state (e.g. with a new chain ID or revision) in preparation for an upgrade.
 
 As the client state change will be performed immediately, once the new client state information is written to the predetermined key, the client will no longer be able to follow blocks on the old chain, so it must upgrade promptly.
 
@@ -189,11 +189,8 @@ function upgradeClientState(
   height: Height,
   proof: CommitmentPrefix) {
     codeHandle = clientState.codeHandle()
-    codeHandle.verifyNewClientState(oldClientState, newClientState, height)
-    // fetch the previously verified commitment root & verify membership
-    root = get("clients/{identifier}/consensusStates/{height}")
-    // verify that the provided consensus state has been stored
-    assert(root.verifyMembership(path, newClientState, proof))
+    assert(codeHandle.verifyNewClientState(clientState, newClientState, height, proof))
+
     // update client state
     clientState = newClientState
     set("clients/{identifier}", clientState)
@@ -215,13 +212,8 @@ function verifyClientConsensusState(
   clientIdentifier: Identifier,
   consensusStateHeight: Height,
   consensusState: ConsensusState) {
-    path = applyPrefix(prefix, "clients/{clientIdentifier}/consensusState/{consensusStateHeight}")
     codeHandle = getCodeHandleFromClientID(clientIdentifier)
-    assert(codeHandle.isValidClientState(clientState, height))
-    // fetch the previously verified commitment root & verify membership
-    root = get("clients/{identifier}/consensusStates/{height}")
-    // verify that the provided consensus state has been stored
-    assert(root.verifyMembership(path, consensusState, proof))
+    assert(codeHandle.isValidClientState(clientState, height, prefix, clientIdentifier, proof, consensusStateHeight, consensusState))
 }
 
 function verifyConnectionState(
@@ -231,13 +223,8 @@ function verifyConnectionState(
   proof: CommitmentProof,
   connectionIdentifier: Identifier,
   connectionEnd: ConnectionEnd) {
-    path = applyPrefix(prefix, "connections/{connectionIdentifier}")
     codeHandle = clientState.codeHandle()
-    assert(codeHandle.isValidClientState(clientState, height))
-    // fetch the previously verified commitment root & verify membership
-    root = get("clients/{identifier}/consensusStates/{height}")
-    // verify that the provided connection end has been stored
-    assert(root.verifyMembership(path, connectionEnd, proof))
+    assert(codeHandle.verifyConnectionState(clientState, height, prefix, proof, connectionIdentifier, connectionEnd))
 }
 
 function verifyChannelState(
@@ -248,13 +235,8 @@ function verifyChannelState(
   portIdentifier: Identifier,
   channelIdentifier: Identifier,
   channelEnd: ChannelEnd) {
-    path = applyPrefix(prefix, "ports/{portIdentifier}/channels/{channelIdentifier}")
     codeHandle = clientState.codeHandle()
-    assert(codeHandle.isValidClientState(clientState, height))
-    // fetch the previously verified commitment root & verify membership
-    root = get("clients/{identifier}/consensusStates/{height}")
-    // verify that the provided channel end has been stored
-    assert(root.verifyMembership(codeHandle.getProofSpec(clientState), path, channelEnd, proof))
+    assert(codeHandle.verifyChannelState(clientState, height, prefix, proof, porttIdentifier, channelIdentifier, channelEnd))
 }
 
 function verifyPacketData(
@@ -266,13 +248,8 @@ function verifyPacketData(
   channelIdentifier: Identifier,
   sequence: uint64,
   data: bytes) {
-    path = applyPrefix(prefix, "ports/{portIdentifier}/channels/{channelIdentifier}/packets/{sequence}")
     codeHandle = clientState.codeHandle()
-    assert(codeHandle.isValidClientState(clientState, height))
-    // fetch the previously verified commitment root & verify membership
-    root = get("clients/{identifier}/consensusStates/{height}")
-    // verify that the provided commitment has been stored
-    assert(root.verifyMembership(codeHandle.getProofSpec(clientState), path, hash(data), proof))
+    assert(codeHandle.verifyPacketData(clientState, height, prefix, proof, portportIdentifier, channelIdentifier, sequence, data))
 }
 
 function verifyPacketAcknowledgement(
@@ -284,13 +261,8 @@ function verifyPacketAcknowledgement(
   channelIdentifier: Identifier,
   sequence: uint64,
   acknowledgement: bytes) {
-    path = applyPrefix(prefix, "ports/{portIdentifier}/channels/{channelIdentifier}/acknowledgements/{sequence}")
     codeHandle = clientState.codeHandle()
-    assert(codeHandle.isValidClientState(clientState, height))
-    // fetch the previously verified commitment root & verify membership
-    root = get("clients/{identifier}/consensusStates/{height}")
-    // verify that the provided acknowledgement has been stored
-    assert(root.verifyMembership(codeHandle.getProofSpec(clientState), path, hash(acknowledgement), proof))
+    assert(codeHandle.verifyPacketAcknowledgement(clientState, height, prefix, proof, portportIdentifier, channelIdentifier, sequence, acknowledgement))
 }
 
 function verifyPacketReceiptAbsence(
@@ -301,13 +273,8 @@ function verifyPacketReceiptAbsence(
   portIdentifier: Identifier,
   channelIdentifier: Identifier,
   sequence: uint64) {
-    path = applyPrefix(prefix, "ports/{portIdentifier}/channels/{channelIdentifier}/receipts/{sequence}")
     codeHandle = clientState.codeHandle()
-    assert(codeHandle.isValidClientState(clientState, height))
-    // fetch the previously verified commitment root & verify membership
-    root = get("clients/{identifier}/consensusStates/{height}")
-    // verify that no acknowledgement has been stored
-    assert(root.verifyNonMembership(codeHandle.getProofSpec(clientState), path, proof))
+    assert(codeHandle.verifyPacketReceiptAbsence(clientState, height, prefix, proof, portIdentifier, channelIdentifier, sequence))
 }
 
 function verifyNextSequenceRecv(
@@ -318,13 +285,8 @@ function verifyNextSequenceRecv(
   portIdentifier: Identifier,
   channelIdentifier: Identifier,
   nextSequenceRecv: uint64) {
-    path = applyPrefix(prefix, "ports/{portIdentifier}/channels/{channelIdentifier}/nextSequenceRecv")
     codeHandle = clientState.codeHandle()
-    assert(codeHandle.isValidClientState(clientState, height))
-    // fetch the previously verified commitment root & verify membership
-    root = get("clients/{identifier}/consensusStates/{height}")
-    // verify that the nextSequenceRecv is as claimed
-    assert(root.verifyMembership(codeHandle.getProofSpec(clientState), path, nextSequenceRecv, proof))
+    assert(codeHandle.verifyNextSequenceRecv(clientState, height, prefix, proof, portIdentifier, channelIdentifier, nextSequenceRecv))
 }
 ```
 
@@ -359,7 +321,7 @@ pub struct MisbehaviourMessage {
 #[serde(rename_all = "snake_case")]
 pub struct CreateConsensusMessage {
     pub client_state: Vec<byte>,
-    pub epoch: u64,
+    pub revision: u64,
     pub height: u64
 }
 
