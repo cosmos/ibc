@@ -152,13 +152,12 @@ Wasm client validity checking uses underlying Wasm Client code. If the provided 
 ```typescript
 function checkValidityAndUpdateState(
   clientState: ClientState,
-  revision: uint64,
   header: Header) {
     store = getStore("clients/{identifier}")
     codeHandle = clientState.codeHandle()
 
     // verify that provided header is valid and state is saved
-    assert(codeHandle.validateHeaderAndCreateConsensusState(store, clientState, header, revision))
+    assert(codeHandle.validateHeaderAndCreateConsensusState(store, clientState, header))
 }
 ```
 
@@ -213,7 +212,7 @@ function verifyClientConsensusState(
   consensusStateHeight: Height,
   consensusState: ConsensusState) {
     codeHandle = getCodeHandleFromClientID(clientIdentifier)
-    assert(codeHandle.isValidClientState(clientState, height, prefix, clientIdentifier, proof, consensusStateHeight, consensusState))
+    assert(codeHandle.verifyClientConsensusState(clientState, height, prefix, clientIdentifier, proof, consensusStateHeight, consensusState))
 }
 
 function verifyConnectionState(
@@ -236,10 +235,10 @@ function verifyChannelState(
   channelIdentifier: Identifier,
   channelEnd: ChannelEnd) {
     codeHandle = clientState.codeHandle()
-    assert(codeHandle.verifyChannelState(clientState, height, prefix, proof, porttIdentifier, channelIdentifier, channelEnd))
+    assert(codeHandle.verifyChannelState(clientState, height, prefix, proof, portIdentifier, channelIdentifier, channelEnd))
 }
 
-function verifyPacketData(
+function verifyPacketCommitment(
   clientState: ClientState,
   height: Height,
   prefix: CommitmentPrefix,
@@ -247,9 +246,9 @@ function verifyPacketData(
   portIdentifier: Identifier,
   channelIdentifier: Identifier,
   sequence: uint64,
-  data: bytes) {
+  commitment: bytes) {
     codeHandle = clientState.codeHandle()
-    assert(codeHandle.verifyPacketData(clientState, height, prefix, proof, portportIdentifier, channelIdentifier, sequence, data))
+    assert(codeHandle.verifyPacketCommitment(clientState, height, prefix, proof, portIdentifier, channelIdentifier, sequence, commitment))
 }
 
 function verifyPacketAcknowledgement(
@@ -312,7 +311,7 @@ Every Wasm client code need to support ingestion of below messages in order to b
 pub struct MisbehaviourMessage {
     pub client_state: Vec<byte>,
     pub consensus_state: Vec<byte>,
-    pub height: u64,
+    pub height: Height,
     pub header1: Vec<byte>,
     pub header2: Vec<byte>,
 }
@@ -321,8 +320,7 @@ pub struct MisbehaviourMessage {
 #[serde(rename_all = "snake_case")]
 pub struct CreateConsensusMessage {
     pub client_state: Vec<byte>,
-    pub revision: u64,
-    pub height: u64
+    pub height: Height
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
@@ -345,7 +343,7 @@ pub enum HandleMsg {
 #[serde(rename_all = "snake_case")]
 pub struct ValidateClientStateMessage {
     client_state: Vec<byte>,
-    height: u64
+    height: Height
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
@@ -353,7 +351,7 @@ pub struct ValidateClientStateMessage {
 pub struct ValidateNewClientStateMessage {
     client_state: Vec<byte>,
     new_client_state: Vec<byte>,
-    height: u64
+    height: Height
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
