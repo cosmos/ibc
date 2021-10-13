@@ -24,7 +24,7 @@ IBC standardisation will follow an adaptation of the [TC 39](https://tc39.github
     1. Discussion of key algorithms, abstractions, and semantics
     1. High-level application interface outline, where applicable
     1. Identification of potential design trade-offs and implementation challenges/complexity
-    See [ICS 1](../spec/ics-1-ics-standard) for a more detailed description of standard requirements.
+    See [ICS 1](../spec/ics-001-ics-standard) for a more detailed description of standard requirements.
   * Identified `author(s)` who will advance the proposal in the header of the standard file
   * Any additional reference documentation or media in the `./spec/ics-{{ .Spec.Number }}-{{ .Spec.Name }}` directory
   * The specification team expects that this proposal will be finalised and eventually included in the IBC standard set.

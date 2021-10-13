@@ -20,9 +20,9 @@ Wasm based light clients are decoupled from SDK source code, which enables one t
 
 ### Definitions
 
-Functions & terms are as defined in [ICS 2](../ics-002-client-semantics).
+Functions & terms are as defined in [ICS 2](../../core/ics-002-client-semantics).
 
-`currentTimestamp` is as defined in [ICS 24](../ics-024-host-requirements).
+`currentTimestamp` is as defined in [ICS 24](../../core/ics-024-host-requirements).
 
 `Wasm Client Code` refers to Wasm bytecode stored in the client store, which provides a target blockchain specific implementation of [ICS 2](../ics-002-client-semantics).
 

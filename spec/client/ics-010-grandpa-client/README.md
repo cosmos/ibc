@@ -21,7 +21,7 @@ Blockchains using GRANDPA finality gadget might like to interface with other rep
 
 ### Definitions
 
-Functions & terms are as defined in [ICS 2](../ics-002-client-semantics).
+Functions & terms are as defined in [ICS 2](../../core/ics-002-client-semantics).
 
 ### Desired Properties
 

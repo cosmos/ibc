@@ -12,7 +12,7 @@ modified: 2019-12-09
 
 ## Synopsis
 
-This specification document describes a client (verification algorithm) for a solo machine with a single updateable public key which implements the [ICS 2](../ics-002-client-semantics) interface.
+This specification document describes a client (verification algorithm) for a solo machine with a single updateable public key which implements the [ICS 2](../../core/ics-002-client-semantics) interface.
 
 ### Motivation
 

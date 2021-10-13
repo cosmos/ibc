@@ -656,7 +656,7 @@ All query functions for clients, connections, and channels should be exposed (re
 
 ### Interface usage example
 
-See [ICS 20](../ics-020-fungible-token-transfer) for a usage example.
+See [ICS 20](../../app/ics-020-fungible-token-transfer) for a usage example.
 
 ### Properties & Invariants
 
