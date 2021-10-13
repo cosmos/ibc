@@ -119,8 +119,8 @@ Note that the client-related paths listed below reflect the Tendermint client as
 | Store          | Path format                                                                    | Value type        | Defined in |
 | -------------- | ------------------------------------------------------------------------------ | ----------------- | ---------------------- |
 | provableStore  | "clients/{identifier}/clientType"                                              | ClientType        | [ICS 2](../ics-002-client-semantics) |
-| privateStore   | "clients/{identifier}/clientState"                                             | ClientState       | [ICS 2](../ics-007-tendermint-client) |
-| provableStore  | "clients/{identifier}/consensusStates/{height}"                                | ConsensusState    | [ICS 7](../ics-007-tendermint-client) |
+| privateStore   | "clients/{identifier}/clientState"                                             | ClientState       | [ICS 2](../../client/ics-007-tendermint-client) |
+| provableStore  | "clients/{identifier}/consensusStates/{height}"                                | ConsensusState    | [ICS 7](../../client/ics-007-tendermint-client) |
 | privateStore   | "clients/{identifier}/connections                                              | []Identifier      | [ICS 3](../ics-003-connection-semantics) |
 | provableStore  | "connections/{identifier}"                                                     | ConnectionEnd     | [ICS 3](../ics-003-connection-semantics) |
 | privateStore   | "ports/{identifier}"                                                           | CapabilityKey     | [ICS 5](../ics-005-port-allocation) |
