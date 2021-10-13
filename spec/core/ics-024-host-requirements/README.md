@@ -233,7 +233,7 @@ Modules that wish to make use of particular IBC features MAY implement certain h
 
 ### Datagram submission
 
-Host state machines which implement the routing module MAY define a `submitDatagram` function to submit [datagrams](../../ibc/1_IBC_TERMINOLOGY.md), which will be included in transactions, directly to the routing module (defined in [ICS 26](../ics-026-routing-module)):
+Host state machines which implement the routing module MAY define a `submitDatagram` function to submit datagrams<sup>[1](#footnote1)</sup>, which will be included in transactions, directly to the routing module (defined in [ICS 26](../ics-026-routing-module)):
 
 ```typescript
 type submitDatagram = (datagram: Datagram) => void
@@ -324,3 +324,7 @@ Aug 18, 2019 - Revisions to module system, definitions
 ## Copyright
 
 All content herein is licensed under [Apache 2.0](https://www.apache.org/licenses/LICENSE-2.0).
+
+---
+
+<a id="footnote1">1</a>: A datagram is an opaque bytestring transmitted over some physical network, and handled by the IBC routing module implemented in the ledger's state machine. In some implementations, the datagram may be a field in a ledger-specific transaction or message data structure which also contains other information (e.g. a fee for spam prevention, nonce for replay prevention, type identifier to route to the IBC handler, etc.). All IBC sub-protocols (such as opening a connection, creating a channel, sending a packet) are defined in terms of sets of datagrams and protocols for handling them through the routing module.

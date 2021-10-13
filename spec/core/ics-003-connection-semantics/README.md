@@ -458,7 +458,7 @@ Coming soon.
 
 ## History
 
-Parts of this document were inspired by the [previous IBC specification](https://github.com/cosmos/cosmos-sdk/tree/master/docs/spec/ibc).
+Parts of this document were inspired by the [previous IBC specification](../../../archive).
 
 Mar 29, 2019 - Initial draft version submitted
 
