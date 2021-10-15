@@ -114,13 +114,13 @@ Parts of the private store MAY safely be used for other purposes as long as the 
 Keys used in the private store MAY safely vary as long as there exists a bipartite mapping between the key formats defined herein and the ones
 actually used in the private store implementation.
 
-Note that the client-related paths listed below reflect the Tendermint client as defined in [ICS 7](../ics-007-tendermint-client) and may vary for other client types.
+Note that the client-related paths listed below reflect the Tendermint client as defined in [ICS 7](../../client/ics-007-tendermint-client) and may vary for other client types.
 
 | Store          | Path format                                                                    | Value type        | Defined in |
 | -------------- | ------------------------------------------------------------------------------ | ----------------- | ---------------------- |
 | provableStore  | "clients/{identifier}/clientType"                                              | ClientType        | [ICS 2](../ics-002-client-semantics) |
-| privateStore   | "clients/{identifier}/clientState"                                             | ClientState       | [ICS 2](../ics-007-tendermint-client) |
-| provableStore  | "clients/{identifier}/consensusStates/{height}"                                | ConsensusState    | [ICS 7](../ics-007-tendermint-client) |
+| privateStore   | "clients/{identifier}/clientState"                                             | ClientState       | [ICS 2](../../client/ics-007-tendermint-client) |
+| provableStore  | "clients/{identifier}/consensusStates/{height}"                                | ConsensusState    | [ICS 7](../../client/ics-007-tendermint-client) |
 | privateStore   | "clients/{identifier}/connections                                              | []Identifier      | [ICS 3](../ics-003-connection-semantics) |
 | provableStore  | "connections/{identifier}"                                                     | ConnectionEnd     | [ICS 3](../ics-003-connection-semantics) |
 | privateStore   | "ports/{identifier}"                                                           | CapabilityKey     | [ICS 5](../ics-005-port-allocation) |
@@ -233,7 +233,7 @@ Modules that wish to make use of particular IBC features MAY implement certain h
 
 ### Datagram submission
 
-Host state machines which implement the routing module MAY define a `submitDatagram` function to submit [datagrams](../../ibc/1_IBC_TERMINOLOGY.md), which will be included in transactions, directly to the routing module (defined in [ICS 26](../ics-026-routing-module)):
+Host state machines which implement the routing module MAY define a `submitDatagram` function to submit datagrams<sup>[1](#footnote1)</sup>, which will be included in transactions, directly to the routing module (defined in [ICS 26](../ics-026-routing-module)):
 
 ```typescript
 type submitDatagram = (datagram: Datagram) => void
@@ -324,3 +324,7 @@ Aug 18, 2019 - Revisions to module system, definitions
 ## Copyright
 
 All content herein is licensed under [Apache 2.0](https://www.apache.org/licenses/LICENSE-2.0).
+
+---
+
+<a id="footnote1">1</a>: A datagram is an opaque bytestring transmitted over some physical network, and handled by the IBC routing module implemented in the ledger's state machine. In some implementations, the datagram may be a field in a ledger-specific transaction or message data structure which also contains other information (e.g. a fee for spam prevention, nonce for replay prevention, type identifier to route to the IBC handler, etc.). All IBC sub-protocols (such as opening a connection, creating a channel, sending a packet) are defined in terms of sets of datagrams and protocols for handling them through the routing module.

@@ -12,7 +12,7 @@ modified: 2019-12-09
 
 ## Synopsis
 
-This specification document describes a client (verification algorithm) for a solo machine with a single updateable public key which implements the [ICS 2](../ics-002-client-semantics) interface.
+This specification document describes a client (verification algorithm) for a solo machine with a single updateable public key which implements the [ICS 2](../../core/ics-002-client-semantics) interface.
 
 ### Motivation
 
@@ -22,17 +22,17 @@ Solo machine clients are roughly analogous to "implicit accounts" and can be use
 
 ### Definitions
 
-Functions & terms are as defined in [ICS 2](../ics-002-client-semantics).
+Functions & terms are as defined in [ICS 2](../../core/ics-002-client-semantics).
 
 ### Desired Properties
 
-This specification must satisfy the client interface defined in [ICS 2](../ics-002-client-semantics).
+This specification must satisfy the client interface defined in [ICS 2](../../core/ics-002-client-semantics).
 
 Conceptually, we assume "big table of signatures in the universe" - that signatures produced are public - and incorporate replay protection accordingly.
 
 ## Technical Specification
 
-This specification contains implementations for all of the functions defined by [ICS 2](../ics-002-client-semantics).
+This specification contains implementations for all of the functions defined by [ICS 2](../../core/ics-002-client-semantics).
 
 ### Client state
 
@@ -331,7 +331,7 @@ function verifyNextSequenceRecv(
 
 ### Properties & Invariants
 
-Instantiates the interface defined in [ICS 2](../ics-002-client-semantics).
+Instantiates the interface defined in [ICS 2](../../core/ics-002-client-semantics).
 
 ## Backwards Compatibility
 

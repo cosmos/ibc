@@ -21,7 +21,7 @@ Loop-back clients may be useful in cases where the calling module does not have 
 
 ### Definitions
 
-Functions & terms are as defined in [ICS 2](../ics-002-client-semantics).
+Functions & terms are as defined in [ICS 2](../../core/ics-002-client-semantics).
 
 ### Desired Properties
 

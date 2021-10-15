@@ -20,9 +20,9 @@ State machines of various sorts replicated using the Tendermint consensus algori
 
 ### Definitions
 
-Functions & terms are as defined in [ICS 2](../ics-002-client-semantics).
+Functions & terms are as defined in [ICS 2](../../core/ics-002-client-semantics).
 
-`currentTimestamp` is as defined in [ICS 24](../ics-024-host-requirements).
+`currentTimestamp` is as defined in [ICS 24](../../core/ics-024-host-requirements).
 
 The Tendermint light client uses the generalised Merkle proof format as defined in ICS 8.
 
@@ -54,7 +54,7 @@ The necessary condition is thus that `A_1` should be willing to look up headers 
 
 ## Technical Specification
 
-This specification depends on correct instantiation of the [Tendermint consensus algorithm](https://github.com/tendermint/spec/blob/master/spec/consensus/consensus.md) and [light client algorithm](https://github.com/tendermint/spec/blob/master/spec/consensus/light-client.md).
+This specification depends on correct instantiation of the [Tendermint consensus algorithm](https://github.com/tendermint/spec/blob/master/spec/consensus/consensus.md) and [light client algorithm](https://github.com/tendermint/spec/blob/master/spec/light-client).
 
 ### Client state
 
