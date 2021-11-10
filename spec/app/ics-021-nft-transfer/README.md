@@ -80,7 +80,7 @@ interface ModuleState {
 
 ### Sub-protocols
 
-The sub-protocols described herein should be implemented in a "non-fungible token transfer bridge" module with access to the IBC routing module.
+The sub-protocols described herein should be implemented in a "non-fungible token transfer bridge" module with access to the NFT asset tracking module and the IBC routing module.
 
 #### Port & channel setup
 
