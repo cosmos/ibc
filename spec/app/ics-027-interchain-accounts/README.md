@@ -143,7 +143,7 @@ This port will be used to create channels between the controller & host chain fo
 
 The controller and host chain should keep track of an `active-channel` for each registered interchain account. The `active-channel` is set during the channel creation handshake process. This is a safety mechanism that allows a controller chain to regain access to an interchain account on a host chain in case of a channel closing. 
 
-An active channel on the controller chain will look like this:
+An example of an active channel on the controller chain can look like this:
 
 
 ```typescript
