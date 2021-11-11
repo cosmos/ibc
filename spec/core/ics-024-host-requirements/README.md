@@ -128,9 +128,9 @@ Note that the client-related paths listed below reflect the Tendermint client as
 | provableStore  | "nextSequenceSend/ports/{identifier}/channels/{identifier}"                    | uint64            | [ICS 4](../ics-004-channel-and-packet-semantics) |
 | provableStore  | "nextSequenceRecv/ports/{identifier}/channels/{identifier}"                    | uint64            | [ICS 4](../ics-004-channel-and-packet-semantics) |
 | provableStore  | "nextSequenceAck/ports/{identifier}/channels/{identifier}"                     | uint64            | [ICS 4](../ics-004-channel-and-packet-semantics) |
-| provableStore  | "commitments/ports/{identifier}/channels/{identifier}/packets/{sequence}"      | bytes             | [ICS 4](../ics-004-channel-and-packet-semantics) |
-| provableStore  | "receipts/ports/{identifier}/channels/{identifier}/receipts/{sequence}"        | bytes             | [ICS 4](../ics-004-channel-and-packet-semantics) |
-| provableStore  | "acks/ports/{identifier}/channels/{identifier}/acknowledgements/{sequence}"    | bytes             | [ICS 4](../ics-004-channel-and-packet-semantics) |
+| provableStore  | "commitments/ports/{identifier}/channels/{identifier}/sequences/{sequence}"    | bytes             | [ICS 4](../ics-004-channel-and-packet-semantics) |
+| provableStore  | "receipts/ports/{identifier}/channels/{identifier}/sequences/{sequence}"       | bytes             | [ICS 4](../ics-004-channel-and-packet-semantics) |
+| provableStore  | "acks/ports/{identifier}/channels/{identifier}/sequences/{sequence}"           | bytes             | [ICS 4](../ics-004-channel-and-packet-semantics) |
 
 ### Module layout
 
