@@ -199,7 +199,7 @@ icaPacketData = InterchainAccountPacketData{
 }
 
 // Sends the message to the host chain, where it will eventually be executed 
-TrySendTx(chanCapability, ownerAddress, connectionId, counterPartyConnectionId, data)
+TrySendTx(ownerAddress, connectionId, counterPartyConnectionId, data)
 ```
 
 4. The host chain upon receiving the IBC packet will call `DeserializeTx` and then call `AuthenticateTx` for each message. If either of these steps fails an error will be returned
