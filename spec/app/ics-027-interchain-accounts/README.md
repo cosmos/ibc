@@ -53,7 +53,7 @@ This specification defines the general way to register an interchain account and
 // * CONTROLLER CHAIN *
 
 // InitInterchainAccount is the entry point to registering an interchain account 
-// It generates a new port identifier using the owner address & connection identifiers
+// It generates a new port identifier using the owner address and connection identifiers
 // The port id will look like: ics27-1.{connection-id}.{counterparty-connection-id}.{owner-address}
 // It will bind to the port identifier and
 // call 04-channel 'ChanOpenInit'. An error is returned if the port identifier is already in use
