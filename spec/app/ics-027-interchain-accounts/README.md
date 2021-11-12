@@ -169,17 +169,14 @@ Due to how the mechanics of ICS-004 channel version negotiation operate the vers
 
 Combined with the one channel per interchain account approach, this method of version negotiation allows us to pass the address of the interchain account back to the controller chain and create a mapping from controller port ID -> interchain account address during the `OnChanOpenAck` callback. As outlined in the [controlling flow](#Controlling-Flow), a controller chain will need to know the address of a registered interchain account in order to send transactions to the account on the host chain.
 
-
 #### Version negotiation summary
 
-| Initiator | Datagram         | Chain acted upon |  Version (Controller, Host) | Port ID (Controller, Host) |
-| --------- | ---------------- | ---------------- |  ---------------------- | ---------------------- |
-| Controller| ChanOpenInit     | Controller       |  (ics27-1, none)        | (ics27-1.0.0.<owner-id>, interchain-account)           |
-| Relayer   | ChanOpenTry      | Host             |  (ics27-1, ics27-1.<owner-id>)        | (ics27-1.0.0.<owner-id>, interchain-account)       |
-| Relayer   | ChanOpenAck      | Controller       |  (ics27-1, ics27-1.<owner-id>)        | (ics27-1.0.0.<owner-id>, interchain-account)        | (ics27-1.0.0.<owner-id>, interchain-account)        |
-| Relayer   | ChanOpenConfirm  | Host             |  (ics27-1, ics27-1.<owner-id>)        | (ics27-1.0.0.<owner-id>, interchain-account)           | (ics27-1.0.0.<owner-id>, interchain-account)           |
-
-
+| Initiator | Datagram         | Chain acted upon |  Version (Controller, Host) |
+| --------- | ---------------- | ---------------- |  ---------------------- | 
+| Controller| ChanOpenInit     | Controller       |  (ics27-1, none)        | 
+| Relayer   | ChanOpenTry      | Host             |  (ics27-1, ics27-1.<interchain-account-address>)        | 
+| Relayer   | ChanOpenAck      | Controller       |  (ics27-1, ics27-1.<interchain-account-address>)        | 
+| Relayer   | ChanOpenConfirm  | Host             |  (ics27-1, ics27-1.<interchain-account-address>)        | 
 
 #### Controlling Flow
 
