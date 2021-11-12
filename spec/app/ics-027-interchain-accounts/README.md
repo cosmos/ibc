@@ -174,9 +174,9 @@ Combined with the one channel per interchain account approach, this method of ve
 | Initiator | Datagram         | Chain acted upon |  Version (Controller, Host) |
 | --------- | ---------------- | ---------------- |  ---------------------- | 
 | Controller| ChanOpenInit     | Controller       |  (ics27-1, none)        | 
-| Relayer   | ChanOpenTry      | Host             |  (ics27-1, ics27-1.<interchain-account-address>)        | 
-| Relayer   | ChanOpenAck      | Controller       |  (ics27-1, ics27-1.<interchain-account-address>)        | 
-| Relayer   | ChanOpenConfirm  | Host             |  (ics27-1, ics27-1.<interchain-account-address>)        | 
+| Relayer   | ChanOpenTry      | Host             |  (ics27-1, ics27-1.{interchain-account-address})        | 
+| Relayer   | ChanOpenAck      | Controller       |  (ics27-1, ics27-1.{interchain-account-address})        | 
+| Relayer   | ChanOpenConfirm  | Host             |  (ics27-1, ics27-1.{interchain-account-address})        | 
 
 #### Controlling Flow
 
