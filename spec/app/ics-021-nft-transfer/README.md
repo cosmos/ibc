@@ -14,11 +14,11 @@ modified: 2021-11-12
 
 ## Synopsis
 
-This standard document specifies packet data structure, state machine handling logic, and encoding details for the transfer of non-fungible tokens over an IBC channel between two modules on separate chains. The state machine logic presented allows for safe multi-chain denomination handling with permissionless channel opening. This logic constitutes a "non-fungible token transfer bridge module", interfacing between the IBC routing module and an existing asset tracking module on the host state machine.
+This standard document specifies packet data structure, state machine handling logic, and encoding details for the transfer of non-fungible tokens over an IBC channel between two modules on separate chains. The state machine logic presented allows for safe multi-chain `classId` handling with permissionless channel opening. This logic constitutes a "non-fungible token transfer bridge module", interfacing between the IBC routing module and an existing asset tracking module on the host state machine.
 
 ### Motivation
 
-Users of a set of chains connected over the IBC protocol might wish to utilise an asset issued on one chain on another chain, perhaps to make use of additional features such as exchange or privacy protection, while retaining non-fungibility with the original asset on the issuing chain. This application-layer standard describes a protocol for transferring non-fungible tokens between chains connected with IBC which preserves asset non-fungibility, preserves asset ownership, limits the impact of Byzantine faults, and requires no additional permissioning.
+Users of a set of chains connected over the IBC protocol might wish to utilise an asset issued on one chain on another chain, perhaps to make use of additional features such as exchange or privacy protection, while retaining uniqueness with the original asset on the issuing chain. This application-layer standard describes a protocol for transferring non-fungible tokens between chains connected with IBC which preserves asset uniqueness, preserves asset ownership, limits the impact of Byzantine faults, and requires no additional permissioning.
 
 ### Definitions
 
@@ -28,7 +28,7 @@ The IBC handler interface & IBC routing module interface are as defined in [ICS 
 
 - Preservation of uniqueness (two-way peg).
 - Preservation of total supply (maintained on a single source chain & module).
-- Permissionless token transfers, no need to whitelist connections, modules, or denominations.
+- Permissionless token transfers, no need to whitelist connections, modules, or `classId`s.
 - Symmetric (all chains implement the same logic, no in-protocol differentiation of hubs & zones).
 - Fault containment: prevents Byzantine-inflation of tokens originating on chain `A`, as a result of chain `B`'s Byzantine behaviour (though any users who sent tokens to chain `B` may be at risk).
 
@@ -36,7 +36,7 @@ The IBC handler interface & IBC routing module interface are as defined in [ICS 
 
 ### Data Structures
 
-Only one packet data type is required: `NonFungibleTokenPacketData`, which specifies the denomination, amount, sending account, and receiving account.
+Only one packet data type is required: `NonFungibleTokenPacketData`, which specifies the class id, class uri, token id, token uri, sending account, and receiving account.
 
 ```typescript
 interface NonFungibleTokenPacketData {
@@ -51,9 +51,9 @@ interface NonFungibleTokenPacketData {
 
 As tokens are sent across chains using the ICS 21 protocol, they begin to accrue a record of channels for which they have been transferred across. This information is encoded into the `classId` field.
 
-The ics21 token classes are represented in the form `{ics21Port}/{ics21Channel}/{classId}`, where `ics21Port` and `ics21Channel` are an ics21 port and channel on the current chain for which the token exists. The prefixed port and channel pair indicate which channel the token was previously sent through. If `{classId}` contains `/`, then it must also be in the ics21 form which indicates that this token has a multi-hop record. Note that this requires that the `/` (slash character) is prohibited in non-IBC token denomination names.
+The ics21 token classes are represented in the form `{ics21Port}/{ics21Channel}/{classId}`, where `ics21Port` and `ics21Channel` are an ics21 port and channel on the current chain for which the token exists. The prefixed port and channel pair indicate which channel the token was previously sent through. If `{classId}` contains `/`, then it must also be in the ics21 form which indicates that this token has a multi-hop record. Note that this requires that the `/` (slash character) is prohibited in non-IBC token `classId`s.
 
-A sending chain may be acting as a source or sink zone. When a chain is sending tokens across a port and channel which are not equal to the last prefixed port and channel pair, it is acting as a source zone. When tokens are sent from a source zone, the destination port and channel will be prefixed onto the `classId` (once the tokens are received) adding another hop to a tokens record. When a chain is sending tokens across a port and channel which are equal to the last prefixed port and channel pair, it is acting as a sink zone. When tokens are sent from a sink zone, the last prefixed port and channel pair on the `classId` is removed (once the tokens are received), undoing the last hop in the tokens record. A more complete explanation is present in the ibc-go implementation (TBD).
+A sending chain may be acting as a source or sink zone. When a chain is sending tokens across a port and channel which are not equal to the last prefixed port and channel pair, it is acting as a source zone. When tokens are sent from a source zone, the destination port and channel will be prefixed onto the `classId` (once the tokens are received) adding another hop to a tokens record. When a chain is sending tokens across a port and channel which are equal to the last prefixed port and channel pair, it is acting as a sink zone. When tokens are sent from a sink zone, the last prefixed port and channel pair on the `classId` is removed (once the tokens are received), undoing the last hop in the tokens record. A more complete explanation is present in the [ibc-go implementation]() (TBD).
 
 The acknowledgement data type describes whether the transfer succeeded or failed, and the reason for failure (if any).
 
@@ -108,9 +108,7 @@ function setup() {
 
 Once the `setup` function has been called, channels can be created through the IBC routing module between instances of the non-fungible token transfer module on separate chains.
 
-An administrator (with the permissions to create connections & channels on the host state machine) is responsible for setting up connections to other state machines & creating channels
-to other instances of this module (or another module supporting this interface) on other chains. This specification defines packet handling semantics only, and defines them in such a fashion
-that the module itself doesn't need to worry about what connections or channels might or might not exist at any point in time.
+An administrator (with the permissions to create connections & channels on the host state machine) is responsible for setting up connections to other state machines & creating channels to other instances of this module (or another module supporting this interface) on other chains. This specification defines packet handling semantics only, and defines them in such a fashion that the module itself doesn't need to worry about what connections or channels might or might not exist at any point in time.
 
 #### Routing module callbacks
 
@@ -219,17 +217,19 @@ function createOutgoingPacket(
   sourceChannel: string,
   timeoutHeight: Height,
   timeoutTimestamp: uint64) {
+  // assert that sender is token owner
+  abortTransactionUnless(sender === nft.getOwner(classId, tokenId))
   prefix = "{sourcePort}/{sourceChannel}/"
-  // we are the source if the denomination is not prefixed
+  // we are the source if the classId is not prefixed
   source = classId.slice(0, len(prefix)) !== prefix
   if source {
     // determine escrow account
     escrowAccount = channelEscrowAddresses[sourceChannel]
-    // escrow source token (assumed to fail if sender is not owner)
-    nft.Transfer(sender, escrowAccount, classId, tokenId)
+    // escrow source token
+    nft.Transfer(classId, tokenId, escrowAccount)
   } else {
-    // receiver is source chain, burn voucher (assumed to fail if sender is not owner)
-    bank.Burn(sender, classId, tokenId)
+    // receiver is source chain, burn voucher
+    bank.Burn(classId, tokenId)
   }
   Class class = nft.getClass(classId)
   NFT token = nft.getNFT(classId, tokenId)
@@ -252,15 +252,17 @@ function onRecvPacket(packet: Packet) {
     // receiver is source chain: unescrow token
     // determine escrow account
     escrowAccount = channelEscrowAddresses[packet.destChannel]
+    // assert that escrow account is token owner
+    abortTransactionUnless(escrowAccount === nft.getOwner(data.classId.slice(len(prefix)), data.tokenId))
     // unescrow token to receiver
-    err = nft.Transfer(escrowAccount, data.receiver, data.classId.slice(len(prefix)), data.tokenId)
+    err = nft.Transfer(data.classId.slice(len(prefix)), data.tokenId, data.receiver)
     if (err !== nil)
       ack = NonFungibleTokenPacketAcknowledgement{false, "transfer nft failed"}
   } else {
     prefix = "{packet.destPort}/{packet.destChannel}/"
     prefixedClassId = prefix + data.classId
     // sender was source, mint voucher to receiver
-    err = nft.Mint(data.receiver, prefixedClassId, data.tokenId)
+    err = nft.Mint(prefixedClassId, data.tokenId, data.receiver)
     if (err !== nil)
       ack = NonFungibleTokenPacketAcknowledgement{false, "mint nft failed"}
   }
@@ -300,10 +302,12 @@ function refundToken(packet: Packet) {
   if source {
     // sender was source chain, unescrow tokens back to sender
     escrowAccount = channelEscrowAddresses[packet.srcChannel]
-    nft.Transfer(escrowAccount, data.sender, data.classId, data.tokenId)
+    // assert that escrow account is token owner
+    abortTransactionUnless(escrowAccount === nft.getOwner(data.classId, data.tokenId))
+    nft.Transfer(data.classId, data.tokenId, data.sender)
   } else {
     // receiver was source chain, mint voucher back to sender
-    bank.Mint(data.sender, data.classId, data.tokenId)
+    bank.Mint(data.classId, data.tokenId, data.sender)
   }
 }
 ```
