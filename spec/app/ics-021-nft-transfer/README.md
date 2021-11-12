@@ -6,9 +6,11 @@ category: IBC/APP
 requires: 25, 26
 kind: instantiation
 author: Christopher Goes <cwgoes@interchain.berlin>, Haifeng Xi <haifeng@bianjie.ai>
-created: 2021-11-10 
-modified: 2021-11-10
+created: 2021-11-10
+modified: 2021-11-12
 ---
+
+> This spec follows the same design principles of [ICS 20](../ics-020-fungible-token-transfer) and copies most of its content therefrom, while replacing `bank` module based asset tracking logic with that of the `nft` module.
 
 ## Synopsis
 
@@ -47,7 +49,7 @@ interface NonFungibleTokenPacketData {
 }
 ```
 
-As tokens are sent across chains using the ICS 21 protocol, they begin to accrue a record of channels for which they have been transferred across. This information is encoded into the `classId` field. 
+As tokens are sent across chains using the ICS 21 protocol, they begin to accrue a record of channels for which they have been transferred across. This information is encoded into the `classId` field.
 
 The ics21 token classes are represented in the form `{ics21Port}/{ics21Channel}/{classId}`, where `ics21Port` and `ics21Channel` are an ics21 port and channel on the current chain for which the token exists. The prefixed port and channel pair indicate which channel the token was previously sent through. If `{classId}` contains `/`, then it must also be in the ics21 form which indicates that this token has a multi-hop record. Note that this requires that the `/` (slash character) is prohibited in non-IBC token denomination names.
 
@@ -330,7 +332,7 @@ In order to track all of the tokens moving around the network of chains in vario
 
 #### Optional addenda
 
-- Each chain, locally, could elect to keep a lookup table to use short, user-friendly local `classId`s in state which are translated to and from the longer `classId`s when sending and receiving packets. 
+- Each chain, locally, could elect to keep a lookup table to use short, user-friendly local `classId`s in state which are translated to and from the longer `classId`s when sending and receiving packets.
 - Additional restrictions may be imposed on which other machines may be connected to & which channels may be established.
 
 ## Backwards Compatibility
