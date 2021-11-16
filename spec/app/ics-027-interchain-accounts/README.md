@@ -203,7 +203,7 @@ TrySendTx(ownerAddress, connectionId, counterPartyConnectionId, data)
 
 4. The host chain upon receiving the IBC packet will call `DeserializeTx` and then call `AuthenticateTx` for each message. If either of these steps fails an error will be returned
     
-Messages are authenticated on the host chain by taking the controller side port identifier and calling `GetInterchainAccountAddress(controllerPortId)` to get the expected interchain account address for the current controller port. If the signer of this message does not match the expected account address then authentication will fail. An example implementation for the cosmos SDK can be seen here:
+Messages are authenticated on the host chain by taking the controller side port identifier and calling `GetInterchainAccountAddress(controllerPortId)` to get the expected interchain account address for the current controller port. If the signer of this message does not match the expected account address then authentication will fail. An example implementation for the cosmos SDK can be seen [here](https://github.com/cosmos/ibc-go/blob/interchain-accounts/modules/apps/27-interchain-accounts/keeper/relay.go#L76).
     
 5. The host chain will then call `ExecuteTx` for each message and return an acknowledgment
 
