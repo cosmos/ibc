@@ -20,22 +20,22 @@ ICS-27 Interchain Accounts outlines a cross-chain account management protocol bu
 
 ### Definitions 
 
-- `Interchain Account`: An account on a host chain. An interchain account has all the capabilities of a normal account. However, rather than signing transactions with a private key, a controller chain will send IBC packets to the host chain which signal what transactions the interchain account should execute 
-- `Interchain Account Owner`: An account on the controller chain. Every interchain account on a host chain has a respective owner account on the controller chain 
-- `Controller Chain`: The chain registering and controlling an account on a host chain. The controller chain sends IBC packets to the host chain to control the account
-- `Host Chain`: The chain where the interchain account is registered. The host chain listens for IBC packets from a controller chain which should contain instructions (e.g. cosmos SDK messages) that the interchain account will execute
+- `Interchain Account`: An account on a host chain. An interchain account has all the capabilities of a normal account. However, rather than signing transactions with a private key, a controller chain will send IBC packets to the host chain which signals what transactions the interchain account should execute. 
+- `Interchain Account Owner`: An account on the controller chain. Every interchain account on a host chain has a respective owner account on the controller chain. 
+- `Controller Chain`: The chain registering and controlling an account on a host chain. The controller chain sends IBC packets to the host chain to control the account.
+- `Host Chain`: The chain where the interchain account is registered. The host chain listens for IBC packets from a controller chain which should contain instructions (e.g. cosmos SDK messages) that the interchain account will execute.
 
 The IBC handler interface & IBC relayer module interface are as defined in [ICS 25](../ics-025-handler-interface) and [ICS 26](../ics-026-routing-module), respectively.
 
 ### Desired Properties
 
 - Permissionless 
-- Fault tolerance: A controller chain must not be able to control accounts registered by other controller chains. For example, in the case of a fork attack on a controller chain, only the interchain accounts registered by the forked chain will be vulnerable
-- The ordering of transactions sent to an interchain account on a host chain must be maintained. Transactions should be executed by an interchain account in the order in which they are sent by the controller chain
-- If a channel closes, the controller chain must be able to regain access to registered interchain accounts by simply opening a new channel
+- Fault tolerance: A controller chain must not be able to control accounts registered by other controller chains. For example, in the case of a fork attack on a controller chain, only the interchain accounts registered by the forked chain will be vulnerable.
+- The ordering of transactions sent to an interchain account on a host chain must be maintained. Transactions should be executed by an interchain account in the order in which they are sent by the controller chain.
+- If a channel closes, the controller chain must be able to regain access to registered interchain accounts by simply opening a new channel.
 - Each interchain account is owned by a single account on the controller chain. Only the owner account on the controller chain is authorized to control the interchain account. The controller chain is responsible for enforcing this logic.
 - The controller chain must store the account address of any owned interchain account's registered on host chains
-- A host chain must have the ability to limit interchain account functionality on its chain as necessary (e.g. a host chain can decide that interchain accounts registered on the host chain cannot take part in staking)
+- A host chain must have the ability to limit interchain account functionality on its chain as necessary (e.g. a host chain can decide that interchain accounts registered on the host chain cannot take part in staking).
 
 
 ## Technical Specification
@@ -53,8 +53,8 @@ This specification defines the general way to register an interchain account and
 // * CONTROLLER CHAIN *
 
 // InitInterchainAccount is the entry point to registering an interchain account 
-// It generates a new port identifier using the owner address and connection identifiers
-// The port id will look like: ics27-1.{connection-id}.{counterparty-connection-id}.{owner-address}
+// It generates a new port identifier using the owner account address and connection identifiers
+// The port id will look like: ics27-1.{connection-id}.{counterparty-connection-id}.{owner-account-address}
 // It will bind to the port identifier and
 // call 04-channel 'ChanOpenInit'. An error is returned if the port identifier is already in use
 // An `OnChannelOpenInit` event is emitted which can be picked up by an offchain process such as a relayer
@@ -72,7 +72,7 @@ function TrySendTx(channelCapability: ChannelCapability, portID: string, connect
 // Opens a new channel on a particular port given a connection
 // This is a helper function to open a new channel 
 // This is a safety function in case of a channel closing and the controller chain needs to regain access to an interchain account on the host chain 
-function InitChannel(portId: string, connectionId: string) returns (nil){
+function InitChannel(portID: string, connectionID: string) returns (nil){
   // An `OnChannelOpenInit` event is emitted which can be picked up by an off-chain process such as a relayer which will finish the channel opening handshake
   // The active channel will be set to the newly opened channel on the OnChanOpenAck & OnChanOpenConfirm steps
 }
@@ -93,7 +93,7 @@ function AuthenticateTx(msgs []Any, portId string) error {
     // interchainAccountAddress != signer.String() return error
 }
 
-// Executes each message sent by the owner on the Controller chain
+// Executes each message sent by the owner account on the Controller chain
 function ExecuteTx(sourcePort: string, destPort: string, destChannel: string, msgs []Any) error {
   // validates each message
   // executes each message
@@ -101,20 +101,20 @@ function ExecuteTx(sourcePort: string, destPort: string, destChannel: string, ms
 
 // * UTILITY FUNCTIONS *
 
-// Sets the active channel
+// Sets the active channel for a given portID.
 function SetActiveChannelID(portId: string, channelId: string) returns (error){
 }
 
-// Returns the id of the active channel if present
-function GetActiveChannelID(portId: string) returns (string, boolean){
+// Returns the ID of the active channel for a given portID, if present.
+function GetActiveChannelID(portID: string) returns (string, boolean){
 }
 
-// Stores the address of the interchain account in state
-function SetInterchainAccountAddress(portId string, address string) returns (string) {
+// Stores the address of the interchain account in state.
+function SetInterchainAccountAddress(portID string, address string) returns (string) {
 }
 
-// Gets the interchain account from state
-function GetInterchainAccountAddress(portId string) returns (string, bool){
+// Retrieves the interchain account from state.
+function GetInterchainAccountAddress(portID string) returns (string, bool){
 }
 ```
 
@@ -128,10 +128,10 @@ To register an interchain account we require an off-chain process (relayer) to l
 
 The IBC port identifier will look like this:
 ```
-ics27-1.{connection-id}.{counterparty-connection-id}.{owner-address}
+ics27-1.{connection-id}.{counterparty-connection-id}.{owner-account-address}
 ```
 
-This port will be used to create channels between the controller & host chain for a specific owner/interchain account pair. Only the account with `{owner-address}` matching the bound port will be authorized to send IBC packets over channels created with `ics27-1.{connection-id}.{counterparty-connection-id}.{owner-address}`. It is up to each controller chain to enforce this port registration and access on the controller side. 
+This port will be used to create channels between the controller & host chain for a specific owner/interchain account pair. Only the account with `{owner-account-address}` matching the bound port will be authorized to send IBC packets over channels created with `ics27-1.{connection-id}.{counterparty-connection-id}.{owner-account-address}`. It is up to each controller chain to enforce this port registration and access on the controller side. 
 
 2. The controller chain emits an event signaling to open a new channel on this port given a connection 
 3. A relayer listening for `OnChannelOpenInit` events will begin the channel creation handshake
@@ -149,27 +149,27 @@ An example of an active channel on the controller chain can look like this:
 ```typescript
 {
  // Controller Chain
- SourcePortId: `ics27-1.0.0.<owner-id>`,
- SourceChannelId: `channel-1`,
+ SourcePortId: `ics27-<version>.<source-connection-id>.<counterparty-connection-id>.<owner-account-address>`,
+ SourceChannelId: `<channel-id>`,
  // Host Chain
  CounterPartyPortId: `interchain-account`,
- CounterPartyChannelId: `channel-2`,
+ CounterPartyChannelId: `<channel-id>`,
 }
 ```
 
-In the event of a channel closing, the active channel should be unset. ICS-27 channels should only be closed in the event of a timeout (if the implementation uses ordered channels) or in the unlikely event of a light client attack. It is critical that controller chains retain the ability to open new ICS-27 channels and reset the active channel for a particular port id (owner) and associated interchain account. 
+In the event of a channel closing, the active channel should be unset. ICS-27 channels should only be closed in the event of a timeout (if the implementation uses ordered channels) or in the unlikely event of a light client attack. Controller chains must retain the ability to open new ICS-27 channels and reset the active channel for a particular port id (containing owner-account-address) and associated interchain account. 
 
 #### Version Negotiation
 
 ICS-27 takes advantage of [ISC-04 channel version negotiation](https://github.com/cosmos/ibc/tree/master/spec/core/ics-004-channel-and-packet-semantics#versioning) to store a mapping of the controller chain port ID to the newly registered interchain account address, on both the host chain & controller chains, during the channel creation handshake ([account registration flow](#Register-Account-Flow)). 
 
-ICS-004 allows for each channel version negotiation to be application-specific. In the case of interchain accounts, the channel version set during the `OnChanOpenInit` step (controller chain) must be `ics27-<version>` & the version set during the host chain `OnChanOpenTry` step will include the interchain account address that will be created. Note that the generation of this address is stateless, and can be generated in advance of the account creation. An example implementation of this can be viewed here: 
+ICS-004 allows for each channel version negotiation to be application-specific. In the case of interchain accounts, the channel version set during the `OnChanOpenInit` step (controller chain) must be `ics27-<version>` & the version set during the host chain `OnChanOpenTry` step will include the interchain account address that will be created ([see summary table below](#Version-negotiation-summary)). Note that the generation of this address is stateless, and can be generated in advance of the account creation. 
 
-Due to how the mechanics of ICS-004 channel version negotiation operate the version passed into the host chain side (OnChanOpenTry) must match the counterparty version passed into the controller side (OnChanOpenAck) otherwise there will be a resulting error at the IBC protocol level. 
+Due to how the mechanics of ICS-004 channel version negotiation operate the version passed into the host chain side (OnChanOpenTry) must match the counterparty version passed into the controller side (OnChanOpenAck) otherwise, there will be a resulting error at the IBC protocol level. 
 
 Combined with the one channel per interchain account approach, this method of version negotiation allows us to pass the address of the interchain account back to the controller chain and create a mapping from controller port ID -> interchain account address during the `OnChanOpenAck` callback. As outlined in the [controlling flow](#Controlling-Flow), a controller chain will need to know the address of a registered interchain account in order to send transactions to the account on the host chain.
 
-#### Version negotiation summary
+#### Version Negotiation Summary
 
 | Initiator | Datagram         | Chain acted upon |  Version (Controller, Host) |
 | --------- | ---------------- | ---------------- |  ---------------------- | 
@@ -177,6 +177,8 @@ Combined with the one channel per interchain account approach, this method of ve
 | Relayer   | ChanOpenTry      | Host             |  (ics27-1, ics27-1.{interchain-account-address})        | 
 | Relayer   | ChanOpenAck      | Controller       |  (ics27-1, ics27-1.{interchain-account-address})        | 
 | Relayer   | ChanOpenConfirm  | Host             |  (ics27-1, ics27-1.{interchain-account-address})        | 
+
+The channel `version` string passed into the `OnChannelOpenTry` callback by a relayer will contain the account address of the interchain account that will be registered on the host chain. A relayer will then pass this version into the `OnChannelOpenAcknowledgement` step on the controller chain as the `counterpartyVersion`. The controller chain will then proceed to parse the interchain account address from the `counterpartyVersion` string and store this address in state with a map to the associated port id.  
 
 #### Controlling Flow
 
@@ -201,7 +203,7 @@ TrySendTx(ownerAddress, connectionId, counterPartyConnectionId, data)
 
 4. The host chain upon receiving the IBC packet will call `DeserializeTx` and then call `AuthenticateTx` for each message. If either of these steps fails an error will be returned
     
-Messages are authenticated on the host chain by taking the controller side port identifier and calling `GetInterchainAccountAddress(controllerPortId)` to get the expected interchain account address for the controller port (owner). If the signer of this message does not match the expected account address then authentication will fail. An example implementation for the cosmos SDK can be seen here:
+Messages are authenticated on the host chain by taking the controller side port identifier and calling `GetInterchainAccountAddress(controllerPortId)` to get the expected interchain account address for the current controller port. If the signer of this message does not match the expected account address then authentication will fail. An example implementation for the cosmos SDK can be seen here:
     
 5. The host chain will then call `ExecuteTx` for each message and return an acknowledgment
 
@@ -232,11 +234,11 @@ message Acknowledgement {
 
 ICS-27 relies on [ICS-30 middleware architecture](https://github.com/cosmos/ibc/tree/master/spec/app/ics-030-middleware) to provide the option for application developers to apply custom logic on the success or fail of ICS-27 packets. 
 
-Controller chains will wrap `OnAcknowledgement` & `OnTimeoutPacket` in order to handle the success or fail cases for ICS-27 packets. 
+Controller chains will wrap `OnAcknowledgement` & `OnTimeoutPacket` to handle the success or fail cases for ICS-27 packets. 
 
 ### Port & channel setup
 
-The interchain account module on a host chain must always bind to a port with the id `interchain-account`. Controller chains will bind to ports dynamically, with each port id set as `ics27-1.{connection-id}.{counterparty-connection-id}.{owner-address}`.
+The interchain account module on a host chain must always bind to a port with the id `interchain-account`. Controller chains will bind to ports dynamically, with each port id set as `ics27-1.{connection-id}.{counterparty-connection-id}.{owner-account-address}`.
 
 The example below assumes a module is implementing the entire `InterchainAccountModule` interface. The `setup` function must be called exactly once when the module is created (perhaps when the blockchain itself is initialized) to bind to the appropriate port.
 
@@ -383,7 +385,7 @@ function OnRecvPacket(packet Packet) {
                 }
 	}
 
-	// NOTE: acknowledgement will be written synchronously during IBC handler execution.
+	// NOTE: acknowledgment will be written synchronously during IBC handler execution.
 	return ack
 }
 ```
@@ -429,4 +431,5 @@ November 11, 2021 - Update with latest changes from implementation
 ## Copyright
 
 All content herein is licensed under [Apache 2.0](https://www.apache.org/licenses/LICENSE-2.0).
+
 
