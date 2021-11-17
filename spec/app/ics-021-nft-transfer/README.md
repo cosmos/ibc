@@ -14,7 +14,7 @@ modified: 2021-11-12
 
 ## Synopsis
 
-This standard document specifies packet data structure, state machine handling logic, and encoding details for the transfer of non-fungible tokens over an IBC channel between two modules on separate chains. The state machine logic presented allows for safe multi-chain `classId` handling with permissionless channel opening. This logic constitutes a "non-fungible token transfer bridge module", interfacing between the IBC routing module and an existing asset tracking module on the host state machine.
+This standard document specifies packet data structure, state machine handling logic, and encoding details for the transfer of non-fungible tokens over an IBC channel between two modules on separate chains. The state machine logic presented allows for safe multi-chain `classId` handling with permissionless channel opening. This logic constitutes a "non-fungible token transfer bridge module", interfacing between the IBC routing module and an existing asset tracking module on the host state machine, which could be either a Cosmos-style "native" module or a smart contract running in a virtual machine.
 
 ### Motivation
 
@@ -48,6 +48,13 @@ interface NonFungibleTokenPacketData {
   receiver: string
 }
 ```
+`classId` uniquely identifies the class/collection to which this NFT belongs in the originating host environment.  In the case of an ERC-1155 compliant smart contract, for example, this could be a string representation of the top 128 bits of the token ID.
+
+`classUri` is optional, but will be extremely beneficial for cross-chain interoperability with NFT marketplaces like OpenSea, where [class/collection metadata](https://docs.opensea.io/docs/contract-level-metadata) can be added for better user experience.
+
+`tokenId` uniquely identifies the NFT within the given class.  In the case of an ERC-1155 compliant smart contract, for example, this could be a string representation of the bottom 128 bits of the token ID.
+
+`tokenUri` refers to an off-chain resource, typically an immutable JSON file containing the NFT's metadata.
 
 As tokens are sent across chains using the ICS 21 protocol, they begin to accrue a record of channels for which they have been transferred across. This information is encoded into the `classId` field.
 
