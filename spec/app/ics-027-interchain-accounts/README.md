@@ -177,6 +177,8 @@ Combined with the one channel per interchain account approach, this method of ve
 
 #### Version Negotiation Summary
 
+`interchain-account-address` is the address of the interchain account registered on the host chain by the controller chain.
+
 | Initiator | Datagram         | Chain acted upon |  Version (Controller, Host) |
 | --------- | ---------------- | ---------------- |  ---------------------- | 
 | Controller| ChanOpenInit     | Controller       |  (ics27-1, none)        | 
