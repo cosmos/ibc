@@ -116,6 +116,12 @@ function SetInterchainAccountAddress(portID string, address string) returns (str
 // Retrieves the interchain account from state.
 function GetInterchainAccountAddress(portID string) returns (string, bool){
 }
+
+
+// DeleteActiveChannelID removes the active channel keyed by the provided portID stored in state
+function (k Keeper) DeleteActiveChannelID(portID string) {
+}
+
 ```
 
 ### Register & Controlling flows
@@ -341,8 +347,8 @@ function onChanOpenConfirm(
 function onChanCloseInit(
   portIdentifier: Identifier,
   channelIdentifier: Identifier) { \
-    // unset the active channel for this owner/interchain account pair
-    DeleteActiveChannel(portIdentifier, channelIdentifier)
+ 	// Disallow user-initiated channel closing for interchain account channels
+  return err
 }
 ```
 
@@ -350,8 +356,8 @@ function onChanCloseInit(
 function onChanCloseConfirm(
   portIdentifier: Identifier,
   channelIdentifier: Identifier) {
-    // unset the active channel for this owner/interchain account pair
-    DeleteActiveChannel(portIdentifier, channelIdentifier)
+    // unset the active channel for given portID 
+    DeleteActiveChannelID(portIdentifier)
 }
 ```
 
@@ -403,6 +409,9 @@ function onAcknowledgePacket(
 
 ```typescript
 function onTimeoutPacket(packet: Packet) {
+    // unset the active channel for given portID
+    DeleteActiveChannelID(portIdentifier)
+
     // call underlying app's OnTimeoutPacket callback 
     // see ICS30 middleware for more information
 }
