@@ -1,5 +1,5 @@
 ---
-ics: 21
+ics: 721
 title: Non-Fungible Token Transfer
 stage: draft
 category: IBC/APP
@@ -56,9 +56,9 @@ interface NonFungibleTokenPacketData {
 
 `tokenUri` refers to an off-chain resource, typically an immutable JSON file containing the NFT's metadata.
 
-As tokens are sent across chains using the ICS 21 protocol, they begin to accrue a record of channels for which they have been transferred across. This information is encoded into the `classId` field.
+As tokens are sent across chains using the ICS 721 protocol, they begin to accrue a record of channels for which they have been transferred across. This information is encoded into the `classId` field.
 
-The ics21 token classes are represented in the form `{ics21Port}/{ics21Channel}/{classId}`, where `ics21Port` and `ics21Channel` are an ics21 port and channel on the current chain for which the token exists. The prefixed port and channel pair indicate which channel the token was previously sent through. If `{classId}` contains `/`, then it must also be in the ics21 form which indicates that this token has a multi-hop record. Note that this requires that the `/` (slash character) is prohibited in non-IBC token `classId`s.
+The ics721 token classes are represented in the form `{ics721Port}/{ics721Channel}/{classId}`, where `ics721Port` and `ics721Channel` are an ics721 port and channel on the current chain for which the token exists. The prefixed port and channel pair indicate which channel the token was previously sent through. If `{classId}` contains `/`, then it must also be in the ics721 form which indicates that this token has a multi-hop record. Note that this requires that the `/` (slash character) is prohibited in non-IBC token `classId`s.
 
 A sending chain may be acting as a source or sink zone. When a chain is sending tokens across a port and channel which are not equal to the last prefixed port and channel pair, it is acting as a source zone. When tokens are sent from a source zone, the destination port and channel will be prefixed onto the `classId` (once the tokens are received) adding another hop to a tokens record. When a chain is sending tokens across a port and channel which are equal to the last prefixed port and channel pair, it is acting as a sink zone. When tokens are sent from a sink zone, the last prefixed port and channel pair on the `classId` is removed (once the tokens are received), undoing the last hop in the tokens record. A more complete explanation is present in the [ibc-go implementation]() (TBD).
 
@@ -124,7 +124,7 @@ An administrator (with the permissions to create connections & channels on the h
 Both machines `A` and `B` accept new channels from any module on another machine, if and only if:
 
 - The channel being created is unordered.
-- The version string is `ics21-1`.
+- The version string is `ics721-1`.
 
 ```typescript
 function onChanOpenInit(
@@ -137,8 +137,8 @@ function onChanOpenInit(
   version: string) {
   // only unordered channels allowed
   abortTransactionUnless(order === UNORDERED)
-  // assert that version is "ics21-1"
-  abortTransactionUnless(version === "ics21-1")
+  // assert that version is "ics721-1"
+  abortTransactionUnless(version === "ics721-1")
   // allocate an escrow address
   channelEscrowAddresses[channelIdentifier] = newAddress()
 }
@@ -156,9 +156,9 @@ function onChanOpenTry(
   counterpartyVersion: string) {
   // only unordered channels allowed
   abortTransactionUnless(order === UNORDERED)
-  // assert that version is "ics21-1"
-  abortTransactionUnless(version === "ics21-1")
-  abortTransactionUnless(counterpartyVersion === "ics21-1")
+  // assert that version is "ics721-1"
+  abortTransactionUnless(version === "ics721-1")
+  abortTransactionUnless(counterpartyVersion === "ics721-1")
   // allocate an escrow address
   channelEscrowAddresses[channelIdentifier] = newAddress()
 }
@@ -170,8 +170,8 @@ function onChanOpenAck(
   channelIdentifier: Identifier,
   version: string) {
   // port has already been validated
-  // assert that version is "ics21-1"
-  abortTransactionUnless(version === "ics21-1")
+  // assert that version is "ics721-1"
+  abortTransactionUnless(version === "ics721-1")
 }
 ```
 
@@ -352,7 +352,7 @@ Not applicable.
 
 ## Forwards Compatibility
 
-This initial standard uses version "ics21-1" in the channel handshake.
+This initial standard uses version "ics721-1" in the channel handshake.
 
 A future version of this standard could use a different version in the channel handshake, and safely alter the packet data format & packet handler semantics.
 
@@ -366,8 +366,9 @@ Coming soon.
 
 ## History
 
-Nov 10, 2021 - Initial draft adapted from ICS20 spec
+Nov 10, 2021 - Initial draft adapted from ICS 20 spec
 Nov 17, 2021 - Revisions to better accommodate smart contracts
+Nov 17, 2021 - Renamed from ICS 21 to ICS 721
 
 ## Copyright
 
