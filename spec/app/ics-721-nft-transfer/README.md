@@ -7,7 +7,7 @@ requires: 25, 26
 kind: instantiation
 author: Christopher Goes <cwgoes@interchain.berlin>, Haifeng Xi <haifeng@bianjie.ai>
 created: 2021-11-10
-modified: 2021-11-17
+modified: 2021-11-18
 ---
 
 > This spec follows the same design principles of [ICS 20](../ics-020-fungible-token-transfer) and copies most of its content therefrom, while replacing `bank` module based asset tracking logic with that of the `nft` module.
@@ -379,6 +379,7 @@ Coming soon.
 Nov 10, 2021 - Initial draft adapted from ICS 20 spec
 Nov 17, 2021 - Revisions to better accommodate smart contracts
 Nov 17, 2021 - Renamed from ICS 21 to ICS 721
+Nov 18, 2021 - Revisions to allow for multiple tokens in one packet
 
 ## Copyright
 
