@@ -36,14 +36,14 @@ The IBC handler interface & IBC routing module interface are as defined in [ICS 
 
 ### Data Structures
 
-Only one packet data type is required: `NonFungibleTokenPacketData`, which specifies the class id, class uri, token id, token uri, sending account, and receiving account.
+Only one packet data type is required: `NonFungibleTokenPacketData`, which specifies the class id, class uri, token id's, token uri's, sending account, and receiving account.
 
 ```typescript
 interface NonFungibleTokenPacketData {
   classId: string
   classUri: string
-  tokenId: string
-  tokenUri: string
+  tokenIds: []string
+  tokenUris: []string
   sender: string
   receiver: string
 }
@@ -52,9 +52,9 @@ interface NonFungibleTokenPacketData {
 
 `classUri` is optional, but will be extremely beneficial for cross-chain interoperability with NFT marketplaces like OpenSea, where [class/collection metadata](https://docs.opensea.io/docs/contract-level-metadata) can be added for better user experience.
 
-`tokenId` uniquely identifies the NFT within the given class.  In the case of an ERC-1155 compliant smart contract, for example, this could be a string representation of the bottom 128 bits of the token ID.
+`tokenIds` uniquely identifies some NFTs within the given class that are being transferred.  In the case of an ERC-1155 compliant smart contract, for example, a `tokenId` could be a string representation of the bottom 128 bits of the token ID.
 
-`tokenUri` refers to an off-chain resource, typically an immutable JSON file containing the NFT's metadata.
+Each `tokenId` has a corresponding entry in `tokenUris`, which refers to an off-chain resource that is typically an immutable JSON file containing the NFT's metadata.
 
 As tokens are sent across chains using the ICS 721 protocol, they begin to accrue a record of channels for which they have been transferred across. This information is encoded into the `classId` field.
 
@@ -214,7 +214,7 @@ In plain English, between chains `A` and `B`:
 ```typescript
 function createOutgoingPacket(
   classId: string,
-  tokenId: string,
+  tokenIds: []string,
   sender: string,
   receiver: string,
   source: boolean,
@@ -224,23 +224,25 @@ function createOutgoingPacket(
   sourceChannel: string,
   timeoutHeight: Height,
   timeoutTimestamp: uint64) {
-  // assert that sender is token owner
-  abortTransactionUnless(sender === nft.getOwner(classId, tokenId))
   prefix = "{sourcePort}/{sourceChannel}/"
   // we are the source if the classId is not prefixed
   source = classId.slice(0, len(prefix)) !== prefix
-  if source {
-    // determine escrow account
-    escrowAccount = channelEscrowAddresses[sourceChannel]
-    // escrow source token
-    nft.Transfer(classId, tokenId, escrowAccount)
-  } else {
-    // receiver is source chain, burn voucher
-    bank.Burn(classId, tokenId)
+  tokenUris = []
+  for (let tokenId in tokenIds) {
+    // assert that sender is token owner
+    abortTransactionUnless(sender === nft.getOwner(classId, tokenId))
+    if source {
+      // determine escrow account
+      escrowAccount = channelEscrowAddresses[sourceChannel]
+      // escrow source token
+      nft.Transfer(classId, tokenId, escrowAccount)
+    } else {
+      // receiver is source chain, burn voucher
+      bank.Burn(classId, tokenId)
+    }
+    tokenUris.push(nft.getNFT(classId, tokenId).getUri())
   }
-  Class class = nft.getClass(classId)
-  NFT token = nft.getNFT(classId, tokenId)
-  NonFungibleTokenPacketData data = NonFungibleTokenPacketData{classId, class.getUri(), tokenId, token.getUri(), sender, receiver}
+  NonFungibleTokenPacketData data = NonFungibleTokenPacketData{classId, nft.getClass(classId).getUri(), tokenIds, tokenUris, sender, receiver}
   handler.sendPacket(Packet{timeoutHeight, timeoutTimestamp, destPort, destChannel, sourcePort, sourceChannel, data}, getCapability("port"))
 }
 ```
@@ -255,23 +257,29 @@ function onRecvPacket(packet: Packet) {
   prefix = "{packet.sourcePort}/{packet.sourceChannel}/"
   // we are the source if the packets were prefixed by the sending chain
   source = data.classId.slice(0, len(prefix)) === prefix
-  if source {
-    // receiver is source chain: unescrow token
-    // determine escrow account
-    escrowAccount = channelEscrowAddresses[packet.destChannel]
-    // assert that escrow account is token owner
-    abortTransactionUnless(escrowAccount === nft.getOwner(data.classId.slice(len(prefix)), data.tokenId))
-    // unescrow token to receiver
-    err = nft.Transfer(data.classId.slice(len(prefix)), data.tokenId, data.receiver)
-    if (err !== nil)
-      ack = NonFungibleTokenPacketAcknowledgement{false, "transfer nft failed"}
-  } else {
-    prefix = "{packet.destPort}/{packet.destChannel}/"
-    prefixedClassId = prefix + data.classId
-    // sender was source, mint voucher to receiver
-    err = nft.Mint(prefixedClassId, data.tokenId, data.receiver)
-    if (err !== nil)
-      ack = NonFungibleTokenPacketAcknowledgement{false, "mint nft failed"}
+  for (var i in data.tokenIds) {
+    if source {
+      // receiver is source chain: unescrow token
+      // determine escrow account
+      escrowAccount = channelEscrowAddresses[packet.destChannel]
+      // assert that escrow account is token owner
+      abortTransactionUnless(escrowAccount === nft.getOwner(data.classId.slice(len(prefix)), data.tokenIds[i]))
+      // unescrow token to receiver
+      err = nft.Transfer(data.classId.slice(len(prefix)), data.tokenIds[i], data.receiver)
+      if (err !== nil) {
+        ack = NonFungibleTokenPacketAcknowledgement{false, "transfer nft(" + data.classId + ", " + data.tokenIds[i] + ") failed"}
+        break
+      }
+    } else {
+      prefix = "{packet.destPort}/{packet.destChannel}/"
+      prefixedClassId = prefix + data.classId
+      // sender was source, mint voucher to receiver
+      err = nft.Mint(prefixedClassId, data.classUri, data.tokenIds[i], data.tokenUris[i], data.receiver)
+      if (err !== nil) {
+        ack = NonFungibleTokenPacketAcknowledgement{false, "mint nft(" + data.classId + ", " + data.tokenIds[i] + ") failed"}
+        break
+      }
+    }
   }
   return ack
 }
@@ -304,17 +312,19 @@ function onTimeoutPacket(packet: Packet) {
 function refundToken(packet: Packet) {
   NonFungibleTokenPacketData data = packet.data
   prefix = "{packet.sourcePort}/{packet.sourceChannel}/"
-  // we are the source if the classId is not prefixed
-  source = data.classId.slice(0, len(prefix)) !== prefix
-  if source {
-    // sender was source chain, unescrow tokens back to sender
-    escrowAccount = channelEscrowAddresses[packet.srcChannel]
-    // assert that escrow account is token owner
-    abortTransactionUnless(escrowAccount === nft.getOwner(data.classId, data.tokenId))
-    nft.Transfer(data.classId, data.tokenId, data.sender)
-  } else {
-    // receiver was source chain, mint voucher back to sender
-    bank.Mint(data.classId, data.tokenId, data.sender)
+  for (let tokenId in data.tokenIds) {
+    // we are the source if the classId is not prefixed
+    source = data.classId.slice(0, len(prefix)) !== prefix
+    if source {
+      // sender was source chain, unescrow tokens back to sender
+      escrowAccount = channelEscrowAddresses[packet.srcChannel]
+      // assert that escrow account is token owner
+      abortTransactionUnless(escrowAccount === nft.getOwner(data.classId, tokenId))
+      nft.Transfer(data.classId, tokenId, data.sender)
+    } else {
+      // receiver was source chain, mint voucher back to sender
+      bank.Mint(data.classId, tokenId, data.sender)
+    }
   }
 }
 ```
