@@ -48,14 +48,6 @@ interface ConnectionEnd {
 }
 ```
 
-```typescript
-interface UpgradeStatus {
-    state: ConnectionState
-    timeoutHeight: Height
-    timeoutTimestamp: uint64
-}
-```
-
 The desired property that the connection upgrade protocol may not modify the underlying clients or connection identifiers, means that only some fields are upgradable by the upgrade protocol.
 
 - `state`: The state is specified by the handshake steps of the upgrade protocol.
@@ -66,6 +58,18 @@ The desired property that the connection upgrade protocol may not modify the und
 - `version`: The version MAY be modified by the upgrade protocol. The same version negotiation that happens in the initial connection handshake can be employed for the upgrade handshake.
 - `delayPeriodTime`: The delay period MAY be modified by the upgrade protocol. The counterparty MUST accept the new proposed value or return an error during the upgrade handshake.
 - `delayPeriodBlocks`: The delay period MAY be modified by the upgrade protocol. The counterparty MUST accept the new proposed value or return an error during the upgrade handshake.
+
+```typescript
+interface UpgradeStatus {
+    state: ConnectionState
+    timeoutHeight: Height
+    timeoutTimestamp: uint64
+}
+```
+
+- UpgradeStatus contains the state of the upgrade. If upgrade is successful it will contain the `ConnectionState` of the upgrading connection on the executing chain. If the executing chain wants to abort the upgrade, it will restore its previous connection under its connection path with state `OPEN` and write an `UpgradeStatus` with state `UPGRADE_ERR`.
+- `timeoutHeight`: Timeout height indicates the height at which the counterparty must no longer proceed with the upgrade handshake. The chains will then preserve their original connection and the upgrade handshake is aborted.
+- `timeoutTimestamp`: Timeout timestamp indicates the time on the counterparty at which the counterparty must no longer proceed with the upgrade handshake. The chains will then preserve their original connection and the upgrade handshake is aborted.
 
 ```typescript
 interface UpgradeConnectionState {
@@ -98,7 +102,7 @@ function restorePath(id: Identifier): Path {
 The upgrade status path is a public path that can signal the status of the upgrade to the counterparty. It does not store anything in the successful case, but it will store a sentinel abort value in the case that a chain does not accept the proposed upgrade.
 
 ```typescript
-function upgradePath(id: Identifier): Path {
+function statusPath(id: Identifier): Path {
     return "connections/{id}/upgradeStatus"
 
 }
@@ -113,7 +117,7 @@ A successful protocol execution flows as follows (note that all calls are made t
 | Initiator | Datagram             | Chain acted upon | Prior state (A, B)          | Posterior state (A, B)      |
 | --------- | -------------------- | ---------------- | --------------------------- | --------------------------- |
 | Actor     | `ConnUpgradeInit`    | A                | (OPEN, OPEN)                | (UPGRADE_INIT, OPEN)        |
-| Relayer   | `ConnUpgradeTry`     | B                | (UPGRADE_INIT, OPEN)        | (UPGRADE_INIT, UPGRADE_TRY) |
+| Actor     | `ConnUpgradeTry`     | B                | (UPGRADE_INIT, OPEN)        | (UPGRADE_INIT, UPGRADE_TRY) |
 | Relayer   | `ConnUpgradeAck`     | A                | (UPGRADE_INIT, UPGRADE_TRY) | (OPEN, UPGRADE_TRY)         |
 | Relayer   | `ConnUpgradeConfirm` | B                | (OPEN, UPGRADE_TRY)         | (OPEN, OPEN)                |
 
@@ -151,7 +155,14 @@ function connUpgradeInit(
     // either timeout height or timestamp must be non-zero
     abortTransactionUnless(proposedUpgrade.TimeoutHeight != 0 || proposedUpgrade.TimeoutTimestamp != 0)
 
-    provableStore.set(connectionPath(identifier), proposedUpgrade)
+    upgradeStatus = UpgradeStatus{
+        state: UPGRADE_INIT,
+        timeoutHeight: proposedUpgrade.timeoutHeight,
+        timeoutTimestamp: proposedUpgrade.timeoutTimestamp,
+    }
+
+    provableStore.set(statusPath(identifier), upgradeStatus)
+    provableStore.set(connectionPath(identifier), proposedUpgrade.connection)
     privateStore.set(restorePath(identifier), currentConnection)
 }
 ```
@@ -159,5 +170,185 @@ function connUpgradeInit(
 ```typescript
 function connUpgradeTry(
     identifier: Identifier,
-    proposedUpgrade
-)
+    proposedUpgrade: UpgradeConnectionState,
+    counterpartyConnection: ConnectionEnd,
+    counterpartyUpgradeStatus: UpgradeStatus,
+    proofConnection: CommitmentProof,
+    proofUpgradeStatus: CommitmentProof,
+    proofHeight: Height
+) {
+    // current connection must be OPEN or UPGRADE_INIT (crossing hellos)
+    currentConnection = provableStore.get(connectionPath(identifier))
+    abortTransactionUnless(connection.state == (OPEN || UPGRADE_INIT))
+
+    // abort transaction if an unmodifiable field is modified
+    // upgraded connection state must be in `UPGRADE_TRY`
+    abortTransactionUnless(
+        proposedUpgrade.connection.state == UPGRADE_TRY &&
+        proposedUpgrade.connection.counterpartyConnectionIdentifier == currentConnection.counterpartyConnectionIdentifier &&
+        proposedUpgrade.connection.clientIdentifier == currentConnection.clientIdentifier &&
+        proposedUpgrade.connection.counterpartyClientIdentifier == currentConnection.counterpartyClientIdentifier &&
+    )
+
+    // either timeout height or timestamp must be non-zero
+    abortTransactionUnless(proposedUpgrade.TimeoutHeight != 0 || proposedUpgrade.TimeoutTimestamp != 0)
+
+
+    // verify proofs of counterparty state
+    abortTransactionUnless(currentConnection.client.verifyConnectionState(proofHeight, proofConnection, counterpartyConnection))
+    abortTransactionUnless(currentConnection.client.verifyUpgradeStatus(proofHeight, proofUpgradeStatus, counterpartyUpgradeStatus))
+
+    // verify that counterparty connection unmodifiable fields have not changed and counterparty state
+    // is UPGRADE_INIT
+    restoreConnectionUnless(
+        counterpartyConnection.state == UPGRADE_INIT &&
+        counterpartyConnection.counterpartyConnectionIdentifier == identifier &&
+        counterpartyConnection.clientIdentifier == currentConnection.counterpartyClientIdentifier &&
+        counterpartyConnection.counterpartyClientIdentifier == currentConnection.clientIdentifier
+    )
+    restoreConnectionUnless(counterpartyUpgradeStatus.state == UPGRADE_INIT)
+
+    // counterparty-specified timeout must not have exceeded
+    restoreConnectionUnless(
+        counterparty.UpgradeStatus.TimeoutHeight < currentHeight() &&
+        counterparty.UpgradeStatus.TimeoutTimestamp < currentTimestamp()
+    )
+
+    // verify chosen versions are compatible
+    versionsIntersection = intersection(counterpartyConnection.version, proposedUpgrade.Connection.version)
+    version = pickVersion(versionsIntersection) // throws if there is no intersection
+
+    // both connection ends must be mutually compatible.
+    restoreConnectionUnless(IsCompatible(counterpartyConnection, proposedUpgrade.Connection))
+
+    upgradeStatus = UpgradeStatus{
+        state: UPGRADE_TRY,
+        timeoutHeight: proposedUpgrade.timeoutHeight,
+        timeoutTimestamp: proposedUpgrade.timeoutTimestamp,
+    }
+
+    provableStore.set(statusPath(identifier), upgradeStatus)
+    provableStore.set(connectionPath(identifier), proposedUpgrade.connection)
+    privateStore.set(restorePath(identifier), currentConnection)
+}
+```
+
+```typescript
+function onChanUpgradeAck(
+    identifier: Identifier,
+    counterpartyConnection: ConnectionEnd,
+    counterpartyStatus: UpgradeStatus,
+    proofConnection: CommitmentProof,
+    proofUpgradeStatus: CommitmentProof,
+    proofHeight: Height
+) {
+    // current connection is in UPGRADE_INIT
+    currentConnection = provableStore.get(connectionPath(identifier))
+    abortTransactionUnless(connection.state == UPGRADE_INIT)
+
+
+    // verify proofs of counterparty state
+    abortTransactionUnless(currentConnection.client.verifyConnectionState(proofHeight, proofConnection, counterpartyConnection))
+    abortTransactionUnless(currentConnection.client.verifyUpgradeStatus(proofHeight, proofUpgradeStatus, counterpartyUpgradeStatus))
+
+    // counterparty must be in TRY state
+    restoreConnectionUnless(counterpartyStatus.state == UPGRADE_TRY)
+    restoreConnectionUnless(counterpartyConnection.State == UPGRADE_TRY)
+
+    // verify connections are mutually compatible
+    // this will also check counterparty chosen version is valid
+    restoreConnectionUnless(IsCompatible(counterpartyConnection, connection))
+
+    // counterparty-specified timeout must not have exceeded
+    restoreConnectionUnless(
+        counterparty.UpgradeStatus.TimeoutHeight < currentHeight() &&
+        counterparty.UpgradeStatus.TimeoutTimestamp < currentTimestamp()
+    )
+
+    // upgrade is complete
+    // set connection to OPEN and remove unnecessary state
+    currentConnection.state = OPEN
+    provableStore.set(connectionPath(identifier), currentConnection)
+    provableStore.delete(statusPath(identifier))
+    privateStore.delete(restorePath(identifier))
+}
+```
+
+```typescript
+function onChanUpgradeConfirm(
+    identifier: Identifier,
+    counterpartyConnection: ConnectionEnd,
+    proofConnection: CommitmentProof,
+    proofHeight: Height,
+) {
+    // current connection is in UPGRADE_TRY
+    currentConnection = provableStore.get(connectionPath(identifier))
+    abortTransactionUnless(connection.state == UPGRADE_TRY)
+
+    // counterparty must be in OPEN state
+    abortTransactionUnless(counterpartyConnection.State == OPEN)
+
+    // verify proofs of counterparty state
+    abortTransactionUnless(currentConnection.client.verifyConnectionState(proofHeight, proofConnection, counterpartyConnection))
+    
+    // upgrade is complete
+    // set connection to OPEN and remove unnecessary state
+    currentConnection.state = OPEN
+    provableStore.set(connectionPath(identifier), currentConnection)
+    provableStore.delete(statusPath(identifier))
+    privateStore.delete(restorePath(identifier))
+}
+```
+
+Note: In the `TRY` and `ACK` steps, the chain has the ability to abort the upgrade process if the upgrade parameters are not suitable or the timeout has exceeded. In this case, the chain is expected to write `UPGRADE_ERR` as the state in the `UPGRADE_STATUS`, and restore the original connection with state `OPEN`. The counterparty can then verify that the upgrade status is `UPGRADE_ERR` and restore its original connection to `OPEN` as well, thus cancelling the upgrade.
+
+```typescript
+function restoreConnectionUnless(condition: bool) {
+    if !condition {
+        // cancel upgrade
+        // set UpgradeStatus to `UPGRADE_ERR`
+        // and restore original conneciton
+        errStatus = UpgradeStatus{UPGRADE_ERR}
+        provableStore.set(statusPath(identifier), errStatus)
+        originalConnection = privateStore.get(restorePath(identifier))
+        provableStore.set(connectionPath(identifier), originalConnection)
+        privateStore.delete(restorePath(identifier))
+        // caller should return as well
+    } else {
+        // caller should continue execution
+    }
+}
+```
+
+### Cancel Upgrade Process
+
+As discussed, during the upgrade handshake a chain may cancel the upgrade by writing `UPGRADE_ERR` into the `UpgradeStatus` and restoring the original connection to `OPEN`. The counterparty must then restore its connection to `OPEN` as well. A relayer can facilitate this by calling `CancelConnectionUpgrade`
+
+```typescript
+function cancelConnectionUpgrade(
+    identifier: Identifer,
+    counterpartyUpgradeStatus: UpgradeStatus,
+    proofUpgradeStatus: CommitmentProof,
+    proofHeight: Height,
+) {
+    // current connection is in UPGRADE_INIT or UPGRADE_TRY
+    currentConnection = provableStore.get(connectionPath(identifier))
+    abortTransactionUnless(connection.state == (UPGRADE_INIT || UPGRADE_TRY))
+
+    abortTransactionUnless(counterpartyUpgradeStatus.state == UPGRADE_ERR)
+
+    abortTransactionUnless(currentConnection.client.verifyUpgradeStatus(proofHeight, proofUpgradeStatus, counterpartyUpgradeStatus))
+
+    // cancel upgrade
+    // and restore original conneciton
+    // delete unnecessary state
+    originalConnection = privateStore.get(restorePath(identifier))
+    provableStore.set(connectionPath(identifier), originalConnection)
+    provableStore.delete(statusPath(identifier))
+    privateStore.delete(restorePath(identifier))
+}
+```
+
+It is possible that there is an extraordinary delay in the upgrade handshake occurs because of liveness issues. In this case, we do not want to indefinitely stay in the upgrade process and we will revert to the original connection by calling `CancelConnectionUpgradeTimeout`.
+
+// TODO
