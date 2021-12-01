@@ -167,6 +167,9 @@ function connUpgradeInit(
 }
 ```
 
+NOTE: It is up to individual implementations how they will provide access-control to the `ConnUpgradeInit` function. E.g. chain governance, permissioned actor, DAO, etc.
+Access control on counterparty should inform choice of timeout values, i.e. timeout value should be large if counterparty's `UpgradeTry` is gated by chain governance.
+
 ```typescript
 function connUpgradeTry(
     identifier: Identifier,
@@ -232,6 +235,9 @@ function connUpgradeTry(
     privateStore.set(restorePath(identifier), currentConnection)
 }
 ```
+
+NOTE: It is up to individual implementations how they will provide access-control to the `ConnUpgradeTry` function. E.g. chain governance, permissioned actor, DAO, etc.
+
 
 ```typescript
 function onChanUpgradeAck(
