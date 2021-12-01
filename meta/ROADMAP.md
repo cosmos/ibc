@@ -10,7 +10,7 @@ This roadmap reflects the major activities that the [standards committee](STANDA
 
 - Update the Interchain Accounts ([ICS27](https://github.com/cosmos/ibc/blob/master/spec/app/ics-027-interchain-accounts/README.md)) and Relayer Incentivisation ([ICS29](https://github.com/cosmos/ibc/tree/master/spec/app/ics-029-fee-payment)) specifications to align them with the ibc-go implementation.
 - The function `NegotiateAppVersion` has been [added to the app module interface in ibc-go](https://github.com/cosmos/ibc-go/pull/384) as part of the Interchain Accounts work. This change is not reflected yet in the [ICS05](https://github.com/cosmos/ibc/blob/master/spec/core/ics-005-port-allocation/README.md) specification. An update is needed to describe its semantics beyond the Interchain Accounts use case.
-- Review [Bianjie](https://www.bianjie.ai)'s simplified, enterprise-targeted IBC protocol [TIBC](https://github.com/bianjieai/tibc) and [IRISnet](https://www.irisnet.org)'s [ICS721](https://github.com/cosmos/ibc/pull/615) specification proposal for NFT transfers.
+- Review [IRISnet](https://www.irisnet.org)'s [ICS721](https://github.com/cosmos/ibc/pull/615) specification proposal for NFT transfers.
 - Rough draft of channel upgrade process (potentially connection as well).
 
 ## Q1 - 2022
