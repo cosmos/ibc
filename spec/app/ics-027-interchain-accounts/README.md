@@ -213,7 +213,7 @@ TrySendTx(ownerAddress, connectionId, counterPartyConnectionId, data)
     
 5. The host chain will then call `AuthenticateTx` and `ExecuteTx` for each message and return an acknowledgment containing a success or error.  
 
-Messages are authenticated on the host chain by taking the controller side port identifier and calling `GetInterchainAccountAddress(controllerPortId)` to get the expected interchain account address for the current controller port. If the signer of this message does not match the expected account address then authentication will fail. An example implementation for the cosmos SDK can be seen [here](https://github.com/cosmos/ibc-go/blob/interchain-accounts/modules/apps/27-interchain-accounts/keeper/relay.go#L76).
+Messages are authenticated on the host chain by taking the controller side port identifier and calling `GetInterchainAccountAddress(controllerPortId)` to get the expected interchain account address for the current controller port. If the signer of this message does not match the expected account address then authentication will fail.
 
 ### Packet Data
 `InterchainAccountPacketData` contains an array of messages that an interchain account can execute and a memo string that is sent to the host chain as well as the packet `type`. ICS-27 version 1 has only one type `EXECUTE_TX`.
