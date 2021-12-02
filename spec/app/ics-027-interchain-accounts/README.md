@@ -140,7 +140,7 @@ ics27-1.{connection-id}.{counterparty-connection-id}.{owner-account-address}
 This port will be used to create channels between the controller & host chain for a specific owner/interchain account pair. Only the account with `{owner-account-address}` matching the bound port will be authorized to send IBC packets over channels created with `ics27-1.{connection-id}.{counterparty-connection-id}.{owner-account-address}`. It is up to each controller chain to enforce this port registration and access on the controller side. 
 
 2. The controller chain emits an event signaling to open a new channel on this port given a connection 
-3. A relayer listening for `OnChannelOpenInit` events will begin the channel creation handshake
+3. A relayer listening for `OnChannelOpenInit` events will continue the channel creation handshake
 4. During the `OnChanOpenTry` callback on the host chain an interchain account will be registered and a mapping of the interchain account address to the owner account address will be stored in state (this is used for authenticating transactions on the host chain at execution time). 
 5. During the `OnChanOpenAck` callback on the controller chain a record of the interchain account address registered on the host chain during `OnChanOpenTry` is set in state with a mapping from portID -> interchain account address. See [version negotiation](#Version-Negotiation) section below for how to implement this
 6. During the `OnChanOpenAck` & `OnChanOpenConfirm` callbacks on the controller & host chains respectively, the [active-channel](#Active-Channels) for this interchain account/owner pair, is set in state
