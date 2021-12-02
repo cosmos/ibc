@@ -194,7 +194,7 @@ Once an interchain account is registered on the host chain a controller chain ca
 
 1. The controller chain calls `TrySendTx` and passes message(s) that will be executed on the host side by the associated interchain account (determined by the controller side port identifier)
 
-Cosmos SDK psuedo code example:
+Cosmos SDK pseudo-code example:
 
 ```typescript
 interchainAccountAddress := GetInterchainAccountAddress(portId)
