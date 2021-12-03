@@ -51,13 +51,17 @@ interface ConnectionEnd {
 The desired property that the connection upgrade protocol may not modify the underlying clients or connection identifiers, means that only some fields are upgradable by the upgrade protocol.
 
 - `state`: The state is specified by the handshake steps of the upgrade protocol.
-- `counterpartyConnectionIdentifier`: The counterparty connection identifier CAN NOT be modified by the upgrade protocol.
+
+CAN BE MODIFIED:
 - `counterpartyPrefix`: The prefix MAY be modified in the upgrade protocol. The counterparty must accept the new proposed prefix value, or it must return an error during the upgrade handshake.
-- `clientIdentifier`: The client identifier CAN NOT be modified by the upgrade protocol
-- `counterpartyClientIdentifier`: The counterparty client identifier CAN NOT be modified by the upgrade protocol
 - `version`: The version MAY be modified by the upgrade protocol. The same version negotiation that happens in the initial connection handshake can be employed for the upgrade handshake.
 - `delayPeriodTime`: The delay period MAY be modified by the upgrade protocol. The counterparty MUST accept the new proposed value or return an error during the upgrade handshake.
 - `delayPeriodBlocks`: The delay period MAY be modified by the upgrade protocol. The counterparty MUST accept the new proposed value or return an error during the upgrade handshake.
+
+CAN NOT BE MODIFIED:
+- `counterpartyConnectionIdentifier`: The counterparty connection identifier CAN NOT be modified by the upgrade protocol.
+- `clientIdentifier`: The client identifier CAN NOT be modified by the upgrade protocol
+- `counterpartyClientIdentifier`: The counterparty client identifier CAN NOT be modified by the upgrade protocol
 
 ```typescript
 interface UpgradeStatus {
@@ -126,13 +130,14 @@ At the end of an opening handshake between two chains implementing the sub-proto
 - Each chain is running their new upgraded connection end and is processing upgraded logic and state according to the upgraded parameters.
 - Each chain has knowledge of and has agreed to the counterparty's upgraded connection parameters.
 
-If a chain does not agree to the proposed counterparty `UpgradeConnectionState`, it may abort the upgrade handshake by writing a sentinel abort value into the upgrade-failed connection path.
+If a chain does not agree to the proposed counterparty `UpgradeConnectionState`, it may abort the upgrade handshake by writing `UPGRADE_ERR` as the state in the `UpgradeStatus` and storing
+it under the status path and restore the original connection.
 
-`connection/{identifier}/proposedUpgradeFailed` => `[]byte(0x1)`.
+`statusPath(id) => UpgradeStatus{UPGRADE_ERR}`
 
-The counterparty receiving proof of this must cancel the upgrade and resume the 
+A relayer may then submit a `CancelConnectionUpgradeMsg` to the counterparty. Upon receiving this message a chain must verify that the counterparty wrote `UPGRADE_ERR` into its `UpgradeStatus` and if successful, it will restore its original connection as well thus cancelling the upgrade.
 
-If an upgrade message arrives after the specified timeout, then the message MUST NOT execute successfully.
+If an upgrade message arrives after the specified timeout, then the message MUST NOT execute successfully. Again a relayer may submit a proof of this in a `CancelConnectionUpgradeTimeoutMsg` so that counterparty cancels the upgrade and restores it original connection as well.
 
 ```typescript
 function connUpgradeInit(
