@@ -6,7 +6,7 @@ This standard document specifies the interfaces and state machine logic that IBC
 
 ### Motivation
 
-As new features get added to IBC, chains may wish the take advantage of new connection features without abandoning the accumulated state and network effect(s) of an already existing connection. The upgrade protocol proposed would allow chains to renegotiate an existing connection to take advantage of new features without having to create a new connection.
+As new features get added to IBC, chains may wish the take advantage of new connection features without abandoning the accumulated state and network effect(s) of an already existing connection. The upgrade protocol proposed would allow chains to renegotiate an existing connection to take advantage of new features without having to create a new connection, thus preserving all existing channels that built on top of the connection.
 
 ### Desired Properties
 
@@ -62,6 +62,8 @@ CAN NOT BE MODIFIED:
 - `counterpartyConnectionIdentifier`: The counterparty connection identifier CAN NOT be modified by the upgrade protocol.
 - `clientIdentifier`: The client identifier CAN NOT be modified by the upgrade protocol
 - `counterpartyClientIdentifier`: The counterparty client identifier CAN NOT be modified by the upgrade protocol
+
+NOTE: If the upgrade adds any fields to the `ConnectionEnd` these are by default modifiable, and can be arbitrarily chosen by an Actor (e.g. chain governance) which has permission to initiate the upgrade.
 
 ```typescript
 interface UpgradeStatus {
@@ -362,4 +364,4 @@ function cancelConnectionUpgrade(
 
 It is possible that there is an extraordinary delay in the upgrade handshake occurs because of liveness issues. In this case, we do not want to indefinitely stay in the upgrade process and we will revert to the original connection by calling `CancelConnectionUpgradeTimeout`.
 
-// TODO
+// TODO Timeout Specification
