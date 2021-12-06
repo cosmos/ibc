@@ -58,7 +58,7 @@ CAN BE MODIFIED:
 - `delayPeriodTime`: The delay period MAY be modified by the upgrade protocol. The counterparty MUST accept the new proposed value or return an error during the upgrade handshake.
 - `delayPeriodBlocks`: The delay period MAY be modified by the upgrade protocol. The counterparty MUST accept the new proposed value or return an error during the upgrade handshake.
 
-CAN NOT BE MODIFIED:
+CANNOT BE MODIFIED:
 - `counterpartyConnectionIdentifier`: The counterparty connection identifier CAN NOT be modified by the upgrade protocol.
 - `clientIdentifier`: The client identifier CAN NOT be modified by the upgrade protocol
 - `counterpartyClientIdentifier`: The counterparty client identifier CAN NOT be modified by the upgrade protocol
@@ -85,7 +85,7 @@ interface UpgradeConnectionState {
 }
 ```
 
-- `proposedConnectionState`: Proposed `ConnectionState` to replace the current `ConnectionState`, it MUST ONLY modify the fields that are permissable to 
+- `proposedConnectionState`: Proposed `ConnectionState` to replace the current `ConnectionState`, it MUST ONLY modify the fields that are permissible to 
 - `timeoutHeight`: Timeout height indicates the height at which the counterparty must no longer proceed with the upgrade handshake. The chains will then preserve their original connection and the upgrade handshake is aborted.
 - `timeoutTimestamp`: Timeout timestamp indicates the time on the counterparty at which the counterparty must no longer proceed with the upgrade handshake. The chains will then preserve their original connection and the upgrade handshake is aborted.
 
