@@ -87,7 +87,7 @@ function InitChannel(portID: string, connectionID: string) returns (nil){
 }
 ```
 
-### HOST CHAIN Contract
+### Host Chain Contract
 
 #### **RegisterInterchainAccount**
 
@@ -125,7 +125,7 @@ function ExecuteTx(sourcePort: string, destPort: string, destChannel: string, ms
 }
 ```
 
-### UTILITY FUNCTIONS
+### Utility Functions
 
 ```typescript
 // Sets the active channel for a given portID.
@@ -372,6 +372,8 @@ function onChanOpenConfirm(
 }
 ```
 
+### Closing Handshake
+
 ```typescript
 function onChanCloseInit(
   portIdentifier: Identifier,
@@ -448,6 +450,8 @@ function onTimeoutPacket(packet: Packet) {
 ```
 
 ### Identifier Formats
+
+These are the formats that the port identifiers on each side of an interchain accounts channel must follow to be accepted by a correct interchain accounts module.
 
 Controller Port Identifier: `ics27-1.{connection-id}.{counterparty-connection-id}.{owner-account-address}`
 
