@@ -16,7 +16,7 @@ This standard document specifies packet data structure, state machine handling l
 
 ### Motivation
 
-ICS-27 Interchain Accounts outlines a cross-chain account management protocol built upon IBC. ICS-27 enabled chains can programmatically create accounts on other ICS-27 enabled chains & control these accounts via IBC transactions (instead of signing with a private key). Interchain accounts retain all of the capabilities of a normal account (i.e. stake, send, vote) but instead are managed by a separate chain via IBC in a way such that the owner of the accounts retain full control over how the accounts behave. 
+ICS-27 Interchain Accounts outlines a cross-chain account management protocol built upon IBC. ICS-27 enabled chains can programmatically create accounts on other ICS-27 enabled chains & control these accounts via IBC transactions (instead of signing with a private key). Interchain accounts retain all of the capabilities of a normal account (i.e. stake, send, vote) but instead are managed by a separate chain via IBC in a way such that the owner account on the controller chain retains full control over any interchain account(s) it registers on host chain(s). 
 
 ### Definitions 
 
@@ -30,7 +30,7 @@ The IBC handler interface & IBC relayer module interface are as defined in [ICS 
 ### Desired Properties
 
 - Permissionless: An interchain account may be created by any actor without the approval of a third party (e.g. chain governance). Note: Individual implementations may implement their own permissioning scheme, however the protocol must not require permissioning from a trusted party to be secure.
-- Fault tolerance: A controller chain must not be able to control accounts registered by other controller chains. For example, in the case of a fork attack on a controller chain, only the interchain accounts registered by the forked chain will be vulnerable.
+- Fault isolation: A controller chain must not be able to control accounts registered by other controller chains. For example, in the case of a fork attack on a controller chain, only the interchain accounts registered by the forked chain will be vulnerable.
 - The ordering of transactions sent to an interchain account on a host chain must be maintained. Transactions should be executed by an interchain account in the order in which they are sent by the controller chain.
 - If a channel closes, the controller chain must be able to regain access to registered interchain accounts by simply opening a new channel.
 - Each interchain account is owned by a single account on the controller chain. Only the owner account on the controller chain is authorized to control the interchain account. The controller chain is responsible for enforcing this logic.
@@ -56,6 +56,7 @@ It will bind to the controller portID and
 call 04-channel 'ChanOpenInit'. An error is returned if the controller portID is already in use.
 An `OnChannelOpenInit` event is emitted which can be picked up by an offchain process such as a relayer.
 The account will be registered during the OnChanOpenTry step on the host chain.
+This function must be called after an OPEN connection is already esablished with the given connection and counterparty connection identifiers.
 
 ```typescript
 function InitInterchainAccount(connectionId: string, counterPartyConnectionId: string, owner: string) returns (error){
@@ -174,7 +175,7 @@ An example of an active channel on the controller chain can look like this:
 ```typescript
 {
  // Controller Chain
- SourcePortId: `ics27-<version>.<source-connection-id>.<counterparty-connection-id>.<owner-account-address>`,
+ SourcePortId: `ics27-<version>.<source-connection-id>.<destination-connection-id>.<owner-account-address>`,
  SourceChannelId: `<channel-id>`,
  // Host Chain
  CounterPartyPortId: `interchain-account`,
