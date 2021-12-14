@@ -298,6 +298,7 @@ An interchain account module will accept new channels from any module on another
 - The channel initialization step is being invoked from the controller chain
 
 ```typescript
+// Called on Controller Chain by InitInterchainAccount
 function onChanOpenInit(
   order: ChannelOrder,
   connectionHops: [Identifier],
@@ -320,6 +321,7 @@ function onChanOpenInit(
 ```
 
 ```typescript
+// Called on Host Chain by Relayer
 function onChanOpenTry(
   order: ChannelOrder,
   connectionHops: [Identifier],
@@ -331,8 +333,11 @@ function onChanOpenTry(
   counterpartyVersion: string) {
   // only unordered channels allowed
   abortTransactionUnless(order === ORDERED)
-  // validate port format
-  abortTransactionUnless(validateControllerPortParams(portIdentifier))
+  // validate port ID
+  abortTransactionUnless(portIdentifier === "interchain-account")
+  // only allow channels to be created on host chain if the counteparty port ID
+  // is in the expected controller portID format.
+  abortTransactionUnless(validateControllerPortParams(counterpartyPortIdentifier))
   // assert that version is expected format `ics27-1.interchain-account-address`
   abortTransactionUnless(validateVersion(version))
   // assert that the counterparty version is `ics27-1`  
@@ -343,6 +348,7 @@ function onChanOpenTry(
 ```
 
 ```typescript
+// Called on Controller Chain by Relayer
 function onChanOpenAck(
   portIdentifier: Identifier,
   channelIdentifier: Identifier,
@@ -357,6 +363,7 @@ function onChanOpenAck(
 ```
 
 ```typescript
+// Called on Host Chain by Relayer
 function onChanOpenConfirm(
   portIdentifier: Identifier,
   channelIdentifier: Identifier) {
