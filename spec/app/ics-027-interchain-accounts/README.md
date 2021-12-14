@@ -461,6 +461,12 @@ Host Port Identifier: `interchain-account`
 
 Repository for Cosmos-SDK implementation of ICS-27: https://github.com/cosmos/ibc-go
 
+## Future Improvements
+
+A future version of interchain accounts may be greatly simplified by the introduction of an IBC channel type that is ORDERED but does not close the channel on timeouts, and instead proceeds to accept and receive the next packet. If such a channel type is made available by core IBC, Interchain accounts could require the use of this channel type and remove all logic and state pertaining to "active channels". The controller port identifier format can also be simplified to remove any reference to the underlying connection identifiers
+
+The "active channel" setting and unsetting is currently necessary to allow interchain account owners to create a new channel in case the current active channel closes during channel timeout. The connection identifiers are part of the portID to ensure that any new channel that gets opened are established on top of the original connection. All of this logic becomes unnecessary once the channel is ordered **and** unclosable, which can only be achieved by the introduction of a new channel type to core IBC.
+
 ## History
 
 Aug 1, 2019 - Concept discussed
@@ -476,6 +482,8 @@ July 14, 2020 - Major revisions
 April 27, 2021 - Redesign of ics27 specification
 
 November 11, 2021 - Update with latest changes from implementation
+
+December 14, 2021 - Revisions to spec based on audits and maintainer reviews
     
 ## Copyright
 
