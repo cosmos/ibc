@@ -319,7 +319,7 @@ function chanOpenTry(
   counterpartyChosenChannelIdentifer: Identifier,
   counterpartyPortIdentifier: Identifier,
   counterpartyChannelIdentifier: Identifier,
-  version: string,
+  version: string, // deprecated
   counterpartyVersion: string,
   proofInit: CommitmentProof,
   proofHeight: Height): CapabilityKey {
@@ -332,7 +332,7 @@ function chanOpenTry(
          previous.counterpartyPortIdentifier === counterpartyPortIdentifier &&
          previous.counterpartyChannelIdentifier === "" &&
          previous.connectionHops === connectionHops &&
-         previous.version === version)
+         previous.version === counterpartyVersion
         )
       channelIdentifier = previousIdentifier
     } else {
