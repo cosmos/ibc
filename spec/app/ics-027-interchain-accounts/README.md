@@ -68,8 +68,8 @@ function InitInterchainAccount(connectionId: string, counterpartyConnectionId: s
 `TrySendTx` is used to send an IBC packet containing instructions (messages) to an interchain account on a host chain for a given interchain account owner.
 
 ```typescript
-function TrySendTx(channelCapability: ChannelCapability, portID: string, connectionId: string, counterpartyConnectionId: string, icaPacketData: InterchainAccountPacketData) returns (uint64, error){
-    // A call to GetActiveChannel() checks if there is a currently active channel for this portID which also implies an interchain account has been registered using this port identifier
+function TrySendTx(channelCapability: ChannelCapability, portId: string, connectionId: string, counterpartyConnectionId: string, icaPacketData: InterchainAccountPacketData) returns (uint64, error){
+    // A call to GetActiveChannel() checks if there is a currently active channel for this portId which also implies an interchain account has been registered using this port identifier
     // if there are no errors CreateOutgoingPacket() is called and the IBC packet will be sent to the host chain on the active channel
 }
 ```
@@ -81,7 +81,7 @@ This is a helper function to open a new channel.
 This is a safety function in case of a channel closing and the controller chain needs to regain access to an interchain account on the host chain.
 
 ```typescript
-function InitChannel(portID: string, connectionID: string) returns (nil){
+function InitChannel(portId: string, connectionId: string) returns (nil){
   // A `ChannelOpenInit` event is emitted which can be picked up by an off-chain process such as a relayer which will finish the channel opening handshake
   // The active channel will be set to the newly opened channel on the `OnChanOpenAck` & `OnChanOpenConfirm` steps
 }
@@ -94,7 +94,7 @@ function InitChannel(portID: string, connectionID: string) returns (nil){
 `RegisterInterchainAccount` is called on the `OnChanOpenTry` step during the channel creation handshake.
 
 ```typescript
-function RegisterInterchainAccount(accAddr: string, counterpartyPortID: string) returns (nil){
+function RegisterInterchainAccount(accAddr: string, counterpartyPortId: string) returns (nil){
    // checks to make sure the account has not already been registered
    // creates a new address on chain 
    // calls SetInterchainAccountAddress()
@@ -107,8 +107,8 @@ function RegisterInterchainAccount(accAddr: string, counterpartyPortID: string) 
 `AuthenticateTx` checks that the signer of a particular message is the interchain account associated with the counterparty portID of the channel that the IBC packet was sent on.
 
 ```typescript
-function AuthenticateTx(msgs []Any, portID string) error {
-    // GetInterchainAccountAddress(portID)
+function AuthenticateTx(msgs []Any, portId string) error {
+    // GetInterchainAccountAddress(portId)
     // interchainAccountAddress != signer.String() return error
 }
 ```
@@ -129,23 +129,23 @@ function ExecuteTx(sourcePort: string, destPort: string, destChannel: string, ms
 
 ```typescript
 // Sets the active channel for a given portID.
-function SetActiveChannelID(portID: string, channelID: string) returns (error){
+function SetActiveChannelID(portId: string, channelId: string) returns (error){
 }
 
 // Returns the ID of the active channel for a given portID, if present.
-function GetActiveChannelID(portID: string) returns (string, boolean){
+function GetActiveChannelID(portId: string) returns (string, boolean){
 }
 
 // Stores the address of the interchain account in state.
-function SetInterchainAccountAddress(portID string, address string) returns (string) {
+function SetInterchainAccountAddress(portId string, address string) returns (string) {
 }
 
 // Retrieves the interchain account from state.
-function GetInterchainAccountAddress(portID string) returns (string, bool){
+function GetInterchainAccountAddress(portId string) returns (string, bool){
 }
 
 // DeleteActiveChannelID removes the active channel keyed by the provided portID stored in state
-function (k Keeper) DeleteActiveChannelID(portID string) {
+function (k Keeper) DeleteActiveChannelID(portId string) {
 }
 ```
 
