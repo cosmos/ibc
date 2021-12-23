@@ -187,7 +187,7 @@ In the event of a channel closing, the active channel must be unset. ICS-27 chan
 
 #### Version negotiation
 
-ICS-27 takes advantage of [ISC-04 channel version negotiation](../../core/ics-004-channel-and-packet-semantics/README.md#versioning) to store a mapping of the controller chain portID to the newly registered interchain account address, on both the host & controller chains, during the channel creation handshake ([account registration flow](#Register-account-flow)). 
+ICS-27 takes advantage of [ICS-04 channel version negotiation](../../core/ics-004-channel-and-packet-semantics/README.md#versioning) to store a mapping of the controller chain portID to the newly registered interchain account address, on both the host & controller chains, during the channel creation handshake ([account registration flow](#Register-account-flow)). 
 
 ICS-04 allows for each channel version negotiation to be application-specific. In the case of interchain accounts, the channel version set during the `OnChanOpenInit` step (controller chain) must be `ics27-<version>` & the version set during the host chain `OnChanOpenTry` step will include the interchain account address that will be created ([see summary table below](#Version-negotiation-summary)). Note that the generation of this address is stateless, and can be generated in advance of the account creation. 
 
