@@ -229,9 +229,9 @@ icaPacketData = InterchainAccountPacketData{
 TrySendTx(ownerAddress, connectionId, counterpartyConnectionId, data)
 ```
 
-4. The host chain upon receiving the IBC packet will call `DeserializeTx`. 
+2. The host chain upon receiving the IBC packet will call `DeserializeTx`. 
     
-5. The host chain will then call `AuthenticateTx` and `ExecuteTx` for each message and return an acknowledgment containing a success or error.  
+3. The host chain will then call `AuthenticateTx` and `ExecuteTx` for each message and return an acknowledgment containing a success or error.  
 
 Messages are authenticated on the host chain by taking the controller side port identifier and calling `GetInterchainAccountAddress(controllerPortId)` to get the expected interchain account address for the current controller port. If the signer of this message does not match the expected account address then authentication will fail.
 
