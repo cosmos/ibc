@@ -49,7 +49,6 @@ interface ClientState {
   codeId: []byte
   data: []byte
   latestHeight: Height
-  proofSpecs: []ProofSpec
 }
 ```
 
@@ -374,7 +373,6 @@ pub enum ValidityPredicate {
 pub enum QueryMsg {
    IsValid(ValidityPredicate),
    LatestClientHeight(Vec<byte>),
-   ProofSpec(Vec<byte>)
 }
 
 ```
