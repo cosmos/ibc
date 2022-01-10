@@ -42,7 +42,9 @@ A *bidirectional* channel is a channel where packets can flow in both directions
 
 A *unidirectional* channel is a channel where packets can only flow in one direction: from `A` to `B` (or from `B` to `A`, the order of naming is arbitrary).
 
-An *ordered* channel is a channel where packets are delivered exactly in the order which they were sent.
+An *ordered* channel is a channel where packets are delivered exactly in the order which they were sent. This channel type offers a very strict guarantee of ordering. Either, the packets are received in the order they were sent, or if a packet in the sequence times out; then all future packets are also not receivable and the channel closes.
+
+An *ordered_allow_timeout* channel is a less strict version of the *ordered* channel. Here, the channel logic will take a *best effort* approach to delivering the packets in order. In a stream of packets, the channel will relay all packets in order and if a packet in the stream times out, the timeout logic for that packet will execute and the rest of the later packets will continue processing in order. Thus, we **do not close** the channel on a timeout with this channel type.
 
 An *unordered* channel is a channel where packets can be delivered in any order, which may differ from the order in which they were sent.
 
@@ -50,6 +52,7 @@ An *unordered* channel is a channel where packets can be delivered in any order,
 enum ChannelOrder {
   ORDERED,
   UNORDERED,
+  ORDERED_ALLOW_TIMEOUT,
 }
 ```
 
@@ -73,7 +76,7 @@ interface ChannelEnd {
 ```
 
 - The `state` is the current state of the channel end.
-- The `ordering` field indicates whether the channel is ordered or unordered.
+- The `ordering` field indicates whether the channel is `unordered`, `ordered`, or `ordered_allow_timeout`.
 - The `counterpartyPortIdentifier` identifies the port on the counterparty chain which owns the other end of the channel.
 - The `counterpartyChannelIdentifier` identifies the channel end on the counterparty chain.
 - The `nextSequenceSend`, stored separately, tracks the sequence number for the next packet to be sent.
@@ -145,8 +148,9 @@ type OpaquePacket = object
 
 #### Ordering
 
-- On ordered channels, packets should be sent and received in the same order: if packet *x* is sent before packet *y* by a channel end on chain `A`, packet *x* must be received before packet *y* by the corresponding channel end on chain `B`.
-- On unordered channels, packets may be sent and received in any order. Unordered packets, like ordered packets, have individual timeouts specified in terms of the destination chain's height.
+- On *ordered* channels, packets should be sent and received in the same order: if packet *x* is sent before packet *y* by a channel end on chain `A`, packet *x* must be received before packet *y* by the corresponding channel end on chain `B`. If packet *x* is sent before packet *y* by a channel and packet *x* is timed out; then packet *y* and any packet sent after *x* cannot be received.
+- On *ordered_allow_timeout* channels, packets should be sent and received in the same order: if packet *x* is sent before packet *y* by a channel end on chain `A`, packet *x* must be received **or** timed out before packet *y* by the corresponding channel end on chain `B`.
+- On *unordered* channels, packets may be sent and received in any order. Unordered packets, like ordered packets, have individual timeouts specified in terms of the destination chain's height.
 
 #### Permissioning
 
@@ -585,11 +589,11 @@ The IBC handler performs the following steps in order:
 - Checks that the channel & connection are open to receive packets
 - Checks that the calling module owns the receiving port
 - Checks that the packet metadata matches the channel & connection information
-- Checks that the packet sequence is the next sequence the channel end expects to receive (for ordered channels)
+- Checks that the packet sequence is the next sequence the channel end expects to receive (for ordered and ordered_allow_timeout channels)
 - Checks that the timeout height has not yet passed
 - Checks the inclusion proof of packet data commitment in the outgoing chain's state
 - Sets a store path to indicate that the packet has been received (unordered channels only)
-- Increments the packet receive sequence associated with the channel end (ordered channels only)
+- Increments the packet receive sequence associated with the channel end (ordered and ordered_allow_timeout channels only)
 
 We pass the address of the `relayer` that signed and submitted the packet to enable a module to optionally provide some rewards. This provides a foundation for fee payment, but can be used for other techniques as well (like calculating a leaderboard).
 
@@ -624,7 +628,7 @@ function recvPacket(
 
     // all assertions passed (except sequence check), we can alter state
 
-    if (channel.order === ORDERED) {
+    if (channel.order === ORDERED || channel.order == ORDERED_ALLOW_TIMEOUT) {
       nextSequenceRecv = provableStore.get(nextSequenceRecvPath(packet.destPort, packet.destChannel))
       abortTransactionUnless(packet.sequence === nextSequenceRecv)
       nextSequenceRecv = nextSequenceRecv + 1
@@ -732,7 +736,7 @@ function acknowledgePacket(
     ))
 
     // abort transaction unless acknowledgement is processed in order
-    if (channel.order === ORDERED) {
+    if (channel.order === ORDERED || channel.order == ORDERED_ALLOW_TIMEOUT) {
       nextSequenceAck = provableStore.get(nextSequenceAckPath(packet.sourcePort, packet.sourceChannel))
       abortTransactionUnless(packet.sequence === nextSequenceAck)
       nextSequenceAck = nextSequenceAck + 1
@@ -823,7 +827,7 @@ function timeoutPacket(
     abortTransactionUnless(provableStore.get(packetCommitmentPath(packet.sourcePort, packet.sourceChannel, packet.sequence))
            === hash(packet.data, packet.timeoutHeight, packet.timeoutTimestamp))
 
-    if channel.order === ORDERED {
+    if channel.order === ORDERED || channel.order == ORDERED_ALLOW_TIMEOUT {
       // ordered channel: check that packet has not been received
       abortTransactionUnless(nextSequenceRecv <= packet.sequence)
       // ordered channel: check that the recv sequence is as claimed
@@ -849,6 +853,7 @@ function timeoutPacket(
     // delete our commitment
     provableStore.delete(packetCommitmentPath(packet.sourcePort, packet.sourceChannel, packet.sequence))
 
+    // only close on strictly ORDERED channels
     if channel.order === ORDERED {
       // ordered channel: close the channel
       channel.state = CLOSED
@@ -903,7 +908,7 @@ function timeoutOnClose(
       expected
     ))
 
-    if channel.order === ORDERED {
+    if channel.order === ORDERED || channel.order == ORDERED_ALLOW_TIMEOUT {
       // ordered channel: check that the recv sequence is as claimed
       abortTransactionUnless(connection.verifyNextSequenceRecv(
         proofHeight,
@@ -928,12 +933,6 @@ function timeoutOnClose(
 
     // delete our commitment
     provableStore.delete(packetCommitmentPath(packet.sourcePort, packet.sourceChannel, packet.sequence))
-
-    if channel.order === ORDERED {
-      // ordered channel: close the channel
-      channel.state = CLOSED
-      provableStore.set(channelPath(packet.sourcePort, packet.sourceChannel), channel)
-    }
 
     // return transparent packet
     return packet
@@ -1011,6 +1010,8 @@ Jul 29, 2019 - Revisions to handle timeouts after connection closure
 Aug 13, 2019 - Various edits
 
 Aug 25, 2019 - Cleanup
+
+Jan 10, 2022 - Add ORDERED_ALLOW_TIMEOUT channel type and appropriate logic
 
 ## Copyright
 
