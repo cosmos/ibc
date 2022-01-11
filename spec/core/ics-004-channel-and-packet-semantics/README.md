@@ -315,7 +315,6 @@ function chanOpenTry(
   order: ChannelOrder,
   connectionHops: [Identifier],
   portIdentifier: Identifier,
-  previousIdentifier: Identifier,
   counterpartyChosenChannelIdentifer: Identifier,
   counterpartyPortIdentifier: Identifier,
   counterpartyChannelIdentifier: Identifier,
@@ -323,22 +322,8 @@ function chanOpenTry(
   counterpartyVersion: string,
   proofInit: CommitmentProof,
   proofHeight: Height): CapabilityKey {
-    if (previousIdentifier !== "") {
-      previous = provableStore.get(channelPath(portIdentifier, channelIdentifier))
-      abortTransactionUnless(
-        (previous !== null) &&
-        (previous.state === INIT &&
-         previous.order === order &&
-         previous.counterpartyPortIdentifier === counterpartyPortIdentifier &&
-         previous.counterpartyChannelIdentifier === "" &&
-         previous.connectionHops === connectionHops &&
-         previous.version === counterpartyVersion
-        )
-      channelIdentifier = previousIdentifier
-    } else {
-      // generate a new identifier if the provided identifier was the sentinel empty-string
-      channelIdentifier = generateIdentifier()
-    }
+    channelIdentifier = generateIdentifier()
+
     abortTransactionUnless(validateChannelIdentifier(portIdentifier, channelIdentifier))
     abortTransactionUnless(connectionHops.length === 1) // for v1 of the IBC protocol
     abortTransactionUnless(authenticateCapability(portPath(portIdentifier), portCapability))
