@@ -24,6 +24,8 @@ See [STANDARDS_COMMITTEE.md](meta/STANDARDS_COMMITTEE.md) for the membership of 
 
 See [CONTRIBUTING.md](meta/CONTRIBUTING.md) for contribution guidelines.
 
+See [ROADMAP.md](meta/ROADMAP.md) for a public up-to-date version of our roadmap.
+
 ## Interchain Standards
 
 All standards at or past the "Draft" stage are listed here in order of their ICS numbers, sorted by category.
