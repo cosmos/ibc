@@ -343,12 +343,12 @@ function chanOpenTry(
                          counterpartyChannelIdentifier, connectionHops, version}
     provableStore.set(channelPath(portIdentifier, channelIdentifier), channel)
     channelCapability = newCapability(channelCapabilityPath(portIdentifier, channelIdentifier))
-    // only reset sequences if the previous channel didn't exist, else we might overwrite optimistically-sent packets
-    if (previous === null) {
-      provableStore.set(nextSequenceSendPath(portIdentifier, channelIdentifier), 1)
-      provableStore.set(nextSequenceRecvPath(portIdentifier, channelIdentifier), 1)
-      provableStore.set(nextSequenceAckPath(portIdentifier, channelIdentifier), 1)
-    }
+
+    // initialize channel sequences
+    provableStore.set(nextSequenceSendPath(portIdentifier, channelIdentifier), 1)
+    provableStore.set(nextSequenceRecvPath(portIdentifier, channelIdentifier), 1)
+    provableStore.set(nextSequenceAckPath(portIdentifier, channelIdentifier), 1)
+
     return channelCapability
 }
 ```
