@@ -20,7 +20,7 @@ ICS-27 Interchain Accounts outlines a cross-chain account management protocol bu
 
 ### Definitions 
 
-- `Host Chain`: The chain where the interchain account is registered. The host chain listens for IBC packets from a controller chain which contains instructions (e.g. cosmos SDK messages) that the interchain account will execute.
+- `Host Chain`: The chain where the interchain account is registered. The host chain listens for IBC packets from a controller chain which contain instructions (e.g. cosmos SDK messages) that the interchain account will execute.
 - `Controller Chain`: The chain registering and controlling an account on a host chain. The controller chain sends IBC packets to the host chain to control the account.
 - `Interchain Account`: An account on a host chain. An interchain account has all the capabilities of a normal account. However, rather than signing transactions with a private key, a controller chain will send IBC packets to the host chain which signals what transactions the interchain account must execute. 
 - `Interchain Account Owner`: An account on the controller chain. Every interchain account on a host chain has a respective owner account on the controller chain. 
