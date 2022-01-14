@@ -43,13 +43,13 @@ Modules must expose the following function signatures to the routing module, whi
 
 #### **ChanOpenInit**
 
-ChanOpenInit will verify that the relayer-chosen parameters
-are valid and perform any custom INIT logic.
+`onChanOpenInit` will verify that the relayer-chosen parameters
+are valid and perform any custom `INIT` logic.
 It may return an error if the chosen parameters are invalid
 in which case the handshake is aborted.
-If the provided version string is non-empty, ChanOpenInit should return
+If the provided version string is non-empty, `onChanOpenInit` should return
 the version string if valid or an error if the provided version is invalid.
-If the version string is empty, ChanOpenInit is expected to
+If the version string is empty, `onChanOpenInit` is expected to
 return a default version string representing the version(s)
 it supports.
 If there is no default version string for the application,
@@ -70,15 +70,15 @@ function onChanOpenInit(
 
 #### **ChanOpenTry**
 
-ChanOpenTry will verify the relayer-chosen parameters along with the
-counterparty-chosen version string and perform custom TRY logic.
+`onChanOpenTry` will verify the relayer-chosen parameters along with the
+counterparty-chosen version string and perform custom `TRY` logic.
 If the relayer-chosen parameters
 are invalid, the callback must return an error to abort the handshake.
 If the counterparty-chosen version is not compatible with this modules
 supported versions, the callback must return an error to abort the handshake.
 If the versions are compatible, the try callback must select the final version
 string and return it to core IBC.
-ChanOpenTry may also perform custom initialization logic
+`onChanOpenTry` may also perform custom initialization logic
 
 ```typescript
 function onChanOpenTry(
@@ -95,7 +95,7 @@ function onChanOpenTry(
 
 #### **OnChanOpenAck**
 
-OnChanOpenAck will error if the counterparty selected version string
+`onChanOpenAck` will error if the counterparty selected version string
 is invalid to abort the handshake. It may also perform custom ACK logic.
 
 ```typescript
@@ -109,7 +109,7 @@ function onChanOpenAck(
 
 #### **OnChanOpenConfirm**
 
-OnChanOpenConfirm will perform custom CONFIRM logic and may error to abort the handshake.
+`onChanOpenConfirm` will perform custom CONFIRM logic and may error to abort the handshake.
 
 ```typescript
 function onChanOpenConfirm(
