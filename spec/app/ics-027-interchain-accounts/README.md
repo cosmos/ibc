@@ -107,7 +107,7 @@ function RegisterInterchainAccount(counterpartyPortId: string) returns (nil) {
 `AuthenticateTx` checks that the signer of a particular message is the interchain account associated with the counterparty portID of the channel that the IBC packet was sent on.
 
 ```typescript
-function AuthenticateTx(msgs []Any, portId string) error {
+function AuthenticateTx(msgs []Any, portId string) returns (error) {
     // GetInterchainAccountAddress(portId)
     // interchainAccountAddress != signer.String() return error
 }
@@ -118,10 +118,11 @@ function AuthenticateTx(msgs []Any, portId string) error {
 Executes each message sent by the owner account on the controller chain.
 
 ```typescript
-function ExecuteTx(sourcePort: string, destPort: string, destChannel: string, msgs []Any) error {
+function ExecuteTx(sourcePort: string, msgs []Any) returns (resultString, error) {
   // validate each message
   // verify that interchain account owner is authorized to send each message
   // execute each message
+  // return result of transaction
 }
 ```
 
@@ -142,10 +143,6 @@ function SetInterchainAccountAddress(portId string, address string) returns (str
 
 // Retrieves the interchain account from state.
 function GetInterchainAccountAddress(portId string) returns (string, bool){
-}
-
-// DeleteActiveChannelID removes the active channel keyed by the provided portID stored in state
-function (k Keeper) DeleteActiveChannelID(portId string) {
 }
 ```
 
@@ -501,34 +498,29 @@ function onChanCloseConfirm(
 
 ```typescript
 function OnRecvPacket(packet Packet) {
-    	ack := NewResultAcknowledgement([]byte{byte(1)})
+    	ack = NewResultAcknowledgement([]byte{byte(1)})
 
 	// only attempt the application logic if the packet data
 	// was successfully decoded
-	if ack.Success() {
-		switch data.Type {
-	          case types.EXECUTE_TX:
-		        msgs, err := types.DeserializeTx(data.Data)
-		        if err != nil {
-			      return err
-		        }
+  switch data.Type {
+  case types.EXECUTE_TX:
+  msgs, err := types.DeserializeTx(data.Data)
+  if err != nil {
+    return NewErrorAcknowledgement(err)
+  }
 
-                        // ExecuteTx calls the AuthenticateTx function defined above 
-		        if err = ExecuteTx(ctx, packet.SourcePort, packet.DestinationPort, packet.DestinationChannel, msgs); err != nil {
-			      return err
-		        }
+  // ExecuteTx calls the AuthenticateTx function defined above 
+  result, err = ExecuteTx(ctx, packet.SourcePort, packet.DestinationPort, packet.DestinationChannel, msgs)
+  if err != nil {
+    return NewErrorAcknowledgement(err)
+  }
 
-		        return nil
-	          default:
-		        return ErrUnknownDataType
-	        }
-	        if err != nil {
-                    ack = NewErrorAcknowledgement(err.Error())
-                }
-	}
+  // return acknowledgement containing the transaction result after executing on host chain
+  return NewAcknowledgement(result)
 
-	// NOTE: acknowledgment will be written synchronously during IBC handler execution.
-	return ack
+  default:
+    return NewErrorAcknowledgement(ErrUnknownDataType)
+  }
 }
 ```
 
