@@ -46,7 +46,7 @@ Before describing the data structures and sub-protocols of the CCV protocol, we 
 
 - As an IBC module, the CCV module interacts with Core IBC for functionalities regarding
   - port allocation ([ICS 5](../../core/ics-005-port-allocation)) via `portKeeper`;
-  - channels and packet semantics ([ICS 4](../../core/ics-004-channels-and-packets-semantics)) via `channelKeeper`;
+  - channels and packet semantics ([ICS 4](../../core/ics-004-channel-and-packet-semantics)) via `channelKeeper`;
   - connection semantics ([ICS 3](../../core/ics-003-connection-semantics)) via `connectionKeeper`;
   - client semantics ([ICS 2](../../core/ics-002-client-semantics)) via `clientKeeper`.
 
@@ -150,7 +150,7 @@ The provider CCV module handles governance proposals to spawn new consumer chain
 ### CCV Packets
 [&uparrow; Back to Outline](#outline)
 
-The structure of the packets sent through the CCV channel is defined by the `Packet` interface in [ICS 4](../../core/ics-004-channels-and-packets-semantics). Packets are acknowledged by the remote side by sending back an `Acknowledgement` that contains either a result, created with `NewResultAcknowledgement()`, or an error, created with `NewErrorAcknowledgement()`. 
+The structure of the packets sent through the CCV channel is defined by the `Packet` interface in [ICS 4](../../core/ics-004-channel-and-packet-semantics). Packets are acknowledged by the remote side by sending back an `Acknowledgement` that contains either a result, created with `NewResultAcknowledgement()`, or an error, created with `NewErrorAcknowledgement()`. 
 
 The following packet data types are required by the CCV module:
 - `VSCPacketData` contains a list of validator updates, i.e., 

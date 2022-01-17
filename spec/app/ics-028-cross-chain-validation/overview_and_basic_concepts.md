@@ -52,7 +52,7 @@ This section defines the new terms and concepts introduced by CCV and provides a
 
 **CCV Module**: The module that implements the CCV protocol. Both the provider and the consumer chains have each their own CCV module. Furthermore, the functionalities provided by the CCV module differ between the provider chain and the consumer chain. For brevity, we use *provider CCV module* and *consumer CCV module* to refer to the CCV modules on the provider chain and on the consumer chain, respectively. 
 
-**CCV Channel**: A unique, ordered IBC channel (as defined in [ICS 4](../../core/ics-004-channels-and-packets-semantics)) that is used by the two CCV modules to exchange IBC packets (as defined in [ICS 4](../../core/ics-004-channels-and-packets-semantics)).
+**CCV Channel**: A unique, ordered IBC channel (as defined in [ICS 4](../../core/ics-004-channel-and-packet-semantics)) that is used by the two CCV modules to exchange IBC packets (as defined in [ICS 4](../../core/ics-004-channel-and-packet-semantics)).
 
 > Note that the IBC handler interface & IBC relayer module interface are as defined in [ICS 25](../../core/ics-025-handler-interface) and [ICS 26](../../core/ics-026-routing-module), respectively.
 
@@ -95,7 +95,7 @@ The channel initialization consists of four phases:
   >  
   > Note that at genesis, the validator set of the consumer chain matches the validator set of the provider chain.
 - **Connection handshake**: A relayer is responsible for initiating the connection handshake (as defined in [ICS 3](../../core/ics-003-connection-semantics)). 
-- **Channel handshake**: A relayer is responsible for initiating the channel handshake (as defined in [ICS 4](../../core/ics-004-channels-and-packets-semantics)). The channel handshake must be initiated on the child chain. The handshake consists of four messages that need to be received for a channel built on top of the expected clients. We omit the `ChanOpenAck` message since it is not relevant for the overview. 
+- **Channel handshake**: A relayer is responsible for initiating the channel handshake (as defined in [ICS 4](../../core/ics-004-channel-and-packet-semantics)). The channel handshake must be initiated on the child chain. The handshake consists of four messages that need to be received for a channel built on top of the expected clients. We omit the `ChanOpenAck` message since it is not relevant for the overview. 
   - *OnChanOpenInit*: On receiving the *FIRST* `ChanOpenInit` message, the consumer CCV module sets the status of its end of the CCV channel to `INITIALIZING`.
   - *OnChanOpenTry*: On receiving the *FIRST* `ChanOpenTry` message, the provider CCV module sets the status of its end of the CCV channel to `INITIALIZING`.
   - *OnChanOpenConfirm*: On receiving the *FIRST* `ChanOpenConfirm` message, the provider CCV module sets the status of its end of the CCV channel to `VALIDATING`.
