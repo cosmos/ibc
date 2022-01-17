@@ -491,8 +491,8 @@ function onChanCloseInit(
 function onChanCloseConfirm(
   portIdentifier: Identifier,
   channelIdentifier: Identifier) {
-    // unset the active channel for given portID 
-    DeleteActiveChannelID(portIdentifier)
+    // no op on ChanCloseConfirm
+    return
 }
 ```
 
@@ -545,9 +545,6 @@ function onAcknowledgePacket(
 
 ```typescript
 function onTimeoutPacket(packet: Packet) {
-    // unset the active channel for given portID
-    DeleteActiveChannelID(portIdentifier)
-
     // call underlying app's OnTimeoutPacket callback 
     // see ICS-30 middleware for more information
 }
