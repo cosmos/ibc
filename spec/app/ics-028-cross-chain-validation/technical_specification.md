@@ -82,7 +82,7 @@ interface ValidatorUpdate {
 ```
 The provider chain sends to the consumer chain a list of `ValidatorUpdate`s, containing an entry for every validator that had its power updated. 
 
-The data structures required for creating clients (i.e., `ClientState`, `ConsensusState`) are defined in [ICS 2](../../core/ics-002-client-semantics). Specifically for Tendermint clients, the data structures are defined in [ICS 7](../../core/cs-007-tendermint-client).
+The data structures required for creating clients (i.e., `ClientState`, `ConsensusState`) are defined in [ICS 2](../../core/ics-002-client-semantics). Specifically for Tendermint clients, the data structures are defined in [ICS 7](../../client/ics-007-tendermint-client).
 
 ### CCV Data Structures
 [&uparrow; Back to Outline](#outline)
@@ -145,7 +145,7 @@ The provider CCV module handles governance proposals to spawn new consumer chain
     genesisHash: [byte]
   }
   ```
-  Note that `Height` is defined in [ICS 7](../../core/cs-007-tendermint-client).
+  Note that `Height` is defined in [ICS 7](../../client/ics-007-tendermint-client).
 
 ### CCV Packets
 [&uparrow; Back to Outline](#outline)
@@ -309,7 +309,7 @@ function CreateConsumerChainProposal(p: CreateConsumerChainProposal) {
 - Error condition:
   - None.
 
-> **Note:** Creating a client of a remote chain requires a `ClientState` and a `ConsensusState` (as defined in [ICS 2](../../core/ics-002-client-semantics)). For Tendermint clients, creating a `ConsensusState` requires setting a validator set of the remote chain (see [ICS 7](../../core/cs-007-tendermint-client/README.md#consensus-state)). The provider chain uses the fact that the validator set of the consumer chain is the same as its own validator set. The rest of information to create a `ClientState` it receives through a governance proposal.
+> **Note:** Creating a client of a remote chain requires a `ClientState` and a `ConsensusState` (as defined in [ICS 2](../../core/ics-002-client-semantics)). For Tendermint clients, creating a `ConsensusState` requires setting a validator set of the remote chain (see [ICS 7](../../client/ics-007-tendermint-client/README.md#consensus-state)). The provider chain uses the fact that the validator set of the consumer chain is the same as its own validator set. The rest of information to create a `ClientState` it receives through a governance proposal.
 
 <!-- omit in toc -->
 #### **[CCV-PCF-COINIT.1]**
