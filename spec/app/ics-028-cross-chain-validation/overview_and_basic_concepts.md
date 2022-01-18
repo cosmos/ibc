@@ -9,6 +9,7 @@
 - [Definitions and Overview](#definitions-and-overview)
   - [Channel Initialization](#channel-initialization)
   - [Validator Set Update](#validator-set-update)
+    - [Completion of Unbonding Operations](#completion-of-unbonding-operations)
 
 
 
@@ -58,7 +59,7 @@ This section defines the new terms and concepts introduced by CCV and provides a
 
 **Validator Set Change (VSC)**: A change in the validator set of the provider chain that must be reflected in the validator set of the consumer chain. A VSC consists of a batch of validator updates, i.e., changes in the voting power granted to validators on the provider chain and, due to CCV, also on the consumer chain.
 
-> **Background**: In the context of single-chain validation, the changes of the validator set are triggered by the Staking module. For more details, take a look at the [Cosmos SDK documentation](https://docs.cosmos.network/master/modules/staking/). 
+> **Background**: In the context of single-chain validation, the changes of the validator set are triggered by the Staking module. For more details, take a look at the [Cosmos SDK documentation](https://docs.cosmos.network/master/modules/staking/02_state_transitions.html). 
 
 **Matured VSC**: A VSC that has matured on the consumer chain, i.e., a certain period of time, known as the *unbonding period* (i.e., `UnbondingPeriod`) has elapsed since the VSC was applied by the consumer chain. 
 
@@ -66,11 +67,16 @@ This section defines the new terms and concepts introduced by CCV and provides a
 
 > **Intuition**: Every VSC consists of a batch of validator updates, some of which can be decreases in the voting power granted to validators. These decreases may be a consequence of unbonding operations on the provider chain, which MUST NOT complete before reaching maturity on both the provider and all the consumer chains. Thus, a VSC reaching maturity on a consumer chain means that all the unbonding operations that resulted in validator updates included in that VSC have matured on the consumer chain.
 
-> **Background**: An *unbonding operation* is any operation of unbonding an amount of the tokens a validator bonded. Note that the bonded tokens correspond to the validator's voting power. Unbonding operations have two components: 
+> **Background**: An *unbonding operation* is any operation of unbonding an amount of the tokens a validator bonded. Note that the bonded tokens correspond to the validator's voting power. We distinguish between three types of unbonding operations:
+> - *undelegation* - a delegator unbonds tokens it previously delegated to a validator;
+> - *redelegation* - a delegator instantly redelegates tokens from a source validator to a different validator (the destination validator);
+> - *validator unbonding* - a validator is removed from the validator set; note that although validator unbondings do not entail unbonding tokens, they behave similarly to other unbonding operations.
+> 
+> Regardless of the type, unbonding operations have two components: 
 > - The *initiation*, e.g., a delegator requests their delegated tokens to be unbonded. The initiation of an operation of unbonding an amount of the tokens a validator bonded results in a change in the voting power of that validator.
-> - The *completion*, e.g., the tokens are actually unbonded and transferred back to the delegator. To complete, unbonding operations must reach *maturity*, i.e., `UnbondingPeriod` must elapse since the operations were initiated.
-
-> TODO: Describe the types of unbonding ops: undelegations, redelegations and unbonding validators.
+> - The *completion*, e.g., the tokens are actually unbonded and transferred back to the delegator. To complete, unbonding operations must reach *maturity*, i.e., `UnbondingPeriod` must elapse since the operations were initiated. 
+> 
+> For more details, take a look at the [Cosmos SDK documentation](https://docs.cosmos.network/master/modules/staking/).
 
 CCV must handle the following types of operations:
 - **Channel Initialization**: Create a unique, ordered IBC channel between the provider chain and the consumer chain.
@@ -119,3 +125,29 @@ In the context of VSCs, the CCV module enables the following functionalities:
 These functionalities are depicted in the following Figure that shows an overview of the Validator Set Update operation of CCV. 
 
 ![Validator Set Update Overview](./figures/ccv-vsc-overview.png?raw=true)
+
+### Completion of Unbonding Operations
+
+In the context of single-chain validation, the completion of any unbonding operation requires the `UnbondingPeriod` to elapse since the operations was initiated (i.e., the operation MUST reach maturity). 
+In the context of CCV, the completion MUST require also the unbonding operation to reach maturity on all consumer chains (for the [Security Model](#security-model) to be preserved). 
+Therefore, the Staking module (on the provider chain) needs to be aware of the VSC maturity notifications registered by the provider CCV module.
+
+The ***provider chain*** achieves this through the following approach: 
+- The Staking module is notifying the CCV module when any unbonding operation is initiated. 
+  This is done through [Staking hooks](https://docs.cosmos.network/master/modules/staking/06_hooks.html), i.e., operations registered by the CCV module to be execute when a certain event has occurred within the Staking module. 
+  As a result, the CCV module maps all the unbonding operations to the corresponding VSCs.  
+  > Note that it is not necessary for the Staking module to notify the initiation of validator unbonding operations, since the CCV module can obtain this information from the validator updates received from the Staking module (i.e., by comparing to the previous batch of validator updates). 
+- When the CCV module registers maturity notifications for a VSC from all consumer chains, it notifies the Staking module of the maturity of all unbonding operations mapped to this VSC. 
+  This enables the Staking module to complete the unbonding operations only when they reach maturity on both the provider chain and on all the consumer chains.
+
+This approach is depicted in the following Figure that shows an overview of the interface between the provider CCV module and the Staking module (on the provider chain) in the context of the Validator Set Update operation of CCV. 
+
+![Completion of Unbonding Operations](./figures/ccv-unbonding-overview.png?raw=true)
+
+> TODO: add diagram with the Staking module interfacing the CCV module
+> - staking sends validator updates 
+> - staking notifies when any unbonding operation is initiated
+> - CCV provides VSCs (w/ vscId)
+> - CCV maps unbonding operations to VSCs
+> - CCV registers VSC maturity notifications; if from all chains, notify staking
+

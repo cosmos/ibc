@@ -67,7 +67,7 @@ Before describing the data structures and sub-protocols of the CCV protocol, we 
   }
   ```
 
-- In addition, the following hooks enable the provider CCV module to register operations to be execute when certain events occur on the Staking module:
+- In addition, the following hooks enable the provider CCV module to register operations to be execute when certain events occur within the Staking module:
   ```typescript
   // invoked by the Staking module when 
   // an unbonding delegation operation is initiated
