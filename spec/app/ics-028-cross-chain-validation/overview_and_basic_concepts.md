@@ -70,6 +70,8 @@ This section defines the new terms and concepts introduced by CCV and provides a
 > - The *initiation*, e.g., a delegator requests their delegated tokens to be unbonded. The initiation of an operation of unbonding an amount of the tokens a validator bonded results in a change in the voting power of that validator.
 > - The *completion*, e.g., the tokens are actually unbonded and transferred back to the delegator. To complete, unbonding operations must reach *maturity*, i.e., `UnbondingPeriod` must elapse since the operations were initiated.
 
+> TODO: Describe the types of unbonding ops: undelegations, redelegations and unbonding validators.
+
 CCV must handle the following types of operations:
 - **Channel Initialization**: Create a unique, ordered IBC channel between the provider chain and the consumer chain.
 - **Validator Set Update**: It is a two-part operation, i.e., 

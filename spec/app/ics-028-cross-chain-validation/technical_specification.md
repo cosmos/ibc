@@ -61,9 +61,23 @@ Before describing the data structures and sub-protocols of the CCV protocol, we 
     // get validator updates from the Staking module
     GetValidatorUpdates(chainID: string): [ValidatorUpdate]
 
-    // notify the Staking module of matured CCV unbonding operations
-    UnbondValidators(chainID: string, valUpdates [ValidatorUpdate])
+    // notify the Staking module of unboding operations that
+    // have matured from the consumer chain's perspective 
+    CompleteStoppedUnbonding(id: uint64)
   }
+  ```
+
+- In addition, the following hooks enable the provider CCV module to register operations to be execute when certain events occur on the Staking module:
+  ```typescript
+  // invoked by the Staking module when 
+  // an unbonding delegation operation is initiated
+  function UnbondingDelegationEntryCreated(
+    unbondingDelegationEntryId: uint64);
+  
+  // invoked by the Staking module when 
+  // trying to complete an unbonding delegation operation
+  function BeforeUnbondingDelegationEntryComplete(
+    unbondingDelegationEntryId: uint64): Bool;
   ```
 
 ## Data Structures
@@ -156,6 +170,7 @@ The following packet data types are required by the CCV module:
 - `VSCPacketData` contains a list of validator updates, i.e., 
     ```typescript
     interface VSCPacketData {
+      id: uint64 // the id of this VSC
       updates: [ValidatorUpdate]
     }
     ```
@@ -193,6 +208,19 @@ This section describes the internal state of the CCV module. For simplicity, the
 - `channelToChain: Map<Identifier, string>` is a mapping from CCV channel IDs to consumer chain IDs.
 - `channelStatus: Map<Identifier, ChannelStatus>` is a mapping from CCV channel IDs to CCV channel state, as indicated by `ChannelStatus`.
 - `pendingUpdates: Map<string, [ValidatorUpdate]>` is a mapping from consumer chain IDs to a list of pending `ValidatorUpdate`s that must be sent to the consumer chain once the CCV channel is established.
+- `vscId: uint64` is a monotonic strictly increasing ID that is used to uniquely identify the VSCs sent to the consumer chains.
+- `unbondingDelegationEntries: Map<uint64, UnbondingDelegationEntry>` is a mapping that enables accessing unbonding delegation entries by their IDs. Unbonding delegation entries are created when unbonding delegation operations are initiated and are defined as 
+   ```typescript
+   interface UnbondingDelegationEntry {
+     id: uint64
+     vscId: uint64
+     // list of consumer chain IDs that are still unbonding
+     unbondingChainIds: [string] 
+   }
+   ``` 
+ - `vscToUBDEs: Map<(Identifier, uint64), [uint64]>` is a mapping from `(chainId, vscId)` tuples to a list of unbonding delegation entry IDs. It is needed to match an acknowledgement of a `VSCPacket` received from a consumer chain with the corresponding unbonding delegation entries.
+
+> **Discussion**: The motivation behind `unbondingDelegationEntries` and `vscToUBDEs` is that unbonding delegation operations can be initiated at any time. Once they are initiated, a new `UnbondingDelegationEntry` is added to `unbondingDelegationEntries` through Staking module hook [UnbondingDelegationEntryCreated()](#ccv-pcf-shook-ubdecr1). Every unbonding delegation operation results in a validator update. These updates are retrieved (from the Staking module) by the provider CCV module at the end of each block (through the `stakingKeeper.GetValidatorUpdates()` method) and added to a VSC that is sent to the consumer chain. The provider chain assigns a unique ID to each VSC, i.e., `vscId`. Moreover, it keeps a list of what unbonding delegation operations (i.e., `UnbondingDelegationEntry`s) are associated with each one of these VSCs. The list of unbonding delegation operations must be associated also with the consumer chains and hence the `vscToUBDEs` mapping from `(chainId, vscId)` to a list of unbonding delegation entry IDs.
 
 <!-- omit in toc -->
 #### State on the consumer chain
@@ -265,7 +293,7 @@ function InitGenesis(state: ProviderGenesisState) {
 function CreateConsumerChainProposal(p: CreateConsumerChainProposal) {
   if currentTimestamp() > p.spawnTime {
     // get UnbondingPeriod from Staking module
-    unbondingTime = registryKeeper.UnbondingTime()
+    unbondingTime = stakingKeeper.UnbondingTime()
 
     // create client state as defined in ICS 2
     clientState = ClientState{
@@ -860,7 +888,7 @@ function EndBlock(): [ValidatorUpdate] {
   // iterate over all consumer chains registered with this provider chain
   foreach chainId in chainToClient.Keys() {
     // get list of validator updates from the Staking module
-    valUpdates = registryKeeper.GetValidatorUpdates(chainId)
+    valUpdates = stakingKeeper.GetValidatorUpdates(chainId)
 
     // add validator updates to the list of pending updates 
     pendingUpdates[chainId] = pendingUpdates[chainId].Aggregate(valUpdates)
@@ -877,7 +905,7 @@ function EndBlock(): [ValidatorUpdate] {
       abortSystemUnless(channelStatus[chainId] == VALIDATING)
 
       // create packet data
-      packetData = VSCPacketData{updates: pendingUpdates[chainId]}
+      packetData = VSCPacketData{id: vscId, updates: pendingUpdates[chainId]}
 
       // gets the channel ID for the given consumer chain ID
       channelId = chainToChannel[chainId]
@@ -887,6 +915,8 @@ function EndBlock(): [ValidatorUpdate] {
       channelKeeper.SendPacket(packet)
     }
   }
+  // increment VSC ID
+  vscId++ 
 
   // do not return anything to the consensus engine
   return []   
@@ -901,8 +931,9 @@ function EndBlock(): [ValidatorUpdate] {
   - For every consumer chain with `chainId`
     - A list of validator updates is retrieved from the Staking module and aggregated to the list of pending updates for the consumer chain with `chainId`, i.e., `pendingUpdates[chainId]`.
     - If the list of pending updates is not empty and there is a CCV channel with status `VALIDATING` for the the consumer chain with `chainId`, then
-      - a `VSCPacketData` is created, with `updates = valUpdates`;
+      - a `VSCPacketData` is created, with `id = vscId` and `updates = valUpdates`;
       - a packet with the created `VSCPacketData` is sent on the channel associated with the consumer chain with `chainId`.
+  - `vscId` is incremented.
 - Error condition:
   - A CCV channel for the consumer chain with `chainId` exists and its status is not set to `VALIDATING`.
 
@@ -920,7 +951,23 @@ function onAcknowledgeVSCPacket(packet: Packet) {
   abortTransactionUnless(channelId IN channelToChain.Keys())
   chainId = channelToChain[packet.getDestinationChannel()]
 
-  registryKeeper.UnbondValidators(chainID, packet.data.updates)
+  // iterate over the unbonding delegation entries mapped to
+  // this chainId and vscId (i.e., packet.data.id)
+  foreach ubd in GetUBDEsFromVSC(chainId, packet.data.id) {
+    // remove consumer chain ID from the list of consumer chain IDs 
+    // that are still unbonding
+    ubd.unbondingChainIds.Remove(chainId)
+    // if the unbonding delegation entry is completely unbonded 
+    // on all consumer chains
+    if ubd.unbondingChainIds.IsEmpty() {
+      // attempt to complete unbonding in Staking module
+      stakingKeeper.CompleteStoppedUnbonding(ubd.id)
+      // remove unbonding delegation entry
+      unbondingDelegationEntries.Remove(ubd.id)
+    }
+  }
+  // clean up vscToUBDEs mapping
+  vscToUBDEs.Remove((chainId, vscId))
 }
 ```
 - Initiator: 
@@ -928,9 +975,54 @@ function onAcknowledgeVSCPacket(packet: Packet) {
 - Expected precondition:
   - The IBC module on the provider chain received an acknowledgement of a `VSCPacket` on a channel owned by the provider CCV module.
 - Expected postcondition:
-  - The `UnbondValidators` method of the Staking module is invoked.
+  - For each unbonding delegation entry `ubd` returned by `GetUBDEsFromVSC(chainId, packet.data.id)`
+    - `chainId` is removed from `ud.unbondingChainIds`;
+    - if `ud.unbondingChainIds` is empty,
+      - the `CompleteStoppedUnbonding()` method of the Staking module is invoked;
+      - the entry `ubd` is removed from `unbondingDelegationEntries`.
+  - Remove `(chainId, vscId)` from `vscToUBDEs`.
 - Error condition:
   - The ID of the channel on which the `VSCPacket` was sent is not mapped to a chain ID (in `channelToChain`).
+
+<!-- omit in toc -->
+#### **[CCV-PCF-GETUBDES.1]**
+```typescript
+// PCF: Provider Chain Function
+// Utility method
+function GetUBDEsFromVSC(
+  chainId: Identifier, 
+  _vscId: uint64): [UnbondingDelegationEntry] {
+    ids = vscToUBDEs[(chainId, _vscId)]
+    if ids == nil {
+      // cannot find the list of unbonding delegation entry IDs
+      // for this chainId and _vscId
+      return nil
+    }
+    // get all unbonding delegation entries associated with
+    // this chainId and _vscId
+    entries = []
+    foreach id in ids {
+      // get the unbonding delegation entry with this ID
+      entry = unbondingDelegationEntries[id]
+      // if cannot find UnbondingDelegationEntry according to vscToUBDEs,
+      // then vscToUBDEs was probably not correctly updated;
+      // programming error
+      abortSystemUnless(entry != nil)
+      // append entry to the list of entries to be returned
+      entries.Append(entry)
+    }
+    return entries
+}
+```
+- **Initiator:** 
+  - The provider CCV module when receiving an acknowledgement for a `VSCPacket`.
+- **Expected precondition:**
+  - None. 
+- **Expected postcondition:**
+  - If there is a list of unbonding delegation entry IDs mapped to `(chainId, _vscId)`, then return the list of unbonding delegation entries mapped to these IDs. 
+  - Otherwise, return `nil`.
+- **Error condition:**
+  - None.
 
 <!-- omit in toc -->
 #### **[CCV-PCF-TOVSC.1]**
@@ -949,6 +1041,64 @@ function onTimeoutVSCPacket(packet Packet) {
 - Expected postcondition:
   - `channelStatus` is set to `INVALID`
 - Error condition:
+  - None.
+
+<!-- omit in toc -->
+#### **[CCV-PCF-SHOOK-UBDECR.1]**
+```typescript
+// PCF: Provider Chain Function
+// implements a Staking module hook
+function UnbondingDelegationEntryCreated(unbondingDelegationEntryId: uint64) {
+  // get the IDs of all consumer chains registered with this provider chain
+  chainIds = chainToChannel.Keys()
+  
+  // create an unbonding delegation entry
+  ubde = UnbondingDelegationEntry{
+    id: unbondingDelegationEntryId,
+    vscId: vscId,
+    unbondingChainIds: chainIds
+  }
+  // store the unbonding delegation entry
+  unbondingDelegationEntries[ubde.id] = ubde
+  
+  // add unbonding delegation entry id to vscToUBDEs
+  foreach chainId in chainIds {
+    vscToUBDEs[(chainId, vscId)].Append(ubde.id)
+  }
+}
+```
+- **Initiator:** 
+  - The Staking module.
+- **Expected precondition:**
+  - An unbonding delegation operation with id `unbondingDelegationEntryId` is initiated.
+- **Expected postcondition:**
+  - An unbonding delegation entry is created and added to `unbondingDelegationEntries`.
+  - The ID of the created unbonding delegation entry is appended to every list in `vscToUBDEs[(chainId, vscId)]`, where `chainId` is an ID of a consumer chains registered with this provider chain and `vscId` is the current VSC ID. 
+- **Error condition:**
+  - None.
+
+
+<!-- omit in toc -->
+#### **[CCV-PCF-SHOOK-BUBDECO.1]**
+```typescript
+// PCF: Provider Chain Function
+// implements a Staking module hook
+function BeforeUnbondingDelegationEntryComplete(
+  unbondingDelegationEntryId: uint64): Bool {
+    if unbondingDelegationEntryId in unbondingDelegationEntries.Keys() {
+      return true
+    }
+    return false
+}
+```
+- **Initiator:** 
+  - The Staking module.
+- **Expected precondition:**
+  - An unbonding delegation operation has matured on the provider chain.
+- **Expected postcondition:**
+  - If there is an unboding delegation entry with ID `unbondingDelegationEntryId`, then true is returned.
+  - Otherwise, false is returned.
+- **Error condition:**
   - None.
 
 ---
