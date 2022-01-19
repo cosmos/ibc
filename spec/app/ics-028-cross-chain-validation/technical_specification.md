@@ -69,15 +69,13 @@ Before describing the data structures and sub-protocols of the CCV protocol, we 
 
 - In addition, the following hooks enable the provider CCV module to register operations to be execute when certain events occur within the Staking module:
   ```typescript
-  // invoked by the Staking module when 
+  // invoked by the Staking module after 
   // an unbonding delegation operation is initiated
-  function UnbondingDelegationEntryCreated(
-    unbondingDelegationEntryId: uint64);
+  function AfterUBDECreated(ubdeId: uint64);
   
-  // invoked by the Staking module when 
-  // trying to complete an unbonding delegation operation
-  function BeforeUnbondingDelegationEntryComplete(
-    unbondingDelegationEntryId: uint64): Bool;
+  // invoked by the Staking module before 
+  // completing an unbonding delegation operation
+  function BeforeUBDECompleted(ubdeId: uint64): Bool;
   ```
 
 ## Data Structures
@@ -1044,33 +1042,33 @@ function onTimeoutVSCPacket(packet Packet) {
   - None.
 
 <!-- omit in toc -->
-#### **[CCV-PCF-SHOOK-UBDECR.1]**
+#### **[CCV-PCF-SHOOK-AFUBDECR.1]**
 ```typescript
 // PCF: Provider Chain Function
 // implements a Staking module hook
-function UnbondingDelegationEntryCreated(unbondingDelegationEntryId: uint64) {
+function AfterUBDECreated(ubdeId: uint64) {
   // get the IDs of all consumer chains registered with this provider chain
   chainIds = chainToChannel.Keys()
   
   // create an unbonding delegation entry
   ubde = UnbondingDelegationEntry{
-    id: unbondingDelegationEntryId,
+    id: ubdeId,
     vscId: vscId,
     unbondingChainIds: chainIds
   }
   // store the unbonding delegation entry
-  unbondingDelegationEntries[ubde.id] = ubde
+  unbondingDelegationEntries[ubdeId] = ubde
   
   // add unbonding delegation entry id to vscToUBDEs
   foreach chainId in chainIds {
-    vscToUBDEs[(chainId, vscId)].Append(ubde.id)
+    vscToUBDEs[(chainId, vscId)].Append(ubdeId)
   }
 }
 ```
 - **Initiator:** 
   - The Staking module.
 - **Expected precondition:**
-  - An unbonding delegation operation with id `unbondingDelegationEntryId` is initiated.
+  - An unbonding delegation operation with id `ubdeId` is initiated.
 - **Expected postcondition:**
   - An unbonding delegation entry is created and added to `unbondingDelegationEntries`.
   - The ID of the created unbonding delegation entry is appended to every list in `vscToUBDEs[(chainId, vscId)]`, where `chainId` is an ID of a consumer chains registered with this provider chain and `vscId` is the current VSC ID. 
@@ -1079,16 +1077,15 @@ function UnbondingDelegationEntryCreated(unbondingDelegationEntryId: uint64) {
 
 
 <!-- omit in toc -->
-#### **[CCV-PCF-SHOOK-BUBDECO.1]**
+#### **[CCV-PCF-SHOOK-BFUBDECO.1]**
 ```typescript
 // PCF: Provider Chain Function
 // implements a Staking module hook
-function BeforeUnbondingDelegationEntryComplete(
-  unbondingDelegationEntryId: uint64): Bool {
-    if unbondingDelegationEntryId in unbondingDelegationEntries.Keys() {
-      return true
-    }
-    return false
+function BeforeUBDECompleted(ubdeId: uint64): Bool {
+  if ubdeId in unbondingDelegationEntries.Keys() {
+    return true
+  }
+  return false
 }
 ```
 - **Initiator:** 
@@ -1096,7 +1093,7 @@ function BeforeUnbondingDelegationEntryComplete(
 - **Expected precondition:**
   - An unbonding delegation operation has matured on the provider chain.
 - **Expected postcondition:**
-  - If there is an unboding delegation entry with ID `unbondingDelegationEntryId`, then true is returned.
+  - If there is an unboding delegation entry with ID `ubdeId`, then true is returned.
   - Otherwise, false is returned.
 - **Error condition:**
   - None.

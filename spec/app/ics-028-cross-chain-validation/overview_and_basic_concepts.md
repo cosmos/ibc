@@ -134,20 +134,17 @@ Therefore, the Staking module (on the provider chain) needs to be aware of the V
 
 The ***provider chain*** achieves this through the following approach: 
 - The Staking module is notifying the CCV module when any unbonding operation is initiated. 
-  This is done through [Staking hooks](https://docs.cosmos.network/master/modules/staking/06_hooks.html), i.e., operations registered by the CCV module to be execute when a certain event has occurred within the Staking module. 
+  This is done through [Staking hooks](https://docs.cosmos.network/master/modules/staking/06_hooks.html), i.e., operations registered by the CCV module to be execute when a certain event has occurred within the Staking module (for more details, see the [Interfacing Other Modules](./technical_specification.md#interfacing-other-modules) section). 
   As a result, the CCV module maps all the unbonding operations to the corresponding VSCs.  
   > Note that it is not necessary for the Staking module to notify the initiation of validator unbonding operations, since the CCV module can obtain this information from the validator updates received from the Staking module (i.e., by comparing to the previous batch of validator updates). 
 - When the CCV module registers maturity notifications for a VSC from all consumer chains, it notifies the Staking module of the maturity of all unbonding operations mapped to this VSC. 
   This enables the Staking module to complete the unbonding operations only when they reach maturity on both the provider chain and on all the consumer chains.
 
-This approach is depicted in the following Figure that shows an overview of the interface between the provider CCV module and the Staking module (on the provider chain) in the context of the Validator Set Update operation of CCV. 
+This approach is depicted in the following Figure that shows an overview of the interface between the provider CCV module and the Staking module (on the provider chain) in the context of the Validator Set Update operation of CCV: 
+- In `Block 1`, two unbonding operations are initiated (i.e., `undelegate-1` and `redelegate-1`) in the Staking module of the provider chain. For each operation, the Staking module notifies the provider CCV module. As a result, the provider CCV module maps these to operation to `vscId`, which is the ID of the following VSC (i.e., `VSC1`). The provider CCV module provides `VSC1` to all consumer chains.
+- In `Block 2`, the same approach is used for `undelegate-2`.
+- In `Block j`, `UnbondingPeriod` has elapsed since `Block 1`. In the meantime, the provider CCV module registered maturity notifications for `VSC1` from all consumer chains and, consequently, notified the Staking module of the maturity of both `undelegate-1` and `redelegate-1`. As a result, the Staking module completes both unbonding operations in `Block j`.
+- In `Block k`, `UnbondingPeriod` has elapsed since `Block 2`. In the meantime, the provider CCV module has NOT yet registered maturity notifications for `VSC2` from all consumer chains. As a result, As a result, the Staking module CANNOT complete `undelegate-2` in `Block k`. The unbonding operation is completed later once the provider CCV module registered maturity notifications for `VSC2` from all consumer chains.
 
 ![Completion of Unbonding Operations](./figures/ccv-unbonding-overview.png?raw=true)
-
-> TODO: add diagram with the Staking module interfacing the CCV module
-> - staking sends validator updates 
-> - staking notifies when any unbonding operation is initiated
-> - CCV provides VSCs (w/ vscId)
-> - CCV maps unbonding operations to VSCs
-> - CCV registers VSC maturity notifications; if from all chains, notify staking
 
