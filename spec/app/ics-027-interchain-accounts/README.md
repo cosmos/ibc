@@ -51,15 +51,15 @@ This specification defines the general way to register an interchain account and
 #### **InitInterchainAccount**
 
 `InitInterchainAccount` is the entry point to registering an interchain account.
-It generates a new controller portID using the owner account address and connection identifiers.
+It generates a new controller portID using the owner account address.
 It will bind to the controller portID and
 call 04-channel `ChanOpenInit`. An error is returned if the controller portID is already in use.
 A `ChannelOpenInit` event is emitted which can be picked up by an offchain process such as a relayer.
 The account will be registered during the `OnChanOpenTry` step on the host chain.
-This function must be called after an `OPEN` connection is already established with the given connection and counterparty connection identifiers.
+This function must be called after an `OPEN` connection is already established with the given connection identifier.
 
 ```typescript
-function InitInterchainAccount(connectionId: string, counterpartyConnectionId: string, owner: string) returns (error){
+function InitInterchainAccount(connectionId: string, owner: string) returns (error) {
 }
 ```
 
@@ -68,7 +68,7 @@ function InitInterchainAccount(connectionId: string, counterpartyConnectionId: s
 `TrySendTx` is used to send an IBC packet containing instructions (messages) to an interchain account on a host chain for a given interchain account owner.
 
 ```typescript
-function TrySendTx(channelCapability: ChannelCapability, portId: string, connectionId: string, counterpartyConnectionId: string, icaPacketData: InterchainAccountPacketData) returns (uint64, error){
+function TrySendTx(channelCapability: ChannelCapability, portId: string, connectionId: string, icaPacketData: InterchainAccountPacketData) returns (uint64, error){
     // A call to GetActiveChannel() checks if there is a currently active channel for this portId which also implies an interchain account has been registered using this port identifier
     // if there are no errors CreateOutgoingPacket() is called and the IBC packet will be sent to the host chain on the active channel
 }
@@ -94,9 +94,9 @@ function InitChannel(portId: string, connectionId: string) returns (nil){
 `RegisterInterchainAccount` is called on the `OnChanOpenTry` step during the channel creation handshake.
 
 ```typescript
-function RegisterInterchainAccount(accAddr: string, counterpartyPortId: string) returns (nil){
+function RegisterInterchainAccount(counterpartyPortId: string, connectionID: string) returns (nil) {
    // checks to make sure the account has not already been registered
-   // creates a new address on chain 
+   // creates a new address on chain deterministically given counterpartyPortId and underlying connectionID
    // calls SetInterchainAccountAddress()
 }
 ```
@@ -155,7 +155,7 @@ function (k Keeper) DeleteActiveChannelID(portId string) {
 
 To register an interchain account we require an off-chain process (relayer) to listen for `ChannelOpenInit` events with the capability to finish a channel creation handshake on a given connection. 
 
-1. The controller chain binds a new IBC port with the controller portID for a given *source/counterparty connection-ids* and *interchain account owner address*.
+1. The controller chain binds a new IBC port with the controller portID for a given *interchain account owner address*.
 
 This port will be used to create channels between the controller & host chain for a specific owner/interchain account pair. Only the account with `{owner-account-address}` matching the bound port will be authorized to send IBC packets over channels created with the controller portID. It is up to each controller chain to enforce this port registration and access on the controller side. 
 
@@ -175,7 +175,7 @@ An example of an active channel on the controller chain can look like this:
 ```typescript
 {
  // Controller Chain
- SourcePortId: `ics27-<version>.<source-connection-id>.<destination-connection-id>.<owner-account-address>`,
+ SourcePortId: `ics27-<owner-account-address>`,
  SourceChannelId: `<channel-id>`,
  // Host Chain
  CounterpartyPortId: `interchain-account`,
@@ -372,12 +372,21 @@ function onChanOpenConfirm(
 }
 ```
 
+```typescript
+// The controller portID must have the format: `ics27-{ownerAddress}`
+function validateControllerPortParams(portIdentifier: Identifier) {
+  split(portIdentifier, "-")
+  abortTransactionUnless(portIdentifier[0] === "ics27")
+  abortTransactionUnless(IsValidAddress(portIdentifier[1]))
+}
+```
+
 ### Closing handshake
 
 ```typescript
 function onChanCloseInit(
   portIdentifier: Identifier,
-  channelIdentifier: Identifier) { \
+  channelIdentifier: Identifier) {
  	// disallow user-initiated channel closing for interchain account channels
   return err
 }
