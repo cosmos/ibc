@@ -41,6 +41,20 @@ The functions `newCapability` & `authenticateCapability` are defined as in [ICS 
 
 Modules must expose the following function signatures to the routing module, which are called upon the receipt of various datagrams:
 
+#### **ChanOpenInit**
+
+`onChanOpenInit` will verify that the relayer-chosen parameters
+are valid and perform any custom `INIT` logic.
+It may return an error if the chosen parameters are invalid
+in which case the handshake is aborted.
+If the provided version string is non-empty, `onChanOpenInit` should return
+the version string if valid or an error if the provided version is invalid.
+If the version string is empty, `onChanOpenInit` is expected to
+return a default version string representing the version(s)
+it supports.
+If there is no default version string for the application,
+it should return an error if provided version is empty string.
+
 ```typescript
 function onChanOpenInit(
   order: ChannelOrder,
@@ -49,10 +63,24 @@ function onChanOpenInit(
   channelIdentifier: Identifier,
   counterpartyPortIdentifier: Identifier,
   counterpartyChannelIdentifier: Identifier,
-  version: string) {
+  version: string) => (version: string, err: Error) {
     // defined by the module
 }
+```
 
+#### **ChanOpenTry**
+
+`onChanOpenTry` will verify the relayer-chosen parameters along with the
+counterparty-chosen version string and perform custom `TRY` logic.
+If the relayer-chosen parameters
+are invalid, the callback must return an error to abort the handshake.
+If the counterparty-chosen version is not compatible with this modules
+supported versions, the callback must return an error to abort the handshake.
+If the versions are compatible, the try callback must select the final version
+string and return it to core IBC.
+`onChanOpenTry` may also perform custom initialization logic
+
+```typescript
 function onChanOpenTry(
   order: ChannelOrder,
   connectionHops: [Identifier],
@@ -60,24 +88,38 @@ function onChanOpenTry(
   channelIdentifier: Identifier,
   counterpartyPortIdentifier: Identifier,
   counterpartyChannelIdentifier: Identifier,
-  version: string,
-  counterpartyVersion: string) {
+  counterpartyVersion: string) => (version: string, err: Error) {
     // defined by the module
 }
+```
 
+#### **OnChanOpenAck**
+
+`onChanOpenAck` will error if the counterparty selected version string
+is invalid to abort the handshake. It may also perform custom ACK logic.
+
+```typescript
 function onChanOpenAck(
   portIdentifier: Identifier,
   channelIdentifier: Identifier,
   version: string) {
     // defined by the module
 }
+```
 
+#### **OnChanOpenConfirm**
+
+`onChanOpenConfirm` will perform custom CONFIRM logic and may error to abort the handshake.
+
+```typescript
 function onChanOpenConfirm(
   portIdentifier: Identifier,
   channelIdentifier: Identifier) {
     // defined by the module
 }
+```
 
+```typescript
 function onChanCloseInit(
   portIdentifier: Identifier,
   channelIdentifier: Identifier) {
@@ -382,7 +424,7 @@ interface ChanOpenInit {
 ```typescript
 function handleChanOpenInit(datagram: ChanOpenInit) {
     module = lookupModule(datagram.portIdentifier)
-    module.onChanOpenInit(
+    version, err = module.onChanOpenInit(
       datagram.order,
       datagram.connectionHops,
       datagram.portIdentifier,
@@ -391,6 +433,7 @@ function handleChanOpenInit(datagram: ChanOpenInit) {
       datagram.counterpartyChannelIdentifier,
       datagram.version
     )
+    abortTransactionUnless(err === nil)
     handler.chanOpenInit(
       datagram.order,
       datagram.connectionHops,
@@ -398,7 +441,7 @@ function handleChanOpenInit(datagram: ChanOpenInit) {
       datagram.channelIdentifier,
       datagram.counterpartyPortIdentifier,
       datagram.counterpartyChannelIdentifier,
-      datagram.version
+      version // pass in version returned from callback
     )
 }
 ```
@@ -411,7 +454,7 @@ interface ChanOpenTry {
   channelIdentifier: Identifier
   counterpartyPortIdentifier: Identifier
   counterpartyChannelIdentifier: Identifier
-  version: string
+  version: string // deprecated
   counterpartyVersion: string
   proofInit: CommitmentProof
   proofHeight: Height
@@ -421,16 +464,16 @@ interface ChanOpenTry {
 ```typescript
 function handleChanOpenTry(datagram: ChanOpenTry) {
     module = lookupModule(datagram.portIdentifier)
-    module.onChanOpenTry(
+    version, err = module.onChanOpenTry(
       datagram.order,
       datagram.connectionHops,
       datagram.portIdentifier,
       datagram.channelIdentifier,
       datagram.counterpartyPortIdentifier,
       datagram.counterpartyChannelIdentifier,
-      datagram.version,
       datagram.counterpartyVersion
     )
+    abortTransactionUnless(err === nil)
     handler.chanOpenTry(
       datagram.order,
       datagram.connectionHops,
@@ -438,7 +481,7 @@ function handleChanOpenTry(datagram: ChanOpenTry) {
       datagram.channelIdentifier,
       datagram.counterpartyPortIdentifier,
       datagram.counterpartyChannelIdentifier,
-      datagram.version,
+      version, // pass in version returned by callback
       datagram.counterpartyVersion,
       datagram.proofInit,
       datagram.proofHeight
@@ -458,11 +501,12 @@ interface ChanOpenAck {
 
 ```typescript
 function handleChanOpenAck(datagram: ChanOpenAck) {
-    module.onChanOpenAck(
+    err = module.onChanOpenAck(
       datagram.portIdentifier,
       datagram.channelIdentifier,
       datagram.version
     )
+    abortTransactionUnless(err === nil)
     handler.chanOpenAck(
       datagram.portIdentifier,
       datagram.channelIdentifier,
@@ -485,10 +529,11 @@ interface ChanOpenConfirm {
 ```typescript
 function handleChanOpenConfirm(datagram: ChanOpenConfirm) {
     module = lookupModule(datagram.portIdentifier)
-    module.onChanOpenConfirm(
+    err = module.onChanOpenConfirm(
       datagram.portIdentifier,
       datagram.channelIdentifier
     )
+    abortTransactionUnless(err === nil)
     handler.chanOpenConfirm(
       datagram.portIdentifier,
       datagram.channelIdentifier,
@@ -508,10 +553,11 @@ interface ChanCloseInit {
 ```typescript
 function handleChanCloseInit(datagram: ChanCloseInit) {
     module = lookupModule(datagram.portIdentifier)
-    module.onChanCloseInit(
+    err = module.onChanCloseInit(
       datagram.portIdentifier,
       datagram.channelIdentifier
     )
+    abortTransactionUnless(err === nil)
     handler.chanCloseInit(
       datagram.portIdentifier,
       datagram.channelIdentifier
@@ -531,10 +577,11 @@ interface ChanCloseConfirm {
 ```typescript
 function handleChanCloseConfirm(datagram: ChanCloseConfirm) {
     module = lookupModule(datagram.portIdentifier)
-    module.onChanCloseConfirm(
+    err = module.onChanCloseConfirm(
       datagram.portIdentifier,
       datagram.channelIdentifier
     )
+    abortTransactionUnless(err === nil)
     handler.chanCloseConfirm(
       datagram.portIdentifier,
       datagram.channelIdentifier,

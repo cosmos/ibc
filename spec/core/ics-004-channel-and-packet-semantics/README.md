@@ -315,30 +315,15 @@ function chanOpenTry(
   order: ChannelOrder,
   connectionHops: [Identifier],
   portIdentifier: Identifier,
-  previousIdentifier: Identifier,
   counterpartyChosenChannelIdentifer: Identifier,
   counterpartyPortIdentifier: Identifier,
   counterpartyChannelIdentifier: Identifier,
-  version: string,
+  version: string, // deprecated
   counterpartyVersion: string,
   proofInit: CommitmentProof,
   proofHeight: Height): CapabilityKey {
-    if (previousIdentifier !== "") {
-      previous = provableStore.get(channelPath(portIdentifier, channelIdentifier))
-      abortTransactionUnless(
-        (previous !== null) &&
-        (previous.state === INIT &&
-         previous.order === order &&
-         previous.counterpartyPortIdentifier === counterpartyPortIdentifier &&
-         previous.counterpartyChannelIdentifier === "" &&
-         previous.connectionHops === connectionHops &&
-         previous.version === version)
-        )
-      channelIdentifier = previousIdentifier
-    } else {
-      // generate a new identifier if the provided identifier was the sentinel empty-string
-      channelIdentifier = generateIdentifier()
-    }
+    channelIdentifier = generateIdentifier()
+
     abortTransactionUnless(validateChannelIdentifier(portIdentifier, channelIdentifier))
     abortTransactionUnless(connectionHops.length === 1) // for v1 of the IBC protocol
     abortTransactionUnless(authenticateCapability(portPath(portIdentifier), portCapability))
@@ -358,12 +343,12 @@ function chanOpenTry(
                          counterpartyChannelIdentifier, connectionHops, version}
     provableStore.set(channelPath(portIdentifier, channelIdentifier), channel)
     channelCapability = newCapability(channelCapabilityPath(portIdentifier, channelIdentifier))
-    // only reset sequences if the previous channel didn't exist, else we might overwrite optimistically-sent packets
-    if (previous === null) {
-      provableStore.set(nextSequenceSendPath(portIdentifier, channelIdentifier), 1)
-      provableStore.set(nextSequenceRecvPath(portIdentifier, channelIdentifier), 1)
-      provableStore.set(nextSequenceAckPath(portIdentifier, channelIdentifier), 1)
-    }
+
+    // initialize channel sequences
+    provableStore.set(nextSequenceSendPath(portIdentifier, channelIdentifier), 1)
+    provableStore.set(nextSequenceRecvPath(portIdentifier, channelIdentifier), 1)
+    provableStore.set(nextSequenceAckPath(portIdentifier, channelIdentifier), 1)
+
     return channelCapability
 }
 ```

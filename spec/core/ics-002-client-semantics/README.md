@@ -205,7 +205,7 @@ a trusted operator, or a proof of stake but with
 insufficient value of stake. In such cases, it is possible that the
 security assumptions break, the correspondence between `Consensus` and
 the validity predicate no longer exists, and the behaviour of the validity predicate becomes
-undefined. Also, the `Blockchain` may not longer satisfy
+undefined. Also, the `Blockchain` may no longer satisfy
 the requirements above, which will cause the chain to be incompatible with the IBC
 protocol. In cases of attributable faults, a misbehaviour proof can be generated and submitted to the
 chain storing the client to safely freeze the light client and
