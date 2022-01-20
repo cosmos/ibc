@@ -2,7 +2,7 @@
 ics: 27
 title: Interchain Accounts
 stage: Draft
-category: IBC/TAO
+category: IBC/APP
 requires: 25, 26
 kind: instantiation
 author: Tony Yun <tony@chainapsis.com>, Dogemos <josh@tendermint.com>, Sean King <sean@interchain.io>
@@ -74,19 +74,6 @@ function TrySendTx(channelCapability: ChannelCapability, portId: string, connect
 }
 ```
 
-#### **InitChannel**
-
-Opens a new channel on a particular port given a connection.
-This is a helper function to open a new channel.
-This is a safety function in case of a channel closing and the controller chain needs to regain access to an interchain account on the host chain.
-
-```typescript
-function InitChannel(portId: string, connectionId: string) returns (nil){
-  // A `ChannelOpenInit` event is emitted which can be picked up by an off-chain process such as a relayer which will finish the channel opening handshake
-  // The active channel will be set to the newly opened channel on the `OnChanOpenAck` & `OnChanOpenConfirm` steps
-}
-```
-
 ### Host chain contract
 
 #### **RegisterInterchainAccount**
@@ -107,7 +94,7 @@ function RegisterInterchainAccount(counterpartyPortId: string, connectionID: str
 `AuthenticateTx` checks that the signer of a particular message is the interchain account associated with the counterparty portID of the channel that the IBC packet was sent on.
 
 ```typescript
-function AuthenticateTx(msgs []Any, portId string) error {
+function AuthenticateTx(msgs []Any, portId string) returns (error) {
     // GetInterchainAccountAddress(portId)
     // interchainAccountAddress != signer.String() return error
 }
@@ -118,10 +105,11 @@ function AuthenticateTx(msgs []Any, portId string) error {
 Executes each message sent by the owner account on the controller chain.
 
 ```typescript
-function ExecuteTx(sourcePort: string, destPort: string, destChannel: string, msgs []Any) error {
+function ExecuteTx(sourcePort: string, destPort: string, destChannel: string, msgs []Any) returns (resultString, error) {
   // validate each message
   // verify that interchain account owner is authorized to send each message
   // execute each message
+  // return result of transaction
 }
 ```
 
@@ -406,34 +394,31 @@ function onChanCloseConfirm(
 
 ```typescript
 function OnRecvPacket(packet Packet) {
-    	ack := NewResultAcknowledgement([]byte{byte(1)})
+  ack = NewResultAcknowledgement([]byte{byte(1)})
 
 	// only attempt the application logic if the packet data
 	// was successfully decoded
-	if ack.Success() {
-		switch data.Type {
-	          case types.EXECUTE_TX:
-		        msgs, err := types.DeserializeTx(data.Data)
-		        if err != nil {
-			      return err
-		        }
+  switch data.Type {
+  case types.EXECUTE_TX:
+  msgs, err = types.DeserializeTx(data.Data)
+  if err != nil {
+    return NewErrorAcknowledgement(err)
+  }
 
-                        // ExecuteTx calls the AuthenticateTx function defined above 
-		        if err = ExecuteTx(ctx, packet.SourcePort, packet.DestinationPort, packet.DestinationChannel, msgs); err != nil {
-			      return err
-		        }
+  // ExecuteTx calls the AuthenticateTx function defined above 
+  result, err = ExecuteTx(ctx, packet.SourcePort, packet.DestinationPort, packet.DestinationChannel, msgs)
+  if err != nil {
+    // NOTE: The error string placed in the acknowledgement must be consistent across all
+    // nodes in the network or there will be a fork in the state machine. 
+    return NewErrorAcknowledgement(err)
+  }
 
-		        return nil
-	          default:
-		        return ErrUnknownDataType
-	        }
-	        if err != nil {
-                    ack = NewErrorAcknowledgement(err.Error())
-                }
-	}
+  // return acknowledgement containing the transaction result after executing on host chain
+  return NewAcknowledgement(result)
 
-	// NOTE: acknowledgment will be written synchronously during IBC handler execution.
-	return ack
+  default:
+    return NewErrorAcknowledgement(ErrUnknownDataType)
+  }
 }
 ```
 
