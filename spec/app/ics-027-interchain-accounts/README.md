@@ -105,7 +105,7 @@ function AuthenticateTx(msgs []Any, portId string) returns (error) {
 Executes each message sent by the owner account on the controller chain.
 
 ```typescript
-function ExecuteTx(sourcePort: string, destPort: string, destChannel: string, msgs []Any) returns (resultString, error) {
+function ExecuteTx(sourcePort: string, msgs []Any) returns (resultString, error) {
   // validate each message
   // verify that interchain account owner is authorized to send each message
   // execute each message
