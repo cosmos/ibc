@@ -175,10 +175,10 @@ An example of an active channel on the controller chain can look like this:
 ```typescript
 {
  // Controller Chain
- SourcePortId: `ics27-<owner-account-address>`,
+ SourcePortId: `icacontroller-<owner-account-address>`,
  SourceChannelId: `<channel-id>`,
  // Host Chain
- CounterpartyPortId: `interchain-account`,
+ CounterpartyPortId: `icahost`,
  CounterpartyChannelId: `<channel-id>`,
 }
 ```
@@ -312,7 +312,7 @@ function onChanOpenInit(
   // validate port format
   abortTransactionUnless(validateControllerPortParams(portIdentifier))
   // only allow channels to be created on the "interchain-account" port on the counterparty chain
-  abortTransactionUnless(counterpartyPortIdentifier === "interchain-account")
+  abortTransactionUnless(counterpartyPortIdentifier === "icahost")
   // validate controller side channel version
   abortTransactionUnless(version === "ics27-1")
   // only open the channel if there is no active channel already set (with status OPEN)
@@ -334,7 +334,7 @@ function onChanOpenTry(
   // only ordered channels allowed
   abortTransactionUnless(order === ORDERED)
   // validate port ID
-  abortTransactionUnless(portIdentifier === "interchain-account")
+  abortTransactionUnless(portIdentifier === "icahost")
   // only allow channels to be created on host chain if the counteparty port ID
   // is in the expected controller portID format.
   abortTransactionUnless(validateControllerPortParams(counterpartyPortIdentifier))
@@ -373,10 +373,10 @@ function onChanOpenConfirm(
 ```
 
 ```typescript
-// The controller portID must have the format: `ics27-{ownerAddress}`
+// The controller portID must have the format: `icacontroller-{ownerAddress}`
 function validateControllerPortParams(portIdentifier: Identifier) {
   split(portIdentifier, "-")
-  abortTransactionUnless(portIdentifier[0] === "ics27")
+  abortTransactionUnless(portIdentifier[0] === "icacontroller")
   abortTransactionUnless(IsValidAddress(portIdentifier[1]))
 }
 ```
@@ -462,9 +462,9 @@ function onTimeoutPacket(packet: Packet) {
 
 These are the formats that the port identifiers on each side of an interchain accounts channel must follow to be accepted by a correct interchain accounts module.
 
-Controller Port Identifier: `ics27-1.{connection-id}.{counterparty-connection-id}.{owner-account-address}`
+Controller Port Identifier: `icacontroller.{connection-id}.{counterparty-connection-id}.{owner-account-address}`
 
-Host Port Identifier: `interchain-account`
+Host Port Identifier: `icahost`
 
 ## Example Implementation
 
