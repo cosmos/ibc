@@ -246,9 +246,9 @@ The host chain must also generate the interchain account address and populate th
 
 Initiator: Relayer
 
-Datagram: ChanOpenTry
+Datagram: ChanOpenAck
 
-Chain Acted Upon: Host
+Chain Acted Upon: Controller
 
 CounterpartyVersion: 
 ```json
