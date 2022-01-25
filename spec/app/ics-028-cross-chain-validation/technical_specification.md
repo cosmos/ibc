@@ -265,7 +265,7 @@ function InitGenesis(state: ProviderGenesisState) {
 function CreateConsumerChainProposal(p: CreateConsumerChainProposal) {
   if currentTimestamp() > p.spawnTime {
     // get UnbondingPeriod from provider Staking module
-    unbondingTime = registryKeeper.UnbondingTime()
+    unbondingTime = stakingKeeper.UnbondingTime()
 
     // create client state as defined in ICS 2
     clientState = ClientState{
@@ -861,7 +861,7 @@ function EndBlock(): [ValidatorUpdate] {
   // iterate over all consumer chains registered with this provider chain
   foreach chainId in chainToClient.Keys() {
     // get list of validator updates from the provider Staking module
-    valUpdates = registryKeeper.GetValidatorUpdates(chainId)
+    valUpdates = stakingKeeper.GetValidatorUpdates(chainId)
 
     // add validator updates to the list of pending updates 
     pendingUpdates[chainId] = pendingUpdates[chainId].Aggregate(valUpdates)
@@ -907,7 +907,7 @@ function EndBlock(): [ValidatorUpdate] {
 - Error condition:
   - A CCV channel for the consumer chain with `chainId` exists and its status is not set to `VALIDATING`.
 
-> **Note**: The expected precondition implies that the provider Staking module MUST update its view of the validator sets for each consumer chain before `EndBlock()` in the CCV module is invoked. A solution is for the provider Staking module to update its view during `EndBlock()` and then, the `EndBlock()` of the provider Staking module MUST be executed before the `EndBlock()` of the CCV module.
+> **Note**: The expected precondition implies that the provider Staking module MUST update its view of the validator sets for each consumer chain before `EndBlock()` in the provider CCV module is invoked. A solution is for the provider Staking module to update its view during `EndBlock()` and then, the `EndBlock()` of the provider Staking module MUST be executed before the `EndBlock()` of the provider CCV module.
 
 <!-- omit in toc -->
 #### **[CCV-PCF-ACKVSC.1]**
@@ -921,7 +921,7 @@ function onAcknowledgeVSCPacket(packet: Packet) {
   abortTransactionUnless(channelId IN channelToChain.Keys())
   chainId = channelToChain[packet.getDestinationChannel()]
 
-  registryKeeper.UnbondValidators(chainID, packet.data.updates)
+  stakingKeeper.UnbondValidators(chainID, packet.data.updates)
 }
 ```
 - Initiator: 
