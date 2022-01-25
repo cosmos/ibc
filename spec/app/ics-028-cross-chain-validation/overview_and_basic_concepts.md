@@ -73,7 +73,7 @@ This section defines the new terms and concepts introduced by CCV and provides a
 CCV must handle the following types of operations:
 - **Channel Initialization**: Create a unique, ordered IBC channel between the provider chain and the consumer chain.
 - **Validator Set Update**: It is a two-part operation, i.e., 
-  - update the validator set of the consumer chain based on the information received from the Staking module on the amount of tokens bonded by validators on the provider chain;
+  - update the validator set of the consumer chain based on the information obtained from the *provider Staking module* (i.e., the Staking module on the provider chain) on the amount of tokens bonded by validators on the provider chain;
   - and enable the timely completion (cf. the unbonding periods on the consumer chains) of unbonding operations (i.e., operations of unbonding bonded tokens).
 
 ## Channel Initialization

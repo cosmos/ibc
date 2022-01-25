@@ -52,16 +52,16 @@ Before describing the data structures and sub-protocols of the CCV protocol, we 
 
 - For the **Initialization** sub-protocol, the provider CCV module interacts with the [Governance module](https://docs.cosmos.network/master/modules/gov/) by handling governance proposals to spawn new consumer chains. If such proposals pass, then all validators on the provider chain MUST validate the consumer chain at spawn time; otherwise they get slashed. 
 
-- For the **Validator Set Update** sub-protocol, the provider CCV module interacts with the [Staking module](https://docs.cosmos.network/master/modules/staking/). The interaction is defined by the following interface:
+- For the **Validator Set Update** sub-protocol, the provider CCV module interacts with the provider [Staking module](https://docs.cosmos.network/master/modules/staking/). The interaction is defined by the following interface:
   ```typescript 
   interface StakingKeeper {
-    // get UnbondingPeriod from the Staking module 
+    // get UnbondingPeriod from the provider Staking module 
     UnbondingTime(): Duration
 
-    // get validator updates from the Staking module
+    // get validator updates from the provider Staking module
     GetValidatorUpdates(chainID: string): [ValidatorUpdate]
 
-    // notify the Staking module of matured CCV unbonding operations
+    // notify the provider Staking module of matured CCV unbonding operations
     UnbondValidators(chainID: string, valUpdates [ValidatorUpdate])
   }
   ```
@@ -264,7 +264,7 @@ function InitGenesis(state: ProviderGenesisState) {
 // implements governance proposal Handler 
 function CreateConsumerChainProposal(p: CreateConsumerChainProposal) {
   if currentTimestamp() > p.spawnTime {
-    // get UnbondingPeriod from Staking module
+    // get UnbondingPeriod from provider Staking module
     unbondingTime = registryKeeper.UnbondingTime()
 
     // create client state as defined in ICS 2
@@ -301,7 +301,7 @@ function CreateConsumerChainProposal(p: CreateConsumerChainProposal) {
   - A governance proposal with `CreateConsumerChainProposal` as content has passed (i.e., it got the necessary votes). 
 - Expected postcondition: 
   - If the spawn time has already passed,
-    - `UnbondingPeriod` is retrieved from the Staking module;
+    - `UnbondingPeriod` is retrieved from the provider Staking module;
     - a client state is created;
     - a consensus state is created;
     - a client of the consumer chain is created and the client ID is added to `consumerClient`.
@@ -860,7 +860,7 @@ The *validator set update* sub-protocol enables the provider chain
 function EndBlock(): [ValidatorUpdate] {
   // iterate over all consumer chains registered with this provider chain
   foreach chainId in chainToClient.Keys() {
-    // get list of validator updates from the Staking module
+    // get list of validator updates from the provider Staking module
     valUpdates = registryKeeper.GetValidatorUpdates(chainId)
 
     // add validator updates to the list of pending updates 
@@ -897,17 +897,17 @@ function EndBlock(): [ValidatorUpdate] {
   - ABCI.
 - Expected precondition:
   - An `EndBlock` message is received from the consensus engine. 
-  - The Staking module has an up-to-date list of validator updates for every consumer chain registered.
+  - The provider Staking module has an up-to-date list of validator updates for every consumer chain registered.
 - Expected postcondition:
   - For every consumer chain with `chainId`
-    - A list of validator updates is retrieved from the Staking module and aggregated to the list of pending updates for the consumer chain with `chainId`, i.e., `pendingUpdates[chainId]`.
+    - A list of validator updates is retrieved from the provider Staking module and aggregated to the list of pending updates for the consumer chain with `chainId`, i.e., `pendingUpdates[chainId]`.
     - If the list of pending updates is not empty and there is a CCV channel with status `VALIDATING` for the the consumer chain with `chainId`, then
       - a `VSCPacketData` is created, with `updates = valUpdates`;
       - a packet with the created `VSCPacketData` is sent on the channel associated with the consumer chain with `chainId`.
 - Error condition:
   - A CCV channel for the consumer chain with `chainId` exists and its status is not set to `VALIDATING`.
 
-> **Note**: The expected precondition implies that the Staking module MUST update its view of the validator sets for each consumer chain before `EndBlock()` in the CCV module is invoked. A solution is for the Staking module to update its view during `EndBlock()` and then, the `EndBlock()` of the Staking module MUST be executed before the `EndBlock()` of the CCV module.
+> **Note**: The expected precondition implies that the provider Staking module MUST update its view of the validator sets for each consumer chain before `EndBlock()` in the CCV module is invoked. A solution is for the provider Staking module to update its view during `EndBlock()` and then, the `EndBlock()` of the provider Staking module MUST be executed before the `EndBlock()` of the CCV module.
 
 <!-- omit in toc -->
 #### **[CCV-PCF-ACKVSC.1]**
@@ -929,7 +929,7 @@ function onAcknowledgeVSCPacket(packet: Packet) {
 - Expected precondition:
   - The IBC module on the provider chain received an acknowledgement of a `VSCPacket` on a channel owned by the provider CCV module.
 - Expected postcondition:
-  - The `UnbondValidators` method of the Staking module is invoked.
+  - The `UnbondValidators` method of the provider Staking module is invoked.
 - Error condition:
   - The ID of the channel on which the `VSCPacket` was sent is not mapped to a chain ID (in `channelToChain`).
 
