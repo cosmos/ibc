@@ -52,14 +52,15 @@ Before describing the data structures and sub-protocols of the CCV protocol, we 
 
 - For the **Initialization** sub-protocol, the provider CCV module interacts with the [Governance module](https://docs.cosmos.network/master/modules/gov/) by handling governance proposals to spawn new consumer chains. If such proposals pass, then all validators on the provider chain MUST validate the consumer chain at spawn time; otherwise they get slashed. 
 
-- For the **Validator Set Update** sub-protocol, the provider CCV module interacts with the [Staking module](https://docs.cosmos.network/master/modules/staking/). The interaction is defined by the following interface:
+- For the **Validator Set Update** sub-protocol, the provider CCV module interacts with the provider [Staking module](https://docs.cosmos.network/master/modules/staking/). The interaction is defined by the following interface:
   ```typescript 
   interface StakingKeeper {
-    // get UnbondingPeriod from the Staking module 
+    // get UnbondingPeriod from the provider Staking module 
     UnbondingTime(): Duration
 
-    // get validator updates from the Staking module
+    // get validator updates from the provider Staking module
     GetValidatorUpdates(chainID: string): [ValidatorUpdate]
+
 
     // notify the Staking module of unboding operations that
     // have matured from the consumer chain's perspective 
@@ -133,7 +134,7 @@ The CCV module is initialized through the `InitGenesis` method when the chain is
   }
   ```
 
-The provider CCV module handles governance proposals to spawn new consumer chains. The structure of these proposals is defined by the `Proposal` interface in the [Governance module documentation](https://docs.cosmos.network/master/modules/gov/). The content of these proposals is described by the following interface (we omit typical fields such as tile and description):
+The provider CCV module handles governance proposals to spawn new consumer chains. The structure of these proposals is defined by the `Proposal` interface in the [Governance module documentation](https://docs.cosmos.network/master/modules/gov/). The content of these proposals is described by the following interface (we omit typical fields such as title and description):
   ```typescript
   interface CreateConsumerChainProposal {
     // The proposed chain ID of the new consumer chain.
@@ -287,7 +288,7 @@ function InitGenesis(state: ProviderGenesisState) {
 // implements governance proposal Handler 
 function CreateConsumerChainProposal(p: CreateConsumerChainProposal) {
   if currentTimestamp() > p.spawnTime {
-    // get UnbondingPeriod from Staking module
+    // get UnbondingPeriod from provider Staking module
     unbondingTime = stakingKeeper.UnbondingTime()
 
     // create client state as defined in ICS 2
@@ -324,7 +325,7 @@ function CreateConsumerChainProposal(p: CreateConsumerChainProposal) {
   - A governance proposal with `CreateConsumerChainProposal` as content has passed (i.e., it got the necessary votes). 
 - Expected postcondition: 
   - If the spawn time has already passed,
-    - `UnbondingPeriod` is retrieved from the Staking module;
+    - `UnbondingPeriod` is retrieved from the provider Staking module;
     - a client state is created;
     - a consensus state is created;
     - a client of the consumer chain is created and the client ID is added to `consumerClient`.
@@ -490,7 +491,7 @@ function InitGenesis(state: ConsumerGenesisState) {
   abortSystemUnless(err == nil)
 
   // create client of the provider chain
-  clientId = clientKeeper.CreateClient(state.parentClientState, state.parentConsensusState)
+  clientId = clientKeeper.CreateClient(state.providerClientState, state.providerConsensusState)
 
   // store the ID of the client of the provider chain
   providerClient = clientId
@@ -683,7 +684,8 @@ function onChanCloseConfirm(
 function onChanCloseInit(
   portIdentifier: Identifier,
   channelIdentifier: Identifier) {
-    // allow relayers to close duplicate OPEN channels, if the parent channel has already been established
+    // allow relayers to close duplicate OPEN channels, 
+    // if the provider channel has already been established
     if providerChannel == "" || providerChannel == channelIdentifier {
       // user cannot close channel
       abortTransactionUnless(FALSE)
@@ -882,7 +884,7 @@ The *validator set update* sub-protocol enables the provider chain
 function EndBlock(): [ValidatorUpdate] {
   // iterate over all consumer chains registered with this provider chain
   foreach chainId in chainToClient.Keys() {
-    // get list of validator updates from the Staking module
+    // get list of validator updates from the provider Staking module
     valUpdates = stakingKeeper.GetValidatorUpdates(chainId)
 
     // add validator updates to the list of pending updates 
@@ -921,10 +923,10 @@ function EndBlock(): [ValidatorUpdate] {
   - ABCI.
 - Expected precondition:
   - An `EndBlock` message is received from the consensus engine. 
-  - The Staking module has an up-to-date list of validator updates for every consumer chain registered.
+  - The provider Staking module has an up-to-date list of validator updates for every consumer chain registered.
 - Expected postcondition:
   - For every consumer chain with `chainId`
-    - A list of validator updates is retrieved from the Staking module and aggregated to the list of pending updates for the consumer chain with `chainId`, i.e., `pendingUpdates[chainId]`.
+    - A list of validator updates is retrieved from the provider Staking module and aggregated to the list of pending updates for the consumer chain with `chainId`, i.e., `pendingUpdates[chainId]`.
     - If the list of pending updates is not empty and there is a CCV channel with status `VALIDATING` for the the consumer chain with `chainId`, then
       - a `VSCPacketData` is created, with `id = vscId` and `updates = valUpdates`;
       - a packet with the created `VSCPacketData` is sent on the channel associated with the consumer chain with `chainId`.
@@ -932,7 +934,7 @@ function EndBlock(): [ValidatorUpdate] {
 - Error condition:
   - A CCV channel for the consumer chain with `chainId` exists and its status is not set to `VALIDATING`.
 
-> **Note**: The expected precondition implies that the Staking module MUST update its view of the validator sets for each consumer chain before `EndBlock()` in the CCV module is invoked. A solution is for the Staking module to update its view during `EndBlock()` and then, the `EndBlock()` of the Staking module MUST be executed before the `EndBlock()` of the CCV module.
+> **Note**: The expected precondition implies that the provider Staking module MUST update its view of the validator sets for each consumer chain before `EndBlock()` in the provider CCV module is invoked. A solution is for the provider Staking module to update its view during `EndBlock()` and then, the `EndBlock()` of the provider Staking module MUST be executed before the `EndBlock()` of the provider CCV module.
 
 <!-- omit in toc -->
 #### **[CCV-PCF-ACKVSC.1]**
