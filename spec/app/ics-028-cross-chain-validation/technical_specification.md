@@ -467,7 +467,7 @@ function InitGenesis(state: ConsumerGenesisState) {
   abortSystemUnless(err == nil)
 
   // create client of the provider chain
-  clientId = clientKeeper.CreateClient(state.parentClientState, state.parentConsensusState)
+  clientId = clientKeeper.CreateClient(state.providerClientState, state.providerConsensusState)
 
   // store the ID of the client of the provider chain
   providerClient = clientId
@@ -660,7 +660,8 @@ function onChanCloseConfirm(
 function onChanCloseInit(
   portIdentifier: Identifier,
   channelIdentifier: Identifier) {
-    // allow relayers to close duplicate OPEN channels, if the parent channel has already been established
+    // allow relayers to close duplicate OPEN channels, 
+    // if the provider channel has already been established
     if providerChannel == "" || providerChannel == channelIdentifier {
       // user cannot close channel
       abortTransactionUnless(FALSE)

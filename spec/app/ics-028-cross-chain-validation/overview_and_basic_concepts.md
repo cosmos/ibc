@@ -95,7 +95,7 @@ The channel initialization consists of four phases:
   >  
   > Note that at genesis, the validator set of the consumer chain matches the validator set of the provider chain.
 - **Connection handshake**: A relayer is responsible for initiating the connection handshake (as defined in [ICS 3](../../core/ics-003-connection-semantics)). 
-- **Channel handshake**: A relayer is responsible for initiating the channel handshake (as defined in [ICS 4](../../core/ics-004-channel-and-packet-semantics)). The channel handshake must be initiated on the child chain. The handshake consists of four messages that need to be received for a channel built on top of the expected clients. We omit the `ChanOpenAck` message since it is not relevant for the overview. 
+- **Channel handshake**: A relayer is responsible for initiating the channel handshake (as defined in [ICS 4](../../core/ics-004-channel-and-packet-semantics)). The channel handshake must be initiated on the consumer chain. The handshake consists of four messages that need to be received for a channel built on top of the expected clients. We omit the `ChanOpenAck` message since it is not relevant for the overview. 
   - *OnChanOpenInit*: On receiving the *FIRST* `ChanOpenInit` message, the consumer CCV module sets the status of its end of the CCV channel to `INITIALIZING`.
   - *OnChanOpenTry*: On receiving the *FIRST* `ChanOpenTry` message, the provider CCV module sets the status of its end of the CCV channel to `INITIALIZING`.
   - *OnChanOpenConfirm*: On receiving the *FIRST* `ChanOpenConfirm` message, the provider CCV module sets the status of its end of the CCV channel to `VALIDATING`.
