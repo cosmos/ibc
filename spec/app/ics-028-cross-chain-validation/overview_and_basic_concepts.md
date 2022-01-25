@@ -16,7 +16,7 @@
 [&uparrow; Back to Outline](#outline)
 
 We consider chains that reach consensus through a proof of stake mechanism based on the model of [weak subjectivity](https://blog.ethereum.org/2014/11/25/proof-stake-learned-love-weak-subjectivity/). 
-The next block in a blockchain is *validated* and *voted* upon by a set of pre-determined *full nodes*, also known as *validators*. 
+The next block in a blockchain is *validated* and *voted* upon by a set of pre-determined *full nodes*; these pre-determined full nodes are also known as *validators*. 
 We refer to the validators eligible to validate a block as that block's *validator set*. 
 To be part of the validator set, a validator needs to *bond* (i.e., lock, stake) an amount of tokens for a (minimum) period of time, known as the *unbonding period*. 
 The amount of tokens bonded gives a validator's *voting power*. 
