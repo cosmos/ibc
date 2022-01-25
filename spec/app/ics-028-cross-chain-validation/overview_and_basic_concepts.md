@@ -17,14 +17,14 @@
 [&uparrow; Back to Outline](#outline)
 
 We consider chains that reach consensus through a proof of stake mechanism based on the model of [weak subjectivity](https://blog.ethereum.org/2014/11/25/proof-stake-learned-love-weak-subjectivity/). 
-The next block in a blockchain is *validated* and *voted* upon by a set of pre-determined *full nodes*, also known as *validators*. 
+The next block in a blockchain is *validated* and *voted* upon by a set of pre-determined *full nodes*; these pre-determined full nodes are also known as *validators*. 
 We refer to the validators eligible to validate a block as that block's *validator set*. 
 To be part of the validator set, a validator needs to *bond* (i.e., lock, stake) an amount of tokens for a (minimum) period of time, known as the *unbonding period*. 
 The amount of tokens bonded gives a validator's *voting power*. 
 If a validator misbehaves (e.g., validates two different blocks at the same height), its bonded tokens can be slashed. Note that the unbonding period enables the system to punish a misbehaving validator after the misbehavior is committed. 
 For more details, take a look at the [Tendermint Specification](https://github.com/tendermint/spec/blob/master/spec/core/data_structures.md) and the [Light Client Specification](https://github.com/tendermint/spec/blob/master/spec/light-client/verification/verification_002_draft.md#part-i---tendermint-blockchain).
 
-In the context of CCV, the validator sets of the consumer chains are chosen based on the tokens validators bonded on the provider chain, i.e., are chosen from the validator set of the provider chain. When these validators misbehave on the consumer chains, their bonded tokens on the provider chain is slashed. As a result, the security gained from the value of the bonded tokens on the provider chain is shared with the consumer chains. For more details, take a look at the [Interchain Security light paper](https://github.com/cosmos/gaia/blob/main/docs/interchain-security.md).
+In the context of CCV, the validator sets of the consumer chains are chosen based on the tokens validators bonded on the provider chain, i.e., are chosen from the validator set of the provider chain. When these validators misbehave on the consumer chains, their bonded tokens on the provider chain are slashed. As a result, the security gained from the value of the bonded tokens on the provider chain is shared with the consumer chains. For more details, take a look at the [Interchain Security light paper](https://github.com/cosmos/gaia/blob/main/docs/interchain-security.md).
 
 # Motivation
 [&uparrow; Back to Outline](#outline)
@@ -81,7 +81,7 @@ This section defines the new terms and concepts introduced by CCV and provides a
 CCV must handle the following types of operations:
 - **Channel Initialization**: Create a unique, ordered IBC channel between the provider chain and the consumer chain.
 - **Validator Set Update**: It is a two-part operation, i.e., 
-  - update the validator set of the consumer chain based on the information received from the Staking module on the amount of tokens bonded by validators on the provider chain;
+  - update the validator set of the consumer chain based on the information obtained from the *provider Staking module* (i.e., the Staking module on the provider chain) on the amount of tokens bonded by validators on the provider chain;
   - and enable the timely completion (cf. the unbonding periods on the consumer chains) of unbonding operations (i.e., operations of unbonding bonded tokens).
 
 ## Channel Initialization
@@ -99,11 +99,11 @@ The channel initialization consists of four phases:
   Once the consumer chain starts, the `InitGenesis()` method of the consumer CCV module is invoked and a client of the provider chain is created (for more details on `InitGenesis()`, take a look at the [Cosmos SDK documentation](https://docs.cosmos.network/master/building-modules/genesis.html)). 
   For client creation, both a `ClientState` and a `ConsensusState` are necessary (as defined in [ICS 2](../../core/ics-002-client-semantics)); both are contained in the `GenesisState` of the consumer CCV module. 
   This `GenesisState` is distributed to all operators that need to start a full node of the consumer chain (the mechanism of distributing the `GenesisState` is outside the scope of this specification).
-  > Note that although the mechanism of distributing the `GenesisState` is outside the scope of this specification, a possible approach would entail the creator of the proposal to spawn the new consumer chain to distributed the `GenesisState` via the gossip network. 
+  > Note that although the mechanism of distributing the `GenesisState` is outside the scope of this specification, a possible approach would entail the creator of the proposal to spawn the new consumer chain to distribute the `GenesisState` via the gossip network. 
   >  
   > Note that at genesis, the validator set of the consumer chain matches the validator set of the provider chain.
 - **Connection handshake**: A relayer is responsible for initiating the connection handshake (as defined in [ICS 3](../../core/ics-003-connection-semantics)). 
-- **Channel handshake**: A relayer is responsible for initiating the channel handshake (as defined in [ICS 4](../../core/ics-004-channel-and-packet-semantics)). The channel handshake must be initiated on the child chain. The handshake consists of four messages that need to be received for a channel built on top of the expected clients. We omit the `ChanOpenAck` message since it is not relevant for the overview. 
+- **Channel handshake**: A relayer is responsible for initiating the channel handshake (as defined in [ICS 4](../../core/ics-004-channel-and-packet-semantics)). The channel handshake must be initiated on the consumer chain. The handshake consists of four messages that need to be received for a channel built on top of the expected clients. We omit the `ChanOpenAck` message since it is not relevant for the overview. 
   - *OnChanOpenInit*: On receiving the *FIRST* `ChanOpenInit` message, the consumer CCV module sets the status of its end of the CCV channel to `INITIALIZING`.
   - *OnChanOpenTry*: On receiving the *FIRST* `ChanOpenTry` message, the provider CCV module sets the status of its end of the CCV channel to `INITIALIZING`.
   - *OnChanOpenConfirm*: On receiving the *FIRST* `ChanOpenConfirm` message, the provider CCV module sets the status of its end of the CCV channel to `VALIDATING`.
