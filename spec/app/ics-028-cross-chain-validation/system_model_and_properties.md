@@ -48,7 +48,8 @@ A more thorough discussion of the environment in which CCV operates is given in 
 > In practice, choosing `to` such that `to >> drift(S,D)` and `to >> RTmax`, e.g., `to = 4 weeks`, makes the *Correct Relayer* assumption feasible.
 
 The following assumptions define the guarantees CCV expects from the provider Staking module. 
-- ***Validator Update Provision***: Let `{U1, U2, ..., Ui}` be a batch of validator updates applied (by the provider Staking module) to the validator set of the provider chain at the end of a block `B` with timestamp `ts(B)`. Then, the *first* batch of validator updates obtained (by the provider CCV module) from the provider Staking module at a time `t >= ts(B)` MUST be exactly the batch `{U1, U2, ..., Ui}`.
+- ***Validator Update Provision***: Let `{U1, U2, ..., Ui}` be a batch of validator updates applied (by the provider Staking module) to the validator set of the provider chain at the end of a block `B` with timestamp `ts(B)`. 
+  Then, the *first* batch of validator updates obtained (by the provider CCV module) from the provider Staking module at a time `t >= ts(B)` MUST be exactly the batch `{U1, U2, ..., Ui}`.
 
 - ***Unbonding Safety***: Let `uo` be any unbonding operation that starts with an unboding transaction being executed 
   and completes with the event that returns the corresponding stake; 
