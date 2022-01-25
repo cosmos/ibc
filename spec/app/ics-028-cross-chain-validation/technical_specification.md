@@ -121,7 +121,7 @@ The CCV module is initialized through the `InitGenesis` method when the chain is
   }
   ```
 
-The provider CCV module handles governance proposals to spawn new consumer chains. The structure of these proposals is defined by the `Proposal` interface in the [Governance module documentation](https://docs.cosmos.network/master/modules/gov/). The content of these proposals is described by the following interface (we omit typical fields such as tile and description):
+The provider CCV module handles governance proposals to spawn new consumer chains. The structure of these proposals is defined by the `Proposal` interface in the [Governance module documentation](https://docs.cosmos.network/master/modules/gov/). The content of these proposals is described by the following interface (we omit typical fields such as title and description):
   ```typescript
   interface CreateConsumerChainProposal {
     // The proposed chain ID of the new consumer chain.
