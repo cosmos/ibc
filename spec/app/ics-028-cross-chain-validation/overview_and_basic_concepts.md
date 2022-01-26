@@ -50,6 +50,12 @@ This section defines the new terms and concepts introduced by CCV and provides a
 
 > Note that in the current version the validator set of the consumer chain is entirely provided by the provider chain.
 
+Both the provider and the consumer chains are [application-specific blockchains](https://docs.cosmos.network/v0.44/intro/why-app-specific.html), 
+i.e., the state-machine is typically connected to the underlying consensus engine via an interface called the [ABCI](https://docs.tendermint.com/v0.34/spec/abci/). 
+Thus, we refer to the state-machine as an ABCI application. 
+For ease of presentation, this specification considers a modular paradigm, 
+i.e., the functionality of the ABCI application is separated into multiple modules, like the approach adopted by [Cosmos SDK](https://docs.cosmos.network/v0.44/basics/app-anatomy.html#modules).  
+
 **CCV Module**: The module that implements the CCV protocol. Both the provider and the consumer chains have each their own CCV module. Furthermore, the functionalities provided by the CCV module differ between the provider chain and the consumer chain. For brevity, we use *provider CCV module* and *consumer CCV module* to refer to the CCV modules on the provider chain and on the consumer chain, respectively. 
 
 **CCV Channel**: A unique, ordered IBC channel (as defined in [ICS 4](../../core/ics-004-channel-and-packet-semantics)) that is used by the two CCV modules to exchange IBC packets (as defined in [ICS 4](../../core/ics-004-channel-and-packet-semantics)).
@@ -58,7 +64,9 @@ This section defines the new terms and concepts introduced by CCV and provides a
 
 **Validator Set Change (VSC)**: A change in the validator set of the provider chain that must be reflected in the validator set of the consumer chain. A VSC consists of a batch of validator updates, i.e., changes in the voting power granted to validators on the provider chain and, due to CCV, also on the consumer chain.
 
-> **Background**: In the context of single-chain validation, the changes of the validator set are triggered by the Staking module. For more details, take a look at the [Cosmos SDK documentation](https://docs.cosmos.network/master/modules/staking/). 
+> **Background**: In the context of single-chain validation, the changes of the validator set are triggered by the *Staking module*, 
+> i.e., a module of the ABCI application that implements the proof of stake mechanism needed by the [security model](#security-model). 
+> For more details, take a look at the [Staking module documentation](https://docs.cosmos.network/master/modules/staking/) of Cosmos SDK. 
 
 **Matured VSC**: A VSC that has matured on the consumer chain, i.e., a certain period of time, known as the *unbonding period* (i.e., `UnbondingPeriod`) has elapsed since the VSC was applied by the consumer chain. 
 
@@ -83,18 +91,22 @@ The following Figure shows an overview of the CCV Channel initialization.
 
 ![Channel Initialization Overview](./figures/ccv-init-overview.png?raw=true)
 
-Consumer chains are created through governance proposals. For details on how governance proposals work, take a look at the [Cosmos SDK documentation](https://docs.cosmos.network/master/modules/gov/).
+Consumer chains are created through governance proposals. For details on how governance proposals work, take a look at the [Governance module documentation](https://docs.cosmos.network/master/modules/gov/) of Cosmos SDK.
 
 The channel initialization consists of four phases:
 - **Create clients**: The provider CCV module handles every passed proposal to spawn a new consumer chain. Once it receives a proposal, it creates a client of the consumer chain (as defined in [ICS 2](../../core/ics-002-client-semantics)). 
   Then, the operators of validators in the validator set of the provider chain must each start a full node (i.e., a validator) of the consumer chain. 
-  Once the consumer chain starts, the `InitGenesis()` method of the consumer CCV module is invoked and a client of the provider chain is created (for more details on `InitGenesis()`, take a look at the [Cosmos SDK documentation](https://docs.cosmos.network/master/building-modules/genesis.html)). 
-  For client creation, both a `ClientState` and a `ConsensusState` are necessary (as defined in [ICS 2](../../core/ics-002-client-semantics)); both are contained in the `GenesisState` of the consumer CCV module. 
-  This `GenesisState` is distributed to all operators that need to start a full node of the consumer chain (the mechanism of distributing the `GenesisState` is outside the scope of this specification).
+  Once the consumer chain starts, the application receives an `InitChain` message from the consensus engine 
+  (for more details, take a look at the [ABCI documentation](https://docs.tendermint.com/v0.34/spec/abci/abci.html#initchain)). 
+  The `InitChain` message triggers the call to the `InitGenesis()` method of the consumer CCV module, which creates a client of the provider chain.
+  For client creation, both a `ClientState` and a `ConsensusState` are necessary (as defined in [ICS 2](../../core/ics-002-client-semantics));
+  both are contained in the `GenesisState` of the consumer CCV module.
+  The `GenesisState` is distributed to all operators that need to start a full node of the consumer chain 
+  (the mechanism of distributing the `GenesisState` is outside the scope of this specification).
   > Note that although the mechanism of distributing the `GenesisState` is outside the scope of this specification, a possible approach would entail the creator of the proposal to spawn the new consumer chain to distribute the `GenesisState` via the gossip network. 
   >  
   > Note that at genesis, the validator set of the consumer chain matches the validator set of the provider chain.
-- **Connection handshake**: A relayer is responsible for initiating the connection handshake (as defined in [ICS 3](../../core/ics-003-connection-semantics)). 
+- **Connection handshake**: A relayer (as defined in [ICS 18](../../relayer/ics-018-relayer-algorithms)) is responsible for initiating the connection handshake (as defined in [ICS 3](../../core/ics-003-connection-semantics)). 
 - **Channel handshake**: A relayer is responsible for initiating the channel handshake (as defined in [ICS 4](../../core/ics-004-channel-and-packet-semantics)). The channel handshake must be initiated on the consumer chain. The handshake consists of four messages that need to be received for a channel built on top of the expected clients. We omit the `ChanOpenAck` message since it is not relevant for the overview. 
   - *OnChanOpenInit*: On receiving the *FIRST* `ChanOpenInit` message, the consumer CCV module sets the status of its end of the CCV channel to `INITIALIZING`.
   - *OnChanOpenTry*: On receiving the *FIRST* `ChanOpenTry` message, the provider CCV module sets the status of its end of the CCV channel to `INITIALIZING`.

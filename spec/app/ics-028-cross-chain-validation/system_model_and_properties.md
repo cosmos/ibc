@@ -14,13 +14,14 @@
 ## Assumptions
 [&uparrow; Back to Outline](#outline)
 
-CCV lives between IBC, Cosmos SDK, and the Staking module. 
+As part of an ABCI application, CCV interacts with both the consensus engine (via ABCI) and other application modules, such as the Staking module. 
+As an IBC application, CCV interacts with external relayers (defined in [ICS 18](../../relayer/ics-018-relayer-algorithms)).  
 In this section we specify what we assume about these other components, 
 i.e., CCV relies on the following assumptions: *Valid Blockchain*, *Correct Relayer*, *Validator Update Provision*, and *Unbonding Safety*. 
 
 Intuitively, CCV safety relies on the *Valid Blockchain* assumption, and CCV liveness relies on the *Correct Relayer* assumption. 
 The *Validator Update Provision* and *Unbonding Safety* assumptions define what is needed from the provider Staking module. 
-A more thorough discussion of the environment in which CCV operates is given in the section [Placing CCV within Cosmos SDK](./technical_specification.md#placing-ccv-within-cosmos-sdk).
+A more thorough discussion of the environment in which CCV operates is given in the section [Placing CCV within an ABCI Application](./technical_specification.md#placing-ccv-within-and-abci-application).
 
 - ***Valid Blockchain***: Both the provider and the consumer chains are *valid*. 
   This means that the protocols are executed correctly and the underlying consensus algorithm satisfies both safety and liveness properties. 

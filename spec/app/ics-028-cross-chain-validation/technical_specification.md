@@ -4,7 +4,7 @@
 
 <!-- omit in toc -->
 ## Outline
-- [Placing CCV within Cosmos SDK](#placing-ccv-within-cosmos-sdk)
+- [Placing CCV within an ABCI Application](#placing-ccv-within-an-abci-application)
 - [Data Structures](#data-structures)
   - [External Data Structures](#external-data-structures)
   - [CCV Data Structures](#ccv-data-structures)
@@ -16,28 +16,32 @@
   - [Packet Relay](#packet-relay)
   - [Validator Set Update](#validator-set-update)
 
-## Placing CCV within Cosmos SDK
+## Placing CCV within an ABCI Application
 [&uparrow; Back to Outline](#outline)
 
-Before describing the data structures and sub-protocols of the CCV protocol, we provide a short overview of the interfaces the CCV module implements and the interactions with the other Cosmos SDK modules.
+Before describing the data structures and sub-protocols of the CCV protocol, we provide a short overview of the interfaces the CCV module implements and the interactions with the other ABCI application modules.
 
 <!-- omit in toc -->
 ### Implemented Interfaces
 
-- CCV is a **Cosmos SDK module**, which means it MUST implement the [AppModule interfaces](https://docs.cosmos.network/master/building-modules/module-manager.html#application-module-interfaces). Out of the methods of the AppModule interfaces, three are of particular interest to the CCV protocol:
-  - `InitGenesis()` -- Called at genesis, i.e., when a chain is first started.
-  - `ExportGenesis()` -- Called for each module when a new chain is started from the state of an existing chain.
-  - `EndBlock()` -- Contains logic that is automatically triggered at the end of each block. This is also where the module can inform the underlying consensus engine of changes in the validator set.
+- CCV is an **ABCI application module**, which means it MUST implement the logic to handle some of the messages received from the consensus engine via ABCI, e.g., `InitChain`, `EndBlock` 
+  (for more details, take a look at the [ABCI documentation](https://docs.tendermint.com/v0.34/spec/abci/abci.html)). 
+  The following methods handle messages that are of particular interest to the CCV protocol:
+  - `InitGenesis()` -- Called when the chain is first started, on receiving an `InitChain` message from the consensus engine. 
+  - `EndBlock()` -- Contains logic that is automatically triggered at the end of each block. 
+    This is also where the module can inform the underlying consensus engine of changes in the validator set.
+
+> TODO: `ExportGenesis()` and handling hard forks. 
 
 - CCV is an **IBC module**, which means it MUST implement the module callbacks interface defined in [ICS 26](../../core/ics-026-routing-module/README.md#module-callback-interface). The interface consists of a set of callbacks for 
   - channel opening handshake, which we describe in the [Initialization](#initialization) section;
-  - channel closing handshake, which we describe in the [Channel closing handshake](#channel-closing-handshake) section;
+  - channel closing handshake, which we describe in the [Channel Closing Handshake](#channel-closing-handshake) section;
   - and packet relay, which we describe in the [Packet Relay](#packet-relay) section.
 
 <!-- omit in toc -->
 ### Interfacing Other Modules
 
-- As an SDK module, the CCV module interacts with the underlying consensus engine through ABCI:
+- As an ABCI application module, the CCV module interacts with the underlying consensus engine through ABCI:
   - On the provider chain,
     - it initializes the application (e.g., binds to the expected IBC port) in the `InitGenesis()` method.
   - On the consumer chain,
@@ -50,9 +54,14 @@ Before describing the data structures and sub-protocols of the CCV protocol, we 
   - connection semantics ([ICS 3](../../core/ics-003-connection-semantics)) via `connectionKeeper`;
   - client semantics ([ICS 2](../../core/ics-002-client-semantics)) via `clientKeeper`.
 
-- For the **Initialization** sub-protocol, the provider CCV module interacts with the [Governance module](https://docs.cosmos.network/master/modules/gov/) by handling governance proposals to spawn new consumer chains. If such proposals pass, then all validators on the provider chain MUST validate the consumer chain at spawn time; otherwise they get slashed. 
+- For the [Initialization sub-protocol](#initialization), the provider CCV module interacts with a Governance module by handling governance proposals to spawn new consumer chains. 
+  If such proposals pass, then all validators on the provider chain MUST validate the consumer chain at spawn time; 
+  otherwise they get slashed. 
+  For an example of how governance proposals work, take a look at the [Governance module documentation](https://docs.cosmos.network/master/modules/gov/) of Cosmos SDK. 
 
-- For the **Validator Set Update** sub-protocol, the provider CCV module interacts with the provider [Staking module](https://docs.cosmos.network/master/modules/staking/). The interaction is defined by the following interface:
+- For the [Validator Set Update sub-protocol](#validator-set-update), the provider CCV module interacts with a Staking module on the provider chain. 
+  For an example of how staking works, take a look at the [Staking module documentation](https://docs.cosmos.network/master/modules/staking/) of Cosmos SDK. 
+  The interaction is defined by the following interface:
   ```typescript 
   interface StakingKeeper {
     // get UnbondingPeriod from the provider Staking module 
@@ -82,7 +91,8 @@ interface ValidatorUpdate {
 ```
 The provider chain sends to the consumer chain a list of `ValidatorUpdate`s, containing an entry for every validator that had its power updated. 
 
-The data structures required for creating clients (i.e., `ClientState`, `ConsensusState`) are defined in [ICS 2](../../core/ics-002-client-semantics). Specifically for Tendermint clients, the data structures are defined in [ICS 7](../../client/ics-007-tendermint-client).
+The data structures required for creating clients (i.e., `ClientState`, `ConsensusState`) are defined in [ICS 2](../../core/ics-002-client-semantics). 
+Specifically for Tendermint clients, the data structures are defined in [ICS 7](../../client/ics-007-tendermint-client).
 
 ### CCV Data Structures
 [&uparrow; Back to Outline](#outline)
