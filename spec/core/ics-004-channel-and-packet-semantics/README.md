@@ -859,6 +859,11 @@ function timeoutPacket(
       channel.state = CLOSED
       provableStore.set(channelPath(packet.sourcePort, packet.sourceChannel), channel)
     }
+    // on ORDERED_ALLOW_TIMEOUT, increment NextSequenceRecv so that next packet sequence can be received once this packet times out.
+    if channel.order === ORDERED_ALLOW_TIMEOUT {
+      nextSequenceRecv = nextSequenceRecv + 1
+      provableStore.set(nextSequenceRecvPath(packet.destPort, packet.destChannel), nextSequenceRecv)
+    }
 
     // return transparent packet
     return packet
