@@ -15,15 +15,32 @@
 # Security Model
 [&uparrow; Back to Outline](#outline)
 
-We consider chains that reach consensus through a proof of stake mechanism based on the model of [weak subjectivity](https://blog.ethereum.org/2014/11/25/proof-stake-learned-love-weak-subjectivity/). 
-The next block in a blockchain is *validated* and *voted* upon by a set of pre-determined *full nodes*; these pre-determined full nodes are also known as *validators*. 
+We consider chains that use a proof of stake mechanism based on the model of [weak subjectivity](https://blog.ethereum.org/2014/11/25/proof-stake-learned-love-weak-subjectivity/) 
+in order to strengthen the assumptions required by the underlying consensus engine 
+(e.g., [Tendermint](https://arxiv.org/pdf/1807.04938.pdf) requires that at most one third of the voting power is Byzantine). 
+
+> **Background**: The next block in a blockchain is *validated* and *voted* upon by a set of pre-determined *full nodes*; these pre-determined full nodes are also known as *validators*. 
 We refer to the validators eligible to validate a block as that block's *validator set*. 
 To be part of the validator set, a validator needs to *bond* (i.e., lock, stake) an amount of tokens for a (minimum) period of time, known as the *unbonding period*. 
 The amount of tokens bonded gives a validator's *voting power*. 
-If a validator misbehaves (e.g., validates two different blocks at the same height), its bonded tokens can be slashed. Note that the unbonding period enables the system to punish a misbehaving validator after the misbehavior is committed. 
-For more details, take a look at the [Tendermint Specification](https://github.com/tendermint/spec/blob/master/spec/core/data_structures.md) and the [Light Client Specification](https://github.com/tendermint/spec/blob/master/spec/light-client/verification/verification_002_draft.md#part-i---tendermint-blockchain).
+When a validator starts unbonding some of its tokens, its voting power is reduced immediately, 
+but the tokens are unbonded (i.e., unlocked) only after the unbonding period has elapsed. 
+If a validator misbehaves (e.g., validates two different blocks at the same height), then the system can slash the validator's bonded tokens that gave its voting power during the misbehavior.
+This prevents validators from misbehaving and immediately exiting with their tokens, 
+i.e., the unbonding period enables the system to punish misbehaving validators after the misbehaviors are committed.
+For more details, take a look at the [Tendermint Specification](https://github.com/tendermint/spec/blob/master/spec/core/data_structures.md) 
+and the [Light Client Specification](https://github.com/tendermint/spec/blob/master/spec/light-client/verification/verification_002_draft.md#part-i---tendermint-blockchain).
 
-In the context of CCV, the validator sets of the consumer chains are chosen based on the tokens validators bonded on the provider chain, i.e., are chosen from the validator set of the provider chain. When these validators misbehave on the consumer chains, their bonded tokens on the provider chain are slashed. As a result, the security gained from the value of the bonded tokens on the provider chain is shared with the consumer chains. For more details, take a look at the [Interchain Security light paper](https://github.com/cosmos/gaia/blob/main/docs/interchain-security.md).
+
+In the context of CCV, the validator sets of the consumer chains are chosen based on the tokens validators bonded on the provider chain, 
+i.e., are chosen from the validator set of the provider chain. 
+When validators misbehave on the consumer chains, their tokens bonded on the provider chain are slashed. 
+As a result, the security gained from the value of the tokens bonded on the provider chain is shared with the consumer chains. 
+Similarly to the single-chain approach, when a validator starts unbonding some of its bonded tokens, its voting power is reduced on all chains (i.e., provider chain and consumer chains); 
+yet, due to delays in the communication over the IBC protocol (e.g., due to relaying packets), the voting power is not reduced immediately on the consumer chains. 
+A further consequence of CCV is that the tokens are unbonded only after the unbonding period has elapsed on all chains starting from the moment the corresponding voting power was reduced. 
+Thus, CCV may delay the unbonding of tokens validators bonded on the provider chain.
+For more details, take a look at the [Interchain Security light paper](https://github.com/cosmos/gaia/blob/main/docs/interchain-security.md).
 
 # Motivation
 [&uparrow; Back to Outline](#outline)
