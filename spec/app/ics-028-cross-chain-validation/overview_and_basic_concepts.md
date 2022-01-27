@@ -118,7 +118,8 @@ The following Figure shows an overview of the CCV Channel initialization.
 Consumer chains are created through governance proposals. For details on how governance proposals work, take a look at the [Governance module documentation](https://docs.cosmos.network/master/modules/gov/) of Cosmos SDK.
 
 The channel initialization consists of four phases:
-- **Create clients**: The provider CCV module handles every passed proposal to spawn a new consumer chain. Once it receives a proposal, it creates a client of the consumer chain (as defined in [ICS 2](../../core/ics-002-client-semantics)). 
+- **Create clients**: The provider CCV module handles every passed proposal to spawn a new consumer chain. 
+  Once it receives a proposal, it creates a client of the consumer chain (as defined in [ICS 2](../../core/ics-002-client-semantics)). 
   Then, the operators of validators in the validator set of the provider chain must each start a full node (i.e., a validator) of the consumer chain. 
   Once the consumer chain starts, the application receives an `InitChain` message from the consensus engine 
   (for more details, take a look at the [ABCI documentation](https://docs.tendermint.com/v0.34/spec/abci/abci.html#initchain)). 
@@ -127,17 +128,26 @@ The channel initialization consists of four phases:
   both are contained in the `GenesisState` of the consumer CCV module.
   The `GenesisState` is distributed to all operators that need to start a full node of the consumer chain 
   (the mechanism of distributing the `GenesisState` is outside the scope of this specification).
-  > Note that although the mechanism of distributing the `GenesisState` is outside the scope of this specification, a possible approach would entail the creator of the proposal to spawn the new consumer chain to distribute the `GenesisState` via the gossip network. 
+  > Note that although the mechanism of distributing the `GenesisState` is outside the scope of this specification, 
+  a possible approach would entail the creator of the proposal to spawn the new consumer chain to distribute the `GenesisState` via the gossip network 
+  and to add the hash of `GenesisState` in the proposal. 
   >  
   > Note that at genesis, the validator set of the consumer chain matches the validator set of the provider chain.
 - **Connection handshake**: A relayer (as defined in [ICS 18](../../relayer/ics-018-relayer-algorithms)) is responsible for initiating the connection handshake (as defined in [ICS 3](../../core/ics-003-connection-semantics)). 
-- **Channel handshake**: A relayer is responsible for initiating the channel handshake (as defined in [ICS 4](../../core/ics-004-channel-and-packet-semantics)). The channel handshake must be initiated on the consumer chain. The handshake consists of four messages that need to be received for a channel built on top of the expected clients. We omit the `ChanOpenAck` message since it is not relevant for the overview. 
+- **Channel handshake**: A relayer is responsible for initiating the channel handshake (as defined in [ICS 4](../../core/ics-004-channel-and-packet-semantics)). 
+  The channel handshake must be initiated on the consumer chain. 
+  The handshake consists of four messages that need to be received for a channel built on top of the expected clients. 
+  We omit the `ChanOpenAck` message since it is not relevant for the overview. 
   - *OnChanOpenInit*: On receiving the *FIRST* `ChanOpenInit` message, the consumer CCV module sets the status of its end of the CCV channel to `INITIALIZING`.
   - *OnChanOpenTry*: On receiving the *FIRST* `ChanOpenTry` message, the provider CCV module sets the status of its end of the CCV channel to `INITIALIZING`.
   - *OnChanOpenConfirm*: On receiving the *FIRST* `ChanOpenConfirm` message, the provider CCV module sets the status of its end of the CCV channel to `VALIDATING`.
-- **Channel completion**: Once the provider chain sets the status of the CCV channel to `VALIDATING`, it provides a VSC (i.e., validator set change) to the consumer chain (see [next section](#validator-set-update)). On receiving the *FIRST* `VSCPacket`, the consumer CCV module sets the status of its end of the CCV channel to `VALIDATING`. 
+- **Channel completion**: Once the provider chain sets the status of the CCV channel to `VALIDATING`, 
+  it provides a VSC (i.e., validator set change) to the consumer chain (see [next section](#validator-set-update)). 
+  On receiving the *FIRST* `VSCPacket`, the consumer CCV module sets the status of its end of the CCV channel to `VALIDATING`. 
 
-Note that the "*FIRST*" keyword in the above description ensures the uniqueness of the IBC channel.
+> **Discussion**: As long as the [assumptions required by CCV](./system_model_and_properties.md#assumptions) hold (e.g., *Correct Relayer*), every governance proposal to spawn a new consumer chain that passes on the provider chain eventually results in a CCV channel being created. Furthermore, the "*FIRST*" keyword in the above description ensures the uniqueness of the CCV channel, i.e., all subsequent attempts to create another CCV channel to the same consumer chain will fail.
+
+For a more detailed description of Channel Initialization, take a look at the [technical specification](./technical_specification.md#initialization).
 
 ## Validator Set Update
 [&uparrow; Back to Outline](#outline)
@@ -153,3 +163,5 @@ In the context of VSCs, the CCV module enables the following functionalities:
 These functionalities are depicted in the following Figure that shows an overview of the Validator Set Update operation of CCV. 
 
 ![Validator Set Update Overview](./figures/ccv-vsc-overview.png?raw=true)
+
+For a more detailed description of Validator Set Update, take a look at the [technical specification](./technical_specification.md#validator-set-update).
