@@ -23,9 +23,11 @@ Intuitively, CCV safety relies on the *Valid Blockchain* assumption, and CCV liv
 The *Validator Update Provision* and *Unbonding Safety* assumptions define what is needed from the provider Staking module. 
 A more thorough discussion of the environment in which CCV operates is given in the section [Placing CCV within an ABCI Application](./technical_specification.md#placing-ccv-within-and-abci-application).
 
-- ***Valid Blockchain***: Both the provider and the consumer chains are *valid*. 
-  This means that the protocols are executed correctly and the underlying consensus algorithm satisfies both safety and liveness properties. 
-  For more details, take a look at the [Tendermint Paper](https://arxiv.org/pdf/1807.04938.pdf).
+- ***Safe Blockchain***: Both the provider and the consumer chains are *safe*. This means that, for every chain, the underlying consensus engine satisfies safety (e.g., the chain does not fork) and the execution of the state machine follows the described protocol. 
+
+- ***Live Blockchain***: Both the provider and the consumer chains are *live*. This means that, for every chain, the underlying consensus engine satisfies liveness (i.e., new blocks are eventually added to the chain).
+
+> **Note**: Both *Safe Blockchain* and *Live Blockchain* assumptions require the consensus engine's assumptions to hold, e.g., less than a third of the voting power is Byzantine. For more details, take a look at the [Tendermint Paper](https://arxiv.org/pdf/1807.04938.pdf).
 
 - ***Correct Relayer***: There is at least one *correct* relayer between the provider and consumer chains -- every packet sent on the CCV channel is relayed to the receiving end before the packet timeout elapses. 
   Clearly, the CCV protocol is responsible of setting the packet timeouts (i.e., `timeoutHeight` and `timeoutTimestamp`) such that the *Correct Relayer* assumption is feasible. 
