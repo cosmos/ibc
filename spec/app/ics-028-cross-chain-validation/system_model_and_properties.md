@@ -17,9 +17,12 @@
 As part of an ABCI application, CCV interacts with both the consensus engine (via ABCI) and other application modules, such as the Staking module. 
 As an IBC application, CCV interacts with external relayers (defined in [ICS 18](../../relayer/ics-018-relayer-algorithms)).  
 In this section we specify what we assume about these other components, 
-i.e., CCV relies on the following assumptions: *Valid Blockchain*, *Correct Relayer*, *Validator Update Provision*, and *Unbonding Safety*. 
+i.e., CCV relies on the following assumptions: *Safe Blockchain*, *Live Blockchain*, *Correct Relayer*, *Validator Update Provision*, and *Unbonding Safety*. 
 
-Intuitively, CCV safety relies on the *Valid Blockchain* assumption, and CCV liveness relies on the *Correct Relayer* assumption. 
+Intuitively, CCV safety relies on the *Safe Blockchain* assumption, 
+i.e., neither *Live Blockchain* and *Correct Relayer* are required for safety. 
+Note though that CCV liveness relies on both *Live Blockchain* and *Correct Relayer* assumptions; 
+furthermore, the *Correct Relayer* assumption relies on both *Safe Blockchain* and *Live Blockchain* assumptions. 
 The *Validator Update Provision* and *Unbonding Safety* assumptions define what is needed from the provider Staking module. 
 A more thorough discussion of the environment in which CCV operates is given in the section [Placing CCV within an ABCI Application](./technical_specification.md#placing-ccv-within-and-abci-application).
 
@@ -73,9 +76,9 @@ Between the provider chain and each consumer chain, a separate (unique) CCV chan
 First, we define the properties for the CCV channels. Then, we define the guarantees provided by CCV.
 
 - ***Channel Uniqueness***: The channel between the provider chain and a consumer chain MUST be unique.
-- ***Channel Validity***: If a packet `P` is received by one end of the channel, then `P` MUST have been sent by the other end of the channel.
-- ***Channel Order***: If a packet `P1` is sent over the channel before a packet `P2`, then `P2` MUST NOT be received by the other end of the channel before `P1`. 
-- ***Channel Liveness***: Every packet sent over the channel MUST eventually be received by the other end of the channel. 
+- ***Channel Validity***: If a packet `P` is received by one end of a CCV channel, then `P` MUST have been sent by the other end of the channel.
+- ***Channel Order***: If a packet `P1` is sent over a CCV channel before a packet `P2`, then `P2` MUST NOT be received by the other end of the channel before `P1`. 
+- ***Channel Liveness***: Every packet sent over a CCV channel MUST eventually be received by the other end of the channel. 
 
 CCV provides the following system invariants:
 - ***Validator Set Invariant***: Every validator set on any consumer chain MUST either be or have been a validator set on the provider chain.
@@ -172,66 +175,66 @@ The following properties define the guarantees of CCV on *registering* on the pr
 In this section we argue the correctness of the CCV protocol described in the [Technical Specification](./technical_specification.md), 
 i.e., we informally prove the properties described in the [previous section](#desired-properties).
 
-- ***Channel Uniqueness*:** The provider chain sets the CCV channel when receiving (from the consumer chain) the first `ChanOpenConfirm` message and it marks the channel as `INVALID` when receiving any subsequent `ChanOpenConfirm` messages (cf. *Valid Blockchain*). 
-  Similarly, the consumer chain sets the CCV channel when receiving the first `VSCPacket` and ignores any packets received on different channels (cf. *Valid Blockchain*). 
+- ***Channel Uniqueness*:** The provider chain sets the CCV channel when receiving (from the consumer chain) the first `ChanOpenConfirm` message and it marks the channel as `INVALID` when receiving any subsequent `ChanOpenConfirm` messages (cf. *Safe Blockchain*). 
+  Similarly, the consumer chain sets the CCV channel when receiving the first `VSCPacket` and ignores any packets received on different channels (cf. *Safe Blockchain*). 
 
-- ***Channel Validity*:** Follows directly from the *Valid Blockchain* assumption.
+- ***Channel Validity*:** Follows directly from the *Safe Blockchain* assumption.
 
-- ***Channel Order*:** The provider chain accepts only ordered channels when receiving a `ChanOpenTry` message (cf. *Valid Blockchain*). 
-  Similarly, the consumer chain accepts only ordered channels when receiving `ChanOpenInit` messages (cf. *Valid Blockchain*). 
+- ***Channel Order*:** The provider chain accepts only ordered channels when receiving a `ChanOpenTry` message (cf. *Safe Blockchain*). 
+  Similarly, the consumer chain accepts only ordered channels when receiving `ChanOpenInit` messages (cf. *Safe Blockchain*). 
   Thus, the property follows directly from the fact that the CCV channel is ordered. 
 
 - ***Channel Liveness*:** The property follows from the *Correct Relayer* assumption. 
 
 - ***Validator Update To VSC Validity***: The provider CCV module provides only VSCs that contain validator updates obtained from the Staking module, 
-  i.e., by calling the `GetValidatorUpdates()` method (cf. *Valid Blockchain*). 
+  i.e., by calling the `GetValidatorUpdates()` method (cf. *Safe Blockchain*). 
   Furthermore, these validator updates were applied to the validator set of the provider chain (cf. *Validator Update Provision*).
 
 - ***Validator Update To VSC Order***: We prove the property through contradiction. 
   Given two validator updates `U1` and `U2`, with `U1` occurring on the provider chain before `U2`, we assume `U2` is included in a provided VSC before `U1`. 
   However, `U2` could not have been obtained by the provider CCV module before `U1` (cf. *Validator Update Provision*). 
-  Thus, the provider CCV module could not have provided a VSC that contains `U2` before a VSC that contains `U1` (cf. *Valid Blockchain*), which contradicts the initial assumption.
+  Thus, the provider CCV module could not have provided a VSC that contains `U2` before a VSC that contains `U1` (cf. *Safe Blockchain*), which contradicts the initial assumption.
   
-- ***Validator Update To VSC Liveness***: The provider CCV module eventually provides to all consumer chains VSCs containing all validator updates obtained from the provider Staking module (cf. *Valid Blockchain*). 
+- ***Validator Update To VSC Liveness***: The provider CCV module eventually provides to all consumer chains VSCs containing all validator updates obtained from the provider Staking module (cf. *Safe Blockchain*, *Life Blockchain*). 
   Thus, it is sufficient to prove that every update of a validator in the validator set of the provider chain MUST eventually be obtained from the provider Staking module. 
-  We prove this through contradiction. Given a validator update `U` that is applied to the validator set of the provider chain at the end of a block `B` with timestamp `ts(B)`, we assume `U` is never obtained by the provider CCV module. 
-  However, there is a time `t >= ts(B)` when the provider CCV module tries to obtain a new batch of validator updates from the provider Staking module (cf. liveness property guaranteed by *Valid Blockchain*). 
+  We prove this through contradiction. Given a validator update `U` that is applied to the validator set of the provider chain at the end of a block `B` with timestamp `t`, we assume `U` is never obtained by the provider CCV module. 
+  However, at time `t`, the provider CCV module tries to obtain a new batch of validator updates from the provider Staking module (cf. *Safe Blockchain*). 
   Thus, this batch of validator updates MUST contain all validator updates applied to the validator set of the provider chain at the end of block `B`, including `U` (cf. *Validator Update Provision*), which contradicts the initial assumption.
 
 - ***Apply VSC Validity*:** The property follows from the following two assertions.
-  - The consumer chain only applies VSCs received in `VSCPacket`s through the CCV channel (cf. *Valid Blockchain*).
-  - The provider chain only sends `VSCPacket`s containing provided VSCs (cf. *Valid Blockchain*). 
+  - The consumer chain only applies VSCs received in `VSCPacket`s through the CCV channel (cf. *Safe Blockchain*).
+  - The provider chain only sends `VSCPacket`s containing provided VSCs (cf. *Safe Blockchain*). 
 
 - ***Apply VSC Order*:** We prove the property through contradiction. 
   Given two VSCs `vsc1` and `vsc2` such that the provider chain provides `vsc1` before `vsc2`, we assume the consumer chain applies the validator updates included in `vsc2` before the validator updates included in `vsc1`. 
   The following sequence of assertions leads to a contradiction.
-  - The provider chain could not have sent a `VSCPacket` `P2` containing `vsc2` before a `VSCPacket` `P1` containing `vsc1` (cf. *Valid Blockchain*).
+  - The provider chain could not have sent a `VSCPacket` `P2` containing `vsc2` before a `VSCPacket` `P1` containing `vsc1` (cf. *Safe Blockchain*).
   - The consumer chain could not have received `P2` before `P1` (cf. *Channel Order*).
-  - Given the *Valid Blockchain* assumption, we distinguish two cases.
+  - Given the *Safe Blockchain* assumption, we distinguish two cases.
     - First, the consumer chain receives `P1` during block `B1` and `P2` during block `B2` (with `B1` < `B2`). 
     Then, it applies the validator updates included in `vsc1` at the end of `B1` and the validator updates included in `vsc2` at the end of `B2` (cf. *Validator Update Inclusion*), which contradicts the initial assumption. 
     - Second, the consumer chain receives both `P1` and `P2` during the same block. 
     Then, it applies the validator updates included in both `vsc1` and `vsc2` at the end of the block. 
     Thus, it could not have apply the validator updates included in `vsc2` before.
 
-- ***Apply VSC Liveness*:** The provider chain eventually sends over the CCV channel a `VSCPacket` containing `vsc` (cf. *Valid Blockchain*). 
+- ***Apply VSC Liveness*:** The provider chain eventually sends over the CCV channel a `VSCPacket` containing `vsc` (cf. *Safe Blockchain*, *Life Blockchain*). 
   As a result, the consumer chain eventually receives this packet (cf. *Channel Liveness*). 
-  Then, the consumer chain aggregates all received VSCs at the end of the block and applies all the aggregated updates (cf. *Valid Blockchain*). 
+  Then, the consumer chain aggregates all received VSCs at the end of the block and applies all the aggregated updates (cf. *Safe Blockchain*, *Life Blockchain*). 
   As a result, the consumer chain applies all validator updates in `vsc` (cf. *Validator Update Inclusion*).
 
 - ***Register Maturity Validity***: The property follows from the following sequence of assertions.
-  - The provider chain only registers VSC maturity notifications when receiving on the CCV channel acknowledgements of `VSCPacket`s (cf. *Valid Blockchain*). 
+  - The provider chain only registers VSC maturity notifications when receiving on the CCV channel acknowledgements of `VSCPacket`s (cf. *Safe Blockchain*). 
   - The provider chain receives on the CCV channel only packets sent by the consumer chain (cf. *Channel Validity*).
-  - The consumer chain only acknowledges `VSCPacket`s that it receives on the CCV channel (cf. *Valid Blockchain*).
+  - The consumer chain only acknowledges `VSCPacket`s that it receives on the CCV channel (cf. *Safe Blockchain*).
   - The consumer chain receives on the CCV channel only packets sent by the provider chain (cf. *Channel Validity*). 
-  - The provider chain only sends `VSCPacket`s containing provided VSCs (cf. *Valid Blockchain*). 
+  - The provider chain only sends `VSCPacket`s containing provided VSCs (cf. *Safe Blockchain*). 
 
 - ***Register Maturity Timeliness*:** We prove the property through contradiction. 
   Given a VSC `vsc` provided by the provider chain to the consumer chain, we assume that the provider chain registers a maturity notification of `vsc` before `UnbondingPeriod` has elapsed on the consumer chain since the consumer chain applied `vsc`. 
   The following sequence of assertions leads to a contradiction.
-  - The provider chain could not have register a maturity notification of `vsc` before receiving on the CCV channel an acknowledgements of a `VSCPacket` `P` with `P.updates = C` (cf. *Valid Blockchain*). 
+  - The provider chain could not have register a maturity notification of `vsc` before receiving on the CCV channel an acknowledgements of a `VSCPacket` `P` with `P.updates = C` (cf. *Safe Blockchain*). 
   - The provider chain could not have received an acknowledgement of `P` on the CCV channel before the consumer chain sent it (cf. *Channel Validity*).
-  - The consumer chain could not have sent an acknowledgement of `P` before at least `UnbondingPeriod` has elapsed since receiving `P` on the CCV channel (cf. *Valid Blockchain*). 
+  - The consumer chain could not have sent an acknowledgement of `P` before at least `UnbondingPeriod` has elapsed since receiving `P` on the CCV channel (cf. *Safe Blockchain*). 
   Note that since time is measured in terms of the block time, the time of receiving `P` is the same as the time of applying `vsc`.
   - The consumer chain could not have received `P` on the CCV channel before the provider chain sent it (cf. *Channel Validity*).  
   - The provider chain could not have sent `P` before providing `vsc`. 
@@ -239,23 +242,23 @@ i.e., we informally prove the properties described in the [previous section](#de
 
 - ***Register Maturity Order*:** We prove the property through contradiction. Given two VSCs `vsc1` and `vsc2` such that the provider chain provides `vsc1` before `vsc2`, we assume the provider chain registers the maturity notification of `vsc2` before the maturity notification of `vsc1`. 
   The following sequence of assertions leads to a contradiction.
-  - The provider chain could not have sent a `VSCPacket` `P2`, with `P2.updates = C2`, before a `VSCPacket` `P1`, with `P1.updates = C1` (cf. *Valid Blockchain*).
+  - The provider chain could not have sent a `VSCPacket` `P2`, with `P2.updates = C2`, before a `VSCPacket` `P1`, with `P1.updates = C1` (cf. *Safe Blockchain*).
   - The consumer chain could not have received `P2` before `P1` (cf. *Channel Order*).
-  - The consumer chain could not have sent the acknowledgment of `P2` before the acknowledgement of `P1` (cf. *Valid Blockchain*).
+  - The consumer chain could not have sent the acknowledgment of `P2` before the acknowledgement of `P1` (cf. *Safe Blockchain*).
   - The provider chain could not have received the acknowledgment of `P2` before the acknowledgement of `P1` (cf. *Channel Order*).
-  - The provider chain could not have registered the maturity notification of `vsc2` before the maturity notification of `vsc1` (cf. *Valid Blockchain*).
+  - The provider chain could not have registered the maturity notification of `vsc2` before the maturity notification of `vsc1` (cf. *Safe Blockchain*).
 
 - ***Register Maturity Liveness*:** The property follows from the following sequence of assertions.
-  - The provider chain eventually sends on the CCV channel a `VSCPacket` `P`, with `P.updates = C` (cf. *Valid Blockchain*).
+  - The provider chain eventually sends on the CCV channel a `VSCPacket` `P`, with `P.updates = C` (cf. *Safe Blockchain*, *Life Blockchain*).
   - The consumer chain eventually receives `P` on the CCV channel (cf. *Channel Liveness*).
-  - The consumer chain eventually sends an acknowledgement of `P` on the CCV channel (cf. *Valid Blockchain*).
+  - The consumer chain eventually sends an acknowledgement of `P` on the CCV channel (cf. *Safe Blockchain*, *Life Blockchain*).
   - The provider chain eventually receives the acknowledgement of `P` on the CCV channel (cf. *Channel Liveness*).
-  - The provider chain eventually registers the maturity notification of `vsc` (cf. *Valid Blockchain*).
+  - The provider chain eventually registers the maturity notification of `vsc` (cf. *Safe Blockchain*, *Life Blockchain*).
 
 
-- ***Validator Set Invariant***: The invariant follows from the *Valid Blockchain* assumption and both the *Apply VSC Validity* and *Validator Update To VSC Validity* properties. 
+- ***Validator Set Invariant***: The invariant follows from the *Safe Blockchain* assumption and both the *Apply VSC Validity* and *Validator Update To VSC Validity* properties. 
 
-- ***Voting Power Invariant***: To prove the invariant, we use the following property that follows directly from the design of the protocol (cf. *Valid Blockchain*).
+- ***Voting Power Invariant***: To prove the invariant, we use the following property that follows directly from the design of the protocol (cf. *Safe Blockchain*, *Life Blockchain*).
   - *Property1*: Let `val` be a validator; let `Ua` and `Ub` be two updates of `val` that are applied subsequently by a consumer chain `cc`, at times `ta` and `tb`, respectively (i.e., no other updates of `val` are applied in between). 
   Then, `Power(cc,ta,val) = Power(cc,t,val)`, for all times `t`, such that `ta <= t < tb` (i.e., the voting power granted to `val` on `cc` in the period between `ta` and `tb` is constant).  
 
