@@ -26,7 +26,7 @@ Before describing the data structures and sub-protocols of the CCV protocol, we 
 
 - CCV is an **ABCI application module**, which means it MUST implement the logic to handle some of the messages received from the consensus engine via ABCI, e.g., `InitChain`, `EndBlock` 
   (for more details, take a look at the [ABCI documentation](https://docs.tendermint.com/v0.34/spec/abci/abci.html)). 
-  The following methods handle messages that are of particular interest to the CCV protocol:
+  In this specification we define the following methods that handle messages that are of particular interest to the CCV protocol:
   - `InitGenesis()` -- Called when the chain is first started, on receiving an `InitChain` message from the consensus engine. 
   - `EndBlock()` -- Contains logic that is automatically triggered at the end of each block. 
     This is also where the module can inform the underlying consensus engine of changes in the validator set.

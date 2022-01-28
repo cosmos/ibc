@@ -17,7 +17,7 @@
 
 We consider chains that use a proof of stake mechanism based on the model of [weak subjectivity](https://blog.ethereum.org/2014/11/25/proof-stake-learned-love-weak-subjectivity/) 
 in order to strengthen the assumptions required by the underlying consensus engine 
-(e.g., [Tendermint](https://arxiv.org/pdf/1807.04938.pdf) requires that at most one third of the voting power is Byzantine). 
+(e.g., [Tendermint](https://arxiv.org/pdf/1807.04938.pdf) requires that less than a third of the voting power is Byzantine). 
 
 > **Background**: The next block in a blockchain is *validated* and *voted* upon by a set of pre-determined *full nodes*; these pre-determined full nodes are also known as *validators*. 
 We refer to the validators eligible to validate a block as that block's *validator set*. 
