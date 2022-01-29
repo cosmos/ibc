@@ -32,7 +32,7 @@ A more thorough discussion of the environment in which CCV operates is given in 
 
 > **Note**: Both *Safe Blockchain* and *Live Blockchain* assumptions require the consensus engine's assumptions to hold, e.g., less than a third of the voting power is Byzantine. For more details, take a look at the [Tendermint Paper](https://arxiv.org/pdf/1807.04938.pdf).
 
-- ***Correct Relayer***: There is at least one *correct* relayer between the provider and consumer chains -- every packet sent on the CCV channel is relayed to the receiving end before the packet timeout elapses. 
+- ***Correct Relayer***: There is at least one *correct*, *live* relayer between the provider and consumer chains -- every packet sent on the CCV channel is relayed to the receiving end before the packet timeout elapses. 
   Clearly, the CCV protocol is responsible of setting the packet timeouts (i.e., `timeoutHeight` and `timeoutTimestamp`) such that the *Correct Relayer* assumption is feasible. 
  
 > **Discussion**: IBC relies on timeouts to signal that a sent packet is not going to be received on the other end. 
