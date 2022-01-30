@@ -32,7 +32,7 @@ A more thorough discussion of the environment in which CCV operates is given in 
 
 > **Note**: Both *Safe Blockchain* and *Live Blockchain* assumptions require the consensus engine's assumptions to hold, e.g., less than a third of the voting power is Byzantine. For more details, take a look at the [Tendermint Paper](https://arxiv.org/pdf/1807.04938.pdf).
 
-- ***Correct Relayer***: There is at least one *correct* relayer between the provider and consumer chains -- every packet sent on the CCV channel is relayed to the receiving end before the packet timeout elapses. 
+- ***Correct Relayer***: There is at least one *correct*, *live* relayer between the provider and consumer chains -- every packet sent on the CCV channel is relayed to the receiving end before the packet timeout elapses. 
   Clearly, the CCV protocol is responsible of setting the packet timeouts (i.e., `timeoutHeight` and `timeoutTimestamp`) such that the *Correct Relayer* assumption is feasible. 
  
 > **Discussion**: IBC relies on timeouts to signal that a sent packet is not going to be received on the other end. 
@@ -57,7 +57,7 @@ The following assumptions define the guarantees CCV expects from the provider St
 - ***Validator Update Provision***: Let `{U1, U2, ..., Ui}` be a batch of validator updates applied (by the provider Staking module) to the validator set of the provider chain at the end of a block `B` with timestamp `t`. 
   Then, the *first* batch of validator updates obtained (by the provider CCV module) from the provider Staking module at time `t` MUST be exactly the batch `{U1, U2, ..., Ui}`.
 
-- ***Unbonding Safety***: Let `uo` be any unbonding operation that starts with an unboding transaction being executed 
+- ***Unbonding Safety***: Let `uo` be any unbonding operation that starts with an unbonding transaction being executed 
   and completes with the event that returns the corresponding stake; 
   let `U(uo)` be the validator update caused by initiating `uo`; 
   let `vsc(uo)` be the VSC that contains `U(uo)`. 
