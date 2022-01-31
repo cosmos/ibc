@@ -209,15 +209,15 @@ Version:
 ```json
 {
   "Version": "ics27-1",
-  "Encoding": ["supported encoding types", "..."],
-  "TxTypes": ["supported transaction types", "..."],
+  "Encoding": "requested_encoding_types",
+  "TxTypes": "requested_transaction_types",
   "ControllerConnectionId": "self_connection_id",
   "HostConnectionId": "counterparty_connection_id",
-  "Address": "",
+  "Address": ""
 }
 ```
 
-Comments: The address is left empty since this will be generated and relayed back by the host chain. The INIT step may include multiple supported encoding and transaction types.
+Comments: The address is left empty since this will be generated and relayed back by the host chain.
 
 **TRY**
 
@@ -235,11 +235,11 @@ Version:
   "TxTypes": "negotiated_TxType",
   "ControllerConnectionId": "self_connection_id",
   "HostConnectionId": "counterparty_connection_id",
-  "Address": "interchain_account_address",
+  "Address": "interchain_account_address"
 }
 ```
 
-Comments: The ICS-27 application on the host chain is responsible for returning this version given the counterparty version set by the controller chain in INIT. The host chain must select a single encoding type and a single tx type that is supported by both the host chain and the controller chain (ie. included in counterparty version). If no such encoding or tx type exists, then the host chain must return an error and abort the handshake.
+Comments: The ICS-27 application on the host chain is responsible for returning this version given the counterparty version set by the controller chain in INIT. The host chain must agree with the single encoding type and a single tx type that is requested by the controller chain (ie. included in counterparty version). If the requested encoding or tx type is not supported, then the host chain must return an error and abort the handshake.
 The host chain must also generate the interchain account address and populate the address field in the version with the interchain account address string.
 
 **ACK**
@@ -258,7 +258,7 @@ CounterpartyVersion:
   "TxTypes": "negotiated_TxType",
   "ControllerConnectionId": "self_connection_id",
   "HostConnectionId": "counterparty_connection_id",
-  "Address": "interchain_account_address",
+  "Address": "interchain_account_address"
 }
 ```
 
@@ -273,7 +273,7 @@ Once an interchain account is registered on the host chain a controller chain ca
 
 Cosmos SDK pseudo-code example:
 
-```typescript
+```golang
 interchainAccountAddress := GetInterchainAccountAddress(portId)
 msg := &banktypes.MsgSend{FromAddress: interchainAccountAddress, ToAddress: ToAddress, Amount: amount}
 icaPacketData = InterchainAccountPacketData{
@@ -295,7 +295,7 @@ Messages are authenticated on the host chain by taking the controller side port 
 ### Packet Data
 `InterchainAccountPacketData` contains an array of messages that an interchain account can execute and a memo string that is sent to the host chain as well as the packet `type`. ICS-27 version 1 has only one type `EXECUTE_TX`.
 
-```typescript
+```proto
 message InterchainAccountPacketData  {
     enum type
     bytes data = 1;
@@ -305,7 +305,7 @@ message InterchainAccountPacketData  {
 
 The acknowledgment packet structure is defined as in [ics4](https://github.com/cosmos/ibc-go/blob/main/proto/ibc/core/channel/v1/channel.proto#L135-L148). If an error occurs on the host chain the acknowledgment contains the error message.
 
-```typescript
+```proto
 message Acknowledgement {
   // response contains either a result or an error and must be non-empty
   oneof response {
