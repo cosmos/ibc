@@ -401,8 +401,9 @@ function onChanOpenTry(
   // only allow channels to be created on host chain if the counteparty port ID
   // is in the expected controller portID format.
   abortTransactionUnless(validateControllerPortParams(counterpartyPortIdentifier))
-  // create the interchain account 
-  address = RegisterInterchainAccount(accAddr, counterpartyPortIdentifier)
+  // create the interchain account with the counterpartyPortIdentifier
+  // and the underlying connectionID on the host chain.
+  address = RegisterInterchainAccount(counterpartyPortIdentifier, connectionID)
 
   cpMetadata = UnmarshalJSON(counterpartyVersion)
   abortTransactionUnless(cpMetadata.Version === "ics27-1")
