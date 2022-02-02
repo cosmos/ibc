@@ -197,8 +197,8 @@ Version:
 ```json
 {
   "Version": "ics27-1",
-  "Encoding": "requested_encoding_types",
-  "TxTypes": "requested_transaction_types",
+  "Encoding": "requested_encoding_type",
+  "TxType": "requested_transaction_type",
   "ControllerConnectionId": "self_connection_id",
   "HostConnectionId": "counterparty_connection_id",
   "Address": ""
@@ -220,7 +220,7 @@ Version:
 {
   "Version": "ics27-1",
   "Encoding": "negotiated_encoding_type",
-  "TxTypes": "negotiated_TxType",
+  "TxType": "negotiated_TxType",
   "ControllerConnectionId": "counterparty_connection_id",
   "HostConnectionId": "self_connection_id",
   "Address": "interchain_account_address"
@@ -243,7 +243,7 @@ CounterpartyVersion:
 {
   "Version": "ics27-1",
   "Encoding": "negotiated_encoding_type",
-  "TxTypes": "negotiated_TxType",
+  "TxType": "negotiated_TxType",
   "ControllerConnectionId": "self_connection_id",
   "HostConnectionId": "counterparty_connection_id",
   "Address": "interchain_account_address"
