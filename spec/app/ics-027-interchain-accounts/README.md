@@ -233,8 +233,8 @@ Version:
   "Version": "ics27-1",
   "Encoding": "negotiated_encoding_type",
   "TxTypes": "negotiated_TxType",
-  "ControllerConnectionId": "self_connection_id",
-  "HostConnectionId": "counterparty_connection_id",
+  "ControllerConnectionId": "counterparty_connection_id",
+  "HostConnectionId": "self_connection_id",
   "Address": "interchain_account_address"
 }
 ```
