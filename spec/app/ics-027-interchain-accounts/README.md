@@ -395,12 +395,10 @@ function onChanOpenTry(
 
   cpMetadata = UnmarshalJSON(counterpartyVersion)
   abortTransactionUnless(cpMetadata.Version === "ics27-1")
-  // select an encoding and tx type. If none are supported by executing chain then
-  // abortTransaction
-  encoding = SelectEncoding(cpMetadata.Encoding)
-  abortTransactionUnless(encoding != "")
-  txType = SelectTxType(cpMetadata.TxType)
-  abortTransactionUnless(txType != "")
+  // If encoding or txType requested by initializing chain is not supported by host chain then
+  // fail handshake and abort transaction
+  abortTransactionUnless(IsSupportedEncoding(metadata.Encoding))
+  abortTransactionUnless(IsSupportedTxType(metadata.TxType))
   abortTransactionUnless(cpMetadata.ControllerConnectionId === counterpartyConnectionId)
   abortTransactionUnless(cpMetadata.HostConnectionId === connectionId)
   
