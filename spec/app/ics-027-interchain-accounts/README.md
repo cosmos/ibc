@@ -185,7 +185,7 @@ Combined with the one channel per interchain account approach, this method of me
 
 `interchain-account-address` is the address of the interchain account registered on the host chain by the controller chain.
 
-**INIT**
+- **INIT**
 
 Initiator: Controller
 
@@ -197,17 +197,17 @@ Version:
 ```json
 {
   "Version": "ics27-1",
-  "Encoding": "requested_encoding_type",
-  "TxType": "requested_tx_type",
   "ControllerConnectionId": "self_connection_id",
   "HostConnectionId": "counterparty_connection_id",
-  "Address": ""
+  "Address": "",
+  "Encoding": "requested_encoding_type",
+  "TxType": "requested_tx_type",
 }
 ```
 
-Comments: The address is left empty since this will be generated and relayed back by the host chain.
+Comments: The address is left empty since this will be generated and relayed back by the host chain. The connection identifiers must be included to ensure that if a new channel needs to be opened (in case active channel times out), then we can ensure that the new channel is opened on the same connection. This will ensure that the interchain account is always connected to the same counterparty chain.
 
-**TRY**
+- **TRY**
 
 Initiator: Relayer
 
@@ -219,18 +219,18 @@ Version:
 ```json
 {
   "Version": "ics27-1",
-  "Encoding": "negotiated_encoding_type",
-  "TxType": "negotiated_tx_type",
   "ControllerConnectionId": "counterparty_connection_id",
   "HostConnectionId": "self_connection_id",
-  "Address": "interchain_account_address"
+  "Address": "interchain_account_address",
+  "Encoding": "negotiated_encoding_type",
+  "TxType": "negotiated_tx_type",
 }
 ```
 
 Comments: The ICS-27 application on the host chain is responsible for returning this version given the counterparty version set by the controller chain in INIT. The host chain must agree with the single encoding type and a single tx type that is requested by the controller chain (ie. included in counterparty version). If the requested encoding or tx type is not supported, then the host chain must return an error and abort the handshake.
 The host chain must also generate the interchain account address and populate the address field in the version with the interchain account address string.
 
-**ACK**
+- **ACK** 
 
 Initiator: Relayer
 
@@ -242,11 +242,11 @@ CounterpartyVersion:
 ```json
 {
   "Version": "ics27-1",
-  "Encoding": "negotiated_encoding_type",
-  "TxType": "negotiated_tx_type",
   "ControllerConnectionId": "self_connection_id",
   "HostConnectionId": "counterparty_connection_id",
-  "Address": "interchain_account_address"
+  "Address": "interchain_account_address",
+  "Encoding": "negotiated_encoding_type",
+  "TxType": "negotiated_tx_type",
 }
 ```
 
@@ -367,6 +367,8 @@ function onChanOpenInit(
   // all elements in encoding list and tx type list must be supported
   abortTransactionUnless(IsSupportedEncoding(metadata.Encoding))
   abortTransactionUnless(IsSupportedTxType(metadata.TxType))
+
+  // connectionID and counterpartyConnectionID is retrievable in Channel
   abortTransactionUnless(metadata.ControllerConnectionId === connectionId)
   abortTransactionUnless(metadata.HostConnectionId === counterpartyConnectionId)
 }
@@ -397,18 +399,20 @@ function onChanOpenTry(
   abortTransactionUnless(cpMetadata.Version === "ics27-1")
   // If encoding or txType requested by initializing chain is not supported by host chain then
   // fail handshake and abort transaction
-  abortTransactionUnless(IsSupportedEncoding(metadata.Encoding))
-  abortTransactionUnless(IsSupportedTxType(metadata.TxType))
+  abortTransactionUnless(IsSupportedEncoding(cpMetadata.Encoding))
+  abortTransactionUnless(IsSupportedTxType(cpMetadata.TxType))
+
+  // connectionID and counterpartyConnectionID is retrievable in Channel
   abortTransactionUnless(cpMetadata.ControllerConnectionId === counterpartyConnectionId)
   abortTransactionUnless(cpMetadata.HostConnectionId === connectionId)
   
   metadata = {
     "Version": "ics27-1",
-    "Encoding": encoding,
-    "TxType": txType,
     "ControllerConnectionId": cpMetadata.ControllerConnectionId,
     "HostConnectionId": cpMetadata.HostConnectionId,
     "Address": address,
+    "Encoding": cpMetadata.Encoding,
+    "TxType": cpMetadata.TxType,
   }
 
   return string(MarshalJSON(metadata))
