@@ -535,7 +535,7 @@ function onTimeoutPacket(packet: Packet) {
 
 These are the formats that the port identifiers on each side of an interchain accounts channel must follow to be accepted by a correct interchain accounts module.
 
-Controller Port Identifier: `icacontroller-owner-account-address}`
+Controller Port Identifier: `icacontroller-{owner-account-address}`
 
 Host Port Identifier: `icahost`
 
@@ -545,7 +545,7 @@ Repository for Cosmos-SDK implementation of ICS-27: https://github.com/cosmos/ib
 
 ## Future Improvements
 
-A future version of interchain accounts may be greatly simplified by the introduction of an IBC channel type that is ORDERED but does not close the channel on timeouts, and instead proceeds to accept and receive the next packet. If such a channel type is made available by core IBC, Interchain accounts could require the use of this channel type and remove all logic and state pertaining to "active channels". The controller port identifier format can also be simplified to remove any reference to the underlying connection identifiers in the metadata.
+A future version of interchain accounts may be greatly simplified by the introduction of an IBC channel type that is ORDERED but does not close the channel on timeouts, and instead proceeds to accept and receive the next packet. If such a channel type is made available by core IBC, Interchain accounts could require the use of this channel type and remove all logic and state pertaining to "active channels". The metadata format can also be simplified to remove any reference to the underlying connection identifiers.
 
 The "active channel" setting and unsetting is currently necessary to allow interchain account owners to create a new channel in case the current active channel closes during channel timeout. The connection identifiers are part of the metadata to ensure that any new channel that gets opened are established on top of the original connection. All of this logic becomes unnecessary once the channel is ordered **and** unclosable, which can only be achieved by the introduction of a new channel type to core IBC.
 
