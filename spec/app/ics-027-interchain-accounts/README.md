@@ -44,7 +44,7 @@ The IBC handler interface & IBC relayer module interface are as defined in [ICS-
 
 A chain can utilize one or both parts of the interchain accounts protocol (*controlling* and *hosting*). A controller chain that registers accounts on other host chains (that support interchain accounts) does not necessarily have to allow other controller chains to register accounts on its chain, and vice versa. 
 
-This specification defines the general way to register an interchain account and transfer tx bytes to control the account. The host chain is responsible for deserializing and executing the tx bytes, and the controller chain must know how the host chain will handle the tx bytes in advance (Cosmos SDK chains will deserialize using Protobuf). 
+This specification defines the general way to register an interchain account and send tx bytes to be executed on behalf of the owner account. The host chain is responsible for deserializing and executing the tx bytes and the controller chain must know how the host chain will handle the tx bytes in advance of sending a packet, thus this must be negotiated during channel creation.
 
 ### Controller chain contract
 
@@ -68,9 +68,9 @@ function InitInterchainAccount(connectionId: string, owner: string) returns (err
 `TrySendTx` is used to send an IBC packet containing instructions (messages) to an interchain account on a host chain for a given interchain account owner.
 
 ```typescript
-function TrySendTx(channelCapability: ChannelCapability, portId: string, connectionId: string, icaPacketData: InterchainAccountPacketData) returns (uint64, error){
+function TrySendTx(channelCapability: ChannelCapability, portId: string, icaPacketData: InterchainAccountPacketData, timeoutTimestamp uint64) returns (uint64, error) {
     // A call to GetActiveChannel() checks if there is a currently active channel for this portId which also implies an interchain account has been registered using this port identifier
-    // if there are no errors CreateOutgoingPacket() is called and the IBC packet will be sent to the host chain on the active channel
+    // if there are no errors CreateOutgoingPacket() is called with the given packet data and timeout and the IBC packet will be sent to the host chain on the active channel
 }
 ```
 
@@ -150,7 +150,7 @@ This port will be used to create channels between the controller & host chain fo
 2. The controller chain emits an event signaling to open a new channel on this port given a connection. 
 3. A relayer listening for `ChannelOpenInit` events will continue the channel creation handshake.
 4. During the `OnChanOpenTry` callback on the host chain an interchain account will be registered and a mapping of the interchain account address to the owner account address will be stored in state (this is used for authenticating transactions on the host chain at execution time). 
-5. During the `OnChanOpenAck` callback on the controller chain a record of the interchain account address registered on the host chain during `OnChanOpenTry` is set in state with a mapping from portID -> interchain account address. See [version negotiation](#Version-negotiation) section below for how to implement this.
+5. During the `OnChanOpenAck` callback on the controller chain a record of the interchain account address registered on the host chain during `OnChanOpenTry` is set in state with a mapping from portID -> interchain account address. See [metadata negotiation](#Metadata-negotiation) section below for how to implement this.
 6. During the `OnChanOpenAck` & `OnChanOpenConfirm` callbacks on the controller & host chains respectively, the [active-channel](#Active-channels) for this interchain account/owner pair, is set in state.
 
 #### Active channels
@@ -173,28 +173,85 @@ An example of an active channel on the controller chain can look like this:
 
 In the event of a channel closing, the active channel must be unset. ICS-27 channels can only be closed in the event of a timeout (if the implementation uses ordered channels) or in the unlikely event of a light client attack. Controller chains must retain the ability to open new ICS-27 channels and reset the active channel for a particular portID (containing `{owner-account-address}`) and associated interchain account. 
 
-#### Version negotiation
+#### **Metadata negotiation**
 
-ICS-27 takes advantage of [ICS-04 channel version negotiation](../../core/ics-004-channel-and-packet-semantics/README.md#versioning) to store a mapping of the controller chain portID to the newly registered interchain account address, on both the host & controller chains, during the channel creation handshake ([account registration flow](#Register-account-flow)). 
+ICS-27 takes advantage of [ICS-04 channel version negotiation](../../core/ics-004-channel-and-packet-semantics/README.md#versioning) to negotiate metadata and channel parameters during the channel handshake. The metadata will contain the encoding format along with the transaction type so that the counterparties can agree on the structure and encoding of the interchain transactions. The metadata sent from the host chain on the TRY step will also contain the interchain account address, so that it can be relayed to the controller chain. At the end of the channel handshake, both the controller and host chains will store a mapping of the controller chain portID to the newly registered interchain account address ([account registration flow](#Register-account-flow)). 
 
-ICS-04 allows for each channel version negotiation to be application-specific. In the case of interchain accounts, the channel version set during the `OnChanOpenInit` step (controller chain) must be `ics27-<version>` & the version set during the host chain `OnChanOpenTry` step will include the interchain account address that will be created ([see summary table below](#Version-negotiation-summary)). Note that the generation of this address is stateless, and can be generated in advance of the account creation. 
+ICS-04 allows for each channel version negotiation to be application-specific. In the case of interchain accounts, the channel version will be a string of a JSON struct containing all the relevant metadata intended to be relayed to the counterparty during the channel handshake step ([see summary below](#Metadata-negotiation-summary)).
 
-Due to how the mechanics of ICS-04 channel version negotiation operate the version passed into the host chain side (`OnChanOpenTry`) must match the counterparty version passed into the controller side (`OnChanOpenAck`) otherwise, there will be a resulting error at the IBC protocol level. 
+Combined with the one channel per interchain account approach, this method of metadata negotiation allows us to pass the address of the interchain account back to the controller chain and create a mapping from controller portID -> interchain account address during the `OnChanOpenAck` callback. As outlined in the [controlling flow](#Controlling-flow), a controller chain will need to know the address of a registered interchain account in order to send transactions to the account on the host chain.
 
-Combined with the one channel per interchain account approach, this method of version negotiation allows us to pass the address of the interchain account back to the controller chain and create a mapping from controller portID -> interchain account address during the `OnChanOpenAck` callback. As outlined in the [controlling flow](#Controlling-flow), a controller chain will need to know the address of a registered interchain account in order to send transactions to the account on the host chain.
-
-#### Version negotiation summary
+#### **Metadata negotiation summary**
 
 `interchain-account-address` is the address of the interchain account registered on the host chain by the controller chain.
 
-| Initiator | Datagram         | Chain acted upon |  Version (Controller, Host) |
-| --------- | ---------------- | ---------------- |  ---------------------- | 
-| Controller| ChanOpenInit     | Controller       |  (ics27-1, none)        | 
-| Relayer   | ChanOpenTry      | Host             |  (ics27-1, ics27-1.{interchain-account-address})        | 
-| Relayer   | ChanOpenAck      | Controller       |  (ics27-1, ics27-1.{interchain-account-address})        | 
-| Relayer   | ChanOpenConfirm  | Host             |  (ics27-1, ics27-1.{interchain-account-address})        | 
+- **INIT**
 
-The channel `version` string passed into the `OnChanOpenTry` callback by a relayer will contain the account address of the interchain account that will be registered on the host chain. A relayer will then pass this version into the `OnChanOpenAck` step on the controller chain as the `counterpartyVersion`. The controller chain will then proceed to parse the interchain account address from the `counterpartyVersion` string and store this address in state with a map to the associated portID.  
+Initiator: Controller
+
+Datagram: ChanOpenInit
+
+Chain Acted Upon: Controller
+
+Version: 
+```json
+{
+  "Version": "ics27-1",
+  "ControllerConnectionId": "self_connection_id",
+  "HostConnectionId": "counterparty_connection_id",
+  "Address": "",
+  "Encoding": "requested_encoding_type",
+  "TxType": "requested_tx_type",
+}
+```
+
+Comments: The address is left empty since this will be generated and relayed back by the host chain. The connection identifiers must be included to ensure that if a new channel needs to be opened (in case active channel times out), then we can ensure that the new channel is opened on the same connection. This will ensure that the interchain account is always connected to the same counterparty chain.
+
+- **TRY**
+
+Initiator: Relayer
+
+Datagram: ChanOpenTry
+
+Chain Acted Upon: Host
+
+Version: 
+```json
+{
+  "Version": "ics27-1",
+  "ControllerConnectionId": "counterparty_connection_id",
+  "HostConnectionId": "self_connection_id",
+  "Address": "interchain_account_address",
+  "Encoding": "negotiated_encoding_type",
+  "TxType": "negotiated_tx_type",
+}
+```
+
+Comments: The ICS-27 application on the host chain is responsible for returning this version given the counterparty version set by the controller chain in INIT. The host chain must agree with the single encoding type and a single tx type that is requested by the controller chain (ie. included in counterparty version). If the requested encoding or tx type is not supported, then the host chain must return an error and abort the handshake.
+The host chain must also generate the interchain account address and populate the address field in the version with the interchain account address string.
+
+- **ACK** 
+
+Initiator: Relayer
+
+Datagram: ChanOpenAck
+
+Chain Acted Upon: Controller
+
+CounterpartyVersion: 
+```json
+{
+  "Version": "ics27-1",
+  "ControllerConnectionId": "self_connection_id",
+  "HostConnectionId": "counterparty_connection_id",
+  "Address": "interchain_account_address",
+  "Encoding": "negotiated_encoding_type",
+  "TxType": "negotiated_tx_type",
+}
+```
+
+Comments: On the ChanOpenAck step, the ICS27 application on the controller chain must verify the version string chosen by the host chain on ChanOpenTry. The controller chain must verify that it can support the negotiated encoding and tx type selected by the host chain. If either is unsupported, then it must return an error and abort the handshake.
+If both are supported, then the controller chain must store a mapping from the channel's portID to the provided interchain account address and return successfully.
 
 #### Controlling flow
 
@@ -204,7 +261,7 @@ Once an interchain account is registered on the host chain a controller chain ca
 
 Cosmos SDK pseudo-code example:
 
-```typescript
+```golang
 interchainAccountAddress := GetInterchainAccountAddress(portId)
 msg := &banktypes.MsgSend{FromAddress: interchainAccountAddress, ToAddress: ToAddress, Amount: amount}
 icaPacketData = InterchainAccountPacketData{
@@ -214,7 +271,7 @@ icaPacketData = InterchainAccountPacketData{
 }
 
 // Sends the message to the host chain, where it will eventually be executed 
-TrySendTx(ownerAddress, connectionId, counterpartyConnectionId, data)
+TrySendTx(ownerAddress, portID, data, timeout)
 ```
 
 2. The host chain upon receiving the IBC packet will call `DeserializeTx`. 
@@ -226,7 +283,7 @@ Messages are authenticated on the host chain by taking the controller side port 
 ### Packet Data
 `InterchainAccountPacketData` contains an array of messages that an interchain account can execute and a memo string that is sent to the host chain as well as the packet `type`. ICS-27 version 1 has only one type `EXECUTE_TX`.
 
-```typescript
+```proto
 message InterchainAccountPacketData  {
     enum type
     bytes data = 1;
@@ -236,7 +293,7 @@ message InterchainAccountPacketData  {
 
 The acknowledgment packet structure is defined as in [ics4](https://github.com/cosmos/ibc-go/blob/main/proto/ibc/core/channel/v1/channel.proto#L135-L148). If an error occurs on the host chain the acknowledgment contains the error message.
 
-```typescript
+```proto
 message Acknowledgement {
   // response contains either a result or an error and must be non-empty
   oneof response {
@@ -301,10 +358,19 @@ function onChanOpenInit(
   abortTransactionUnless(validateControllerPortParams(portIdentifier))
   // only allow channels to be created on the "interchain-account" port on the counterparty chain
   abortTransactionUnless(counterpartyPortIdentifier === "icahost")
-  // validate controller side channel version
-  abortTransactionUnless(version === "ics27-1")
   // only open the channel if there is no active channel already set (with status OPEN)
   abortTransactionUnless(activeChannel === nil)
+
+  // validate metadata
+  metadata = UnmarshalJSON(version)
+  abortTransactionUnless(metadata.Version === "ics27-1")
+  // all elements in encoding list and tx type list must be supported
+  abortTransactionUnless(IsSupportedEncoding(metadata.Encoding))
+  abortTransactionUnless(IsSupportedTxType(metadata.TxType))
+
+  // connectionID and counterpartyConnectionID is retrievable in Channel
+  abortTransactionUnless(metadata.ControllerConnectionId === connectionId)
+  abortTransactionUnless(metadata.HostConnectionId === counterpartyConnectionId)
 }
 ```
 
@@ -317,8 +383,7 @@ function onChanOpenTry(
   channelIdentifier: Identifier,
   counterpartyPortIdentifier: Identifier,
   counterpartyChannelIdentifier: Identifier,
-  version: string,
-  counterpartyVersion: string) {
+  counterpartyVersion: string) (version: string) {
   // only ordered channels allowed
   abortTransactionUnless(order === ORDERED)
   // validate port ID
@@ -326,12 +391,31 @@ function onChanOpenTry(
   // only allow channels to be created on host chain if the counteparty port ID
   // is in the expected controller portID format.
   abortTransactionUnless(validateControllerPortParams(counterpartyPortIdentifier))
-  // assert that version is expected format `ics27-1.interchain-account-address`
-  abortTransactionUnless(validateVersion(version))
-  // assert that the counterparty version is `ics27-1`  
-  abortTransactionUnless(counterpartyVersion === "ics27-1")
-  // create the interchain account 
-  RegisterInterchainAccount(accAddr, counterpartyPortIdentifier)
+  // create the interchain account with the counterpartyPortIdentifier
+  // and the underlying connectionID on the host chain.
+  address = RegisterInterchainAccount(counterpartyPortIdentifier, connectionID)
+
+  cpMetadata = UnmarshalJSON(counterpartyVersion)
+  abortTransactionUnless(cpMetadata.Version === "ics27-1")
+  // If encoding or txType requested by initializing chain is not supported by host chain then
+  // fail handshake and abort transaction
+  abortTransactionUnless(IsSupportedEncoding(cpMetadata.Encoding))
+  abortTransactionUnless(IsSupportedTxType(cpMetadata.TxType))
+
+  // connectionID and counterpartyConnectionID is retrievable in Channel
+  abortTransactionUnless(cpMetadata.ControllerConnectionId === counterpartyConnectionId)
+  abortTransactionUnless(cpMetadata.HostConnectionId === connectionId)
+  
+  metadata = {
+    "Version": "ics27-1",
+    "ControllerConnectionId": cpMetadata.ControllerConnectionId,
+    "HostConnectionId": cpMetadata.HostConnectionId,
+    "Address": address,
+    "Encoding": cpMetadata.Encoding,
+    "TxType": cpMetadata.TxType,
+  }
+
+  return string(MarshalJSON(metadata))
 }
 ```
 
@@ -340,11 +424,19 @@ function onChanOpenTry(
 function onChanOpenAck(
   portIdentifier: Identifier,
   channelIdentifier: Identifier,
-  version: string) {
-  // validate that the counterparty version is expected format `ics27-1.interchain-account-address`      
-  abortTransactionUnless(validateVersion(version))
+  counterpartyVersion: string) {
+
+  // validate counterparty metadata decided by host chain
+  metadata = UnmarshalJSON(version)
+  abortTransactionUnless(metadata.Version === "ics27-1")
+  abortTransactionUnless(IsSupportedEncoding(metadata.Encoding))
+  abortTransactionUnless(IsSupportedTxType(metadata.TxType))
+  abortTransactionUnless(metadata.ControllerConnectionId === connectionId)
+  abortTransactionUnless(metadata.HostConnectionId === counterpartyConnectionId)
+
+  
   // state change to keep track of successfully registered interchain account
-  SetInterchainAccountAddress(portID, accAddr)
+  SetInterchainAccountAddress(portID, metadata.Address)
   // set the active channel for this owner/interchain account pair
   setActiveChannel(SourcePortId)
 }
@@ -447,7 +539,7 @@ function onTimeoutPacket(packet: Packet) {
 
 These are the formats that the port identifiers on each side of an interchain accounts channel must follow to be accepted by a correct interchain accounts module.
 
-Controller Port Identifier: `icacontroller.{connection-id}.{counterparty-connection-id}.{owner-account-address}`
+Controller Port Identifier: `icacontroller-{owner-account-address}`
 
 Host Port Identifier: `icahost`
 
@@ -457,9 +549,9 @@ Repository for Cosmos-SDK implementation of ICS-27: https://github.com/cosmos/ib
 
 ## Future Improvements
 
-A future version of interchain accounts may be greatly simplified by the introduction of an IBC channel type that is ORDERED but does not close the channel on timeouts, and instead proceeds to accept and receive the next packet. If such a channel type is made available by core IBC, Interchain accounts could require the use of this channel type and remove all logic and state pertaining to "active channels". The controller port identifier format can also be simplified to remove any reference to the underlying connection identifiers
+A future version of interchain accounts may be greatly simplified by the introduction of an IBC channel type that is ORDERED but does not close the channel on timeouts, and instead proceeds to accept and receive the next packet. If such a channel type is made available by core IBC, Interchain accounts could require the use of this channel type and remove all logic and state pertaining to "active channels". The metadata format can also be simplified to remove any reference to the underlying connection identifiers.
 
-The "active channel" setting and unsetting is currently necessary to allow interchain account owners to create a new channel in case the current active channel closes during channel timeout. The connection identifiers are part of the portID to ensure that any new channel that gets opened are established on top of the original connection. All of this logic becomes unnecessary once the channel is ordered **and** unclosable, which can only be achieved by the introduction of a new channel type to core IBC.
+The "active channel" setting and unsetting is currently necessary to allow interchain account owners to create a new channel in case the current active channel closes during channel timeout. The connection identifiers are part of the metadata to ensure that any new channel that gets opened are established on top of the original connection. All of this logic becomes unnecessary once the channel is ordered **and** unclosable, which can only be achieved by the introduction of a new channel type to core IBC.
 
 ## History
 
