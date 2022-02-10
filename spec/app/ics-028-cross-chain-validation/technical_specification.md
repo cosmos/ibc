@@ -180,6 +180,18 @@ The following packet data types are required by the CCV module:
 
 This section describes the internal state of the CCV module. For simplicity, the state is described by a set of variables; for each variable, both the type and a brief description is provided. In practice, all the state (except for hardcoded constants, e.g., `ProviderPortId`) is stored in a key/value store (KVS). The host state machine provides a KVS interface with three functions, i.e., `get()`, `set()`, and `delete()` (as defined in [ICS 24](../../core/ics-024-host-requirements)).
 
+- `[VSCPacketData]` is a list of `VSCPacketData`s. It exposes the following interface:
+  ```typescript
+  interface [VSCPacketData] {
+    // append a VSCPacketData to the list;
+    // the list is modified
+    Append(data: VSCPacketData) 
+
+    // remove all the VSCPacketData mapped to chainId;
+    // the list is modified
+    Remove(chainId: string)
+  }
+
 - `[ValidatorUpdate]` is a list of `ValidatorUpdate`s. It exposes the following interface:
   ```typescript
   interface [ValidatorUpdate] {
@@ -206,7 +218,7 @@ This section describes the internal state of the CCV module. For simplicity, the
 - `chainToChannel: Map<string, Identifier>` is a mapping from consumer chain IDs to the CCV channel IDs.
 - `channelToChain: Map<Identifier, string>` is a mapping from CCV channel IDs to consumer chain IDs.
 - `channelStatus: Map<Identifier, ChannelStatus>` is a mapping from CCV channel IDs to CCV channel state, as indicated by `ChannelStatus`.
-- `pendingUpdates: Map<string, [ValidatorUpdate]>` is a mapping from consumer chain IDs to a list of pending `ValidatorUpdate`s that must be sent to the consumer chain once the CCV channel is established.
+- `pendingVSCPackets: Map<string, [VSCPacketData]>` is a mapping from consumer chain IDs to a list of pending `VSCPacketData`s that must be sent to the consumer chain once the CCV channel is established.
 - `vscId: uint64` is a monotonic strictly increasing ID that is used to uniquely identify the VSCs sent to the consumer chains.
 - `unbondingOps: Map<uint64, UnbondingOperation>` is a mapping that enables accessing for every unbonding operation the list of consumer chains that are still unbonding. When unbonding operations are initiated, the Staking module calls the `AfterUnbondingOpInitiated()` [hook](#ccv-pcf-shook-afubopcr1); this leads to the creation of a new `UnbondingOperation`, which is defined as
   ```typescript
@@ -311,7 +323,7 @@ function CreateConsumerChainProposal(p: CreateConsumerChainProposal) {
 
     // create consumer chain client and store it
     clientId = clientKeeper.CreateClient(clientState, consensusState)
-    consumerClient[p.chainId] = clientId
+    chainToClient[p.chainId] = clientId
   }
   else {
     // store the client as a pending client
@@ -328,7 +340,7 @@ function CreateConsumerChainProposal(p: CreateConsumerChainProposal) {
     - `UnbondingPeriod` is retrieved from the provider Staking module;
     - a client state is created;
     - a consensus state is created;
-    - a client of the consumer chain is created and the client ID is added to `consumerClient`.
+    - a client of the consumer chain is created and the client ID is added to `chainToClient`.
   - Otherwise, the client is stored in `pendingClient` as a pending client.
 - Error condition:
   - None.
@@ -887,29 +899,33 @@ function EndBlock(): [ValidatorUpdate] {
     // get list of validator updates from the provider Staking module
     valUpdates = stakingKeeper.GetValidatorUpdates(chainId)
 
-    // add validator updates to the list of pending updates 
-    pendingUpdates[chainId] = pendingUpdates[chainId].Aggregate(valUpdates)
+    // check whether there are changes in the validator set;
+    // note that this also entails unbonding operations 
+    // w/o changes in the voting power of the validators in the validator set
+    if len(valUpdates) != 0 OR len(vscToUnbondingOps[(chainId, vscId)]) != 0 {
+      // create VSCPacket data
+      packetData = VSCPacketData{id: vscId, updates: valUpdates}
 
-    // TODO pendingUpdates should be a list of VSCs; 
-    // once the channel is established, all the VSCs are sent, 
-    // so that we can receive ACKs for the unbonding
-    
-    // check whether 
-    //  - there are pending updates; 
-    //  - and there is an established CCV channel to the consumer chain
-    if len(pendingUpdates[chainId]) != 0 AND chainId IN chainToChannel.Keys() {
+      // add VSCPacket data to the list of pending VSCPackets 
+      pendingVSCPackets[chainId] = pendingVSCPackets[chainId].Append(packetData)
+    }
+
+    // check whether there is an established CCV channel to the consumer chain
+    if chainId IN chainToChannel.Keys() {
       // the CCV channel should be in VALIDATING state
       abortSystemUnless(channelStatus[chainId] == VALIDATING)
-
-      // create packet data
-      packetData = VSCPacketData{id: vscId, updates: pendingUpdates[chainId]}
 
       // gets the channel ID for the given consumer chain ID
       channelId = chainToChannel[chainId]
 
-      // create packet and send it using the interface exposed by ICS-4
-      packet = Packet{data: packetData, destChannel: channelId}
-      channelKeeper.SendPacket(packet)
+      foreach data IN pendingVSCPackets[chainId] {
+        // create packet and send it using the interface exposed by ICS-4
+        packet = Packet{data: data, destChannel: channelId}
+        channelKeeper.SendPacket(packet)
+      }
+
+      // Remove pending VSCPackets
+      pendingVSCPackets.Remove(chainId)
     }
   }
   // increment VSC ID
@@ -926,10 +942,12 @@ function EndBlock(): [ValidatorUpdate] {
   - The provider Staking module has an up-to-date list of validator updates for every consumer chain registered.
 - Expected postcondition:
   - For every consumer chain with `chainId`
-    - A list of validator updates is retrieved from the provider Staking module and aggregated to the list of pending updates for the consumer chain with `chainId`, i.e., `pendingUpdates[chainId]`.
-    - If the list of pending updates is not empty and there is a CCV channel with status `VALIDATING` for the the consumer chain with `chainId`, then
-      - a `VSCPacketData` is created, with `id = vscId` and `updates = valUpdates`;
-      - a packet with the created `VSCPacketData` is sent on the channel associated with the consumer chain with `chainId`.
+    - A list of validator updates `valUpdates` is obtained from the provider Staking module.
+    - If either `valUpdates` is not empty or there were unbonding operations initiated during this block, 
+      then a `VSCPacketData` is created and appended to the list of pending VSCPackets associated to `chainId`, i.e., `pendingVSCPackets[chainId]`.
+    - If there is an established CCV channel for the the consumer chain with `chainId`, then
+      - for each `VSCPacketData` in the list of pending VSCPackets associated to `chainId`
+        - a packet with the `VSCPacketData` is sent on the channel associated with the consumer chain with `chainId`.
   - `vscId` is incremented.
 - Error condition:
   - A CCV channel for the consumer chain with `chainId` exists and its status is not set to `VALIDATING`.
