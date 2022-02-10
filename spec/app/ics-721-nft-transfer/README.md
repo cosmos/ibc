@@ -58,7 +58,7 @@ Each `tokenId` has a corresponding entry in `tokenUris`, which refers to an off-
 
 As tokens are sent across chains using the ICS 721 protocol, they begin to accrue a record of channels for which they have been transferred across. This information is encoded into the `classId` field.
 
-The ics721 token classes are represented in the form `{ics721Port}/{ics721Channel}/{classId}`, where `ics721Port` and `ics721Channel` are an ics721 port and channel on the current chain for which the token exists. The prefixed port and channel pair indicate which channel the token was previously sent through. If `{classId}` contains `/`, then it must also be in the ics721 form which indicates that this token has a multi-hop record. Note that this requires that the `/` (slash character) is prohibited in non-IBC token `classId`s.
+The ics721 token classes are represented in the form `{ics721Port}/{ics721Channel}/{classId}`, where `ics721Port` and `ics721Channel` identifiy the channel on the current chain from which the token arrived. The prefixed port and channel pair indicate which channel the token was previously sent through. If `{classId}` contains `/`, then it must also be in the ics721 form which indicates that this token has a multi-hop record. Note that this requires that the `/` (slash character) is prohibited in non-IBC token `classId`s.
 
 A sending chain may be acting as a source or sink zone. When a chain is sending tokens across a port and channel which are not equal to the last prefixed port and channel pair, it is acting as a source zone. When tokens are sent from a source zone, the destination port and channel will be prefixed onto the `classId` (once the tokens are received) adding another hop to a tokens record. When a chain is sending tokens across a port and channel which are equal to the last prefixed port and channel pair, it is acting as a sink zone. When tokens are sent from a sink zone, the last prefixed port and channel pair on the `classId` is removed (once the tokens are received), undoing the last hop in the tokens record. A more complete explanation is present in the [ibc-go implementation]() (TBD).
 
@@ -77,9 +77,9 @@ interface NonFungibleTokenPacketError {
 }
 ```
 
-Note that both the `NonFungibleTokenPacketData` as well as `NonFungibleTokenPacketAcknowledgement` must be JSON-encoded (not Protobuf encoded) when they serialized into packet data.
+Note that both the `NonFungibleTokenPacketData` as well as `NonFungibleTokenPacketAcknowledgement` must be JSON-encoded (not Protobuf encoded) when serialized into packet data.
 
-The non-fungible token transfer bridge module tracks escrow addresses associated with particular channels in state. Fields of the `ModuleState` are assumed to be in scope.
+The non-fungible token transfer bridge module maintains a separate escrow address for each NFT channel.
 
 ```typescript
 interface ModuleState {
@@ -93,7 +93,7 @@ The sub-protocols described herein should be implemented in a "non-fungible toke
 
 #### Port & channel setup
 
-The `setup` function must be called exactly once when the module is created (perhaps when the blockchain itself is initialised) to bind to the appropriate port and create an escrow address (owned by the module).
+The `setup` function must be called exactly once when the module is created (perhaps when the blockchain itself is initialised) to bind to the appropriate port (owned by the module).
 
 ```typescript
 function setup() {
@@ -115,7 +115,7 @@ function setup() {
 
 Once the `setup` function has been called, channels can be created through the IBC routing module between instances of the non-fungible token transfer module on separate chains.
 
-An administrator (with the permissions to create connections & channels on the host state machine) is responsible for setting up connections to other state machines & creating channels to other instances of this module (or another module supporting this interface) on other chains. This specification defines packet handling semantics only, and defines them in such a fashion that the module itself doesn't need to worry about what connections or channels might or might not exist at any point in time.
+This specification defines packet handling semantics only, and defines them in such a fashion that the module itself doesn't need to worry about what connections or channels might or might not exist at any point in time.
 
 #### Routing module callbacks
 
@@ -139,8 +139,6 @@ function onChanOpenInit(
   abortTransactionUnless(order === UNORDERED)
   // assert that version is "ics721-1"
   abortTransactionUnless(version === "ics721-1")
-  // allocate an escrow address
-  channelEscrowAddresses[channelIdentifier] = newAddress()
 }
 ```
 
@@ -159,8 +157,6 @@ function onChanOpenTry(
   // assert that version is "ics721-1"
   abortTransactionUnless(version === "ics721-1")
   abortTransactionUnless(counterpartyVersion === "ics721-1")
-  // allocate an escrow address
-  channelEscrowAddresses[channelIdentifier] = newAddress()
 }
 ```
 
@@ -172,6 +168,8 @@ function onChanOpenAck(
   // port has already been validated
   // assert that version is "ics721-1"
   abortTransactionUnless(version === "ics721-1")
+  // allocate an escrow address
+  channelEscrowAddresses[channelIdentifier] = newAddress()
 }
 ```
 
@@ -180,6 +178,8 @@ function onChanOpenConfirm(
   portIdentifier: Identifier,
   channelIdentifier: Identifier) {
   // accept channel confirmations, port has already been validated, version has already been validated
+  // allocate an escrow address
+  channelEscrowAddresses[channelIdentifier] = newAddress()
 }
 ```
 
@@ -201,13 +201,12 @@ function onChanCloseConfirm(
 
 ##### Packet relay
 
-In plain English, between chains `A` and `B`:
+In plain English:
 
-- When acting as the source zone, the bridge module escrows an existing local non-fungible token on the sending chain and mints a corresponding voucher on the receiving chain.
-- When acting as the sink zone, the bridge module burns the local voucher on the sending chain and unescrows the local non-fungible token on the receiving chain.
-- When a packet times-out, local non-fungible tokens are unescrowed back to the sender or vouchers minted back to the sender appropriately.
-- Acknowledgement data is used to handle failures, such as invalid destination accounts. Returning
-  an acknowledgement of failure is preferable to aborting the transaction since it more easily enables the sending chain to take appropriate action based on the nature of the failure.
+- When a non-fungible token is sent away from its source, the bridge module escrows the token on the sending chain and mints a corresponding voucher on the receiving chain.
+- When a non-fungible token is sent back toward its source, the bridge module burns the token on the sending chain and unescrows the corresponding locked token on the receiving chain.
+- When a packet times out, tokens represented in the packet are either unescrowed or minted back to the sender appropriately -- depending on whether the tokens are being moved away from or back to their source.
+- Acknowledgement data is used to handle failures, such as invalid destination accounts. Returning an acknowledgement of failure is preferable to aborting the transaction since it more easily enables the sending chain to take appropriate action based on the nature of the failure.
 
 `createOutgoingPacket` must be called by a transaction handler in the module which performs appropriate signature checks, specific to the account owner on the host state machine.
 
@@ -225,7 +224,7 @@ function createOutgoingPacket(
   timeoutHeight: Height,
   timeoutTimestamp: uint64) {
   prefix = "{sourcePort}/{sourceChannel}/"
-  // we are the source if the classId is not prefixed
+  // we are the source if the classId is not prefixed with the sourcePort and sourceChannel
   source = classId.slice(0, len(prefix)) !== prefix
   tokenUris = []
   for (let tokenId in tokenIds) {
@@ -238,7 +237,7 @@ function createOutgoingPacket(
       nft.Transfer(classId, tokenId, escrowAccount)
     } else {
       // receiver is source chain, burn voucher
-      bank.Burn(classId, tokenId)
+      nft.Burn(classId, tokenId)
     }
     tokenUris.push(nft.getNFT(classId, tokenId).getUri())
   }
@@ -255,15 +254,13 @@ function onRecvPacket(packet: Packet) {
   // construct default acknowledgement of success
   NonFungibleTokenPacketAcknowledgement ack = NonFungibleTokenPacketAcknowledgement{true, null}
   prefix = "{packet.sourcePort}/{packet.sourceChannel}/"
-  // we are the source if the packets were prefixed by the sending chain
+  // we are the source if the classId is prefixed with the packet's sourcePort and sourceChannel
   source = data.classId.slice(0, len(prefix)) === prefix
   for (var i in data.tokenIds) {
     if source {
       // receiver is source chain: unescrow token
       // determine escrow account
       escrowAccount = channelEscrowAddresses[packet.destChannel]
-      // assert that escrow account is token owner
-      abortTransactionUnless(escrowAccount === nft.getOwner(data.classId.slice(len(prefix)), data.tokenIds[i]))
       // unescrow token to receiver
       err = nft.Transfer(data.classId.slice(len(prefix)), data.tokenIds[i], data.receiver)
       if (err !== nil) {
@@ -297,7 +294,7 @@ function onAcknowledgePacket(
 }
 ```
 
-`onTimeoutPacket` is called by the routing module when a packet sent by this module has timed-out (such that it will not be received on the destination chain).
+`onTimeoutPacket` is called by the routing module when a packet sent by this module has timed out (such that it will not be received on the destination chain).
 
 ```typescript
 function onTimeoutPacket(packet: Packet) {
@@ -313,7 +310,7 @@ function refundToken(packet: Packet) {
   NonFungibleTokenPacketData data = packet.data
   prefix = "{packet.sourcePort}/{packet.sourceChannel}/"
   for (let tokenId in data.tokenIds) {
-    // we are the source if the classId is not prefixed
+    // we are the source if the classId is not prefixed with the packet's sourcePort and sourceChannel
     source = data.classId.slice(0, len(prefix)) !== prefix
     if source {
       // sender was source chain, unescrow tokens back to sender
@@ -323,7 +320,7 @@ function refundToken(packet: Packet) {
       nft.Transfer(data.classId, tokenId, data.sender)
     } else {
       // receiver was source chain, mint voucher back to sender
-      bank.Mint(data.classId, tokenId, data.sender)
+      nft.Mint(data.classId, tokenId, data.sender)
     }
   }
 }
