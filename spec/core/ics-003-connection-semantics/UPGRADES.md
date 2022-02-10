@@ -152,6 +152,7 @@ function connUpgradeInit(
 
     // abort transaction if an unmodifiable field is modified
     // upgraded connection state must be in `UPGRADE_INIT`
+    // NOTE: Any added fields are by default modifiable.
     abortTransactionUnless(
         proposedUpgrade.connection.state == UPGRADE_INIT &&
         proposedUpgrade.connection.counterpartyConnectionIdentifier == currentConnection.counterpartyConnectionIdentifier &&
@@ -193,6 +194,7 @@ function connUpgradeTry(
 
     // abort transaction if an unmodifiable field is modified
     // upgraded connection state must be in `UPGRADE_TRY`
+    // NOTE: Any added fields are by default modifiable.
     abortTransactionUnless(
         proposedUpgrade.connection.state == UPGRADE_TRY &&
         proposedUpgrade.connection.counterpartyConnectionIdentifier == currentConnection.counterpartyConnectionIdentifier &&
@@ -202,7 +204,6 @@ function connUpgradeTry(
 
     // either timeout height or timestamp must be non-zero
     abortTransactionUnless(proposedUpgrade.TimeoutHeight != 0 || proposedUpgrade.TimeoutTimestamp != 0)
-
 
     // verify proofs of counterparty state
     abortTransactionUnless(currentConnection.client.verifyConnectionState(proofHeight, proofConnection, counterpartyConnection))
@@ -271,12 +272,6 @@ function onChanUpgradeAck(
     // verify connections are mutually compatible
     // this will also check counterparty chosen version is valid
     restoreConnectionUnless(IsCompatible(counterpartyConnection, connection))
-
-    // counterparty-specified timeout must not have exceeded
-    restoreConnectionUnless(
-        counterparty.UpgradeStatus.TimeoutHeight < currentHeight() &&
-        counterparty.UpgradeStatus.TimeoutTimestamp < currentTimestamp()
-    )
 
     // upgrade is complete
     // set connection to OPEN and remove unnecessary state
@@ -362,6 +357,39 @@ function cancelConnectionUpgrade(
 }
 ```
 
-It is possible that there is an extraordinary delay in the upgrade handshake occurs because of liveness issues. In this case, we do not want to indefinitely stay in the upgrade process and we will revert to the original connection by calling `CancelConnectionUpgradeTimeout`.
+### Timeout Upgrade Process
 
-// TODO Timeout Specification
+It is possible for the connection upgrade process to timeout on TRY. This may be because of a liveness issue, or because the UPGRADE_TRY transaction simply cannot pass on the counterparty; for example, the upgrade feature may not be enabled on the counterparty chain.
+
+In this case, we do not want the initializing chain to be stuck indefinitely in the `UPGRADE_INIT` step. Thus, the `UpgradeInit` message will contain a `TimeoutHeight` and `TimeoutTimestamp`. The counterparty chain is expected to reject `UpgradeTry` message if the specified timeout has already elapsed.
+
+A relayer must then submit an `UpgradeTimeout` message to the initializing chain which proves that the counterparty is still in its original state. If the proof succeeds, then the initializing chain shall also restore its original connection and cancel the upgrade.
+
+```typescript
+function timeoutConnectionUpgrade(
+    identifier: Identifier,
+    counterpartyConnection: ConnectionEnd,
+    proofConnection: CommitmentProof,
+    proofHeight: Height,
+) {
+    upgradeStatus = provableStore.get(statusPath(identifier))
+
+    // proof must be from a height after timeout has elapsed. Either timeoutHeight or timeoutTimestamp must be defined.
+    // if timeoutHeight is defined and proof is from before timeout height
+    // then abort transaction
+    abortTransactionUnless(upgradeStatus.TimeoutHeight.IsZero() || proofHeight >= upgradeStatus.TimeoutHeight)
+    // if timeoutTimestamp is defined then the consensus time from proof height must be greater than timeout timestamp
+    connection = getConnection(identifer)
+    consensusState = getConsensusState(connection.clientIdentifer, proofHeight)
+    abortTransactionUnless(upgradeStatus.TimeoutTimestamp.IsZero() || consensusState.Timestamp >= upgradeStatus.Timestamp)
+
+    // counterparty connection must be proved to still be in OPEN state
+    abortTransactionUnless(counterpartyConnection.State === OPEN)
+    abortTransactionUnless(connection.client.verifyConnectionState(proofHeight, proofConnection, counterpartyConnection))
+
+    // we must restore the connection since the timeout verification has passed
+    restoreConnectionUnless(false)
+}
+```
+
+Note that the timeout logic only applies to the INIT step. This is to protect an upgrading chain from being stuck in a non-OPEN state if the counterparty cannot execute the TRY successfully. Once the TRY step succeeds, then both sides are guaranteed to have the upgrade feature enabled. Liveness is no longer an issue, because we can wait until liveness is restored to execute the ACK step which will move the connection definitely into an OPEN state (either a successful upgrade or a rollback).
