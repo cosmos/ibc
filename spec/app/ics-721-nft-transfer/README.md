@@ -5,20 +5,20 @@ stage: draft
 category: IBC/APP
 requires: 25, 26
 kind: instantiation
-author: Christopher Goes <cwgoes@interchain.berlin>, Haifeng Xi <haifeng@bianjie.ai>
+author: Haifeng Xi <haifeng@bianjie.ai>
 created: 2021-11-10
-modified: 2021-11-18
+modified: 2022-02-10
 ---
 
-> This spec follows the same design principles of [ICS 20](../ics-020-fungible-token-transfer) and copies most of its content therefrom, while replacing `bank` module based asset tracking logic with that of the `nft` module.
+> This standard document follows the same design principles of [ICS 20](../ics-020-fungible-token-transfer) and inherits most of its content therefrom, while replacing `bank` module based asset tracking logic with that of the `nft` module.
 
 ## Synopsis
 
-This standard document specifies packet data structure, state machine handling logic, and encoding details for the transfer of non-fungible tokens over an IBC channel between two modules on separate chains. The state machine logic presented allows for safe multi-chain `classId` handling with permissionless channel opening. This logic constitutes a "non-fungible token transfer bridge module", interfacing between the IBC routing module and an existing asset tracking module on the host state machine, which could be either a Cosmos-style "native" module or a smart contract running in a virtual machine.
+This standard document specifies packet data structure, state machine handling logic, and encoding details for the transfer of non-fungible tokens over an IBC channel between two modules on separate chains. The state machine logic presented allows for safe multi-chain `classId` handling with permissionless channel opening. This logic constitutes a _non-fungible token transfer bridge module_, interfacing between the IBC routing module and an existing asset tracking module on the host state machine, which could be either a Cosmos-style native module or a smart contract running in a virtual machine.
 
 ### Motivation
 
-Users of a set of chains connected over the IBC protocol might wish to utilise an asset issued on one chain on another chain, perhaps to make use of additional features such as exchange or privacy protection, while retaining uniqueness with the original asset on the issuing chain. This application-layer standard describes a protocol for transferring non-fungible tokens between chains connected with IBC which preserves asset uniqueness, preserves asset ownership, limits the impact of Byzantine faults, and requires no additional permissioning.
+Users of a set of chains connected over the IBC protocol might wish to utilize a non-fungible token on a chain other than the chain where the token was originally issued -- perhaps to make use of additional features such as exchange, royalty payment or privacy protection. This application-layer standard describes a protocol for transferring non-fungible tokens between chains connected with IBC which preserves asset non-fungibility, preserves asset ownership, limits the impact of Byzantine faults, and requires no additional permissioning.
 
 ### Definitions
 
@@ -26,11 +26,10 @@ The IBC handler interface & IBC routing module interface are as defined in [ICS 
 
 ### Desired Properties
 
-- Preservation of uniqueness (two-way peg).
-- Preservation of total supply (maintained on a single source chain & module).
+- Preservation of non-fungibility and uniqueness (i.e., only one instance of the token is *live* across all the IBC-connected blockchains).
 - Permissionless token transfers, no need to whitelist connections, modules, or `classId`s.
 - Symmetric (all chains implement the same logic, no in-protocol differentiation of hubs & zones).
-- Fault containment: prevents Byzantine-inflation of tokens originating on chain `A`, as a result of chain `B`'s Byzantine behaviour (though any users who sent tokens to chain `B` may be at risk).
+- Fault containment: prevents Byzantine-creation of tokens originating on chain `A`, as a result of chain `B`'s Byzantine behavior.
 
 ## Technical Specification
 
@@ -336,11 +335,9 @@ function onTimeoutPacketClose(packet: Packet) {
 
 ##### Correctness
 
-This implementation preserves both uniqueness & supply.
+This implementation preserves token uniqueness.
 
 Uniqueness: If tokens have been sent to the counterparty chain, they can be redeemed back in the same `classId` & `tokenId` on the source chain.
-
-Supply: Redefine supply as unlocked tokens. All send-recv pairs for any given token class sum to net zero. Source chain can change supply.
 
 ##### Multi-chain notes
 
@@ -352,6 +349,9 @@ In order to track all of the tokens moving around the network of chains in vario
 
 - Each chain, locally, could elect to keep a lookup table to use short, user-friendly local `classId`s in state which are translated to and from the longer `classId`s when sending and receiving packets.
 - Additional restrictions may be imposed on which other machines may be connected to & which channels may be established.
+
+## Further Discussion
+Extended and complex use cases such as royalties, marketplaces or permissioned transfers can be supported on top of this specification. Solutions could be modules, hooks, [IBC middleware](../ics-030-middleware) and so on. Designing a guideline for this is out of the scope.
 
 ## Backwards Compatibility
 
@@ -372,11 +372,13 @@ Coming soon.
 Coming soon.
 
 ## History
-
-Nov 10, 2021 - Initial draft adapted from ICS 20 spec
-Nov 17, 2021 - Revisions to better accommodate smart contracts
-Nov 17, 2021 - Renamed from ICS 21 to ICS 721
-Nov 18, 2021 - Revisions to allow for multiple tokens in one packet
+| Date          | Description                                          |
+| ------------- | ---------------------------------------------------- |
+| Nov 10, 2021  | Initial draft adapted from ICS 20 spec               |
+| Nov 17, 2021  | Revisions to better accommodate smart contracts      |
+| Nov 17, 2021  | Renamed from ICS 21 to ICS 721                       |
+| Nov 18, 2021  | Revisions to allow for multiple tokens in one packet |
+| Feb 10, 2022  | Revisions to incorporate feedbacks from IBC team     |
 
 ## Copyright
 
