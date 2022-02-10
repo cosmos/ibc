@@ -26,7 +26,7 @@ Before describing the data structures and sub-protocols of the CCV protocol, we 
 
 - CCV is an **ABCI application module**, which means it MUST implement the logic to handle some of the messages received from the consensus engine via ABCI, e.g., `InitChain`, `EndBlock` 
   (for more details, take a look at the [ABCI documentation](https://docs.tendermint.com/v0.34/spec/abci/abci.html)). 
-  The following methods handle messages that are of particular interest to the CCV protocol:
+  In this specification we define the following methods that handle messages that are of particular interest to the CCV protocol:
   - `InitGenesis()` -- Called when the chain is first started, on receiving an `InitChain` message from the consensus engine. 
   - `EndBlock()` -- Contains logic that is automatically triggered at the end of each block. 
     This is also where the module can inform the underlying consensus engine of changes in the validator set.
@@ -164,7 +164,8 @@ The provider CCV module handles governance proposals to spawn new consumer chain
     // validator node.
     spawnTime: Timestamp
 
-    // the hash of the genesis state for the consumer chain
+    // the hash of the genesis state for the consumer chain; 
+    // the full genesis state MAY be disseminated off-chain
     genesisHash: [byte]
   }
   ```
@@ -265,8 +266,6 @@ This section describes the internal state of the CCV module. For simplicity, the
   ```
  
 ## Sub-protocols
-
-> TODO: What about `EmitEvent()`? There are some events emitted throughout the code, but none of them are specified. 
 
 To express the error conditions, the following specification of the sub-protocols uses the exception system of the host state machine, which is exposed through two functions (as defined in [ICS 24](../../core/ics-024-host-requirements)): `abortTransactionUnless` and `abortSystemUnless`.
 
@@ -405,6 +404,10 @@ function onChanOpenTry(
     // - require the version to be the expected version
     abortTransactionUnless(version == "1")
 
+    // assert that the counterpartyPortIdentifier matches 
+    // the expected consumer port ID
+    abortTransactionUnless(counterpartyPortIdentifier == ConsumerPortId)
+
     // assert that the counterpartyVersion matches the local version
     abortTransactionUnless(counterpartyVersion == version)
 
@@ -434,6 +437,7 @@ function onChanOpenTry(
   - The channel is not ordered.
   - `portIdentifier != ProviderPortId`.
   - `version` is not the expected version.
+  - `counterpartyPortIdentifier != ConsumerPortId`.
   - `counterpartyVersion != version`.
   - The channel is not built on top of the client created for this consumer chain.
   - Another CCV channel for this consumer chain already exists.
@@ -512,7 +516,8 @@ function InitGenesis(state: ConsumerGenesisState) {
   // check whether the capability for the port can be claimed
   abortSystemUnless(err == nil)
 
-  // create client of the provider chain
+  // create client of the provider chain 
+  // using data included in the ConsumerGenesisState
   clientId = clientKeeper.CreateClient(state.providerClientState, state.providerConsensusState)
 
   // store the ID of the client of the provider chain
@@ -555,6 +560,10 @@ function onChanOpenInit(
     // - require the version to be the expected version
     abortTransactionUnless(version == "1")
 
+    // assert that the counterpartyPortIdentifier matches 
+    // the expected consumer port ID
+    abortTransactionUnless(counterpartyPortIdentifier == ProviderPortId)
+
     // set the CCV channel status to INITIALIZING
     channelStatus[channelIdentifier] = INITIALIZING
    
@@ -574,6 +583,7 @@ function onChanOpenInit(
   - `providerChannel` is already set.
   - `portIdentifier != ConsumerPortId`.
   - `version` is not the expected version.
+  - `counterpartyPortIdentifier != ProviderPortId`.
   - The client associated with this channel is not the expected provider client.
 
 <!-- omit in toc -->
@@ -684,7 +694,7 @@ function onChanCloseInit(
 function onChanCloseConfirm(
   portIdentifier: Identifier,
   channelIdentifier: Identifier) {
-    // do nothing
+    abortTransactionUnless(FALSE)
 }
 ```
 - Initiator:
@@ -694,7 +704,7 @@ function onChanCloseConfirm(
 - Expected postcondition: 
   - The state is not changed.
 - Error condition:
-  - None.
+  - Invoked on the provider chain.
 
 ---
 
@@ -731,7 +741,7 @@ function onChanCloseInit(
 function onChanCloseConfirm(
   portIdentifier: Identifier,
   channelIdentifier: Identifier) {
-    // do nothing
+    abortTransactionUnless(FALSE)
 }
 ```
 - Initiator:
@@ -741,7 +751,7 @@ function onChanCloseConfirm(
 - Expected postcondition: 
   - The state is not changed.
 - Error condition:
-  - None.
+  - Invoked on the consumer chain.
 
 ### Packet Relay
 [&uparrow; Back to Outline](#outline)
