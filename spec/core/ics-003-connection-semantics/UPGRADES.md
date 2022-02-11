@@ -210,7 +210,9 @@ function connUpgradeTry(
     restoreConnectionUnless(currentConnection.IsEqual(proposedUpgrade.connection))
 
     // either timeout height or timestamp must be non-zero
-    abortTransactionUnless(proposedUpgrade.TimeoutHeight != 0 || proposedUpgrade.TimeoutTimestamp != 0)
+    // if the upgrade feature is implemented on the TRY chain, then a relayer may submit a TRY transaction after the timeout.
+    // this will restore the connection on the executing chain and allow counterparty to use the CancelUpgradeMsg to restore their connection.
+    restoreTransactionUnless(proposedUpgrade.TimeoutHeight != 0 || proposedUpgrade.TimeoutTimestamp != 0)
 
     // verify proofs of counterparty state
     abortTransactionUnless(currentConnection.client.verifyConnectionState(proofHeight, proofConnection, counterpartyConnection))
@@ -365,7 +367,7 @@ function cancelConnectionUpgrade(
 
 ### Timeout Upgrade Process
 
-It is possible for the connection upgrade process to timeout on TRY. This may be because of a liveness issue, or because the UPGRADE_TRY transaction simply cannot pass on the counterparty; for example, the upgrade feature may not be enabled on the counterparty chain.
+It is possible for the connection upgrade process to stall indefinitely on UPGRADE_TRY if the UPGRADE_TRY transaction simply cannot pass on the counterparty; for example, the upgrade feature may not be enabled on the counterparty chain.
 
 In this case, we do not want the initializing chain to be stuck indefinitely in the `UPGRADE_INIT` step. Thus, the `UpgradeInit` message will contain a `TimeoutHeight` and `TimeoutTimestamp`. The counterparty chain is expected to reject `UpgradeTry` message if the specified timeout has already elapsed.
 
@@ -399,3 +401,7 @@ function timeoutConnectionUpgrade(
 ```
 
 Note that the timeout logic only applies to the INIT step. This is to protect an upgrading chain from being stuck in a non-OPEN state if the counterparty cannot execute the TRY successfully. Once the TRY step succeeds, then both sides are guaranteed to have the upgrade feature enabled. Liveness is no longer an issue, because we can wait until liveness is restored to execute the ACK step which will move the connection definitely into an OPEN state (either a successful upgrade or a rollback).
+
+### Migrations
+
+A chain may have to update its internal state to be consistent with the new upgraded connection. In this case, a migration handler should be a part of the chain binary before the upgrade process so that the chain can properly migrate its state once the upgrade is successful. If a migration handler is necessary for a given upgrade but is not available, then th executing chain must reject the upgrade so as not to enter into an invalid state. This state migration will not be verified by the counterparty since it will just assume that if the connection is upgraded to a particular connection version, then the auxilliary state on the counterparty will also be updated to match the specification for the given connection version. The migration must only run once the upgrade has successfully completed and the new connection is `OPEN` (ie. on `ACK` and `CONFIRM`).
