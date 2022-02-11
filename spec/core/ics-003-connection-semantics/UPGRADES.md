@@ -190,7 +190,7 @@ function connUpgradeTry(
 ) {
     // current connection must be OPEN or UPGRADE_INIT (crossing hellos)
     currentConnection = provableStore.get(connectionPath(identifier))
-    abortTransactionUnless(connection.state == (OPEN || UPGRADE_INIT))
+    abortTransactionUnless(currentConnection.state == OPEN || currentConnection.state == UPGRADE_INIT)
 
     // abort transaction if an unmodifiable field is modified
     // upgraded connection state must be in `UPGRADE_TRY`
@@ -201,6 +201,13 @@ function connUpgradeTry(
         proposedUpgrade.connection.clientIdentifier == currentConnection.clientIdentifier &&
         proposedUpgrade.connection.counterpartyClientIdentifier == currentConnection.counterpartyClientIdentifier &&
     )
+
+    // if there is a crossing hello, ie an UpgradeInit has been called on both connectionEnds,
+    // then we must ensure that the proposedUpgrade by the counterparty is the same as the currentConnection
+    // except for the connection state (upgrade connection will be in UPGRADE_TRY and current connection will be in UPGRADE_INIT)
+    // if the proposed upgrades on either side are incompatible, then we will restore the connection and cancel the upgrade.
+    currentConnection.state = UPGRADE_TRY
+    restoreConnectionUnless(currentConnection.IsEqual(proposedUpgrade.connection))
 
     // either timeout height or timestamp must be non-zero
     abortTransactionUnless(proposedUpgrade.TimeoutHeight != 0 || proposedUpgrade.TimeoutTimestamp != 0)
@@ -256,10 +263,9 @@ function onChanUpgradeAck(
     proofUpgradeStatus: CommitmentProof,
     proofHeight: Height
 ) {
-    // current connection is in UPGRADE_INIT
+    // current connection is in UPGRADE_INIT or UPGRADE_TRY (crossing hellos)
     currentConnection = provableStore.get(connectionPath(identifier))
-    abortTransactionUnless(connection.state == UPGRADE_INIT)
-
+    abortTransactionUnless(currentConnection.state == UPGRADE_INIT || currentConnection.state == UPGRADE_TRY)
 
     // verify proofs of counterparty state
     abortTransactionUnless(currentConnection.client.verifyConnectionState(proofHeight, proofConnection, counterpartyConnection))
