@@ -9,7 +9,8 @@ This roadmap reflects the major activities that the [standards committee](STANDA
 ## Q1 - 2022
 
 - Update the Interchain Accounts ([ICS27](https://github.com/cosmos/ibc/blob/master/spec/app/ics-027-interchain-accounts/README.md)) and Relayer Incentivisation ([ICS29](https://github.com/cosmos/ibc/tree/master/spec/app/ics-029-fee-payment)) specifications to align them with the ibc-go implementation.
-- Work on the connection upgradability and channel upgredability specs.
+- Work on the connection upgradability and channel upgradability specs.
 - Work on spec for ordered channels that are allowed to timeout.
-- Work on spec to allow timeouts on ordered channels that don't have proof of absence.
+- Work on spec to support timeouts without proof of absence.
+- Finalize a complete draft of ICS28 (Cross-chain validation) that is aligned with the implementation of Interchain Security V1.
 - Review [IRISnet](https://www.irisnet.org)'s [ICS721](https://github.com/cosmos/ibc/pull/615) specification proposal for NFT transfers.
