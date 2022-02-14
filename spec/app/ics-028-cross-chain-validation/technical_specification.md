@@ -28,8 +28,9 @@ Before describing the data structures and sub-protocols of the CCV protocol, we 
   (for more details, take a look at the [ABCI documentation](https://docs.tendermint.com/v0.34/spec/abci/abci.html)). 
   In this specification we define the following methods that handle messages that are of particular interest to the CCV protocol:
   - `InitGenesis()` -- Called when the chain is first started, on receiving an `InitChain` message from the consensus engine. 
+    This is also where the application can inform the underlying consensus engine of the initial validator set.
   - `EndBlock()` -- Contains logic that is automatically triggered at the end of each block. 
-    This is also where the module can inform the underlying consensus engine of changes in the validator set.
+    This is also where the application can inform the underlying consensus engine of changes in the validator set.
 
 > TODO: `ExportGenesis()` and handling hard forks. 
 
@@ -139,8 +140,13 @@ The CCV module is initialized through the `InitGenesis` method when the chain is
 - On the consumer chain, the genesis state is described by the following interface:
   ```typescript
   interface ConsumerGenesisState {
-    providerClientState: ClientState
-    providerConsensusState: ConsensusState
+    newChain: Bool // true for new consumer chain, false for chain restart
+    providerClientId: Identifier // empty for a new chain
+    providerChannelId: // empty for a new chain
+    providerClientState: ClientState // nil on restart
+    providerConsensusState: ConsensusState // nil on restart
+    unbondingPackets: [(Packet, Time)] // empty for a new chain
+    initialValSet: [ValidatorUpdate]
   }
   ```
 
@@ -164,8 +170,9 @@ The provider CCV module handles governance proposals to spawn new consumer chain
     // validator node.
     spawnTime: Timestamp
 
-    // the hash of the genesis state for the consumer chain; 
-    // the full genesis state MAY be disseminated off-chain
+    // the hash of the consumer chain pre-CCV genesis state, i.e.,
+    // the genesis state except the consumer CCV module genesis state;  
+    // the pre-CCV genesis state MAY be disseminated off-chain
     genesisHash: [byte]
   }
   ```
@@ -248,7 +255,8 @@ This section describes the internal state of the CCV module. For simplicity, the
 - `providerChannel: Identifier` identifies the consumer's channel end of the CCV channel.
 - `channelStatus: ChannelStatus` is the status of the CCV channel.
 - `pendingChanges: [ValidatorUpdate]` is a list of `ValidatorUpdate`s received, but not yet applied to the validator set. It is emptied on every `EndBlock()`. 
-- `unbondingPackets: [(Packet, Time)]>` is a list of `(packet, unbondingTime)` tuples, where `packet` is a received `VSCPacket` and `unbondingTime` is the packet's unbonding time. The list is used to keep track of when unbonding operations are matured on the consumer chain. It exposes the following interface:
+- `unbondingPackets: [(Packet, Time)]` is a list of `(packet, unbondingTime)` tuples, where `packet` is a received `VSCPacket` and `unbondingTime` is the packet's unbonding time. 
+  The list is used to keep track of when unbonding operations are matured on the consumer chain. It exposes the following interface:
   ```typescript
   interface [(Packet, Time)]> {
     // add a packet with its unbonding time to the list;
@@ -279,7 +287,7 @@ The *initialization* sub-protocol enables a provider chain and a consumer chain 
 ```typescript
 // PCF: Provider Chain Function
 // implements the AppModule interface
-function InitGenesis(state: ProviderGenesisState) {
+function InitGenesis(state: ProviderGenesisState): [ValidatorUpdate] {
   // bind to ProviderPortId port 
   err = portKeeper.BindPort(ProviderPortId)
   // check whether the capability for the port can be claimed
@@ -290,6 +298,9 @@ function InitGenesis(state: ProviderGenesisState) {
     channelToChain[cs.channelId] = cc.chainId
     channelStatus[cs.channelId] = cc.status
   }
+
+  // do not return anything to the consensus engine 
+  return []
 }
 ```
 - Initiator:
@@ -510,18 +521,72 @@ function onChanOpenConfirm(
 ```typescript
 // CCF: Consumer Chain Function
 // implements the AppModule interface
-function InitGenesis(state: ConsumerGenesisState) {
+function InitGenesis(gs: ConsumerGenesisState): [ValidatorUpdate] {
+  // ValidateGenesis
+  abortSystemUnless(gs.initialValSet NOT empty)
+  if gs.newChain {
+    // for new consumer chains, the genesis state 
+    // - contains a valid providerClientState  
+    abortSystemUnless(gs.providerClientState != nil)
+    abortSystemUnless(gs.providerClientState.Valid() == true)
+    // - contains a valid providerConsensusState
+    abortSystemUnless(gs.providerConsensusState != nil)
+    abortSystemUnless(gs.providerConsensusState.Valid() == true)
+    // - has the providerClientId unspecified
+    abortSystemUnless(gs.providerClientId == "")
+    // - has the providerChannelId unspecified
+    abortSystemUnless(gs.providerChannelId == "")
+    // - has the unbondingPackets empty
+    abortSystemUnless(gs.unbondingPackets IS empty)
+    // - contains the initial validator set that matches 
+    //   the validator set in the providerConsensusState (see ICS 7)
+    abortSystemUnless(gs.initialValSet == gs.providerConsensusState.validatorSet)
+  }
+  else {
+    // for restarted consumer chains, the genesis state 
+    // - contains the providerClientId
+    abortSystemUnless(gs.providerClientId != "")
+    // - contains the providerChannelId
+    abortSystemUnless(gs.providerChannelId != "")
+    // - has the providerClientState set to nil
+    abortSystemUnless(gs.providerClientState == nil)
+    // - has the providerConsensusState set to nil
+    abortSystemUnless(gs.providerConsensusState != nil)
+    // - contains only unbonding packets with positive unbonding times
+    foreach (_, unbondingTime) in gs.unbondingPackets {
+      abortSystemUnless(unbondingTime > 0)
+    }
+  } 
+
   // bind to ConsumerPortId port 
   err = portKeeper.BindPort(ConsumerPortId)
   // check whether the capability for the port can be claimed
   abortSystemUnless(err == nil)
 
-  // create client of the provider chain 
-  // using data included in the ConsumerGenesisState
-  clientId = clientKeeper.CreateClient(state.providerClientState, state.providerConsensusState)
+  if gs.newChain {
+    // create client of the provider chain 
+    clientId = clientKeeper.CreateClient(gs.providerClientState, gs.providerConsensusState)
 
-  // store the ID of the client of the provider chain
-  providerClient = clientId
+    // store the ID of the client of the provider chain
+    providerClient = clientId
+  }
+  else {
+    // verify that latest consensus state on provider client 
+    // matches the initial validator set of restarted chain;
+		// thus, IBC genesis MUST run before CCV consumer genesis
+    consensusState = clientKeeper.GetLatestClientConsensusState(gs.providerClientId)
+    abortSystemUnless(consensusState != nil)
+    abortSystemUnless(gs.initialValSet == consensusState.validatorSet)
+
+    providerClient = gs.providerClientId
+    providerChannel = gs.providerChannelId
+
+    foreach (packet, unbondingTime) in gs.unbondingPackets {
+      unbondingPackets.Add(packet, unbondingTime)
+    }
+  }
+
+  return gs.initialValSet
 }
 ```
 - Initiator:
@@ -530,11 +595,30 @@ function InitGenesis(state: ConsumerGenesisState) {
   - An `InitChain` message is received from the consensus engine; the `InitChain` message is sent when the consumer chain is first started. 
 - Expected postcondition:
   - The capability for the port `ConsumerPortId` is claimed.
-  - A client of the provider chain is created and the client ID is stored into `providerClient`.
+  - If this is a new consumer chain,
+    - a client of the provider chain is created and the client ID is stored into `providerClient`.
+  - Otherwise (i.e., a restarted consumer chain),
+    - both the provider client ID and channel ID are stored;
+    - each unbonding packet is added to the `unbondingPackets` list together with its unbonding time.  
+  - The initial validator set is returned to the consensus engine.
 - Error condition:
+  - The genesis state contains an empty initial validator set.
+  - If this is a new consumer chain,
+    - the genesis state contains no valid provider client state, where the validity is defined as in [ICS 7](../../client/ics-007-tendermint-client);
+    - the genesis state contains no valid provider consensus state, where the validity is defined as in [ICS 7](../../client/ics-007-tendermint-client);
+    - the genesis state contains either a provider client ID or channel ID;
+    - the genesis state contains a non-empty list of unbonding packets;
+    - the genesis state contains an initial validator set that does not match the validator set in the provider consensus state.
+  - Otherwise (i.e., a restarted consumer chain),
+    - the genesis state contains either no provider client ID or no provider channel ID;
+    - the genesis state contains either a non-nil provider client state or a non-nil provider consensus state;
+    - the genesis state contains at least one unbonding packet with non-positive unbonding time;
+    - there is no latest consensus state for the client with ID `gs.providerClientId` or the validator set of this consensus state does not match the initial validator set contained in the genesis state.
   - The capability for the port `ConsumerPortId` cannot be claimed.
 
-> **Note**: CCV assumes that `ConsumerGenesisState` is disseminated to all validators. To ensure that validators receive the correct genesis state, the governance proposal also contains a hash of the `ConsumerGenesisState` (see `CreateConsumerChainProposal`). 
+> **Note**: CCV assumes that the genesis state of the consumer chain is disseminated to all the validators in the initial validator set of the consumer chain. To ensure that validators receive the correct genesis state, the governance proposal (see `CreateConsumerChainProposal`) also contains a hash of the genesis state without the `ConsumerGenesisState`. The `ConsumerGenesisState` is queried by each validator from the provider chain. 
+
+> **Note**: In the case of a restarted consumer chain, the `InitGenesis` of the IBC module MUST run before the `InitGenesis` of the consumer CCV module.
 
 <!-- omit in toc -->
 #### **[CCV-CCF-COINIT.1]**

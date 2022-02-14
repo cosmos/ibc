@@ -3,8 +3,7 @@ ics: 28
 title: Cross-Chain Validation
 stage: draft
 category: IBC/APP
-requires: 25, 26
-kind: 
+requires: 25, 26, 7
 author: 
 created: 
 modified: 
