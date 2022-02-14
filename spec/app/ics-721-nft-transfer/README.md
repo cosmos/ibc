@@ -7,7 +7,7 @@ requires: 25, 26
 kind: instantiation
 author: Haifeng Xi <haifeng@bianjie.ai>
 created: 2021-11-10
-modified: 2022-02-10
+modified: 2022-02-14
 ---
 
 > This standard document follows the same design principles of [ICS 20](../ics-020-fungible-token-transfer) and inherits most of its content therefrom, while replacing `bank` module based asset tracking logic with that of the `nft` module.
@@ -35,7 +35,7 @@ The IBC handler interface & IBC routing module interface are as defined in [ICS 
 
 ### Data Structures
 
-Only one packet data type is required: `NonFungibleTokenPacketData`, which specifies the class id, class uri, token id's, token uri's, sending account, and receiving account.
+Only one packet data type is required: `NonFungibleTokenPacketData`, which specifies the class id, class uri, token id's, token uri's, sender address, and receiver address.
 
 ```typescript
 interface NonFungibleTokenPacketData {
@@ -57,7 +57,7 @@ Each `tokenId` has a corresponding entry in `tokenUris`, which refers to an off-
 
 As tokens are sent across chains using the ICS 721 protocol, they begin to accrue a record of channels for which they have been transferred across. This information is encoded into the `classId` field.
 
-The ics721 token classes are represented in the form `{ics721Port}/{ics721Channel}/{classId}`, where `ics721Port` and `ics721Channel` identifiy the channel on the current chain from which the token arrived. The prefixed port and channel pair indicate which channel the token was previously sent through. If `{classId}` contains `/`, then it must also be in the ics721 form which indicates that this token has a multi-hop record. Note that this requires that the `/` (slash character) is prohibited in non-IBC token `classId`s.
+The ics721 token classes are represented in the form `{ics721Port}/{ics721Channel}/{classId}`, where `ics721Port` and `ics721Channel` identify the channel on the current chain from which the token arrived. The prefixed port and channel pair indicate which channel the token was previously sent through. If `{classId}` contains `/`, then it must also be in the ics721 form which indicates that this token has a multi-hop record. Note that this requires that the `/` (slash character) is prohibited in non-IBC token `classId`s.
 
 A sending chain may be acting as a source or sink zone. When a chain is sending tokens across a port and channel which are not equal to the last prefixed port and channel pair, it is acting as a source zone. When tokens are sent from a source zone, the destination port and channel will be prefixed onto the `classId` (once the tokens are received) adding another hop to a tokens record. When a chain is sending tokens across a port and channel which are equal to the last prefixed port and channel pair, it is acting as a sink zone. When tokens are sent from a sink zone, the last prefixed port and channel pair on the `classId` is removed (once the tokens are received), undoing the last hop in the tokens record. A more complete explanation is present in the [ibc-go implementation]() (TBD).
 
@@ -186,7 +186,8 @@ function onChanOpenConfirm(
 function onChanCloseInit(
   portIdentifier: Identifier,
   channelIdentifier: Identifier) {
-  // no action necessary
+  // abort and return error to prevent channel closing by user
+  abortTransaction
 }
 ```
 
@@ -200,11 +201,9 @@ function onChanCloseConfirm(
 
 ##### Packet relay
 
-In plain English:
-
 - When a non-fungible token is sent away from its source, the bridge module escrows the token on the sending chain and mints a corresponding voucher on the receiving chain.
 - When a non-fungible token is sent back toward its source, the bridge module burns the token on the sending chain and unescrows the corresponding locked token on the receiving chain.
-- When a packet times out, tokens represented in the packet are either unescrowed or minted back to the sender appropriately -- depending on whether the tokens are being moved away from or back to their source.
+- When a packet times out, tokens represented in the packet are either unescrowed or minted back to the sender appropriately -- depending on whether the tokens are being moved away from or back toward their source.
 - Acknowledgement data is used to handle failures, such as invalid destination accounts. Returning an acknowledgement of failure is preferable to aborting the transaction since it more easily enables the sending chain to take appropriate action based on the nature of the failure.
 
 `createOutgoingPacket` must be called by a transaction handler in the module which performs appropriate signature checks, specific to the account owner on the host state machine.
@@ -379,6 +378,7 @@ Coming soon.
 | Nov 17, 2021  | Renamed from ICS 21 to ICS 721                       |
 | Nov 18, 2021  | Revisions to allow for multiple tokens in one packet |
 | Feb 10, 2022  | Revisions to incorporate feedbacks from IBC team     |
+| Feb 14, 2022  | Revisions to resolve comments from IBC team          |
 
 ## Copyright
 
