@@ -10,6 +10,7 @@
   - [Channel Initialization](#channel-initialization)
   - [Validator Set Update](#validator-set-update)
     - [Completion of Unbonding Operations](#completion-of-unbonding-operations)
+  - [Consumer Initiated Slashing](#consumer-initiated-slashing)
 
 
 
@@ -115,6 +116,7 @@ CCV must handle the following types of operations:
 - **Validator Set Update**: It is a two-part operation, i.e., 
   - update the validator sets of all the consumer chains based on the information obtained from the *provider Staking module* (i.e., the Staking module on the provider chain) on the amount of tokens bonded by validators on the provider chain;
   - and enable the timely completion (cf. the unbonding periods on the consumer chains) of unbonding operations (i.e., operations of unbonding bonded tokens).
+- **Consumer Initiated Slashing**: Enable the provider chain to slash and jail bonded validators that misbehaved while validating on the consumer chain. 
 
 ## Channel Initialization
 [&uparrow; Back to Outline](#outline)
@@ -205,3 +207,35 @@ This approach is depicted in the following Figure that shows an overview of the 
   The unbonding operation is completed later once the provider CCV module registered maturity notifications for `VSC2` from all consumer chains.
 
 ![Completion of Unbonding Operations](./figures/ccv-unbonding-overview.png?raw=true)
+
+## Consumer Initiated Slashing
+[&uparrow; Back to Outline](#outline)
+
+For the [Security Model](#security-model) to be preserved, misbehaving validators MUST be slashed (and MAY be jailed, i.e., removed from the validator set). 
+A prerequisite to slash validators is to receive valid evidence of their misbehavior. 
+Thus, when slashing a validator, we distinguish between three time instances:
+- `infractionTime`, the time the misbehavior (or infraction) happened;
+- `evidenceTime`, the time the evidence of misbehavior is received;
+- `slashingTime`, the time the validator is slashed (and jailed). 
+
+> **Note**: In the context of single-chain validation, usually `evidenceTime = slashingTime`. 
+
+The [Security Model](#security-model) guarantees that any misbehaving validator can be slashed for at least the unbonding period, 
+i.e., as long as that validator's tokens are not unbonded yet, they can be slashed. 
+However, if the tokens start unbonding before `infractionTime`, i.e., the tokens did not contribute to the voting power that committed the infraction, 
+then the tokens MUST NOT be slashed.
+
+In the context of CCV, validators (with tokens bonded on the provider chain) MUST be slashed for misbehaviors on the consumer chains. 
+Thus, although the misbehaviors happen on the consumer chains and evidence of these misbehavior is submitted to the consumer chains, the slashing happens on the provider chain. 
+As a result, the Consumer Initiated Slashing operation requires, for every consumer chain, a mapping between time instances on the provider chain and on the consumer chain. 
+This entails a mapping between provider chain block heights and consumer chain block heights. 
+The following Figure shows an overview of how CCV creates such a mapping using VSC ids.
+
+![Mapping Between Provider and Consumer Heights](./figures/ccv-height-mapping-overview.png?raw=true)
+
+- For every block, the provider CCV module maps the block height to the id of the VSC it provides to the consumer chain.
+- For every block, the consumer CCV module maps the block height to the id of the latest received VSC.
+
+> **Note**: It is possible for multiple VSCs to be received by the consumer chain within the same block. For more details, take a look at the [Validator sets, validator updates and VSCs](./system_model_and_properties.md#validator-sets-validator-updates-and-vscs) section. 
+
+The following Figure shows an overview of the Consumer Initiated Slashing operation of CCV. 

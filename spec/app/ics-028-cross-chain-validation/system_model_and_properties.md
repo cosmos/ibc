@@ -115,7 +115,7 @@ However, in general this need not be the case. The reason is twofold:
   (i.e., we consider the sequences of blocks of any two chains to be completely asynchronous); 
 - and second, due to relaying delays, we cannot assume that the rate of sending VSCs matches the rate of receiving VSCs.
 
-As a result, is it possible for multiple VSCs to be received by a consumer chain within the same block and be applied together at the end of the block, 
+As a result, it is possible for multiple VSCs to be received by a consumer chain within the same block and be applied together at the end of the block, 
 i.e., the validator updates within the VSCs are being *aggregated* by keeping only the latest update per validator. 
 As a consequence, some validator sets on the provider chain are not existing on all consumer chains. 
 In other words, the validator sets on each consumer chain form a *subsequence* of the validator sets on the provider chain. 
