@@ -136,9 +136,7 @@ The channel initialization consists of four phases:
   both are contained in the `GenesisState` of the consumer CCV module.
   The `GenesisState` is distributed to all operators that need to start a full node of the consumer chain 
   (the mechanism of distributing the `GenesisState` is outside the scope of this specification).
-  > Note that although the mechanism of distributing the `GenesisState` is outside the scope of this specification, 
-  a possible approach would entail the creator of the proposal to spawn the new consumer chain to distribute the `GenesisState` via the gossip network 
-  and to add the hash of `GenesisState` in the proposal. 
+  > Note that although the mechanism of distributing the `GenesisState` is outside the scope of this specification, a possible approach is described in the [technical specification](./technical_specification.md#ccv-ccf-initg1).
   >  
   > Note that at genesis, the validator set of the consumer chain matches the validator set of the provider chain.
 - **Connection handshake**: A relayer (as defined in [ICS 18](../../relayer/ics-018-relayer-algorithms)) is responsible for initiating the connection handshake (as defined in [ICS 3](../../core/ics-003-connection-semantics)). 

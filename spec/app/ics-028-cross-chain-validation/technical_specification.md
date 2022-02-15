@@ -616,7 +616,13 @@ function InitGenesis(gs: ConsumerGenesisState): [ValidatorUpdate] {
     - there is no latest consensus state for the client with ID `gs.providerClientId` or the validator set of this consensus state does not match the initial validator set contained in the genesis state.
   - The capability for the port `ConsumerPortId` cannot be claimed.
 
-> **Note**: CCV assumes that the genesis state of the consumer chain is disseminated to all the validators in the initial validator set of the consumer chain. To ensure that validators receive the correct genesis state, the governance proposal (see `CreateConsumerChainProposal`) also contains a hash of the genesis state without the `ConsumerGenesisState`. The `ConsumerGenesisState` is queried by each validator from the provider chain. 
+> **Note**: CCV assumes that the _same_ consumer chain genesis state is disseminated to all the correct validators in the initial validator set of the consumer chain. 
+> Although the mechanism of disseminating the genesis state is outside the scope of this specification, a possible approach would entail the following steps:
+> - the process `P` creating a governance proposal `Prop` to spawn the new consumer chain creates the genesis state `S` of the entire consumer ABCI application without the genesis state of the consumer CCV module, i.e., without `ConsumerGenesisState`; 
+> - `P` adds a hash of `S` to the proposal `Prop` (see `CreateConsumerChainProposal`);
+> - `P` disseminates `S` via the gossip network;
+> - when handling `Prop`, the provider chain creates and store in its state the `ConsumerGenesisState` using the information that the validator set of the consumer chain matches the validator set of the provider chain;
+> - finally, each validator in the initial validator set of the consumer chain obtains the remainder of the genesis state (i.e., `ConsumerGenesisState`) by querying the provider chain.
 
 > **Note**: In the case of a restarted consumer chain, the `InitGenesis` of the IBC module MUST run before the `InitGenesis` of the consumer CCV module.
 
