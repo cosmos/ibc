@@ -121,7 +121,7 @@ CCV must handle the following types of operations:
 ## Channel Initialization
 [&uparrow; Back to Outline](#outline)
 
-The following Figure shows an overview of the CCV Channel initialization. 
+The following figure shows an overview of the CCV Channel initialization. 
 
 ![Channel Initialization Overview](./figures/ccv-init-overview.png?raw=true)
 
@@ -168,7 +168,7 @@ In the context of VSCs, the CCV module enables the following functionalities:
     - **apply** the VSCs provided by the provider chain to the validator set of the consumer chain; 
     - **notify** the provider chain that the provided VSCs have matured on this consumer chain.
 
-These functionalities are depicted in the following Figure that shows an overview of the Validator Set Update operation of CCV. 
+These functionalities are depicted in the following figure that shows an overview of the Validator Set Update operation of CCV. 
 For a more detailed description of Validator Set Update, take a look at the [technical specification](./technical_specification.md#validator-set-update).
 
 ![Validator Set Update Overview](./figures/ccv-vsc-overview.png?raw=true)
@@ -191,7 +191,7 @@ The ***provider chain*** achieves this through the following approach:
 - When the CCV module registers maturity notifications for a VSC from all consumer chains, it notifies the provider Staking module of the maturity of all unbonding operations mapped to this VSC. 
   This enables the provider Staking module to complete the unbonding operations only when they reach maturity on both the provider chain and on all the consumer chains.
 
-This approach is depicted in the following Figure that shows an overview of the interface between the provider CCV module and the provider Staking module in the context of the Validator Set Update operation of CCV: 
+This approach is depicted in the following figure that shows an overview of the interface between the provider CCV module and the provider Staking module in the context of the Validator Set Update operation of CCV: 
 - In `Block 1`, two unbonding operations are initiated (i.e., `undelegate-1` and `redelegate-1`) in the provider Staking module. 
   For each operation, the provider Staking module notifies the provider CCV module. 
   As a result, the provider CCV module maps these to operation to `vscId`, which is the ID of the following VSC (i.e., `VSC1`). 
@@ -226,16 +226,33 @@ However, if the tokens start unbonding before `infractionTime`, i.e., the tokens
 then the tokens MUST NOT be slashed.
 
 In the context of CCV, validators (with tokens bonded on the provider chain) MUST be slashed for misbehaviors on the consumer chains. 
-Thus, although the misbehaviors happen on the consumer chains and evidence of these misbehavior is submitted to the consumer chains, the slashing happens on the provider chain. 
+Thus, although the misbehaviors happen on the consumer chains and evidence of these misbehaviors is submitted to the consumer chains, the slashing happens on the provider chain. 
 As a result, the Consumer Initiated Slashing operation requires, for every consumer chain, a mapping between time instances on the provider chain and on the consumer chain. 
 This entails a mapping between provider chain block heights and consumer chain block heights. 
-The following Figure shows an overview of how CCV creates such a mapping using VSC ids.
+The following figure shows an overview of how CCV creates such a mapping using VSC ids.
+For clarity, we use `Hp*` and `Hc*` to denote block heights on the provider chain and consumer chain, respectively. 
 
 ![Mapping Between Provider and Consumer Heights](./figures/ccv-height-mapping-overview.png?raw=true)
 
-- For every block, the provider CCV module maps the block height to the id of the VSC it provides to the consumer chain.
-- For every block, the consumer CCV module maps the block height to the id of the latest received VSC.
+- For every block, the provider CCV module maps the id of the VSC it provides to the consumer chains to the height of the subsequent block, i.e., `H(VSC.id) = Hp + 1`, for a VSC provided at height `Hp`. 
+  Intuitively, this means that the validator updates in a provided VSC will update the voting power at height `H(VSC.id)`.
+- For every block, every consumer CCV module maps the height of the subsequent block to the id of the latest received VSC, e.g., `vscId(Hc2 + 1) = VSC1.id`. 
+  Intuitively, this means that the voting power on the consumer chain during a block `Hc` was updated by the VSC with id `vscId(Hc)`.
+  > **Note**: It is possible for multiple VSCs to be received by the consumer chain within the same block. For more details, take a look at the [Validator sets, validator updates and VSCs](./system_model_and_properties.md#validator-sets-validator-updates-and-vscs) section.
+- By default, every consumer CCV module maps any block height to `0` (i.e., VSC ids start from `1`). 
+  Intuitively, this means that the voting power on the consumer chain at height `Hc` with `vscId(Hc) = 0` was setup at genesis during Channel Initialization. 
+- For every consumer chain, the provider CCV module sets `H(0)` to the height at which the first VSC was provided to that consumer chain. 
+  Intuitively, this means that the validator set on the provider chain at height `H(0)` matches the validator set on the consumer chain at all heights `Hc` with `vscId(Hc) = 0`.
 
-> **Note**: It is possible for multiple VSCs to be received by the consumer chain within the same block. For more details, take a look at the [Validator sets, validator updates and VSCs](./system_model_and_properties.md#validator-sets-validator-updates-and-vscs) section. 
+The following figure shows an overview of the Consumer Initiated Slashing operation of CCV. 
 
-The following Figure shows an overview of the Consumer Initiated Slashing operation of CCV. 
+![Consumer Initiated Slashing](./figures/ccv-evidence-overview.png?raw=true)
+
+- At height `Hc2`, the consumer chain receives evidence that a validator `V` misbehaved at height `Hc1`. 
+  As a result, the consumer CCV module sends a `SlashPacket` to the provider chain:  
+  It requests the validator to be slashed, but it replaces `Hc1` with `vscId(Hc1)`, 
+  i.e., the id of the VSC that updated the "misbehaving voting power".
+- The provider CCV module receives the `SlashPacket` in block `Hp1`. 
+  As a result, it requests the provider Staking module to slash `V` for its misbehavior at height `H(vscId(Hc1))`,
+  i.e., the height on the provider chain where the voting power was updated by the VSC with id `vscId(Hc1)`.
+  > **Note**: The provider CCV module MAY also request the provider Staking module to jail `V`. As a result, in the subsequent provided VSC, `V`'s voting power is updated to zero. 
