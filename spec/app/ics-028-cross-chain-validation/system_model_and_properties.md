@@ -80,24 +80,32 @@ First, we define the properties for the CCV channels. Then, we define the guaran
 - ***Channel Order***: If a packet `P1` is sent over a CCV channel before a packet `P2`, then `P2` MUST NOT be received by the other end of the channel before `P1`. 
 - ***Channel Liveness***: Every packet sent over a CCV channel MUST eventually be received by the other end of the channel. 
 
-CCV provides the following system invariants:
-- ***Validator Set Invariant***: Every validator set on any consumer chain MUST either be or have been a validator set on the provider chain.
-- ***Voting Power Invariant***: Let
-  - `pBonded(t,val)` be the number of tokens bonded by validator `val` on the provider chain at time `t`; 
-    note that `pBonded(t,val)` includes also unbonding tokens (i.e., tokens in the process of being unbonded);
-  - `VP(T)` be the voting power associated to a number `T` of tokens;
-  - `Power(cc,t,val)` be the voting power granted to a validator `val` on a consumer chain `cc` at time `t`.  
-  
-  Then, for all times `t` and `s`, all consumer chains `cc`, and all validators `val`,  
+CCV provides the following system invariants. For clarity, we use the following notations:
+- `pBonded(t,val)` is the number of tokens bonded by validator `val` on the provider chain at time `t`; 
+  note that `pBonded(t,val)` includes also unbonding tokens (i.e., tokens in the process of being unbonded);
+- `VP(T)` is the voting power associated to a number `T` of tokens;
+- `Power(cc,t,val)` is the voting power granted to a validator `val` on a consumer chain `cc` at time `t`;
+- `Token(power)` is the amount of tokens necessary to be bonded (on the provider chain) by a validator to be granted `power` voting power, 
+  i.e., `Token(VP(T)) = T`.
+
+***Validator Set Invariant***: Every validator set on any consumer chain MUST either be or have been a validator set on the provider chain.
+
+***Voting Power Invariant***: For all times `t` and `s`, all consumer chains `cc`, and all validators `val`,  
   ```
   t <= s <= t + UnbondingPeriod: Power(cc,t,val) <= VP(pBonded(s,val))
   ```
-
   > **Intuition**: 
   > - The *Voting Power Invariant* ensures that validators that validate on the consumer chain have enough tokens bonded on the provider chain for a sufficient amount of time such that the security model holds. 
   > This means that if the validators misbehave on the consumer chain, their tokens bonded on the provider chain can be slashed during the unbonding period.
   > For example, if one unit of voting power requires `1.000.000` bonded tokens (i.e., `VP(1.000.000)=1`), 
   > then a validator that gets one unit of voting power on the consumer chain must have at least `1.000.000` tokens bonded on the provider chain for at least `UnbondingPeriod`.
+
+***Slashing Invariant***: If a validator `val` misbehaves on a chain `c` at a time `t`, then any evidence of misbehavior that is received by `c` at time `t'`, such that `t' < t + UnbondingPeriod`, MUST results in *exactly* the amount of tokens `Token(Power(c,t,val))` to be slashed on the provider chain. 
+  > **Note:** Unlike in single-chain validation, in CCV the tokens `Token(Power(cc,t,val))` MAY be slashed even if the evidence of misbehavior is received at time `t' >= t + UnbondingPeriod`, 
+  since unbonding operations need to reach maturity on both the provider and all the consumer chains.
+  >
+  > **Note:** The *Slash Invariant* ensures also that if a delegator starts unbonding an amount `x` of tokens from `val` before `t`, then `x` will not be slashed, since `x` is not part of `Token(Power(c,t,val))`.
+
 
 Before we define the properties of CCV needed for these invariants to hold, 
 we provide a short discussion on how the validator set, the validator updates, and the VSCs relates in the context of multiple chains. 
