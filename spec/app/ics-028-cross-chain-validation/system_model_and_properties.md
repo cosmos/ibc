@@ -57,8 +57,8 @@ furthermore, the *Correct Relayer* assumption relies on both *Safe Blockchain* a
   > yet, `drift(S,D)` is not known at a chain level. 
   > In practice, choosing `to` such that `to >> drift(S,D)` and `to >> RTmax`, e.g., `to = 4 weeks`, makes the *Correct Relayer* assumption feasible.
 
-- ***Validator Update Provision***: Let `{U1, U2, ..., Ui}` be a batch of validator updates applied (by the provider Staking module) to the validator set of the provider chain at the end of a block `B` with timestamp `t`. 
-  Then, the *first* batch of validator updates obtained (by the provider CCV module) from the provider Staking module at time `t` MUST be exactly the batch `{U1, U2, ..., Ui}`.
+- ***Validator Update Provision***: Let `{U1, U2, ..., Ui}` be a batch of validator updates applied (by the provider Staking module) to the validator set of the provider chain at block height `h`. 
+  Then, the batch of validator updates obtained (by the provider CCV module) from the provider Staking module at height `h` MUST be exactly the batch `{U1, U2, ..., Ui}`.
 
 - ***Unbonding Safety***: Let `uo` be any unbonding operation that starts with an unbonding transaction being executed 
   and completes with the event that returns the corresponding stake; 
@@ -69,14 +69,10 @@ furthermore, the *Correct Relayer* assumption relies on both *Safe Blockchain* a
   - (*unbonding completion*) `uo` MUST NOT complete on the provider chain before the provider chain registers notifications of `vsc(uo)`'s maturity from all consumer chains.
   > **Note**: Depending on the implementation, the (*unbonding initiation*) part of the *Unbonding Safety* MAY NOT be necessary for validator unbonding operations.
 
-- ***Slashing Warranty***: If the provider Staking module receives a request to slash a validator `val` that misbehaved at time `t`, then it slashes the amount of tokens `val` had bonded at time `t` except the amount that has already completely unbonded. 
+- ***Slashing Warranty***: If the provider Staking module receives a request to slash a validator `val` that misbehaved at block height `h`, then it slashes the amount of tokens `val` had bonded at height `h` except the amount that has already completely unbonded. 
 
-- ***Evidence Provision***: If a consumer chain receives a valid evidence of misbehavior in a block `B`, then it MUST submit it to the consumer CCV module in the same block `B`.
+- ***Evidence Provision***: If a consumer chain receives a valid evidence of misbehavior at block height `h`, then it MUST submit it to the consumer CCV module at the same height `h`.
   > **Note**: What constitutes a valid evidence of misbehavior depends on the type of misbehavior and it is outside the scope of this specification.
-
-
-
-
 
 ## Desired Properties
 
@@ -86,31 +82,46 @@ Between the provider chain and each consumer chain, a separate (unique) CCV chan
 ### System Invariants
 [&uparrow; Back to Outline](#outline)
 
-CCV provides the following system invariants. For clarity, we use the following notations:
-- `pBonded(t,val)` is the number of tokens bonded by validator `val` on the provider chain at time `t`; 
-  note that `pBonded(t,val)` includes also unbonding tokens (i.e., tokens in the process of being unbonded);
+We use the following notations:
+- `ts(h)` is the timestamp of a block with height `h`, i.e., `ts(h) = B.currentTimestamp()`, where `B` is the block at height `h`;
+- `pBonded(h,val)` is the number of tokens bonded by validator `val` on the provider chain at block height `h`; 
+  note that `pBonded(h,val)` includes also unbonding tokens (i.e., tokens in the process of being unbonded);
 - `VP(T)` is the voting power associated to a number `T` of tokens;
-- `Power(cc,t,val)` is the voting power granted to a validator `val` on a consumer chain `cc` at time `t`;
+- `Power(cc,h,val)` is the voting power granted to a validator `val` on a consumer chain `cc` at block height `h`;
 - `Token(power)` is the amount of tokens necessary to be bonded (on the provider chain) by a validator to be granted `power` voting power, 
-  i.e., `Token(VP(T)) = T`.
+  i.e., `Token(VP(T)) = T`;
 
-***Validator Set Invariant***: Every validator set on any consumer chain MUST either be or have been a validator set on the provider chain.
+Aslo, we use `ha << hb` to denote an order relation between heights, i.e., the block at height `ha` *happens before* the block at height `hb`. 
+For heights on the same chain, `<<` is equivalent to `<`, i.e., `ha << hb` entails `hb` is the larger than `ha`.
+For heights on two different chains, `<<` is establish by the packets sent over an order channel between two chains, 
+i.e., if a chain `A` sends at height `ha` a packet to `B` and `B` receives it at height `hb`, then `ha << hb`. 
+> **Note**: `<<` is transitive, i.e., `ha << hb` and `hb << hc` entail `ha << hc`.
+> 
+> **Note**: The block on the proposer chain that handles a governance proposal to spawn a new consumer chain `cc` *happens before* all the blocks of `cc`.
 
-***Voting Power Invariant***: For all times `t` and `s`, all consumer chains `cc`, and all validators `val`,  
+CCV provides the following system invariants. 
+- ***Validator Set Invariant***: Every validator set on any consumer chain MUST either be or have been a validator set on the provider chain.
+
+- ***Voting Power Invariant***: Let `val` be a validator, `cc` be a consumer chain, both `hc` and `hc'` be heights on `cc`, and both `hp` and `hp'` be heights on the provider chain, such that
+  - `hc'` is the smallest height on `cc` that satisfies `ts(h') >= ts(hc) + UnbondingPeriod`;
+  - `hp` is the largest height on the provider chain that satisfies `hp << hc`;
+  - `hp'` is the smallest height on the provider chain that satisfies `hc' << hp'`.  
+  
+  Then for all heights `h` on the provider chain, 
+   ```
+  hp <= h <= hp': Power(cc,hc,val) <= VP(pBonded(h,val))
   ```
-  t <= s <= t + UnbondingPeriod: Power(cc,t,val) <= VP(pBonded(s,val))
-  ```
-  > **Intuition**: 
-  > - The *Voting Power Invariant* ensures that validators that validate on the consumer chain have enough tokens bonded on the provider chain for a sufficient amount of time such that the security model holds. 
+
+  > **Intuition**: The *Voting Power Invariant* ensures that validators that validate on the consumer chain have enough tokens bonded on the provider chain for a sufficient amount of time such that the security model holds. 
   > This means that if the validators misbehave on the consumer chain, their tokens bonded on the provider chain can be slashed during the unbonding period.
   > For example, if one unit of voting power requires `1.000.000` bonded tokens (i.e., `VP(1.000.000)=1`), 
   > then a validator that gets one unit of voting power on the consumer chain must have at least `1.000.000` tokens bonded on the provider chain for at least `UnbondingPeriod`.
 
-***Slashing Invariant***: If a validator `val` misbehaves on a consumer chain `cc` at a time `t`, then any evidence of misbehavior that is received by `cc` at time `t'`, such that `t' < t + UnbondingPeriod`, MUST results in *exactly* the amount of tokens `Token(Power(cc,t,val))` to be slashed on the provider chain. 
-  > **Note:** Unlike in single-chain validation, in CCV the tokens `Token(Power(cc,t,val))` MAY be slashed even if the evidence of misbehavior is received at time `t' >= t + UnbondingPeriod`, 
+- ***Slashing Invariant***: If a validator `val` misbehaves on a consumer chain `cc` at a block height `h`, then any evidence of misbehavior that is received by `cc` at height `h'`, such that `ts(h') < ts(h) + UnbondingPeriod`, MUST results in *exactly* the amount of tokens `Token(Power(cc,h,val))` to be slashed on the provider chain. 
+  > **Note:** Unlike in single-chain validation, in CCV the tokens `Token(Power(cc,h,val))` MAY be slashed even if the evidence of misbehavior is received at height `h'` such that `ts(h') >= ts(h) + UnbondingPeriod`, 
   since unbonding operations need to reach maturity on both the provider and all the consumer chains.
   >
-  > **Note:** The *Slash Invariant* ensures also that if a delegator starts unbonding an amount `x` of tokens from `val` before `t`, then `x` will not be slashed, since `x` is not part of `Token(Power(c,t,val))`.
+  > **Note:** The *Slash Invariant* ensures also that if a delegator starts unbonding an amount `x` of tokens from `val` before height `h`, then `x` will not be slashed, since `x` is not part of `Token(Power(c,h,val))`.
 
 ### CCV Channel
 [&uparrow; Back to Outline](#outline)
@@ -143,9 +154,9 @@ Nonetheless, as a **requirement of CCV**, *all the validator updates on the prov
 
 This is possible since every validator update contains *the absolute voting power* of that validator. 
 Given a validator `val`, the sequence of validator updates targeting `val` (i.e., updates of the voting power of `val`) is the prefix sum of the sequence of relative changes of the voting power of `val`. 
-Thus, given a validator update `U` targeting `val` that occurs at at a time `t`, 
-`U` *sums up* all the relative changes of the voting power of `val` that occur until `t`, 
-i.e., `U = c_1+c_2+...+c_i`, such that `c_i` is the last relative change that occurs by `t`. 
+Thus, given a validator update `U` targeting `val` that occurs at a block height `h`, 
+`U` *sums up* all the relative changes of the voting power of `val` that occur until height `h`, 
+i.e., `U = c_1+c_2+...+c_i`, such that `c_i` is the last relative change that occurs by `h`. 
 Note that relative changes are integer values. 
 
 As a consequence, CCV can rely on the following property:
@@ -192,11 +203,13 @@ The following properties define the guarantees of CCV on *registering* on the pr
 ### Consumer Initiated Slashing
 [&uparrow; Back to Outline](#outline)
 
-- If the CCV module of a consumer chain `cc` receives at height `H` evidence that a validator `val` misbehaved on `cc` at height `H'`, then it MUST send at height `H` to the provider chain a `SlashPacket` containing both `val` and the id of the latest VSC that updated the validator set on `cc` at height `H'` (or `0` if such a VSC does not exist), i.e., `vscId(H')`. 
+- If the CCV module of a consumer chain `cc` receives at block height `h` evidence that a validator `val` misbehaved on `cc` at height `h'`, then it MUST send at height `h` to the provider chain a `SlashPacket` containing both `val` and `HtoVSC(h')`, i.e., the id of the latest VSC that updated the validator set on `cc` at height `h'` (or `0` if such a VSC does not exist). 
 
-- If the provider CCV module receives in block `B` from a consumer chain `cc` a `SlashPacket` containing a validator `val` and a VSC id `vscId`, then it MUST request in the same block `B` the provider Staking module to slash `val` for misbehaving at height `H`, such that
-  - if `vscId = 0`, `H` is the height at which the provider chain provided to `cc` the first VSC;
-  - otherwise, `H = H' + 1`, where `H'` is the height at which the provider chain provided to `cc` the VSC with id `vscId`. 
+- If the provider CCV module receives in a block from a consumer chain `cc` a `SlashPacket` containing a validator `val` and a VSC id `vscId`, then it MUST request in the same block the provider Staking module to slash `val` for misbehaving at height `h`, such that
+  - if `vscId = 0`, `h` is the height of the block when the provider chain provided to `cc` the first VSC;
+  - otherwise, `h` is the height of the block immediately subsequent to the block when the provider chain provided to `cc` the VSC with id `vscId`.
+
+> TODO: `SlashPacket`s must be ordered w.r.t. notifications of VSC maturity. 
 
 ## Correctness Reasoning
 [&uparrow; Back to Outline](#outline)
@@ -226,8 +239,8 @@ i.e., we informally prove the properties described in the [previous section](#de
   
 - ***Validator Update To VSC Liveness***: The provider CCV module eventually provides to all consumer chains VSCs containing all validator updates obtained from the provider Staking module (cf. *Safe Blockchain*, *Life Blockchain*). 
   Thus, it is sufficient to prove that every update of a validator in the validator set of the provider chain MUST eventually be obtained from the provider Staking module. 
-  We prove this through contradiction. Given a validator update `U` that is applied to the validator set of the provider chain at the end of a block `B` with timestamp `t`, we assume `U` is never obtained by the provider CCV module. 
-  However, at time `t`, the provider CCV module tries to obtain a new batch of validator updates from the provider Staking module (cf. *Safe Blockchain*). 
+  We prove this through contradiction. Given a validator update `U` that is applied to the validator set of the provider chain at the end of a block `B` with height `h`, we assume `U` is never obtained by the provider CCV module. 
+  However, at height `h`, the provider CCV module tries to obtain a new batch of validator updates from the provider Staking module (cf. *Safe Blockchain*). 
   Thus, this batch of validator updates MUST contain all validator updates applied to the validator set of the provider chain at the end of block `B`, including `U` (cf. *Validator Update Provision*), which contradicts the initial assumption.
 
 - ***Apply VSC Validity*:** The property follows from the following two assertions.
@@ -287,26 +300,29 @@ i.e., we informally prove the properties described in the [previous section](#de
 
 - ***Validator Set Invariant***: The invariant follows from the *Safe Blockchain* assumption and both the *Apply VSC Validity* and *Validator Update To VSC Validity* properties. 
 
-- ***Voting Power Invariant***: To prove the invariant, we use the following property that follows directly from the design of the protocol (cf. *Safe Blockchain*, *Life Blockchain*).
-  - *Property1*: Let `val` be a validator; let `Ua` and `Ub` be two updates of `val` that are applied subsequently by a consumer chain `cc`, at times `ta` and `tb`, respectively (i.e., no other updates of `val` are applied in between). 
-  Then, `Power(cc,ta,val) = Power(cc,t,val)`, for all times `t`, such that `ta <= t < tb` (i.e., the voting power granted to `val` on `cc` in the period between `ta` and `tb` is constant).  
+- ***Voting Power Invariant***: The existence of `hp` is given by construction, i.e., the block on the proposer chain that handles a governance proposal to spawn a new consumer chain `cc` *happens before* all the blocks of `cc`. 
+  The existence of `hc'` and `hp'` is given by *Life Blockchain* and *Channel Liveness*.
 
-  We prove the invariant through contradiction. 
-  Given a consumer chain `cc`, a validator `val`, and times `t` and `s` such that `t <= s <= t + UnbondingPeriod`, we assume `Power(cc,t,val) > VP(pBonded(s,val))`. 
+  To prove the *Voting Power Invariant*, we use the following property that follows directly from the design of the protocol (cf. *Safe Blockchain*, *Life Blockchain*).
+  - *Property1*: Let `val` be a validator; let `Ua` and `Ub` be two updates of `val` that are applied subsequently by a consumer chain `cc`, at block heights `ha` and `hb`, respectively (i.e., no other updates of `val` are applied in between). 
+  Then, `Power(cc,ha,val) = Power(cc,h,val)`, for all block heights `h`, such that `ha <= h < hb` (i.e., the voting power granted to `val` on `cc` in the period between `ts(ha)` and `ts(hb)` is constant).  
+
+  We prove the *Voting Power Invariant* through contradiction.
+  We assume there exist a height `h` on the provider chain between `hp` and `hp'` such that `Power(cc,hc,val) > VP(pBonded(h,val))`.
   The following sequence of assertions leads to a contradiction.
-  - Let `U1` be the latest update of `val` that is applied by `cc` before or not later than time `t` 
-    (i.e., `U1` is the update that sets `Power(cc,t,val)` for `val`). 
-    Let `t1` be the time `U1` occurs on the provider chain; let `t2` be the time `U1` is applied on `cc`. 
-    Then, `t1 <= t2 <= t` and `Power(cc,t2,val) = Power(cc,t,val)`.
-    This means that some of the tokens bonded by `val` at time `t1` (i.e., `pBonded(t1,val)`) were *completely* unbonded before or not later than time `s` (cf. `pBonded(s,val) < pBonded(t1,val)`). 
-  - Let `uo` be the first such unbonding operation that is initiated on the provider chain at a time `t3`, such that `t1 < t3 <= s`. 
-    Note that at time `t3`, the tokens unbonded by `uo` are still part of `pBonded(t1,val)`.
+  - Let `U1` be the latest update of `val` that is applied by `cc` before or not later than block height `hc` 
+    (i.e., `U1` is the update that sets `Power(cc,hc,val)` for `val`). 
+    Let `hp1` be the height at which `U1` occurs on the provider chain; let `hc1` be the height at which `U1` is applied on `cc`.
+    Then, `hp1 << hc1 <= hc`, `hp1 <= hp`, and `Power(cc,hc,val) = Power(cc,hc1,val) = VP(pBonded(hp1,val))`.
+    This means that some of the tokens bonded by `val` at height `hp1` were *completely* unbonded before or not later than height `hp'` (cf. `Power(cc,hc,val) > VP(pBonded(h,val))`).
+  - Let `uo` be the first such unbonding operation that is initiated on the provider chain at height `hp2`, such that `hp1 < hp2 <= hp'`. 
+    Note that at height `hp2`, the tokens unbonded by `uo` are still part of `pBonded(hp1,val)`.
     Let `U2` be the validator update caused by initiating `uo`.
-    Let `t4` be the time `U2` is applied on `cc`; clearly, `t3 <= t4` and `Power(cc,t4,val) < Power(cc,t,val)`. 
-    Note that the existence of `t4` is ensured by *Validator Update To VSC Liveness* and *Apply VSC Liveness*.
-    Then, `t4 > t2` (cf. `t3 > t1`, *Validator Update To VSC Order*, *Apply VSC Order*). 
-  - `Power(cc,t,val) = Power(cc,t2,val) = Power(cc,t',val)`, for all times `t'`, such that `t2 <= t' < t4` (cf. *Property1*). 
-    Thus, `t4 > t` (cf. `Power(cc,t4,val) < Power(cc,t,val)`).
-  - `uo` cannot complete before `t4 + UnbondingPeriod`, which means it cannot complete before `s` (cf. `t4 > t`, `s <= t + UnbondingPeriod`). 
+    Let `hc2` be the height at which `U2` is applied on `cc`; clearly, `Power(cc,hc2,val) < Power(cc,hc,val)`.
+    Note that the existence of `hc2` is ensured by *Validator Update To VSC Liveness* and *Apply VSC Liveness*.
+    Then, `hc2 > hc1` (cf. `hp2 > hp1`, *Validator Update To VSC Order*, *Apply VSC Order*).
+  - `Power(cc,hc,val) = Power(cc,hc1,val) = Power(cc,h,val)`, for all heights `h`, such that `hc1 <= h < hc2` (cf. *Property1*). 
+    Thus, `hc2 > hc` (cf. `Power(cc,hc2,val) < Power(cc,hc,val)`).
+  - `uo` cannot complete before `ts(hc2) + UnbondingPeriod`, which means it cannot complete before `hc'` and thus it cannot complete before `hp'` (cf. `hc' << hp'`). 
 
 - ***Slashing Invariant***: TODO

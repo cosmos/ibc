@@ -240,8 +240,8 @@ For clarity, we use `Hp*` and `Hc*` to denote block heights on the provider chai
   > **Note**: It is possible for multiple VSCs to be received by the consumer chain within the same block. For more details, take a look at the [Validator sets, validator updates and VSCs](./system_model_and_properties.md#validator-sets-validator-updates-and-vscs) section.
 - By default, every consumer CCV module maps any block height to `0` (i.e., VSC ids start from `1`). 
   Intuitively, this means that the voting power on the consumer chain at height `Hc` with `HtoVSC(Hc) = 0` was setup at genesis during Channel Initialization. 
-- For every consumer chain, the provider CCV module sets `H(0)` to the height at which the first VSC was provided to that consumer chain. 
-  Intuitively, this means that the validator set on the provider chain at height `H(0)` matches the validator set on the consumer chain at all heights `Hc` with `HtoVSC(Hc) = 0`.
+- For every consumer chain, the provider CCV module sets `VSCtoH(0)` to the height at which the first VSC was provided to that consumer chain. 
+  Intuitively, this means that the validator set on the provider chain at height `VSCtoH(0)` matches the validator set on the consumer chain at all heights `Hc` with `HtoVSC(Hc) = 0`.
 
 The following figure shows an overview of the Consumer Initiated Slashing operation of CCV. 
 
