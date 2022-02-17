@@ -6,7 +6,9 @@
 ## Outline
 - [Assumptions](#assumptions)
 - [Desired Properties](#desired-properties)
-  - [Validator sets, validator updates and VSCs](#validator-sets-validator-updates-and-vscs)
+  - [System Invariants](#system-invariants)
+  - [CCV Channel](#ccv-channel)
+  - [Validator Sets, Validator Updates and VSCs](#validator-sets-validator-updates-and-vscs)
   - [Staking Module Interface](#staking-module-interface)
   - [Validator Set Update](#validator-set-update)
 - [Correctness Reasoning](#correctness-reasoning)
@@ -15,45 +17,45 @@
 [&uparrow; Back to Outline](#outline)
 
 As part of an ABCI application, CCV interacts with both the consensus engine (via ABCI) and other application modules, such as the Staking module. 
-As an IBC application, CCV interacts with external relayers (defined in [ICS 18](../../relayer/ics-018-relayer-algorithms)).  
-In this section we specify what we assume about these other components, 
-i.e., CCV relies on the following assumptions: *Safe Blockchain*, *Live Blockchain*, *Correct Relayer*, *Validator Update Provision*, and *Unbonding Safety*. 
+As an IBC application, CCV interacts with external relayers (defined in [ICS 18](../../relayer/ics-018-relayer-algorithms)). 
+In this section we specify what we assume about these other components. 
+A more thorough discussion of the environment in which CCV operates is given in the section [Placing CCV within an ABCI Application](./technical_specification.md#placing-ccv-within-and-abci-application).
 
-Intuitively, CCV safety relies on the *Safe Blockchain* assumption, 
+> **Intuition**: 
+> 
+> CCV safety relies on the *Safe Blockchain* assumption, 
 i.e., neither *Live Blockchain* and *Correct Relayer* are required for safety. 
 Note though that CCV liveness relies on both *Live Blockchain* and *Correct Relayer* assumptions; 
 furthermore, the *Correct Relayer* assumption relies on both *Safe Blockchain* and *Live Blockchain* assumptions. 
-The *Validator Update Provision* and *Unbonding Safety* assumptions define what is needed from the provider Staking module. 
-A more thorough discussion of the environment in which CCV operates is given in the section [Placing CCV within an ABCI Application](./technical_specification.md#placing-ccv-within-and-abci-application).
+>
+> The *Validator Update Provision*, *Unbonding Safety*, and *Slashing Warranty* assumptions define what is needed from the provider Staking module. 
+> 
+> The *Evidence Provision* assumptions defines what is needed from the ABCI application of the consumer chains.
 
 - ***Safe Blockchain***: Both the provider and the consumer chains are *safe*. This means that, for every chain, the underlying consensus engine satisfies safety (e.g., the chain does not fork) and the execution of the state machine follows the described protocol. 
-
 - ***Live Blockchain***: Both the provider and the consumer chains are *live*. This means that, for every chain, the underlying consensus engine satisfies liveness (i.e., new blocks are eventually added to the chain).
-
-> **Note**: Both *Safe Blockchain* and *Live Blockchain* assumptions require the consensus engine's assumptions to hold, e.g., less than a third of the voting power is Byzantine. For more details, take a look at the [Tendermint Paper](https://arxiv.org/pdf/1807.04938.pdf).
+  > **Note**: Both *Safe Blockchain* and *Live Blockchain* assumptions require the consensus engine's assumptions to hold, e.g., less than a third of the voting power is Byzantine. For more details, take a look at the [Tendermint Paper](https://arxiv.org/pdf/1807.04938.pdf).
 
 - ***Correct Relayer***: There is at least one *correct*, *live* relayer between the provider and consumer chains -- every packet sent on the CCV channel is relayed to the receiving end before the packet timeout elapses. 
   Clearly, the CCV protocol is responsible of setting the packet timeouts (i.e., `timeoutHeight` and `timeoutTimestamp`) such that the *Correct Relayer* assumption is feasible. 
- 
-> **Discussion**: IBC relies on timeouts to signal that a sent packet is not going to be received on the other end. 
-> Once an ordered IBC channel timeouts, the channel is closed (see [ICS 4](../../core/ics-004-channel-and-packet-semantics)). 
-> The *Correct Relayer* assumption is necessary to ensure that the CCV channel **cannot** ever timeout and, as a result, cannot transit to the closed state. 
-> 
-> **In practice**, the *Correct Relayer* assumption is realistic since any validator could play the role of the relayer and it is in the best interest of correct validators to successfully relay packets.
-> 
-> The following strategy is a practical example of how to ensure the *Correct Relayer* assumption holds. 
-> Let S denote the sending chain and D the destination chain; 
-> and let `drift(S,D)` be the time drift between S and D, 
-> i.e., `drift(S,D) =  S.currentTimestamp() - D.currentTimestamp()` (`drift(S,D) > 0` means that S is "ahead" of D). 
-> For every packet, S only sets `timeoutTimestamp = S.currentTimestamp() + to`, with `to` an application-level parameter. 
-> The `timeoutTimestamp` indicates *a timestamp on the destination chain* after which the packet will no longer be processed (cf. [ICS 4](../../core/ics-004-channel-and-packet-semantics)). 
-> Therefore, the packet MUST be relayed within a time period of `to - drift(S,D)`, 
-> i.e., `to - drift(S,D) > RTmax`, where `RTmax` is the maximum relaying time across all packet. 
-> Theoretically, choosing the value of `to` requires knowing the value of `drift(S,D)` (i.e., `to > drift(S,D)`); 
-> yet, `drift(S,D)` is not known at a chain level. 
-> In practice, choosing `to` such that `to >> drift(S,D)` and `to >> RTmax`, e.g., `to = 4 weeks`, makes the *Correct Relayer* assumption feasible.
+  > **Discussion**: IBC relies on timeouts to signal that a sent packet is not going to be received on the other end. 
+  > Once an ordered IBC channel timeouts, the channel is closed (see [ICS 4](../../core/ics-004-channel-and-packet-semantics)). 
+  > The *Correct Relayer* assumption is necessary to ensure that the CCV channel **cannot** ever timeout and, as a result, cannot transit to the closed state. 
+  > 
+  > **In practice**, the *Correct Relayer* assumption is realistic since any validator could play the role of the relayer and it is in the best interest of correct validators to successfully relay packets.
+  > 
+  > The following strategy is a practical example of how to ensure the *Correct Relayer* assumption holds. 
+  > Let S denote the sending chain and D the destination chain; 
+  > and let `drift(S,D)` be the time drift between S and D, 
+  > i.e., `drift(S,D) =  S.currentTimestamp() - D.currentTimestamp()` (`drift(S,D) > 0` means that S is "ahead" of D). 
+  > For every packet, S only sets `timeoutTimestamp = S.currentTimestamp() + to`, with `to` an application-level parameter. 
+  > The `timeoutTimestamp` indicates *a timestamp on the destination chain* after which the packet will no longer be processed (cf. [ICS 4](../../core/ics-004-channel-and-packet-semantics)). 
+  > Therefore, the packet MUST be relayed within a time period of `to - drift(S,D)`, 
+  > i.e., `to - drift(S,D) > RTmax`, where `RTmax` is the maximum relaying time across all packet. 
+  > Theoretically, choosing the value of `to` requires knowing the value of `drift(S,D)` (i.e., `to > drift(S,D)`); 
+  > yet, `drift(S,D)` is not known at a chain level. 
+  > In practice, choosing `to` such that `to >> drift(S,D)` and `to >> RTmax`, e.g., `to = 4 weeks`, makes the *Correct Relayer* assumption feasible.
 
-The following assumptions define the guarantees CCV expects from the provider Staking module. 
 - ***Validator Update Provision***: Let `{U1, U2, ..., Ui}` be a batch of validator updates applied (by the provider Staking module) to the validator set of the provider chain at the end of a block `B` with timestamp `t`. 
   Then, the *first* batch of validator updates obtained (by the provider CCV module) from the provider Staking module at time `t` MUST be exactly the batch `{U1, U2, ..., Ui}`.
 
@@ -64,21 +66,24 @@ The following assumptions define the guarantees CCV expects from the provider St
   Then,
   - (*unbonding initiation*) the provider CCV module MUST be notified of `uo`'s initiation before receiving `U(uo)`;
   - (*unbonding completion*) `uo` MUST NOT complete on the provider chain before the provider chain registers notifications of `vsc(uo)`'s maturity from all consumer chains.
+  > **Note**: Depending on the implementation, the (*unbonding initiation*) part of the *Unbonding Safety* MAY NOT be necessary for validator unbonding operations.
 
-> **Note**: Depending on the implementation, the (*unbonding initiation*) part of the *Unbonding Safety* MAY NOT be necessary for validator unbonding operations.
+- ***Slashing Warranty***: If the provider Staking module receives a request to slash a validator `val` that misbehaved at time `t`, then it slashes the amount of tokens `val` had bonded at time `t` except the amount that has already completely unbonded. 
+
+- ***Evidence Provision***: If a consumer chain receives valid evidence of misbehavior in a block `B`, then it MUST submit it to the consumer CCV module in the same block `B`.
+  > **Note**: What constitutes a valid evidence of misbehavior depends on the type of misbehavior and it is outside the scope of this specification.
+
+
+
+
 
 ## Desired Properties
-[&uparrow; Back to Outline](#outline)
 
 The following properties are concerned with **one provider chain** providing security to **multiple consumer chains**. 
 Between the provider chain and each consumer chain, a separate (unique) CCV channel is established. 
 
-First, we define the properties for the CCV channels. Then, we define the guarantees provided by CCV.
-
-- ***Channel Uniqueness***: The channel between the provider chain and a consumer chain MUST be unique.
-- ***Channel Validity***: If a packet `P` is received by one end of a CCV channel, then `P` MUST have been sent by the other end of the channel.
-- ***Channel Order***: If a packet `P1` is sent over a CCV channel before a packet `P2`, then `P2` MUST NOT be received by the other end of the channel before `P1`. 
-- ***Channel Liveness***: Every packet sent over a CCV channel MUST eventually be received by the other end of the channel. 
+### System Invariants
+[&uparrow; Back to Outline](#outline)
 
 CCV provides the following system invariants. For clarity, we use the following notations:
 - `pBonded(t,val)` is the number of tokens bonded by validator `val` on the provider chain at time `t`; 
@@ -100,18 +105,24 @@ CCV provides the following system invariants. For clarity, we use the following 
   > For example, if one unit of voting power requires `1.000.000` bonded tokens (i.e., `VP(1.000.000)=1`), 
   > then a validator that gets one unit of voting power on the consumer chain must have at least `1.000.000` tokens bonded on the provider chain for at least `UnbondingPeriod`.
 
-***Slashing Invariant***: If a validator `val` misbehaves on a chain `c` at a time `t`, then any evidence of misbehavior that is received by `c` at time `t'`, such that `t' < t + UnbondingPeriod`, MUST results in *exactly* the amount of tokens `Token(Power(c,t,val))` to be slashed on the provider chain. 
+***Slashing Invariant***: If a validator `val` misbehaves on a consumer chain `cc` at a time `t`, then any evidence of misbehavior that is received by `cc` at time `t'`, such that `t' < t + UnbondingPeriod`, MUST results in *exactly* the amount of tokens `Token(Power(cc,t,val))` to be slashed on the provider chain. 
   > **Note:** Unlike in single-chain validation, in CCV the tokens `Token(Power(cc,t,val))` MAY be slashed even if the evidence of misbehavior is received at time `t' >= t + UnbondingPeriod`, 
   since unbonding operations need to reach maturity on both the provider and all the consumer chains.
   >
   > **Note:** The *Slash Invariant* ensures also that if a delegator starts unbonding an amount `x` of tokens from `val` before `t`, then `x` will not be slashed, since `x` is not part of `Token(Power(c,t,val))`.
 
-
-Before we define the properties of CCV needed for these invariants to hold, 
-we provide a short discussion on how the validator set, the validator updates, and the VSCs relates in the context of multiple chains. 
-
-### Validator sets, validator updates and VSCs
+### CCV Channel
 [&uparrow; Back to Outline](#outline)
+
+- ***Channel Uniqueness***: The channel between the provider chain and a consumer chain MUST be unique.
+- ***Channel Validity***: If a packet `P` is received by one end of a CCV channel, then `P` MUST have been sent by the other end of the channel.
+- ***Channel Order***: If a packet `P1` is sent over a CCV channel before a packet `P2`, then `P2` MUST NOT be received by the other end of the channel before `P1`. 
+- ***Channel Liveness***: Every packet sent over a CCV channel MUST eventually be received by the other end of the channel. 
+
+### Validator Sets, Validator Updates and VSCs
+[&uparrow; Back to Outline](#outline)
+
+In this section, we provide a short discussion on how the validator set, the validator updates, and the VSCs relates in the context of multiple chains. 
 
 Every chain consists of a sequence of blocks. 
 At the end of each block, validator updates (i.e., changes in the validators voting power) results in changes in the validator set of the next block. 
@@ -287,3 +298,5 @@ i.e., we informally prove the properties described in the [previous section](#de
   - `Power(cc,t,val) = Power(cc,t2,val) = Power(cc,t',val)`, for all times `t'`, such that `t2 <= t' < t4` (cf. *Property1*). 
     Thus, `t4 > t` (cf. `Power(cc,t4,val) < Power(cc,t,val)`).
   - `uo` cannot complete before `t4 + UnbondingPeriod`, which means it cannot complete before `s` (cf. `t4 > t`, `s <= t + UnbondingPeriod`). 
+
+- ***Slashing Invariant***: TODO
