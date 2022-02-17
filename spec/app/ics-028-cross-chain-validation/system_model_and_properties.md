@@ -11,6 +11,7 @@
   - [Validator Sets, Validator Updates and VSCs](#validator-sets-validator-updates-and-vscs)
   - [Staking Module Interface](#staking-module-interface)
   - [Validator Set Update](#validator-set-update)
+  - [Consumer Initiated Slashing](#consumer-initiated-slashing)
 - [Correctness Reasoning](#correctness-reasoning)
 
 ## Assumptions
@@ -70,7 +71,7 @@ furthermore, the *Correct Relayer* assumption relies on both *Safe Blockchain* a
 
 - ***Slashing Warranty***: If the provider Staking module receives a request to slash a validator `val` that misbehaved at time `t`, then it slashes the amount of tokens `val` had bonded at time `t` except the amount that has already completely unbonded. 
 
-- ***Evidence Provision***: If a consumer chain receives valid evidence of misbehavior in a block `B`, then it MUST submit it to the consumer CCV module in the same block `B`.
+- ***Evidence Provision***: If a consumer chain receives a valid evidence of misbehavior in a block `B`, then it MUST submit it to the consumer CCV module in the same block `B`.
   > **Note**: What constitutes a valid evidence of misbehavior depends on the type of misbehavior and it is outside the scope of this specification.
 
 
@@ -187,6 +188,15 @@ The following properties define the guarantees of CCV on *registering* on the pr
 - ***Register Maturity Liveness***: If the provider chain provides a VSC `vsc` to the consumer chain, then the provider chain MUST eventually register a maturity notification of `vsc` from the consumer chain.
 
 > Note that, except for *Apply VSC Liveness* and *Register Maturity Liveness*, none of the properties of CCV require the *Correct Relayer* assumption to hold.
+
+### Consumer Initiated Slashing
+[&uparrow; Back to Outline](#outline)
+
+- If the CCV module of a consumer chain `cc` receives at height `H` evidence that a validator `val` misbehaved on `cc` at height `H'`, then it MUST send at height `H` to the provider chain a `SlashPacket` containing both `val` and the id of the latest VSC that updated the validator set on `cc` at height `H'` (or `0` if such a VSC does not exist), i.e., `vscId(H')`. 
+
+- If the provider CCV module receives in block `B` from a consumer chain `cc` a `SlashPacket` containing a validator `val` and a VSC id `vscId`, then it MUST request in the same block `B` the provider Staking module to slash `val` for misbehaving at height `H`, such that
+  - if `vscId = 0`, `H` is the height at which the provider chain provided to `cc` the first VSC;
+  - otherwise, `H = H' + 1`, where `H'` is the height at which the provider chain provided to `cc` the VSC with id `vscId`. 
 
 ## Correctness Reasoning
 [&uparrow; Back to Outline](#outline)
