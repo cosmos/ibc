@@ -29,6 +29,7 @@ Before describing the data structures and sub-protocols of the CCV protocol, we 
   In this specification we define the following methods that handle messages that are of particular interest to the CCV protocol:
   - `InitGenesis()` -- Called when the chain is first started, on receiving an `InitChain` message from the consensus engine. 
     This is also where the application can inform the underlying consensus engine of the initial validator set.
+  - `BeginBlock()` -- Contains logic that is automatically triggered at the beginning of each block. 
   - `EndBlock()` -- Contains logic that is automatically triggered at the end of each block. 
     This is also where the application can inform the underlying consensus engine of changes in the validator set.
 
@@ -237,7 +238,13 @@ This section describes the internal state of the CCV module. For simplicity, the
 - `channelToChain: Map<Identifier, string>` is a mapping from CCV channel IDs to consumer chain IDs.
 - `channelStatus: Map<Identifier, ChannelStatus>` is a mapping from CCV channel IDs to CCV channel state, as indicated by `ChannelStatus`.
 - `pendingVSCPackets: Map<string, [VSCPacketData]>` is a mapping from consumer chain IDs to a list of pending `VSCPacketData`s that must be sent to the consumer chain once the CCV channel is established.
-- `vscId: uint64` is a monotonic strictly increasing ID that is used to uniquely identify the VSCs sent to the consumer chains.
+- `vscId: uint64` is a monotonic strictly increasing and positive ID that is used to uniquely identify the VSCs sent to the consumer chains. 
+  Note that `0` is used as a special ID for the mapping from consumer heights to provider heights.
+- `initH: Map<string, Height>` is a mapping from consumer chain IDs to the heights on the provider chain. 
+  For every consumer chain, the mapping stores the height when the first VSC was provided to that consumer chain. 
+  It enables the mapping from consumer heights to provider heights.
+- `VSCtoH: Map<uint64, Height>` is a mapping from VSC IDs to heights on the provider chain. It enables the mapping from consumer heights to provider heights, 
+  i.e., the voting power at height `VSCtoH[id]` on the provider chain was last updated by the validator updates contained in the VSC with ID `id`.  
 - `unbondingOps: Map<uint64, UnbondingOperation>` is a mapping that enables accessing for every unbonding operation the list of consumer chains that are still unbonding. When unbonding operations are initiated, the Staking module calls the `AfterUnbondingOpInitiated()` [hook](#ccv-pcf-shook-afubopcr1); this leads to the creation of a new `UnbondingOperation`, which is defined as
   ```typescript
   interface UnbondingOperation {
@@ -255,6 +262,9 @@ This section describes the internal state of the CCV module. For simplicity, the
 - `providerChannel: Identifier` identifies the consumer's channel end of the CCV channel.
 - `channelStatus: ChannelStatus` is the status of the CCV channel.
 - `pendingChanges: [ValidatorUpdate]` is a list of `ValidatorUpdate`s received, but not yet applied to the validator set. It is emptied on every `EndBlock()`. 
+- `HtoVSC: Map<Height, uint64>` is a mapping from consumer chain heights to VSC IDs. It enables the mapping from consumer heights to provider heights., i.e.,
+  - if `HtoVSC[h] == 0`, then the voting power on the consumer chain at height `h` was setup at genesis during Channel Initialization;
+  - otherwise, the voting power on the consumer chain at height `h` was updated by the VSC with ID `HtoVSC[h]`.
 - `unbondingPackets: [(Packet, Time)]` is a list of `(packet, unbondingTime)` tuples, where `packet` is a received `VSCPacket` and `unbondingTime` is the packet's unbonding time. 
   The list is used to keep track of when unbonding operations are matured on the consumer chain. It exposes the following interface:
   ```typescript
@@ -323,7 +333,7 @@ function CreateConsumerChainProposal(p: CreateConsumerChainProposal) {
     // get UnbondingPeriod from provider Staking module
     unbondingTime = stakingKeeper.UnbondingTime()
 
-    // create client state as defined in ICS 2
+    // create client state as defined in ICS 7
     clientState = ClientState{
       chainId: p.chainId,
       trustLevel: DefaultTrustLevel, // 1/3
@@ -332,13 +342,16 @@ function CreateConsumerChainProposal(p: CreateConsumerChainProposal) {
       latestHeight: p.initialHeight,
     }
 
-    // create consensus state as defined in ICS 2;
+    // create consensus state as defined in ICS 7;
     // SentinelRoot is used as a stand-in root value for 
-    // the consensus state set at the upgrade height
+    // the consensus state set at the upgrade height;
+    // the validator set is the same as the validator set 
+    // from own consensus state at current height
+    ownConsensusState = getConsensusState(getCurrentHeight())
     consensusState = ConsensusState{
       timestamp: currentTimestamp(),
-      root: SentinelRoot,
-      nextValidatorsHash: BlockHeader().NextValidatorsHash,
+      commitmentRoot: SentinelRoot,
+      validatorSet: ownConsensusState.validatorSet,
     }
 
     // create consumer chain client and store it
@@ -365,7 +378,10 @@ function CreateConsumerChainProposal(p: CreateConsumerChainProposal) {
 - Error condition:
   - None.
 
-> **Note:** Creating a client of a remote chain requires a `ClientState` and a `ConsensusState` (as defined in [ICS 2](../../core/ics-002-client-semantics)). For Tendermint clients, creating a `ConsensusState` requires setting a validator set of the remote chain (see [ICS 7](../../client/ics-007-tendermint-client/README.md#consensus-state)). The provider chain uses the fact that the validator set of the consumer chain is the same as its own validator set. The rest of information to create a `ClientState` it receives through a governance proposal.
+> **Note:** Creating a client of a remote chain requires a `ClientState` and a `ConsensusState` (as defined in [ICS 7](../../core/ics-002-client-semantics)).
+> `ConsensusState` requires setting a validator set of the remote chain. 
+> The provider chain uses the fact that the validator set of the consumer chain is the same as its own validator set. 
+> The rest of information to create a `ClientState` it receives through a governance proposal.
 
 <!-- omit in toc -->
 #### **[CCV-PCF-COINIT.1]**
@@ -586,6 +602,8 @@ function InitGenesis(gs: ConsumerGenesisState): [ValidatorUpdate] {
     }
   }
 
+  HtoVSC[getCurrentHeight()] = 0
+
   return gs.initialValSet
 }
 ```
@@ -600,6 +618,7 @@ function InitGenesis(gs: ConsumerGenesisState): [ValidatorUpdate] {
   - Otherwise (i.e., a restarted consumer chain),
     - both the provider client ID and channel ID are stored;
     - each unbonding packet is added to the `unbondingPackets` list together with its unbonding time.  
+  - `HtoVSC` for the current block is set to `0`.
   - The initial validator set is returned to the consensus engine.
 - Error condition:
   - The genesis state contains an empty initial validator set.
@@ -999,6 +1018,23 @@ The *validator set update* sub-protocol enables the provider chain
 - and to ensure the correct completion of unbonding operations for validators that produce blocks on the consumer chain.
 
 <!-- omit in toc -->
+#### **[CCV-PCF-BBLOCK.1]**
+```typescript
+// CCF: Provider Chain Function
+// implements the AppModule interface
+function BeginBlock() {
+}
+```
+- Initiator: 
+  - ABCI.
+- Expected precondition:
+  - An `BeginBlock` message is received from the consensus engine. 
+- Expected postcondition:
+  - None.
+- Error condition:
+  - None.
+
+<!-- omit in toc -->
 #### **[CCV-PCF-EBLOCK.1]**
 ```typescript
 // PCF: Provider Chain Function
@@ -1025,6 +1061,11 @@ function EndBlock(): [ValidatorUpdate] {
       // the CCV channel should be in VALIDATING state
       abortSystemUnless(channelStatus[chainId] == VALIDATING)
 
+      // set initH for this consumer chain (if not done already)
+      if chainId NOT IN initH.Keys() {
+        initH[chainId] = getCurrentHeight()
+      }
+
       // gets the channel ID for the given consumer chain ID
       channelId = chainToChannel[chainId]
 
@@ -1038,6 +1079,8 @@ function EndBlock(): [ValidatorUpdate] {
       pendingVSCPackets.Remove(chainId)
     }
   }
+  // set VSCtoH mapping
+  VSCtoH[vscId] = getCurrentHeight() + 1
   // increment VSC ID
   vscId++ 
 
@@ -1056,8 +1099,10 @@ function EndBlock(): [ValidatorUpdate] {
     - If either `valUpdates` is not empty or there were unbonding operations initiated during this block, 
       then a `VSCPacketData` is created and appended to the list of pending VSCPackets associated to `chainId`, i.e., `pendingVSCPackets[chainId]`.
     - If there is an established CCV channel for the the consumer chain with `chainId`, then
+      - if `initH[chainId]` is not already set, then `initH[chainId]` is set to the current height;
       - for each `VSCPacketData` in the list of pending VSCPackets associated to `chainId`
         - a packet with the `VSCPacketData` is sent on the channel associated with the consumer chain with `chainId`.
+  - `vscId` is mapped to the height of the subsequent block. 
   - `vscId` is incremented.
 - Error condition:
   - A CCV channel for the consumer chain with `chainId` exists and its status is not set to `VALIDATING`.
@@ -1226,6 +1271,24 @@ function BeforeUnbondingOpCompleted(opId: uint64): Bool {
 ---
 
 <!-- omit in toc -->
+#### **[CCV-CCF-BBLOCK.1]**
+```typescript
+// CCF: Consumer Chain Function
+// implements the AppModule interface
+function BeginBlock() {
+  HtoVSC[getCurrentHeight() + 1] = HtoVSC[getCurrentHeight()]
+}
+```
+- Initiator: 
+  - ABCI.
+- Expected precondition:
+  - An `BeginBlock` message is received from the consensus engine. 
+- Expected postcondition:
+  - `HtoVSC` for the subsequent block is set to the same VSC ID as the current block.
+- Error condition:
+  - None.
+
+<!-- omit in toc -->
 #### **[CCV-CCF-RECVVSC.1]**
 ```typescript
 // CCF: Consumer Chain Function
@@ -1238,6 +1301,9 @@ function onRecvVSCPacket(packet: Packet): Packet {
     channelKeeper.ChanCloseInit(channelId)
     return NewErrorAcknowledgement()
   }
+
+  // set HtoVSC mapping
+  HtoVSC[getCurrentHeight() + 1] = packet.data.id
   
   // check whether the status of the CCV channel is VALIDATING
   if (channelStatus != VALIDATING) {
@@ -1267,7 +1333,8 @@ function onRecvVSCPacket(packet: Packet): Packet {
   - If `providerChannel` is set and does not match the channel with ID `channelId` on which the packet was sent, then 
     - the closing handshake for the channel with ID `channelId` is initiated;
     - an error acknowledgement is returned.
-  - Otherwise,  
+  - Otherwise,
+    - the height of the subsequent block is mapped to `packet.data.id`;  
     - if the CCV channel status is not `VALIDATING`, then it is set to `VALIDATING` and the channel ID is set as the provider channel;
     - `packet.data.updates` are appended to `pendingChanges`;
     - `(packet, unbondingTime)` is added to `unbondingPackets`, where `unbondingTime = currentTimestamp() + UnbondingPeriod`;
