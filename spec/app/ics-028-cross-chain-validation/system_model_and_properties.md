@@ -203,13 +203,14 @@ The following properties define the guarantees of CCV on *registering* on the pr
 ### Consumer Initiated Slashing
 [&uparrow; Back to Outline](#outline)
 
-- If the CCV module of a consumer chain `cc` receives at block height `h` evidence that a validator `val` misbehaved on `cc` at height `h'`, then it MUST send at height `h` to the provider chain a `SlashPacket` containing both `val` and `HtoVSC(h')`, i.e., the id of the latest VSC that updated the validator set on `cc` at height `h'` (or `0` if such a VSC does not exist). 
+- ***Consumer Slashing Warranty***: If the CCV module of a consumer chain `cc` receives at block height `h` evidence that a validator `val` misbehaved on `cc` at height `h'`, then it MUST send at height `h` to the provider chain a `SlashPacket` containing both `val` and `HtoVSC(h')`, i.e., the id of the latest VSC that updated the validator set on `cc` at height `h'` (or `0` if such a VSC does not exist). 
 
-- If the provider CCV module receives in a block from a consumer chain `cc` a `SlashPacket` containing a validator `val` and a VSC id `vscId`, then it MUST request in the same block the provider Staking module to slash `val` for misbehaving at height `h`, such that
+- ***Provider Slashing Warranty***: If the provider CCV module receives in a block from a consumer chain `cc` a `SlashPacket` containing a validator `val` and a VSC id `vscId`, then it MUST request in the same block the provider Staking module to slash `val` for misbehaving at height `h`, such that
   - if `vscId = 0`, `h` is the height of the block when the provider chain provided to `cc` the first VSC;
   - otherwise, `h` is the height of the block immediately subsequent to the block when the provider chain provided to `cc` the VSC with id `vscId`.
 
-> TODO: `SlashPacket`s must be ordered w.r.t. notifications of VSC maturity. 
+- ***VSC Maturity and Slashing Order***: If a consumer chain sends to the provider chain a `SlashPacket` before a maturity notification of a VSC, then the provider chain MUST NOT receive the maturity notification before the `SlashPacket`.
+  > **Note**: *VSC Maturity and Slashing Order* requires the VSC maturity notifications to be sent through their own IBC packets (instead of e.g., through acknowledgements of `VSCPacket`s). 
 
 ## Correctness Reasoning
 [&uparrow; Back to Outline](#outline)
@@ -297,6 +298,11 @@ i.e., we informally prove the properties described in the [previous section](#de
   - The provider chain eventually receives the acknowledgement of `P` on the CCV channel (cf. *Channel Liveness*).
   - The provider chain eventually registers the maturity notification of `vsc` (cf. *Safe Blockchain*, *Life Blockchain*).
 
+- ***Consumer Slashing Warranty***: Follows directly from *Safe Blockchain*.
+
+- ***Provider Slashing Warranty***: Follows directly from *Safe Blockchain*.
+
+- ***VSC Maturity and Slashing Order***: Follows directly from *Channel Order*.
 
 - ***Validator Set Invariant***: The invariant follows from the *Safe Blockchain* assumption and both the *Apply VSC Validity* and *Validator Update To VSC Validity* properties. 
 
@@ -325,4 +331,19 @@ i.e., we informally prove the properties described in the [previous section](#de
     Thus, `hc2 > hc` (cf. `Power(cc,hc2,val) < Power(cc,hc,val)`).
   - `uo` cannot complete before `ts(hc2) + UnbondingPeriod`, which means it cannot complete before `hc'` and thus it cannot complete before `hp'` (cf. `hc' << hp'`). 
 
-- ***Slashing Invariant***: TODO
+- ***Slashing Invariant***: To prove this invariant, we consider the following sequence of statements.
+  - The CCV module of `cc` receives at height `h'` the evidence that `val` misbehaved on `cc` at height `h` (cf. *Evidence Provision*, *Safe Blockchain*, *Life Blockchain*).
+  - The CCV module of `cc` sends at height `h'` to the provider chain a `SlashPacket` `P`, such that `P.val = val` and `P.vscId = HtoVSC(h)` (cf. *Consumer Slashing Warranty*).
+  - The provider CCV module eventually receives `P` in a block `B` (cf. *Channel Liveness*). 
+  - The provider CCV module requests (in the same block `B`) the provider Staking module to slash `val` for misbehaving at height `hp = VSCtoH(P.vscId)` (cf. *Provider Slashing Warranty*).
+  - The provider Staking module slashes the amount of tokens `val` had bonded at height `hp` except the amount that has already completely unbonded (cf. *Slashing Warranty*).
+  
+  Thus, it remains to be proven that `Token(Power(cc,h,val))` is exactly the same as the amount of tokens `val` had bonded at height `hp = VSCtoH(HtoVSC(h))` except the amount that has already completely unbonded. We distinguish two cases:
+  - `HtoVSC(h) != 0`, which means that by definition `HtoVSC(h)` is the id of the last VSC that update `Power(cc,h,val)`. 
+    Also by definition, this VSC contains the last updates to the voting power at height `VSCtoH(HtoVSC(h))` on the provider. 
+  - `HtoVSC(h) == 0`, which means that by definition `Power(cc,h,val)` was setup at genesis during Channel Initialization. 
+    Also by definition, this is the same voting power of the provider chain block when the first VSC was provided to that consumer chain, i.e., `VSCtoH(HtoVSC(h))`. 
+  
+  Thus, in both cases, `pBonded(hp,val) >= Token(Power(cc,h,val))` and `pBonded(hp,val) - Token(Power(cc,h,val))` consists only of tokens in the process of unbonding. 
+  The tokens bonded by `val` at height `hp` that were not in the process of unbonding (i.e., `Token(Power(cc,h,val))`) could not have completely unbonded by block `B` (cf. `ts(h') < ts(h) + UnbondingPeriod`, *VSC Maturity and Slashing Order*, *Register Maturity Timeliness*, *Unbonding Safety*).
+  This means that *exactly* the amount of tokens `Token(Power(cc,h,val))` is slashed on the provider chain. 
