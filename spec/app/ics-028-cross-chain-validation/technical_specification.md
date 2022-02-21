@@ -287,7 +287,8 @@ function InitGenesis(state: ProviderGenesisState): [ValidatorUpdate] {
   // check whether the capability for the port can be claimed
   abortSystemUnless(err == nil)
 
-  foreach cs in state.clientStates {
+  foreach cs in state.consumerStates {
+    abortSystemUnless(validateChannelIdentifier(cs.channelId))
     chainToChannel[cs.chainId] = cs.channelId
     channelToChain[cs.channelId] = cc.chainId
     channelStatus[cs.channelId] = cc.status
@@ -306,6 +307,7 @@ function InitGenesis(state: ProviderGenesisState): [ValidatorUpdate] {
   - For each consumer state in the `ProviderGenesisState`, the initial state is set, i.e., the following mappings `chainToChannel`, `channelToChain`, `channelStatus` are set.
 - Error condition:
   - The capability for the port `ProviderPortId` cannot be claimed.
+  - For any consumer state in the `ProviderGenesisState`, the channel ID is not valid (cf. the validation function defined in [ICS 4](../../core/ics-004-channel-and-packet-semantics)).
 
 <!-- omit in toc -->
 #### **[CCV-PCF-CCPROP.1]**
