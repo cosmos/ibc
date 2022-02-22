@@ -10,6 +10,8 @@
   - [CCV Data Structures](#ccv-data-structures)
   - [CCV Packets](#ccv-packets)
   - [CCV State](#ccv-state)
+- [Sub-protocols](#sub-protocols)
+  - [Initialization](#initialization)
   - [Channel Closing Handshake](#channel-closing-handshake)
   - [Packet Relay](#packet-relay)
   - [Validator Set Update](#validator-set-update)
@@ -220,7 +222,7 @@ The following packet data types are required by the CCV module:
       valPower: int64
       vscId: uint64
       slashFactor: int64
-      jailTime: int64
+      jailTime: uint64
     }
     ```
 > Note that for brevity we use e.g., `VSCPacket` to refer to a packet with `VSCPacketData` as its data.
@@ -333,6 +335,7 @@ This section describes the internal state of the CCV module. For simplicity, the
     // the list is modified
     Remove()
   }
+  ```
 - `jailUntil: Map<string, uint64>` is a mapping from validator addresses to a time instance. 
   It enables the consumer CCV module to keep track of how long are validators jailed and consequently to avoid sending to the provider chain two slashing requests for the same infraction, e.g., downtime. 
   It has no impact on the VSCs applied by the consumer CCV module.
@@ -1519,6 +1522,7 @@ function onAcknowledgeSlashPacket(packet: Packet, ack: bytes) {
 // CCF: Consumer Chain Function
 function onTimeoutSlashPacket(packet Packet) {
   // TODO Do we need to notify the provider to close the channel?
+}
 ```
 - Initiator: 
   - The `onTimeoutPacket()` method.
@@ -1591,7 +1595,7 @@ function SendSlashRequest(
   power: int64, 
   infractionHeight: Height,
   slashFactor: int64,
-  jailTime: int66) {
+  jailTime: uint64) {
     // check whether the validator is already jailed
     if data.valAddress in jailUntil.Keys() AND jailUntil[data.valAddress] > currentTimestamp() {
       return
@@ -1646,7 +1650,6 @@ function SendPendingSlashRequests() {
   if providerChannel != "" {
     // iterate over every pending SlashPacket in reverse order
     foreach data IN pendingSlashPackets.Reverse() {
-
       if jailUntil[data.valAddress] <= currentTimestamp() {
         // create packet and send it using the interface exposed by ICS-4
         packet = Packet{data: data, destChannel: providerChannel}
