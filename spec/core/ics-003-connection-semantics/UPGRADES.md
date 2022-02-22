@@ -2,7 +2,7 @@
 
 ### Synopsis
 
-This standard document specifies the interfaces and state machine logic that IBC implementations must implement in order to enable existing connections to upgrade after initial connection handshake.
+This standard document specifies the interfaces and state machine logic that IBC implementations must implement in order to enable existing connections to upgrade after the initial connection handshake.
 
 ### Motivation
 
@@ -10,12 +10,13 @@ As new features get added to IBC, chains may wish the take advantage of new conn
 
 ### Desired Properties
 
-- Both chains must agree to the renegotiated connection parameters
-- Connection state and logic on both chains should either be using the old parameters or the new parameters, but should not be in an in-between state. i.e. It should not be possible for a chain to write state to an old proof path, while the counterparty expects a new proof path.
-- If the upgrade handshake is unsuccessful, the connection must fall-back to the original connection parameters
-- If the upgrade handshake is successful, then both connection ends have adopted the new connection parameters and process IBC data appropriately.
+- Both chains MUST agree to the renegotiated connection parameters.
+- Connection state and logic on both chains SHOULD either be using the old parameters or the new parameters, but MUST NOT be in an in-between state, e.g., it MUST NOT be possible for a chain to write state to an old proof path, while the counterparty expects a new proof path.
+- The connection upgrade protocol is atomic, i.e., 
+  - either it is unsuccessful and then the connection MUST fall-back to the original connection parameters; 
+  - or it is successful and then both connection ends MUST adopt the new connection parameters and process IBC data appropriately.
 - The connection upgrade protocol should have the ability to change all connection-related parameters; however the connection upgrade protocol MUST NOT be able to change the underlying `ClientState`.
-- The connection upgrade protocol may not modify the connection identifiers.
+The connection upgrade protocol MUST NOT modify the connection identifiers.
 
 ## Technical Specification
 
@@ -48,17 +49,17 @@ interface ConnectionEnd {
 }
 ```
 
-The desired property that the connection upgrade protocol may not modify the underlying clients or connection identifiers, means that only some fields are upgradable by the upgrade protocol.
+The desired property that the connection upgrade protocol MUST NOT modify the underlying clients or connection identifiers, means that only some fields of `ConnectionEnd` are upgradable by the upgrade protocol.
 
 - `state`: The state is specified by the handshake steps of the upgrade protocol.
 
-CAN BE MODIFIED:
+MAY BE MODIFIED:
 - `counterpartyPrefix`: The prefix MAY be modified in the upgrade protocol. The counterparty must accept the new proposed prefix value, or it must return an error during the upgrade handshake.
 - `version`: The version MAY be modified by the upgrade protocol. The same version negotiation that happens in the initial connection handshake can be employed for the upgrade handshake.
 - `delayPeriodTime`: The delay period MAY be modified by the upgrade protocol. The counterparty MUST accept the new proposed value or return an error during the upgrade handshake.
 - `delayPeriodBlocks`: The delay period MAY be modified by the upgrade protocol. The counterparty MUST accept the new proposed value or return an error during the upgrade handshake.
 
-CANNOT BE MODIFIED:
+MUST NOT BE MODIFIED:
 - `counterpartyConnectionIdentifier`: The counterparty connection identifier CAN NOT be modified by the upgrade protocol.
 - `clientIdentifier`: The client identifier CAN NOT be modified by the upgrade protocol
 - `counterpartyClientIdentifier`: The counterparty client identifier CAN NOT be modified by the upgrade protocol
@@ -93,7 +94,7 @@ NOTE: One of the timeout height or timeout timestamp must be non-zero.
 
 ### Store Paths
 
-##### Restore Connection Path
+#### Restore Connection Path
 
 The chain must store the previous connection end so that it may restore it if the upgrade handshake fails. This may be stored in the private store.
 
@@ -103,7 +104,7 @@ function restorePath(id: Identifier): Path {
 }
 ```
 
-##### UpgradeStatus Path
+#### UpgradeStatus Path
 
 The upgrade status path is a public path that can signal the status of the upgrade to the counterparty. It does not store anything in the successful case, but it will store a sentinel abort value in the case that a chain does not accept the proposed upgrade.
 
@@ -157,7 +158,7 @@ function connUpgradeInit(
         proposedUpgrade.connection.state == UPGRADE_INIT &&
         proposedUpgrade.connection.counterpartyConnectionIdentifier == currentConnection.counterpartyConnectionIdentifier &&
         proposedUpgrade.connection.clientIdentifier == currentConnection.clientIdentifier &&
-        proposedUpgrade.connection.counterpartyClientIdentifier == currentConnection.counterpartyClientIdentifier &&
+        proposedUpgrade.connection.counterpartyClientIdentifier == currentConnection.counterpartyClientIdentifier
     )
 
     // either timeout height or timestamp must be non-zero
@@ -199,7 +200,7 @@ function connUpgradeTry(
         proposedUpgrade.connection.state == UPGRADE_TRY &&
         proposedUpgrade.connection.counterpartyConnectionIdentifier == currentConnection.counterpartyConnectionIdentifier &&
         proposedUpgrade.connection.clientIdentifier == currentConnection.clientIdentifier &&
-        proposedUpgrade.connection.counterpartyClientIdentifier == currentConnection.counterpartyClientIdentifier &&
+        proposedUpgrade.connection.counterpartyClientIdentifier == currentConnection.counterpartyClientIdentifier
     )
 
     // if there is a crossing hello, ie an UpgradeInit has been called on both connectionEnds,
