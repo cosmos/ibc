@@ -205,12 +205,18 @@ The following properties define the guarantees of CCV on *registering* on the pr
 
 - ***Consumer Slashing Warranty***: If the CCV module of a consumer chain `cc` receives at block height `h` evidence that a validator `val` misbehaved on `cc` at height `h'`, then it MUST send at height `h` to the provider chain a `SlashPacket` containing both `val` and `HtoVSC(h')`, i.e., the id of the latest VSC that updated the validator set on `cc` at height `h'` (or `0` if such a VSC does not exist). 
 
+> TODO: *Consumer Slashing Warranty* doesn't hold during channel initialization, i.e., the `SlashPacket` is sent once the CCV channel is established. 
+
+> TODO: The consumer CCV module MUST send only one packet per received evidence. 
+
 - ***Provider Slashing Warranty***: If the provider CCV module receives in a block from a consumer chain `cc` a `SlashPacket` containing a validator `val` and a VSC id `vscId`, then it MUST request in the same block the provider Staking module to slash `val` for misbehaving at height `h`, such that
   - if `vscId = 0`, `h` is the height of the block when the provider chain provided to `cc` the first VSC;
   - otherwise, `h` is the height of the block immediately subsequent to the block when the provider chain provided to `cc` the VSC with id `vscId`.
 
 - ***VSC Maturity and Slashing Order***: If a consumer chain sends to the provider chain a `SlashPacket` before a maturity notification of a VSC, then the provider chain MUST NOT receive the maturity notification before the `SlashPacket`.
   > **Note**: *VSC Maturity and Slashing Order* requires the VSC maturity notifications to be sent through their own IBC packets (instead of e.g., through acknowledgements of `VSCPacket`s). 
+
+> TODO: properties for jailing
 
 ## Correctness Reasoning
 [&uparrow; Back to Outline](#outline)

@@ -89,7 +89,7 @@ A VSC consists of a batch of validator updates, i.e., changes in the voting powe
 
 > **Background**: In the context of single-chain validation, the changes of the validator set are triggered by the *Staking module*, 
 > i.e., a module of the ABCI application that implements the proof of stake mechanism needed by the [security model](#security-model). 
-> For more details, take a look at the [Staking module documentation](https://docs.cosmos.network/master/modules/staking/) of Cosmos SDK.
+> For more details, take a look at the [Staking module documentation](https://docs.cosmos.network/v0.44/modules/staking/) of Cosmos SDK.
 
 Every VSC consists of a batch of validator updates, some of which can decrease the voting power granted to validators. 
 These decreases may be a consequence of unbonding operations (e.g., unbonding delegations) on the provider chain.
@@ -106,7 +106,7 @@ Thus, a *VSC reaching maturity* on a consumer chain means that all the unbonding
 > - The *initiation*, e.g., a delegator requests their delegated tokens to be unbonded. The initiation of an operation of unbonding an amount of the tokens a validator bonded results in a change in the voting power of that validator.
 > - The *completion*, e.g., the tokens are actually unbonded and transferred back to the delegator. To complete, unbonding operations must reach *maturity*, i.e., `UnbondingPeriod` must elapse since the operations were initiated. 
 > 
-> For more details, take a look at the [Cosmos SDK documentation](https://docs.cosmos.network/master/modules/staking/).
+> For more details, take a look at the [Cosmos SDK documentation](https://docs.cosmos.network/v0.44/modules/staking/).
 
 > **Note**: Time periods are measured in terms of the block time, i.e., `currentTimestamp()` (as defined in [ICS 24](../../core/ics-024-host-requirements)). 
 > As a result, a consumer chain MAY start the unbonding period for every VSC that it applies in a block at any point during that block.
@@ -125,7 +125,7 @@ The following figure shows an overview of the CCV Channel initialization.
 
 ![Channel Initialization Overview](./figures/ccv-init-overview.png?raw=true)
 
-Consumer chains are created through governance proposals. For details on how governance proposals work, take a look at the [Governance module documentation](https://docs.cosmos.network/master/modules/gov/) of Cosmos SDK.
+Consumer chains are created through governance proposals. For details on how governance proposals work, take a look at the [Governance module documentation](https://docs.cosmos.network/v0.44/modules/gov/) of Cosmos SDK.
 
 The channel initialization consists of four phases:
 - **Create clients**: The provider CCV module handles every passed proposal to spawn a new consumer chain. 
@@ -181,7 +181,7 @@ Therefore, the provider Staking module needs to be aware of the VSC maturity not
 
 The ***provider chain*** achieves this through the following approach: 
 - The provider Staking module is notifying the CCV module when any unbonding operation is initiated. 
-  This is done through [Staking hooks](https://docs.cosmos.network/master/modules/staking/06_hooks.html), 
+  This is done through [Staking hooks](https://docs.cosmos.network/v0.44/modules/staking/06_hooks.html), 
   i.e., operations registered by the CCV module to be execute when a certain event has occurred within the provider Staking module 
   (for more details, see the [Interfacing Other Modules](./technical_specification.md#interfacing-other-modules) section). 
   As a result, the CCV module maps all the unbonding operations to the corresponding VSCs.  
@@ -254,4 +254,4 @@ The following figure shows an overview of the Consumer Initiated Slashing operat
 - The provider CCV module receives the `SlashPacket` in block `Hp1`. 
   As a result, it requests the provider Staking module to slash `V` for its misbehavior at height `VSCtoH(HtoVSC(Hc1))`,
   i.e., the height on the provider chain where the voting power was updated by the VSC with id `HtoVSC(Hc1)`.
-  > **Note**: The provider CCV module MAY also request the provider Staking module to jail `V`. As a result, in the subsequent provided VSC, `V`'s voting power is updated to zero. 
+  > **Note**: The provider CCV module MAY also request the provider ABCI application to jail `V`. As a result, in the subsequent provided VSC, `V`'s voting power is updated to zero. 

@@ -10,11 +10,10 @@
   - [CCV Data Structures](#ccv-data-structures)
   - [CCV Packets](#ccv-packets)
   - [CCV State](#ccv-state)
-- [Sub-protocols](#sub-protocols)
-  - [Initialization](#initialization)
   - [Channel Closing Handshake](#channel-closing-handshake)
   - [Packet Relay](#packet-relay)
   - [Validator Set Update](#validator-set-update)
+  - [Consumer Initiated Slashing](#consumer-initiated-slashing)
 
 ## Placing CCV within an ABCI Application
 [&uparrow; Back to Outline](#outline)
@@ -57,10 +56,10 @@ Before describing the data structures and sub-protocols of the CCV protocol, we 
 - For the [Initialization sub-protocol](#initialization), the provider CCV module interacts with a Governance module by handling governance proposals to spawn new consumer chains. 
   If such proposals pass, then all validators on the provider chain MUST validate the consumer chain at spawn time; 
   otherwise they get slashed. 
-  For an example of how governance proposals work, take a look at the [Governance module documentation](https://docs.cosmos.network/master/modules/gov/) of Cosmos SDK. 
+  For an example of how governance proposals work, take a look at the [Governance module documentation](https://docs.cosmos.network/v0.44/modules/gov/) of Cosmos SDK. 
 
-- For the [Validator Set Update sub-protocol](#validator-set-update), the provider CCV module interacts with a Staking module on the provider chain. 
-  For an example of how staking works, take a look at the [Staking module documentation](https://docs.cosmos.network/master/modules/staking/) of Cosmos SDK. 
+- The provider CCV module interacts with a Staking module on the provider chain. 
+  For an example of how staking works, take a look at the [Staking module documentation](https://docs.cosmos.network/v0.44/modules/staking/) of Cosmos SDK. 
   The interaction is defined by the following interface:
   ```typescript 
   interface StakingKeeper {
@@ -70,14 +69,31 @@ Before describing the data structures and sub-protocols of the CCV protocol, we 
     // get validator updates from the provider Staking module
     GetValidatorUpdates(chainID: string): [ValidatorUpdate]
 
-
     // notify the Staking module of unboding operations that
     // have matured from the consumer chain's perspective 
     CompleteStoppedUnbonding(id: uint64)
+
+    // request the Staking module to slash a validator
+    Slash(valAddress: string, 
+          infractionHeight: int64, 
+          power: int64, 
+          slashFactor: int64)
   }
   ```
 
-- In addition, the following hooks enable the provider CCV module to register operations to be execute when certain events occur within the Staking module:
+- The provider CCV modules interact with a Slashing module. 
+  For an example of how slashing works, take a look at the [Slashing module documentation](https://docs.cosmos.network/v0.44/modules/slashing/) of Cosmos SDK. 
+  The interaction is defined by the following interface:
+  ```typescript 
+  interface SlashingKeeper {
+    // request the Slashing module to jail a validator until time
+    JailUntil(valAddress: string, time: uint64)
+  }
+  ```
+
+> TODO: It may be cleaner to move `Slash` to the slashing module.
+
+- The following hooks enable the provider CCV module to register operations to be execute when certain events occur within the provider Staking module:
   ```typescript
   // invoked by the Staking module after 
   // initiating an unbonding operation
@@ -88,6 +104,19 @@ Before describing the data structures and sub-protocols of the CCV protocol, we 
   function BeforeUnbondingOpCompleted(opId: uint64): Bool;
   ```
 
+- The following hooks enable the consumer CCV module to register operations to be execute when certain evidence is received by the consumer ABCI application:
+  ```typescript
+  // invoked by the consumer ABCI application 
+  // after receiving evidence of downtime
+  function AfterDowntimeEvidence(valAddress: string, power: int64);
+
+  // invoked by the consumer ABCI application 
+  // after receiving evidence of 
+  // - equivocation, i.e., double signing
+  // - light client attack 
+  function AfterEquivocationEvidence(valAddress: string, power: int64, infractionHeight: int64);
+  ```
+
 ## Data Structures
 
 ### External Data Structures
@@ -95,17 +124,16 @@ Before describing the data structures and sub-protocols of the CCV protocol, we 
 
 This section describes external data structures used by the CCV module.
 
-The CCV module uses the ABCI `ValidatorUpdate` data structure, which consists of a validator address (i.e., the hash of its public key) and its power, i.e.,
+The CCV module uses the ABCI `ValidatorUpdate` data structure, which consists of a validator and its power (for more details, take a look at the [ABCI documentation](https://docs.tendermint.com/v0.34/spec/abci/abci.html#data-types)), i.e.,
 ```typescript
 interface ValidatorUpdate {
-  address: string
+  pubKey: PublicKey
   power: int64
 }
 ```
 The provider chain sends to the consumer chain a list of `ValidatorUpdate`s, containing an entry for every validator that had its power updated. 
 
-The data structures required for creating clients (i.e., `ClientState`, `ConsensusState`) are defined in [ICS 2](../../core/ics-002-client-semantics). 
-Specifically for Tendermint clients, the data structures are defined in [ICS 7](../../client/ics-007-tendermint-client).
+The data structures required for creating clients (i.e., `ClientState`, `ConsensusState`) are defined in [ICS 7](../../client/ics-007-tendermint-client).
 
 ### CCV Data Structures
 [&uparrow; Back to Outline](#outline)
@@ -145,7 +173,7 @@ The CCV module is initialized through the `InitGenesis` method when the chain is
   }
   ```
 
-The provider CCV module handles governance proposals to spawn new consumer chains. The structure of these proposals is defined by the `Proposal` interface in the [Governance module documentation](https://docs.cosmos.network/master/modules/gov/). The content of these proposals is described by the following interface (we omit typical fields such as title and description):
+The provider CCV module handles governance proposals to spawn new consumer chains. The structure of these proposals is defined by the `Proposal` interface in the [Governance module documentation](https://docs.cosmos.network/v0.44/modules/gov/). The content of these proposals is described by the following interface (we omit typical fields such as title and description):
   ```typescript
   interface CreateConsumerChainProposal {
     // The proposed chain ID of the new consumer chain.
@@ -176,8 +204,7 @@ The provider CCV module handles governance proposals to spawn new consumer chain
 ### CCV Packets
 [&uparrow; Back to Outline](#outline)
 
-The structure of the packets sent through the CCV channel is defined by the `Packet` interface in [ICS 4](../../core/ics-004-channel-and-packet-semantics). Packets are acknowledged by the remote side by sending back an `Acknowledgement` that contains either a result, created with `NewResultAcknowledgement()`, or an error, created with `NewErrorAcknowledgement()`. 
-
+The structure of the packets sent through the CCV channel is defined by the `Packet` interface in [ICS 4](../../core/ics-004-channel-and-packet-semantics). 
 The following packet data types are required by the CCV module:
 - `VSCPacketData` contains a list of validator updates, i.e., 
     ```typescript
@@ -186,41 +213,30 @@ The following packet data types are required by the CCV module:
       updates: [ValidatorUpdate]
     }
     ```
+- `SlashPacketData` contains a request to slash a validator, i.e.,
+  ```typescript
+    interface SlashPacketData {
+      valAddress: string // validator address, i.e., the hash of its public key
+      valPower: int64
+      vscId: uint64
+      slashFactor: int64
+      jailTime: int64
+    }
+    ```
 > Note that for brevity we use e.g., `VSCPacket` to refer to a packet with `VSCPacketData` as its data.
+
+Packets are acknowledged by the remote side by sending back an `Acknowledgement` that contains either a result (in case of success) or an error (as defined in [ICS 4](../../core/ics-004-channel-and-packet-semantics/README.md#acknowledgement-envelope)). 
+The following acknowledgement types are required by the CCV module:
+```typescript
+type VSCPacketAcknowledgement = VSCPacketSuccess | VSCPacketError;
+type SlashPacketAcknowledgement = SlashPacketSuccess | SlashPacketError;
+type PacketAcknowledgement = PacketSuccess | PacketError; // general ack
+```
 
 ### CCV State
 [&uparrow; Back to Outline](#outline)
 
 This section describes the internal state of the CCV module. For simplicity, the state is described by a set of variables; for each variable, both the type and a brief description is provided. In practice, all the state (except for hardcoded constants, e.g., `ProviderPortId`) is stored in a key/value store (KVS). The host state machine provides a KVS interface with three functions, i.e., `get()`, `set()`, and `delete()` (as defined in [ICS 24](../../core/ics-024-host-requirements)).
-
-- `[VSCPacketData]` is a list of `VSCPacketData`s. It exposes the following interface:
-  ```typescript
-  interface [VSCPacketData] {
-    // append a VSCPacketData to the list;
-    // the list is modified
-    Append(data: VSCPacketData) 
-
-    // remove all the VSCPacketData mapped to chainId;
-    // the list is modified
-    Remove(chainId: string)
-  }
-
-- `[ValidatorUpdate]` is a list of `ValidatorUpdate`s. It exposes the following interface:
-  ```typescript
-  interface [ValidatorUpdate] {
-    // append updates to the list;
-    // the list is modified
-    Append(updates: [ValidatorUpdate]) 
-
-    // return an aggregated list of updates, i.e., 
-    // keep only the latest update per validator;
-    // the original list is not modified
-    Aggregate(): [ValidatorUpdate]
-
-    // remove all the updates from the list;
-    // the list is modified
-    RemoveAll()
-  }
 
 <!-- omit in toc -->
 #### State on the provider chain
@@ -231,7 +247,17 @@ This section describes the internal state of the CCV module. For simplicity, the
 - `chainToChannel: Map<string, Identifier>` is a mapping from consumer chain IDs to the CCV channel IDs.
 - `channelToChain: Map<Identifier, string>` is a mapping from CCV channel IDs to consumer chain IDs.
 - `channelStatus: Map<Identifier, ChannelStatus>` is a mapping from CCV channel IDs to CCV channel state, as indicated by `ChannelStatus`.
-- `pendingVSCPackets: Map<string, [VSCPacketData]>` is a mapping from consumer chain IDs to a list of pending `VSCPacketData`s that must be sent to the consumer chain once the CCV channel is established.
+- `pendingVSCPackets: Map<string, [VSCPacketData]>` is a mapping from consumer chain IDs to a list of pending `VSCPacketData`s that must be sent to the consumer chain once the CCV channel is established. The map exposes the following interface: 
+  ```typescript
+  interface Map<string, [VSCPacketData]> {
+    // append a VSCPacketData to the list mapped to chainId;
+    // the list is modified
+    Append(chainId: string, data: VSCPacketData) 
+
+    // remove all the VSCPacketData mapped to chainId;
+    // the list is modified
+    Remove(chainId: string)
+  }
 - `vscId: uint64` is a monotonic strictly increasing and positive ID that is used to uniquely identify the VSCs sent to the consumer chains. 
   Note that `0` is used as a special ID for the mapping from consumer heights to provider heights.
 - `initH: Map<string, Height>` is a mapping from consumer chain IDs to the heights on the provider chain. 
@@ -255,27 +281,61 @@ This section describes the internal state of the CCV module. For simplicity, the
 - `providerClient: Identifier` identifies the client of the provider chain (on the consumer chain) that the CCV channel is build upon.
 - `providerChannel: Identifier` identifies the consumer's channel end of the CCV channel.
 - `channelStatus: ChannelStatus` is the status of the CCV channel.
-- `pendingChanges: [ValidatorUpdate]` is a list of `ValidatorUpdate`s received, but not yet applied to the validator set. It is emptied on every `EndBlock()`. 
+- `pendingChanges: [ValidatorUpdate]` is a list of `ValidatorUpdate`s received, but not yet applied to the validator set. 
+  It is emptied on every `EndBlock()`. The list exposes the following interface:
+  ```typescript
+  interface [ValidatorUpdate] {
+    // append updates to the list;
+    // the list is modified
+    Append(updates: [ValidatorUpdate]) 
+
+    // return an aggregated list of updates, i.e., 
+    // keep only the latest update per validator;
+    // the original list is not modified
+    Aggregate(): [ValidatorUpdate]
+
+    // remove all the updates from the list;
+    // the list is modified
+    RemoveAll()
+  }
 - `HtoVSC: Map<Height, uint64>` is a mapping from consumer chain heights to VSC IDs. It enables the mapping from consumer heights to provider heights., i.e.,
   - if `HtoVSC[h] == 0`, then the voting power on the consumer chain at height `h` was setup at genesis during Channel Initialization;
   - otherwise, the voting power on the consumer chain at height `h` was updated by the VSC with ID `HtoVSC[h]`.
-- `unbondingPackets: [(Packet, Time)]` is a list of `(packet, unbondingTime)` tuples, where `packet` is a received `VSCPacket` and `unbondingTime` is the packet's unbonding time. 
+- `unbondingPackets: [(Packet, uint64)]` is a list of `(packet, unbondingTime)` tuples, where `packet` is a received `VSCPacket` and `unbondingTime` is the packet's unbonding time. 
   The list is used to keep track of when unbonding operations are matured on the consumer chain. It exposes the following interface:
   ```typescript
-  interface [(Packet, Time)]> {
+  interface [(Packet, uint64)] {
     // add a packet with its unbonding time to the list;
     // the list is modified
-    Add(packet: Packet, unbondingTime: Time)
+    Add(packet: Packet, unbondingTime: uint64)
 
     // return the list sorted by the unbonding time;
     // the original list is not modified
-    SortedByUnbondingTime(): [(Packet, Time)]>
+    SortedByUnbondingTime(): [(Packet, uint64)]
 
     // remove (packet, unbondingTime) from the list;
     // the list is modified
-    Remove(packet: Packet, unbondingTime: Time)
+    Remove(packet: Packet, unbondingTime: uint64)
   }
   ```
+- `pendingSlashPackets: [SlashPacketData]` is a list of pending `SlashPacketData`s that must be sent to the provider chain once the CCV channel is established. The list exposes the following interface: 
+  ```typescript
+  interface [SlashPacketData] {
+    // append a SlashPacketData to the list;
+    // the list is modified
+    Append(data: SlashPacketData) 
+
+    // return the reverse list, i.e., latest SlashPacket first;
+    // the original list is not modified
+    Reverse(): [SlashPacketData]
+
+    // remove all the SlashPacketData;
+    // the list is modified
+    Remove()
+  }
+- `jailUntil: Map<string, uint64>` is a mapping from validator addresses to a time instance. 
+  It enables the consumer CCV module to keep track of how long are validators jailed and consequently to avoid sending to the provider chain two slashing requests for the same infraction, e.g., downtime. 
+  It has no impact on the VSCs applied by the consumer CCV module.
  
 ## Sub-protocols
 
@@ -815,12 +875,13 @@ function onChanCloseConfirm(
 ```typescript
 // PCF: Provider Chain Function
 // implements the ICS26 interface
-function onRecvPacket(packet: Packet): Packet {
+function onRecvPacket(packet: Packet): bytes {
   switch typeof(packet.data) {
-    // the provider chain receives no packets
+    case SlashPacketData:
+      return onRecvSlashPacket(packet)
     default:
       // unexpected packet type
-      return NewErrorAcknowledgement()
+      return PacketError
   }    
 }
 ```
@@ -838,10 +899,10 @@ function onRecvPacket(packet: Packet): Packet {
 ```typescript
 // PCF: Provider Chain Function
 // implements the ICS26 interface
-function onAcknowledgePacket(packet: Packet) {
+function onAcknowledgePacket(packet: Packet, ack: bytes) {
   switch typeof(packet.data) {
     case VSCPacketData:
-      onAcknowledgeVSCPacket(packet)
+      onAcknowledgeVSCPacket(packet, ack)
     default:
       // unexpected packet type
       abortTransactionUnless(FALSE)
@@ -889,13 +950,13 @@ function onTimeoutPacket(packet Packet) {
 ```typescript
 // CCF: Consumer Chain Function
 // implements the ICS26 interface
-function onRecvPacket(packet: Packet): Packet {
+function onRecvPacket(packet: Packet): bytes {
   switch typeof(packet.data) {
     case VSCPacketData:
       return onRecvVSCPacket(packet)
     default:
       // unexpected packet type
-      return NewErrorAcknowledgement()
+      return PacketError
   }
 }
 ```
@@ -913,9 +974,10 @@ function onRecvPacket(packet: Packet): Packet {
 ```typescript
 // CCF: Consumer Chain Function
 // implements the ICS26 interface
-function onAcknowledgePacket(packet: Packet) {
+function onAcknowledgePacket(packet: Packet, ack: bytes) {
   switch typeof(packet.data) {
-    // the consumer chain sends no packets
+    case SlashPacketData:
+      onAcknowledgeSlashPacket(packet, ack)
     default:
       // unexpected packet type
       abortTransactionUnless(FALSE)
@@ -938,7 +1000,8 @@ function onAcknowledgePacket(packet: Packet) {
 // implements the ICS26 interface
 function onTimeoutPacket(packet Packet) {
   switch typeof(packet.data) {
-    // the consumer chain sends no packets
+    case SlashPacketData:
+      onTimeoutSlashPacket(packet)
     default:
       // unexpected packet type
       abortTransactionUnless(FALSE) 
@@ -998,7 +1061,7 @@ function EndBlock(): [ValidatorUpdate] {
       packetData = VSCPacketData{id: vscId, updates: valUpdates}
 
       // add VSCPacket data to the list of pending VSCPackets 
-      pendingVSCPackets[chainId] = pendingVSCPackets[chainId].Append(packetData)
+      pendingVSCPackets.Append(chainId, packetData)
     }
 
     // check whether there is an established CCV channel to the consumer chain
@@ -1046,7 +1109,8 @@ function EndBlock(): [ValidatorUpdate] {
     - If there is an established CCV channel for the the consumer chain with `chainId`, then
       - if `initH[chainId]` is not already set, then `initH[chainId]` is set to the current height;
       - for each `VSCPacketData` in the list of pending VSCPackets associated to `chainId`
-        - a packet with the `VSCPacketData` is sent on the channel associated with the consumer chain with `chainId`.
+        - a packet with the `VSCPacketData` is sent on the channel associated with the consumer chain with `chainId`;
+      - all the pending VSCPackets associated to `chainId` are removed.
   - `vscId` is mapped to the height of the subsequent block. 
   - `vscId` is incremented.
 - Error condition:
@@ -1158,7 +1222,7 @@ function onTimeoutVSCPacket(packet Packet) {
   - None.
 
 <!-- omit in toc -->
-#### **[CCV-PCF-SHOOK-AFUBOPCR.1]**
+#### **[CCV-PCF-HOOK-AFUBOPCR.1]**
 ```typescript
 // PCF: Provider Chain Function
 // implements a Staking module hook
@@ -1190,7 +1254,7 @@ function AfterUnbondingOpInitiated(opId: uint64) {
 
 
 <!-- omit in toc -->
-#### **[CCV-PCF-SHOOK-BFUBOPCO.1]**
+#### **[CCV-PCF-HOOK-BFUBOPCO.1]**
 ```typescript
 // PCF: Provider Chain Function
 // implements a Staking module hook
@@ -1237,14 +1301,14 @@ function BeginBlock() {
 #### **[CCV-CCF-RECVVSC.1]**
 ```typescript
 // CCF: Consumer Chain Function
-function onRecvVSCPacket(packet: Packet): Packet {
+function onRecvVSCPacket(packet: Packet): bytes {
   channelId = packet.getDestinationChannel()
   // check whether the packet was sent on the CCV channel
   if providerChannel != "" && providerChannel != channelId {
     // packet sent on a channel other than the established provider channel;
     // close channel and return error acknowledgement
     channelKeeper.ChanCloseInit(channelId)
-    return NewErrorAcknowledgement()
+    return VSCPacketError
   }
 
   // set HtoVSC mapping
@@ -1257,6 +1321,9 @@ function onRecvVSCPacket(packet: Packet): Packet {
 
     // set the channel as the provider channel
     providerChannel = channelId
+
+    // send pending slash requests
+    SendPendingSlashRequests()
   }
 
   // store the list of updates from the packet
@@ -1280,7 +1347,10 @@ function onRecvVSCPacket(packet: Packet): Packet {
     - an error acknowledgement is returned.
   - Otherwise,
     - the height of the subsequent block is mapped to `packet.data.id`;  
-    - if the CCV channel status is not `VALIDATING`, then it is set to `VALIDATING` and the channel ID is set as the provider channel;
+    - if the CCV channel status is not `VALIDATING`, then 
+      - the CCV channel status is set to `VALIDATING`;
+      - the channel ID is set as the provider channel;
+      - the pending slash requests are sent to the provider chain;
     - `packet.data.updates` are appended to `pendingChanges`;
     - `(packet, unbondingTime)` is added to `unbondingPackets`, where `unbondingTime = currentTimestamp() + UnbondingPeriod`;
     - a nil acknowledgement is returned, i.e., the acknowledgement will be sent asynchronously.
@@ -1335,7 +1405,7 @@ function UnbondMaturePackets() {
     foreach (packet, unbondingTime) in unbondingPackets.SortedByUnbondingTime() {
       if currentTimestamp() >= unbondingTime {
         // send acknowledgement to the provider chain
-        channelKeeper.WriteAcknowledgement(providerChannel, packet, NewResultAcknowledgement())
+        channelKeeper.WriteAcknowledgement(providerChannel, packet, VSCPacketSuccess)
               
         // remove entry from the list
         unbondingPackets.Remove(packet, unbondingTime)
@@ -1359,3 +1429,250 @@ function UnbondMaturePackets() {
   - Otherwise, the state is not changed.
 - Error condition:
   - None.
+
+### Consumer Initiated Slashing
+[&uparrow; Back to Outline](#outline)
+
+<!-- omit in toc -->
+#### **[CCV-PCF-RECVSLASH.1]**
+```typescript
+// PCF: Provider Chain Function
+function onRecvSlashPacket(packet: Packet): bytes {
+  channelId = packet.getDestinationChannel()
+  // check whether the channel the packet was sent on 
+  // is an established CCV channel
+  chainId = channelToChain[channelId]
+  if chainId == "" {
+    // packet sent on a non-established channel;
+    // incorrect behavior
+    channelStatus[channelId] = INVALID
+    channelKeeper.ChanCloseInit(channelId)
+    return SlashPacketError
+  }
+
+  // get the height that maps to the VSC ID in the packet data
+  if packet.data.vscId == 0 {
+    // the infraction happened before sending any VSC to this chain
+    infractionHeight = initH[chainId]
+  }
+  else {
+    infractionHeight = VSCtoH(packet.data.vscId)
+  }
+
+  // request the Staking module to slash the validator
+  stakingKeeper.Slash(
+    packet.data.valAddress, 
+    infractionHeight, 
+    packet.data.valPower, 
+    packet.data.slashFactor))
+
+  // request the Slashing module to jail the validator
+  timestamp = currentTimestamp() + data.jailTime
+  slashingKeeper.JailUntil(packet.data.valAddress, timestamp)
+
+  return SlashPacketSuccess
+}
+```
+- Initiator: 
+  - The `onRecvPacket()` method.
+- Expected precondition:
+  - The IBC module on the provider chain received a `SlashPacket` on a channel owned by the provider CCV module.
+- Expected postcondition:
+  - If the channel the packet was sent on is not an established CCV channel, then
+    - the channel status is set to `INVALID`;
+    - the channel closing handshake is initiated;
+    - an error acknowledgment is returned.
+  - Otherwise,
+    - if `packet.data.vscId == 0`, `infractionHeight` is set to `initH[chainId]`, i.e., the height when the first VSC was provided to this consumer chain;
+    - otherwise, `infractionHeight` is set to `VSCtoH(packet.data.vscId)`, i.e., the height at which the voting power was last updated by the validator updates in the VSC with ID `packet.data.vscId`;
+    - a request is made to the Staking module to slash the validator with address `packet.data.valAddress` for misbehaving at height `infractionHeight`;
+    - a request is made to the Slashing module to jail the validator with address `packet.data.valAddress` for a period `data.jailTime`;
+    - a successful acknowledgment is returned.
+- Error condition:
+  - None.
+
+---
+
+<!-- omit in toc -->
+#### **[CCV-CCF-ACKSLASH.1]**
+```typescript
+// CCF: Consumer Chain Function
+function onAcknowledgeSlashPacket(packet: Packet, ack: bytes) {
+  // if the slash request failed, clear jailUntil for the validator
+  if ack == SlashPacketError {
+    jailUntil[packet.data.valAddress] = 0
+  }
+}
+```
+- Initiator: 
+  - The `onAcknowledgePacket()` method.
+- Expected precondition:
+  - The IBC module on the consumer chain received an acknowledgement of a `SlashPacket` on a channel owned by the consumer CCV module.
+- Expected postcondition:
+  - If the slash request was not successful, then unset `jailUntil[packet.data.valAddress]`.
+- Error condition:
+  - None.
+
+<!-- omit in toc -->
+#### **[CCV-CCF-TOSLASH.1]**
+```typescript
+// CCF: Consumer Chain Function
+function onTimeoutSlashPacket(packet Packet) {
+  // TODO Do we need to notify the provider to close the channel?
+```
+- Initiator: 
+  - The `onTimeoutPacket()` method.
+- Expected precondition:
+  - The IBC module on the consumer chain received a timeout of a `SlashPacket` on a channel owned by the consumer CCV module.
+- Expected postcondition:
+  - None.
+- Error condition:
+  - None.
+
+<!-- omit in toc -->
+#### **[CCV-CCF-HOOK-AFDOWNEV.1]**
+```typescript
+// CCF: Consumer Chain Function
+// implements a ABCI application hook
+function AfterDowntimeEvidence(valAddress: string, power: int64) {
+  slashFactor = TBA // TODO governance
+  jailTime = TBA // TODO governance
+
+  // the infraction height of downtime evidence is the current block
+  infractionHeight = getCurrentHeight()
+
+  // send slash request to the provider chain
+  SendSlashRequest(valAddress, power, infractionHeight, slashFactor, jailTime)
+}
+```
+- **Initiator:** 
+  - The ABCI application.
+- **Expected precondition:**
+  - Evidence of downtime for a validator with address `valAddress` was received.  
+- **Expected postcondition:**
+  - Both `slashFactor` and `jailTime` parameters are set.
+  - `infractionHeight` is set to the current height.
+  - `SendSlashRequest(valAddress, power, infractionHeight, slashFactor, jailTime)` is invoked.
+- **Error condition:**
+  - None.
+
+> **Note:** In the [Golang Cosmos SDK implementation](https://github.com/cosmos/interchain-security/blob/c4ce132b75087818873e769a828ccb4db36df74e/x/ccv/child/keeper/hooks.go#L14), the `AfterDowntimeEvidence()` hook also changes the [internal state of the Slashing module](https://docs.cosmos.network/v0.44/modules/slashing/02_state.html). 
+
+<!-- omit in toc -->
+#### **[CCV-CCF-HOOK-AFEQEV.1]**
+```typescript
+// CCF: Consumer Chain Function
+// implements a ABCI application hook
+function AfterEquivocationEvidence(valAddress: string, power: int64, infractionHeight: int64) {
+  slashFactor = TBA // TODO governance
+  jailTime = TBA // TODO governance
+  
+  // send slash request to the provider chain
+  SendSlashRequest(valAddress, power, infractionHeight, slashFactor, jailTime)
+}
+```
+- **Initiator:** 
+  - The ABCI application.
+- **Expected precondition:**
+  - Evidence of equivocation for a validator with address `valAddress` was received.  
+- **Expected postcondition:**
+  - Both `slashFactor` and `jailTime` parameters are set.
+  - `SendSlashRequest(valAddress, power, infractionHeight, slashFactor, jailTime)` is invoked.
+- **Error condition:**
+  - None.
+
+<!-- omit in toc -->
+#### **[CCV-CCF-SNDSLASH.1]**
+```typescript
+// CCF: Consumer Chain Function
+// Utility method
+function SendSlashRequest(
+  valAddress: string, 
+  power: int64, 
+  infractionHeight: Height,
+  slashFactor: int64,
+  jailTime: int66) {
+    // check whether the validator is already jailed
+    if data.valAddress in jailUntil.Keys() AND jailUntil[data.valAddress] > currentTimestamp() {
+      return
+    }
+
+    // create SlashPacket data
+    packetData = SlashPacketData{
+      valAddress: valAddress,
+      valPower: power,
+      vscId: VSCtoH(infractionHeight),
+      slashFactor: slashFactor,
+      jailTime: jailTime
+    }
+
+    // check whether the CCV channel to the provider chain is established
+    if providerChannel != "" {
+      // create packet and send it using the interface exposed by ICS-4
+      packet = Packet{data: packetData, destChannel: providerChannel}
+      channelKeeper.SendPacket(packet)
+
+      // set jailUntil for this validator
+      jailUntil[data.valAddress] = currentTimestamp() + data.jailTime
+    }
+    else {
+      // add SlashPacket data to the list of pending SlashPackets 
+      pendingSlashPackets.Append(packetData)
+    }
+}
+```
+- **Initiator:** 
+  - The consumer CCV module.
+- **Expected precondition:**
+  - Evidence of misbehavior for a validator with address `valAddress` was received.
+- **Expected postcondition:**
+  - If `jailUntil[data.valAddress]` is set and larger than the current timestamp, then none.
+  - Otherwise, 
+    - a `SlashPacket` data `packetData` is created;
+    - if the CCV channel to the provider chain is established, then 
+      - a packet with the `packetData` is sent to the provider chain;
+      - `jailUntil[data.valAddress]` is set to the current timestamp plus `data.jailTime`;
+    - otherwise `packetData` appended to `pendingSlashPackets`.
+- **Error condition:**
+  - None.
+
+<!-- omit in toc -->
+#### **[CCV-CCF-SNDPESLASH.1]**
+```typescript
+// CCF: Consumer Chain Function
+// Utility method
+function SendPendingSlashRequests() {
+  // check whether the CCV channel to the provider chain is established
+  if providerChannel != "" {
+    // iterate over every pending SlashPacket in reverse order
+    foreach data IN pendingSlashPackets.Reverse() {
+
+      if jailUntil[data.valAddress] <= currentTimestamp() {
+        // create packet and send it using the interface exposed by ICS-4
+        packet = Packet{data: data, destChannel: providerChannel}
+        channelKeeper.SendPacket(packet)
+
+        // set jailUntil for this validator
+        jailUntil[data.valAddress] = currentTimestamp() + data.jailTime
+      }
+    }
+
+    // remove pending SlashPacket
+    pendingSlashPackets.Remove()
+  }
+}
+```
+- **Initiator:** 
+  - The consumer CCV module.
+- **Expected precondition:**
+  - None.
+- **Expected postcondition:**
+  - If the CCV channel to the provider chain is established,
+    - for each `data` in `pendingSlashPackets` in reverse order, such that `jailUntil[data.valAddress]` is not larger than the current timestamp,
+      - a packet with the `SlashPacketData` is sent to the provider chain;
+      - `jailUntil[data.valAddress]` is set to the current timestamp plus `data.jailTime`;
+    - all the pending `SlashPacket`s are removed.
+- **Error condition:**
+  - None.
+
+> **Note**: Iterating over pending `SlashPacket`s in reverse order ensures that validators that misbehave multiple times during channel initialization will be slashed for the latest infraction.  
