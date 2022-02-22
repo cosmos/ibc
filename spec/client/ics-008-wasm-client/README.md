@@ -16,7 +16,13 @@ This specification document describes an interface to a client (verification alg
 
 ### Motivation
 
-Wasm based light clients are decoupled from SDK source code, which enables one to upgrade existing light client or add support for other blockchain without modifying SDK source code.
+Currently adding a new client implementation or upgrading an existing one requires a hard upgrade because the client implementations are part of the static chain binary. Any change to the on-chain light client code is dependent on chain governance to approve an upgrade before it can be deployed.
+
+This may be acceptable when adding new client types, since the number of unique consensus algorithms that need to be supported is currently small. However, this process will become very tedious when it comes to upgrading light clients.
+
+Without dynamically upgradable light clients, a chain that wishes to upgrade its consensus algorithm (and thus break existing light clients) must wait for all counterparty chains to perform a hard upgrade that adds support for the upgraded light client before it itself can perform an upgrade on its chain. This will inevitably slow the pace of upgrades in the IBC network, since the deployment of an upgrade on even a very experimental, fast-moving chain will be blocked by an upgrade to a high-value chain that will be inherently more conservative.
+
+With dynamically upgradable light clients enabled by WASM, a chain may upgrade its consensus algorithm whenever it wishes and relayers may upgrade the client code of all counterparty chains without requiring the counterparty chains to perform an upgrade themselves. This prevents a dependency on counterparty chains when considering upgrading one's own consensus algorithm.
 
 ### Definitions
 
