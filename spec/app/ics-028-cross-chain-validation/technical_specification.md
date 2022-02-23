@@ -1145,10 +1145,12 @@ function EndBlock(): [ValidatorUpdate] {
 ```typescript
 // PCF: Provider Chain Function
 function onAcknowledgeVSCPacket(packet: Packet, ack: bytes) {
-  if ack == VSCPacketError {
-    // providing the VSC with id packet.data.id failed
-    // TODO what to do here?
-  }
+  // providing the VSC with id packet.data.id can fail, 
+  // i.e., ack == VSCPacketError, 
+  // only if the VSCPacket was sent on a channel 
+  // other than the established CCV channel;
+  // that should never happen, see EndBlock()
+  abortSystemUnless(ack != VSCPacketError)
 }
 ```
 - Initiator: 
@@ -1158,7 +1160,7 @@ function onAcknowledgeVSCPacket(packet: Packet, ack: bytes) {
 - Expected postcondition:
   - The state is not changed.
 - Error condition:
-  - None.
+  - The acknowledgement is `VSCPacketError`.
 
 <!-- omit in toc -->
 #### **[CCV-PCF-TOVSC.1]**
@@ -1191,7 +1193,7 @@ function onTimeoutVSCPacket(packet Packet) {
 #### **[CCV-PCF-RCVMAT.1]**
 ```typescript
 // PCF: Provider Chain Function
-function onRecvVSCMaturedPacket(packet: Packet) {
+function onRecvVSCMaturedPacket(packet: Packet): bytes {
   // get the channel ID of the CCV channel the packet was sent on
   channelId = packet.getDestinationChannel()
   
@@ -1215,6 +1217,8 @@ function onRecvVSCMaturedPacket(packet: Packet) {
   }
   // clean up vscToUnbondingOps mapping
   vscToUnbondingOps.Remove((chainId, vscId))
+
+  return VSCMaturedPacketSuccess
 }
 ```
 - Initiator: 
@@ -1228,6 +1232,7 @@ function onRecvVSCMaturedPacket(packet: Packet) {
       - the `CompleteStoppedUnbonding()` method of the Staking module is invoked;
       - the entry `op` is removed from `unbondingOps`.
   - `(chainId, vscId)` is removed from `vscToUnbondingOps`.
+  - A successful acknowledgment is returned.
 - Error condition:
   - The ID of the channel on which the packet was sent is not mapped to a chain ID (in `channelToChain`).
 
@@ -1411,12 +1416,8 @@ function onRecvVSCPacket(packet: Packet): bytes {
 ```typescript
 // CCF: Consumer Chain Function
 function onAcknowledgeVSCMaturedPacket(packet: Packet, ack: bytes) {
-  if ack == VSCMaturedPacketError {
-    // the notification of the maturity of the VSC 
-    // with id packet.data.id failed
-    
-    // TODO what to do here?
-  }
+  // notifications of VSC maturity cannot fail by construction
+  abortSystemUnless(ack != VSCMaturedPacketError)
 }
 ```
 - Initiator: 
@@ -1426,7 +1427,7 @@ function onAcknowledgeVSCMaturedPacket(packet: Packet, ack: bytes) {
 - Expected postcondition:
   - The state is not changed.
 - Error condition:
-  - None.
+  - The acknowledgement is `VSCMaturedPacketError`.
 
 <!-- omit in toc -->
 #### **[CCV-CCF-TOMAT.1]**
@@ -1593,7 +1594,13 @@ function onRecvSlashPacket(packet: Packet): bytes {
 ```typescript
 // CCF: Consumer Chain Function
 function onAcknowledgeSlashPacket(packet: Packet, ack: bytes) {
-  // if the slash request failed, clear jailUntil for the validator
+  // slash request fail, i.e., ack == SlashPacketError, 
+  // only if the SlashPacket was sent on a channel 
+  // other than the established CCV channel;
+  // that should never happen, 
+  // see SendSlashRequest() and SendPendingSlashRequests();
+  // however, to be safe, if the slash request failed, 
+  // clear jailUntil for the validator
   if ack == SlashPacketError {
     jailUntil[packet.data.valAddress] = 0
   }
@@ -1633,8 +1640,9 @@ function onTimeoutSlashPacket(packet Packet) {
 // CCF: Consumer Chain Function
 // implements a ABCI application hook
 function AfterDowntimeEvidence(valAddress: string, power: int64) {
-  slashFactor = TBA // TODO governance
-  jailTime = TBA // TODO governance
+  // TODO governance and CCV params
+  slashFactor = TBA
+  jailTime = TBA
 
   // the infraction height of downtime evidence is the current block
   infractionHeight = getCurrentHeight()
@@ -1662,8 +1670,9 @@ function AfterDowntimeEvidence(valAddress: string, power: int64) {
 // CCF: Consumer Chain Function
 // implements a ABCI application hook
 function AfterEquivocationEvidence(valAddress: string, power: int64, infractionHeight: int64) {
-  slashFactor = TBA // TODO governance
-  jailTime = TBA // TODO governance
+  // TODO governance and CCV params
+  slashFactor = TBA
+  jailTime = TBA
   
   // send slash request to the provider chain
   SendSlashRequest(valAddress, power, infractionHeight, slashFactor, jailTime)
