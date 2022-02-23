@@ -213,6 +213,12 @@ The following packet data types are required by the CCV module:
       updates: [ValidatorUpdate]
     }
     ```
+- `VSCMaturedPacketData` contains the ID of the VSC that reached maturity, i.e., 
+    ```typescript
+    interface VSCMaturedPacketData {
+      id: uint64 // the id of the VSC that reached maturity
+    }
+    ```
 - `SlashPacketData` contains a request to slash a validator, i.e.,
   ```typescript
     interface SlashPacketData {
@@ -229,6 +235,7 @@ Packets are acknowledged by the remote side by sending back an `Acknowledgement`
 The following acknowledgement types are required by the CCV module:
 ```typescript
 type VSCPacketAcknowledgement = VSCPacketSuccess | VSCPacketError;
+type VSCMaturedPacketAcknowledgement = VSCMaturedPacketSuccess | VSCMaturedPacketError;
 type SlashPacketAcknowledgement = SlashPacketSuccess | SlashPacketError;
 type PacketAcknowledgement = PacketSuccess | PacketError; // general ack
 ```
@@ -273,7 +280,10 @@ This section describes the internal state of the CCV module. For simplicity, the
     unbondingChainIds: [string] 
   }
   ```
-- `vscToUnbondingOps: Map<(Identifier, uint64), [uint64]>` is a mapping from `(chainId, vscId)` tuples to a list of unbonding operation IDs. It enables the provider CCV module to match an acknowledgement of a `VSCPacket`, received from a consumer chain with `chainId`, with the corresponding unbonding operations. As a result, `chainId` can be removed from the list of consumer chains that are still unbonding these operations. For more details see how `VSCPacket` [acknowledgements are handled](#ccv-pcf-ackvsc1).
+- `vscToUnbondingOps: Map<(Identifier, uint64), [uint64]>` is a mapping from `(chainId, vscId)` tuples to a list of unbonding operation IDs. 
+  It enables the provider CCV module to match a `VSCMaturedPacket{vscId}`, received from a consumer chain with `chainId`, with the corresponding unbonding operations. 
+  As a result, `chainId` can be removed from the list of consumer chains that are still unbonding these operations. 
+  For more details see how received `VSCMaturedPacket`s [are handled](#ccv-pcf-rcvmat1).
 
 <!-- omit in toc -->
 #### State on the consumer chain
@@ -301,21 +311,21 @@ This section describes the internal state of the CCV module. For simplicity, the
 - `HtoVSC: Map<Height, uint64>` is a mapping from consumer chain heights to VSC IDs. It enables the mapping from consumer heights to provider heights., i.e.,
   - if `HtoVSC[h] == 0`, then the voting power on the consumer chain at height `h` was setup at genesis during Channel Initialization;
   - otherwise, the voting power on the consumer chain at height `h` was updated by the VSC with ID `HtoVSC[h]`.
-- `unbondingPackets: [(Packet, uint64)]` is a list of `(packet, unbondingTime)` tuples, where `packet` is a received `VSCPacket` and `unbondingTime` is the packet's unbonding time. 
+- `maturingVSCs: [(uint64, uint64)]` is a list of `(id, ts)` tuples, where `id` is the ID of a VSC received via a `VSCPacket` and `ts` is the timestamp at which the VSC reaches maturity on the consumer chain. 
   The list is used to keep track of when unbonding operations are matured on the consumer chain. It exposes the following interface:
   ```typescript
-  interface [(Packet, uint64)] {
-    // add a packet with its unbonding time to the list;
+  interface [(uint64, uint64)] {
+    // add a VSC id with its maturity timestamp to the list;
     // the list is modified
-    Add(packet: Packet, unbondingTime: uint64)
+    Add(id: uint64, ts: uint64)
 
-    // return the list sorted by the unbonding time;
+    // return the list sorted by the maturity timestamps;
     // the original list is not modified
-    SortedByUnbondingTime(): [(Packet, uint64)]
+    SortedByMaturityTime(): [(uint64, uint64)]
 
-    // remove (packet, unbondingTime) from the list;
+    // remove (id, ts) from the list;
     // the list is modified
-    Remove(packet: Packet, unbondingTime: uint64)
+    Remove(id: uint64, ts: uint64)
   }
   ```
 - `pendingSlashPackets: [SlashPacketData]` is a list of pending `SlashPacketData`s that must be sent to the provider chain once the CCV channel is established. The list exposes the following interface: 
@@ -878,6 +888,8 @@ function onChanCloseConfirm(
 // implements the ICS26 interface
 function onRecvPacket(packet: Packet): bytes {
   switch typeof(packet.data) {
+    case VSCMaturedPacketData:
+      return onRecvVSCMaturedPacket(packet)
     case SlashPacketData:
       return onRecvSlashPacket(packet)
     default:
@@ -891,9 +903,11 @@ function onRecvPacket(packet: Packet): bytes {
 - Expected precondition: 
   - The IBC module on the provider chain received a packet on a channel owned by the provider CCV module.
 - Expected postcondition: 
-  - The state is not changed.
+  - If the packet is a `VSCMaturedPacket`, the `onRecvVSCMaturedPacket` method is invoked.
+  - If the packet is a `SlashPacket`, the `onRecvSlashPacket` method is invoked.
+  - Otherwise, an error acknowledgement is returned.
 - Error condition:
-  - The packet type is unexpected.
+  - None.
 
 <!-- omit in toc -->
 #### **[CCV-PCF-ACKP.1]**
@@ -967,8 +981,9 @@ function onRecvPacket(packet: Packet): bytes {
   - The IBC module on the consumer chain received a packet on a channel owned by the consumer CCV module.
 - Expected postcondition: 
   - If the packet is a `VSCPacket`, the `onRecvVSCPacket` method is invoked.
+  - Otherwise, an error acknowledgement is returned.
 - Error condition:
-  - The packet type is unexpected.
+  - None.
 
 <!-- omit in toc -->
 #### **[CCV-CCF-ACKP.1]**
@@ -977,6 +992,8 @@ function onRecvPacket(packet: Packet): bytes {
 // implements the ICS26 interface
 function onAcknowledgePacket(packet: Packet, ack: bytes) {
   switch typeof(packet.data) {
+    case VSCMaturedPacketData:
+      onAcknowledgeVSCMaturedPacket(packet, ack)
     case SlashPacketData:
       onAcknowledgeSlashPacket(packet, ack)
     default:
@@ -990,7 +1007,8 @@ function onAcknowledgePacket(packet: Packet, ack: bytes) {
 - Expected precondition: 
   - The IBC module on the consumer chain received an acknowledgement on a channel owned by the consumer CCV module.
 - Expected postcondition: 
-  - The state is not changed.
+  - If the acknowledgement is for a `VSCMaturedPacket`, the `onAcknowledgeVSCMaturedPacket` method is invoked.
+  - If the acknowledgement is for a `SlashPacket`, the `onAcknowledgeSlashPacket` method is invoked.
 - Error condition:
   - The acknowledgement is for an unexpected packet.
 
@@ -1001,6 +1019,8 @@ function onAcknowledgePacket(packet: Packet, ack: bytes) {
 // implements the ICS26 interface
 function onTimeoutPacket(packet Packet) {
   switch typeof(packet.data) {
+    case VSCMaturedPacketData:
+      onTimeoutVSCMaturedPacket(packet)
     case SlashPacketData:
       onTimeoutSlashPacket(packet)
     default:
@@ -1015,7 +1035,8 @@ function onTimeoutPacket(packet Packet) {
   - The IBC module on the consumer chain received a timeout on a channel owned by the consumer CCV module.
   - The Correct Relayer assumption is violated.
 - Expected postcondition: 
-  - The state is not changed.
+  - If the timeout is for a `VSCMaturedPacket`, the `onTimeoutVSCMaturedPacket` method is invoked.
+  - If the timeout is for a `SlashPacket`, the `onTimeoutSlashPacket` method is invoked.
 - Error condition:
   - The timeout is for an unexpected packet.
 
@@ -1039,7 +1060,7 @@ function BeginBlock() {
 - Expected precondition:
   - An `BeginBlock` message is received from the consensus engine. 
 - Expected postcondition:
-  - None.
+  - The state is not changed.
 - Error condition:
   - None.
 
@@ -1123,7 +1144,54 @@ function EndBlock(): [ValidatorUpdate] {
 #### **[CCV-PCF-ACKVSC.1]**
 ```typescript
 // PCF: Provider Chain Function
-function onAcknowledgeVSCPacket(packet: Packet) {
+function onAcknowledgeVSCPacket(packet: Packet, ack: bytes) {
+  if ack == VSCPacketError {
+    // providing the VSC with id packet.data.id failed
+    // TODO what to do here?
+  }
+}
+```
+- Initiator: 
+  - The `onAcknowledgePacket()` method.
+- Expected precondition:
+  - The IBC module on the provider chain received an acknowledgement of a `VSCPacket` on a channel owned by the provider CCV module.
+- Expected postcondition:
+  - The state is not changed.
+- Error condition:
+  - None.
+
+<!-- omit in toc -->
+#### **[CCV-PCF-TOVSC.1]**
+```typescript
+// PCF: Provider Chain Function
+function onTimeoutVSCPacket(packet Packet) {
+  // get the channel ID of the CCV channel the timeout was sent on
+  channelId = packet.getDestinationChannel()
+
+  // get the ID of the consumer chain mapped to this channel ID
+  abortTransactionUnless(channelId IN channelToChain.Keys())
+  chainId = channelToChain[packet.getDestinationChannel()]
+
+  // set the channel status to INVALID
+  channelStatus[chainId] = INVALID
+
+  // TODO: cleanup, e.g., complete all outstanding unbonding ops
+}
+```
+- Initiator: 
+  - The `onTimeoutPacket()` method.
+- Expected precondition:
+  - The IBC module on the provider chain received a timeout of a `VSCPacket` on a channel owned by the provider CCV module.
+- Expected postcondition:
+  - `channelStatus` for the CCV channel to this consumer chain is set to `INVALID`.
+- Error condition:
+  - The ID of the channel on which the packet was sent is not mapped to a chain ID (in `channelToChain`).
+
+<!-- omit in toc -->
+#### **[CCV-PCF-RCVMAT.1]**
+```typescript
+// PCF: Provider Chain Function
+function onRecvVSCMaturedPacket(packet: Packet) {
   // get the channel ID of the CCV channel the packet was sent on
   channelId = packet.getDestinationChannel()
   
@@ -1150,9 +1218,9 @@ function onAcknowledgeVSCPacket(packet: Packet) {
 }
 ```
 - Initiator: 
-  - The `onAcknowledgePacket()` method.
+  - The `onRecvPacket()` method.
 - Expected precondition:
-  - The IBC module on the provider chain received an acknowledgement of a `VSCPacket` on a channel owned by the provider CCV module.
+  - The IBC module on the provider chain received a `VSCMaturedPacket` on a channel owned by the provider CCV module.
 - Expected postcondition:
   - For each unbonding operation `op` returned by `GetUnbondingOpsFromVSC(chainId, packet.data.id)`
     - `chainId` is removed from `op.unbondingChainIds`;
@@ -1161,7 +1229,7 @@ function onAcknowledgeVSCPacket(packet: Packet) {
       - the entry `op` is removed from `unbondingOps`.
   - `(chainId, vscId)` is removed from `vscToUnbondingOps`.
 - Error condition:
-  - The ID of the channel on which the `VSCPacket` was sent is not mapped to a chain ID (in `channelToChain`).
+  - The ID of the channel on which the packet was sent is not mapped to a chain ID (in `channelToChain`).
 
 <!-- omit in toc -->
 #### **[CCV-PCF-GETUBDES.1]**
@@ -1194,32 +1262,13 @@ function GetUnbondingOpsFromVSC(
 }
 ```
 - **Initiator:** 
-  - The provider CCV module when receiving an acknowledgement for a `VSCPacket`.
+  - The provider CCV module when receiving a `VSCMaturedPacket`.
 - **Expected precondition:**
   - None. 
 - **Expected postcondition:**
   - If there is a list of unbonding operation IDs mapped to `(chainId, _vscId)`, then return the list of unbonding operations mapped to these IDs. 
   - Otherwise, return `nil`.
 - **Error condition:**
-  - None.
-
-<!-- omit in toc -->
-#### **[CCV-PCF-TOVSC.1]**
-```typescript
-// PCF: Provider Chain Function
-function onTimeoutVSCPacket(packet Packet) {
-  channelStatus = INVALID
-
-  // TODO: Unbonding everything?
-}
-```
-- Initiator: 
-  - The `onTimeoutPacket()` method.
-- Expected precondition:
-  - The IBC module on the provider chain received a timeout of a `VSCPacket` on a channel owned by the provider CCV module.
-- Expected postcondition:
-  - `channelStatus` is set to `INVALID`
-- Error condition:
   - None.
 
 <!-- omit in toc -->
@@ -1299,7 +1348,7 @@ function BeginBlock() {
   - None.
 
 <!-- omit in toc -->
-#### **[CCV-CCF-RECVVSC.1]**
+#### **[CCV-CCF-RCVVSC.1]**
 ```typescript
 // CCF: Consumer Chain Function
 function onRecvVSCPacket(packet: Packet): bytes {
@@ -1330,12 +1379,11 @@ function onRecvVSCPacket(packet: Packet): bytes {
   // store the list of updates from the packet
   pendingChanges.Append(packet.data.updates)
 
-  // calculate and store the unbonding time for the packet
-  unbondingTime = currentTimestamp().Add(UnbondingPeriod)
-  unbondingPackets.Add(packet, unbondingTime)
+  // calculate and store the maturity timestamp for the VSC
+  maturityTimestamp = currentTimestamp().Add(UnbondingPeriod)
+  maturingVSCs.Add(packet.data.id, maturityTimestamp)
 
-  // ack will be sent asynchronously
-  return nil
+  return VSCPacketSuccess
 }
 ```
 - Initiator: 
@@ -1353,8 +1401,49 @@ function onRecvVSCPacket(packet: Packet): bytes {
       - the channel ID is set as the provider channel;
       - the pending slash requests are sent to the provider chain;
     - `packet.data.updates` are appended to `pendingChanges`;
-    - `(packet, unbondingTime)` is added to `unbondingPackets`, where `unbondingTime = currentTimestamp() + UnbondingPeriod`;
-    - a nil acknowledgement is returned, i.e., the acknowledgement will be sent asynchronously.
+    - `(packet.data.id, maturityTimestamp)` is added to `maturingVSCs`, where `maturityTimestamp = currentTimestamp() + UnbondingPeriod`;
+    - a successful acknowledgement is returned.
+- Error condition:
+  - None.
+
+<!-- omit in toc -->
+#### **[CCV-CCF-ACKMAT.1]**
+```typescript
+// CCF: Consumer Chain Function
+function onAcknowledgeVSCMaturedPacket(packet: Packet, ack: bytes) {
+  if ack == VSCMaturedPacketError {
+    // the notification of the maturity of the VSC 
+    // with id packet.data.id failed
+    
+    // TODO what to do here?
+  }
+}
+```
+- Initiator: 
+  - The `onAcknowledgePacket()` method.
+- Expected precondition:
+  - The IBC module on the consumer chain received an acknowledgement of a `VSCMaturedPacket` on a channel owned by the consumer CCV module.
+- Expected postcondition:
+  - The state is not changed.
+- Error condition:
+  - None.
+
+<!-- omit in toc -->
+#### **[CCV-CCF-TOMAT.1]**
+```typescript
+// CCF: Consumer Chain Function
+function onTimeoutVSCMaturedPacket(packet Packet) {
+  channelStatus = INVALID
+
+  // TODO What do we do here? Do we need to notify the provider to close the channel?
+}
+```
+- Initiator: 
+  - The `onTimeoutPacket()` method.
+- Expected precondition:
+  - The IBC module on the consumer chain received a timeout of a `VSCMaturedPacket` on a channel owned by the consumer CCV module.
+- Expected postcondition:
+  - `channelStatus` is set to `INVALID`.
 - Error condition:
   - None.
 
@@ -1403,18 +1492,21 @@ function EndBlock(): [ValidatorUpdate] {
 function UnbondMaturePackets() {
   // check if the provider channel is set
   if providerChannel != "" {
-    foreach (packet, unbondingTime) in unbondingPackets.SortedByUnbondingTime() {
-      if currentTimestamp() >= unbondingTime {
-        // send acknowledgement to the provider chain
-        channelKeeper.WriteAcknowledgement(providerChannel, packet, VSCPacketSuccess)
-              
-        // remove entry from the list
-        unbondingPackets.Remove(packet, unbondingTime)
-      } 
-      else {
+    foreach (id, ts) in maturingVSCs.SortedByMaturityTime() {
+      if currentTimestamp() < ts {
         // stop loop
         break
       }
+
+      // create VSCMaturedPacketData
+      packetData = VSCMaturedPacketData{id: id}
+
+      // create packet and send it using the interface exposed by ICS-4
+      packet = Packet{data: packetData, destChannel: providerChannel}
+      channelKeeper.SendPacket(packet)
+            
+      // remove entry from the list
+      maturingVSCs.Remove(id, ts)
     }
   }
 }
@@ -1424,9 +1516,11 @@ function UnbondMaturePackets() {
 - Expected precondition:
   - None.
 - Expected postcondition:
-  - If the provider channel is set, for each `(packet, unbondingTime)` in the list of unbonding packet sorted by unbonding times
-    - if `currentTimestamp() >= unbondingTime`, the packet is acknowledged (i.e., `channelKeeper.WriteAcknowledgement()` is invoked) and the tuple is removed from `unbondingPackets`;
-    - otherwise, stop the loop.
+  - If the provider channel is set, for each `(id, ts)` in the list of maturing VSCs sorted by maturity timestamps
+    - if `currentTimestamp() < ts`, the loop is stopped;
+    - a `VSCMaturedPacketData` packet is created;
+    - a packet with the created `VSCMaturedPacketData` is sent to the provider chain;
+    - the tuple `(id, ts)` is removed from `maturingVSCs`.
   - Otherwise, the state is not changed.
 - Error condition:
   - None.
@@ -1435,7 +1529,7 @@ function UnbondMaturePackets() {
 [&uparrow; Back to Outline](#outline)
 
 <!-- omit in toc -->
-#### **[CCV-PCF-RECVSLASH.1]**
+#### **[CCV-PCF-RCVSLASH.1]**
 ```typescript
 // PCF: Provider Chain Function
 function onRecvSlashPacket(packet: Packet): bytes {
@@ -1519,7 +1613,9 @@ function onAcknowledgeSlashPacket(packet: Packet, ack: bytes) {
 ```typescript
 // CCF: Consumer Chain Function
 function onTimeoutSlashPacket(packet Packet) {
-  // TODO Do we need to notify the provider to close the channel?
+  channelStatus = INVALID
+
+  // TODO What do we do here? Do we need to notify the provider to close the channel?
 }
 ```
 - Initiator: 
@@ -1527,7 +1623,7 @@ function onTimeoutSlashPacket(packet Packet) {
 - Expected precondition:
   - The IBC module on the consumer chain received a timeout of a `SlashPacket` on a channel owned by the consumer CCV module.
 - Expected postcondition:
-  - None.
+  - `channelStatus` is set to `INVALID`.
 - Error condition:
   - None.
 
@@ -1628,7 +1724,7 @@ function SendSlashRequest(
 - **Expected precondition:**
   - Evidence of misbehavior for a validator with address `valAddress` was received.
 - **Expected postcondition:**
-  - If `jailUntil[data.valAddress]` is set and larger than the current timestamp, then none.
+  - If `jailUntil[data.valAddress]` is set and larger than the current timestamp, then the state is not changed.
   - Otherwise, 
     - a `SlashPacket` data `packetData` is created;
     - if the CCV channel to the provider chain is established, then 

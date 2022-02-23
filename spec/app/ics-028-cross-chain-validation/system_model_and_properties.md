@@ -272,36 +272,36 @@ i.e., we informally prove the properties described in the [previous section](#de
   As a result, the consumer chain applies all validator updates in `vsc` (cf. *Validator Update Inclusion*).
 
 - ***Register Maturity Validity***: The property follows from the following sequence of assertions.
-  - The provider chain only registers VSC maturity notifications when receiving on the CCV channel acknowledgements of `VSCPacket`s (cf. *Safe Blockchain*). 
+  - The provider chain only registers VSC maturity notifications when receiving on the CCV channel a `VSCMaturedPacket`s notifying the maturity of those VSCs (cf. *Safe Blockchain*). 
   - The provider chain receives on the CCV channel only packets sent by the consumer chain (cf. *Channel Validity*).
-  - The consumer chain only acknowledges `VSCPacket`s that it receives on the CCV channel (cf. *Safe Blockchain*).
+  - The consumer chain only sends `VSCMaturedPacket`s matching the `VSCPacket`s it receives on the CCV channel (cf. *Safe Blockchain*).
   - The consumer chain receives on the CCV channel only packets sent by the provider chain (cf. *Channel Validity*). 
   - The provider chain only sends `VSCPacket`s containing provided VSCs (cf. *Safe Blockchain*). 
 
 - ***Register Maturity Timeliness*:** We prove the property through contradiction. 
   Given a VSC `vsc` provided by the provider chain to the consumer chain, we assume that the provider chain registers a maturity notification of `vsc` before `UnbondingPeriod` has elapsed on the consumer chain since the consumer chain applied `vsc`. 
   The following sequence of assertions leads to a contradiction.
-  - The provider chain could not have register a maturity notification of `vsc` before receiving on the CCV channel an acknowledgements of a `VSCPacket` `P` with `P.updates = C` (cf. *Safe Blockchain*). 
-  - The provider chain could not have received an acknowledgement of `P` on the CCV channel before the consumer chain sent it (cf. *Channel Validity*).
-  - The consumer chain could not have sent an acknowledgement of `P` before at least `UnbondingPeriod` has elapsed since receiving `P` on the CCV channel (cf. *Safe Blockchain*). 
-  Note that since time is measured in terms of the block time, the time of receiving `P` is the same as the time of applying `vsc`.
-  - The consumer chain could not have received `P` on the CCV channel before the provider chain sent it (cf. *Channel Validity*).  
-  - The provider chain could not have sent `P` before providing `vsc`. 
+  - The provider chain could not have register a maturity notification of `vsc` before receiving on the CCV channel a `VSCMaturedPacket` `P` with `P.id = vsc.id` (cf. *Safe Blockchain*). 
+  - The provider chain could not have received `P` on the CCV channel before the consumer chain sent it (cf. *Channel Validity*).
+  - The consumer chain could not have sent `P` before at least `UnbondingPeriod` has elapsed since receiving a `VSCPacket` `P'` with `P'.id = P.id` on the CCV channel (cf. *Safe Blockchain*). 
+  Note that since time is measured in terms of the block time, the time of receiving `P'` is the same as the time of applying `vsc`.
+  - The consumer chain could not have received `P'` on the CCV channel before the provider chain sent it (cf. *Channel Validity*).  
+  - The provider chain could not have sent `P'` before providing `vsc`. 
   - Since the duration of sending packets through the CCV channel cannot be negative, the provider chain could not have registered a maturity notification of `vsc` before `UnbondingPeriod` has elapsed on the consumer chain since the consumer chain applied `vsc`.
 
 - ***Register Maturity Order*:** We prove the property through contradiction. Given two VSCs `vsc1` and `vsc2` such that the provider chain provides `vsc1` before `vsc2`, we assume the provider chain registers the maturity notification of `vsc2` before the maturity notification of `vsc1`. 
   The following sequence of assertions leads to a contradiction.
   - The provider chain could not have sent a `VSCPacket` `P2`, with `P2.updates = C2`, before a `VSCPacket` `P1`, with `P1.updates = C1` (cf. *Safe Blockchain*).
   - The consumer chain could not have received `P2` before `P1` (cf. *Channel Order*).
-  - The consumer chain could not have sent the acknowledgment of `P2` before the acknowledgement of `P1` (cf. *Safe Blockchain*).
-  - The provider chain could not have received the acknowledgment of `P2` before the acknowledgement of `P1` (cf. *Channel Order*).
+  - The consumer chain could not have sent a `VSCMaturedPacket` `P2'`, with `P2'.id = P2.id`, before a `VSCMaturedPacket` `P1'`, with `P1'.id = P1.id` (cf. *Safe Blockchain*).
+  - The provider chain could not have received `P2'` before `P1'` (cf. *Channel Order*).
   - The provider chain could not have registered the maturity notification of `vsc2` before the maturity notification of `vsc1` (cf. *Safe Blockchain*).
 
 - ***Register Maturity Liveness*:** The property follows from the following sequence of assertions.
   - The provider chain eventually sends on the CCV channel a `VSCPacket` `P`, with `P.updates = C` (cf. *Safe Blockchain*, *Life Blockchain*).
   - The consumer chain eventually receives `P` on the CCV channel (cf. *Channel Liveness*).
-  - The consumer chain eventually sends an acknowledgement of `P` on the CCV channel (cf. *Safe Blockchain*, *Life Blockchain*).
-  - The provider chain eventually receives the acknowledgement of `P` on the CCV channel (cf. *Channel Liveness*).
+  - The consumer chain eventually sends on the CCV channel a `VSCMaturedPacket` `P'`, with `P'.id = P.id` (cf. *Safe Blockchain*, *Life Blockchain*).
+  - The provider chain eventually receives `P'` on the CCV channel (cf. *Channel Liveness*).
   - The provider chain eventually registers the maturity notification of `vsc` (cf. *Safe Blockchain*, *Life Blockchain*).
 
 - ***Consumer Slashing Warranty***: Follows directly from *Safe Blockchain*.
@@ -339,9 +339,9 @@ i.e., we informally prove the properties described in the [previous section](#de
 
 - ***Slashing Invariant***: To prove this invariant, we consider the following sequence of statements.
   - The CCV module of `cc` receives at height `h'` the evidence that `val` misbehaved on `cc` at height `h` (cf. *Evidence Provision*, *Safe Blockchain*, *Life Blockchain*).
-  - The CCV module of `cc` sends at height `h'` to the provider chain a `SlashPacket` `P`, such that `P.val = val` and `P.vscId = HtoVSC(h)` (cf. *Consumer Slashing Warranty*).
+  - The CCV module of `cc` sends at height `h'` to the provider chain a `SlashPacket` `P`, such that `P.val = val` and `P.id = HtoVSC(h)` (cf. *Consumer Slashing Warranty*).
   - The provider CCV module eventually receives `P` in a block `B` (cf. *Channel Liveness*). 
-  - The provider CCV module requests (in the same block `B`) the provider Slashing module to slash `val` for misbehaving at height `hp = VSCtoH(P.vscId)` (cf. *Provider Slashing Warranty*).
+  - The provider CCV module requests (in the same block `B`) the provider Slashing module to slash `val` for misbehaving at height `hp = VSCtoH(P.id)` (cf. *Provider Slashing Warranty*).
   - The provider Slashing module slashes the amount of tokens `val` had bonded at height `hp` except the amount that has already completely unbonded (cf. *Slashing Warranty*).
   
   Thus, it remains to be proven that `Token(Power(cc,h,val))` is exactly the same as the amount of tokens `val` had bonded at height `hp = VSCtoH(HtoVSC(h))` except the amount that has already completely unbonded. We distinguish two cases:

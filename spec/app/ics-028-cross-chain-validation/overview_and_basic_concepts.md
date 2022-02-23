@@ -172,11 +172,13 @@ For a more detailed description of Channel Initialization, take a look at the [t
 
 In the context of VSCs, the CCV module enables the following functionalities:
   - On the provider chain, 
-    - **provide** VSCs to the consumer chains, for them to update their validator sets according to the validator set of the provider chain;
+    - **provide** VSCs to the consumer chains, for them to update their validator sets according to the validator set of the provider chain; 
+      providing VSCs entails sending `VSCPacket`s to all consumer chains;  
     - **register** VSC maturity notifications from the consumer chain.
   - On every consumer chain,
     - **apply** the VSCs provided by the provider chain to the validator set of the consumer chain; 
-    - **notify** the provider chain that the provided VSCs have matured on this consumer chain.
+    - **notify** the provider chain that the provided VSCs have matured on this consumer chain; 
+      notifying of VSCs maturity entails sending `VSCMaturedPacket`s to the provider chain.
 
 These functionalities are depicted in the following figure that shows an overview of the Validator Set Update operation of CCV. 
 For a more detailed description of Validator Set Update, take a look at the [technical specification](./technical_specification.md#validator-set-update).
@@ -191,13 +193,7 @@ Therefore, the provider Staking module needs to be aware of the VSC maturity not
 
 The ***provider chain*** achieves this through the following approach: 
 - The provider Staking module is notifying the CCV module when any unbonding operation is initiated. 
-  This is done through [Staking hooks](https://docs.cosmos.network/v0.44/modules/staking/06_hooks.html), 
-  i.e., operations registered by the CCV module to be execute when a certain event has occurred within the provider Staking module 
-  (for more details, see the [Interfacing Other Modules](./technical_specification.md#interfacing-other-modules) section). 
   As a result, the CCV module maps all the unbonding operations to the corresponding VSCs.  
-  > Note that it is not necessary for the provider Staking module to notify the initiation of validator unbonding operations, 
-  since the CCV module can obtain this information from the validator updates received from the provider Staking module 
-  (i.e., by comparing to the previous batch of validator updates). 
 - When the CCV module registers maturity notifications for a VSC from all consumer chains, it notifies the provider Staking module of the maturity of all unbonding operations mapped to this VSC. 
   This enables the provider Staking module to complete the unbonding operations only when they reach maturity on both the provider chain and on all the consumer chains.
 
@@ -265,3 +261,5 @@ The following figure shows an overview of the Consumer Initiated Slashing operat
     - if `vscId != 0`, the height on the provider chain where the voting power was updated by the VSC with ID `vscId`;
     - otherwise, the height at which the first VSC was provided to this consumer chain.
   > **Note**: As a consequence of slashing (and potentially jailing) `V`, the Staking module updates accordingly `V`'s voting power. This update MUST be visible in the next VSC provided to the consumer chains.  
+
+For a more detailed description of Consumer Initiated Slashing, take a look at the [technical specification](./technical_specification.md#consumer-initiated-slashing).
