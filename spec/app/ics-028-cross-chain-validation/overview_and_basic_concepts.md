@@ -30,8 +30,8 @@ but the tokens are unbonded (i.e., unlocked) only after the unbonding period has
 If a validator misbehaves (e.g., validates two different blocks at the same height), then the system can slash the validator's bonded tokens that gave its voting power during the misbehavior.
 This prevents validators from misbehaving and immediately exiting with their tokens, 
 i.e., the unbonding period enables the system to punish misbehaving validators after the misbehaviors are committed.
-For more details, take a look at the [Tendermint Specification](https://github.com/tendermint/spec/blob/master/spec/core/data_structures.md) 
-and the [Light Client Specification](https://github.com/tendermint/spec/blob/master/spec/light-client/verification/verification_002_draft.md#part-i---tendermint-blockchain).
+For more details, take a look at the [Tendermint Specification](https://github.com/tendermint/spec/blob/v0.7.1/spec/core/data_structures.md) 
+and the [Light Client Specification](https://github.com/tendermint/spec/blob/v0.7.1/spec/light-client/verification/verification_002_draft.md#part-i---tendermint-blockchain).
 
 In the context of CCV, the validator sets of the consumer chains are chosen based on the tokens validators bonded on the provider chain, 
 i.e., are chosen from the validator set of the provider chain. 
@@ -70,7 +70,7 @@ This section defines the new terms and concepts introduced by CCV and provides a
 > Note that in the current version the validator set of the consumer chain is entirely provided by the provider chain.
 
 Both the provider and the consumer chains are [application-specific blockchains](https://docs.cosmos.network/v0.44/intro/why-app-specific.html), 
-i.e., the state-machine is typically connected to the underlying consensus engine via an interface called the [ABCI](https://docs.tendermint.com/v0.34/spec/abci/). 
+i.e., the state-machine is typically connected to the underlying consensus engine via an interface called [ABCI](https://github.com/tendermint/spec/tree/v0.7.1/spec/abci). 
 Thus, we refer to the state-machine as an ABCI application. 
 For ease of presentation, this specification considers a modular paradigm, 
 i.e., the functionality of the ABCI application is separated into multiple modules, like the approach adopted by [Cosmos SDK](https://docs.cosmos.network/v0.44/basics/app-anatomy.html#modules).  
@@ -132,7 +132,7 @@ The channel initialization consists of four phases:
   Once it receives a proposal, it creates a client of the consumer chain (as defined in [ICS 2](../../core/ics-002-client-semantics)). 
   Then, the operators of validators in the validator set of the provider chain must each start a full node (i.e., a validator) of the consumer chain. 
   Once the consumer chain starts, the application receives an `InitChain` message from the consensus engine 
-  (for more details, take a look at the [ABCI documentation](https://docs.tendermint.com/v0.34/spec/abci/abci.html#initchain)). 
+  (for more details, take a look at the [ABCI specification](https://github.com/tendermint/spec/blob/v0.7.1/spec/abci/abci.md#initchain)). 
   The `InitChain` message triggers the call to the `InitGenesis()` method of the consumer CCV module, which creates a client of the provider chain.
   For client creation, both a `ClientState` and a `ConsensusState` are necessary (as defined in [ICS 2](../../core/ics-002-client-semantics));
   both are contained in the `GenesisState` of the consumer CCV module.

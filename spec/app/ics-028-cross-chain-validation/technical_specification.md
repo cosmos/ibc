@@ -26,7 +26,7 @@ Before describing the data structures and sub-protocols of the CCV protocol, we 
 ### Implemented Interfaces
 
 - CCV is an **ABCI application module**, which means it MUST implement the logic to handle some of the messages received from the consensus engine via ABCI, e.g., `InitChain`, `EndBlock` 
-  (for more details, take a look at the [ABCI documentation](https://docs.tendermint.com/v0.34/spec/abci/abci.html)). 
+  (for more details, take a look at the [ABCI specification](https://github.com/tendermint/spec/tree/v0.7.1/spec/abci)). 
   In this specification we define the following methods that handle messages that are of particular interest to the CCV protocol:
   - `InitGenesis()` -- Called when the chain is first started, on receiving an `InitChain` message from the consensus engine. 
     This is also where the application can inform the underlying consensus engine of the initial validator set.
@@ -126,7 +126,7 @@ Before describing the data structures and sub-protocols of the CCV protocol, we 
 
 This section describes external data structures used by the CCV module.
 
-The CCV module uses the ABCI `ValidatorUpdate` data structure, which consists of a validator and its power (for more details, take a look at the [ABCI documentation](https://docs.tendermint.com/v0.34/spec/abci/abci.html#data-types)), i.e.,
+The CCV module uses the ABCI `ValidatorUpdate` data structure, which consists of a validator and its power (for more details, take a look at the [ABCI specification](https://github.com/tendermint/spec/blob/v0.7.1/spec/abci/abci.md#data-types)), i.e.,
 ```typescript
 interface ValidatorUpdate {
   pubKey: PublicKey
