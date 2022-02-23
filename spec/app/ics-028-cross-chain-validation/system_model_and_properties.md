@@ -17,7 +17,7 @@
 ## Assumptions
 [&uparrow; Back to Outline](#outline)
 
-As part of an ABCI application, CCV interacts with both the consensus engine (via ABCI) and other application modules, such as the Staking module. 
+As part of an ABCI application, CCV interacts with both the consensus engine (via ABCI) and other application modules (e.g, the Staking module). 
 As an IBC application, CCV interacts with external relayers (defined in [ICS 18](../../relayer/ics-018-relayer-algorithms)). 
 In this section we specify what we assume about these other components. 
 A more thorough discussion of the environment in which CCV operates is given in the section [Placing CCV within an ABCI Application](./technical_specification.md#placing-ccv-within-and-abci-application).
@@ -29,7 +29,7 @@ i.e., neither *Live Blockchain* and *Correct Relayer* are required for safety.
 Note though that CCV liveness relies on both *Live Blockchain* and *Correct Relayer* assumptions; 
 furthermore, the *Correct Relayer* assumption relies on both *Safe Blockchain* and *Live Blockchain* assumptions. 
 >
-> The *Validator Update Provision*, *Unbonding Safety*, and *Slashing Warranty* assumptions define what is needed from the provider Staking module. 
+> The *Validator Update Provision*, *Unbonding Safety*, and *Slashing Warranty* assumptions define what is needed from the ABCI application of the provider chain. 
 > 
 > The *Evidence Provision* assumptions defines what is needed from the ABCI application of the consumer chains.
 
@@ -69,9 +69,9 @@ furthermore, the *Correct Relayer* assumption relies on both *Safe Blockchain* a
   - (*unbonding completion*) `uo` MUST NOT complete on the provider chain before the provider chain registers notifications of `vsc(uo)`'s maturity from all consumer chains.
   > **Note**: Depending on the implementation, the (*unbonding initiation*) part of the *Unbonding Safety* MAY NOT be necessary for validator unbonding operations.
 
-- ***Slashing Warranty***: If the provider Staking module receives a request to slash a validator `val` that misbehaved at block height `h`, then it slashes the amount of tokens `val` had bonded at height `h` except the amount that has already completely unbonded. 
+- ***Slashing Warranty***: If the provider ABCI application (e.g., the Slashing module) receives a request to slash a validator `val` that misbehaved at block height `h`, then it slashes the amount of tokens `val` had bonded at height `h` except the amount that has already completely unbonded. 
 
-- ***Evidence Provision***: If a consumer chain receives a valid evidence of misbehavior at block height `h`, then it MUST submit it to the consumer CCV module at the same height `h`.
+- ***Evidence Provision***: If the consumer ABCI application receives a valid evidence of misbehavior at block height `h`, then it MUST submit it to the consumer CCV module at the same height `h`.
   > **Note**: What constitutes a valid evidence of misbehavior depends on the type of misbehavior and it is outside the scope of this specification.
 
 ## Desired Properties
@@ -209,7 +209,7 @@ The following properties define the guarantees of CCV on *registering* on the pr
 
 > TODO: The consumer CCV module MUST send only one packet per received evidence. 
 
-- ***Provider Slashing Warranty***: If the provider CCV module receives in a block from a consumer chain `cc` a `SlashPacket` containing a validator `val` and a VSC id `vscId`, then it MUST request in the same block the provider Staking module to slash `val` for misbehaving at height `h`, such that
+- ***Provider Slashing Warranty***: If the provider CCV module receives in a block from a consumer chain `cc` a `SlashPacket` containing a validator `val` and a VSC id `vscId`, then it MUST request in the same block the provider Slashing module to slash `val` for misbehaving at height `h`, such that
   - if `vscId = 0`, `h` is the height of the block when the provider chain provided to `cc` the first VSC;
   - otherwise, `h` is the height of the block immediately subsequent to the block when the provider chain provided to `cc` the VSC with id `vscId`.
 
@@ -341,8 +341,8 @@ i.e., we informally prove the properties described in the [previous section](#de
   - The CCV module of `cc` receives at height `h'` the evidence that `val` misbehaved on `cc` at height `h` (cf. *Evidence Provision*, *Safe Blockchain*, *Life Blockchain*).
   - The CCV module of `cc` sends at height `h'` to the provider chain a `SlashPacket` `P`, such that `P.val = val` and `P.vscId = HtoVSC(h)` (cf. *Consumer Slashing Warranty*).
   - The provider CCV module eventually receives `P` in a block `B` (cf. *Channel Liveness*). 
-  - The provider CCV module requests (in the same block `B`) the provider Staking module to slash `val` for misbehaving at height `hp = VSCtoH(P.vscId)` (cf. *Provider Slashing Warranty*).
-  - The provider Staking module slashes the amount of tokens `val` had bonded at height `hp` except the amount that has already completely unbonded (cf. *Slashing Warranty*).
+  - The provider CCV module requests (in the same block `B`) the provider Slashing module to slash `val` for misbehaving at height `hp = VSCtoH(P.vscId)` (cf. *Provider Slashing Warranty*).
+  - The provider Slashing module slashes the amount of tokens `val` had bonded at height `hp` except the amount that has already completely unbonded (cf. *Slashing Warranty*).
   
   Thus, it remains to be proven that `Token(Power(cc,h,val))` is exactly the same as the amount of tokens `val` had bonded at height `hp = VSCtoH(HtoVSC(h))` except the amount that has already completely unbonded. We distinguish two cases:
   - `HtoVSC(h) != 0`, which means that by definition `HtoVSC(h)` is the id of the last VSC that update `Power(cc,h,val)`. 

@@ -74,26 +74,24 @@ Before describing the data structures and sub-protocols of the CCV protocol, we 
     // notify the Staking module of unboding operations that
     // have matured from the consumer chain's perspective 
     CompleteStoppedUnbonding(id: uint64)
+  }
+  ```
 
+- The provider CCV modules interact with a Slashing module on the provider chain. 
+  For an example of how slashing works, take a look at the [Slashing module documentation](https://docs.cosmos.network/v0.44/modules/slashing/) of Cosmos SDK. 
+  The interaction is defined by the following interface:
+  ```typescript 
+  interface SlashingKeeper {
     // request the Staking module to slash a validator
     Slash(valAddress: string, 
           infractionHeight: int64, 
           power: int64, 
           slashFactor: int64)
-  }
-  ```
 
-- The provider CCV modules interact with a Slashing module. 
-  For an example of how slashing works, take a look at the [Slashing module documentation](https://docs.cosmos.network/v0.44/modules/slashing/) of Cosmos SDK. 
-  The interaction is defined by the following interface:
-  ```typescript 
-  interface SlashingKeeper {
     // request the Slashing module to jail a validator until time
     JailUntil(valAddress: string, time: uint64)
   }
   ```
-
-> TODO: It may be cleaner to move `Slash` to the slashing module.
 
 - The following hooks enable the provider CCV module to register operations to be execute when certain events occur within the provider Staking module:
   ```typescript
@@ -1462,8 +1460,8 @@ function onRecvSlashPacket(packet: Packet): bytes {
     infractionHeight = VSCtoH(packet.data.vscId)
   }
 
-  // request the Staking module to slash the validator
-  stakingKeeper.Slash(
+  // request the Slashing module to slash the validator
+  slashingKeeper.Slash(
     packet.data.valAddress, 
     infractionHeight, 
     packet.data.valPower, 
@@ -1488,7 +1486,7 @@ function onRecvSlashPacket(packet: Packet): bytes {
   - Otherwise,
     - if `packet.data.vscId == 0`, `infractionHeight` is set to `initH[chainId]`, i.e., the height when the first VSC was provided to this consumer chain;
     - otherwise, `infractionHeight` is set to `VSCtoH(packet.data.vscId)`, i.e., the height at which the voting power was last updated by the validator updates in the VSC with ID `packet.data.vscId`;
-    - a request is made to the Staking module to slash the validator with address `packet.data.valAddress` for misbehaving at height `infractionHeight`;
+    - a request is made to the Slashing module to slash the validator with address `packet.data.valAddress` for misbehaving at height `infractionHeight`;
     - a request is made to the Slashing module to jail the validator with address `packet.data.valAddress` for a period `data.jailTime`;
     - a successful acknowledgment is returned.
 - Error condition:
