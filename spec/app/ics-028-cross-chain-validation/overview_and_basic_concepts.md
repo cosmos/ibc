@@ -174,7 +174,7 @@ For a more detailed description of Validator Set Update, take a look at the [tec
 ### Completion of Unbonding Operations
 
 In the context of single-chain validation, the completion of any unbonding operation requires the `UnbondingPeriod` to elapse since the operations was initiated (i.e., the operation MUST reach maturity). 
-In the context of CCV, the completion MUST require also the unbonding operation to reach maturity on all consumer chains (for the [Security Model](#security-model) to be preserved). 
+In the context of CCV, the completion MUST require also the unbonding operation to reach maturity on **all** consumer chains (for the [Security Model](#security-model) to be preserved). 
 Therefore, the provider Staking module needs to be aware of the VSC maturity notifications registered by the provider CCV module.
 
 The ***provider chain*** achieves this through the following approach: 
