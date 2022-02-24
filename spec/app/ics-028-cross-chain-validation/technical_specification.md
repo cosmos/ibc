@@ -1436,7 +1436,9 @@ function onAcknowledgeVSCMaturedPacket(packet: Packet, ack: bytes) {
 function onTimeoutVSCMaturedPacket(packet Packet) {
   channelStatus = INVALID
 
-  // TODO What do we do here? Do we need to notify the provider to close the channel?
+  // TODO What do we do here? 
+  // Do we need to notify the provider to close the channel?
+  // What happens w/ the consumer chain once the CCV channel gets closed?
 }
 ```
 - Initiator: 
@@ -1622,7 +1624,9 @@ function onAcknowledgeSlashPacket(packet: Packet, ack: bytes) {
 function onTimeoutSlashPacket(packet Packet) {
   channelStatus = INVALID
 
-  // TODO What do we do here? Do we need to notify the provider to close the channel?
+  // TODO What do we do here? 
+  // Do we need to notify the provider to close the channel?
+  // What happens w/ the consumer chain once the CCV channel gets closed?
 }
 ```
 - Initiator: 
