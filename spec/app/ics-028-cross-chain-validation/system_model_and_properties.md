@@ -211,7 +211,7 @@ The following properties define the guarantees of CCV on *registering* on the pr
   Let `hv` be the height when the CCV module of `cc` receives the first VSC from the provider CCV module, i.e., the height when the CCV channel is established.
   Then, the CCV module of `cc` MUST send (to the provider CCV module) *exactly one* `SlashPacket` `P`, such that
     - `P` is sent at height `h = max(he, hv)`;
-    - `P.val = val` and `P.id = HtoVSC(hi)`,
+    - `P.val = val` and `P.id = HtoVSC[hi]`,
     i.e., the ID of the latest VSC that updated the validator set on `cc` at height `hi` or `0` if such a VSC does not exist (if `hi < hv`).
   > **Note**: A consequence of the *Consumer Slashing Warranty* property is that the initial validator set on a consumer chain cannot be slashed during the initialization of the CCV channel. 
   Therefore, consumer chains *SHOULD NOT allow user transactions before the CCV channel is established*. 
@@ -349,16 +349,16 @@ i.e., we informally prove the properties described in the [previous section](#de
   To prove the first part of the invariant (i.e., exactly the amount of tokens `Token(Power(cc,hi,val))` are slashed on the provider chain), we consider the following sequence of statements.
   - The CCV module of `cc` receives at height `he` the evidence that `val` misbehaved on `cc` at height `hi` (cf. *Evidence Provision*, *Safe Blockchain*, *Life Blockchain*).
   - Let `hv` be the height when the CCV module of `cc` receives the first VSC from the provider CCV module. 
-  Then, the CCV module of `cc` sends at height `h = max(he, hv)` to the provider chain a `SlashPacket` `P`, such that `P.val = val` and `P.id = HtoVSC(hi)` (cf. *Consumer Slashing Warranty*).
+  Then, the CCV module of `cc` sends at height `h = max(he, hv)` to the provider chain a `SlashPacket` `P`, such that `P.val = val` and `P.id = HtoVSC[hi]` (cf. *Consumer Slashing Warranty*).
   - The provider CCV module eventually receives `P` in a block `B` (cf. *Channel Liveness*). 
-  - The provider CCV module requests (in the same block `B`) the provider Slashing module to slash `val` for misbehaving at height `hp = VSCtoH(P.id)` (cf. *Provider Slashing Warranty*).
+  - The provider CCV module requests (in the same block `B`) the provider Slashing module to slash `val` for misbehaving at height `hp = VSCtoH[P.id]` (cf. *Provider Slashing Warranty*).
   - The provider Slashing module slashes the amount of tokens `val` had bonded at height `hp` except the amount that has already completely unbonded (cf. *Slashing Warranty*).
   
-  Thus, it remains to be proven that `Token(Power(cc,hi,val))` is exactly the same as the amount of tokens `val` had bonded at height `hp = VSCtoH(HtoVSC(hi))` except the amount that has already completely unbonded. We distinguish two cases:
-  - `HtoVSC(hi) != 0`, which means that by definition `HtoVSC(hi)` is the ID of the last VSC that update `Power(cc,hi,val)`. 
-    Also by definition, this VSC contains the last updates to the voting power at height `VSCtoH(HtoVSC(hi))` on the provider. 
-  - `HtoVSC(hi) == 0`, which means that by definition `Power(cc,hi,val)` was setup at genesis during Channel Initialization. 
-    Also by definition, this is the same voting power of the provider chain block when the first VSC was provided to that consumer chain, i.e., `VSCtoH(HtoVSC(hi))`. 
+  Thus, it remains to be proven that `Token(Power(cc,hi,val))` is exactly the same as the amount of tokens `val` had bonded at height `hp = VSCtoH[HtoVSC[hi]]` except the amount that has already completely unbonded. We distinguish two cases:
+  - `HtoVSC[hi] != 0`, which means that by definition `HtoVSC[hi]` is the ID of the last VSC that update `Power(cc,hi,val)`. 
+    Also by definition, this VSC contains the last updates to the voting power at height `VSCtoH[HtoVSC[hi]]` on the provider. 
+  - `HtoVSC[hi] == 0`, which means that by definition `Power(cc,hi,val)` was setup at genesis during Channel Initialization. 
+    Also by definition, this is the same voting power of the provider chain block when the first VSC was provided to that consumer chain, i.e., `VSCtoH[HtoVSC[hi]]`. 
   
   Thus, in both cases, `pBonded(hp,val) >= Token(Power(cc,hi,val))` and `pBonded(hp,val) - Token(Power(cc,hi,val))` consists only of tokens in the process of unbonding. 
   The tokens bonded by `val` at height `hp` that were not in the process of unbonding (i.e., `Token(Power(cc,hi,val))`) could not have completely unbonded by block `B` (cf. `ts(he) < ts(hi) + UnbondingPeriod`, *VSC Maturity and Slashing Order*, *Register Maturity Timeliness*, *Unbonding Safety*).
