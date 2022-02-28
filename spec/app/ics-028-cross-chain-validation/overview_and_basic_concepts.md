@@ -9,6 +9,7 @@
 - [Definitions and Overview](#definitions-and-overview)
   - [Channel Initialization](#channel-initialization)
   - [Validator Set Update](#validator-set-update)
+    - [Completion of Unbonding Operations](#completion-of-unbonding-operations)
 
 
 
@@ -95,9 +96,16 @@ which MUST NOT complete before reaching maturity on both the provider and all th
 i.e., the *unbonding period* (denoted as `UnbondingPeriod`) has elapsed on both the provider and all the consumer chains.
 Thus, a *VSC reaching maturity* on a consumer chain means that all the unbonding operations that resulted in validator updates included in that VSC have matured on the consumer chain.
 
-> **Background**: An *unbonding operation* is any operation of unbonding an amount of the tokens a validator bonded. Note that the bonded tokens correspond to the validator's voting power. Unbonding operations have two components: 
+> **Background**: An *unbonding operation* is any operation of unbonding an amount of the tokens a validator bonded. Note that the bonded tokens correspond to the validator's voting power. We distinguish between three types of unbonding operations:
+> - *undelegation* - a delegator unbonds tokens it previously delegated to a validator;
+> - *redelegation* - a delegator instantly redelegates tokens from a source validator to a different validator (the destination validator);
+> - *validator unbonding* - a validator is removed from the validator set; note that although validator unbondings do not entail unbonding tokens, they behave similarly to other unbonding operations.
+> 
+> Regardless of the type, unbonding operations have two components: 
 > - The *initiation*, e.g., a delegator requests their delegated tokens to be unbonded. The initiation of an operation of unbonding an amount of the tokens a validator bonded results in a change in the voting power of that validator.
-> - The *completion*, e.g., the tokens are actually unbonded and transferred back to the delegator. To complete, unbonding operations must reach *maturity*, i.e., `UnbondingPeriod` must elapse since the operations were initiated.
+> - The *completion*, e.g., the tokens are actually unbonded and transferred back to the delegator. To complete, unbonding operations must reach *maturity*, i.e., `UnbondingPeriod` must elapse since the operations were initiated. 
+> 
+> For more details, take a look at the [Cosmos SDK documentation](https://docs.cosmos.network/master/modules/staking/).
 
 > **Note**: Time periods are measured in terms of the block time, i.e., `currentTimestamp()` (as defined in [ICS 24](../../core/ics-024-host-requirements)). 
 > As a result, a consumer chain MAY start the unbonding period for every VSC that it applies in a block at any point during that block.
@@ -161,7 +169,41 @@ In the context of VSCs, the CCV module enables the following functionalities:
     - **notify** the provider chain that the provided VSCs have matured on this consumer chain.
 
 These functionalities are depicted in the following Figure that shows an overview of the Validator Set Update operation of CCV. 
+For a more detailed description of Validator Set Update, take a look at the [technical specification](./technical_specification.md#validator-set-update).
 
 ![Validator Set Update Overview](./figures/ccv-vsc-overview.png?raw=true)
 
-For a more detailed description of Validator Set Update, take a look at the [technical specification](./technical_specification.md#validator-set-update).
+### Completion of Unbonding Operations
+
+In the context of single-chain validation, the completion of any unbonding operation requires the `UnbondingPeriod` to elapse since the operations was initiated (i.e., the operation MUST reach maturity). 
+In the context of CCV, the completion MUST require also the unbonding operation to reach maturity on **all** consumer chains (for the [Security Model](#security-model) to be preserved). 
+Therefore, the provider Staking module needs to be aware of the VSC maturity notifications registered by the provider CCV module.
+
+The ***provider chain*** achieves this through the following approach: 
+- The provider Staking module is notifying the CCV module when any unbonding operation is initiated. 
+  This is done through [Staking hooks](https://docs.cosmos.network/master/modules/staking/06_hooks.html), 
+  i.e., operations registered by the CCV module to be execute when a certain event has occurred within the provider Staking module 
+  (for more details, see the [Interfacing Other Modules](./technical_specification.md#interfacing-other-modules) section). 
+  As a result, the CCV module maps all the unbonding operations to the corresponding VSCs.  
+  > Note that it is not necessary for the provider Staking module to notify the initiation of validator unbonding operations, 
+  since the CCV module can obtain this information from the validator updates received from the provider Staking module 
+  (i.e., by comparing to the previous batch of validator updates). 
+- When the CCV module registers maturity notifications for a VSC from all consumer chains, it notifies the provider Staking module of the maturity of all unbonding operations mapped to this VSC. 
+  This enables the provider Staking module to complete the unbonding operations only when they reach maturity on both the provider chain and on all the consumer chains.
+
+This approach is depicted in the following Figure that shows an overview of the interface between the provider CCV module and the provider Staking module in the context of the Validator Set Update operation of CCV: 
+- In `Block 1`, two unbonding operations are initiated (i.e., `undelegate-1` and `redelegate-1`) in the provider Staking module. 
+  For each operation, the provider Staking module notifies the provider CCV module. 
+  As a result, the provider CCV module maps these to operation to `vscId`, which is the ID of the following VSC (i.e., `VSC1`). 
+  The provider CCV module provides `VSC1` to all consumer chains.
+- In `Block 2`, the same approach is used for `undelegate-2`.
+- In `Block j`, `UnbondingPeriod` has elapsed since `Block 1`. 
+  In the meantime, the provider CCV module registered maturity notifications for `VSC1` from all consumer chains 
+  and, consequently, notified the provider Staking module of the maturity of both `undelegate-1` and `redelegate-1`. 
+  As a result, the provider Staking module completes both unbonding operations in `Block j`.
+- In `Block k`, `UnbondingPeriod` has elapsed since `Block 2`. 
+  In the meantime, the provider CCV module has NOT yet registered maturity notifications for `VSC2` from all consumer chains. 
+  As a result, the provider Staking module CANNOT complete `undelegate-2` in `Block k`. 
+  The unbonding operation is completed later once the provider CCV module registered maturity notifications for `VSC2` from all consumer chains.
+
+![Completion of Unbonding Operations](./figures/ccv-unbonding-overview.png?raw=true)
