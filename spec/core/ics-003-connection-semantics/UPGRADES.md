@@ -22,6 +22,8 @@ The connection upgrade protocol MUST NOT modify the connection identifiers.
 
 ### Data Structures
 
+The `ConnectionState` and `ConnectionEnd` are defined in [ICS-3](./README.md), they are reproduced here for the reader's convenience. `UPGRADE_INIT`, `UPGRADE_TRY`, `UPGRADE_ERR` are additional states added to enable the upgrade feature.
+
 ```typescript
 enum ConnectionState {
   INIT,
@@ -74,23 +76,23 @@ interface UpgradeStatus {
 }
 ```
 
-- UpgradeStatus contains the state of the upgrade. If upgrade is successful it will contain the `ConnectionState` of the upgrading connection on the executing chain. If the executing chain wants to abort the upgrade, it will restore its previous connection under its connection path with state `OPEN` and write an `UpgradeStatus` with state `UPGRADE_ERR`.
+- `state`: If the upgrade step was successful, then the `state` of the `UpgradeStatus` will be the same as the `state` of the `ConnectionEnd`. If the upgrade step failed, then the `ConnectionEnd` will be reverted to its previous `OPEN` state; and the `UpgradeStatus` will have state `UPGRADE_ERR` to signal to counterparty to revert its connection end as well.
 - `timeoutHeight`: Timeout height indicates the height at which the counterparty must no longer proceed with the upgrade handshake. The chains will then preserve their original connection and the upgrade handshake is aborted.
 - `timeoutTimestamp`: Timeout timestamp indicates the time on the counterparty at which the counterparty must no longer proceed with the upgrade handshake. The chains will then preserve their original connection and the upgrade handshake is aborted.
 
 ```typescript
 interface UpgradeConnectionState {
-    connection: ConnectionEnd
+    proposedConnection: ConnectionEnd
     timeoutHeight: Height
     timeoutTimestamp: uint64
 }
 ```
 
-- `proposedConnectionState`: Proposed `ConnectionState` to replace the current `ConnectionState`, it MUST ONLY modify the fields that are permissible to 
+- `proposedConnection`: Proposed `ConnectionEnd` to replace the current `ConnectionEnd`, it MUST ONLY modify the fields that are permissable to be modified by upgrade connection process.
 - `timeoutHeight`: Timeout height indicates the height at which the counterparty must no longer proceed with the upgrade handshake. The chains will then preserve their original connection and the upgrade handshake is aborted.
 - `timeoutTimestamp`: Timeout timestamp indicates the time on the counterparty at which the counterparty must no longer proceed with the upgrade handshake. The chains will then preserve their original connection and the upgrade handshake is aborted.
 
-NOTE: One of the timeout height or timeout timestamp must be non-zero.
+At least one of the timeoutHeight or timeoutTimestamp MUST be non-zero.
 
 ### Store Paths
 
@@ -114,6 +116,10 @@ function statusPath(id: Identifier): Path {
 
 }
 ```
+
+## Sub-Protocols
+
+The Connection Upgrade process consists of three sub-protocols: `UpgradeHandshake`, `CancelConnectionUpgrade`, and `TimeoutConnectionUpgrade`. In the case where both chains approve of the proposed upgrade, the upgrade handshake protocol should complete successfully and the ConnectionEnd should upgrade successf
 
 ### Upgrade Handshake
 
@@ -216,8 +222,8 @@ function connUpgradeTry(
     restoreTransactionUnless(proposedUpgrade.TimeoutHeight != 0 || proposedUpgrade.TimeoutTimestamp != 0)
 
     // verify proofs of counterparty state
-    abortTransactionUnless(currentConnection.client.verifyConnectionState(proofHeight, proofConnection, counterpartyConnection))
-    abortTransactionUnless(currentConnection.client.verifyUpgradeStatus(proofHeight, proofUpgradeStatus, counterpartyUpgradeStatus))
+    abortTransactionUnless(verifyConnectionState(currentConnection, proofHeight, proofConnection, currentConnection.counterpartyConnectionIdentifier, counterpartyConnection))
+    abortTransactionUnless(verifyUpgradeStatus(currentConnection, proofHeight, proofUpgradeStatus, currentConnection.counterpartyConnectionIdentifier, counterpartyUpgradeStatus))
 
     // verify that counterparty connection unmodifiable fields have not changed and counterparty state
     // is UPGRADE_INIT
@@ -271,8 +277,8 @@ function onChanUpgradeAck(
     abortTransactionUnless(currentConnection.state == UPGRADE_INIT || currentConnection.state == UPGRADE_TRY)
 
     // verify proofs of counterparty state
-    abortTransactionUnless(currentConnection.client.verifyConnectionState(proofHeight, proofConnection, counterpartyConnection))
-    abortTransactionUnless(currentConnection.client.verifyUpgradeStatus(proofHeight, proofUpgradeStatus, counterpartyUpgradeStatus))
+    abortTransactionUnless(verifyConnectionState(currentConnection, proofHeight, proofConnection, currentConnection.counterpartyConnectionIdentifier, counterpartyConnection))
+    abortTransactionUnless(verifyUpgradeStatus(currentConnection, proofHeight, proofUpgradeStatus, currentConnection.counterpartyConnectionIdentifier, counterpartyUpgradeStatus))
 
     // counterparty must be in TRY state
     restoreConnectionUnless(counterpartyStatus.state == UPGRADE_TRY)
@@ -306,7 +312,7 @@ function onChanUpgradeConfirm(
     abortTransactionUnless(counterpartyConnection.State == OPEN)
 
     // verify proofs of counterparty state
-    abortTransactionUnless(currentConnection.client.verifyConnectionState(proofHeight, proofConnection, counterpartyConnection))
+    abortTransactionUnless(verifyConnectionState(currentConnection, proofHeight, proofConnection, currentConnection.counterpartyConnectionIdentifier, counterpartyConnection))
     
     // upgrade is complete
     // set connection to OPEN and remove unnecessary state
@@ -324,7 +330,7 @@ function restoreConnectionUnless(condition: bool) {
     if !condition {
         // cancel upgrade
         // set UpgradeStatus to `UPGRADE_ERR`
-        // and restore original conneciton
+        // and restore original connection
         errStatus = UpgradeStatus{UPGRADE_ERR}
         provableStore.set(statusPath(identifier), errStatus)
         originalConnection = privateStore.get(restorePath(identifier))
@@ -354,7 +360,7 @@ function cancelConnectionUpgrade(
 
     abortTransactionUnless(counterpartyUpgradeStatus.state == UPGRADE_ERR)
 
-    abortTransactionUnless(currentConnection.client.verifyUpgradeStatus(proofHeight, proofUpgradeStatus, counterpartyUpgradeStatus))
+    abortTransactionUnless(verifyUpgradeStatus(currentConnection, proofHeight, proofUpgradeStatus, currentConnection.counterpartyConnectionIdentifier, counterpartyUpgradeStatus))
 
     // cancel upgrade
     // and restore original conneciton
