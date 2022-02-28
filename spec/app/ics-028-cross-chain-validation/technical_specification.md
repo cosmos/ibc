@@ -107,14 +107,8 @@ Before describing the data structures and sub-protocols of the CCV protocol, we 
 - The following hooks enable the consumer CCV module to register operations to be execute when certain evidence is received by the consumer ABCI application:
   ```typescript
   // invoked by the consumer ABCI application 
-  // after receiving evidence of downtime
-  function AfterDowntimeEvidence(valAddress: string, power: int64);
-
-  // invoked by the consumer ABCI application 
-  // after receiving evidence of 
-  // - equivocation, i.e., double signing
-  // - light client attack 
-  function AfterEquivocationEvidence(valAddress: string, power: int64, infractionHeight: int64);
+  // after receiving evidence of misbehavior
+  function AfterEvidence(valAddress: string, power: int64, infractionHeight: int64);
   ```
 
 ## Data Structures
@@ -132,6 +126,11 @@ interface ValidatorUpdate {
 }
 ```
 The provider chain sends to the consumer chain a list of `ValidatorUpdate`s, containing an entry for every validator that had its power updated. 
+
+In Tendermint, there is a delay (in blocks) between when validator updates are returned to the consensus-engine and when they are applied (for more details, take a look at the [ABCI specification](https://github.com/tendermint/spec/blob/v0.7.1/spec/abci/abci.md#endblock)). 
+We denote this delay by `ValidatorUpdateDelay`. 
+For example, if `ValidatorUpdateDelay = x` and a validator set update is returned with new validators at the end of block `10`, then the new validators are expected to sign blocks beginning at block `11+x`. 
+For the current version of this specification, `ValidatorUpdateDelay = 1`.
 
 The data structures required for creating clients (i.e., `ClientState`, `ConsensusState`) are defined in [ICS 7](../../client/ics-007-tendermint-client).
 
@@ -1554,7 +1553,7 @@ function onRecvSlashPacket(packet: Packet): bytes {
     infractionHeight = initH[chainId]
   }
   else {
-    infractionHeight = VSCtoH(packet.data.vscId)
+    infractionHeight = VSCtoH[packet.data.vscId]
   }
 
   // request the Slashing module to slash the validator
@@ -1582,7 +1581,7 @@ function onRecvSlashPacket(packet: Packet): bytes {
     - an error acknowledgment is returned.
   - Otherwise,
     - if `packet.data.vscId == 0`, `infractionHeight` is set to `initH[chainId]`, i.e., the height when the first VSC was provided to this consumer chain;
-    - otherwise, `infractionHeight` is set to `VSCtoH(packet.data.vscId)`, i.e., the height at which the voting power was last updated by the validator updates in the VSC with ID `packet.data.vscId`;
+    - otherwise, `infractionHeight` is set to `VSCtoH[packet.data.vscId]`, i.e., the height at which the voting power was last updated by the validator updates in the VSC with ID `packet.data.vscId`;
     - a request is made to the Slashing module to slash the validator with address `packet.data.valAddress` for misbehaving at height `infractionHeight`;
     - a request is made to the Slashing module to jail the validator with address `packet.data.valAddress` for a period `data.jailTime`;
     - a successful acknowledgment is returned.
@@ -1639,41 +1638,11 @@ function onTimeoutSlashPacket(packet Packet) {
   - None.
 
 <!-- omit in toc -->
-#### **[CCV-CCF-HOOK-AFDOWNEV.1]**
+#### **[CCV-CCF-HOOK-AFEVID.1]**
 ```typescript
 // CCF: Consumer Chain Function
 // implements a ABCI application hook
-function AfterDowntimeEvidence(valAddress: string, power: int64) {
-  // TODO governance and CCV params
-  slashFactor = TBA
-  jailTime = TBA
-
-  // the infraction height of downtime evidence is the current block
-  infractionHeight = getCurrentHeight()
-
-  // send slash request to the provider chain
-  SendSlashRequest(valAddress, power, infractionHeight, slashFactor, jailTime)
-}
-```
-- **Initiator:** 
-  - The ABCI application.
-- **Expected precondition:**
-  - Evidence of downtime for a validator with address `valAddress` was received.  
-- **Expected postcondition:**
-  - Both `slashFactor` and `jailTime` parameters are set.
-  - `infractionHeight` is set to the current height.
-  - `SendSlashRequest(valAddress, power, infractionHeight, slashFactor, jailTime)` is invoked.
-- **Error condition:**
-  - None.
-
-> **Note:** In the [Golang Cosmos SDK implementation](https://github.com/cosmos/interchain-security/blob/c4ce132b75087818873e769a828ccb4db36df74e/x/ccv/child/keeper/hooks.go#L14), the `AfterDowntimeEvidence()` hook also changes the [internal state of the Slashing module](https://docs.cosmos.network/v0.44/modules/slashing/02_state.html). 
-
-<!-- omit in toc -->
-#### **[CCV-CCF-HOOK-AFEQEV.1]**
-```typescript
-// CCF: Consumer Chain Function
-// implements a ABCI application hook
-function AfterEquivocationEvidence(valAddress: string, power: int64, infractionHeight: int64) {
+function AfterEvidence(valAddress: string, power: int64, infractionHeight: int64) {
   // TODO governance and CCV params
   slashFactor = TBA
   jailTime = TBA
@@ -1685,12 +1654,18 @@ function AfterEquivocationEvidence(valAddress: string, power: int64, infractionH
 - **Initiator:** 
   - The ABCI application.
 - **Expected precondition:**
-  - Evidence of equivocation for a validator with address `valAddress` was received.  
+  - Evidence of misbehavior at height `infractionHeight` for a validator with address `valAddress` was received.  
 - **Expected postcondition:**
   - Both `slashFactor` and `jailTime` parameters are set.
   - `SendSlashRequest(valAddress, power, infractionHeight, slashFactor, jailTime)` is invoked.
 - **Error condition:**
   - None.
+
+> **Note**: The ABCI application SHOULD set the infraction height of the downtime evidence to the current height minus `1`.
+>  The reason is that downtime evidence is computed on the `LastCommit` field of the Tendermint header, which consists of the votes for the previous block 
+> (for more details, take a look at the [Tendermint specification](https://github.com/tendermint/spec/blob/v0.7.1/spec/core/data_structures.md#block), 
+> and for an example, take a look at the [Golang Cosmos SDK implementation](https://github.com/cosmos/cosmos-sdk/blob/e6571906043b6751951a42b6546431b1c38b05bd/x/slashing/keeper/infractions.go#L85)). 
+> Consequently, the consumer CCV module expects the `infractionHeight` parameter of the `AfterEvidence` hook to be set accordingly.
 
 <!-- omit in toc -->
 #### **[CCV-CCF-SNDSLASH.1]**
@@ -1708,11 +1683,15 @@ function SendSlashRequest(
       return
     }
 
+    // retrieve the stake distribution which signed the block,
+	  // i.e., subtract ValidatorUpdateDelay from the infraction height
+    distributionHeight = infractionHeight - ValidatorUpdateDelay
+
     // create SlashPacket data
     packetData = SlashPacketData{
       valAddress: valAddress,
       valPower: power,
-      vscId: VSCtoH(infractionHeight),
+      vscId: VSCtoH[distributionHeight],
       slashFactor: slashFactor,
       jailTime: jailTime
     }
@@ -1739,7 +1718,7 @@ function SendSlashRequest(
 - **Expected postcondition:**
   - If `jailUntil[data.valAddress]` is set and larger than the current timestamp, then the state is not changed.
   - Otherwise, 
-    - a `SlashPacket` data `packetData` is created;
+    - a `SlashPacket` data `packetData` is created, such that `packetData.vscId = VSCtoH[distributionHeight]`, where `distributionHeight = infractionHeight - ValidatorUpdateDelay`;
     - if the CCV channel to the provider chain is established, then 
       - a packet with the `packetData` is sent to the provider chain;
       - `jailUntil[data.valAddress]` is set to the current timestamp plus `data.jailTime`;
