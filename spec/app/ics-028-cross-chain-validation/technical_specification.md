@@ -1162,6 +1162,46 @@ function onAcknowledgeVSCPacket(packet: Packet, ack: bytes) {
   - The acknowledgement is `VSCPacketError`.
 
 <!-- omit in toc -->
+#### **[CCV-PCF-GETUBDES.1]**
+```typescript
+// PCF: Provider Chain Function
+// Utility method
+function GetUnbondingOpsFromVSC(
+  chainId: Identifier, 
+  _vscId: uint64): [UnbondingOperation] {
+    ids = vscToUnbondingOps[(chainId, _vscId)]
+    if ids == nil {
+      // cannot find the list of unbonding operation IDs
+      // for this chainId and _vscId
+      return nil
+    }
+    // get all unbonding operations associated with
+    // this chainId and _vscId
+    ops = []
+    foreach id in ids {
+      // get the unbonding operation with this ID
+      op = unbondingOps[id]
+      // if cannot find UnbondingOperation according to vscToUnbondingOps,
+      // then vscToUnbondingOps was probably not correctly updated;
+      // programming error
+      abortSystemUnless(op != nil)
+      // append the operation to the list of operations to be returned
+      ops.Append(op)
+    }
+    return ops
+}
+```
+- **Initiator:** 
+  - The provider CCV module when receiving an acknowledgement for a `VSCPacket`.
+- **Expected precondition:**
+  - None. 
+- **Expected postcondition:**
+  - If there is a list of unbonding operation IDs mapped to `(chainId, _vscId)`, then return the list of unbonding operations mapped to these IDs. 
+  - Otherwise, return `nil`.
+- **Error condition:**
+  - None.
+
+<!-- omit in toc -->
 #### **[CCV-PCF-TOVSC.1]**
 ```typescript
 // PCF: Provider Chain Function
@@ -1309,6 +1349,62 @@ function AfterUnbondingOpInitiated(opId: uint64) {
 
 <!-- omit in toc -->
 #### **[CCV-PCF-HOOK-BFUBOPCO.1]**
+```typescript
+// PCF: Provider Chain Function
+// implements a Staking module hook
+function BeforeUnbondingOpCompleted(opId: uint64): Bool {
+  if opId in unbondingOps.Keys() {
+    // the unbonding operation is still unbonding 
+    // on at least one consumer chain
+    return true
+  }
+  return false
+}
+```
+- **Initiator:** 
+  - The Staking module.
+- **Expected precondition:**
+  - An unbonding operation has matured on the provider chain.
+- **Expected postcondition:**
+  - If there is an unboding operation with ID `opId`, then true is returned.
+  - Otherwise, false is returned.
+- **Error condition:**
+  - None.
+
+<!-- omit in toc -->
+#### **[CCV-PCF-SHOOK-AFUBOPCR.1]**
+```typescript
+// PCF: Provider Chain Function
+// implements a Staking module hook
+function AfterUnbondingOpInitiated(opId: uint64) {
+  // get the IDs of all consumer chains registered with this provider chain
+  chainIds = chainToChannel.Keys()
+  
+  // create and store a new unbonding operation
+  unbondingOps[opId] = UnbondingOperation{
+    id: opId,
+    unbondingChainIds: chainIds
+  }
+  
+  // add the unbonding operation id to vscToUnbondingOps
+  foreach chainId in chainIds {
+    vscToUnbondingOps[(chainId, vscId)].Append(opId)
+  }
+}
+```
+- **Initiator:** 
+  - The Staking module.
+- **Expected precondition:**
+  - An unbonding operation with id `opId` is initiated.
+- **Expected postcondition:**
+  - An unbonding operations is created and added to `unbondingOps`.
+  - The ID of the created unbonding operation is appended to every list in `vscToUnbondingOps[(chainId, vscId)]`, where `chainId` is an ID of a consumer chains registered with this provider chain and `vscId` is the current VSC ID. 
+- **Error condition:**
+  - None.
+
+
+<!-- omit in toc -->
+#### **[CCV-PCF-SHOOK-BFUBOPCO.1]**
 ```typescript
 // PCF: Provider Chain Function
 // implements a Staking module hook

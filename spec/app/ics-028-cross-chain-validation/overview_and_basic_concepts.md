@@ -8,14 +8,14 @@
 - [Motivation](#motivation)
 - [Definition](#definition)
 - [Overview](#overview)
-    - [Channel Initialization](#channel-initialization)
-    - [Validator Set Update](#validator-set-update)
-      - [Completion of Unbonding Operations](#completion-of-unbonding-operations)
-    - [Consumer Initiated Slashing](#consumer-initiated-slashing)
+  - [Channel Initialization](#channel-initialization)
+  - [Validator Set Update](#validator-set-update)
+    - [Completion of Unbonding Operations](#completion-of-unbonding-operations)
+  - [Consumer Initiated Slashing](#consumer-initiated-slashing)
 
 
 
-# Security Model
+## Security Model
 [&uparrow; Back to Outline](#outline)
 
 We consider chains that use a proof of stake mechanism based on the model of [weak subjectivity](https://blog.ethereum.org/2014/11/25/proof-stake-learned-love-weak-subjectivity/) 
@@ -45,7 +45,7 @@ A further consequence of CCV is that the tokens are unbonded only after the unbo
 Thus, CCV may delay the unbonding of tokens validators bonded on the provider chain.
 For more details, take a look at the [Interchain Security light paper](https://github.com/cosmos/gaia/blob/main/docs/interchain-security.md).
 
-# Motivation
+## Motivation
 [&uparrow; Back to Outline](#outline)
 
 CCV is a primitive (i.e., a building block) that enables arbitrary shared security models: The security of a chain can be composed of security transferred from multiple provider chains including the chain itself (a consumer chain can be its own provider). As a result, CCV enables chains to borrow security from more established chains (e.g., Cosmos Hub), in order to boost their own security, i.e., increase the cost of attacking their networks. 
@@ -59,7 +59,7 @@ Moreover, CCV enables *hub minimalism*. In a nutshell, hub minimalism entails ke
 > 
 > For more details on the planned releases, take a look at the [Interchain Security light paper](https://github.com/cosmos/gaia/blob/main/docs/interchain-security.md#the-interchain-security-stack).
 
-# Definition
+## Definition
 [&uparrow; Back to Outline](#outline)
 
 This section defines the new terms and concepts introduced by CCV.
@@ -118,7 +118,7 @@ Thus, a *VSC reaching maturity* on a consumer chain means that all the unbonding
 > i.e., a module of the ABCI application that enables the application to decentivize misbehaving validators.
 > For an example, take a look at the [Slashing module documentation](https://docs.cosmos.network/v0.44/modules/slashing/) of Cosmos SDK.
 
-# Overview
+## Overview
 [&uparrow; Back to Outline](#outline)
 
 CCV must handle the following types of operations:
