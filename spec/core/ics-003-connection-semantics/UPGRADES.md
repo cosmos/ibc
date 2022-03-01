@@ -199,6 +199,19 @@ function connUpgradeTry(
     currentConnection = provableStore.get(connectionPath(identifier))
     abortTransactionUnless(currentConnection.state == OPEN || currentConnection.state == UPGRADE_INIT)
 
+    if currentConnection.state == UPGRADE_INIT {
+        // if there is a crossing hello, ie an UpgradeInit has been called on both connectionEnds,
+        // then we must ensure that the proposedUpgrade by the counterparty is the same as the currentConnection
+        // except for the connection state (upgrade connection will be in UPGRADE_TRY and current connection will be in UPGRADE_INIT)
+        // if the proposed upgrades on either side are incompatible, then we will restore the connection and cancel the upgrade.
+        currentConnection.state = UPGRADE_TRY
+        restoreConnectionUnless(currentConnection.IsEqual(proposedUpgrade.connection))
+    } else {
+        // this is first message in upgrade handshake on this chain so we must store original connection in restore path
+        // in case we need to restore connection later.
+        privateStore.set(restorePath(identifier), currentConnection)
+    }
+
     // abort transaction if an unmodifiable field is modified
     // upgraded connection state must be in `UPGRADE_TRY`
     // NOTE: Any added fields are by default modifiable.
@@ -209,17 +222,11 @@ function connUpgradeTry(
         proposedUpgrade.connection.counterpartyClientIdentifier == currentConnection.counterpartyClientIdentifier
     )
 
-    // if there is a crossing hello, ie an UpgradeInit has been called on both connectionEnds,
-    // then we must ensure that the proposedUpgrade by the counterparty is the same as the currentConnection
-    // except for the connection state (upgrade connection will be in UPGRADE_TRY and current connection will be in UPGRADE_INIT)
-    // if the proposed upgrades on either side are incompatible, then we will restore the connection and cancel the upgrade.
-    currentConnection.state = UPGRADE_TRY
-    restoreConnectionUnless(currentConnection.IsEqual(proposedUpgrade.connection))
-
+    
     // either timeout height or timestamp must be non-zero
     // if the upgrade feature is implemented on the TRY chain, then a relayer may submit a TRY transaction after the timeout.
     // this will restore the connection on the executing chain and allow counterparty to use the CancelUpgradeMsg to restore their connection.
-    restoreTransactionUnless(proposedUpgrade.TimeoutHeight != 0 || proposedUpgrade.TimeoutTimestamp != 0)
+    restoreConnectionUnless(proposedUpgrade.TimeoutHeight != 0 || proposedUpgrade.TimeoutTimestamp != 0)
 
     // verify proofs of counterparty state
     abortTransactionUnless(verifyConnectionState(currentConnection, proofHeight, proofConnection, currentConnection.counterpartyConnectionIdentifier, counterpartyConnection))
@@ -246,6 +253,9 @@ function connUpgradeTry(
     version = pickVersion(versionsIntersection) // throws if there is no intersection
 
     // both connection ends must be mutually compatible.
+    // this function has been left unspecified since it will depend on the specific structure of the new connection.
+    // It is the responsibility of implementations to make sure that verification that the proposed new connections
+    // on either side are correctly constructed according to the new version selected.
     restoreConnectionUnless(IsCompatible(counterpartyConnection, proposedUpgrade.Connection))
 
     upgradeStatus = UpgradeStatus{
@@ -256,7 +266,6 @@ function connUpgradeTry(
 
     provableStore.set(statusPath(identifier), upgradeStatus)
     provableStore.set(connectionPath(identifier), proposedUpgrade.connection)
-    privateStore.set(restorePath(identifier), currentConnection)
 }
 ```
 
@@ -286,6 +295,9 @@ function onChanUpgradeAck(
 
     // verify connections are mutually compatible
     // this will also check counterparty chosen version is valid
+    // this function has been left unspecified since it will depend on the specific structure of the new connection.
+    // It is the responsibility of implementations to make sure that verification that the proposed new connections
+    // on either side are correctly constructed according to the new version selected.
     restoreConnectionUnless(IsCompatible(counterpartyConnection, connection))
 
     // upgrade is complete
