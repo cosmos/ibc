@@ -18,7 +18,7 @@ Contributing to this repo can mean many things such as participating in discussi
   - When the PR is complete it can be marked `Ready for Review`.
 
 - If you would like to propose a new standard for inclusion in the IBC standards, please take a look at [PROCESS.md](./PROCESS.md) for a detailed description of the standardisation process.
-  - To start a new standardisation document, copy the [template](spec/ics-template.md) and open a PR.
+  - To start a new standardisation document, copy the [template](../spec/ics-template.md) and open a PR.
 
 If you have any questions, you can usually find some IBC team members on the [Cosmos Discord](https://discord.gg/rPFPxVJmUZ).
 
@@ -27,7 +27,7 @@ If you have any questions, you can usually find some IBC team members on the [Co
 To accommodate review process we suggest that PRs are categorically broken up.
 Each PR should address only a single issue and **a single standard**. 
 The PR name should be prefixed by the standard number, 
-e.g., `[ICS 4] Some improvements` should contain only changes to [ICS 4](spec/core/ics-004-channel-and-packet-semantics/README.md).
+e.g., `[ICS 4] Some improvements` should contain only changes to [ICS 4](../spec/core/ics-004-channel-and-packet-semantics/README.md).
 If fixing an issue requires changes to multiple standards, create multiple PRs and mention the inter-dependencies.
 
 ### Process for reviewing PRs
@@ -39,7 +39,7 @@ When reviewing PRs please use the following review explanations:
   - You must also think through anything which ought to be included but is not.
   - You must think through any potential security issues or incentive-compatibility flaws introduced by the changes.
   - The changes must be consistent with the other IBC standards, especially the [core IBC standards](../README.md#core). 
-  - The modified standard must be consistent with the description from [ICS 1](spec/ics-001-ics-standard/README.md).
+  - The modified standard must be consistent with the description from [ICS 1](../ics-001-ics-standard/README.md).
 - If you are only making "surface level" reviews, submit any notes as `Comments` without adding a review.
 
 ### PR Targeting
