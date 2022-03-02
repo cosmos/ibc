@@ -39,7 +39,7 @@ When reviewing PRs please use the following review explanations:
   - You must also think through anything which ought to be included but is not.
   - You must think through any potential security issues or incentive-compatibility flaws introduced by the changes.
   - The changes must be consistent with the other IBC standards, especially the [core IBC standards](../README.md#core). 
-  - The modified standard must be consistent with the description from [ICS 1](../ics-001-ics-standard/README.md).
+  - The modified standard must be consistent with the description from [ICS 1](../spec/ics-001-ics-standard/README.md).
 - If you are only making "surface level" reviews, submit any notes as `Comments` without adding a review.
 
 ### PR Targeting
