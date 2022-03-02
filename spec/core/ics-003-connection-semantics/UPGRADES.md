@@ -390,8 +390,6 @@ function onChanUpgradeConfirm(
 }
 ```
 
-Note: In the `TRY` and `ACK` steps, the chain has the ability to abort the upgrade process if the upgrade parameters are not suitable or the timeout has exceeded. In this case, the chain is expected to write `UPGRADE_ERR` as the state in the `UPGRADE_STATUS`, and restore the original connection with state `OPEN`. The counterparty can then verify that the upgrade error is `UPGRADE_ERR` and restore its original connection to `OPEN` as well, thus cancelling the upgrade.
-
 ```typescript
 function restoreConnectionUnless(condition: bool) {
     if !condition {
@@ -413,7 +411,7 @@ function restoreConnectionUnless(condition: bool) {
 
 ### Cancel Upgrade Process
 
-As discussed, during the upgrade handshake a chain may cancel the upgrade by writing an error receipt into the `UpgradeError` and restoring the original connection to `OPEN`. The counterparty must then restore its connection to `OPEN` as well. A relayer can facilitate this by calling `CancelConnectionUpgrade`:
+During the upgrade handshake a chain may cancel the upgrade by writing an error receipt into the error path and restoring the original connection to `OPEN`. The counterparty must then restore its connection to `OPEN` as well. A relayer can facilitate this by calling `CancelConnectionUpgrade`:
 
 ```typescript
 function cancelConnectionUpgrade(
@@ -483,6 +481,8 @@ function timeoutConnectionUpgrade(
 ```
 
 Note that the timeout logic only applies to the INIT step. This is to protect an upgrading chain from being stuck in a non-OPEN state if the counterparty cannot execute the TRY successfully. Once the TRY step succeeds, then both sides are guaranteed to have the upgrade feature enabled. Liveness is no longer an issue, because we can wait until liveness is restored to execute the ACK step which will move the connection definitely into an OPEN state (either a successful upgrade or a rollback).
+
+The TRY chain will receive the timeout parameters chosen by the counterparty on INIT, so that it can reject any TRY message that is received after the specified timeout. This prevents the handshake from entering into an invalid state, in which the INIT chain processes a timeout successfully and restores its connection to `OPEN` while the TRY chain at a later point successfully writes a `TRY` state.
 
 ### Migrations
 
