@@ -293,10 +293,6 @@ function connUpgradeTry(
         timeoutTimestamp: timeoutTimestamp,
     }
 
-    // verify proofs of counterparty state
-    abortTransactionUnless(verifyConnectionState(currentConnection, proofHeight, proofConnection, currentConnection.counterpartyConnectionIdentifier, counterpartyConnection))
-    abortTransactionUnless(verifyUpgradeTimeout(currentConnection, proofHeight, proofUpgradeTimeout, currentConnection.counterpartyConnectionIdentifier, upgradeTimeout))
-
     // verify that counterparty connection unmodifiable fields have not changed and counterparty state
     // is UPGRADE_INIT
     restoreConnectionUnless(
@@ -314,7 +310,7 @@ function connUpgradeTry(
 
     // verify chosen versions are compatible
     versionsIntersection = intersection(counterpartyConnection.version, proposedUpgrade.Connection.version)
-    version = pickVersion(versionsIntersection) // throws if there is no intersection
+    version = pickVersion(versionsIntersection) // aborts transaction if there is no intersection
 
     // both connection ends must be mutually compatible.
     // this function has been left unspecified since it will depend on the specific structure of the new connection.
@@ -322,6 +318,10 @@ function connUpgradeTry(
     // on either side are correctly constructed according to the new version selected.
     restoreConnectionUnless(IsCompatible(counterpartyConnection, proposedUpgrade.Connection))
 
+    // verify proofs of counterparty state
+    abortTransactionUnless(verifyConnectionState(currentConnection, proofHeight, proofConnection, currentConnection.counterpartyConnectionIdentifier, counterpartyConnection))
+    abortTransactionUnless(verifyUpgradeTimeout(currentConnection, proofHeight, proofUpgradeTimeout, currentConnection.counterpartyConnectionIdentifier, upgradeTimeout))
+ 
     provableStore.set(connectionPath(identifier), proposedUpgrade.connection)
 }
 ```
@@ -342,9 +342,6 @@ function onChanUpgradeAck(
     currentConnection = provableStore.get(connectionPath(identifier))
     abortTransactionUnless(currentConnection.state == UPGRADE_INIT || currentConnection.state == UPGRADE_TRY)
 
-    // verify proofs of counterparty state
-    abortTransactionUnless(verifyConnectionState(currentConnection, proofHeight, proofConnection, currentConnection.counterpartyConnectionIdentifier, counterpartyConnection))
-
     // counterparty must be in TRY state
     restoreConnectionUnless(counterpartyConnection.State == UPGRADE_TRY)
 
@@ -354,6 +351,9 @@ function onChanUpgradeAck(
     // It is the responsibility of implementations to make sure that verification that the proposed new connections
     // on either side are correctly constructed according to the new version selected.
     restoreConnectionUnless(IsCompatible(counterpartyConnection, connection))
+
+    // verify proofs of counterparty state
+    abortTransactionUnless(verifyConnectionState(currentConnection, proofHeight, proofConnection, currentConnection.counterpartyConnectionIdentifier, counterpartyConnection))
 
     // upgrade is complete
     // set connection to OPEN and remove unnecessary state
@@ -467,8 +467,7 @@ function timeoutConnectionUpgrade(
     // then abort transaction
     abortTransactionUnless(upgradeTimeout.timeoutHeight.IsZero() || proofHeight >= upgradeTimeout.timeoutHeight)
     // if timeoutTimestamp is defined then the consensus time from proof height must be greater than timeout timestamp
-    connection = getConnection(identifer)
-    consensusState = getConsensusState(connection.clientIdentifer, proofHeight)
+    consensusState = queryConsensusState(currentConnection.clientIdentifer, proofHeight)
     abortTransactionUnless(upgradeTimeout.timeoutTimestamp.IsZero() || consensusState.getTimestamp() >= upgradeTimeout.timestamp)
 
     // counterparty connection must be proved to still be in OPEN state
