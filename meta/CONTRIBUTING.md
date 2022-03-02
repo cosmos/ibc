@@ -27,7 +27,7 @@ If you have any questions, you can usually find some IBC team members on the [Co
 To accommodate review process we suggest that PRs are categorically broken up.
 Each PR should address only a single issue and **a single standard**. 
 The PR name should be prefixed by the standard number, 
-e.g., `[ICS 4] Some improvements` should contain only changes to [ICS 4](../spec/core/ics-004-channel-and-packet-semantics/README.md).
+e.g., `ICS4: Some improvements` should contain only changes to [ICS 4](../spec/core/ics-004-channel-and-packet-semantics/README.md).
 If fixing an issue requires changes to multiple standards, create multiple PRs and mention the inter-dependencies.
 
 ### Process for reviewing PRs
