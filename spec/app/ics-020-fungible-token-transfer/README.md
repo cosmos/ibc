@@ -58,7 +58,7 @@ type FungibleTokenPacketAcknowledgement = FungibleTokenPacketSuccess | FungibleT
 
 interface FungibleTokenPacketSuccess {
   // This is binary 0x01 base64 encoded
-  success: "AQ=="
+  result: "AQ=="
 }
 
 interface FungibleTokenPacketError {
