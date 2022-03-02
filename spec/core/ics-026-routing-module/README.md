@@ -501,6 +501,7 @@ interface ChanOpenAck {
 
 ```typescript
 function handleChanOpenAck(datagram: ChanOpenAck) {
+    module = lookupModule(datagram.portIdentifier)
     err = module.onChanOpenAck(
       datagram.portIdentifier,
       datagram.channelIdentifier,
