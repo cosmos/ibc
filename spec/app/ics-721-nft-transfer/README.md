@@ -7,7 +7,7 @@ requires: 25, 26
 kind: instantiation
 author: Haifeng Xi <haifeng@bianjie.ai>
 created: 2021-11-10
-modified: 2022-02-14
+modified: 2022-02-17
 ---
 
 > This standard document follows the same design principles of [ICS 20](../ics-020-fungible-token-transfer) and inherits most of its content therefrom, while replacing `bank` module based asset tracking logic with that of the `nft` module.
@@ -47,19 +47,19 @@ interface NonFungibleTokenPacketData {
   receiver: string
 }
 ```
-`classId` uniquely identifies the class/collection to which this NFT belongs in the originating host environment.  In the case of an ERC-1155 compliant smart contract, for example, this could be a string representation of the top 128 bits of the token ID.
+`classId` uniquely identifies the class/collection which the tokens being transferred belong to in the sending chain. In the case of an ERC-1155 compliant smart contract, for example, this could be a string representation of the top 128 bits of the token ID.
 
 `classUri` is optional, but will be extremely beneficial for cross-chain interoperability with NFT marketplaces like OpenSea, where [class/collection metadata](https://docs.opensea.io/docs/contract-level-metadata) can be added for better user experience.
 
-`tokenIds` uniquely identifies some NFTs within the given class that are being transferred.  In the case of an ERC-1155 compliant smart contract, for example, a `tokenId` could be a string representation of the bottom 128 bits of the token ID.
+`tokenIds` uniquely identifies some tokens of the given class that are being transferred.  In the case of an ERC-1155 compliant smart contract, for example, a `tokenId` could be a string representation of the bottom 128 bits of the token ID.
 
-Each `tokenId` has a corresponding entry in `tokenUris`, which refers to an off-chain resource that is typically an immutable JSON file containing the NFT's metadata.
+Each `tokenId` has a corresponding entry in `tokenUris`, which refers to an off-chain resource that is typically an immutable JSON file containing the token's metadata.
 
-As tokens are sent across chains using the ICS 721 protocol, they begin to accrue a record of channels for which they have been transferred across. This information is encoded into the `classId` field.
+As tokens are sent across chains using the ICS-721 protocol, they begin to accrue a record of channels across which they have been transferred. This record information is encoded into the `classId` field.
 
-The ics721 token classes are represented in the form `{ics721Port}/{ics721Channel}/{classId}`, where `ics721Port` and `ics721Channel` identify the channel on the current chain from which the token arrived. The prefixed port and channel pair indicate which channel the token was previously sent through. If `{classId}` contains `/`, then it must also be in the ics721 form which indicates that this token has a multi-hop record. Note that this requires that the `/` (slash character) is prohibited in non-IBC token `classId`s.
+An ICS-721 token class is represented in the form `{ics721Port}/{ics721Channel}/{classId}`, where `ics721Port` and `ics721Channel` identify the channel on the current chain from which the tokens arrived. The prefixed port and channel pair indicate which channel the tokens were previously sent through. If `{classId}` contains `/`, then it must also be in the ICS-721 form which indicates that the tokens have a multi-hop record. Note that this requires that the `/` (slash character) is prohibited in non-IBC token `classId`s.
 
-A sending chain may be acting as a source or sink zone. When a chain is sending tokens across a port and channel which are not equal to the last prefixed port and channel pair, it is acting as a source zone. When tokens are sent from a source zone, the destination port and channel will be prefixed onto the `classId` (once the tokens are received) adding another hop to a tokens record. When a chain is sending tokens across a port and channel which are equal to the last prefixed port and channel pair, it is acting as a sink zone. When tokens are sent from a sink zone, the last prefixed port and channel pair on the `classId` is removed (once the tokens are received), undoing the last hop in the tokens record. A more complete explanation is present in the [ibc-go implementation]() (TBD).
+A sending chain may be acting as a source or sink zone. When a chain is sending tokens across a port and channel which are not equal to the last prefixed port and channel pair, it is acting as a source zone. When tokens are sent from a source zone, the destination port and channel will be prefixed onto the `classId` (once the tokens are received) adding another hop to the tokens record. When a chain is sending tokens across a port and channel which are equal to the last prefixed port and channel pair, it is acting as a sink zone. When tokens are sent from a sink zone, the last prefixed port and channel pair on the `classId` is removed (once the tokens are received), undoing the last hop in the tokens record.
 
 The acknowledgement data type describes whether the transfer succeeded or failed, and the reason for failure (if any).
 
@@ -130,9 +130,7 @@ function onChanOpenInit(
   order: ChannelOrder,
   connectionHops: [Identifier],
   portIdentifier: Identifier,
-  channelIdentifier: Identifier,
   counterpartyPortIdentifier: Identifier,
-  counterpartyChannelIdentifier: Identifier,
   version: string) {
   // only unordered channels allowed
   abortTransactionUnless(order === UNORDERED)
@@ -163,10 +161,11 @@ function onChanOpenTry(
 function onChanOpenAck(
   portIdentifier: Identifier,
   channelIdentifier: Identifier,
-  version: string) {
+  counterpartyVersion: string,
+  counterpartyChannelIdentifier: string) {
   // port has already been validated
   // assert that version is "ics721-1"
-  abortTransactionUnless(version === "ics721-1")
+  abortTransactionUnless(counterpartyVersion === "ics721-1")
   // allocate an escrow address
   channelEscrowAddresses[channelIdentifier] = newAddress()
 }
@@ -187,7 +186,7 @@ function onChanCloseInit(
   portIdentifier: Identifier,
   channelIdentifier: Identifier) {
   // abort and return error to prevent channel closing by user
-  abortTransaction
+  abortTransactionUnless(FALSE)
 }
 ```
 
@@ -257,12 +256,9 @@ function onRecvPacket(packet: Packet) {
   for (var i in data.tokenIds) {
     if source {
       // receiver is source chain: unescrow token
-      // determine escrow account
-      escrowAccount = channelEscrowAddresses[packet.destChannel]
-      // unescrow token to receiver
       err = nft.Transfer(data.classId.slice(len(prefix)), data.tokenIds[i], data.receiver)
       if (err !== nil) {
-        ack = NonFungibleTokenPacketAcknowledgement{false, "transfer nft(" + data.classId + ", " + data.tokenIds[i] + ") failed"}
+        ack = NonFungibleTokenPacketAcknowledgement{false, err.Error()}
         break
       }
     } else {
@@ -271,7 +267,7 @@ function onRecvPacket(packet: Packet) {
       // sender was source, mint voucher to receiver
       err = nft.Mint(prefixedClassId, data.classUri, data.tokenIds[i], data.tokenUris[i], data.receiver)
       if (err !== nil) {
-        ack = NonFungibleTokenPacketAcknowledgement{false, "mint nft(" + data.classId + ", " + data.tokenIds[i] + ") failed"}
+        ack = NonFungibleTokenPacketAcknowledgement{false, err.Error()}
         break
       }
     }
@@ -312,9 +308,6 @@ function refundToken(packet: Packet) {
     source = data.classId.slice(0, len(prefix)) !== prefix
     if source {
       // sender was source chain, unescrow tokens back to sender
-      escrowAccount = channelEscrowAddresses[packet.srcChannel]
-      // assert that escrow account is token owner
-      abortTransactionUnless(escrowAccount === nft.getOwner(data.classId, tokenId))
       nft.Transfer(data.classId, tokenId, data.sender)
     } else {
       // receiver was source chain, mint voucher back to sender
