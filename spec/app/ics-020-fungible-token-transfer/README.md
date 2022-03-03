@@ -178,7 +178,8 @@ function onChanOpenConfirm(
 function onChanCloseInit(
   portIdentifier: Identifier,
   channelIdentifier: Identifier) {
-  // no action necessary
+    // always abort transaction
+    abortTransactionUnless(FALSE)
 }
 ```
 
