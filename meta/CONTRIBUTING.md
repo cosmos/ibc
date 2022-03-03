@@ -50,7 +50,7 @@ Ensure that you base and target your PR on the `master` branch.
 
 - The latest state of development is on `master`.
 - Create a development branch either on `github.com/cosmos/ibc` or your fork (using `git remote add fork`).
-  - To ensure a clear ownership of branches on the ibc repo, branches must be named with the convention `{moniker}/branch-name`
+  - To ensure a clear ownership of branches on the ibc repo, branches must be named with the convention `{moniker}/{issue#}-branch-name`
 - Before submitting a pull request, begin `git rebase` on top of `master`. 
   **Since standards cannot be compiled, make sure that the changes in your PR remains consistent with the new commits on the `master` branch**.
 
