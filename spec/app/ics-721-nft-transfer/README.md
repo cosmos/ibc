@@ -7,7 +7,7 @@ requires: 25, 26
 kind: instantiation
 author: Haifeng Xi <haifeng@bianjie.ai>
 created: 2021-11-10
-modified: 2022-02-17
+modified: 2022-03-03
 ---
 
 > This standard document follows the same design principles of [ICS 20](../ics-020-fungible-token-transfer) and inherits most of its content therefrom, while replacing `bank` module based asset tracking logic with that of the `nft` module.
@@ -366,12 +366,12 @@ Coming soon.
 ## History
 | Date          | Description                                          |
 | ------------- | ---------------------------------------------------- |
-| Nov 10, 2021  | Initial draft adapted from ICS 20 spec               |
-| Nov 17, 2021  | Revisions to better accommodate smart contracts      |
+| Nov 10, 2021  | Initial draft - adapted from ICS 20 spec               |
+| Nov 17, 2021  | Revised to better accommodate smart contracts      |
 | Nov 17, 2021  | Renamed from ICS 21 to ICS 721                       |
-| Nov 18, 2021  | Revisions to allow for multiple tokens in one packet |
-| Feb 10, 2022  | Revisions to incorporate feedbacks from IBC team     |
-| Feb 14, 2022  | Revisions to resolve comments from IBC team          |
+| Nov 18, 2021  | Revised to allow for multiple tokens in one packet |
+| Feb 10, 2022  | Revised to incorporate feedbacks from IBC team     |
+| Mar 03, 2022  | Revised to make TRY callback consistent with PR#629         |
 
 ## Copyright
 
