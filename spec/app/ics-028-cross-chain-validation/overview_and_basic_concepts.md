@@ -135,7 +135,7 @@ The following figure shows an overview of the CCV Channel initialization.
 
 ![Channel Initialization Overview](./figures/ccv-init-overview.png?raw=true)
 
-Consumer chains are created through governance proposals. For details on how governance proposals work, take a look at the [Governance module documentation](https://docs.cosmos.network/v0.44/modules/gov/) of Cosmos SDK.
+Consumer chains are created through governance proposals. For an example of how governance proposals work, take a look at the [Governance module documentation](https://docs.cosmos.network/v0.44/modules/gov/) of Cosmos SDK.
 
 The channel initialization consists of four phases:
 - **Create clients**: The provider CCV module handles every passed proposal to spawn a new consumer chain. 
@@ -153,17 +153,21 @@ The channel initialization consists of four phases:
   > Note that at genesis, the validator set of the consumer chain matches the validator set of the provider chain.
 - **Connection handshake**: A relayer (as defined in [ICS 18](../../relayer/ics-018-relayer-algorithms)) is responsible for initiating the connection handshake (as defined in [ICS 3](../../core/ics-003-connection-semantics)). 
 - **Channel handshake**: A relayer is responsible for initiating the channel handshake (as defined in [ICS 4](../../core/ics-004-channel-and-packet-semantics)). 
-  The channel handshake must be initiated on the consumer chain. 
+  The channel handshake MUST be initiated on the consumer chain. 
   The handshake consists of four messages that need to be received for a channel built on top of the expected clients. 
   We omit the `ChanOpenAck` message since it is not relevant for the overview. 
-  - *OnChanOpenInit*: On receiving the *FIRST* `ChanOpenInit` message, the consumer CCV module sets the status of its end of the CCV channel to `INITIALIZING`.
-  - *OnChanOpenTry*: On receiving the *FIRST* `ChanOpenTry` message, the provider CCV module sets the status of its end of the CCV channel to `INITIALIZING`.
-  - *OnChanOpenConfirm*: On receiving the *FIRST* `ChanOpenConfirm` message, the provider CCV module sets the status of its end of the CCV channel to `VALIDATING`.
-- **Channel completion**: Once the provider chain sets the status of the CCV channel to `VALIDATING`, 
-  it provides a VSC (i.e., validator set change) to the consumer chain (see [next section](#validator-set-update)). 
-  On receiving the *FIRST* `VSCPacket`, the consumer CCV module sets the status of its end of the CCV channel to `VALIDATING`. 
+  - *OnChanOpenInit*: On receiving a `ChanOpenInit` message, the consumer CCV module verifies that the underlying client associated with this channel is the expected client of the provider chain (i.e., created during genesis).
+  - *OnChanOpenTry*: On receiving a `ChanOpenTry` message, the provider CCV module verifies that the underlying client associated with this channel is the expected client of the consumer chain (i.e., created when handling the governance proposal).
+  - *OnChanOpenConfirm*: On receiving the *FIRST* `ChanOpenConfirm` message, the provider CCV module considers its side of the CCV channel to be established.
+- **Channel completion**: Once the provider chain side of the CCV channel is established, 
+  the provider CCV module provides VSCs (i.e., validator set changes) to the consumer chain (see the [next section](#validator-set-update)). 
+  On receiving the *FIRST* `VSCPacket`, the consumer CCV module considers its side of the CCV channel to be established. 
+  From this moment onwards, the consumer chain is secured by the provider chain.
 
-> **Discussion**: As long as the [assumptions required by CCV](./system_model_and_properties.md#assumptions) hold (e.g., *Correct Relayer*), every governance proposal to spawn a new consumer chain that passes on the provider chain eventually results in a CCV channel being created. Furthermore, the "*FIRST*" keyword in the above description ensures the uniqueness of the CCV channel, i.e., all subsequent attempts to create another CCV channel to the same consumer chain will fail.
+> **Note**: As long as the [assumptions required by CCV](./system_model_and_properties.md#assumptions) hold (e.g., *Correct Relayer*), every governance proposal to spawn a new consumer chain that passes on the provider chain results eventually in a CCV channel being created. 
+> Furthermore, the "*FIRST*" keyword in the above description ensures the uniqueness of the CCV channel, i.e., all subsequent attempts to create another CCV channel to the same consumer chain will fail.
+
+> **Note**: To reduce the attack surface during channel initialization, the consumer chain SHOULD enable user transactions only after the CCV channel is established (i.e., after receiving the first VSC). 
 
 For a more detailed description of Channel Initialization, take a look at the [technical specification](./technical_specification.md#initialization).
 
