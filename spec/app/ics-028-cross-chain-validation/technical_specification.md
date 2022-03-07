@@ -104,11 +104,13 @@ Before describing the data structures and sub-protocols of the CCV protocol, we 
   function BeforeUnbondingOpCompleted(opId: uint64): Bool;
   ```
 
-- The following hooks enable the consumer CCV module to register operations to be execute when certain evidence is received by the consumer ABCI application:
+- The consumer CCV module defines the following hooks that enable other modules to register operations to execute when certain events have occurred within CCV:
   ```typescript
-  // invoked by the consumer ABCI application 
-  // after receiving evidence of misbehavior
-  function AfterEvidence(valAddress: string, power: int64, infractionHeight: int64);
+  // invoked after a new validator is added to the validator set
+  function AfterCCValidatorBonded(valAddress: string);
+
+  // invoked after a validator is removed from the validator set
+  function AfterCCValidatorBeginUnbonding(valAddress: string);
   ```
 
 ## Data Structures
@@ -126,11 +128,6 @@ interface ValidatorUpdate {
 }
 ```
 The provider chain sends to the consumer chain a list of `ValidatorUpdate`s, containing an entry for every validator that had its power updated. 
-
-In Tendermint, there is a delay (in blocks) between when validator updates are returned to the consensus-engine and when they are applied (for more details, take a look at the [ABCI specification](https://github.com/tendermint/spec/blob/v0.7.1/spec/abci/abci.md#endblock)). 
-We denote this delay by `ValidatorUpdateDelay`. 
-For example, if `ValidatorUpdateDelay = x` and a validator set update is returned with new validators at the end of block `10`, then the new validators are expected to sign blocks beginning at block `11+x`. 
-For the current version of this specification, `ValidatorUpdateDelay = 1`.
 
 The data structures required for creating clients (i.e., `ClientState`, `ConsensusState`) are defined in [ICS 7](../../client/ics-007-tendermint-client).
 
@@ -290,6 +287,20 @@ This section describes the internal state of the CCV module. For simplicity, the
 - `providerClient: Identifier` identifies the client of the provider chain (on the consumer chain) that the CCV channel is build upon.
 - `providerChannel: Identifier` identifies the consumer's channel end of the CCV channel.
 - `channelStatus: ChannelStatus` is the status of the CCV channel.
+- `validatorSet: <string, CrossChainValidator>` is a mapping that stores the validators in the validator set of the consumer chain. Each validator is described by a `CrossChainValidator` data structure, which is defined as
+  ```typescript
+  interface CrossChainValidator {
+    // validator address, i.e., the hash of its public key
+    address: string 
+
+    // flag indicating whether the consumer chain sent a request 
+    // to slash the validator without receiving a VSC confirming it;
+    // it enables the consumer CCV module to avoid sending to 
+    // the provider chain two slashing requests for the same infraction, 
+    // e.g., downtime.  
+    outstandingSlash: Bool
+  }
+  ```
 - `pendingChanges: [ValidatorUpdate]` is a list of `ValidatorUpdate`s received, but not yet applied to the validator set. 
   It is emptied on every `EndBlock()`. The list exposes the following interface:
   ```typescript
@@ -343,9 +354,6 @@ This section describes the internal state of the CCV module. For simplicity, the
     Remove()
   }
   ```
-- `jailUntil: Map<string, uint64>` is a mapping from validator addresses to a time instance. 
-  It enables the consumer CCV module to keep track of how long are validators jailed and consequently to avoid sending to the provider chain two slashing requests for the same infraction, e.g., downtime. 
-  It has no impact on the VSCs applied by the consumer CCV module.
  
 ## Sub-protocols
 
@@ -631,6 +639,15 @@ function InitGenesis(gs: ConsumerGenesisState): [ValidatorUpdate] {
   // set default value for HtoVSC
   HtoVSC[getCurrentHeight()] = 0
 
+  // set the initial validator set for the consumer chain
+  foreach val IN gs.initialValSet {
+    ccVal := CrossChainValidator{
+      address: hash(val.pubKey),
+      outstandingSlash: FALSE
+    }
+    validatorSet[ccVal.address] = ccVal
+  }
+
   return gs.initialValSet
 }
 ```
@@ -642,6 +659,7 @@ function InitGenesis(gs: ConsumerGenesisState): [ValidatorUpdate] {
   - The capability for the port `ConsumerPortId` is claimed.
   - A client of the provider chain is created and the client ID is stored into `providerClient`.
   - `HtoVSC` for the current block is set to `0`.
+  - The `validatorSet` mapping is populated with the initial validator set.
   - The initial validator set is returned to the consensus engine.
 - Error condition:
   - The genesis state contains no valid provider client state, where the validity is defined as in [ICS 7](../../client/ics-007-tendermint-client).
@@ -1483,6 +1501,16 @@ function onRecvVSCPacket(packet: Packet): bytes {
   maturityTimestamp = currentTimestamp().Add(UnbondingPeriod)
   maturingVSCs.Add(packet.data.id, maturityTimestamp)
 
+  // look for confirmation of jail requests
+  foreach update IN packet.data.updates {
+    // check whether the update is a removal
+    if update.power == 0 {
+      addr := hash(update.pubKey)
+      abortSystemUnless(addr IN validatorSet.Keys())
+      validatorSet[addr].outstandingSlash = FALSE
+    }
+  }
+
   return VSCPacketSuccess
 }
 ```
@@ -1502,9 +1530,10 @@ function onRecvVSCPacket(packet: Packet): bytes {
       - the pending slash requests are sent to the provider chain;
     - `packet.data.updates` are appended to `pendingChanges`;
     - `(packet.data.id, maturityTimestamp)` is added to `maturingVSCs`, where `maturityTimestamp = currentTimestamp() + UnbondingPeriod`;
+    - for each `update` received, such that `update.power = 0`, `validatorSet[addr].outstandingSlash` is set to false;
     - a successful acknowledgement is returned.
 - Error condition:
-  - None.
+  - A validator update with the power set to 0 is received, but the validator cannot be found in the validator set of the consumer chain.
 
 <!-- omit in toc -->
 #### **[CCV-CCF-ACKMAT.1]**
@@ -1563,6 +1592,9 @@ function EndBlock(): [ValidatorUpdate] {
   // remove all pending changes
   pendingChanges.RemoveAll()
 
+  // update validatorSet
+  UpdateValidatorSet(changes)
+
   // unbond mature packets
   UnbondMaturePackets()
 
@@ -1577,9 +1609,53 @@ function EndBlock(): [ValidatorUpdate] {
 - Expected postcondition:
   - If `pendingChanges` is empty, the state is not changed.
   - Otherwise,
-    - the pending changes are aggregated and returned to the consensus engine;
+    - the pending changes are aggregated and stored in `changes`;
     - `pendingChanges` is emptied;
-    - `UnbondMaturePackets()` is invoked.
+    - `UpdateValidatorSet(changes)` is invoked;
+    - `UnbondMaturePackets()` is invoked;
+    - `changes` is returned to the consensus engine.
+- Error condition:
+  - None.
+
+<!-- omit in toc -->
+#### **[CCV-CCF-UPVALS.1]**
+```typescript
+// CCF: Consumer Chain Function
+function UpdateValidatorSet(changes: [ValidatorUpdate]) {
+  foreach update IN changes {
+    addr := hash(update.pubKey)
+    if addr NOT IN validatorSet.Keys() {
+      // new validator bonded
+      val := CrossChainValidator{
+        address: addr,
+        outstandingSlash: FALSE
+      }
+      validatorSet[addr] = val
+      // call AfterCCValidatorBonded hook
+      AfterCCValidatorBonded(addr)
+    }
+    else if update.power == 0 {
+      // existing validator begins unbonding
+      validatorSet.Remove(addr)
+      // call AfterCCValidatorBeginUnbonding hook
+      AfterCCValidatorBeginUnbonding(addr)
+    }
+  }
+}
+```
+- Initiator: 
+  - The `EndBlock()` method.
+- Expected precondition:
+  - None.
+- Expected postcondition:
+  - For each validator `update` in `changes`,
+    - if the validator is not in the validator set, then 
+      - a new `CrossChainValidator` is added to `validatorSet`;
+      - the `AfterCCValidatorBonded` hook is called;
+    - otherwise, if the validator's new power is `0`, then,
+      - the validator is removed from `validatorSet`;
+      - the `AfterCCValidatorBeginUnbonding` hook is called;
+    - otherwise, nothing is changed.
 - Error condition:
   - None.
 
@@ -1697,9 +1773,9 @@ function onAcknowledgeSlashPacket(packet: Packet, ack: bytes) {
   // that should never happen, 
   // see SendSlashRequest() and SendPendingSlashRequests();
   // however, to be safe, if the slash request failed, 
-  // clear jailUntil for the validator
+  // clear outstandingSlash for the validator
   if ack == SlashPacketError {
-    jailUntil[packet.data.valAddress] = 0
+    validatorSet[packet.data.valAddress].outstandingSlash = FALSE
   }
 }
 ```
@@ -1708,7 +1784,7 @@ function onAcknowledgeSlashPacket(packet: Packet, ack: bytes) {
 - Expected precondition:
   - The IBC module on the consumer chain received an acknowledgement of a `SlashPacket` on a channel owned by the consumer CCV module.
 - Expected postcondition:
-  - If the slash request was not successful, then unset `jailUntil[packet.data.valAddress]`.
+  - If the slash request was not successful, then `validatorSet[packet.data.valAddress].outstandingSlash` is set to false.
 - Error condition:
   - None.
 
@@ -1734,54 +1810,22 @@ function onTimeoutSlashPacket(packet Packet) {
   - None.
 
 <!-- omit in toc -->
-#### **[CCV-CCF-HOOK-AFEVID.1]**
-```typescript
-// CCF: Consumer Chain Function
-// implements a ABCI application hook
-function AfterEvidence(valAddress: string, power: int64, infractionHeight: int64) {
-  // TODO governance and CCV params
-  slashFactor = TBA
-  jailTime = TBA
-  
-  // send slash request to the provider chain
-  SendSlashRequest(valAddress, power, infractionHeight, slashFactor, jailTime)
-}
-```
-- **Initiator:** 
-  - The ABCI application.
-- **Expected precondition:**
-  - Evidence of misbehavior at height `infractionHeight` for a validator with address `valAddress` was received.  
-- **Expected postcondition:**
-  - Both `slashFactor` and `jailTime` parameters are set.
-  - `SendSlashRequest(valAddress, power, infractionHeight, slashFactor, jailTime)` is invoked.
-- **Error condition:**
-  - None.
-
-> **Note**: The ABCI application SHOULD set the infraction height of the downtime evidence to the current height minus `1`.
->  The reason is that downtime evidence is computed on the `LastCommit` field of the Tendermint header, which consists of the votes for the previous block 
-> (for more details, take a look at the [Tendermint specification](https://github.com/tendermint/spec/blob/v0.7.1/spec/core/data_structures.md#block), 
-> and for an example, take a look at the [Golang Cosmos SDK implementation](https://github.com/cosmos/cosmos-sdk/blob/e6571906043b6751951a42b6546431b1c38b05bd/x/slashing/keeper/infractions.go#L85)). 
-> Consequently, the consumer CCV module expects the `infractionHeight` parameter of the `AfterEvidence` hook to be set accordingly.
-
-<!-- omit in toc -->
 #### **[CCV-CCF-SNDSLASH.1]**
 ```typescript
 // CCF: Consumer Chain Function
-// Utility method
+// Enables consumer initiated slashing
 function SendSlashRequest(
   valAddress: string, 
   power: int64, 
-  infractionHeight: Height,
-  slashFactor: int64,
-  jailTime: uint64) {
-    // check whether the validator is already jailed
-    if data.valAddress in jailUntil.Keys() AND jailUntil[data.valAddress] > currentTimestamp() {
+  infractionHeight: Height) {
+    // check whether there is an outstanding request to slash the validator
+    if data.valAddress IN validatorSet.Keys() AND validatorSet[data.valAddress].outstandingSlash {
       return
     }
 
-    // retrieve the stake distribution which signed the block,
-	  // i.e., subtract ValidatorUpdateDelay from the infraction height
-    distributionHeight = infractionHeight - ValidatorUpdateDelay
+    // TODO governance and CCV params
+    slashFactor = TBA
+    jailTime = TBA
 
     // create SlashPacket data
     packetData = SlashPacketData{
@@ -1798,8 +1842,8 @@ function SendSlashRequest(
       packet = Packet{data: packetData, destChannel: providerChannel}
       channelKeeper.SendPacket(packet)
 
-      // set jailUntil for this validator
-      jailUntil[data.valAddress] = currentTimestamp() + data.jailTime
+      // set outstandingSlash for this validator
+      validatorSet[data.valAddress].outstandingSlash = TRUE
     }
     else {
       // add SlashPacket data to the list of pending SlashPackets 
@@ -1808,19 +1852,28 @@ function SendSlashRequest(
 }
 ```
 - **Initiator:** 
-  - The consumer CCV module.
+  - The ABCI application (e.g., the Slashing module).
 - **Expected precondition:**
   - Evidence of misbehavior for a validator with address `valAddress` was received.
 - **Expected postcondition:**
-  - If `jailUntil[data.valAddress]` is set and larger than the current timestamp, then the state is not changed.
+  - If there is an outstanding request to slash this validator, then the state is not changed.
   - Otherwise, 
-    - a `SlashPacket` data `packetData` is created, such that `packetData.vscId = VSCtoH[distributionHeight]`, where `distributionHeight = infractionHeight - ValidatorUpdateDelay`;
+    - both `slashFactor` and `jailTime` parameters are set;
+    - a `SlashPacket` data `packetData` is created, such that `packetData.vscId = VSCtoH[infractionHeight]`;
     - if the CCV channel to the provider chain is established, then 
       - a packet with the `packetData` is sent to the provider chain;
-      - `jailUntil[data.valAddress]` is set to the current timestamp plus `data.jailTime`;
+      - `validatorSet[data.valAddress].outstandingSlash` is set to true;
     - otherwise `packetData` appended to `pendingSlashPackets`.
 - **Error condition:**
   - None.
+
+> **Note**: The ABCI application MUST subtract `ValidatorUpdateDelay` from the infraction height before invoking `SendSlashRequest`, 
+> where `ValidatorUpdateDelay` is a delay (in blocks) between when validator updates are returned to the consensus-engine and when they are applied 
+> (for more details, take a look at the [ABCI specification](https://github.com/tendermint/spec/blob/v0.7.1/spec/abci/abci.md#endblock)). 
+> For example, if `ValidatorUpdateDelay = x` and a validator set update is returned with new validators at the end of block `10`, 
+> then the new validators are expected to sign blocks beginning at block `11+x`. 
+> 
+> Consequently, the consumer CCV module expects the `infractionHeight` parameter of the `SendSlashRequest()` to be set accordingly.
 
 <!-- omit in toc -->
 #### **[CCV-CCF-SNDPESLASH.1]**
@@ -1828,34 +1881,31 @@ function SendSlashRequest(
 // CCF: Consumer Chain Function
 // Utility method
 function SendPendingSlashRequests() {
-  // check whether the CCV channel to the provider chain is established
-  if providerChannel != "" {
-    // iterate over every pending SlashPacket in reverse order
-    foreach data IN pendingSlashPackets.Reverse() {
-      if jailUntil[data.valAddress] <= currentTimestamp() {
-        // create packet and send it using the interface exposed by ICS-4
-        packet = Packet{data: data, destChannel: providerChannel}
-        channelKeeper.SendPacket(packet)
+  // iterate over every pending SlashPacket in reverse order
+  foreach data IN pendingSlashPackets.Reverse() {
+    if !validatorSet[data.valAddress].outstandingSlash {
+      // create packet and send it using the interface exposed by ICS-4
+      packet = Packet{data: data, destChannel: providerChannel}
+      channelKeeper.SendPacket(packet)
 
-        // set jailUntil for this validator
-        jailUntil[data.valAddress] = currentTimestamp() + data.jailTime
-      }
+      // set outstandingSlash for this validator
+      validatorSet[data.valAddress].outstandingSlash = TRUE
     }
-
-    // remove pending SlashPacket
-    pendingSlashPackets.Remove()
   }
+
+  // remove pending SlashPacket
+  pendingSlashPackets.Remove()
 }
 ```
 - **Initiator:** 
   - The consumer CCV module.
 - **Expected precondition:**
-  - None.
+  - `providerChannel != ""`.
 - **Expected postcondition:**
   - If the CCV channel to the provider chain is established,
-    - for each `data` in `pendingSlashPackets` in reverse order, such that `jailUntil[data.valAddress]` is not larger than the current timestamp,
+    - for each `data` in `pendingSlashPackets` in reverse order, such that `validatorSet[data.valAddress].outstandingSlash` is false,
       - a packet with the `SlashPacketData` is sent to the provider chain;
-      - `jailUntil[data.valAddress]` is set to the current timestamp plus `data.jailTime`;
+      - `validatorSet[data.valAddress].outstandingSlash` is set to true;;
     - all the pending `SlashPacket`s are removed.
 - **Error condition:**
   - None.

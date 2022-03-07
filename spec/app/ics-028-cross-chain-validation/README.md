@@ -29,14 +29,10 @@ The communication between the provider and the consumer chains is done through t
 ## Backwards Compatibility
 
 (discussion of compatibility or lack thereof with previous standards)
- -->
 
 
 ## Forwards Compatibility
 
-Future version may use newer versions of ABCI (e.g., ABCI++), which may result in different Tendermint block headers and, consequently, in different values for `ValidatorUpdateDelay` (see the [External Data Structures](./technical_specification.md#external-data-structures) section). 
-
-<!--
 ## Example Implementation
 
 (link to or description of concrete example implementation)
