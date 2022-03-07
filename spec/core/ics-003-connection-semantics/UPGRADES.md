@@ -31,7 +31,6 @@ enum ConnectionState {
   OPEN,
   UPGRADE_INIT,
   UPGRADE_TRY,
-  UPGRADE_ERR,
 }
 ```
 
@@ -106,8 +105,8 @@ function errorPath(id: Identifier): Path {
 The UpgradeError MUST have an associated verification function added to the connection and client interfaces so that a counterparty may verify that chain has stored an error in the UpgradeError path.
 
 ```typescript
-// Connection VerifyUpgradeError method
-function verifyUpgradeError(
+// Connection VerifyConnectionUpgradeError method
+function verifyConnectionUpgradeError(
   connection: ConnectionEnd,
   height: Height,
   proof: CommitmentProof,
@@ -120,7 +119,7 @@ function verifyUpgradeError(
 
 ```typescript
 // Client VerifyUpgradeError
-function verifyUpgradeError(
+function verifyConnectionUpgradeError(
     clientState: ClientState,
     height: Height,
     prefix: CommitmentPrefix,
@@ -147,8 +146,8 @@ function timeoutPath(id: Identifier) Path {
 The timeout path MUST have associated verification methods on the connection and client interfaces in order for a counterparty to prove that a chain stored a particular `UpgradeTimeout`.
 
 ```typescript
-// Connection VerifyUpgradeTimeout method
-function verifyUpgradeTimeout(
+// Connection VerifyConnectionUpgradeTimeout method
+function verifyConnectionUpgradeTimeout(
   connection: ConnectionEnd,
   height: Height,
   proof: CommitmentProof,
@@ -161,7 +160,7 @@ function verifyUpgradeTimeout(
 
 ```typescript
 // Client VerifyUpgradeTimeout
-function verifyUpgradeTimeout(
+function verifyConnectionUpgradeTimeout(
     clientState: ClientState,
     height: Height,
     prefix: CommitmentPrefix,
@@ -178,7 +177,7 @@ function verifyUpgradeTimeout(
 
 ## Sub-Protocols
 
-The Connection Upgrade process consists of three sub-protocols: `UpgradeHandshake`, `CancelConnectionUpgrade`, and `TimeoutConnectionUpgrade`. In the case where both chains approve of the proposed upgrade, the upgrade handshake protocol should complete successfully and the ConnectionEnd should upgrade successf
+The Connection Upgrade process consists of three sub-protocols: `UpgradeConnectionHandshake`, `CancelConnectionUpgrade`, and `TimeoutConnectionUpgrade`. In the case where both chains approve of the proposed upgrade, the upgrade handshake protocol should complete successfully and the ConnectionEnd should upgrade successfully.
 
 ### Upgrade Handshake
 
@@ -247,8 +246,7 @@ Access control on counterparty should inform choice of timeout values, i.e. time
 ```typescript
 function connUpgradeTry(
     identifier: Identifier,
-    proposedUpgrade: UpgradeConnectionState,
-    counterpartyConnection: ConnectionEnd,
+    proposedUpgradeConnection: ConnectionEnd,
     timeoutHeight: Height,
     timeoutTimestamp: uint64,
     UpgradeTimeout: UpgradeTimeout,
@@ -277,10 +275,10 @@ function connUpgradeTry(
     // upgraded connection state must be in `UPGRADE_TRY`
     // NOTE: Any added fields are by default modifiable.
     abortTransactionUnless(
-        proposedUpgrade.connection.state == UPGRADE_TRY &&
-        proposedUpgrade.connection.counterpartyConnectionIdentifier == currentConnection.counterpartyConnectionIdentifier &&
-        proposedUpgrade.connection.clientIdentifier == currentConnection.clientIdentifier &&
-        proposedUpgrade.connection.counterpartyClientIdentifier == currentConnection.counterpartyClientIdentifier
+        proposedUpgradeConnection.state == UPGRADE_TRY &&
+        proposedUpgradeConnection.counterpartyConnectionIdentifier == currentConnection.counterpartyConnectionIdentifier &&
+        proposedUpgradeConnection.clientIdentifier == currentConnection.clientIdentifier &&
+        proposedUpgradeConnection.counterpartyClientIdentifier == currentConnection.counterpartyClientIdentifier
     )
 
     
@@ -319,7 +317,7 @@ function connUpgradeTry(
     restoreConnectionUnless(IsCompatible(counterpartyConnection, proposedUpgrade.Connection))
 
     // verify proofs of counterparty state
-    abortTransactionUnless(verifyConnectionState(currentConnection, proofHeight, proofConnection, currentConnection.counterpartyConnectionIdentifier, counterpartyConnection))
+    abortTransactionUnless(verifyConnectionState(currentConnection, proofHeight, proofConnection, currentConnection.counterpartyConnectionIdentifier, proposedUpgradeConnection))
     abortTransactionUnless(verifyUpgradeTimeout(currentConnection, proofHeight, proofUpgradeTimeout, currentConnection.counterpartyConnectionIdentifier, upgradeTimeout))
  
     provableStore.set(connectionPath(identifier), proposedUpgrade.connection)
@@ -333,9 +331,7 @@ NOTE: It is up to individual implementations how they will provide access-contro
 function onChanUpgradeAck(
     identifier: Identifier,
     counterpartyConnection: ConnectionEnd,
-    counterpartyStatus: UpgradeError,
     proofConnection: CommitmentProof,
-    proofUpgradeError: CommitmentProof,
     proofHeight: Height
 ) {
     // current connection is in UPGRADE_INIT or UPGRADE_TRY (crossing hellos)
@@ -417,7 +413,6 @@ During the upgrade handshake a chain may cancel the upgrade by writing an error 
 function cancelConnectionUpgrade(
     identifier: Identifer,
     errorReceipt: []byte,
-    counterpartyUpgradeError: UpgradeError,
     proofUpgradeError: CommitmentProof,
     proofHeight: Height,
 ) {
@@ -427,7 +422,7 @@ function cancelConnectionUpgrade(
 
     abortTransactionUnless(!isEmpty(errorReceipt))
 
-    abortTransactionUnless(verifyUpgradeError(currentConnection, proofHeight, proofUpgradeError, currentConnection.counterpartyConnectionIdentifier, counterpartyUpgradeError))
+    abortTransactionUnless(verifyUpgradeError(currentConnection, proofHeight, proofUpgradeError, currentConnection.counterpartyConnectionIdentifier, errorReceipt))
 
     // cancel upgrade
     // and restore original conneciton
