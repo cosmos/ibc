@@ -328,7 +328,7 @@ NOTE: It is up to individual implementations how they will provide access-contro
 
 
 ```typescript
-function onChanUpgradeAck(
+function connUpgradeAck(
     identifier: Identifier,
     counterpartyConnection: ConnectionEnd,
     proofConnection: CommitmentProof,
@@ -361,7 +361,7 @@ function onChanUpgradeAck(
 ```
 
 ```typescript
-function onChanUpgradeConfirm(
+function connUpgradeConfirm(
     identifier: Identifier,
     counterpartyConnection: ConnectionEnd,
     proofConnection: CommitmentProof,
