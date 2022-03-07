@@ -511,6 +511,7 @@ function handleChanOpenAck(datagram: ChanOpenAck) {
       datagram.portIdentifier,
       datagram.channelIdentifier,
       datagram.version,
+      datagram.counterpartyChannelIdentifier,
       datagram.proofTry,
       datagram.proofHeight
     )
