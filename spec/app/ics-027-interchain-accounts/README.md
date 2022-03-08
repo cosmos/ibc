@@ -422,6 +422,7 @@ function onChanOpenTry(
 function onChanOpenAck(
   portIdentifier: Identifier,
   channelIdentifier: Identifier,
+  counterpartyChannelIdentifier,
   counterpartyVersion: string) {
 
   // validate counterparty metadata decided by host chain
