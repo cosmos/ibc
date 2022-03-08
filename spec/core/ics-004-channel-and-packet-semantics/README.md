@@ -363,7 +363,7 @@ function chanOpenAck(
   portIdentifier: Identifier,
   channelIdentifier: Identifier,
   counterpartyVersion: string,
-  counterpartyChannelIdentifier: string,
+  counterpartyChannelIdentifier: Identifier,
   proofTry: CommitmentProof,
   proofHeight: Height) {
     channel = provableStore.get(channelPath(portIdentifier, channelIdentifier))
