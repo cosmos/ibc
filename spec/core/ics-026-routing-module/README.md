@@ -102,8 +102,7 @@ is invalid to abort the handshake. It may also perform custom ACK logic.
 function onChanOpenAck(
   portIdentifier: Identifier,
   channelIdentifier: Identifier,
-  counterpartyVersion: string, 
-  counterpartyChannelIdentifier: Identifier) {
+  version: string) {
     // defined by the module
 }
 ```
