@@ -493,8 +493,8 @@ function handleChanOpenTry(datagram: ChanOpenTry) {
 interface ChanOpenAck {
   portIdentifier: Identifier
   channelIdentifier: Identifier
-  counterpartyVersion: string
   counterpartyChannelIdentifier: Identifier
+  counterpartyVersion: string
   proofTry: CommitmentProof
   proofHeight: Height
 }
@@ -511,8 +511,8 @@ function handleChanOpenAck(datagram: ChanOpenAck) {
     handler.chanOpenAck(
       datagram.portIdentifier,
       datagram.channelIdentifier,
-      datagram.counterpartyVersion,
       datagram.counterpartyChannelIdentifier,
+      datagram.counterpartyVersion,
       datagram.proofTry,
       datagram.proofHeight
     )
