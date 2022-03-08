@@ -167,7 +167,10 @@ The channel initialization consists of four phases:
 > **Note**: As long as the [assumptions required by CCV](./system_model_and_properties.md#assumptions) hold (e.g., *Correct Relayer*), every governance proposal to spawn a new consumer chain that passes on the provider chain results eventually in a CCV channel being created. 
 > Furthermore, the "*FIRST*" keyword in the above description ensures the uniqueness of the CCV channel, i.e., all subsequent attempts to create another CCV channel to the same consumer chain will fail.
 
-> **Note**: To reduce the attack surface during channel initialization, the consumer chain SHOULD enable user transactions only after the CCV channel is established (i.e., after receiving the first VSC). 
+> **Note**: Until the CCV channel is established, the initial validator set of the consumer chain cannot be updated (see the [Validator Set Update](#validator-set-update) section) and the validators from this initial set cannot be slashed (see the [Consumer Initiated Slashing](#consumer-initiated-slashing) section).
+> This means that the consumer chain is *not yet secured* by the provider chain.
+> Thus, to reduce the attack surface during channel initialization, the consumer chain SHOULD enable user transactions only after the CCV channel is established (i.e., after receiving the first VSC). 
+> As a consequence, a malicious initial validator set can only influence the initialization of the CCV channel. 
 
 For a more detailed description of Channel Initialization, take a look at the [technical specification](./technical_specification.md#initialization).
 
