@@ -159,10 +159,11 @@ function onChanOpenTry(
 function onChanOpenAck(
   portIdentifier: Identifier,
   channelIdentifier: Identifier,
-  version: string) {
+  counterpartyChannelIdentifier: Identifier,
+  counterpartyVersion: string) {
   // port has already been validated
-  // assert that version is "ics20-1"
-  abortTransactionUnless(version === "ics20-1")
+  // assert that counterparty selected version is "ics20-1"
+  abortTransactionUnless(counterpartyVersion === "ics20-1")
 }
 ```
 

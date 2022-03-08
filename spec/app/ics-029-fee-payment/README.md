@@ -255,8 +255,9 @@ function OnChanOpenTry(
 function onChanOpenAck(
   portIdentifier: Identifier,
   channelIdentifier: Identifier,
-  version: string) {
-      feeVersion, appVersion = splitFeeVersion(version)
+  counterpartyChannelIdentifier: Identifier,
+  counterpartyVersion: string) {
+      feeVersion, appVersion = splitFeeVersion(counterpartyVersion)
       if !isSupported(feeVersion) {
           return error
       }

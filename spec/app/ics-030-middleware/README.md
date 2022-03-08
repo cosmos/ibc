@@ -129,8 +129,9 @@ function OnChanOpenTry(
 function onChanOpenAck(
   portIdentifier: Identifier,
   channelIdentifier: Identifier,
-  version: string) {
-      middlewareVersion, appVersion = splitMiddlewareVersion(version)
+  counterpartyChannelIdentifier: Identifier,
+  counterpartyVersion: string) {
+      middlewareVersion, appVersion = splitMiddlewareVersion(counterpartyVersion)
       if !isCompatible(middlewareVersion) {
           return error
       }
