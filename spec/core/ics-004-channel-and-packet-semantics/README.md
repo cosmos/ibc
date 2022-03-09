@@ -630,11 +630,12 @@ function recvPacket(
         abortTransactionUnless(packet.timeoutHeight === 0 || getConsensusHeight() < packet.timeoutHeight)
         abortTransactionUnless(packet.timeoutTimestamp === 0 || currentTimestamp() < packet.timeoutTimestamp)
         break;
+
       case ORDERED_ALLOW_TIMEOUT:
         // for ORDERED_ALLOW_TIMEOUT, we do not abort on timeout
         // instead increment next sequence recv and write the sentinel timeout value in packet receipt
         // then return
-        if getConsensusHeight() > packet.timeoutHeight || packet.timeoutTimestamp > currentTimestamp() {
+        if (getConsensusHeight() > packet.timeoutHeight && packet.timeoutHeight != 0) || (currentTimestamp() > packet.timeoutTimestamp && packet.timeoutTimestamp != 0) {
           nextSequenceRecv = nextSequenceRecv + 1
           provableStore.set(nextSequenceRecvPath(packet.destPort, packet.destChannel), nextSequenceRecv)
           provableStore.set(
