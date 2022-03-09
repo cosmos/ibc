@@ -235,7 +235,7 @@ function connUpgradeInit(
     }
 
     provableStore.set(timeoutPath(identifier), upgradeTimeout)
-    provableStore.set(connectionPath(identifier), proposedUpgrade.connection)
+    provableStore.set(connectionPath(identifier), proposedUpgradeConnection)
     privateStore.set(restorePath(identifier), currentConnection)
 }
 ```
@@ -302,7 +302,7 @@ function connUpgradeTry(
 
     // counterparty-specified timeout must not have exceeded
     restoreConnectionUnless(
-        timeoutHeight < currentHeight() &&
+        timeoutHeight < getCurrentHeight() &&
         timeoutTimestamp < currentTimestamp()
     )
 
@@ -318,7 +318,7 @@ function connUpgradeTry(
 
     // verify proofs of counterparty state
     abortTransactionUnless(verifyConnectionState(currentConnection, proofHeight, proofConnection, currentConnection.counterpartyConnectionIdentifier, proposedUpgradeConnection))
-    abortTransactionUnless(verifyUpgradeTimeout(currentConnection, proofHeight, proofUpgradeTimeout, currentConnection.counterpartyConnectionIdentifier, upgradeTimeout))
+    abortTransactionUnless(verifyConnectionUpgradeTimeout(currentConnection, proofHeight, proofUpgradeTimeout,  upgradeTimeout))
  
     provableStore.set(connectionPath(identifier), proposedUpgrade.connection)
 }
@@ -369,7 +369,7 @@ function connUpgradeConfirm(
 ) {
     // current connection is in UPGRADE_TRY
     currentConnection = provableStore.get(connectionPath(identifier))
-    abortTransactionUnless(connection.state == UPGRADE_TRY)
+    abortTransactionUnless(currentConnection.state == UPGRADE_TRY)
 
     // counterparty must be in OPEN state
     abortTransactionUnless(counterpartyConnection.State == OPEN)
@@ -422,7 +422,7 @@ function cancelConnectionUpgrade(
 
     abortTransactionUnless(!isEmpty(errorReceipt))
 
-    abortTransactionUnless(verifyUpgradeError(currentConnection, proofHeight, proofUpgradeError, currentConnection.counterpartyConnectionIdentifier, errorReceipt))
+    abortTransactionUnless(verifyConnectionUpgradeError(currentConnection, proofHeight, proofUpgradeError, errorReceipt))
 
     // cancel upgrade
     // and restore original conneciton
