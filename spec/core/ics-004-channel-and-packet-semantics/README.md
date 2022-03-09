@@ -642,6 +642,11 @@ function recvPacket(
             TIMEOUT_RECEIPT
           )
         }
+        break;
+
+      default:
+        // unsupported channel type
+        abortTransactionUnless(true)
     }
 
     abortTransactionUnless(connection.verifyPacketData(
@@ -673,6 +678,11 @@ function recvPacket(
           packetReceiptPath(packet.destPort, packet.destChannel, packet.sequence),
           SUCCESFUL_RECEIPT
         )
+      break;
+
+      default:
+        // unsupported channel type
+        abortTransactionUnless(true)
     }
     
     // log that a packet has been received
@@ -870,6 +880,8 @@ function timeoutPacket(
           packet.destChannel,
           nextSequenceRecv
         ))
+        break;
+
       case UNORDERED:
         // unordered channel: verify absence of receipt at packet index
         abortTransactionUnless(connection.verifyPacketReceiptAbsence(
@@ -879,6 +891,10 @@ function timeoutPacket(
           packet.destChannel,
           packet.sequence
         ))
+        break;
+
+      // NOTE: For ORDERED_ALLOW_TIMEOUT, the relayer must first attempt the receive on the destination chain
+      // before the timeout receipt can be written and subsequently proven on the sender chain in timeoutPacket
       case ORDERED_ALLOW_TIMEOUT:
         abortTransactionUnless(connection.verifyPacketReceipt(
           proofHeight,
@@ -887,6 +903,11 @@ function timeoutPacket(
           packet.destChannel,
           TIMEOUT_RECEIPT,
         ))
+        break;
+
+      default:
+        // unsupported channel type
+        abortTransactionUnless(true)
     } 
 
     // all assertions passed, we can alter state
