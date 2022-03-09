@@ -102,7 +102,8 @@ is invalid to abort the handshake. It may also perform custom ACK logic.
 function onChanOpenAck(
   portIdentifier: Identifier,
   channelIdentifier: Identifier,
-  version: string) {
+  counterpartyChannelIdentifier: Identifier, 
+  counterpartyVersion: string) {
     // defined by the module
 }
 ```
@@ -493,7 +494,8 @@ function handleChanOpenTry(datagram: ChanOpenTry) {
 interface ChanOpenAck {
   portIdentifier: Identifier
   channelIdentifier: Identifier
-  version: string
+  counterpartyChannelIdentifier: Identifier
+  counterpartyVersion: string
   proofTry: CommitmentProof
   proofHeight: Height
 }
@@ -504,13 +506,15 @@ function handleChanOpenAck(datagram: ChanOpenAck) {
     err = module.onChanOpenAck(
       datagram.portIdentifier,
       datagram.channelIdentifier,
-      datagram.version
+      datagram.counterpartyChannelIdentifier,
+      datagram.counterpartyVersion
     )
     abortTransactionUnless(err === nil)
     handler.chanOpenAck(
       datagram.portIdentifier,
       datagram.channelIdentifier,
-      datagram.version,
+      datagram.counterpartyChannelIdentifier,
+      datagram.counterpartyVersion,
       datagram.proofTry,
       datagram.proofHeight
     )

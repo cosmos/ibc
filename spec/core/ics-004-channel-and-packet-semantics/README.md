@@ -362,8 +362,8 @@ counterparty module on the other chain.
 function chanOpenAck(
   portIdentifier: Identifier,
   channelIdentifier: Identifier,
+  counterpartyChannelIdentifier: Identifier,
   counterpartyVersion: string,
-  counterpartyChannelIdentifier: string,
   proofTry: CommitmentProof,
   proofHeight: Height) {
     channel = provableStore.get(channelPath(portIdentifier, channelIdentifier))
