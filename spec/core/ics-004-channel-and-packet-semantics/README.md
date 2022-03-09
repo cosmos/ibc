@@ -133,6 +133,15 @@ An `OpaquePacket` is a packet, but cloaked in an obscuring data type by the host
 type OpaquePacket = object
 ```
 
+In order to enable new channel types (e.g. ORDERED_ALLOW_TIMEOUT), the protocol introduces standardized packet receipts that will serve as sentinel values for the receiving chain to expliclity write to its store the outcome of a `recvPacket`.
+
+```typescript
+enum PacketReceipt {
+  SUCCESSFUL_RECEIPT,
+  TIMEOUT_RECEIPT,
+}
+```
+
 ### Desired Properties
 
 #### Efficiency
@@ -211,7 +220,8 @@ function packetCommitmentPath(portIdentifier: Identifier, channelIdentifier: Ide
 
 Absence of the path in the store is equivalent to a zero-bit.
 
-Packet receipt data are stored under the `packetReceiptPath`
+Packet receipt data are stored under the `packetReceiptPath`. In the case of a successful receive, the destination chain writes a sentinel success value of `SUCCESSFUL_RECEIPT`.
+Some channel types MAY write a sentinel timeout value `TIMEOUT_RECEIPT` if the packet is received after the specified timeout.
 
 ```typescript
 function packetReceiptPath(portIdentifier: Identifier, channelIdentifier: Identifier, sequence: uint64): Path {
@@ -590,7 +600,7 @@ The IBC handler performs the following steps in order:
 - Checks that the calling module owns the receiving port
 - Checks that the packet metadata matches the channel & connection information
 - Checks that the packet sequence is the next sequence the channel end expects to receive (for ordered and ordered_allow_timeout channels)
-- Checks that the timeout height has not yet passed
+- Checks that the timeout height and timestamp have not yet passed
 - Checks the inclusion proof of packet data commitment in the outgoing chain's state
 - Sets a store path to indicate that the packet has been received (unordered channels only)
 - Increments the packet receive sequence associated with the channel end (ordered and ordered_allow_timeout channels only)
@@ -614,8 +624,25 @@ function recvPacket(
     abortTransactionUnless(connection !== null)
     abortTransactionUnless(connection.state === OPEN)
 
-    abortTransactionUnless(packet.timeoutHeight === 0 || getConsensusHeight() < packet.timeoutHeight)
-    abortTransactionUnless(packet.timeoutTimestamp === 0 || currentTimestamp() < packet.timeoutTimestamp)
+    switch channel.order {
+      case ORDERED:
+      case UNORDERED:
+        abortTransactionUnless(packet.timeoutHeight === 0 || getConsensusHeight() < packet.timeoutHeight)
+        abortTransactionUnless(packet.timeoutTimestamp === 0 || currentTimestamp() < packet.timeoutTimestamp)
+        break;
+      case ORDERED_ALLOW_TIMEOUT:
+        // for ORDERED_ALLOW_TIMEOUT, we do not abort on timeout
+        // instead increment next sequence recv and write the sentinel timeout value in packet receipt
+        // then return
+        if getConsensusHeight() > packet.timeoutHeight || packet.timeoutTimestamp > currentTimestamp() {
+          nextSequenceRecv = nextSequenceRecv + 1
+          provableStore.set(nextSequenceRecvPath(packet.destPort, packet.destChannel), nextSequenceRecv)
+          provableStore.set(
+          packetReceiptPath(packet.destPort, packet.destChannel, packet.sequence),
+            TIMEOUT_RECEIPT
+          )
+        }
+    }
 
     abortTransactionUnless(connection.verifyPacketData(
       proofHeight,
@@ -628,22 +655,26 @@ function recvPacket(
 
     // all assertions passed (except sequence check), we can alter state
 
-    if (channel.order === ORDERED || channel.order == ORDERED_ALLOW_TIMEOUT) {
-      nextSequenceRecv = provableStore.get(nextSequenceRecvPath(packet.destPort, packet.destChannel))
-      abortTransactionUnless(packet.sequence === nextSequenceRecv)
-      nextSequenceRecv = nextSequenceRecv + 1
-      provableStore.set(nextSequenceRecvPath(packet.destPort, packet.destChannel), nextSequenceRecv)
-    } else {
-      // for unordered channels we must set the receipt so it can be verified on the other side
-      // this receipt does not contain any data, since the packet has not yet been processed
-      // it's just a single store key set to an empty string to indicate that the packet has been received
-      abortTransactionUnless(provableStore.get(packetReceiptPath(packet.destPort, packet.destChannel, packet.sequence) === null))
-      provableStore.set(
-        packetReceiptPath(packet.destPort, packet.destChannel, packet.sequence),
-        "1"
-      )
-    }
+    switch channel.order {
+      case ORDERED:
+      case ORDERED_ALLOW_TIMEOUT:
+        nextSequenceRecv = provableStore.get(nextSequenceRecvPath(packet.destPort, packet.destChannel))
+        abortTransactionUnless(packet.sequence === nextSequenceRecv)
+        nextSequenceRecv = nextSequenceRecv + 1
+        provableStore.set(nextSequenceRecvPath(packet.destPort, packet.destChannel), nextSequenceRecv)
+        break;
 
+      case UNORDERED:
+        // for unordered channels we must set the receipt so it can be verified on the other side
+        // this receipt does not contain any data, since the packet has not yet been processed
+        // it's the sentinel success receipt: []byte{0x01}
+        abortTransactionUnless(provableStore.get(packetReceiptPath(packet.destPort, packet.destChannel, packet.sequence) === null))
+        provableStore.set(
+          packetReceiptPath(packet.destPort, packet.destChannel, packet.sequence),
+          SUCCESFUL_RECEIPT
+        )
+    }
+    
     // log that a packet has been received
     emitLogEntry("recvPacket", {sequence: packet.sequence, timeoutHeight: packet.timeoutHeight, port: packet.destPort, channel: packet.destChannel,
                                 timeoutTimestamp: packet.timeoutTimestamp, data: packet.data})
@@ -827,26 +858,36 @@ function timeoutPacket(
     abortTransactionUnless(provableStore.get(packetCommitmentPath(packet.sourcePort, packet.sourceChannel, packet.sequence))
            === hash(packet.data, packet.timeoutHeight, packet.timeoutTimestamp))
 
-    if channel.order === ORDERED || channel.order == ORDERED_ALLOW_TIMEOUT {
-      // ordered channel: check that packet has not been received
-      abortTransactionUnless(nextSequenceRecv <= packet.sequence)
-      // ordered channel: check that the recv sequence is as claimed
-      abortTransactionUnless(connection.verifyNextSequenceRecv(
-        proofHeight,
-        proof,
-        packet.destPort,
-        packet.destChannel,
-        nextSequenceRecv
-      ))
-    } else
-      // unordered channel: verify absence of receipt at packet index
-      abortTransactionUnless(connection.verifyPacketReceiptAbsence(
-        proofHeight,
-        proof,
-        packet.destPort,
-        packet.destChannel,
-        packet.sequence
-      ))
+    switch channel.order {
+      case ORDERED:
+        // ordered channel: check that packet has not been received
+        abortTransactionUnless(nextSequenceRecv <= packet.sequence)
+        // ordered channel: check that the recv sequence is as claimed
+        abortTransactionUnless(connection.verifyNextSequenceRecv(
+          proofHeight,
+          proof,
+          packet.destPort,
+          packet.destChannel,
+          nextSequenceRecv
+        ))
+      case UNORDERED:
+        // unordered channel: verify absence of receipt at packet index
+        abortTransactionUnless(connection.verifyPacketReceiptAbsence(
+          proofHeight,
+          proof,
+          packet.destPort,
+          packet.destChannel,
+          packet.sequence
+        ))
+      case ORDERED_ALLOW_TIMEOUT:
+        abortTransactionUnless(connection.verifyPacketReceipt(
+          proofHeight,
+          proof,
+          packet.destPort,
+          packet.destChannel,
+          TIMEOUT_RECEIPT,
+        ))
+    } 
 
     // all assertions passed, we can alter state
 
@@ -859,10 +900,10 @@ function timeoutPacket(
       channel.state = CLOSED
       provableStore.set(channelPath(packet.sourcePort, packet.sourceChannel), channel)
     }
-    // on ORDERED_ALLOW_TIMEOUT, increment NextSequenceRecv so that next packet sequence can be received once this packet times out.
+    // on ORDERED_ALLOW_TIMEOUT, increment NextSequenceAck so that next packet can be acknowledged after this packet timed out.
     if channel.order === ORDERED_ALLOW_TIMEOUT {
-      nextSequenceRecv = nextSequenceRecv + 1
-      provableStore.set(nextSequenceRecvPath(packet.destPort, packet.destChannel), nextSequenceRecv)
+      nextSequenceAck = nextSequenceAck + 1
+      provableStore.set(nextSequenceAckPath(packet.destPort, packet.destChannel), nextSequenceAck)
     }
 
     // return transparent packet
