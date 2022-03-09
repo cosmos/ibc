@@ -175,6 +175,29 @@ function verifyConnectionUpgradeTimeout(
 }
 ```
 
+## Utility Functions
+
+`restoreConnectionUnless(condition: bool)` is a utility function that allows a chain to abort an upgrade handshake in progress, and return the connection to its original pre-upgrade state if the condition passed in is `true`.
+
+```typescript
+function restoreConnectionUnless(condition: bool) {
+    if !condition {
+        // cancel upgrade
+        // write an error receipt into the error path
+        // and restore original connection
+        errorReceipt = []byte{1}
+        provableStore.set(errorPath(identifier), errorReceipt)
+        originalConnection = privateStore.get(restorePath(identifier))
+        provableStore.set(connectionPath(identifier), originalConnection)
+        provableStore.delete(timeoutPath(identifier))
+        privateStore.delete(restorePath(identifier))
+        // caller should return as well
+    } else {
+        // caller should continue execution
+    }
+}
+```
+
 ## Sub-Protocols
 
 The Connection Upgrade process consists of three sub-protocols: `UpgradeConnectionHandshake`, `CancelConnectionUpgrade`, and `TimeoutConnectionUpgrade`. In the case where both chains approve of the proposed upgrade, the upgrade handshake protocol should complete successfully and the ConnectionEnd should upgrade successfully.
@@ -302,8 +325,8 @@ function connUpgradeTry(
 
     // counterparty-specified timeout must not have exceeded
     restoreConnectionUnless(
-        timeoutHeight < getCurrentHeight() &&
-        timeoutTimestamp < currentTimestamp()
+        timeoutHeight > getCurrentHeight() ||
+        timeoutTimestamp > currentTimestamp()
     )
 
     // verify chosen versions are compatible
@@ -383,25 +406,6 @@ function connUpgradeConfirm(
     provableStore.set(connectionPath(identifier), currentConnection)
     provableStore.delete(timeoutPath(identifier))
     privateStore.delete(restorePath(identifier))
-}
-```
-
-```typescript
-function restoreConnectionUnless(condition: bool) {
-    if !condition {
-        // cancel upgrade
-        // write an error receipt into the error path
-        // and restore original connection
-        errorReceipt = []byte{1}
-        provableStore.set(errorPath(identifier), errorReceipt)
-        originalConnection = privateStore.get(restorePath(identifier))
-        provableStore.set(connectionPath(identifier), originalConnection)
-        provableStore.delete(timeoutPath(identifier))
-        privateStore.delete(restorePath(identifier))
-        // caller should return as well
-    } else {
-        // caller should continue execution
-    }
 }
 ```
 
