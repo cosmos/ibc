@@ -302,7 +302,7 @@ function connUpgradeTry(
 
     // counterparty-specified timeout must not have exceeded
     restoreConnectionUnless(
-        timeoutHeight < currentHeight() &&
+        timeoutHeight < getCurrentHeight() &&
         timeoutTimestamp < currentTimestamp()
     )
 
@@ -318,7 +318,7 @@ function connUpgradeTry(
 
     // verify proofs of counterparty state
     abortTransactionUnless(verifyConnectionState(currentConnection, proofHeight, proofConnection, currentConnection.counterpartyConnectionIdentifier, proposedUpgradeConnection))
-    abortTransactionUnless(verifyUpgradeTimeout(currentConnection, proofHeight, proofUpgradeTimeout, currentConnection.counterpartyConnectionIdentifier, upgradeTimeout))
+    abortTransactionUnless(verifyConnectionUpgradeTimeout(currentConnection, proofHeight, proofUpgradeTimeout,  upgradeTimeout))
  
     provableStore.set(connectionPath(identifier), proposedUpgradeConnection)
 }
@@ -422,7 +422,7 @@ function cancelConnectionUpgrade(
 
     abortTransactionUnless(!isEmpty(errorReceipt))
 
-    abortTransactionUnless(verifyUpgradeError(currentConnection, proofHeight, proofUpgradeError, currentConnection.counterpartyConnectionIdentifier, errorReceipt))
+    abortTransactionUnless(verifyConnectionUpgradeError(currentConnection, proofHeight, proofUpgradeError, errorReceipt))
 
     // cancel upgrade
     // and restore original conneciton
