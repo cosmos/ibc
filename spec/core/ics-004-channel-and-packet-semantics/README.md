@@ -643,7 +643,7 @@ function recvPacket(
             TIMEOUT_RECEIPT
           )
         }
-        break;
+        return;
 
       default:
         // unsupported channel type
