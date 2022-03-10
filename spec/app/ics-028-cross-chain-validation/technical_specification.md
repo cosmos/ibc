@@ -69,7 +69,7 @@ Before describing the data structures and sub-protocols of the CCV protocol, we 
     UnbondingTime(): Duration
 
     // get validator updates from the provider Staking module
-    GetValidatorUpdates(chainID: string): [ValidatorUpdate]
+    GetValidatorUpdates(): [ValidatorUpdate]
 
     // notify the Staking module of unboding operations that
     // have matured from the consumer chain's perspective 
@@ -1097,10 +1097,12 @@ The *validator set update* sub-protocol enables the provider chain
 function BeginBlock() {
 }
 ```
-- Initiator: 
-  - ABCI.
+- **Caller**
+  - The ABCI application.
+- **Trigger Event**
+  - A `BeginBlock` message is received from the consensus engine; `BeginBlock` messages are sent once per block.
 - **Precondition**
-  - An `BeginBlock` message is received from the consensus engine. 
+  - True. 
 - **Postcondition**
   - The state is not changed.
 - **Error Condition**
@@ -1112,11 +1114,11 @@ function BeginBlock() {
 // PCF: Provider Chain Function
 // implements the AppModule interface
 function EndBlock(): [ValidatorUpdate] {
+  // get list of validator updates from the provider Staking module
+  valUpdates = stakingKeeper.GetValidatorUpdates()
+
   // iterate over all consumer chains registered with this provider chain
   foreach chainId in chainToClient.Keys() {
-    // get list of validator updates from the provider Staking module
-    valUpdates = stakingKeeper.GetValidatorUpdates(chainId)
-
     // check whether there are changes in the validator set;
     // note that this also entails unbonding operations 
     // w/o changes in the voting power of the validators in the validator set
@@ -1157,14 +1159,15 @@ function EndBlock(): [ValidatorUpdate] {
   return []   
 }
 ```
-- Initiator: 
-  - ABCI.
+- **Caller**
+  - The ABCI application.
+- **Trigger Event**
+  - An `EndBlock` message is received from the consensus engine; `EndBlock` messages are sent once per block.
 - **Precondition**
-  - An `EndBlock` message is received from the consensus engine. 
-  - The provider Staking module has an up-to-date list of validator updates for every consumer chain registered.
+  - True. 
 - **Postcondition**
+  - A list of validator updates `valUpdates` is obtained from the provider Staking module.
   - For every consumer chain with `chainId`
-    - A list of validator updates `valUpdates` is obtained from the provider Staking module.
     - If either `valUpdates` is not empty or there were unbonding operations initiated during this block, 
       then a `VSCPacketData` is created and appended to the list of pending VSCPackets associated to `chainId`, i.e., `pendingVSCPackets[chainId]`.
     - If there is an established CCV channel for the the consumer chain with `chainId`, then
@@ -1177,7 +1180,8 @@ function EndBlock(): [ValidatorUpdate] {
 - **Error Condition**
   - None.
 
-> **Note**: The expected precondition implies that the provider Staking module MUST update its view of the validator sets for each consumer chain before `EndBlock()` in the provider CCV module is invoked. A solution is for the provider Staking module to update its view during `EndBlock()` and then, the `EndBlock()` of the provider Staking module MUST be executed before the `EndBlock()` of the provider CCV module.
+> **Note**: The provider CCV module expects the provider Staking module to update its view of the validator set before the `EndBlock()` of the provider CCV module is invoked. 
+> A solution is for the provider Staking module to update its view during `EndBlock()` and then, the `EndBlock()` of the provider Staking module to be executed before the `EndBlock()` of the provider CCV module.
 
 <!-- omit in toc -->
 #### **[CCV-PCF-ACKVSC.1]**
@@ -1192,54 +1196,16 @@ function onAcknowledgeVSCPacket(packet: Packet, ack: bytes) {
   abortSystemUnless(ack != VSCPacketError)
 }
 ```
-- Initiator: 
+- **Caller**
   - The `onAcknowledgePacket()` method.
+- **Trigger Event**
+  - The provider IBC routing module receives an acknowledgement of a `VSCPacket` on a channel owned by the provider CCV module.
 - **Precondition**
-  - The IBC module on the provider chain received an acknowledgement of a `VSCPacket` on a channel owned by the provider CCV module.
+  - True.
 - **Postcondition**
   - The state is not changed.
 - **Error Condition**
   - The acknowledgement is `VSCPacketError`.
-
-<!-- omit in toc -->
-#### **[CCV-PCF-GETUBDES.1]**
-```typescript
-// PCF: Provider Chain Function
-// Utility method
-function GetUnbondingOpsFromVSC(
-  chainId: Identifier, 
-  _vscId: uint64): [UnbondingOperation] {
-    ids = vscToUnbondingOps[(chainId, _vscId)]
-    if ids == nil {
-      // cannot find the list of unbonding operation IDs
-      // for this chainId and _vscId
-      return nil
-    }
-    // get all unbonding operations associated with
-    // this chainId and _vscId
-    ops = []
-    foreach id in ids {
-      // get the unbonding operation with this ID
-      op = unbondingOps[id]
-      // if cannot find UnbondingOperation according to vscToUnbondingOps,
-      // then vscToUnbondingOps was probably not correctly updated;
-      // programming error
-      abortSystemUnless(op != nil)
-      // append the operation to the list of operations to be returned
-      ops.Append(op)
-    }
-    return ops
-}
-```
-- **Initiator:** 
-  - The provider CCV module when receiving an acknowledgement for a `VSCPacket`.
-- **Precondition**
-  - None. 
-- **Postcondition**
-  - If there is a list of unbonding operation IDs mapped to `(chainId, _vscId)`, then return the list of unbonding operations mapped to these IDs. 
-  - Otherwise, return `nil`.
-- **Error Condition**
-  - None.
 
 <!-- omit in toc -->
 #### **[CCV-PCF-TOVSC.1]**
@@ -1247,7 +1213,7 @@ function GetUnbondingOpsFromVSC(
 // PCF: Provider Chain Function
 function onTimeoutVSCPacket(packet Packet) {
   // cleanup state
-  abortTransactionUnless(channelId IN channelToChain.Keys())
+  abortTransactionUnless(packet.getDestinationChannel() IN channelToChain.Keys())
   chainId = channelToChain[packet.getDestinationChannel()]
   channelToChain.Remove(packet.getDestinationChannel())
   chainToChannel.Remove(chainId)
@@ -1255,27 +1221,27 @@ function onTimeoutVSCPacket(packet Packet) {
   // TODO: complete all outstanding unbonding ops?
 }
 ```
-- Initiator: 
+- **Caller**
   - The `onTimeoutPacket()` method.
+- **Trigger Event**
+  - The provider IBC routing module receives a timeout of a `VSCPacket` on a channel owned by the provider CCV module.
 - **Precondition**
-  - The IBC module on the provider chain received a timeout of a `VSCPacket` on a channel owned by the provider CCV module.
+  - The Correct Relayer assumption is violated (see the [Assumptions](./system_model_and_properties.md#assumptions) section).
 - **Postcondition**
+  - The transaction is aborted if the ID of the channel on which the packet was sent is not mapped to a chain ID (in `channelToChain`).
   - `chainId` is set to `channelToChain[packet.getDestinationChannel()]`.
   - The chain ID mapped to `packet.getDestinationChannel()` in `channelToChain` is removed.
   - The channel ID mapped to `chainId` in `chainToChannel` is removed.
 - **Error Condition**
-  - The ID of the channel on which the packet was sent is not mapped to a chain ID (in `channelToChain`).
+  - None
 
 <!-- omit in toc -->
 #### **[CCV-PCF-RCVMAT.1]**
 ```typescript
 // PCF: Provider Chain Function
 function onRecvVSCMaturedPacket(packet: Packet): bytes {
-  // get the channel ID of the CCV channel the packet was sent on
-  channelId = packet.getDestinationChannel()
-  
   // get the ID of the consumer chain mapped to this channel ID
-  abortTransactionUnless(channelId IN channelToChain.Keys())
+  abortTransactionUnless(packet.getDestinationChannel() IN channelToChain.Keys())
   chainId = channelToChain[packet.getDestinationChannel()]
 
   // iterate over the unbonding operations mapped to
@@ -1298,11 +1264,15 @@ function onRecvVSCMaturedPacket(packet: Packet): bytes {
   return VSCMaturedPacketSuccess
 }
 ```
-- Initiator: 
+- **Caller**
   - The `onRecvPacket()` method.
+- **Trigger Event**
+  - The provider IBC routing module receives a `VSCMaturedPacket` on a channel owned by the provider CCV module.
 - **Precondition**
-  - The IBC module on the provider chain received a `VSCMaturedPacket` on a channel owned by the provider CCV module.
+  - True.
 - **Postcondition**
+  - The transaction is aborted if the channel on which the packet was received is not an established CCV channel (i.e., not in `channelToChain`).
+  - `chainId` is set to the ID of the consumer chain mapped to the channel on which the packet was received. 
   - For each unbonding operation `op` returned by `GetUnbondingOpsFromVSC(chainId, packet.data.id)`
     - `chainId` is removed from `op.unbondingChainIds`;
     - if `op.unbondingChainIds` is empty,
@@ -1311,45 +1281,35 @@ function onRecvVSCMaturedPacket(packet: Packet): bytes {
   - `(chainId, vscId)` is removed from `vscToUnbondingOps`.
   - A successful acknowledgment is returned.
 - **Error Condition**
-  - The channel on which the packet was sent is not an established CCV channel (i.e., not in `channelToChain`).
+  - None.
 
 <!-- omit in toc -->
-#### **[CCV-PCF-GETUBDES.1]**
+#### **[CCV-PCF-GETUBOPS.1]**
 ```typescript
 // PCF: Provider Chain Function
 // Utility method
 function GetUnbondingOpsFromVSC(
   chainId: Identifier, 
   _vscId: uint64): [UnbondingOperation] {
-    ids = vscToUnbondingOps[(chainId, _vscId)]
-    if ids == nil {
-      // cannot find the list of unbonding operation IDs
-      // for this chainId and _vscId
-      return nil
-    }
-    // get all unbonding operations associated with
-    // this chainId and _vscId
+    // get all unbonding operations associated with (chainId, _vscId)
     ops = []
-    foreach id in ids {
+    foreach id in vscToUnbondingOps[(chainId, _vscId)] {
       // get the unbonding operation with this ID
       op = unbondingOps[id]
-      // if cannot find UnbondingOperation according to vscToUnbondingOps,
-      // then vscToUnbondingOps was probably not correctly updated;
-      // programming error
-      abortSystemUnless(op != nil)
       // append the operation to the list of operations to be returned
       ops.Append(op)
     }
     return ops
 }
 ```
-- **Initiator:** 
-  - The provider CCV module when receiving a `VSCMaturedPacket`.
+- **Caller**
+  - The `onRecvVSCMaturedPacket()` method.
+- **Trigger Event**
+  - The provider IBC routing module receives a `VSCMaturedPacket` on a channel owned by the provider CCV module.
 - **Precondition**
-  - None. 
+  - The provider CCV module received a `VSCMaturedPacket` `P` from a consumer chain with ID `chainId`, such that `P.data.id == _vscId`.
 - **Postcondition**
-  - If there is a list of unbonding operation IDs mapped to `(chainId, _vscId)`, then return the list of unbonding operations mapped to these IDs. 
-  - Otherwise, return `nil`.
+  - Return the list of unbonding operations mapped to `(chainId, _vscId)`. 
 - **Error Condition**
   - None.
 
@@ -1360,26 +1320,26 @@ function GetUnbondingOpsFromVSC(
 // implements a Staking module hook
 function AfterUnbondingOpInitiated(opId: uint64) {
   // get the IDs of all consumer chains registered with this provider chain
-  chainIds = chainToChannel.Keys()
-  
+  chainIds = chainToClient.Keys()
   // create and store a new unbonding operation
   unbondingOps[opId] = UnbondingOperation{
     id: opId,
     unbondingChainIds: chainIds
   }
-  
   // add the unbonding operation id to vscToUnbondingOps
   foreach chainId in chainIds {
     vscToUnbondingOps[(chainId, vscId)].Append(opId)
   }
 }
 ```
-- **Initiator:** 
+- **Caller**
   - The Staking module.
-- **Precondition**
+- **Trigger Event**
   - An unbonding operation with id `opId` is initiated.
+- **Precondition**
+  - True.
 - **Postcondition**
-  - An unbonding operations is created and added to `unbondingOps`.
+  - An `UnbondingOperation` `op` is created and added to `unbondingOps`, such that `op.id = opId` and `op.unbondingChainIds` is the list of all consumer chains registered with this provider chain, i.e., `chainToClient.Keys()`.
   - The ID of the created unbonding operation is appended to every list in `vscToUnbondingOps[(chainId, vscId)]`, where `chainId` is an ID of a consumer chains registered with this provider chain and `vscId` is the current VSC ID. 
 - **Error Condition**
   - None.
@@ -1399,12 +1359,14 @@ function BeforeUnbondingOpCompleted(opId: uint64): Bool {
   return false
 }
 ```
-- **Initiator:** 
+- **Caller**
   - The Staking module.
+- **Trigger Event**
+  - An unbonding operation with ID `opId` has matured on the provider chain.
 - **Precondition**
-  - An unbonding operation has matured on the provider chain.
+  - True.
 - **Postcondition**
-  - If there is an unboding operation with ID `opId`, then true is returned.
+  - If there is an unboding operation with ID `opId` in `unbondingOps`, then true is returned.
   - Otherwise, false is returned.
 - **Error Condition**
   - None.
@@ -1420,12 +1382,14 @@ function BeginBlock() {
   HtoVSC[getCurrentHeight() + 1] = HtoVSC[getCurrentHeight()]
 }
 ```
-- Initiator: 
-  - ABCI.
+- **Caller**
+  - The ABCI application.
+- **Trigger Event**
+  - A `BeginBlock` message is received from the consensus engine; `BeginBlock` messages are sent once per block.
 - **Precondition**
-  - An `BeginBlock` message is received from the consensus engine. 
+  - True. 
 - **Postcondition**
-  - `HtoVSC` for the subsequent block is set to the same VSC ID as the current block.
+  - `HtoVSC` for the subsequent block height is set to the same VSC ID as the current block height.
 - **Error Condition**
   - None.
 
@@ -1463,19 +1427,21 @@ function onRecvVSCPacket(packet: Packet): bytes {
   return VSCPacketSuccess
 }
 ```
-- Initiator: 
+- **Caller**
   - The `onRecvPacket()` method.
+- **Trigger Event**
+  - The consumer IBC routing module receives a `VSCPacket` on a channel owned by the consumer CCV module.
 - **Precondition**
-  - The IBC module on the consumer chain received a `VSCPacket` on a channel owned by the consumer CCV module.
+  - True.
 - **Postcondition**
-  - If `providerChannel` is set and does not match the channel (with ID `packet.getDestinationChannel()`) on which the packet was sent, then 
+  - If `providerChannel` is set and does not match the channel (with ID `packet.getDestinationChannel()`) on which the packet was received, then 
     - the closing handshake for the channel with ID `packet.getDestinationChannel()` is initiated;
     - an error acknowledgement is returned.
   - Otherwise,
-    - the height of the subsequent block is mapped to `packet.data.id`;  
+    - the height of the subsequent block is mapped to `packet.data.id` (i.e., the `HtoVSC` mapping) ;  
     - if `providerChannel` is not set, then 
       - the CCV channel is marked as established, i.e., `providerChannel = packet.getDestinationChannel()`;
-      - the pending slash requests are sent to the provider chain;
+      - the pending slash requests are sent to the provider chain (see [CCV-CCF-SNDPESLASH.1](#ccv-ccf-sndpeslash1));
     - `packet.data.updates` are appended to `pendingChanges`;
     - `(packet.data.id, maturityTimestamp)` is added to `maturingVSCs`, where `maturityTimestamp = currentTimestamp() + UnbondingPeriod`;
     - a successful acknowledgement is returned.
@@ -1491,10 +1457,12 @@ function onAcknowledgeVSCMaturedPacket(packet: Packet, ack: bytes) {
   abortSystemUnless(ack != VSCMaturedPacketError)
 }
 ```
-- Initiator: 
+- **Caller**
   - The `onAcknowledgePacket()` method.
+- **Trigger Event**
+  - The consumer IBC routing module receives an acknowledgement of a `VSCMaturedPacket` on a channel owned by the consumer CCV module.
 - **Precondition**
-  - The IBC module on the consumer chain received an acknowledgement of a `VSCMaturedPacket` on a channel owned by the consumer CCV module.
+  - True.
 - **Postcondition**
   - The state is not changed.
 - **Error Condition**
@@ -1510,14 +1478,16 @@ function onTimeoutVSCMaturedPacket(packet Packet) {
   // What happens w/ the consumer chain once the CCV channel gets closed?
 }
 ```
-- Initiator: 
+- **Caller**
   - The `onTimeoutPacket()` method.
+- **Trigger Event**
+  - The consumer IBC routing module receives a timeout of a `VSCPacket` on a channel owned by the consumer CCV module.
 - **Precondition**
-  - The IBC module on the consumer chain received a timeout of a `VSCMaturedPacket` on a channel owned by the consumer CCV module.
+  - The Correct Relayer assumption is violated (see the [Assumptions](./system_model_and_properties.md#assumptions) section).
 - **Postcondition**
   - The state is not changed.
 - **Error Condition**
-  - None.
+  - None
 
 <!-- omit in toc -->
 #### **[CCV-CCF-EBLOCK.1]**
@@ -1540,24 +1510,28 @@ function EndBlock(): [ValidatorUpdate] {
   // update validatorSet
   UpdateValidatorSet(changes)
 
-  // unbond mature packets
-  UnbondMaturePackets()
+  // unbond mature packets if the CCV channel is established
+  if providerChannel != "" {
+    UnbondMaturePackets()
+  }
 
   // return the validator set updates to the consensus engine
   return changes
 }
 ```
-- Initiator: 
-  - ABCI.
+- **Caller**
+  - The ABCI application.
+- **Trigger Event**
+  - An `EndBlock` message is received from the consensus engine; `EndBlock` messages are sent once per block.
 - **Precondition**
-  - An `EndBlock` message is received from the consensus engine. 
+  - True. 
 - **Postcondition**
   - If `pendingChanges` is empty, the state is not changed.
   - Otherwise,
     - the pending changes are aggregated and stored in `changes`;
     - `pendingChanges` is emptied;
     - `UpdateValidatorSet(changes)` is invoked;
-    - `UnbondMaturePackets()` is invoked;
+    - if `providerChannel != ""`, `UnbondMaturePackets()` is invoked;
     - `changes` is returned to the consensus engine.
 - **Error Condition**
   - None.
@@ -1595,10 +1569,12 @@ function UpdateValidatorSet(changes: [ValidatorUpdate]) {
   }
 }
 ```
-- Initiator: 
+- **Caller**
   - The `EndBlock()` method.
+- **Trigger Event**
+  - An `EndBlock` message is received from the consensus engine.
 - **Precondition**
-  - None.
+  - `changes` contains the aggregated validator updates from `pendingChanges` before it was emptied. 
 - **Postcondition**
   - For each validator `update` in `changes`,
     - if the validator is not in the validator set, then 
@@ -1617,38 +1593,34 @@ function UpdateValidatorSet(changes: [ValidatorUpdate]) {
 ```typescript
 // CCF: Consumer Chain Function
 function UnbondMaturePackets() {
-  // check if the provider channel is set
-  if providerChannel != "" {
-    foreach (id, ts) in maturingVSCs.SortedByMaturityTime() {
-      if currentTimestamp() < ts {
-        // stop loop
-        break
-      }
-
-      // create VSCMaturedPacketData
-      packetData = VSCMaturedPacketData{id: id}
-
-      // create packet and send it using the interface exposed by ICS-4
-      packet = Packet{data: packetData, destChannel: providerChannel}
-      channelKeeper.SendPacket(packet)
-            
-      // remove entry from the list
-      maturingVSCs.Remove(id, ts)
+  foreach (id, ts) in maturingVSCs.SortedByMaturityTime() {
+    if currentTimestamp() < ts {
+      break // stop loop
     }
+    // create VSCMaturedPacketData
+    packetData = VSCMaturedPacketData{id: id}
+
+    // create packet and send it using the interface exposed by ICS-4
+    packet = Packet{data: packetData, destChannel: providerChannel}
+    channelKeeper.SendPacket(packet)
+          
+    // remove entry from the list
+    maturingVSCs.Remove(id, ts)
   }
 }
 ```
-- Initiator: 
+- **Caller**
   - The `EndBlock()` method.
+- **Trigger Event**
+  - An `EndBlock` message is received from the consensus engine.
 - **Precondition**
-  - None.
+  - The CCV channel to the provider chain is established, i.e., `providerChannel != ""`.
 - **Postcondition**
-  - If the provider channel is set, for each `(id, ts)` in the list of maturing VSCs sorted by maturity timestamps
+  - For each `(id, ts)` in the list of maturing VSCs sorted by maturity timestamps
     - if `currentTimestamp() < ts`, the loop is stopped;
-    - a `VSCMaturedPacketData` packet is created;
+    - a `VSCMaturedPacketData` packet data is created;
     - a packet with the created `VSCMaturedPacketData` is sent to the provider chain;
     - the tuple `(id, ts)` is removed from `maturingVSCs`.
-  - Otherwise, the state is not changed.
 - **Error Condition**
   - None.
 
