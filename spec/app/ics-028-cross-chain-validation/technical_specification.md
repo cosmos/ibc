@@ -277,15 +277,8 @@ This section describes the internal state of the CCV module. For simplicity, the
 - `validatorSet: <string, CrossChainValidator>` is a mapping that stores the validators in the validator set of the consumer chain. Each validator is described by a `CrossChainValidator` data structure, which is defined as
   ```typescript
   interface CrossChainValidator {
-    // validator address, i.e., the hash of its public key
-    address: string 
-
-    // flag indicating whether the consumer chain sent a request 
-    // to slash the validator without receiving a VSC confirming it;
-    // it enables the consumer CCV module to avoid sending to 
-    // the provider chain two slashing requests for the same infraction, 
-    // e.g., downtime.  
-    outstandingSlash: Bool
+    address: string // validator address, i.e., the hash of its public key
+    power: int64
   }
   ```
 - `pendingChanges: [ValidatorUpdate]` is a list of `ValidatorUpdate`s received, but not yet applied to the validator set. 
@@ -325,22 +318,27 @@ This section describes the internal state of the CCV module. For simplicity, the
     Remove(id: uint64, ts: uint64)
   }
   ```
-- `pendingSlashPackets: [SlashPacketData]` is a list of pending `SlashPacketData`s that must be sent to the provider chain once the CCV channel is established. The list exposes the following interface: 
+- `pendingSlashRequests: [SlashRequest]` is a list of pending `SlashRequest`s that must be sent to the provider chain once the CCV channel is established. A `SlashRequest` consist of a `SlashPacketData` and a flag indicating whether the request is for downtime slashing. The list exposes the following interface: 
   ```typescript
-  interface [SlashPacketData] {
-    // append a SlashPacketData to the list;
+  interface SlashRequest {
+    data: SlashPacketData
+    downtime: Bool
+  }
+  interface [SlashRequest] {
+    // append a SlashRequest to the list;
     // the list is modified
-    Append(data: SlashPacketData) 
+    Append(data: SlashRequest) 
 
-    // return the reverse list, i.e., latest SlashPacket first;
+    // return the reverse list, i.e., latest SlashRequest first;
     // the original list is not modified
-    Reverse(): [SlashPacketData]
+    Reverse(): [SlashRequest]
 
-    // remove all the SlashPacketData;
+    // remove all the SlashRequest;
     // the list is modified
-    Remove()
+    RemoveAll()
   }
   ```
+- `outstandingDowntime: <string, Bool>` is a mapping from validator addresses to boolean values. `outstandingDowntime[valAddr] == TRUE` entails that the consumer chain sent a request to slash for downtime the validator with address `valAddr`. `outstandingDowntime[valAddr]` is set to false once the validator with address `valAddr` is bonded. The mapping enables the consumer CCV module to avoid sending to the provider chain multiple slashing requests for the same downtime infraction.
  
 ## Sub-protocols
 
@@ -636,7 +634,7 @@ function InitGenesis(gs: ConsumerGenesisState): [ValidatorUpdate] {
   foreach val IN gs.initialValSet {
     ccVal := CrossChainValidator{
       address: hash(val.pubKey),
-      outstandingSlash: FALSE
+      power: val.power
     }
     validatorSet[ccVal.address] = ccVal
   }
@@ -1235,12 +1233,12 @@ function GetUnbondingOpsFromVSC(
 ```
 - **Initiator:** 
   - The provider CCV module when receiving an acknowledgement for a `VSCPacket`.
-- ****Precondition****
+- **Precondition**
   - None. 
-- ****Postcondition****
+- **Postcondition**
   - If there is a list of unbonding operation IDs mapped to `(chainId, _vscId)`, then return the list of unbonding operations mapped to these IDs. 
   - Otherwise, return `nil`.
-- ****Error Condition****
+- **Error Condition**
   - None.
 
 <!-- omit in toc -->
@@ -1347,12 +1345,12 @@ function GetUnbondingOpsFromVSC(
 ```
 - **Initiator:** 
   - The provider CCV module when receiving a `VSCMaturedPacket`.
-- ****Precondition****
+- **Precondition**
   - None. 
-- ****Postcondition****
+- **Postcondition**
   - If there is a list of unbonding operation IDs mapped to `(chainId, _vscId)`, then return the list of unbonding operations mapped to these IDs. 
   - Otherwise, return `nil`.
-- ****Error Condition****
+- **Error Condition**
   - None.
 
 <!-- omit in toc -->
@@ -1378,12 +1376,12 @@ function AfterUnbondingOpInitiated(opId: uint64) {
 ```
 - **Initiator:** 
   - The Staking module.
-- ****Precondition****
+- **Precondition**
   - An unbonding operation with id `opId` is initiated.
-- ****Postcondition****
+- **Postcondition**
   - An unbonding operations is created and added to `unbondingOps`.
   - The ID of the created unbonding operation is appended to every list in `vscToUnbondingOps[(chainId, vscId)]`, where `chainId` is an ID of a consumer chains registered with this provider chain and `vscId` is the current VSC ID. 
-- ****Error Condition****
+- **Error Condition**
   - None.
 
 
@@ -1403,12 +1401,12 @@ function BeforeUnbondingOpCompleted(opId: uint64): Bool {
 ```
 - **Initiator:** 
   - The Staking module.
-- ****Precondition****
+- **Precondition**
   - An unbonding operation has matured on the provider chain.
-- ****Postcondition****
+- **Postcondition**
   - If there is an unboding operation with ID `opId`, then true is returned.
   - Otherwise, false is returned.
-- ****Error Condition****
+- **Error Condition**
   - None.
 
 ---
@@ -1462,16 +1460,6 @@ function onRecvVSCPacket(packet: Packet): bytes {
   maturityTimestamp = currentTimestamp().Add(UnbondingPeriod)
   maturingVSCs.Add(packet.data.id, maturityTimestamp)
 
-  // look for confirmation of jail requests
-  foreach update IN packet.data.updates {
-    // check whether the update is a removal
-    if update.power == 0 {
-      addr := hash(update.pubKey)
-      abortSystemUnless(addr IN validatorSet.Keys())
-      validatorSet[addr].outstandingSlash = FALSE
-    }
-  }
-
   return VSCPacketSuccess
 }
 ```
@@ -1490,7 +1478,6 @@ function onRecvVSCPacket(packet: Packet): bytes {
       - the pending slash requests are sent to the provider chain;
     - `packet.data.updates` are appended to `pendingChanges`;
     - `(packet.data.id, maturityTimestamp)` is added to `maturingVSCs`, where `maturityTimestamp = currentTimestamp() + UnbondingPeriod`;
-    - for each `update` received, such that `update.power = 0`, `validatorSet[addr].outstandingSlash` is set to false;
     - a successful acknowledgement is returned.
 - **Error Condition**
   - A validator update with the power set to 0 is received, but the validator cannot be found in the validator set of the consumer chain.
@@ -1584,11 +1571,15 @@ function UpdateValidatorSet(changes: [ValidatorUpdate]) {
     addr := hash(update.pubKey)
     if addr NOT IN validatorSet.Keys() {
       // new validator bonded
+      abortSystemUnless(update.power > 0)
+      // add new CrossChainValidator to validator set
       val := CrossChainValidator{
         address: addr,
-        outstandingSlash: FALSE
+        power: update.power
       }
       validatorSet[addr] = val
+      // reset any outstandingDowntime flag
+      outstandingDowntime[addr] = FALSE
       // call AfterCCValidatorBonded hook
       AfterCCValidatorBonded(addr)
     }
@@ -1597,6 +1588,9 @@ function UpdateValidatorSet(changes: [ValidatorUpdate]) {
       validatorSet.Remove(addr)
       // call AfterCCValidatorBeginUnbonding hook
       AfterCCValidatorBeginUnbonding(addr)
+    }
+    else {
+      validatorSet[addr].power = update.power
     }
   }
 }
@@ -1609,13 +1603,14 @@ function UpdateValidatorSet(changes: [ValidatorUpdate]) {
   - For each validator `update` in `changes`,
     - if the validator is not in the validator set, then 
       - a new `CrossChainValidator` is added to `validatorSet`;
+      - `outstandingDowntime[addr]` is set to false;
       - the `AfterCCValidatorBonded` hook is called;
     - otherwise, if the validator's new power is `0`, then,
       - the validator is removed from `validatorSet`;
       - the `AfterCCValidatorBeginUnbonding` hook is called;
-    - otherwise, nothing is changed.
+    - otherwise, the validator's power is updated.
 - **Error Condition**
-  - None.
+  - Receiving a validator `update`, such that the validator is not in the validator set and `update.power = 0`.
 
 <!-- omit in toc -->
 #### **[CCV-CCF-UMP.1]**
@@ -1725,13 +1720,9 @@ function onAcknowledgeSlashPacket(packet: Packet, ack: bytes) {
   // slash request fail, i.e., ack == SlashPacketError, 
   // only if the SlashPacket was sent on a channel 
   // other than the established CCV channel;
-  // that should never happen, 
-  // see SendSlashRequest() and SendPendingSlashRequests();
-  // however, to be safe, if the slash request failed, 
-  // clear outstandingSlash for the validator
-  if ack == SlashPacketError {
-    validatorSet[packet.data.valAddress].outstandingSlash = FALSE
-  }
+  // that should never happen,
+  // see SendSlashRequest() and SendPendingSlashRequests()
+  abortSystemUnless(ack != SlashPacketError)
 }
 ```
 - Initiator: 
@@ -1739,9 +1730,9 @@ function onAcknowledgeSlashPacket(packet: Packet, ack: bytes) {
 - **Precondition**
   - The IBC module on the consumer chain received an acknowledgement of a `SlashPacket` on a channel owned by the consumer CCV module.
 - **Postcondition**
-  - If the slash request was not successful, then `validatorSet[packet.data.valAddress].outstandingSlash` is set to false.
+  - The state is not changed.
 - **Error Condition**
-  - None.
+  - The acknowledgement is `SlashPacketError`.
 
 <!-- omit in toc -->
 #### **[CCV-CCF-TOSLASH.1]**
@@ -1770,9 +1761,10 @@ function onTimeoutSlashPacket(packet Packet) {
 function SendSlashRequest(
   valAddress: string, 
   power: int64, 
-  infractionHeight: Height) {
-    // check whether there is an outstanding request to slash the validator
-    if data.valAddress IN validatorSet.Keys() AND validatorSet[data.valAddress].outstandingSlash {
+  infractionHeight: Height,
+  downtime: Bool) {
+    if downtime AND outstandingDowntime[data.valAddress] {
+      // do not send multiple requests for the same downtime
       return
     }
 
@@ -1795,29 +1787,32 @@ function SendSlashRequest(
       packet = Packet{data: packetData, destChannel: providerChannel}
       channelKeeper.SendPacket(packet)
 
-      // set outstandingSlash for this validator
-      validatorSet[data.valAddress].outstandingSlash = TRUE
+      if downtime {
+        // set outstandingDowntime for this validator
+        outstandingDowntime[data.valAddress] = TRUE
+      }
     }
     else {
       // add SlashPacket data to the list of pending SlashPackets 
-      pendingSlashPackets.Append(packetData)
+      req := SlashRequest{data: packetData, downtime: downtime}
+      pendingSlashRequests.Append(req)
     }
 }
 ```
 - **Initiator:** 
   - The ABCI application (e.g., the Slashing module).
-- ****Precondition****
+- **Precondition**
   - Evidence of misbehavior for a validator with address `valAddress` was received.
-- ****Postcondition****
-  - If there is an outstanding request to slash this validator, then the state is not changed.
+- **Postcondition**
+  - If the request is for downtime and there is an outstanding request to slash this validator for downtime, then the state is not changed.
   - Otherwise, 
     - both `slashFactor` and `jailTime` parameters are set;
     - a `SlashPacket` data `packetData` is created, such that `packetData.vscId = VSCtoH[infractionHeight]`;
     - if the CCV channel to the provider chain is established, then 
       - a packet with the `packetData` is sent to the provider chain;
-      - `validatorSet[data.valAddress].outstandingSlash` is set to true;
-    - otherwise `packetData` appended to `pendingSlashPackets`.
-- ****Error Condition****
+      - if the request is for downtime, `outstandingDowntime[data.valAddress]` is set to true;
+    - otherwise `SlashRequest{data: packetData, downtime: downtime}` is appended to `pendingSlashRequests`.
+- **Error Condition**
   - None.
 
 > **Note**: The ABCI application MUST subtract `ValidatorUpdateDelay` from the infraction height before invoking `SendSlashRequest`, 
@@ -1834,33 +1829,34 @@ function SendSlashRequest(
 // CCF: Consumer Chain Function
 // Utility method
 function SendPendingSlashRequests() {
-  // iterate over every pending SlashPacket in reverse order
-  foreach data IN pendingSlashPackets.Reverse() {
-    if !validatorSet[data.valAddress].outstandingSlash {
+  // iterate over every pending SlashRequest in reverse order
+  foreach req IN pendingSlashRequests.Reverse() {
+    if !req.downtime OR !outstandingDowntime[req.data.valAddress] {
       // create packet and send it using the interface exposed by ICS-4
-      packet = Packet{data: data, destChannel: providerChannel}
+      packet = Packet{data: req.data, destChannel: providerChannel}
       channelKeeper.SendPacket(packet)
 
-      // set outstandingSlash for this validator
-      validatorSet[data.valAddress].outstandingSlash = TRUE
+      if req.downtime {
+        // set outstandingDowntime for this validator
+        outstandingDowntime[req.data.valAddress] = TRUE
+      }
     }
   }
 
-  // remove pending SlashPacket
-  pendingSlashPackets.Remove()
+  // remove pending SlashRequest
+  pendingSlashRequests.RemoveAll()
 }
 ```
 - **Initiator:** 
   - The consumer CCV module.
-- ****Precondition****
-  - The CCV channel towards the provider chain is established.
-- ****Postcondition****
-  - If the CCV channel to the provider chain is established,
-    - for each `data` in `pendingSlashPackets` in reverse order, such that `validatorSet[data.valAddress].outstandingSlash` is false,
-      - a packet with the `SlashPacketData` is sent to the provider chain;
-      - `validatorSet[data.valAddress].outstandingSlash` is set to true;;
-    - all the pending `SlashPacket`s are removed.
-- ****Error Condition****
+- **Precondition**
+  - `providerChannel != ""`.
+- **Postcondition**
+  - For each slash request `req` in `pendingSlashRequests` in reverse order, such that either the slash request is not for downtime or there is no outstanding slash request for downtime,
+    - a packet with the data `req.data` is sent to the provider chain;
+    - if the request is for downtime, `outstandingDowntime[req.data.valAddress]` is set to true.
+  - All the pending `SlashRequest`s are removed.
+- **Error Condition**
   - None.
 
-> **Note**: Iterating over pending `SlashPacket`s in reverse order ensures that validators that misbehave multiple times during channel initialization will be slashed for the latest infraction.  
+> **Note**: Iterating over pending `SlashRequest`s in reverse order ensures that validators that are down for multiple blocks during channel initialization will be slashed for the latest downtime evidence.  
