@@ -1632,11 +1632,9 @@ function UnbondMaturePackets() {
 ```typescript
 // PCF: Provider Chain Function
 function onRecvSlashPacket(packet: Packet): bytes {
-  // check whether the channel the packet was sent on 
-  // is an established CCV channel
+  // check whether the packet was received on an established CCV channel
   if packet.getDestinationChannel() NOT IN channelToChain.Keys() {
-    // packet sent on a non-established channel;
-    // incorrect behavior
+    // packet sent on a non-established channel; incorrect behavior
     channelKeeper.ChanCloseInit(packet.getDestinationChannel())
     return SlashPacketError
   }
@@ -1665,12 +1663,14 @@ function onRecvSlashPacket(packet: Packet): bytes {
   return SlashPacketSuccess
 }
 ```
-- Initiator: 
+- **Caller**
   - The `onRecvPacket()` method.
+- **Trigger Event**
+  - The provider IBC routing module receives a `SlashPacket` on a channel owned by the provider CCV module.
 - **Precondition**
-  - The IBC module on the provider chain received a `SlashPacket` on a channel owned by the provider CCV module.
+  - True.
 - **Postcondition**
-  - If the channel the packet was sent on is not an established CCV channel, then
+  - If the channel the packet was received on is not an established CCV channel, then
     - the channel closing handshake is initiated;
     - an error acknowledgment is returned.
   - Otherwise,
@@ -1697,10 +1697,12 @@ function onAcknowledgeSlashPacket(packet: Packet, ack: bytes) {
   abortSystemUnless(ack != SlashPacketError)
 }
 ```
-- Initiator: 
+- **Caller**
   - The `onAcknowledgePacket()` method.
+- **Trigger Event**
+  - The consumer IBC routing module receives an acknowledgement of a `SlashPacket` on a channel owned by the consumer CCV module.
 - **Precondition**
-  - The IBC module on the consumer chain received an acknowledgement of a `SlashPacket` on a channel owned by the consumer CCV module.
+  - True.
 - **Postcondition**
   - The state is not changed.
 - **Error Condition**
@@ -1716,14 +1718,16 @@ function onTimeoutSlashPacket(packet Packet) {
   // What happens w/ the consumer chain once the CCV channel gets closed?
 }
 ```
-- Initiator: 
+- **Caller**
   - The `onTimeoutPacket()` method.
+- **Trigger Event**
+  - The consumer IBC routing module receives a timeout of a `SlashPacket` on a channel owned by the consumer CCV module.
 - **Precondition**
-  - The IBC module on the consumer chain received a timeout of a `SlashPacket` on a channel owned by the consumer CCV module.
+  - The Correct Relayer assumption is violated (see the [Assumptions](./system_model_and_properties.md#assumptions) section).
 - **Postcondition**
   - The state is not changed.
 - **Error Condition**
-  - None.
+  - None
 
 <!-- omit in toc -->
 #### **[CCV-CCF-SNDSLASH.1]**
@@ -1771,10 +1775,12 @@ function SendSlashRequest(
     }
 }
 ```
-- **Initiator:** 
+- **Caller**
   - The ABCI application (e.g., the Slashing module).
-- **Precondition**
+- **Trigger Event**
   - Evidence of misbehavior for a validator with address `valAddress` was received.
+- **Precondition**
+  - True.
 - **Postcondition**
   - If the request is for downtime and there is an outstanding request to slash this validator for downtime, then the state is not changed.
   - Otherwise, 
@@ -1814,13 +1820,14 @@ function SendPendingSlashRequests() {
       }
     }
   }
-
   // remove pending SlashRequest
   pendingSlashRequests.RemoveAll()
 }
 ```
-- **Initiator:** 
-  - The consumer CCV module.
+- **Caller**
+  - The `onRecvVSCPacket()` method (see [CCV-CCF-RCVVSC.1](#ccv-ccf-rcvvsc1)).
+- **Trigger Event**
+  - The first `VSCPacket` is received from the provider chain.
 - **Precondition**
   - `providerChannel != ""`.
 - **Postcondition**
