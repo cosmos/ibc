@@ -429,6 +429,26 @@ type verifyNextSequenceRecv = (
   => boolean
 ```
 
+#### Optional Functions
+
+
+`verifyPacketReceipt` verifies a proof of an incoming packet receipt at the specified port, specified channel, and specified sequence. It is needed only if the chain wishes to support new channel types other than ORDERED and UNORDERED.
+
+```typescript
+type verifyPacketReceipt = (
+  clientState: ClientState,
+  height: Height,
+  delayPeriodTime: uint64,
+  delayPeriodBlocks: uint64,
+  prefix: CommitmentPrefix,
+  proof: CommitmentProof,
+  portIdentifier: Identifier,
+  channelIdentifier: Identifier,
+  sequence: uint64,
+  receipt: bytes)
+  => boolean
+```
+
 #### Query interface
 
 ##### Chain queries
