@@ -432,7 +432,7 @@ type verifyNextSequenceRecv = (
 #### Optional Functions
 
 
-`verifyPacketReceipt` verifies a proof of the absence of an incoming packet receipt at the specified port, specified channel, and specified sequence. It is needed only if the chain wishes to support new channel types other than ORDERED and UNORDERED.
+`verifyPacketReceipt` verifies a proof of an incoming packet receipt at the specified port, specified channel, and specified sequence. It is needed only if the chain wishes to support new channel types other than ORDERED and UNORDERED.
 
 ```typescript
 type verifyPacketReceipt = (
