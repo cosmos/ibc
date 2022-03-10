@@ -203,6 +203,19 @@ function verifyPacketReceiptAbsence(
     return client.verifyPacketReceiptAbsence(connection, height, connection.delayPeriodTime, connection.delayPeriodBlocks, connection.counterpartyPrefix, proof, portIdentifier, channelIdentifier)
 }
 
+// OPTIONAL: verifyPacketReceipt is only required to support new channel types beyond ORDERED and UNORDERED.
+function verifyPacketReceipt(
+  connection: ConnectionEnd,
+  height: Height,
+  proof: CommitmentProof,
+  portIdentifier: Identifier,
+  channelIdentifier: Identifier,
+  sequence: uint64,
+  receipt: bytes) {
+    client = queryClient(connection.clientIdentifier)
+    return client.verifyPacketReceipt(connection, height, connection.delayPeriodTime, connection.delayPeriodBlocks, connection.counterpartyPrefix, proof, portIdentifier, channelIdentifier, sequence, receipt)
+}
+
 function verifyNextSequenceRecv(
   connection: ConnectionEnd,
   height: Height,
