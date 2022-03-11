@@ -7,7 +7,7 @@ requires: 25, 26
 kind: instantiation
 author: Haifeng Xi <haifeng@bianjie.ai>
 created: 2021-11-10
-modified: 2022-03-03
+modified: 2022-03-11
 ---
 
 > This standard document follows the same design principles of [ICS 20](../ics-020-fungible-token-transfer) and inherits most of its content therefrom, while replacing `bank` module based asset tracking logic with that of the `nft` module.
@@ -26,7 +26,7 @@ The IBC handler interface & IBC routing module interface are as defined in [ICS 
 
 ### Desired Properties
 
-- Preservation of non-fungibility and uniqueness (i.e., only one instance of the token is *live* across all the IBC-connected blockchains).
+- Preservation of non-fungibility (i.e., only one instance of any token is *live* across all the IBC-connected blockchains).
 - Permissionless token transfers, no need to whitelist connections, modules, or `classId`s.
 - Symmetric (all chains implement the same logic, no in-protocol differentiation of hubs & zones).
 - Fault containment: prevents Byzantine-creation of tokens originating on chain `A`, as a result of chain `B`'s Byzantine behavior.
@@ -61,6 +61,19 @@ An ICS-721 token class is represented in the form `{ics721Port}/{ics721Channel}/
 
 A sending chain may be acting as a source or sink zone. When a chain is sending tokens across a port and channel which are not equal to the last prefixed port and channel pair, it is acting as a source zone. When tokens are sent from a source zone, the destination port and channel will be prefixed onto the `classId` (once the tokens are received) adding another hop to the tokens record. When a chain is sending tokens across a port and channel which are equal to the last prefixed port and channel pair, it is acting as a sink zone. When tokens are sent from a sink zone, the last prefixed port and channel pair on the `classId` is removed (once the tokens are received), undoing the last hop in the tokens record.
 
+Each send to any chain other than the one from which the token was previously received is a movement forward in the token's timeline. This causes trace to be added to the token's history and the destination port and destination channel to be prefixed to the `classId`. In these instances the sender chain is acting as the *source zone*. When the token is sent back to the chain it was previously received from, the prefix is removed. This is a backward movement in the token's timeline and the sender chain is acting as the *sink zone*.
+
+For example, assume these steps of transfer occur:
+
+A(p1,c1) -> B(p2,c2) -> C(p3,c3) -> A(p4,c4) -> C(p3,c3) -> B(p2,c2) -> A(p1,c1)
+
+1. A -> B : A is source zone. `classId` in B: 'p2/c2/nftClass'
+2. B -> C : B is source zone. `classId` in C: 'p3/c3/p2/c2/nftClass'
+3. C -> A : C is source zone. `classId` in A: 'p4/c4/p3/c3/p2/c2/nftClass'
+4. A -> C : A is sink zone. `classId` in C: 'p3/c3/p2/c2/nftClass'
+5. C -> B : C is sink zone. `classId` in B: 'p2/c2/nftClass'
+6. B -> A : B is sink zone. `classId` in A: 'nftClass'
+
 The acknowledgement data type describes whether the transfer succeeded or failed, and the reason for failure (if any).
 
 ```typescript
@@ -89,6 +102,8 @@ interface ModuleState {
 ### Sub-protocols
 
 The sub-protocols described herein should be implemented in a "non-fungible token transfer bridge" module with access to the NFT asset tracking module and the IBC routing module.
+
+The `x/nft` module specified in [ADR-043](https://github.com/cosmos/cosmos-sdk/blob/master/docs/architecture/adr-043-nft-module.md) is one such example of the NFT asset tracking module, where the ownership of each NFT should be properly tracked. If an NFT is transferred to a recipient by its current owner, the module is expected to record the ownership change by updating the token's new owner to the recipient.
 
 #### Port & channel setup
 
@@ -221,7 +236,7 @@ function createOutgoingPacket(
   timeoutHeight: Height,
   timeoutTimestamp: uint64) {
   prefix = "{sourcePort}/{sourceChannel}/"
-  // we are the source if the classId is not prefixed with the sourcePort and sourceChannel
+  // we are source chain if classId is not prefixed with sourcePort and sourceChannel
   source = classId.slice(0, len(prefix)) !== prefix
   tokenUris = []
   for (let tokenId in tokenIds) {
@@ -230,10 +245,10 @@ function createOutgoingPacket(
     if source {
       // determine escrow account
       escrowAccount = channelEscrowAddresses[sourceChannel]
-      // escrow source token
+      // escrow token (escrow account becomes new owner)
       nft.Transfer(classId, tokenId, escrowAccount)
     } else {
-      // receiver is source chain, burn voucher
+      // we are sink chain, burn voucher
       nft.Burn(classId, tokenId)
     }
     tokenUris.push(nft.getNFT(classId, tokenId).getUri())
@@ -251,11 +266,11 @@ function onRecvPacket(packet: Packet) {
   // construct default acknowledgement of success
   NonFungibleTokenPacketAcknowledgement ack = NonFungibleTokenPacketAcknowledgement{true, null}
   prefix = "{packet.sourcePort}/{packet.sourceChannel}/"
-  // we are the source if the classId is prefixed with the packet's sourcePort and sourceChannel
+  // we are source chain if classId is prefixed with packet's sourcePort and sourceChannel
   source = data.classId.slice(0, len(prefix)) === prefix
   for (var i in data.tokenIds) {
     if source {
-      // receiver is source chain: unescrow token
+      // unescrow token (receiver becomes new owner)
       err = nft.Transfer(data.classId.slice(len(prefix)), data.tokenIds[i], data.receiver)
       if (err !== nil) {
         ack = NonFungibleTokenPacketAcknowledgement{false, err.Error()}
@@ -264,7 +279,7 @@ function onRecvPacket(packet: Packet) {
     } else {
       prefix = "{packet.destPort}/{packet.destChannel}/"
       prefixedClassId = prefix + data.classId
-      // sender was source, mint voucher to receiver
+      // we are sink chain, mint voucher to receiver (owner)
       err = nft.Mint(prefixedClassId, data.classUri, data.tokenIds[i], data.tokenUris[i], data.receiver)
       if (err !== nil) {
         ack = NonFungibleTokenPacketAcknowledgement{false, err.Error()}
@@ -327,13 +342,14 @@ function onTimeoutPacketClose(packet: Packet) {
 
 ##### Correctness
 
-This implementation preserves token uniqueness.
+This implementation preserves token non-fungibility and redeemability.
 
-Uniqueness: If tokens have been sent to the counterparty chain, they can be redeemed back in the same `classId` & `tokenId` on the source chain.
+* Non-fungibility: Only one instance of any token is *live* across all the IBC-connected blockchains.
+* Redeemability: If tokens have been sent to the counterparty chain, they can be redeemed back in the same `classId` & `tokenId` on the source chain.
 
 ##### Multi-chain notes
 
-This specification does not directly handle the "diamond problem", where a user sends a token originating on chain A to chain B, then to chain D, and wants to return it through D -> C -> A — since the supply is tracked as owned by chain B (and the `classId` will be "{portOnD}/{channelOnD}/{portOnB}/{channelOnB}/classId"), chain C cannot serve as the intermediary. It is not yet clear whether that case should be dealt with in-protocol or not — it may be fine to just require the original path of redemption (and if there is frequent liquidity and some surplus on both paths the diamond path will work most of the time). Complexities arising from long redemption paths may lead to the emergence of central chains in the network topology.
+This specification does not directly handle the "diamond problem", where a user sends a token originating on chain A to chain B, then to chain D, and wants to return it through D -> C -> A — since the token is tracked as owned by chain B (and the `classId` will be "{portOnD}/{channelOnD}/{portOnB}/{channelOnB}/classId"), chain C cannot serve as the intermediary. The original path, in reverse order, is required to redeem the token at its source chain. Complexities arising from long redemption paths may lead to the emergence of central chains in the network topology.
 
 In order to track all of the tokens moving around the network of chains in various paths, it may be helpful for a particular chain to implement a registry which will track the "global" source chain for each `classId`. End-user service providers (such as wallet authors) may want to integrate such a registry or keep their own mapping of canonical source chains and human-readable names in order to improve UX.
 
@@ -372,6 +388,7 @@ Coming soon.
 | Nov 18, 2021  | Revised to allow for multiple tokens in one packet |
 | Feb 10, 2022  | Revised to incorporate feedbacks from IBC team     |
 | Mar 03, 2022  | Revised to make TRY callback consistent with PR#629         |
+| Mar 11, 2022  | Added example to illustrate the prefix concept         |
 
 ## Copyright
 
