@@ -6,7 +6,7 @@ This standard document specifies the interfaces and state machine logic that IBC
 
 ### Motivation
 
-As new features get added to IBC, chains may wish the take advantage of new channel features without abandoning the accumulated state and network effect(s) of an already existing channel. The upgrade protocol proposed would allow chains to renegotiate an existing channel to take advantage of new features without having to create a new channel, thus preserving all existing channels that built on top of the channel.
+As new features get added to IBC, chains may wish the take advantage of new channel features without abandoning the accumulated state and network effect(s) of an already existing channel. The upgrade protocol proposed would allow chains to renegotiate an existing channel to take advantage of new features without having to create a new channel, thus preserving all existing packet state processed on the channel.
 
 ### Desired Properties
 
@@ -15,7 +15,7 @@ As new features get added to IBC, chains may wish the take advantage of new chan
 - The channel upgrade protocol is atomic, i.e., 
   - either it is unsuccessful and then the channel MUST fall-back to the original channel parameters; 
   - or it is successful and then both channel ends MUST adopt the new channel parameters and the applications must process packet data appropriately.
-- The channel upgrade protocol should have the ability to change all channel-related parameters; however the channel upgrade protocol MUST NOT be able to change the underlying `ClientState`.
+- The channel upgrade protocol should have the ability to change all channel-related parameters; however the channel upgrade protocol MUST NOT be able to change the underlying `ConnectionEnd`.
 The channel upgrade protocol MUST NOT modify the channel identifiers.
 
 ## Technical Specification
