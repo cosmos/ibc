@@ -177,24 +177,20 @@ function verifyConnectionUpgradeTimeout(
 
 ## Utility Functions
 
-`restoreConnectionUnless(condition: bool)` is a utility function that allows a chain to abort an upgrade handshake in progress, and return the connection to its original pre-upgrade state if the condition passed in is `true`.
+`restoreConnection()` is a utility function that allows a chain to abort an upgrade handshake in progress, and return the `connectionEnd` to its original pre-upgrade state while also setting the `errorReceipt`. A relayer can then send a `cancelUpgradeMsg` to the counterparty so that it can restore its `connectionEnd` to its pre-upgrade state as well. Once both connection ends are back to the pre-upgrade state, the connection will resume processing with its original connection parameters
 
 ```typescript
-function restoreConnectionUnless(condition: bool) {
-    if !condition {
-        // cancel upgrade
-        // write an error receipt into the error path
-        // and restore original connection
-        errorReceipt = []byte{1}
-        provableStore.set(errorPath(identifier), errorReceipt)
-        originalConnection = privateStore.get(restorePath(identifier))
-        provableStore.set(connectionPath(identifier), originalConnection)
-        provableStore.delete(timeoutPath(identifier))
-        privateStore.delete(restorePath(identifier))
-        // caller should return as well
-    } else {
-        // caller should continue execution
-    }
+function restoreConnection() {
+    // cancel upgrade
+    // write an error receipt into the error path
+    // and restore original connection
+    errorReceipt = []byte{1}
+    provableStore.set(errorPath(identifier), errorReceipt)
+    originalConnection = privateStore.get(restorePath(identifier))
+    provableStore.set(connectionPath(identifier), originalConnection)
+    provableStore.delete(timeoutPath(identifier))
+    privateStore.delete(restorePath(identifier))
+    // caller should return as well
 }
 ```
 
@@ -281,19 +277,6 @@ function connUpgradeTry(
     currentConnection = provableStore.get(connectionPath(identifier))
     abortTransactionUnless(currentConnection.state == OPEN || currentConnection.state == UPGRADE_INIT)
 
-    if currentConnection.state == UPGRADE_INIT {
-        // if there is a crossing hello, ie an UpgradeInit has been called on both connectionEnds,
-        // then we must ensure that the proposedUpgrade by the counterparty is the same as the currentConnection
-        // except for the connection state (upgrade connection will be in UPGRADE_TRY and current connection will be in UPGRADE_INIT)
-        // if the proposed upgrades on either side are incompatible, then we will restore the connection and cancel the upgrade.
-        currentConnection.state = UPGRADE_TRY
-        restoreConnectionUnless(currentConnection.IsEqual(proposedUpgradeConnection))
-    } else {
-        // this is first message in upgrade handshake on this chain so we must store original connection in restore path
-        // in case we need to restore connection later.
-        privateStore.set(restorePath(identifier), currentConnection)
-    }
-
     // abort transaction if an unmodifiable field is modified
     // upgraded connection state must be in `UPGRADE_TRY`
     // NOTE: Any added fields are by default modifiable.
@@ -304,30 +287,56 @@ function connUpgradeTry(
         proposedUpgradeConnection.counterpartyClientIdentifier == currentConnection.counterpartyClientIdentifier
     )
 
-    
-    // either timeout height or timestamp must be non-zero
-    // if the upgrade feature is implemented on the TRY chain, then a relayer may submit a TRY transaction after the timeout.
-    // this will restore the connection on the executing chain and allow counterparty to use the CancelUpgradeMsg to restore their connection.
-    restoreConnectionUnless(timeoutHeight != 0 || timeoutTimestamp != 0)
-    upgradeTimeout = UpgradeTimeout{
-        timeoutHeight: timeoutHeight,
-        timeoutTimestamp: timeoutTimestamp,
-    }
+    // verify proofs of counterparty state
+    abortTransactionUnless(verifyConnectionState(currentConnection, proofHeight, proofConnection, currentConnection.counterpartyConnectionIdentifier, proposedUpgradeConnection))
+    abortTransactionUnless(verifyConnectionUpgradeTimeout(currentConnection, proofHeight, proofUpgradeTimeout,  upgradeTimeout))
 
     // verify that counterparty connection unmodifiable fields have not changed and counterparty state
     // is UPGRADE_INIT
-    restoreConnectionUnless(
+    abortTransactionUnless(
         counterpartyConnection.state == UPGRADE_INIT &&
         counterpartyConnection.counterpartyConnectionIdentifier == identifier &&
         counterpartyConnection.clientIdentifier == currentConnection.counterpartyClientIdentifier &&
         counterpartyConnection.counterpartyClientIdentifier == currentConnection.clientIdentifier
     )
 
+    if currentConnection.state == UPGRADE_INIT {
+        // if there is a crossing hello, ie an UpgradeInit has been called on both connectionEnds,
+        // then we must ensure that the proposedUpgrade by the counterparty is the same as the currentConnection
+        // except for the connection state (upgrade connection will be in UPGRADE_TRY and current connection will be in UPGRADE_INIT)
+        // if the proposed upgrades on either side are incompatible, then we will restore the connection and cancel the upgrade.
+        currentConnection.state = UPGRADE_TRY
+        if !currentConnection.IsEqual(proposedUpgradeConnection) {
+            restoreConnection()
+            return
+        }
+    } else if currentConnection.state == OPEN {
+        // this is first message in upgrade handshake on this chain so we must store original connection in restore path
+        // in case we need to restore connection later.
+        privateStore.set(restorePath(identifier), currentConnection)
+    } else {
+        // abort transaction if current connection is not in INIT or OPEN
+        abortTransactionUnless(false)
+    }
+    
+    // either timeout height or timestamp must be non-zero
+    // if the upgrade feature is implemented on the TRY chain, then a relayer may submit a TRY transaction after the timeout.
+    // this will restore the connection on the executing chain and allow counterparty to use the CancelUpgradeMsg to restore their connection.
+    if timeoutHeight == 0 && timeoutTimestamp == 0 {
+        restoreConnection()
+        return
+    }
+    upgradeTimeout = UpgradeTimeout{
+        timeoutHeight: timeoutHeight,
+        timeoutTimestamp: timeoutTimestamp,
+    }
+
     // counterparty-specified timeout must not have exceeded
-    restoreConnectionUnless(
-        timeoutHeight > getCurrentHeight() ||
-        timeoutTimestamp > currentTimestamp()
-    )
+    if (currentHeight() > timeoutHeight && timeoutHeight != 0) ||
+        (currentTimestamp() > timeoutTimestamp && timeoutTimestamp != 0) {
+        restoreConnection()
+        return
+    }
 
     // verify chosen versions are compatible
     versionsIntersection = intersection(counterpartyConnection.version, proposedUpgradeConnection.version)
@@ -337,12 +346,11 @@ function connUpgradeTry(
     // this function has been left unspecified since it will depend on the specific structure of the new connection.
     // It is the responsibility of implementations to make sure that verification that the proposed new connections
     // on either side are correctly constructed according to the new version selected.
-    restoreConnectionUnless(IsCompatible(counterpartyConnection, proposedUpgradeConnection))
+    if !IsCompatible(counterpartyConnection, proposedUpgradeConnection) {
+        restoreConnection()
+        return
+    }
 
-    // verify proofs of counterparty state
-    abortTransactionUnless(verifyConnectionState(currentConnection, proofHeight, proofConnection, currentConnection.counterpartyConnectionIdentifier, proposedUpgradeConnection))
-    abortTransactionUnless(verifyConnectionUpgradeTimeout(currentConnection, proofHeight, proofUpgradeTimeout,  upgradeTimeout))
- 
     provableStore.set(connectionPath(identifier), proposedUpgradeConnection)
 }
 ```
@@ -362,17 +370,23 @@ function connUpgradeAck(
     abortTransactionUnless(currentConnection.state == UPGRADE_INIT || currentConnection.state == UPGRADE_TRY)
 
     // counterparty must be in TRY state
-    restoreConnectionUnless(counterpartyConnection.State == UPGRADE_TRY)
+    if counterpartyConnection.State != UPGRADE_TRY {
+        restoreConnection()
+        return
+    }
+
+    // verify proofs of counterparty state
+    abortTransactionUnless(verifyConnectionState(currentConnection, proofHeight, proofConnection, currentConnection.counterpartyConnectionIdentifier, counterpartyConnection))
 
     // verify connections are mutually compatible
     // this will also check counterparty chosen version is valid
     // this function has been left unspecified since it will depend on the specific structure of the new connection.
     // It is the responsibility of implementations to make sure that verification that the proposed new connections
     // on either side are correctly constructed according to the new version selected.
-    restoreConnectionUnless(IsCompatible(counterpartyConnection, connection))
-
-    // verify proofs of counterparty state
-    abortTransactionUnless(verifyConnectionState(currentConnection, proofHeight, proofConnection, currentConnection.counterpartyConnectionIdentifier, counterpartyConnection))
+    if !IsCompatible(counterpartyConnection, connection) {
+        restoreConnection()
+        return
+    }
 
     // upgrade is complete
     // set connection to OPEN and remove unnecessary state
@@ -474,7 +488,12 @@ function timeoutConnectionUpgrade(
     abortTransactionUnless(currentConnection.verifyConnectionState(proofHeight, proofConnection, currentConnection.counterpartyConnectionIdentifier, counterpartyConnection))
 
     // we must restore the connection since the timeout verification has passed
-    restoreConnectionUnless(false)
+    originalConnection = privateStore.get(restorePath(identifier))
+    provableStore.set(connectionPath(identifier), originalConnection)
+
+    // delete auxilliary upgrade state
+    provableStore.delete(timeoutPath(identifier))
+    privateStore.delete(restorePath(identifier))
 }
 ```
 
