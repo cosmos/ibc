@@ -48,7 +48,7 @@ are valid and perform any custom `INIT` logic.
 It may return an error if the chosen parameters are invalid
 in which case the handshake is aborted.
 If the provided version string is non-empty, `onChanOpenInit` should return
-the version string if valid or an error if the provided version is invalid.
+the version string or an error if the provided version is invalid.
 If the version string is empty, `onChanOpenInit` is expected to
 return a default version string representing the version(s)
 it supports.
@@ -70,9 +70,9 @@ function onChanOpenInit(
 
 #### **ChanOpenTry**
 
-`onChanOpenTry` will verify the relayer-chosen parameters along with the
+`onChanOpenTry` will verify the INIT-chosen parameters along with the
 counterparty-chosen version string and perform custom `TRY` logic.
-If the relayer-chosen parameters
+If the INIT-chosen parameters
 are invalid, the callback must return an error to abort the handshake.
 If the counterparty-chosen version is not compatible with this modules
 supported versions, the callback must return an error to abort the handshake.
