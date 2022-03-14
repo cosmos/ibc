@@ -344,14 +344,15 @@ function chanUpgradeTry(
             restoreChannel()
             return
         }
-    } else {
+    } else if currentChannel.state == OPEN {
         // this is first message in upgrade handshake on this chain so we must store original channel in restore path
         // in case we need to restore channel later.
         privateStore.set(restorePath(portIdentifier, channelIdentifier), currentChannel)
+    } else {
+        // abort transaction if current channel is not in state: INIT or OPEN
+        abortTransactionUnless(false)
     }
 
-   
-    
     // either timeout height or timestamp must be non-zero
     // if the upgrade feature is implemented on the TRY chain, then a relayer may submit a TRY transaction after the timeout.
     // this will restore the channel on the executing chain and allow counterparty to use the CancelUpgradeMsg to restore their channel.
