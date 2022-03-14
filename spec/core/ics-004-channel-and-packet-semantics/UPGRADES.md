@@ -243,8 +243,26 @@ function chanUpgradeInit(
         timeoutTimestamp: counterpartyTimeoutTimestamp,
     }
 
+    // call modules onChanUpgradeInit callback
+    module = lookupModule(portIdentifier)
+    version, err = module.onChanUpgradeInit(
+        proposedUpgradeChannel.order,
+        proposedUpgradeChannel.connectionHops,
+        proposedUpgradeChannel.portIdentifier,
+        proposedUpgradeChannel.channelIdentifer,
+        proposedUpgradeChannel.counterpartyPortIdentifer,
+        proposedUpgradeChannel.counterpartyChannelIdentifier,
+        proposedUpgradeChannel.version
+    )
+    // abort transaction if callback returned error
+    abortTransactionUnless(err != nil)
+
+    // replace channel version with the version returned by application
+    // in case it was modified
+    proposedUpgradeChannel.version = version
+
     provableStore.set(timeoutPath(portIdentifier, channelIdentifier), upgradeTimeout)
-    provableStore.set(channelPath(portIdentifier, channelIdentifier), proposedUpgrade.channel)
+    provableStore.set(channelPath(portIdentifier, channelIdentifier), proposedUpgradeChannel)
     privateStore.set(restorePath(portIdentifier, channelIdentifier), currentChannel)
 }
 ```
@@ -274,7 +292,7 @@ function chanUpgradeTry(
         // except for the channel state (upgrade channel will be in UPGRADE_TRY and current channel will be in UPGRADE_INIT)
         // if the proposed upgrades on either side are incompatible, then we will restore the channel and cancel the upgrade.
         currentChannel.state = UPGRADE_TRY
-        restoreChannelUnless(currentChannel.IsEqual(proposedUpgrade.channel))
+        restoreChannelUnless(currentChannel.IsEqual(proposedUpgradeChannel)
     } else {
         // this is first message in upgrade handshake on this chain so we must store original channel in restore path
         // in case we need to restore channel later.
@@ -318,11 +336,29 @@ function chanUpgradeTry(
     // on either side are correctly constructed according to the new version selected.
     restoreChannelUnless(IsCompatible(counterpartyChannel, proposedUpgrade.Channel))
 
+    // call modules onChanUpgradeTry callback
+    module = lookupModule(portIdentifier)
+    version, err = module.onChanUpgradeInit(
+        proposedUpgradeChannel.order,
+        proposedUpgradeChannel.connectionHops,
+        proposedUpgradeChannel.portIdentifier,
+        proposedUpgradeChannel.channelIdentifer,
+        proposedUpgradeChannel.counterpartyPortIdentifer,
+        proposedUpgradeChannel.counterpartyChannelIdentifier,
+        proposedUpgradeChannel.version
+    )
+    // restore channel if callback returned error
+    restoreChannelUnless(err != nil)
+
+    // replace channel version with the version returned by application
+    // in case it was modified
+    proposedUpgradeChannel.version = version
+
     // verify proofs of counterparty state
     abortTransactionUnless(verifyChannelState(currentChannel, proofHeight, proofChannel, currentChannel.counterpartyChannelIdentifier, counterpartyChannel))
     abortTransactionUnless(verifyUpgradeTimeout(currentChannel, proofHeight, proofUpgradeTimeout, currentChannel.counterpartyChannelIdentifier, upgradeTimeout))
  
-    provableStore.set(channelPath(portIdentifier, channelIdentifier), proposedUpgrade.channel)
+    provableStore.set(channelPath(portIdentifier, channelIdentifier), proposedUpgradeChannel)
 }
 ```
 
@@ -350,6 +386,17 @@ function chanUpgradeAck(
     // It is the responsibility of implementations to make sure that verification that the proposed new channels
     // on either side are correctly constructed according to the new version selected.
     restoreChannelUnless(IsCompatible(counterpartyChannel, channel))
+
+    // call modules onChanUpgradeAck callback
+    module = lookupModule(portIdentifier)
+    err = module.onChanUpgradeAck(
+        portIdentifier,
+        channelIdentifier,
+        counterpartyChannel.channelIdentifier,
+        counterpartyChannel.version
+    )
+    // restore channel if callback returned error
+    restoreChannelUnless(err != nil)
 
     // verify proofs of counterparty state
     abortTransactionUnless(verifyChannelState(currentChannel, proofHeight, proofChannel, currentChannel.counterpartyChannelIdentifier, counterpartyChannel))
@@ -380,6 +427,14 @@ function chanUpgradeConfirm(
 
     // verify proofs of counterparty state
     abortTransactionUnless(verifyChannelState(currentChannel, proofHeight, proofChannel, currentChannel.counterpartyChannelIdentifier, counterpartyChannel))
+
+    // call modules onChanUpgradeConfirm callback
+    module = lookupModule(portIdentifier)
+    // confirm callback must not return error since counterparty successfully upgraded
+    module.onChanUpgradeConfirm(
+        portIdentifer,
+        channelIdentifier
+    )
     
     // upgrade is complete
     // set channel to OPEN and remove unnecessary state
@@ -402,6 +457,16 @@ function restoreChannelUnless(condition: bool) {
         provableStore.set(channelPath(portIdentifier, channelIdentifier), originalChannel)
         provableStore.delete(timeoutPath(portIdentifier, channelIdentifier))
         privateStore.delete(restorePath(portIdentifier, channelIdentifier))
+
+        // call modules onChanUpgradeRestore callback
+        module = lookupModule(portIdentifier)
+        // restore callback must not return error and it must successfully restore
+        // application to its pre-upgrade state
+        module.onChanUpgradeRestore(
+            portIdentifier,
+            channelIdentifier
+        )
+
         // caller should return as well
     } else {
         // caller should continue execution
