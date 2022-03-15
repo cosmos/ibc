@@ -86,7 +86,7 @@ At least one of the timeoutHeight or timeoutTimestamp MUST be non-zero.
 The chain must store the previous connection end so that it may restore it if the upgrade handshake fails. This may be stored in the private store.
 
 ```typescript
-function restorePath(id: Identifier): Path {
+function connectionRestorePath(id: Identifier): Path {
     return "connections/{id}/restore"
 }
 ```
@@ -96,7 +96,7 @@ function restorePath(id: Identifier): Path {
 The upgrade error path is a public path that can signal an error of the upgrade to the counterparty. It does not store anything in the successful case, but it will store a sentinel abort value in the case that a chain does not accept the proposed upgrade.
 
 ```typescript
-function errorPath(id: Identifier): Path {
+function connectionErrorPath(id: Identifier): Path {
     return "connections/{id}/upgradeError"
 
 }
@@ -105,7 +105,7 @@ function errorPath(id: Identifier): Path {
 The UpgradeError MUST have an associated verification function added to the connection and client interfaces so that a counterparty may verify that chain has stored an error in the UpgradeError path.
 
 ```typescript
-// Connection VerifyConnectionUpgradeError method
+// ConnectionEnd VerifyConnectionUpgradeError method
 function verifyConnectionUpgradeError(
   connection: ConnectionEnd,
   height: Height,
@@ -113,23 +113,11 @@ function verifyConnectionUpgradeError(
   upgradeErrorReceipt: []byte, 
 ) {
     client = queryClient(connection.clientIdentifier)
-    client.verifyUpgradeError(height, connection.counterpartyPrefix, proof, connection.counterpartyConnectionIdentifier, upgradeErrorReceipt)
-}
-```
-
-```typescript
-// Client VerifyUpgradeError
-function verifyConnectionUpgradeError(
-    clientState: ClientState,
-    height: Height,
-    prefix: CommitmentPrefix,
-    proof: CommitmentProof,
-    counterpartyConnectionIdentifier: Identifier,
-    upgradeErrorReceipt []byte,
-) {
-    path = applyPrefix(prefix, errorPath(counterpartyConnectionIdentifier))
-    abortTransactionUnless(!clientState.frozen)
-    return clientState.verifiedRoots[height].verifyMembership(path, upgradeErrorReceipt, proof)
+    // construct CommitmentPath
+    path = applyPrefix(connection.counterpartyPrefix, connectionErrorPath(connection.counterpartyConnectionIdentifier))
+    // verify upgradeErrorReceipt is stored under the constructed path
+    // delay period is unnecessary for non-packet verification so pass in 0 for delay period fields
+    return client.verifyMembership(height, 0, 0, proof, path, upgradeErrorReceipt)
 }
 ```
 
@@ -146,7 +134,7 @@ function timeoutPath(id: Identifier) Path {
 The timeout path MUST have associated verification methods on the connection and client interfaces in order for a counterparty to prove that a chain stored a particular `UpgradeTimeout`.
 
 ```typescript
-// Connection VerifyConnectionUpgradeTimeout method
+// ConnectionEnd VerifyConnectionUpgradeTimeout method
 function verifyConnectionUpgradeTimeout(
   connection: ConnectionEnd,
   height: Height,
@@ -154,24 +142,11 @@ function verifyConnectionUpgradeTimeout(
   upgradeTimeout: UpgradeTimeout, 
 ) {
     client = queryClient(connection.clientIdentifier)
-    client.verifyUpgradeTimeout(height, connection.counterpartyPrefix, proof, connection.counterpartyConnectionIdentifier, upgradeTimeout)
-}
-```
-
-```typescript
-// Client VerifyUpgradeTimeout
-function verifyConnectionUpgradeTimeout(
-    clientState: ClientState,
-    height: Height,
-    prefix: CommitmentPrefix,
-    proof: CommitmentProof,
-    counterpartyConnectionIdentifier: Identifier,
-    upgradeTimeout: UpgradeTimeout,
-) {
-    path = applyPrefix(prefix, timeoutPath(counterpartyConnectionIdentifier))
-    abortTransactionUnless(!clientState.frozen)
+    // construct CommitmentPath
+    path = applyPrefix(connection.counterpartyPrefix, connectionTimeoutPath(connection.counterpartyConnectionIdentifier))
+    // marshal upgradeTimeout into bytes with standardized protobuf codec
     timeoutBytes = protobuf.marshal(upgradeTimeout)
-    return clientState.verifiedRoots[height].verifyMembership(path, timeoutBytes, proof)
+    client.verifyMembership(height, proof, path, timeoutBytes)
 }
 ```
 
