@@ -22,7 +22,9 @@ The connection upgrade protocol MUST NOT modify the connection identifiers.
 
 ### Data Structures
 
-The `ConnectionState` and `ConnectionEnd` are defined in [ICS-3](./README.md), they are reproduced here for the reader's convenience. `UPGRADE_INIT`, `UPGRADE_TRY`, `UPGRADE_ERR` are additional states added to enable the upgrade feature.
+The `ConnectionState` and `ConnectionEnd` are defined in [ICS-3](./README.md), they are reproduced here for the reader's convenience. `UPGRADE_INIT`, `UPGRADE_TRY` are additional states added to enable the upgrade feature.
+
+#### **ConnectionState (reproduced from [ICS-3](README.md)**
 
 ```typescript
 enum ConnectionState {
@@ -36,6 +38,8 @@ enum ConnectionState {
 
 - The chain that is proposing the upgrade should set the connection state from `OPEN` to `UPGRADE_INIT`
 - The counterparty chain that accepts the upgrade should set the connection state from `OPEN` to `UPGRADE_TRY`
+
+#### **ConnectionEnd (reproduced from [ICS-3](README.md)**
 
 ```typescript
 interface ConnectionEnd {
@@ -66,6 +70,10 @@ MUST NOT BE MODIFIED:
 - `counterpartyClientIdentifier`: The counterparty client identifier CAN NOT be modified by the upgrade protocol
 
 NOTE: If the upgrade adds any fields to the `ConnectionEnd` these are by default modifiable, and can be arbitrarily chosen by an Actor (e.g. chain governance) which has permission to initiate the upgrade.
+
+Modifiable fields may also be removed completely.
+
+#### **UpgradeTimeout**
 
 ```typescript
 interface UpgradeTimeout {
@@ -398,9 +406,15 @@ function connUpgradeConfirm(
 }
 ```
 
+NOTE: Since the counterparty has already successfully upgraded and moved to `OPEN` in `ACK` step, we cannot restore the connection here. We simply verify that the counterparty has successfully upgraded and then upgrade ourselves.
+
 ### Cancel Upgrade Process
 
-During the upgrade handshake a chain may cancel the upgrade by writing an error receipt into the error path and restoring the original connection to `OPEN`. The counterparty must then restore its connection to `OPEN` as well. A relayer can facilitate this by calling `CancelConnectionUpgrade`:
+During the upgrade handshake a chain may cancel the upgrade by writing an error receipt into the error path and restoring the original connection to `OPEN`. The counterparty must then restore its connection to `OPEN` as well.
+
+A connectionEnd may only cancel the upgrade during the upgrade negotiation process (TRY, ACK). An upgrade cannot be cancelled on one end once the other chain has already completed its upgrade and moved to `OPEN` since that will lead the connection to being in an invalid state.
+
+A relayer can facilitate this by calling `CancelConnectionUpgrade`:
 
 ```typescript
 function cancelConnectionUpgrade(
@@ -458,8 +472,8 @@ function timeoutConnectionUpgrade(
     consensusState = queryConsensusState(currentConnection.clientIdentifer, proofHeight)
     abortTransactionUnless(upgradeTimeout.timeoutTimestamp.IsZero() || consensusState.getTimestamp() >= upgradeTimeout.timestamp)
 
-    // counterparty connection must be proved to still be in OPEN state
-    abortTransactionUnless(counterpartyConnection.State === OPEN)
+    // counterparty connection must be proved to still be in OPEN state or INIT state (crossing hellos)
+    abortTransactionUnless(counterpartyConnection.State === OPEN || counterpartyConnection.State == INIT)
     abortTransactionUnless(currentConnection.verifyConnectionState(proofHeight, proofConnection, currentConnection.counterpartyConnectionIdentifier, counterpartyConnection))
 
     // we must restore the connection since the timeout verification has passed
