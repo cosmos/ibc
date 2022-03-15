@@ -429,25 +429,39 @@ type verifyNextSequenceRecv = (
   => boolean
 ```
 
-#### Optional Functions
-
-
-`verifyPacketReceipt` verifies a proof of an incoming packet receipt at the specified port, specified channel, and specified sequence. It is needed only if the chain wishes to support new channel types other than ORDERED and UNORDERED.
+`verifyMembership` is a generic proof verification method which verifies a proof of the existence a value at a given `CommitmentPath` at the specified height.
+The caller is expected to construct the full `CommitmentPath` from a `CommitmentPrefix` and a standardized path. If the caller desires a particular delay period to be enforced,
+then it can pass in a non-zero `delayPeriodTime` or `delayPeriodBlocks`. If a delay period is not necessary, the caller must pass in 0 for `delayPeriodTime` and `delayPeriodBlocks`,
+and the client will not enforce any delay period for verification.
 
 ```typescript
-type verifyPacketReceipt = (
+type verifyMembership = (
   clientState: ClientState,
   height: Height,
   delayPeriodTime: uint64,
   delayPeriodBlocks: uint64,
-  prefix: CommitmentPrefix,
   proof: CommitmentProof,
-  portIdentifier: Identifier,
-  channelIdentifier: Identifier,
-  sequence: uint64,
-  receipt: bytes)
+  path: CommitmentPath,
+  value: bytes)
   => boolean
 ```
+
+`verifyNonMembership` is a generic proof verification method which verifies a proof of absence at a given `CommitmentPath` at the specified height.
+The caller is expected to construct the full `CommitmentPath` from a `CommitmentPrefix` and a standardized path. If the caller desires a particular delay period to be enforced,
+then it can pass in a non-zero `delayPeriodTime` or `delayPeriodBlocks`. If a delay period is not necessary, the caller must pass in 0 for `delayPeriodTime` and `delayPeriodBlocks`,
+and the client will not enforce any delay period for verification.
+
+```typescript
+type verifyNonMembership = (
+  clientState: ClientState,
+  height: Height,
+  delayPeriodTime: uint64,
+  delayPeriodBlocks: uint64,
+  proof: CommitmentProof,
+  path: CommitmentPath)
+  => boolean
+```
+
 
 #### Query interface
 
