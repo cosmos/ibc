@@ -231,14 +231,14 @@ i.e., as long as that validator's tokens are not unbonded yet, they can be slash
 However, if the tokens start unbonding before `infractionHeight`, i.e., the tokens did not contribute to the voting power that committed the infraction, 
 then the tokens MUST NOT be slashed.
 
-In the context of CCV, validators (with tokens bonded on the provider chain) MUST be slashed for infractions committed on the consumer chains. 
+In the context of CCV, validators (with tokens bonded on the provider chain) MUST be slashed for infractions committed on the consumer chains at heights for which they have voting power. 
 Thus, although the infractions are committed on the consumer chains and evidence of these infractions is submitted to the consumer chains, the slashing happens on the provider chain. As a result, the Consumer Initiated Slashing operation requires, for every consumer chain, a mapping from consumer chain block heights to provider chain block heights.
 
 The following figure shows the intuition behind such a mapping using the provided VSCs. 
 The four unbonding operations (i.e., undelegations) occur on the provider chain and, as a consequence, the provider chain provides VSCs to the consumer chain, e.g., `undelegate-3` results in `VSC3` being provided.
 The four color (i.e., red, blue, green, and yellow) indicate the mapping of consumer chain heights to provider chain heights (note that on the provider chain there is only one block of a given color).  
 As a result, a validator misbehaving on the consumer chain, e.g., in either of the two green blocks, is slashed the same as if misbehaving on the provider chain, e.g., in the green block. 
-This ensures that once unbonding operations are initiated, the corresponding unbonding tokens are not slashed for infractions committed in the subsequent blocks, e.g., the tokens unbonding due to `undelegate-3` are not be slashed for infractions committed in or after the green blocks.
+This ensures that once unbonding operations are initiated, the corresponding unbonding tokens are not slashed for infractions committed in the subsequent blocks, e.g., the tokens unbonding due to `undelegate-3` are not slashed for infractions committed in or after the green blocks.
 
 ![Intuition of Mapping Between Provider and Consumer Heights](./figures/ccv-mapping-intuition.png?raw=true)
 
