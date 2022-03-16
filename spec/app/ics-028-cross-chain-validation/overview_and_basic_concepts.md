@@ -261,11 +261,11 @@ The following figure shows an overview of the Consumer Initiated Slashing operat
 
 ![Consumer Initiated Slashing](./figures/ccv-evidence-overview.png?raw=true)
 
-- At height `Hc2`, the consumer chain receives evidence that a validator `V` misbehaved at height `Hc1`. 
+- At (evidence) height `Hc2`, the consumer chain receives evidence that a validator `V` misbehaved at (infraction) height `Hc1`. 
   As a result, the consumer CCV module sends a `SlashPacket` to the provider chain: 
   It makes a request to slash `V`, but it replaces the infraction height `Hc1` with `HtoVSC[Hc1]`, 
   i.e., the ID of the VSC that updated the "misbehaving voting power" or `0` if such a VSC does not exist.
-- The provider CCV module receives at height `Hp1` the `SlashPacket` with `vscId = HtoVSC[Hc1]`. 
+- The provider CCV module receives at (slashing) height `Hp1` the `SlashPacket` with `vscId = HtoVSC[Hc1]`. 
   As a result, it requests the provider Slashing module to slash `V`, but it set the infraction height to `VSCtoH[vscId]`, i.e., 
     - if `vscId != 0`, the height on the provider chain where the voting power was updated by the VSC with ID `vscId`;
     - otherwise, the height at which the first VSC was provided to this consumer chain.
