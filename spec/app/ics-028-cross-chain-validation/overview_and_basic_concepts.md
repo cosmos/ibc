@@ -112,7 +112,7 @@ Thus, a *VSC reaching maturity* on a consumer chain means that all the unbonding
 > **Note**: Time periods are measured in terms of the block time, i.e., `currentTimestamp()` (as defined in [ICS 24](../../core/ics-024-host-requirements)). 
 > As a result, a consumer chain MAY start the unbonding period for every VSC that it applies in a block at any point during that block.
 
-- **Slash Request**: A request to *slash* the tokens bonded by a validator on the provider chain as a consequence of that validator misbehaving on the consumer chains. A slash request MAY also result in the misbehaving validator being *jailed* for a period of time, during which it cannot be part of the validator set. 
+- **Slash Request**: A request by a consumer chain to *slash* the tokens bonded by a validator on the provider chain as a consequence of that validator misbehavior on the consumer chain. A slash request MAY also result in the misbehaving validator being *jailed* for a period of time, during which it cannot be part of the validator set. 
 
 > **Background**: In the context of single-chain validation, slashing and jailing misbehaving validators is handled by the *Slashing module*, 
 > i.e., a module of the ABCI application that enables the application to decentivize misbehaving validators.
