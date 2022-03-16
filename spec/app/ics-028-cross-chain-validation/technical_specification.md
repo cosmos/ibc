@@ -1894,7 +1894,7 @@ function SendSlashRequest(
 > 
 > Consequently, the consumer CCV module expects the `infractionHeight` parameter of the `SendSlashRequest()` to be set accordingly.
 
-> **Note**: In the context of single-chain validation, slashing for downtime is an **_atomic operation_**, i.e., once the downtime is detected, the misbehaving validator is slash and jailed immediately. 
+> **Note**: In the context of single-chain validation, slashing for downtime is an **_atomic operation_**, i.e., once the downtime is detected, the misbehaving validator is slashed and jailed immediately. 
 > Consequently, once a validator is punished for downtime, is removed from the validator set and cannot be punished again for downtime. 
 > Since validators are not automatically added back to the validator set, it entails that the validator is aware of the punishment before it can rejoin and be potentially punished again.
 > 
