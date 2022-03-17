@@ -116,7 +116,7 @@ CCV provides the following system invariants.
   > **Intuition**: The *Voting Power Invariant* ensures that validators that validate on the consumer chain have enough tokens bonded on the provider chain for a sufficient amount of time such that the security model holds. 
   > This means that if the validators misbehave on the consumer chain, their tokens bonded on the provider chain can be slashed during the unbonding period.
   > For example, if one unit of voting power requires `1.000.000` bonded tokens (i.e., `VP(1.000.000)=1`), 
-  > then a validator that gets one unit of voting power on the consumer chain must have at least `1.000.000` tokens bonded on the provider chain for at least `UnbondingPeriod`.
+  > then a validator that gets one unit of voting power on the consumer chain must have at least `1.000.000` tokens bonded on the provider chain until both provider chain and consumer chain pass their unbonding period.
 
 - ***Slashing Invariant***: If a validator `val` misbehaves on a consumer chain `cc` at a block height `hi`, 
   then any evidence of misbehavior that is received by `cc` at height `he`, such that `ts(he) < ts(hi) + UnbondingPeriod`, 
