@@ -1250,6 +1250,7 @@ function onTimeoutVSCPacket(packet Packet) {
   channelStatus[chainId] = INVALID
 
   // TODO: cleanup, e.g., complete all outstanding unbonding ops
+  // see https://github.com/cosmos/ibc/issues/669
 }
 ```
 - Initiator: 
@@ -1573,6 +1574,7 @@ function onTimeoutVSCMaturedPacket(packet Packet) {
   // TODO What do we do here? 
   // Do we need to notify the provider to close the channel?
   // What happens w/ the consumer chain once the CCV channel gets closed?
+  // see https://github.com/cosmos/ibc/issues/669
 }
 ```
 - Initiator: 
@@ -1813,6 +1815,7 @@ function onTimeoutSlashPacket(packet Packet) {
   // TODO What do we do here? 
   // Do we need to notify the provider to close the channel?
   // What happens w/ the consumer chain once the CCV channel gets closed?
+  // see https://github.com/cosmos/ibc/issues/669
 }
 ```
 - Initiator: 
@@ -1840,6 +1843,7 @@ function SendSlashRequest(
     }
 
     // TODO governance and CCV params
+    // see https://github.com/cosmos/ibc/issues/673
     slashFactor = TBA
     jailTime = TBA
 
