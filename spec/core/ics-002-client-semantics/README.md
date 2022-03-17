@@ -429,8 +429,8 @@ type verifyNextSequenceRecv = (
   => boolean
 ```
 
-`verifyMembership` is a generic proof verification method which verifies a proof of the existence a value at a given `CommitmentPath` at the specified height.
-The caller is expected to construct the full `CommitmentPath` from a `CommitmentPrefix` and a standardized path. If the caller desires a particular delay period to be enforced,
+`verifyMembership` is a generic proof verification method which verifies a proof of the existence of a value at a given `CommitmentPath` at the specified height.
+The caller is expected to construct the full `CommitmentPath` from a `CommitmentPrefix` and a standardized path (as defined in [ICS 24](../ics-024-host-requirements/README.md#path-space)). If the caller desires a particular delay period to be enforced,
 then it can pass in a non-zero `delayPeriodTime` or `delayPeriodBlocks`. If a delay period is not necessary, the caller must pass in 0 for `delayPeriodTime` and `delayPeriodBlocks`,
 and the client will not enforce any delay period for verification.
 
@@ -446,8 +446,8 @@ type verifyMembership = (
   => boolean
 ```
 
-`verifyNonMembership` is a generic proof verification method which verifies a proof of absence at a given `CommitmentPath` at the specified height.
-The caller is expected to construct the full `CommitmentPath` from a `CommitmentPrefix` and a standardized path. If the caller desires a particular delay period to be enforced,
+`verifyNonMembership` is a generic proof verification method which verifies a proof of absence of a given `CommitmentPath` at the specified height.
+The caller is expected to construct the full `CommitmentPath` from a `CommitmentPrefix` and a standardized path (as defined in [ICS 24](../ics-024-host-requirements/README.md#path-space)). If the caller desires a particular delay period to be enforced,
 then it can pass in a non-zero `delayPeriodTime` or `delayPeriodBlocks`. If a delay period is not necessary, the caller must pass in 0 for `delayPeriodTime` and `delayPeriodBlocks`,
 and the client will not enforce any delay period for verification.
 
