@@ -20,7 +20,7 @@
 As part of an ABCI application, CCV interacts with both the consensus engine (via ABCI) and other application modules (e.g, the Staking module). 
 As an IBC application, CCV interacts with external relayers (defined in [ICS 18](../../relayer/ics-018-relayer-algorithms)). 
 In this section we specify what we assume about these other components. 
-A more thorough discussion of the environment in which CCV operates is given in the section [Placing CCV within an ABCI Application](./technical_specification.md#placing-ccv-within-and-abci-application).
+A more thorough discussion of the environment in which CCV operates is given in the section [Placing CCV within an ABCI Application](./technical_specification.md#placing-ccv-within-an-abci-application).
 
 > **Intuition**: 
 > 
