@@ -48,27 +48,25 @@ For more details, take a look at the [Interchain Security light paper](https://g
 ## Motivation
 [&uparrow; Back to Outline](#outline)
 
-CCV is a primitive (i.e., a building block) that enables arbitrary shared security models: The security of a chain can be composed of security transferred from multiple provider chains including the chain itself (a consumer chain can be its own provider). As a result, CCV enables chains to borrow security from more established chains (e.g., Cosmos Hub), in order to boost their own security, i.e., increase the cost of attacking their networks. 
+CCV is a primitive (i.e., a building block) that enables arbitrary shared security models, by allowing validator set updates and slashing to be synchronized cross-chain. As a result, CCV enables chains to borrow security from more established chains (e.g., Cosmos Hub), in order to boost their own security, i.e., increase the cost of attacking their networks. 
+
 > **Intuition**: For example, for chains based on Tendermint consensus, a variety of attacks against the network are possible if an attacker acquire 1/3+ or 2/3+ of all bonded tokens. Since the market cap of newly created chains could be relatively low, an attacker could realistically acquire sufficient tokens to pass these thresholds. As a solution, CCV allows the newly created chains to use validators that have stake on chains with a much larger market cap and, as a result, increase the cost an attacker would have to pay. 
 
 Moreover, CCV enables *hub minimalism*. In a nutshell, hub minimalism entails keeping a hub in the Cosmos network (e.g., the Cosmos Hub) as simple as possible, with as few features as possible in order to decrease the attack surface. CCV enables moving distinct features (e.g., DEX) to independent chains that are validated by the same set of validators as the hub. 
 
 > **Versioning**: Note that CCV will be developed progressively. 
 > - The V1 release will require the validator set of a consumer chain to be entirely provided by the provider chain. In other words, once a provider chain agrees to provide security to a consumer chain, the entire validator set of the provider chain MUST validate also on the consumer chain.
-> - The V2 release will allow the provider chain validators to opt-in to participate as validators on the consumer chain. It is up to each consumer chain to establish the benefits that provider chain validators receive for their participation.
-> 
-> For more details on the planned releases, take a look at the [Interchain Security light paper](https://github.com/cosmos/gaia/blob/main/docs/interchain-security.md#the-interchain-security-stack).
 
 ## Definition
 [&uparrow; Back to Outline](#outline)
 
 This section defines the new terms and concepts introduced by CCV.
 
-- **Provider Chain**: The blockchain that provides security, i.e., manages the validator set of the consumer chain.
+### Provider Chain
+The blockchain that provides security, i.e., manages the validator set of the consumer chain.
 
-- **Consumer Chain**: The blockchain that consumes security, i.e., enables the provider chain to manage its validator set.
-
-> Note that in the current version the validator set of the consumer chain is entirely provided by the provider chain.
+### Consumer Chain
+The blockchain that consumes security, i.e., enables the provider chain to manage its validator set.
 
 Both the provider and the consumer chains are [application-specific blockchains](https://docs.cosmos.network/v0.44/intro/why-app-specific.html), 
 i.e., the state-machine is typically connected to the underlying consensus engine via an interface called [ABCI](https://github.com/tendermint/spec/tree/v0.7.1/spec/abci). 
@@ -76,27 +74,28 @@ Thus, we refer to the state-machine as an ABCI application.
 For ease of presentation, this specification considers a modular paradigm, 
 i.e., the functionality of the ABCI application is separated into multiple modules, like the approach adopted by [Cosmos SDK](https://docs.cosmos.network/v0.44/basics/app-anatomy.html#modules).  
 
-- **CCV Module**: The module that implements the CCV protocol. Both the provider and the consumer chains have each their own CCV module. 
+### CCV Module
+The module that implements the CCV protocol. Both the provider and the consumer chains have each their own CCV module. 
 Furthermore, the functionalities provided by the CCV module differ between the provider chain and the consumer chains. 
 For brevity, we use *provider CCV module* and *consumer CCV module* to refer to the CCV modules on the provider chain and on the consumer chains, respectively. 
 
-- **CCV Channel**: A unique, ordered IBC channel that is used by the provider CCV module to exchange IBC packets with a consumer CCV module. 
+### CCV Channel
+A unique, ordered IBC channel that is used by the provider CCV module to exchange IBC packets with a consumer CCV module. 
 Note that there is a separate CCV channel for every consumer chain.
 
 > Note that the IBC handler interface, the IBC relayer module interface, and both IBC channels and IBC packets are as defined in [ICS 25](../../core/ics-025-handler-interface), [ICS 26](../../core/ics-026-routing-module), and [ICS 4](../../core/ics-004-channel-and-packet-semantics), respectively.
 
-- **Validator Set Change (VSC)**: A change in the validator set of the provider chain that must be reflected in the validator sets of the consumer chains. 
+### Validator Set Change (VSC) 
+A change in the validator set of the provider chain that must be reflected in the validator sets of the consumer chains. 
 A VSC consists of a batch of validator updates, i.e., changes in the voting power granted to validators on the provider chain and, due to CCV, also on the consumer chains.
 
 > **Background**: In the context of single-chain validation, the changes of the validator set are triggered by the *Staking module*, 
 > i.e., a module of the ABCI application that implements the proof of stake mechanism needed by the [security model](#security-model). 
 > For an example, take a look at the [Staking module documentation](https://docs.cosmos.network/v0.44/modules/staking/) of Cosmos SDK.
 
-Every VSC consists of a batch of validator updates, some of which can decrease the voting power granted to validators. 
-These decreases may be a consequence of unbonding operations (e.g., unbonding delegations) on the provider chain.
-which MUST NOT complete before reaching maturity on both the provider and all the consumer chains,
-i.e., the *unbonding period* (denoted as `UnbondingPeriod`) has elapsed on both the provider and all the consumer chains.
-Thus, a *VSC reaching maturity* on a consumer chain means that all the unbonding operations that resulted in validator updates included in that VSC have matured on the consumer chain.
+Every VSC consists of a batch of validator updates, some of which can decrease the voting power granted to validators. These decreases may be a consequence of unbonding operations (e.g., unbonding delegations) on the provider chain. 
+
+Unbonding operations MUST NOT complete (return coins to the user) before the *unbonding period* (denoted as `UnbondingPeriod`) has elapsed on both the provider and all the consumer chains. Once the `UnbondingPeriod` has elapsed for an unbonding operation, we say it has reached maturity. Thus, a *VSC reaching maturity* on a consumer chain means that all the unbonding operations that resulted in validator updates included in that VSC have matured on the consumer chain.
 
 > **Background**: An *unbonding operation* is any operation of unbonding an amount of the tokens a validator bonded. Note that the bonded tokens correspond to the validator's voting power. We distinguish between three types of unbonding operations:
 > - *undelegation* - a delegator unbonds tokens it previously delegated to a validator;
@@ -112,7 +111,8 @@ Thus, a *VSC reaching maturity* on a consumer chain means that all the unbonding
 > **Note**: Time periods are measured in terms of the block time, i.e., `currentTimestamp()` (as defined in [ICS 24](../../core/ics-024-host-requirements)). 
 > As a result, a consumer chain MAY start the unbonding period for every VSC that it applies in a block at any point during that block.
 
-- **Slash Request**: A request by a consumer chain to *slash* the tokens bonded by a validator on the provider chain as a consequence of that validator misbehavior on the consumer chain. A slash request MAY also result in the misbehaving validator being *jailed* for a period of time, during which it cannot be part of the validator set. 
+### Slash Request
+A request by a consumer chain to *slash* the tokens bonded by a validator on the provider chain as a consequence of that validator misbehavior on the consumer chain. A slash request MAY also result in the misbehaving validator being *jailed* for a period of time, during which it cannot be part of the validator set. 
 
 > **Background**: In the context of single-chain validation, slashing and jailing misbehaving validators is handled by the *Slashing module*, 
 > i.e., a module of the ABCI application that enables the application to decentivize misbehaving validators.
@@ -192,8 +192,7 @@ In the context of CCV, the completion MUST require also the unbonding operation 
 Therefore, the provider Staking module needs to be aware of the VSC maturity notifications registered by the provider CCV module.
 
 The ***provider chain*** achieves this through the following approach: 
-- The provider Staking module is notifying the CCV module when any unbonding operation is initiated. 
-  As a result, the CCV module maps all the unbonding operations to the corresponding VSCs.  
+- The provider Staking module notifies the CCV module when any unbonding operation is initiated. As a result, the CCV module maps all the unbonding operations to the corresponding VSCs.  
 - When the CCV module registers maturity notifications for a VSC from all consumer chains, it notifies the provider Staking module of the maturity of all unbonding operations mapped to this VSC. 
   This enables the provider Staking module to complete the unbonding operations only when they reach maturity on both the provider chain and on all the consumer chains.
 
@@ -220,6 +219,7 @@ This approach is depicted in the following figure that shows an overview of the 
 For the [Security Model](#security-model) to be preserved, misbehaving validators MUST be slashed (and MAY be jailed, i.e., removed from the validator set). 
 A prerequisite to slash validators is to receive valid evidence of their misbehavior. 
 Thus, when slashing a validator, we distinguish between three events and the heights when they occur:
+
 - `infractionHeight`, the height at which the misbehavior (or infraction) happened;
 - `evidenceHeight`, the height at which the evidence of misbehavior is received;
 - `slashingHeight`, the height at which the validator is slashed (and jailed). 
