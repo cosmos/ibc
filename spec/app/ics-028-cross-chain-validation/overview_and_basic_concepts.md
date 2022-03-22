@@ -112,7 +112,7 @@ Thus, a *VSC reaching maturity* on a consumer chain means that all the unbonding
 > **Note**: Time periods are measured in terms of the block time, i.e., `currentTimestamp()` (as defined in [ICS 24](../../core/ics-024-host-requirements)). 
 > As a result, a consumer chain MAY start the unbonding period for every VSC that it applies in a block at any point during that block.
 
-- **Slash Request**: A request to *slash* the tokens bonded by a validator on the provider chain as a consequence of that validator misbehaving on the consumer chains. A slash request MAY also result in the misbehaving validator being *jailed* for a period of time, during which it cannot be part of the validator set. 
+- **Slash Request**: A request by a consumer chain to *slash* the tokens bonded by a validator on the provider chain as a consequence of that validator misbehavior on the consumer chain. A slash request MAY also result in the misbehaving validator being *jailed* for a period of time, during which it cannot be part of the validator set. 
 
 > **Background**: In the context of single-chain validation, slashing and jailing misbehaving validators is handled by the *Slashing module*, 
 > i.e., a module of the ABCI application that enables the application to decentivize misbehaving validators.
@@ -238,14 +238,14 @@ i.e., as long as that validator's tokens are not unbonded yet, they can be slash
 However, if the tokens start unbonding before `infractionHeight`, i.e., the tokens did not contribute to the voting power that committed the infraction, 
 then the tokens MUST NOT be slashed.
 
-In the context of CCV, validators (with tokens bonded on the provider chain) MUST be slashed for infractions committed on the consumer chains. 
+In the context of CCV, validators (with tokens bonded on the provider chain) MUST be slashed for infractions committed on the consumer chains at heights for which they have voting power. 
 Thus, although the infractions are committed on the consumer chains and evidence of these infractions is submitted to the consumer chains, the slashing happens on the provider chain. As a result, the Consumer Initiated Slashing operation requires, for every consumer chain, a mapping from consumer chain block heights to provider chain block heights.
 
 The following figure shows the intuition behind such a mapping using the provided VSCs. 
 The four unbonding operations (i.e., undelegations) occur on the provider chain and, as a consequence, the provider chain provides VSCs to the consumer chain, e.g., `undelegate-3` results in `VSC3` being provided.
-The four color (i.e., red, blue, green, and yellow) indicate the mapping of consumer chain heights to provider chain heights (note that on the provider chain there is only one block of a given color).  
+The four colors (i.e., red, blue, green, and yellow) indicate the mapping of consumer chain heights to provider chain heights (note that on the provider chain there is only one block of a given color).  
 As a result, a validator misbehaving on the consumer chain, e.g., in either of the two green blocks, is slashed the same as if misbehaving on the provider chain, e.g., in the green block. 
-This ensures that once unbonding operations are initiated, the corresponding unbonding tokens are not slashed for infractions committed in the subsequent blocks, e.g., the tokens unbonding due to `undelegate-3` are not be slashed for infractions committed in or after the green blocks.
+This ensures that once unbonding operations are initiated, the corresponding unbonding tokens are not slashed for infractions committed in the subsequent blocks, e.g., the tokens unbonding due to `undelegate-3` are not slashed for infractions committed in or after the green blocks.
 
 ![Intuition of Mapping Between Provider and Consumer Heights](./figures/ccv-mapping-intuition.png?raw=true)
 
@@ -268,11 +268,11 @@ The following figure shows an overview of the Consumer Initiated Slashing operat
 
 ![Consumer Initiated Slashing](./figures/ccv-evidence-overview.png?raw=true)
 
-- At height `Hc2`, the consumer chain receives evidence that a validator `V` misbehaved at height `Hc1`. 
+- At (evidence) height `Hc2`, the consumer chain receives evidence that a validator `V` misbehaved at (infraction) height `Hc1`. 
   As a result, the consumer CCV module sends a `SlashPacket` to the provider chain: 
   It makes a request to slash `V`, but it replaces the infraction height `Hc1` with `HtoVSC[Hc1]`, 
   i.e., the ID of the VSC that updated the "misbehaving voting power" or `0` if such a VSC does not exist.
-- The provider CCV module receives at height `Hp1` the `SlashPacket` with `vscId = HtoVSC[Hc1]`. 
+- The provider CCV module receives at (slashing) height `Hp1` the `SlashPacket` with `vscId = HtoVSC[Hc1]`. 
   As a result, it requests the provider Slashing module to slash `V`, but it set the infraction height to `VSCtoH[vscId]`, i.e., 
     - if `vscId != 0`, the height on the provider chain where the voting power was updated by the VSC with ID `vscId`;
     - otherwise, the height at which the first VSC was provided to this consumer chain.

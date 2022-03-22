@@ -20,7 +20,7 @@
 As part of an ABCI application, CCV interacts with both the consensus engine (via ABCI) and other application modules (e.g, the Staking module). 
 As an IBC application, CCV interacts with external relayers (defined in [ICS 18](../../relayer/ics-018-relayer-algorithms)). 
 In this section we specify what we assume about these other components. 
-A more thorough discussion of the environment in which CCV operates is given in the section [Placing CCV within an ABCI Application](./technical_specification.md#placing-ccv-within-and-abci-application).
+A more thorough discussion of the environment in which CCV operates is given in the section [Placing CCV within an ABCI Application](./technical_specification.md#placing-ccv-within-an-abci-application).
 
 > **Intuition**: 
 > 
@@ -92,10 +92,10 @@ We use the following notations:
 - `Token(power)` is the amount of tokens necessary to be bonded (on the provider chain) by a validator to be granted `power` voting power, 
   i.e., `Token(VP(T)) = T`;
 
-Aslo, we use `ha << hb` to denote an order relation between heights, i.e., the block at height `ha` *happens before* the block at height `hb`. 
-For heights on the same chain, `<<` is equivalent to `<`, i.e., `ha << hb` entails `hb` is the larger than `ha`.
+Also, we use `ha << hb` to denote an order relation between heights, i.e., the block at height `ha` *happens before* the block at height `hb`. 
+For heights on the same chain, `<<` is equivalent to `<`, i.e., `ha << hb` entails `hb` is larger than `ha`.
 For heights on two different chains, `<<` is establish by the packets sent over an order channel between two chains, 
-i.e., if a chain `A` sends at height `ha` a packet to `B` and `B` receives it at height `hb`, then `ha << hb`. 
+i.e., if a chain `A` sends at height `ha` a packet to a chain `B` and `B` receives it at height `hb`, then `ha << hb`. 
 > **Note**: `<<` is transitive, i.e., `ha << hb` and `hb << hc` entail `ha << hc`.
 > 
 > **Note**: The block on the proposer chain that handles a governance proposal to spawn a new consumer chain `cc` *happens before* all the blocks of `cc`.
@@ -104,19 +104,20 @@ CCV provides the following system invariants.
 - ***Validator Set Invariant***: Every validator set on any consumer chain MUST either be or have been a validator set on the provider chain.
 
 - ***Voting Power Invariant***: Let `val` be a validator, `cc` be a consumer chain, both `hc` and `hc'` be heights on `cc`, and both `hp` and `hp'` be heights on the provider chain, such that
-  - `hc'` is the smallest height on `cc` that satisfies `ts(h') >= ts(hc) + UnbondingPeriod`;
-  - `hp` is the largest height on the provider chain that satisfies `hp << hc`;
-  - `hp'` is the smallest height on the provider chain that satisfies `hc' << hp'`.  
+  - `val` has `Power(cc,hc,val)` voting power on `cc` at height `hc`;
+  - `hc'` is the smallest height on `cc` that satisfies `ts(hc') >= ts(hc) + UnbondingPeriod`, i.e., `val` cannot completely unbond on `cc` before `hc'`;   
+  - `hp` is the largest height on the provider chain that satisfies `hp << hc`, i.e., `Power(pc,hp,val) = Power(cc,hc,val)`, where `pc` is the provider chain;
+  - `hp'` is the smallest height on the provider chain that satisfies `hc' << hp'`, i.e., `val` cannot completely unbond on the provider chain before `hp'`.  
   
   Then for all heights `h` on the provider chain, 
    ```
   hp <= h <= hp': Power(cc,hc,val) <= VP(pBonded(h,val))
   ```
 
-  > **Intuition**: The *Voting Power Invariant* ensures that validators that validate on the consumer chain have enough tokens bonded on the provider chain for a sufficient amount of time such that the security model holds. 
-  > This means that if the validators misbehave on the consumer chain, their tokens bonded on the provider chain can be slashed during the unbonding period.
+  > **Intuition**: The *Voting Power Invariant* ensures that validators that validate on the consumer chains have enough tokens bonded on the provider chain for a sufficient amount of time such that the security model holds. 
+  > This means that if the validators misbehave on the consumer chains, their tokens bonded on the provider chain can be slashed during the unbonding period.
   > For example, if one unit of voting power requires `1.000.000` bonded tokens (i.e., `VP(1.000.000)=1`), 
-  > then a validator that gets one unit of voting power on the consumer chain must have at least `1.000.000` tokens bonded on the provider chain for at least `UnbondingPeriod`.
+  > then a validator that gets one unit of voting power on a consumer chain must have at least `1.000.000` tokens bonded on the provider chain until the unbonding period elapses on the consumer chain.
 
 - ***Slashing Invariant***: If a validator `val` misbehaves on a consumer chain `cc` at a block height `hi`, 
   then any evidence of misbehavior that is received by `cc` at height `he`, such that `ts(he) < ts(hi) + UnbondingPeriod`, 
@@ -217,8 +218,8 @@ The following properties define the guarantees of CCV on *registering* on the pr
   Therefore, consumer chains *SHOULD NOT allow user transactions before the CCV channel is established*. 
   Note that once the CCV channel is established (i.e., a VSC is received from the provider CCV module), CCV enables the slashing of the initial validator set for infractions committed during channel initialization.
 
-- ***Provider Slashing Warranty***: If the provider CCV module receives in a block from a consumer chain `cc` a `SlashPacket` containing a validator `val` and a VSC ID `vscId`, 
-  then it MUST make in the same block *exactly one* request to the provider Slashing module to slash `val` for misbehaving at height `h`, such that
+- ***Provider Slashing Warranty***: If the provider CCV module receives at height `hs` from a consumer chain `cc` a `SlashPacket` containing a validator `val` and a VSC ID `vscId`, 
+  then it MUST make at height `hs` *exactly one* request to the provider Slashing module to slash `val` for misbehaving at height `h`, such that
   - if `vscId = 0`, `h` is the height of the block when the provider chain provided to `cc` the first VSC;
   - otherwise, `h` is the height of the block immediately subsequent to the block when the provider chain provided to `cc` the VSC with ID `vscId`.
 

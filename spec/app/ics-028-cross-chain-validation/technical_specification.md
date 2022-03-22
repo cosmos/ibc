@@ -663,8 +663,6 @@ function InitGenesis(gs: ConsumerGenesisState): [ValidatorUpdate] {
 > - when handling `Prop`, the provider chain creates and store in its state the `ConsumerGenesisState` using the information that the validator set of the consumer chain matches the validator set of the provider chain;
 > - finally, each validator in the initial validator set of the consumer chain obtains the remainder of the genesis state (i.e., `ConsumerGenesisState`) by querying the provider chain.
 
-> **Note**: In the case of a restarted consumer chain, the `InitGenesis` of the IBC module MUST run before the `InitGenesis` of the consumer CCV module.
-
 <!-- omit in toc -->
 #### **[CCV-CCF-COINIT.1]**
 ```typescript
@@ -1218,7 +1216,8 @@ function onTimeoutVSCPacket(packet Packet) {
   channelToChain.Remove(packet.getDestinationChannel())
   chainToChannel.Remove(chainId)
 
-  // TODO: complete all outstanding unbonding ops?
+  // TODO: cleanup, e.g., complete all outstanding unbonding ops
+  // see https://github.com/cosmos/ibc/issues/669
 }
 ```
 - Initiator: 
@@ -1480,6 +1479,7 @@ function onTimeoutVSCMaturedPacket(packet Packet) {
   // TODO What do we do here? 
   // Do we need to notify the provider to close the channel?
   // What happens w/ the consumer chain once the CCV channel gets closed?
+  // see https://github.com/cosmos/ibc/issues/669
 }
 ```
 - Initiator: 
@@ -1715,6 +1715,7 @@ function onTimeoutSlashPacket(packet Packet) {
   // TODO What do we do here? 
   // Do we need to notify the provider to close the channel?
   // What happens w/ the consumer chain once the CCV channel gets closed?
+  // see https://github.com/cosmos/ibc/issues/669
 }
 ```
 - Initiator: 
@@ -1742,6 +1743,7 @@ function SendSlashRequest(
     }
 
     // TODO governance and CCV params
+    // see https://github.com/cosmos/ibc/issues/673
     slashFactor = TBA
     jailTime = TBA
 
@@ -1796,8 +1798,8 @@ function SendSlashRequest(
 > 
 > Consequently, the consumer CCV module expects the `infractionHeight` parameter of the `SendSlashRequest()` to be set accordingly.
 
-> **Note**: In the context of single-chain validation, slashing for downtime is an **_atomic operation_**, i.e., once the downtime is detected, the misbehaving validator is slash and jailed immediately. 
-> Consequently, once a validator is punished for downtime, is removed from the validator set and cannot be punished again for downtime. 
+> **Note**: In the context of single-chain validation, slashing for downtime is an **_atomic operation_**, i.e., once the downtime is detected, the misbehaving validator is slashed and jailed immediately. 
+> Consequently, once a validator is punished for downtime, it is removed from the validator set and cannot be punished again for downtime. 
 > Since validators are not automatically added back to the validator set, it entails that the validator is aware of the punishment before it can rejoin and be potentially punished again.
 > 
 > In the context of CCV, slashing for downtime is no longer atomic, i.e., downtime is detected on the consumer chain, but the jailing happens on the provider chain. 
