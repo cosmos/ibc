@@ -22,7 +22,7 @@ The channel upgrade protocol MUST NOT modify the channel identifiers.
 
 ### Data Structures
 
-The `ChannelState` and `ChannelEnd` are defined in [ICS-4](./README.md), they are reproduced here for the reader's convenience. `UPGRADE_INIT`, `UPGRADE_TRY`, `UPGRADE_ERR` are additional states added to enable the upgrade feature.
+The `ChannelState` and `ChannelEnd` are defined in [ICS-4](./README.md), they are reproduced here for the reader's convenience. `UPGRADE_INIT`, `UPGRADE_TRY` are additional states added to enable the upgrade feature.
 
 ```typescript
 enum ChannelState {
@@ -98,7 +98,7 @@ function errorPath(portIdentifier: Identifier, channelIdentifier: Identifier): P
 }
 ```
 
-The UpgradeError MUST have an associated verification function added to the channel and client interfaces so that a counterparty may verify that chain has stored an error in the UpgradeError path.
+The UpgradeError MUST have an associated verification membership and nonmembership function added to the connection interface so that a counterparty may verify that chain has stored an error in the UpgradeError path.
 
 ```typescript
 // Connection VerifyChannelUpgradeError method
@@ -111,24 +111,23 @@ function verifyChannelUpgradeError(
   upgradeErrorReceipt: []byte, 
 ) {
     client = queryClient(connection.clientIdentifier)
-    client.verifyChannelUpgradeError(height, connection.counterpartyPrefix, proof, counterpartyPortIdentifer, counterpartyChannelIdentifier, upgradeErrorReceipt)
+    path = applyPrefix(connection.counterpartyPrefix, channelErrorPath(counterpartyPortIdentifier, counterpartyChannelIdentifier))
+    client.verifyMembership(height, 0, 0, proof, path, upgradeErrorReceipt)
 }
 ```
 
 ```typescript
-// Client VerifyUpgradeError
-function verifyUpgradeError(
-    clientState: ClientState,
-    height: Height,
-    prefix: CommitmentPrefix,
-    proof: CommitmentProof,
-    counterpartyPortIdentifier: Identifier,
-    counterpartyChannelIdentifier: Identifier,
-    upgradeErrorReceipt []byte,
+// Connection VerifyChannelUpgradeErrorAbsence method
+function verifyChannelUpgradeErrorAbsence(
+  connection: ConnectionEnd,
+  height: Height,
+  proof: CommitmentProof,
+  counterpartyPortIdentifier: Identifier,
+  counterpartyChannelIdentifier: Identifier,
 ) {
-    path = applyPrefix(prefix, errorPath(counterpartyPortIdentifier, counterpartyChannelIdentifier))
-    abortTransactionUnless(!clientState.frozen)
-    return clientState.verifiedRoots[height].verifyMembership(path, upgradeErrorReceipt, proof)
+    client = queryClient(connection.clientIdentifier)
+    path = applyPrefix(connection.counterpartyPrefix, channelErrorPath(counterpartyPortIdentifier, counterpartyChannelIdentifier))
+    client.verifyNonMembership(height, 0, 0, proof, path)
 }
 ```
 
@@ -142,7 +141,7 @@ function timeoutPath(portIdentifier: Identifier, channelIdentifier: Identifier) 
 }
 ```
 
-The timeout path MUST have associated verification methods on the channel and client interfaces in order for a counterparty to prove that a chain stored a particular `UpgradeTimeout`.
+The timeout path MUST have associated verification membership method on the connection interface in order for a counterparty to prove that a chain stored a particular `UpgradeTimeout`.
 
 ```typescript
 // Connection VerifyChannelUpgradeTimeout method
@@ -155,25 +154,8 @@ function verifyChannelUpgradeTimeout(
   upgradeTimeout: UpgradeTimeout, 
 ) {
     client = queryClient(connection.clientIdentifier)
-    client.verifyChannelUpgradeTimeout(height, connection.counterpartyPrefix, proof, counterpartyPortIdentifier, counterpartyChannelIdentifier, upgradeTimeout)
-}
-```
-
-```typescript
-// Client VerifyUpgradeTimeout
-function verifyUpgradeTimeout(
-    clientState: ClientState,
-    height: Height,
-    prefix: CommitmentPrefix,
-    proof: CommitmentProof,
-    counterpartyPortIdentifier: Identifier,
-    counterpartyChannelIdentifier: Identifier,
-    upgradeTimeout: UpgradeTimeout,
-) {
-    path = applyPrefix(prefix, timeoutPath(counterpartyPortIdentifier, counterpartyChannelIdentifier))
-    abortTransactionUnless(!clientState.frozen)
-    timeoutBytes = protobuf.marshal(upgradeTimeout)
-    return clientState.verifiedRoots[height].verifyMembership(path, timeoutBytes, proof)
+    path = applyPrefix(connection.counterpartyPrefix, channelTimeoutPath(counterpartyPortIdentifier, counterpartyChannelIdentifier))
+    client.verifyChannelUpgradeTimeout(height, 0, 0, proof, path, upgradeTimeout)
 }
 ```
 
@@ -528,6 +510,14 @@ function cancelChannelUpgrade(
     // delete auxilliary upgrade state
     provableStore.delete(timeoutPath(portIdentifier, channelIdentifier))
     privateStore.delete(restorePath(portIdentifier, channelIdentifier))
+
+    // call modules onChanUpgradeRestore callback
+    module = lookupModule(portIdentifier)
+    // restore callback must not return error since counterparty successfully upgraded
+    module.onChanUpgradeRestore(
+        portIdentifer,
+        channelIdentifier
+    )
 }
 ```
 
@@ -558,8 +548,8 @@ function timeoutChannelUpgrade(
     // then abort transaction
     abortTransactionUnless(upgradeTimeout.timeoutHeight.IsZero() || proofHeight >= upgradeTimeout.timeoutHeight)
     // if timeoutTimestamp is defined then the consensus time from proof height must be greater than timeout timestamp
-    consensusState = queryConsensusState(currentChannel.clientIdentifer, proofHeight)
-    abortTransactionUnless(upgradeTimeout.timeoutTimestamp.IsZero() || consensusState.getTimestamp() >= upgradeTimeout.timestamp)
+    connection = queryConnection(currentChannel.connectionIdentifier)
+    abortTransactionUnless(upgradeTimeout.timeoutTimestamp.IsZero() || getTimestampAtHeight(connection, proofHeight) >= upgradeTimeout.timestamp)
 
     // counterparty channel must be proved to still be in OPEN state
     abortTransactionUnless(counterpartyChannel.State === OPEN)
@@ -572,6 +562,14 @@ function timeoutChannelUpgrade(
     // delete auxilliary upgrade state
     provableStore.delete(timeoutPath(portIdentifier, channelIdentifier))
     privateStore.delete(restorePath(portIdentifier, channelIdentifier))
+
+    // call modules onChanUpgradeRestore callback
+    module = lookupModule(portIdentifier)
+    // restore callback must not return error since counterparty successfully upgraded
+    module.onChanUpgradeRestore(
+        portIdentifer,
+        channelIdentifier
+    )
 }
 ```
 
