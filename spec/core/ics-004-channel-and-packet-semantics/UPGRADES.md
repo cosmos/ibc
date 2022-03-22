@@ -331,7 +331,7 @@ function chanUpgradeTry(
     )
 
     // verify proofs of counterparty state
-    abortTransactionUnless(verifyChannelState(currentChannel, proofHeight, proofChannel, currentChannel.counterpartyChannelIdentifier, counterpartyChannel))
+    abortTransactionUnless(verifyChannelState(currentChannel, proofHeight, proofChannel, currentChannel.counterpartyChannelIdentifier, proposedUpgradeChannel))
     abortTransactionUnless(verifyUpgradeTimeout(currentChannel, proofHeight, proofUpgradeTimeout, currentChannel.counterpartyChannelIdentifier, upgradeTimeout))
 
     if currentChannel.state == UPGRADE_INIT {
@@ -349,7 +349,7 @@ function chanUpgradeTry(
         // in case we need to restore channel later.
         privateStore.set(restorePath(portIdentifier, channelIdentifier), currentChannel)
     } else {
-        // abort transaction if current channel is not in state: INIT or OPEN
+        // abort transaction if current channel is not in state: UPGRADE_INIT or OPEN
         abortTransactionUnless(false)
     }
 
@@ -383,7 +383,7 @@ function chanUpgradeTry(
 
     // call modules onChanUpgradeTry callback
     module = lookupModule(portIdentifier)
-    version, err = module.onChanUpgradeInit(
+    version, err = module.onChanUpgradeTry(
         proposedUpgradeChannel.order,
         proposedUpgradeChannel.connectionHops,
         proposedUpgradeChannel.portIdentifier,
