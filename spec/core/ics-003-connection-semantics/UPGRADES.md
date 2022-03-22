@@ -110,7 +110,7 @@ function connectionErrorPath(id: Identifier): Path {
 }
 ```
 
-The UpgradeError MUST have an associated verification function added to the connection and client interfaces so that a counterparty may verify that chain has stored an error in the UpgradeError path.
+The UpgradeError MUST have an associated verification membership and non-membership functions added to the connection interface so that a counterparty may verify that chain has stored an error in the UpgradeError path.
 
 ```typescript
 // ConnectionEnd VerifyConnectionUpgradeError method
@@ -129,6 +129,22 @@ function verifyConnectionUpgradeError(
 }
 ```
 
+```typescript
+// ConnectionEnd VerifyConnectionUpgradeErrorAbsence method
+function verifyConnectionUpgradeErrorAbsence(
+  connection: ConnectionEnd,
+  height: Height,
+  proof: CommitmentProof,
+) {
+    client = queryClient(connection.clientIdentifier)
+    // construct CommitmentPath
+    path = applyPrefix(connection.counterpartyPrefix, connectionErrorPath(connection.counterpartyConnectionIdentifier))
+    // verify upgradeError path is empty
+    // delay period is unnecessary for non-packet verification so pass in 0 for delay period fields
+    return client.verifyNonMembership(height, 0, 0, proof, path)
+}
+```
+
 #### TimeoutPath
 
 The timeout path is a public path set by the upgrade initiator to determine when the TRY step should timeout. It stores the `timeoutHeight` and `timeoutTimestamp` by which point the counterparty must have progressed to the TRY step. This path will be proven on the counterparty chain in case of a successful TRY, to ensure timeout has not passed. Or in the case of a timeout, in which case counterparty proves that the timeout has passed on its chain and restores the connection.
@@ -139,7 +155,7 @@ function timeoutPath(id: Identifier) Path {
 }
 ```
 
-The timeout path MUST have associated verification methods on the connection and client interfaces in order for a counterparty to prove that a chain stored a particular `UpgradeTimeout`.
+The timeout path MUST have associated verification methods on the connection interface in order for a counterparty to prove that a chain stored a particular `UpgradeTimeout`.
 
 ```typescript
 // ConnectionEnd VerifyConnectionUpgradeTimeout method
@@ -154,7 +170,7 @@ function verifyConnectionUpgradeTimeout(
     path = applyPrefix(connection.counterpartyPrefix, connectionTimeoutPath(connection.counterpartyConnectionIdentifier))
     // marshal upgradeTimeout into bytes with standardized protobuf codec
     timeoutBytes = protobuf.marshal(upgradeTimeout)
-    client.verifyMembership(height, proof, path, timeoutBytes)
+    client.verifyMembership(height, 0, 0, proof, path, timeoutBytes)
 }
 ```
 
@@ -270,6 +286,13 @@ function connUpgradeTry(
         proposedUpgradeConnection.counterpartyClientIdentifier == currentConnection.counterpartyClientIdentifier
     )
 
+    // construct upgrade timeout from timeoutHeight and timeoutTimestamp
+    // so that we can prove they were set by counterparty
+    upgradeTimeout = UpgradeTimeout{
+        timeoutHeight: timeoutHeight,
+        timeoutTimestamp: timeoutTimestamp,
+    }
+
     // verify proofs of counterparty state
     abortTransactionUnless(verifyConnectionState(currentConnection, proofHeight, proofConnection, currentConnection.counterpartyConnectionIdentifier, proposedUpgradeConnection))
     abortTransactionUnless(verifyConnectionUpgradeTimeout(currentConnection, proofHeight, proofUpgradeTimeout,  upgradeTimeout))
@@ -309,11 +332,7 @@ function connUpgradeTry(
         restoreConnection()
         return
     }
-    upgradeTimeout = UpgradeTimeout{
-        timeoutHeight: timeoutHeight,
-        timeoutTimestamp: timeoutTimestamp,
-    }
-
+    
     // counterparty-specified timeout must not have exceeded
     if (currentHeight() > timeoutHeight && timeoutHeight != 0) ||
         (currentTimestamp() > timeoutTimestamp && timeoutTimestamp != 0) {
@@ -352,14 +371,14 @@ function connUpgradeAck(
     currentConnection = provableStore.get(connectionPath(identifier))
     abortTransactionUnless(currentConnection.state == UPGRADE_INIT || currentConnection.state == UPGRADE_TRY)
 
+    // verify proofs of counterparty state
+    abortTransactionUnless(verifyConnectionState(currentConnection, proofHeight, proofConnection, currentConnection.counterpartyConnectionIdentifier, counterpartyConnection))
+
     // counterparty must be in TRY state
     if counterpartyConnection.State != UPGRADE_TRY {
         restoreConnection()
         return
     }
-
-    // verify proofs of counterparty state
-    abortTransactionUnless(verifyConnectionState(currentConnection, proofHeight, proofConnection, currentConnection.counterpartyConnectionIdentifier, counterpartyConnection))
 
     // verify connections are mutually compatible
     // this will also check counterparty chosen version is valid
@@ -385,6 +404,7 @@ function connUpgradeConfirm(
     identifier: Identifier,
     counterpartyConnection: ConnectionEnd,
     proofConnection: CommitmentProof,
+    proofUpgradeError: CommitmentProof,
     proofHeight: Height,
 ) {
     // current connection is in UPGRADE_TRY
@@ -396,6 +416,10 @@ function connUpgradeConfirm(
 
     // verify proofs of counterparty state
     abortTransactionUnless(verifyConnectionState(currentConnection, proofHeight, proofConnection, currentConnection.counterpartyConnectionIdentifier, counterpartyConnection))
+
+    // verify that counterparty did not restore the connection and store an upgrade error
+    // in the connection upgradeError path
+    abortTransactionUnless(verifyConnectionUpgradeErrorAbsence(currentConnection, proofHeight, proofUpgradeError))
     
     // upgrade is complete
     // set connection to OPEN and remove unnecessary state
@@ -472,9 +496,9 @@ function timeoutConnectionUpgrade(
     consensusState = queryConsensusState(currentConnection.clientIdentifer, proofHeight)
     abortTransactionUnless(upgradeTimeout.timeoutTimestamp.IsZero() || consensusState.getTimestamp() >= upgradeTimeout.timestamp)
 
-    // counterparty connection must be proved to still be in OPEN state or INIT state (crossing hellos)
-    abortTransactionUnless(counterpartyConnection.State === OPEN || counterpartyConnection.State == INIT)
-    abortTransactionUnless(currentConnection.verifyConnectionState(proofHeight, proofConnection, currentConnection.counterpartyConnectionIdentifier, counterpartyConnection))
+    // counterparty connection must be proved to still be in OPEN state or UPGRADE_INIT state (crossing hellos)
+    abortTransactionUnless(counterpartyConnection.State === OPEN || counterpartyConnection.State == UPGRADE_INIT)
+    abortTransactionUnless(verifyConnectionState(currentConnection, proofHeight, proofConnection, currentConnection.counterpartyConnectionIdentifier, counterpartyConnection))
 
     // we must restore the connection since the timeout verification has passed
     originalConnection = privateStore.get(restorePath(identifier))
