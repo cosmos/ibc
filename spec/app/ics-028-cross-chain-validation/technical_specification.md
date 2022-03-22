@@ -684,8 +684,6 @@ function InitGenesis(gs: ConsumerGenesisState): [ValidatorUpdate] {
 > - when handling `Prop`, the provider chain creates and store in its state the `ConsumerGenesisState` using the information that the validator set of the consumer chain matches the validator set of the provider chain;
 > - finally, each validator in the initial validator set of the consumer chain obtains the remainder of the genesis state (i.e., `ConsumerGenesisState`) by querying the provider chain.
 
-> **Note**: In the case of a restarted consumer chain, the `InitGenesis` of the IBC module MUST run before the `InitGenesis` of the consumer CCV module.
-
 <!-- omit in toc -->
 #### **[CCV-CCF-COINIT.1]**
 ```typescript
