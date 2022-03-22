@@ -24,7 +24,7 @@ The connection upgrade protocol MUST NOT modify the connection identifiers.
 
 The `ConnectionState` and `ConnectionEnd` are defined in [ICS-3](./README.md), they are reproduced here for the reader's convenience. `UPGRADE_INIT`, `UPGRADE_TRY` are additional states added to enable the upgrade feature.
 
-#### **ConnectionState (reproduced from [ICS-3](README.md)**
+#### **ConnectionState (reproduced from [ICS-3](README.md))**
 
 ```typescript
 enum ConnectionState {
@@ -39,7 +39,7 @@ enum ConnectionState {
 - The chain that is proposing the upgrade should set the connection state from `OPEN` to `UPGRADE_INIT`
 - The counterparty chain that accepts the upgrade should set the connection state from `OPEN` to `UPGRADE_TRY`
 
-#### **ConnectionEnd (reproduced from [ICS-3](README.md)**
+#### **ConnectionEnd (reproduced from [ICS-3](README.md))**
 
 ```typescript
 interface ConnectionEnd {
@@ -179,7 +179,7 @@ function restoreConnection() {
 
 ## Sub-Protocols
 
-The Connection Upgrade process consists of three sub-protocols: `UpgradeConnectionHandshake`, `CancelConnectionUpgrade`, and `TimeoutConnectionUpgrade`. In the case where both chains approve of the proposed upgrade, the upgrade handshake protocol should complete successfully and the ConnectionEnd should upgrade successfully.
+The Connection Upgrade process consists of three sub-protocols: `UpgradeConnectionHandshake`, `CancelConnectionUpgrade`, and `TimeoutConnectionUpgrade`. In the case where both chains approve of the proposed upgrade, the upgrade handshake protocol should complete successfully and the `ConnectionEnd` should upgrade successfully.
 
 ### Upgrade Handshake
 
@@ -194,7 +194,7 @@ A successful protocol execution flows as follows (note that all calls are made t
 | Relayer   | `ConnUpgradeAck`     | A                | (UPGRADE_INIT, UPGRADE_TRY) | (OPEN, UPGRADE_TRY)         |
 | Relayer   | `ConnUpgradeConfirm` | B                | (OPEN, UPGRADE_TRY)         | (OPEN, OPEN)                |
 
-At the end of an opening handshake between two chains implementing the sub-protocol, the following properties hold:
+At the end of an upgrade handshake between two chains implementing the sub-protocol, the following properties hold:
 
 - Each chain is running their new upgraded connection end and is processing upgraded logic and state according to the upgraded parameters.
 - Each chain has knowledge of and has agreed to the counterparty's upgraded connection parameters.
