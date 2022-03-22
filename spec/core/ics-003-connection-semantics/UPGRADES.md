@@ -493,8 +493,7 @@ function timeoutConnectionUpgrade(
     // then abort transaction
     abortTransactionUnless(upgradeTimeout.timeoutHeight.IsZero() || proofHeight >= upgradeTimeout.timeoutHeight)
     // if timeoutTimestamp is defined then the consensus time from proof height must be greater than timeout timestamp
-    consensusState = queryConsensusState(currentConnection.clientIdentifer, proofHeight)
-    abortTransactionUnless(upgradeTimeout.timeoutTimestamp.IsZero() || consensusState.getTimestamp() >= upgradeTimeout.timestamp)
+    abortTransactionUnless(upgradeTimeout.timeoutTimestamp.IsZero() || getTimestampAtHeight(currentConnection, proofHeight) >= upgradeTimeout.timestamp)
 
     // counterparty connection must be proved to still be in OPEN state or UPGRADE_INIT state (crossing hellos)
     abortTransactionUnless(counterpartyConnection.State === OPEN || counterpartyConnection.State == UPGRADE_INIT)
