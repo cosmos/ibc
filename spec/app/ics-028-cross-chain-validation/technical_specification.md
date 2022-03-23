@@ -158,33 +158,19 @@ The CCV module is initialized through the `InitGenesis` method when the chain is
   }
   ```
 
-The provider CCV module handles governance proposals to spawn new consumer chains. The structure of these proposals is defined by the `Proposal` interface in the [Governance module documentation](https://docs.cosmos.network/v0.44/modules/gov/). The content of these proposals is described by the following interface (we omit typical fields such as title and description):
+The provider CCV module handles governance proposals to spawn new consumer chains. 
+While the structure of governance proposals is specific to every ABCI application (for an example, see the `Proposal` interface in the [Governance module documentation](https://docs.cosmos.network/v0.44/modules/gov/) of Cosmos SDK),
+this specification expects the following fields to be part of every proposal to spawn a new consumer chain:
   ```typescript
   interface CreateConsumerChainProposal {
-    // The proposed chain ID of the new consumer chain.
-    // Must be different from all other consumer chain IDs 
-    // of the executing proposer chain.
     chainId: string
-
-    // The proposed initial height of new consumer chain.
-    // For a completely new chain, this will be {0,1}; 
-    // however, it may be different if this is a chain 
-    // that is converting to a consumer chain.
     initialHeight: Height
-
-    // Spawn time is the time on the provider chain at which 
-    // the consumer chain genesis is finalized and all validators
-    // will be responsible for starting their consumer chain 
-    // validator node.
     spawnTime: Timestamp
-
-    // the hash of the consumer chain pre-CCV genesis state, i.e.,
-    // the genesis state except the consumer CCV module genesis state;  
-    // the pre-CCV genesis state MAY be disseminated off-chain
-    genesisHash: [byte]
   }
   ```
-  Note that `Height` is defined in [ICS 7](../../client/ics-007-tendermint-client).
+  - `chainId` is the proposed chain ID of the new consumer chain. It must be different from all other consumer chain IDs of the executing provider chain.
+  - `initialHeight` is the proposed initial height of new consumer chain. Note that `Height` is defined in [ICS 7](../../client/ics-007-tendermint-client). For a completely new chain, `initialHeight = {0,1}`; however, it may be different if the chain converts to a consumer chain.
+  - `spawnTime` is the time on the provider chain at which the consumer chain genesis is finalized and all validators will be responsible for starting their consumer chain validator node.
 
 ### CCV Packets
 [&uparrow; Back to Outline](#outline)
@@ -421,7 +407,7 @@ function CreateConsumerChainProposal(p: CreateConsumerChainProposal) {
 - **Caller**
   - `EndBlock()` method of Governance module.
 - **Trigger Event**
-  - A governance proposal with `CreateConsumerChainProposal` as content has passed (i.e., it got the necessary votes).
+  - A governance proposal `CreateConsumerChainProposal` has passed (i.e., it got the necessary votes).
 - **Precondition** 
   - True. 
 - **Postcondition** 
@@ -470,18 +456,18 @@ function CreateConsumerClient(p: CreateConsumerChainProposal) {
 - **Caller**
   - Either `CreateConsumerChainProposal` (see [CCV-PCF-CCPROP.1](#ccv-pcf-ccprop1)) or `BeginBlock()` (see [CCV-PCF-BBLOCK.1](#ccv-pcf-bblock1)).
 - **Trigger Event**
-  - A governance proposal with `CreateConsumerChainProposal` as content has passed (i.e., it got the necessary votes).
+  - A governance proposal `CreateConsumerChainProposal` `p` has passed (i.e., it got the necessary votes).
 - **Precondition** 
-  - `currentTimestamp() > spawnTime`, where `spawnTime` is contained by the `CreateConsumerChainProposal`.
+  - `currentTimestamp() > p.spawnTime`.
 - **Postcondition** 
   - `UnbondingPeriod` is retrieved from the provider Staking module.
-  - A client state is created (as defined in [ICS 7](../../core/ics-002-client-semantics)).
-  - A consensus state is created (as defined in [ICS 7](../../core/ics-002-client-semantics)).
+  - A client state is created (as defined in [ICS 7](../../client/ics-007-tendermint-client)).
+  - A consensus state is created (as defined in [ICS 7](../../client/ics-007-tendermint-client)).
   - A client of the consumer chain is created and the client ID is added to `chainToClient`.
 - **Error Condition**
   - None.
 
-> **Note:** Creating a client of a remote chain requires a `ClientState` and a `ConsensusState` (as defined in [ICS 7](../../core/ics-002-client-semantics)).
+> **Note:** Creating a client of a remote chain requires a `ClientState` and a `ConsensusState` (as defined in [ICS 7](../../client/ics-007-tendermint-client)).
 > `ConsensusState` requires setting a validator set of the remote chain. 
 > The provider chain uses the fact that the validator set of the consumer chain is the same as its own validator set. 
 > The rest of information to create a `ClientState` it receives through the governance proposal.
@@ -702,11 +688,11 @@ function InitGenesis(gs: ConsumerGenesisState): [ValidatorUpdate] {
   - The genesis state contains an initial validator set that does not match the validator set in the provider consensus state.
   - The capability for the port `ConsumerPortId` cannot be claimed.
 
-> **Note**: CCV assumes that the _same_ consumer chain genesis state is disseminated to all the correct validators in the initial validator set of the consumer chain. 
-> Although the mechanism of disseminating the genesis state is outside the scope of this specification, a possible approach would entail the following steps:
+> **Note**: CCV assumes that all the correct validators in the initial validator set of the consumer chain receive the _same_ consumer chain binary and consumer chain genesis state. 
+> Although the mechanism of disseminating the binary and the genesis state is outside the scope of this specification, a possible approach would entail the following steps:
 > - the process `P` creating a governance proposal `Prop` to spawn the new consumer chain creates the genesis state `S` of the entire consumer ABCI application without the genesis state of the consumer CCV module, i.e., without `ConsumerGenesisState`; 
-> - `P` adds a hash of `S` to the proposal `Prop` (see `CreateConsumerChainProposal`);
-> - `P` disseminates `S` via the gossip network;
+> - `P` adds to the proposal `Prop` both a hash of `S` and a hash of the consumer chain binary;
+> - `P` disseminates both `S` and the binary via the gossip network;
 > - when handling `Prop`, the provider chain creates and store in its state the `ConsumerGenesisState` using the information that the validator set of the consumer chain matches the validator set of the provider chain;
 > - finally, each validator in the initial validator set of the consumer chain obtains the remainder of the genesis state (i.e., `ConsumerGenesisState`) by querying the provider chain.
 
