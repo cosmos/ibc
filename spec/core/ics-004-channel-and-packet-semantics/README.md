@@ -624,9 +624,17 @@ function recvPacket(
     abortTransactionUnless(connection !== null)
     abortTransactionUnless(connection.state === OPEN)
 
+    abortTransactionUnless(connection.verifyPacketData(
+      proofHeight,
+      proof,
+      packet.sourcePort,
+      packet.sourceChannel,
+      packet.sequence,
+      concat(packet.data, packet.timeoutHeight, packet.timeoutTimestamp)
+    ))
+
     switch channel.order {
-      case ORDERED:
-      case UNORDERED:
+      case ORDERED || UNORDERED:
         abortTransactionUnless(packet.timeoutHeight === 0 || getConsensusHeight() < packet.timeoutHeight)
         abortTransactionUnless(packet.timeoutTimestamp === 0 || currentTimestamp() < packet.timeoutTimestamp)
         break;
@@ -647,17 +655,8 @@ function recvPacket(
 
       default:
         // unsupported channel type
-        abortTransactionUnless(true)
+        abortTransactionUnless(false)
     }
-
-    abortTransactionUnless(connection.verifyPacketData(
-      proofHeight,
-      proof,
-      packet.sourcePort,
-      packet.sourceChannel,
-      packet.sequence,
-      concat(packet.data, packet.timeoutHeight, packet.timeoutTimestamp)
-    ))
 
     // all assertions passed (except sequence check), we can alter state
 
@@ -680,10 +679,6 @@ function recvPacket(
           SUCCESFUL_RECEIPT
         )
       break;
-
-      default:
-        // unsupported channel type
-        abortTransactionUnless(true)
     }
     
     // log that a packet has been received
@@ -872,7 +867,8 @@ function timeoutPacket(
     switch channel.order {
       case ORDERED:
         // ordered channel: check that packet has not been received
-        abortTransactionUnless(nextSequenceRecv <= packet.sequence)
+        // only allow timeout on next sequence so all sequences before the timed out packet can be received
+        abortTransactionUnless(nextSequenceRecv == packet.sequence)
         // ordered channel: check that the recv sequence is as claimed
         abortTransactionUnless(connection.verifyNextSequenceRecv(
           proofHeight,
@@ -897,6 +893,9 @@ function timeoutPacket(
       // NOTE: For ORDERED_ALLOW_TIMEOUT, the relayer must first attempt the receive on the destination chain
       // before the timeout receipt can be written and subsequently proven on the sender chain in timeoutPacket
       case ORDERED_ALLOW_TIMEOUT:
+        // ordered channel: check that packet has not been received
+        // only allow timeout on next sequence so all sequences before the timed out packet can be received
+        abortTransactionUnless(nextSequenceRecv == packet.sequence)
         abortTransactionUnless(connection.verifyPacketReceipt(
           proofHeight,
           proof,
@@ -925,7 +924,7 @@ function timeoutPacket(
     // on ORDERED_ALLOW_TIMEOUT, increment NextSequenceAck so that next packet can be acknowledged after this packet timed out.
     if channel.order === ORDERED_ALLOW_TIMEOUT {
       nextSequenceAck = nextSequenceAck + 1
-      provableStore.set(nextSequenceAckPath(packet.destPort, packet.destChannel), nextSequenceAck)
+      provableStore.set(nextSequenceAckPath(packet.srcPort, packet.srcChannel), nextSequenceAck)
     }
 
     // return transparent packet
