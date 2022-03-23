@@ -134,16 +134,6 @@ The data structures required for creating clients (i.e., `ClientState`, `Consens
 ### CCV Data Structures
 [&uparrow; Back to Outline](#outline)
 
-The CCV channel state is indicated by `ChannelStatus`, which is defined as 
-```typescript
-enum ChannelStatus {
-  UNINITIALIZED   // default state
-  INITIALIZING    // the channel is in handshake process
-  VALIDATING      // the channel is open and validating
-  INVALID         // the channel is invalid and can no longer process packets
-}
-```
-
 The CCV module is initialized through the `InitGenesis` method when the chain is first started. The initialization is done from a genesis state. This is the case for both provider and consumer chains:
 - On the provider chain, the genesis state is described by the following interface:
   ```typescript
@@ -157,7 +147,6 @@ The CCV module is initialized through the `InitGenesis` method when the chain is
   interface ConsumerState {
     chainId: string
     channelId: Identifier
-    status: ChannelStatus
   }
   ```
 - On the consumer chain, the genesis state is described by the following interface:
@@ -254,7 +243,6 @@ This section describes the internal state of the CCV module. For simplicity, the
 - `chainToClient: Map<string, Identifier>` is a mapping from consumer chain IDs to the associated client IDs.
 - `chainToChannel: Map<string, Identifier>` is a mapping from consumer chain IDs to the CCV channel IDs.
 - `channelToChain: Map<Identifier, string>` is a mapping from CCV channel IDs to consumer chain IDs.
-- `channelStatus: Map<Identifier, ChannelStatus>` is a mapping from CCV channel IDs to CCV channel state, as indicated by `ChannelStatus`.
 - `pendingVSCPackets: Map<string, [VSCPacketData]>` is a mapping from consumer chain IDs to a list of pending `VSCPacketData`s that must be sent to the consumer chain once the CCV channel is established. The map exposes the following interface: 
   ```typescript
   interface Map<string, [VSCPacketData]> {
@@ -273,7 +261,7 @@ This section describes the internal state of the CCV module. For simplicity, the
   It enables the mapping from consumer heights to provider heights.
 - `VSCtoH: Map<uint64, Height>` is a mapping from VSC IDs to heights on the provider chain. It enables the mapping from consumer heights to provider heights, 
   i.e., the voting power at height `VSCtoH[id]` on the provider chain was last updated by the validator updates contained in the VSC with ID `id`.  
-- `unbondingOps: Map<uint64, UnbondingOperation>` is a mapping that enables accessing for every unbonding operation the list of consumer chains that are still unbonding. When unbonding operations are initiated, the Staking module calls the `AfterUnbondingOpInitiated()` [hook](#ccv-pcf-shook-afubopcr1); this leads to the creation of a new `UnbondingOperation`, which is defined as
+- `unbondingOps: Map<uint64, UnbondingOperation>` is a mapping that enables accessing for every unbonding operation the list of consumer chains that are still unbonding. When unbonding operations are initiated, the Staking module calls the `AfterUnbondingOpInitiated()` [hook](#ccv-pcf-hook-afubopcr1); this leads to the creation of a new `UnbondingOperation`, which is defined as
   ```typescript
   interface UnbondingOperation {
     id: uint64
@@ -293,7 +281,6 @@ This section describes the internal state of the CCV module. For simplicity, the
 - `ConsumerPortId = "consumer"` is the port ID the consumer CCV module is expected to bind to.
 - `providerClient: Identifier` identifies the client of the provider chain (on the consumer chain) that the CCV channel is build upon.
 - `providerChannel: Identifier` identifies the consumer's channel end of the CCV channel.
-- `channelStatus: ChannelStatus` is the status of the CCV channel.
 - `validatorSet: <string, CrossChainValidator>` is a mapping that stores the validators in the validator set of the consumer chain. Each validator is described by a `CrossChainValidator` data structure, which is defined as
   ```typescript
   interface CrossChainValidator {
@@ -387,7 +374,6 @@ function InitGenesis(state: ProviderGenesisState): [ValidatorUpdate] {
     abortSystemUnless(validateChannelIdentifier(cs.channelId))
     chainToChannel[cs.chainId] = cs.channelId
     channelToChain[cs.channelId] = cc.chainId
-    channelStatus[cs.channelId] = cc.status
   }
 
   // do not return anything to the consensus engine 
@@ -400,7 +386,7 @@ function InitGenesis(state: ProviderGenesisState): [ValidatorUpdate] {
   - An `InitChain` message is received from the consensus engine; the `InitChain` message is sent when the provider chain is first started. 
 - Expected postcondition:
   - The capability for the port `ProviderPortId` is claimed.
-  - For each consumer state in the `ProviderGenesisState`, the initial state is set, i.e., the following mappings `chainToChannel`, `channelToChain`, `channelStatus` are set.
+  - For each consumer state in the `ProviderGenesisState`, the initial state is set, i.e., the following mappings `chainToChannel`, `channelToChain` are set.
 - Error condition:
   - The capability for the port `ProviderPortId` cannot be claimed.
   - For any consumer state in the `ProviderGenesisState`, the channel ID is not valid (cf. the validation function defined in [ICS 4](../../core/ics-004-channel-and-packet-semantics)).
@@ -519,9 +505,6 @@ function onChanOpenTry(
 
     // assert that the counterpartyVersion matches the local version
     abortTransactionUnless(counterpartyVersion == version)
-
-    // set the CCV channel status to INITIALIZING
-    channelStatus[channelIdentifier] = INITIALIZING
     
     // get the client state associated with this client ID in order 
     // to get access to the consumer chain ID
@@ -541,7 +524,7 @@ function onChanOpenTry(
 - Expected precondition: 
   - The IBC module on the provider chain received a `ChanOpenTry` message on a port the provider CCV module is bounded to.
 - Expected postcondition:
-  - The status of the CCV channel with ID `channelIdentifier` is set to `INITIALIZING`.
+  - The state is not changed.
 - Error condition:
   - The channel is not ordered.
   - `portIdentifier != ProviderPortId`.
@@ -589,7 +572,6 @@ function onChanOpenConfirm(
     // Verify that there isn't already a CCV channel for the consumer chain
     // If there is, then close the channel.
     if clientState.chainId IN chainToChannel {
-      channelStatus[channelIdentifier] = INVALID
       channelKeeper.ChanCloseInit(channelIdentifier)
       abortTransactionUnless(FALSE)
     }
@@ -597,9 +579,6 @@ function onChanOpenConfirm(
     // set channel mappings
     chainToChannel[clientState.chainId] = channelIdentifier
     channelToChain[channelIdentifier] = clientState.chainId
-
-    // set CCV channel status to VALIDATING
-    channelStatus[channelIdentifier] = VALIDATING
 }
 ```
 - Initiator:
@@ -607,8 +586,8 @@ function onChanOpenConfirm(
 - Expected precondition: 
   - The IBC module on the provider chain received a `ChanOpenConfirm` message on a port the provider CCV module is bounded to.
 - Expected postcondition:
-  - If a CCV channel for this consumer chain already exists, then the channel is invalidated and closed.
-  - Otherwise, the channel mappings are set and the CCV channel status is set to `VALIDATING`.
+  - If a CCV channel for this consumer chain already exists, then the channel closing handshake is initiated for the underlying channel.
+  - Otherwise, the channel mappings are set, i.e., `chainToChannel` and `channelToChain`.
 - Error condition:
   - A CCV channel for this consumer chain already exists.
 
@@ -711,9 +690,6 @@ function onChanOpenInit(
     // assert that the counterpartyPortIdentifier matches 
     // the expected consumer port ID
     abortTransactionUnless(counterpartyPortIdentifier == ProviderPortId)
-
-    // set the CCV channel status to INITIALIZING
-    channelStatus[channelIdentifier] = INITIALIZING
    
     // require that the client ID of the client associated 
     // with this channel matches the expected provider client id
@@ -726,7 +702,7 @@ function onChanOpenInit(
 - Expected precondition:
   - The IBC module on the consumer chain received a `ChanOpenInit` message on a port the consumer CCV module is bounded to.
 - Expected postcondition: 
-  - The status of the CCV channel with ID `channelIdentifier` is set to `INITIALIZING`.
+  - The state is not changed.
 - Error condition:
   - `providerChannel` is already set.
   - `portIdentifier != ConsumerPortId`.
@@ -1116,8 +1092,10 @@ function EndBlock(): [ValidatorUpdate] {
 
     // check whether there is an established CCV channel to the consumer chain
     if chainId IN chainToChannel.Keys() {
-      // the CCV channel should be in VALIDATING state
-      abortSystemUnless(channelStatus[chainId] == VALIDATING)
+      // set initH for this consumer chain (if not done already)
+      if chainId NOT IN initH.Keys() {
+        initH[chainId] = getCurrentHeight()
+      }
 
       // set initH for this consumer chain (if not done already)
       if chainId NOT IN initH.Keys() {
@@ -1133,7 +1111,7 @@ function EndBlock(): [ValidatorUpdate] {
         channelKeeper.SendPacket(packet)
       }
 
-      // Remove pending VSCPackets
+      // remove pending VSCPackets
       pendingVSCPackets.Remove(chainId)
     }
   }
@@ -1166,7 +1144,7 @@ function EndBlock(): [ValidatorUpdate] {
   - `vscId` is mapped to the height of the subsequent block. 
   - `vscId` is incremented.
 - Error condition:
-  - A CCV channel for the consumer chain with `chainId` exists and its status is not set to `VALIDATING`.
+  - None.
 
 > **Note**: The expected precondition implies that the provider Staking module MUST update its view of the validator sets for each consumer chain before `EndBlock()` in the provider CCV module is invoked. A solution is for the provider Staking module to update its view during `EndBlock()` and then, the `EndBlock()` of the provider Staking module MUST be executed before the `EndBlock()` of the provider CCV module.
 
@@ -1237,15 +1215,11 @@ function GetUnbondingOpsFromVSC(
 ```typescript
 // PCF: Provider Chain Function
 function onTimeoutVSCPacket(packet Packet) {
-  // get the channel ID of the CCV channel the timeout was sent on
-  channelId = packet.getDestinationChannel()
-
-  // get the ID of the consumer chain mapped to this channel ID
-  abortTransactionUnless(channelId IN channelToChain.Keys())
+  // cleanup state
+  abortTransactionUnless(packet.getDestinationChannel() IN channelToChain.Keys())
   chainId = channelToChain[packet.getDestinationChannel()]
-
-  // set the channel status to INVALID
-  channelStatus[chainId] = INVALID
+  channelToChain.Remove(packet.getDestinationChannel())
+  chainToChannel.Remove(chainId)
 
   // TODO: cleanup, e.g., complete all outstanding unbonding ops
   // see https://github.com/cosmos/ibc/issues/669
@@ -1256,7 +1230,9 @@ function onTimeoutVSCPacket(packet Packet) {
 - Expected precondition:
   - The IBC module on the provider chain received a timeout of a `VSCPacket` on a channel owned by the provider CCV module.
 - Expected postcondition:
-  - `channelStatus` for the CCV channel to this consumer chain is set to `INVALID`.
+  - `chainId` is set to `channelToChain[packet.getDestinationChannel()]`.
+  - The chain ID mapped to `packet.getDestinationChannel()` in `channelToChain` is removed.
+  - The channel ID mapped to `chainId` in `chainToChannel` is removed.
 - Error condition:
   - The ID of the channel on which the packet was sent is not mapped to a chain ID (in `channelToChain`).
 
@@ -1305,7 +1281,7 @@ function onRecvVSCMaturedPacket(packet: Packet): bytes {
   - `(chainId, vscId)` is removed from `vscToUnbondingOps`.
   - A successful acknowledgment is returned.
 - Error condition:
-  - The ID of the channel on which the packet was sent is not mapped to a chain ID (in `channelToChain`).
+  - The channel on which the packet was sent is not an established CCV channel (i.e., not in `channelToChain`).
 
 <!-- omit in toc -->
 #### **[CCV-PCF-GETUBDES.1]**
@@ -1403,62 +1379,6 @@ function BeforeUnbondingOpCompleted(opId: uint64): Bool {
 - **Error condition:**
   - None.
 
-<!-- omit in toc -->
-#### **[CCV-PCF-SHOOK-AFUBOPCR.1]**
-```typescript
-// PCF: Provider Chain Function
-// implements a Staking module hook
-function AfterUnbondingOpInitiated(opId: uint64) {
-  // get the IDs of all consumer chains registered with this provider chain
-  chainIds = chainToChannel.Keys()
-  
-  // create and store a new unbonding operation
-  unbondingOps[opId] = UnbondingOperation{
-    id: opId,
-    unbondingChainIds: chainIds
-  }
-  
-  // add the unbonding operation id to vscToUnbondingOps
-  foreach chainId in chainIds {
-    vscToUnbondingOps[(chainId, vscId)].Append(opId)
-  }
-}
-```
-- **Initiator:** 
-  - The Staking module.
-- **Expected precondition:**
-  - An unbonding operation with id `opId` is initiated.
-- **Expected postcondition:**
-  - An unbonding operations is created and added to `unbondingOps`.
-  - The ID of the created unbonding operation is appended to every list in `vscToUnbondingOps[(chainId, vscId)]`, where `chainId` is an ID of a consumer chains registered with this provider chain and `vscId` is the current VSC ID. 
-- **Error condition:**
-  - None.
-
-
-<!-- omit in toc -->
-#### **[CCV-PCF-SHOOK-BFUBOPCO.1]**
-```typescript
-// PCF: Provider Chain Function
-// implements a Staking module hook
-function BeforeUnbondingOpCompleted(opId: uint64): Bool {
-  if opId in unbondingOps.Keys() {
-    // the unbonding operation is still unbonding 
-    // on at least one consumer chain
-    return true
-  }
-  return false
-}
-```
-- **Initiator:** 
-  - The Staking module.
-- **Expected precondition:**
-  - An unbonding operation has matured on the provider chain.
-- **Expected postcondition:**
-  - If there is an unboding operation with ID `opId`, then true is returned.
-  - Otherwise, false is returned.
-- **Error condition:**
-  - None.
-
 ---
 
 <!-- omit in toc -->
@@ -1484,26 +1404,21 @@ function BeginBlock() {
 ```typescript
 // CCF: Consumer Chain Function
 function onRecvVSCPacket(packet: Packet): bytes {
-  channelId = packet.getDestinationChannel()
   // check whether the packet was sent on the CCV channel
-  if providerChannel != "" && providerChannel != channelId {
+  if providerChannel != "" && providerChannel != packet.getDestinationChannel() {
     // packet sent on a channel other than the established provider channel;
     // close channel and return error acknowledgement
-    channelKeeper.ChanCloseInit(channelId)
+    channelKeeper.ChanCloseInit(packet.getDestinationChannel())
     return VSCPacketError
   }
 
   // set HtoVSC mapping
   HtoVSC[getCurrentHeight() + 1] = packet.data.id
   
-  // check whether the status of the CCV channel is VALIDATING
-  if (channelStatus != VALIDATING) {
-    // set status to VALIDATING
-    channelStatus = VALIDATING
-
+  // check whether the CCV channel is established
+  if providerChannel == "" {
     // set the channel as the provider channel
-    providerChannel = channelId
-
+    providerChannel = packet.getDestinationChannel()
     // send pending slash requests
     SendPendingSlashRequests()
   }
@@ -1528,14 +1443,13 @@ function onRecvVSCPacket(packet: Packet): bytes {
 - Expected precondition:
   - The IBC module on the consumer chain received a `VSCPacket` on a channel owned by the consumer CCV module.
 - Expected postcondition:
-  - If `providerChannel` is set and does not match the channel with ID `channelId` on which the packet was sent, then 
-    - the closing handshake for the channel with ID `channelId` is initiated;
+  - If `providerChannel` is set and does not match the channel (with ID `packet.getDestinationChannel()`) on which the packet was sent, then 
+    - the closing handshake for the channel with ID `packet.getDestinationChannel()` is initiated;
     - an error acknowledgement is returned.
   - Otherwise,
     - the height of the subsequent block is mapped to `packet.data.id`;  
-    - if the CCV channel status is not `VALIDATING`, then 
-      - the CCV channel status is set to `VALIDATING`;
-      - the channel ID is set as the provider channel;
+    - if `providerChannel` is not set, then 
+      - the CCV channel is marked as established, i.e., `providerChannel = packet.getDestinationChannel()`;
       - the pending slash requests are sent to the provider chain;
     - `packet.data.updates` are appended to `pendingChanges`;
     - `(packet.data.id, maturityTimestamp)` is added to `maturingVSCs`, where `maturityTimestamp = currentTimestamp() + UnbondingPeriod`;
@@ -1567,8 +1481,6 @@ function onAcknowledgeVSCMaturedPacket(packet: Packet, ack: bytes) {
 ```typescript
 // CCF: Consumer Chain Function
 function onTimeoutVSCMaturedPacket(packet Packet) {
-  channelStatus = INVALID
-
   // TODO What do we do here? 
   // Do we need to notify the provider to close the channel?
   // What happens w/ the consumer chain once the CCV channel gets closed?
@@ -1580,7 +1492,7 @@ function onTimeoutVSCMaturedPacket(packet Packet) {
 - Expected precondition:
   - The IBC module on the consumer chain received a timeout of a `VSCMaturedPacket` on a channel owned by the consumer CCV module.
 - Expected postcondition:
-  - `channelStatus` is set to `INVALID`.
+  - The state is not changed.
 - Error condition:
   - None.
 
@@ -1722,21 +1634,19 @@ function UnbondMaturePackets() {
 ```typescript
 // PCF: Provider Chain Function
 function onRecvSlashPacket(packet: Packet): bytes {
-  channelId = packet.getDestinationChannel()
   // check whether the channel the packet was sent on 
   // is an established CCV channel
-  chainId = channelToChain[channelId]
-  if chainId == "" {
+  if packet.getDestinationChannel() NOT IN channelToChain.Keys() {
     // packet sent on a non-established channel;
     // incorrect behavior
-    channelStatus[channelId] = INVALID
-    channelKeeper.ChanCloseInit(channelId)
+    channelKeeper.ChanCloseInit(packet.getDestinationChannel())
     return SlashPacketError
   }
 
   // get the height that maps to the VSC ID in the packet data
   if packet.data.vscId == 0 {
     // the infraction happened before sending any VSC to this chain
+    chainId = channelToChain[packet.getDestinationChannel()]
     infractionHeight = initH[chainId]
   }
   else {
@@ -1766,11 +1676,10 @@ function onRecvSlashPacket(packet: Packet): bytes {
   - The IBC module on the provider chain received a `SlashPacket` on a channel owned by the provider CCV module.
 - Expected postcondition:
   - If the channel the packet was sent on is not an established CCV channel, then
-    - the channel status is set to `INVALID`;
     - the channel closing handshake is initiated;
     - an error acknowledgment is returned.
   - Otherwise,
-    - if `packet.data.vscId == 0`, `infractionHeight` is set to `initH[chainId]`, i.e., the height when the first VSC was provided to this consumer chain;
+    - if `packet.data.vscId == 0`, `infractionHeight` is set to `initH[chainId]`, with `chainId = channelToChain[packet.getDestinationChannel()]`, i.e., the height when the first VSC was provided to this consumer chain;
     - otherwise, `infractionHeight` is set to `VSCtoH[packet.data.vscId]`, i.e., the height at which the voting power was last updated by the validator updates in the VSC with ID `packet.data.vscId`;
     - a request is made to the Slashing module to slash the validator with address `packet.data.valAddress` for misbehaving at height `infractionHeight`;
     - a request is made to the Slashing module to jail the validator with address `packet.data.valAddress` for a period `data.jailTime`;
@@ -1808,8 +1717,6 @@ function onAcknowledgeSlashPacket(packet: Packet, ack: bytes) {
 ```typescript
 // CCF: Consumer Chain Function
 function onTimeoutSlashPacket(packet Packet) {
-  channelStatus = INVALID
-
   // TODO What do we do here? 
   // Do we need to notify the provider to close the channel?
   // What happens w/ the consumer chain once the CCV channel gets closed?
@@ -1821,7 +1728,7 @@ function onTimeoutSlashPacket(packet Packet) {
 - Expected precondition:
   - The IBC module on the consumer chain received a timeout of a `SlashPacket` on a channel owned by the consumer CCV module.
 - Expected postcondition:
-  - `channelStatus` is set to `INVALID`.
+  - The state is not changed.
 - Error condition:
   - None.
 
@@ -1931,7 +1838,7 @@ function SendPendingSlashRequests() {
 - **Initiator:** 
   - The consumer CCV module.
 - **Expected precondition:**
-  - `providerChannel != ""`.
+  - The CCV channel towards the provider chain is established.
 - **Expected postcondition:**
   - For each slash request `req` in `pendingSlashRequests` in reverse order, such that either the slash request is not for downtime or there is no outstanding slash request for downtime,
     - a packet with the data `req.data` is sent to the provider chain;
