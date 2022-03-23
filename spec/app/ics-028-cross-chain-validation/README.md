@@ -30,9 +30,8 @@ The communication between the provider and the consumer chains is done through t
 
 (discussion of compatibility or lack thereof with previous standards)
 
-## Forwards Compatibility
 
-(discussion of compatibility or lack thereof with expected future standards)
+## Forwards Compatibility
 
 ## Example Implementation
 
