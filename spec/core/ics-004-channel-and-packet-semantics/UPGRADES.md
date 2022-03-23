@@ -54,12 +54,12 @@ The desired property that the channel upgrade protocol MUST NOT modify the under
 
 MAY BE MODIFIED:
 - `version`: The version MAY be modified by the upgrade protocol. The same version negotiation that happens in the initial channel handshake can be employed for the upgrade handshake.
-- `ordering`: The ordering MAY be modified by the upgrade protocol. However, it MUST be the case that the previous ordering is a valid subset of the new ordering. Thus, the only supported change is from stricter ordering rules to less strict ordering. Ex: Switching from ORDERED to UNORDERED is supported, switching from UNORDERED to ORDERED is **unsupported**.
+- `ordering`: The ordering MAY be modified by the upgrade protocol. However, it MUST be the case that the previous ordering is a valid subset of the new ordering. Thus, the only supported change is from stricter ordering rules to less strict ordering. For example, switching from ORDERED to UNORDERED is supported, switching from UNORDERED to ORDERED is **unsupported**.
 - `connectionHops`: The connectionHops MAY be modified by the upgrade protocol.
 
 MUST NOT BE MODIFIED:
-- `counterpartyChannelIdentifier`: The counterparty channel identifier MAY NOT be modified by the upgrade protocol.
-- `counterpartyPortIdentifier`: The counterparty port identifier MAY NOT be modified by the upgrade protocol
+- `counterpartyChannelIdentifier`: The counterparty channel identifier MUST NOT be modified by the upgrade protocol.
+- `counterpartyPortIdentifier`: The counterparty port identifier MUST NOT be modified by the upgrade protocol
 
 NOTE: If the upgrade adds any fields to the `ChannelEnd` these are by default modifiable, and can be arbitrarily chosen by an Actor (e.g. chain governance) which has permission to initiate the upgrade.
 
@@ -155,7 +155,7 @@ function verifyChannelUpgradeTimeout(
 ) {
     client = queryClient(connection.clientIdentifier)
     path = applyPrefix(connection.counterpartyPrefix, channelTimeoutPath(counterpartyPortIdentifier, counterpartyChannelIdentifier))
-    client.verifyChannelUpgradeTimeout(height, 0, 0, proof, path, upgradeTimeout)
+    client.verifyMembership(height, 0, 0, proof, path, upgradeTimeout)
 }
 ```
 
@@ -165,7 +165,7 @@ The Channel Upgrade process consists of three sub-protocols: `UpgradeChannelHand
 
 ### Utility Functions
 
-`restoreConnectionUnless()` is a utility function that allows a chain to abort an upgrade handshake in progress, and return the `channelEnd` to its original pre-upgrade state while also setting the `errorReceipt`. A relayer can then send a `cancelUpgradeMsg` to the counterparty so that it can restore its `channelEnd` to its pre-upgrade state as well. Once both channel ends are back to the pre-upgrade state, packet processing will resume with the original channel and application parameters.
+`restoreChannel()` is a utility function that allows a chain to abort an upgrade handshake in progress, and return the `channelEnd` to its original pre-upgrade state while also setting the `errorReceipt`. A relayer can then send a `CancelChannelUpgradeMsg` to the counterparty so that it can restore its `channelEnd` to its pre-upgrade state as well. Once both channel ends are back to the pre-upgrade state, packet processing will resume with the original channel and application parameters.
 
 ```typescript
 function restoreChannel() {
@@ -204,7 +204,7 @@ A successful protocol execution flows as follows (note that all calls are made t
 | Relayer   | `ChanUpgradeAck`     | A                | (UPGRADE_INIT, UPGRADE_TRY) | (OPEN, UPGRADE_TRY)         |
 | Relayer   | `ChanUpgradeConfirm` | B                | (OPEN, UPGRADE_TRY)         | (OPEN, OPEN)                |
 
-At the end of an opening handshake between two chains implementing the sub-protocol, the following properties hold:
+At the end of an upgrade handshake between two chains implementing the sub-protocol, the following properties hold:
 
 - Each chain is running their new upgraded channel end and is processing upgraded logic and state according to the upgraded parameters.
 - Each chain has knowledge of and has agreed to the counterparty's upgraded channel parameters.
@@ -256,10 +256,10 @@ function chanUpgradeInit(
     // call modules onChanUpgradeInit callback
     module = lookupModule(portIdentifier)
     version, err = module.onChanUpgradeInit(
-        proposedUpgradeChannel.order,
+        proposedUpgradeChannel.ordering,
         proposedUpgradeChannel.connectionHops,
-        proposedUpgradeChannel.portIdentifier,
-        proposedUpgradeChannel.channelIdentifer,
+        portIdentifier,
+        channelIdentifer,
         proposedUpgradeChannel.counterpartyPortIdentifer,
         proposedUpgradeChannel.counterpartyChannelIdentifier,
         proposedUpgradeChannel.version
@@ -372,10 +372,10 @@ function chanUpgradeTry(
     // call modules onChanUpgradeTry callback
     module = lookupModule(portIdentifier)
     version, err = module.onChanUpgradeTry(
-        proposedUpgradeChannel.order,
+        proposedUpgradeChannel.ordering,
         proposedUpgradeChannel.connectionHops,
-        proposedUpgradeChannel.portIdentifier,
-        proposedUpgradeChannel.channelIdentifer,
+        portIdentifier,
+        channelIdentifer,
         proposedUpgradeChannel.counterpartyPortIdentifer,
         proposedUpgradeChannel.counterpartyChannelIdentifier,
         proposedUpgradeChannel.version
@@ -573,8 +573,8 @@ function timeoutChannelUpgrade(
     // get underlying connection for proof verification
     connection = getConnection(currentChannel.connectionIdentifier)
 
-    // counterparty channel must be proved to still be in OPEN state
-    abortTransactionUnless(counterpartyChannel.State === OPEN)
+    // counterparty channel must be proved to still be in OPEN state or UPGRADE_INIT state (crossing hellos)
+    abortTransactionUnless(counterpartyChannel.State === OPEN || counterpartyChannel.State == UPGRADE_INIT)
     abortTransactionUnless(verifyChannelState(connection, proofHeight, proofChannel, currentChannel.counterpartyPortIdentifier, currentChannel.counterpartyChannelIdentifier, counterpartyChannel))
 
     // we must restore the channel since the timeout verification has passed
