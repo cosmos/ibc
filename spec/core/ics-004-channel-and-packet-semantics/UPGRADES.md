@@ -133,7 +133,7 @@ function verifyChannelUpgradeErrorAbsence(
 
 #### TimeoutPath
 
-The timeout path is a public path set by the upgrade initiator to determine when the TRY step should timeout. It stores the `timeoutHeight` and `timeoutTimestamp` by which point the counterparty must have progressed to the TRY step. This path will be proven on the counterparty chain in case of a successful TRY, to ensure timeout has not passed. Or in the case of a timeout, in which case counterparty proves that the timeout has passed on its chain and restores the channel.
+The timeout path is a public path set by the upgrade initiator to determine when the TRY step should timeout. It stores the `timeoutHeight` and `timeoutTimestamp` by which point the counterparty must have progressed to the TRY step. The TRY step will prove the timeout values set by the initiating chain and ensure the timeout has not passed. Or in the case of a timeout, in which case counterparty proves that the timeout has passed on its chain and restores the channel.
 
 ```typescript
 function timeoutPath(portIdentifier: Identifier, channelIdentifier: Identifier) Path {
@@ -312,9 +312,18 @@ function chanUpgradeTry(
         currentChannel.ordering.subsetOf(proposedUpgradeChannel.ordering)
     )
 
+    // construct upgradeTimeout so it can be verified against counterparty state
+    upgradeTimeout = UpgradeTimeout{
+        timeoutHeight: timeoutHeight,
+        timeoutTimestamp: timeoutTimestamp,
+    }
+
+    // get underlying connection for proof verification
+    connection = getConnection(currentChannel.connectionIdentifier)
+
     // verify proofs of counterparty state
-    abortTransactionUnless(verifyChannelState(currentChannel, proofHeight, proofChannel, currentChannel.counterpartyChannelIdentifier, proposedUpgradeChannel))
-    abortTransactionUnless(verifyUpgradeTimeout(currentChannel, proofHeight, proofUpgradeTimeout, currentChannel.counterpartyChannelIdentifier, upgradeTimeout))
+    abortTransactionUnless(verifyChannelState(connection, proofHeight, proofChannel, currentChannel.counterpartyPortIdentifier, currentChannel.counterpartyChannelIdentifier, proposedUpgradeChannel))
+    abortTransactionUnless(verifyChannelUpgradeTimeout(connection, proofHeight, proofUpgradeTimeout, currentChannel.counterpartyPortIdentifier, currentChannel.counterpartyChannelIdentifier, upgradeTimeout))
 
     if currentChannel.state == UPGRADE_INIT {
         // if there is a crossing hello, ie an UpgradeInit has been called on both channelEnds,
@@ -342,10 +351,7 @@ function chanUpgradeTry(
         restoreChannel()
         return
     }
-    upgradeTimeout = UpgradeTimeout{
-        timeoutHeight: timeoutHeight,
-        timeoutTimestamp: timeoutTimestamp,
-    }
+    
 
     // counterparty-specified timeout must not have exceeded
     if (currentHeight() > timeoutHeight && timeoutHeight != 0) ||
@@ -403,8 +409,11 @@ function chanUpgradeAck(
     currentChannel = provableStore.get(channelPath(portIdentifier, channelIdentifier))
     abortTransactionUnless(currentChannel.state == UPGRADE_INIT || currentChannel.state == UPGRADE_TRY)
 
+    // get underlying connection for proof verification
+    connection = getConnection(currentChannel.connectionIdentifier)
+
     // verify proofs of counterparty state
-    abortTransactionUnless(verifyChannelState(currentChannel, proofHeight, proofChannel, currentChannel.counterpartyChannelIdentifier, counterpartyChannel))
+    abortTransactionUnless(verifyChannelState(connection, proofHeight, proofChannel, currentChannel.counterpartyPortIdentifier, currentChannel.counterpartyChannelIdentifier, counterpartyChannel))
 
     // counterparty must be in TRY state
     if counterpartyChannel.State != UPGRADE_TRY {
@@ -451,6 +460,7 @@ function chanUpgradeConfirm(
     channelIdentifier: Identifier,
     counterpartyChannel: ChannelEnd,
     proofChannel: CommitmentProof,
+    proofUpgradeError: CommitmentProof,
     proofHeight: Height,
 ) {
     // current channel is in UPGRADE_TRY
@@ -460,8 +470,14 @@ function chanUpgradeConfirm(
     // counterparty must be in OPEN state
     abortTransactionUnless(counterpartyChannel.State == OPEN)
 
+    // get underlying connection for proof verification
+    connection = getConnection(currentChannel.connectionIdentifier)
+
     // verify proofs of counterparty state
-    abortTransactionUnless(verifyChannelState(currentChannel, proofHeight, proofChannel, currentChannel.counterpartyChannelIdentifier, counterpartyChannel))
+    abortTransactionUnless(verifyChannelState(connection, proofHeight, proofChannel, currentChannel.counterpartyPortIdentifier, currentChannel.counterpartyChannelIdentifier, counterpartyChannel))
+    // verify counterparty did not abort upgrade handshake by writing upgrade error
+    // must have absent value at upgradeError path
+    abortTransactionUnless(verifyUpgradeChannelErrorAbsence(connection, proofHeight, proofUpgradeError, currentChannel.counterpartyPortIdentifier, currentChannel.counterpartyChannelIdentifier))
 
     // call modules onChanUpgradeConfirm callback
     module = lookupModule(portIdentifier)
@@ -499,7 +515,10 @@ function cancelChannelUpgrade(
 
     abortTransactionUnless(!isEmpty(errorReceipt))
 
-    abortTransactionUnless(verifyUpgradeError(currentChannel, proofHeight, proofUpgradeError, currentChannel.counterpartyChannelIdentifier, errorReceipt))
+    // get underlying connection for proof verification
+    connection = getConnection(currentChannel.connectionIdentifier)
+    // verify that a non-empty error receipt is written to the upgradeError path
+    abortTransactionUnless(verifyChannelUpgradeError(connection, proofHeight, proofUpgradeError, currentChannel.counterpartyPortIdentifier, currentChannel.counterpartyChannelIdentifier, errorReceipt))
 
     // cancel upgrade
     // and restore original conneciton
@@ -551,9 +570,12 @@ function timeoutChannelUpgrade(
     connection = queryConnection(currentChannel.connectionIdentifier)
     abortTransactionUnless(upgradeTimeout.timeoutTimestamp.IsZero() || getTimestampAtHeight(connection, proofHeight) >= upgradeTimeout.timestamp)
 
+    // get underlying connection for proof verification
+    connection = getConnection(currentChannel.connectionIdentifier)
+
     // counterparty channel must be proved to still be in OPEN state
     abortTransactionUnless(counterpartyChannel.State === OPEN)
-    abortTransactionUnless(channel.client.verifyChannelState(proofHeight, proofChannel, counterpartyChannel))
+    abortTransactionUnless(verifyChannelState(connection, proofHeight, proofChannel, currentChannel.counterpartyPortIdentifier, currentChannel.counterpartyChannelIdentifier, counterpartyChannel))
 
     // we must restore the channel since the timeout verification has passed
     originalChannel = privateStore.get(restorePath(portIdentifier, channelIdentifier))
