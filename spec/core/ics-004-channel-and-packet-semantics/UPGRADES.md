@@ -578,7 +578,11 @@ function timeoutChannelUpgrade(
     abortTransactionUnless(verifyChannelState(connection, proofHeight, proofChannel, currentChannel.counterpartyPortIdentifier, currentChannel.counterpartyChannelIdentifier, counterpartyChannel))
 
     if counterpartyChannel.State == UPGRADE_INIT {
-
+        // if the counterparty is in UPGRADE_INIT and we have timed out then we should write and error receipt
+        // to ensure that counterparty aborts the handshake as well and returns to the original state
+        // write an error receipt into the error path
+        errorReceipt = []byte{1}
+        provableStore.set(errorPath(portIdentifier, channelIdentifier), errorReceipt)
     }
 
     // we must restore the channel since the timeout verification has passed
