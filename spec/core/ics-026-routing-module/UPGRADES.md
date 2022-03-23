@@ -47,6 +47,8 @@ to the default version which MAY be a new default from when the channel was firs
 If there is no default version string for the application,
 it should return an error if provided version is empty string.
 
+If an error is returned, then core IBC will revert any changes made by `onChanUpgradeInit` and abort the handshake.
+
 `onChanUpgradeInit` is also responsible for making sure that the application is recoverable to its pre-upgrade state. The application may either store any new metadata in separate paths, or store the previous metadata under a different path so it can be restored.
 
 ```typescript
@@ -72,6 +74,8 @@ If the versions are compatible, the try callback must select the final version
 string and return it to core IBC.
 `onChanUpgradeTry` may also perform custom initialization logic.
 
+If an error is returned, then core IBC will revert any changes made by `onChanUpgradeTry` and abort the handshake.
+
 `onChanUpgradeTry` is also responsible for making sure that the application is recoverable to its pre-upgrade state. The application may either store any new metadata in separate paths, or store the previous metadata under a different path so it can be restored.
 
 ```typescript
@@ -90,7 +94,9 @@ function onChanUpgradeTry(
 #### **OnChanUpgradeAck**
 
 `onChanUpgradeAck` will error if the counterparty selected version string
-is invalid to abort the handshake. It may also perform custom ACK logic.
+is invalid. If an error is returned by the callback, core IBC will revert any changes made by `onChanUpgradeAck` and abort the handshake.
+
+The `onChanUpgradeAck` callback may also perform custom ACK logic.
 
 After `onChanUpgradeAck` returns successfully, the application upgrade is complete on this end so any 
 auxilliary data stored for the purposes of recovery is no longer needed and may be deleted.
