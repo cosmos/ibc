@@ -165,7 +165,7 @@ The Channel Upgrade process consists of three sub-protocols: `UpgradeChannelHand
 
 ### Utility Functions
 
-`restoreChannel()` is a utility function that allows a chain to abort an upgrade handshake in progress, and return the `channelEnd` to its original pre-upgrade state while also setting the `errorReceipt`. A relayer can then send a `CancelChannelUpgradeMsg` to the counterparty so that it can restore its `channelEnd` to its pre-upgrade state as well. Once both channel ends are back to the pre-upgrade state, packet processing will resume with the original channel and application parameters.
+`restoreChannel()` is a utility function that allows a chain to abort an upgrade handshake in progress, and return the `channelEnd` to its original pre-upgrade state while also setting the `errorReceipt`. A relayer can then send a `ChanUpgradeCancelMsg` to the counterparty so that it can restore its `channelEnd` to its pre-upgrade state as well. Once both channel ends are back to the pre-upgrade state, packet processing will resume with the original channel and application parameters.
 
 ```typescript
 function restoreChannel() {
@@ -213,9 +213,9 @@ If a chain does not agree to the proposed counterparty `UpgradedChannel`, it may
 
 `errorPath(id) => error_receipt`
 
-A relayer may then submit a `CancelChannelUpgradeMsg` to the counterparty. Upon receiving this message a chain must verify that the counterparty wrote a non-empty error receipt into its `UpgradeError` and if successful, it will restore its original channel as well thus cancelling the upgrade.
+A relayer may then submit a `ChanUpgradeCancelMsg` to the counterparty. Upon receiving this message a chain must verify that the counterparty wrote a non-empty error receipt into its `UpgradeError` and if successful, it will restore its original channel as well thus cancelling the upgrade.
 
-If an upgrade message arrives after the specified timeout, then the message MUST NOT execute successfully. Again a relayer may submit a proof of this in a `CancelChannelUpgradeTimeoutMsg` so that counterparty cancels the upgrade and restores it original channel as well.
+If an upgrade message arrives after the specified timeout, then the message MUST NOT execute successfully. Again a relayer may submit a proof of this in a `ChanUpgradeTimeoutMsg` so that counterparty cancels the upgrade and restores it original channel as well.
 
 ```typescript
 function chanUpgradeInit(
@@ -284,10 +284,10 @@ Access control on counterparty should inform choice of timeout values, i.e. time
 function chanUpgradeTry(
     portIdentifier: Identifier,
     channelIdentifier: Identifier,
+    counterpartyChannel: ChannelEnd,
     proposedUpgradeChannel: ChannelEnd,
     timeoutHeight: Height,
     timeoutTimestamp: uint64,
-    UpgradeTimeout: UpgradeTimeout,
     proofChannel: CommitmentProof,
     proofUpgradeTimeout: CommitmentProof,
     proofHeight: Height
@@ -322,7 +322,7 @@ function chanUpgradeTry(
     connection = getConnection(currentChannel.connectionIdentifier)
 
     // verify proofs of counterparty state
-    abortTransactionUnless(verifyChannelState(connection, proofHeight, proofChannel, currentChannel.counterpartyPortIdentifier, currentChannel.counterpartyChannelIdentifier, proposedUpgradeChannel))
+    abortTransactionUnless(verifyChannelState(connection, proofHeight, proofChannel, currentChannel.counterpartyPortIdentifier, currentChannel.counterpartyChannelIdentifier, counterpartyChannel))
     abortTransactionUnless(verifyChannelUpgradeTimeout(connection, proofHeight, proofUpgradeTimeout, currentChannel.counterpartyPortIdentifier, currentChannel.counterpartyChannelIdentifier, upgradeTimeout))
 
     if currentChannel.state == UPGRADE_INIT {
@@ -346,7 +346,7 @@ function chanUpgradeTry(
 
     // either timeout height or timestamp must be non-zero
     // if the upgrade feature is implemented on the TRY chain, then a relayer may submit a TRY transaction after the timeout.
-    // this will restore the channel on the executing chain and allow counterparty to use the CancelUpgradeMsg to restore their channel.
+    // this will restore the channel on the executing chain and allow counterparty to use the ChanUpgradeCancelMsg to restore their channel.
     if timeoutHeight == 0 && timeoutTimestamp == 0 {
         restoreChannel()
         return
@@ -499,7 +499,7 @@ function chanUpgradeConfirm(
 
 ### Cancel Upgrade Process
 
-During the upgrade handshake a chain may cancel the upgrade by writing an error receipt into the error path and restoring the original channel to `OPEN`. The counterparty must then restore its channel to `OPEN` as well. A relayer can facilitate this by calling `CancelChannelUpgrade`:
+During the upgrade handshake a chain may cancel the upgrade by writing an error receipt into the error path and restoring the original channel to `OPEN`. The counterparty must then restore its channel to `OPEN` as well. A relayer can facilitate this by sending `ChanUpgradeCancelMsg` to the handler:
 
 ```typescript
 function cancelChannelUpgrade(
@@ -546,7 +546,7 @@ It is possible for the channel upgrade process to stall indefinitely on UPGRADE_
 
 In this case, we do not want the initializing chain to be stuck indefinitely in the `UPGRADE_INIT` step. Thus, the `UpgradeInit` message will contain a `TimeoutHeight` and `TimeoutTimestamp`. The counterparty chain is expected to reject `UpgradeTry` message if the specified timeout has already elapsed.
 
-A relayer must then submit an `UpgradeTimeout` message to the initializing chain which proves that the counterparty is still in its original state. If the proof succeeds, then the initializing chain shall also restore its original channel and cancel the upgrade.
+A relayer must then submit an `ChanUpgradeTimeoutMsg` message to the initializing chain which proves that the counterparty is still in its original state. If the proof succeeds, then the initializing chain shall also restore its original channel and cancel the upgrade.
 
 ```typescript
 function timeoutChannelUpgrade(
@@ -576,6 +576,10 @@ function timeoutChannelUpgrade(
     // counterparty channel must be proved to still be in OPEN state or UPGRADE_INIT state (crossing hellos)
     abortTransactionUnless(counterpartyChannel.State === OPEN || counterpartyChannel.State == UPGRADE_INIT)
     abortTransactionUnless(verifyChannelState(connection, proofHeight, proofChannel, currentChannel.counterpartyPortIdentifier, currentChannel.counterpartyChannelIdentifier, counterpartyChannel))
+
+    if counterpartyChannel.State == UPGRADE_INIT {
+
+    }
 
     // we must restore the channel since the timeout verification has passed
     originalChannel = privateStore.get(restorePath(portIdentifier, channelIdentifier))
