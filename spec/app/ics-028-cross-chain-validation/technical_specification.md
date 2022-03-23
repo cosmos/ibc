@@ -1097,7 +1097,12 @@ function EndBlock(): [ValidatorUpdate] {
         initH[chainId] = getCurrentHeight()
       }
 
-      // get the channel ID for the given consumer chain ID
+      // set initH for this consumer chain (if not done already)
+      if chainId NOT IN initH.Keys() {
+        initH[chainId] = getCurrentHeight()
+      }
+
+      // gets the channel ID for the given consumer chain ID
       channelId = chainToChannel[chainId]
 
       foreach data IN pendingVSCPackets[chainId] {
@@ -1211,7 +1216,7 @@ function GetUnbondingOpsFromVSC(
 // PCF: Provider Chain Function
 function onTimeoutVSCPacket(packet Packet) {
   // cleanup state
-  abortTransactionUnless(channelId IN channelToChain.Keys())
+  abortTransactionUnless(packet.getDestinationChannel() IN channelToChain.Keys())
   chainId = channelToChain[packet.getDestinationChannel()]
   channelToChain.Remove(packet.getDestinationChannel())
   chainToChannel.Remove(chainId)
