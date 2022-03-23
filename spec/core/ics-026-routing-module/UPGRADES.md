@@ -92,10 +92,10 @@ function onChanUpgradeTry(
 `onChanUpgradeAck` will error if the counterparty selected version string
 is invalid to abort the handshake. It may also perform custom ACK logic.
 
-After `onChanUpgradeAck` returns, the application upgrade is complete on this end so any 
+After `onChanUpgradeAck` returns successfully, the application upgrade is complete on this end so any 
 auxilliary data stored for the purposes of recovery is no longer needed and may be deleted.
 
-The application MUST have its state fully migrated to start processing packet data according to the new application parameters by the time the callback returns.
+If the callback returns successfully, the application MUST have its state fully migrated to start processing packet data according to the new application parameters.
 
 ```typescript
 function onChanUpgradeAck(
@@ -104,7 +104,7 @@ function onChanUpgradeAck(
   counterpartyChannelIdentifier: Identifier, 
   counterpartyVersion: string) {
     // defined by the module
-}
+} => Error
 ```
 
 #### **OnChanUpgradeConfirm**
