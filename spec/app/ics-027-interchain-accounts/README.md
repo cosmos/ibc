@@ -309,13 +309,13 @@ Controller chains will wrap `OnAcknowledgementPacket` & `OnTimeoutPacket` to han
 
 ### Port & channel setup
 
-The interchain account module on a host chain must always bind to a port with the id `interchain-account`. Controller chains will bind to ports dynamically, as specified in the identifier format [section](#identifer-formats).
+The interchain account module on a host chain must always bind to a port with the id `icahost`. Controller chains will bind to ports dynamically, as specified in the identifier format [section](#identifer-formats).
 
 The example below assumes a module is implementing the entire `InterchainAccountModule` interface. The `setup` function must be called exactly once when the module is created (perhaps when the blockchain itself is initialized) to bind to the appropriate port.
 
 ```typescript
 function setup() {
-  capability = routingModule.bindPort("interchain-account", ModuleCallbacks{
+  capability = routingModule.bindPort("icahost", ModuleCallbacks{
       onChanOpenInit,
       onChanOpenTry,
       onChanOpenAck,
@@ -354,7 +354,7 @@ function onChanOpenInit(
   abortTransactionUnless(order === ORDERED)
   // validate port format
   abortTransactionUnless(validateControllerPortParams(portIdentifier))
-  // only allow channels to be created on the "interchain-account" port on the counterparty chain
+  // only allow channels to be created on the "icahost" port on the counterparty chain
   abortTransactionUnless(counterpartyPortIdentifier === "icahost")
   // only open the channel if there is no active channel already set (with status OPEN)
   abortTransactionUnless(activeChannel === nil)
