@@ -61,8 +61,6 @@ An ICS-721 token class is represented in the form `{ics721Port}/{ics721Channel}/
 
 A sending chain may be acting as a source or sink zone. When a chain is sending tokens across a port and channel which are not equal to the last prefixed port and channel pair, it is acting as a source zone. When tokens are sent from a source zone, the destination port and channel will be prefixed onto the `classId` (once the tokens are received) adding another hop to the tokens record. When a chain is sending tokens across a port and channel which are equal to the last prefixed port and channel pair, it is acting as a sink zone. When tokens are sent from a sink zone, the last prefixed port and channel pair on the `classId` is removed (once the tokens are received), undoing the last hop in the tokens record.
 
-Each send to any chain other than the one from which the token was previously received is a movement forward in the token's timeline. This causes trace to be added to the token's history and the destination port and destination channel to be prefixed to the `classId`. In these instances the sender chain is acting as the *source zone*. When the token is sent back to the chain it was previously received from, the prefix is removed. This is a backward movement in the token's timeline and the sender chain is acting as the *sink zone*.
-
 For example, assume these steps of transfer occur:
 
 A -> B -> C -> A -> C -> B -> A
