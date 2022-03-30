@@ -7,7 +7,7 @@ requires: 25, 26
 kind: instantiation
 author: Haifeng Xi <haifeng@bianjie.ai>
 created: 2021-11-10
-modified: 2022-03-11
+modified: 2022-03-30
 ---
 
 > This standard document follows the same design principles of [ICS 20](../ics-020-fungible-token-transfer) and inherits most of its content therefrom, while replacing `bank` module based asset tracking logic with that of the `nft` module.
@@ -57,7 +57,7 @@ Each `tokenId` has a corresponding entry in `tokenUris`, which refers to an off-
 
 As tokens are sent across chains using the ICS-721 protocol, they begin to accrue a record of channels across which they have been transferred. This record information is encoded into the `classId` field.
 
-An ICS-721 token class is represented in the form `{ics721Port}/{ics721Channel}/{classId}`, where `ics721Port` and `ics721Channel` identify the channel on the current chain from which the tokens arrived. The prefixed port and channel pair indicate which channel the tokens were previously sent through. If `{classId}` contains `/`, then it must also be in the ICS-721 form which indicates that the tokens have a multi-hop record. Note that this requires that the `/` (slash character) is prohibited in non-IBC token `classId`s.
+An ICS-721 token class is represented in the form `{ics721Port}/{ics721Channel}/{classId}`, where `ics721Port` and `ics721Channel` identify the channel on the current chain from which the tokens arrived. If `{classId}` contains `/`, then it must also be in the ICS-721 form which indicates that the tokens have a multi-hop record. Note that this requires that the `/` (slash character) is prohibited in non-IBC token `classId`s.
 
 A sending chain may be acting as a source or sink zone. When a chain is sending tokens across a port and channel which are not equal to the last prefixed port and channel pair, it is acting as a source zone. When tokens are sent from a source zone, the destination port and channel will be prefixed onto the `classId` (once the tokens are received) adding another hop to the tokens record. When a chain is sending tokens across a port and channel which are equal to the last prefixed port and channel pair, it is acting as a sink zone. When tokens are sent from a sink zone, the last prefixed port and channel pair on the `classId` is removed (once the tokens are received), undoing the last hop in the tokens record.
 
@@ -65,14 +65,14 @@ Each send to any chain other than the one from which the token was previously re
 
 For example, assume these steps of transfer occur:
 
-A(p1,c1) -> B(p2,c2) -> C(p3,c3) -> A(p4,c4) -> C(p3,c3) -> B(p2,c2) -> A(p1,c1)
+A -> B -> C -> A -> C -> B -> A
 
-1. A -> B : A is source zone. `classId` in B: 'p2/c2/nftClass'
-2. B -> C : B is source zone. `classId` in C: 'p3/c3/p2/c2/nftClass'
-3. C -> A : C is source zone. `classId` in A: 'p4/c4/p3/c3/p2/c2/nftClass'
-4. A -> C : A is sink zone. `classId` in C: 'p3/c3/p2/c2/nftClass'
-5. C -> B : C is sink zone. `classId` in B: 'p2/c2/nftClass'
-6. B -> A : B is sink zone. `classId` in A: 'nftClass'
+1. A(p1,c1) -> (p2,c2)B : A is source zone. `classId` in B: 'p2/c2/nftClass'
+2. B(p3,c3) -> (p4,c4)C : B is source zone. `classId` in C: 'p4/c4/p2/c2/nftClass'
+3. C(p5,c5) -> (p6,c6)A : C is source zone. `classId` in A: 'p6/c6/p4/c4/p2/c2/nftClass'
+4. A(p6,c6) -> (p5,c5)C : A is sink zone. `classId` in C: 'p4/c4/p2/c2/nftClass'
+5. C(p4,c4) -> (p3,c3)B : C is sink zone. `classId` in B: 'p2/c2/nftClass'
+6. B(p2,c2) -> (p1,c1)A : B is sink zone. `classId` in A: 'nftClass'
 
 The acknowledgement data type describes whether the transfer succeeded or failed, and the reason for failure (if any).
 
@@ -103,7 +103,73 @@ interface ModuleState {
 
 The sub-protocols described herein should be implemented in a "non-fungible token transfer bridge" module with access to the NFT asset tracking module and the IBC routing module.
 
-The `x/nft` module specified in [ADR-043](https://github.com/cosmos/cosmos-sdk/blob/master/docs/architecture/adr-043-nft-module.md) is one such example of the NFT asset tracking module, where the ownership of each NFT should be properly tracked. If an NFT is transferred to a recipient by its current owner, the module is expected to record the ownership change by updating the token's new owner to the recipient.
+The NFT asset tracking module should implement the following functions:
+
+```typescript
+function SaveClass(
+  classId: string,
+  classUri: string) {
+  // creates a new NFT Class identified by classId
+}
+```
+
+```typescript
+function Mint(
+  classId: string,
+  tokenId: string,
+  tokenUri: string,
+  sender: string) {
+  // creates a new NFT identified by <classId,tokenId>
+  // sender becomes owner of the newly minted NFT
+}
+```
+
+```typescript
+function Transfer(
+  classId: string,
+  tokenId: string,
+  receiver: string) {
+  // transfers the NFT identified by <classId,tokenId> to receiver
+  // receiver becomes new owner of the NFT
+}
+```
+
+```typescript
+function Burn(
+  classId: string,
+  tokenId: string) {
+  // destroys the NFT identified by <classId,tokenId>
+}
+```
+
+```typescript
+function GetOwner(
+  classId: string,
+  tokenId: string) {
+  // returns current owner of the NFT identified by <classId,tokenId>
+}
+```
+
+```typescript
+function GetNFT(
+  classId: string,
+  tokenId: string) {
+  // returns NFT identified by <classId,tokenId>
+}
+```
+
+```typescript
+function HasClass(classId: string) {
+  // returns true if NFT Class identified by classId already exists;
+  // returns false otherwise
+}
+```
+
+```typescript
+function GetClass(classId: string) {
+  // returns NFT Class identified by classId
+}
+```
 
 #### Port & channel setup
 
@@ -145,7 +211,9 @@ function onChanOpenInit(
   order: ChannelOrder,
   connectionHops: [Identifier],
   portIdentifier: Identifier,
+  channelIdentifier: Identifier,
   counterpartyPortIdentifier: Identifier,
+  counterpartyChannelIdentifier: Identifier,
   version: string) {
   // only unordered channels allowed
   abortTransactionUnless(order === UNORDERED)
@@ -162,12 +230,10 @@ function onChanOpenTry(
   channelIdentifier: Identifier,
   counterpartyPortIdentifier: Identifier,
   counterpartyChannelIdentifier: Identifier,
-  version: string,
   counterpartyVersion: string) {
   // only unordered channels allowed
   abortTransactionUnless(order === UNORDERED)
   // assert that version is "ics721-1"
-  abortTransactionUnless(version === "ics721-1")
   abortTransactionUnless(counterpartyVersion === "ics721-1")
 }
 ```
@@ -176,8 +242,8 @@ function onChanOpenTry(
 function onChanOpenAck(
   portIdentifier: Identifier,
   channelIdentifier: Identifier,
-  counterpartyVersion: string,
-  counterpartyChannelIdentifier: string) {
+  counterpartyChannelIdentifier: Identifier,
+  counterpartyVersion: string) {
   // port has already been validated
   // assert that version is "ics721-1"
   abortTransactionUnless(counterpartyVersion === "ics721-1")
@@ -240,21 +306,19 @@ function createOutgoingPacket(
   source = classId.slice(0, len(prefix)) !== prefix
   tokenUris = []
   for (let tokenId in tokenIds) {
-    // assert that sender is token owner
-    abortTransactionUnless(sender === nft.getOwner(classId, tokenId))
+    // ensure that sender is token owner
+    abortTransactionUnless(sender === nft.GetOwner(classId, tokenId))
     if source {
-      // determine escrow account
-      escrowAccount = channelEscrowAddresses[sourceChannel]
-      // escrow token (escrow account becomes new owner)
-      nft.Transfer(classId, tokenId, escrowAccount)
+      // escrow token
+      nft.Transfer(classId, tokenId, channelEscrowAddresses[sourceChannel])
     } else {
       // we are sink chain, burn voucher
       nft.Burn(classId, tokenId)
     }
-    tokenUris.push(nft.getNFT(classId, tokenId).getUri())
+    tokenUris.push(nft.GetNFT(classId, tokenId).GetUri())
   }
-  NonFungibleTokenPacketData data = NonFungibleTokenPacketData{classId, nft.getClass(classId).getUri(), tokenIds, tokenUris, sender, receiver}
-  handler.sendPacket(Packet{timeoutHeight, timeoutTimestamp, destPort, destChannel, sourcePort, sourceChannel, data}, getCapability("port"))
+  NonFungibleTokenPacketData data = NonFungibleTokenPacketData{classId, nft.GetClass(classId).GetUri(), tokenIds, tokenUris, sender, receiver}
+  ics4Handler.sendPacket(Packet{timeoutHeight, timeoutTimestamp, destPort, destChannel, sourcePort, sourceChannel, data}, getCapability("port"))
 }
 ```
 
@@ -265,29 +329,31 @@ function onRecvPacket(packet: Packet) {
   NonFungibleTokenPacketData data = packet.data
   // construct default acknowledgement of success
   NonFungibleTokenPacketAcknowledgement ack = NonFungibleTokenPacketAcknowledgement{true, null}
+  err = ProcessReceivedPacketData(data)
+  if (err !== null) {
+    ack = NonFungibleTokenPacketAcknowledgement{false, err.Error()}
+  }
+  return ack
+}
+
+function ProcessReceivedPacketData(data: NonFungibleTokenPacketData) {
   prefix = "{packet.sourcePort}/{packet.sourceChannel}/"
   // we are source chain if classId is prefixed with packet's sourcePort and sourceChannel
   source = data.classId.slice(0, len(prefix)) === prefix
   for (var i in data.tokenIds) {
     if source {
-      // unescrow token (receiver becomes new owner)
-      err = nft.Transfer(data.classId.slice(len(prefix)), data.tokenIds[i], data.receiver)
-      if (err !== nil) {
-        ack = NonFungibleTokenPacketAcknowledgement{false, err.Error()}
-        break
+      // unescrow token to receiver
+      nft.Transfer(data.classId.slice(len(prefix)), data.tokenIds[i], data.receiver)
+    } else { // we are sink chain
+      prefixedClassId = "{packet.destPort}/{packet.destChannel}/" + data.classId
+      // create NFT class if it doesn't exist already
+      if (nft.HasClass(prefixedClassId) === false) {
+        nft.SaveClass(data.classId, data.classUri)
       }
-    } else {
-      prefix = "{packet.destPort}/{packet.destChannel}/"
-      prefixedClassId = prefix + data.classId
-      // we are sink chain, mint voucher to receiver (owner)
-      err = nft.Mint(prefixedClassId, data.classUri, data.tokenIds[i], data.tokenUris[i], data.receiver)
-      if (err !== nil) {
-        ack = NonFungibleTokenPacketAcknowledgement{false, err.Error()}
-        break
-      }
+      // mint voucher to receiver
+      nft.Mint(prefixedClassId, data.tokenIds[i], data.tokenUris[i], data.receiver)
     }
   }
-  return ack
 }
 ```
 
@@ -318,15 +384,15 @@ function onTimeoutPacket(packet: Packet) {
 function refundToken(packet: Packet) {
   NonFungibleTokenPacketData data = packet.data
   prefix = "{packet.sourcePort}/{packet.sourceChannel}/"
-  for (let tokenId in data.tokenIds) {
-    // we are the source if the classId is not prefixed with the packet's sourcePort and sourceChannel
-    source = data.classId.slice(0, len(prefix)) !== prefix
+  // we are the source if the classId is not prefixed with the packet's sourcePort and sourceChannel
+  source = data.classId.slice(0, len(prefix)) !== prefix
+  for (var i in data.tokenIds) { {
     if source {
-      // sender was source chain, unescrow tokens back to sender
-      nft.Transfer(data.classId, tokenId, data.sender)
+      // unescrow token back to sender
+      nft.Transfer(data.classId, data.tokenIds[i], data.sender)
     } else {
-      // receiver was source chain, mint voucher back to sender
-      nft.Mint(data.classId, tokenId, data.sender)
+      // we are sink chain, mint voucher back to sender
+      nft.Mint(data.classId, data.tokenIds[i], data.tokenUris[i], data.sender)
     }
   }
 }
@@ -389,6 +455,7 @@ Coming soon.
 | Feb 10, 2022  | Revised to incorporate feedbacks from IBC team     |
 | Mar 03, 2022  | Revised to make TRY callback consistent with PR#629         |
 | Mar 11, 2022  | Added example to illustrate the prefix concept         |
+| Mar 30, 2022  | Added NFT module definition and fixed pseudo-code errors |
 
 ## Copyright
 
