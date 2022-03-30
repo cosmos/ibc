@@ -689,12 +689,7 @@ function InitGenesis(gs: ConsumerGenesisState): [ValidatorUpdate] {
   - The capability for the port `ConsumerPortId` cannot be claimed.
 
 > **Note**: CCV assumes that all the correct validators in the initial validator set of the consumer chain receive the _same_ consumer chain binary and consumer chain genesis state. 
-> Although the mechanism of disseminating the binary and the genesis state is outside the scope of this specification, a possible approach would entail the following steps:
-> - the process `P` creating a governance proposal `Prop` to spawn the new consumer chain creates the genesis state `S` of the entire consumer ABCI application without the genesis state of the consumer CCV module, i.e., without `ConsumerGenesisState`; 
-> - `P` adds to the proposal `Prop` both a hash of `S` and a hash of the consumer chain binary;
-> - `P` disseminates both `S` and the binary via the gossip network;
-> - when handling `Prop`, the provider chain creates and store in its state the `ConsumerGenesisState` using the information that the validator set of the consumer chain matches the validator set of the provider chain;
-> - finally, each validator in the initial validator set of the consumer chain obtains the remainder of the genesis state (i.e., `ConsumerGenesisState`) by querying the provider chain.
+> Although the mechanism of disseminating the binary and the genesis state is outside the scope of this specification, a possible approach would entail including this information in the governance proposal on the provider chain.
 
 <!-- omit in toc -->
 #### **[CCV-CCF-COINIT.1]**
