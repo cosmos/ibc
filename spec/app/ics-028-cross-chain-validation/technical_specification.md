@@ -172,6 +172,16 @@ this specification expects the following fields to be part of every proposal to 
   - `initialHeight` is the proposed initial height of new consumer chain. Note that `Height` is defined in [ICS 7](../../client/ics-007-tendermint-client). For a completely new chain, `initialHeight = {0,1}`; however, it may be different if the chain converts to a consumer chain.
   - `spawnTime` is the time on the provider chain at which the consumer chain genesis is finalized and all validators will be responsible for starting their consumer chain validator node.
 
+During the CCV channel opening handshake, the provider chain adds the address of its distribution module account to the channel version as metadata (as described in [ICS 4](../../core/ics-004-channel-and-packet-semantics/README.md#definitions)). 
+The metadata structure is described by the following interface:
+```typescript
+interface CCVHandshakeMetadata {
+  providerDistributionAccount: string // the account's address
+  version: string
+}
+```
+This specification assumes that the provider CCV module has access to the address of the distribution module account through the `GetDistributionAccountAddress()` method. For an example, take a look at the [auth module](https://docs.cosmos.network/v0.44/modules/auth/) of Cosmos SDK. 
+
 ### CCV Packets
 [&uparrow; Back to Outline](#outline)
 
@@ -220,6 +230,8 @@ type PacketAcknowledgement = PacketSuccess | PacketError; // general ack
 [&uparrow; Back to Outline](#outline)
 
 This section describes the internal state of the CCV module. For simplicity, the state is described by a set of variables; for each variable, both the type and a brief description is provided. In practice, all the state (except for hardcoded constants, e.g., `ProviderPortId`) is stored in a key/value store (KVS). The host state machine provides a KVS interface with three functions, i.e., `get()`, `set()`, and `delete()` (as defined in [ICS 24](../../core/ics-024-host-requirements)).
+
+- `ccvVersion = "ccv-1"` is the CCV expected version. Both the provider and the consumer chains need to agree on this version. 
 
 <!-- omit in toc -->
 #### State on the provider chain
@@ -345,6 +357,7 @@ This section describes the internal state of the CCV module. For simplicity, the
   `outstandingDowntime[valAddr] == TRUE` entails that the consumer chain sent a request to slash for downtime the validator with address `valAddr`. 
   `outstandingDowntime[valAddr]` is set to false once the consumer chain receives a confirmation that the slash request was received by the provider chain, i.e., a `VSCPacket` that contains `valAddr` in `slashAcks`. 
   The mapping enables the consumer CCV module to avoid sending to the provider chain multiple slashing requests for the same downtime infraction.
+- `providerDistributionAccount: string` is the address of the distribution module account on the provider chain. It enables the consumer chain to transfer rewards to the provider chain.
  
 ## Sub-protocols
 
@@ -484,7 +497,7 @@ function onChanOpenInit(
   channelIdentifier: Identifier,
   counterpartyPortIdentifier: Identifier,
   counterpartyChannelIdentifier: Identifier,
-  version: string) {
+  version: string): string {
     // the channel handshake MUST be initiated by consumer chain
     abortTransactionUnless(FALSE)
 }
@@ -512,22 +525,19 @@ function onChanOpenTry(
   channelIdentifier: Identifier,
   counterpartyPortIdentifier: Identifier,
   counterpartyChannelIdentifier: Identifier,
-  version: string,
-  counterpartyVersion: string) {
+  counterpartyVersion: string):  string {
     // validate parameters:
     // - only ordered channels allowed
     abortTransactionUnless(order == ORDERED)
     // - require the portIdentifier to be the port ID the CCV module is bound to
     abortTransactionUnless(portIdentifier == ProviderPortId)
-    // - require the version to be the expected version
-    abortTransactionUnless(version == "1")
 
     // assert that the counterpartyPortIdentifier matches 
     // the expected consumer port ID
     abortTransactionUnless(counterpartyPortIdentifier == ConsumerPortId)
 
-    // assert that the counterpartyVersion matches the local version
-    abortTransactionUnless(counterpartyVersion == version)
+    // assert that the counterpartyVersion matches the expected version
+    abortTransactionUnless(counterpartyVersion == ccvVersion)
     
     // get the client state associated with this client ID in order 
     // to get access to the consumer chain ID
@@ -540,6 +550,11 @@ function onChanOpenTry(
 
     // require that no other CCV channel exists for this consumer chain
     abortTransactionUnless(clientState.chainId NOTIN chainToChannel.Keys())
+
+    return CCVHandshakeMetadata{
+      providerDistributionAccount: GetDistributionAccountAddress(),
+      version: ccvVersion
+    }
 }
 ```
 - **Caller**
@@ -552,11 +567,11 @@ function onChanOpenTry(
   - The transaction is aborted if any of the following conditions are true:
     - the channel is not ordered;
     - `portIdentifier != ProviderPortId`;
-    - `version` is not the expected version;
     - `counterpartyPortIdentifier != ConsumerPortId`;
-    - `counterpartyVersion != version`;
+    - `counterpartyVersion != ccvVersion`;
     - the channel is not built on top of the client created for this consumer chain;
     - another CCV channel for this consumer chain already exists.
+  - A `CCVHandshakeMetadata` is returned, with `providerDistributionAccount` set to the the address of the distribution module account on the provider chain and `version` set to `ccvVersion`.
   - The state is not changed.
 - **Error Condition**
   - None.
@@ -703,7 +718,7 @@ function onChanOpenInit(
   channelIdentifier: Identifier,
   counterpartyPortIdentifier: Identifier,
   counterpartyChannelIdentifier: Identifier,
-  version: string) {
+  version: string): string {
     // ensure provider channel hasn't already been created
     abortTransactionUnless(providerChannel == "")
 
@@ -713,7 +728,7 @@ function onChanOpenInit(
     // - require the portIdentifier to be the port ID the CCV module is bound to
     abortTransactionUnless(portIdentifier == ConsumerPortId)
     // - require the version to be the expected version
-    abortTransactionUnless(version == "1")
+    abortTransactionUnless(version == "" OR version == ccvVersion)
 
     // assert that the counterpartyPortIdentifier matches 
     // the expected consumer port ID
@@ -723,6 +738,8 @@ function onChanOpenInit(
     // with this channel matches the expected provider client id
     clientId = getClient(channelIdentifier)   
     abortTransactionUnless(providerClient != clientId)
+
+    return ccvVersion
 }
 ```
 - **Caller**
@@ -735,9 +752,10 @@ function onChanOpenInit(
   - The transaction is aborted if any of the following conditions are true:
     - `providerChannel` is already set;
     - `portIdentifier != ConsumerPortId`;
-    - `version` is not the expected version;
+    - `version` is set but not to the expected version;
     - `counterpartyPortIdentifier != ProviderPortId`;
     - the client associated with this channel is not the expected provider client.
+  - `ccvVersion` is returned.
   - The state is not changed.
 - **Error Condition**
   - None.
@@ -754,8 +772,7 @@ function onChanOpenTry(
   channelIdentifier: Identifier,
   counterpartyPortIdentifier: Identifier,
   counterpartyChannelIdentifier: Identifier,
-  version: string,
-  counterpartyVersion: string) {
+  counterpartyVersion: string):  string {
     // the channel handshake MUST be initiated by consumer chain
     abortTransactionUnless(FALSE)
 }
@@ -783,8 +800,14 @@ function onChanOpenAck(
     // ensure provider channel hasn't already been created
     abortTransactionUnless(providerChannel == "")
 
-    // assert that the counterpartyVersion matches the local version
-    abortTransactionUnless(counterpartyVersion == version)
+    // the version must be encoded in JSON format (as defined in ICS4)
+    md = UnmarshalJSON(counterpartyVersion)
+
+    // assert that the counterpartyVersion matches the expected version
+    abortTransactionUnless(md.version == ccvVersion)
+
+    // set the address of the distribution module account on the provider chain
+    providerDistributionAccount = md.providerDistributionAccount
 }
 ```
 - **Caller**
@@ -794,10 +817,11 @@ function onChanOpenAck(
 - **Precondition**
   - True.
 - **Postcondition**
+  - `counterpartyVersion` is unmarshaled into a `CCVHandshakeMetadata` structure `md`. 
   - The transaction is aborted if any of the following conditions are true:
     - `providerChannel` is already set;
-    - `counterpartyVersion != version`.
-  - The state is not changed.
+    - `md.version != ccvVersion`.
+  - The address of the distribution module account on the provider chain is set to `md.providerDistributionAccount`.
 - **Error Condition**
   - None.
 
