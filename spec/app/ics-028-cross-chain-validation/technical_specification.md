@@ -358,6 +358,7 @@ This section describes the internal state of the CCV module. For simplicity, the
   `outstandingDowntime[valAddr]` is set to false once the consumer chain receives a confirmation that the slash request was received by the provider chain, i.e., a `VSCPacket` that contains `valAddr` in `slashAcks`. 
   The mapping enables the consumer CCV module to avoid sending to the provider chain multiple slashing requests for the same downtime infraction.
 - `providerDistributionAccount: string` is the address of the distribution module account on the provider chain. It enables the consumer chain to transfer rewards to the provider chain.
+- `distributionChannelId: Identifier` is the ID of the distribution token transfer channel used for sending rewards to the provider chain.
  
 ## Sub-protocols
 
@@ -808,6 +809,17 @@ function onChanOpenAck(
 
     // set the address of the distribution module account on the provider chain
     providerDistributionAccount = md.providerDistributionAccount
+
+    // initiate opening handshake for the distribution token transfer channel
+    // over the same connection as the CCV channel
+    // i.e., ChanOpenInit (as required by ICS20)
+    distributionChannelId = channelKeeper.ChanOpenInit(
+      UNORDERED, // order
+      channelKeeper.GetConnectionHops(channelIdentifier), // connectionHops: same as the CCV channel
+      "transfer", // portIdentifier
+      "transfer", // counterpartyPortIdentifier
+      "ics20-1" // version
+    )
 }
 ```
 - **Caller**
@@ -822,6 +834,7 @@ function onChanOpenAck(
     - `providerChannel` is already set;
     - `md.version != ccvVersion`.
   - The address of the distribution module account on the provider chain is set to `md.providerDistributionAccount`.
+  - The distribution token transfer channel opening handshake is initiated and `distributionChannelId` is set to the resulting channel ID.
 - **Error Condition**
   - None.
 
