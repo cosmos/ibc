@@ -1799,7 +1799,7 @@ function SendSlashRequest(
     packetData = SlashPacketData{
       valAddress: valAddress,
       valPower: power,
-      vscId: VSCtoH[infractionHeight],
+      vscId: HtoVSC[infractionHeight],
       slashFactor: slashFactor,
       jailTime: jailTime
     }
