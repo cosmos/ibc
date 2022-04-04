@@ -239,7 +239,16 @@ This section describes the internal state of the CCV module. For simplicity, the
 #### State on the provider chain
 
 - `ProviderPortId = "provider"` is the port ID the provider CCV module is expected to bind to.
-- `pendingClient: Map<(Timestamp, string), Height>` is a mapping from `(timestamp, chainId)` tuples to the initial height of pending clients, i.e., belonging to consumer chains that were not yet spawned, but for which a `CreateConsumerChainProposal` was received.
+- `pendingProposals: [CreateConsumerChainProposal]` is a list of pending proposals to spawn new consumer chains. The list exposes the following interface: 
+```typescript
+  interface [CreateConsumerChainProposal] {
+    // append a proposal to the list; the list is modified
+    Append(p: CreateConsumerChainProposal) 
+
+    // remove a proposal from the list; the list is modified
+    Remove(p: CreateConsumerChainProposal)
+  }
+  ```
 - `chainToClient: Map<string, Identifier>` is a mapping from consumer chain IDs to the associated client IDs.
 - `chainToChannel: Map<string, Identifier>` is a mapping from consumer chain IDs to the CCV channel IDs.
 - `channelToChain: Map<Identifier, string>` is a mapping from CCV channel IDs to consumer chain IDs.
@@ -305,6 +314,7 @@ This section describes the internal state of the CCV module. For simplicity, the
     // the list is modified
     RemoveAll()
   }
+  ```
 - `HtoVSC: Map<Height, uint64>` is a mapping from consumer chain heights to VSC IDs. It enables the mapping from consumer heights to provider heights., i.e.,
   - if `HtoVSC[h] == 0`, then the voting power on the consumer chain at height `h` was setup at genesis during Channel Initialization;
   - otherwise, the voting power on the consumer chain at height `h` was updated by the VSC with ID `HtoVSC[h]`.
@@ -400,37 +410,11 @@ function InitGenesis(state: ProviderGenesisState): [ValidatorUpdate] {
 // implements governance proposal Handler 
 function CreateConsumerChainProposal(p: CreateConsumerChainProposal) {
   if currentTimestamp() > p.spawnTime {
-    // get UnbondingPeriod from provider Staking module
-    unbondingTime = stakingKeeper.UnbondingTime()
-
-    // create client state as defined in ICS 7
-    clientState = ClientState{
-      chainId: p.chainId,
-      trustLevel: DefaultTrustLevel, // 1/3
-      trustingPeriod: unbondingTime/2,
-      unbondingPeriod: unbondingTime,
-      latestHeight: p.initialHeight,
-    }
-
-    // create consensus state as defined in ICS 7;
-    // SentinelRoot is used as a stand-in root value for 
-    // the consensus state set at the upgrade height;
-    // the validator set is the same as the validator set 
-    // from own consensus state at current height
-    ownConsensusState = getConsensusState(getCurrentHeight())
-    consensusState = ConsensusState{
-      timestamp: currentTimestamp(),
-      commitmentRoot: SentinelRoot,
-      validatorSet: ownConsensusState.validatorSet,
-    }
-
-    // create consumer chain client and store it
-    clientId = clientKeeper.CreateClient(clientState, consensusState)
-    chainToClient[p.chainId] = clientId
+    CreateConsumerClient(p)
   }
   else {
-    // store the client as a pending client
-    pendingClient[(p.spawnTime, p.chainId)] = p.initialHeight
+    // store the proposal as a pending proposal
+    pendingProposals.Append(p)
   }
 }
 ```
@@ -441,19 +425,66 @@ function CreateConsumerChainProposal(p: CreateConsumerChainProposal) {
 - **Precondition** 
   - True. 
 - **Postcondition** 
-  - If the spawn time has already passed,
-    - `UnbondingPeriod` is retrieved from the provider Staking module;
-    - a client state is created;
-    - a consensus state is created;
-    - a client of the consumer chain is created and the client ID is added to `chainToClient`.
-  - Otherwise, the client is stored in `pendingClient` as a pending client.
+  - If the spawn time has already passed, `CreateConsumerClient(p)` is invoked, with `p` the `CreateConsumerChainProposal`. 
+  - Otherwise, the proposal is appended to the list of pending proposals, i.e., `pendingProposals`.
+- **Error Condition**
+  - None.
+
+<!-- omit in toc -->
+#### **[CCV-PCF-CRCLIENT.1]**
+```typescript
+// PCF: Provider Chain Function
+// Utility method
+function CreateConsumerClient(p: CreateConsumerChainProposal) {
+  // get UnbondingPeriod from provider Staking module
+  // TODO governance and CCV params
+  // see https://github.com/cosmos/ibc/issues/673
+  unbondingTime = stakingKeeper.UnbondingTime()
+
+  // create client state as defined in ICS 7
+  clientState = ClientState{
+    chainId: p.chainId,
+    trustLevel: DefaultTrustLevel, // i.e., 1/3
+    trustingPeriod: unbondingTime/2,
+    unbondingPeriod: unbondingTime,
+    latestHeight: p.initialHeight,
+  }
+
+  // create consensus state as defined in ICS 7;
+  // SentinelRoot is used as a stand-in root value for 
+  // the consensus state set at the upgrade height;
+  // the validator set is the same as the validator set 
+  // from own consensus state at current height
+  ownConsensusState = getConsensusState(getCurrentHeight())
+  consensusState = ConsensusState{
+    timestamp: currentTimestamp(),
+    commitmentRoot: SentinelRoot,
+    validatorSet: ownConsensusState.validatorSet,
+  }
+
+  // create consumer chain client and store it
+  clientId = clientKeeper.CreateClient(clientState, consensusState)
+  chainToClient[p.chainId] = clientId
+}
+```
+- **Caller**
+  - Either `CreateConsumerChainProposal` (see [CCV-PCF-CCPROP.1](#ccv-pcf-ccprop1)) or `BeginBlock()` (see [CCV-PCF-BBLOCK.1](#ccv-pcf-bblock1)).
+- **Trigger Event**
+  - A governance proposal with `CreateConsumerChainProposal` as content has passed (i.e., it got the necessary votes).
+- **Precondition** 
+  - `currentTimestamp() > spawnTime`, where `spawnTime` is contained by the `CreateConsumerChainProposal`.
+- **Postcondition** 
+  - `UnbondingPeriod` is retrieved from the provider Staking module.
+  - A client state is created (as defined in [ICS 7](../../core/ics-002-client-semantics)).
+  - A consensus state is created (as defined in [ICS 7](../../core/ics-002-client-semantics)).
+  - A client of the consumer chain is created and the client ID is added to `chainToClient`.
 - **Error Condition**
   - None.
 
 > **Note:** Creating a client of a remote chain requires a `ClientState` and a `ConsensusState` (as defined in [ICS 7](../../core/ics-002-client-semantics)).
 > `ConsensusState` requires setting a validator set of the remote chain. 
 > The provider chain uses the fact that the validator set of the consumer chain is the same as its own validator set. 
-> The rest of information to create a `ClientState` it receives through a governance proposal.
+> The rest of information to create a `ClientState` it receives through the governance proposal.
 
 <!-- omit in toc -->
 #### **[CCV-PCF-COINIT.1]**
@@ -1103,6 +1134,14 @@ The *validator set update* sub-protocol enables the provider chain
 // CCF: Provider Chain Function
 // implements the AppModule interface
 function BeginBlock() {
+  // iterate over the pending proposals and create 
+  // the consumer client if the spawn time has passed
+  foreach p IN pendingProposals {
+    if currentTimestamp() > p.spawnTime {
+      CreateConsumerClient(p)
+      pendingProposals.Remove(p)
+    }
+  }
 }
 ```
 - **Caller**
@@ -1112,7 +1151,9 @@ function BeginBlock() {
 - **Precondition**
   - True. 
 - **Postcondition**
-  - The state is not changed.
+  - For each `CreateConsumerChainProposal` `p` in the list of pending proposals `pendingProposals`, if `currentTimestamp() > p.spawnTime`, then
+    - `CreateConsumerClient(p)` is invoked;
+    - `p` is removed from `pendingProposals`.
 - **Error Condition**
   - None.
 
