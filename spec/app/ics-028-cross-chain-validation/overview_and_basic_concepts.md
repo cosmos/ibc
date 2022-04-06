@@ -298,6 +298,9 @@ The operation consists of two steps that are depicted in the following figure:
 - At the beginning of every block on the consumer chain, a fraction of the rewards are transferred to an account on the consumer CCV module.
 - At regular intervals (e.g., every `100` blocks), the consumer CCV module sends the accumulated rewards to the distribution module account on the provider chain through an IBC token transfer packet (as defined in [ICS 20](../ics-020-fungible-token-transfer/README.md)). 
   Note that the IBC transfer packet is sent over a separate unordered channel. 
+  As a result, the reward distribution is not synchronized with the other CCV operations,
+  e.g., some validators may miss out on some rewards by unbonding before an IBC transfer packet is received, 
+  while other validators may get some extra rewards by bonding before an IBC transfer packet is received.
 
 > **Note**: From the perspective of the distribution module account on the provider chain, the rewards coming from the consumer chains are indistinguishable  from locally collected rewards and thus, are distributed to all the validators and their delegators.
 
