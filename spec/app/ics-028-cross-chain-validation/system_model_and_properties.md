@@ -12,6 +12,7 @@
   - [Staking Module Interface](#staking-module-interface)
   - [Validator Set Update](#validator-set-update)
   - [Consumer Initiated Slashing](#consumer-initiated-slashing)
+  - [Reward Distribution](#reward-distribution)
 - [Correctness Reasoning](#correctness-reasoning)
 
 ## Assumptions
@@ -37,8 +38,11 @@ furthermore, the *Correct Relayer* assumption relies on both *Safe Blockchain* a
 - ***Live Blockchain***: Both the provider and the consumer chains are *live*. This means that, for every chain, the underlying consensus engine satisfies liveness (i.e., new blocks are eventually added to the chain).
   > **Note**: Both *Safe Blockchain* and *Live Blockchain* assumptions require the consensus engine's assumptions to hold, e.g., less than a third of the voting power is Byzantine. For more details, take a look at the [Tendermint Paper](https://arxiv.org/pdf/1807.04938.pdf).
 
-- ***Correct Relayer***: There is at least one *correct*, *live* relayer between the provider and consumer chains -- every packet sent on the CCV channel is relayed to the receiving end before the packet timeout elapses. 
-  Clearly, the CCV protocol is responsible of setting the packet timeouts (i.e., `timeoutHeight` and `timeoutTimestamp`) such that the *Correct Relayer* assumption is feasible. 
+- ***Correct Relayer***: There is at least one *correct*, *live* relayer between the provider and consumer chains. This assumption has two implications.
+  - First, every packet sent on the CCV channel is relayed to the receiving end before the packet timeout elapses.
+  - Second, a correct relayer will eventually relay packets on the token transfer channel.   
+  
+  Clearly, the CCV protocol is responsible of setting the timeouts (i.e., `timeoutHeight` and `timeoutTimestamp`), for the packets sent on the CCV channel, such that the *Correct Relayer* assumption is feasible.
   > **Discussion**: IBC relies on timeouts to signal that a sent packet is not going to be received on the other end. 
   > Once an ordered IBC channel timeouts, the channel is closed (see [ICS 4](../../core/ics-004-channel-and-packet-semantics)). 
   > The *Correct Relayer* assumption is necessary to ensure that the CCV channel **cannot** ever timeout and, as a result, cannot transit to the closed state. 
@@ -74,6 +78,8 @@ furthermore, the *Correct Relayer* assumption relies on both *Safe Blockchain* a
 - ***Evidence Provision***: If the consumer ABCI application receives a valid evidence of misbehavior at block height `h`, then it MUST submit it to the consumer CCV module *exactly once* and at the same height `h`. 
   Furthermore, the consumer ABCI application MUST NOT submit invalid evidence to the consumer CCV module. 
   > **Note**: What constitutes a valid evidence of misbehavior depends on the type of misbehavior and it is outside the scope of this specification.
+
+- ***Distribution Warranty***: The provider ABCI application (e.g., the Distribution module) distributes the tokens from the distribution module account among the validators that are part of the validator set.
 
 ## Desired Properties
 
@@ -127,6 +133,10 @@ CCV provides the following system invariants.
   since unbonding operations need to reach maturity on both the provider and all the consumer chains.
   >
   > **Note:** The *Slash Invariant* also ensures that if a delegator starts unbonding an amount `x` of tokens from `val` before height `hi`, then `x` will not be slashed, since `x` is not part of `Token(Power(c,hi,val))`.
+
+- ***Distribution Invariant***: If a consumer chain sends to the provider chain an amount `T` of tokens as reward for providing security, then
+  - `T` (equivalent) tokens are eventually minted on the provider chain and then distributed among the validators that are part of the validator set;
+  - the total supply of tokens is preserved, i.e., the `T` (original) tokens are escrowed on the consumer chain.
 
 ### CCV Channel
 [&uparrow; Back to Outline](#outline)
@@ -226,6 +236,10 @@ The following properties define the guarantees of CCV on *registering* on the pr
 - ***VSC Maturity and Slashing Order***: If a consumer chain sends to the provider chain a `SlashPacket` before a maturity notification of a VSC, then the provider chain MUST NOT receive the maturity notification before the `SlashPacket`.
   > **Note**: *VSC Maturity and Slashing Order* requires the VSC maturity notifications to be sent through their own IBC packets (i.e., `VSCMaturedPacket`s) instead of e.g., through acknowledgements of `VSCPacket`s. 
 
+### Reward Distribution
+[&uparrow; Back to Outline](#outline)
+
+- ***Distribution Liveness***: If the CCV module on a consumer chain sends to the distribution module account on the provider chain an amount `T` of tokens as reward for providing security, then `T` (equivalent) tokens are eventually minted in the distribution module account on the provider chain.
 
 ## Correctness Reasoning
 [&uparrow; Back to Outline](#outline)
@@ -319,6 +333,13 @@ i.e., we informally prove the properties described in the [previous section](#de
 
 - ***VSC Maturity and Slashing Order***: Follows directly from *Channel Order*.
 
+- ***Distribution Liveness***: The CCV module on the consumer chain sends to the provider chain an amount `T` of tokens through an IBC token transfer packet (as defined in [ICS 20](../ics-020-fungible-token-transfer/README.md)). 
+  Thus, if the packet is relayed within the timeout period, then `T` (equivalent) tokens are minted on the provider chain. 
+  Otherwise, the `T` tokens are refunded to the consumer CCV module account. 
+  In this case, the `T` tokens will be part of the next token transfer packet.
+  Eventually, a correct relayer will relay a token transfer packet containing the `T` tokens (cf. *Correct Relayer*, *Life Blockchain*). 
+  As a result, `T` (equivalent) tokens are eventually minted on the provider chain.
+
 - ***Validator Set Invariant***: The invariant follows from the *Safe Blockchain* assumption and both the *Apply VSC Validity* and *Validator Update To VSC Validity* properties. 
 
 - ***Voting Power Invariant***: The existence of `hp` is given by construction, i.e., the block on the proposer chain that handles a governance proposal to spawn a new consumer chain `cc` *happens before* all the blocks of `cc`. 
@@ -364,3 +385,6 @@ i.e., we informally prove the properties described in the [previous section](#de
   Thus, in both cases, `pBonded(hp,val) >= Token(Power(cc,hi,val))` and `pBonded(hp,val) - Token(Power(cc,hi,val))` consists only of tokens in the process of unbonding. 
   The tokens bonded by `val` at height `hp` that were not in the process of unbonding (i.e., `Token(Power(cc,hi,val))`) could not have completely unbonded by block `B` (cf. `ts(he) < ts(hi) + UnbondingPeriod`, *VSC Maturity and Slashing Order*, *Register Maturity Timeliness*, *Unbonding Safety*).
   This means that *exactly* the amount of tokens `Token(Power(cc,hi,val))` is slashed on the provider chain. 
+
+- ***Distribution Invariant***: The first part of the *Distribution Invariant* (i.e., the tokens are eventually minted on the provider chain and then distributed among the validators) follows directly from *Distribution Liveness* and *Distribution Warranty*. 
+  The second part of the *Distribution Invariant* (i.e., the total supply of tokens is preserved) follows directly from the *Supply* property of the Fungible Token Transfer protocol (see [ICS 20](../ics-020-fungible-token-transfer/README.md)). 
