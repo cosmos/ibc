@@ -45,7 +45,7 @@ As a result, the IBC protocol can easily be integrated with new state machines r
 as long as the necessary light client algorithms fulfilling the listed requirements are provided.
 
 The IBC protocol can be used to interact with probabilistic-finality consensus algorithms.
-In such cases, different finality thresholds may be required by different application.
+In such cases, different validity predicates may be required by different applications. For probabilistic-finality consensus, a validity predicate is defined by a finality threshold (e.g., the threshold defines how many block needs to be on top of a block in order to consider it finalized).
 As a result, clients could act as *thresholding views* of other clients:
 One *write-only* client could be used to store state updates (without the ability to verify them), 
 while many *read-only* clients with different finality thresholds (confirmation depths after which 
