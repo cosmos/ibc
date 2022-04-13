@@ -76,7 +76,7 @@ could be provided as executable WASM functions when the client instance is creat
 
 * `ConsensusState` is an opaque type representing the state of a validity predicate.
   `ConsensusState` must be able to verify state updates agreed upon by the associated consensus algorithm.
-  It must also be serialisable in a canonical fashion so that third parties, such as counterparty state machines,
+  It must also be serialisable in a canonical fashion so that third parties, such as remote state machines,
   can check that a particular state machine has stored a particular `ConsensusState`. It must finally be
   introspectable by the state machine which it is for, such that the state machine can look up its
   own `ConsensusState` at a past height.
