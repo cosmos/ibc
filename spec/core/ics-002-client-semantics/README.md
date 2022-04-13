@@ -18,7 +18,7 @@ communication (IBC) protocol are required to satisfy.
 These properties are necessary for efficient and safe verification in the higher-level protocol abstractions. 
 The algorithm utilised in IBC to verify the state updates of a remote state machine is referred to as a *validity predicate*. 
 Pairing a validity predicate with a trusted state (i.e., a state that the verifier assumes to be correct), 
-forms a *light client*, often shortened to *client*.
+implements the functionality of a *light client* (often shortened to *client*) for a remote state machine on the host state machine.
 In addition to state update verification, every light client is able to detect consensus misbehaviours through a *misbehaviour predicate*.
 
 Beyond the properties described in this specification, IBC does not impose any requirements on
