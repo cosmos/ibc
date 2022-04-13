@@ -24,7 +24,7 @@ In addition to state update verification, every light client is able to detect c
 Beyond the properties described in this specification, IBC does not impose any requirements on
 the internal operation of the state machines and their consensus algorithms. 
 A state machine may consist of a single process signing operations with a private key (the so-called "solo machine"), a quorum of processes signing in unison,
-many processes operating a Byzantine fault-tolerant consensus algorithm, or other configurations yet to be invented
+many processes operating a Byzantine fault-tolerant consensus algorithm (e.g., Tendermint), or other configurations yet to be invented
 — from the perspective of IBC, a state machine is defined entirely by its light client validation and misbehaviour detection logic.
 
 This standard also specifies how light clients are stored, registered, and updated by the IBC protocol. 
