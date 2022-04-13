@@ -27,7 +27,7 @@ A state machine may consist of a single process signing operations with a privat
 many processes operating a Byzantine fault-tolerant consensus algorithm (e.g., Tendermint), or other configurations yet to be invented
 — from the perspective of IBC, a state machine is defined entirely by its light client validation and misbehaviour detection logic.
 
-This standard also specifies how light clients are stored, registered, and updated by the IBC protocol. 
+This standard also specifies how the light client's functionality is registered and how its data is stored and updated by the IBC protocol. 
 The stored client instances can be introspected by a third party actor,
 such as a user inspecting the state of the state machine and deciding whether or not to send an IBC packet.
 
