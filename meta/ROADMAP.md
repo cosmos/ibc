@@ -13,7 +13,7 @@ This roadmap reflects the major activities that the [standards committee](STANDA
 - Finish writing the spec for [ordered channels that support timeouts](https://github.com/cosmos/ibc/pull/636).
 - Start writing the spec to support state trees without absence proofs.
 - The implementation of [ICS29](https://github.com/cosmos/ibc/tree/master/spec/app/ics-029-fee-payment) in ibc-go will be finished in Q2 and the spec might need some updates to reflect the latest status.
-- Finish ICS28 (Cross-chain validation) spec.
+- Finish [ICS28](https://github.com/cosmos/ibc/pull/666) (Cross-chain validation) spec.
 - Review and possibly merge [ICS721](https://github.com/cosmos/ibc/pull/615) spec for NFT transfers.
 - Review and possibly merge the spec for [IBC queries](https://github.com/cosmos/ibc/pull/647).
 - Write and add to the repository a high level overview of what IBC is. This can be used as an entry point for newcomers to IBC to understand its general principles.
