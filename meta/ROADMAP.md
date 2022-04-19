@@ -8,7 +8,7 @@ This roadmap reflects the major activities that the [standards committee](STANDA
 
 ## Q2 - 2022
 
-- Work on general readability improvements and inconsisntency fixes in some of the specs ([ICS02](https://github.com/cosmos/ibc/blob/carlos/update-roadmap/spec/core/ics-002-client-semantics/README.md), [ICS06](https://github.com/cosmos/ibc/blob/carlos/update-roadmap/spec/client/ics-006-solo-machine-client/README.md), [ICS07](https://github.com/cosmos/ibc/blob/carlos/update-roadmap/spec/client/ics-007-tendermint-client/README.md)). This is a first step on the long-term plan to make the specs easier to understand to qualified developers.
+- Work on general readability improvements and inconsistency fixes in some of the specs ([ICS02](https://github.com/cosmos/ibc/blob/master/spec/core/ics-002-client-semantics/README.md), [ICS06](https://github.com/cosmos/ibc/blob/master/spec/client/ics-006-solo-machine-client/README.md), [ICS07](https://github.com/cosmos/ibc/blob/master/spec/client/ics-007-tendermint-client/README.md)). This is a first step on the long-term plan to make the specs easier to understand to qualified developers.
 - The [connection](https://github.com/cosmos/ibc/pull/621) and [channel](https://github.com/cosmos/ibc/pull/677) upgradability specs have been merged, but they need some small fixes. The spec team will also help with the planning of the implementation of channel upgradability in [ibc-go](https://github.com/cosmos/ibc-go).
 - Finish writing the spec for [ordered channels that support timeouts](https://github.com/cosmos/ibc/pull/636).
 - Start writing the spec to support state trees without absence proofs.
