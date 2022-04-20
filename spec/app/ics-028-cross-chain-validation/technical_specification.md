@@ -195,6 +195,16 @@ interface CCVHandshakeMetadata {
 ```
 This specification assumes that the provider CCV module has access to the address of the distribution module account through the `GetDistributionAccountAddress()` method. For an example, take a look at the [auth module](https://docs.cosmos.network/v0.44/modules/auth/) of Cosmos SDK. 
 
+During the CCV channel opening handshake, the provider chain adds the address of its distribution module account to the channel version as metadata (as described in [ICS 4](../../core/ics-004-channel-and-packet-semantics/README.md#definitions)). 
+The metadata structure is described by the following interface:
+```typescript
+interface CCVHandshakeMetadata {
+  providerDistributionAccount: string // the account's address
+  version: string
+}
+```
+This specification assumes that the provider CCV module has access to the address of the distribution module account through the `GetDistributionAccountAddress()` method. For an example, take a look at the [auth module](https://docs.cosmos.network/v0.44/modules/auth/) of Cosmos SDK. 
+
 ### CCV Packets
 [&uparrow; Back to Outline](#outline)
 
@@ -282,7 +292,7 @@ This section describes the internal state of the CCV module. For simplicity, the
   }
 - `vscId: uint64` is a monotonic strictly increasing and positive ID that is used to uniquely identify the VSCs sent to the consumer chains. 
   Note that `0` is used as a special ID for the mapping from consumer heights to provider heights.
-- `initH: Map<string, Height>` is a mapping from consumer chain IDs to the heights on the provider chain. 
+- `initialHeights: Map<string, Height>` is a mapping from consumer chain IDs to the heights on the provider chain. 
   For every consumer chain, the mapping stores the height when the CCV channel to that consumer chain is established. 
   Note that the provider validator set at this height matches the validator set at the height when the first VSC is provided to that consumer chain.
   It enables the mapping from consumer heights to provider heights.
@@ -732,8 +742,8 @@ function onChanOpenConfirm(
     // set channel mappings
     chainToChannel[clientState.chainId] = channelIdentifier
     channelToChain[channelIdentifier] = clientState.chainId
-    // set initH for this consumer chain
-    initH[chainId] = getCurrentHeight()
+    // set initialHeights for this consumer chain
+    initialHeights[chainId] = getCurrentHeight()
 }
 ```
 - **Caller**
@@ -748,7 +758,7 @@ function onChanOpenConfirm(
     - the transaction is aborted.
   - Otherwise, 
     - the channel mappings are set, i.e., `chainToChannel` and `channelToChain`;
-    - `initH[chainId]` is set to the current height.
+    - `initialHeights[chainId]` is set to the current height.
 - **Error Condition**
   - None.
 
@@ -1852,7 +1862,7 @@ function onRecvSlashPacket(packet: Packet): bytes {
   if packet.data.vscId == 0 {
     // the infraction happened before sending any VSC to this chain
     chainId = channelToChain[packet.getDestinationChannel()]
-    infractionHeight = initH[chainId]
+    infractionHeight = initialHeights[chainId]
   }
   else {
     infractionHeight = VSCtoH[packet.data.vscId]
@@ -1886,7 +1896,7 @@ function onRecvSlashPacket(packet: Packet): bytes {
     - the channel closing handshake is initiated;
     - an error acknowledgment is returned.
   - Otherwise,
-    - if `packet.data.vscId == 0`, `infractionHeight` is set to `initH[chainId]`, with `chainId = channelToChain[packet.getDestinationChannel()]`, i.e., the height when the CCV channel to this consumer chain is established;
+    - if `packet.data.vscId == 0`, `infractionHeight` is set to `initialHeights[chainId]`, with `chainId = channelToChain[packet.getDestinationChannel()]`, i.e., the height when the CCV channel to this consumer chain is established;
     - otherwise, `infractionHeight` is set to `VSCtoH[packet.data.vscId]`, i.e., the height at which the voting power was last updated by the validator updates in the VSC with ID `packet.data.vscId`;
     - a request is made to the Slashing module to slash the validator with address `packet.data.valAddress` for misbehaving at height `infractionHeight`;
     - a request is made to the Slashing module to jail the validator with address `packet.data.valAddress` for a period `data.jailTime`;
