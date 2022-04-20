@@ -16,6 +16,7 @@
   - [Packet Relay](#packet-relay)
   - [Validator Set Update](#validator-set-update)
   - [Consumer Initiated Slashing](#consumer-initiated-slashing)
+  - [Reward Distribution](#reward-distribution)
 
 ## Placing CCV within an ABCI Application
 [&uparrow; Back to Outline](#outline)
@@ -55,6 +56,8 @@ Before describing the data structures and sub-protocols of the CCV protocol, we 
   - connection semantics ([ICS 3](../../core/ics-003-connection-semantics)) via `connectionKeeper`;
   - client semantics ([ICS 2](../../core/ics-002-client-semantics)) via `clientKeeper`.
 
+- The consumer CCV module interacts with the IBC Token Transfer module ([ICS 20](../ics-020-fungible-token-transfer/README.md)) via `transferKeeper`.
+
 - For the [Initialization sub-protocol](#initialization), the provider CCV module interacts with a Governance module by handling governance proposals to spawn new consumer chains. 
   If such proposals pass, then all validators on the provider chain MUST validate the consumer chain at spawn time; 
   otherwise they get slashed. 
@@ -77,7 +80,7 @@ Before describing the data structures and sub-protocols of the CCV protocol, we 
   }
   ```
 
-- The provider CCV modules interact with a Slashing module on the provider chain. 
+- The provider CCV module interacts with a Slashing module on the provider chain. 
   For an example of how slashing works, take a look at the [Slashing module documentation](https://docs.cosmos.network/v0.44/modules/slashing/) of Cosmos SDK. 
   The interaction is defined by the following interface:
   ```typescript 
@@ -91,7 +94,7 @@ Before describing the data structures and sub-protocols of the CCV protocol, we 
     // request the Slashing module to jail a validator until time
     JailUntil(valAddress: string, time: uint64)
   }
-  ```
+  ``` 
 
 - The following hooks enable the provider CCV module to register operations to be execute when certain events occur within the provider Staking module:
   ```typescript
@@ -172,6 +175,16 @@ this specification expects the following fields to be part of every proposal to 
   - `initialHeight` is the proposed initial height of new consumer chain. Note that `Height` is defined in [ICS 7](../../client/ics-007-tendermint-client). For a completely new chain, `initialHeight = {0,1}`; however, it may be different if the chain converts to a consumer chain.
   - `spawnTime` is the time on the provider chain at which the consumer chain genesis is finalized and all validators will be responsible for starting their consumer chain validator node.
 
+During the CCV channel opening handshake, the provider chain adds the address of its distribution module account to the channel version as metadata (as described in [ICS 4](../../core/ics-004-channel-and-packet-semantics/README.md#definitions)). 
+The metadata structure is described by the following interface:
+```typescript
+interface CCVHandshakeMetadata {
+  providerDistributionAccount: string // the account's address
+  version: string
+}
+```
+This specification assumes that the provider CCV module has access to the address of the distribution module account through the `GetDistributionAccountAddress()` method. For an example, take a look at the [auth module](https://docs.cosmos.network/v0.44/modules/auth/) of Cosmos SDK. 
+
 ### CCV Packets
 [&uparrow; Back to Outline](#outline)
 
@@ -220,6 +233,11 @@ type PacketAcknowledgement = PacketSuccess | PacketError; // general ack
 [&uparrow; Back to Outline](#outline)
 
 This section describes the internal state of the CCV module. For simplicity, the state is described by a set of variables; for each variable, both the type and a brief description is provided. In practice, all the state (except for hardcoded constants, e.g., `ProviderPortId`) is stored in a key/value store (KVS). The host state machine provides a KVS interface with three functions, i.e., `get()`, `set()`, and `delete()` (as defined in [ICS 24](../../core/ics-024-host-requirements)).
+
+- `ccvVersion = "ccv-1"` is the CCV expected version. Both the provider and the consumer chains need to agree on this version.
+- `zeroTimeoutHeight = {0,0}` is the `timeoutHeight` (as defined in [ICS 4](../../core/ics-004-channel-and-packet-semantics)) used by CCV for sending packets. Note that CCV uses `ccvTimeoutTimestamp` for sending CCV packets and `transferTimeoutTimestamp` for transferring tokens. 
+- `ccvTimeoutTimestamp: uint64` is the `timeoutTimestamp` (as defined in [ICS 4](../../core/ics-004-channel-and-packet-semantics)) for sending CCV packets. The CCV protocol is responsible of setting `ccvTimeoutTimestamp` such that the *Correct Relayer* assumption is feasible.
+- `transferTimeoutTimestamp: uint64` is the `timeoutTimestamp` (as defined in [ICS 4](../../core/ics-004-channel-and-packet-semantics)) for transferring tokens. 
 
 <!-- omit in toc -->
 #### State on the provider chain
@@ -345,6 +363,11 @@ This section describes the internal state of the CCV module. For simplicity, the
   `outstandingDowntime[valAddr] == TRUE` entails that the consumer chain sent a request to slash for downtime the validator with address `valAddr`. 
   `outstandingDowntime[valAddr]` is set to false once the consumer chain receives a confirmation that the slash request was received by the provider chain, i.e., a `VSCPacket` that contains `valAddr` in `slashAcks`. 
   The mapping enables the consumer CCV module to avoid sending to the provider chain multiple slashing requests for the same downtime infraction.
+- `providerDistributionAccount: string` is the address of the distribution module account on the provider chain. It enables the consumer chain to transfer rewards to the provider chain.
+- `distributionChannelId: Identifier` is the ID of the distribution token transfer channel used for sending rewards to the provider chain.
+- `BlocksPerDistributionTransfer: int64` is the interval (in number of blocks) between two distribution token transfers. 
+- `lastDistributionTransferHeight: Height` is the block height of the last distribution token transfer.
+- `ccvAccount: string` is the address of the CCV module account where a fraction of the consumer chain rewards are collected before being transferred to the provider chain. 
  
 ## Sub-protocols
 
@@ -484,7 +507,7 @@ function onChanOpenInit(
   channelIdentifier: Identifier,
   counterpartyPortIdentifier: Identifier,
   counterpartyChannelIdentifier: Identifier,
-  version: string) {
+  version: string): string {
     // the channel handshake MUST be initiated by consumer chain
     abortTransactionUnless(FALSE)
 }
@@ -512,22 +535,19 @@ function onChanOpenTry(
   channelIdentifier: Identifier,
   counterpartyPortIdentifier: Identifier,
   counterpartyChannelIdentifier: Identifier,
-  version: string,
-  counterpartyVersion: string) {
+  counterpartyVersion: string):  string {
     // validate parameters:
     // - only ordered channels allowed
     abortTransactionUnless(order == ORDERED)
     // - require the portIdentifier to be the port ID the CCV module is bound to
     abortTransactionUnless(portIdentifier == ProviderPortId)
-    // - require the version to be the expected version
-    abortTransactionUnless(version == "1")
 
     // assert that the counterpartyPortIdentifier matches 
     // the expected consumer port ID
     abortTransactionUnless(counterpartyPortIdentifier == ConsumerPortId)
 
-    // assert that the counterpartyVersion matches the local version
-    abortTransactionUnless(counterpartyVersion == version)
+    // assert that the counterpartyVersion matches the expected version
+    abortTransactionUnless(counterpartyVersion == ccvVersion)
     
     // get the client state associated with this client ID in order 
     // to get access to the consumer chain ID
@@ -540,6 +560,11 @@ function onChanOpenTry(
 
     // require that no other CCV channel exists for this consumer chain
     abortTransactionUnless(clientState.chainId NOTIN chainToChannel.Keys())
+
+    return CCVHandshakeMetadata{
+      providerDistributionAccount: GetDistributionAccountAddress(),
+      version: ccvVersion
+    }
 }
 ```
 - **Caller**
@@ -552,11 +577,11 @@ function onChanOpenTry(
   - The transaction is aborted if any of the following conditions are true:
     - the channel is not ordered;
     - `portIdentifier != ProviderPortId`;
-    - `version` is not the expected version;
     - `counterpartyPortIdentifier != ConsumerPortId`;
-    - `counterpartyVersion != version`;
+    - `counterpartyVersion != ccvVersion`;
     - the channel is not built on top of the client created for this consumer chain;
     - another CCV channel for this consumer chain already exists.
+  - A `CCVHandshakeMetadata` is returned, with `providerDistributionAccount` set to the the address of the distribution module account on the provider chain and `version` set to `ccvVersion`.
   - The state is not changed.
 - **Error Condition**
   - None.
@@ -703,7 +728,7 @@ function onChanOpenInit(
   channelIdentifier: Identifier,
   counterpartyPortIdentifier: Identifier,
   counterpartyChannelIdentifier: Identifier,
-  version: string) {
+  version: string): string {
     // ensure provider channel hasn't already been created
     abortTransactionUnless(providerChannel == "")
 
@@ -713,7 +738,7 @@ function onChanOpenInit(
     // - require the portIdentifier to be the port ID the CCV module is bound to
     abortTransactionUnless(portIdentifier == ConsumerPortId)
     // - require the version to be the expected version
-    abortTransactionUnless(version == "1")
+    abortTransactionUnless(version == "" OR version == ccvVersion)
 
     // assert that the counterpartyPortIdentifier matches 
     // the expected consumer port ID
@@ -723,6 +748,8 @@ function onChanOpenInit(
     // with this channel matches the expected provider client id
     clientId = getClient(channelIdentifier)   
     abortTransactionUnless(providerClient != clientId)
+
+    return ccvVersion
 }
 ```
 - **Caller**
@@ -735,9 +762,10 @@ function onChanOpenInit(
   - The transaction is aborted if any of the following conditions are true:
     - `providerChannel` is already set;
     - `portIdentifier != ConsumerPortId`;
-    - `version` is not the expected version;
+    - `version` is set but not to the expected version;
     - `counterpartyPortIdentifier != ProviderPortId`;
     - the client associated with this channel is not the expected provider client.
+  - `ccvVersion` is returned.
   - The state is not changed.
 - **Error Condition**
   - None.
@@ -754,8 +782,7 @@ function onChanOpenTry(
   channelIdentifier: Identifier,
   counterpartyPortIdentifier: Identifier,
   counterpartyChannelIdentifier: Identifier,
-  version: string,
-  counterpartyVersion: string) {
+  counterpartyVersion: string):  string {
     // the channel handshake MUST be initiated by consumer chain
     abortTransactionUnless(FALSE)
 }
@@ -783,8 +810,25 @@ function onChanOpenAck(
     // ensure provider channel hasn't already been created
     abortTransactionUnless(providerChannel == "")
 
-    // assert that the counterpartyVersion matches the local version
-    abortTransactionUnless(counterpartyVersion == version)
+    // the version must be encoded in JSON format (as defined in ICS4)
+    md = UnmarshalJSON(counterpartyVersion)
+
+    // assert that the counterpartyVersion matches the expected version
+    abortTransactionUnless(md.version == ccvVersion)
+
+    // set the address of the distribution module account on the provider chain
+    providerDistributionAccount = md.providerDistributionAccount
+
+    // initiate opening handshake for the distribution token transfer channel
+    // over the same connection as the CCV channel
+    // i.e., ChanOpenInit (as required by ICS20)
+    distributionChannelId = channelKeeper.ChanOpenInit(
+      UNORDERED, // order
+      channelKeeper.GetConnectionHops(channelIdentifier), // connectionHops: same as the CCV channel
+      "transfer", // portIdentifier
+      "transfer", // counterpartyPortIdentifier
+      "ics20-1" // version
+    )
 }
 ```
 - **Caller**
@@ -794,10 +838,12 @@ function onChanOpenAck(
 - **Precondition**
   - True.
 - **Postcondition**
+  - `counterpartyVersion` is unmarshaled into a `CCVHandshakeMetadata` structure `md`. 
   - The transaction is aborted if any of the following conditions are true:
     - `providerChannel` is already set;
-    - `counterpartyVersion != version`.
-  - The state is not changed.
+    - `md.version != ccvVersion`.
+  - The address of the distribution module account on the provider chain is set to `md.providerDistributionAccount`.
+  - The distribution token transfer channel opening handshake is initiated and `distributionChannelId` is set to the resulting channel ID.
 - **Error Condition**
   - None.
 
@@ -1177,7 +1223,12 @@ function EndBlock(): [ValidatorUpdate] {
 
       foreach data IN pendingVSCPackets[chainId] {
         // create packet and send it using the interface exposed by ICS-4
-        packet = Packet{data: data, destChannel: channelId}
+        packet = Packet{
+          timeoutHeight: zeroTimeoutHeight,
+          timeoutTimestamp: ccvTimeoutTimestamp,
+          destChannel: channelId,
+          data: data,
+        }
         channelKeeper.SendPacket(packet)
       }
 
@@ -1539,6 +1590,10 @@ function onTimeoutVSCMaturedPacket(packet Packet) {
 // CCF: Consumer Chain Function
 // implements the AppModule interface
 function EndBlock(): [ValidatorUpdate] {
+  if getCurrentHeight() - lastDistributionTransferHeight >= BlocksPerDistributionTransfer {
+    DistributeRewards()
+  }
+
   if pendingChanges.IsEmpty() {
     // do nothing
     return []
@@ -1570,6 +1625,7 @@ function EndBlock(): [ValidatorUpdate] {
 - **Precondition**
   - True. 
 - **Postcondition**
+  - If `getCurrentHeight() - lastDistributionTransferHeight >= BlocksPerDistributionTransfer`, the `DistributeRewards()` method is invoked (see [CCV-CCF-DISTRREW.1](#ccv-ccf-distrrew1)).
   - If `pendingChanges` is empty, the state is not changed.
   - Otherwise,
     - the pending changes are aggregated and stored in `changes`;
@@ -1642,7 +1698,12 @@ function UnbondMaturePackets() {
     packetData = VSCMaturedPacketData{id: id}
 
     // create packet and send it using the interface exposed by ICS-4
-    packet = Packet{data: packetData, destChannel: providerChannel}
+    packet = Packet{
+      timeoutHeight: zeroTimeoutHeight,
+      timeoutTimestamp: ccvTimeoutTimestamp,
+      destChannel: providerChannel,
+      data: packetData,
+    }
     channelKeeper.SendPacket(packet)
           
     // remove entry from the list
@@ -1807,7 +1868,12 @@ function SendSlashRequest(
     // check whether the CCV channel to the provider chain is established
     if providerChannel != "" {
       // create packet and send it using the interface exposed by ICS-4
-      packet = Packet{data: packetData, destChannel: providerChannel}
+      packet = Packet{
+        timeoutHeight: zeroTimeoutHeight,
+        timeoutTimestamp: ccvTimeoutTimestamp,
+        destChannel: providerChannel,
+        data: packetData,
+      }
       channelKeeper.SendPacket(packet)
 
       if downtime {
@@ -1866,7 +1932,12 @@ function SendPendingSlashRequests() {
   foreach req IN pendingSlashRequests.Reverse() {
     if !req.downtime OR !outstandingDowntime[req.data.valAddress] {
       // create packet and send it using the interface exposed by ICS-4
-      packet = Packet{data: req.data, destChannel: providerChannel}
+      packet = Packet{
+        timeoutHeight: zeroTimeoutHeight,
+        timeoutTimestamp: ccvTimeoutTimestamp,
+        destChannel: providerChannel,
+        data: req.data,
+      }
       channelKeeper.SendPacket(packet)
 
       if req.downtime {
@@ -1893,4 +1964,40 @@ function SendPendingSlashRequests() {
 - **Error Condition**
   - None.
 
-> **Note**: Iterating over pending `SlashRequest`s in reverse order ensures that validators that are down for multiple blocks during channel initialization will be slashed for the latest downtime evidence.  
+> **Note**: Iterating over pending `SlashRequest`s in reverse order ensures that validators that are down for multiple blocks during channel initialization will be slashed for the latest downtime evidence.
+
+### Reward Distribution
+[&uparrow; Back to Outline](#outline)
+
+<!-- omit in toc -->
+#### **[CCV-CCF-DISTRREW.1]**
+```typescript
+// CCF: Consumer Chain Function
+function DistributeRewards() {
+  // iterate over all different tokens in ccvAccount
+  foreach (denomination, amount) IN ccvAccount.GetAllBalances() {
+    // transfer token using ICS20
+    transferKeeper.TransferToken(
+      denomination,
+      amount,
+      ccvAccount, // sender
+      providerDistributionAccount, // receiver
+      distributionChannelId, // transfer channel ID
+      zeroTimeoutHeight, // timeoutHeight
+      transferTimeoutTimestamp // timeoutTimestamp
+    )
+  }
+  lastDistributionTransferHeight = getCurrentHeight()
+}
+```
+- **Caller**
+  - The `EndBlock()` method.
+- **Trigger Event**
+  - An `EndBlock` message is received from the consensus engine.
+- **Precondition**
+  - `getCurrentHeight() - lastDistributionTransferHeight >= BlocksPerDistributionTransfer`
+- **Postcondition**
+  - For each token type defined as a pair `(denomination, amount)` in `ccvAccount`, a transfer token (as defined in [ICS 20](../ics-020-fungible-token-transfer/README.md)) is initiated. 
+  - `lastDistributionTransferHeight` is set to the current height. 
+- **Error Condition**
+  - None.

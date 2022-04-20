@@ -12,6 +12,7 @@
   - [Validator Set Update](#validator-set-update)
     - [Completion of Unbonding Operations](#completion-of-unbonding-operations)
   - [Consumer Initiated Slashing](#consumer-initiated-slashing)
+  - [Reward Distribution](#reward-distribution)
 
 
 
@@ -126,7 +127,8 @@ CCV must handle the following types of operations:
 - **Validator Set Update**: It is a two-part operation, i.e., 
   - update the validator sets of all the consumer chains based on the information obtained from the *provider Staking module* (i.e., the Staking module on the provider chain) on the amount of tokens bonded by validators on the provider chain;
   - and enable the timely completion (cf. the unbonding periods on the consumer chains) of unbonding operations (i.e., operations of unbonding bonded tokens).
-- **Consumer Initiated Slashing**: Enable the provider chain to slash and jail bonded validators that misbehave while validating on the consumer chain. 
+- **Consumer Initiated Slashing**: Enable the provider chain to slash and jail bonded validators that misbehave while validating on the consumer chain.
+- **Reward Distribution**: Enable the distribution of block production rewards and transaction fees from the consumer chains to the validators on the provider chain.  
 
 ### Channel Initialization
 [&uparrow; Back to Outline](#outline)
@@ -155,12 +157,12 @@ The channel initialization consists of four phases:
 - **Channel handshake**: A relayer is responsible for initiating the channel handshake (as defined in [ICS 4](../../core/ics-004-channel-and-packet-semantics)). 
   The channel handshake MUST be initiated on the consumer chain. 
   The handshake consists of four messages that need to be received for a channel built on top of the expected clients. 
-  We omit the `ChanOpenAck` message since it is not relevant for the overview. 
   - *OnChanOpenInit*: On receiving a `ChanOpenInit` message, the consumer CCV module verifies that the underlying client associated with this channel is the expected client of the provider chain (i.e., created during genesis).
   - *OnChanOpenTry*: On receiving a `ChanOpenTry` message, the provider CCV module verifies that the underlying client associated with this channel is the expected client of the consumer chain (i.e., created when handling the governance proposal).
+  - *OnChanOpenAck*: On receiving a `ChanOpenAck` message, the consumer CCV module initiates the opening handshake for the token transfer channel required by the Reward Distribution operation (see the [Reward Distribution](#reward-distribution) section).
   - *OnChanOpenConfirm*: On receiving the *FIRST* `ChanOpenConfirm` message, the provider CCV module considers its side of the CCV channel to be established.
 - **Channel completion**: Once the provider chain side of the CCV channel is established, 
-  the provider CCV module provides VSCs (i.e., validator set changes) to the consumer chain (see the [next section](#validator-set-update)). 
+  the provider CCV module provides VSCs (i.e., validator set changes) to the consumer chain (see the [Validator Set Update](#validator-set-update) section). 
   On receiving the *FIRST* `VSCPacket`, the consumer CCV module considers its side of the CCV channel to be established. 
   From this moment onwards, the consumer chain is secured by the provider chain.
 
@@ -279,3 +281,29 @@ The following figure shows an overview of the Consumer Initiated Slashing operat
   > **Note**: As a consequence of slashing (and potentially jailing) `V`, the Staking module updates accordingly `V`'s voting power. This update MUST be visible in the next VSC provided to the consumer chains.  
 
 For a more detailed description of Consumer Initiated Slashing, take a look at the [technical specification](./technical_specification.md#consumer-initiated-slashing).
+
+### Reward Distribution
+[&uparrow; Back to Outline](#outline)
+
+In the context of single-chain validation, the *Distribution module*, i.e., a module of the ABCI application, handles the distribution of rewards (i.e., block production rewards and transaction fees) to every validator account based on their total voting power; 
+these rewards are then further distributed to the delegators. 
+For an example, take a look at the [Distribution module documentation](https://docs.cosmos.network/v0.44/modules/distribution/) of Cosmos SDK.
+
+At the beginning of every block, the rewards for the previous block are pooled into a distribution module account. 
+The Reward Distribution operation of CCV enables every consumer chain to transfer a fraction of these rewards to the provider chain. 
+The operation consists of two steps that are depicted in the following figure:
+
+![Reward Distribution](./figures/ccv-distribution-overview.png?raw=true)
+
+- At the beginning of every block on the consumer chain, a fraction of the rewards are transferred to an account on the consumer CCV module.
+- At regular intervals (e.g., every `100` blocks), the consumer CCV module sends the accumulated rewards to the distribution module account on the provider chain through an IBC token transfer packet (as defined in [ICS 20](../ics-020-fungible-token-transfer/README.md)). 
+  Note that the IBC transfer packet is sent over a separate unordered channel. 
+  As a result, the reward distribution is not synchronized with the other CCV operations,
+  e.g., some validators may miss out on some rewards by unbonding before an IBC transfer packet is received, 
+  while other validators may get some extra rewards by bonding before an IBC transfer packet is received.
+
+> **Note**: From the perspective of the distribution module account on the provider chain, the rewards coming from the consumer chains are indistinguishable  from locally collected rewards and thus, are distributed to all the validators and their delegators.
+
+As a prerequisite of this approach, every consumer chain must open a token transfer channel to the provider chain and be made aware of the address of the distribution module account on the provider chain, both of which happen during channel initialization.
+- On receiving a `ChanOpenAck` message, the consumer CCV module initiates the opening handshake for the token transfer channel using the same client and connection as for the CCV channel. 
+- On receiving a `ChanOpenTry` message, the provider CCV module adds the address of the distribution module account to the channel version as metadata (as defined in [ICS 4](../../core/ics-004-channel-and-packet-semantics/README.md#definitions)).
