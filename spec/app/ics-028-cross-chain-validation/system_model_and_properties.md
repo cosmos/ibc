@@ -138,6 +138,10 @@ CCV provides the following system properties.
   - `T` (equivalent) tokens MUST be eventually minted on the provider chain and then distributed among the validators that are part of the validator set;
   - the total supply of tokens MUST be preserved, i.e., the `T` (original) tokens are escrowed on the consumer chain.
 
+- ***Distribution Invariant***: If a consumer chain sends to the provider chain an amount `T` of tokens as reward for providing security, then
+  - `T` (equivalent) tokens are eventually minted on the provider chain and then distributed among the validators that are part of the validator set;
+  - the total supply of tokens is preserved, i.e., the `T` (original) tokens are escrowed on the consumer chain.
+
 ### CCV Channel
 [&uparrow; Back to Outline](#outline)
 
@@ -230,7 +234,7 @@ The following properties define the guarantees of CCV on *registering* on the pr
 
 - ***Provider Slashing Warranty***: If the provider CCV module receives at height `hs` from a consumer chain `cc` a `SlashPacket` containing a validator `val` and a VSC ID `vscId`, 
   then it MUST make at height `hs` *exactly one* request to the provider Slashing module to slash `val` for misbehaving at height `h`, such that
-  - if `vscId = 0`, `h` is the height of the block when the provider chain provided to `cc` the first VSC;
+  - if `vscId = 0`, `h` is the height of the block when the provider chain established a CCV channel to `cc`;
   - otherwise, `h` is the height of the block immediately subsequent to the block when the provider chain provided to `cc` the VSC with ID `vscId`.
 
 - ***VSC Maturity and Slashing Order***: If a consumer chain sends to the provider chain a `SlashPacket` before a maturity notification of a VSC, then the provider chain MUST NOT receive the maturity notification before the `SlashPacket`.

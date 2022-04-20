@@ -269,8 +269,9 @@ This section describes the internal state of the CCV module. For simplicity, the
   }
 - `vscId: uint64` is a monotonic strictly increasing and positive ID that is used to uniquely identify the VSCs sent to the consumer chains. 
   Note that `0` is used as a special ID for the mapping from consumer heights to provider heights.
-- `initH: Map<string, Height>` is a mapping from consumer chain IDs to the heights on the provider chain. 
-  For every consumer chain, the mapping stores the height when the first VSC was provided to that consumer chain. 
+- `initialHeights: Map<string, Height>` is a mapping from consumer chain IDs to the heights on the provider chain. 
+  For every consumer chain, the mapping stores the height when the CCV channel to that consumer chain is established. 
+  Note that the provider validator set at this height matches the validator set at the height when the first VSC is provided to that consumer chain.
   It enables the mapping from consumer heights to provider heights.
 - `VSCtoH: Map<uint64, Height>` is a mapping from VSC IDs to heights on the provider chain. It enables the mapping from consumer heights to provider heights, 
   i.e., the voting power at height `VSCtoH[id]` on the provider chain was last updated by the validator updates contained in the VSC with ID `id`.  
@@ -633,6 +634,8 @@ function onChanOpenConfirm(
     // set channel mappings
     chainToChannel[clientState.chainId] = channelIdentifier
     channelToChain[channelIdentifier] = clientState.chainId
+    // set initialHeights for this consumer chain
+    initialHeights[chainId] = getCurrentHeight()
 }
 ```
 - **Caller**
@@ -645,7 +648,9 @@ function onChanOpenConfirm(
   - If a CCV channel for this consumer chain already exists, then 
     - the channel closing handshake is initiated for the underlying channel;
     - the transaction is aborted.
-  - Otherwise, the channel mappings are set, i.e., `chainToChannel` and `channelToChain`.
+  - Otherwise, 
+    - the channel mappings are set, i.e., `chainToChannel` and `channelToChain`;
+    - `initialHeights[chainId]` is set to the current height.
 - **Error Condition**
   - None.
 
@@ -1213,11 +1218,6 @@ function EndBlock(): [ValidatorUpdate] {
 
     // check whether there is an established CCV channel to the consumer chain
     if chainId IN chainToChannel.Keys() {
-      // set initH for this consumer chain (if not done already)
-      if chainId NOT IN initH.Keys() {
-        initH[chainId] = getCurrentHeight()
-      }
-
       // get the channel ID for the given consumer chain ID
       channelId = chainToChannel[chainId]
 
@@ -1259,7 +1259,6 @@ function EndBlock(): [ValidatorUpdate] {
       - `slashRequests[chainId]` is emptied;
       - `packetData` is appended to the list of pending `VSCPacket`s associated to `chainId`, i.e., `pendingVSCPackets[chainId]`.
     - If there is an established CCV channel for the the consumer chain with `chainId`, then
-      - if `initH[chainId]` is not already set, then `initH[chainId]` is set to the current height;
       - for each `VSCPacketData` in the list of pending VSCPackets associated to `chainId`
         - a packet with the `VSCPacketData` is sent on the channel associated with the consumer chain with `chainId`;
       - all the pending VSCPackets associated to `chainId` are removed.
@@ -1745,7 +1744,7 @@ function onRecvSlashPacket(packet: Packet): bytes {
   if packet.data.vscId == 0 {
     // the infraction happened before sending any VSC to this chain
     chainId = channelToChain[packet.getDestinationChannel()]
-    infractionHeight = initH[chainId]
+    infractionHeight = initialHeights[chainId]
   }
   else {
     infractionHeight = VSCtoH[packet.data.vscId]
@@ -1779,7 +1778,7 @@ function onRecvSlashPacket(packet: Packet): bytes {
     - the channel closing handshake is initiated;
     - an error acknowledgment is returned.
   - Otherwise,
-    - if `packet.data.vscId == 0`, `infractionHeight` is set to `initH[chainId]`, with `chainId = channelToChain[packet.getDestinationChannel()]`, i.e., the height when the first VSC was provided to this consumer chain;
+    - if `packet.data.vscId == 0`, `infractionHeight` is set to `initialHeights[chainId]`, with `chainId = channelToChain[packet.getDestinationChannel()]`, i.e., the height when the CCV channel to this consumer chain is established;
     - otherwise, `infractionHeight` is set to `VSCtoH[packet.data.vscId]`, i.e., the height at which the voting power was last updated by the validator updates in the VSC with ID `packet.data.vscId`;
     - a request is made to the Slashing module to slash the validator with address `packet.data.valAddress` for misbehaving at height `infractionHeight`;
     - a request is made to the Slashing module to jail the validator with address `packet.data.valAddress` for a period `data.jailTime`;

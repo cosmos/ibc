@@ -245,7 +245,9 @@ Thus, although the infractions are committed on the consumer chains and evidence
 
 The following figure shows the intuition behind such a mapping using the provided VSCs. 
 The four unbonding operations (i.e., undelegations) occur on the provider chain and, as a consequence, the provider chain provides VSCs to the consumer chain, e.g., `undelegate-3` results in `VSC3` being provided.
-The four colors (i.e., red, blue, green, and yellow) indicate the mapping of consumer chain heights to provider chain heights (note that on the provider chain there is only one block of a given color).  
+The four colors (i.e., red, blue, green, and yellow) indicate the mapping of consumer chain heights to provider chain heights. 
+Note that on the provider chain there is only one block of a given color. 
+Also, note that the three white blocks between the green and the yellow blocks on the provider chain have the same validator set.  
 As a result, a validator misbehaving on the consumer chain, e.g., in either of the two green blocks, is slashed the same as if misbehaving on the provider chain, e.g., in the green block. 
 This ensures that once unbonding operations are initiated, the corresponding unbonding tokens are not slashed for infractions committed in the subsequent blocks, e.g., the tokens unbonding due to `undelegate-3` are not slashed for infractions committed in or after the green blocks.
 
@@ -263,8 +265,9 @@ For clarity, we use `Hp*` and `Hc*` to denote block heights on the provider chai
   > **Note**: It is possible for multiple VSCs to be received by the consumer chain within the same block. For more details, take a look at the [Validator sets, validator updates and VSCs](./system_model_and_properties.md#validator-sets-validator-updates-and-vscs) section.
 - By default, every consumer CCV module maps any block height to `0` (i.e., VSC IDs start from `1`). 
   Intuitively, this means that the voting power on the consumer chain at height `Hc` with `HtoVSC(Hc) = 0` was setup at genesis during Channel Initialization. 
-- For every consumer chain, the provider CCV module sets `VSCtoH[0]` to the height at which the first VSC was provided to this consumer chain. 
-  Intuitively, this means that the validator set on the provider chain at height `VSCtoH[0]` matches the validator set on the consumer chain at all heights `Hc` with `HtoVSC[Hc] = 0`.
+- For every consumer chain, the provider CCV module sets `VSCtoH[0]` to the height when it establishes the CCV channel to this consumer chain. 
+  Note that the validator set on the provider chain at height `VSCtoH[0]` matches the validator set at the height when the first VSC is provided to this consumer chain. 
+  This means that this validator set on the provider chain matches the validator set on the consumer chain at all heights `Hc` with `HtoVSC[Hc] = 0`.
 
 The following figure shows an overview of the Consumer Initiated Slashing operation of CCV. 
 
@@ -277,7 +280,7 @@ The following figure shows an overview of the Consumer Initiated Slashing operat
 - The provider CCV module receives at (slashing) height `Hp1` the `SlashPacket` with `vscId = HtoVSC[Hc1]`. 
   As a result, it requests the provider Slashing module to slash `V`, but it set the infraction height to `VSCtoH[vscId]`, i.e., 
     - if `vscId != 0`, the height on the provider chain where the voting power was updated by the VSC with ID `vscId`;
-    - otherwise, the height at which the first VSC was provided to this consumer chain.
+    - otherwise, the height at which the CCV channel to this consumer chain was established.
   > **Note**: As a consequence of slashing (and potentially jailing) `V`, the Staking module updates accordingly `V`'s voting power. This update MUST be visible in the next VSC provided to the consumer chains.  
 
 For a more detailed description of Consumer Initiated Slashing, take a look at the [technical specification](./technical_specification.md#consumer-initiated-slashing).
