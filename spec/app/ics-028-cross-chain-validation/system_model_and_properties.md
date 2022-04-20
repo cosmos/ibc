@@ -6,7 +6,7 @@
 ## Outline
 - [Assumptions](#assumptions)
 - [Desired Properties](#desired-properties)
-  - [System Invariants](#system-invariants)
+  - [System Properties](#system-properties)
   - [CCV Channel](#ccv-channel)
   - [Validator Sets, Validator Updates and VSCs](#validator-sets-validator-updates-and-vscs)
   - [Staking Module Interface](#staking-module-interface)
@@ -86,7 +86,7 @@ furthermore, the *Correct Relayer* assumption relies on both *Safe Blockchain* a
 The following properties are concerned with **one provider chain** providing security to **multiple consumer chains**. 
 Between the provider chain and each consumer chain, a separate (unique) CCV channel is established. 
 
-### System Invariants
+### System Properties
 [&uparrow; Back to Outline](#outline)
 
 We use the following notations:
@@ -106,10 +106,10 @@ i.e., if a chain `A` sends at height `ha` a packet to a chain `B` and `B` receiv
 > 
 > **Note**: The block on the proposer chain that handles a governance proposal to spawn a new consumer chain `cc` *happens before* all the blocks of `cc`.
 
-CCV provides the following system invariants. 
-- ***Validator Set Invariant***: Every validator set on any consumer chain MUST either be or have been a validator set on the provider chain.
+CCV provides the following system properties.
+- ***Validator Set Replication***: Every validator set on any consumer chain MUST either be or have been a validator set on the provider chain.
 
-- ***Voting Power Invariant***: Let `val` be a validator, `cc` be a consumer chain, both `hc` and `hc'` be heights on `cc`, and both `hp` and `hp'` be heights on the provider chain, such that
+- ***Bond-Based Consumer Voting Power***: Let `val` be a validator, `cc` be a consumer chain, both `hc` and `hc'` be heights on `cc`, and both `hp` and `hp'` be heights on the provider chain, such that
   - `val` has `Power(cc,hc,val)` voting power on `cc` at height `hc`;
   - `hc'` is the smallest height on `cc` that satisfies `ts(hc') >= ts(hc) + UnbondingPeriod`, i.e., `val` cannot completely unbond on `cc` before `hc'`;   
   - `hp` is the largest height on the provider chain that satisfies `hp << hc`, i.e., `Power(pc,hp,val) = Power(cc,hc,val)`, where `pc` is the provider chain;
@@ -120,19 +120,23 @@ CCV provides the following system invariants.
   hp <= h <= hp': Power(cc,hc,val) <= VP(pBonded(h,val))
   ```
 
-  > **Intuition**: The *Voting Power Invariant* ensures that validators that validate on the consumer chains have enough tokens bonded on the provider chain for a sufficient amount of time such that the security model holds. 
+  > **Intuition**: The *Bond-Based Consumer Voting Power* property ensures that validators that validate on the consumer chains have enough tokens bonded on the provider chain for a sufficient amount of time such that the security model holds. 
   > This means that if the validators misbehave on the consumer chains, their tokens bonded on the provider chain can be slashed during the unbonding period.
   > For example, if one unit of voting power requires `1.000.000` bonded tokens (i.e., `VP(1.000.000)=1`), 
   > then a validator that gets one unit of voting power on a consumer chain must have at least `1.000.000` tokens bonded on the provider chain until the unbonding period elapses on the consumer chain.
 
-- ***Slashing Invariant***: If a validator `val` misbehaves on a consumer chain `cc` at a block height `hi`, 
+- ***Slashable Consumer Misbehavior***: If a validator `val` misbehaves on a consumer chain `cc` at a block height `hi`, 
   then any evidence of misbehavior that is received by `cc` at height `he`, such that `ts(he) < ts(hi) + UnbondingPeriod`, 
   MUST results in *exactly* the amount of tokens `Token(Power(cc,hi,val))` to be slashed on the provider chain. 
   Furthermore, `val` MUST NOT be slashed more than once for the same misbehavior. 
   > **Note:** Unlike in single-chain validation, in CCV the tokens `Token(Power(cc,hi,val))` MAY be slashed even if the evidence of misbehavior is received at height `he` such that `ts(he) >= ts(hi) + UnbondingPeriod`, 
   since unbonding operations need to reach maturity on both the provider and all the consumer chains.
   >
-  > **Note:** The *Slash Invariant* also ensures that if a delegator starts unbonding an amount `x` of tokens from `val` before height `hi`, then `x` will not be slashed, since `x` is not part of `Token(Power(c,hi,val))`.
+  > **Note:** The *Slashable Consumer Misbehavior* property also ensures that if a delegator starts unbonding an amount `x` of tokens from `val` before height `hi`, then `x` will not be slashed, since `x` is not part of `Token(Power(c,hi,val))`.
+
+- ***Consumer Rewards Distribution***: If a consumer chain sends to the provider chain an amount `T` of tokens as reward for providing security, then
+  - `T` (equivalent) tokens MUST be eventually minted on the provider chain and then distributed among the validators that are part of the validator set;
+  - the total supply of tokens MUST be preserved, i.e., the `T` (original) tokens are escrowed on the consumer chain.
 
 - ***Distribution Invariant***: If a consumer chain sends to the provider chain an amount `T` of tokens as reward for providing security, then
   - `T` (equivalent) tokens are eventually minted on the provider chain and then distributed among the validators that are part of the validator set;
@@ -340,16 +344,16 @@ i.e., we informally prove the properties described in the [previous section](#de
   Eventually, a correct relayer will relay a token transfer packet containing the `T` tokens (cf. *Correct Relayer*, *Life Blockchain*). 
   As a result, `T` (equivalent) tokens are eventually minted on the provider chain.
 
-- ***Validator Set Invariant***: The invariant follows from the *Safe Blockchain* assumption and both the *Apply VSC Validity* and *Validator Update To VSC Validity* properties. 
+- ***Validator Set Replication***: The property follows from the *Safe Blockchain* assumption and both the *Apply VSC Validity* and *Validator Update To VSC Validity* properties. 
 
-- ***Voting Power Invariant***: The existence of `hp` is given by construction, i.e., the block on the proposer chain that handles a governance proposal to spawn a new consumer chain `cc` *happens before* all the blocks of `cc`. 
+- ***Bond-Based Consumer Voting Power***: The existence of `hp` is given by construction, i.e., the block on the proposer chain that handles a governance proposal to spawn a new consumer chain `cc` *happens before* all the blocks of `cc`. 
   The existence of `hc'` and `hp'` is given by *Life Blockchain* and *Channel Liveness*.
 
-  To prove the *Voting Power Invariant*, we use the following property that follows directly from the design of the protocol (cf. *Safe Blockchain*, *Life Blockchain*).
+  To prove the *Bond-Based Consumer Voting Power* property, we use the following property that follows directly from the design of the protocol (cf. *Safe Blockchain*, *Life Blockchain*).
   - *Property1*: Let `val` be a validator; let `Ua` and `Ub` be two updates of `val` that are applied subsequently by a consumer chain `cc`, at block heights `ha` and `hb`, respectively (i.e., no other updates of `val` are applied in between). 
   Then, `Power(cc,ha,val) = Power(cc,h,val)`, for all block heights `h`, such that `ha <= h < hb` (i.e., the voting power granted to `val` on `cc` in the period between `ts(ha)` and `ts(hb)` is constant).  
 
-  We prove the *Voting Power Invariant* through contradiction.
+  We prove the *Bond-Based Consumer Voting Power* property through contradiction.
   We assume there exist a height `h` on the provider chain between `hp` and `hp'` such that `Power(cc,hc,val) > VP(pBonded(h,val))`.
   The following sequence of assertions leads to a contradiction.
   - Let `U1` be the latest update of `val` that is applied by `cc` before or not later than block height `hc` 
@@ -367,8 +371,8 @@ i.e., we informally prove the properties described in the [previous section](#de
     Thus, `hc2 > hc` (cf. `Power(cc,hc2,val) < Power(cc,hc,val)`).
   - `uo` cannot complete before `ts(hc2) + UnbondingPeriod`, which means it cannot complete before `hc'` and thus it cannot complete before `hp'` (cf. `hc' << hp'`). 
 
-- ***Slashing Invariant***: The second part of the *Slashing Invariant* (i.e., `val` is not slashed more than once for the same misbehavior) follows directly from *Evidence Provision*, *Channel Validity*, *Consumer Slashing Warranty*, *Provider Slashing Warranty*.
-  To prove the first part of the invariant (i.e., exactly the amount of tokens `Token(Power(cc,hi,val))` are slashed on the provider chain), we consider the following sequence of statements.
+- ***Slashable Consumer Misbehavior***: The second part of the *Slashable Consumer Misbehavior* property (i.e., `val` is not slashed more than once for the same misbehavior) follows directly from *Evidence Provision*, *Channel Validity*, *Consumer Slashing Warranty*, *Provider Slashing Warranty*.
+  To prove the first part of the *Slashable Consumer Misbehavior* property (i.e., exactly the amount of tokens `Token(Power(cc,hi,val))` are slashed on the provider chain), we consider the following sequence of statements.
   - The CCV module of `cc` receives at height `he` the evidence that `val` misbehaved on `cc` at height `hi` (cf. *Evidence Provision*, *Safe Blockchain*, *Life Blockchain*).
   - Let `hv` be the height when the CCV module of `cc` receives the first VSC from the provider CCV module. 
   Then, the CCV module of `cc` sends at height `h = max(he, hv)` to the provider chain a `SlashPacket` `P`, such that `P.val = val` and `P.id = HtoVSC[hi]` (cf. *Consumer Slashing Warranty*).
@@ -386,5 +390,5 @@ i.e., we informally prove the properties described in the [previous section](#de
   The tokens bonded by `val` at height `hp` that were not in the process of unbonding (i.e., `Token(Power(cc,hi,val))`) could not have completely unbonded by block `B` (cf. `ts(he) < ts(hi) + UnbondingPeriod`, *VSC Maturity and Slashing Order*, *Register Maturity Timeliness*, *Unbonding Safety*).
   This means that *exactly* the amount of tokens `Token(Power(cc,hi,val))` is slashed on the provider chain. 
 
-- ***Distribution Invariant***: The first part of the *Distribution Invariant* (i.e., the tokens are eventually minted on the provider chain and then distributed among the validators) follows directly from *Distribution Liveness* and *Distribution Warranty*. 
-  The second part of the *Distribution Invariant* (i.e., the total supply of tokens is preserved) follows directly from the *Supply* property of the Fungible Token Transfer protocol (see [ICS 20](../ics-020-fungible-token-transfer/README.md)). 
+- ***Consumer Rewards Distribution***: The first part of the *Consumer Rewards Distribution* property (i.e., the tokens are eventually minted on the provider chain and then distributed among the validators) follows directly from *Distribution Liveness* and *Distribution Warranty*. 
+  The second part of the *Consumer Rewards Distribution* property (i.e., the total supply of tokens is preserved) follows directly from the *Supply* property of the Fungible Token Transfer protocol (see [ICS 20](../ics-020-fungible-token-transfer/README.md)). 
