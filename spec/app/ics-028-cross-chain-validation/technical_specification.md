@@ -1163,7 +1163,9 @@ function onTimeoutPacket(packet Packet) {
 - **Caller**
   - The provider IBC routing module.
 - **Trigger Event**
-  - The provider IBC routing module receives a timeout on a channel owned by the provider CCV module.
+  - A packet sent on a channel owned by the provider CCV module timed out as a result of either
+    - the timeout height or timeout timestamp passing on the consumer chain without the packet being received (see `timeoutPacket` defined in [ICS4](../../core/ics-004-channel-and-packet-semantics/README.md#sending-end));
+    - or the channel being closed without the packet being received (see `timeoutOnClose` defined in [ICS4](../../core/ics-004-channel-and-packet-semantics/README.md#timing-out-on-close)). 
 - **Precondition**
   - The Correct Relayer assumption is violated (see the [Assumptions](./system_model_and_properties.md#assumptions) section).
 - **Postcondition** 
@@ -1251,7 +1253,9 @@ function onTimeoutPacket(packet Packet) {
 - **Caller**
   - The consumer IBC routing module.
 - **Trigger Event**
-  - The consumer IBC routing module receives a timeout on a channel owned by the consumer CCV module.
+  - A packet sent on a channel owned by the consumer CCV module timed out as a result of either
+    - the timeout height or timeout timestamp passing on the provider chain without the packet being received (see `timeoutPacket` defined in [ICS4](../../core/ics-004-channel-and-packet-semantics/README.md#sending-end));
+    - or the channel being closed without the packet being received (see `timeoutOnClose` defined in [ICS4](../../core/ics-004-channel-and-packet-semantics/README.md#timing-out-on-close)). 
 - **Precondition**
   - The Correct Relayer assumption is violated (see the [Assumptions](./system_model_and_properties.md#assumptions) section).
 - **Postcondition** 
@@ -1431,7 +1435,9 @@ function onTimeoutVSCPacket(packet: Packet) {
 - **Caller**
   - The `onTimeoutPacket()` method.
 - **Trigger Event**
-  - The provider IBC routing module receives a timeout of a `VSCPacket` on a channel owned by the provider CCV module.
+  - A `VSCPacket` sent on a channel owned by the provider CCV module timed out as a result of either
+    - the timeout height or timeout timestamp passing on the consumer chain without the packet being received (see `timeoutPacket` defined in [ICS4](../../core/ics-004-channel-and-packet-semantics/README.md#sending-end));
+    - or the channel being closed without the packet being received (see `timeoutOnClose` defined in [ICS4](../../core/ics-004-channel-and-packet-semantics/README.md#timing-out-on-close)). 
 - **Precondition**
   - The Correct Relayer assumption is violated (see the [Assumptions](./system_model_and_properties.md#assumptions) section).
 - **Postcondition**
@@ -1584,6 +1590,18 @@ function BeforeUnbondingOpCompleted(opId: uint64): Bool {
 // CCF: Consumer Chain Function
 // implements the AppModule interface
 function BeginBlock() {
+  if providerChannel != "" AND channelKeeper.GetChannelState(providerChannel) == CLOSED {
+      // the CCV channel was established, but it was then closed; 
+      // the consumer chain is no longer safe
+
+      // cleanup state, e.g., 
+      // providerChannel = ""
+
+      // shut down consumer chain
+      abortSystemUnless(FALSE)
+    } 
+  }
+
   HtoVSC[getCurrentHeight() + 1] = HtoVSC[getCurrentHeight()]
 }
 ```
@@ -1594,9 +1612,10 @@ function BeginBlock() {
 - **Precondition**
   - True. 
 - **Postcondition**
+  - If the CCV was established, but then was moved to the `CLOSED` state, then the state of the consumer CCV module is cleaned up, e.g., the `providerChannel` is unset. 
   - `HtoVSC` for the subsequent block height is set to the same VSC ID as the current block height.
 - **Error Condition**
-  - None.
+  - If the CCV was established, but then was moved to the `CLOSED` state. 
 
 <!-- omit in toc -->
 #### **[CCV-CCF-RCVVSC.1]**
@@ -1684,16 +1703,16 @@ function onAcknowledgeVSCMaturedPacket(packet: Packet, ack: bytes) {
 ```typescript
 // CCF: Consumer Chain Function
 function onTimeoutVSCMaturedPacket(packet Packet) {
-  // TODO What do we do here? 
-  // Do we need to notify the provider to close the channel?
-  // What happens w/ the consumer chain once the CCV channel gets closed?
-  // see https://github.com/cosmos/ibc/issues/669
+  // the CCV channel state is changed to CLOSED 
+  // by the IBC handler (since the channel is ORDERED)
 }
 ```
 - **Caller**
   - The `onTimeoutPacket()` method.
 - **Trigger Event**
-  - The consumer IBC routing module receives a timeout of a `VSCPacket` on a channel owned by the consumer CCV module.
+  - A `VSCMaturedPacket` sent on a channel owned by the consumer CCV module timed out as a result of either
+    - the timeout height or timeout timestamp passing on the provider chain without the packet being received (see `timeoutPacket` defined in [ICS4](../../core/ics-004-channel-and-packet-semantics/README.md#sending-end));
+    - or the channel being closed without the packet being received (see `timeoutOnClose` defined in [ICS4](../../core/ics-004-channel-and-packet-semantics/README.md#timing-out-on-close)).
 - **Precondition**
   - The Correct Relayer assumption is violated (see the [Assumptions](./system_model_and_properties.md#assumptions) section).
 - **Postcondition**
@@ -1936,16 +1955,16 @@ function onAcknowledgeSlashPacket(packet: Packet, ack: bytes) {
 ```typescript
 // CCF: Consumer Chain Function
 function onTimeoutSlashPacket(packet Packet) {
-  // TODO What do we do here? 
-  // Do we need to notify the provider to close the channel?
-  // What happens w/ the consumer chain once the CCV channel gets closed?
-  // see https://github.com/cosmos/ibc/issues/669
+  // the CCV channel state is changed to CLOSED 
+  // by the IBC handler (since the channel is ORDERED)
 }
 ```
 - **Caller**
   - The `onTimeoutPacket()` method.
 - **Trigger Event**
-  - The consumer IBC routing module receives a timeout of a `SlashPacket` on a channel owned by the consumer CCV module.
+  - A `SlashPacket` sent on a channel owned by the consumer CCV module timed out as a result of either
+    - the timeout height or timeout timestamp passing on the provider chain without the packet being received (see `timeoutPacket` defined in [ICS4](../../core/ics-004-channel-and-packet-semantics/README.md#sending-end));
+    - or the channel being closed without the packet being received (see `timeoutOnClose` defined in [ICS4](../../core/ics-004-channel-and-packet-semantics/README.md#timing-out-on-close)).
 - **Precondition**
   - The Correct Relayer assumption is violated (see the [Assumptions](./system_model_and_properties.md#assumptions) section).
 - **Postcondition**
