@@ -179,18 +179,15 @@ The `ConsensusState` MUST define a `getTimestamp()` method which returns the tim
 type getTimestamp = ConsensusState => uint64
 ```
 
-#### UpdateMessage
+#### Header
 
-`UpdateMessage` is an opaque data structure that contains information on one or more state updates of a state machine.
-Every client type MUST define its own `UpdateMessage`. 
-For example, in the case the state machine is a blockchain, an `UpdateMessage` may consist of one or more 
-block headers, each likely to contain a `Height` and a `CommitmentRoot`.
+A `Header` is an opaque data structure defined by a client type which provides information to update a `ConsensusState`.
+Headers can be submitted to an associated client to update the stored `ConsensusState`. They likely contain a height, a proof,
+a commitment root, and possibly updates to the validity predicate.
 
 ```typescript
-type UpdateMessage = bytes
+type Header = bytes
 ```
-
-`UpdateMessage`s SHOULD be submitted to the associated clients to update the `ConsensusState`s.
 
 #### Validity predicate
 
