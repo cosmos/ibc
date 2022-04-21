@@ -83,14 +83,14 @@ At least one of the `timeoutHeight` or `timeoutTimestamp` MUST be non-zero.
 
 ### Store Paths
 
-#### Backup Channel Path
+#### Restore Channel Path
 
 The chain must store the previous channel end so that it may restore it if the upgrade handshake fails. This may be stored in the private store.
 
 ```typescript
-function backupChannelPath(portIdentifier: Identifier, channelIdentifier: Identifier): Path {
-    return "channelEnds/ports/{portIdentifier}/channels/{channelIdentifier}/backup"
-}
+function channelRestorePath(portIdentifier: Identifier, channelIdentifier: Identifier): Path {
+    return "channelUpgrades/ports/{portIdentifier}/channels/{channelIdentifier}/restore"
+ }
 ```
 
 #### Upgrade Error Path
@@ -98,7 +98,7 @@ function backupChannelPath(portIdentifier: Identifier, channelIdentifier: Identi
 The upgrade error path is a public path that can signal an error of the upgrade to the counterparty. It does not store anything in the successful case, but it will store a sentinel abort value in the case that a chain does not accept the proposed upgrade.
 
 ```typescript
-function upgradeErrorPath(portIdentifier: Identifier, channelIdentifier: Identifier): Path {
+function channelUpgradeErrorPath(portIdentifier: Identifier, channelIdentifier: Identifier): Path {
     return "channelUpgrades/ports/{portIdentifier}/channels/{channelIdentifier}/upgradeError"
 
 }
@@ -117,7 +117,7 @@ function verifyChannelUpgradeError(
   upgradeErrorReceipt: []byte, 
 ) {
     client = queryClient(connection.clientIdentifier)
-    path = applyPrefix(connection.counterpartyPrefix, upgradeErrorPath(counterpartyPortIdentifier, counterpartyChannelIdentifier))
+    path = applyPrefix(connection.counterpartyPrefix, channelUpgradeErrorPath(counterpartyPortIdentifier, counterpartyChannelIdentifier))
     client.verifyMembership(height, 0, 0, proof, path, upgradeErrorReceipt)
 }
 ```
@@ -132,7 +132,7 @@ function verifyChannelUpgradeErrorAbsence(
   counterpartyChannelIdentifier: Identifier,
 ) {
     client = queryClient(connection.clientIdentifier)
-    path = applyPrefix(connection.counterpartyPrefix, upgradeErrorPath(counterpartyPortIdentifier, counterpartyChannelIdentifier))
+    path = applyPrefix(connection.counterpartyPrefix, channelUpgradeErrorPath(counterpartyPortIdentifier, counterpartyChannelIdentifier))
     client.verifyNonMembership(height, 0, 0, proof, path)
 }
 ```
@@ -142,7 +142,7 @@ function verifyChannelUpgradeErrorAbsence(
 The upgrade timeout path is a public path set by the upgrade initiator to determine when the TRY step should timeout. It stores the `timeoutHeight` and `timeoutTimestamp` by which point the counterparty must have progressed to the TRY step. The TRY step will prove the timeout values set by the initiating chain and ensure the timeout has not passed. Or in the case of a timeout, in which case counterparty proves that the timeout has passed on its chain and restores the channel.
 
 ```typescript
-function upgradeTimeoutPath(portIdentifier: Identifier, channelIdentifier: Identifier) Path {
+function channelUpgradeTimeoutPath(portIdentifier: Identifier, channelIdentifier: Identifier) Path {
     return "channelUpgrades/ports/{portIdentifier}/channels/{channelIdentifier}/upgradeTimeout"
 }
 ```
@@ -160,7 +160,7 @@ function verifyChannelUpgradeTimeout(
   upgradeTimeout: UpgradeTimeout, 
 ) {
     client = queryClient(connection.clientIdentifier)
-    path = applyPrefix(connection.counterpartyPrefix, upgradeTimeoutPath(counterpartyPortIdentifier, counterpartyChannelIdentifier))
+    path = applyPrefix(connection.counterpartyPrefix, channelUpgradeTimeoutPath(counterpartyPortIdentifier, counterpartyChannelIdentifier))
     client.verifyMembership(height, 0, 0, proof, path, upgradeTimeout)
 }
 ```
@@ -179,11 +179,11 @@ function restoreChannel() {
     // write an upgrade error receipt into the upgrade error path
     // and restore original channel
     upgradeErrorReceipt = []byte{1}
-    provableStore.set(upgradeErrorPath(portIdentifier, channelIdentifier), upgradeErrorReceipt)
-    originalChannel = privateStore.get(backupChannelPath(portIdentifier, channelIdentifier))
+    provableStore.set(channelUpgradeErrorPath(portIdentifier, channelIdentifier), upgradeErrorReceipt)
+    originalChannel = privateStore.get(channelRestorePath(portIdentifier, channelIdentifier))
     provableStore.set(channelPath(portIdentifier, channelIdentifier), originalChannel)
-    provableStore.delete(upgradeTimeoutPath(portIdentifier, channelIdentifier))
-    privateStore.delete(backupChannelPath(portIdentifier, channelIdentifier))
+    provableStore.delete(channelUpgradeTimeoutPath(portIdentifier, channelIdentifier))
+    privateStore.delete(channelRestorePath(portIdentifier, channelIdentifier))
 
     // call modules onChanUpgradeRestore callback
     module = lookupModule(portIdentifier)
@@ -215,11 +215,11 @@ At the end of an upgrade handshake between two chains implementing the sub-proto
 - Each chain is running their new upgraded channel end and is processing upgraded logic and state according to the upgraded parameters.
 - Each chain has knowledge of and has agreed to the counterparty's upgraded channel parameters.
 
-If a chain does not agree to the proposed counterparty upgrade `ChannelEnd`, it may abort the upgrade handshake by writing an error receipt into the `upgradeErrorPath` and restoring the original channel. The upgrade error receipt MAY be arbitrary bytes and MUST be non-empty.
+If a chain does not agree to the proposed counterparty upgrade `ChannelEnd`, it may abort the upgrade handshake by writing an error receipt into the `channelUpgradeErrorPath` and restoring the original channel. The upgrade error receipt MAY be arbitrary bytes and MUST be non-empty.
 
-`upgradeErrorPath(id) => upgrade_error_receipt`
+`channelUpgradeErrorPath(id) => upgrade_error_receipt`
 
-A relayer may then submit a `CancelChannelUpgradeMsg` to the counterparty. Upon receiving this message a chain must verify that the counterparty wrote a non-empty upgrade error receipt into its `upgradeErrorPath` and if successful, it will restore its original channel as well thus cancelling the upgrade.
+A relayer may then submit a `CancelChannelUpgradeMsg` to the counterparty. Upon receiving this message a chain must verify that the counterparty wrote a non-empty upgrade error receipt into its `channelUpgradeErrorPath` and if successful, it will restore its original channel as well thus cancelling the upgrade.
 
 If an upgrade message arrives after the specified timeout, then the message MUST NOT execute successfully. Again a relayer may submit a proof of this in a `ChannelUpgradeTimeoutMsg` so that counterparty cancels the upgrade and restores its original channel as well.
 
@@ -277,9 +277,9 @@ function chanUpgradeInit(
     // in case it was modified
     proposedUpgradeChannel.version = version
 
-    provableStore.set(upgradeTimeoutPath(portIdentifier, channelIdentifier), upgradeTimeout)
+    provableStore.set(channelUpgradeTimeoutPath(portIdentifier, channelIdentifier), upgradeTimeout)
     provableStore.set(channelPath(portIdentifier, channelIdentifier), proposedUpgradeChannel)
-    privateStore.set(backupChannelPath(portIdentifier, channelIdentifier), currentChannel)
+    privateStore.set(channelRestorePath(portIdentifier, channelIdentifier), currentChannel)
 }
 ```
 
@@ -342,9 +342,9 @@ function chanUpgradeTry(
             return
         }
     } else if currentChannel.state == OPEN {
-        // this is first message in upgrade handshake on this chain so we must store original channel in backup channel path
+        // this is first message in upgrade handshake on this chain so we must store original channel in restore channel path
         // in case we need to restore channel later.
-        privateStore.set(backupChannelPath(portIdentifier, channelIdentifier), currentChannel)
+        privateStore.set(channelRestorePath(portIdentifier, channelIdentifier), currentChannel)
     } else {
         // abort transaction if current channel is not in state: UPGRADE_INIT or OPEN
         abortTransactionUnless(false)
@@ -454,8 +454,8 @@ function chanUpgradeAck(
     // set channel to OPEN and remove unnecessary state
     currentChannel.state = OPEN
     provableStore.set(channelPath(portIdentifier, channelIdentifier), currentChannel)
-    provableStore.delete(upgradeTimeoutPath(portIdentifier, channelIdentifier))
-    privateStore.delete(backupChannelPath(portIdentifier, channelIdentifier))
+    provableStore.delete(channelUpgradeTimeoutPath(portIdentifier, channelIdentifier))
+    privateStore.delete(channelRestorePath(portIdentifier, channelIdentifier))
 }
 ```
 
@@ -496,8 +496,8 @@ function chanUpgradeConfirm(
     // set channel to OPEN and remove unnecessary state
     currentChannel.state = OPEN
     provableStore.set(channelPath(portIdentifier, channelIdentifier), currentChannel)
-    provableStore.delete(upgradeTimeoutPath(portIdentifier, channelIdentifier))
-    privateStore.delete(backupChannelPath(portIdentifier, channelIdentifier))
+    provableStore.delete(channelUpgradeTimeoutPath(portIdentifier, channelIdentifier))
+    privateStore.delete(channelRestorePath(portIdentifier, channelIdentifier))
 }
 ```
 
@@ -528,12 +528,12 @@ function cancelChannelUpgrade(
     // cancel upgrade
     // and restore original conneciton
     // delete unnecessary state
-    originalChannel = privateStore.get(backupChannelPath(portIdentifier, channelIdentifier))
+    originalChannel = privateStore.get(channelRestorePath(portIdentifier, channelIdentifier))
     provableStore.set(channelPath(portIdentifier, channelIdentifier), originalChannel)
 
     // delete auxilliary upgrade state
-    provableStore.delete(upgradeTimeoutPath(portIdentifier, channelIdentifier))
-    privateStore.delete(backupChannelPath(portIdentifier, channelIdentifier))
+    provableStore.delete(channelUpgradeTimeoutPath(portIdentifier, channelIdentifier))
+    privateStore.delete(channelRestorePath(portIdentifier, channelIdentifier))
 
     // call modules onChanUpgradeRestore callback
     module = lookupModule(portIdentifier)
@@ -587,7 +587,7 @@ function timeoutChannelUpgrade(
         // to ensure that counterparty aborts the handshake as well and returns to the original state
         // write an error receipt into the error path
         upgradeErrorReceipt = []byte{1}
-        provableStore.set(upgradeErrorPath(portIdentifier, channelIdentifier), upgradeErrorReceipt)
+        provableStore.set(channelUpgradeErrorPath(portIdentifier, channelIdentifier), upgradeErrorReceipt)
     }
 
     // we must restore the channel since the timeout verification has passed
