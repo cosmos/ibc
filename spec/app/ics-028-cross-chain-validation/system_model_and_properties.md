@@ -169,7 +169,7 @@ As a result, it is possible for multiple VSCs to be received by a consumer chain
 i.e., the validator updates within the VSCs are being *aggregated* by keeping only the latest update per validator. 
 As a consequence, some validator sets on the provider chain are not existing on all consumer chains. 
 In other words, the validator sets on each consumer chain form a *subsequence* of the validator sets on the provider chain. 
-Nonetheless, as a **requirement of CCV**, *all the validator updates on the provider chain MUST be included in the sequence of validator sets on all consumer chains*.
+Nonetheless, as a **requirement of CCV**, *all the validator updates on all the consumer chains MUST be included in the sequence of validator sets on the provider chain*.
 
 This is possible since every validator update contains *the absolute voting power* of that validator. 
 Given a validator `val`, the sequence of validator updates targeting `val` (i.e., updates of the voting power of `val`) is the prefix sum of the sequence of relative changes of the voting power of `val`. 
