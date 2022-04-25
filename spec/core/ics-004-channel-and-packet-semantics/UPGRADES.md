@@ -501,7 +501,7 @@ function chanUpgradeConfirm(
 
 **Sub-Definitions**:
 
-`Aborting Chain`: This is the chain that first encounters an error, writes data to the error receipt and restores the connection.
+`Aborting Chain`: This is the chain that first encounters an error, writes data to the error receipt and restores the channel.
 
 **Protocol**:
 
