@@ -434,14 +434,22 @@ NOTE: Since the counterparty has already successfully upgraded and moved to `OPE
 
 ### Cancel Upgrade Process
 
+**Sub-Definitions**:
+
+`Aborting Chain`: This is the chain that first encounters an error, writes data to the error receipt and restores the connection.
+
+**Protocol**:
+
+During the upgrade handshake an aborting chain may cancel the upgrade by writing an error receipt into the error path and restoring the original connection to `OPEN`. The counterparty must then restore its connection to `OPEN` as well. A relayer can facilitate this by sending `ConnUpgradeCancelInitMsg` to the counterparty chain's handler:
+
 During the upgrade handshake a chain may cancel the upgrade by writing an error receipt into the error path and restoring the original connection to `OPEN`. The counterparty must then restore its connection to `OPEN` as well.
 
-A connectionEnd may only cancel the upgrade during the upgrade negotiation process (TRY, ACK). An upgrade cannot be cancelled on one end once the other chain has already completed its upgrade and moved to `OPEN` since that will lead the connection to being in an invalid state.
+A connectionEnd may only cancel the upgrade during the upgrade negotiation process (`TRY`, `ACK`). Thus, the counterparty connection state must be either `UPGRADE_INIT` or `UPGRADE_TRY`. An upgrade cannot be cancelled on one end once the other chain has already completed its upgrade and moved to `OPEN` since that will lead the connection to being in an invalid state.
 
-A relayer can facilitate this by calling `CancelConnectionUpgrade`:
+Once the aborting chain has written to the error receipt, a relayer must submit `CancelConnectionUpgradeInit` to the counterparty chain:
 
 ```typescript
-function cancelConnectionUpgrade(
+function cancelConnectionUpgradeInit(
     identifier: Identifer,
     errorReceipt: []byte,
     proofUpgradeError: CommitmentProof,
@@ -464,6 +472,35 @@ function cancelConnectionUpgrade(
     // delete auxilliary upgrade state
     provableStore.delete(timeoutPath(identifier))
     privateStore.delete(restorePath(identifier))
+}
+```
+
+Once the counterparty has also aborted the handshake and cleared all upgrade state, the aborting chain will also need to clear its remaining upgrade state (error receipt) in order to ensure that this stale upgrade state does not interfere with future upgrades. To do this a relayer can send a `ConnUpgradeCancelConfirmMsg` to the handler on the original aborting chain's handler:
+
+```typescript
+function connUpgradeCancelConfirm(
+    connectionIdentifier: Identifier,
+    counterpartyConnection: ConnectionEnd,
+    proofConnection: CommitmentProof,
+    proofHeight: Height,
+) {
+    // currentConnection must be OPEN and error receipt must be non-empty
+    currentConnection = provableStore.get(connectionPath(connectionIdentifier))
+    abortTransactionUnless(currentConnection.state == OPEN)
+
+    errorReceipt = provableStore.get(errorPath(connectionIdentifier))
+    abortTransactionUnless(!isEmpty(errorReceipt))
+
+    // verify that the counterparty has restored the connection to OPEN
+    // since this connection is the aborting chain, the counterparty state
+    // must have been in either `UPGRADE_INIT` or `UPGRADE_TRY` before the
+    // upgrade process was aborted.
+    // Thus, if the counterparty connection is now in OPEN; that means that the
+    // counterparty connection has been restored to its pre-upgrade state.
+    abortTransactionUnless(counterpartyConnection.state == OPEN)
+    abortTransactionUnless(verifyConnectionState(currentConnection, height, proof, connectionIdentifier, counterpartyConnection))
+    // delete error receipt so that new upgrades can proceed
+    provableStore.delete(errorPath(connectionIdentifier))
 }
 ```
 
