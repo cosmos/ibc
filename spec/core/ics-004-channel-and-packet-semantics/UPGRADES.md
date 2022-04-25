@@ -499,6 +499,12 @@ function chanUpgradeConfirm(
 
 ### Cancel Upgrade Process
 
+**Sub-Definitions**:
+
+`Aborting Chain`: This is the chain that first encounters an error, writes data to the error receipt and restores the connection.
+
+**Protocol**:
+
 During the upgrade handshake an aborting chain may cancel the upgrade by writing an error receipt into the error path and restoring the original channel to `OPEN`. The counterparty must then restore its channel to `OPEN` as well. A relayer can facilitate this by sending `ChanUpgradeCancelInitMsg` to the counterparty chain's handler:
 
 ```typescript
@@ -540,7 +546,7 @@ function cancelChannelUpgradeInit(
 }
 ```
 
-Once the counterparty has aborted the handshake and cleared all upgrade state, the aborting chain will also need to clear its remaining upgrade state (error receipt) in order to ensure that this stale upgrade state does not interfere with future upgrades. To do this a relayer can send a `ChanUpgradeCancelConfirmMsg` to the handler on the original aborting chain's handler:
+Once the counterparty has also aborted the handshake and cleared all upgrade state, the aborting chain will also need to clear its remaining upgrade state (error receipt) in order to ensure that this stale upgrade state does not interfere with future upgrades. To do this a relayer can send a `ChanUpgradeCancelConfirmMsg` to the handler on the original aborting chain's handler:
 
 ```typescript
 function chanUpgradeCancelConfirm(
