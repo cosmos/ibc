@@ -499,10 +499,10 @@ function chanUpgradeConfirm(
 
 ### Cancel Upgrade Process
 
-During the upgrade handshake a chain may cancel the upgrade by writing an error receipt into the error path and restoring the original channel to `OPEN`. The counterparty must then restore its channel to `OPEN` as well. A relayer can facilitate this by sending `ChanUpgradeCancelMsg` to the handler:
+During the upgrade handshake an aborting chain may cancel the upgrade by writing an error receipt into the error path and restoring the original channel to `OPEN`. The counterparty must then restore its channel to `OPEN` as well. A relayer can facilitate this by sending `ChanUpgradeCancelInitMsg` to the counterparty chain's handler:
 
 ```typescript
-function cancelChannelUpgrade(
+function cancelChannelUpgradeInit(
     portIdentifier: Identifier,
     channelIdentifier: Identifier,
     errorReceipt: []byte,
@@ -537,6 +537,40 @@ function cancelChannelUpgrade(
         portIdentifer,
         channelIdentifier
     )
+}
+```
+
+Once the counterparty has aborted the handshake and cleared all upgrade state, the aborting chain will also need to clear its remaining upgrade state (error receipt) in order to ensure that this stale upgrade state does not interfere with future upgrades. To do this a relayer can send a `ChanUpgradeCancelConfirmMsg` to the handler on the original aborting chain's handler:
+
+```typescript
+function chanUpgradeCancelConfirm(
+    portIdentifier: Identifier,
+    channelIdentifier: Identifier,
+    counterpartyChannel: ChannelEnd,
+    proofChannel: CommitmentProof,
+    proofHeight: Height,
+) {
+    // currentChannel must be OPEN and error receipt must be non-empty
+    currentChannel = provableStore.get(channelPath(portIdentifier, channelIdentifier))
+    abortTransactionUnless(currentChannel.state == OPEN)
+
+    errorReceipt = provableStore.get(errorPath(portIdentifier, channelIdentifier))
+    abortTransactionUnless(!isEmpty(errorReceipt))
+
+    // verify that the counterparty has restored the channel to OPEN
+    // since this channel is the aborting chain, the counterparty state
+    // must have been in either `UPGRADE_INIT` or `UPGRADE_TRY` before the
+    // upgrade process was aborted.
+    // Thus, if the counterparty channel is now in OPEN; that means that the
+    // counterparty channel has been restored to its pre-upgrade state.
+    abortTransactionUnless(counterpartyChannel.state == OPEN)
+
+    // get underlying connection for proof verification.
+    connection = getConnection(currentChannel.connectionIdentifier)
+    abortTransactionUnless(verifyChannelState(connection, height, proof, portIdentifier, channelIdentifier, counterpartyChannel))
+
+    // delete error receipt so that new upgrades can proceed
+    provableStore.delete(errorPath)
 }
 ```
 
