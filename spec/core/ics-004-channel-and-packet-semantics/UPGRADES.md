@@ -570,7 +570,7 @@ function chanUpgradeCancelConfirm(
     abortTransactionUnless(verifyChannelState(connection, height, proof, portIdentifier, channelIdentifier, counterpartyChannel))
 
     // delete error receipt so that new upgrades can proceed
-    provableStore.delete(errorPath)
+    provableStore.delete(errorPath(portIdentifier, channelIdentifier))
 }
 ```
 
