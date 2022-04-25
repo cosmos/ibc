@@ -440,9 +440,7 @@ NOTE: Since the counterparty has already successfully upgraded and moved to `OPE
 
 **Protocol**:
 
-During the upgrade handshake an aborting chain may cancel the upgrade by writing an error receipt into the error path and restoring the original connection to `OPEN`. The counterparty must then restore its connection to `OPEN` as well. A relayer can facilitate this by sending `ConnUpgradeCancelInitMsg` to the counterparty chain's handler:
-
-During the upgrade handshake a chain may cancel the upgrade by writing an error receipt into the error path and restoring the original connection to `OPEN`. The counterparty must then restore its connection to `OPEN` as well.
+During the upgrade handshake an aborting chain may cancel the upgrade by writing an error receipt into the error path and restoring the original connection to `OPEN`. The counterparty must then restore its connection to `OPEN` as well.
 
 A connectionEnd may only cancel the upgrade during the upgrade negotiation process (`TRY`, `ACK`). Thus, the counterparty connection state must be either `UPGRADE_INIT` or `UPGRADE_TRY`. An upgrade cannot be cancelled on one end once the other chain has already completed its upgrade and moved to `OPEN` since that will lead the connection to being in an invalid state.
 
