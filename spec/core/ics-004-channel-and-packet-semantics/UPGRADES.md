@@ -505,10 +505,14 @@ function chanUpgradeConfirm(
 
 **Protocol**:
 
-During the upgrade handshake an aborting chain may cancel the upgrade by writing an error receipt into the error path and restoring the original channel to `OPEN`. The counterparty must then restore its channel to `OPEN` as well. A relayer can facilitate this by sending `ChanUpgradeCancelInitMsg` to the counterparty chain's handler:
+During the upgrade handshake an aborting chain may cancel the upgrade by writing an error receipt into the error path and restoring the original channel to `OPEN`. The counterparty must then restore its original channel to `OPEN` as well.
+
+A channelEnd may only cancel the upgrade during the upgrade negotiation process (`TRY`, `ACK`). Thus, the counterparty channel state must be either `UPGRADE_INIT` or `UPGRADE_TRY`. An upgrade cannot be cancelled on one end once the other chain has already completed its upgrade and moved to `OPEN` since that will lead the channel to being in an invalid state.
+
+Once the aborting chain has written to the error receipt, a relayer must submit `ChanUpgradeCancelInit` to the counterparty chain:
 
 ```typescript
-function cancelChannelUpgradeInit(
+function chanUpgradeCancelInit(
     portIdentifier: Identifier,
     channelIdentifier: Identifier,
     errorReceipt: []byte,
