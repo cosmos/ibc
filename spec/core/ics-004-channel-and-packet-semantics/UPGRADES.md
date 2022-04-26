@@ -171,7 +171,7 @@ The channel upgrade process consists of three sub-protocols: `UpgradeChannelHand
 
 ### Utility Functions
 
-`restoreChannel()` is a utility function that allows a chain to abort an upgrade handshake in progress, and return the `ChannelEnd` to its original pre-upgrade state while also setting the `upgradeErrorReceipt`. A relayer can then send a `CancelChannelUpgradeMsg` to the counterparty so that it can restore its `ChannelEnd` to its pre-upgrade state as well. Once both channel ends are back to the pre-upgrade state, packet processing will resume with the original channel and application parameters.
+`restoreChannel()` is a utility function that allows a chain to abort an upgrade handshake in progress, and return the `ChannelEnd` to its original pre-upgrade state while also setting the `upgradeErrorReceipt`. A relayer can then send a `ChannelUpgradeCancelMsg` to the counterparty so that it can restore its `ChannelEnd` to its pre-upgrade state as well. Once both channel ends are back to the pre-upgrade state, packet processing will resume with the original channel and application parameters.
 
 ```typescript
 function restoreChannel() {
@@ -219,7 +219,7 @@ If a chain does not agree to the proposed counterparty upgrade `ChannelEnd`, it 
 
 `channelUpgradeErrorPath(id) => upgrade_error_receipt`
 
-A relayer may then submit a `CancelChannelUpgradeMsg` to the counterparty. Upon receiving this message a chain must verify that the counterparty wrote a non-empty upgrade error receipt into its `channelUpgradeErrorPath` and if successful, it will restore its original channel as well thus cancelling the upgrade.
+A relayer may then submit a `ChannelUpgradeCancelMsg` to the counterparty. Upon receiving this message a chain must verify that the counterparty wrote a non-empty upgrade error receipt into its `channelUpgradeErrorPath` and if successful, it will restore its original channel as well thus cancelling the upgrade.
 
 If an upgrade message arrives after the specified timeout, then the message MUST NOT execute successfully. Again a relayer may submit a proof of this in a `ChannelUpgradeTimeoutMsg` so that counterparty cancels the upgrade and restores its original channel as well.
 
@@ -504,7 +504,7 @@ function chanUpgradeConfirm(
 
 ### Cancel Upgrade Process
 
-During the upgrade handshake a chain may cancel the upgrade by writing an upgrade error receipt into the upgrade error path and restoring the original channel to `OPEN`. The counterparty must then restore its channel to `OPEN` as well. A relayer can facilitate this by sending `CancelChannelUpgradeMsg` to the handler:
+During the upgrade handshake a chain may cancel the upgrade by writing an upgrade error receipt into the upgrade error path and restoring the original channel to `OPEN`. The counterparty must then restore its channel to `OPEN` as well. A relayer can facilitate this by sending `ChannelUpgradeCancelMsg` to the handler:
 
 ```typescript
 function cancelChannelUpgrade(
