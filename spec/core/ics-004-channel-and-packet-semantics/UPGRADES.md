@@ -82,7 +82,7 @@ interface ErrorReceipt {
 }
 ```
 
-- `counterpartyHeight`: Counterparty height is the proof height of the counterparty when the executing chain aborts the upgrade process. This height will get used to clear the error receipt before future upgrades.
+- `counterpartyHeight`: Counterparty height is the proof height of the counterparty when the executing chain aborts the upgrade process. This height will get used to verify that the error receipt submitted on `ChanUpgradeCancel` is for the current upgrade and not a stale error receipt.
 - `errorMsg`: Error Msg is an arbitrary string that chains may use to provide more information as to why the upgrade failed.
 
 ### Store Paths
