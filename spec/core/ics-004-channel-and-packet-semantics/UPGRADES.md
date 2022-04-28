@@ -358,6 +358,8 @@ function chanUpgradeTry(
     // verify proofs of counterparty state
     abortTransactionUnless(verifyChannelState(connection, proofHeight, proofChannel, currentChannel.counterpartyPortIdentifier, currentChannel.counterpartyChannelIdentifier, counterpartyChannel))
     abortTransactionUnless(verifyChannelUpgradeTimeout(connection, proofHeight, proofUpgradeTimeout, currentChannel.counterpartyPortIdentifier, currentChannel.counterpartyChannelIdentifier, upgradeTimeout))
+    abortTransactionUnless(verifyUpgradeSequence(connection, proofHeight, proofUpgradeSequence, currentChannel.counterpartyPortIdentifier,
+    currentChannel.counterpartyChannelIdentifier, counterpartySequence))
 
     if currentChannel.state == UPGRADE_INIT {
         // if there is a crossing hello, ie an UpgradeInit has been called on both channelEnds,
@@ -437,6 +439,7 @@ function chanUpgradeAck(
     channelIdentifier: Identifier,
     counterpartyChannel: ChannelEnd,
     proofChannel: CommitmentProof,
+    proofSequence: CommitmentProof,
     proofHeight: Height
 ) {
     // current channel is in UPGRADE_INIT or UPGRADE_TRY (crossing hellos)
@@ -448,6 +451,14 @@ function chanUpgradeAck(
 
     // verify proofs of counterparty state
     abortTransactionUnless(verifyChannelState(connection, proofHeight, proofChannel, currentChannel.counterpartyPortIdentifier, currentChannel.counterpartyChannelIdentifier, counterpartyChannel))
+
+    // verify that the counterparty sequence is the same as the current sequence to ensure that the proofs were
+    // retrieved from the current upgrade attempt
+    // since all proofs are retrieved from same proof height, and there can not be multiple upgrade states in the store for a given
+    // channel at the same time
+    sequence = provableStore.get(currentSequence(portIdentifier, channelIdentifier))
+    abortTransactionUnless(verifyUpgradeSequence(connection, proofHeight, proofUpgradeSequence, currentChannel.counterpartyPortIdentifier,
+    currentChannel.counterpartyChannelIdentifier, sequence))
 
     // counterparty must be in TRY state
     if counterpartyChannel.State != UPGRADE_TRY {
@@ -495,6 +506,7 @@ function chanUpgradeConfirm(
     counterpartyChannel: ChannelEnd,
     proofChannel: CommitmentProof,
     proofUpgradeError: CommitmentProof,
+    proofSequence: CommitmentProof,
     proofHeight: Height,
 ) {
     // current channel is in UPGRADE_TRY
@@ -515,6 +527,14 @@ function chanUpgradeConfirm(
     // verify counterparty did not abort upgrade handshake by writing upgrade error
     // must have absent value at upgradeError path at the current sequence
     abortTransactionUnless(verifyUpgradeChannelErrorAbsence(connection, proofHeight, proofUpgradeError, currentChannel.counterpartyPortIdentifier, currentChannel.counterpartyChannelIdentifier, sequence))
+
+    // verify that the counterparty sequence is the same as the current sequence to ensure that the proofs were
+    // retrieved from the current upgrade attempt
+    // since all proofs are retrieved from same proof height, and there can not be multiple upgrade states in the store for a given
+    // channel at the same time
+    sequence = provableStore.get(currentSequence(portIdentifier, channelIdentifier))
+    abortTransactionUnless(verifyUpgradeSequence(connection, proofHeight, proofUpgradeSequence, currentChannel.counterpartyPortIdentifier,
+    currentChannel.counterpartyChannelIdentifier, sequence))
 
     // call modules onChanUpgradeConfirm callback
     module = lookupModule(portIdentifier)
