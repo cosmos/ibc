@@ -1617,6 +1617,9 @@ function BeginBlock() {
 - **Error Condition**
   - If the CCV was established, but then was moved to the `CLOSED` state. 
 
+> **Note**: Once the CCV channel is closed, the provider chain can no longer provider security. As a result, the consumer chain MUST be shut down. 
+> For an example of how to do this in practice, see the Cosmos SDK [implementation](https://github.com/cosmos/cosmos-sdk/blob/0c0b4da114cf73ef5ae1ac5268241d69e8595a60/x/upgrade/abci.go#L71). 
+
 <!-- omit in toc -->
 #### **[CCV-CCF-RCVVSC.1]**
 ```typescript
