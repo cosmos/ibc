@@ -1275,7 +1275,7 @@ The *validator set update* sub-protocol enables the provider chain
 <!-- omit in toc -->
 #### **[CCV-PCF-BBLOCK.1]**
 ```typescript
-// CCF: Provider Chain Function
+// PCF: Provider Chain Function
 // implements the AppModule interface
 function BeginBlock() {
   // iterate over the pending spawn proposals and create 
