@@ -195,6 +195,16 @@ interface CCVHandshakeMetadata {
 ```
 This specification assumes that the provider CCV module has access to the address of the distribution module account through the `GetDistributionAccountAddress()` method. For an example, take a look at the [auth module](https://docs.cosmos.network/v0.44/modules/auth/) of Cosmos SDK. 
 
+During the CCV channel opening handshake, the provider chain adds the address of its distribution module account to the channel version as metadata (as described in [ICS 4](../../core/ics-004-channel-and-packet-semantics/README.md#definitions)). 
+The metadata structure is described by the following interface:
+```typescript
+interface CCVHandshakeMetadata {
+  providerDistributionAccount: string // the account's address
+  version: string
+}
+```
+This specification assumes that the provider CCV module has access to the address of the distribution module account through the `GetDistributionAccountAddress()` method. For an example, take a look at the [auth module](https://docs.cosmos.network/v0.44/modules/auth/) of Cosmos SDK. 
+
 ### CCV Packets
 [&uparrow; Back to Outline](#outline)
 
@@ -282,7 +292,7 @@ This section describes the internal state of the CCV module. For simplicity, the
   }
 - `vscId: uint64` is a monotonic strictly increasing and positive ID that is used to uniquely identify the VSCs sent to the consumer chains. 
   Note that `0` is used as a special ID for the mapping from consumer heights to provider heights.
-- `initH: Map<string, Height>` is a mapping from consumer chain IDs to the heights on the provider chain. 
+- `initialHeights: Map<string, Height>` is a mapping from consumer chain IDs to the heights on the provider chain. 
   For every consumer chain, the mapping stores the height when the CCV channel to that consumer chain is established. 
   Note that the provider validator set at this height matches the validator set at the height when the first VSC is provided to that consumer chain.
   It enables the mapping from consumer heights to provider heights.
@@ -593,6 +603,16 @@ function StopConsumerChain(chainId: string, lockUnbonding: Bool) {
     - all the entries with `chainId` are removed from the `vscToUnbondingOps` mapping.
 - **Error Condition**
   - None
+
+> **Note**: Invoking `StopConsumerChain(chainId, lockUnbonding)` with `lockUnbonding == FALSE` entails that all outstanding unbonding operations can complete before the `UnbondingPeriod` elapses on the consumer chain with `chainId`. 
+> Thus, invoking `StopConsumerChain(chainId, false)` for any `chainId` MAY violate the *Bond-Based Consumer Voting Power* and *Slashable Consumer Misbehavior* properties (see the [System Properties](./system_model_and_properties.md#system-properties) section). 
+> 
+> `StopConsumerChain(chainId, false)` is invoked in two scenarios (see Trigger Event above).
+> - In the first scenario (i.e., a governance proposal to stop the consumer chain with `chainId`), the validators on the provider chain MUST make sure that it is safe to stop the consumer chain. 
+> Since a governance proposal needs a majority of the voting power to pass, the safety of invoking `StopConsumerChain(chainId, false)` is ensured by the *Safe Blockchain* assumption (see the [Assumptions](./system_model_and_properties.md#assumptions) section).
+> 
+> - The second scenario (i.e., a timeout) is only possible if the *Correct Relayer* assumption is violated (see the [Assumptions](./system_model_and_properties.md#assumptions) section), 
+> which is necessary to guarantee both the *Bond-Based Consumer Voting Power* and *Slashable Consumer Misbehavior* properties (see the [Assumptions](./system_model_and_properties.md#correctness-reasoning) section).
   
 <!-- omit in toc -->
 #### **[CCV-PCF-COINIT.1]**
@@ -732,8 +752,8 @@ function onChanOpenConfirm(
     // set channel mappings
     chainToChannel[clientState.chainId] = channelIdentifier
     channelToChain[channelIdentifier] = clientState.chainId
-    // set initH for this consumer chain
-    initH[chainId] = getCurrentHeight()
+    // set initialHeights for this consumer chain
+    initialHeights[chainId] = getCurrentHeight()
 }
 ```
 - **Caller**
@@ -748,7 +768,7 @@ function onChanOpenConfirm(
     - the transaction is aborted.
   - Otherwise, 
     - the channel mappings are set, i.e., `chainToChannel` and `channelToChain`;
-    - `initH[chainId]` is set to the current height.
+    - `initialHeights[chainId]` is set to the current height.
 - **Error Condition**
   - None.
 
@@ -1153,9 +1173,11 @@ function onTimeoutPacket(packet Packet) {
 - **Caller**
   - The provider IBC routing module.
 - **Trigger Event**
-  - The provider IBC routing module receives a timeout on a channel owned by the provider CCV module.
+  - A packet sent on a channel owned by the provider CCV module timed out as a result of either
+    - the timeout height or timeout timestamp passing on the consumer chain without the packet being received (see `timeoutPacket` defined in [ICS4](../../core/ics-004-channel-and-packet-semantics/README.md#sending-end));
+    - or the channel being closed without the packet being received (see `timeoutOnClose` defined in [ICS4](../../core/ics-004-channel-and-packet-semantics/README.md#timing-out-on-close)). 
 - **Precondition**
-  - The Correct Relayer assumption is violated (see the [Assumptions](./system_model_and_properties.md#assumptions) section).
+  - The *Correct Relayer* assumption is violated (see the [Assumptions](./system_model_and_properties.md#assumptions) section).
 - **Postcondition** 
   - If the timeout is for a `VSCPacket`, the `onTimeoutVSCPacket` method is invoked.
   - Otherwise, the transaction is aborted.
@@ -1241,9 +1263,11 @@ function onTimeoutPacket(packet Packet) {
 - **Caller**
   - The consumer IBC routing module.
 - **Trigger Event**
-  - The consumer IBC routing module receives a timeout on a channel owned by the consumer CCV module.
+  - A packet sent on a channel owned by the consumer CCV module timed out as a result of either
+    - the timeout height or timeout timestamp passing on the provider chain without the packet being received (see `timeoutPacket` defined in [ICS4](../../core/ics-004-channel-and-packet-semantics/README.md#sending-end));
+    - or the channel being closed without the packet being received (see `timeoutOnClose` defined in [ICS4](../../core/ics-004-channel-and-packet-semantics/README.md#timing-out-on-close)). 
 - **Precondition**
-  - The Correct Relayer assumption is violated (see the [Assumptions](./system_model_and_properties.md#assumptions) section).
+  - The *Correct Relayer* assumption is violated (see the [Assumptions](./system_model_and_properties.md#assumptions) section).
 - **Postcondition** 
   - If the timeout is for a `VSCMaturedPacket`, the `onTimeoutVSCMaturedPacket` method is invoked.
   - If the timeout is for a `SlashPacket`, the `onTimeoutSlashPacket` method is invoked.
@@ -1261,7 +1285,7 @@ The *validator set update* sub-protocol enables the provider chain
 <!-- omit in toc -->
 #### **[CCV-PCF-BBLOCK.1]**
 ```typescript
-// CCF: Provider Chain Function
+// PCF: Provider Chain Function
 // implements the AppModule interface
 function BeginBlock() {
   // iterate over the pending spawn proposals and create 
@@ -1421,9 +1445,11 @@ function onTimeoutVSCPacket(packet: Packet) {
 - **Caller**
   - The `onTimeoutPacket()` method.
 - **Trigger Event**
-  - The provider IBC routing module receives a timeout of a `VSCPacket` on a channel owned by the provider CCV module.
+  - A `VSCPacket` sent on a channel owned by the provider CCV module timed out as a result of either
+    - the timeout height or timeout timestamp passing on the consumer chain without the packet being received (see `timeoutPacket` defined in [ICS4](../../core/ics-004-channel-and-packet-semantics/README.md#sending-end));
+    - or the channel being closed without the packet being received (see `timeoutOnClose` defined in [ICS4](../../core/ics-004-channel-and-packet-semantics/README.md#timing-out-on-close)). 
 - **Precondition**
-  - The Correct Relayer assumption is violated (see the [Assumptions](./system_model_and_properties.md#assumptions) section).
+  - The *Correct Relayer* assumption is violated (see the [Assumptions](./system_model_and_properties.md#assumptions) section).
 - **Postcondition**
   - The transaction is aborted if the ID of the channel on which the packet was sent is not mapped to a chain ID (in `channelToChain`).
   - `StopConsumerChain(chainId, lockUnbondingOnTimeout[chainId])` is invoked, where `chainId = channelToChain[packet.getDestinationChannel()]`.
@@ -1552,6 +1578,18 @@ function AfterUnbondingOpInitiated(opId: uint64) {
 // CCF: Consumer Chain Function
 // implements the AppModule interface
 function BeginBlock() {
+  if providerChannel != "" AND channelKeeper.GetChannelState(providerChannel) == CLOSED {
+      // the CCV channel was established, but it was then closed; 
+      // the consumer chain is no longer safe
+
+      // cleanup state, e.g., 
+      // providerChannel = ""
+
+      // shut down consumer chain
+      abortSystemUnless(FALSE)
+    } 
+  }
+
   HtoVSC[getCurrentHeight() + 1] = HtoVSC[getCurrentHeight()]
 }
 ```
@@ -1562,9 +1600,13 @@ function BeginBlock() {
 - **Precondition**
   - True. 
 - **Postcondition**
+  - If the CCV was established, but then was moved to the `CLOSED` state, then the state of the consumer CCV module is cleaned up, e.g., the `providerChannel` is unset. 
   - `HtoVSC` for the subsequent block height is set to the same VSC ID as the current block height.
 - **Error Condition**
-  - None.
+  - If the CCV was established, but then was moved to the `CLOSED` state. 
+
+> **Note**: Once the CCV channel is closed, the provider chain can no longer provider security. As a result, the consumer chain MUST be shut down. 
+> For an example of how to do this in practice, see the Cosmos SDK [implementation](https://github.com/cosmos/cosmos-sdk/blob/0c0b4da114cf73ef5ae1ac5268241d69e8595a60/x/upgrade/abci.go#L71). 
 
 <!-- omit in toc -->
 #### **[CCV-CCF-RCVVSC.1]**
@@ -1652,18 +1694,18 @@ function onAcknowledgeVSCMaturedPacket(packet: Packet, ack: bytes) {
 ```typescript
 // CCF: Consumer Chain Function
 function onTimeoutVSCMaturedPacket(packet Packet) {
-  // TODO What do we do here? 
-  // Do we need to notify the provider to close the channel?
-  // What happens w/ the consumer chain once the CCV channel gets closed?
-  // see https://github.com/cosmos/ibc/issues/669
+  // the CCV channel state is changed to CLOSED 
+  // by the IBC handler (since the channel is ORDERED)
 }
 ```
 - **Caller**
   - The `onTimeoutPacket()` method.
 - **Trigger Event**
-  - The consumer IBC routing module receives a timeout of a `VSCPacket` on a channel owned by the consumer CCV module.
+  - A `VSCMaturedPacket` sent on a channel owned by the consumer CCV module timed out as a result of either
+    - the timeout height or timeout timestamp passing on the provider chain without the packet being received (see `timeoutPacket` defined in [ICS4](../../core/ics-004-channel-and-packet-semantics/README.md#sending-end));
+    - or the channel being closed without the packet being received (see `timeoutOnClose` defined in [ICS4](../../core/ics-004-channel-and-packet-semantics/README.md#timing-out-on-close)).
 - **Precondition**
-  - The Correct Relayer assumption is violated (see the [Assumptions](./system_model_and_properties.md#assumptions) section).
+  - The *Correct Relayer* assumption is violated (see the [Assumptions](./system_model_and_properties.md#assumptions) section).
 - **Postcondition**
   - The state is not changed.
 - **Error Condition**
@@ -1830,7 +1872,7 @@ function onRecvSlashPacket(packet: Packet): bytes {
   if packet.data.vscId == 0 {
     // the infraction happened before sending any VSC to this chain
     chainId = channelToChain[packet.getDestinationChannel()]
-    infractionHeight = initH[chainId]
+    infractionHeight = initialHeights[chainId]
   }
   else {
     infractionHeight = VSCtoH[packet.data.vscId]
@@ -1864,7 +1906,7 @@ function onRecvSlashPacket(packet: Packet): bytes {
     - the channel closing handshake is initiated;
     - an error acknowledgment is returned.
   - Otherwise,
-    - if `packet.data.vscId == 0`, `infractionHeight` is set to `initH[chainId]`, with `chainId = channelToChain[packet.getDestinationChannel()]`, i.e., the height when the CCV channel to this consumer chain is established;
+    - if `packet.data.vscId == 0`, `infractionHeight` is set to `initialHeights[chainId]`, with `chainId = channelToChain[packet.getDestinationChannel()]`, i.e., the height when the CCV channel to this consumer chain is established;
     - otherwise, `infractionHeight` is set to `VSCtoH[packet.data.vscId]`, i.e., the height at which the voting power was last updated by the validator updates in the VSC with ID `packet.data.vscId`;
     - a request is made to the Slashing module to slash the validator with address `packet.data.valAddress` for misbehaving at height `infractionHeight`;
     - a request is made to the Slashing module to jail the validator with address `packet.data.valAddress` for a period `data.jailTime`;
@@ -1904,18 +1946,18 @@ function onAcknowledgeSlashPacket(packet: Packet, ack: bytes) {
 ```typescript
 // CCF: Consumer Chain Function
 function onTimeoutSlashPacket(packet Packet) {
-  // TODO What do we do here? 
-  // Do we need to notify the provider to close the channel?
-  // What happens w/ the consumer chain once the CCV channel gets closed?
-  // see https://github.com/cosmos/ibc/issues/669
+  // the CCV channel state is changed to CLOSED 
+  // by the IBC handler (since the channel is ORDERED)
 }
 ```
 - **Caller**
   - The `onTimeoutPacket()` method.
 - **Trigger Event**
-  - The consumer IBC routing module receives a timeout of a `SlashPacket` on a channel owned by the consumer CCV module.
+  - A `SlashPacket` sent on a channel owned by the consumer CCV module timed out as a result of either
+    - the timeout height or timeout timestamp passing on the provider chain without the packet being received (see `timeoutPacket` defined in [ICS4](../../core/ics-004-channel-and-packet-semantics/README.md#sending-end));
+    - or the channel being closed without the packet being received (see `timeoutOnClose` defined in [ICS4](../../core/ics-004-channel-and-packet-semantics/README.md#timing-out-on-close)).
 - **Precondition**
-  - The Correct Relayer assumption is violated (see the [Assumptions](./system_model_and_properties.md#assumptions) section).
+  - The *Correct Relayer* assumption is violated (see the [Assumptions](./system_model_and_properties.md#assumptions) section).
 - **Postcondition**
   - The state is not changed.
 - **Error Condition**
