@@ -18,7 +18,7 @@
 ## Assumptions
 [&uparrow; Back to Outline](#outline)
 
-As part of an ABCI application, CCV interacts with both the consensus engine (via ABCI) and other application modules (e.g, the Staking module). 
+As part of a modular ABCI application, CCV interacts with both the consensus engine (via ABCI) and other application modules (e.g, the Staking module). 
 As an IBC application, CCV interacts with external relayers (defined in [ICS 18](../../relayer/ics-018-relayer-algorithms)). 
 In this section we specify what we assume about these other components. 
 A more thorough discussion of the environment in which CCV operates is given in the section [Placing CCV within an ABCI Application](./technical_specification.md#placing-ccv-within-an-abci-application).
@@ -30,13 +30,13 @@ i.e., neither *Live Blockchain* and *Correct Relayer* are required for safety.
 Note though that CCV liveness relies on both *Live Blockchain* and *Correct Relayer* assumptions; 
 furthermore, the *Correct Relayer* assumption relies on both *Safe Blockchain* and *Live Blockchain* assumptions. 
 >
-> The *Validator Update Provision*, *Unbonding Safety*, and *Slashing Warranty* assumptions define what is needed from the ABCI application of the provider chain. 
+> The *Validator Update Provision*, *Unbonding Safety*, *Slashing Warranty*, and *Distribution Warranty* assumptions define what is needed from the ABCI application of the provider chain. 
 > 
 > The *Evidence Provision* assumptions defines what is needed from the ABCI application of the consumer chains.
 
 - ***Safe Blockchain***: Both the provider and the consumer chains are *safe*. This means that, for every chain, the underlying consensus engine satisfies safety (e.g., the chain does not fork) and the execution of the state machine follows the described protocol. 
 - ***Live Blockchain***: Both the provider and the consumer chains are *live*. This means that, for every chain, the underlying consensus engine satisfies liveness (i.e., new blocks are eventually added to the chain).
-  > **Note**: Both *Safe Blockchain* and *Live Blockchain* assumptions require the consensus engine's assumptions to hold, e.g., less than a third of the voting power is Byzantine. For more details, take a look at the [Tendermint Paper](https://arxiv.org/pdf/1807.04938.pdf).
+  > **Note**: Both *Safe Blockchain* and *Live Blockchain* assumptions require the consensus engine's assumptions to hold, e.g., less than a third of the voting power is Byzantine. For an example, take a look at the [Tendermint Paper](https://arxiv.org/pdf/1807.04938.pdf).
 
 - ***Correct Relayer***: There is at least one *correct*, *live* relayer between the provider and consumer chains. This assumption has two implications.
   - First, every packet sent on the CCV channel is relayed to the receiving end before the packet timeout elapses.
