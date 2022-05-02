@@ -55,8 +55,8 @@ CCV is a primitive (i.e., a building block) that enables arbitrary shared securi
 Moreover, CCV enables *hub minimalism*. In a nutshell, hub minimalism entails keeping a hub in the Cosmos network (e.g., the Cosmos Hub) as simple as possible, with as few features as possible in order to decrease the attack surface. CCV enables moving distinct features (e.g., DEX) to independent chains that are validated by the same set of validators as the hub. 
 
 > **Versioning**: Note that CCV will be developed progressively. 
-> - The V1 release will require the validator set of a consumer chain to be entirely provided by the provider chain. In other words, once a provider chain agrees to provide security to a consumer chain, the entire validator set of the provider chain MUST validate also on the consumer chain.
-> - The V2 release will allow the provider chain validators to opt-in to participate as validators on the consumer chain. It is up to each consumer chain to establish the benefits that provider chain validators receive for their participation.
+> This standard document specifies the V1 release, which will require the validator set of a consumer chain to be entirely provided by the provider chain. 
+> In other words, once a provider chain agrees to provide security to a consumer chain, the entire validator set of the provider chain MUST validate also on the consumer chain.
 > 
 > For more details on the planned releases, take a look at the [Interchain Security light paper](https://github.com/cosmos/gaia/blob/main/docs/interchain-security.md#the-interchain-security-stack).
 
@@ -69,7 +69,7 @@ This section defines the new terms and concepts introduced by CCV.
 
 - **Consumer Chain**: The blockchain that consumes security, i.e., enables the provider chain to manage its validator set.
 
-> Note that in the current version the validator set of the consumer chain is entirely provided by the provider chain.
+> **Note**: In this specification, the validator set of the consumer chain is entirely provided by the provider chain.
 
 Both the provider and the consumer chains are [application-specific blockchains](https://docs.cosmos.network/v0.44/intro/why-app-specific.html), 
 i.e., the state-machine is typically connected to the underlying consensus engine via an interface called [ABCI](https://github.com/tendermint/spec/tree/v0.7.1/spec/abci). 
