@@ -26,8 +26,8 @@ Before describing the data structures and sub-protocols of the CCV protocol, we 
 <!-- omit in toc -->
 ### Implemented Interfaces
 
-- CCV is an **ABCI application module**, which means it MUST implement the logic to handle some of the messages received from the consensus engine via ABCI, e.g., `InitChain`, `EndBlock` 
-  (for more details, take a look at the [ABCI specification](https://github.com/tendermint/spec/tree/v0.7.1/spec/abci)). 
+- CCV is an **ABCI application module**, which means it MUST implement the logic to handle some of the messages received from the consensus engine via ABCI, 
+  e.g., `InitChain`, `BeginBlock`, `EndBlock` (for more details, take a look at the [ABCI specification](https://github.com/tendermint/spec/tree/v0.7.1/spec/abci)). 
   In this specification we define the following methods that handle messages that are of particular interest to the CCV protocol:
   - `InitGenesis()` -- Called when the chain is first started, on receiving an `InitChain` message from the consensus engine. 
     This is also where the application can inform the underlying consensus engine of the initial validator set.
@@ -140,7 +140,11 @@ interface ValidatorUpdate {
 ```
 The provider chain sends to the consumer chain a list of `ValidatorUpdate`s, containing an entry for every validator that had its power updated. 
 
-The data structures required for creating clients (i.e., `ClientState`, `ConsensusState`) are defined in [ICS 7](../../client/ics-007-tendermint-client).
+The data structures required for creating clients (i.e., `ClientState`, `ConsensusState`) are defined in [ICS 2](../../core/ics-002-client-semantics). 
+In the context of CCV, every chain is uniquely defined by their chain ID and the validator set. 
+Thus, CCV requires the `ClientState` to contain the chain ID and the `ConsensusState` for a particular height to contain the validator set at that height. 
+In addition, the `ClientState` should contain the `UnbondingPeriod`.
+For an example, take a look at the `ClientState` and `ConsensusState` defined in [ICS 7](../../client/ics-007-tendermint-client).
 
 ### CCV Data Structures
 [&uparrow; Back to Outline](#outline)
@@ -181,7 +185,8 @@ this specification expects the following fields to be part of the proposals to s
   }
   ```
   - `chainId` is the proposed chain ID of the new consumer chain. It must be different from all other consumer chain IDs of the executing provider chain.
-  - `initialHeight` is the proposed initial height of new consumer chain. Note that `Height` is defined in [ICS 7](../../client/ics-007-tendermint-client). For a completely new chain, `initialHeight = {0,1}`; however, it may be different if the chain converts to a consumer chain.
+  - `initialHeight` is the proposed initial height of new consumer chain. 
+    For an example, take a look at the `Height` defined in [ICS 7](../../client/ics-007-tendermint-client).
   - `spawnTime` is the time on the provider chain at which the consumer chain genesis is finalized and all validators are responsible to start their consumer chain validator node.
   - `lockUnbondingOnTimeout` is a boolean value that indicates whether the funds corresponding to the outstanding unbonding operations are to be released in case of a timeout. In case `lockUnbondingOnTimeout == true`, a governance proposal to stop the timed out consumer chain would be necessary to release the locked funds. 
   ```typescript
@@ -476,29 +481,22 @@ function SpawnConsumerChainProposalHandler(p: SpawnConsumerChainProposal) {
 // PCF: Provider Chain Function
 // Utility method
 function CreateConsumerClient(p: SpawnConsumerChainProposal) {
-  // get UnbondingPeriod from provider Staking module
-  // TODO governance and CCV params
-  // see https://github.com/cosmos/ibc/issues/673
-  unbondingTime = stakingKeeper.UnbondingTime()
-
-  // create client state as defined in ICS 7
+  // create client state
   clientState = ClientState{
     chainId: p.chainId,
-    trustLevel: DefaultTrustLevel, // i.e., 1/3
-    trustingPeriod: unbondingTime/2,
-    unbondingPeriod: unbondingTime,
+    // get UnbondingPeriod from provider Staking module
+    // TODO governance and CCV params
+    // see https://github.com/cosmos/ibc/issues/673
+    unbondingPeriod: stakingKeeper.UnbondingTime(),
+    // the height when the client was last updated
     latestHeight: p.initialHeight,
   }
 
-  // create consensus state as defined in ICS 7;
-  // SentinelRoot is used as a stand-in root value for 
-  // the consensus state set at the upgrade height;
+  // create consensus state;
   // the validator set is the same as the validator set 
   // from own consensus state at current height
   ownConsensusState = getConsensusState(getCurrentHeight())
   consensusState = ConsensusState{
-    timestamp: currentTimestamp(),
-    commitmentRoot: SentinelRoot,
     validatorSet: ownConsensusState.validatorSet,
   }
 
@@ -517,15 +515,14 @@ function CreateConsumerClient(p: SpawnConsumerChainProposal) {
 - **Precondition** 
   - `currentTimestamp() > p.spawnTime`.
 - **Postcondition** 
-  - `UnbondingPeriod` is retrieved from the provider Staking module.
-  - A client state is created (as defined in [ICS 7](../../client/ics-007-tendermint-client)).
-  - A consensus state is created (as defined in [ICS 7](../../client/ics-007-tendermint-client)).
+  - A client state is created with `chainId = p.chainId` and `unbondingPeriod` set to the `UnbondingPeriod` obtained from the provider Staking module.
+  - A consensus state is created with `validatorSet` set to the validator set the provider chain own consensus state at current height.
   - A client of the consumer chain is created and the client ID is added to `chainToClient`.
   - `lockUnbondingOnTimeout[p.chainId]` is set to `p.lockUnbondingOnTimeout`.
 - **Error Condition**
   - None.
 
-> **Note:** Creating a client of a remote chain requires a `ClientState` and a `ConsensusState` (as defined in [ICS 7](../../client/ics-007-tendermint-client)).
+> **Note:** Creating a client of a remote chain requires a `ClientState` and a `ConsensusState` (for an example, take a look at [ICS 7](../../client/ics-007-tendermint-client)).
 > `ConsensusState` requires setting a validator set of the remote chain. 
 > The provider chain uses the fact that the validator set of the consumer chain is the same as its own validator set. 
 > The rest of information to create a `ClientState` it receives through the governance proposal.
@@ -795,7 +792,7 @@ function InitGenesis(gs: ConsumerGenesisState): [ValidatorUpdate] {
   // - contains a non-empty initial validator set
   abortSystemUnless(gs.initialValSet NOT empty)
   // - contains an initial validator set that matches 
-  //   the validator set in the providerConsensusState (see ICS 7)
+  //   the validator set in the providerConsensusState (e.g., ICS 7)
   abortSystemUnless(gs.initialValSet == gs.providerConsensusState.validatorSet)
 
   // bind to ConsumerPortId port 
@@ -837,8 +834,8 @@ function InitGenesis(gs: ConsumerGenesisState): [ValidatorUpdate] {
   - The `validatorSet` mapping is populated with the initial validator set.
   - The initial validator set is returned to the consensus engine.
 - **Error Condition**
-  - The genesis state contains no valid provider client state, where the validity is defined as in [ICS 7](../../client/ics-007-tendermint-client).
-  - The genesis state contains no valid provider consensus state, where the validity is defined as in [ICS 7](../../client/ics-007-tendermint-client).
+  - The genesis state contains no valid provider client state, where the validity is defined in the corresponding client specification (e.g., [ICS 7](../../client/ics-007-tendermint-client)).
+  - The genesis state contains no valid provider consensus state, where the validity is defined in the corresponding client specification (e.g., [ICS 7](../../client/ics-007-tendermint-client))..
   - The genesis state contains an empty initial validator set.
   - The genesis state contains an initial validator set that does not match the validator set in the provider consensus state.
   - The capability for the port `ConsumerPortId` cannot be claimed.
@@ -2039,10 +2036,10 @@ function SendSlashRequest(
   - None.
 
 > **Note**: The ABCI application MUST subtract `ValidatorUpdateDelay` from the infraction height before invoking `SendSlashRequest`, 
-> where `ValidatorUpdateDelay` is a delay (in blocks) between when validator updates are returned to the consensus-engine and when they are applied 
-> (for more details, take a look at the [ABCI specification](https://github.com/tendermint/spec/blob/v0.7.1/spec/abci/abci.md#endblock)). 
+> where `ValidatorUpdateDelay` is a delay (in blocks) between when validator updates are returned to the consensus-engine and when they are applied. 
 > For example, if `ValidatorUpdateDelay = x` and a validator set update is returned with new validators at the end of block `10`, 
-> then the new validators are expected to sign blocks beginning at block `11+x`. 
+> then the new validators are expected to sign blocks beginning at block `11+x`
+> (for more details, take a look at the [ABCI specification](https://github.com/tendermint/spec/blob/v0.7.1/spec/abci/abci.md#endblock)).
 > 
 > Consequently, the consumer CCV module expects the `infractionHeight` parameter of the `SendSlashRequest()` to be set accordingly.
 
