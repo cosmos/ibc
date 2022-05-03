@@ -513,15 +513,14 @@ Represented spatially, packet transit between two machines can be rendered as fo
 
 ##### Sending packets
 
-The `sendPacket` function is called by a module in order to send an IBC packet on a channel end owned by the calling module to the corresponding module on the counterparty chain.
+The `sendPacket` function is called by a module in order to send *data* (in the form of an IBC packet) on a channel end owned by the calling module.
 
 Calling modules MUST execute application logic atomically in conjunction with calling `sendPacket`.
 
 The IBC handler performs the following steps in order:
 
 - Checks that the channel & connection are open to send packets
-- Checks that the calling module owns the sending port
-- Checks that the packet metadata matches the channel & connection information
+- Checks that the calling module owns the sending port (see [ICS 5](../ics-005-port-allocation))
 - Checks that the timeout height specified has not already passed on the destination chain
 - Increments the send sequence counter associated with the channel
 - Stores a constant-size commitment to the packet data & packet timeout
@@ -529,35 +528,41 @@ The IBC handler performs the following steps in order:
 Note that the full packet is not stored in the state of the chain - merely a short hash-commitment to the data & timeout value. The packet data can be calculated from the transaction execution and possibly returned as log output which relayers can index.
 
 ```typescript
-function sendPacket(packet: Packet) {
-    channel = provableStore.get(channelPath(packet.sourcePort, packet.sourceChannel))
+function sendPacket(
+  capability: CapabilityKey,
+  sourcePort: Identifier,
+  sourceChannel: Identifier,
+  timeoutHeight: Height,
+  timeoutTimestamp: uint64,
+  data: bytes) {
+    channel = provableStore.get(channelPath(sourcePort, sourceChannel))
 
-    // optimistic sends are permitted once the handshake has started
+    // check that the channel & connection are open to send packets; 
+    // note: optimistic sends are permitted once the handshake has started
     abortTransactionUnless(channel !== null)
     abortTransactionUnless(channel.state !== CLOSED)
-    abortTransactionUnless(authenticateCapability(channelCapabilityPath(packet.sourcePort, packet.sourceChannel), capability))
-    abortTransactionUnless(packet.destPort === channel.counterpartyPortIdentifier)
-    abortTransactionUnless(packet.destChannel === channel.counterpartyChannelIdentifier)
     connection = provableStore.get(connectionPath(channel.connectionHops[0]))
-
     abortTransactionUnless(connection !== null)
 
-    // sanity-check that the timeout height hasn't already passed in our local client tracking the receiving chain
+    // check if the calling module owns the sending port
+    abortTransactionUnless(authenticateCapability(channelCapabilityPath(sourcePort, sourceChannel), capability))
+    
+    // check that the timeout height hasn't already passed in the local client tracking the receiving chain
     latestClientHeight = provableStore.get(clientPath(connection.clientIdentifier)).latestClientHeight()
     abortTransactionUnless(packet.timeoutHeight === 0 || latestClientHeight < packet.timeoutHeight)
 
-    nextSequenceSend = provableStore.get(nextSequenceSendPath(packet.sourcePort, packet.sourceChannel))
-    abortTransactionUnless(packet.sequence === nextSequenceSend)
+    // increment the send sequence counter
+    sequence = provableStore.get(nextSequenceSendPath(packet.sourcePort, packet.sourceChannel))
+    provableStore.set(nextSequenceSendPath(packet.sourcePort, packet.sourceChannel), sequence+1)
 
-    // all assertions passed, we can alter state
+    // store commitment to the packet data & packet timeout
+    provableStore.set(
+      packetCommitmentPath(sourcePort, sourceChannel, sequence),
+      hash(data, timeoutHeight, timeoutTimestamp)
+    )
 
-    nextSequenceSend = nextSequenceSend + 1
-    provableStore.set(nextSequenceSendPath(packet.sourcePort, packet.sourceChannel), nextSequenceSend)
-    provableStore.set(packetCommitmentPath(packet.sourcePort, packet.sourceChannel, packet.sequence),
-                      hash(packet.data, packet.timeoutHeight, packet.timeoutTimestamp))
-
-    // log that a packet has been sent
-    emitLogEntry("sendPacket", {sequence: packet.sequence, data: packet.data, timeoutHeight: packet.timeoutHeight, timeoutTimestamp: packet.timeoutTimestamp})
+    // log that a packet can be safely sent
+    emitLogEntry("sendPacket", {sequence: sequence, data: data, timeoutHeight: timeoutHeight, timeoutTimestamp: timeoutTimestamp})
 }
 ```
 
