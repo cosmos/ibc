@@ -161,19 +161,39 @@ The CCV module is initialized through the `InitGenesis` method when the chain is
   }
   ```
 
-The provider CCV module handles governance proposals to spawn new consumer chains. 
+The provider CCV module handles governance proposals to spawn new consumer chains and to stop existing consumer chains. 
 While the structure of governance proposals is specific to every ABCI application (for an example, see the `Proposal` interface in the [Governance module documentation](https://docs.cosmos.network/v0.44/modules/gov/) of Cosmos SDK),
-this specification expects the following fields to be part of every proposal to spawn a new consumer chain:
+this specification expects the following fields to be part of the proposals to spawn new consumer chains (i.e., `SpawnConsumerChainProposal`) and to stop existing ones (i.e., `StopConsumerChainProposal`):
   ```typescript
-  interface CreateConsumerChainProposal {
+  interface SpawnConsumerChainProposal {
     chainId: string
     initialHeight: Height
     spawnTime: Timestamp
+    lockUnbondingOnTimeout: Bool
   }
   ```
   - `chainId` is the proposed chain ID of the new consumer chain. It must be different from all other consumer chain IDs of the executing provider chain.
   - `initialHeight` is the proposed initial height of new consumer chain. Note that `Height` is defined in [ICS 7](../../client/ics-007-tendermint-client). For a completely new chain, `initialHeight = {0,1}`; however, it may be different if the chain converts to a consumer chain.
-  - `spawnTime` is the time on the provider chain at which the consumer chain genesis is finalized and all validators will be responsible for starting their consumer chain validator node.
+  - `spawnTime` is the time on the provider chain at which the consumer chain genesis is finalized and all validators are responsible to start their consumer chain validator node.
+  - `lockUnbondingOnTimeout` is a boolean value that indicates whether the funds corresponding to the outstanding unbonding operations are to be released in case of a timeout. In case `lockUnbondingOnTimeout == true`, a governance proposal to stop the timed out consumer chain would be necessary to release the locked funds. 
+  ```typescript
+  interface StopConsumerChainProposal {
+    chainId: string
+    stopTime: Timestamp
+  }
+  ```
+  - `chainId` is the chain ID of the consumer chain to be removed. It must be the ID of an existing consumer chain of the executing provider chain.
+  - `stopTime` is the time on the provider chain at which all validators are responsible to stop their consumer chain validator node.
+
+During the CCV channel opening handshake, the provider chain adds the address of its distribution module account to the channel version as metadata (as described in [ICS 4](../../core/ics-004-channel-and-packet-semantics/README.md#definitions)). 
+The metadata structure is described by the following interface:
+```typescript
+interface CCVHandshakeMetadata {
+  providerDistributionAccount: string // the account's address
+  version: string
+}
+```
+This specification assumes that the provider CCV module has access to the address of the distribution module account through the `GetDistributionAccountAddress()` method. For an example, take a look at the [auth module](https://docs.cosmos.network/v0.44/modules/auth/) of Cosmos SDK. 
 
 During the CCV channel opening handshake, the provider chain adds the address of its distribution module account to the channel version as metadata (as described in [ICS 4](../../core/ics-004-channel-and-packet-semantics/README.md#definitions)). 
 The metadata structure is described by the following interface:
@@ -243,16 +263,19 @@ This section describes the internal state of the CCV module. For simplicity, the
 #### State on the provider chain
 
 - `ProviderPortId = "provider"` is the port ID the provider CCV module is expected to bind to.
-- `pendingProposals: [CreateConsumerChainProposal]` is a list of pending proposals to spawn new consumer chains. The list exposes the following interface: 
+- `pendingSpawnProposals: [SpawnConsumerChainProposal]` is a list of pending governance proposals to spawn new consumer chains. 
+- `pendingStopProposals: [StopConsumerChainProposal]` is a list of pending governance proposals to stop existing consumer chains. 
+  Both lists of pending governance proposals expose the following interface: 
 ```typescript
-  interface [CreateConsumerChainProposal] {
+  interface [Proposal] {
     // append a proposal to the list; the list is modified
-    Append(p: CreateConsumerChainProposal) 
+    Append(p: Proposal) 
 
     // remove a proposal from the list; the list is modified
-    Remove(p: CreateConsumerChainProposal)
+    Remove(p: Proposal)
   }
   ```
+- `lockUnbondingOnTimeout: Map<string, Bool>` is a mapping from consumer chain IDs to the boolean values indicating whether the funds corresponding to the in progress unbonding operations are to be released in case of a timeout.
 - `chainToClient: Map<string, Identifier>` is a mapping from consumer chain IDs to the associated client IDs.
 - `chainToChannel: Map<string, Identifier>` is a mapping from consumer chain IDs to the CCV channel IDs.
 - `channelToChain: Map<Identifier, string>` is a mapping from CCV channel IDs to consumer chain IDs.
@@ -283,11 +306,11 @@ This section describes the internal state of the CCV module. For simplicity, the
     unbondingChainIds: [string] 
   }
   ```
-- `vscToUnbondingOps: Map<(Identifier, uint64), [uint64]>` is a mapping from `(chainId, vscId)` tuples to a list of unbonding operation IDs. 
+- `vscToUnbondingOps: Map<(string, uint64), [uint64]>` is a mapping from `(chainId, vscId)` tuples to a list of unbonding operation IDs. 
   It enables the provider CCV module to match a `VSCMaturedPacket{vscId}`, received from a consumer chain with `chainId`, with the corresponding unbonding operations. 
   As a result, `chainId` can be removed from the list of consumer chains that are still unbonding these operations. 
   For more details see how received `VSCMaturedPacket`s [are handled](#ccv-pcf-rcvmat1).
-- `slashRequests: Map<(string, [string])>` is a mapping from `chainId`s to lists of validator addresses, 
+- `slashRequests: Map<string, [string]>` is a mapping from `chainId`s to lists of validator addresses, 
   i.e., `slashRequests[chainId]` contains all the validator addresses for which the provider chain received slash requests from the consumer chain with `chainId`.
 
 <!-- omit in toc -->
@@ -414,29 +437,29 @@ function InitGenesis(state: ProviderGenesisState): [ValidatorUpdate] {
   - For any consumer state in the `ProviderGenesisState`, the channel ID is not valid (cf. the validation function defined in [ICS 4](../../core/ics-004-channel-and-packet-semantics)).
 
 <!-- omit in toc -->
-#### **[CCV-PCF-CCPROP.1]**
+#### **[CCV-PCF-SPCCPROP.1]**
 ```typescript
 // PCF: Provider Chain Function
 // implements governance proposal Handler 
-function CreateConsumerChainProposal(p: CreateConsumerChainProposal) {
+function SpawnConsumerChainProposalHandler(p: SpawnConsumerChainProposal) {
   if currentTimestamp() > p.spawnTime {
     CreateConsumerClient(p)
   }
   else {
-    // store the proposal as a pending proposal
-    pendingProposals.Append(p)
+    // store the proposal as a pending spawn proposal
+    pendingSpawnProposals.Append(p)
   }
 }
 ```
 - **Caller**
   - `EndBlock()` method of Governance module.
 - **Trigger Event**
-  - A governance proposal `CreateConsumerChainProposal` has passed (i.e., it got the necessary votes).
+  - A governance proposal `SpawnConsumerChainProposal` has passed (i.e., it got the necessary votes).
 - **Precondition** 
   - True. 
 - **Postcondition** 
-  - If the spawn time has already passed, `CreateConsumerClient(p)` is invoked, with `p` the `CreateConsumerChainProposal`. 
-  - Otherwise, the proposal is appended to the list of pending proposals, i.e., `pendingProposals`.
+  - If the spawn time has already passed, `CreateConsumerClient(p)` is invoked, with `p` the `SpawnConsumerChainProposal`. 
+  - Otherwise, the proposal is appended to the list of pending spawn proposals, i.e., `pendingSpawnProposals`.
 - **Error Condition**
   - None.
 
@@ -445,7 +468,7 @@ function CreateConsumerChainProposal(p: CreateConsumerChainProposal) {
 ```typescript
 // PCF: Provider Chain Function
 // Utility method
-function CreateConsumerClient(p: CreateConsumerChainProposal) {
+function CreateConsumerClient(p: SpawnConsumerChainProposal) {
   // get UnbondingPeriod from provider Staking module
   // TODO governance and CCV params
   // see https://github.com/cosmos/ibc/issues/673
@@ -475,12 +498,15 @@ function CreateConsumerClient(p: CreateConsumerChainProposal) {
   // create consumer chain client and store it
   clientId = clientKeeper.CreateClient(clientState, consensusState)
   chainToClient[p.chainId] = clientId
+
+  // store lockUnbondingOnTimeout flag
+  lockUnbondingOnTimeout[p.chainId] = p.lockUnbondingOnTimeout
 }
 ```
 - **Caller**
-  - Either `CreateConsumerChainProposal` (see [CCV-PCF-CCPROP.1](#ccv-pcf-ccprop1)) or `BeginBlock()` (see [CCV-PCF-BBLOCK.1](#ccv-pcf-bblock1)).
+  - Either `SpawnConsumerChainProposalHandler` (see [CCV-PCF-SPCCPROP.1](#ccv-pcf-spccprop1)) or `BeginBlock()` (see [CCV-PCF-BBLOCK.1](#ccv-pcf-bblock1)).
 - **Trigger Event**
-  - A governance proposal `CreateConsumerChainProposal` `p` has passed (i.e., it got the necessary votes).
+  - A governance proposal `SpawnConsumerChainProposal` `p` has passed (i.e., it got the necessary votes).
 - **Precondition** 
   - `currentTimestamp() > p.spawnTime`.
 - **Postcondition** 
@@ -488,6 +514,7 @@ function CreateConsumerClient(p: CreateConsumerChainProposal) {
   - A client state is created (as defined in [ICS 7](../../client/ics-007-tendermint-client)).
   - A consensus state is created (as defined in [ICS 7](../../client/ics-007-tendermint-client)).
   - A client of the consumer chain is created and the client ID is added to `chainToClient`.
+  - `lockUnbondingOnTimeout[p.chainId]` is set to `p.lockUnbondingOnTimeout`.
 - **Error Condition**
   - None.
 
@@ -496,6 +523,97 @@ function CreateConsumerClient(p: CreateConsumerChainProposal) {
 > The provider chain uses the fact that the validator set of the consumer chain is the same as its own validator set. 
 > The rest of information to create a `ClientState` it receives through the governance proposal.
 
+<!-- omit in toc -->
+#### **[CCV-PCF-STCCPROP.1]**
+> TODO Move function to another place, i.e., restructuring.  
+```typescript
+// PCF: Provider Chain Function
+// implements governance proposal Handler 
+function StopConsumerChainProposalHandler(p: StopConsumerChainProposal) {
+  if currentTimestamp() > p.stopTime {
+    // stop the consumer chain and do not lock the unbonding
+    StopConsumerChain(p.chainId, false)
+  }
+  else {
+    // store the proposal as a pending stop proposal
+    pendingStopProposals.Append(p)
+  }
+}
+```
+- **Caller**
+  - `EndBlock()` method of Governance module.
+- **Trigger Event**
+  - A governance proposal `StopConsumerChainProposal` has passed (i.e., it got the necessary votes).
+- **Precondition** 
+  - True. 
+- **Postcondition** 
+  - If the spawn time has already passed, `StopConsumerChain(p.chainId, false)` is invoked, with `p` the `StopConsumerChainProposal`. 
+  - Otherwise, the proposal is appended to the list of pending stop proposals, i.e., `pendingStopProposals`.
+- **Error Condition**
+  - None.
+
+<!-- omit in toc -->
+#### **[CCV-PCF-STCC.1]**
+```typescript
+// PCF: Provider Chain Function
+function StopConsumerChain(chainId: string, lockUnbonding: Bool) {
+  // cleanup state
+  chainToClient.Remove(chainId)
+  lockUnbondingOnTimeout.Remove(chainId)
+  if chainId IN chainToChannel.Keys() {
+    // CCV channel is established
+    channelToChain.Remove(chainToChannel[chainId])
+    channelKeeper.ChanCloseInit(chainToChannel[chainId])
+    chainToChannel.Remove(chainId)
+  }
+  pendingVSCPackets.Remove(chainId)
+  initH.Remove(chainId)
+  slashRequests.Remove(chainId)
+
+  if !lockUnbonding {
+    // remove chainId form all outstanding unbonding operations
+    foreach id IN vscToUnbondingOps[(chainId, _)] {
+      unbondingOps[id].unbondingChainIds.Remove(chainId)
+    }
+    // clean up vscToUnbondingOps mapping
+    vscToUnbondingOps.Remove((chainId, _))
+  }
+}
+```
+- **Caller**
+  - `StopConsumerChainProposalHandler` (see [CCV-PCF-STCCPROP.1](#ccv-pcf-stccprop1)) 
+    or `BeginBlock()` (see [CCV-PCF-BBLOCK.1](#ccv-pcf-bblock1)) 
+    or `onTimeoutVSCPacket()` (see [CCV-PCF-TOVSC.1](#ccv-pcf-tovsc1)).
+- **Trigger Event**
+  - Either a governance proposal to stop the consumer chain with `chainId` has passed (i.e., it got the necessary votes) or a packet sent on the CCV channel to the consumer chain with `chainId` has timed out.
+- **Precondition**
+  - True.
+- **Postcondition**
+  - The client ID mapped to `chainId` in `chainToClient` is removed.
+  - The value mapped to `chainId` in `lockUnbondingOnTimeout` is removed.
+  - If the CCV channel to the consumer chain with `chainId` is established, then
+    - the chain ID mapped to `chainToChannel[chainId]` in `channelToChain` is removed;
+    - the channel closing handshake is initiated for the CCV channel;
+    - the channel ID mapped to `chainId` in `chainToChannel` is removed.
+  - All the `VSCPacketData` mapped to `chainId` in `pendingVSCPackets` are removed.
+  - The height mapped to `chainId` in `initH` is removed.
+  - `slashRequests[chainId]` is emptied.
+  - If `lockUnbonding == false`, then 
+    - `chainId` is removed from all outstanding unbonding operations;
+    - all the entries with `chainId` are removed from the `vscToUnbondingOps` mapping.
+- **Error Condition**
+  - None
+
+> **Note**: Invoking `StopConsumerChain(chainId, lockUnbonding)` with `lockUnbonding == FALSE` entails that all outstanding unbonding operations can complete before the `UnbondingPeriod` elapses on the consumer chain with `chainId`. 
+> Thus, invoking `StopConsumerChain(chainId, false)` for any `chainId` MAY violate the *Bond-Based Consumer Voting Power* and *Slashable Consumer Misbehavior* properties (see the [System Properties](./system_model_and_properties.md#system-properties) section). 
+> 
+> `StopConsumerChain(chainId, false)` is invoked in two scenarios (see Trigger Event above).
+> - In the first scenario (i.e., a governance proposal to stop the consumer chain with `chainId`), the validators on the provider chain MUST make sure that it is safe to stop the consumer chain. 
+> Since a governance proposal needs a majority of the voting power to pass, the safety of invoking `StopConsumerChain(chainId, false)` is ensured by the *Safe Blockchain* assumption (see the [Assumptions](./system_model_and_properties.md#assumptions) section).
+> 
+> - The second scenario (i.e., a timeout) is only possible if the *Correct Relayer* assumption is violated (see the [Assumptions](./system_model_and_properties.md#assumptions) section), 
+> which is necessary to guarantee both the *Bond-Based Consumer Voting Power* and *Slashable Consumer Misbehavior* properties (see the [Assumptions](./system_model_and_properties.md#correctness-reasoning) section).
+  
 <!-- omit in toc -->
 #### **[CCV-PCF-COINIT.1]**
 ```typescript
@@ -1055,9 +1173,11 @@ function onTimeoutPacket(packet Packet) {
 - **Caller**
   - The provider IBC routing module.
 - **Trigger Event**
-  - The provider IBC routing module receives a timeout on a channel owned by the provider CCV module.
+  - A packet sent on a channel owned by the provider CCV module timed out as a result of either
+    - the timeout height or timeout timestamp passing on the consumer chain without the packet being received (see `timeoutPacket` defined in [ICS4](../../core/ics-004-channel-and-packet-semantics/README.md#sending-end));
+    - or the channel being closed without the packet being received (see `timeoutOnClose` defined in [ICS4](../../core/ics-004-channel-and-packet-semantics/README.md#timing-out-on-close)). 
 - **Precondition**
-  - The Correct Relayer assumption is violated (see the [Assumptions](./system_model_and_properties.md#assumptions) section).
+  - The *Correct Relayer* assumption is violated (see the [Assumptions](./system_model_and_properties.md#assumptions) section).
 - **Postcondition** 
   - If the timeout is for a `VSCPacket`, the `onTimeoutVSCPacket` method is invoked.
   - Otherwise, the transaction is aborted.
@@ -1143,9 +1263,11 @@ function onTimeoutPacket(packet Packet) {
 - **Caller**
   - The consumer IBC routing module.
 - **Trigger Event**
-  - The consumer IBC routing module receives a timeout on a channel owned by the consumer CCV module.
+  - A packet sent on a channel owned by the consumer CCV module timed out as a result of either
+    - the timeout height or timeout timestamp passing on the provider chain without the packet being received (see `timeoutPacket` defined in [ICS4](../../core/ics-004-channel-and-packet-semantics/README.md#sending-end));
+    - or the channel being closed without the packet being received (see `timeoutOnClose` defined in [ICS4](../../core/ics-004-channel-and-packet-semantics/README.md#timing-out-on-close)). 
 - **Precondition**
-  - The Correct Relayer assumption is violated (see the [Assumptions](./system_model_and_properties.md#assumptions) section).
+  - The *Correct Relayer* assumption is violated (see the [Assumptions](./system_model_and_properties.md#assumptions) section).
 - **Postcondition** 
   - If the timeout is for a `VSCMaturedPacket`, the `onTimeoutVSCMaturedPacket` method is invoked.
   - If the timeout is for a `SlashPacket`, the `onTimeoutSlashPacket` method is invoked.
@@ -1163,15 +1285,25 @@ The *validator set update* sub-protocol enables the provider chain
 <!-- omit in toc -->
 #### **[CCV-PCF-BBLOCK.1]**
 ```typescript
-// CCF: Provider Chain Function
+// PCF: Provider Chain Function
 // implements the AppModule interface
 function BeginBlock() {
-  // iterate over the pending proposals and create 
+  // iterate over the pending spawn proposals and create 
   // the consumer client if the spawn time has passed
-  foreach p IN pendingProposals {
+  foreach p IN pendingSpawnProposals {
     if currentTimestamp() > p.spawnTime {
       CreateConsumerClient(p)
-      pendingProposals.Remove(p)
+      pendingSpawnProposals.Remove(p)
+    }
+  }
+
+  // iterate over the pending stop proposals 
+  // and stop the consumer chain
+  foreach p IN pendingStopProposals {
+    if currentTimestamp() > p.stopTime {
+      // stop the consumer chain and do not lock the unbonding
+      StopConsumerChain(p.chainId, false)
+      pendingStopProposals.Remove(p)
     }
   }
 }
@@ -1183,9 +1315,12 @@ function BeginBlock() {
 - **Precondition**
   - True. 
 - **Postcondition**
-  - For each `CreateConsumerChainProposal` `p` in the list of pending proposals `pendingProposals`, if `currentTimestamp() > p.spawnTime`, then
+  - For each `SpawnConsumerChainProposal` `p` in the list of pending spawn proposals `pendingSpawnProposals`, if `currentTimestamp() > p.spawnTime`, then
     - `CreateConsumerClient(p)` is invoked;
-    - `p` is removed from `pendingProposals`.
+    - `p` is removed from `pendingSpawnProposals`.
+  - For each `StopConsumerChainProposal` `p` in the list of pending spawn proposals `pendingStopProposals`, if `currentTimestamp() > p.stopTime`, then
+    - `StopConsumerChain(p.chainId, false)` is invoked;
+    - `p` is removed from `pendingStopProposals`.
 - **Error Condition**
   - None.
 
@@ -1298,27 +1433,26 @@ function onAcknowledgeVSCPacket(packet: Packet, ack: bytes) {
 #### **[CCV-PCF-TOVSC.1]**
 ```typescript
 // PCF: Provider Chain Function
-function onTimeoutVSCPacket(packet Packet) {
+function onTimeoutVSCPacket(packet: Packet) {
   // cleanup state
   abortTransactionUnless(packet.getDestinationChannel() IN channelToChain.Keys())
   chainId = channelToChain[packet.getDestinationChannel()]
-  channelToChain.Remove(packet.getDestinationChannel())
-  chainToChannel.Remove(chainId)
-
-  // TODO: cleanup, e.g., complete all outstanding unbonding ops
-  // see https://github.com/cosmos/ibc/issues/669
+  // stop the consumer chain and use lockUnbondingOnTimeout 
+  // to decide whether to lock the unbonding
+  StopConsumerChain(chainId, lockUnbondingOnTimeout[chainId])
 }
 ```
 - **Caller**
   - The `onTimeoutPacket()` method.
 - **Trigger Event**
-  - The provider IBC routing module receives a timeout of a `VSCPacket` on a channel owned by the provider CCV module.
+  - A `VSCPacket` sent on a channel owned by the provider CCV module timed out as a result of either
+    - the timeout height or timeout timestamp passing on the consumer chain without the packet being received (see `timeoutPacket` defined in [ICS4](../../core/ics-004-channel-and-packet-semantics/README.md#sending-end));
+    - or the channel being closed without the packet being received (see `timeoutOnClose` defined in [ICS4](../../core/ics-004-channel-and-packet-semantics/README.md#timing-out-on-close)). 
 - **Precondition**
-  - The Correct Relayer assumption is violated (see the [Assumptions](./system_model_and_properties.md#assumptions) section).
+  - The *Correct Relayer* assumption is violated (see the [Assumptions](./system_model_and_properties.md#assumptions) section).
 - **Postcondition**
   - The transaction is aborted if the ID of the channel on which the packet was sent is not mapped to a chain ID (in `channelToChain`).
-  - The chain ID mapped to `packet.getDestinationChannel()` in `channelToChain` is removed.
-  - The channel ID mapped to `chainId` in `chainToChannel` is removed, where `chainId = channelToChain[packet.getDestinationChannel()]`.
+  - `StopConsumerChain(chainId, lockUnbondingOnTimeout[chainId])` is invoked, where `chainId = channelToChain[packet.getDestinationChannel()]`.
 - **Error Condition**
   - None
 
@@ -1466,6 +1600,18 @@ function BeforeUnbondingOpCompleted(opId: uint64): Bool {
 // CCF: Consumer Chain Function
 // implements the AppModule interface
 function BeginBlock() {
+  if providerChannel != "" AND channelKeeper.GetChannelState(providerChannel) == CLOSED {
+      // the CCV channel was established, but it was then closed; 
+      // the consumer chain is no longer safe
+
+      // cleanup state, e.g., 
+      // providerChannel = ""
+
+      // shut down consumer chain
+      abortSystemUnless(FALSE)
+    } 
+  }
+
   HtoVSC[getCurrentHeight() + 1] = HtoVSC[getCurrentHeight()]
 }
 ```
@@ -1476,9 +1622,13 @@ function BeginBlock() {
 - **Precondition**
   - True. 
 - **Postcondition**
+  - If the CCV was established, but then was moved to the `CLOSED` state, then the state of the consumer CCV module is cleaned up, e.g., the `providerChannel` is unset. 
   - `HtoVSC` for the subsequent block height is set to the same VSC ID as the current block height.
 - **Error Condition**
-  - None.
+  - If the CCV was established, but then was moved to the `CLOSED` state. 
+
+> **Note**: Once the CCV channel is closed, the provider chain can no longer provider security. As a result, the consumer chain MUST be shut down. 
+> For an example of how to do this in practice, see the Cosmos SDK [implementation](https://github.com/cosmos/cosmos-sdk/blob/0c0b4da114cf73ef5ae1ac5268241d69e8595a60/x/upgrade/abci.go#L71). 
 
 <!-- omit in toc -->
 #### **[CCV-CCF-RCVVSC.1]**
@@ -1566,18 +1716,18 @@ function onAcknowledgeVSCMaturedPacket(packet: Packet, ack: bytes) {
 ```typescript
 // CCF: Consumer Chain Function
 function onTimeoutVSCMaturedPacket(packet Packet) {
-  // TODO What do we do here? 
-  // Do we need to notify the provider to close the channel?
-  // What happens w/ the consumer chain once the CCV channel gets closed?
-  // see https://github.com/cosmos/ibc/issues/669
+  // the CCV channel state is changed to CLOSED 
+  // by the IBC handler (since the channel is ORDERED)
 }
 ```
 - **Caller**
   - The `onTimeoutPacket()` method.
 - **Trigger Event**
-  - The consumer IBC routing module receives a timeout of a `VSCPacket` on a channel owned by the consumer CCV module.
+  - A `VSCMaturedPacket` sent on a channel owned by the consumer CCV module timed out as a result of either
+    - the timeout height or timeout timestamp passing on the provider chain without the packet being received (see `timeoutPacket` defined in [ICS4](../../core/ics-004-channel-and-packet-semantics/README.md#sending-end));
+    - or the channel being closed without the packet being received (see `timeoutOnClose` defined in [ICS4](../../core/ics-004-channel-and-packet-semantics/README.md#timing-out-on-close)).
 - **Precondition**
-  - The Correct Relayer assumption is violated (see the [Assumptions](./system_model_and_properties.md#assumptions) section).
+  - The *Correct Relayer* assumption is violated (see the [Assumptions](./system_model_and_properties.md#assumptions) section).
 - **Postcondition**
   - The state is not changed.
 - **Error Condition**
@@ -1818,18 +1968,18 @@ function onAcknowledgeSlashPacket(packet: Packet, ack: bytes) {
 ```typescript
 // CCF: Consumer Chain Function
 function onTimeoutSlashPacket(packet Packet) {
-  // TODO What do we do here? 
-  // Do we need to notify the provider to close the channel?
-  // What happens w/ the consumer chain once the CCV channel gets closed?
-  // see https://github.com/cosmos/ibc/issues/669
+  // the CCV channel state is changed to CLOSED 
+  // by the IBC handler (since the channel is ORDERED)
 }
 ```
 - **Caller**
   - The `onTimeoutPacket()` method.
 - **Trigger Event**
-  - The consumer IBC routing module receives a timeout of a `SlashPacket` on a channel owned by the consumer CCV module.
+  - A `SlashPacket` sent on a channel owned by the consumer CCV module timed out as a result of either
+    - the timeout height or timeout timestamp passing on the provider chain without the packet being received (see `timeoutPacket` defined in [ICS4](../../core/ics-004-channel-and-packet-semantics/README.md#sending-end));
+    - or the channel being closed without the packet being received (see `timeoutOnClose` defined in [ICS4](../../core/ics-004-channel-and-packet-semantics/README.md#timing-out-on-close)).
 - **Precondition**
-  - The Correct Relayer assumption is violated (see the [Assumptions](./system_model_and_properties.md#assumptions) section).
+  - The *Correct Relayer* assumption is violated (see the [Assumptions](./system_model_and_properties.md#assumptions) section).
 - **Postcondition**
   - The state is not changed.
 - **Error Condition**
