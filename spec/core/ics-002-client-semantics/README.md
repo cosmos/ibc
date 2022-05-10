@@ -88,7 +88,8 @@ could be provided as executable WASM functions when the client instance is creat
     such as Tendermint, less than a third of block producers MAY be Byzantine.
   
   Unless the state machine satisfies all of the above properties, the IBC protocol
-may not work as intended, e.g., users' assets might be stolen.
+may not work as intended, e.g., users' assets might be stolen. Note that specific client 
+types may require additional properties. 
 
 * `Height` specifies the order of the state updates of a state machine, e.g., a sequence number. 
   This entails that each state update is mapped to a `Height`.
