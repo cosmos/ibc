@@ -77,6 +77,34 @@ At least one of the timeoutHeight or timeoutTimestamp MUST be non-zero.
 
 ### Store Paths
 
+#### UpgradeSequencePath
+
+The upgrade sequence path is a public path that stores the current sequence of the upgrade attempt. The sequence will increment with each attempted upgrade on the given channel. The sequence will be used to ensure that different error receipts referring to different upgrade attempts do not interfere with each other.
+
+```typescript
+function upgradeSequencePath(portIdentifier: Identifier, channelIdentifier: Identifier) Path {
+    return "channelUpgrade/ports/{portIdentifier}/channelIdentifier/{channelIdentifier}/upgradeSequence"
+}
+```
+
+The upgrade sequence MUST also have a verification method so that chains can prove the upgrade sequence on the counterparty for the given channel upgrade.
+
+```typescript
+// Connection VerifyChannelUpgradeSequence method
+function verifyChannelUpgradeSequence(
+  connection: ConnectionEnd,
+  height: Height,
+  proof: CommitmentProof,
+  counterpartyPortIdentifier: Identifier,
+  counterpartyChannelIdentifier: Identifier,
+  sequence: uint64
+) {
+    client = queryClient(connection.clientIdentifier)
+    path = applyPrefix(connection.counterpartyPrefix, upgradeSequencePath(counterpartyPortIdentifier, counterpartyChannelIdentifier))
+    client.verifyMembership(height, 0, 0, proof, path, sequence)
+}
+```
+
 #### Restore Channel Path
 
 The chain must store the previous channel end so that it may restore it if the upgrade handshake fails. This may be stored in the private store.
@@ -84,16 +112,6 @@ The chain must store the previous channel end so that it may restore it if the u
 ```typescript
 function restorePath(portIdentifier: Identifier, channelIdentifier: Identifier): Path {
     return "channelUpgrade/ports/{portIdentifier}/channels/{channelIdentifier}/restore"
-}
-```
-
-#### CurrentUpgradeSequencePath
-
-The current upgrade sequence path is a public path that stores the sequence of the current upgrade attempt. The sequence will increment with each attempted upgrade on the given channel. The sequence will be used to ensure that different error receipts referring to different upgrade attempts do not interfere with each other.
-
-```typescript
-function currentSequencePath(portIdentifier: Identifier, channelIdentifier: Identifier) Path {
-    return "channelUpgrade/ports/{portIdentifier}/channelIdentifier/{channelIdentifier}/currentUpgradeSequence"
 }
 ```
 
@@ -117,8 +135,8 @@ function verifyChannelUpgradeError(
   proof: CommitmentProof,
   counterpartyPortIdentifier: Identifier,
   counterpartyChannelIdentifier: Identifier,
-  sequence: uint64
-  upgradeErrorReceipt: []byte, 
+  sequence: uint64,
+  upgradeErrorReceipt: []byte
 ) {
     client = queryClient(connection.clientIdentifier)
     path = applyPrefix(connection.counterpartyPrefix, channelErrorPath(counterpartyPortIdentifier, counterpartyChannelIdentifier, sequence))
@@ -183,7 +201,7 @@ function restoreChannel() {
     // cancel upgrade
     // write an error receipt into the error path at the current sequence
     // and restore original channel
-    sequence = provableStore.get(currentSequence(portIdentifier, channelIdentifier))
+    sequence = provableStore.get(upgradeSequencePath(portIdentifier, channelIdentifier))
     errorReceipt = []byte{1}
     provableStore.set(errorPath(portIdentifier, channelIdentifier, sequence), errorReceipt)
     originalChannel = privateStore.get(restorePath(portIdentifier, channelIdentifier))
@@ -201,7 +219,7 @@ function restoreChannel() {
     )
 
     // increment sequence in preparation for the next upgrade
-    provableStore.set(currentSequencePath(portIdentifier, channelIdentifier), sequence+1)
+    provableStore.set(upgradeSequencePath(portIdentifier, channelIdentifier), sequence+1)
 
     // caller should return as well
 }
@@ -269,7 +287,7 @@ function chanUpgradeInit(
         timeoutTimestamp: counterpartyTimeoutTimestamp,
     }
 
-    sequence := provableStore.get(currentSequencePath(portIdentifier, channelIdentifier))
+    sequence := provableStore.get(upgradeSequencePath(portIdentifier, channelIdentifier))
 
     // call modules onChanUpgradeInit callback
     module = lookupModule(portIdentifier)
@@ -310,7 +328,7 @@ function chanUpgradeTry(
     timeoutTimestamp: uint64,
     proofChannel: CommitmentProof,
     proofUpgradeTimeout: CommitmentProof,
-    proofSequence: CommitmentProof,
+    proofUpgradeSequence: CommitmentProof,
     proofHeight: Height
 ) {
     // current channel must be OPEN or UPGRADE_INIT (crossing hellos)
@@ -354,10 +372,9 @@ function chanUpgradeTry(
     // if the counterparty sequence is less than the current sequence, then either the counterparty chain is out-of-sync or
     // the message is out-of-sync and we write an error receipt with our own sequence so that the counterparty can update
     // their sequence as well.
-    currentSequence = provableStore.get(currentSequencePath(portIdentifier, channelIdentifier))
-    abortTransactionUnless()
+    currentSequence = provableStore.get(upgradeSequencePath(portIdentifier, channelIdentifier))
     if counterpartySequence >= currentSequence {
-        provableStore.set(currentSequencePath(portIdentifier, channelIdentifier), counterpartySequence)
+        provableStore.set(upgradeSequencePath(portIdentifier, channelIdentifier), counterpartySequence)
     } else {
         provableStore.set(errorPath(portIdentifier, channelIdentifier, currentSequence), []byte{1})
         return
@@ -442,7 +459,7 @@ function chanUpgradeAck(
     channelIdentifier: Identifier,
     counterpartyChannel: ChannelEnd,
     proofChannel: CommitmentProof,
-    proofSequence: CommitmentProof,
+    proofUpgradeSequence: CommitmentProof,
     proofHeight: Height
 ) {
     // current channel is in UPGRADE_INIT or UPGRADE_TRY (crossing hellos)
@@ -459,7 +476,7 @@ function chanUpgradeAck(
     // retrieved from the current upgrade attempt
     // since all proofs are retrieved from same proof height, and there can not be multiple upgrade states in the store for a given
     // channel at the same time
-    sequence = provableStore.get(currentSequence(portIdentifier, channelIdentifier))
+    sequence = provableStore.get(upgradeSequencePath(portIdentifier, channelIdentifier))
     abortTransactionUnless(verifyUpgradeSequence(connection, proofHeight, proofUpgradeSequence, currentChannel.counterpartyPortIdentifier,
     currentChannel.counterpartyChannelIdentifier, sequence))
 
@@ -501,7 +518,7 @@ function chanUpgradeAck(
     privateStore.delete(restorePath(portIdentifier, channelIdentifier))
 
     // increment sequence in preparation for the next upgrade
-    provableStore.set(currentSequencePath(portIdentifier, channelIdentifier), sequence+1)
+    provableStore.set(upgradeSequencePath(portIdentifier, channelIdentifier), sequence+1)
 }
 ```
 
@@ -512,7 +529,7 @@ function chanUpgradeConfirm(
     counterpartyChannel: ChannelEnd,
     proofChannel: CommitmentProof,
     proofUpgradeError: CommitmentProof,
-    proofSequence: CommitmentProof,
+    proofUpgradeSequence: CommitmentProof,
     proofHeight: Height,
 ) {
     // current channel is in UPGRADE_TRY
@@ -523,7 +540,7 @@ function chanUpgradeConfirm(
     abortTransactionUnless(counterpartyChannel.State == OPEN)
 
     // get current sequence
-    sequence = provableStore.get(currentSequencePath(portIdentifier, channelIdentifier))
+    sequence = provableStore.get(upgradeSequencePath(portIdentifier, channelIdentifier))
 
     // get underlying connection for proof verification
     connection = getConnection(currentChannel.connectionIdentifier)
@@ -538,7 +555,6 @@ function chanUpgradeConfirm(
     // retrieved from the current upgrade attempt
     // since all proofs are retrieved from same proof height, and there can not be multiple upgrade states in the store for a given
     // channel at the same time
-    sequence = provableStore.get(currentSequence(portIdentifier, channelIdentifier))
     abortTransactionUnless(verifyUpgradeSequence(connection, proofHeight, proofUpgradeSequence, currentChannel.counterpartyPortIdentifier,
     currentChannel.counterpartyChannelIdentifier, sequence))
 
@@ -558,7 +574,7 @@ function chanUpgradeConfirm(
     privateStore.delete(restorePath(portIdentifier, channelIdentifier))
 
     // increment sequence in preparation for the next upgrade
-    provableStore.set(currentSequencePath(portIdentifier, channelIdentifier), sequence+1)
+    provableStore.set(upgradeSequencePath(portIdentifier, channelIdentifier), sequence+1)
 }
 ```
 
@@ -591,11 +607,11 @@ function cancelChannelUpgrade(
     if counterpartySequence > currentSequence {
         // the counterparty sequence is higher and thus the channel ends are out of sync
         // setting our sequence to the counterparty sequence will bring the channel ends back in sync
-        provableStore.set(currentSequencePath(portIdentifier, channelIdentifier), counterpartySequence)
+        provableStore.set(upgradeSequencePath(portIdentifier, channelIdentifier), counterpartySequence)
     } else {
         // current sequence and counterparty sequence are equal so both chains are in sync.
         // We must increment the sequence to prepare for the next upgrade
-        provableStore.set(currentSequencePath(portIdentifier, channelIdentifier), currentSequence+1)
+        provableStore.set(upgradeSequencePath(portIdentifier, channelIdentifier), currentSequence+1)
     }
 
     // get underlying connection for proof verification
