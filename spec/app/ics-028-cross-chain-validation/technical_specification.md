@@ -74,9 +74,13 @@ Before describing the data structures and sub-protocols of the CCV protocol, we 
     // get validator updates from the provider Staking module
     GetValidatorUpdates(): [ValidatorUpdate]
 
-    // notify the Staking module of unboding operations that
-    // have matured from the consumer chain's perspective 
-    CompleteStoppedUnbonding(id: uint64)
+    // request the Staking module to put on hold 
+    // the completion of an unbonding operation
+    PutUnbondingOnHold(id: uint64)
+
+    // notify the Staking module of an unboding operation that
+    // has matured from the perspective of the consumer chains 
+    UnbondingCanComplete(id: uint64)
   }
   ```
 
@@ -96,15 +100,11 @@ Before describing the data structures and sub-protocols of the CCV protocol, we 
   }
   ``` 
 
-- The following hooks enable the provider CCV module to register operations to be execute when certain events occur within the provider Staking module:
+- The following hook enables the provider CCV module to register operations to be execute when certain events occur within the provider Staking module:
   ```typescript
   // invoked by the Staking module after 
   // initiating an unbonding operation
-  function AfterUnbondingOpInitiated(opId: uint64);
-
-  // invoked by the Staking module before 
-  // completing an unbonding operation
-  function BeforeUnbondingOpCompleted(opId: uint64): Bool;
+  function AfterUnbondingInitiated(opId: uint64);
   ```
 
 - The consumer CCV module defines the following hooks that enable other modules to register operations to execute when certain events have occurred within CCV:
@@ -298,7 +298,7 @@ This section describes the internal state of the CCV module. For simplicity, the
   It enables the mapping from consumer heights to provider heights.
 - `VSCtoH: Map<uint64, Height>` is a mapping from VSC IDs to heights on the provider chain. It enables the mapping from consumer heights to provider heights, 
   i.e., the voting power at height `VSCtoH[id]` on the provider chain was last updated by the validator updates contained in the VSC with ID `id`.  
-- `unbondingOps: Map<uint64, UnbondingOperation>` is a mapping that enables accessing for every unbonding operation the list of consumer chains that are still unbonding. When unbonding operations are initiated, the Staking module calls the `AfterUnbondingOpInitiated()` [hook](#ccv-pcf-hook-afubopcr1); this leads to the creation of a new `UnbondingOperation`, which is defined as
+- `unbondingOps: Map<uint64, UnbondingOperation>` is a mapping that enables accessing for every unbonding operation the list of consumer chains that are still unbonding. When unbonding operations are initiated, the Staking module calls the `AfterUnbondingInitiated()` [hook](#ccv-pcf-hook-afubopcr1); this leads to the creation of a new `UnbondingOperation`, which is defined as
   ```typescript
   interface UnbondingOperation {
     id: uint64
@@ -1467,14 +1467,14 @@ function onRecvVSCMaturedPacket(packet: Packet): bytes {
 
   // iterate over the unbonding operations mapped to
   // this chainId and vscId (i.e., packet.data.id)
-  foreach op in GetUnbondingOpsFromVSC(chainId, packet.data.id) {
+  foreach op in GetUnbondingsFromVSC(chainId, packet.data.id) {
     // remove the consumer chain from 
     // the list of consumer chain that are still unbonding
     op.unbondingChainIds.Remove(chainId)
     // if the unbonding operation has unbonded on all consumer chains
     if op.unbondingChainIds.IsEmpty() {
-      // attempt to complete unbonding in Staking module
-      stakingKeeper.CompleteStoppedUnbonding(op.id)
+      // notify the Staking module that the unbonding can complete
+      stakingKeeper.UnbondingCanComplete(op.id)
       // remove unbonding operation
       unbondingOps.Remove(op.id)
     }
@@ -1494,10 +1494,10 @@ function onRecvVSCMaturedPacket(packet: Packet): bytes {
 - **Postcondition**
   - The transaction is aborted if the channel on which the packet was received is not an established CCV channel (i.e., not in `channelToChain`).
   - `chainId` is set to the ID of the consumer chain mapped to the channel on which the packet was received. 
-  - For each unbonding operation `op` returned by `GetUnbondingOpsFromVSC(chainId, packet.data.id)`
+  - For each unbonding operation `op` returned by `GetUnbondingsFromVSC(chainId, packet.data.id)`
     - `chainId` is removed from `op.unbondingChainIds`;
     - if `op.unbondingChainIds` is empty,
-      - the `CompleteStoppedUnbonding()` method of the Staking module is invoked;
+      - the `UnbondingCanComplete()` method of the Staking module is invoked;
       - the entry `op` is removed from `unbondingOps`.
   - `(chainId, vscId)` is removed from `vscToUnbondingOps`.
   - A successful acknowledgment is returned.
@@ -1505,11 +1505,11 @@ function onRecvVSCMaturedPacket(packet: Packet): bytes {
   - None.
 
 <!-- omit in toc -->
-#### **[CCV-PCF-GETUBOPS.1]**
+#### **[CCV-PCF-GETUBS.1]**
 ```typescript
 // PCF: Provider Chain Function
 // Utility method
-function GetUnbondingOpsFromVSC(
+function GetUnbondingsFromVSC(
   chainId: Identifier, 
   _vscId: uint64): [UnbondingOperation] {
     // get all unbonding operations associated with (chainId, _vscId)
@@ -1539,7 +1539,7 @@ function GetUnbondingOpsFromVSC(
 ```typescript
 // PCF: Provider Chain Function
 // implements a Staking module hook
-function AfterUnbondingOpInitiated(opId: uint64) {
+function AfterUnbondingInitiated(opId: uint64) {
   // get the IDs of all consumer chains registered with this provider chain
   chainIds = chainToClient.Keys()
   // create and store a new unbonding operation
@@ -1551,6 +1551,10 @@ function AfterUnbondingOpInitiated(opId: uint64) {
   foreach chainId in chainIds {
     vscToUnbondingOps[(chainId, vscId)].Append(opId)
   }
+
+  // ask the Staking module to wait for this operation 
+  // to reach maturity on the consumer chains
+  stakingKeeper.PutUnbondingOnHold(opId)
 }
 ```
 - **Caller**
@@ -1561,34 +1565,8 @@ function AfterUnbondingOpInitiated(opId: uint64) {
   - True.
 - **Postcondition**
   - An `UnbondingOperation` `op` is created and added to `unbondingOps`, such that `op.id = opId` and `op.unbondingChainIds` is the list of all consumer chains registered with this provider chain, i.e., `chainToClient.Keys()`.
-  - The ID of the created unbonding operation is appended to every list in `vscToUnbondingOps[(chainId, vscId)]`, where `chainId` is an ID of a consumer chains registered with this provider chain and `vscId` is the current VSC ID. 
-- **Error Condition**
-  - None.
-
-
-<!-- omit in toc -->
-#### **[CCV-PCF-HOOK-BFUBOPCO.1]**
-```typescript
-// PCF: Provider Chain Function
-// implements a Staking module hook
-function BeforeUnbondingOpCompleted(opId: uint64): Bool {
-  if opId in unbondingOps.Keys() {
-    // the unbonding operation is still unbonding 
-    // on at least one consumer chain
-    return true
-  }
-  return false
-}
-```
-- **Caller**
-  - The Staking module.
-- **Trigger Event**
-  - An unbonding operation with ID `opId` has matured on the provider chain.
-- **Precondition**
-  - True.
-- **Postcondition**
-  - If there is an unboding operation with ID `opId` in `unbondingOps`, then true is returned.
-  - Otherwise, false is returned.
+  - `opId` is appended to every list in `vscToUnbondingOps[(chainId, vscId)]`, where `chainId` is an ID of a consumer chains registered with this provider chain and `vscId` is the current VSC ID. 
+  - The `PutUnbondingOnHold(opId)` of the Staking module is invoked.
 - **Error Condition**
   - None.
 
