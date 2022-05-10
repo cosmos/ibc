@@ -89,11 +89,19 @@ Before describing the data structures and sub-protocols of the CCV protocol, we 
   The interaction is defined by the following interface:
   ```typescript 
   interface SlashingKeeper {
-    // request the Staking module to slash a validator
+    // query the Slashing module for the slashing factor, 
+    // which may be different for downtime infractions
+    GetSlashFactor(downtime: Bool): int64
+
+    // request the Slashing module to slash a validator
     Slash(valAddress: string, 
           infractionHeight: int64, 
           power: int64, 
           slashFactor: int64)
+
+    // query the Slashing module for the jailing time, 
+    // which may be different for downtime infractions
+    GetJailTime(downtime: Bool): int64
 
     // request the Slashing module to jail a validator until time
     JailUntil(valAddress: string, time: uint64)
@@ -234,8 +242,7 @@ The following packet data types are required by the CCV module:
       valAddress: string // validator address, i.e., the hash of its public key
       valPower: int64
       vscId: uint64
-      slashFactor: int64
-      jailTime: uint64
+      downtime: Bool
     }
     ```
 > Note that for brevity we use e.g., `VSCPacket` to refer to a packet with `VSCPacketData` as its data.
@@ -1636,6 +1643,8 @@ function onRecvVSCPacket(packet: Packet): bytes {
   pendingChanges.Append(packet.data.updates)
 
   // calculate and store the maturity timestamp for the VSC
+  // TODO governance and CCV params (UnbondingPeriod)
+  // see https://github.com/cosmos/ibc/issues/673
   maturityTimestamp = currentTimestamp().Add(UnbondingPeriod)
   maturingVSCs.Add(packet.data.id, maturityTimestamp)
 
@@ -1879,15 +1888,18 @@ function onRecvSlashPacket(packet: Packet): bytes {
   }
 
   // request the Slashing module to slash the validator
+  // using the slashFactor set on the provider chain
+  slashFactor = slashingKeeper.GetSlashFactor(packet.data.downtime)
   slashingKeeper.Slash(
     packet.data.valAddress, 
     infractionHeight, 
     packet.data.valPower, 
-    packet.data.slashFactor))
+    slashFactor))
 
   // request the Slashing module to jail the validator
-  timestamp = currentTimestamp() + data.jailTime
-  slashingKeeper.JailUntil(packet.data.valAddress, timestamp)
+  // using the jailTime set on the provider chain
+  jailTime = slashingKeeper.GetJailTime(packet.data.downtime)
+  slashingKeeper.JailUntil(packet.data.valAddress, currentTimestamp() + jailTime)
 
   // add validator to list of slash requests for chainId
   slashRequests[chainId].Append(packet.data.valAddress)
@@ -1908,8 +1920,8 @@ function onRecvSlashPacket(packet: Packet): bytes {
   - Otherwise,
     - if `packet.data.vscId == 0`, `infractionHeight` is set to `initialHeights[chainId]`, with `chainId = channelToChain[packet.getDestinationChannel()]`, i.e., the height when the CCV channel to this consumer chain is established;
     - otherwise, `infractionHeight` is set to `VSCtoH[packet.data.vscId]`, i.e., the height at which the voting power was last updated by the validator updates in the VSC with ID `packet.data.vscId`;
-    - a request is made to the Slashing module to slash the validator with address `packet.data.valAddress` for misbehaving at height `infractionHeight`;
-    - a request is made to the Slashing module to jail the validator with address `packet.data.valAddress` for a period `data.jailTime`;
+    - a request is made to the Slashing module to slash `slashFactor` of the tokens bonded at `infractionHeight` by the validator with address `packet.data.valAddress`, where `slashFactor` is the slashing factor set on the provider chain;
+    - a request is made to the Slashing module to jail the validator with address `packet.data.valAddress` for a period `jailTime`, where `jailTime` is the jailing time set on the provider chain;
     - the validator's address `packet.data.valAddress` is added to the list of slash requests from this `chainId`;
     - a successful acknowledgment is returned.
 - **Error Condition**
@@ -1978,18 +1990,12 @@ function SendSlashRequest(
       return
     }
 
-    // TODO governance and CCV params
-    // see https://github.com/cosmos/ibc/issues/673
-    slashFactor = TBA
-    jailTime = TBA
-
     // create SlashPacket data
     packetData = SlashPacketData{
       valAddress: valAddress,
       valPower: power,
       vscId: HtoVSC[infractionHeight],
-      slashFactor: slashFactor,
-      jailTime: jailTime
+      downtime: downtime
     }
 
     // check whether the CCV channel to the provider chain is established
@@ -2024,7 +2030,6 @@ function SendSlashRequest(
 - **Postcondition**
   - If the request is for downtime and there is an outstanding request to slash this validator for downtime, then the state is not changed.
   - Otherwise, 
-    - both `slashFactor` and `jailTime` parameters are set;
     - a `SlashPacket` data `packetData` is created, such that `packetData.vscId = VSCtoH[infractionHeight]`;
     - if the CCV channel to the provider chain is established, then 
       - a packet with the `packetData` is sent to the provider chain;
