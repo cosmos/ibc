@@ -371,12 +371,13 @@ function chanUpgradeTry(
     // so that both channel ends are using the same sequence for the current upgrade
     // if the counterparty sequence is less than the current sequence, then either the counterparty chain is out-of-sync or
     // the message is out-of-sync and we write an error receipt with our own sequence so that the counterparty can update
-    // their sequence as well.
+    // their sequence as well. We must then increment our sequence so both sides start the next upgrade with a fresh sequence.
     currentSequence = provableStore.get(upgradeSequencePath(portIdentifier, channelIdentifier))
     if counterpartySequence >= currentSequence {
         provableStore.set(upgradeSequencePath(portIdentifier, channelIdentifier), counterpartySequence)
     } else {
         provableStore.set(errorPath(portIdentifier, channelIdentifier, currentSequence), []byte{1})
+        provableStore.set(upgradeSequencePath(portIdentifier, channelIdentifier), currentSequence+1)
         return
     }
 
@@ -600,19 +601,10 @@ function cancelChannelUpgrade(
 
     // get current sequence
     // If counterparty sequence is less than the current sequence, abort transaction since this error receipt is from a previous upgrade
-    // If counterparty sequence is greater than the current sequence, set the current sequence to the counterparty sequence to resync this channelEnd's
-    // upgrade sequence.
+    // Otherwise, set the sequence to counterparty's error sequence+1 so that both sides start with a fresh sequence
     currentSequence = provableStore.get(currentSequencePath(portIdentifier, channelIdentifier))
     abortTransactionUnless(counterpartySequence >= currentSequence)
-    if counterpartySequence > currentSequence {
-        // the counterparty sequence is higher and thus the channel ends are out of sync
-        // setting our sequence to the counterparty sequence will bring the channel ends back in sync
-        provableStore.set(upgradeSequencePath(portIdentifier, channelIdentifier), counterpartySequence)
-    } else {
-        // current sequence and counterparty sequence are equal so both chains are in sync.
-        // We must increment the sequence to prepare for the next upgrade
-        provableStore.set(upgradeSequencePath(portIdentifier, channelIdentifier), currentSequence+1)
-    }
+    provableStore.set(upgradeSequencePath(portIdentifier, channelIdentifier), counterpartySequence+1)
 
     // get underlying connection for proof verification
     connection = getConnection(currentChannel.connectionIdentifier)
