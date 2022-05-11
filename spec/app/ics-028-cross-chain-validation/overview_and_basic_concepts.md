@@ -44,7 +44,6 @@ Similarly to the single-chain approach, when a validator starts unbonding some o
 yet, due to delays in the communication over the IBC protocol (e.g., due to relaying packets), the voting power is not reduced immediately on the consumer chains. 
 A further consequence of CCV is that the tokens are unbonded only after the unbonding period has elapsed on all chains starting from the moment the corresponding voting power was reduced. 
 Thus, CCV may delay the unbonding of tokens validators bonded on the provider chain.
-For more details, take a look at the [Interchain Security light paper](https://github.com/cosmos/gaia/blob/main/docs/interchain-security.md).
 
 ## Motivation
 [&uparrow; Back to Outline](#outline)
@@ -55,8 +54,8 @@ CCV is a primitive (i.e., a building block) that enables arbitrary shared securi
 Moreover, CCV enables *hub minimalism*. In a nutshell, hub minimalism entails keeping a hub in the Cosmos network (e.g., the Cosmos Hub) as simple as possible, with as few features as possible in order to decrease the attack surface. CCV enables moving distinct features (e.g., DEX) to independent chains that are validated by the same set of validators as the hub. 
 
 > **Versioning**: Note that CCV will be developed progressively. 
-> - The V1 release will require the validator set of a consumer chain to be entirely provided by the provider chain. In other words, once a provider chain agrees to provide security to a consumer chain, the entire validator set of the provider chain MUST validate also on the consumer chain.
-> - The V2 release will allow the provider chain validators to opt-in to participate as validators on the consumer chain. It is up to each consumer chain to establish the benefits that provider chain validators receive for their participation.
+> This standard document specifies the V1 release, which will require the validator set of a consumer chain to be entirely provided by the provider chain. 
+> In other words, once a provider chain agrees to provide security to a consumer chain, the entire validator set of the provider chain MUST validate also on the consumer chain.
 > 
 > For more details on the planned releases, take a look at the [Interchain Security light paper](https://github.com/cosmos/gaia/blob/main/docs/interchain-security.md#the-interchain-security-stack).
 
@@ -69,13 +68,15 @@ This section defines the new terms and concepts introduced by CCV.
 
 - **Consumer Chain**: The blockchain that consumes security, i.e., enables the provider chain to manage its validator set.
 
-> Note that in the current version the validator set of the consumer chain is entirely provided by the provider chain.
+> **Note**: In this specification, the validator set of the consumer chain is entirely provided by the provider chain.
 
 Both the provider and the consumer chains are [application-specific blockchains](https://docs.cosmos.network/v0.44/intro/why-app-specific.html), 
-i.e., the state-machine is typically connected to the underlying consensus engine via an interface called [ABCI](https://github.com/tendermint/spec/tree/v0.7.1/spec/abci). 
-Thus, we refer to the state-machine as an ABCI application. 
-For ease of presentation, this specification considers a modular paradigm, 
-i.e., the functionality of the ABCI application is separated into multiple modules, like the approach adopted by [Cosmos SDK](https://docs.cosmos.network/v0.44/basics/app-anatomy.html#modules).  
+i.e., each blockchain's state machine is typically connected to the underlying consensus engine via a *blockchain interface*, such as [ABCI](https://github.com/tendermint/spec/tree/v0.7.1/spec/abci). 
+The blockchain interface MUST enable the state machine to provide to the underlying consensus engine a set of validator updates, i.e., changes in the voting power granted to validators.
+Although this specification is not dependent on ABCI, for ease of presentation, we refer to the state machines as ABCI applications.
+Also, this specification considers a modular paradigm, 
+i.e., the functionality of each ABCI application is separated into multiple modules, like the approach adopted by [Cosmos SDK](https://docs.cosmos.network/v0.44/basics/app-anatomy.html#modules).
+
 
 - **CCV Module**: The module that implements the CCV protocol. Both the provider and the consumer chains have each their own CCV module. 
 Furthermore, the functionalities provided by the CCV module differ between the provider chain and the consumer chains. 
@@ -84,16 +85,16 @@ For brevity, we use *provider CCV module* and *consumer CCV module* to refer to 
 - **CCV Channel**: A unique, ordered IBC channel that is used by the provider CCV module to exchange IBC packets with a consumer CCV module. 
 Note that there is a separate CCV channel for every consumer chain.
 
-> Note that the IBC handler interface, the IBC relayer module interface, and both IBC channels and IBC packets are as defined in [ICS 25](../../core/ics-025-handler-interface), [ICS 26](../../core/ics-026-routing-module), and [ICS 4](../../core/ics-004-channel-and-packet-semantics), respectively.
+The IBC handler interface, the IBC relayer module interface, and both IBC channels and IBC packets are as defined in [ICS 25](../../core/ics-025-handler-interface), [ICS 26](../../core/ics-026-routing-module), and [ICS 4](../../core/ics-004-channel-and-packet-semantics), respectively.
 
 - **Validator Set Change (VSC)**: A change in the validator set of the provider chain that must be reflected in the validator sets of the consumer chains. 
-A VSC consists of a batch of validator updates, i.e., changes in the voting power granted to validators on the provider chain and, due to CCV, also on the consumer chains.
+Every VSC consists of a batch of validator updates provided to the consensus engine of the provider chain. 
 
 > **Background**: In the context of single-chain validation, the changes of the validator set are triggered by the *Staking module*, 
 > i.e., a module of the ABCI application that implements the proof of stake mechanism needed by the [security model](#security-model). 
 > For an example, take a look at the [Staking module documentation](https://docs.cosmos.network/v0.44/modules/staking/) of Cosmos SDK.
 
-Every VSC consists of a batch of validator updates, some of which can decrease the voting power granted to validators. 
+Some of the validator updates can decrease the voting power granted to validators. 
 These decreases may be a consequence of unbonding operations (e.g., unbonding delegations) on the provider chain.
 which MUST NOT complete before reaching maturity on both the provider and all the consumer chains,
 i.e., the *unbonding period* (denoted as `UnbondingPeriod`) has elapsed on both the provider and all the consumer chains.
@@ -116,7 +117,7 @@ Thus, a *VSC reaching maturity* on a consumer chain means that all the unbonding
 - **Slash Request**: A request by a consumer chain to *slash* the tokens bonded by a validator on the provider chain as a consequence of that validator misbehavior on the consumer chain. A slash request MAY also result in the misbehaving validator being *jailed* for a period of time, during which it cannot be part of the validator set. 
 
 > **Background**: In the context of single-chain validation, slashing and jailing misbehaving validators is handled by the *Slashing module*, 
-> i.e., a module of the ABCI application that enables the application to decentivize misbehaving validators.
+> i.e., a module of the ABCI application that enables the application to discourage misbehaving validators.
 > For an example, take a look at the [Slashing module documentation](https://docs.cosmos.network/v0.44/modules/slashing/) of Cosmos SDK.
 
 ## Overview
@@ -150,8 +151,6 @@ The channel initialization consists of four phases:
   both are contained in the `GenesisState` of the consumer CCV module.
   The `GenesisState` is distributed to all operators that need to start a full node of the consumer chain 
   (the mechanism of distributing the `GenesisState` is outside the scope of this specification).
-  > Note that although the mechanism of distributing the `GenesisState` is outside the scope of this specification, a possible approach is described in the [technical specification](./technical_specification.md#ccv-ccf-initg1).
-  >  
   > Note that at genesis, the validator set of the consumer chain matches the validator set of the provider chain.
 - **Connection handshake**: A relayer (as defined in [ICS 18](../../relayer/ics-018-relayer-algorithms)) is responsible for initiating the connection handshake (as defined in [ICS 3](../../core/ics-003-connection-semantics)). 
 - **Channel handshake**: A relayer is responsible for initiating the channel handshake (as defined in [ICS 4](../../core/ics-004-channel-and-packet-semantics)). 
@@ -201,10 +200,10 @@ In the context of CCV, the completion MUST require also the unbonding operation 
 Therefore, the provider Staking module needs to be aware of the VSC maturity notifications registered by the provider CCV module.
 
 The ***provider chain*** achieves this through the following approach: 
-- The provider Staking module is notifying the CCV module when any unbonding operation is initiated. 
+- The Staking module is notifying the CCV module when any unbonding operation is initiated. 
   As a result, the CCV module maps all the unbonding operations to the corresponding VSCs.  
-- When the CCV module registers maturity notifications for a VSC from all consumer chains, it notifies the provider Staking module of the maturity of all unbonding operations mapped to this VSC. 
-  This enables the provider Staking module to complete the unbonding operations only when they reach maturity on both the provider chain and on all the consumer chains.
+- When the CCV module registers maturity notifications for a VSC from all consumer chains, it notifies the Staking module of the maturity of all unbonding operations mapped to this VSC. 
+  This enables the Staking module to complete the unbonding operations only when they reach maturity on both the provider chain and on all the consumer chains.
 
 This approach is depicted in the following figure that shows an overview of the interface between the provider CCV module and the provider Staking module in the context of the Validator Set Update operation of CCV: 
 - In `Block 1`, two unbonding operations are initiated (i.e., `undelegate-1` and `redelegate-1`) in the provider Staking module. 
@@ -227,7 +226,7 @@ This approach is depicted in the following figure that shows an overview of the 
 [&uparrow; Back to Outline](#outline)
 
 For the [Security Model](#security-model) to be preserved, misbehaving validators MUST be slashed (and MAY be jailed, i.e., removed from the validator set). 
-A prerequisite to slash validators is to receive valid evidence of their misbehavior. 
+A prerequisite to slashing validators is to receive valid evidence of their misbehavior. 
 Thus, when slashing a validator, we distinguish between three events and the heights when they occur:
 - `infractionHeight`, the height at which the misbehavior (or infraction) happened;
 - `evidenceHeight`, the height at which the evidence of misbehavior is received;
@@ -237,8 +236,7 @@ Thus, when slashing a validator, we distinguish between three events and the hei
 
 The [Security Model](#security-model) guarantees that any misbehaving validator can be slashed for at least the unbonding period, 
 i.e., as long as that validator's tokens are not unbonded yet, they can be slashed. 
-However, if the tokens start unbonding before `infractionHeight`, i.e., the tokens did not contribute to the voting power that committed the infraction, 
-then the tokens MUST NOT be slashed.
+However, if the tokens start unbonding before `infractionHeight` (i.e., the tokens did not contribute to the voting power that committed the infraction) then the tokens MUST NOT be slashed.
 
 In the context of CCV, validators (with tokens bonded on the provider chain) MUST be slashed for infractions committed on the consumer chains at heights for which they have voting power. 
 Thus, although the infractions are committed on the consumer chains and evidence of these infractions is submitted to the consumer chains, the slashing happens on the provider chain. As a result, the Consumer Initiated Slashing operation requires, for every consumer chain, a mapping from consumer chain block heights to provider chain block heights.
@@ -299,7 +297,7 @@ The operation consists of two steps that are depicted in the following figure:
 ![Reward Distribution](./figures/ccv-distribution-overview.png?raw=true)
 
 - At the beginning of every block on the consumer chain, a fraction of the rewards are transferred to an account on the consumer CCV module.
-- At regular intervals (e.g., every `100` blocks), the consumer CCV module sends the accumulated rewards to the distribution module account on the provider chain through an IBC token transfer packet (as defined in [ICS 20](../ics-020-fungible-token-transfer/README.md)). 
+- At regular intervals (e.g., every `1000` blocks), the consumer CCV module sends the accumulated rewards to the distribution module account on the provider chain through an IBC token transfer packet (as defined in [ICS 20](../ics-020-fungible-token-transfer/README.md)). 
   Note that the IBC transfer packet is sent over a separate unordered channel. 
   As a result, the reward distribution is not synchronized with the other CCV operations,
   e.g., some validators may miss out on some rewards by unbonding before an IBC transfer packet is received, 
