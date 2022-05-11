@@ -74,7 +74,7 @@ A bounty is paid to incentivize relayers for participating in interchain queries
 
 The Querying Chain MUST implement the Cross-chain Querying module, which allows the Querying Chain to query state at the Queried Chain. 
 
-Cross-chain querying relies on relayers operating between both chains. When a query request is received by the Cross-chain Querying module of the Querying Chain, this emits a `sendQuery` event. Relayers operating between the Querying and Queried chains must monitor the Querying chain for `sendQuery` events. Eventually, a relayer will retrieve the query request and execute it at the Queried Chain. The relayer then submits (on-chain) the result at the Querying Chain. The result is finally stored at the Querying Chain by the Cross-chain Querying module.
+Cross-chain querying relies on relayers operating between both chains. When a query request is received by the Querying Chain, the Cross-chain Querying module emits a `sendQuery` event. Relayers operating between the Querying and Queried chains must monitor the Querying chain for `sendQuery` events. Eventually, a relayer will retrieve the query request and execute it at the Queried Chain. The relayer then submits (on-chain) the result at the Querying Chain. The result is finally registered at the Querying Chain by the Cross-chain Querying module.
 
 A query request includes the height of the Queried Chain at which the query must be executed. The reason is that the keys being queried can have different values at different heights. Thus, a malicious relayer could choose to query a height that has a value that benefits it somehow. By letting the Querying Chain decide the height at which the query is executed, we can prevent relayers from affecting the result data.
 
@@ -99,8 +99,8 @@ interface CrossChainQuery struct {
 - The `path` field is the path to be queried at the Queried Chain.
 - The `timeoutHeight` field  specifies a height limit at the Querying Chain after which a query is considered to have failed and a timeout result should be returned to the original caller.
 - The `queryHeigth` field is the height at which the relayer must query the Queried Chain
-- The `bounty` field is a bounty that is given to the relayer for participating in the query.
 - The `clientId` field identifies the Queried Chain.
+- The `bounty` field is a bounty that is given to the relayer for participating in the query.
 
 The Cross-chain Querying module stores query results to allow query callers to asynchronously retrieve them. 
 In this context, this ICS defines the `QueryResult` type as follows:
@@ -116,7 +116,7 @@ enum QueryResult {
 - A query that is executed but does not return a value is marked as `FAILURE`. This means that the query has been executed at the Queried Chain, but there was no value associated to the queried path at the requested height.
 - A query that timeout before a result is committed at the Querying Chain is marked as `TIMEOUT`.
 
-A CrossChainQueryResult is a particular interface used to represent query replies.
+A CrossChainQueryResult is a particular interface used to represent query results.
 
 ```typescript
 interface CrossChainQueryResult struct {
@@ -163,10 +163,10 @@ function generateQueryIdentifier = () -> Identifier
 
 #### Query lifecycle
 
-1) When the Cross-chain Querying module receives a query request, it calls `CrossChainQueryRequest`. This function generates a unique identifier for the query, stores it in its `privateStore` and emits a `sendQuery` event. Query requests can be submitted by other IBC modules as transactions to the Querying Chain or simply executed as part of the `BeginBlock` and `EndBlock` logic.
+1) When the Querying Chain receives a query request, it calls `CrossChainQueryRequest` of the Cross-chain Querying module. This function generates a unique identifier for the query, stores it in its `privateStore` and emits a `sendQuery` event. Query requests can be submitted by other IBC modules as transactions to the Querying Chain or simply executed as part of the `BeginBlock` and `EndBlock` logic.
 2) A correct relayer listening to `sendQuery` events from the Querying Chain will eventually pick the query request up and execute it at the Queried Chain. The result is then submitted (on-chain) to the Querying Chain.
-3) When the query result is committed at the Querying Chain, it is handed to the Cross-chain Querying module.
-4) The Cross-chain Querying module calls `CrossChainQueryResult`. This function first retrieves the query from the `privateStore` using the query's unique identifier. It then proceeds to verify the result using its local client. If it passes the verification, the function removes the query from the `privateStore` and stores the result in a public path.
+3) When the query result is committed at the Querying Chain, this calls the `CrossChainQueryResult` function of the Cross-chain Querying module.
+4) The `CrossChainQueryResult` first retrieves the query from the `privateStore` using the query's unique identifier. It then proceeds to verify the result using its local client. If it passes the verification, the function removes the query from the `privateStore` and stores the result in a public path.
 5) The query caller can then asynchronously retrieve the query result.
 
 #### Normal path methods
