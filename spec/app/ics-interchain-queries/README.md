@@ -239,7 +239,7 @@ function CrossChainQueryResult(
     abortTransactionUnless(query.queryHeight !== proofHeight)
 
     // Verify query result using the local light client of the Queried Chain. If success, then verify that the data is indeed the value associated with query.path at query.queryHeight at the Queried Chain. Otherwise, verify that query.path does not exist at query.queryHeight at the Queried Chain.
-    if (data != null) {    
+    if (data !== null) {    
         abortTransactionUnless(client.verifyMemership(
             client,
             proofHeight,
