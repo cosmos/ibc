@@ -38,7 +38,7 @@ Interchain Accounts (ICS-27) brings one of the most important features IBC offer
 
 ### Assumptions
 
-- **Safe chains:** Both the Querying and Queried chains are safe.
+- **Safe chains:** Both the Querying and Queried chains are safe. This means that, for every chain, the underlying consensus engine satisfies safety (e.g., the chain does not fork) and the execution of the state machine follows the described protocol.
 
 - **Live chains:** Both the Querying and Queried chains MUST be live, i.e., new blocks are eventually added to the chain.
 
@@ -87,18 +87,18 @@ A CrossChainQuery is a particular interface to represent query requests. A reque
 ```typescript
 interface CrossChainQuery struct {
     id: Identifier
-	path: CommitmentPath
-	timeoutHeight: Height
+    path: CommitmentPath
+    timeoutHeight: Height
     queryHeight: Height
     clientId: Identifier
-	bounty: sdk.Coin
+    bounty: sdk.Coin
 }
 ```
 
 - The `id` field uniquely identifies the query at the Querying Chain.
 - The `path` field is the path to be queried at the Queried Chain.
 - The `timeoutHeight` field  specifies a height limit at the Querying Chain after which a query is considered to have failed and a timeout result should be returned to the original caller.
-- The `queryHeigth` field is the height at which the relayer must query the Queried Chain
+- The `queryHeight` field is the height at which the relayer must query the Queried Chain
 - The `clientId` field identifies the Queried Chain.
 - The `bounty` field is a bounty that is given to the relayer for participating in the query.
 
@@ -176,8 +176,8 @@ The `CrossChainQueryRequest` function is called when the Cross-chain Querying mo
 ```typescript
 function CrossChainQueryRequest(
   path: CommitmentPath,
-  queryHeigth: Heigth,
-  timeoutHeigth: Height,
+  queryHeight: Height,
+  timeoutHeight: Height,
   clientId: Identifier,
   bounty: sdk.Coin,
   ): Identifier {
@@ -185,14 +185,17 @@ function CrossChainQueryRequest(
     // Check that there exists a client of the Queried Chain. The client will be used to verify the query result.
     abortTransactionUnless(queryClientState(clientId) !== null)
 
+    // Check that timeoutHeight is greater than the current height, otherwise the query will always timeout.
+    abortTransactionUnless(timeoutHeight > getCurrentHeight())
+
     // Generate a unique query identifier.
     queryIdentifier = generateQueryIdentifier()
 
     // Create a query request record.
     query = CrossChainQuery{queryIdentifier,
                             path,
-                            queryHeigth,
-                            timeoutHeigth, 
+                            queryHeight,
+                            timeoutHeight, 
                             clientId,
                             bounty}
 
@@ -220,7 +223,6 @@ function CrossChainQueryResult(
   data: []byte
   proof: CommitmentProof,
   proofHeight: Height,
-  success: boolean,
   delayPeriodTime: uint64,
   delayPeriodBlocks: uint64
   ) {
@@ -234,10 +236,10 @@ function CrossChainQueryResult(
     abortTransactionUnless(client !== null)
 
     // Check that the relier executed the query at the requested height at the Queried Chain.
-    abortTransactionUnless(query.queryHeigth !== proofHeight)
+    abortTransactionUnless(query.queryHeight !== proofHeight)
 
     // Verify query result using the local light client of the Queried Chain. If success, then verify that the data is indeed the value associated with query.path at query.queryHeight at the Queried Chain. Otherwise, verify that query.path does not exist at query.queryHeight at the Queried Chain.
-    if (success) {    
+    if (data ==  null) {    
         abortTransactionUnless(client.verifyMemership(
             client,
             proofHeight,
@@ -247,7 +249,7 @@ function CrossChainQueryResult(
             query.path,
             data
         ))
-        result = FOUND
+        result = SUCCESS
     } else {
         abortTransactionUnless(client.verifyNonMemership(
             client,
@@ -257,7 +259,7 @@ function CrossChainQueryResult(
             proof,
             query.path,
         ))
-        result = NOTFOUND
+        result = FAILURE
     }
 
     // Delete the query from the local, private store.
