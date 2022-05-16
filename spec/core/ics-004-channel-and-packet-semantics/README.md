@@ -317,7 +317,6 @@ function chanOpenTry(
   order: ChannelOrder,
   connectionHops: [Identifier],
   portIdentifier: Identifier,
-  counterpartyChosenChannelIdentifer: Identifier,
   counterpartyPortIdentifier: Identifier,
   counterpartyChannelIdentifier: Identifier,
   version: string, // deprecated
@@ -334,13 +333,17 @@ function chanOpenTry(
     abortTransactionUnless(connection.state === OPEN)
     expected = ChannelEnd{INIT, order, portIdentifier,
                           "", [connection.counterpartyConnectionIdentifier], counterpartyVersion}
-    abortTransactionUnless(connection.verifyChannelState(
-      proofHeight,
-      proofInit,
-      counterpartyPortIdentifier,
-      counterpartyChannelIdentifier,
-      expected
-    ))
+    for i = 0; i < len(connectionHops); i++ {
+      // prove channel state on each connection route
+      connection = getConnection(connectionHops[i])
+      abortTransactionUnless(connection.verifyChannelState(
+        proofHeight,
+        proofInit,
+        counterpartyPortIdentifier,
+        counterpartyChannelIdentifier,
+        expected
+      ))
+    }
     channel = ChannelEnd{TRYOPEN, order, counterpartyPortIdentifier,
                          counterpartyChannelIdentifier, connectionHops, version}
     provableStore.set(channelPath(portIdentifier, channelIdentifier), channel)
@@ -374,13 +377,16 @@ function chanOpenAck(
     abortTransactionUnless(connection.state === OPEN)
     expected = ChannelEnd{TRYOPEN, channel.order, portIdentifier,
                           channelIdentifier, [connection.counterpartyConnectionIdentifier], counterpartyVersion}
-    abortTransactionUnless(connection.verifyChannelState(
-      proofHeight,
-      proofTry,
-      channel.counterpartyPortIdentifier,
-      counterpartyChannelIdentifier,
-      expected
-    ))
+
+    for i = 0; i < len(connectionHops); i++ {
+      abortTransactionUnless(connection.verifyChannelState(
+        proofHeight,
+        proofTry,
+        channel.counterpartyPortIdentifier,
+        counterpartyChannelIdentifier,
+        expected
+      ))
+    }
     channel.state = OPEN
     channel.version = counterpartyVersion
     channel.counterpartyChannelIdentifier = counterpartyChannelIdentifier
@@ -406,13 +412,15 @@ function chanOpenConfirm(
     abortTransactionUnless(connection.state === OPEN)
     expected = ChannelEnd{OPEN, channel.order, portIdentifier,
                           channelIdentifier, [connection.counterpartyConnectionIdentifier], channel.version}
-    abortTransactionUnless(connection.verifyChannelState(
-      proofHeight,
-      proofAck,
-      channel.counterpartyPortIdentifier,
-      channel.counterpartyChannelIdentifier,
-      expected
-    ))
+    for i = 0; i < len(connectionHops); i++ {
+      abortTransactionUnless(connection.verifyChannelState(
+        proofHeight,
+        proofAck,
+        channel.counterpartyPortIdentifier,
+        channel.counterpartyChannelIdentifier,
+        expected
+      ))
+    }
     channel.state = OPEN
     provableStore.set(channelPath(portIdentifier, channelIdentifier), channel)
 }
@@ -600,6 +608,7 @@ function recvPacket(
     abortTransactionUnless(packet.timeoutHeight === 0 || getConsensusHeight() < packet.timeoutHeight)
     abortTransactionUnless(packet.timeoutTimestamp === 0 || currentTimestamp() < packet.timeoutTimestamp)
 
+    // only need to prove against one connection
     abortTransactionUnless(connection.verifyPacketData(
       proofHeight,
       proof,
