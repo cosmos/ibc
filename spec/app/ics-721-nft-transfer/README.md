@@ -7,7 +7,7 @@ requires: 25, 26
 kind: instantiation
 author: Haifeng Xi <haifeng@bianjie.ai>
 created: 2021-11-10
-modified: 2022-03-30
+modified: 2022-05-18
 ---
 
 > This standard document follows the same design principles of [ICS 20](../ics-020-fungible-token-transfer) and inherits most of its content therefrom, while replacing `bank` module based asset tracking logic with that of the `nft` module.
@@ -116,9 +116,9 @@ function Mint(
   classId: string,
   tokenId: string,
   tokenUri: string,
-  sender: string) {
+  receiver: string) {
   // creates a new NFT identified by <classId,tokenId>
-  // sender becomes owner of the newly minted NFT
+  // receiver becomes owner of the newly minted NFT
 }
 ```
 
@@ -411,12 +411,6 @@ This implementation preserves token non-fungibility and redeemability.
 * Non-fungibility: Only one instance of any token is *live* across all the IBC-connected blockchains.
 * Redeemability: If tokens have been sent to the counterparty chain, they can be redeemed back in the same `classId` & `tokenId` on the source chain.
 
-##### Multi-chain notes
-
-This specification does not directly handle the "diamond problem", where a user sends a token originating on chain A to chain B, then to chain D, and wants to return it through D -> C -> A — since the token is tracked as owned by chain B (and the `classId` will be "{portOnD}/{channelOnD}/{portOnB}/{channelOnB}/classId"), chain C cannot serve as the intermediary. The original path, in reverse order, is required to redeem the token at its source chain. Complexities arising from long redemption paths may lead to the emergence of central chains in the network topology.
-
-In order to track all of the tokens moving around the network of chains in various paths, it may be helpful for a particular chain to implement a registry which will track the "global" source chain for each `classId`. End-user service providers (such as wallet authors) may want to integrate such a registry or keep their own mapping of canonical source chains and human-readable names in order to improve UX.
-
 #### Optional addenda
 
 - Each chain, locally, could elect to keep a lookup table to use short, user-friendly local `classId`s in state which are translated to and from the longer `classId`s when sending and receiving packets.
@@ -424,6 +418,8 @@ In order to track all of the tokens moving around the network of chains in vario
 
 ## Further Discussion
 Extended and complex use cases such as royalties, marketplaces or permissioned transfers can be supported on top of this specification. Solutions could be modules, hooks, [IBC middleware](../ics-030-middleware) and so on. Designing a guideline for this is out of the scope.
+
+It is assumed that application logic in host state machines will be responsible for metadata immutability of IBC tokens minted according to this specification. For any IBC token, NFT applications are strongly advised to check upstream blockchains (all the way back to the source) to ensure its metadata has not been modified along the way. If it is decided, sometime in the future, to accommodate NFT metadata mutability over IBC, we will update this specification or create an entirely new specification -- by using advanced DID features perhaps.
 
 ## Backwards Compatibility
 
@@ -454,6 +450,7 @@ Coming soon.
 | Mar 03, 2022  | Revised to make TRY callback consistent with PR#629         |
 | Mar 11, 2022  | Added example to illustrate the prefix concept         |
 | Mar 30, 2022  | Added NFT module definition and fixed pseudo-code errors |
+| May 18, 2002  | Added paragraph about NFT metadata mutability |
 
 ## Copyright
 
