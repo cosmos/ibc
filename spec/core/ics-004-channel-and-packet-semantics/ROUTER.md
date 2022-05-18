@@ -56,8 +56,8 @@ function routeChanOpenTry(
     path = append(sourceConnectionHops, channelPath(counterpartyPortIdentifier, counterpartyChannelIdentifier))
     store.set(path, initChannel)
 
-    // store source identifiers -> sourceConnectionHops
-    store(counterpartyPortIdentifier, counterpartyChannelIdentifier, sourceConnectionHops)
+    // store sourceConnectionHops -> source identifiers
+    store(sourceConnectionHops, counterpartyPortIdentifier, counterpartyChannelIdentifier)
 }
 
 function routeChanOpenAck(
@@ -94,8 +94,8 @@ function routeChanOpenAck(
     path = append(sourceConnectionHops, channelPath(counterpartyPortIdentifier, counterpartyChannelIdentifier))
     store.set(path, tryChannel)
 
-    // store source identifiers -> sourceConnectionHops
-    store(counterpartyPortIdentifier, counterpartyChannelIdentifier, sourceConnectionHops)
+    // store sourceConnectionHops -> source identifiers
+    store(sourceConnectionHops, counterpartyPortIdentifier, counterpartyChannelIdentifier)
 }
 
 // similar logic for other handshake methods
