@@ -1,5 +1,5 @@
 ---
-ics: TBA
+ics: 31
 title: Interchain Query
 stage: draft
 category: IBC/APP
@@ -66,7 +66,7 @@ The Querying Chain should have ultimate control over how to handle queried data.
 
 #### Incentivization
 
-A bounty is paid to incentivize relayers for participating in interchain queries.
+A bounty is paid to incentivize relayers for participating in interchain queries: fetching data from the Queried Chain and submitting it (together with proofs) to the Querying
 
 ## Technical Specification
 
@@ -74,7 +74,7 @@ A bounty is paid to incentivize relayers for participating in interchain queries
 
 The Querying Chain MUST implement the Cross-chain Querying module, which allows the Querying Chain to query state at the Queried Chain. 
 
-Cross-chain querying relies on relayers operating between both chains. When a query request is received by the Querying Chain, the Cross-chain Querying module emits a `sendQuery` event. Relayers operating between the Querying and Queried chains must monitor the Querying chain for `sendQuery` events. Eventually, a relayer will retrieve the query request and execute it at the Queried Chain. The relayer then submits (on-chain) the result at the Querying Chain. The result is finally registered at the Querying Chain by the Cross-chain Querying module.
+Cross-chain querying relies on relayers operating between both chains. When a query request is received by the Querying Chain, the Cross-chain Querying module emits a `sendQuery` event. Relayers operating between the Querying and Queried chains must monitor the Querying chain for `sendQuery` events. Eventually, a relayer will retrieve the query request and execute it, i.e., fetch the data and generate the corresponding proofs, at the Queried Chain. The relayer then submits (on-chain) the result at the Querying Chain. The result is finally registered at the Querying Chain by the Cross-chain Querying module.
 
 A query request includes the height of the Queried Chain at which the query must be executed. The reason is that the keys being queried can have different values at different heights. Thus, a malicious relayer could choose to query a height that has a value that benefits it somehow. By letting the Querying Chain decide the height at which the query is executed, we can prevent relayers from affecting the result data.
 
@@ -114,7 +114,7 @@ enum QueryResult {
 ```
 - A query that returns a value is marked as `SUCCESS`. This means that the query has been executed at the Queried Chain and there was a value associated to the queried path at the requested height.
 - A query that is executed but does not return a value is marked as `FAILURE`. This means that the query has been executed at the Queried Chain, but there was no value associated to the queried path at the requested height.
-- A query that timeout before a result is committed at the Querying Chain is marked as `TIMEOUT`.
+- A query that timed out before a result is committed at the Querying Chain is marked as `TIMEOUT`.
 
 A CrossChainQueryResult is a particular interface used to represent query results.
 
@@ -185,7 +185,7 @@ function CrossChainQueryRequest(
     // Check that there exists a client of the Queried Chain. The client will be used to verify the query result.
     abortTransactionUnless(queryClientState(clientId) !== null)
 
-    // Check that timeoutHeight is greater than the current height, otherwise the query will always timeout.
+    // Check that timeoutHeight is greater than the current height, otherwise the query will always time out.
     abortTransactionUnless(timeoutHeight > getCurrentHeight())
 
     // Generate a unique query identifier.
@@ -286,10 +286,10 @@ function CrossChainQueryResult(
 
 Query requests have associated a `timeoutHeight` field that specifies the height limit at the Querying Chain after which a query is considered to have failed. 
 
-The Querying Chain calls the `checkQueryTimeout` function to check whether a specific query has timeout. 
+The Querying Chain calls the `checkQueryTimeout` function to check whether a specific query has timed out. 
 
-> There are several alternatives on how to handle timeouts. For instance, the relayer could submit on-chain timeout notifications to the Querying Chain. Since the relayer is untrusted, for each of these notifications the Cross-chain Querying module of the Querying Chain MUST call the `checkQueryTimeout` to check if the query has indeed timeout. An alternative could be to make the Cross-chain Querying module responsible for checking  
-if any query has timeout by iterating over the ongoing queries at the beginning of a block and calling `checkQueryTimeout`. This is an implementation detail that this specification does not cover.
+> There are several alternatives on how to handle timeouts. For instance, the relayer could submit on-chain timeout notifications to the Querying Chain. Since the relayer is untrusted, for each of these notifications the Cross-chain Querying module of the Querying Chain MUST call the `checkQueryTimeout` to check if the query has indeed timed out. An alternative could be to make the Cross-chain Querying module responsible for checking  
+if any query has timed out by iterating over the ongoing queries at the beginning of a block and calling `checkQueryTimeout`. This is an implementation detail that this specification does not cover.
 
 ```typescript
 function checkQueryTimeout(
@@ -304,7 +304,7 @@ function checkQueryTimeout(
 
     
     if (currentHeight > query.timeoutHeight) {
-        // Delete the query from the local, private store if it has timeout
+        // Delete the query from the local, private store if it has timed out
         query = privateStore.delete(ongoingQueryPath(queryId))
 
         // Create a query result record.
@@ -320,6 +320,6 @@ function checkQueryTimeout(
 - **Precondition**
   - There is a query request stored in the `privateStore` identified by `queryId`.
 - **Postcondition**
-  - If the query has indeed timeout, then
+  - If the query has indeed timed out, then
     - the query request identified by `queryId` is deleted from the `privateStore`;
-    - the fact that the query has timeout is recorded in the `provableStore`.
+    - the fact that the query has timed out is recorded in the `provableStore`.
