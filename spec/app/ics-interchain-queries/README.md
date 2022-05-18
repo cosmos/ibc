@@ -7,7 +7,7 @@ requires: 2, 18, 23, 24
 kind: instantiation
 author: Joe Schnetzler <schnetzlerjoe@gmail.com>, Manuel Bravo <manuel@informal.systems>
 created: 2022-01-06
-modified: 2022-05-03
+modified: 2022-05-11
 ---
 
 ## Synopsis
@@ -33,6 +33,8 @@ Interchain Accounts (ICS-27) brings one of the most important features IBC offer
 `CommitmentPath` and `CommitmentProof` are as defined in ICS 23.
 
 `Identifier`, `get`, `set`, `delete`, `getCurrentHeight`, and module-system related primitives are as defined in ICS 24.
+
+`Fee` is as defined in ICS 29.
 
 ## System Model and Properties
 
@@ -91,7 +93,7 @@ interface CrossChainQuery struct {
     timeoutHeight: Height
     queryHeight: Height
     clientId: Identifier
-    bounty: sdk.Coin
+    bounty: Fee
 }
 ```
 
@@ -132,13 +134,13 @@ interface CrossChainQueryResult struct {
 
 ### Store paths
 
-#### Ongoing query path
+#### Query path
 
-The ongoing query path is a private path that stores the state of ongoing cross-chain queries.
+The query path is a private path that stores the state of ongoing cross-chain queries.
 
 ```typescript
-function ongoingQueryPath(id: Identifier): Path {
-    return "ibcquery/{id}"
+function queryPath(id: Identifier): Path {
+    return "queries/{id}"
 }
 ```
 #### Result query path
@@ -147,7 +149,7 @@ The result query path is a public path that stores the result of completed queri
 
 ```typescript
 function resultQueryPath(id: Identifier): Path {
-    return "ibcqueryresult/{id}"
+    return "queriesresult/{id}"
 }
 ```
 
@@ -200,7 +202,7 @@ function CrossChainQueryRequest(
                             bounty}
 
     // Store the query in the local, private store.
-    privateStore.set(ongoingQueryPath(queryIdentifier), query)
+    privateStore.set(queryPath(queryIdentifier), query)
 
     // Log the query request.
     emitLogEntry("sendQuery", query)
@@ -263,7 +265,7 @@ function CrossChainQueryResult(
     }
 
     // Delete the query from the local, private store.
-    query = privateStore.delete(ongoingQueryPath(queryId))
+    query = privateStore.delete(queryPath(queryId))
 
     // Create a query result record.
     resultRecord = CrossChainQuery{queryIdentifier,
@@ -305,7 +307,7 @@ function checkQueryTimeout(
     
     if (currentHeight > query.timeoutHeight) {
         // Delete the query from the local, private store if it has timed out
-        query = privateStore.delete(ongoingQueryPath(queryId))
+        query = privateStore.delete(queryPath(queryId))
 
         // Create a query result record.
         resultRecord = CrossChainQuery{queryIdentifier,
@@ -323,3 +325,13 @@ function checkQueryTimeout(
   - If the query has indeed timed out, then
     - the query request identified by `queryId` is deleted from the `privateStore`;
     - the fact that the query has timed out is recorded in the `provableStore`.
+
+## History
+
+January 6, 2022 - First draft
+
+May 11, 2022 - Major revision
+
+## Copyright
+
+All content herein is licensed under [Apache 2.0](https://www.apache.org/licenses/LICENSE-2.0).
