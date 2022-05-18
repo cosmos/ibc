@@ -57,9 +57,13 @@ call 04-channel `ChanOpenInit`. An error is returned if the controller portID is
 A `ChannelOpenInit` event is emitted which can be picked up by an offchain process such as a relayer.
 The account will be registered during the `OnChanOpenTry` step on the host chain.
 This function must be called after an `OPEN` connection is already established with the given connection identifier.
+The caller must provide the complete version. This MUST include the ICA version with complete metadata and it MAY include 
+versions of other middleware that is wrapping ICA on both sides of the channel. Note this will require contextual information
+on what middleware is enabled on either end of the channel. Thus it is recommended that an ICA-auth application construct the ICA
+version automatically and allow for users to optionally enable additional middleware versioning.
 
 ```typescript
-function RegisterInterchainAccount(connectionId: string, owner: string) returns (error) {
+function RegisterInterchainAccount(connectionId: string, owner: string, version: string) returns (error) {
 }
 ```
 
