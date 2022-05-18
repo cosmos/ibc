@@ -333,6 +333,8 @@ function chanOpenTry(
     abortTransactionUnless(connection.state === OPEN)
     expected = ChannelEnd{INIT, order, portIdentifier,
                           "", [connection.counterpartyConnectionIdentifier], counterpartyVersion}
+    // handshake messages must be proven against
+    // every possible route
     for i = 0; i < len(connectionHops); i++ {
       // prove channel state on each connection route
       connection = getConnection(connectionHops[i])
