@@ -203,7 +203,7 @@ Constant-size commitments to packet data fields are stored under the packet sequ
 
 ```typescript
 function packetCommitmentPath(portIdentifier: Identifier, channelIdentifier: Identifier, sequence: uint64): Path {
-    return "commitments/ports/{portIdentifier}/channels/{channelIdentifier}/packets/" + sequence
+    return "commitments/ports/{portIdentifier}/channels/{channelIdentifier}/packets/{sequence}"
 }
 ```
 
@@ -213,7 +213,7 @@ Packet receipt data are stored under the `packetReceiptPath`
 
 ```typescript
 function packetReceiptPath(portIdentifier: Identifier, channelIdentifier: Identifier, sequence: uint64): Path {
-    return "receipts/ports/{portIdentifier}/channels/{channelIdentifier}/receipts/" + sequence
+    return "receipts/ports/{portIdentifier}/channels/{channelIdentifier}/receipts/{sequence}"
 }
 ```
 
@@ -221,7 +221,7 @@ Packet acknowledgement data are stored under the `packetAcknowledgementPath`:
 
 ```typescript
 function packetAcknowledgementPath(portIdentifier: Identifier, channelIdentifier: Identifier, sequence: uint64): Path {
-    return "acks/ports/{portIdentifier}/channels/{channelIdentifier}/acknowledgements/" + sequence
+    return "acks/ports/{portIdentifier}/channels/{channelIdentifier}/sequences/{sequence}"
 }
 ```
 
