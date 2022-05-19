@@ -1777,16 +1777,21 @@ function UpdateValidatorSet(changes: [ValidatorUpdate]) {
   foreach update IN changes {
     addr := hash(update.pubKey)
     if addr NOT IN validatorSet.Keys() {
-      // new validator bonded
-      abortSystemUnless(update.power > 0)
-      // add new CrossChainValidator to validator set
-      val := CrossChainValidator{
-        address: addr,
-        power: update.power
+      // new validator bonded;
+      // note that due pendingChanges.Aggregate(), 
+      // a validator can be added to the valset and 
+      // then removed in the subsequent block, 
+      // resulting in update.power == 0 
+      if update.power > 0 {
+        // add new CrossChainValidator to validator set
+        val := CrossChainValidator{
+          address: addr,
+          power: update.power
+        }
+        validatorSet[addr] = val
+        // call AfterCCValidatorBonded hook
+        AfterCCValidatorBonded(addr)
       }
-      validatorSet[addr] = val
-      // call AfterCCValidatorBonded hook
-      AfterCCValidatorBonded(addr)
     }
     else if update.power == 0 {
       // existing validator begins unbonding
@@ -1808,7 +1813,7 @@ function UpdateValidatorSet(changes: [ValidatorUpdate]) {
   - `changes` contains the aggregated validator updates from `pendingChanges` before it was emptied. 
 - **Postcondition**
   - For each validator `update` in `changes`,
-    - if the validator is not in the validator set, then 
+    - if the validator is not in the validator set and `update.power > 0`, then 
       - a new `CrossChainValidator` is added to `validatorSet`;
       - the `AfterCCValidatorBonded` hook is called;
     - otherwise, if the validator's new power is `0`, then,
@@ -1816,7 +1821,7 @@ function UpdateValidatorSet(changes: [ValidatorUpdate]) {
       - the `AfterCCValidatorBeginUnbonding` hook is called;
     - otherwise, the validator's power is updated.
 - **Error Condition**
-  - Receiving a validator `update`, such that the validator is not in the validator set and `update.power = 0`.
+  - None.
 
 <!-- omit in toc -->
 #### **[CCV-CCF-UMP.1]**
