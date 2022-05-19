@@ -1727,6 +1727,11 @@ function EndBlock(): [ValidatorUpdate] {
     DistributeRewards()
   }
 
+  // unbond mature packets if the CCV channel is established
+  if providerChannel != "" {
+    UnbondMaturePackets()
+  }
+
   if pendingChanges.IsEmpty() {
     // do nothing
     return []
@@ -1741,11 +1746,6 @@ function EndBlock(): [ValidatorUpdate] {
 
   // update validatorSet
   UpdateValidatorSet(changes)
-
-  // unbond mature packets if the CCV channel is established
-  if providerChannel != "" {
-    UnbondMaturePackets()
-  }
 
   // return the validator set updates to the consensus engine
   return changes
