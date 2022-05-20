@@ -230,9 +230,9 @@ The following packet data types are required by the CCV module:
       id: uint64 
       // validator updates
       updates: [ValidatorUpdate]
-      // slash requests acknowledgements, 
+      // downtime slash requests acknowledgements, 
       // i.e., list of validator addresses
-      slashAcks: [string]
+      downtimeSlashAcks: [string]
     }
     ```
 - `VSCMaturedPacketData` contains the ID of the VSC that reached maturity, i.e., 
@@ -322,8 +322,8 @@ This section describes the internal state of the CCV module. For simplicity, the
   It enables the provider CCV module to match a `VSCMaturedPacket{vscId}`, received from a consumer chain with `chainId`, with the corresponding unbonding operations. 
   As a result, `chainId` can be removed from the list of consumer chains that are still unbonding these operations. 
   For more details see how received `VSCMaturedPacket`s [are handled](#ccv-pcf-rcvmat1).
-- `slashRequests: Map<string, [string]>` is a mapping from `chainId`s to lists of validator addresses, 
-  i.e., `slashRequests[chainId]` contains all the validator addresses for which the provider chain received slash requests from the consumer chain with `chainId`.
+- `downtimeSlashRequests: Map<string, [string]>` is a mapping from `chainId`s to lists of validator addresses, 
+  i.e., `downtimeSlashRequests[chainId]` contains all the validator addresses for which the provider chain received slash requests for downtime from the consumer chain with `chainId`.
 
 <!-- omit in toc -->
 #### State on the consumer chain
@@ -397,7 +397,7 @@ This section describes the internal state of the CCV module. For simplicity, the
   ```
 - `outstandingDowntime: <string, Bool>` is a mapping from validator addresses to boolean values. 
   `outstandingDowntime[valAddr] == TRUE` entails that the consumer chain sent a request to slash for downtime the validator with address `valAddr`. 
-  `outstandingDowntime[valAddr]` is set to false once the consumer chain receives a confirmation that the slash request was received by the provider chain, i.e., a `VSCPacket` that contains `valAddr` in `slashAcks`. 
+  `outstandingDowntime[valAddr]` is set to false once the consumer chain receives a confirmation that the downtime slash request was received by the provider chain, i.e., a `VSCPacket` that contains `valAddr` in `downtimeSlashAcks`. 
   The mapping enables the consumer CCV module to avoid sending to the provider chain multiple slashing requests for the same downtime infraction.
 - `providerDistributionAccount: string` is the address of the distribution module account on the provider chain. It enables the consumer chain to transfer rewards to the provider chain.
 - `distributionChannelId: Identifier` is the ID of the distribution token transfer channel used for sending rewards to the provider chain.
@@ -572,7 +572,7 @@ function StopConsumerChain(chainId: string, lockUnbonding: Bool) {
   }
   pendingVSCPackets.Remove(chainId)
   initH.Remove(chainId)
-  slashRequests.Remove(chainId)
+  downtimeSlashRequests.Remove(chainId)
 
   if !lockUnbonding {
     // remove chainId form all outstanding unbonding operations
@@ -601,7 +601,7 @@ function StopConsumerChain(chainId: string, lockUnbonding: Bool) {
     - the channel ID mapped to `chainId` in `chainToChannel` is removed.
   - All the `VSCPacketData` mapped to `chainId` in `pendingVSCPackets` are removed.
   - The height mapped to `chainId` in `initH` is removed.
-  - `slashRequests[chainId]` is emptied.
+  - `downtimeSlashRequests[chainId]` is emptied.
   - If `lockUnbonding == false`, then 
     - `chainId` is removed from all outstanding unbonding operations;
     - all the entries with `chainId` are removed from the `vscToUnbondingOps` mapping.
@@ -1347,9 +1347,9 @@ function EndBlock(): [ValidatorUpdate] {
       data = VSCPacketData{
         id: vscId, 
         updates: valUpdates,
-        slashAcks: slashRequests[chainId]
+        downtimeSlashAcks: downtimeSlashRequests[chainId]
       }
-      slashRequests.Remove(chainId)
+      downtimeSlashRequests.Remove(chainId)
 
       // add VSCPacket data to the list of pending VSCPackets 
       pendingVSCPackets.Append(chainId, data)
@@ -1394,8 +1394,8 @@ function EndBlock(): [ValidatorUpdate] {
   - A list of validator updates `valUpdates` is obtained from the provider Staking module.
   - For every consumer chain with `chainId`
     - If either `valUpdates` is not empty or there were unbonding operations initiated during this block, then 
-      - a `VSCPacket` data `data` is created such that `data.id = vscId`, `data.updates = valUpdates`, and `data.slashAcks = slashRequests[chainId]`;
-      - `slashRequests[chainId]` is emptied;
+      - a `VSCPacket` data `data` is created such that `data.id = vscId`, `data.updates = valUpdates`, and `data.downtimeSlashAcks = downtimeSlashRequests[chainId]`;
+      - `downtimeSlashRequests[chainId]` is emptied;
       - `packetData` is appended to the list of pending `VSCPacket`s associated to `chainId`, i.e., `pendingVSCPackets[chainId]`.
     - If there is an established CCV channel for the the consumer chain with `chainId`, then
       - for each `VSCPacketData` in the list of pending VSCPackets associated to `chainId`
@@ -1645,8 +1645,8 @@ function onRecvVSCPacket(packet: Packet): bytes {
   maturityTimestamp = currentTimestamp().Add(UnbondingPeriod)
   maturingVSCs.Add(packet.data.id, maturityTimestamp)
 
-  // reset outstandingDowntime for validators in packet.data.slashAcks
-  foreach valAddr IN packet.data.slashAcks {
+  // reset outstandingDowntime for validators in packet.data.downtimeSlashAcks
+  foreach valAddr IN packet.data.downtimeSlashAcks {
     outstandingDowntime[valAddr] = FALSE
   }
 
@@ -1903,8 +1903,10 @@ function onRecvSlashPacket(packet: Packet): bytes {
   jailTime = slashingKeeper.GetJailTime(packet.data.downtime)
   slashingKeeper.JailUntil(packet.data.valAddress, currentTimestamp() + jailTime)
 
-  // add validator to list of slash requests for chainId
-  slashRequests[chainId].Append(packet.data.valAddress)
+  if packet.data.downtime {
+    // add validator to list of downtime slash requests for chainId
+    downtimeSlashRequests[chainId].Append(packet.data.valAddress)
+  }
 
   return SlashPacketSuccess
 }
@@ -1924,7 +1926,7 @@ function onRecvSlashPacket(packet: Packet): bytes {
     - otherwise, `infractionHeight` is set to `VSCtoH[packet.data.vscId]`, i.e., the height at which the voting power was last updated by the validator updates in the VSC with ID `packet.data.vscId`;
     - a request is made to the Slashing module to slash `slashFactor` of the tokens bonded at `infractionHeight` by the validator with address `packet.data.valAddress`, where `slashFactor` is the slashing factor set on the provider chain;
     - a request is made to the Slashing module to jail the validator with address `packet.data.valAddress` for a period `jailTime`, where `jailTime` is the jailing time set on the provider chain;
-    - the validator's address `packet.data.valAddress` is added to the list of slash requests from this `chainId`;
+    - if the slash request is for downtime, the validator's address `packet.data.valAddress` is added to the list of downtime slash requests from this `chainId`;
     - a successful acknowledgment is returned.
 - **Error Condition**
   - None.
