@@ -120,7 +120,7 @@ CCV provides the following system properties.
   
   Then for all heights `h` on the provider chain, 
    ```
-  hp <= h <= hp': Power(cc,hc,val) <= VP(pBonded(h,val))
+  hp <= h < hp': Power(cc,hc,val) <= VP(pBonded(h,val))
   ```
 
   > **Intuition**: The *Bond-Based Consumer Voting Power* property ensures that validators that validate on the consumer chains have enough tokens bonded on the provider chain for a sufficient amount of time such that the security model holds. 
