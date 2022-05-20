@@ -421,7 +421,7 @@ The *initialization* sub-protocol enables a provider chain and a consumer chain 
 // implements the AppModule interface
 function InitGenesis(state: ProviderGenesisState): [ValidatorUpdate] {
   // bind to ProviderPortId port 
-  err = portKeeper.BindPort(ProviderPortId)
+  err = portKeeper.bindPort(ProviderPortId)
   // check whether the capability for the port can be claimed
   abortSystemUnless(err == nil)
 
@@ -796,7 +796,7 @@ function InitGenesis(gs: ConsumerGenesisState): [ValidatorUpdate] {
   abortSystemUnless(gs.initialValSet == gs.providerConsensusState.validatorSet)
 
   // bind to ConsumerPortId port 
-  err = portKeeper.BindPort(ConsumerPortId)
+  err = portKeeper.bindPort(ConsumerPortId)
   // check whether the capability for the port can be claimed
   abortSystemUnless(err == nil)
 
@@ -1361,14 +1361,15 @@ function EndBlock(): [ValidatorUpdate] {
       channelId = chainToChannel[chainId]
 
       foreach data IN pendingVSCPackets[chainId] {
-        // create packet and send it using the interface exposed by ICS-4
-        packet = Packet{
-          timeoutHeight: zeroTimeoutHeight,
-          timeoutTimestamp: ccvTimeoutTimestamp,
-          destChannel: channelId,
-          data: data,
-        }
-        channelKeeper.SendPacket(packet)
+        // send data using the interface exposed by ICS-4
+        channelKeeper.sendPacket(
+          portKeeper.getCapability(portKeeper.portPath(ProviderPortId)),
+          ProviderPortId, // source port ID
+          channelId, // source channel ID
+          zeroTimeoutHeight,
+          ccvTimeoutTimestamp,
+          data
+        )
       }
 
       // remove pending VSCPackets
@@ -1835,14 +1836,15 @@ function UnbondMaturePackets() {
     // create VSCMaturedPacketData
     packetData = VSCMaturedPacketData{id: id}
 
-    // create packet and send it using the interface exposed by ICS-4
-    packet = Packet{
-      timeoutHeight: zeroTimeoutHeight,
-      timeoutTimestamp: ccvTimeoutTimestamp,
-      destChannel: providerChannel,
-      data: packetData,
-    }
-    channelKeeper.SendPacket(packet)
+    // send VSCMaturedPacketData using the interface exposed by ICS-4
+    channelKeeper.sendPacket(
+      portKeeper.getCapability(portKeeper.portPath(ConsumerPortId)),
+      ConsumerPortId, // source port ID
+      providerChannel, // source channel ID
+      zeroTimeoutHeight,
+      ccvTimeoutTimestamp,
+      packetData
+    )
           
     // remove entry from the list
     maturingVSCs.Remove(id, ts)
@@ -2002,14 +2004,15 @@ function SendSlashRequest(
 
     // check whether the CCV channel to the provider chain is established
     if providerChannel != "" {
-      // create packet and send it using the interface exposed by ICS-4
-      packet = Packet{
-        timeoutHeight: zeroTimeoutHeight,
-        timeoutTimestamp: ccvTimeoutTimestamp,
-        destChannel: providerChannel,
-        data: packetData,
-      }
-      channelKeeper.SendPacket(packet)
+      // send SlashPacket data using the interface exposed by ICS-4
+      channelKeeper.sendPacket(
+        portKeeper.getCapability(portKeeper.portPath(ConsumerPortId)),
+        ConsumerPortId, // source port ID
+        providerChannel, // source channel ID
+        zeroTimeoutHeight,
+        ccvTimeoutTimestamp,
+        packetData
+      )
 
       if downtime {
         // set outstandingDowntime for this validator
@@ -2065,14 +2068,15 @@ function SendPendingSlashRequests() {
   // iterate over every pending SlashRequest in reverse order
   foreach req IN pendingSlashRequests.Reverse() {
     if !req.downtime OR !outstandingDowntime[req.data.valAddress] {
-      // create packet and send it using the interface exposed by ICS-4
-      packet = Packet{
-        timeoutHeight: zeroTimeoutHeight,
-        timeoutTimestamp: ccvTimeoutTimestamp,
-        destChannel: providerChannel,
-        data: req.data,
-      }
-      channelKeeper.SendPacket(packet)
+      // send req.data using the interface exposed by ICS-4
+      channelKeeper.sendPacket(
+        portKeeper.getCapability(portKeeper.portPath(ConsumerPortId)),
+        ConsumerPortId, // source port ID
+        providerChannel, // source channel ID
+        zeroTimeoutHeight,
+        ccvTimeoutTimestamp,
+        req.data
+      )
 
       if req.downtime {
         // set outstandingDowntime for this validator
