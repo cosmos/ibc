@@ -72,9 +72,35 @@ function RegisterInterchainAccount(connectionId: string, owner: string, version:
 `SendTx` is used to send an IBC packet containing instructions (messages) to an interchain account on a host chain for a given interchain account owner.
 
 ```typescript
-function SendTx(channelCapability: ChannelCapability, portId: string, icaPacketData: InterchainAccountPacketData, timeoutTimestamp uint64) returns (uint64, error) {
-    // A call to GetActiveChannel() checks if there is a currently active channel for this portId which also implies an interchain account has been registered using this port identifier
-    // if there are no errors CreateOutgoingPacket() is called with the given packet data and timeout and the IBC packet will be sent to the host chain on the active channel
+function SendTx(
+  capability: CapabilityKey, 
+  connectionId: string,
+  portId: string, 
+  icaPacketData: InterchainAccountPacketData, 
+  timeoutTimestamp uint64) {
+    // check if there is a currently active channel for
+    // this portId and connectionId, which also implies an 
+    // interchain account has been registered using 
+    // this portId and connectionId
+    activeChannelID, found = GetActiveChannelID(portId, connectionId)
+    abortTransactionUnless(found)
+
+    // validate timeoutTimestamp
+    abortTransactionUnless(timeoutTimestamp <= currentTimestamp())
+
+    // validate icaPacketData
+    abortTransactionUnless(icaPacketData.type == EXECUTE_TX)
+    abortTransactionUnless(icaPacketData.data != nil)
+
+    // send icaPacketData to the host chain on the active channel
+    handler.sendPacket(
+      capability,
+      portId, // source port ID
+      activeChannelID, // source channel ID 
+      0,
+      timeoutTimestamp,
+      icaPacketData
+    )
 }
 ```
 
@@ -273,7 +299,7 @@ icaPacketData = InterchainAccountPacketData{
 }
 
 // Sends the message to the host chain, where it will eventually be executed 
-SendTx(ownerAddress, portID, data, timeout)
+SendTx(ownerAddress, connectionId, portID, data, timeout)
 ```
 
 2. The host chain upon receiving the IBC packet will call `DeserializeTx`. 
