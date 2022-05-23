@@ -63,7 +63,7 @@ on what middleware is enabled on either end of the channel. Thus it is recommend
 version automatically and allow for users to optionally enable additional middleware versioning.
 
 ```typescript
-function RegisterInterchainAccount(connectionId: string, owner: string, version: string) returns (error) {
+function RegisterInterchainAccount(connectionId: Identifier, owner: string, version: string) returns (error) {
 }
 ```
 
@@ -74,8 +74,8 @@ function RegisterInterchainAccount(connectionId: string, owner: string, version:
 ```typescript
 function SendTx(
   capability: CapabilityKey, 
-  connectionId: string,
-  portId: string, 
+  connectionId: Identifier,
+  portId: Identifier, 
   icaPacketData: InterchainAccountPacketData, 
   timeoutTimestamp uint64) {
     // check if there is a currently active channel for
@@ -111,7 +111,7 @@ function SendTx(
 `RegisterInterchainAccount` is called on the `OnChanOpenTry` step during the channel creation handshake.
 
 ```typescript
-function RegisterInterchainAccount(counterpartyPortId: string, connectionID: string) returns (nil) {
+function RegisterInterchainAccount(counterpartyPortId: Identifier, connectionID: Identifier) returns (nil) {
    // checks to make sure the account has not already been registered
    // creates a new address on chain deterministically given counterpartyPortId and underlying connectionID
    // calls SetInterchainAccountAddress()
@@ -135,7 +135,7 @@ function AuthenticateTx(msgs []Any, connectionId string, portId string) returns 
 Executes each message sent by the owner account on the controller chain.
 
 ```typescript
-function ExecuteTx(sourcePort: string, channel Channel, msgs []Any) returns (resultString, error) {
+function ExecuteTx(sourcePort: Identifier, channel Channel, msgs []Any) returns (resultString, error) {
   // validate each message
   // retrieve the interchain account for the given channel by passing in source port and channel's connectionID
   // verify that interchain account is authorized signer of each message
@@ -148,19 +148,19 @@ function ExecuteTx(sourcePort: string, channel Channel, msgs []Any) returns (res
 
 ```typescript
 // Sets the active channel for a given portID and connectionID.
-function SetActiveChannelID(portId: string, connectionId: string, channelId: string) returns (error){
+function SetActiveChannelID(portId: Identifier, connectionId: Identifier, channelId: Identifier) returns (error){
 }
 
 // Returns the ID of the active channel for a given portID and connectionID, if present.
-function GetActiveChannelID(portId: string, connectionId: string) returns (string, boolean){
+function GetActiveChannelID(portId: Identifier, connectionId: Identifier) returns (Identifier, boolean){
 }
 
 // Stores the address of the interchain account in state.
-function SetInterchainAccountAddress(portId: string, connectionId: string, address: string) returns (string) {
+function SetInterchainAccountAddress(portId: Identifier, connectionId: Identifier, address: string) returns (string) {
 }
 
 // Retrieves the interchain account from state.
-function GetInterchainAccountAddress(portId: string, connectionId: string) returns (string, bool){
+function GetInterchainAccountAddress(portId: Identifier, connectionId: Identifier) returns (string, bool){
 }
 ```
 
