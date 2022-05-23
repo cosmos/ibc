@@ -41,6 +41,7 @@ All standards at or past the "Draft" stage are listed here in order of their ICS
 | --------------------------------------------------------------- | -------------------------- | ----- |
 | [6](spec/client/ics-006-solo-machine-client/README.md)          | Solo Machine Client        | Candidate |
 | [7](spec/client/ics-007-tendermint-client/README.md)            | Tendermint Client          | Candidate |
+| [8](spec/client/ics-008-wasm-client/README.md)                  | Wasm Client                | Draft |
 | [9](spec/client/ics-009-loopback-client/README.md)              | Loopback Client            | Candidate |
 | [10](spec/client/ics-010-grandpa-client/README.md)              | GRANDPA Client             | Draft |
 
