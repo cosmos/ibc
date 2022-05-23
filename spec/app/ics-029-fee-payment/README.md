@@ -376,10 +376,22 @@ function writeAcknowledgement(
     return ics4Wrapper.writeAcknowledgement(packet, ack_bytes)
 }
 
-// Fee Middleware sendPacket function just forwards message to ics-4 handler
-function sendPacket(packet: Packet) {
+// Fee Middleware sendPacket function just forwards data to ics-4 handler
+function sendPacket(
+  capability: CapabilityKey,
+  sourcePort: Identifier,
+  sourceChannel: Identifier,
+  timeoutHeight: Height,
+  timeoutTimestamp: uint64,
+  data: bytes) {
     // ics4Wrapper may be core IBC or higher-level middleware
-    return ics4Wrapper.sendPacket(packet)
+    return ics4Wrapper.sendPacket(
+      capability,
+      sourcePort,
+      sourceChannel,
+      timeoutHeight,
+      timeoutTimestamp,
+      data)
 }
 ```
 
