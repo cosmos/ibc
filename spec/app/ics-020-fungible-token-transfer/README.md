@@ -209,8 +209,8 @@ In plain English, between chains `A` and `B`:
 function sendFungibleTokens(
   denomination: string,
   amount: uint256,
+  sender: string,
   receiver: string,
-  source: boolean,
   sourcePort: string,
   sourceChannel: string,
   timeoutHeight: Height,
