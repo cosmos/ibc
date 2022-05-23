@@ -229,7 +229,7 @@ function sendPacket(
   sourceChannel: Identifier,
   timeoutHeight: Height,
   timeoutTimestamp: uint64,
-  data: bytes) {
+  app_data: bytes) {
     // middleware may modify packet
     doCustomLogic()
 
