@@ -231,7 +231,7 @@ function sendPacket(
   timeoutTimestamp: uint64,
   app_data: bytes) {
     // middleware may modify packet
-    doCustomLogic()
+    data = doCustomLogic(app_data)
 
     return ics4.sendPacket(
       capability,
