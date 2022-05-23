@@ -68,7 +68,13 @@ interface Middleware extends ICS26Module {
 // The base application will call `sendPacket` or `writeAcknowledgement` of the middleware directly above them
 // which will call the next middleware until it reaches the core IBC handler.
 interface ICS4Wrapper {
-    sendPacket(packet: Packet)
+    sendPacket(
+      capability: CapabilityKey,
+      sourcePort: Identifier,
+      sourceChannel: Identifier,
+      timeoutHeight: Height,
+      timeoutTimestamp: uint64,
+      data: bytes)
     writeAcknowledgement(packet: Packet, ack: Acknowledgement)
 }
 ```
@@ -217,11 +223,23 @@ function writeAcknowledgement(
 ```
 
 ```typescript
-function sendPacket(app_packet: Packet) {
+function sendPacket(
+  capability: CapabilityKey,
+  sourcePort: Identifier,
+  sourceChannel: Identifier,
+  timeoutHeight: Height,
+  timeoutTimestamp: uint64,
+  app_data: bytes) {
     // middleware may modify packet
-    packet = doCustomLogic(app_packet)
+    data = doCustomLogic(app_data)
 
-    return ics4.sendPacket(packet)
+    return ics4.sendPacket(
+      capability,
+      sourcePort,
+      sourceChannel,
+      timeoutHeight,
+      timeoutTimestamp,
+      data)
 }
 ```
 
