@@ -316,25 +316,25 @@ Every Wasm client code need to support ingestion of below messages in order to b
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
 #[serde(rename_all = "snake_case")]
 pub struct MisbehaviourMessage {
-    pub client_state: Vec<Byte>,
-    pub consensus_state: Vec<Byte>,
+    pub client_state: Vec<u8>,
+    pub consensus_state: Vec<u8>,
     pub height: Height,
-    pub header1: Vec<Byte>,
-    pub header2: Vec<Byte>,
+    pub header1: Vec<u8>,
+    pub header2: Vec<u8>,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
 #[serde(rename_all = "snake_case")]
 pub struct CreateConsensusMessage {
-    pub client_state: Vec<Byte>,
+    pub client_state: Vec<u8>,
     pub height: Height
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
 #[serde(rename_all = "snake_case")]
 pub struct InitializeClientStateMessage {
-    pub initialization_data: Vec<Byte>,
-    pub consensus_state: Vec<Byte>
+    pub initialization_data: Vec<u8>,
+    pub consensus_state: Vec<u8>
 }
 
 
@@ -349,23 +349,23 @@ pub enum HandleMsg {
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
 #[serde(rename_all = "snake_case")]
 pub struct ValidateClientStateMessage {
-    client_state: Vec<Byte>,
+    client_state: Vec<u8>,
     height: Height
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
 #[serde(rename_all = "snake_case")]
 pub struct ValidateNewClientStateMessage {
-    client_state: Vec<Byte>,
-    new_client_state: Vec<Byte>,
+    client_state: Vec<u8>,
+    new_client_state: Vec<u8>,
     height: Height
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
 #[serde(rename_all = "snake_case")]
 pub struct ValidateInitializationDataMessage {
-    init_data: Vec<Byte>,
-    consensus_state: Vec<Byte>
+    init_data: Vec<u8>,
+    consensus_state: Vec<u8>
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
@@ -380,7 +380,7 @@ pub enum ValidityPredicate {
 #[serde(rename_all = "snake_case")]
 pub enum QueryMsg {
    IsValid(ValidityPredicate),
-   LatestClientHeight(Vec<Byte>),
+   LatestClientHeight(Vec<u8>),
 }
 
 ```
