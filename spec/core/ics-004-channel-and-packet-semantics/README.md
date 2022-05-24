@@ -265,6 +265,17 @@ If not provided, the default `validateChannelIdentifier` function will always re
 | Actor     | ChanCloseInit    | A                | (OPEN, OPEN)       | (CLOSED, OPEN)         |
 | Relayer   | ChanCloseConfirm | B                | (CLOSED, OPEN)     | (CLOSED, CLOSED)       |
 
+##### Utility Functions
+
+`getNextConnection` is a utility function that takes a route represented as a series of connections joined by `/` and returns the next connection in the sequence.
+
+```typescript
+function getNextConnection(route string) {
+  hops = strings.split(route, "/")
+  return hops[0]
+}
+```
+
 ##### Opening handshake
 
 The `chanOpenInit` function is called by a module to initiate a channel opening handshake with a module on another chain.
@@ -282,6 +293,10 @@ type generateIdentifier = () -> Identifier
 ```
 
 ```typescript
+// connectionHops is a list of routes that connect the channelEnds
+// each element in the list consists of one or more connection identifiers joined by `/'
+// the connectionHops must be ordered from the initiating chain to the counterparty chain
+// each element in the route is the connection identifier for the next chain in the sequence
 function chanOpenInit(
   order: ChannelOrder,
   connectionHops: [Identifier],
@@ -291,13 +306,18 @@ function chanOpenInit(
     channelIdentifier = generateIdentifier()
     abortTransactionUnless(validateChannelIdentifier(portIdentifier, channelIdentifier))
 
-    abortTransactionUnless(connectionHops.length === 1) // for v1 of the IBC protocol
-
     abortTransactionUnless(provableStore.get(channelPath(portIdentifier, channelIdentifier)) === null)
-    connection = provableStore.get(connectionPath(connectionHops[0]))
 
     // optimistic channel handshakes are allowed
-    abortTransactionUnless(connection !== null)
+    // so next connection does not need to be OPEN but it does need to exist for each proposed route
+    for i := 0; i < len(connectionHops); i++ {
+      route = connectionHops[i]
+      nextHopConnectionId = getNextHop(route)
+      connection = provableStore.get(connectionPath(nextHopConnectionId))
+
+      abortTransactionUnless(connection !== null)
+    }
+
     abortTransactionUnless(authenticateCapability(portPath(portIdentifier), portCapability))
     channel = ChannelEnd{INIT, order, counterpartyPortIdentifier,
                          "", connectionHops, version}
@@ -326,18 +346,22 @@ function chanOpenTry(
     channelIdentifier = generateIdentifier()
 
     abortTransactionUnless(validateChannelIdentifier(portIdentifier, channelIdentifier))
-    abortTransactionUnless(connectionHops.length === 1) // for v1 of the IBC protocol
     abortTransactionUnless(authenticateCapability(portPath(portIdentifier), portCapability))
     connection = provableStore.get(connectionPath(connectionHops[0]))
-    abortTransactionUnless(connection !== null)
-    abortTransactionUnless(connection.state === OPEN)
+
     expected = ChannelEnd{INIT, order, portIdentifier,
                           "", [connection.counterpartyConnectionIdentifier], counterpartyVersion}
+    
     // handshake messages must be proven against
     // every possible route
-    for i = 0; i < len(connectionHops); i++ {
-      // prove channel state on each connection route
-      connection = getConnection(connectionHops[i])
+    for i := 0; i < len(connectionHops); i++ {
+      route = connectionHops[i]
+      nextHopConnectionId = getNextHop(route)
+      connection = provableStore.get(connectionPath(nextHopConnectionId))
+
+      abortTransactionUnless(connection !== null)
+      abortTransactionUnless(connection.state === OPEN)
+
       abortTransactionUnless(connection.verifyChannelState(
         proofHeight,
         proofInit,
@@ -346,6 +370,7 @@ function chanOpenTry(
         expected
       ))
     }
+    
     channel = ChannelEnd{TRYOPEN, order, counterpartyPortIdentifier,
                          counterpartyChannelIdentifier, connectionHops, version}
     provableStore.set(channelPath(portIdentifier, channelIdentifier), channel)
@@ -374,13 +399,20 @@ function chanOpenAck(
     channel = provableStore.get(channelPath(portIdentifier, channelIdentifier))
     abortTransactionUnless(channel.state === INIT || channel.state === TRYOPEN)
     abortTransactionUnless(authenticateCapability(channelCapabilityPath(portIdentifier, channelIdentifier), capability))
-    connection = provableStore.get(connectionPath(channel.connectionHops[0]))
-    abortTransactionUnless(connection !== null)
-    abortTransactionUnless(connection.state === OPEN)
+   
     expected = ChannelEnd{TRYOPEN, channel.order, portIdentifier,
                           channelIdentifier, [connection.counterpartyConnectionIdentifier], counterpartyVersion}
 
+    // handshake messages must be proven against
+    // every possible route
     for i = 0; i < len(connectionHops); i++ {
+      route = connectionHops[i]
+      nextHopConnectionId = getNextHop(route)
+      connection = provableStore.get(connectionPath(nextHopConnectionId))
+
+      abortTransactionUnless(connection !== null)
+      abortTransactionUnless(connection.state === OPEN)
+
       abortTransactionUnless(connection.verifyChannelState(
         proofHeight,
         proofTry,
@@ -389,6 +421,7 @@ function chanOpenAck(
         expected
       ))
     }
+    
     channel.state = OPEN
     channel.version = counterpartyVersion
     channel.counterpartyChannelIdentifier = counterpartyChannelIdentifier
@@ -409,12 +442,20 @@ function chanOpenConfirm(
     abortTransactionUnless(channel !== null)
     abortTransactionUnless(channel.state === TRYOPEN)
     abortTransactionUnless(authenticateCapability(channelCapabilityPath(portIdentifier, channelIdentifier), capability))
-    connection = provableStore.get(connectionPath(channel.connectionHops[0]))
-    abortTransactionUnless(connection !== null)
-    abortTransactionUnless(connection.state === OPEN)
+    
     expected = ChannelEnd{OPEN, channel.order, portIdentifier,
                           channelIdentifier, [connection.counterpartyConnectionIdentifier], channel.version}
+
+    // handshake messages must be proven against
+    // every possible route
     for i = 0; i < len(connectionHops); i++ {
+      route = connectionHops[i]
+      nextHopConnectionId = getNextHop(route)
+      connection = provableStore.get(connectionPath(nextHopConnectionId))
+
+      abortTransactionUnless(connection !== null)
+      abortTransactionUnless(connection.state === OPEN)
+
       abortTransactionUnless(connection.verifyChannelState(
         proofHeight,
         proofAck,
@@ -423,6 +464,7 @@ function chanOpenConfirm(
         expected
       ))
     }
+
     channel.state = OPEN
     provableStore.set(channelPath(portIdentifier, channelIdentifier), channel)
 }
