@@ -1,37 +1,315 @@
 <!-- omit in toc -->
-# CCV: Technical Specification - Sub-protocols
+# CCV: Technical Specification - Methods
 [&uparrow; Back to main document](./README.md)
 
 [&uparrow; Back to technical specification](./technical_specification.md)
 
 <!-- omit in toc -->
 ## Outline
-- [Initialization](#initialization)
-  - [Provider Chain Functions](#provider-chain-functions)
-  - [Consumer Chain Functions](#consumer-chain-functions)
-- [Consumer Chain Removal](#consumer-chain-removal)
-  - [Provider Chain Functions](#provider-chain-functions-1)
-  - [Consumer Chain Functions](#consumer-chain-functions-1)
-- [Packet Relay](#packet-relay)
-  - [Provider Chain Functions](#provider-chain-functions-2)
-  - [Consumer Chain Functions](#consumer-chain-functions-2)
-- [Validator Set Update](#validator-set-update)
-  - [Provider Chain Functions](#provider-chain-functions-3)
-  - [Consumer Chain Functions](#consumer-chain-functions-3)
-- [Consumer Initiated Slashing](#consumer-initiated-slashing)
-  - [Provider Chain Functions](#provider-chain-functions-4)
-  - [Consumer Chain Functions](#consumer-chain-functions-4)
-- [Reward Distribution](#reward-distribution)
-  - [Consumer Chain Functions](#consumer-chain-functions-5)
+- [General Methods](#general-methods)
+  - [BeginBlock and EndBlock](#beginblock-and-endblock)
+  - [Packet Relay](#packet-relay)
+- [Sub-protocols](#sub-protocols)
+  - [Initialization](#initialization)
+  - [Consumer Chain Removal](#consumer-chain-removal)
+  - [Validator Set Update](#validator-set-update)
+  - [Consumer Initiated Slashing](#consumer-initiated-slashing)
+  - [Reward Distribution](#reward-distribution)
+
+## General Methods
+[&uparrow; Back to Outline](#outline)
 
 To express the error conditions, the following specification of the sub-protocols uses the exception system of the host state machine, which is exposed through two functions (as defined in [ICS 24](../../core/ics-024-host-requirements)): `abortTransactionUnless` and `abortSystemUnless`.
 
-## Initialization
+### BeginBlock and EndBlock
+[&uparrow; Back to Outline](#outline)
+
+The functions `BeginBlock()` and `EndBlock()` (see [Implemented Interfaces](./technical_specification.md#implemented-interfaces)) are split across the CCV sub-protocols.
+
+<!-- omit in toc -->
+#### **[CCV-PCF-BBLOCK.1]**
+```typescript
+// PCF: Provider Chain Function
+// implements the AppModule interface
+function BeginBlock() {
+    BeginBlockInit()
+    BeginBlockCCR()
+}
+```
+- **Caller**
+  - The ABCI application.
+- **Trigger Event**
+  - A `BeginBlock` message is received from the consensus engine; `BeginBlock` messages are sent once per block.
+- **Precondition**
+  - True. 
+- **Postcondition**
+  - `BeginBlockInit()` is invoked (see [[CCV-PCF-BBLOCK-INIT.1]](#ccv-pcf-bblock-init1), i.e., it contains the `BeginBlock()` logic needed for the Initialization sub-protocol).
+  - `BeginBlockCCR()` is invoked (see [[CCV-PCF-BBLOCK-CCR.1]](#ccv-pcf-bblock-ccr1), i.e., it contains the `BeginBlock()` logic needed for the Consumer Chain Removal sub-protocol).
+- **Error Condition**
+  - None.
+
+<!-- omit in toc -->
+#### **[CCV-PCF-EBLOCK.1]**
+```typescript
+// PCF: Provider Chain Function
+// implements the AppModule interface
+function EndBlock(): [ValidatorUpdate] {
+  EndBlockCIS()
+  EndBlockVSU()
+
+  // do not return anything to the consensus engine
+  return []   
+}
+```
+- **Caller**
+  - The ABCI application.
+- **Trigger Event**
+  - An `EndBlock` message is received from the consensus engine; `EndBlock` messages are sent once per block.
+- **Precondition**
+  - True. 
+- **Postcondition**
+  - `EndBlockCIS()` is invoked (see [[CCV-PCF-EBLOCK-CIS.1]](#ccv-pcf-eblock-cis1), i.e., it contains the `EndBlock()` logic needed for the Consumer Initiated Slashing sub-protocol).
+  - `EndBlockVSU()` is invoked (see [[CCV-PCF-EBLOCK-VSU.1]](#ccv-pcf-eblock-vsu1), i.e., it contains the `EndBlock()` logic needed for the Validator Set Update sub-protocol).
+- **Error Condition**
+  - None.
+
+> **Note**: The provider CCV module expects the provider Staking module to update its view of the validator set before the `EndBlock()` of the provider CCV module is invoked. 
+> A solution is for the provider Staking module to update its view during `EndBlock()` and then, the `EndBlock()` of the provider Staking module to be executed before the `EndBlock()` of the provider CCV module.
+
+---
+
+<!-- omit in toc -->
+#### **[CCV-CCF-BBLOCK.1]**
+```typescript
+// CCF: Consumer Chain Function
+// implements the AppModule interface
+function BeginBlock() {
+    BeginBlockCCR()
+    BeginBlockCIS()
+}
+```
+- **Caller**
+  - The ABCI application.
+- **Trigger Event**
+  - A `BeginBlock` message is received from the consensus engine; `BeginBlock` messages are sent once per block.
+- **Precondition**
+  - True. 
+- **Postcondition**
+  - `BeginBlockCCR()` is invoked (see [[CCV-CCF-BBLOCK-CCR.1]](#ccv-ccf-bblock-ccr1), i.e., it contains the `BeginBlock()` logic needed for the Consumer Chain Removal sub-protocol).
+  - `BeginBlockCIS()` is invoked (see [[CCV-CCF-BBLOCK-CIS.1]](#ccv-ccf-bblock-cis1), i.e., it contains the `BeginBlock()` logic needed for the Consumer Initiated Slashing sub-protocol).
+- **Error Condition**
+  - None.
+
+<!-- omit in toc -->
+#### **[CCV-CCF-EBLOCK.1]**
+```typescript
+// CCF: Consumer Chain Function
+// implements the AppModule interface
+function EndBlock(): [ValidatorUpdate] {
+  EndBlockRD()
+
+  // return the validator set updates to the consensus engine
+  return EndBlockVSU()
+}
+```
+- **Caller**
+  - The ABCI application.
+- **Trigger Event**
+  - An `EndBlock` message is received from the consensus engine; `EndBlock` messages are sent once per block.
+- **Precondition**
+  - True. 
+- **Postcondition**
+  - `EndBlockRD()` is invoked (see [[CCV-PCF-EBLOCK-RD.1]](#ccv-pcf-eblock-rd1), i.e., it contains the `EndBlock()` logic needed for the Reward Distribution sub-protocol).
+  - `EndBlockVSU()` is invoked and the return value is returned to the consensus engine (see [[CCV-CCF-EBLOCK-VSU.1]](#ccv-ccf-eblock-vsu1), i.e., it contains the `EndBlock()` logic needed for the Validator Set Update sub-protocol).
+- **Error Condition**
+  - None.
+
+### Packet Relay
+[&uparrow; Back to Outline](#outline)
+
+<!-- omit in toc -->
+#### **[CCV-PCF-RCVP.1]**
+```typescript
+// PCF: Provider Chain Function
+// implements the ModuleCallbacks interface defined in ICS26
+function onRecvPacket(packet: Packet): bytes {
+  switch typeof(packet.data) {
+    case VSCMaturedPacketData:
+      return onRecvVSCMaturedPacket(packet)
+    case SlashPacketData:
+      return onRecvSlashPacket(packet)
+    default:
+      // unexpected packet type
+      return PacketError
+  }    
+}
+```
+- **Caller**
+  - The provider IBC routing module.
+- **Trigger Event**
+  - The provider IBC routing module receives a packet on a channel owned by the provider CCV module.
+- **Precondition**
+  - True.
+- **Postcondition** 
+  - If the packet is a `VSCMaturedPacket`, the acknowledgement obtained from invoking the `onRecvVSCMaturedPacket` method is returned.
+  - If the packet is a `SlashPacket`, the acknowledgement obtained from invoking the `onRecvSlashPacket` method is returned.
+  - Otherwise, an error acknowledgement is returned.
+- **Error Condition**
+  - None.
+
+<!-- omit in toc -->
+#### **[CCV-PCF-ACKP.1]**
+```typescript
+// PCF: Provider Chain Function
+// implements the ModuleCallbacks interface defined in ICS26
+function onAcknowledgePacket(packet: Packet, ack: bytes) {
+  switch typeof(packet.data) {
+    case VSCPacketData:
+      onAcknowledgeVSCPacket(packet, ack)
+    default:
+      // unexpected packet type
+      abortTransactionUnless(FALSE)
+  }
+}
+```
+- **Caller**
+  - The provider IBC routing module.
+- **Trigger Event**
+  - The provider IBC routing module receives an acknowledgement on a channel owned by the provider CCV module.
+- **Precondition**
+  - True.
+- **Postcondition** 
+  - If the acknowledgement is for a `VSCPacket`, the `onAcknowledgeVSCPacket` method is invoked.
+  - Otherwise, the transaction is aborted.
+- **Error Condition**
+  - None.
+
+<!-- omit in toc -->
+#### **[CCV-PCF-TOP.1]**
+```typescript
+// PCF: Provider Chain Function
+// implements the ModuleCallbacks interface defined in ICS26
+function onTimeoutPacket(packet Packet) {
+  switch typeof(packet.data) {
+    case VSCPacketData:
+      onTimeoutVSCPacket(packet)
+    default:
+      // unexpected packet type
+      abortTransactionUnless(FALSE) 
+  }
+}
+```
+- **Caller**
+  - The provider IBC routing module.
+- **Trigger Event**
+  - A packet sent on a channel owned by the provider CCV module timed out as a result of either
+    - the timeout height or timeout timestamp passing on the consumer chain without the packet being received (see `timeoutPacket` defined in [ICS4](../../core/ics-004-channel-and-packet-semantics/README.md#sending-end));
+    - or the channel being closed without the packet being received (see `timeoutOnClose` defined in [ICS4](../../core/ics-004-channel-and-packet-semantics/README.md#timing-out-on-close)). 
+- **Precondition**
+  - The *Correct Relayer* assumption is violated (see the [Assumptions](./system_model_and_properties.md#assumptions) section).
+- **Postcondition** 
+  - If the timeout is for a `VSCPacket`, the `onTimeoutVSCPacket` method is invoked.
+  - Otherwise, the transaction is aborted.
+- **Error Condition**
+  - None.
+
+---
+
+<!-- omit in toc -->
+#### **[CCV-CCF-RCVP.1]**
+```typescript
+// CCF: Consumer Chain Function
+// implements the ModuleCallbacks interface defined in ICS26
+function onRecvPacket(packet: Packet): bytes {
+  switch typeof(packet.data) {
+    case VSCPacketData:
+      return onRecvVSCPacket(packet)
+    default:
+      // unexpected packet type
+      return PacketError
+  }
+}
+```
+- **Caller**
+  - The consumer IBC routing module.
+- **Trigger Event**
+  - The consumer IBC routing module receives a packet on a channel owned by the consumer CCV module.
+- **Precondition**
+  - True.
+- **Postcondition** 
+  - If the packet is a `VSCPacket`, the acknowledgement obtained from invoking the `onRecvVSCPacket` method is returned.
+  - Otherwise, an error acknowledgement is returned.
+- **Error Condition**
+  - None.
+
+<!-- omit in toc -->
+#### **[CCV-CCF-ACKP.1]**
+```typescript
+// CCF: Consumer Chain Function
+// implements the ModuleCallbacks interface defined in ICS26
+function onAcknowledgePacket(packet: Packet, ack: bytes) {
+  switch typeof(packet.data) {
+    case VSCMaturedPacketData:
+      onAcknowledgeVSCMaturedPacket(packet, ack)
+    case SlashPacketData:
+      onAcknowledgeSlashPacket(packet, ack)
+    default:
+      // unexpected packet type
+      abortTransactionUnless(FALSE)
+  }
+}
+```
+- **Caller**
+  - The consumer IBC routing module.
+- **Trigger Event**
+  - The consumer IBC routing module receives an acknowledgement on a channel owned by the consumer CCV module.
+- **Precondition**
+  - True.
+- **Postcondition** 
+  - If the acknowledgement is for a `VSCMaturedPacket`, the `onAcknowledgeVSCMaturedPacket` method is invoked.
+  - If the acknowledgement is for a `SlashPacket`, the `onAcknowledgeSlashPacket` method is invoked.
+  - Otherwise, the transaction is aborted.
+- **Error Condition**
+  - None.
+
+<!-- omit in toc -->
+#### **[CCV-CCF-TOP.1]**
+```typescript
+// CCF: Consumer Chain Function
+// implements the ModuleCallbacks interface defined in ICS26
+function onTimeoutPacket(packet Packet) {
+  switch typeof(packet.data) {
+    case VSCMaturedPacketData:
+      onTimeoutVSCMaturedPacket(packet)
+    case SlashPacketData:
+      onTimeoutSlashPacket(packet)
+    default:
+      // unexpected packet type
+      abortTransactionUnless(FALSE) 
+  }
+}
+```
+- **Caller**
+  - The consumer IBC routing module.
+- **Trigger Event**
+  - A packet sent on a channel owned by the consumer CCV module timed out as a result of either
+    - the timeout height or timeout timestamp passing on the provider chain without the packet being received (see `timeoutPacket` defined in [ICS4](../../core/ics-004-channel-and-packet-semantics/README.md#sending-end));
+    - or the channel being closed without the packet being received (see `timeoutOnClose` defined in [ICS4](../../core/ics-004-channel-and-packet-semantics/README.md#timing-out-on-close)). 
+- **Precondition**
+  - The *Correct Relayer* assumption is violated (see the [Assumptions](./system_model_and_properties.md#assumptions) section).
+- **Postcondition** 
+  - If the timeout is for a `VSCMaturedPacket`, the `onTimeoutVSCMaturedPacket` method is invoked.
+  - If the timeout is for a `SlashPacket`, the `onTimeoutSlashPacket` method is invoked.
+  - Otherwise, the transaction is aborted.
+- **Error Condition**
+  - None.
+
+## Sub-protocols
+
+### Initialization
 [&uparrow; Back to Outline](#outline)
 
 The *initialization* sub-protocol enables a provider chain and a consumer chain to create a CCV channel -- a unique, ordered IBC channel for exchanging packets. As a prerequisite, the initialization sub-protocol MUST create two IBC clients, one on the provider chain to the consumer chain and one on the consumer chain to the provider chain. This is necessary to verify the identity of the two chains (as long as the clients are trusted).
-
-### Provider Chain Functions
 
 <!-- omit in toc -->
 #### **[CCV-PCF-INITG.1]**
@@ -128,7 +406,7 @@ function CreateConsumerClient(p: SpawnConsumerChainProposal) {
 }
 ```
 - **Caller**
-  - Either `SpawnConsumerChainProposalHandler` (see [CCV-PCF-SPCCPROP.1](#ccv-pcf-spccprop1)) or `BeginBlock()` (see [CCV-PCF-BBLOCK.1](#ccv-pcf-bblock1)).
+  - Either `SpawnConsumerChainProposalHandler` (see [CCV-PCF-SPCCPROP.1](#ccv-pcf-spccprop1)) or `BeginBlockInit()` (see [CCV-PCF-BBLOCK-INIT.1](#ccv-pcf-bblock-init1)).
 - **Trigger Event**
   - A governance proposal `SpawnConsumerChainProposal` `p` has passed (i.e., it got the necessary votes).
 - **Precondition** 
@@ -146,7 +424,33 @@ function CreateConsumerClient(p: SpawnConsumerChainProposal) {
 > The provider chain uses the fact that the validator set of the consumer chain is the same as its own validator set. 
 > The rest of information to create a `ClientState` it receives through the governance proposal.
 
-
+<!-- omit in toc -->
+#### **[CCV-PCF-BBLOCK-INIT.1]**
+```typescript
+// PCF: Provider Chain Function
+function BeginBlockInit() {
+  // iterate over the pending spawn proposals and create 
+  // the consumer client if the spawn time has passed
+  foreach p IN pendingSpawnProposals {
+    if currentTimestamp() > p.spawnTime {
+      CreateConsumerClient(p)
+      pendingSpawnProposals.Remove(p)
+    }
+  }
+}
+```
+- **Caller**
+  - The `BeginBlock()` method.
+- **Trigger Event**
+  - A `BeginBlock` message is received from the consensus engine; `BeginBlock` messages are sent once per block.
+- **Precondition**
+  - True. 
+- **Postcondition**
+  - For each `SpawnConsumerChainProposal` `p` in the list of pending spawn proposals `pendingSpawnProposals`, if `currentTimestamp() > p.spawnTime`, then
+    - `CreateConsumerClient(p)` is invoked;
+    - `p` is removed from `pendingSpawnProposals`.
+- **Error Condition**
+  - None.
   
 <!-- omit in toc -->
 #### **[CCV-PCF-COINIT.1]**
@@ -307,8 +611,6 @@ function onChanOpenConfirm(
   - None.
 
 ---
-
-### Consumer Chain Functions
 
 <!-- omit in toc -->
 #### **[CCV-CCF-INITG.1]**
@@ -531,10 +833,8 @@ function onChanOpenConfirm(
 - **Error Condition**
   - None.
 
-## Consumer Chain Removal
+### Consumer Chain Removal
 [&uparrow; Back to Outline](#outline)
-
-### Provider Chain Functions
 
 <!-- omit in toc -->
 #### **[CCV-PCF-STCCPROP.1]**
@@ -594,7 +894,7 @@ function StopConsumerChain(chainId: string, lockUnbonding: Bool) {
 ```
 - **Caller**
   - `StopConsumerChainProposalHandler` (see [CCV-PCF-STCCPROP.1](#ccv-pcf-stccprop1)) 
-    or `BeginBlock()` (see [CCV-PCF-BBLOCK.1](#ccv-pcf-bblock1)) 
+    or `BeginBlockCCR()` (see [CCV-PCF-BBLOCK-CCR.1](#ccv-pcf-bblock-ccr1)) 
     or `onTimeoutVSCPacket()` (see [CCV-PCF-TOVSC.1](#ccv-pcf-tovsc1)).
 - **Trigger Event**
   - Either a governance proposal to stop the consumer chain with `chainId` has passed (i.e., it got the necessary votes) or a packet sent on the CCV channel to the consumer chain with `chainId` has timed out.
@@ -625,6 +925,35 @@ function StopConsumerChain(chainId: string, lockUnbonding: Bool) {
 > 
 > - The second scenario (i.e., a timeout) is only possible if the *Correct Relayer* assumption is violated (see the [Assumptions](./system_model_and_properties.md#assumptions) section), 
 > which is necessary to guarantee both the *Bond-Based Consumer Voting Power* and *Slashable Consumer Misbehavior* properties (see the [Assumptions](./system_model_and_properties.md#correctness-reasoning) section).
+
+<!-- omit in toc -->
+#### **[CCV-PCF-BBLOCK-CCR.1]**
+```typescript
+// PCF: Provider Chain Function
+function BeginBlockCCR() {
+  // iterate over the pending stop proposals 
+  // and stop the consumer chain
+  foreach p IN pendingStopProposals {
+    if currentTimestamp() > p.stopTime {
+      // stop the consumer chain and do not lock the unbonding
+      StopConsumerChain(p.chainId, false)
+      pendingStopProposals.Remove(p)
+    }
+  }
+}
+```
+- **Caller**
+  - The `BeginBlock()` method.
+- **Trigger Event**
+  - A `BeginBlock` message is received from the consensus engine; `BeginBlock` messages are sent once per block.
+- **Precondition**
+  - True. 
+- **Postcondition**
+  - For each `StopConsumerChainProposal` `p` in the list of pending spawn proposals `pendingStopProposals`, if `currentTimestamp() > p.stopTime`, then
+    - `StopConsumerChain(p.chainId, false)` is invoked;
+    - `p` is removed from `pendingStopProposals`.
+- **Error Condition**
+  - None.
 
 <!-- omit in toc -->
 #### **[CCV-PCF-CCINIT.1]**
@@ -673,7 +1002,37 @@ function onChanCloseConfirm(
 
 ---
 
-### Consumer Chain Functions
+<!-- omit in toc -->
+#### **[CCV-CCF-BBLOCK-CCR.1]**
+```typescript
+// CCF: Consumer Chain Function
+function BeginBlockCCR() {
+  if providerChannel != "" AND channelKeeper.GetChannelState(providerChannel) == CLOSED {
+      // the CCV channel was established, but it was then closed; 
+      // the consumer chain is no longer safe
+
+      // cleanup state, e.g., 
+      // providerChannel = ""
+
+      // shut down consumer chain
+      abortSystemUnless(FALSE)
+    } 
+  }
+}
+```
+- **Caller**
+  - The `BeginBlock()` method.
+- **Trigger Event**
+  - A `BeginBlock` message is received from the consensus engine; `BeginBlock` messages are sent once per block.
+- **Precondition**
+  - True. 
+- **Postcondition**
+  - If the CCV was established, but then was moved to the `CLOSED` state, then the state of the consumer CCV module is cleaned up, e.g., the `providerChannel` is unset. 
+- **Error Condition**
+  - If the CCV was established, but then was moved to the `CLOSED` state. 
+
+> **Note**: Once the CCV channel is closed, the provider chain can no longer provider security. As a result, the consumer chain MUST be shut down. 
+> For an example of how to do this in practice, see the Cosmos SDK [implementation](https://github.com/cosmos/cosmos-sdk/blob/0c0b4da114cf73ef5ae1ac5268241d69e8595a60/x/upgrade/abci.go#L71). 
 
 <!-- omit in toc -->
 #### **[CCV-CCF-CCINIT.1]**
@@ -725,247 +1084,20 @@ function onChanCloseConfirm(
 - **Error Condition**
   - None.
 
-## Packet Relay
-[&uparrow; Back to Outline](#outline)
 
-### Provider Chain Functions
 
-<!-- omit in toc -->
-#### **[CCV-PCF-RCVP.1]**
-```typescript
-// PCF: Provider Chain Function
-// implements the ModuleCallbacks interface defined in ICS26
-function onRecvPacket(packet: Packet): bytes {
-  switch typeof(packet.data) {
-    case VSCMaturedPacketData:
-      return onRecvVSCMaturedPacket(packet)
-    case SlashPacketData:
-      return onRecvSlashPacket(packet)
-    default:
-      // unexpected packet type
-      return PacketError
-  }    
-}
-```
-- **Caller**
-  - The provider IBC routing module.
-- **Trigger Event**
-  - The provider IBC routing module receives a packet on a channel owned by the provider CCV module.
-- **Precondition**
-  - True.
-- **Postcondition** 
-  - If the packet is a `VSCMaturedPacket`, the acknowledgement obtained from invoking the `onRecvVSCMaturedPacket` method is returned.
-  - If the packet is a `SlashPacket`, the acknowledgement obtained from invoking the `onRecvSlashPacket` method is returned.
-  - Otherwise, an error acknowledgement is returned.
-- **Error Condition**
-  - None.
-
-<!-- omit in toc -->
-#### **[CCV-PCF-ACKP.1]**
-```typescript
-// PCF: Provider Chain Function
-// implements the ModuleCallbacks interface defined in ICS26
-function onAcknowledgePacket(packet: Packet, ack: bytes) {
-  switch typeof(packet.data) {
-    case VSCPacketData:
-      onAcknowledgeVSCPacket(packet, ack)
-    default:
-      // unexpected packet type
-      abortTransactionUnless(FALSE)
-  }
-}
-```
-- **Caller**
-  - The provider IBC routing module.
-- **Trigger Event**
-  - The provider IBC routing module receives an acknowledgement on a channel owned by the provider CCV module.
-- **Precondition**
-  - True.
-- **Postcondition** 
-  - If the acknowledgement is for a `VSCPacket`, the `onAcknowledgeVSCPacket` method is invoked.
-  - Otherwise, the transaction is aborted.
-- **Error Condition**
-  - None.
-
-<!-- omit in toc -->
-#### **[CCV-PCF-TOP.1]**
-```typescript
-// PCF: Provider Chain Function
-// implements the ModuleCallbacks interface defined in ICS26
-function onTimeoutPacket(packet Packet) {
-  switch typeof(packet.data) {
-    case VSCPacketData:
-      onTimeoutVSCPacket(packet)
-    default:
-      // unexpected packet type
-      abortTransactionUnless(FALSE) 
-  }
-}
-```
-- **Caller**
-  - The provider IBC routing module.
-- **Trigger Event**
-  - A packet sent on a channel owned by the provider CCV module timed out as a result of either
-    - the timeout height or timeout timestamp passing on the consumer chain without the packet being received (see `timeoutPacket` defined in [ICS4](../../core/ics-004-channel-and-packet-semantics/README.md#sending-end));
-    - or the channel being closed without the packet being received (see `timeoutOnClose` defined in [ICS4](../../core/ics-004-channel-and-packet-semantics/README.md#timing-out-on-close)). 
-- **Precondition**
-  - The *Correct Relayer* assumption is violated (see the [Assumptions](./system_model_and_properties.md#assumptions) section).
-- **Postcondition** 
-  - If the timeout is for a `VSCPacket`, the `onTimeoutVSCPacket` method is invoked.
-  - Otherwise, the transaction is aborted.
-- **Error Condition**
-  - None.
-
----
-
-### Consumer Chain Functions
-
-<!-- omit in toc -->
-#### **[CCV-CCF-RCVP.1]**
-```typescript
-// CCF: Consumer Chain Function
-// implements the ModuleCallbacks interface defined in ICS26
-function onRecvPacket(packet: Packet): bytes {
-  switch typeof(packet.data) {
-    case VSCPacketData:
-      return onRecvVSCPacket(packet)
-    default:
-      // unexpected packet type
-      return PacketError
-  }
-}
-```
-- **Caller**
-  - The consumer IBC routing module.
-- **Trigger Event**
-  - The consumer IBC routing module receives a packet on a channel owned by the consumer CCV module.
-- **Precondition**
-  - True.
-- **Postcondition** 
-  - If the packet is a `VSCPacket`, the acknowledgement obtained from invoking the `onRecvVSCPacket` method is returned.
-  - Otherwise, an error acknowledgement is returned.
-- **Error Condition**
-  - None.
-
-<!-- omit in toc -->
-#### **[CCV-CCF-ACKP.1]**
-```typescript
-// CCF: Consumer Chain Function
-// implements the ModuleCallbacks interface defined in ICS26
-function onAcknowledgePacket(packet: Packet, ack: bytes) {
-  switch typeof(packet.data) {
-    case VSCMaturedPacketData:
-      onAcknowledgeVSCMaturedPacket(packet, ack)
-    case SlashPacketData:
-      onAcknowledgeSlashPacket(packet, ack)
-    default:
-      // unexpected packet type
-      abortTransactionUnless(FALSE)
-  }
-}
-```
-- **Caller**
-  - The consumer IBC routing module.
-- **Trigger Event**
-  - The consumer IBC routing module receives an acknowledgement on a channel owned by the consumer CCV module.
-- **Precondition**
-  - True.
-- **Postcondition** 
-  - If the acknowledgement is for a `VSCMaturedPacket`, the `onAcknowledgeVSCMaturedPacket` method is invoked.
-  - If the acknowledgement is for a `SlashPacket`, the `onAcknowledgeSlashPacket` method is invoked.
-  - Otherwise, the transaction is aborted.
-- **Error Condition**
-  - None.
-
-<!-- omit in toc -->
-#### **[CCV-CCF-TOP.1]**
-```typescript
-// CCF: Consumer Chain Function
-// implements the ModuleCallbacks interface defined in ICS26
-function onTimeoutPacket(packet Packet) {
-  switch typeof(packet.data) {
-    case VSCMaturedPacketData:
-      onTimeoutVSCMaturedPacket(packet)
-    case SlashPacketData:
-      onTimeoutSlashPacket(packet)
-    default:
-      // unexpected packet type
-      abortTransactionUnless(FALSE) 
-  }
-}
-```
-- **Caller**
-  - The consumer IBC routing module.
-- **Trigger Event**
-  - A packet sent on a channel owned by the consumer CCV module timed out as a result of either
-    - the timeout height or timeout timestamp passing on the provider chain without the packet being received (see `timeoutPacket` defined in [ICS4](../../core/ics-004-channel-and-packet-semantics/README.md#sending-end));
-    - or the channel being closed without the packet being received (see `timeoutOnClose` defined in [ICS4](../../core/ics-004-channel-and-packet-semantics/README.md#timing-out-on-close)). 
-- **Precondition**
-  - The *Correct Relayer* assumption is violated (see the [Assumptions](./system_model_and_properties.md#assumptions) section).
-- **Postcondition** 
-  - If the timeout is for a `VSCMaturedPacket`, the `onTimeoutVSCMaturedPacket` method is invoked.
-  - If the timeout is for a `SlashPacket`, the `onTimeoutSlashPacket` method is invoked.
-  - Otherwise, the transaction is aborted.
-- **Error Condition**
-  - None.
-
-## Validator Set Update
+### Validator Set Update
 [&uparrow; Back to Outline](#outline)
 
 The *validator set update* sub-protocol enables the provider chain 
 - to update the consumer chain on the voting power granted to validators on the provider chain
 - and to ensure the correct completion of unbonding operations for validators that produce blocks on the consumer chain.
 
-### Provider Chain Functions
-
 <!-- omit in toc -->
-#### **[CCV-PCF-BBLOCK.1]**
+#### **[CCV-PCF-EBLOCK-VSU.1]**
 ```typescript
 // PCF: Provider Chain Function
-// implements the AppModule interface
-function BeginBlock() {
-  // iterate over the pending spawn proposals and create 
-  // the consumer client if the spawn time has passed
-  foreach p IN pendingSpawnProposals {
-    if currentTimestamp() > p.spawnTime {
-      CreateConsumerClient(p)
-      pendingSpawnProposals.Remove(p)
-    }
-  }
-
-  // iterate over the pending stop proposals 
-  // and stop the consumer chain
-  foreach p IN pendingStopProposals {
-    if currentTimestamp() > p.stopTime {
-      // stop the consumer chain and do not lock the unbonding
-      StopConsumerChain(p.chainId, false)
-      pendingStopProposals.Remove(p)
-    }
-  }
-}
-```
-- **Caller**
-  - The ABCI application.
-- **Trigger Event**
-  - A `BeginBlock` message is received from the consensus engine; `BeginBlock` messages are sent once per block.
-- **Precondition**
-  - True. 
-- **Postcondition**
-  - For each `SpawnConsumerChainProposal` `p` in the list of pending spawn proposals `pendingSpawnProposals`, if `currentTimestamp() > p.spawnTime`, then
-    - `CreateConsumerClient(p)` is invoked;
-    - `p` is removed from `pendingSpawnProposals`.
-  - For each `StopConsumerChainProposal` `p` in the list of pending spawn proposals `pendingStopProposals`, if `currentTimestamp() > p.stopTime`, then
-    - `StopConsumerChain(p.chainId, false)` is invoked;
-    - `p` is removed from `pendingStopProposals`.
-- **Error Condition**
-  - None.
-
-<!-- omit in toc -->
-#### **[CCV-PCF-EBLOCK.1]**
-```typescript
-// PCF: Provider Chain Function
-// implements the AppModule interface
-function EndBlock(): [ValidatorUpdate] {
+function EndBlockVSU() {
   // get list of validator updates from the provider Staking module
   valUpdates = stakingKeeper.GetValidatorUpdates()
 
@@ -1008,17 +1140,12 @@ function EndBlock(): [ValidatorUpdate] {
       pendingVSCPackets.Remove(chainId)
     }
   }
-  // set VSCtoH mapping
-  VSCtoH[vscId] = getCurrentHeight() + 1
   // increment VSC ID
   vscId++ 
-
-  // do not return anything to the consensus engine
-  return []   
 }
 ```
 - **Caller**
-  - The ABCI application.
+  - The `EndBlock()` method.
 - **Trigger Event**
   - An `EndBlock` message is received from the consensus engine; `EndBlock` messages are sent once per block.
 - **Precondition**
@@ -1034,13 +1161,9 @@ function EndBlock(): [ValidatorUpdate] {
       - for each `VSCPacketData` in the list of pending VSCPackets associated to `chainId`
         - a packet with the `VSCPacketData` is sent on the channel associated with the consumer chain with `chainId`;
       - all the pending VSCPackets associated to `chainId` are removed.
-  - `vscId` is mapped to the height of the subsequent block. 
   - `vscId` is incremented.
 - **Error Condition**
   - None.
-
-> **Note**: The provider CCV module expects the provider Staking module to update its view of the validator set before the `EndBlock()` of the provider CCV module is invoked. 
-> A solution is for the provider Staking module to update its view during `EndBlock()` and then, the `EndBlock()` of the provider Staking module to be executed before the `EndBlock()` of the provider CCV module.
 
 <!-- omit in toc -->
 #### **[CCV-PCF-ACKVSC.1]**
@@ -1209,44 +1332,6 @@ function AfterUnbondingInitiated(opId: uint64) {
 
 ---
 
-### Consumer Chain Functions
-
-<!-- omit in toc -->
-#### **[CCV-CCF-BBLOCK.1]**
-```typescript
-// CCF: Consumer Chain Function
-// implements the AppModule interface
-function BeginBlock() {
-  if providerChannel != "" AND channelKeeper.GetChannelState(providerChannel) == CLOSED {
-      // the CCV channel was established, but it was then closed; 
-      // the consumer chain is no longer safe
-
-      // cleanup state, e.g., 
-      // providerChannel = ""
-
-      // shut down consumer chain
-      abortSystemUnless(FALSE)
-    } 
-  }
-
-  HtoVSC[getCurrentHeight() + 1] = HtoVSC[getCurrentHeight()]
-}
-```
-- **Caller**
-  - The ABCI application.
-- **Trigger Event**
-  - A `BeginBlock` message is received from the consensus engine; `BeginBlock` messages are sent once per block.
-- **Precondition**
-  - True. 
-- **Postcondition**
-  - If the CCV was established, but then was moved to the `CLOSED` state, then the state of the consumer CCV module is cleaned up, e.g., the `providerChannel` is unset. 
-  - `HtoVSC` for the subsequent block height is set to the same VSC ID as the current block height.
-- **Error Condition**
-  - If the CCV was established, but then was moved to the `CLOSED` state. 
-
-> **Note**: Once the CCV channel is closed, the provider chain can no longer provider security. As a result, the consumer chain MUST be shut down. 
-> For an example of how to do this in practice, see the Cosmos SDK [implementation](https://github.com/cosmos/cosmos-sdk/blob/0c0b4da114cf73ef5ae1ac5268241d69e8595a60/x/upgrade/abci.go#L71). 
-
 <!-- omit in toc -->
 #### **[CCV-CCF-RCVVSC.1]**
 ```typescript
@@ -1353,15 +1438,10 @@ function onTimeoutVSCMaturedPacket(packet Packet) {
   - None
 
 <!-- omit in toc -->
-#### **[CCV-CCF-EBLOCK.1]**
+#### **[CCV-CCF-EBLOCK-VSU.1]**
 ```typescript
 // CCF: Consumer Chain Function
-// implements the AppModule interface
-function EndBlock(): [ValidatorUpdate] {
-  if getCurrentHeight() - lastDistributionTransferHeight >= BlocksPerDistributionTransfer {
-    DistributeRewards()
-  }
-
+function EndBlockVSU(): [ValidatorUpdate] {
   // unbond mature packets if the CCV channel is established
   if providerChannel != "" {
     UnbondMaturePackets()
@@ -1382,25 +1462,24 @@ function EndBlock(): [ValidatorUpdate] {
   // update validatorSet
   UpdateValidatorSet(changes)
 
-  // return the validator set updates to the consensus engine
+  // return the validator set updates
   return changes
 }
 ```
 - **Caller**
-  - The ABCI application.
+  - The `EndBlock()` method.
 - **Trigger Event**
   - An `EndBlock` message is received from the consensus engine; `EndBlock` messages are sent once per block.
 - **Precondition**
   - True. 
 - **Postcondition**
-  - If `getCurrentHeight() - lastDistributionTransferHeight >= BlocksPerDistributionTransfer`, the `DistributeRewards()` method is invoked (see [CCV-CCF-DISTRREW.1](#ccv-ccf-distrrew1)).
+  - If `providerChannel != ""`, `UnbondMaturePackets()` is invoked;
   - If `pendingChanges` is empty, the state is not changed.
   - Otherwise,
     - the pending changes are aggregated and stored in `changes`;
     - `pendingChanges` is emptied;
     - `UpdateValidatorSet(changes)` is invoked;
-    - if `providerChannel != ""`, `UnbondMaturePackets()` is invoked;
-    - `changes` is returned to the consensus engine.
+    - `changes` is returned.
 - **Error Condition**
   - None.
 
@@ -1500,10 +1579,28 @@ function UnbondMaturePackets() {
 - **Error Condition**
   - None.
 
-## Consumer Initiated Slashing
+### Consumer Initiated Slashing
 [&uparrow; Back to Outline](#outline)
 
-### Provider Chain Functions
+<!-- omit in toc -->
+#### **[CCV-PCF-EBLOCK-CIS.1]**
+```typescript
+// PCF: Provider Chain Function
+function EndBlockCIS() {
+  // set VSCtoH mapping
+  VSCtoH[vscId] = getCurrentHeight() + 1
+}
+```
+- **Caller**
+  - The `EndBlock()` method.
+- **Trigger Event**
+  - An `EndBlock` message is received from the consensus engine; `EndBlock` messages are sent once per block.
+- **Precondition**
+  - True. 
+- **Postcondition**
+  - `vscId` is mapped to the height of the subsequent block. 
+- **Error Condition**
+  - None.
 
 <!-- omit in toc -->
 #### **[CCV-PCF-RCVSLASH.1]**
@@ -1571,7 +1668,24 @@ function onRecvSlashPacket(packet: Packet): bytes {
 
 ---
 
-### Consumer Chain Functions
+<!-- omit in toc -->
+#### **[CCV-CCF-BBLOCK-CIS.1]**
+```typescript
+// CCF: Consumer Chain Function
+function BeginBlockCIS() {
+  HtoVSC[getCurrentHeight() + 1] = HtoVSC[getCurrentHeight()]
+}
+```
+- **Caller**
+  - The `BeginBlock()` method.
+- **Trigger Event**
+  - A `BeginBlock` message is received from the consensus engine; `BeginBlock` messages are sent once per block.
+- **Precondition**
+  - True. 
+- **Postcondition**
+  - `HtoVSC` for the subsequent block height is set to the same VSC ID as the current block height.
+- **Error Condition**
+  - None. 
 
 <!-- omit in toc -->
 #### **[CCV-CCF-ACKSLASH.1]**
@@ -1744,10 +1858,29 @@ function SendPendingSlashRequests() {
 
 > **Note**: Iterating over pending `SlashRequest`s in reverse order ensures that validators that are down for multiple blocks during channel initialization will be slashed for the latest downtime evidence.
 
-## Reward Distribution
+### Reward Distribution
 [&uparrow; Back to Outline](#outline)
 
-### Consumer Chain Functions
+<!-- omit in toc -->
+#### **[CCV-CCF-EBLOCK-RD.1]**
+```typescript
+// CCF: Consumer Chain Function
+function EndBlockRD() {
+  if getCurrentHeight() - lastDistributionTransferHeight >= BlocksPerDistributionTransfer {
+    DistributeRewards()
+  }
+}
+```
+- **Caller**
+  - The `EndBlock()` method.
+- **Trigger Event**
+  - An `EndBlock` message is received from the consensus engine; `EndBlock` messages are sent once per block.
+- **Precondition**
+  - True. 
+- **Postcondition**
+  - If `getCurrentHeight() - lastDistributionTransferHeight >= BlocksPerDistributionTransfer`, the `DistributeRewards()` method is invoked.
+- **Error Condition**
+  - None.
 
 <!-- omit in toc -->
 #### **[CCV-CCF-DISTRREW.1]**
@@ -1771,7 +1904,7 @@ function DistributeRewards() {
 }
 ```
 - **Caller**
-  - The `EndBlock()` method.
+  - The `EndBlockRD()` method.
 - **Trigger Event**
   - An `EndBlock` message is received from the consensus engine.
 - **Precondition**

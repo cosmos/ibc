@@ -7,7 +7,7 @@
 - [Placing CCV within an ABCI Application](#placing-ccv-within-an-abci-application)
   - [Implemented Interfaces](#implemented-interfaces)
   - [Interfacing Other Modules](#interfacing-other-modules)
-- [Data Structures and Sub-protocols](#data-structures-and-sub-protocols)
+- [Data Structures and Methods](#data-structures-and-methods)
 
 ## Placing CCV within an ABCI Application
 [&uparrow; Back to Outline](#outline)
@@ -26,9 +26,9 @@ Before describing the data structures and sub-protocols of the CCV protocol, we 
     This is also where the application can inform the underlying consensus engine of changes in the validator set.
 
 - CCV is an **IBC module**, which means it MUST implement the module callbacks interface defined in [ICS 26](../../core/ics-026-routing-module/README.md#module-callback-interface). The interface consists of a set of callbacks for 
-  - channel opening handshake, which we describe in the [Initialization](./subprotocols.md#initialization) section;
-  - channel closing handshake, which we describe in the [Channel Closing Handshake](./subprotocols.md#consumer-chain-removal) section;
-  - and packet relay, which we describe in the [Packet Relay](./subprotocols.md#packet-relay) section.
+  - channel opening handshake, which we describe in the [Initialization](./methods.md#initialization) section;
+  - channel closing handshake, which we describe in the [Consumer Chain Removal](./methods.md#consumer-chain-removal) section;
+  - and packet relay, which we describe in the [Packet Relay](./methods.md#packet-relay) section.
 
 ### Interfacing Other Modules
 
@@ -113,8 +113,8 @@ Before describing the data structures and sub-protocols of the CCV protocol, we 
   function AfterCCValidatorBeginUnbonding(valAddress: string);
   ```
 
-## Data Structures and Sub-protocols
+## Data Structures and Methods
 [&uparrow; Back to Outline](#outline)
 
-The remainder of this technical specification is split into [Data Structures](./data_structures.md) and [Sub-protocols](./subprotocols.md).
+The remainder of this technical specification is split into [Data Structures](./data_structures.md) and [Methods](./methods.md).
 
