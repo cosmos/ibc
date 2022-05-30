@@ -173,7 +173,7 @@ The channel initialization consists of four phases:
 > Thus, to reduce the attack surface during channel initialization, the consumer chain SHOULD enable user transactions only after the CCV channel is established (i.e., after receiving the first VSC). 
 > As a consequence, a malicious initial validator set can only influence the initialization of the CCV channel. 
 
-For a more detailed description of Channel Initialization, take a look at the [technical specification](./technical_specification.md#initialization).
+For a more detailed description of Channel Initialization, take a look at the [technical specification](./subprotocols.md#initialization).
 
 ### Validator Set Update
 [&uparrow; Back to Outline](#outline)
@@ -189,7 +189,7 @@ In the context of VSCs, the CCV module enables the following functionalities:
       notifying of VSCs maturity entails sending `VSCMaturedPacket`s to the provider chain.
 
 These functionalities are depicted in the following figure that shows an overview of the Validator Set Update operation of CCV. 
-For a more detailed description of Validator Set Update, take a look at the [technical specification](./technical_specification.md#validator-set-update).
+For a more detailed description of Validator Set Update, take a look at the [technical specification](./subprotocols.md#validator-set-update).
 
 ![Validator Set Update Overview](./figures/ccv-vsc-overview.png?raw=true)
 
@@ -281,7 +281,7 @@ The following figure shows an overview of the Consumer Initiated Slashing operat
     - otherwise, the height at which the CCV channel to this consumer chain was established.
   > **Note**: As a consequence of slashing (and potentially jailing) `V`, the Staking module updates accordingly `V`'s voting power. This update MUST be visible in the next VSC provided to the consumer chains.  
 
-For a more detailed description of Consumer Initiated Slashing, take a look at the [technical specification](./technical_specification.md#consumer-initiated-slashing).
+For a more detailed description of Consumer Initiated Slashing, take a look at the [technical specification](./subprotocols.md#consumer-initiated-slashing).
 
 ### Reward Distribution
 [&uparrow; Back to Outline](#outline)
