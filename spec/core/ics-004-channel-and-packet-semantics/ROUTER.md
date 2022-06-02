@@ -14,9 +14,13 @@ The following document specifies the interfaces and state machine logic that IBC
 
 ## Technical Specification
 
-### Data Structures
-
 ### Store Paths
+
+#### RouteInfoPath
+
+The route info path stores
+
+### Data Structures
 
 ### Channel Handshake
 
@@ -59,7 +63,7 @@ function routeChanOpenTry(
         path = append(srcConnectionHops[0:len(srcConnectionHops)-1], channelPath(portIdentifier, channelIdentifier))
         client = queryClient(connection.clientIdentifier)
         value = protobuf.marshal(initChannel)
-        verifyMembership(clientState, proofHeight, 0, 0, proofInit, path, value)
+        verifyMembership(client, proofHeight, 0, 0, proofInit, path, value)
     } else {
         // prove that previous hop (original source) stored channel under channel path
         verifyChannelState(connection, proofHeight, proofInit, counterpartyPortIdentifier, counterpartyChannelIdentifier, initChannel)
