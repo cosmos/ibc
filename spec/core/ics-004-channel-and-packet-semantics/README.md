@@ -590,13 +590,11 @@ function sendPacket(packet: Packet) {
     abortTransactionUnless(authenticateCapability(channelCapabilityPath(packet.sourcePort, packet.sourceChannel), capability))
     abortTransactionUnless(packet.destPort === channel.counterpartyPortIdentifier)
     abortTransactionUnless(packet.destChannel === channel.counterpartyChannelIdentifier)
-    connection = provableStore.get(connectionPath(channel.connectionHops[0]))
 
-    abortTransactionUnless(connection !== null)
-
-    // sanity-check that the timeout height hasn't already passed in our local client tracking the receiving chain
-    latestClientHeight = provableStore.get(clientPath(connection.clientIdentifier)).latestClientHeight()
-    abortTransactionUnless(packet.timeoutHeight === 0 || latestClientHeight < packet.timeoutHeight)
+    for (route in channel.connectionHops) {
+      connection = provableStore.get(connectionPath(route.split("/")[0]))
+      abortTransactionUnless(connection !== null)
+    }
 
     nextSequenceSend = provableStore.get(nextSequenceSendPath(packet.sourcePort, packet.sourceChannel))
     abortTransactionUnless(packet.sequence === nextSequenceSend)
@@ -637,6 +635,7 @@ function recvPacket(
   packet: OpaquePacket,
   proof: CommitmentProof,
   proofHeight: Height,
+  sourceConnectionHops: [Identifier],
   relayer: string): Packet {
 
     channel = provableStore.get(channelPath(packet.destPort, packet.destChannel))
@@ -646,21 +645,37 @@ function recvPacket(
     abortTransactionUnless(packet.sourcePort === channel.counterpartyPortIdentifier)
     abortTransactionUnless(packet.sourceChannel === channel.counterpartyChannelIdentifier)
 
+    route = join(sourceConnectionHops, "/")
+    abortTransactionUnless(route in channel.connectionHops)
+
+    previousHopConnection = len(sourceConnectionHops) - 1
+    connection = provableStore.get(connectionPath(previousHopConnection))
     abortTransactionUnless(connection !== null)
     abortTransactionUnless(connection.state === OPEN)
 
     abortTransactionUnless(packet.timeoutHeight === 0 || getConsensusHeight() < packet.timeoutHeight)
     abortTransactionUnless(packet.timeoutTimestamp === 0 || currentTimestamp() < packet.timeoutTimestamp)
 
-    // only need to prove against one connection
-    abortTransactionUnless(connection.verifyPacketData(
-      proofHeight,
-      proof,
-      packet.sourcePort,
-      packet.sourceChannel,
-      packet.sequence,
-      concat(packet.data, packet.timeoutHeight, packet.timeoutTimestamp)
-    ))
+    if len(sourceConnectionHops) > 1 {
+        clientState = queryClient(connection.clientIdentifier)
+        prefix = sourceConnectionHops[0:len(sourceConnectionHops)-2]
+        abortTransactionUnless(verifyMembership(clientState,
+                                                proofHeight,
+                                                0,
+                                                0,
+                                                proof,
+                                                routePacketPath(prefix, packet.sourcePort, packet.sourceChannel, packet.sequence),
+                                                hash(packet.data, packet.timeoutHeight, packet.timeoutTimestamp)))
+    } else {
+        abortTransactionUnless(connection.verifyPacketData(proofHeight,
+                                                           proof,
+                                                           packet.sourcePort,
+                                                           packet.sourceChannel,
+                                                           packet.sequence,
+                                                           concat(packet.data,
+                                                                  packet.timeoutHeight,
+                                                                  packet.timeoutTimestamp)))
+    }
 
     // all assertions passed (except sequence check), we can alter state
 

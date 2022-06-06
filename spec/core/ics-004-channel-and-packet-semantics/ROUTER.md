@@ -111,7 +111,6 @@ function routePacket(
     proof: CommitmentProof,
     proofHeight: Height,
     sourceConnectionHops: [Identifier], //ordered from source up to self. It starts from 0.
-    destConnectionHops: [Identifier] //ordered from dest up to self. It starts from 0.
 ) {
     previousHopConnectionId = sourceConnectionHops[len(sourceConnectionHops)-1]
     connection = getConnection(previousHopConnectionId)
@@ -139,11 +138,7 @@ function routePacket(
     path = routePacketPath(sourceConnectionHops, packet.sourcePort, packet.sourceChannel, packet.sequence)
     provableStore.set(path, hash(packet.data, packet.timeoutHeight, packet.timeoutTimestamp))
 
-    if len(destConnectionHops) > 1{
-        emitLogEntry("routePacket", {sequence: packet.sequence, data: packet.data, timeoutHeight: packet.timeoutHeight, timeoutTimestamp: packet.timeoutTimestamp})
-    } else{
-        emitLogEntry("sendPacket", {sequence: packet.sequence, data: packet.data, timeoutHeight: packet.timeoutHeight, timeoutTimestamp: packet.timeoutTimestamp})
-    }
+    emitLogEntry("routePacket", {sequence: packet.sequence, data: packet.data, timeoutHeight: packet.timeoutHeight, timeoutTimestamp: packet.timeoutTimestamp})
 }
 ```
 
@@ -180,11 +175,7 @@ function routeAcknowledgmentPacket(
     path = routeAckPath(sourceConnectionHops, packet.destPort, packet.destChannel, packet.sequence)
     provableStore.set(path, hash(acknowledgement))
 
-    if len(destConnectionHops) > 1{
-        emitLogEntry("routeAcknowledgement", {sequence: packet.sequence, timeoutHeight: packet.timeoutHeight, port: packet.destPort,channel: packet.destChannel, timeoutTimestamp: packet.timeoutTimestamp, data: packet.data, acknowledgement})
-    } else{
-        emitLogEntry("writeAcknowledgement", {sequence: packet.sequence, timeoutHeight: packet.timeoutHeight, port: packet.destPort,channel: packet.destChannel, timeoutTimestamp: packet.timeoutTimestamp, data: packet.data, acknowledgement})
-    }
+    emitLogEntry("routeAcknowledgement", {sequence: packet.sequence, timeoutHeight: packet.timeoutHeight, port: packet.destPort,channel: packet.destChannel, timeoutTimestamp: packet.timeoutTimestamp, data: packet.data, acknowledgement})
 }
 ```
 
@@ -199,7 +190,7 @@ function routeTimeoutPacket(
     destConnectionHops: [Identifier] //ordered from dest up to self. It starts from 0.
 ) {
 
-    channel = provableStore.get(append(sourceConnectionHops ,channelPath(packet.sourcePort, packet.sourceChannel)))
+    channel = provableStore.get(append(sourceConnectionHops, channelPath(packet.sourcePort, packet.sourceChannel)))
     abortTransactionUnless(channel !== null)
     abortTransactionUnless(channel.state === OPEN)
 
