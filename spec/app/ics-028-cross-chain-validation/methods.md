@@ -879,7 +879,7 @@ function StopConsumerChain(chainId: string, lockUnbonding: Bool) {
     chainToChannel.Remove(chainId)
   }
   pendingVSCPackets.Remove(chainId)
-  initH.Remove(chainId)
+  initialHeights.Remove(chainId)
   downtimeSlashRequests.Remove(chainId)
 
   if !lockUnbonding {
@@ -908,7 +908,7 @@ function StopConsumerChain(chainId: string, lockUnbonding: Bool) {
     - the channel closing handshake is initiated for the CCV channel;
     - the channel ID mapped to `chainId` in `chainToChannel` is removed.
   - All the `VSCPacketData` mapped to `chainId` in `pendingVSCPackets` are removed.
-  - The height mapped to `chainId` in `initH` is removed.
+  - The height mapped to `chainId` in `initialHeights` is removed.
   - `downtimeSlashRequests[chainId]` is emptied.
   - If `lockUnbonding == false`, then 
     - `chainId` is removed from all outstanding unbonding operations;
