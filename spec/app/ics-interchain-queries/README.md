@@ -182,7 +182,7 @@ function CrossChainQueryRequest(
   timeoutHeight: Height,
   clientId: Identifier,
   bounty: sdk.Coin,
-  ): Identifier {
+  ): [Identifier, CapabilityKey] {
 
     // Check that there exists a client of the Queried Chain. The client will be used to verify the query result.
     abortTransactionUnless(queryClientState(clientId) !== null)
@@ -204,11 +204,13 @@ function CrossChainQueryRequest(
     // Store the query in the local, private store.
     privateStore.set(queryPath(queryIdentifier), query)
 
+    queryCapability = newCapability(queryIdentifier)
+
     // Log the query request.
     emitLogEntry("sendQuery", query)
 
     // Returns the query identifier.
-    return queryIdentifier
+    return [queryIdentifier, queryCapability]
 }
 ```
 - **Precondition**
@@ -265,7 +267,7 @@ function CrossChainQueryResult(
     }
 
     // Delete the query from the local, private store.
-    query = privateStore.delete(queryPath(queryId))
+    privateStore.delete(queryPath(queryId))
 
     // Create a query result record.
     resultRecord = CrossChainQuery{queryIdentifier,
@@ -283,6 +285,31 @@ function CrossChainQueryResult(
 - **Postcondition**
   - The query request identified by `queryId` is deleted from the `privateStore`.
   - The query result is stored in the `provableStore`.
+
+The `CleanCrossChainQueryResult` function is called when the caller of a query has retrieved the result and wants to delete it.
+
+```typescript
+function CleanCrossChainQueryResult(
+  queryId: Identifier,
+  queryCapability: CapabilityKey
+  ) {
+
+    // Retrieve the query result from the provable store using the query's identifier.
+    resultRecord = privateStore.get(resultQueryPath(queryIdentifier))
+    abortTransactionUnless(resultRecord !== null)
+
+    // Abort the transaction unless the caller has the right to clean the query result
+    abortTransactionUnless(authenticateCapability(queryId, queryCapability))
+
+    // Delete the query result from the public store.
+    privateStore.delete(resultQueryPath(queryId))
+}
+```
+- **Precondition**
+  - There is a query result stored in the `provableStore` identified by `queryId`.
+  - The caller has the right to clean the query result
+- **Postcondition**
+  - The query result identified by `queryId` is deleted from the `provableStore`.
 
 #### Timeouts
 
@@ -307,11 +334,12 @@ function checkQueryTimeout(
     
     if (currentHeight > query.timeoutHeight) {
         // Delete the query from the local, private store if it has timed out
-        query = privateStore.delete(queryPath(queryId))
+        privateStore.delete(queryPath(queryId))
 
         // Create a query result record.
         resultRecord = CrossChainQuery{queryIdentifier,
                                        TIMEOUT,
+                                       query.caller
                                        null} 
 
         // Store the result in a public path.
