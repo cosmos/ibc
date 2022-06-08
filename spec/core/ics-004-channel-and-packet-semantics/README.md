@@ -311,8 +311,8 @@ function chanOpenInit(
     // optimistic channel handshakes are allowed
     // so next connection does not need to be OPEN but it does need to exist for each proposed route
     for i := 0; i < len(connectionHops); i++ {
-      route = connectionHops[i]
-      nextHopConnectionId = getNextHop(route)
+      hops = splitRoute(connectionHops[i])
+      nextHopConnectionId = hops[0]
       connection = provableStore.get(connectionPath(nextHopConnectionId))
 
       abortTransactionUnless(connection !== null)
@@ -357,9 +357,7 @@ function chanOpenTry(
     // handshake messages must be proven against
     // every possible route
     for i := 0; i < len(connectionHops); i++ {
-      route = connectionHops[i]
-
-      hops = splitRoute(route)
+      hops = splitRoute(connectionHops[i])
 
       nextHopConnectionId = getNextHop(hops[0])
       connection = provableStore.get(connectionPath(nextHopConnectionId))
@@ -429,9 +427,7 @@ function chanOpenAck(
     // handshake messages must be proven against
     // every possible route
     for i := 0; i < len(connectionHops); i++ {
-      route = connectionHops[i]
-
-      hops = splitRoute(route)
+      hops = splitRoute(connectionHops[i])
 
       nextHopConnectionId = getNextHop(hops[0])
       connection = provableStore.get(connectionPath(nextHopConnectionId))
@@ -494,9 +490,7 @@ function chanOpenConfirm(
     // handshake messages must be proven against
     // every possible route
     for i := 0; i < len(connectionHops); i++ {
-      route = connectionHops[i]
-
-      hops = splitRoute(route)
+      hops = splitRoute(connectionHops[i])
 
       nextHopConnectionId = getNextHop(hops[0])
       connection = provableStore.get(connectionPath(nextHopConnectionId))

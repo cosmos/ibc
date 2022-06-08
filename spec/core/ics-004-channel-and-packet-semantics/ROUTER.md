@@ -18,9 +18,13 @@ The following document specifies the interfaces and state machine logic that IBC
 
 #### RouteInfoPath
 
-The route info path stores
+The route info path includes the connectionID on the executing chain along with the path to the executing chain and the source port and channelID.
 
-### Data Structures
+```typescript
+function routeInfoPath(connectionId: Identifier, route: Identifier, portIdentifier: Identifer, channelIdentifier: Identifier) {
+    return "routeInfo/connectionId/{connectionId}/route/{route}/portIdentifier/{portIdentifier}/channelIdentifier/{channelIdentifier}"
+}
+```
 
 ### Channel Handshake
 
@@ -72,9 +76,6 @@ function routeChanOpenTry(
     // store channel under channelPath prefixed by srcConnectionHops
     path = append(srcConnectionHops, channelPath(counterpartyPortIdentifier, counterpartyChannelIdentifier))
     store.set(path, initChannel)
-
-    // store srcConnectionHops -> src identifiers
-    store(srcConnectionHops, counterpartyPortIdentifier, counterpartyChannelIdentifier)
 }
 
 // srcConnectionHops is the connection Hops from the TRY chain to the executing router chain
@@ -110,11 +111,11 @@ function routeChanOpenAck(
     // store channel under channelPath prefixed by srcConnectionHops
     path = append(srcConnectionHops, channelPath(counterpartyPortIdentifier, counterpartyChannelIdentifier))
     store.set(path, tryChannel)
-
-    // store srcConnectionHops -> src identifiers
-    store(srcConnectionHops, counterpartyPortIdentifier, counterpartyChannelIdentifier)
 }
 
+// routeChanOpenConfirm routes an ACK to the confirmation chain
+// srcConnectionHops is the connectionHops from the ACK chain
+// destConnectionHops is the connectionHops to the CONFIRM chain
 function routeChanOpenConfirm(
     srcConnectionHops: [Identifier],
     destConnectionHops: [Identifier],
@@ -144,7 +145,9 @@ function routeChanOpenConfirm(
         verifyChannelState(connection, proofHeight, proofTry, counterpartyPortIdentifier, counterpartyChannelIdentifier, tryChannel)
     }
 
-
+     // store channel under channelPath prefixed by srcConnectionHops
+    path = append(srcConnectionHops, channelPath(counterpartyPortIdentifier, counterpartyChannelIdentifier))
+    store.set(path, ackChannel)
 }
 ```
 
