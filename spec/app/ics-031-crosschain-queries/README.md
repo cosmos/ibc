@@ -1,9 +1,9 @@
 ---
 ics: 31
-title: Interchain Query
+title: Cross-chain Queries
 stage: draft
 category: IBC/APP
-requires: 2, 18, 23, 24
+requires: 2, 5, 18, 23, 24
 kind: instantiation
 author: Joe Schnetzler <schnetzlerjoe@gmail.com>, Manuel Bravo <manuel@informal.systems>
 created: 2022-01-06
@@ -29,6 +29,8 @@ Interchain Accounts (ICS-27) brings one of the most important features IBC offer
 `Cross-chain Querying Module`: The module that implements the Cross-chain Querying protocol. Only the Querying Chain integrates it.
 
 `Height` and client-related functions are as defined in ICS 2.
+
+`newCapability` and `authenticateCapability` are as defined in ICS 5.
 
 `CommitmentPath` and `CommitmentProof` are as defined in ICS 23.
 
@@ -169,7 +171,7 @@ function generateQueryIdentifier = () -> Identifier
 2) A correct relayer listening to `sendQuery` events from the Querying Chain will eventually pick the query request up and execute it at the Queried Chain. The result is then submitted (on-chain) to the Querying Chain.
 3) When the query result is committed at the Querying Chain, this calls the `CrossChainQueryResult` function of the Cross-chain Querying module.
 4) The `CrossChainQueryResult` first retrieves the query from the `privateStore` using the query's unique identifier. It then proceeds to verify the result using its local client. If it passes the verification, the function removes the query from the `privateStore` and stores the result in a public path.
-5) The query caller can then asynchronously retrieve the query result.
+5) The query caller can then asynchronously retrieve the query result. The function `PruneCrossChainQueryResult` allows a query caller to prune the result from the store once it retrieves it.
 
 #### Normal path methods
 
@@ -286,10 +288,10 @@ function CrossChainQueryResult(
   - The query request identified by `queryId` is deleted from the `privateStore`.
   - The query result is stored in the `provableStore`.
 
-The `CleanCrossChainQueryResult` function is called when the caller of a query has retrieved the result and wants to delete it.
+The `PruneCrossChainQueryResult` function is called when the caller of a query has retrieved the result and wants to delete it.
 
 ```typescript
-function CleanCrossChainQueryResult(
+function PruneCrossChainQueryResult(
   queryId: Identifier,
   queryCapability: CapabilityKey
   ) {
