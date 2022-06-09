@@ -24,6 +24,8 @@ The communication between the provider and the consumer chains is done through t
 - [Overview and Basic Concepts](./overview_and_basic_concepts.md)
 - [System Model and Properties](./system_model_and_properties.md)
 - [Technical Specification: Data Structures and Methods](./technical_specification.md)
+  - [Data Structures](./data_structures.md)
+  - [Methods](./methods.md)
 
 <!--
 ## Backwards Compatibility
