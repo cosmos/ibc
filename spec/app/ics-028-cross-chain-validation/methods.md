@@ -1302,19 +1302,21 @@ function GetUnbondingsFromVSC(
 function AfterUnbondingInitiated(opId: uint64) {
   // get the IDs of all consumer chains registered with this provider chain
   chainIds = chainToClient.Keys()
-  // create and store a new unbonding operation
-  unbondingOps[opId] = UnbondingOperation{
-    id: opId,
-    unbondingChainIds: chainIds
-  }
-  // add the unbonding operation id to vscToUnbondingOps
-  foreach chainId in chainIds {
-    vscToUnbondingOps[(chainId, vscId)].Append(opId)
-  }
+  if len(chainIds) > 0 {
+    // create and store a new unbonding operation
+    unbondingOps[opId] = UnbondingOperation{
+      id: opId,
+      unbondingChainIds: chainIds
+    }
+    // add the unbonding operation id to vscToUnbondingOps
+    foreach chainId in chainIds {
+      vscToUnbondingOps[(chainId, vscId)].Append(opId)
+    }
 
-  // ask the Staking module to wait for this operation 
-  // to reach maturity on the consumer chains
-  stakingKeeper.PutUnbondingOnHold(opId)
+    // ask the Staking module to wait for this operation 
+    // to reach maturity on the consumer chains
+    stakingKeeper.PutUnbondingOnHold(opId)
+  }
 }
 ```
 - **Caller**
@@ -1324,9 +1326,11 @@ function AfterUnbondingInitiated(opId: uint64) {
 - **Precondition**
   - True.
 - **Postcondition**
-  - An `UnbondingOperation` `op` is created and added to `unbondingOps`, such that `op.id = opId` and `op.unbondingChainIds` is the list of all consumer chains registered with this provider chain, i.e., `chainToClient.Keys()`.
-  - `opId` is appended to every list in `vscToUnbondingOps[(chainId, vscId)]`, where `chainId` is an ID of a consumer chains registered with this provider chain and `vscId` is the current VSC ID. 
-  - The `PutUnbondingOnHold(opId)` of the Staking module is invoked.
+  - `chainIds` is set to the list of all consumer chains registered with this provider chain, i.e., `chainToClient.Keys()`.
+  - If there is at least one consumer chain in `chainIds`, then 
+    - an `UnbondingOperation` `op` is created and added to `unbondingOps`, such that `op.id = opId` and `op.unbondingChainIds = chainIds`.
+    - `opId` is appended to every list in `vscToUnbondingOps[(chainId, vscId)]`, where `chainId` is an ID of a consumer chains registered with this provider chain and `vscId` is the current VSC ID. 
+    - the `PutUnbondingOnHold(opId)` of the Staking module is invoked.
 - **Error Condition**
   - None.
 
