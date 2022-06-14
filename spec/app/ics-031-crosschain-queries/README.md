@@ -92,7 +92,8 @@ A CrossChainQuery is a particular interface to represent query requests. A reque
 interface CrossChainQuery struct {
     id: Identifier
     path: CommitmentPath
-    timeoutHeight: Height
+    localTimeoutHeight: Height
+    localTimeoutTimestamp: Height
     queryHeight: Height
     clientId: Identifier
     bounty: Fee
@@ -101,7 +102,8 @@ interface CrossChainQuery struct {
 
 - The `id` field uniquely identifies the query at the Querying Chain.
 - The `path` field is the path to be queried at the Queried Chain.
-- The `timeoutHeight` field  specifies a height limit at the Querying Chain after which a query is considered to have failed and a timeout result should be returned to the original caller.
+- The `localTimeoutHeight` field specifies a height limit at the Querying Chain after which a query is considered to have failed and a timeout result should be returned to the original caller.
+- The `localTimeoutTimestamp` field specifies a timestamp limit at the Querying Chain after which a query is considered to have failed and a timeout result should be returned to the original caller.
 - The `queryHeight` field is the height at which the relayer must query the Queried Chain
 - The `clientId` field identifies the Queried Chain.
 - The `bounty` field is a bounty that is given to the relayer for participating in the query.
@@ -181,16 +183,18 @@ The `CrossChainQueryRequest` function is called when the Cross-chain Querying mo
 function CrossChainQueryRequest(
   path: CommitmentPath,
   queryHeight: Height,
-  timeoutHeight: Height,
+  localTimeoutHeight: Height,
   clientId: Identifier,
-  bounty: sdk.Coin,
+  bounty: Fee,
   ): [Identifier, CapabilityKey] {
 
     // Check that there exists a client of the Queried Chain. The client will be used to verify the query result.
     abortTransactionUnless(queryClientState(clientId) !== null)
 
-    // Check that timeoutHeight is greater than the current height, otherwise the query will always time out.
-    abortTransactionUnless(timeoutHeight > getCurrentHeight())
+    // Sanity-check that localTimeoutHeight is 0 or greater than the current height, otherwise the query will always time out.
+    abortTransactionUnless(localTimeoutHeight === 0 || localTimeoutHeight > getCurrentHeight())
+    // Sanity-check that localTimeoutTimestamp is 0 or greater than the current timestamp, otherwise the query will always time out.
+    abortTransactionUnless(localTimeoutTimestamp === 0 || localTimeoutTimestamp > currentTimestamp())
 
     // Generate a unique query identifier.
     queryIdentifier = generateQueryIdentifier()
@@ -199,7 +203,8 @@ function CrossChainQueryRequest(
     query = CrossChainQuery{queryIdentifier,
                             path,
                             queryHeight,
-                            timeoutHeight, 
+                            localTimeoutHeight,
+                            localTimeoutTimestamp, 
                             clientId,
                             bounty}
 
@@ -222,6 +227,7 @@ function CrossChainQueryRequest(
   - A `sendQuery` event is emitted.
 
 The `CrossChainQueryResult` function is called when the Cross-chain Querying module at the Querying Chain receives a new query reply.
+We pass the address of the relayer that submitted the query result to the Querying Chain to optionally provide some rewards. This provides a foundation for fee payment, but can be used for other techniques as well (like calculating a leaderboard).
 
 ```typescript
 function CrossChainQueryResult(
@@ -230,7 +236,8 @@ function CrossChainQueryResult(
   proof: CommitmentProof,
   proofHeight: Height,
   delayPeriodTime: uint64,
-  delayPeriodBlocks: uint64
+  delayPeriodBlocks: uint64,
+  relayer: string
   ) {
 
     // Retrieve query state from the local, private store using the query's identifier.
@@ -243,6 +250,12 @@ function CrossChainQueryResult(
 
     // Check that the relier executed the query at the requested height at the Queried Chain.
     abortTransactionUnless(query.queryHeight !== proofHeight)
+
+    // Check that localTimeoutHeight is 0 or greater than the current height.
+    abortTransactionUnless(query.localTimeoutHeight === 0 || query.localTimeoutHeight > getCurrentHeight())
+    // Check that localTimeoutTimestamp is 0 or greater than the current timestamp.
+    abortTransactionUnless(query.localTimeoutTimestamp === 0 || query.localTimeoutTimestamp > currentTimestamp()) 
+
 
     // Verify query result using the local light client of the Queried Chain. If success, then verify that the data is indeed the value associated with query.path at query.queryHeight at the Queried Chain. Otherwise, verify that query.path does not exist at query.queryHeight at the Queried Chain.
     if (data !== null) {    
@@ -315,16 +328,19 @@ function PruneCrossChainQueryResult(
 
 #### Timeouts
 
-Query requests have associated a `timeoutHeight` field that specifies the height limit at the Querying Chain after which a query is considered to have failed. 
+Query requests have associated a `localTimeoutHeight` and a `localTimeoutTimestamp` field that specifies the height and timestamp limit at the Querying Chain after which a query is considered to have failed. 
 
 The Querying Chain calls the `checkQueryTimeout` function to check whether a specific query has timed out. 
 
 > There are several alternatives on how to handle timeouts. For instance, the relayer could submit on-chain timeout notifications to the Querying Chain. Since the relayer is untrusted, for each of these notifications the Cross-chain Querying module of the Querying Chain MUST call the `checkQueryTimeout` to check if the query has indeed timed out. An alternative could be to make the Cross-chain Querying module responsible for checking  
 if any query has timed out by iterating over the ongoing queries at the beginning of a block and calling `checkQueryTimeout`. This is an implementation detail that this specification does not cover.
 
+We pass the relayer address just as in `CrossChainQueryResult` to allow for possible incentivization here as well.
+
 ```typescript
 function checkQueryTimeout(
-    queryId: Identifier
+    queryId: Identifier,
+    relayer: string
 ){
     // Retrieve the query state from the local, private store using the query's identifier.
     query = privateStore.get(queryPath(queryIdentifier))
@@ -333,20 +349,22 @@ function checkQueryTimeout(
     // Get the current height.
     currentHeight = getCurrentHeight()
 
-    
-    if (currentHeight > query.timeoutHeight) {
-        // Delete the query from the local, private store if it has timed out
-        privateStore.delete(queryPath(queryId))
+    // Check that localTimeoutHeight or localTimeoutTimestamp has passed on the Querying Chain (locally)
+    abortTransactionUnless(
+      (query.localTimeoutHeight > 0 && query.localTimeoutHeight < getCurrentHeight()) ||
+      (query.localTimeoutTimestamp > 0 && query.localTimeoutTimestamp < currentTimestamp()))
 
-        // Create a query result record.
-        resultRecord = CrossChainQuery{queryIdentifier,
-                                       TIMEOUT,
-                                       query.caller
-                                       null} 
+    // Delete the query from the local, private store if it has timed out
+    privateStore.delete(queryPath(queryId))
 
-        // Store the result in a public path.
-        provableStore.set(resultQueryPath(queryIdentifier), resultRecord)
-    }
+    // Create a query result record.
+    resultRecord = CrossChainQuery{queryIdentifier,
+                                   TIMEOUT,
+                                   query.caller
+                                   null} 
+
+    // Store the result in a public path.
+    provableStore.set(resultQueryPath(queryIdentifier), resultRecord)
 }
 ```
 - **Precondition**
@@ -361,6 +379,8 @@ function checkQueryTimeout(
 January 6, 2022 - First draft
 
 May 11, 2022 - Major revision
+
+June 14, 2022 - Adds pruning, localTimeoutTimestamp and adds relayer address for incentivization
 
 ## Copyright
 
