@@ -78,7 +78,7 @@ A bounty is paid to incentivize relayers for participating in interchain queries
 
 The Querying Chain MUST implement the Cross-chain Querying module, which allows the Querying Chain to query state at the Queried Chain. 
 
-Cross-chain querying relies on relayers operating between both chains. When a query request is received by the Querying Chain, the Cross-chain Querying module emits a `sendQuery` event. Relayers operating between the Querying and Queried chains must monitor the Querying chain for `sendQuery` events. Eventually, a relayer will retrieve the query request and execute it, i.e., fetch the data and generate the corresponding proofs, at the Queried Chain. The relayer then submits (on-chain) the result at the Querying Chain. The result is finally registered at the Querying Chain by the Cross-chain Querying module.
+Cross-chain querying relies on relayers operating between both chains. When a query request is received by the Querying Chain, the Cross-chain Querying module emits a `sendQuery` event. Relayers operating between the Querying and Queried chains must monitor the Querying chain for `sendQuery` events. Eventually, a relayer will retrieve the query request and execute it, i.e., fetch the data and generate the corresponding proofs, at the Queried Chain. The relayer then submits (on-chain) the result at the Querying Chain. The result is finally registered at the Querying Chain by the Cross-chain Querying module. 
 
 A query request includes the height of the Queried Chain at which the query must be executed. The reason is that the keys being queried can have different values at different heights. Thus, a malicious relayer could choose to query a height that has a value that benefits it somehow. By letting the Querying Chain decide the height at which the query is executed, we can prevent relayers from affecting the result data.
 
@@ -173,6 +173,7 @@ function generateQueryIdentifier = () -> Identifier
 2) A correct relayer listening to `sendQuery` events from the Querying Chain will eventually pick the query request up and execute it at the Queried Chain. The result is then submitted (on-chain) to the Querying Chain.
 3) When the query result is committed at the Querying Chain, this calls the `CrossChainQueryResult` function of the Cross-chain Querying module.
 4) The `CrossChainQueryResult` first retrieves the query from the `privateStore` using the query's unique identifier. It then proceeds to verify the result using its local client. If it passes the verification, the function removes the query from the `privateStore` and stores the result in a public path.
+> The Querying Chain may execute additional state machine logic when a query result is received. To account for this additional state machine logic and charge a fee to the query caller, an implementation of this specification could use the already existing `bounty` field of the `CrossChainQuery` interface or extend the interface with an additional field.
 5) The query caller can then asynchronously retrieve the query result. The function `PruneCrossChainQueryResult` allows a query caller to prune the result from the store once it retrieves it.
 
 #### Normal path methods
