@@ -311,8 +311,8 @@ function chanOpenInit(
     // optimistic channel handshakes are allowed
     // so next connection does not need to be OPEN but it does need to exist for each proposed route
     for i := 0; i < len(connectionHops); i++ {
-      route = connectionHops[i]
-      nextHopConnectionId = getNextHop(route)
+      hops = splitRoute(connectionHops[i])
+      nextHopConnectionId = hops[0]
       connection = provableStore.get(connectionPath(nextHopConnectionId))
 
       abortTransactionUnless(connection !== null)
@@ -333,6 +333,8 @@ function chanOpenInit(
 The `chanOpenTry` function is called by a module to accept the first step of a channel opening handshake initiated by a module on another chain.
 
 ```typescript
+// the connectionHops in TRY must be the same routes as the ones set in INIT in the same order
+// the connectionIDs will represent the identifiers in the other direction from the TRY chain to the ACK chain.
 function chanOpenTry(
   order: ChannelOrder,
   connectionHops: [Identifier],
@@ -340,39 +342,56 @@ function chanOpenTry(
   counterpartyPortIdentifier: Identifier,
   counterpartyChannelIdentifier: Identifier,
   version: string, // deprecated
-  counterpartyVersion: string,
-  proofInit: CommitmentProof,
-  proofHeight: Height): CapabilityKey {
+  initChannel: ChannelEnd,
+  proofInit: [CommitmentProof],
+  proofHeight: [Height]): CapabilityKey {
     channelIdentifier = generateIdentifier()
 
     abortTransactionUnless(validateChannelIdentifier(portIdentifier, channelIdentifier))
     abortTransactionUnless(authenticateCapability(portPath(portIdentifier), portCapability))
-    connection = provableStore.get(connectionPath(connectionHops[0]))
 
-    expected = ChannelEnd{INIT, order, portIdentifier,
-                          "", [connection.counterpartyConnectionIdentifier], counterpartyVersion}
+    abortTransactionUnless(initChannel.state == INIT)
+    abortTransactionUnless(initChannel.order == order)
+    abortTransactionUnless(initChannel.counterpartyPortIdentifier == portIdentifier)
     
     // handshake messages must be proven against
     // every possible route
     for i := 0; i < len(connectionHops); i++ {
-      route = connectionHops[i]
-      nextHopConnectionId = getNextHop(route)
+      hops = splitRoute(connectionHops[i])
+
+      nextHopConnectionId = getNextHop(hops[0])
       connection = provableStore.get(connectionPath(nextHopConnectionId))
 
       abortTransactionUnless(connection !== null)
       abortTransactionUnless(connection.state === OPEN)
 
-      abortTransactionUnless(connection.verifyChannelState(
-        proofHeight,
-        proofInit,
-        counterpartyPortIdentifier,
-        counterpartyChannelIdentifier,
-        expected
-      ))
+      client = queryClient(connection.clientIdentifier)
+      value = protobuf.marshal(initChannel)
+
+      if len(hops == 1) {
+        abortTransactionUnless(connection.verifyChannelState(
+          proofHeight[i],
+          proofInit[i],
+          counterpartyPortIdentifier,
+          counterpartyChannelIdentifier,
+          initChannel
+        ))
+      } else {
+        counterpartyHops = splitRoute(initChannel.connectionHops[i])
+
+        // we prove that the last hop from the initChannel for this route is the counterparty for the first hop of our route
+        abortTransactionUnless(connection.counterpartyConnectionIdentifier == counterpartyHops[len(counterpartyHops)-1])
+
+        // we then prove that the next connection in this route stored
+        // the initChannel under the full connectionHops stored on initChannel
+        path = append(initChannel.connectionHops[i], channelPath(counterpartyPortIdentifier, counterpartyChannelIdentifier))
+
+        verifyMembership(client, proofHeight[i], 0, 0, proofInit[i], path, value)
+      }
     }
     
-    channel = ChannelEnd{TRYOPEN, order, counterpartyPortIdentifier,
-                         counterpartyChannelIdentifier, connectionHops, version}
+    channel = ChannelEnd{TRYOPEN, order, initChannel.portIdentifier,
+                         initChannel.channelIdentifier, connectionHops, version}
     provableStore.set(channelPath(portIdentifier, channelIdentifier), channel)
     channelCapability = newCapability(channelCapabilityPath(portIdentifier, channelIdentifier))
 
@@ -393,33 +412,52 @@ function chanOpenAck(
   portIdentifier: Identifier,
   channelIdentifier: Identifier,
   counterpartyChannelIdentifier: Identifier,
-  counterpartyVersion: string,
-  proofTry: CommitmentProof,
-  proofHeight: Height) {
+  tryChannel: ChannelEnd,
+  proofTry: [CommitmentProof],
+  proofHeight: [Height]) {
     channel = provableStore.get(channelPath(portIdentifier, channelIdentifier))
     abortTransactionUnless(channel.state === INIT || channel.state === TRYOPEN)
     abortTransactionUnless(authenticateCapability(channelCapabilityPath(portIdentifier, channelIdentifier), capability))
    
-    expected = ChannelEnd{TRYOPEN, channel.order, portIdentifier,
-                          channelIdentifier, [connection.counterpartyConnectionIdentifier], counterpartyVersion}
+    abortTransactionUnless(tryChannel.state == TRYOPEN)
+    abortTransactionUnless(tryChannel.order == channel.order)
+    abortTransactionUnless(tryChannel.counterpartyPortIdentifier == portIdentifier)
+    abortTransactionUnless(tryChannel.counterpartyChannelIdentifier == channelIdentifier)
 
     // handshake messages must be proven against
     // every possible route
-    for i = 0; i < len(connectionHops); i++ {
-      route = connectionHops[i]
-      nextHopConnectionId = getNextHop(route)
+    for i := 0; i < len(connectionHops); i++ {
+      hops = splitRoute(connectionHops[i])
+
+      nextHopConnectionId = getNextHop(hops[0])
       connection = provableStore.get(connectionPath(nextHopConnectionId))
 
       abortTransactionUnless(connection !== null)
       abortTransactionUnless(connection.state === OPEN)
 
-      abortTransactionUnless(connection.verifyChannelState(
-        proofHeight,
-        proofTry,
-        channel.counterpartyPortIdentifier,
-        counterpartyChannelIdentifier,
-        expected
-      ))
+      client = queryClient(connection.clientIdentifier)
+      value = protobuf.marshal(tryChannel)
+
+      if len(hops == 1) {
+        abortTransactionUnless(connection.verifyChannelState(
+          proofHeight[i],
+          proofTry[i],
+          channel.counterpartyPortIdentifier,
+          channel.counterpartyChannelIdentifier,
+          tryChannel
+        ))
+      } else {
+        counterpartyHops = splitRoute(tryChannel.connectionHops[i])
+
+        // we prove that the last hop from the tryChannel for this route is the counterparty for the first hop of our route
+        abortTransactionUnless(connection.counterpartyConnectionIdentifier == counterpartyHops[len(counterpartyHops)-1])
+
+        // we then prove that the next connection in this route stored
+        // the tryChannel under the full connectionHops stored on tryChannel
+        path = append(try.connectionHops[i], channelPath(channel.counterpartyPortIdentifier, channel.counterpartyChannelIdentifier))
+
+        verifyMembership(client, proofHeight[i], 0, 0, proofTry[i], path, value)
+      }
     }
     
     channel.state = OPEN
@@ -436,33 +474,53 @@ of the handshake-originating module on the other chain and finish the channel op
 function chanOpenConfirm(
   portIdentifier: Identifier,
   channelIdentifier: Identifier,
-  proofAck: CommitmentProof,
-  proofHeight: Height) {
+  ackChannel: ChannelEnd,
+  proofAck: [CommitmentProof],
+  proofHeight: [Height]) {
     channel = provableStore.get(channelPath(portIdentifier, channelIdentifier))
     abortTransactionUnless(channel !== null)
     abortTransactionUnless(channel.state === TRYOPEN)
     abortTransactionUnless(authenticateCapability(channelCapabilityPath(portIdentifier, channelIdentifier), capability))
     
-    expected = ChannelEnd{OPEN, channel.order, portIdentifier,
-                          channelIdentifier, [connection.counterpartyConnectionIdentifier], channel.version}
+    abortTransactionUnless(ackChannel.state == OPEN)
+    abortTransactionUnless(ackChannel.order == order)
+    abortTransactionUnless(ackChannel.counterpartyPortIdentifier == portIdentifier)
+    abortTransactionUnless(ackChannel.counterpartyChannelIdentifier == channelIdentifier)
 
     // handshake messages must be proven against
     // every possible route
-    for i = 0; i < len(connectionHops); i++ {
-      route = connectionHops[i]
-      nextHopConnectionId = getNextHop(route)
+    for i := 0; i < len(connectionHops); i++ {
+      hops = splitRoute(connectionHops[i])
+
+      nextHopConnectionId = getNextHop(hops[0])
       connection = provableStore.get(connectionPath(nextHopConnectionId))
 
       abortTransactionUnless(connection !== null)
       abortTransactionUnless(connection.state === OPEN)
 
-      abortTransactionUnless(connection.verifyChannelState(
-        proofHeight,
-        proofAck,
-        channel.counterpartyPortIdentifier,
-        channel.counterpartyChannelIdentifier,
-        expected
-      ))
+      client = queryClient(connection.clientIdentifier)
+      value = protobuf.marshal(ackChannel)
+
+      if len(hops == 1) {
+        abortTransactionUnless(connection.verifyChannelState(
+          proofHeight[i],
+          proofAck[i],
+          channel.counterpartyPortIdentifier,
+          channel.counterpartyChannelIdentifier,
+          ackChannel
+        ))
+      } else {
+        counterpartyHops = splitRoute(ackChannel.connectionHops[i])
+
+        // we prove that the last hop from the tryChannel for this route is the counterparty for the first hop of our route
+        abortTransactionUnless(connection.counterpartyConnectionIdentifier == counterpartyHops[len(counterpartyHops)-1])
+
+        // we then prove that the next connection in this route stored
+        // the tryChannel under the full connectionHops stored on tryChannel
+        path = append(ackChannel.connectionHops[i], channelPath(channel.counterpartyPortIdentifier, channel.counterpartyChannelIdentifier))
+
+        verifyMembership(client, proofHeight[i], 0, 0, proofAck[i], path, value)
+      }
     }
 
     channel.state = OPEN
