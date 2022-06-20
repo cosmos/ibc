@@ -842,7 +842,7 @@ function onChanOpenConfirm(
 // PCF: Provider Chain Function
 // implements governance proposal Handler 
 function StopConsumerChainProposalHandler(p: StopConsumerChainProposal) {
-  if currentTimestamp() > p.stopTime {
+  if currentTimestamp() >= p.stopTime {
     // stop the consumer chain and do not lock the unbonding
     StopConsumerChain(p.chainId, false)
   }
