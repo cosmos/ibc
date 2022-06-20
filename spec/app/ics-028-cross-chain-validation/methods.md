@@ -919,6 +919,9 @@ function StopConsumerChain(chainId: string, lockUnbonding: Bool) {
   - `downtimeSlashRequests[chainId]` is emptied.
   - If `lockUnbonding == false`, then 
     - `chainId` is removed from all outstanding unbonding operations;
+    - if an outstanding unbonding operation has matured on all consumer chains, 
+      - the `UnbondingCanComplete()` method of the Staking module is invoked;
+      - the unbonding operation is removed from `unbondingOps`.
     - all the entries with `chainId` are removed from the `vscToUnbondingOps` mapping.
 - **Error Condition**
   - None
