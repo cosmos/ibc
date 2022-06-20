@@ -886,6 +886,13 @@ function StopConsumerChain(chainId: string, lockUnbonding: Bool) {
     // remove chainId form all outstanding unbonding operations
     foreach id IN vscToUnbondingOps[(chainId, _)] {
       unbondingOps[id].unbondingChainIds.Remove(chainId)
+      // if the unbonding operation has unbonded on all consumer chains
+      if unbondingOps[id].unbondingChainIds.IsEmpty() {
+        // notify the Staking module that the unbonding can complete
+        stakingKeeper.UnbondingCanComplete(id)
+        // remove unbonding operation
+        unbondingOps.Remove(id)
+      }
     }
     // clean up vscToUnbondingOps mapping
     vscToUnbondingOps.Remove((chainId, _))
