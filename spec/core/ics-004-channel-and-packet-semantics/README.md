@@ -633,8 +633,15 @@ function recvPacket(
       concat(packet.data, packet.timeoutHeight, packet.timeoutTimestamp)
     ))
 
+    // do sequence check before any state changes
+    if channel.order == ORDERED || channel.order == ORDERED_ALLOW_TIMEOUT {
+        nextSequenceRecv = provableStore.get(nextSequenceRecvPath(packet.destPort, packet.destChannel))
+        abortTransactionUnless(packet.sequence === nextSequenceRecv)
+    }
+
     switch channel.order {
-      case ORDERED || UNORDERED:
+      case ORDERED:
+      case UNORDERED:
         abortTransactionUnless(packet.timeoutHeight === 0 || getConsensusHeight() < packet.timeoutHeight)
         abortTransactionUnless(packet.timeoutTimestamp === 0 || currentTimestamp() < packet.timeoutTimestamp)
         break;
@@ -663,8 +670,6 @@ function recvPacket(
     switch channel.order {
       case ORDERED:
       case ORDERED_ALLOW_TIMEOUT:
-        nextSequenceRecv = provableStore.get(nextSequenceRecvPath(packet.destPort, packet.destChannel))
-        abortTransactionUnless(packet.sequence === nextSequenceRecv)
         nextSequenceRecv = nextSequenceRecv + 1
         provableStore.set(nextSequenceRecvPath(packet.destPort, packet.destChannel), nextSequenceRecv)
         break;
