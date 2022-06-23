@@ -408,6 +408,11 @@ function SpawnConsumerChainProposalHandler(p: SpawnConsumerChainProposal) {
 // PCF: Provider Chain Function
 // Utility method
 function CreateConsumerClient(p: SpawnConsumerChainProposal) {
+  // check that a client for this chain does not exist
+  if p.chainId IN chainToClient.Keys() {
+    return
+  }
+
   // create client state
   clientState = ClientState{
     chainId: p.chainId,
@@ -440,10 +445,12 @@ function CreateConsumerClient(p: SpawnConsumerChainProposal) {
 - **Precondition** 
   - `currentTimestamp() > p.spawnTime`.
 - **Postcondition** 
-  - A client state is created with `chainId = p.chainId` and `unbondingPeriod` set to `ComputeConsumerUnbondingPeriod(stakingKeeper.UnbondingTime())`.
-  - A consensus state is created with `validatorSet` set to the validator set the provider chain own consensus state at current height.
-  - A client of the consumer chain is created and the client ID is added to `chainToClient`.
-  - `lockUnbondingOnTimeout[p.chainId]` is set to `p.lockUnbondingOnTimeout`.
+  - If a client for `p.chainId` already exists, the state is not changed.
+  - Otherwise, 
+    - a client state is created with `chainId = p.chainId` and `unbondingPeriod` set to `ComputeConsumerUnbondingPeriod(stakingKeeper.UnbondingTime())`;
+    - a consensus state is created with `validatorSet` set to the validator set the provider chain own consensus state at current height;
+    - a client of the consumer chain is created and the client ID is added to `chainToClient`;
+    - `lockUnbondingOnTimeout[p.chainId]` is set to `p.lockUnbondingOnTimeout`.
 - **Error Condition**
   - None.
 
@@ -901,6 +908,11 @@ function StopConsumerChainProposalHandler(p: StopConsumerChainProposal) {
 ```typescript
 // PCF: Provider Chain Function
 function StopConsumerChain(chainId: string, lockUnbonding: Bool) {
+  // check that a client for chainId exists 
+  if chainId NOT IN chainToClient.Keys() {
+    return
+  }
+
   // cleanup state
   chainToClient.Remove(chainId)
   lockUnbondingOnTimeout.Remove(chainId)
@@ -933,18 +945,20 @@ function StopConsumerChain(chainId: string, lockUnbonding: Bool) {
 - **Precondition**
   - True.
 - **Postcondition**
-  - The client ID mapped to `chainId` in `chainToClient` is removed.
-  - The value mapped to `chainId` in `lockUnbondingOnTimeout` is removed.
-  - If the CCV channel to the consumer chain with `chainId` is established, then
-    - the chain ID mapped to `chainToChannel[chainId]` in `channelToChain` is removed;
-    - the channel closing handshake is initiated for the CCV channel;
-    - the channel ID mapped to `chainId` in `chainToChannel` is removed.
-  - All the `VSCPacketData` mapped to `chainId` in `pendingVSCPackets` are removed.
-  - The height mapped to `chainId` in `initialHeights` is removed.
-  - `downtimeSlashRequests[chainId]` is emptied.
-  - If `lockUnbonding == false`, then 
-    - `chainId` is removed from all outstanding unbonding operations;
-    - all the entries with `chainId` are removed from the `vscToUnbondingOps` mapping.
+  - If a client for `p.chainId` does not exist, the state is not changed.
+  - Otherwise,
+    - the client ID mapped to `chainId` in `chainToClient` is removed;
+    - the value mapped to `chainId` in `lockUnbondingOnTimeout` is removed;
+    - if the CCV channel to the consumer chain with `chainId` is established, then
+      - the chain ID mapped to `chainToChannel[chainId]` in `channelToChain` is removed;
+      - the channel closing handshake is initiated for the CCV channel;
+      - the channel ID mapped to `chainId` in `chainToChannel` is removed.
+    - all the `VSCPacketData` mapped to `chainId` in `pendingVSCPackets` are removed;
+    - the height mapped to `chainId` in `initialHeights` is removed;
+    - `downtimeSlashRequests[chainId]` is emptied;
+    - if `lockUnbonding == false`, then 
+      - `chainId` is removed from all outstanding unbonding operations;
+      - all the entries with `chainId` are removed from the `vscToUnbondingOps` mapping.
 - **Error Condition**
   - None
 
