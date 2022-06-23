@@ -1924,11 +1924,12 @@ function DistributeRewards() {
   // iterate over all different tokens in ccvAccount
   foreach (denomination, amount) IN ccvAccount.GetAllBalances() {
     // transfer token using ICS20
-    transferKeeper.TransferToken(
+    transferKeeper.sendFungibleTokens(
       denomination,
       amount,
       ccvAccount, // sender
       providerDistributionAccount, // receiver
+      "transfer", // transfer port
       distributionChannelId, // transfer channel ID
       zeroTimeoutHeight, // timeoutHeight
       transferTimeoutTimestamp // timeoutTimestamp
