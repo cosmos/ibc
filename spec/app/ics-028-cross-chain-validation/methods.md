@@ -9,6 +9,7 @@
 - [General Methods](#general-methods)
   - [BeginBlock and EndBlock](#beginblock-and-endblock)
   - [Packet Relay](#packet-relay)
+  - [Utility Methods](#utility-methods)
 - [Sub-protocols](#sub-protocols)
   - [Initialization](#initialization)
   - [Consumer Chain Removal](#consumer-chain-removal)
@@ -304,6 +305,35 @@ function onTimeoutPacket(packet Packet) {
 - **Error Condition**
   - None.
 
+### Utility Methods
+[&uparrow; Back to Outline](#outline)
+
+<!-- omit in toc -->
+#### **[CCV-UTIL-CCUBPER.1]**
+```typescript
+// computes the unbonding period on the consumer
+// from the unbonding period on the provider 
+function ComputeConsumerUnbondingPeriod(delta: Duration): Duration {
+  if delta > 7*24*Hour {
+    return delta - 24*Hour // one day less
+  }
+  else if delta >= 24*Hour {
+ 		return delta - Hour // one hour less
+ 	}
+  return delta
+}
+```
+- **Caller**
+  - Either `CreateConsumerClient` (see [[CCV-PCF-CRCLIENT.1]](#ccv-pcf-crclient1)) or `InitGenesis` (see [[CCV-CCF-INITG.1]](#ccv-ccf-initg1))
+- **Trigger Event**
+  - A new consumer chain is created.
+- **Precondition**
+  - None. 
+- **Postcondition**
+  - None.
+- **Error Condition**
+  - None.
+
 ## Sub-protocols
 
 ### Initialization
@@ -381,12 +411,10 @@ function CreateConsumerClient(p: SpawnConsumerChainProposal) {
   // create client state
   clientState = ClientState{
     chainId: p.chainId,
-    // get UnbondingPeriod from provider Staking module
-    // TODO governance and CCV params
-    // see https://github.com/cosmos/ibc/issues/673
-    unbondingPeriod: stakingKeeper.UnbondingTime(),
-    // the height when the client was last updated
-    latestHeight: p.initialHeight,
+    // use the unbonding period on the provider to compute 
+    // the unbonding period on the consumer
+    unbondingPeriod: ComputeConsumerUnbondingPeriod(stakingKeeper.UnbondingTime()),
+    latestHeight: p.initialHeight, // the height when the client was last updated
   }
 
   // create consensus state;
@@ -412,7 +440,7 @@ function CreateConsumerClient(p: SpawnConsumerChainProposal) {
 - **Precondition** 
   - `currentTimestamp() > p.spawnTime`.
 - **Postcondition** 
-  - A client state is created with `chainId = p.chainId` and `unbondingPeriod` set to the `UnbondingPeriod` obtained from the provider Staking module.
+  - A client state is created with `chainId = p.chainId` and `unbondingPeriod` set to `ComputeConsumerUnbondingPeriod(stakingKeeper.UnbondingTime())`.
   - A consensus state is created with `validatorSet` set to the validator set the provider chain own consensus state at current height.
   - A client of the consumer chain is created and the client ID is added to `chainToClient`.
   - `lockUnbondingOnTimeout[p.chainId]` is set to `p.lockUnbondingOnTimeout`.
@@ -640,6 +668,9 @@ function InitGenesis(gs: ConsumerGenesisState): [ValidatorUpdate] {
   // store the ID of the client of the provider chain
   providerClient = clientId
 
+  // compute (and store) the consumer unbonding period from the provider unbonding period
+  consumerUnbondingPeriod = ComputeConsumerUnbondingPeriod(gs.providerClientState.unbondingTime)
+
   // set default value for HtoVSC
   HtoVSC[getCurrentHeight()] = 0
 
@@ -664,6 +695,7 @@ function InitGenesis(gs: ConsumerGenesisState): [ValidatorUpdate] {
 - **Postcondition**
   - The capability for the port `ConsumerPortId` is claimed.
   - A client of the provider chain is created and the client ID is stored into `providerClient`.
+  - `consumerUnbondingPeriod` is set to `ComputeConsumerUnbondingPeriod(gs.providerClientState.unbondingTime)`.
   - `HtoVSC` for the current block is set to `0`.
   - The `validatorSet` mapping is populated with the initial validator set.
   - The initial validator set is returned to the consensus engine.
@@ -916,7 +948,7 @@ function StopConsumerChain(chainId: string, lockUnbonding: Bool) {
 - **Error Condition**
   - None
 
-> **Note**: Invoking `StopConsumerChain(chainId, lockUnbonding)` with `lockUnbonding == FALSE` entails that all outstanding unbonding operations can complete before the `UnbondingPeriod` elapses on the consumer chain with `chainId`. 
+> **Note**: Invoking `StopConsumerChain(chainId, lockUnbonding)` with `lockUnbonding == FALSE` entails that all outstanding unbonding operations can complete before `consumerUnbondingPeriod` elapses on the consumer chain with `chainId`. 
 > Thus, invoking `StopConsumerChain(chainId, false)` for any `chainId` MAY violate the *Bond-Based Consumer Voting Power* and *Slashable Consumer Misbehavior* properties (see the [System Properties](./system_model_and_properties.md#system-properties) section). 
 > 
 > `StopConsumerChain(chainId, false)` is invoked in two scenarios (see Trigger Event above).
@@ -1364,9 +1396,7 @@ function onRecvVSCPacket(packet: Packet): bytes {
   pendingChanges.Append(packet.data.updates)
 
   // calculate and store the maturity timestamp for the VSC
-  // TODO governance and CCV params (UnbondingPeriod)
-  // see https://github.com/cosmos/ibc/issues/673
-  maturityTimestamp = currentTimestamp().Add(UnbondingPeriod)
+  maturityTimestamp = currentTimestamp().Add(consumerUnbondingPeriod)
   maturingVSCs.Add(packet.data.id, maturityTimestamp)
 
   // reset outstandingDowntime for validators in packet.data.downtimeSlashAcks
@@ -1393,7 +1423,7 @@ function onRecvVSCPacket(packet: Packet): bytes {
       - the CCV channel is marked as established, i.e., `providerChannel = packet.getDestinationChannel()`;
       - the pending slash requests are sent to the provider chain (see [CCV-CCF-SNDPESLASH.1](#ccv-ccf-sndpeslash1));
     - `packet.data.updates` are appended to `pendingChanges`;
-    - `(packet.data.id, maturityTimestamp)` is added to `maturingVSCs`, where `maturityTimestamp = currentTimestamp() + UnbondingPeriod`;
+    - `(packet.data.id, maturityTimestamp)` is added to `maturingVSCs`, where `maturityTimestamp = currentTimestamp() + consumerUnbondingPeriod`;
     - for each `valAddr` in the slash acknowledgments received from the provider chain, `outstandingDowntime[valAddr]` is set to false;
     - a successful acknowledgement is returned.
 - **Error Condition**
