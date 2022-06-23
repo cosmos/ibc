@@ -16,7 +16,15 @@ This specification document describes an interface to a client (verification alg
 
 ### Motivation
 
-Wasm based light clients are decoupled from SDK source code, which enables one to upgrade existing light client or add support for other blockchain without modifying SDK source code.
+Currently adding a new client implementation or upgrading an existing one requires a hard upgrade because the client implementations are part of the static chain binary. Any change to the on-chain light client code is dependent on chain governance to approve an upgrade before it can be deployed.
+
+This may be acceptable when adding new client types, since the number of unique consensus algorithms that need to be supported is currently small. However, this process will become very tedious when it comes to upgrading light clients.
+
+Without dynamically upgradable light clients, a chain that wishes to upgrade its consensus algorithm (and thus break existing light clients) must wait for all counterparty chains to perform a hard upgrade that adds support for the upgraded light client before it itself can perform an upgrade on its chain. Examples of a consensus-breaking upgrade would be an upgrade from Tendermint v1 to a light-client breaking Tendermint v2 or switching from Tendermint consensus to Honeybadger. Changes to the internal state-machine logic will not affect consensus, e.g. changes to staking module do not require an IBC upgrade.
+
+Requiring all counterparties to statically add new client implementations to their binaries will inevitably slow the pace of upgrades in the IBC network, since the deployment of an upgrade on even a very experimental, fast-moving chain will be blocked by an upgrade to a high-value chain that will be inherently more conservative.
+
+Once the IBC network broadly adopts dynamically upgradable clients, a chain may upgrade its consensus algorithm whenever it wishes and relayers may upgrade the client code of all counterparty chains without requiring the counterparty chains to perform an upgrade themselves. This prevents a dependency on counterparty chains when considering upgrading one's own consensus algorithm.
 
 ### Definitions
 
@@ -49,7 +57,6 @@ interface ClientState {
   codeId: []byte
   data: []byte
   latestHeight: Height
-  proofSpecs: []ProofSpec
 }
 ```
 
@@ -309,25 +316,25 @@ Every Wasm client code need to support ingestion of below messages in order to b
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
 #[serde(rename_all = "snake_case")]
 pub struct MisbehaviourMessage {
-    pub client_state: Vec<byte>,
-    pub consensus_state: Vec<byte>,
+    pub client_state: Vec<u8>,
+    pub consensus_state: Vec<u8>,
     pub height: Height,
-    pub header1: Vec<byte>,
-    pub header2: Vec<byte>,
+    pub header1: Vec<u8>,
+    pub header2: Vec<u8>,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
 #[serde(rename_all = "snake_case")]
 pub struct CreateConsensusMessage {
-    pub client_state: Vec<byte>,
+    pub client_state: Vec<u8>,
     pub height: Height
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
 #[serde(rename_all = "snake_case")]
 pub struct InitializeClientStateMessage {
-    pub initialization_data: Vec<byte>,
-    pub consensus_state: Vec<byte>
+    pub initialization_data: Vec<u8>,
+    pub consensus_state: Vec<u8>
 }
 
 
@@ -342,23 +349,23 @@ pub enum HandleMsg {
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
 #[serde(rename_all = "snake_case")]
 pub struct ValidateClientStateMessage {
-    client_state: Vec<byte>,
+    client_state: Vec<u8>,
     height: Height
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
 #[serde(rename_all = "snake_case")]
 pub struct ValidateNewClientStateMessage {
-    client_state: Vec<byte>,
-    new_client_state: Vec<byte>,
+    client_state: Vec<u8>,
+    new_client_state: Vec<u8>,
     height: Height
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
 #[serde(rename_all = "snake_case")]
 pub struct ValidateInitializationDataMessage {
-    init_data: Vec<byte>,
-    consensus_state: Vec<byte>
+    init_data: Vec<u8>,
+    consensus_state: Vec<u8>
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
@@ -373,8 +380,7 @@ pub enum ValidityPredicate {
 #[serde(rename_all = "snake_case")]
 pub enum QueryMsg {
    IsValid(ValidityPredicate),
-   LatestClientHeight(Vec<byte>),
-   ProofSpec(Vec<byte>)
+   LatestClientHeight(Vec<u8>),
 }
 
 ```

@@ -8,21 +8,7 @@ This repository is the canonical location for development and documentation of t
 
 It shall be used to consolidate design rationale, protocol semantics, and encoding descriptions for IBC, including both the core transport, authentication, & ordering layer (IBC/TAO) and the application layers describing packet encoding & processing semantics (IBC/APP).
 
-Contributions are welcome.
-
-## Standardisation
-
-Please see [ICS 1](spec/ics-001-ics-standard/README.md) for a description of what a standard entails.
-
-To propose a new standard, [open an issue](https://github.com/cosmos/ics/issues/new).
-
-To start a new standardisation document, copy the [template](spec/ics-template.md) and open a PR.
-
-See [PROCESS.md](meta/PROCESS.md) for a description of the standardisation process.
-
-See [STANDARDS_COMMITTEE.md](meta/STANDARDS_COMMITTEE.md) for the membership of the core standardisation committee.
-
-See [CONTRIBUTING.md](meta/CONTRIBUTING.md) for contribution guidelines.
+Contributions are welcome. See [CONTRIBUTING.md](meta/CONTRIBUTING.md) for contribution guidelines.
 
 See [ROADMAP.md](meta/ROADMAP.md) for a public up-to-date version of our roadmap.
 
@@ -55,6 +41,7 @@ All standards at or past the "Draft" stage are listed here in order of their ICS
 | --------------------------------------------------------------- | -------------------------- | ----- |
 | [6](spec/client/ics-006-solo-machine-client/README.md)          | Solo Machine Client        | Candidate |
 | [7](spec/client/ics-007-tendermint-client/README.md)            | Tendermint Client          | Candidate |
+| [8](spec/client/ics-008-wasm-client/README.md)                  | Wasm Client                | Draft |
 | [9](spec/client/ics-009-loopback-client/README.md)              | Loopback Client            | Candidate |
 | [10](spec/client/ics-010-grandpa-client/README.md)              | GRANDPA Client             | Draft |
 

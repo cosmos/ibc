@@ -38,14 +38,14 @@ Only one packet data type is required: `FungibleTokenPacketData`, which specifie
 
 ```typescript
 interface FungibleTokenPacketData {
-  denomination: string
+  denom: string
   amount: uint256
   sender: string
   receiver: string
 }
 ```
 
-As tokens are sent across chains using the ICS 20 protocol, they begin to accrue a record of channels for which they have been transferred across. This information is encoded into the `denomination` field. 
+As tokens are sent across chains using the ICS 20 protocol, they begin to accrue a record of channels for which they have been transferred across. This information is encoded into the `denom` field. 
 
 The ics20 token denominations are represented the form `{ics20Port}/{ics20Channel}/{denom}`, where `ics20Port` and `ics20Channel` are an ics20 port and channel on the current chain for which the funds exist. The prefixed port and channel pair indicate which channel the funds were previously sent through. If `{denom}` contains `/`, then it must also be in the ics20 form which indicates that this token has a multi-hop record. Note that this requires that the `/` (slash character) is prohibited in non-IBC token denomination names.
 
@@ -58,7 +58,7 @@ type FungibleTokenPacketAcknowledgement = FungibleTokenPacketSuccess | FungibleT
 
 interface FungibleTokenPacketSuccess {
   // This is binary 0x01 base64 encoded
-  success: "AQ=="
+  result: "AQ=="
 }
 
 interface FungibleTokenPacketError {
@@ -159,10 +159,11 @@ function onChanOpenTry(
 function onChanOpenAck(
   portIdentifier: Identifier,
   channelIdentifier: Identifier,
-  version: string) {
+  counterpartyChannelIdentifier: Identifier,
+  counterpartyVersion: string) {
   // port has already been validated
-  // assert that version is "ics20-1"
-  abortTransactionUnless(version === "ics20-1")
+  // assert that counterparty selected version is "ics20-1"
+  abortTransactionUnless(counterpartyVersion === "ics20-1")
 }
 ```
 
@@ -178,7 +179,8 @@ function onChanOpenConfirm(
 function onChanCloseInit(
   portIdentifier: Identifier,
   channelIdentifier: Identifier) {
-  // no action necessary
+    // always abort transaction
+    abortTransactionUnless(FALSE)
 }
 ```
 
@@ -201,35 +203,43 @@ In plain English, between chains `A` and `B`:
   an acknowledgement of failure is preferable to aborting the transaction since it more easily enables the sending chain
   to take appropriate action based on the nature of the failure.
 
-`createOutgoingPacket` must be called by a transaction handler in the module which performs appropriate signature checks, specific to the account owner on the host state machine.
+`sendFungibleTokens` must be called by a transaction handler in the module which performs appropriate signature checks, specific to the account owner on the host state machine.
 
 ```typescript
-function createOutgoingPacket(
+function sendFungibleTokens(
   denomination: string,
   amount: uint256,
   sender: string,
   receiver: string,
-  source: boolean,
-  destPort: string,
-  destChannel: string,
   sourcePort: string,
   sourceChannel: string,
   timeoutHeight: Height,
   timeoutTimestamp: uint64) {
-  prefix = "{sourcePort}/{sourceChannel}/"
-  // we are the source if the denomination is not prefixed
-  source = denomination.slice(0, len(prefix)) !== prefix
-  if source {
-    // determine escrow account
-    escrowAccount = channelEscrowAddresses[sourceChannel]
-    // escrow source tokens (assumed to fail if balance insufficient)
-    bank.TransferCoins(sender, escrowAccount, denomination, amount)
-  } else {
-    // receiver is source chain, burn vouchers
-    bank.BurnCoins(sender, denomination, amount)
-  }
-  FungibleTokenPacketData data = FungibleTokenPacketData{denomination, amount, sender, receiver}
-  handler.sendPacket(Packet{timeoutHeight, timeoutTimestamp, destPort, destChannel, sourcePort, sourceChannel, data}, getCapability("port"))
+    prefix = "{sourcePort}/{sourceChannel}/"
+    // we are the source if the denomination is not prefixed
+    source = denomination.slice(0, len(prefix)) !== prefix
+    if source {
+      // determine escrow account
+      escrowAccount = channelEscrowAddresses[sourceChannel]
+      // escrow source tokens (assumed to fail if balance insufficient)
+      bank.TransferCoins(sender, escrowAccount, denomination, amount)
+    } else {
+      // receiver is source chain, burn vouchers
+      bank.BurnCoins(sender, denomination, amount)
+    }
+
+    // create FungibleTokenPacket data
+    data = FungibleTokenPacketData{denomination, amount, sender, receiver}
+
+    // send packet using the interface defined in ICS4
+    handler.sendPacket(
+      getCapability("port"),
+      sourcePort,
+      sourceChannel,
+      timeoutHeight,
+      timeoutTimestamp,
+      data
+    )
 }
 ```
 
@@ -242,18 +252,18 @@ function onRecvPacket(packet: Packet) {
   FungibleTokenPacketAcknowledgement ack = FungibleTokenPacketAcknowledgement{true, null}
   prefix = "{packet.sourcePort}/{packet.sourceChannel}/"
   // we are the source if the packets were prefixed by the sending chain
-  source = data.denomination.slice(0, len(prefix)) === prefix
+  source = data.denom.slice(0, len(prefix)) === prefix
   if source {
     // receiver is source chain: unescrow tokens
     // determine escrow account
     escrowAccount = channelEscrowAddresses[packet.destChannel]
     // unescrow tokens to receiver (assumed to fail if balance insufficient)
-    err = bank.TransferCoins(escrowAccount, data.receiver, data.denomination.slice(len(prefix)), data.amount)
+    err = bank.TransferCoins(escrowAccount, data.receiver, data.denom.slice(len(prefix)), data.amount)
     if (err !== nil)
       ack = FungibleTokenPacketAcknowledgement{false, "transfer coins failed"}
   } else {
     prefix = "{packet.destPort}/{packet.destChannel}/"
-    prefixedDenomination = prefix + data.denomination
+    prefixedDenomination = prefix + data.denom
     // sender was source, mint vouchers to receiver (assumed to fail if balance insufficient)
     err = bank.MintCoins(data.receiver, prefixedDenomination, data.amount)
     if (err !== nil)
@@ -291,14 +301,14 @@ function refundTokens(packet: Packet) {
   FungibleTokenPacketData data = packet.data
   prefix = "{packet.sourcePort}/{packet.sourceChannel}/"
   // we are the source if the denomination is not prefixed
-  source = denomination.slice(0, len(prefix)) !== prefix
+  source = data.denom.slice(0, len(prefix)) !== prefix
   if source {
     // sender was source chain, unescrow tokens back to sender
     escrowAccount = channelEscrowAddresses[packet.srcChannel]
-    bank.TransferCoins(escrowAccount, data.sender, data.denomination, data.amount)
+    bank.TransferCoins(escrowAccount, data.sender, data.denom, data.amount)
   } else {
     // receiver was source chain, mint vouchers back to sender
-    bank.MintCoins(data.sender, denomination, data.amount)
+    bank.MintCoins(data.sender, data.denom, data.amount)
   }
 }
 ```

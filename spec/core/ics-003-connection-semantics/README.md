@@ -174,10 +174,10 @@ function verifyPacketData(
   proof: CommitmentProof,
   portIdentifier: Identifier,
   channelIdentifier: Identifier,
-  sequence: Height,
+  sequence: uint64,
   data: bytes) {
     client = queryClient(connection.clientIdentifier)
-    return client.verifyPacketData(connection, height, connection.delayPeriodTime, connection.delayPeriodBlocks, connection.counterpartyPrefix, proof, portIdentifier, channelIdentifier, data)
+    return client.verifyPacketData(connection, height, connection.delayPeriodTime, connection.delayPeriodBlocks, connection.counterpartyPrefix, proof, portIdentifier, channelIdentifier, sequence, data)
 }
 
 function verifyPacketAcknowledgement(
@@ -189,7 +189,7 @@ function verifyPacketAcknowledgement(
   sequence: uint64,
   acknowledgement: bytes) {
     client = queryClient(connection.clientIdentifier)
-    return client.verifyPacketAcknowledgement(connection, height, connection.delayPeriodTime, connection.delayPeriodBlocks, connection.counterpartyPrefix, proof, portIdentifier, channelIdentifier, acknowledgement)
+    return client.verifyPacketAcknowledgement(connection, height, connection.delayPeriodTime, connection.delayPeriodBlocks, connection.counterpartyPrefix, proof, portIdentifier, channelIdentifier, sequence, acknowledgement)
 }
 
 function verifyPacketReceiptAbsence(
@@ -200,7 +200,20 @@ function verifyPacketReceiptAbsence(
   channelIdentifier: Identifier,
   sequence: uint64) {
     client = queryClient(connection.clientIdentifier)
-    return client.verifyPacketReceiptAbsence(connection, height, connection.delayPeriodTime, connection.delayPeriodBlocks, connection.counterpartyPrefix, proof, portIdentifier, channelIdentifier)
+    return client.verifyPacketReceiptAbsence(connection, height, connection.delayPeriodTime, connection.delayPeriodBlocks, connection.counterpartyPrefix, proof, portIdentifier, channelIdentifier, sequence)
+}
+
+// OPTIONAL: verifyPacketReceipt is only required to support new channel types beyond ORDERED and UNORDERED.
+function verifyPacketReceipt(
+  connection: ConnectionEnd,
+  height: Height,
+  proof: CommitmentProof,
+  portIdentifier: Identifier,
+  channelIdentifier: Identifier,
+  sequence: uint64,
+  receipt: bytes) {
+    client = queryClient(connection.clientIdentifier)
+    return client.verifyPacketReceipt(connection, height, connection.delayPeriodTime, connection.delayPeriodBlocks, connection.counterpartyPrefix, proof, portIdentifier, channelIdentifier, sequence, receipt)
 }
 
 function verifyNextSequenceRecv(
@@ -209,9 +222,10 @@ function verifyNextSequenceRecv(
   proof: CommitmentProof,
   portIdentifier: Identifier,
   channelIdentifier: Identifier,
+  sequence: uint64,
   nextSequenceRecv: uint64) {
     client = queryClient(connection.clientIdentifier)
-    return client.verifyNextSequenceRecv(connection, height, connection.delayPeriodTime, connection.delayPeriodBlocks, connection.counterpartyPrefix, proof, portIdentifier, channelIdentifier, nextSequenceRecv)
+    return client.verifyNextSequenceRecv(connection, height, connection.delayPeriodTime, connection.delayPeriodBlocks, connection.counterpartyPrefix, proof, portIdentifier, channelIdentifier, sequence, nextSequenceRecv)
 }
 
 function getTimestampAtHeight(
