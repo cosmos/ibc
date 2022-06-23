@@ -20,11 +20,14 @@ IBC standardisation will follow an adaptation of the [TC 39](https://tc39.github
 - _**Entrance Criteria**_:
   * Prose outlining the problem or need and the general shape of a solution in a PR to a `./spec/{area}/ics-{{ .Spec.Number }}-{{ .Spec.Name }}/README.md` file in this repository.
     This file should contain:
-    1. List of expected projects & users within the Cosmos ecosystem who might make use of the specification along with any particular requirements they have
-    1. Discussion of key algorithms, abstractions, and semantics
-    1. High-level application interface outline, where applicable
-    1. Identification of potential design trade-offs and implementation challenges/complexity
-    See [ICS 1](../spec/ics-001-ics-standard) for a more detailed description of standard requirements.
+    - List of expected projects & users within the Cosmos ecosystem who might make use of the specification along with any particular requirements they have
+    - Discussion of key algorithms, abstractions, and semantics
+    - High-level application interface outline, where applicable
+    - Identification of potential design trade-offs and implementation challenges/complexity
+    
+    For a more detailed description of standard requirements, see [ICS 1](../spec/ics-001-ics-standard).
+  
+    For more details on submitting a PR, take a look at the [Pull Requests](./CONTRIBUTING.md#pull-requests) section in the contribution guidelines.
   * Identified `author(s)` who will advance the proposal in the header of the standard file
   * Any additional reference documentation or media in the `./spec/ics-{{ .Spec.Number }}-{{ .Spec.Name }}` directory
   * The specification team expects that this proposal will be finalised and eventually included in the IBC standard set.
