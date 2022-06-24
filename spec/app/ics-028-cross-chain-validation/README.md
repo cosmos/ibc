@@ -4,9 +4,9 @@ title: Cross-Chain Validation
 stage: draft
 category: IBC/APP
 requires: 25, 26, 20
-author: 
-created: 
-modified: 
+author: Marius Poke <marius@informal.systems>, Aditya Sripal <aditya@interchain.io>, Jovan Komatovic <jovan.komatovic@epfl.ch>, Cezara Dragoi <cezara.dragoi@inria.fr>, Josef Widder <josef@informal.systems>
+created: 2022-06-24
+modified: 2022-06-24
 ---
 
 <!-- omit in toc -->
@@ -35,10 +35,14 @@ The communication between the provider and the consumer chains is done through t
 
 ## Forwards Compatibility
 
+-->
+
 ## Example Implementation
 
-(link to or description of concrete example implementation)
+Interchain Security [Go implementation](https://github.com/cosmos/interchain-security).
 
+
+<!--
 ## Other Implementations
 
 (links to or descriptions of other implementations)
@@ -46,7 +50,7 @@ The communication between the provider and the consumer chains is done through t
 ## History
 
 (changelog and notable inspirations / references)
- -->
+-->
 
 ## Copyright
 
