@@ -785,6 +785,8 @@ In the case of an unordered channel, `timeoutPacket` checks the absence of the r
 
 If relations are enforced between timeout heights of subsequent packets, safe bulk timeouts of all packets prior to a timed-out packet can be performed. This specification omits details for now.
 
+Since we allow optimistic sending of packets (i.e. sending a packet before a channel opens), we must also allow optimistic timing out of packets. With optimistic sends, the packet may be sent on a channel that eventually opens or a channel that will never open. If the channel does open after the packet has timed out, then the packet will never be received on the counterparty so we can safely timeout optimistically. If the channel never opens, then we MUST timeout optimistically so that any state changes made during the optimistic send by the application can be safely reverted.
+
 We pass the `relayer` address just as in [Receiving packets](#receiving-packets) to allow for possible incentivization here as well.
 
 ```typescript
@@ -797,7 +799,6 @@ function timeoutPacket(
 
     channel = provableStore.get(channelPath(packet.sourcePort, packet.sourceChannel))
     abortTransactionUnless(channel !== null)
-    abortTransactionUnless(channel.state === OPEN)
 
     abortTransactionUnless(authenticateCapability(channelCapabilityPath(packet.sourcePort, packet.sourceChannel), capability))
     abortTransactionUnless(packet.destChannel === channel.counterpartyChannelIdentifier)
