@@ -26,6 +26,24 @@ function routeInfoPath(connectionId: Identifier, route: Identifier, portIdentifi
 }
 ```
 
+### Data Structures
+
+In order to implement the Router specification for ICS-4, the chain must store the following `routeInfo` data under the `routeInfoPath`
+
+```typescript
+interface RouteInfo {
+    // this is a list of the continued routes from the current chain to the destination chain
+    // since there may be multiple routes for a given channel that includes the same chain,
+    // this may be a list of Identifiers.
+    // Each Identifier is a route (ie a joined list of connection identifiers by `/`)
+    destHops: [Identifier],
+    // the provingConnectionIdentifier is the connection Identifier that exists on the executing chain
+    // It must be used to prove any information coming from the sourceHops (stored in the RouteInfo path)
+    // The provingConnectionIdentifier must be the counterparty identifier of the last hop on the sourceHops
+    provingConnectionIdentifier: Identifier,
+}
+```
+
 ### Channel Handshake
 
 ```typescript
