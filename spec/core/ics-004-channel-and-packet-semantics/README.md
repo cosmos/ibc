@@ -20,7 +20,9 @@ Channels are payload-agnostic. The modules which send and receive IBC packets de
 
 The interblockchain communication protocol uses a cross-chain message passing model. IBC *packets* are relayed from one blockchain to the other by external relayer processes. Chain `A` and chain `B` confirm new blocks independently, and packets from one chain to the other may be delayed, censored, or re-ordered arbitrarily. Packets are visible to relayers and can be read from a blockchain by any relayer process and submitted to any other blockchain.
 
-> The IBC protocol must provide ordering (for ordered channels) and exactly-once delivery guarantees to allow applications to reason about the combined state of connected modules on two chains. For example, an application may wish to allow a single tokenized asset to be transferred between and held on multiple blockchains while preserving fungibility and conservation of supply. The application can mint asset vouchers on chain `B` when a particular IBC packet is committed to chain `B`, and require outgoing sends of that packet on chain `A` to escrow an equal amount of the asset on chain `A` until the vouchers are later redeemed back to chain `A` with an IBC packet in the reverse direction. This ordering guarantee along with correct application logic can ensure that total supply is preserved across both chains and that any vouchers minted on chain `B` can later be redeemed back to chain `A`.
+The IBC protocol must provide ordering (for ordered channels) and exactly-once delivery guarantees to allow applications to reason about the combined state of connected modules on two chains. 
+
+> **Example**: An application may wish to allow a single tokenized asset to be transferred between and held on multiple blockchains while preserving fungibility and conservation of supply. The application can mint asset vouchers on chain `B` when a particular IBC packet is committed to chain `B`, and require outgoing sends of that packet on chain `A` to escrow an equal amount of the asset on chain `A` until the vouchers are later redeemed back to chain `A` with an IBC packet in the reverse direction. This ordering guarantee along with correct application logic can ensure that total supply is preserved across both chains and that any vouchers minted on chain `B` can later be redeemed back to chain `A`.
 
 In order to provide the desired ordering, exactly-once delivery, and module permissioning semantics to the application layer, the interblockchain communication protocol must implement an abstraction to enforce these semantics — channels are this abstraction.
 
@@ -80,7 +82,7 @@ interface ChannelEnd {
 - The `nextSequenceRecv`, stored separately, tracks the sequence number for the next packet to be received.
 - The `nextSequenceAck`, stored separately, tracks the sequence number for the next packet to be acknowledged.
 - The `connectionHops` stores the list of connection identifiers, in order, along which packets sent on this channel will travel. At the moment this list must be of length 1. In the future multi-hop channels may be supported.
-- The `version` string stores an opaque channel version, which is agreed upon during the handshake. This can determine module-level configuration such as which packet encoding is used for the channel. This version is not used by the core IBC protocol.
+- The `version` string stores an opaque channel version, which is agreed upon during the handshake. This can determine module-level configuration such as which packet encoding is used for the channel. This version is not used by the core IBC protocol. If the version string contains structured metadata for the application to parse and interpret, then it is considered best practice to encode all metadata in a JSON struct and include the marshalled string in the version field.
 
 Channel ends have a *state*:
 
@@ -201,7 +203,7 @@ Constant-size commitments to packet data fields are stored under the packet sequ
 
 ```typescript
 function packetCommitmentPath(portIdentifier: Identifier, channelIdentifier: Identifier, sequence: uint64): Path {
-    return "commitments/ports/{portIdentifier}/channels/{channelIdentifier}/packets/" + sequence
+    return "commitments/ports/{portIdentifier}/channels/{channelIdentifier}/packets/{sequence}"
 }
 ```
 
@@ -211,7 +213,7 @@ Packet receipt data are stored under the `packetReceiptPath`
 
 ```typescript
 function packetReceiptPath(portIdentifier: Identifier, channelIdentifier: Identifier, sequence: uint64): Path {
-    return "receipts/ports/{portIdentifier}/channels/{channelIdentifier}/receipts/" + sequence
+    return "receipts/ports/{portIdentifier}/channels/{channelIdentifier}/receipts/{sequence}"
 }
 ```
 
@@ -219,7 +221,7 @@ Packet acknowledgement data are stored under the `packetAcknowledgementPath`:
 
 ```typescript
 function packetAcknowledgementPath(portIdentifier: Identifier, channelIdentifier: Identifier, sequence: uint64): Path {
-    return "acks/ports/{portIdentifier}/channels/{channelIdentifier}/acknowledgements/" + sequence
+    return "acks/ports/{portIdentifier}/channels/{channelIdentifier}/sequences/{sequence}"
 }
 ```
 
@@ -315,30 +317,15 @@ function chanOpenTry(
   order: ChannelOrder,
   connectionHops: [Identifier],
   portIdentifier: Identifier,
-  previousIdentifier: Identifier,
   counterpartyChosenChannelIdentifer: Identifier,
   counterpartyPortIdentifier: Identifier,
   counterpartyChannelIdentifier: Identifier,
-  version: string,
+  version: string, // deprecated
   counterpartyVersion: string,
   proofInit: CommitmentProof,
   proofHeight: Height): CapabilityKey {
-    if (previousIdentifier !== "") {
-      previous = provableStore.get(channelPath(portIdentifier, channelIdentifier))
-      abortTransactionUnless(
-        (previous !== null) &&
-        (previous.state === INIT &&
-         previous.order === order &&
-         previous.counterpartyPortIdentifier === counterpartyPortIdentifier &&
-         previous.counterpartyChannelIdentifier === "" &&
-         previous.connectionHops === connectionHops &&
-         previous.version === version)
-        )
-      channelIdentifier = previousIdentifier
-    } else {
-      // generate a new identifier if the provided identifier was the sentinel empty-string
-      channelIdentifier = generateIdentifier()
-    }
+    channelIdentifier = generateIdentifier()
+
     abortTransactionUnless(validateChannelIdentifier(portIdentifier, channelIdentifier))
     abortTransactionUnless(connectionHops.length === 1) // for v1 of the IBC protocol
     abortTransactionUnless(authenticateCapability(portPath(portIdentifier), portCapability))
@@ -358,12 +345,12 @@ function chanOpenTry(
                          counterpartyChannelIdentifier, connectionHops, version}
     provableStore.set(channelPath(portIdentifier, channelIdentifier), channel)
     channelCapability = newCapability(channelCapabilityPath(portIdentifier, channelIdentifier))
-    // only reset sequences if the previous channel didn't exist, else we might overwrite optimistically-sent packets
-    if (previous === null) {
-      provableStore.set(nextSequenceSendPath(portIdentifier, channelIdentifier), 1)
-      provableStore.set(nextSequenceRecvPath(portIdentifier, channelIdentifier), 1)
-      provableStore.set(nextSequenceAckPath(portIdentifier, channelIdentifier), 1)
-    }
+
+    // initialize channel sequences
+    provableStore.set(nextSequenceSendPath(portIdentifier, channelIdentifier), 1)
+    provableStore.set(nextSequenceRecvPath(portIdentifier, channelIdentifier), 1)
+    provableStore.set(nextSequenceAckPath(portIdentifier, channelIdentifier), 1)
+
     return channelCapability
 }
 ```
@@ -375,8 +362,8 @@ counterparty module on the other chain.
 function chanOpenAck(
   portIdentifier: Identifier,
   channelIdentifier: Identifier,
+  counterpartyChannelIdentifier: Identifier,
   counterpartyVersion: string,
-  counterpartyChannelIdentifier: string,
   proofTry: CommitmentProof,
   proofHeight: Height) {
     channel = provableStore.get(channelPath(portIdentifier, channelIdentifier))
@@ -526,15 +513,14 @@ Represented spatially, packet transit between two machines can be rendered as fo
 
 ##### Sending packets
 
-The `sendPacket` function is called by a module in order to send an IBC packet on a channel end owned by the calling module to the corresponding module on the counterparty chain.
+The `sendPacket` function is called by a module in order to send *data* (in the form of an IBC packet) on a channel end owned by the calling module.
 
 Calling modules MUST execute application logic atomically in conjunction with calling `sendPacket`.
 
 The IBC handler performs the following steps in order:
 
 - Checks that the channel & connection are open to send packets
-- Checks that the calling module owns the sending port
-- Checks that the packet metadata matches the channel & connection information
+- Checks that the calling module owns the sending port (see [ICS 5](../ics-005-port-allocation))
 - Checks that the timeout height specified has not already passed on the destination chain
 - Increments the send sequence counter associated with the channel
 - Stores a constant-size commitment to the packet data & packet timeout
@@ -542,35 +528,41 @@ The IBC handler performs the following steps in order:
 Note that the full packet is not stored in the state of the chain - merely a short hash-commitment to the data & timeout value. The packet data can be calculated from the transaction execution and possibly returned as log output which relayers can index.
 
 ```typescript
-function sendPacket(packet: Packet) {
-    channel = provableStore.get(channelPath(packet.sourcePort, packet.sourceChannel))
+function sendPacket(
+  capability: CapabilityKey,
+  sourcePort: Identifier,
+  sourceChannel: Identifier,
+  timeoutHeight: Height,
+  timeoutTimestamp: uint64,
+  data: bytes) {
+    channel = provableStore.get(channelPath(sourcePort, sourceChannel))
 
-    // optimistic sends are permitted once the handshake has started
+    // check that the channel & connection are open to send packets; 
+    // note: optimistic sends are permitted once the handshake has started
     abortTransactionUnless(channel !== null)
     abortTransactionUnless(channel.state !== CLOSED)
-    abortTransactionUnless(authenticateCapability(channelCapabilityPath(packet.sourcePort, packet.sourceChannel), capability))
-    abortTransactionUnless(packet.destPort === channel.counterpartyPortIdentifier)
-    abortTransactionUnless(packet.destChannel === channel.counterpartyChannelIdentifier)
     connection = provableStore.get(connectionPath(channel.connectionHops[0]))
-
     abortTransactionUnless(connection !== null)
 
-    // sanity-check that the timeout height hasn't already passed in our local client tracking the receiving chain
+    // check if the calling module owns the sending port
+    abortTransactionUnless(authenticateCapability(channelCapabilityPath(sourcePort, sourceChannel), capability))
+    
+    // check that the timeout height hasn't already passed in the local client tracking the receiving chain
     latestClientHeight = provableStore.get(clientPath(connection.clientIdentifier)).latestClientHeight()
     abortTransactionUnless(packet.timeoutHeight === 0 || latestClientHeight < packet.timeoutHeight)
 
-    nextSequenceSend = provableStore.get(nextSequenceSendPath(packet.sourcePort, packet.sourceChannel))
-    abortTransactionUnless(packet.sequence === nextSequenceSend)
+    // increment the send sequence counter
+    sequence = provableStore.get(nextSequenceSendPath(packet.sourcePort, packet.sourceChannel))
+    provableStore.set(nextSequenceSendPath(packet.sourcePort, packet.sourceChannel), sequence+1)
 
-    // all assertions passed, we can alter state
+    // store commitment to the packet data & packet timeout
+    provableStore.set(
+      packetCommitmentPath(sourcePort, sourceChannel, sequence),
+      hash(data, timeoutHeight, timeoutTimestamp)
+    )
 
-    nextSequenceSend = nextSequenceSend + 1
-    provableStore.set(nextSequenceSendPath(packet.sourcePort, packet.sourceChannel), nextSequenceSend)
-    provableStore.set(packetCommitmentPath(packet.sourcePort, packet.sourceChannel, packet.sequence),
-                      hash(packet.data, packet.timeoutHeight, packet.timeoutTimestamp))
-
-    // log that a packet has been sent
-    emitLogEntry("sendPacket", {sequence: packet.sequence, data: packet.data, timeoutHeight: packet.timeoutHeight, timeoutTimestamp: packet.timeoutTimestamp})
+    // log that a packet can be safely sent
+    emitLogEntry("sendPacket", {sequence: sequence, data: data, timeoutHeight: timeoutHeight, timeoutTimestamp: timeoutTimestamp})
 }
 ```
 
