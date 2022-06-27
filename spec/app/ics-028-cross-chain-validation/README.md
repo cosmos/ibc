@@ -5,8 +5,8 @@ stage: draft
 category: IBC/APP
 requires: 25, 26, 20
 author: Marius Poke <marius@informal.systems>, Aditya Sripal <aditya@interchain.io>, Jovan Komatovic <jovan.komatovic@epfl.ch>, Cezara Dragoi <cezara.dragoi@inria.fr>, Josef Widder <josef@informal.systems>
-created: 2022-06-24
-modified: 2022-06-24
+created: 2022-06-27
+modified: 2022-06-27
 ---
 
 <!-- omit in toc -->
