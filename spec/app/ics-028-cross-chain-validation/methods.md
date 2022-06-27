@@ -918,6 +918,13 @@ function StopConsumerChain(chainId: string, lockUnbonding: Bool) {
     // remove chainId form all outstanding unbonding operations
     foreach id IN vscToUnbondingOps[(chainId, _)] {
       unbondingOps[id].unbondingChainIds.Remove(chainId)
+      // if the unbonding operation has unbonded on all consumer chains
+      if unbondingOps[id].unbondingChainIds.IsEmpty() {
+        // notify the Staking module that the unbonding can complete
+        stakingKeeper.UnbondingCanComplete(id)
+        // remove unbonding operation
+        unbondingOps.Remove(id)
+      }
     }
     // clean up vscToUnbondingOps mapping
     vscToUnbondingOps.Remove((chainId, _))
@@ -944,6 +951,9 @@ function StopConsumerChain(chainId: string, lockUnbonding: Bool) {
   - `downtimeSlashRequests[chainId]` is emptied.
   - If `lockUnbonding == false`, then 
     - `chainId` is removed from all outstanding unbonding operations;
+    - if an outstanding unbonding operation has matured on all consumer chains, 
+      - the `UnbondingCanComplete()` method of the Staking module is invoked;
+      - the unbonding operation is removed from `unbondingOps`.
     - all the entries with `chainId` are removed from the `vscToUnbondingOps` mapping.
 - **Error Condition**
   - None
