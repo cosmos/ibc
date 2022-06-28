@@ -160,13 +160,28 @@ function routePacket(
     packet: OpaquePacket,
     proof: CommitmentProof,
     proofHeight: Height,
-    sourceConnectionHops: [Identifier], //ordered from source up to self. It starts from 0.
+    srcConnectionHops: [Identifier],
+    provingConnectionIdentifier: Identifier,
+    counterpartyPortIdentifier: Identifier,
+    counterpartyChannelIdentifier: Identifier
 ) {
-    previousHopConnectionId = sourceConnectionHops[len(sourceConnectionHops)-1]
-    connection = getConnection(previousHopConnectionId)
-    if len(sourceConnectionHops) > 1 {
+
+    // retrieve channel state 
+    channel = provableStore.get(append(srcConnectionHops, channelPath(packet.destPort, packet.destChannel)))
+    abortTransactionUnless(channel !== null)
+    abortTransactionUnless(channel.state !== CLOSED)
+    // abortTransactionUnless(authenticateCapability(channelCapabilityPath(packet.sourcePort, packet.sourceChannel), capability))
+    abortTransactionUnless(packet.destPort === channel.counterpartyPortIdentifier)
+    abortTransactionUnless(packet.destChannel === channel.counterpartyChannelIdentifier)
+
+    routePrefix = srcConnectionHops.join("/")
+    abortTransactionUnless(channel.connectionHops.some(route => route.startsWith(routePrefix)))
+
+    connection = getConnection(provingConnectionIdentifier)
+
+    if len(srcConnectionHops) > 1 {
         clientState = queryClient(connection.clientIdentifier)
-        prefix = sourceConnectionHops[0:len(sourceConnectionHops)-2]
+        prefix = srcConnectionHops[0:len(srcConnectionHops)-2]
         abortTransactionUnless(verifyMembership(clientState,
                                                 proofHeight,
                                                 0,
@@ -185,10 +200,20 @@ function routePacket(
                                                                   packet.timeoutTimestamp)))
     }
 
-    path = routePacketPath(sourceConnectionHops, packet.sourcePort, packet.sourceChannel, packet.sequence)
+    
+    path = routePacketPath(srcConnectionHops, packet.sourcePort, packet.sourceChannel, packet.sequence)
     provableStore.set(path, hash(packet.data, packet.timeoutHeight, packet.timeoutTimestamp))
 
-    emitLogEntry("routePacket", {sequence: packet.sequence, data: packet.data, timeoutHeight: packet.timeoutHeight, timeoutTimestamp: packet.timeoutTimestamp})
+    routeSuffixes = []
+    for route in channel.connectionHops {
+        if route.startsWith(routePrefix) {
+            routeArray = route.split("/")
+            indexStart = routeArray.indexOf(len(srcConnectionHops)-1) + 2
+            routeSuffixes.push(routeArray[indexStart:len(routeArray)-1].join("/"))
+        }
+    }
+
+    emitLogEntry("routePacket", {sequence: packet.sequence, data: packet.data, timeoutHeight: packet.timeoutHeight, timeoutTimestamp: packet.timeoutTimestamp, routes: routeSuffixes})
 }
 ```
 
@@ -198,14 +223,33 @@ function routeAcknowledgmentPacket(
     acknowledgement: bytes,
     proof: CommitmentProof,
     proofHeight: Height,
-    sourceConnectionHops: [Identifier], //ordered from source up to self. It starts from 0.
-    destConnectionHops: [Identifier] //ordered from dest up to self. It starts from 0.
+    secConnectionHops: [Identifier], 
+    destConnectionHops: [Identifier],
+    provingConnectionIdentifier: Identifier,
+    counterpartyPortIdentifier: Identifier,
+    counterpartyChannelIdentifier: Identifier
 ) {
-    previousHopConnectionId = sourceConnectionHops[len(sourceConnectionHops)-1]
-    connection = getConnection(previousHopConnectionId)
-    if len(sourceConnectionHops) > 1 {
+
+    // I think this is redundant, given that we check the route valid.
+    abortTransactionUnless(len(srcConnectionHops) != 0)
+    abortTransactionUnless(len(destConnectionHops) != 0)
+
+    // retrieve channel state 
+    channel = provableStore.get(append(srcConnectionHops, channelPath(packet.destPort, packet.destChannel)))
+    abortTransactionUnless(channel !== null)
+    abortTransactionUnless(channel.state !== CLOSED)
+    // abortTransactionUnless(authenticateCapability(channelCapabilityPath(packet.sourcePort, packet.sourceChannel), capability))
+    abortTransactionUnless(packet.destPort === channel.counterpartyPortIdentifier)
+    abortTransactionUnless(packet.destChannel === channel.counterpartyChannelIdentifier)
+
+    routePrefix = srcConnectionHops.join("/")
+    abortTransactionUnless(channel.connectionHops.some(route => route.startsWith(routePrefix)))
+
+    connection = getConnection(provingConnectionIdentifier)
+
+    if len(srcConnectionHops) > 1 {
         clientState = queryClient(connection.clientIdentifier)
-        prefix = sourceConnectionHops[0:len(sourceConnectionHops)-2]
+        prefix = srcConnectionHops[0:len(srcConnectionHops)-2]
         abortTransactionUnless(verifyMembership(clientState,
                                                 proofHeight,
                                                 0,
@@ -222,33 +266,54 @@ function routeAcknowledgmentPacket(
                                                                       acknowledgement))
     }
 
-    path = routeAckPath(sourceConnectionHops, packet.destPort, packet.destChannel, packet.sequence)
+    path = routeAckPath(srcConnectionHops, packet.destPort, packet.destChannel, packet.sequence)
     provableStore.set(path, hash(acknowledgement))
 
-    emitLogEntry("routeAcknowledgement", {sequence: packet.sequence, timeoutHeight: packet.timeoutHeight, port: packet.destPort,channel: packet.destChannel, timeoutTimestamp: packet.timeoutTimestamp, data: packet.data, acknowledgement})
+    routeSuffixes = []
+    for route in channel.connectionHops {
+        if route.startsWith(routePrefix) {
+            routeArray = route.split("/")
+            indexStart = routeArray.indexOf(len(srcConnectionHops)-1) + 2
+            routeSuffixes.push(routeArray[indexStart:len(routeArray)-1].join("/"))
+        }
+    }
+
+    emitLogEntry("routeAcknowledgement", {sequence: packet.sequence, timeoutHeight: packet.timeoutHeight, port: packet.destPort,channel: packet.destChannel, timeoutTimestamp: packet.timeoutTimestamp, data: packet.data, acknowledgement, routes: routeSuffixes})
 }
 ```
 
 ```typescript
 function routeTimeoutPacket(
     packet: OpaquePacket,
-    acknowledgement: bytes,
     proof: CommitmentProof,
     proofHeight: Height,
     nextSequenceRecv: uint64,
-    sourceConnectionHops: [Identifier], //ordered from source up to self. It starts from 0.
-    destConnectionHops: [Identifier] //ordered from dest up to self. It starts from 0.
+    srcConnectionHops: [Identifier],
+    destConnectionHops: [Identifier],
+    provingConnectionIdentifier: Identifier,
+    counterpartyPortIdentifier: Identifier,
+    counterpartyChannelIdentifier: Identifier
 ) {
 
-    channel = provableStore.get(append(sourceConnectionHops, channelPath(packet.sourcePort, packet.sourceChannel)))
-    abortTransactionUnless(channel !== null)
-    abortTransactionUnless(channel.state === OPEN)
+    // I think this is redundant, given that we check the route valid.
+    abortTransactionUnless(len(srcConnectionHops) != 0)
+    abortTransactionUnless(len(destConnectionHops) != 0)
 
-    previousHopConnectionId = sourceConnectionHops[len(sourceConnectionHops)-1]
-    connection = getConnection(previousHopConnectionId)
-    if len(sourceConnectionHops) > 1 {
+    // retrieve channel state 
+    channel = provableStore.get(append(srcConnectionHops, channelPath(packet.destPort, packet.destChannel)))
+    // note: the channel may have been closed
+    // abortTransactionUnless(authenticateCapability(channelCapabilityPath(packet.sourcePort, packet.sourceChannel), capability))
+    abortTransactionUnless(packet.destPort === channel.counterpartyPortIdentifier)
+    abortTransactionUnless(packet.destChannel === channel.counterpartyChannelIdentifier)
+
+    route = join(append(srcConnectionHops, destConnectionHops...), "/")
+    abortTransactionUnless(route in channel.connectionHops)
+
+    connection = getConnection(provingConnectionIdentifier)
+
+    if len(srcConnectionHops) > 1 {
         clientState = queryClient(connection.clientIdentifier)
-        prefix = sourceConnectionHops[0:len(sourceConnectionHops)-2]
+        prefix = srcConnectionHops[0:len(srcConnectionHops)-2]
         abortTransactionUnless(verifyMembership(clientState,
                                                 proofHeight,
                                                 0,
@@ -278,7 +343,83 @@ function routeTimeoutPacket(
         }
     }
 
-    path = routeTimeoutPath(sourceConnectionHops, packet.destPort, packet.destChannel, packet.sequence)
+    path = routeTimeoutPath(srcConnectionHops, packet.destPort, packet.destChannel, packet.sequence)
+    provableStore.set(path, 1)
+
+    routeSuffixes = []
+    for route in channel.connectionHops {
+        if route.startsWith(routePrefix) {
+            routeArray = route.split("/")
+            indexStart = routeArray.indexOf(len(srcConnectionHops)-1) + 2
+            routeSuffixes.push(routeArray[indexStart:len(routeArray)-1].join("/"))
+        }
+    }
+
+    emitLogEntry("routeTimeout", {sequence: packet.sequence, timeoutHeight: packet.timeoutHeight, port: packet.destPort,channel: packet.destChannel, timeoutTimestamp: packet.timeoutTimestamp, data: packet.data, route: routeSuffixes})
+}
+```
+
+```typescript
+function routeTimeoutOnClose(
+    packet: OpaquePacket,
+    proof: CommitmentProof,
+    proofHeight: Height,
+    nextSequenceRecv: uint64,
+    srcConnectionHops: [Identifier],
+    destConnectionHops: [Identifier],
+    provingConnectionIdentifier: Identifier,
+    counterpartyPortIdentifier: Identifier,
+    counterpartyChannelIdentifier: Identifier
+) {
+
+    // I think this is redundant, given that we check the route valid.
+    abortTransactionUnless(len(srcConnectionHops) != 0)
+    abortTransactionUnless(len(destConnectionHops) != 0)
+
+    // retrieve channel state 
+    channel = provableStore.get(append(srcConnectionHops, channelPath(packet.destPort, packet.destChannel)))
+    // abortTransactionUnless(authenticateCapability(channelCapabilityPath(packet.sourcePort, packet.sourceChannel), capability))
+    abortTransactionUnless(packet.destPort === channel.counterpartyPortIdentifier)
+    abortTransactionUnless(packet.destChannel === channel.counterpartyChannelIdentifier)
+
+    route = join(append(srcConnectionHops, destConnectionHops...), "/")
+    abortTransactionUnless(route in channel.connectionHops)
+
+    connection = getConnection(provingConnectionIdentifier)
+
+    if len(srcConnectionHops) > 1 {
+        clientState = queryClient(connection.clientIdentifier)
+        prefix = srcConnectionHops[0:len(srcConnectionHops)-2]
+        abortTransactionUnless(verifyMembership(clientState,
+                                                proofHeight,
+                                                0,
+                                                0,
+                                                proof,
+                                                routeTimeoutPath(prefix, packet.destPort, packet.destChannel, packet.sequence),
+                                                1))
+    } else {
+        abortTransactionUnless((packet.timeoutHeight > 0 && proofHeight >= packet.timeoutHeight) ||
+                               (packet.timeoutTimestamp > 0 && connection.getTimestampAtHeight(proofHeight) > packet.timeoutTimestamp))
+        if channel.order === ORDERED {
+            // ordered channel: check that packet has not been received
+            abortTransactionUnless(nextSequenceRecv <= packet.sequence)
+            // ordered channel: check that the recv sequence is as claimed
+            abortTransactionUnless(connection.verifyNextSequenceRecv(proofHeight,
+                                                                     proof,
+                                                                     packet.destPort,
+                                                                     packet.destChannel,
+                                                                     nextSequenceRecv))
+        } else {
+            // unordered channel: verify absence of receipt at packet index
+            abortTransactionUnless(connection.verifyPacketReceiptAbsence(proofHeight,
+                                                                         proof,
+                                                                         packet.destPort,
+                                                                         packet.destChannel,
+                                                                         packet.sequence))
+        }
+    }
+
+    path = routeTimeoutPath(srcConnectionHops, packet.destPort, packet.destChannel, packet.sequence)
     provableStore.set(path, 1)
 
     emitLogEntry("routeTimeout", {sequence: packet.sequence, timeoutHeight: packet.timeoutHeight, port: packet.destPort,channel: packet.destChannel, timeoutTimestamp: packet.timeoutTimestamp, data: packet.data})
