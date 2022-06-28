@@ -334,7 +334,7 @@ Query requests have associated a `localTimeoutHeight` and a `localTimeoutTimesta
 The Querying Chain calls the `checkQueryTimeout` function to check whether a specific query has timed out. 
 
 > There are several alternatives on how to handle timeouts. For instance, the relayer could submit on-chain timeout notifications to the Querying Chain. Since the relayer is untrusted, for each of these notifications the Cross-chain Querying module of the Querying Chain MUST call the `checkQueryTimeout` to check if the query has indeed timed out. An alternative could be to make the Cross-chain Querying module responsible for checking  
-if any query has timed out by iterating over the ongoing queries at the beginning of a block and calling `checkQueryTimeout`. This is an implementation detail that this specification does not cover.
+if any query has timed out by iterating over the ongoing queries at the beginning of a block and calling `checkQueryTimeout`. In this case, ongoing queries should be stored indexed by `localTimeoutTimestamp` and `localTimeoutHeight` to allow iterating over them more efficiently. These are implementation details that this specification does not cover. 
 
 We pass the relayer address just as in `CrossChainQueryResult` to allow for possible incentivization here as well.
 
