@@ -149,7 +149,7 @@ function queryPath(id: Identifier): Path {
 ```
 #### Result query path
 
-The result query path is a public path that stores the result of completed queries.
+The result query path is a private path that stores the result of completed queries.
 
 ```typescript
 function resultQueryPath(id: Identifier): Path {
@@ -172,7 +172,7 @@ function generateQueryIdentifier = () -> Identifier
 1) When the Querying Chain receives a query request, it calls `CrossChainQueryRequest` of the Cross-chain Querying module. This function generates a unique identifier for the query, stores it in its `privateStore` and emits a `sendQuery` event. Query requests can be submitted by other IBC modules as transactions to the Querying Chain or simply executed as part of the `BeginBlock` and `EndBlock` logic.
 2) A correct relayer listening to `sendQuery` events from the Querying Chain will eventually pick the query request up and execute it at the Queried Chain. The result is then submitted (on-chain) to the Querying Chain.
 3) When the query result is committed at the Querying Chain, this calls the `CrossChainQueryResult` function of the Cross-chain Querying module.
-4) The `CrossChainQueryResult` first retrieves the query from the `privateStore` using the query's unique identifier. It then proceeds to verify the result using its local client. If it passes the verification, the function removes the query from the `privateStore` and stores the result in a public path.
+4) The `CrossChainQueryResult` first retrieves the query from the `privateStore` using the query's unique identifier. It then proceeds to verify the result using its local client. If it passes the verification, the function removes the query from the `privateStore` and stores the result in the private store.
 > The Querying Chain may execute additional state machine logic when a query result is received. To account for this additional state machine logic and charge a fee to the query caller, an implementation of this specification could use the already existing `bounty` field of the `CrossChainQuery` interface or extend the interface with an additional field.
 5) The query caller can then asynchronously retrieve the query result. The function `PruneCrossChainQueryResult` allows a query caller to prune the result from the store once it retrieves it.
 
@@ -290,8 +290,8 @@ function CrossChainQueryResult(
                                    result,
                                    data} 
 
-    // Store the result in a public path.
-    provableStore.set(resultQueryPath(queryIdentifier), resultRecord)
+    // Store the result in the local, private store.
+    privateStore.set(resultQueryPath(queryIdentifier), resultRecord)
 
 }
 ```
@@ -300,7 +300,7 @@ function CrossChainQueryResult(
   - There is a query request stored in the `privateStore` identified by `queryId`.
 - **Postcondition**
   - The query request identified by `queryId` is deleted from the `privateStore`.
-  - The query result is stored in the `provableStore`.
+  - The query result is stored in the `privateStore`.
 
 The `PruneCrossChainQueryResult` function is called when the caller of a query has retrieved the result and wants to delete it.
 
@@ -310,22 +310,22 @@ function PruneCrossChainQueryResult(
   queryCapability: CapabilityKey
   ) {
 
-    // Retrieve the query result from the provable store using the query's identifier.
+    // Retrieve the query result from the private store using the query's identifier.
     resultRecord = privateStore.get(resultQueryPath(queryIdentifier))
     abortTransactionUnless(resultRecord !== null)
 
     // Abort the transaction unless the caller has the right to clean the query result
     abortTransactionUnless(authenticateCapability(queryId, queryCapability))
 
-    // Delete the query result from the public store.
+    // Delete the query result from the the local, private store.
     privateStore.delete(resultQueryPath(queryId))
 }
 ```
 - **Precondition**
-  - There is a query result stored in the `provableStore` identified by `queryId`.
+  - There is a query result stored in the `privateStore` identified by `queryId`.
   - The caller has the right to clean the query result
 - **Postcondition**
-  - The query result identified by `queryId` is deleted from the `provableStore`.
+  - The query result identified by `queryId` is deleted from the `privateStore`.
 
 #### Timeouts
 
@@ -364,8 +364,8 @@ function checkQueryTimeout(
                                    query.caller
                                    null} 
 
-    // Store the result in a public path.
-    provableStore.set(resultQueryPath(queryIdentifier), resultRecord)
+    // Store the result in the local, private store.
+    privateStore.set(resultQueryPath(queryIdentifier), resultRecord)
 }
 ```
 - **Precondition**
@@ -373,7 +373,7 @@ function checkQueryTimeout(
 - **Postcondition**
   - If the query has indeed timed out, then
     - the query request identified by `queryId` is deleted from the `privateStore`;
-    - the fact that the query has timed out is recorded in the `provableStore`.
+    - the fact that the query has timed out is recorded in the `privateStore`.
 
 ## History
 
