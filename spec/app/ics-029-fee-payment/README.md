@@ -367,7 +367,7 @@ function onRecvPacket(packet: Packet, relayer: string): bytes {
     sourceAddress = getCounterpartyPayeeAddress(relayer)
 
     // wrap the acknowledgement with forward relayer and return marshalled bytes
-    // constructIncentivizedAck takes the app-specific acknowledgement and receive-packet relayer (forward relayer), and 
+    // constructIncentivizedAck takes the app-specific acknowledgement and receive-packet relayer (forward relayer)
     // and constructs the incentivized acknowledgement struct with the forward relayer and app-specific acknowledgement embedded.
     ack = constructIncentivizedAck(app_acknowledgment, sourceAddress)
     return marshal(ack)
