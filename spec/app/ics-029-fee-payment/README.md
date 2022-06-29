@@ -259,7 +259,7 @@ function onChanOpenInit(
 
     // check that feeVersion is supported
     if !isSupported(metadata.feeVersion) {
-        return "", error
+        return error
     }
     // call the underlying applications OnChanOpenInit callback
     app.onChanOpenInit(
