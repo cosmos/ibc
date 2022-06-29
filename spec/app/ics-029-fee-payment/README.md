@@ -19,8 +19,8 @@ application, without forcing other applications to use this implementation.
 ### Motivation
 
 There has been much discussion on a general incentivization mechanism for relayers. A simple proposal was created to
-[extend ICS20 to incentivize relaying](https://github.com/cosmos/ibc/pull/577) on the destination chain. However,
-it was very specific to ICS20 and would not work for other protocols. This was then extended to a more
+[extend ICS-20 to incentivize relaying](https://github.com/cosmos/ibc/pull/577) on the destination chain. However,
+it was very specific to ICS-20 and would not work for other protocols. This was then extended to a more
 [general fee payment design](https://github.com/cosmos/ibc/issues/578) that could be adopted by any ICS application
 protocol.
 
@@ -48,7 +48,13 @@ define a clear interface that can be easily adopted by any application, but not 
 
 `timeout relayer`: The relayer that submits the `timeoutPacket` or `timeoutOnClose` message for a given packet
 
-`source address`: The address of a relayer on the chain that sent the packet
+`receive fee`: The fee paid for submitting the `recvPacket` message for a given packet
+
+`ack fee`: The fee paid for submitting the `acknowledgePacket` message for a given packet
+
+`timeout fee`: The fee paid for submitting the `timeoutPacket` or `timeoutOnClose` message for a given packet
+
+`source address`: The payee address selected by a relayer on the chain that sent the packet
 
 `destination address`: The address of a relayer on the chain that receives the packet
 
@@ -100,11 +106,35 @@ The sender chain will escrow 0.003 channel-7/ATOM and 0.002 IRIS from the fee pa
 
 The logic involved in collecting fees from users and then paying it out to the relevant relayers is encapsulated by a separate fee module and may vary between implementations. However, all fee modules must implement a uniform interface such that the ICS-4 handlers can correctly pay out fees to the right relayers, and so that relayers themselves can easily determine the fees they can expect for relaying a packet.
 
+
+### Data Structures
+
+The incentivized acknowledgment written on the destination chain includes raw bytes of the acknowledgement from the underlying application and the source address of the forward relayer.
+
+```typescript
+interface Acknowledgement {
+    appAcknowledgement: []byte
+    forwardRelayerAddress: string
+}
+```
+
+### Store Paths
+
+#### Relayer Address for Async Ack Path
+
+The forward relayer addresses are stored under a store path prefix unique to a combination of port identifier, channel identifier and sequence. This may be stored in the private store.
+
+```typescript
+function relayerAddressForAsyncAckPath(packet: Packet): Path {
+    return "forwardRelayer/{packet.destinationPort}/{packet.destinationChannel}/{packet.sequence}"
+}
+```
+
 ### Fee Middleware Contract
 
 While the details may vary between fee modules, all Fee modules **must** ensure it does the following:
 
-- It must allow relayers to register their counterparty address.
+- It must allow relayers to register their counterparty payee address.
 - It must have in escrow the maximum fees that all outstanding packets may pay out (or it must have ability to mint required amount of tokens)
 - It must pay the receive fee for a packet to the forward relayer specified in `PayFee` callback (if unspecified, it must refund forward fee to original fee payer(s))
 - It must pay the ack fee for a packet to the reverse relayer specified in `PayFee` callback
@@ -112,11 +142,11 @@ While the details may vary between fee modules, all Fee modules **must** ensure 
 - It must refund any remainder fees in escrow to the original fee payer(s) if applicable
 
 ```typescript
-// RegisterCounterpartyAddress is called by the relayer on each channelEnd and allows them to specify their counterparty address before relaying
-// This ensures they will be properly compensated for forward relaying since destination chain must send back relayer's source address (counterparty address) in acknowledgement
-// This function may be called more than once by relayer, in which case, latest counterparty address is always used.
-function RegisterCounterpartyAddress(address: string, counterPartyAddress: string) {
-    // set mapping between address and counterparty address
+// RegisterCounterpartyPayee is called by the relayer on each channelEnd and allows them to specify their counterparty payee address before relaying
+// This ensures they will be properly compensated for forward relaying since destination chain must send back relayer's source address (counterparty payee address) in acknowledgement
+// This function may be called more than once by relayer, in which case, latest counterparty payee address is always used.
+function RegisterCounterpartyPayee(relayer: string, counterPartyAddress: string) {
+    // set mapping between relayer address and counterparty payee address
 }
 
 // EscrowPacketFee is an open callback that may be called by any module/user that wishes to escrow funds in order to
@@ -153,7 +183,7 @@ function PayTimeoutFee(packet: Packet, timeout_relayer: string) {
 The fee module should also expose the following queries so that relayers may query their expected fee:
 
 ```typescript
-// Gets the fee expected for submitting ReceivePacket msg for the given packet
+// Gets the fee expected for submitting RecvPacket msg for the given packet
 // Caller should provide the intended relayer address in case the fee is dependent on specific relayer(s).
 function GetReceiveFee(portID, channelID, sequence, relayer) Fee
 
@@ -185,11 +215,17 @@ In this way, custom fee-handling logic can be hooked up to the IBC packet flow l
 
 #### Fee Protocol Negotiation
 
-The fee middleware will negotiate its fee protocol version with the counterparty module by prepending its own version to the application version. 
+The fee middleware will negotiate its fee protocol version with the counterparty module by including its own version next to the application version. The channel version will be a string of a JSON struct containing the fee middleware version and the application version. The application version may as well be a JSON-encoded string, possibly including further middleware and app versions, if the application stack consists of multiple milddlewares wrapping a base application.
 
-Channel Version: `fee_v{fee_protocol_version}:{application_version}`
+Channel Version: 
+```json
+{"fee_version":<fee_protocol_version>,"app_version":<application_version>}`
+```
 
-Ex: `fee_v1:ics20-1`
+Ex: 
+```json
+{"fee_version":"ics29-1","app_version":"ics20-1"}
+```
 
 The fee middleware's handshake callbacks ensure that both modules agree on compatible fee protocol version(s), and then pass the application-specific version string to the embedded application's handshake callbacks.
 
@@ -203,53 +239,78 @@ function onChanOpenInit(
   channelIdentifier: Identifier,
   counterpartyPortIdentifier: Identifier,
   counterpartyChannelIdentifier: Identifier,
-  version: string) {
-    // remove the prefix and pass the app-specific version to app callback.
+  version: string): (version: string, err: Error) {
+    // try to unmarshal JSON-encoded version string and pass 
+    // the app-specific version to app callback.
     // otherwise, pass version directly to app callback.
-    feeVersion, appVersion = splitFeeVersion(version)
-    // check that feeVersion is supported
-    if !isSupported(feeVersion) {
-        return error
+    metadata, err = UnmarshalJSON(version)
+    if err != nil {
+        // call the underlying applications OnChanOpenInit callback
+        app.onChanOpenInit(
+            order,
+            connectionHops,
+            portIdentifier,
+            channelIdentifier,
+            counterpartyPortIdentifier,
+            counterpartyChannelIdentifier,
+            version,
+        )
     }
-    app.OnChanOpenInit(
+
+    // check that feeVersion is supported
+    if !isSupported(metadata.feeVersion) {
+        return "", error
+    }
+    // call the underlying applications OnChanOpenInit callback
+    app.onChanOpenInit(
         order,
         connectionHops,
         portIdentifier,
         channelIdentifier,
         counterpartyPortIdentifier,
         counterpartyChannelIdentifier,
-        appVersion,
+        metadata.appVersion,
     )
 }
 
-function OnChanOpenTry(
+function onChanOpenTry(
   order: ChannelOrder,
   connectionHops: [Identifier],
   portIdentifier: Identifier,
   channelIdentifier: Identifier,
   counterpartyPortIdentifier: Identifier,
   counterpartyChannelIdentifier: Identifier,
-  version: string,
-  counterpartyVersion: string) {
-      // select mutually compatible fee version
-      cpFeeVersion, cpAppVersion = splitFeeVersion(counterpartyVersion)
-      feeVersion, appVersion = splitFeeVersion(version)
-      if !isCompatible(cpFeeVersion, feeVersion) {
-          return error
-      }
-      selectFeeVersion(cpFeeVersion, feeVersion)
+  counterpartyVersion: string): (version: string, err: Error) {
+    // select mutually compatible fee version
+    cpMetadata, err = UnmarshalJSON(counterpartyVersion)
+    if err != nil {
+        // call the underlying applications OnChanOpenTry callback
+        app.onChanOpenTry(
+            order,
+            connectionHops,
+            portIdentifier,
+            channelIdentifier,
+            counterpartyPortIdentifier,
+            counterpartyChannelIdentifier,
+            counterpartyVersion,
+        )
+    }
 
-      // call the underlying applications OnChanOpenTry callback
-      app.OnChanOpenTry(
-          order,
-          connectionHops,
-          portIdentifier,
-          channelIdentifier,
-          counterpartyPortIdentifier,
-          counterpartyChannelIdentifier,
-          cpAppVersion,
-          appVersion,
-      )
+    if !isCompatible(cpMetadata.feeVersion) {
+        return error
+    }
+    selectFeeVersion(cpMetadata.feeVersion)
+
+    // call the underlying applications OnChanOpenTry callback
+    app.onChanOpenTry(
+        order,
+        connectionHops,
+        portIdentifier,
+        channelIdentifier,
+        counterpartyPortIdentifier,
+        counterpartyChannelIdentifier,
+        cpMetadata.appVersion,
+    )
 }
 
 function onChanOpenAck(
@@ -257,34 +318,35 @@ function onChanOpenAck(
   channelIdentifier: Identifier,
   counterpartyChannelIdentifier: Identifier,
   counterpartyVersion: string) {
-      feeVersion, appVersion = splitFeeVersion(counterpartyVersion)
-      if !isSupported(feeVersion) {
-          return error
-      }
+    cpMetadata, err = UnmarshalJSON(counterpartyVersion)
+    if err != nil {
+        // call the underlying applications OnChanOpenAck callback
+        app.onChanOpenAck(
+            portIdentifier, 
+            channelIdentifier, 
+            counterpartyChannelIdentifier,
+            counterpartyVersion,
+        )
+    }
 
-      // call the underlying applications OnChanOpenAck callback
-      app.OnChanOpenAck(portIdentifier, channelIdentifier, appVersion)
+    if !isSupported(cpMetadata.feeVersion) {
+        return error
+    }  
+    // call the underlying applications OnChanOpenAck callback
+    app.onChanOpenAck(
+        portIdentifier, 
+        channelIdentifier, 
+        counterpartyChannelIdentifier,
+        cpMetadata.appVersion,
+    )
 }
 
 function onChanOpenConfirm(
   portIdentifier: Identifier,
   channelIdentifier: Identifier) {
-      // fee middleware performs no-op on ChanOpenConfirm,
-      // just call underlying callback
-      app.onChanOpenConfirm(portIdentifier, channelIdentifier)
-  }
-
-function splitFeeVersion(version: string): []string {
-    if hasPrefix(version, "fee") {
-        splitVersions = split(version,  ":")
-        feeVersion = version[0]
-        appVersion = join(version[1:], ":")
-        // if version has fee prefix
-        // return first split as fee version and the rest of the string as app version
-        return []string{feeVersion, appVersion}
-    }
-    // otherwise return an empty fee version and full version as app version
-    return []string{"", version}
+    // fee middleware performs no-op on ChanOpenConfirm,
+    // just call underlying callback
+    app.onChanOpenConfirm(portIdentifier, channelIdentifier)
 }
 ```
 
@@ -294,25 +356,25 @@ function splitFeeVersion(version: string): []string {
 function onRecvPacket(packet: Packet, relayer: string): bytes {
     app_acknowledgement = app.onRecvPacket(packet, relayer)
 
-    // get source address by retrieving counterparty address of this relayer stored in fee middleware.
-    // NOTE: source address may be empty or invalid, counterparty
-    // must refund fee in these cases
-    sourceAddress = getCounterpartyAddress(relayer)
-
     // in case of asynchronous acknowledgement, we must store the relayer address so that we can retrieve it later to write the acknowledgement.
     if app_acknowledgement == nil {
-        privateStore.set(forwardRelayerPath(packet), sourceAddress)
+        privateStore.set(relayerAddressForAsyncAckPath(packet), relayer)
     }
 
+    // get source address by retrieving counterparty payee address of this relayer stored in fee middleware.
+    // NOTE: source address may be empty or invalid, counterparty
+    // must refund fee in these cases
+    sourceAddress = getCounterpartyPayeeAddress(relayer)
+
     // wrap the acknowledgement with forward relayer and return marshalled bytes
-    // constructIncentivizedAck takes the app-specific acknowledgement and receive-packet relayer (forward relayer)
+    // constructIncentivizedAck takes the app-specific acknowledgement and receive-packet relayer (forward relayer), and 
     // and constructs the incentivized acknowledgement struct with the forward relayer and app-specific acknowledgement embedded.
     ack = constructIncentivizedAck(app_acknowledgment, sourceAddress)
     return marshal(ack)
 }
 
 function onAcknowledgePacket(packet: Packet, acknowledgement: bytes, relayer: string) {
-    // the acknowledgement is a marshalled struct containing the forward relayer address as  a string (called forward_relayer),
+    // the acknowledgement is a marshalled struct containing the forward relayer address as a string (called forward_relayer),
     // and the raw acknowledgement bytes returned by the counterparty application module (called app_ack).
 
     // get the forward relayer from the acknowledgement
@@ -347,15 +409,18 @@ function onTimeoutPacketClose(packet: Packet, relayer: string) {
 }
 
 function constructIncentivizedAck(app_ack: bytes, forward_relayer: string): Acknowledgement {
-    // TODO: see https://github.com/cosmos/ibc/pull/582
+    return Acknowledgement{
+		appAcknowledgement:    app_ack,
+		forwardRelayerAddress: relayer,
+	}
 }
 
 function getForwardRelayer(ack: Acknowledgement): string {
-    // TODO: see https://github.com/cosmos/ibc/pull/582
+    ack.forwardRelayerAddress
 }
 
 function getAppAcknowledgement(ack: Acknowledgement): bytes {
-    // TODO: see https://github.com/cosmos/ibc/pull/582
+    ack.appAcknowledgement
 }
 ```
 
@@ -368,10 +433,12 @@ Note that if the embedded application uses asynchronous acks then, the `WriteAck
 function writeAcknowledgement(
   packet: Packet,
   acknowledgement: bytes) {
-    // retrieve the forward relayer that was stored in `onRecvPacket`
-    relayer = privateStore.get(forwardRelayerPath(packet))
-    ack = constructIncentivizedAck(acknowledgment, relayer)
-    ack_bytes marshal(ack)
+    // retrieve the relayer that was stored in `onRecvPacket`
+    relayer = privateStore.get(relayerAddressForAsyncAckPath(packet))
+    // get source address by retrieving counterparty payee address of this relayer stored in fee middleware.
+    sourceAddress = getCounterpartyPayeeAddress(relayer)
+    ack = constructIncentivizedAck(acknowledgment, sourceAddress)
+    ack_bytes = marshal(ack)
     // ics4Wrapper may be core IBC or higher-level middleware
     return ics4Wrapper.writeAcknowledgement(packet, ack_bytes)
 }
@@ -410,17 +477,17 @@ In case a user wants to pay fees on a packet after it has already been created, 
 Before a relayer starts relaying on a channel, they should register their counterparty message using the standardized message:
 
 ```typescript
-interface RegisterCounterpartyAddressMsg {
-    channelID: string
+interface RegisterCounterpartyPayeeMsg {
     portID: string
-    counterpartyAddress: string
-    address: string
+    channelID: string
+    relayer: string           // destination address of the forward relayer
+    counterpartyPayee: string // source address of the forward relayer
 }
 ```
 
-It is the responsibility of the receiving chain to authenticate that the message was received from owner of `address`. The receiving chain must store the mapping from: `address -> counterpartyAddress` for the given channel. Then, `onRecvPacket` of the destination fee middleware can query for the counterparty address of the `recvPacket` message sender in order to get the source address of the forward relayer. This source address is what will get embedded in the acknowledgement.
+It is the responsibility of the receiving chain to authenticate that the message was received from owner of `relayer`. The receiving chain must store the mapping from: `relayer -> counterpartyPayee` for the given channel. Then, `onRecvPacket` of the destination fee middleware can query for the counterparty payee address of the `recvPacket` message sender in order to get the source address of the forward relayer. This source address is what will get embedded in the acknowledgement.
 
-If the relayer does not register their counterparty address, or registers an invalid address; the acknowledgment will still be received and processed but the forward fee will be refunded to the original fee payer(s).
+If the relayer does not register their counterparty payee address (or registers an invalid address), then the acknowledgment will still be received and processed but the forward fee will be refunded to the original fee payer(s).
 
 #### Backwards Compatibility
 
@@ -436,7 +503,7 @@ This proposal satisfies the desired properties. All parts of the packet flow (re
 
 ##### Correctness
 
-The fee module is responsible for correctly escrowing and distributing funds to the provided relayers. The ack and timeout relayers are trivially retrievable since they are the senders of the acknowledgment and timeout message. The forward relayer is responsible for registering their sourcer address before sending `recvPacket` messages, so that the destination fee middleware can embed this address in the acknowledgement. The fee middleware on source will then use the address in acknowledgement to pay the forward relayer on the source chain.
+The fee module is responsible for correctly escrowing and distributing funds to the provided relayers. The ack and timeout relayers are trivially retrievable since they are the senders of the acknowledgment and timeout message. The forward relayer is responsible for registering their source address before sending `recvPacket` messages, so that the destination fee middleware can embed this address in the acknowledgement. The fee middleware on source will then use the address in acknowledgement to pay the forward relayer on the source chain.
 
 The source chain will use a "best efforts" approach with regard to the forward relayer address. Since it is not verified directly by the counterparty and is instead just treated as a string to be passed back in the acknowledgement, the registered forward relayer source address may not be a valid source chain address. In this case, the invalid address is discarded, the receive fee is refunded, and the acknowledgement processing continues. It is incumbent on relayers to register their source addresses to the counterparty chain correctly.
 In the event that the counterparty chain itself incorrectly sends the forward relayer address, this will cause relayers to not collect fees on source chain for relaying packets. The incentivize-driven relayers will stop relaying for the chain until the acknowledgement logic is fixed, however the channel remains functional.
