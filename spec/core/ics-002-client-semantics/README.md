@@ -479,7 +479,7 @@ This specification defines a single function to query the state of a client by-i
 
 ```typescript
 function queryClientState(identifier: Identifier): ClientState {
-  return privateStore.get(clientStatePath(identifier))
+  return provableStore.get(clientStatePath(identifier))
 }
 ```
 
@@ -621,7 +621,7 @@ function createClient(
   clientType: ClientType,
   consensusState: ConsensusState) {
     abortTransactionUnless(validateClientIdentifier(id))
-    abortTransactionUnless(privateStore.get(clientStatePath(id)) === null)
+    abortTransactionUnless(provableStore.get(clientStatePath(id)) === null)
     abortSystemUnless(provableStore.get(clientTypePath(id)) === null)
     clientType.initialise(consensusState)
     provableStore.set(clientTypePath(id), clientType)
@@ -656,7 +656,7 @@ function updateClient(
   header: Header) {
     clientType = provableStore.get(clientTypePath(id))
     abortTransactionUnless(clientType !== null)
-    clientState = privateStore.get(clientStatePath(id))
+    clientState = provableStore.get(clientStatePath(id))
     abortTransactionUnless(clientState !== null)
     clientType.checkValidityAndUpdateState(clientState, header)
 }
@@ -673,7 +673,7 @@ function submitMisbehaviourToClient(
   misbehaviour: bytes) {
     clientType = provableStore.get(clientTypePath(id))
     abortTransactionUnless(clientType !== null)
-    clientState = privateStore.get(clientStatePath(id))
+    clientState = provableStore.get(clientStatePath(id))
     abortTransactionUnless(clientState !== null)
     clientType.checkMisbehaviourAndUpdateState(clientState, misbehaviour)
 }
@@ -744,7 +744,7 @@ function initialise(consensusState: ConsensusState): () {
     pastPublicKeys: Set.singleton(consensusState.publicKey),
     verifiedRoots: Map.empty()
   }
-  privateStore.set(identifier, clientState)
+  provableStore.set(identifier, clientState)
 }
 
 // validity predicate function defined by the client type
