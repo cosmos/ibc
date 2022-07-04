@@ -94,7 +94,7 @@ Alternate flow:
 ### Fee details
 
 For an example implementation in the Cosmos SDK, we consider 3 potential fee payments, which may be defined. Each one may be
-paid out in a different token. Imagine a connection between IrisNet and the Cosmos Hub. They may define:
+paid out in a different token. Imagine a connection between IrisNet and the Cosmos Hub. To incentivize a packet from IrisNet to the Cosmos Hub, they may define:
 
 - ReceiveFee: 0.003 channel-7/ATOM vouchers (ATOMs already on IrisNet via ICS20)
 - AckFee: 0.001 IRIS
@@ -102,7 +102,7 @@ paid out in a different token. Imagine a connection between IrisNet and the Cosm
 
 Ideally the fees can easily be redeemed in native tokens on both sides, but relayers may select others. In this example, the relayer collects a fair bit of IRIS, covering its costs there and more. It also collects channel-7/ATOM vouchers from many packets. After relaying a few thousand packets, the account on the Cosmos Hub is running low, so the relayer will send those channel-7/ATOM vouchers back over channel-7 to it's account on the Hub to replenish the supply there. 
 
-The sender chain will escrow 0.003 channel-7/ATOM and 0.002 IRIS from the fee payers' account. In the case that a forward relayer submits the `recvPacket` and a reverse relayer submits the `ackPacket`, the forward relayer is rewarded 0.003 channel-7/ATOM and the reverse relayer is rewarded 0.001 IRIS while 0.001 IRIS is refunded to the original fee payer. In the case where the packet times out, the timeout relayer receives 0.002 IRIS and 0.003 channel-7/ATOM is refunded to the original fee payer.
+The sender chain will escrow 0.003 channel-7/ATOM and 0.002 IRIS from the fee payers' account. In the case that a forward relayer submits the `recvPacket` and a reverse relayer submits the `ackPacket`, the forward relayer is rewarded 0.003 channel-7/ATOM and the reverse relayer is rewarded 0.001 IRIS while 0.002 IRIS is refunded to the original fee payer. In the case where the packet times out, the timeout relayer receives 0.002 IRIS and 0.003 channel-7/ATOM is refunded to the original fee payer.
 
 The logic involved in collecting fees from users and then paying it out to the relevant relayers is encapsulated by a separate fee module and may vary between implementations. However, all fee modules must implement a uniform interface such that the ICS-4 handlers can correctly pay out fees to the right relayers, and so that relayers themselves can easily determine the fees they can expect for relaying a packet.
 
