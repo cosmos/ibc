@@ -22,7 +22,7 @@ The channel upgrade protocol MUST NOT modify the channel identifiers.
 
 ### Data Structures
 
-The `ChannelState` and `ChannelEnd` are defined in [ICS 4](./README.md), they are reproduced here for the reader's convenience. `UPGRADE_INIT`, `UPGRADE_TRY` are additional states added to enable the upgrade feature.
+The `ChannelState` and `ChannelEnd` are defined in [ICS-4](./README.md), they are reproduced here for the reader's convenience. `UPGRADE_INIT`, `UPGRADE_TRY` are additional states added to enable the upgrade feature.
 
 #### `ChannelState`
 
