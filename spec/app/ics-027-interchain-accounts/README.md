@@ -57,9 +57,13 @@ call 04-channel `ChanOpenInit`. An error is returned if the controller portID is
 A `ChannelOpenInit` event is emitted which can be picked up by an offchain process such as a relayer.
 The account will be registered during the `OnChanOpenTry` step on the host chain.
 This function must be called after an `OPEN` connection is already established with the given connection identifier.
+The caller must provide the complete channel version. This MUST include the ICA version with complete metadata and it MAY include 
+versions of other middleware that is wrapping ICA on both sides of the channel. Note this will require contextual information
+on what middleware is enabled on either end of the channel. Thus it is recommended that an ICA-auth application construct the ICA
+version automatically and allow for users to optionally enable additional middleware versioning.
 
 ```typescript
-function RegisterInterchainAccount(connectionId: string, owner: string) returns (error) {
+function RegisterInterchainAccount(connectionId: Identifier, owner: string, version: string) returns (error) {
 }
 ```
 
@@ -68,9 +72,35 @@ function RegisterInterchainAccount(connectionId: string, owner: string) returns 
 `SendTx` is used to send an IBC packet containing instructions (messages) to an interchain account on a host chain for a given interchain account owner.
 
 ```typescript
-function SendTx(channelCapability: ChannelCapability, portId: string, icaPacketData: InterchainAccountPacketData, timeoutTimestamp uint64) returns (uint64, error) {
-    // A call to GetActiveChannel() checks if there is a currently active channel for this portId which also implies an interchain account has been registered using this port identifier
-    // if there are no errors CreateOutgoingPacket() is called with the given packet data and timeout and the IBC packet will be sent to the host chain on the active channel
+function SendTx(
+  capability: CapabilityKey, 
+  connectionId: Identifier,
+  portId: Identifier, 
+  icaPacketData: InterchainAccountPacketData, 
+  timeoutTimestamp uint64) {
+    // check if there is a currently active channel for
+    // this portId and connectionId, which also implies an 
+    // interchain account has been registered using 
+    // this portId and connectionId
+    activeChannelID, found = GetActiveChannelID(portId, connectionId)
+    abortTransactionUnless(found)
+
+    // validate timeoutTimestamp
+    abortTransactionUnless(timeoutTimestamp <= currentTimestamp())
+
+    // validate icaPacketData
+    abortTransactionUnless(icaPacketData.type == EXECUTE_TX)
+    abortTransactionUnless(icaPacketData.data != nil)
+
+    // send icaPacketData to the host chain on the active channel
+    handler.sendPacket(
+      capability,
+      portId, // source port ID
+      activeChannelID, // source channel ID 
+      0,
+      timeoutTimestamp,
+      icaPacketData
+    )
 }
 ```
 
@@ -81,7 +111,7 @@ function SendTx(channelCapability: ChannelCapability, portId: string, icaPacketD
 `RegisterInterchainAccount` is called on the `OnChanOpenTry` step during the channel creation handshake.
 
 ```typescript
-function RegisterInterchainAccount(counterpartyPortId: string, connectionID: string) returns (nil) {
+function RegisterInterchainAccount(counterpartyPortId: Identifier, connectionID: Identifier) returns (nil) {
    // checks to make sure the account has not already been registered
    // creates a new address on chain deterministically given counterpartyPortId and underlying connectionID
    // calls SetInterchainAccountAddress()
@@ -105,7 +135,7 @@ function AuthenticateTx(msgs []Any, connectionId string, portId string) returns 
 Executes each message sent by the owner account on the controller chain.
 
 ```typescript
-function ExecuteTx(sourcePort: string, channel Channel, msgs []Any) returns (resultString, error) {
+function ExecuteTx(sourcePort: Identifier, channel Channel, msgs []Any) returns (resultString, error) {
   // validate each message
   // retrieve the interchain account for the given channel by passing in source port and channel's connectionID
   // verify that interchain account is authorized signer of each message
@@ -118,19 +148,19 @@ function ExecuteTx(sourcePort: string, channel Channel, msgs []Any) returns (res
 
 ```typescript
 // Sets the active channel for a given portID and connectionID.
-function SetActiveChannelID(portId: string, connectionId: string, channelId: string) returns (error){
+function SetActiveChannelID(portId: Identifier, connectionId: Identifier, channelId: Identifier) returns (error){
 }
 
 // Returns the ID of the active channel for a given portID and connectionID, if present.
-function GetActiveChannelID(portId: string, connectionId: string) returns (string, boolean){
+function GetActiveChannelID(portId: Identifier, connectionId: Identifier) returns (Identifier, boolean){
 }
 
 // Stores the address of the interchain account in state.
-function SetInterchainAccountAddress(portId: string, connectionId: string, address: string) returns (string) {
+function SetInterchainAccountAddress(portId: Identifier, connectionId: Identifier, address: string) returns (string) {
 }
 
 // Retrieves the interchain account from state.
-function GetInterchainAccountAddress(portId: string, connectionId: string) returns (string, bool){
+function GetInterchainAccountAddress(portId: Identifier, connectionId: Identifier) returns (string, bool){
 }
 ```
 
@@ -269,7 +299,7 @@ icaPacketData = InterchainAccountPacketData{
 }
 
 // Sends the message to the host chain, where it will eventually be executed 
-SendTx(ownerAddress, portID, data, timeout)
+SendTx(ownerAddress, connectionId, portID, data, timeout)
 ```
 
 2. The host chain upon receiving the IBC packet will call `DeserializeTx`. 
