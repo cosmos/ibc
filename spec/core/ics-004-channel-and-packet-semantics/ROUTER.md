@@ -126,7 +126,7 @@ function routeChanOpenAck(
     path = append(provingConnectionIdentifier, srcConnectionHops, channelPath(counterpartyPortIdentifier, counterpartyChannelIdentifier))
 
     // merge destHops into a route and
-    // append the destHops to the routeInfo if it does not already exist.
+    // append the route to the routeInfo if it does not already exist.
     routeInfo = store.get(path)
     route = mergeHops(destHops)
     if routeInfo == nil {
@@ -176,7 +176,7 @@ function routeChanOpenConfirm(
     path = append(provingConnectionIdentifier, srcConnectionHops, channelPath(counterpartyPortIdentifier, counterpartyChannelIdentifier))
 
     // merge destHops into a route and
-    // append the destHops to the routeInfo if it does not already exist.
+    // append the route to the routeInfo if it does not already exist.
     routeInfo = store.get(path)
     route = mergeHops(destHops)
     if routeInfo == nil {
