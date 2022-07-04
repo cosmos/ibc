@@ -109,12 +109,16 @@ The logic involved in collecting fees from users and then paying it out to the r
 
 ### Data Structures
 
-The incentivized acknowledgment written on the destination chain includes raw bytes of the acknowledgement from the underlying application and the source address of the forward relayer.
+The incentivized acknowledgment written on the destination chain includes:
+- raw bytes of the acknowledgement from the underlying application,
+- the source address of the forward relayer,
+- and a boolean indicative of receive operation success on the underlying application.
 
 ```typescript
 interface Acknowledgement {
     appAcknowledgement: []byte
     forwardRelayerAddress: string
+    underlyingAppSuccess: boolean
 }
 ```
 
@@ -246,7 +250,7 @@ function onChanOpenInit(
     metadata, err = UnmarshalJSON(version)
     if err != nil {
         // call the underlying applications OnChanOpenInit callback
-        app.onChanOpenInit(
+        return app.onChanOpenInit(
             order,
             connectionHops,
             portIdentifier,
@@ -259,10 +263,12 @@ function onChanOpenInit(
 
     // check that feeVersion is supported
     if !isSupported(metadata.feeVersion) {
-        return error
+        return "", error
     }
-    // call the underlying applications OnChanOpenInit callback
-    app.onChanOpenInit(
+    // call the underlying applications OnChanOpenInit callback.
+    // if the version string is empty, OnChanOpenInit is expected to return
+    // a default version string representing the version(s) it supports
+    appVersion, err = app.onChanOpenInit(
         order,
         connectionHops,
         portIdentifier,
@@ -271,6 +277,16 @@ function onChanOpenInit(
         counterpartyChannelIdentifier,
         metadata.appVersion,
     )
+    if err != nil {
+        return "", err
+    }
+
+    // a new version string is constructed with the app version returned 
+    // by the underlying application, in case it is different than the 
+    // one passed by the caller
+    version = constructVersion(metadata.MiddlewareVersion, appVersion)
+
+    return version, nil
 }
 
 function onChanOpenTry(
@@ -285,7 +301,7 @@ function onChanOpenTry(
     cpMetadata, err = UnmarshalJSON(counterpartyVersion)
     if err != nil {
         // call the underlying applications OnChanOpenTry callback
-        app.onChanOpenTry(
+        return app.onChanOpenTry(
             order,
             connectionHops,
             portIdentifier,
@@ -297,12 +313,12 @@ function onChanOpenTry(
     }
 
     if !isCompatible(cpMetadata.feeVersion) {
-        return error
+        return "", error
     }
-    selectFeeVersion(cpMetadata.feeVersion)
+    feeVersion = selectFeeVersion(cpMetadata.feeVersion)
 
     // call the underlying applications OnChanOpenTry callback
-    app.onChanOpenTry(
+    appVersion, err = app.onChanOpenTry(
         order,
         connectionHops,
         portIdentifier,
@@ -311,6 +327,17 @@ function onChanOpenTry(
         counterpartyChannelIdentifier,
         cpMetadata.appVersion,
     )
+    if err != nil {
+        return "", err
+    }
+    
+    // a new version string is constructed with the finall fee version
+    // that is selected and the app version returned by the underlying
+    // application (which may be differents different than the one
+    // passed by the caller
+    version = constructVersion(feeVersion, appVersion)
+
+    return version, nil
 }
 
 function onChanOpenAck(
@@ -321,7 +348,7 @@ function onChanOpenAck(
     cpMetadata, err = UnmarshalJSON(counterpartyVersion)
     if err != nil {
         // call the underlying applications OnChanOpenAck callback
-        app.onChanOpenAck(
+        return app.onChanOpenAck(
             portIdentifier, 
             channelIdentifier, 
             counterpartyChannelIdentifier,
@@ -333,7 +360,7 @@ function onChanOpenAck(
         return error
     }  
     // call the underlying applications OnChanOpenAck callback
-    app.onChanOpenAck(
+    return app.onChanOpenAck(
         portIdentifier, 
         channelIdentifier, 
         counterpartyChannelIdentifier,
@@ -346,7 +373,7 @@ function onChanOpenConfirm(
   channelIdentifier: Identifier) {
     // fee middleware performs no-op on ChanOpenConfirm,
     // just call underlying callback
-    app.onChanOpenConfirm(portIdentifier, channelIdentifier)
+    return app.onChanOpenConfirm(portIdentifier, channelIdentifier)
 }
 ```
 
@@ -356,28 +383,36 @@ function onChanOpenConfirm(
 function onRecvPacket(packet: Packet, relayer: string): bytes {
     app_acknowledgement = app.onRecvPacket(packet, relayer)
 
-    // in case of asynchronous acknowledgement, we must store the relayer address so that we can retrieve it later to write the acknowledgement.
+    // in case of asynchronous acknowledgement, we must store the relayer
+    // address. It will be retrieved later and used to get the source 
+    // address that will be written in the acknowledgement.
     if app_acknowledgement == nil {
         privateStore.set(relayerAddressForAsyncAckPath(packet), relayer)
     }
 
-    // get source address by retrieving counterparty payee address of this relayer stored in fee middleware.
+    // get source address by retrieving counterparty payee address of 
+    // this relayer stored in fee middleware.
     // NOTE: source address may be empty or invalid, counterparty
     // must refund fee in these cases
     sourceAddress = getCounterpartyPayeeAddress(relayer)
 
     // wrap the acknowledgement with forward relayer and return marshalled bytes
-    // constructIncentivizedAck takes the app-specific acknowledgement and receive-packet relayer (forward relayer)
-    // and constructs the incentivized acknowledgement struct with the forward relayer and app-specific acknowledgement embedded.
-    ack = constructIncentivizedAck(app_acknowledgment, sourceAddress)
+    // constructIncentivizedAck takes:
+    // - the app-specific acknowledgement,
+    // - the receive-packet relayer (forward relayer)
+    // - and a boolean indicative of receive operation success,
+    // and constructs the incentivized acknowledgement struct with 
+    // the forward relayer and app-specific acknowledgement embedded.
+    ack = constructIncentivizedAck(app_acknowledgment, sourceAddress, app_acknowledgment.success)
     return marshal(ack)
 }
 
 function onAcknowledgePacket(packet: Packet, acknowledgement: bytes, relayer: string) {
-    // the acknowledgement is a marshalled struct containing the forward relayer address as a string (called forward_relayer),
-    // and the raw acknowledgement bytes returned by the counterparty application module (called app_ack).
+    // the acknowledgement is a marshalled struct containing:
+    // - the forward relayer address as a string (called forward_relayer)
+    // - and the raw acknowledgement bytes returned by the counterparty application module (called app_ack).
 
-    // get the forward relayer from the acknowledgement
+    // get the forward relayer from the (incentivized) acknowledgement
     // and pay fees to forward and reverse relayers.
     // reverse_relayer is submitter of acknowledgement message
     // provided in function arguments
@@ -408,10 +443,14 @@ function onTimeoutPacketClose(packet: Packet, relayer: string) {
     app.onTimeoutPacketClose(packet, relayer)
 }
 
-function constructIncentivizedAck(app_ack: bytes, forward_relayer: string): Acknowledgement {
+function constructIncentivizedAck(
+  app_ack: bytes, 
+  forward_relayer: string, 
+  success: boolean): Acknowledgement {
     return Acknowledgement{
 		appAcknowledgement:    app_ack,
 		forwardRelayerAddress: relayer,
+        underlyingAppSuccess:  success,
 	}
 }
 
@@ -435,9 +474,10 @@ function writeAcknowledgement(
   acknowledgement: bytes) {
     // retrieve the relayer that was stored in `onRecvPacket`
     relayer = privateStore.get(relayerAddressForAsyncAckPath(packet))
-    // get source address by retrieving counterparty payee address of this relayer stored in fee middleware.
+    // get source address by retrieving counterparty payee address 
+    // of this relayer stored in fee middleware.
     sourceAddress = getCounterpartyPayeeAddress(relayer)
-    ack = constructIncentivizedAck(acknowledgment, sourceAddress)
+    ack = constructIncentivizedAck(acknowledgment, sourceAddress, acknowledgment.success)
     ack_bytes = marshal(ack)
     // ics4Wrapper may be core IBC or higher-level middleware
     return ics4Wrapper.writeAcknowledgement(packet, ack_bytes)
