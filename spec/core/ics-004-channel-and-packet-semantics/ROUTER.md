@@ -37,10 +37,6 @@ interface RouteInfo {
     // this may be a list of Identifiers.
     // Each Identifier is a route (ie a joined list of connection identifiers by `/`)
     destHops: [Identifier],
-    // the provingConnectionIdentifier is the connection Identifier that exists on the executing chain
-    // It must be used to prove any information coming from the sourceHops (stored in the RouteInfo path)
-    // The provingConnectionIdentifier must be the counterparty identifier of the last hop on the sourceHops
-    provingConnectionIdentifier: Identifier,
 }
 ```
 
@@ -126,9 +122,22 @@ function routeChanOpenAck(
         verifyChannelState(connection, proofHeight, proofTry, counterpartyPortIdentifier, counterpartyChannelIdentifier, tryChannel)
     }
 
-    // store channel under channelPath prefixed by srcConnectionHops
-    path = append(srcConnectionHops, channelPath(counterpartyPortIdentifier, counterpartyChannelIdentifier))
-    store.set(path, tryChannel)
+    // create unique path for the source route: provingConnectionIdentifier/sourceHops
+    path = append(provingConnectionIdentifier, srcConnectionHops, channelPath(counterpartyPortIdentifier, counterpartyChannelIdentifier))
+
+    // merge destHops into a route and
+    // append the destHops to the routeInfo if it does not already exist.
+    routeInfo = store.get(path)
+    route = mergeHops(destHops)
+    if routeInfo == nil {
+        routeInfo = RouteInfo{
+            DestHops: [route],
+        }
+    } else {
+        routes = append(routeInfo.destHops, route)
+        routeInfo.DestHops = routes
+    }
+    store.set(path, routeInfo)
 }
 
 // routeChanOpenConfirm routes an ACK to the confirmation chain
@@ -163,9 +172,22 @@ function routeChanOpenConfirm(
         verifyChannelState(connection, proofHeight, proofTry, counterpartyPortIdentifier, counterpartyChannelIdentifier, tryChannel)
     }
 
-     // store channel under channelPath prefixed by srcConnectionHops
-    path = append(srcConnectionHops, channelPath(counterpartyPortIdentifier, counterpartyChannelIdentifier))
-    store.set(path, ackChannel)
+    // create unique path for the source route: provingConnectionIdentifier/sourceHops
+    path = append(provingConnectionIdentifier, srcConnectionHops, channelPath(counterpartyPortIdentifier, counterpartyChannelIdentifier))
+
+    // merge destHops into a route and
+    // append the destHops to the routeInfo if it does not already exist.
+    routeInfo = store.get(path)
+    route = mergeHops(destHops)
+    if routeInfo == nil {
+        routeInfo = RouteInfo{
+            DestHops: [route],
+        }
+    } else {
+        routes = append(routeInfo.destHops, route)
+        routeInfo.DestHops = routes
+    }
+    store.set(path, routeInfo)
 }
 ```
 
