@@ -650,7 +650,7 @@ function recvPacket(
         // for ORDERED_ALLOW_TIMEOUT, we do not abort on timeout
         // instead increment next sequence recv and write the sentinel timeout value in packet receipt
         // then return
-        if (getConsensusHeight() > packet.timeoutHeight && packet.timeoutHeight != 0) || (currentTimestamp() > packet.timeoutTimestamp && packet.timeoutTimestamp != 0) {
+        if (getConsensusHeight() >= packet.timeoutHeight && packet.timeoutHeight != 0) || (currentTimestamp() >= packet.timeoutTimestamp && packet.timeoutTimestamp != 0) {
           nextSequenceRecv = nextSequenceRecv + 1
           provableStore.set(nextSequenceRecvPath(packet.destPort, packet.destChannel), nextSequenceRecv)
           provableStore.set(
@@ -872,7 +872,8 @@ function timeoutPacket(
     switch channel.order {
       case ORDERED:
         // ordered channel: check that packet has not been received
-        // only allow timeout on next sequence so all sequences before the timed out packet can be received
+        // only allow timeout on next sequence so all sequences before the timed out packet are processed (received/timed out)
+        // before this packet times out
         abortTransactionUnless(nextSequenceRecv == packet.sequence)
         // ordered channel: check that the recv sequence is as claimed
         abortTransactionUnless(connection.verifyNextSequenceRecv(
@@ -899,13 +900,15 @@ function timeoutPacket(
       // before the timeout receipt can be written and subsequently proven on the sender chain in timeoutPacket
       case ORDERED_ALLOW_TIMEOUT:
         // ordered channel: check that packet has not been received
-        // only allow timeout on next sequence so all sequences before the timed out packet can be received
+        // only allow timeout on next sequence so all sequences before the timed out packet are processed (received/timed out)
+        // before this packet times out
         abortTransactionUnless(nextSequenceRecv == packet.sequence)
         abortTransactionUnless(connection.verifyPacketReceipt(
           proofHeight,
           proof,
           packet.destPort,
           packet.destChannel,
+          packet.sequence
           TIMEOUT_RECEIPT,
         ))
         break;
