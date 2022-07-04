@@ -223,7 +223,7 @@ The fee middleware will negotiate its fee protocol version with the counterparty
 
 Channel Version: 
 ```json
-{"fee_version":<fee_protocol_version>,"app_version":<application_version>}`
+{"fee_version":<fee_protocol_version>,"app_version":<application_version>}
 ```
 
 Ex: 
@@ -448,10 +448,10 @@ function constructIncentivizedAck(
   forward_relayer: string, 
   success: boolean): Acknowledgement {
     return Acknowledgement{
-		appAcknowledgement:    app_ack,
-		forwardRelayerAddress: relayer,
+	appAcknowledgement:    app_ack,
+	forwardRelayerAddress: relayer,
         underlyingAppSuccess:  success,
-	}
+    }
 }
 
 function getForwardRelayer(ack: Acknowledgement): string {
