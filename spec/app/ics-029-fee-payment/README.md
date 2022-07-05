@@ -136,9 +136,9 @@ function relayerAddressForAsyncAckPath(packet: Packet): Path {
 
 ### Fee Middleware Contract
 
-While the details may vary between fee modules, all Fee modules **must** ensure it does the following:
+While the details may vary between fee modules, all fee modules **must** ensure they does the following:
 
-- It must allow relayers to register their counterparty payee address.
+- It must allow relayers to register their counterparty payee address (i.e. source address).
 - It must have in escrow the maximum fees that all outstanding packets may pay out (or it must have ability to mint required amount of tokens)
 - It must pay the receive fee for a packet to the forward relayer specified in `PayFee` callback (if unspecified, it must refund forward fee to original fee payer(s))
 - It must pay the ack fee for a packet to the reverse relayer specified in `PayFee` callback
@@ -146,23 +146,31 @@ While the details may vary between fee modules, all Fee modules **must** ensure 
 - It must refund any remainder fees in escrow to the original fee payer(s) if applicable
 
 ```typescript
-// RegisterCounterpartyPayee is called by the relayer on each channelEnd and allows them to specify their counterparty payee address before relaying
-// This ensures they will be properly compensated for forward relaying since destination chain must send back relayer's source address (counterparty payee address) in acknowledgement
-// This function may be called more than once by relayer, in which case, latest counterparty payee address is always used.
+// RegisterCounterpartyPayee is called by the relayer on each channelEnd and 
+// allows them to specify their counterparty payee address before relaying.
+// This ensures they will be properly compensated for forward relaying since 
+// destination chain must send back relayer's source address (counterparty 
+// payee address) in acknowledgement.
+// This function may be called more than once by relayer, in which case, latest 
+// counterparty payee address is always used.
 function RegisterCounterpartyPayee(relayer: string, counterPartyAddress: string) {
     // set mapping between relayer address and counterparty payee address
 }
 
-// EscrowPacketFee is an open callback that may be called by any module/user that wishes to escrow funds in order to
-// incentivize the relaying of the given packet.
-// NOTE: These fees are escrowed in addition to any previously escrowed amount for the packet. In the case where the previous amount is zero,
-// the provided fees are the initial escrow amount.
+// EscrowPacketFee is an open callback that may be called by any module/user 
+// that wishes to escrow funds in order to incentivize the relaying of the 
+// given packet.
+// NOTE: These fees are escrowed in addition to any previously escrowed amount 
+// for the packet. In the case where the previous amount is zero, the provided 
+// fees are the initial escrow amount.
 // They may set a separate receiveFee, ackFee, and timeoutFee to be paid
-// for each step in the packet flow. The caller must send max(receiveFee+ackFee, timeoutFee) to the fee module to be locked
-// in escrow to provide payout for any potential packet flow.
-// The caller may optionally specify an array of relayer addresses. This MAY be used by the fee module to modify fee payment logic
-// based on ultimate relayer address. For example, fee module may choose to only pay out relayer if the relayer address was specified in
-// the `EscrowPacketFee`.
+// for each step in the packet flow. The caller must send max(receiveFee+ackFee, timeoutFee)
+// to the fee module to be locked in escrow to provide payout for any potential 
+// packet flow.
+// The caller may optionally specify an array of relayer addresses. This MAY be
+// used by the fee module to modify fee payment logic based on ultimate relayer
+// address. For example, fee module may choose to only pay out relayer if the 
+// relayer address was specified in the `EscrowPacketFee`.
 function EscrowPacketFee(packet: Packet, receiveFee: Fee, ackFee: Fee, timeoutFee: Fee, relayers: []string) {
     // escrow max(receiveFee+ackFee, timeoutFee) for this packet
     // do custom logic with provided relayer addresses if necessary
