@@ -429,7 +429,8 @@ function onAcknowledgePacket(packet: Packet, acknowledgement: bytes, relayer: st
     forward_relayer = getForwardRelayer(ack)
     PayFee(packet, forward_relayer, relayer)
 
-    // unwrap the raw acknowledgement bytes sent by counterparty application and pass it to the application callback.
+    // unwrap the raw acknowledgement bytes sent by counterparty application
+    // and pass it to the application callback.
     app_ack = getAppAcknowledgement(acknowledgement)
 
     app.OnAcknowledgePacket(packet, app_ack, relayer)
@@ -579,6 +580,7 @@ Coming soon.
 ## History
 
 June 8 2021 - Switched to middleware solution from implementing callbacks in ICS-4 directly.
+
 June 1 2021 - Draft written
 
 ## Copyright
