@@ -426,7 +426,7 @@ function chanUpgradeTry(
 
     // either timeout height or timestamp must be non-zero
     // if the upgrade feature is implemented on the TRY chain, then a relayer may submit a TRY transaction after the timeout.
-    // this will restore the channel on the executing chain and allow counterparty to use the CancelChannelUpgradeMsg to restore their channel.
+    // this will restore the channel on the executing chain and allow counterparty to use the ChannelUpgradeCancelMsg to restore their channel.
     if timeoutHeight == 0 && timeoutTimestamp == 0 {
         restoreChannel()
         return
