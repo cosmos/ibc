@@ -515,7 +515,7 @@ function sendPacket(
 
 **User sending Packets**
 
-A user may specify a fee to incentivize the relaying during packet submission, by submitting a fee payment message atomically with the application-specific "send packet" message (e.g. ICS-20 MsgTransfer). The fee middleware will escrow the fee for the packet that is created atomically with the escrow. The fee payment message itself is not specified in this document as it may vary greatly across implementations. In some middleware, there may be no fee payment message at all if the fees are being paid out from an altruistic pool.
+A user may specify a fee to incentivize the relaying during packet submission, by submitting a fee payment message atomically with the application-specific "send packet" message (e.g. ICS-20 `MsgTransfer`). The fee middleware will escrow the fee for the packet that is created atomically with the escrow. The fee payment message itself is not specified in this document as it may vary greatly across implementations. In some middleware, there may be no fee payment message at all if the fees are being paid out from an altruistic pool.
 
 Since the fee middleware does not need to modify the outgoing packet, the fee payment message may be placed before or after the send packet message. However in order to maintain consistency with other middleware messages, it is recommended that fee middleware require their messages to be placed before the send packet message and escrow fees for the **next sequence** on the given channel. This way when the messages are atomically committed, the next sequence on the channel is the send packet message sent by the user, and the user escrows their fee for the created packet.
 
