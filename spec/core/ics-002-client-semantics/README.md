@@ -456,6 +456,8 @@ The caller is expected to construct the full `CommitmentPath` from a `Commitment
 then it can pass in a non-zero `delayPeriodTime` or `delayPeriodBlocks`. If a delay period is not necessary, the caller must pass in 0 for `delayPeriodTime` and `delayPeriodBlocks`,
 and the client will not enforce any delay period for verification.
 
+Since the verification method is designed to give complete control to client implementations, clients can support chains that do not provide absence proofs by verifying the existence of a non-empty sentinel `ABSENCE` value. Thus in these special cases, the proof provided will be an ICS-23 Existence proof, and the client will verify that the `ABSENCE` value is stored under the given path for the given height.
+
 ```typescript
 type verifyNonMembership = (
   clientState: ClientState,

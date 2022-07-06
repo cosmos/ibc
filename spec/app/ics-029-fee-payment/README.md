@@ -292,7 +292,7 @@ function onChanOpenInit(
     // a new version string is constructed with the app version returned 
     // by the underlying application, in case it is different than the 
     // one passed by the caller
-    version = constructVersion(metadata.MiddlewareVersion, appVersion)
+    version = constructVersion(metadata.feeVersion, appVersion)
 
     return version, nil
 }
