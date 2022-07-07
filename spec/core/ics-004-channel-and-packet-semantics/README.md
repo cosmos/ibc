@@ -381,7 +381,7 @@ function chanOpenAck(
   proofTry: CommitmentProof,
   proofHeight: Height) {
     channel = provableStore.get(channelPath(portIdentifier, channelIdentifier))
-    abortTransactionUnless(channel.state === INIT || channel.state === TRYOPEN)
+    abortTransactionUnless(channel.state === INIT)
     abortTransactionUnless(authenticateCapability(channelCapabilityPath(portIdentifier, channelIdentifier), capability))
     connection = provableStore.get(connectionPath(channel.connectionHops[0]))
     abortTransactionUnless(connection !== null)
