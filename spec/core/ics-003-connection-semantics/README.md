@@ -384,7 +384,7 @@ function connOpenAck(
   consensusHeight: Height) {
     abortTransactionUnless(consensusHeight < getCurrentHeight())
     connection = provableStore.get(connectionPath(identifier))
-    abortTransactionUnless((connection.state === TRYOPEN && connection.version === version))
+    abortTransactionUnless((connection.state === INIT && connection.version.indexOf(version) !== -1)
     expectedConsensusState = getConsensusState(consensusHeight)
     expected = ConnectionEnd{TRYOPEN, identifier, getCommitmentPrefix(),
                              connection.counterpartyClientIdentifier, connection.clientIdentifier,
