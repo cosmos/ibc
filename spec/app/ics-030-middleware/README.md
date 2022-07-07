@@ -53,7 +53,7 @@ Additionally, the middleware must take care to ensure that the application logic
 {
     "<middleware_version_key>": "<middleware_version_value>",
     "app_version": "<application_version_value>",
-    ... // other custom parameter fields
+    // ... other custom parameter fields
 }
 ```
 
