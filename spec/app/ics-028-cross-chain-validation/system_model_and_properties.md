@@ -123,9 +123,9 @@ CCV provides the following system properties.
   
   Then for all heights `h` on the provider chain, 
    ```
-  hp <= h < hp': Power(cc,hc,val) <= VP( pBonded(h,val) + sum(slash(val,hs,hp,_)) ),
+  hp <= h < hp': Power(cc,hc,val) <= VP( pBonded(h,val) + sum(slash(val,hs,hp,_)) ), such that hp <= hs < h,
   ```
-  where `sum(slash(val,hs,hp,_))` is the sum of the slashes at all heights `hs` of `val` for infractions committed at `hp` such that `hp <= hs < hp'`.
+  where `sum(slash(val,hs,hp,_))` is the sum of the slashes at all heights `hs` of `val` for infractions committed at `hp`.
 
   > **Note**: The reason for `+ sum(slash(val,hs,hp,_))` in the above inequality is that slashing `val` reduces its bonded tokens, however it does not reduce the power already granted to it (at height `hc` on `cc`)
 
