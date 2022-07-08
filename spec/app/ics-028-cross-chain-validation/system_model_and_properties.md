@@ -127,7 +127,7 @@ CCV provides the following system properties.
   ```
   where `sum(slash(val,hs,hp,_))` is the sum of the slashes at all heights `hs` of `val` for infractions committed at `hp`.
 
-  > **Note**: The reason for `+ sum(slash(val,hs,hp,_))` in the above inequality is that slashing `val` reduces its bonded tokens, however it does not reduce the power already granted to it (at height `hc` on `cc`)
+  > **Note**: The reason for `+ sum(slash(val,hs,hp,_))` in the above inequality is that slashing `val` reduces its bonded tokens (i.e., `pBonded(h,val)`), however it does not reduce the power already granted to it at height `hc` on `cc` (i.e., `Power(cc,hc,val)`).
 
   > **Intuition**: The *Bond-Based Consumer Voting Power* property ensures that validators that validate on the consumer chains have enough tokens bonded on the provider chain for a sufficient amount of time such that the security model holds. 
   > This means that if the validators misbehave on the consumer chains, their tokens bonded on the provider chain can be slashed during the unbonding period.
@@ -357,7 +357,7 @@ i.e., we informally prove the properties described in the [previous section](#de
   Then, `Power(cc,ha,val) = Power(cc,h,val)`, for all block heights `h`, such that `ha <= h < hb` (i.e., the voting power granted to `val` on `cc` in the period between `ts(ha)` and `ts(hb)` is constant).  
 
   We prove the *Bond-Based Consumer Voting Power* property through contradiction.
-  We assume there exist a height `h` on the provider chain between `hp` and `hp'` such that `Power(cc,hc,val) > VP(pBonded(h,val))`.
+  We assume there exist a height `h` on the provider chain between `hp` and `hp'` such that `Power(cc,hc,val) > VP( pBonded(h,val) + sum(slash(val,hs,hp,_)) )`.
   The following sequence of assertions leads to a contradiction.
   - Let `U1` be the latest update of `val` that is applied by `cc` before or not later than block height `hc` 
     (i.e., `U1` is the update that sets `Power(cc,hc,val)` for `val`). 
