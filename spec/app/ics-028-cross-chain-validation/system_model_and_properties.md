@@ -97,9 +97,12 @@ We use the following notations:
 - `pBonded(h,val)` is the number of tokens bonded by validator `val` on the provider chain at block height `h`; 
   note that `pBonded(h,val)` includes also unbonding tokens (i.e., tokens in the process of being unbonded);
 - `VP(T)` is the voting power associated to a number `T` of tokens;
-- `Power(cc,h,val)` is the voting power granted to a validator `val` on a consumer chain `cc` at block height `h`;
+- `Power(c,h,val)` is the voting power granted to a validator `val` on a chain `c` at block height `h`;
 - `Token(power)` is the amount of tokens necessary to be bonded (on the provider chain) by a validator to be granted `power` voting power, 
   i.e., `Token(VP(T)) = T`;
+- `slash(val, h, hi, sf)` is the amount of token slashed from a validator `val` on the provider chain (i.e., `pc`) at height `h` for an infraction (with a slashing fraction of `sf`) committed at (provider) height `hi`, 
+  i.e., `slash(val, h, hi, sf) = sf * Token(Power(pc,hi,val))`;
+  note that the infraction can be committed also on a consumer chain, in which case `hi` is the corresponding height on the provider chain.
 
 Also, we use `ha << hb` to denote an order relation between heights, i.e., the block at height `ha` *happens before* the block at height `hb`. 
 For heights on the same chain, `<<` is equivalent to `<`, i.e., `ha << hb` entails `hb` is larger than `ha`.
@@ -116,23 +119,26 @@ CCV provides the following system properties.
   - `val` has `Power(cc,hc,val)` voting power on `cc` at height `hc`;
   - `hc'` is the smallest height on `cc` that satisfies `ts(hc') >= ts(hc) + UnbondingPeriod`, i.e., `val` cannot completely unbond on `cc` before `hc'`;   
   - `hp` is the largest height on the provider chain that satisfies `hp << hc`, i.e., `Power(pc,hp,val) = Power(cc,hc,val)`, where `pc` is the provider chain;
-  - `hp'` is the smallest height on the provider chain that satisfies `hc' << hp'`, i.e., `val` cannot completely unbond on the provider chain before `hp'`.  
+  - `hp'` is the smallest height on the provider chain that satisfies `hc' << hp'`, i.e., `val` cannot completely unbond on the provider chain before `hp'`. 
   
   Then for all heights `h` on the provider chain, 
    ```
-  hp <= h < hp': Power(cc,hc,val) <= VP(pBonded(h,val))
+  hp <= h < hp': Power(cc,hc,val) <= VP( pBonded(h,val) + sum(slash(val,hs,hp,_)) ),
   ```
+  where `sum(slash(val,hs,hp,_))` is the sum of the slashes at all heights `hs` of `val` for infractions committed at `hp` such that `hp <= hs < hp'`.
+
+  > **Note**: The reason for `+ sum(slash(val,hs,hp,_))` in the above inequality is that slashing `val` reduces its bonded tokens, however it does not reduce the power already granted to it (at height `hc` on `cc`)
 
   > **Intuition**: The *Bond-Based Consumer Voting Power* property ensures that validators that validate on the consumer chains have enough tokens bonded on the provider chain for a sufficient amount of time such that the security model holds. 
   > This means that if the validators misbehave on the consumer chains, their tokens bonded on the provider chain can be slashed during the unbonding period.
   > For example, if one unit of voting power requires `1.000.000` bonded tokens (i.e., `VP(1.000.000)=1`), 
   > then a validator that gets one unit of voting power on a consumer chain must have at least `1.000.000` tokens bonded on the provider chain until the unbonding period elapses on the consumer chain.
 
-- ***Slashable Consumer Misbehavior***: If a validator `val` misbehaves on a consumer chain `cc` at a block height `hi`, 
+- ***Slashable Consumer Misbehavior***: If a validator `val` commits an infraction, with a slashing fraction of `sf`, on a consumer chain `cc` at a block height `hi`, 
   then any evidence of misbehavior that is received by `cc` at height `he`, such that `ts(he) < ts(hi) + UnbondingPeriod`, 
-  MUST results in *exactly* the amount of tokens `Token(Power(cc,hi,val))` to be slashed on the provider chain. 
+  MUST results in *exactly* the amount of tokens `sf*Token(Power(cc,hi,val))` to be slashed on the provider chain. 
   Furthermore, `val` MUST NOT be slashed more than once for the same misbehavior. 
-  > **Note:** Unlike in single-chain validation, in CCV the tokens `Token(Power(cc,hi,val))` MAY be slashed even if the evidence of misbehavior is received at height `he` such that `ts(he) >= ts(hi) + UnbondingPeriod`, 
+  > **Note:** Unlike in single-chain validation, in CCV the tokens `sf*Token(Power(cc,hi,val))` MAY be slashed even if the evidence of misbehavior is received at height `he` such that `ts(he) >= ts(hi) + UnbondingPeriod`, 
   since unbonding operations need to reach maturity on both the provider and all the consumer chains.
   >
   > **Note:** The *Slashable Consumer Misbehavior* property also ensures that if a delegator starts unbonding an amount `x` of tokens from `val` before height `hi`, then `x` will not be slashed, since `x` is not part of `Token(Power(c,hi,val))`.
