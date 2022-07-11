@@ -89,10 +89,17 @@ function onChanOpenInit(
   channelIdentifier: Identifier,
   counterpartyPortIdentifier: Identifier,
   counterpartyChannelIdentifier: Identifier,
-  version: string) {
-    middlewareVersion, appVersion = splitMiddlewareVersion(version)
+  version: string) (version: string, err: Error) {
+    if version != "" {
+        middlewareVersion, appVersion = splitMiddlewareVersion(version)
+    } else {
+        // set middleware version to default value
+        middlewareVersion = defaultMiddlewareVersion
+        // allow application to return its default version
+        appVersion = ""
+    }
     doCustomLogic()
-    app.OnChanOpenInit(
+    appVersion, err = app.OnChanOpenInit(
         order,
         connectionHops,
         portIdentifier,
@@ -101,6 +108,12 @@ function onChanOpenInit(
         counterpartyChannelIdentifier,
         appVersion, // note we only pass app version here
     )
+    abortTransactionUnless(err != nil)
+    versionJSON = {
+        middlewareVersion: middlewareVersion, // note this should have a different field name specific to middleware
+        appVersion: appVersion
+    }
+    return marshalJSON(versionJSON), nil
 }
 
 function OnChanOpenTry(
@@ -110,17 +123,18 @@ function OnChanOpenTry(
   channelIdentifier: Identifier,
   counterpartyPortIdentifier: Identifier,
   counterpartyChannelIdentifier: Identifier,
-  version: string,
-  counterpartyVersion: string) {
+  counterpartyVersion: string) (version: string, err: Error) {
       cpMiddlewareVersion, cpAppVersion = splitMiddlewareVersion(counterpartyVersion)
-      middlewareVersion, appVersion = splitMiddlewareVersion(version)
-      if !isCompatible(cpMiddlewareVersion, middlewareVersion) {
+      if !isSupported(cpMiddlewareVersion) {
           return error
       }
+      // create our middleware version based on the version passed in by counterparty
+      middlewareVersion = constructVersion(cpMiddlewareVersion)
+
       doCustomLogic()
 
       // call the underlying applications OnChanOpenTry callback
-      app.OnChanOpenTry(
+      appVersion, err = app.OnChanOpenTry(
           order,
           connectionHops,
           portIdentifier,
@@ -130,6 +144,12 @@ function OnChanOpenTry(
           cpAppVersion, // note we only pass counterparty app version here
           appVersion, // only pass app version
       )
+      abortTransactionUnless(err != nil)
+      versionJSON = {
+          middlewareVersion: middlewareVersion, // note this should have a different field name specific to middleware
+          appVersion: appVersion
+      }
+      return marshalJSON(versionJSON), nil
 }
 
 function onChanOpenAck(
