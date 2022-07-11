@@ -125,13 +125,16 @@ function onChanOpenInit(
   channelIdentifier: Identifier,
   counterpartyPortIdentifier: Identifier,
   counterpartyChannelIdentifier: Identifier,
-  version: string) {
+  version: string) => (version: string, err: Error) {
   // only unordered channels allowed
   abortTransactionUnless(order === UNORDERED)
-  // assert that version is "ics20-1"
-  abortTransactionUnless(version === "ics20-1")
+  // assert that version is "ics20-1" or empty
+  // if empty, we return the default transfer version to core IBC
+  // as the version for this channel
+  abortTransactionUnless(version === "ics20-1" || version === "")
   // allocate an escrow address
   channelEscrowAddresses[channelIdentifier] = newAddress()
+  return "ics20-1", nil
 }
 ```
 
@@ -143,15 +146,16 @@ function onChanOpenTry(
   channelIdentifier: Identifier,
   counterpartyPortIdentifier: Identifier,
   counterpartyChannelIdentifier: Identifier,
-  version: string,
-  counterpartyVersion: string) {
+  counterpartyVersion: string) => (version: string, err: Error) {
   // only unordered channels allowed
   abortTransactionUnless(order === UNORDERED)
   // assert that version is "ics20-1"
-  abortTransactionUnless(version === "ics20-1")
   abortTransactionUnless(counterpartyVersion === "ics20-1")
   // allocate an escrow address
   channelEscrowAddresses[channelIdentifier] = newAddress()
+  // return version that this chain will use given the
+  // counterparty version
+  return "ics20-1", nil
 }
 ```
 
