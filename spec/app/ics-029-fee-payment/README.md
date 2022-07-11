@@ -251,27 +251,36 @@ function onChanOpenInit(
   counterpartyPortIdentifier: Identifier,
   counterpartyChannelIdentifier: Identifier,
   version: string): (version: string, err: Error) {
-    // try to unmarshal JSON-encoded version string and pass 
-    // the app-specific version to app callback.
-    // otherwise, pass version directly to app callback.
-    metadata, err = UnmarshalJSON(version)
-    if err != nil {
-        // call the underlying application's OnChanOpenInit callback
-        return app.onChanOpenInit(
-            order,
-            connectionHops,
-            portIdentifier,
-            channelIdentifier,
-            counterpartyPortIdentifier,
-            counterpartyChannelIdentifier,
-            version,
-        )
+    if version != "" {
+        // try to unmarshal JSON-encoded version string and pass 
+        // the app-specific version to app callback.
+        // otherwise, pass version directly to app callback.
+        metadata, err = UnmarshalJSON(version)
+        if err != nil {
+            // call the underlying applications OnChanOpenInit callback
+            return app.onChanOpenInit(
+                order,
+                connectionHops,
+                portIdentifier,
+                channelIdentifier,
+                counterpartyPortIdentifier,
+                counterpartyChannelIdentifier,
+                version,
+            )
+        }
+
+        // check that feeVersion is supported
+        if !isSupported(metadata.feeVersion) {
+            return "", error
+        }
+    } else {
+        // enable fees by default if relayer does not specify otherwise
+        metadata = {
+            feeVersion: "ics29-1",
+            appVersion: "",
+        }
     }
 
-    // check that feeVersion is supported
-    if !isSupported(metadata.feeVersion) {
-        return "", error
-    }
     // call the underlying application's OnChanOpenInit callback.
     // if the version string is empty, OnChanOpenInit is expected to return
     // a default version string representing the version(s) it supports
