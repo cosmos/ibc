@@ -7,7 +7,7 @@ requires: 4, 25, 26, 30
 kind: instantiation
 author: Aditya Sripal <aditya@interchain.berlin>, Ethan Frey <ethan@confio.tech>
 created: 2021-06-01
-modified: 2021-06-18
+modified: 2022-07-06
 ---
 
 ## Synopsis
@@ -191,7 +191,6 @@ function PayTimeoutFee(packet: Packet, timeout_relayer: string) {
 }
 ```
 
-
 The fee module should also expose the following queries so that relayers may query their expected fee:
 
 ```typescript
@@ -252,28 +251,37 @@ function onChanOpenInit(
   counterpartyPortIdentifier: Identifier,
   counterpartyChannelIdentifier: Identifier,
   version: string): (version: string, err: Error) {
-    // try to unmarshal JSON-encoded version string and pass 
-    // the app-specific version to app callback.
-    // otherwise, pass version directly to app callback.
-    metadata, err = UnmarshalJSON(version)
-    if err != nil {
-        // call the underlying applications OnChanOpenInit callback
-        return app.onChanOpenInit(
-            order,
-            connectionHops,
-            portIdentifier,
-            channelIdentifier,
-            counterpartyPortIdentifier,
-            counterpartyChannelIdentifier,
-            version,
-        )
+    if version != "" {
+        // try to unmarshal JSON-encoded version string and pass 
+        // the app-specific version to app callback.
+        // otherwise, pass version directly to app callback.
+        metadata, err = UnmarshalJSON(version)
+        if err != nil {
+            // call the underlying applications OnChanOpenInit callback
+            return app.onChanOpenInit(
+                order,
+                connectionHops,
+                portIdentifier,
+                channelIdentifier,
+                counterpartyPortIdentifier,
+                counterpartyChannelIdentifier,
+                version,
+            )
+        }
+
+        // check that feeVersion is supported
+        if !isSupported(metadata.feeVersion) {
+            return "", error
+        }
+    } else {
+        // enable fees by default if relayer does not specify otherwise
+        metadata = {
+            feeVersion: "ics29-1",
+            appVersion: "",
+        }
     }
 
-    // check that feeVersion is supported
-    if !isSupported(metadata.feeVersion) {
-        return "", error
-    }
-    // call the underlying applications OnChanOpenInit callback.
+    // call the underlying application's OnChanOpenInit callback.
     // if the version string is empty, OnChanOpenInit is expected to return
     // a default version string representing the version(s) it supports
     appVersion, err = app.onChanOpenInit(
@@ -305,10 +313,12 @@ function onChanOpenTry(
   counterpartyPortIdentifier: Identifier,
   counterpartyChannelIdentifier: Identifier,
   counterpartyVersion: string): (version: string, err: Error) {
-    // select mutually compatible fee version
+    // try to unmarshal JSON-encoded version string and pass 
+    // the app-specific version to app callback.
+    // otherwise, pass version directly to app callback.
     cpMetadata, err = UnmarshalJSON(counterpartyVersion)
     if err != nil {
-        // call the underlying applications OnChanOpenTry callback
+        // call the underlying application's OnChanOpenTry callback
         return app.onChanOpenTry(
             order,
             connectionHops,
@@ -320,12 +330,13 @@ function onChanOpenTry(
         )
     }
 
+    // select mutually compatible fee version
     if !isCompatible(cpMetadata.feeVersion) {
         return "", error
     }
     feeVersion = selectFeeVersion(cpMetadata.feeVersion)
 
-    // call the underlying applications OnChanOpenTry callback
+    // call the underlying application's OnChanOpenTry callback
     appVersion, err = app.onChanOpenTry(
         order,
         connectionHops,
@@ -339,10 +350,9 @@ function onChanOpenTry(
         return "", err
     }
     
-    // a new version string is constructed with the finall fee version
+    // a new version string is constructed with the final fee version
     // that is selected and the app version returned by the underlying
-    // application (which may be differents different than the one
-    // passed by the caller
+    // application (which may be different than the one passed by the caller)
     version = constructVersion(feeVersion, appVersion)
 
     return version, nil
@@ -355,7 +365,7 @@ function onChanOpenAck(
   counterpartyVersion: string) {
     cpMetadata, err = UnmarshalJSON(counterpartyVersion)
     if err != nil {
-        // call the underlying applications OnChanOpenAck callback
+        // call the underlying application's OnChanOpenAck callback
         return app.onChanOpenAck(
             portIdentifier, 
             channelIdentifier, 
@@ -367,7 +377,7 @@ function onChanOpenAck(
     if !isSupported(cpMetadata.feeVersion) {
         return error
     }  
-    // call the underlying applications OnChanOpenAck callback
+    // call the underlying application's OnChanOpenAck callback
     return app.onChanOpenAck(
         portIdentifier, 
         channelIdentifier, 
@@ -582,6 +592,8 @@ Coming soon.
 June 8 2021 - Switched to middleware solution from implementing callbacks in ICS-4 directly.
 
 June 1 2021 - Draft written
+
+July 6, 2022 - Update with latest changes from implementation
 
 ## Copyright
 

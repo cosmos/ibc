@@ -104,30 +104,39 @@ function onChanOpenInit(
   channelIdentifier: Identifier,
   counterpartyPortIdentifier: Identifier,
   counterpartyChannelIdentifier: Identifier,
-  version: string): (version: string, err: Error) 
-    // try to unmarshal JSON-encoded version string and pass 
-    // the app-specific version to app callback.
-    // otherwise, pass version directly to app callback.
-    metadata, err = UnmarshalJSON(version)
-    if err != nil {
-        // call the underlying application's onChanOpenInit callback
-        return app.onChanOpenInit(
-            order,
-            connectionHops,
-            portIdentifier,
-            channelIdentifier,
-            counterpartyPortIdentifier,
-            counterpartyChannelIdentifier,
-            version,
-        )
+  version: string): (version: string, err: Error) {
+    if version != "" {
+        // try to unmarshal JSON-encoded version string and pass 
+        // the app-specific version to app callback.
+        // otherwise, pass version directly to app callback.
+        metadata, err = UnmarshalJSON(version)
+        if err != nil {
+            // call the underlying application's onChanOpenInit callback
+            return app.onChanOpenInit(
+                order,
+                connectionHops,
+                portIdentifier,
+                channelIdentifier,
+                counterpartyPortIdentifier,
+                counterpartyChannelIdentifier,
+                version,
+            )
+        }
+    } else {
+        metadata = {
+            // set middleware version to default value
+            middlewareVersion: defaultMiddlewareVersion
+            // allow application to return its default version
+            appVersion: "",
+        }
     }
 
     doCustomLogic()
-
+    
     // call the underlying application's OnChanOpenInit callback.
     // if the version string is empty, OnChanOpenInit is expected to return
     // a default version string representing the version(s) it supports
-    appVersion, err = app.onChanOpenInit(
+    appVersion, err = app.OnChanOpenInit(
         order,
         connectionHops,
         portIdentifier,
@@ -136,16 +145,18 @@ function onChanOpenInit(
         counterpartyChannelIdentifier,
         metadata.appVersion, // note we only pass app version here
     )
-    if err != nil {
-        return "", err
-    }
+    abortTransactionUnless(err != nil)
 
     // a new version string is constructed with the app version returned 
     // by the underlying application, in case it is different than the 
     // one passed by the caller
-    version = constructVersion(metadata.middlewareVersion, appVersion)
+    metadata = {
+        // note this should have a different field name specific to middleware
+        middlewareVersion: metadata.middlewareVersion
+        appVersion: appVersion,
+    }
 
-    return version, nil
+    return MarshallJSON(version), nil
 }
 
 function onChanOpenTry(
@@ -191,16 +202,18 @@ function onChanOpenTry(
         counterpartyChannelIdentifier,
         cpMetadata.appVersion, // note we only pass counterparty app version here
     )
-    if err != nil {
-        return "", err
-    }
+    abortTransactionUnless(err != nil)
 
     // a new version string is constructed with the final middleware version
     // that is selected and the app version returned by the underlying
     // application (which may be different than the one passed by the caller)
-    version = constructVersion(middlewareVersion, appVersion)
+    metadata = {
+        // note this should have a different field name specific to middleware
+        middlewareVersion: middlewareVersion,
+        appVersion: appVersion
+    }
 
-    return version, nil
+    return MarshalJSON(metadata), nil
 }
 
 function onChanOpenAck(
