@@ -86,10 +86,6 @@ function routeChanOpenTry(
         // prove that previous hop (original source) stored channel under channel path
         verifyChannelState(connection, proofHeight, proofInit, counterpartyPortIdentifier, counterpartyChannelIdentifier, initChannel)
     }
-
-    // store channel under channelPath prefixed by srcConnectionHops
-    path = append(srcConnectionHops, channelPath(counterpartyPortIdentifier, counterpartyChannelIdentifier))
-    store.set(path, initChannel)
 }
 
 // srcConnectionHops is the connection Hops from the TRY chain to the executing router chain
