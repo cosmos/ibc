@@ -349,7 +349,7 @@ function connOpenTry(
   proofConsensus: CommitmentProof,
   proofHeight: Height,
   consensusHeight: Height) {
-    // generate a new identifier if the passed identifier was the sentinel empty-string
+    // generate a new identifier
     identifier = generateIdentifier()
 
     abortTransactionUnless(consensusHeight < getCurrentHeight())
