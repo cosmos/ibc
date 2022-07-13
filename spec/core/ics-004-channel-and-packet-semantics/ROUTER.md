@@ -43,13 +43,13 @@ interface RouteInfo {
 ### Channel Handshake
 
 ```typescript
-// srcConnectionHops is the list of identifiers routing back to the ACK chain
-// destConnectionHops is the list of identifiers routing to the CONFIRM chain
-// NOTE: since srcConnectionHops is routing in the opposite direction, it will contain all the counterparty connection identifiers from the connection identifiers specified by the acking chain up to this point.
-// For example, if the route specified by the acking chain is "connection-1/connection-3"
+// srcConnectionHops is the list of identifiers routing back to the TRY chain
+// destConnectionHops is the list of identifiers routing to the ACK chain
+// NOTE: since srcConnectionHops is routing in the opposite direction, it will contain all the counterparty connection identifiers from the connection identifiers specified by the TRY chain up to this point.
+// For example, if the route specified by the TRY chain is "connection-1/connection-3"
 // Then `routeChanOpenAck` may be called on the router chain with srcConnectionHops: "connection-4", destConnectionHops: "connection-3"
-// where connection-4 is the counterparty connectionID on the router chain to connection-1 on the acking chain
-// and connection-3 is the connection on the router chain to the next hop in the route which in this case is the CONFIRM chain.
+// where connection-4 is the counterparty connectionID on the router chain to connection-1 on the TRY chain
+// and connection-3 is the connection on the router chain to the next hop in the route which in this case is the ACK chain.
 function routeChanOpenAck(
   srcConnectionHops: [Identifier],
   destConnectionHops: [Identifier],
