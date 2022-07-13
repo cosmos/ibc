@@ -156,7 +156,7 @@ function onChanOpenInit(
         appVersion: appVersion,
     }
 
-    return MarshallJSON(version), nil
+    return MarshallJSON(metadata), nil
 }
 
 function onChanOpenTry(
