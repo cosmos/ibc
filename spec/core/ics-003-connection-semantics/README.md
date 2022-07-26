@@ -399,9 +399,11 @@ function connOpenTry(
 ```typescript
 function connOpenAck(
   identifier: Identifier,
+  clientState: ClientState,
   version: string,
   counterpartyIdentifier: Identifier,
   proofTry: CommitmentProof,
+  proofClient: CommitmentProof,
   proofConsensus: CommitmentProof,
   proofHeight: Height,
   consensusHeight: Height) {
@@ -415,6 +417,7 @@ function connOpenAck(
                              connection.counterpartyClientIdentifier, connection.clientIdentifier,
                              version, connection.delayPeriodTime, connection.delayPeriodBlocks}
     abortTransactionUnless(connection.verifyConnectionState(proofHeight, proofTry, counterpartyIdentifier, expected))
+    abortTransactionUnless(connection.verifyClientState(proofHeight, proofClient, clientState))
     abortTransactionUnless(connection.verifyClientConsensusState(
       proofHeight, proofConsensus, connection.counterpartyClientIdentifier, consensusHeight, expectedConsensusState))
     connection.state = OPEN
