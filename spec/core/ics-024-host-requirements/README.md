@@ -181,6 +181,80 @@ Host state machines MUST provide the ability to introspect this stored recent co
 type getStoredRecentConsensusStateCount = () => Height
 ```
 
+### Client state validation
+Host state machines MUST define a unique `ClientState` type fulfilling the requirements of [ICS 2](../ics-002-client-semantics).
+
+Host state machines MUST provide the ability to construct a `ClientState` representation of their own state for the purposes of client state validation, with `getHostClientState`:
+
+```typescript
+type getHostClientState = (height: Height) => ClientState
+```
+
+Host state machines MUST provide the ability to validate the `ClientState` of a light client running on a counterparty chain, with `validateSelfClient`:
+
+```typescript
+type validateSelfClient = (counterpartyClientState: ClientState) => boolean
+```
+
+`validateSelfClient` validates the client parameters for a client of the host chain. For example, below is the implementation for Tendermint hosts, using `ClientState` as defined in [ICS 7](../../client/ics-007-tendermint-client/):
+
+```typescript
+function validateSelfClient(counterpartyClientState: ClientState) {
+  hostClientState = getHostClientState()
+
+  // assert that the counterparty client is not frozen
+  if counterpartyClientState.frozenHeight !== null {
+    return false
+  }
+
+  // assert that the chain ids are the same
+  if counterpartyClientState.chainID !== hostClientState.chainID {
+    return false
+  }
+
+  // assert that the counterparty client is in the same revision as the host chain
+  counterpartyRevisionNumber = parseRevisionNumber(counterpartyClientState.chainID)
+  if counterpartyRevisionNumber !== hostClientState.latestHeight.revisionNumber {
+    return false
+  }
+
+  // assert that the counterparty client has a height less than the host height
+  if counterpartyClientState.latestHeight >== hostClientState.latestHeight {
+    return false
+  }
+
+  // assert that the counterparty client has the same ProofSpec as the host
+  if counterpartyClientState.proofSpecs !== hostClientState.proofSpecs {
+    return false
+  }
+
+  // assert that the trustLevel is within the allowed range. 1/3 is the minimum amount
+  // of trust needed which does not break the security model.
+  if counterpartyClientState.trustLevel < 1/3 || counterpartyClientState.trustLevel > 1 {
+    return false
+  }
+
+  // assert that the unbonding periods are the same
+  if counterpartyClientState.unbondingPeriod != hostClientState.unbondingPeriod {
+    return false
+  }
+
+  // assert that the unbonding period is greater than or equal to the trusting period
+  if counterpartyClientState.unbondingPeriod < counterpartyClientState.trustingPeriod {
+    return false
+  }
+
+  // assert that the upgrade paths are the same
+  hostUpgradePath = applyPrefix(hostClientState.upgradeCommitmentPrefix, hostClientState.upgradeKey)
+  counterpartyUpgradePath = applyPrefix(counterpartyClientState.upgradeCommitmentPrefix, counterpartyClientState.upgradeKey)
+  if counterpartyUpgradePath !== hostUpgradePath {
+    return false
+  }
+  
+  return true
+}
+```
+
 ### Commitment path introspection
 
 Host chains MUST provide the ability to inspect their commitment path, with `getCommitmentPrefix`:
