@@ -377,6 +377,7 @@ function connOpenTry(
       // generate a new identifier if the passed identifier was the sentinel empty-string
       identifier = generateIdentifier()
     }
+    abortTransactionUnless(validateSelfClient(clientState))
     abortTransactionUnless(consensusHeight < getCurrentHeight())
     expectedConsensusState = getConsensusState(consensusHeight)
     expectedConnectionEnd = ConnectionEnd{INIT, "", getCommitmentPrefix(), counterpartyClientIdentifier,
@@ -408,6 +409,7 @@ function connOpenAck(
   proofHeight: Height,
   consensusHeight: Height) {
     abortTransactionUnless(consensusHeight < getCurrentHeight())
+    abortTransactionUnless(validateSelfClient(clientState))
     connection = provableStore.get(connectionPath(identifier))
     abortTransactionUnless(
         (connection.state === INIT && connection.version.indexOf(version) !== -1)
