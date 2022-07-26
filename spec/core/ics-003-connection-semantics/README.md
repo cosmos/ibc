@@ -144,7 +144,7 @@ function verifyClientConsensusState(
   consensusStateHeight: Height,
   consensusState: ConsensusState) {
     client = queryClient(connection.clientIdentifier)
-    return client.verifyClientConsensusState(connection, height, connection.counterpartyPrefix, proof, connection.clientIdentifier, consensusStateHeight, consensusState)
+    return client.verifyClientConsensusState(connection, height, connection.counterpartyPrefix, proof, clientIdentifier, consensusStateHeight, consensusState)
 }
 
 function verifyClientState(
