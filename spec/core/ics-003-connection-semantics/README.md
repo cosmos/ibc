@@ -144,7 +144,17 @@ function verifyClientConsensusState(
   consensusStateHeight: Height,
   consensusState: ConsensusState) {
     client = queryClient(connection.clientIdentifier)
-    return client.verifyClientConsensusState(connection, height, connection.counterpartyPrefix, proof, clientIdentifier, consensusStateHeight, consensusState)
+    return client.verifyClientConsensusState(connection, height, connection.counterpartyPrefix, proof, connection.clientIdentifier, consensusStateHeight, consensusState)
+}
+
+function verifyClientState(
+  connection: ConnectionEnd,
+  height: Height,
+  proof: CommitmentProof,
+  clientState: ClientState
+) {
+    client = queryClient(connection.clientIdentifier)
+    return client.verifyClientState(height, connection.counterpartyPrefix, proof, connection.clientIdentifier, clientState)
 }
 
 function verifyConnectionState(
@@ -342,10 +352,12 @@ function connOpenTry(
   counterpartyPrefix: CommitmentPrefix,
   counterpartyClientIdentifier: Identifier,
   clientIdentifier: Identifier,
+  clientState: ClientState,
   counterpartyVersions: string[],
   delayPeriodTime: uint64,
   delayPeriodBlocks: uint64,
   proofInit: CommitmentProof,
+  proofClient: CommitmentProof,
   proofConsensus: CommitmentProof,
   proofHeight: Height,
   consensusHeight: Height) {
@@ -367,13 +379,14 @@ function connOpenTry(
     }
     abortTransactionUnless(consensusHeight < getCurrentHeight())
     expectedConsensusState = getConsensusState(consensusHeight)
-    expected = ConnectionEnd{INIT, "", getCommitmentPrefix(), counterpartyClientIdentifier,
+    expectedConnectionEnd = ConnectionEnd{INIT, "", getCommitmentPrefix(), counterpartyClientIdentifier,
                              clientIdentifier, counterpartyVersions, delayPeriodTime, delayPeriodBlocks}
     versionsIntersection = intersection(counterpartyVersions, previous !== null ? previous.version : getCompatibleVersions())
     version = pickVersion(versionsIntersection) // throws if there is no intersection
     connection = ConnectionEnd{TRYOPEN, counterpartyConnectionIdentifier, counterpartyPrefix,
                                clientIdentifier, counterpartyClientIdentifier, version, delayPeriodTime, delayPeriodBlocks}
-    abortTransactionUnless(connection.verifyConnectionState(proofHeight, proofInit, counterpartyConnectionIdentifier, expected))
+    abortTransactionUnless(connection.verifyConnectionState(proofHeight, proofInit, counterpartyConnectionIdentifier, expectedConnectionEnd))
+    abortTransactionUnless(connection.verifyClientState(proofHeight, proofClient, clientState))
     abortTransactionUnless(connection.verifyClientConsensusState(
       proofHeight, proofConsensus, counterpartyClientIdentifier, consensusHeight, expectedConsensusState))
     provableStore.set(connectionPath(identifier), connection)

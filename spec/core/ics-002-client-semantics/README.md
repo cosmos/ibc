@@ -336,6 +336,18 @@ type verifyClientConsensusState = (
   => boolean
 ```
 
+`verifyClientState` verifies a proof of the client state of the specified client stored on the target machine.
+
+```typescript
+type verifyClientState = (
+  height: Height,
+  prefix: CommitmentPrefix,
+  proof: CommitmentProof,
+  clientIdentifier: Identifier,
+  clientState: ClientState)
+  => boolean
+```
+
 `verifyConnectionState` verifies a proof of the connection state of the specified connection end stored on the target machine.
 
 ```typescript
