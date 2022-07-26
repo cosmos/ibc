@@ -12,6 +12,10 @@ Contributions are welcome. See [CONTRIBUTING.md](meta/CONTRIBUTING.md) for contr
 
 See [ROADMAP.md](meta/ROADMAP.md) for a public up-to-date version of our roadmap.
 
+## What is IBC?
+
+For a high-level explanation of what IBC is and how it works, please read [this blog post](https://blog.cosmos.network/eli5-what-is-ibc-a212f518715f).
+
 ## Interchain Standards
 
 All standards at or past the "Draft" stage are listed here in order of their ICS numbers, sorted by category.
@@ -41,6 +45,7 @@ All standards at or past the "Draft" stage are listed here in order of their ICS
 | --------------------------------------------------------------- | -------------------------- | ----- |
 | [6](spec/client/ics-006-solo-machine-client/README.md)          | Solo Machine Client        | Candidate |
 | [7](spec/client/ics-007-tendermint-client/README.md)            | Tendermint Client          | Candidate |
+| [8](spec/client/ics-008-wasm-client/README.md)                  | Wasm Client                | Draft |
 | [9](spec/client/ics-009-loopback-client/README.md)              | Loopback Client            | Candidate |
 | [10](spec/client/ics-010-grandpa-client/README.md)              | GRANDPA Client             | Draft |
 

@@ -13,90 +13,130 @@ modified: 2020-01-13
 
 ## Synopsis
 
-This standard specifies the properties that consensus algorithms of machines implementing the interblockchain
-communication protocol are required to satisfy. These properties are necessary for efficient and safe
-verification in the higher-level protocol abstractions. The algorithm utilised in IBC to verify the
-consensus transcript & state sub-components of another machine is referred to as a "validity predicate",
-and pairing it with a state that the verifier assumes to be correct forms a "light client" (often shortened to "client").
+This standard specifies the properties that consensus algorithms of state machines implementing the inter-blockchain
+communication (IBC) protocol are required to satisfy. 
+These properties are necessary for efficient and safe verification in the higher-level protocol abstractions. 
+The algorithm utilised in IBC to verify the state updates of a remote state machine is referred to as a *validity predicate*. 
+Pairing a validity predicate with a trusted state (i.e., a state that the verifier assumes to be correct), 
+implements the functionality of a *light client* (often shortened to *client*) for a remote state machine on the host state machine.
+In addition to state update verification, every light client is able to detect consensus misbehaviours through a *misbehaviour predicate*.
 
-This standard also specifies how light clients will be stored, registered, and updated in the
-canonical IBC handler. The stored client instances will be introspectable by a third party actor,
-such as a user inspecting the state of the chain and deciding whether or not to send an IBC packet.
+Beyond the properties described in this specification, IBC does not impose any requirements on
+the internal operation of the state machines and their consensus algorithms. 
+A state machine may consist of a single process signing operations with a private key (the so-called "solo machine"), a quorum of processes signing in unison,
+many processes operating a Byzantine fault-tolerant consensus algorithm (e.g., Tendermint), or other configurations yet to be invented
+— from the perspective of IBC, a state machine is defined entirely by its light client validation and misbehaviour detection logic.
+
+This standard also specifies how the light client's functionality is registered and how its data is stored and updated by the IBC protocol. 
+The stored client instances can be introspected by a third party actor,
+such as a user inspecting the state of the state machine and deciding whether or not to send an IBC packet.
 
 ### Motivation
 
-In the IBC protocol, an actor, which may be an end user, an off-chain process, or a machine,
-needs to be able to verify updates to the state of another machine
-which the other machine's consensus algorithm has agreed upon, and reject any possible updates
-which the other machine's consensus algorithm has not agreed upon. A light client is the algorithm
-with which a machine can do so. This standard formalises the light client model and requirements,
-so that the IBC protocol can easily integrate with new machines which are running new consensus algorithms
-as long as associated light client algorithms fulfilling the listed requirements are provided.
-
-Beyond the properties described in this specification, IBC does not impose any requirements on
-the internal operation of machines and their consensus algorithms. A machine may consist of a
-single process signing operations with a private key, a quorum of processes signing in unison,
-many processes operating a Byzantine fault-tolerant consensus algorithm, or other configurations yet to be invented
-— from the perspective of IBC, a machine is defined entirely by its light client validation & equivocation detection logic.
-Clients will generally not include validation of the state transition logic in general
+In the IBC protocol, an actor, which may be an end user, an off-chain process, or a module on a state machine,
+needs to be able to verify updates to the state of another state machine (i.e., the *remote state machine*). 
+This entails accepting *only* the state updates that were agreed upon by the remote state machine's consensus algorithm. 
+A light client of the remote state machine is the algorithm that enables the actor to verify state updates of that state machine. 
+Note that light clients will generally not include validation of the entire state transition logic
 (as that would be equivalent to simply executing the other state machine), but may
 elect to validate parts of state transitions in particular cases.
+This standard formalises the light client model and requirements. 
+As a result, the IBC protocol can easily be integrated with new state machines running new consensus algorithms,
+as long as the necessary light client algorithms fulfilling the listed requirements are provided.
 
-Clients could also act as thresholding views of other clients. In the case where
-modules utilising the IBC protocol to interact with probabilistic-finality consensus algorithms
-which might require different finality thresholds for different applications, one write-only
-client could be created to track headers and many read-only clients with different finality
-thresholds (confirmation depths after which state roots are considered final) could use that same state.
+The IBC protocol can be used to interact with probabilistic-finality consensus algorithms.
+In such cases, different validity predicates may be required by different applications. For probabilistic-finality consensus, a validity predicate is defined by a finality threshold (e.g., the threshold defines how many block needs to be on top of a block in order to consider it finalized).
+As a result, clients could act as *thresholding views* of other clients:
+One *write-only* client could be used to store state updates (without the ability to verify them), 
+while many *read-only* clients with different finality thresholds (confirmation depths after which 
+state updates are considered final) are used to verify state updates. 
 
-The client protocol should also support third-party introduction. Alice, a module on a machine,
-wants to introduce Bob, a second module on a second machine who Alice knows (and who knows Alice),
-to Carol, a third module on a third machine, who Alice knows but Bob does not. Alice must utilise
-an existing channel to Bob to communicate the canonically-serialisable validity predicate for
-Carol, with which Bob can then open a connection and channel so that Bob and Carol can talk directly.
+The client protocol should also support third-party introduction.
+For example, if `A`, `B`, and `C` are three state machines, with 
+Alice a module on `A`, Bob a module on `B`, and Carol a module on `C`, such that
+Alice knows both Bob and Carol, but Bob knowns only Alice and not Carol, 
+then Alice can utilise an existing channel to Bob to communicate the canonically-serialisable 
+validity predicate for Carol. Bob can then use this validity predicate to open a connection and channel 
+so that Bob and Carol can talk directly.
 If necessary, Alice may also communicate to Carol the validity predicate for Bob, prior to Bob's
 connection attempt, so that Carol knows to accept the incoming request.
 
 Client interfaces should also be constructed so that custom validation logic can be provided safely
 to define a custom client at runtime, as long as the underlying state machine can provide an
 appropriate gas metering mechanism to charge for compute and storage. On a host state machine
-which supports WASM execution, for example, the validity predicate and equivocation predicate
+which supports WASM execution, for example, the validity predicate and misbehaviour predicate
 could be provided as executable WASM functions when the client instance is created.
 
 ### Definitions
 
 * `get`, `set`, `Path`, and `Identifier` are as defined in [ICS 24](../ics-024-host-requirements).
 
-* `CommitmentRoot` is as defined in [ICS 23](../ics-023-vector-commitments). It must provide an inexpensive way for
-  downstream logic to verify whether key/value pairs are present in state at a particular height.
+* `Consensus` is a state update generating algorithm. It takes the previous state of a state machine together 
+  with a set of messages (i.e., state machine transactions) and generates a valid state update of the state machine.
+  Every state machine MUST have a `Consensus` that generates a unique, ordered list of state updates 
+  starting from a genesis state. 
+  
+  This specification expects that the state updates generated by `Consensus` 
+  satisfy the following properties:
+  * Every state update MUST NOT have more than one direct successor in the list of state updates. 
+    In other words, the state machine MUST guarantee *finality* and *safety*. 
+  * Every state update MUST eventually have a successor in the list of state updates. 
+    In other words, the state machine MUST guarantee *liveness*.
+  * Every state update MUST be valid (i.e., valid state transitions).
+    In other words, `Consensus` MUST be *honest*, 
+    e.g., in the case `Consensus` is a Byzantine fault-tolerant consensus algorithm, 
+    such as Tendermint, less than a third of block producers MAY be Byzantine.
+  
+  Unless the state machine satisfies all of the above properties, the IBC protocol
+may not work as intended, e.g., users' assets might be stolen. Note that specific client 
+types may require additional properties. 
 
-* `ConsensusState` is an opaque type representing the state of a validity predicate.
-  `ConsensusState` must be able to verify state updates agreed upon by the associated consensus algorithm.
-  It must also be serialisable in a canonical fashion so that third parties, such as counterparty machines,
-  can check that a particular machine has stored a particular `ConsensusState`. It must finally be
-  introspectable by the state machine which it is for, such that the state machine can look up its
-  own `ConsensusState` at a past height.
+* `Height` specifies the order of the state updates of a state machine, e.g., a sequence number. 
+  This entails that each state update is mapped to a `Height`.
 
-* `ClientState` is an opaque type representing the state of a client.
-  A `ClientState` must expose query functions to verify membership or non-membership of
-  key/value pairs in state at particular heights and to retrieve the current `ConsensusState`.
+* `CommitmentRoot` is as defined in [ICS 23](../ics-023-vector-commitments). 
+  It provides an efficient way for higher-level protocol abstractions to verify whether
+  a particular state transition has occurred on the remote state machine, i.e.,
+  it enables proofs of inclusion or non-inclusion of particular values at particular paths 
+  in the state of the remote state machine at particular `Height`s.
+
+* `ValidityPredicate` is a function that validates state updates. 
+  Using the `ValidityPredicate` SHOULD be more computationally efficient than executing `Consensus`.
+
+* `ConsensusState` is the *trusted view* of the state of a state machine at a particular `Height`.
+  It MUST contain sufficient information to enable the `ValidityPredicate` to validate state updates, 
+  which can then be used to generate new `ConsensusState`s. 
+  It MUST be serialisable in a canonical fashion so that remote parties, such as remote state machines,
+  can check whether a particular `ConsensusState` was stored by a particular state machine.
+  It MUST be introspectable by the state machine whose view it represents, 
+  i.e., a state machine can look up its own `ConsensusState`s at past `Height`s.
+
+* `ClientState` is the state of a client. It MUST expose an interface to higher-level protocol abstractions, 
+  e.g., functions to verify proofs of the existence of particular values at particular paths at particular `Height`s.
+
+* `MisbehaviourPredicate` is a that checks whether the rules of `Consensus` were broken, 
+  in which case the client MUST be *frozen*, i.e., no subsequent `ConsensusState`s can be generated.
+
+* `Misbehaviour` is the proof needed by the `MisbehaviourPredicate` to determine whether 
+  a violation of the consensus protocol occurred. For example, in the case the state machine 
+  is a blockchain, a `Misbehaviour` might consist of two signed block headers with 
+  different `CommitmentRoot`s, but the same `Height`.
 
 ### Desired Properties
 
-Light clients must provide a secure algorithm to verify other chains' canonical headers,
-using the existing `ConsensusState`. The higher level abstractions will then be able to verify
-sub-components of the state with the `CommitmentRoot`s stored in the `ConsensusState`, which are
-guaranteed to have been committed by the other chain's consensus algorithm.
+Light clients MUST provide state verification functions that provide a secure way 
+to verify the state of the remote state machines using the existing `ConsensusState`s. 
+These state verification functions enable higher-level protocol abstractions to 
+verify sub-components of the state of the remote state machines.
 
-Validity predicates are expected to reflect the behaviour of the full nodes which are running the
-corresponding consensus algorithm. Given a `ConsensusState` and a list of messages, if a full node
-accepts the new `Header` generated with `Commit`, then the light client MUST also accept it,
-and if a full node rejects it, then the light client MUST also reject it.
+`ValidityPredicate`s MUST reflect the behaviour of the remote state machine and its `Consensus`, i.e.,
+`ValidityPredicate`s accept *only* state updates that contain state updates generated by 
+the `Consensus` of the remote state machine.
 
-Light clients are not replaying the whole message transcript, so it is possible under cases of
-consensus misbehaviour that the light clients' behaviour differs from the full nodes'.
-In this case, a misbehaviour proof which proves the divergence between the validity predicate
-and the full node can be generated and submitted to the chain so that the chain can safely deactivate the
-light client, invalidate past state roots, and await higher-level intervention.
+In case of misbehavior, the behaviour of the `ValidityPredicate` might differ from the behaviour of 
+the remote state machine and its `Consensus` (since clients do not execute the `Consensus` of the 
+remote state machine). In this case, a `Misbehaviour` SHOULD be submitted to the host state machine, 
+which would result in the client being frozen and higher-level intervention being necessary.
 
 ## Technical Specification
 
@@ -104,11 +144,11 @@ This specification outlines what each *client type* must define. A client type i
 of the data structures, initialisation logic, validity predicate, and misbehaviour predicate required
 to operate a light client. State machines implementing the IBC protocol can support any number of client
 types, and each client type can be instantiated with different initial consensus states in order to track
-different consensus instances. In order to establish a connection between two machines (see [ICS 3](../ics-003-connection-semantics)),
-the machines must each support the client type corresponding to the other machine's consensus algorithm.
+different consensus instances. In order to establish a connection between two state machines (see [ICS 3](../ics-003-connection-semantics)),
+the state machines must each support the client type corresponding to the other state machine's consensus algorithm.
 
 Specific client types shall be defined in later versions of this specification and a canonical list shall exist in this repository.
-Machines implementing the IBC protocol are expected to respect these client types, although they may elect to support only a subset.
+State machines implementing the IBC protocol are expected to respect these client types, although they may elect to support only a subset.
 
 ### Data Structures
 
@@ -149,67 +189,6 @@ a commitment root, and possibly updates to the validity predicate.
 ```typescript
 type Header = bytes
 ```
-
-#### Consensus
-
-`Consensus` is a `Header` generating function which takes the previous
-`ConsensusState` with the messages and returns the result.
-
-```typescript
-type Consensus = (ConsensusState, [Message]) => Header
-```
-
-### Blockchain
-
-A blockchain is a consensus algorithm which generates valid `Header`s.
-It generates a unique list of headers starting from a genesis `ConsensusState` with arbitrary
-messages.
-
-`Blockchain` is defined as
-
-```typescript
-interface Blockchain {
-  genesis: ConsensusState
-  consensus: Consensus
-}
-```
-where
-  * `Genesis` is the genesis `ConsensusState`
-  * `Consensus` is the header generating function
-
-The headers generated from a `Blockchain` are expected to satisfy the following:
-
-1. Each `Header` MUST NOT have more than one direct child
-
-* Satisfied if: finality & safety
-* Possible violation scenario: validator double signing, chain reorganisation (Nakamoto consensus)
-
-2. Each `Header` MUST eventually have at least one direct child
-
-* Satisfied if: liveness, light-client verifier continuity
-* Possible violation scenario: synchronised halt, incompatible hard fork
-
-3. Each `Header`s MUST be generated by `Consensus`, which ensures valid state transitions
-
-* Satisfied if: correct block generation & state machine
-* Possible violation scenario: invariant break, super-majority validator cartel
-
-Unless the blockchain satisfies all of the above the IBC protocol
-may not work as intended: the chain can receive multiple conflicting
-packets, the chain cannot recover from the timeout event, the chain can
-steal the user's asset, etc.
-
-The validity of the validity predicate is dependent on the security model of the
-`Consensus`. For example, the `Consensus` can be a proof of authority with
-a trusted operator, or a proof of stake but with
-insufficient value of stake. In such cases, it is possible that the
-security assumptions break, the correspondence between `Consensus` and
-the validity predicate no longer exists, and the behaviour of the validity predicate becomes
-undefined. Also, the `Blockchain` may no longer satisfy
-the requirements above, which will cause the chain to be incompatible with the IBC
-protocol. In cases of attributable faults, a misbehaviour proof can be generated and submitted to the
-chain storing the client to safely freeze the light client and
-prevent further IBC packet relay.
 
 #### Validity predicate
 
@@ -323,7 +302,7 @@ Internal implementation details may differ (for example, a loopback client could
 
 ##### Required functions
 
-`verifyClientConsensusState` verifies a proof of the consensus state of the specified client stored on the target machine.
+`verifyClientConsensusState` verifies a proof of the consensus state of the specified client stored on the target state machine.
 
 ```typescript
 type verifyClientConsensusState = (
@@ -348,7 +327,7 @@ type verifyClientState = (
   => boolean
 ```
 
-`verifyConnectionState` verifies a proof of the connection state of the specified connection end stored on the target machine.
+`verifyConnectionState` verifies a proof of the connection state of the specified connection end stored on the target state machine.
 
 ```typescript
 type verifyConnectionState = (
@@ -361,7 +340,7 @@ type verifyConnectionState = (
   => boolean
 ```
 
-`verifyChannelState` verifies a proof of the channel state of the specified channel end, under the specified port, stored on the target machine.
+`verifyChannelState` verifies a proof of the channel state of the specified channel end, under the specified port, stored on the target state machine.
 
 ```typescript
 type verifyChannelState = (
@@ -441,25 +420,41 @@ type verifyNextSequenceRecv = (
   => boolean
 ```
 
-#### Optional Functions
-
-
-`verifyPacketReceipt` verifies a proof of an incoming packet receipt at the specified port, specified channel, and specified sequence. It is needed only if the chain wishes to support new channel types other than ORDERED and UNORDERED.
+`verifyMembership` is a generic proof verification method which verifies a proof of the existence of a value at a given `CommitmentPath` at the specified height.
+The caller is expected to construct the full `CommitmentPath` from a `CommitmentPrefix` and a standardized path (as defined in [ICS 24](../ics-024-host-requirements/README.md#path-space)). If the caller desires a particular delay period to be enforced,
+then it can pass in a non-zero `delayPeriodTime` or `delayPeriodBlocks`. If a delay period is not necessary, the caller must pass in 0 for `delayPeriodTime` and `delayPeriodBlocks`,
+and the client will not enforce any delay period for verification.
 
 ```typescript
-type verifyPacketReceipt = (
+type verifyMembership = (
   clientState: ClientState,
   height: Height,
   delayPeriodTime: uint64,
   delayPeriodBlocks: uint64,
-  prefix: CommitmentPrefix,
   proof: CommitmentProof,
-  portIdentifier: Identifier,
-  channelIdentifier: Identifier,
-  sequence: uint64,
-  receipt: bytes)
+  path: CommitmentPath,
+  value: bytes)
   => boolean
 ```
+
+`verifyNonMembership` is a generic proof verification method which verifies a proof of absence of a given `CommitmentPath` at the specified height.
+The caller is expected to construct the full `CommitmentPath` from a `CommitmentPrefix` and a standardized path (as defined in [ICS 24](../ics-024-host-requirements/README.md#path-space)). If the caller desires a particular delay period to be enforced,
+then it can pass in a non-zero `delayPeriodTime` or `delayPeriodBlocks`. If a delay period is not necessary, the caller must pass in 0 for `delayPeriodTime` and `delayPeriodBlocks`,
+and the client will not enforce any delay period for verification.
+
+Since the verification method is designed to give complete control to client implementations, clients can support chains that do not provide absence proofs by verifying the existence of a non-empty sentinel `ABSENCE` value. Thus in these special cases, the proof provided will be an ICS-23 Existence proof, and the client will verify that the `ABSENCE` value is stored under the given path for the given height.
+
+```typescript
+type verifyNonMembership = (
+  clientState: ClientState,
+  height: Height,
+  delayPeriodTime: uint64,
+  delayPeriodBlocks: uint64,
+  proof: CommitmentProof,
+  path: CommitmentPath)
+  => boolean
+```
+
 
 #### Query interface
 
@@ -515,7 +510,7 @@ type queryConsensusState = (
 ##### Proof construction
 
 Each client type SHOULD define functions to allow relayers to construct the proofs required by the client's state verification algorithms. These may take different forms depending on the client type.
-For example, Tendermint client proofs may be returned along with key-value data from store queries, and solo client proofs may need to be constructed interactively on the solo machine in question (since the user will need to sign the message).
+For example, Tendermint client proofs may be returned along with key-value data from store queries, and solo client proofs may need to be constructed interactively on the solo state machine in question (since the user will need to sign the message).
 These functions may constitute external queries over RPC to a full node as well as local computation or verification.
 
 ```typescript
@@ -568,26 +563,26 @@ type queryAndProveNextSequenceRecv = (
 
 ###### Loopback
 
-A loopback client of a local machine merely reads from the local state, to which it must have access.
+A loopback client of a local state machine merely reads from the local state, to which it must have access.
 
 ###### Simple signatures
 
-A client of a solo machine with a known public key checks signatures on messages sent by that local machine,
+A client of a solo state machine with a known public key checks signatures on messages sent by that local state machine,
 which are provided as the `Proof` parameter. The `height` parameter can be used as a replay protection nonce.
 
 Multi-signature or threshold signature schemes can also be used in such a fashion.
 
 ###### Proxy clients
 
-Proxy clients verify another (proxy) machine's verification of the target machine, by including in the
-proof first a proof of the client state on the proxy machine, and then a secondary proof of the sub-state of
-the target machine with respect to the client state on the proxy machine. This allows the proxy client to
-avoid storing and tracking the consensus state of the target machine itself, at the cost of adding
-security assumptions of proxy machine correctness.
+Proxy clients verify another (proxy) state machine's verification of the target state machine, by including in the
+proof first a proof of the client state on the proxy state machine, and then a secondary proof of the sub-state of
+the target state machine with respect to the client state on the proxy state machine. This allows the proxy client to
+avoid storing and tracking the consensus state of the target state machine itself, at the cost of adding
+security assumptions of proxy state machine correctness.
 
 ###### Merklized state trees
 
-For clients of state machines with Merklized state trees, these functions can be implemented by calling `verifyMembership` or `verifyNonMembership`, using a verified Merkle
+For clients of state machines with Merklized state trees, these functions can be implemented by calling the [ICS-23](../ics-023-vector-commitments/README.md) `verifyMembership` or `verifyNonMembership` methods, using a verified Merkle
 root stored in the `ClientState`, to verify presence or absence of particular key/value pairs in state at particular heights in accordance with [ICS 23](../ics-023-vector-commitments).
 
 ```typescript

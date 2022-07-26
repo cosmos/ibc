@@ -8,7 +8,7 @@ requires: 23
 required-by: 2, 3, 4, 5, 18
 author: Christopher Goes <cwgoes@tendermint.com>
 created: 2019-04-16
-modified: 2019-08-25
+modified: 2022-07-05
 ---
 
 ## Synopsis
@@ -58,7 +58,7 @@ By default, identifiers have the following minimum and maximum lengths in charac
 
 | Port identifier | Client identifier | Connection identifier | Channel identifier |
 | --------------- | ----------------- | --------------------- | ------------------ |
-| 2 - 128         | 9 - 64            | 10 - 64               | 10 - 64            |
+| 2 - 128         | 9 - 64            | 10 - 64               | 8 - 64             |
 
 ### Key/value Store
 
@@ -394,6 +394,8 @@ May 11, 2019 - Rename "RootOfTrust" to "ConsensusState"
 Jun 25, 2019 - Use "ports" instead of module names
 
 Aug 18, 2019 - Revisions to module system, definitions
+
+Jul 05, 2022 - Lower the minimal allowed length of a channel identifier to 8
 
 ## Copyright
 
