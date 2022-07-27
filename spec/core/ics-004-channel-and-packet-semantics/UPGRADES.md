@@ -291,6 +291,9 @@ function chanUpgradeInit(
         proposedUpgradeChannel.counterpartyChannelIdentifier == currentChannel.counterpartyChannelIdentifier
     )
 
+    // new channel version must be nonempty
+    abortTransactionUnless(proposedUpgradeChannel.Version != "")
+
     // current ordering must be a valid ordering of packets
     // in the proposed ordering
     // e.g. ORDERED -> UNORDERED, ORDERED -> DAG
@@ -363,12 +366,20 @@ function chanUpgradeTry(
         proposedUpgradeChannel.counterpartyChannelIdentifier == currentChannel.counterpartyChannelIdentifier
     )
 
+    // either timeout height or timestamp must be non-zero
+    // if the upgrade feature is implemented on the TRY chain, then a relayer may submit a TRY transaction after the timeout.
+    // this will restore the channel on the executing chain and allow counterparty to use the ChannelUpgradeCancelMsg to restore their channel.
+    abortTransactionUnless(timeoutHeight != 0 || timeoutTimestamp != 0)
+
     // current ordering must be a valid ordering of packets
     // in the proposed ordering
     // e.g. ORDERED -> UNORDERED, ORDERED -> DAG
     abortTransactionUnless(
         currentChannel.ordering.subsetOf(proposedUpgradeChannel.ordering)
     )
+
+    // new channel version must be nonempty
+    abortTransactionUnless(proposedUpgradeChannel.Version != "")
 
     // construct upgradeTimeout so it can be verified against counterparty state
     upgradeTimeout = UpgradeTimeout{
@@ -423,15 +434,6 @@ function chanUpgradeTry(
         // abort transaction if current channel is not in state: UPGRADE_INIT or OPEN
         abortTransactionUnless(false)
     }
-
-    // either timeout height or timestamp must be non-zero
-    // if the upgrade feature is implemented on the TRY chain, then a relayer may submit a TRY transaction after the timeout.
-    // this will restore the channel on the executing chain and allow counterparty to use the ChannelUpgradeCancelMsg to restore their channel.
-    if timeoutHeight == 0 && timeoutTimestamp == 0 {
-        restoreChannel()
-        return
-    }
-    
 
     // counterparty-specified timeout must not have exceeded
     if (currentHeight() > timeoutHeight && timeoutHeight != 0) ||
