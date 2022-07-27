@@ -125,7 +125,7 @@ function onChanOpenInit(
     } else {
         metadata = {
             // set middleware version to default value
-            middlewareVersion: defaultMiddlewareVersion
+            middlewareVersion: defaultMiddlewareVersion,
             // allow application to return its default version
             appVersion: "",
         }
@@ -152,7 +152,7 @@ function onChanOpenInit(
     // one passed by the caller
     metadata = {
         // note this should have a different field name specific to middleware
-        middlewareVersion: metadata.middlewareVersion
+        middlewareVersion: metadata.middlewareVersion,
         appVersion: appVersion,
     }
 
@@ -210,7 +210,7 @@ function onChanOpenTry(
     metadata = {
         // note this should have a different field name specific to middleware
         middlewareVersion: middlewareVersion,
-        appVersion: appVersion
+        appVersion: appVersion,
     }
 
     return MarshalJSON(metadata), nil
