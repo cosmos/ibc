@@ -381,6 +381,13 @@ function chanUpgradeTry(
     // new channel version must be nonempty
     abortTransactionUnless(proposedUpgradeChannel.Version != "")
 
+
+    // both channel ends must be mutually compatible.
+    // this means that the ordering must be the same and 
+    // any future introduced fields that must be compatible
+    // should also be checked
+    abortTransactionUnless(counterpartyChannel.ordering != proposedUpgradeChannel.ordering)
+    
     // construct upgradeTimeout so it can be verified against counterparty state
     upgradeTimeout = UpgradeTimeout{
         timeoutHeight: timeoutHeight,
@@ -442,14 +449,6 @@ function chanUpgradeTry(
         return
     }
 
-    // both channel ends must be mutually compatible.
-    // this function has been left unspecified since it will depend on the specific structure of the new channel.
-    // It is the responsibility of implementations to make sure that the proposed new channels
-    // on either side are correctly constructed according to the new version selected.
-    if !IsCompatible(counterpartyChannel, proposedUpgradeChannel) {
-        restoreChannel()
-        return
-    }
 
     // call modules onChanUpgradeTry callback
     module = lookupModule(portIdentifier)
