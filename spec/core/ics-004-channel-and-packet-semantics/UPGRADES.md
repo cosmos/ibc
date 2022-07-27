@@ -213,7 +213,7 @@ The channel upgrade process consists of three sub-protocols: `UpgradeChannelHand
 `restoreChannel()` is a utility function that allows a chain to abort an upgrade handshake in progress, and return the `ChannelEnd` to its original pre-upgrade state while also setting the upgrade `errorReceipt`. A relayer can then send a `ChannelUpgradeCancelMsg` to the counterparty so that it can restore its `ChannelEnd` to its pre-upgrade state as well. Once both channel ends are back to the pre-upgrade state, packet processing will resume with the original channel and application parameters.
 
 ```typescript
-function restoreChannel() {
+function restoreChannel(portIdentifier: Identifier, channelIdentifier: Identifier) {
     // cancel upgrade
     // write an error receipt with the current sequence into the error path
     // and restore original channel
@@ -430,7 +430,7 @@ function chanUpgradeTry(
         // if the proposed upgrades on either side are incompatible, then we will restore the channel and cancel the upgrade.
         currentChannel.state = UPGRADE_TRY
         if !currentChannel.IsEqual(proposedUpgradeChannel) {
-            restoreChannel()
+            restoreChannel(portIdentifier, channelIdentifier)
             return
         }
     } else if currentChannel.state == OPEN {
@@ -445,7 +445,7 @@ function chanUpgradeTry(
     // counterparty-specified timeout must not have exceeded
     if (currentHeight() > timeoutHeight && timeoutHeight != 0) ||
         (currentTimestamp() > timeoutTimestamp && timeoutTimestamp != 0) {
-        restoreChannel()
+        restoreChannel(portIdentifier, channelIdentifier)
         return
     }
 
@@ -464,7 +464,7 @@ function chanUpgradeTry(
     )
     // restore channel if callback returned error
     if err != nil {
-        restoreChannel()
+        restoreChannel(portIdentifier, channelIdentifier)
         return
     }
 
@@ -507,7 +507,7 @@ function chanUpgradeAck(
 
     // counterparty must be in TRY state
     if counterpartyChannel.State != UPGRADE_TRY {
-        restoreChannel()
+        restoreChannel(portIdentifier, channelIdentifier)
         return
     }
 
@@ -517,7 +517,7 @@ function chanUpgradeAck(
     // It is the responsibility of implementations to make sure that the proposed new channels
     // on either side are correctly constructed according to the new version selected.
     if !IsCompatible(counterpartyChannel, channel) {
-        restoreChannel()
+        restoreChannel(portIdentifier, channelIdentifier)
         return
     }
 
@@ -531,7 +531,7 @@ function chanUpgradeAck(
     )
     // restore channel if callback returned error
     if err != nil {
-        restoreChannel()
+        restoreChannel(portIdentifier, channelIdentifier)
         return
     }
 
