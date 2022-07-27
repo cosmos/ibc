@@ -22,7 +22,7 @@ The channel upgrade protocol MUST NOT modify the channel identifiers.
 
 ### Data Structures
 
-The `ChannelState` and `ChannelEnd` are defined in [ICS-4](./README.md), they are reproduced here for the reader's convenience. `UPGRADE_INIT`, `UPGRADE_TRY` are additional states added to enable the upgrade feature.
+The `ChannelState` and `ChannelEnd` are defined in [ICS-4](./README.md), they are reproduced here for the reader's convenience. `INITUPGRADE`, `TRYUPGRADE` are additional states added to enable the upgrade feature.
 
 #### `ChannelState`
 
@@ -31,13 +31,13 @@ enum ChannelState {
   INIT,
   TRYOPEN,
   OPEN,
-  UPGRADE_INIT,
-  UPGRADE_TRY,
+  INITUPGRADE,
+  TRYUPGRADE,
 }
 ```
 
-- The chain that is proposing the upgrade should set the channel state from `OPEN` to `UPGRADE_INIT`
-- The counterparty chain that accepts the upgrade should set the channel state from `OPEN` to `UPGRADE_TRY`
+- The chain that is proposing the upgrade should set the channel state from `OPEN` to `INITUPGRADE`
+- The counterparty chain that accepts the upgrade should set the channel state from `OPEN` to `TRYUPGRADE`
 
 #### `ChannelEnd`
 
@@ -252,10 +252,10 @@ A successful protocol execution flows as follows (note that all calls are made t
 
 | Initiator | Datagram             | Chain acted upon | Prior state (A, B)          | Posterior state (A, B)      |
 | --------- | -------------------- | ---------------- | --------------------------- | --------------------------- |
-| Actor     | `ChanUpgradeInit`    | A                | (OPEN, OPEN)                | (UPGRADE_INIT, OPEN)        |
-| Actor     | `ChanUpgradeTry`     | B                | (UPGRADE_INIT, OPEN)        | (UPGRADE_INIT, UPGRADE_TRY) |
-| Relayer   | `ChanUpgradeAck`     | A                | (UPGRADE_INIT, UPGRADE_TRY) | (OPEN, UPGRADE_TRY)         |
-| Relayer   | `ChanUpgradeConfirm` | B                | (OPEN, UPGRADE_TRY)         | (OPEN, OPEN)                |
+| Actor     | `ChanUpgradeInit`    | A                | (OPEN, OPEN)                | (INITUPGRADE, OPEN)        |
+| Actor     | `ChanUpgradeTry`     | B                | (INITUPGRADE, OPEN)        | (INITUPGRADE, TRYUPGRADE) |
+| Relayer   | `ChanUpgradeAck`     | A                | (INITUPGRADE, TRYUPGRADE) | (OPEN, TRYUPGRADE)         |
+| Relayer   | `ChanUpgradeConfirm` | B                | (OPEN, TRYUPGRADE)         | (OPEN, OPEN)                |
 
 At the end of an upgrade handshake between two chains implementing the sub-protocol, the following properties hold:
 
@@ -283,10 +283,10 @@ function chanUpgradeInit(
     abortTransactionUnless(channel.state == OPEN)
 
     // abort transaction if an unmodifiable field is modified
-    // upgraded channel state must be in `UPGRADE_INIT`
+    // upgraded channel state must be in `INITUPGRADE`
     // NOTE: Any added fields are by default modifiable.
     abortTransactionUnless(
-        proposedUpgradeChannel.state == UPGRADE_INIT &&
+        proposedUpgradeChannel.state == INITUPGRADE &&
         proposedUpgradeChannel.counterpartyPortIdentier == currentChannel.counterpartyPortIdentifier &&
         proposedUpgradeChannel.counterpartyChannelIdentifier == currentChannel.counterpartyChannelIdentifier
     )
@@ -350,15 +350,15 @@ function chanUpgradeTry(
     proofUpgradeSequence: CommitmentProof,
     proofHeight: Height
 ) {
-    // current channel must be OPEN or UPGRADE_INIT (crossing hellos)
+    // current channel must be OPEN or INITUPGRADE (crossing hellos)
     currentChannel = provableStore.get(channelPath(portIdentifier, channelIdentifier))
-    abortTransactionUnless(currentChannel.state == OPEN || currentChannel.state == UPGRADE_INIT)
+    abortTransactionUnless(currentChannel.state == OPEN || currentChannel.state == INITUPGRADE)
 
     // abort transaction if an unmodifiable field is modified
-    // upgraded channel state must be in `UPGRADE_TRY`
+    // upgraded channel state must be in `TRYUPGRADE`
     // NOTE: Any added fields are by default modifiable.
     abortTransactionUnless(
-        proposedUpgradeChannel.state == UPGRADE_TRY &&
+        proposedUpgradeChannel.state == TRYUPGRADE &&
         proposedUpgradeChannel.counterpartyPortIdentifier == currentChannel.counterpartyPortIdentifier &&
         proposedUpgradeChannel.counterpartyChannelIdentifier == currentChannel.counterpartyChannelIdentifier
     )
@@ -405,12 +405,12 @@ function chanUpgradeTry(
         return
     }
 
-    if currentChannel.state == UPGRADE_INIT {
+    if currentChannel.state == INITUPGRADE {
         // if there is a crossing hello, ie an UpgradeInit has been called on both channelEnds,
         // then we must ensure that the proposedUpgrade by the counterparty is the same as the currentChannel
-        // except for the channel state (upgrade channel will be in UPGRADE_TRY and current channel will be in UPGRADE_INIT)
+        // except for the channel state (upgrade channel will be in TRYUPGRADE and current channel will be in INITUPGRADE)
         // if the proposed upgrades on either side are incompatible, then we will restore the channel and cancel the upgrade.
-        currentChannel.state = UPGRADE_TRY
+        currentChannel.state = TRYUPGRADE
         if !currentChannel.IsEqual(proposedUpgradeChannel) {
             restoreChannel()
             return
@@ -420,7 +420,7 @@ function chanUpgradeTry(
         // in case we need to restore channel later.
         privateStore.set(channelRestorePath(portIdentifier, channelIdentifier), currentChannel)
     } else {
-        // abort transaction if current channel is not in state: UPGRADE_INIT or OPEN
+        // abort transaction if current channel is not in state: INITUPGRADE or OPEN
         abortTransactionUnless(false)
     }
 
@@ -486,9 +486,9 @@ function chanUpgradeAck(
     proofUpgradeSequence: CommitmentProof,
     proofHeight: Height
 ) {
-    // current channel is in UPGRADE_INIT or UPGRADE_TRY (crossing hellos)
+    // current channel is in INITUPGRADE or TRYUPGRADE (crossing hellos)
     currentChannel = provableStore.get(channelPath(portIdentifier, channelIdentifier))
-    abortTransactionUnless(currentChannel.state == UPGRADE_INIT || currentChannel.state == UPGRADE_TRY)
+    abortTransactionUnless(currentChannel.state == INITUPGRADE || currentChannel.state == TRYUPGRADE)
 
     // get underlying connection for proof verification
     connection = getConnection(currentChannel.connectionIdentifier)
@@ -505,7 +505,7 @@ function chanUpgradeAck(
     currentChannel.counterpartyChannelIdentifier, sequence))
 
     // counterparty must be in TRY state
-    if counterpartyChannel.State != UPGRADE_TRY {
+    if counterpartyChannel.State != TRYUPGRADE {
         restoreChannel()
         return
     }
@@ -556,9 +556,9 @@ function chanUpgradeConfirm(
     proofUpgradeSequence: CommitmentProof,
     proofHeight: Height,
 ) {
-    // current channel is in UPGRADE_TRY
+    // current channel is in TRYUPGRADE
     currentChannel = provableStore.get(channelPath(portIdentifier, channelIdentifier))
-    abortTransactionUnless(channel.state == UPGRADE_TRY)
+    abortTransactionUnless(channel.state == TRYUPGRADE)
 
     // counterparty must be in OPEN state
     abortTransactionUnless(counterpartyChannel.State == OPEN)
@@ -614,9 +614,9 @@ function cancelChannelUpgrade(
     proofUpgradeError: CommitmentProof,
     proofHeight: Height,
 ) {
-    // current channel is in UPGRADE_INIT or UPGRADE_TRY
+    // current channel is in INITUPGRADE or TRYUPGRADE
     currentChannel = provableStore.get(channelPath(portIdentifier, channelIdentifier))
-    abortTransactionUnless(channel.state == UPGRADE_INIT || channel.state == UPGRADE_TRY)
+    abortTransactionUnless(channel.state == INITUPGRADE || channel.state == TRYUPGRADE)
 
     abortTransactionUnless(!isEmpty(errorReceipt))
 
@@ -654,9 +654,9 @@ function cancelChannelUpgrade(
 
 ### Timeout Upgrade Process
 
-It is possible for the channel upgrade process to stall indefinitely on UPGRADE_TRY if the UPGRADE_TRY transaction simply cannot pass on the counterparty; for example, the upgrade feature may not be enabled on the counterparty chain.
+It is possible for the channel upgrade process to stall indefinitely on TRYUPGRADE if the TRYUPGRADE transaction simply cannot pass on the counterparty; for example, the upgrade feature may not be enabled on the counterparty chain.
 
-In this case, we do not want the initializing chain to be stuck indefinitely in the `UPGRADE_INIT` step. Thus, the `ChannelUpgradeInitMsg` message will contain a `TimeoutHeight` and `TimeoutTimestamp`. The counterparty chain is expected to reject `ChannelUpgradeTryMsg` message if the specified timeout has already elapsed.
+In this case, we do not want the initializing chain to be stuck indefinitely in the `INITUPGRADE` step. Thus, the `ChannelUpgradeInitMsg` message will contain a `TimeoutHeight` and `TimeoutTimestamp`. The counterparty chain is expected to reject `ChannelUpgradeTryMsg` message if the specified timeout has already elapsed.
 
 A relayer must then submit an `ChannelUpgradeTimeoutMsg` message to the initializing chain which proves that the counterparty is still in its original state. If the proof succeeds, then the initializing chain shall also restore its original channel and cancel the upgrade.
 
@@ -670,9 +670,9 @@ function timeoutChannelUpgrade(
     proofErrorReceipt: CommitmentProof,
     proofHeight: Height,
 ) {
-    // current channel must be in UPGRADE_INIT
+    // current channel must be in INITUPGRADE
     currentChannel = provableStore.get(channelPath(portIdentifier, channelIdentifier))
-    abortTransactionUnles(currentChannel.state == UPGRADE_INIT)
+    abortTransactionUnles(currentChannel.state == INITUPGRADE)
 
     upgradeTimeout = provableStore.get(timeoutPath(portIdentifier, channelIdentifier))
 
@@ -687,8 +687,8 @@ function timeoutChannelUpgrade(
     // get underlying connection for proof verification
     connection = getConnection(currentChannel.connectionIdentifier)
 
-    // counterparty channel must be proved to still be in OPEN state or UPGRADE_INIT state (crossing hellos)
-    abortTransactionUnless(counterpartyChannel.State === OPEN || counterpartyChannel.State == UPGRADE_INIT)
+    // counterparty channel must be proved to still be in OPEN state or INITUPGRADE state (crossing hellos)
+    abortTransactionUnless(counterpartyChannel.State === OPEN || counterpartyChannel.State == INITUPGRADE)
     abortTransactionUnless(verifyChannelState(connection, proofHeight, proofChannel, currentChannel.counterpartyPortIdentifier, currentChannel.counterpartyChannelIdentifier, counterpartyChannel))
 
     // Error receipt passed in is either nil or it is a stale error receipt from a previous upgrade
