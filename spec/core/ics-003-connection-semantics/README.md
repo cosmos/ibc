@@ -485,6 +485,8 @@ May 17, 2019 - Draft finalised
 
 Jul 29, 2019 - Revisions to track connection set associated with client
 
+Jul 27, 2022 - Addition of `ClientState` validation in `connOpenTry` and `connOpenAck`
+
 ## Copyright
 
 All content herein is licensed under [Apache 2.0](https://www.apache.org/licenses/LICENSE-2.0).

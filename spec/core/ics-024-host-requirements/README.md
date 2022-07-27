@@ -397,6 +397,8 @@ Aug 18, 2019 - Revisions to module system, definitions
 
 Jul 05, 2022 - Lower the minimal allowed length of a channel identifier to 8
 
+Jul 27, 2022 - Move `ClientState` to the `provableStore`, and add "Client state validation" section
+
 ## Copyright
 
 All content herein is licensed under [Apache 2.0](https://www.apache.org/licenses/LICENSE-2.0).

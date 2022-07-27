@@ -915,6 +915,8 @@ Jan 13, 2020 - Revisions for client type separation & path alterations
 
 Jan 26, 2020 - Addition of query interface
 
+Jul 27, 2022 - Addition of `verifyClientState` function, and move `ClientState` to the `provableStore`
+
 ## Copyright
 
 All content herein is licensed under [Apache 2.0](https://www.apache.org/licenses/LICENSE-2.0).
