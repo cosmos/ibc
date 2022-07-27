@@ -40,12 +40,7 @@ interface ModuleUpgradeCallbacks {
 are valid and perform any custom `UpgradeInit` logic.
 It may return an error if the chosen parameters are invalid 
 in which case the upgrade handshake is aborted.
-If the provided version string is empty, `onChanUpgradeInit` should return 
-a default version string or an error if the provided version is invalid.
-Note that if the upgrade provides an empty string, this is an indication to upgrade
-to the default version which MAY be a new default from when the channel was first initiated.
-If there is no default version string for the application,
-it should return an error if provided version is empty string.
+The callback is provided both the previous version of the channel and the new proposed version. It may perform the necessary logic and state changes necessary to upgrade the channel from the previous version to the new version. If upgrading the application from the previous version to the new version is not supported, it must return an error.
 
 If an error is returned, then core IBC will revert any changes made by `onChanUpgradeInit` and abort the handshake.
 
@@ -59,7 +54,8 @@ function onChanUpgradeInit(
   channelIdentifier: Identifier,
   counterpartyPortIdentifier: Identifier,
   counterpartyChannelIdentifier: Identifier,
-  version: string) => (version: string, err: Error) {
+  version: string,
+  previousVersion: string) => (version: string, err: Error) {
     // defined by the module
 }
 ```
@@ -72,6 +68,7 @@ If the counterparty-chosen version is not compatible with this modules
 supported versions, the callback must return an error to abort the handshake. 
 If the versions are compatible, the try callback must select the final version
 string and return it to core IBC.
+If upgrading from the previous version to the final new version is not supported, it must return an error.
 `onChanUpgradeTry` may also perform custom initialization logic.
 
 If an error is returned, then core IBC will revert any changes made by `onChanUpgradeTry` and abort the handshake.
@@ -86,7 +83,8 @@ function onChanUpgradeTry(
   channelIdentifier: Identifier,
   counterpartyPortIdentifier: Identifier,
   counterpartyChannelIdentifier: Identifier,
-  counterpartyVersion: string) => (version: string, err: Error) {
+  counterpartyVersion: string,
+  previousVersion: string) => (version: string, err: Error) {
     // defined by the module
 }
 ```
