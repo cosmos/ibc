@@ -38,3 +38,7 @@ Ref: https://keepachangelog.com/en/1.0.0/
 # Changelog
 
 ## [Unreleased]
+
+### Bug Fixes
+
+- [\#808](https://github.com/cosmos/ibc/pull/808) Fix channel sequence paths in ICS4
