@@ -101,7 +101,7 @@ The upgrade sequence path is a public path that stores the current sequence of t
 
 ```typescript
 function channelUpgradeSequencePath(portIdentifier: Identifier, channelIdentifier: Identifier) Path {
-    return "channelUpgrades/ports/{portIdentifier}/channels/{channelIdentifier}/upgradeSequence"
+    return "channelUpgrades/upgradeSequence/ports/{portIdentifier}/channels/{channelIdentifier}"
 }
 ```
 
@@ -129,7 +129,7 @@ The chain must store the previous channel end so that it may restore it if the u
 
 ```typescript
 function channelRestorePath(portIdentifier: Identifier, channelIdentifier: Identifier): Path {
-    return "channelUpgrades/ports/{portIdentifier}/channels/{channelIdentifier}/restore"
+    return "channelUpgrades/restore/ports/{portIdentifier}/channels/{channelIdentifier}"
  }
 ```
 
@@ -139,7 +139,7 @@ The upgrade error path is a public path that can signal an error of the upgrade 
 
 ```typescript
 function channelUpgradeErrorPath(portIdentifier: Identifier, channelIdentifier: Identifier): Path {
-    return "channelUpgrades/ports/{portIdentifier}/channels/{channelIdentifier}/upgradeError"
+    return "channelUpgrades/upgradeError/ports/{portIdentifier}/channels/{channelIdentifier}"
 }
 ```
 
@@ -182,7 +182,7 @@ The upgrade timeout path is a public path set by the upgrade initiator to determ
 
 ```typescript
 function channelUpgradeTimeoutPath(portIdentifier: Identifier, channelIdentifier: Identifier) Path {
-    return "channelUpgrades/ports/{portIdentifier}/channels/{channelIdentifier}/upgradeTimeout"
+    return "channelUpgrades/upgradeTimeout/ports/{portIdentifier}/channels/{channelIdentifier}"
 }
 ```
 
