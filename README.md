@@ -63,3 +63,4 @@ All standards at or past the "Draft" stage are listed here in order of their ICS
 | [27](spec/app/ics-027-interchain-accounts/README.md)     | Interchain Accounts     | Draft |
 | [29](spec/app/ics-029-fee-payment) | General Relayer Incentivisation Mechanism | Candidate |
 | [30](spec/app/ics-030-middleware) | IBC Application Middleware | Candidate |
+| [31](spec/app/ics-031-fungible-token-swap) | Fungible Token Swap | Draft |
