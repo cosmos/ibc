@@ -7,26 +7,26 @@ requires: 2, 5, 18, 23, 24
 kind: instantiation
 author: Joe Schnetzler <schnetzlerjoe@gmail.com>, Manuel Bravo <manuel@informal.systems>
 created: 2022-01-06
-modified: 2022-05-11
+modified: 2022-07-28
 ---
 
 ## Synopsis
 
-This standard document specifies the data structures and state machine handling logic of the Cross-chain Querying module, which allows for cross-chain querying between IBC enabled chains.
+This standard document specifies the data structures and state machine handling logic of the Cross-chain Queries module, which allows for cross-chain querying between IBC enabled chains.
 
 ## Overview and Basic Concepts
 
 ### Motivation
 
-Interchain Accounts (ICS-27) brings one of the most important features IBC offers, cross-chain transactions (on-chain). Limited in this functionality is the querying of state from one chain, on another chain. Adding cross-chain querying via the Cross-chain Querying module gives unlimited flexibility to chains to build IBC enabled protocols around Interchain Accounts and beyond.
+Interchain Accounts (ICS-27) brings one of the most important features IBC offers, cross-chain transactions. Limited in this functionality is the querying of state from one chain, on another chain. Adding cross-chain querying via the Cross-chain Queries module gives unlimited flexibility to chains to build IBC enabled protocols around Interchain Accounts and beyond.
 
 ### Definitions 
 
-`Querying Chain`: The chain that is interested in getting data from another chain (Queried Chain). The Querying Chain is the chain that implements the Cross-chain Querying module.
+`Querying chain`: The chain that is interested in getting data from another chain (queried chain). The querying chain is the chain that implements the Cross-chain Queries module.
 
-`Queried Chain`: The chain whose state is being queried. The Queried Chain gets queried via a relayer utilizing its RPC client which is then submitted back to the Querying Chain.
+`Queried chain`: The chain whose state is being queried. The queried chain gets queried via a relayer utilizing its RPC client which is then submitted back to the querying chain.
 
-`Cross-chain Querying Module`: The module that implements the Cross-chain Querying protocol. Only the Querying Chain integrates it.
+`Cross-chain Queries Module`: The module that implements the cross-chain querying protocol. Only the querying chain integrates it.
 
 `Height` and client-related functions are as defined in ICS 2.
 
@@ -42,49 +42,58 @@ Interchain Accounts (ICS-27) brings one of the most important features IBC offer
 
 ### Assumptions
 
-- **Safe chains:** Both the Querying and Queried chains are safe. This means that, for every chain, the underlying consensus engine satisfies safety (e.g., the chain does not fork) and the execution of the state machine follows the described protocol.
+- **Safe chains:** Both the queryin and queried chains are safe. This means that, for every chain, the underlying consensus engine satisfies safety (e.g., the chain does not fork) and the execution of the state machine follows the described protocol.
 
-- **Live chains:** Both the Querying and Queried chains MUST be live, i.e., new blocks are eventually added to the chain.
+- **Live chains:** Both the querying and queried chains MUST be live, i.e., new blocks are eventually added to the chain.
 
-- **Censorship-resistant Querying Chain:**  The Querying Chain cannot selectively omit transactions.
+- **Censorship-resistant querying chain:**  The querying chain cannot selectively omit valid transactions.
 
-- **Correct relayer:** There is at least one correct relayer between the Querying and Queried chains. This is required for liveness. 
+> For example, This means that if a relayer submits a valid transaction to the querying chain, the transaction is guaranteed to be included in a committed block within a bounded time.
+
+- **Correct relayer:** There is at least one live relayer between the querying and queried chains where the relayer correctly follows the protocol.
+
+> In the context of this specification, this implies that for every query request coming from the querying chain, there is at least one relayer that (i) picks the query request up, (ii) executes the query at the queried chain, and (iii) submits the result in a transaction, together with a valid proof, to the querying chain.
+
+The above assumptions are enough to guarantee that the query protocol returns results to the application if the querying chain waits unboundly for query results. Nevertheless, this specification considers the case when the querying chain times out after a fixed period of time. Thus, to guarantee that the query protocol always returns query results to the application, the 
+specification requires additional assumptions: both the querying chain and at least one correct relayer have to behave timely.
+
+- **Timely querying chain:** There exists an upper-bound in the time elapsed between the moment a transaction is submitted to the chain and when the chain commits a block including it.
+
+- **Timely relayer:** For correct and live relayers, there exists an upper-bound in the time elapsed between the moment a relayer picks a query request and when the relayer submits the query result.
+
+> Note then that to guarantee that the query protocol always returns results to the application, the timeout bound at the querying chain should be at least equal to the sum of the upper-bounds of assumptions **Timely querying chain** and **Timely relayer**. This would guarantee that the relayer submits and the querying chain process a query result transaction within the specified timeout bound.
 
 ### Desired Properties
 
 #### Permissionless
 
-A Querying Chain can query a chain and implement cross-chain querying without any approval from a third party or chain governance. Note that since there is no prior negotiation between chains, the Querying Chain cannot assume that queried data will be in an expected format.
+The querying chain can query a chain without permission from the latter and implement cross-chain querying without any approval from a third party or chain governance. Note that since there is no prior negotiation between chains, the querying chain cannot assume that queried data will be in an expected format.
 
-#### Minimal Queried Chain Work
+#### Minimal queried chain Work
 
-A Queried Chain has to do no implementation work or add any module to enable cross-chain querying. By utilizing an RPC client on a relayer, this is possible.
+Any chain that provides query support can act as a queried chain, requiring no implementation work or any extra module. This is possible by utilizing an RPC client on a relayer.
 
 #### Modular
 
-Adding cross-chain querying should be as easy as implementing a module in your chain.
-
-#### Control Queried Data
-
-The Querying Chain should have ultimate control over how to handle queried data. Like querying for a certain query form/type.
+Supporting cross-chain queries should be as easy as implementing a module in your chain.
 
 #### Incentivization
 
-A bounty is paid to incentivize relayers for participating in interchain queries: fetching data from the Queried Chain and submitting it (together with proofs) to the Querying
+A bounty is paid to incentivize relayers for participating in cross-chain queries: fetching data from the queried chain and submitting it (together with proofs) to the querying chain.
 
 ## Technical Specification
 
 ### General Design 
 
-The Querying Chain MUST implement the Cross-chain Querying module, which allows the Querying Chain to query state at the Queried Chain. 
+The querying chain must implement the Cross-chain Queries module, which allows the querying chain to query state at the queried chain. 
 
-Cross-chain querying relies on relayers operating between both chains. When a query request is received by the Querying Chain, the Cross-chain Querying module emits a `sendQuery` event. Relayers operating between the Querying and Queried chains must monitor the Querying chain for `sendQuery` events. Eventually, a relayer will retrieve the query request and execute it, i.e., fetch the data and generate the corresponding proofs, at the Queried Chain. The relayer then submits (on-chain) the result at the Querying Chain. The result is finally registered at the Querying Chain by the Cross-chain Querying module. 
+Cross-chain queries relies on relayers operating between both chains. When a query request is received by the querying chain, the Cross-chain Queries module emits a `sendQuery` event. Relayers operating between the querying and queried chains must monitor the querying chain for `sendQuery` events. Eventually, a relayer will retrieve the query request and execute it, i.e., fetch the data and generate the corresponding proofs, at the queried chain. The relayer then submits the result in a transaction to the querying chain. The result is finally registered at the querying chain by the Cross-chain Queries module. 
 
-A query request includes the height of the Queried Chain at which the query must be executed. The reason is that the keys being queried can have different values at different heights. Thus, a malicious relayer could choose to query a height that has a value that benefits it somehow. By letting the Querying Chain decide the height at which the query is executed, we can prevent relayers from affecting the result data.
+A query request includes the height of the queried chain at which the query must be executed. The reason is that the keys being queried can have different values at different heights. Thus, a malicious relayer could choose to query a height that has a value that benefits it somehow. By letting the querying chain decide the height at which the query is executed, we can prevent relayers from affecting the result data.
 
 ### Data Structures
 
-The Cross-chain Querying module stores query requests when it processes them. 
+The Cross-chain Queries module stores query requests when it processes them. 
 
 A CrossChainQuery is a particular interface to represent query requests. A request is retrieved when its result is submitted.
 
@@ -93,34 +102,34 @@ interface CrossChainQuery struct {
     id: Identifier
     path: CommitmentPath
     localTimeoutHeight: Height
-    localTimeoutTimestamp: Height
+    localTimeoutTimestamp: uint64
     queryHeight: Height
     clientId: Identifier
     bounty: Fee
 }
 ```
 
-- The `id` field uniquely identifies the query at the Querying Chain.
-- The `path` field is the path to be queried at the Queried Chain.
-- The `localTimeoutHeight` field specifies a height limit at the Querying Chain after which a query is considered to have failed and a timeout result should be returned to the original caller.
-- The `localTimeoutTimestamp` field specifies a timestamp limit at the Querying Chain after which a query is considered to have failed and a timeout result should be returned to the original caller.
-- The `queryHeight` field is the height at which the relayer must query the Queried Chain
-- The `clientId` field identifies the Queried Chain.
+- The `id` field uniquely identifies the query at the querying chain.
+- The `path` field is the path to be queried at the queried chain.
+- The `localTimeoutHeight` field specifies a height limit at the querying chain after which a query is considered to have failed and a timeout result should be returned to the original caller.
+- The `localTimeoutTimestamp` field specifies a timestamp limit at the querying chain after which a query is considered to have failed and a timeout result should be returned to the original caller.
+- The `queryHeight` field is the height at which the relayer must query the queried chain
+- The `clientId` field identifies the querying chain's client of the queried chain.
 - The `bounty` field is a bounty that is given to the relayer for participating in the query.
 
-The Cross-chain Querying module stores query results to allow query callers to asynchronously retrieve them. 
-In this context, this ICS defines the `QueryResult` type as follows:
+The Cross-chain Queries module stores query results to allow query callers to asynchronously retrieve them. 
+In this context, this standard defines the `QueryResult` type as follows:
 
 ```typescript
 enum QueryResult {
   SUCCESS,
   FAILURE,
-  TIMEOUT,
+  TIMEOUT
 }
 ```
-- A query that returns a value is marked as `SUCCESS`. This means that the query has been executed at the Queried Chain and there was a value associated to the queried path at the requested height.
-- A query that is executed but does not return a value is marked as `FAILURE`. This means that the query has been executed at the Queried Chain, but there was no value associated to the queried path at the requested height.
-- A query that timed out before a result is committed at the Querying Chain is marked as `TIMEOUT`.
+- A query that returns a value is marked as `SUCCESS`. This means that the query has been executed at the queried chain and there was a value associated to the queried path at the requested height.
+- A query that is executed but does not return a value is marked as `FAILURE`. This means that the query has been executed at the queried chain, but there was no value associated to the queried path at the requested height.
+- A query that timed out before a result is committed at the querying chain is marked as `TIMEOUT`.
 
 A CrossChainQueryResult is a particular interface used to represent query results.
 
@@ -132,8 +141,8 @@ interface CrossChainQueryResult struct {
 }
 ```
 
-- The `id` field uniquely identifies the query at the Querying Chain.
-- The `result` field indicates whether the query was correctly executed at the Queried Chain and if the queried path exists.
+- The `id` field uniquely identifies the query at the querying chain.
+- The `result` field indicates whether the query was correctly executed at the queried chain and if the queried path exists.
 - The `data` field is an opaque bytestring that contains the value associated with the queried path in case `result = SUCCESS`.
 
 ### Store paths
@@ -159,7 +168,7 @@ function resultQueryPath(id: Identifier): Path {
 
 ### Helper functions
 
-The Querying Chain MUST implement a function `generateQueryIdentifier`, which generates a unique query identifier:
+The querying chain MUST implement a function `generateQueryIdentifier`, which generates a unique query identifier:
 
 ```typescript
 function generateQueryIdentifier = () -> Identifier
@@ -169,27 +178,28 @@ function generateQueryIdentifier = () -> Identifier
 
 #### Query lifecycle
 
-1) When the Querying Chain receives a query request, it calls `CrossChainQueryRequest` of the Cross-chain Querying module. This function generates a unique identifier for the query, stores it in its `privateStore` and emits a `sendQuery` event. Query requests can be submitted by other IBC modules as transactions to the Querying Chain or simply executed as part of the `BeginBlock` and `EndBlock` logic.
-2) A correct relayer listening to `sendQuery` events from the Querying Chain will eventually pick the query request up and execute it at the Queried Chain. The result is then submitted (on-chain) to the Querying Chain.
-3) When the query result is committed at the Querying Chain, this calls the `CrossChainQueryResult` function of the Cross-chain Querying module.
-4) The `CrossChainQueryResult` first retrieves the query from the `privateStore` using the query's unique identifier. It then proceeds to verify the result using its local client. If it passes the verification, the function removes the query from the `privateStore` and stores the result in the private store.
-> The Querying Chain may execute additional state machine logic when a query result is received. To account for this additional state machine logic and charge a fee to the query caller, an implementation of this specification could use the already existing `bounty` field of the `CrossChainQuery` interface or extend the interface with an additional field.
+1) When the querying chain receives a query request, it calls `CrossChainQueryRequest` of the Cross-chain Queries module. This function generates a unique identifier for the query, stores it in its `privateStore` and emits a `sendQuery` event. Query requests can be submitted as transactions to the querying chain or simply executed as part of the `BeginBlock` and `EndBlock` logic. Typically, query requests will be issued by other IBC modules.
+2) A correct relayer listening to `sendQuery` events from the querying chain will eventually pick the query request up and execute it at the queried chain. The result is then submitted in a transaction to the querying chain.
+3) When the query result is committed at the querying chain, this calls the `CrossChainQueryResponse` function of the Cross-chain Queries module.
+4) The `CrossChainQueryResponse` first retrieves the query from the `privateStore` using the query's unique identifier. It then proceeds to verify the result using its local client. If it passes the verification, the function removes the query from the `privateStore` and stores the result in the private store.
+> The querying chain may execute additional state machine logic when a query result is received. To account for this additional state machine logic and charge a fee to the query caller, an implementation of this specification could use the already existing `bounty` field of the `CrossChainQuery` interface or extend the interface with an additional field.
 5) The query caller can then asynchronously retrieve the query result. The function `PruneCrossChainQueryResult` allows a query caller to prune the result from the store once it retrieves it.
 
 #### Normal path methods
 
-The `CrossChainQueryRequest` function is called when the Cross-chain Querying module at the Querying Chain receives a new query request.
+The `CrossChainQueryRequest` function is called when the Cross-chain Queries module at the querying chain receives a new query request.
 
 ```typescript
 function CrossChainQueryRequest(
   path: CommitmentPath,
   queryHeight: Height,
   localTimeoutHeight: Height,
+  localTimeoutTimestamp: uint64,
   clientId: Identifier,
   bounty: Fee,
   ): [Identifier, CapabilityKey] {
 
-    // Check that there exists a client of the Queried Chain. The client will be used to verify the query result.
+    // Check that there exists a client of the queried chain. The client will be used to verify the query result.
     abortTransactionUnless(queryClientState(clientId) !== null)
 
     // Sanity-check that localTimeoutHeight is 0 or greater than the current height, otherwise the query will always time out.
@@ -227,11 +237,11 @@ function CrossChainQueryRequest(
   - The query request is stored in the `privateStore`.
   - A `sendQuery` event is emitted.
 
-The `CrossChainQueryResult` function is called when the Cross-chain Querying module at the Querying Chain receives a new query reply.
-We pass the address of the relayer that submitted the query result to the Querying Chain to optionally provide some rewards. This provides a foundation for fee payment, but can be used for other techniques as well (like calculating a leaderboard).
+The `CrossChainQueryResponse` function is called when the Cross-chain Queries module at the querying chain receives a new query reply.
+We pass the address of the relayer that submitted the query result to the querying chain to optionally provide some rewards. This provides a foundation for fee payment, but can be used for other techniques as well (like calculating a leaderboard).
 
 ```typescript
-function CrossChainQueryResult(
+function CrossChainQueryResponse(
   queryId: Identifier,
   data: []byte
   proof: CommitmentProof,
@@ -245,11 +255,11 @@ function CrossChainQueryResult(
     query = privateStore.get(queryPath(queryIdentifier))
     abortTransactionUnless(query !== null)
 
-    // Retrieve client state of the Queried Chain.
+    // Retrieve client state of the queried chain.
     client = queryClientState(query.clientId)
     abortTransactionUnless(client !== null)
 
-    // Check that the relier executed the query at the requested height at the Queried Chain.
+    // Check that the relier executed the query at the requested height at the queried chain.
     abortTransactionUnless(query.queryHeight !== proofHeight)
 
     // Check that localTimeoutHeight is 0 or greater than the current height.
@@ -258,7 +268,8 @@ function CrossChainQueryResult(
     abortTransactionUnless(query.localTimeoutTimestamp === 0 || query.localTimeoutTimestamp > currentTimestamp()) 
 
 
-    // Verify query result using the local light client of the Queried Chain. If success, then verify that the data is indeed the value associated with query.path at query.queryHeight at the Queried Chain. Otherwise, verify that query.path does not exist at query.queryHeight at the Queried Chain.
+    // Verify query result using the local light client of the queried chain.
+    // If the reponse carries data, then verify that the data is indeed the value associated with query.path at query.queryHeight at the queried chain.
     if (data !== null) {    
         abortTransactionUnless(client.verifyMemership(
             client,
@@ -270,6 +281,7 @@ function CrossChainQueryResult(
             data
         ))
         result = SUCCESS
+    // If there response does not carry any data, verify that query.path does not exist at query.queryHeight at the queried chain.
     } else {
         abortTransactionUnless(client.verifyNonMemership(
             client,
@@ -329,14 +341,13 @@ function PruneCrossChainQueryResult(
 
 #### Timeouts
 
-Query requests have associated a `localTimeoutHeight` and a `localTimeoutTimestamp` field that specifies the height and timestamp limit at the Querying Chain after which a query is considered to have failed. 
+Query requests have associated a `localTimeoutHeight` and a `localTimeoutTimestamp` field that specifies the height and timestamp limit at the querying chain after which a query is considered to have failed. 
 
-The Querying Chain calls the `checkQueryTimeout` function to check whether a specific query has timed out. 
+The querying chain calls the `checkQueryTimeout` function to check whether a specific query has timed out. 
 
-> There are several alternatives on how to handle timeouts. For instance, the relayer could submit on-chain timeout notifications to the Querying Chain. Since the relayer is untrusted, for each of these notifications the Cross-chain Querying module of the Querying Chain MUST call the `checkQueryTimeout` to check if the query has indeed timed out. An alternative could be to make the Cross-chain Querying module responsible for checking  
-if any query has timed out by iterating over the ongoing queries at the beginning of a block and calling `checkQueryTimeout`. In this case, ongoing queries should be stored indexed by `localTimeoutTimestamp` and `localTimeoutHeight` to allow iterating over them more efficiently. These are implementation details that this specification does not cover. 
+> There are several alternatives on how to handle timeouts. For instance, the relayer could submit timeout notifications as transactions to the querying chain. Since the relayer is untrusted, for each of these notifications, the Cross-chain Queries module of the querying chain MUST call the `checkQueryTimeout` to check if the query has indeed timed out. An alternative could be to make the Cross-chain Queries module responsible for checking if any query has timed out by iterating over the ongoing queries at the beginning of a block and calling `checkQueryTimeout`. In this case, ongoing queries should be stored indexed by `localTimeoutTimestamp` and `localTimeoutHeight` to allow iterating over them more efficiently. These are implementation details that this specification does not cover. 
 
-We pass the relayer address just as in `CrossChainQueryResult` to allow for possible incentivization here as well.
+We pass the relayer address just as in `CrossChainQueryResponse` to allow for possible incentivization here as well.
 
 ```typescript
 function checkQueryTimeout(
@@ -350,7 +361,7 @@ function checkQueryTimeout(
     // Get the current height.
     currentHeight = getCurrentHeight()
 
-    // Check that localTimeoutHeight or localTimeoutTimestamp has passed on the Querying Chain (locally)
+    // Check that localTimeoutHeight or localTimeoutTimestamp has passed on the querying chain (locally)
     abortTransactionUnless(
       (query.localTimeoutHeight > 0 && query.localTimeoutHeight < getCurrentHeight()) ||
       (query.localTimeoutTimestamp > 0 && query.localTimeoutTimestamp < currentTimestamp()))
@@ -382,6 +393,8 @@ January 6, 2022 - First draft
 May 11, 2022 - Major revision
 
 June 14, 2022 - Adds pruning, localTimeoutTimestamp and adds relayer address for incentivization
+
+July 28, 2022 - Revision of the assumptions
 
 ## Copyright
 
