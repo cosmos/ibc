@@ -95,7 +95,7 @@ Between the provider chain and each consumer chain, a separate (unique) CCV chan
 We use the following notations:
 - `ts(h)` is the timestamp of a block with height `h`, i.e., `ts(h) = B.currentTimestamp()`, where `B` is the block at height `h`;
 - `pBonded(h,val)` is the number of tokens bonded by validator `val` on the provider chain at block height `h`; 
-- `pUnbonding(h,val)` is the number of tokens a validator `val` start unbonding on the provider at at block height `h`;
+- `pUnbonding(h,val)` is the number of tokens a validator `val` starts unbonding on the provider at at block height `h`;
 - `VP(T)` is the voting power associated to a number `T` of tokens;
 - `Power(c,h,val)` is the voting power granted to a validator `val` on a chain `c` at block height `h`;
 - `Token(power)` is the amount of tokens necessary to be bonded (on the provider chain) by a validator to be granted `power` voting power, 
