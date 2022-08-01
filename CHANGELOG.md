@@ -45,6 +45,7 @@ Ref: https://keepachangelog.com/en/1.0.0/
 
 ### Improvements
 
-- [\#803](https://github.com/cosmos/ibc/pull/803) Changed UpgradeState enums to match the opening handshake enum style.
 - [\#802](https://github.com/cosmos/ibc/pull/802) Move `ClientState` to the `provableStore` and add `ClientState` validation in `connOpenTry` and `connOpenAck`
+- [\#803](https://github.com/cosmos/ibc/pull/803) Changed UpgradeState enums to match the opening handshake enum style.
+- [\#804](https://github.com/cosmos/ibc/pull/804) Increment upgrade sequence at the start of a new handshake rather than the end of a completed handshake
 - [\#807](https://github.com/cosmos/ibc/pull/807) Upgrade keys will now prefix the channel path to align with the rest of ICS4 keys

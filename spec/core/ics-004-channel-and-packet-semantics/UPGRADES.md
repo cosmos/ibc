@@ -237,9 +237,6 @@ function restoreChannel() {
         channelIdentifier
     )
 
-    // increment sequence in preparation for the next upgrade
-    provableStore.set(channelUpgradeSequencePath(portIdentifier, channelIdentifier), sequence+1)
-
     // caller should return as well
 }
 ```
@@ -307,6 +304,11 @@ function chanUpgradeInit(
     }
 
     sequence := provableStore.get(channelUpgradeSequencePath(portIdentifier, channelIdentifier))
+    if sequence == nil {
+        sequence = 1
+    } else {
+        sequence++
+    }
 
     // call modules onChanUpgradeInit callback
     module = lookupModule(portIdentifier)
@@ -388,11 +390,11 @@ function chanUpgradeTry(
     // get current sequence on this channel
     // if the counterparty sequence is greater than the current sequence, we fast forward to the counterparty sequence
     // so that both channel ends are using the same sequence for the current upgrade
-    // if the counterparty sequence is less than the current sequence, then either the counterparty chain is out-of-sync or
+    // if the counterparty sequence is less than or equal to the current sequence, then either the counterparty chain is out-of-sync or
     // the message is out-of-sync and we write an error receipt with our own sequence so that the counterparty can update
     // their sequence as well. We must then increment our sequence so both sides start the next upgrade with a fresh sequence.
     currentSequence = provableStore.get(channelUpgradeSequencePath(portIdentifier, channelIdentifier))
-    if counterpartySequence >= currentSequence {
+    if counterpartySequence > currentSequence {
         provableStore.set(channelUpgradeSequencePath(portIdentifier, channelIdentifier), counterpartySequence)
     } else {
         // error on the higher sequence so that both chains move to a fresh sequence
@@ -540,9 +542,6 @@ function chanUpgradeAck(
     provableStore.set(channelPath(portIdentifier, channelIdentifier), currentChannel)
     provableStore.delete(channelUpgradeTimeoutPath(portIdentifier, channelIdentifier))
     privateStore.delete(channelRestorePath(portIdentifier, channelIdentifier))
-
-    // increment sequence in preparation for the next upgrade
-    provableStore.set(channelUpgradeSequencePath(portIdentifier, channelIdentifier), sequence+1)
 }
 ```
 
@@ -596,9 +595,6 @@ function chanUpgradeConfirm(
     provableStore.set(channelPath(portIdentifier, channelIdentifier), currentChannel)
     provableStore.delete(channelUpgradeTimeoutPath(portIdentifier, channelIdentifier))
     privateStore.delete(channelRestorePath(portIdentifier, channelIdentifier))
-
-    // increment sequence in preparation for the next upgrade
-    provableStore.set(channelUpgradeSequencePath(portIdentifier, channelIdentifier), sequence+1)
 }
 ```
 
