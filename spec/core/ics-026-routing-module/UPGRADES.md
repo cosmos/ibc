@@ -83,8 +83,8 @@ function onChanUpgradeTry(
   channelIdentifier: Identifier,
   counterpartyPortIdentifier: Identifier,
   counterpartyChannelIdentifier: Identifier,
-  counterpartyVersion: string,
-  previousVersion: string) => (version: string, err: Error) {
+  previousVersion: string,
+  counterpartyVersion: string) => (version: string, err: Error) {
     // defined by the module
 }
 ```
