@@ -200,15 +200,15 @@ The `nextSequenceSend`, `nextSequenceRecv`, and `nextSequenceAck` unsigned integ
 
 ```typescript
 function nextSequenceSendPath(portIdentifier: Identifier, channelIdentifier: Identifier): Path {
-    return "seqSends/ports/{portIdentifier}/channels/{channelIdentifier}/nextSequenceSend"
+    return "nextSequenceSend/ports/{portIdentifier}/channels/{channelIdentifier}"
 }
 
 function nextSequenceRecvPath(portIdentifier: Identifier, channelIdentifier: Identifier): Path {
-    return "seqRecvs/ports/{portIdentifier}/channels/{channelIdentifier}/nextSequenceRecv"
+    return "nextSequenceRecv/ports/{portIdentifier}/channels/{channelIdentifier}"
 }
 
 function nextSequenceAckPath(portIdentifier: Identifier, channelIdentifier: Identifier): Path {
-    return "seqAcks/ports/{portIdentifier}/channels/{channelIdentifier}/nextSequenceAck"
+    return "nextSequenceAck/ports/{portIdentifier}/channels/{channelIdentifier}"
 }
 ```
 
