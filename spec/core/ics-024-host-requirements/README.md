@@ -119,7 +119,7 @@ Note that the client-related paths listed below reflect the Tendermint client as
 | Store          | Path format                                                                    | Value type        | Defined in |
 | -------------- | ------------------------------------------------------------------------------ | ----------------- | ---------------------- |
 | provableStore  | "clients/{identifier}/clientType"                                              | ClientType        | [ICS 2](../ics-002-client-semantics) |
-| privateStore   | "clients/{identifier}/clientState"                                             | ClientState       | [ICS 2](../../client/ics-007-tendermint-client) |
+| provableStore  | "clients/{identifier}/clientState"                                             | ClientState       | [ICS 2](../ics-002-client-semantics) |
 | provableStore  | "clients/{identifier}/consensusStates/{height}"                                | ConsensusState    | [ICS 7](../../client/ics-007-tendermint-client) |
 | privateStore   | "clients/{identifier}/connections                                              | []Identifier      | [ICS 3](../ics-003-connection-semantics) |
 | provableStore  | "connections/{identifier}"                                                     | ConnectionEnd     | [ICS 3](../ics-003-connection-semantics) |
@@ -179,6 +179,80 @@ Host state machines MUST provide the ability to introspect this stored recent co
 
 ```typescript
 type getStoredRecentConsensusStateCount = () => Height
+```
+
+### Client state validation
+Host state machines MUST define a unique `ClientState` type fulfilling the requirements of [ICS 2](../ics-002-client-semantics).
+
+Host state machines MUST provide the ability to construct a `ClientState` representation of their own state for the purposes of client state validation, with `getHostClientState`:
+
+```typescript
+type getHostClientState = (height: Height) => ClientState
+```
+
+Host state machines MUST provide the ability to validate the `ClientState` of a light client running on a counterparty chain, with `validateSelfClient`:
+
+```typescript
+type validateSelfClient = (counterpartyClientState: ClientState) => boolean
+```
+
+`validateSelfClient` validates the client parameters for a client of the host chain. For example, below is the implementation for Tendermint hosts, using `ClientState` as defined in [ICS 7](../../client/ics-007-tendermint-client/):
+
+```typescript
+function validateSelfClient(counterpartyClientState: ClientState) {
+  hostClientState = getHostClientState()
+
+  // assert that the counterparty client is not frozen
+  if counterpartyClientState.frozenHeight !== null {
+    return false
+  }
+
+  // assert that the chain ids are the same
+  if counterpartyClientState.chainID !== hostClientState.chainID {
+    return false
+  }
+
+  // assert that the counterparty client is in the same revision as the host chain
+  counterpartyRevisionNumber = parseRevisionNumber(counterpartyClientState.chainID)
+  if counterpartyRevisionNumber !== hostClientState.latestHeight.revisionNumber {
+    return false
+  }
+
+  // assert that the counterparty client has a height less than the host height
+  if counterpartyClientState.latestHeight >== hostClientState.latestHeight {
+    return false
+  }
+
+  // assert that the counterparty client has the same ProofSpec as the host
+  if counterpartyClientState.proofSpecs !== hostClientState.proofSpecs {
+    return false
+  }
+
+  // assert that the trustLevel is within the allowed range. 1/3 is the minimum amount
+  // of trust needed which does not break the security model.
+  if counterpartyClientState.trustLevel < 1/3 || counterpartyClientState.trustLevel > 1 {
+    return false
+  }
+
+  // assert that the unbonding periods are the same
+  if counterpartyClientState.unbondingPeriod != hostClientState.unbondingPeriod {
+    return false
+  }
+
+  // assert that the unbonding period is greater than or equal to the trusting period
+  if counterpartyClientState.unbondingPeriod < counterpartyClientState.trustingPeriod {
+    return false
+  }
+
+  // assert that the upgrade paths are the same
+  hostUpgradePath = applyPrefix(hostClientState.upgradeCommitmentPrefix, hostClientState.upgradeKey)
+  counterpartyUpgradePath = applyPrefix(counterpartyClientState.upgradeCommitmentPrefix, counterpartyClientState.upgradeKey)
+  if counterpartyUpgradePath !== hostUpgradePath {
+    return false
+  }
+  
+  return true
+}
 ```
 
 ### Commitment path introspection
@@ -322,6 +396,8 @@ Jun 25, 2019 - Use "ports" instead of module names
 Aug 18, 2019 - Revisions to module system, definitions
 
 Jul 05, 2022 - Lower the minimal allowed length of a channel identifier to 8
+
+Jul 27, 2022 - Move `ClientState` to the `provableStore`, and add "Client state validation" section
 
 ## Copyright
 
