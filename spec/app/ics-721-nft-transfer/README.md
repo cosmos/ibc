@@ -212,11 +212,13 @@ function onChanOpenInit(
   channelIdentifier: Identifier,
   counterpartyPortIdentifier: Identifier,
   counterpartyChannelIdentifier: Identifier,
-  version: string) {
+  version: string) (version: string, err: Error) {
   // only unordered channels allowed
   abortTransactionUnless(order === UNORDERED)
   // assert that version is "ics721-1"
-  abortTransactionUnless(version === "ics721-1")
+  // or relayer passed in empty version
+  abortTransactionUnless(version === "ics721-1" || version === "")
+  return "ics721-1", nil
 }
 ```
 
@@ -228,11 +230,12 @@ function onChanOpenTry(
   channelIdentifier: Identifier,
   counterpartyPortIdentifier: Identifier,
   counterpartyChannelIdentifier: Identifier,
-  counterpartyVersion: string) {
+  counterpartyVersion: string) (version: string, err: Error) {
   // only unordered channels allowed
   abortTransactionUnless(order === UNORDERED)
   // assert that version is "ics721-1"
   abortTransactionUnless(counterpartyVersion === "ics721-1")
+  return "ics721-1", nil
 }
 ```
 

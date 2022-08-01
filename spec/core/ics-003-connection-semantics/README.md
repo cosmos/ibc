@@ -147,6 +147,16 @@ function verifyClientConsensusState(
     return client.verifyClientConsensusState(connection, height, connection.counterpartyPrefix, proof, clientIdentifier, consensusStateHeight, consensusState)
 }
 
+function verifyClientState(
+  connection: ConnectionEnd,
+  height: Height,
+  proof: CommitmentProof,
+  clientState: ClientState
+) {
+    client = queryClient(connection.clientIdentifier)
+    return client.verifyClientState(height, connection.counterpartyPrefix, proof, connection.clientIdentifier, clientState)
+}
+
 function verifyConnectionState(
   connection: ConnectionEnd,
   height: Height,
@@ -338,45 +348,38 @@ function connOpenInit(
 
 ```typescript
 function connOpenTry(
-  previousIdentifier: Identifier,
   counterpartyConnectionIdentifier: Identifier,
   counterpartyPrefix: CommitmentPrefix,
   counterpartyClientIdentifier: Identifier,
   clientIdentifier: Identifier,
+  clientState: ClientState,
   counterpartyVersions: string[],
   delayPeriodTime: uint64,
   delayPeriodBlocks: uint64,
   proofInit: CommitmentProof,
+  proofClient: CommitmentProof,
   proofConsensus: CommitmentProof,
   proofHeight: Height,
   consensusHeight: Height) {
-    if (previousIdentifier !== "") {
-      previous = provableStore.get(connectionPath(identifier))
-      abortTransactionUnless(
-        (previous !== null) &&
-        (previous.state === INIT &&
-         previous.counterpartyConnectionIdentifier === "" &&
-         previous.counterpartyPrefix === counterpartyPrefix &&
-         previous.clientIdentifier === clientIdentifier &&
-         previous.counterpartyClientIdentifier === counterpartyClientIdentifier &&
-         previous.delayPeriodTime === delayPeriodTime
-         previous.delayPeriodBlocks === delayPeriodBlocks))
-      identifier = previousIdentifier
-    } else {
-      // generate a new identifier if the passed identifier was the sentinel empty-string
-      identifier = generateIdentifier()
-    }
+    // generate a new identifier
+    identifier = generateIdentifier()
+    
+    abortTransactionUnless(validateSelfClient(clientState))
     abortTransactionUnless(consensusHeight < getCurrentHeight())
     expectedConsensusState = getConsensusState(consensusHeight)
-    expected = ConnectionEnd{INIT, "", getCommitmentPrefix(), counterpartyClientIdentifier,
+    expectedConnectionEnd = ConnectionEnd{INIT, "", getCommitmentPrefix(), counterpartyClientIdentifier,
                              clientIdentifier, counterpartyVersions, delayPeriodTime, delayPeriodBlocks}
-    versionsIntersection = intersection(counterpartyVersions, previous !== null ? previous.version : getCompatibleVersions())
+
+    versionsIntersection = intersection(counterpartyVersions, getCompatibleVersions())
     version = pickVersion(versionsIntersection) // throws if there is no intersection
+
     connection = ConnectionEnd{TRYOPEN, counterpartyConnectionIdentifier, counterpartyPrefix,
                                clientIdentifier, counterpartyClientIdentifier, version, delayPeriodTime, delayPeriodBlocks}
-    abortTransactionUnless(connection.verifyConnectionState(proofHeight, proofInit, counterpartyConnectionIdentifier, expected))
+    abortTransactionUnless(connection.verifyConnectionState(proofHeight, proofInit, counterpartyConnectionIdentifier, expectedConnectionEnd))
+    abortTransactionUnless(connection.verifyClientState(proofHeight, proofClient, clientState))
     abortTransactionUnless(connection.verifyClientConsensusState(
       proofHeight, proofConsensus, counterpartyClientIdentifier, consensusHeight, expectedConsensusState))
+
     provableStore.set(connectionPath(identifier), connection)
     addConnectionToClient(clientIdentifier, identifier)
 }
@@ -387,22 +390,24 @@ function connOpenTry(
 ```typescript
 function connOpenAck(
   identifier: Identifier,
+  clientState: ClientState,
   version: string,
   counterpartyIdentifier: Identifier,
   proofTry: CommitmentProof,
+  proofClient: CommitmentProof,
   proofConsensus: CommitmentProof,
   proofHeight: Height,
   consensusHeight: Height) {
     abortTransactionUnless(consensusHeight < getCurrentHeight())
+    abortTransactionUnless(validateSelfClient(clientState))
     connection = provableStore.get(connectionPath(identifier))
-    abortTransactionUnless(
-        (connection.state === INIT && connection.version.indexOf(version) !== -1)
-        || (connection.state === TRYOPEN && connection.version === version))
+    abortTransactionUnless((connection.state === INIT && connection.version.indexOf(version) !== -1)
     expectedConsensusState = getConsensusState(consensusHeight)
-    expected = ConnectionEnd{TRYOPEN, identifier, getCommitmentPrefix(),
+    expectedConnectionEnd = ConnectionEnd{TRYOPEN, identifier, getCommitmentPrefix(),
                              connection.counterpartyClientIdentifier, connection.clientIdentifier,
                              version, connection.delayPeriodTime, connection.delayPeriodBlocks}
-    abortTransactionUnless(connection.verifyConnectionState(proofHeight, proofTry, counterpartyIdentifier, expected))
+    abortTransactionUnless(connection.verifyConnectionState(proofHeight, proofTry, counterpartyIdentifier, expectedConnectionEnd))
+    abortTransactionUnless(connection.verifyClientState(proofHeight, proofClient, clientState))
     abortTransactionUnless(connection.verifyClientConsensusState(
       proofHeight, proofConsensus, connection.counterpartyClientIdentifier, consensusHeight, expectedConsensusState))
     connection.state = OPEN
@@ -479,6 +484,8 @@ Mar 29, 2019 - Initial draft version submitted
 May 17, 2019 - Draft finalised
 
 Jul 29, 2019 - Revisions to track connection set associated with client
+
+Jul 27, 2022 - Addition of `ClientState` validation in `connOpenTry` and `connOpenAck`
 
 ## Copyright
 

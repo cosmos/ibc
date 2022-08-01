@@ -379,7 +379,7 @@ function onChanOpenInit(
   channelIdentifier: Identifier,
   counterpartyPortIdentifier: Identifier,
   counterpartyChannelIdentifier: Identifier,
-  version: string) {
+  version: string) => (version: string, err: Error) {
   // only ordered channels allowed
   abortTransactionUnless(order === ORDERED)
   // validate port format
@@ -389,16 +389,31 @@ function onChanOpenInit(
   // only open the channel if there is no active channel already set (with status OPEN)
   abortTransactionUnless(activeChannel === nil)
 
-  // validate metadata
-  metadata = UnmarshalJSON(version)
-  abortTransactionUnless(metadata.Version === "ics27-1")
-  // all elements in encoding list and tx type list must be supported
-  abortTransactionUnless(IsSupportedEncoding(metadata.Encoding))
-  abortTransactionUnless(IsSupportedTxType(metadata.TxType))
+  if version != "" {
+    // validate metadata
+    metadata = UnmarshalJSON(version)
+    abortTransactionUnless(metadata.Version === "ics27-1")
+    // all elements in encoding list and tx type list must be supported
+    abortTransactionUnless(IsSupportedEncoding(metadata.Encoding))
+    abortTransactionUnless(IsSupportedTxType(metadata.TxType))
 
-  // connectionID and counterpartyConnectionID is retrievable in Channel
-  abortTransactionUnless(metadata.ControllerConnectionId === connectionId)
-  abortTransactionUnless(metadata.HostConnectionId === counterpartyConnectionId)
+    // connectionID and counterpartyConnectionID is retrievable in Channel
+    abortTransactionUnless(metadata.ControllerConnectionId === connectionId)
+    abortTransactionUnless(metadata.HostConnectionId === counterpartyConnectionId)
+  } else {
+    // construct default metadata
+    metadata = {
+      Version: "ics27-1",
+      ControllerConnectionId: connectionId,
+      HostConnectionId: counterpartyConnectionId,
+      // implementation may choose a default encoding and TxType
+      // e.g. DefaultEncoding=protobuf, DefaultTxType=sdk.MultiMsg
+      Encoding: DefaultEncoding,
+      TxType: DefaultTxType,
+    }
+    version = marshalJSON(metadata)
+  }
+  return version, nil
 }
 ```
 
@@ -411,7 +426,7 @@ function onChanOpenTry(
   channelIdentifier: Identifier,
   counterpartyPortIdentifier: Identifier,
   counterpartyChannelIdentifier: Identifier,
-  counterpartyVersion: string) (version: string) {
+  counterpartyVersion: string) (version: string, err: Error) {
   // only ordered channels allowed
   abortTransactionUnless(order === ORDERED)
   // validate port ID
@@ -443,7 +458,7 @@ function onChanOpenTry(
     "TxType": cpMetadata.TxType,
   }
 
-  return string(MarshalJSON(metadata))
+  return string(MarshalJSON(metadata)), nil
 }
 ```
 
