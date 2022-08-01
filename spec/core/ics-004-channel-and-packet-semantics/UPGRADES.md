@@ -22,7 +22,7 @@ The channel upgrade protocol MUST NOT modify the channel identifiers.
 
 ### Data Structures
 
-The `ChannelState` and `ChannelEnd` are defined in [ICS-4](./README.md), they are reproduced here for the reader's convenience. `UPGRADE_INIT`, `UPGRADE_TRY` are additional states added to enable the upgrade feature.
+The `ChannelState` and `ChannelEnd` are defined in [ICS-4](./README.md), they are reproduced here for the reader's convenience. `INITUPGRADE`, `TRYUPGRADE` are additional states added to enable the upgrade feature.
 
 #### `ChannelState`
 
@@ -31,13 +31,13 @@ enum ChannelState {
   INIT,
   TRYOPEN,
   OPEN,
-  UPGRADE_INIT,
-  UPGRADE_TRY,
+  INITUPGRADE,
+  TRYUPGRADE,
 }
 ```
 
-- The chain that is proposing the upgrade should set the channel state from `OPEN` to `UPGRADE_INIT`
-- The counterparty chain that accepts the upgrade should set the channel state from `OPEN` to `UPGRADE_TRY`
+- The chain that is proposing the upgrade should set the channel state from `OPEN` to `INITUPGRADE`
+- The counterparty chain that accepts the upgrade should set the channel state from `OPEN` to `TRYUPGRADE`
 
 #### `ChannelEnd`
 
@@ -101,7 +101,7 @@ The upgrade sequence path is a public path that stores the current sequence of t
 
 ```typescript
 function channelUpgradeSequencePath(portIdentifier: Identifier, channelIdentifier: Identifier) Path {
-    return "channelUpgrades/ports/{portIdentifier}/channels/{channelIdentifier}/upgradeSequence"
+    return "channelUpgrades/upgradeSequence/ports/{portIdentifier}/channels/{channelIdentifier}"
 }
 ```
 
@@ -129,7 +129,7 @@ The chain must store the previous channel end so that it may restore it if the u
 
 ```typescript
 function channelRestorePath(portIdentifier: Identifier, channelIdentifier: Identifier): Path {
-    return "channelUpgrades/ports/{portIdentifier}/channels/{channelIdentifier}/restore"
+    return "channelUpgrades/restore/ports/{portIdentifier}/channels/{channelIdentifier}"
  }
 ```
 
@@ -139,7 +139,7 @@ The upgrade error path is a public path that can signal an error of the upgrade 
 
 ```typescript
 function channelUpgradeErrorPath(portIdentifier: Identifier, channelIdentifier: Identifier): Path {
-    return "channelUpgrades/ports/{portIdentifier}/channels/{channelIdentifier}/upgradeError"
+    return "channelUpgrades/upgradeError/ports/{portIdentifier}/channels/{channelIdentifier}"
 }
 ```
 
@@ -182,7 +182,7 @@ The upgrade timeout path is a public path set by the upgrade initiator to determ
 
 ```typescript
 function channelUpgradeTimeoutPath(portIdentifier: Identifier, channelIdentifier: Identifier) Path {
-    return "channelUpgrades/ports/{portIdentifier}/channels/{channelIdentifier}/upgradeTimeout"
+    return "channelUpgrades/upgradeTimeout/ports/{portIdentifier}/channels/{channelIdentifier}"
 }
 ```
 
@@ -213,7 +213,7 @@ The channel upgrade process consists of three sub-protocols: `UpgradeChannelHand
 `restoreChannel()` is a utility function that allows a chain to abort an upgrade handshake in progress, and return the `ChannelEnd` to its original pre-upgrade state while also setting the upgrade `errorReceipt`. A relayer can then send a `ChannelUpgradeCancelMsg` to the counterparty so that it can restore its `ChannelEnd` to its pre-upgrade state as well. Once both channel ends are back to the pre-upgrade state, packet processing will resume with the original channel and application parameters.
 
 ```typescript
-function restoreChannel() {
+function restoreChannel(portIdentifier: Identifier, channelIdentifier: Identifier) {
     // cancel upgrade
     // write an error receipt with the current sequence into the error path
     // and restore original channel
@@ -237,9 +237,6 @@ function restoreChannel() {
         channelIdentifier
     )
 
-    // increment sequence in preparation for the next upgrade
-    provableStore.set(channelUpgradeSequencePath(portIdentifier, channelIdentifier), sequence+1)
-
     // caller should return as well
 }
 ```
@@ -252,10 +249,10 @@ A successful protocol execution flows as follows (note that all calls are made t
 
 | Initiator | Datagram             | Chain acted upon | Prior state (A, B)          | Posterior state (A, B)      |
 | --------- | -------------------- | ---------------- | --------------------------- | --------------------------- |
-| Actor     | `ChanUpgradeInit`    | A                | (OPEN, OPEN)                | (UPGRADE_INIT, OPEN)        |
-| Actor     | `ChanUpgradeTry`     | B                | (UPGRADE_INIT, OPEN)        | (UPGRADE_INIT, UPGRADE_TRY) |
-| Relayer   | `ChanUpgradeAck`     | A                | (UPGRADE_INIT, UPGRADE_TRY) | (OPEN, UPGRADE_TRY)         |
-| Relayer   | `ChanUpgradeConfirm` | B                | (OPEN, UPGRADE_TRY)         | (OPEN, OPEN)                |
+| Actor     | `ChanUpgradeInit`    | A                | (OPEN, OPEN)                | (INITUPGRADE, OPEN)        |
+| Actor     | `ChanUpgradeTry`     | B                | (INITUPGRADE, OPEN)        | (INITUPGRADE, TRYUPGRADE) |
+| Relayer   | `ChanUpgradeAck`     | A                | (INITUPGRADE, TRYUPGRADE) | (OPEN, TRYUPGRADE)         |
+| Relayer   | `ChanUpgradeConfirm` | B                | (OPEN, TRYUPGRADE)         | (OPEN, OPEN)                |
 
 At the end of an upgrade handshake between two chains implementing the sub-protocol, the following properties hold:
 
@@ -283,13 +280,16 @@ function chanUpgradeInit(
     abortTransactionUnless(channel.state == OPEN)
 
     // abort transaction if an unmodifiable field is modified
-    // upgraded channel state must be in `UPGRADE_INIT`
+    // upgraded channel state must be in `INITUPGRADE`
     // NOTE: Any added fields are by default modifiable.
     abortTransactionUnless(
-        proposedUpgradeChannel.state == UPGRADE_INIT &&
+        proposedUpgradeChannel.state == INITUPGRADE &&
         proposedUpgradeChannel.counterpartyPortIdentier == currentChannel.counterpartyPortIdentifier &&
         proposedUpgradeChannel.counterpartyChannelIdentifier == currentChannel.counterpartyChannelIdentifier
     )
+
+    // new channel version must be nonempty
+    abortTransactionUnless(proposedUpgradeChannel.Version != "")
 
     // current ordering must be a valid ordering of packets
     // in the proposed ordering
@@ -307,6 +307,11 @@ function chanUpgradeInit(
     }
 
     sequence := provableStore.get(channelUpgradeSequencePath(portIdentifier, channelIdentifier))
+    if sequence == nil {
+        sequence = 1
+    } else {
+        sequence++
+    }
 
     // call modules onChanUpgradeInit callback
     module = lookupModule(portIdentifier)
@@ -350,18 +355,23 @@ function chanUpgradeTry(
     proofUpgradeSequence: CommitmentProof,
     proofHeight: Height
 ) {
-    // current channel must be OPEN or UPGRADE_INIT (crossing hellos)
+    // current channel must be OPEN or INITUPGRADE (crossing hellos)
     currentChannel = provableStore.get(channelPath(portIdentifier, channelIdentifier))
-    abortTransactionUnless(currentChannel.state == OPEN || currentChannel.state == UPGRADE_INIT)
+    abortTransactionUnless(currentChannel.state == OPEN || currentChannel.state == INITUPGRADE)
 
     // abort transaction if an unmodifiable field is modified
-    // upgraded channel state must be in `UPGRADE_TRY`
+    // upgraded channel state must be in `TRYUPGRADE`
     // NOTE: Any added fields are by default modifiable.
     abortTransactionUnless(
-        proposedUpgradeChannel.state == UPGRADE_TRY &&
+        proposedUpgradeChannel.state == TRYUPGRADE &&
         proposedUpgradeChannel.counterpartyPortIdentifier == currentChannel.counterpartyPortIdentifier &&
         proposedUpgradeChannel.counterpartyChannelIdentifier == currentChannel.counterpartyChannelIdentifier
     )
+
+    // either timeout height or timestamp must be non-zero
+    // if the upgrade feature is implemented on the TRY chain, then a relayer may submit a TRY transaction after the timeout.
+    // this will restore the channel on the executing chain and allow counterparty to use the ChannelUpgradeCancelMsg to restore their channel.
+    abortTransactionUnless(timeoutHeight != 0 || timeoutTimestamp != 0)
 
     // current ordering must be a valid ordering of packets
     // in the proposed ordering
@@ -370,6 +380,15 @@ function chanUpgradeTry(
         currentChannel.ordering.subsetOf(proposedUpgradeChannel.ordering)
     )
 
+    // new channel version must be nonempty
+    abortTransactionUnless(proposedUpgradeChannel.Version != "")
+
+    // both channel ends must be mutually compatible.
+    // this means that the ordering must be the same and 
+    // any future introduced fields that must be compatible
+    // should also be checked
+    abortTransactionUnless(counterpartyChannel.ordering != proposedUpgradeChannel.ordering)
+    
     // construct upgradeTimeout so it can be verified against counterparty state
     upgradeTimeout = UpgradeTimeout{
         timeoutHeight: timeoutHeight,
@@ -388,11 +407,11 @@ function chanUpgradeTry(
     // get current sequence on this channel
     // if the counterparty sequence is greater than the current sequence, we fast forward to the counterparty sequence
     // so that both channel ends are using the same sequence for the current upgrade
-    // if the counterparty sequence is less than the current sequence, then either the counterparty chain is out-of-sync or
+    // if the counterparty sequence is less than or equal to the current sequence, then either the counterparty chain is out-of-sync or
     // the message is out-of-sync and we write an error receipt with our own sequence so that the counterparty can update
     // their sequence as well. We must then increment our sequence so both sides start the next upgrade with a fresh sequence.
     currentSequence = provableStore.get(channelUpgradeSequencePath(portIdentifier, channelIdentifier))
-    if counterpartySequence >= currentSequence {
+    if counterpartySequence > currentSequence {
         provableStore.set(channelUpgradeSequencePath(portIdentifier, channelIdentifier), counterpartySequence)
     } else {
         // error on the higher sequence so that both chains move to a fresh sequence
@@ -405,14 +424,14 @@ function chanUpgradeTry(
         return
     }
 
-    if currentChannel.state == UPGRADE_INIT {
+    if currentChannel.state == INITUPGRADE {
         // if there is a crossing hello, ie an UpgradeInit has been called on both channelEnds,
         // then we must ensure that the proposedUpgrade by the counterparty is the same as the currentChannel
-        // except for the channel state (upgrade channel will be in UPGRADE_TRY and current channel will be in UPGRADE_INIT)
+        // except for the channel state (upgrade channel will be in TRYUPGRADE and current channel will be in INITUPGRADE)
         // if the proposed upgrades on either side are incompatible, then we will restore the channel and cancel the upgrade.
-        currentChannel.state = UPGRADE_TRY
+        currentChannel.state = TRYUPGRADE
         if !currentChannel.IsEqual(proposedUpgradeChannel) {
-            restoreChannel()
+            restoreChannel(portIdentifier, channelIdentifier)
             return
         }
     } else if currentChannel.state == OPEN {
@@ -420,34 +439,17 @@ function chanUpgradeTry(
         // in case we need to restore channel later.
         privateStore.set(channelRestorePath(portIdentifier, channelIdentifier), currentChannel)
     } else {
-        // abort transaction if current channel is not in state: UPGRADE_INIT or OPEN
+        // abort transaction if current channel is not in state: INITUPGRADE or OPEN
         abortTransactionUnless(false)
     }
-
-    // either timeout height or timestamp must be non-zero
-    // if the upgrade feature is implemented on the TRY chain, then a relayer may submit a TRY transaction after the timeout.
-    // this will restore the channel on the executing chain and allow counterparty to use the ChannelUpgradeCancelMsg to restore their channel.
-    if timeoutHeight == 0 && timeoutTimestamp == 0 {
-        restoreChannel()
-        return
-    }
-    
 
     // counterparty-specified timeout must not have exceeded
     if (currentHeight() > timeoutHeight && timeoutHeight != 0) ||
         (currentTimestamp() > timeoutTimestamp && timeoutTimestamp != 0) {
-        restoreChannel()
+        restoreChannel(portIdentifier, channelIdentifier)
         return
     }
 
-    // both channel ends must be mutually compatible.
-    // this function has been left unspecified since it will depend on the specific structure of the new channel.
-    // It is the responsibility of implementations to make sure that the proposed new channels
-    // on either side are correctly constructed according to the new version selected.
-    if !IsCompatible(counterpartyChannel, proposedUpgradeChannel) {
-        restoreChannel()
-        return
-    }
 
     // call modules onChanUpgradeTry callback
     module = lookupModule(portIdentifier)
@@ -463,7 +465,7 @@ function chanUpgradeTry(
     )
     // restore channel if callback returned error
     if err != nil {
-        restoreChannel()
+        restoreChannel(portIdentifier, channelIdentifier)
         return
     }
 
@@ -486,9 +488,9 @@ function chanUpgradeAck(
     proofUpgradeSequence: CommitmentProof,
     proofHeight: Height
 ) {
-    // current channel is in UPGRADE_INIT or UPGRADE_TRY (crossing hellos)
+    // current channel is in INITUPGRADE or TRYUPGRADE (crossing hellos)
     currentChannel = provableStore.get(channelPath(portIdentifier, channelIdentifier))
-    abortTransactionUnless(currentChannel.state == UPGRADE_INIT || currentChannel.state == UPGRADE_TRY)
+    abortTransactionUnless(currentChannel.state == INITUPGRADE || currentChannel.state == TRYUPGRADE)
 
     // get underlying connection for proof verification
     connection = getConnection(currentChannel.connectionIdentifier)
@@ -505,18 +507,18 @@ function chanUpgradeAck(
     currentChannel.counterpartyChannelIdentifier, sequence))
 
     // counterparty must be in TRY state
-    if counterpartyChannel.State != UPGRADE_TRY {
-        restoreChannel()
+    if counterpartyChannel.State != TRYUPGRADE {
+        restoreChannel(portIdentifier, channelIdentifier)
         return
     }
 
-    // verify channels are mutually compatible
-    // this will also check counterparty chosen version is valid
-    // this function has been left unspecified since it will depend on the specific structure of the new channel.
-    // It is the responsibility of implementations to make sure that the proposed new channels
-    // on either side are correctly constructed according to the new version selected.
-    if !IsCompatible(counterpartyChannel, channel) {
-        restoreChannel()
+
+    // both channel ends must be mutually compatible.
+    // this means that the ordering must be the same and 
+    // any future introduced fields that must be compatible
+    // should also be checked
+    if counterpartyChannel.ordering != proposedUpgradeChannel.ordering {
+        restoreChannel(portIdentifier, channelIdentifier)
         return
     }
 
@@ -530,7 +532,7 @@ function chanUpgradeAck(
     )
     // restore channel if callback returned error
     if err != nil {
-        restoreChannel()
+        restoreChannel(portIdentifier, channelIdentifier)
         return
     }
 
@@ -540,9 +542,6 @@ function chanUpgradeAck(
     provableStore.set(channelPath(portIdentifier, channelIdentifier), currentChannel)
     provableStore.delete(channelUpgradeTimeoutPath(portIdentifier, channelIdentifier))
     privateStore.delete(channelRestorePath(portIdentifier, channelIdentifier))
-
-    // increment sequence in preparation for the next upgrade
-    provableStore.set(channelUpgradeSequencePath(portIdentifier, channelIdentifier), sequence+1)
 }
 ```
 
@@ -556,9 +555,9 @@ function chanUpgradeConfirm(
     proofUpgradeSequence: CommitmentProof,
     proofHeight: Height,
 ) {
-    // current channel is in UPGRADE_TRY
+    // current channel is in TRYUPGRADE
     currentChannel = provableStore.get(channelPath(portIdentifier, channelIdentifier))
-    abortTransactionUnless(channel.state == UPGRADE_TRY)
+    abortTransactionUnless(channel.state == TRYUPGRADE)
 
     // counterparty must be in OPEN state
     abortTransactionUnless(counterpartyChannel.State == OPEN)
@@ -596,9 +595,6 @@ function chanUpgradeConfirm(
     provableStore.set(channelPath(portIdentifier, channelIdentifier), currentChannel)
     provableStore.delete(channelUpgradeTimeoutPath(portIdentifier, channelIdentifier))
     privateStore.delete(channelRestorePath(portIdentifier, channelIdentifier))
-
-    // increment sequence in preparation for the next upgrade
-    provableStore.set(channelUpgradeSequencePath(portIdentifier, channelIdentifier), sequence+1)
 }
 ```
 
@@ -614,9 +610,9 @@ function cancelChannelUpgrade(
     proofUpgradeError: CommitmentProof,
     proofHeight: Height,
 ) {
-    // current channel is in UPGRADE_INIT or UPGRADE_TRY
+    // current channel is in INITUPGRADE or TRYUPGRADE
     currentChannel = provableStore.get(channelPath(portIdentifier, channelIdentifier))
-    abortTransactionUnless(channel.state == UPGRADE_INIT || channel.state == UPGRADE_TRY)
+    abortTransactionUnless(channel.state == INITUPGRADE || channel.state == TRYUPGRADE)
 
     abortTransactionUnless(!isEmpty(errorReceipt))
 
@@ -654,9 +650,9 @@ function cancelChannelUpgrade(
 
 ### Timeout Upgrade Process
 
-It is possible for the channel upgrade process to stall indefinitely on UPGRADE_TRY if the UPGRADE_TRY transaction simply cannot pass on the counterparty; for example, the upgrade feature may not be enabled on the counterparty chain.
+It is possible for the channel upgrade process to stall indefinitely on TRYUPGRADE if the TRYUPGRADE transaction simply cannot pass on the counterparty; for example, the upgrade feature may not be enabled on the counterparty chain.
 
-In this case, we do not want the initializing chain to be stuck indefinitely in the `UPGRADE_INIT` step. Thus, the `ChannelUpgradeInitMsg` message will contain a `TimeoutHeight` and `TimeoutTimestamp`. The counterparty chain is expected to reject `ChannelUpgradeTryMsg` message if the specified timeout has already elapsed.
+In this case, we do not want the initializing chain to be stuck indefinitely in the `INITUPGRADE` step. Thus, the `ChannelUpgradeInitMsg` message will contain a `TimeoutHeight` and `TimeoutTimestamp`. The counterparty chain is expected to reject `ChannelUpgradeTryMsg` message if the specified timeout has already elapsed.
 
 A relayer must then submit an `ChannelUpgradeTimeoutMsg` message to the initializing chain which proves that the counterparty is still in its original state. If the proof succeeds, then the initializing chain shall also restore its original channel and cancel the upgrade.
 
@@ -670,9 +666,9 @@ function timeoutChannelUpgrade(
     proofErrorReceipt: CommitmentProof,
     proofHeight: Height,
 ) {
-    // current channel must be in UPGRADE_INIT
+    // current channel must be in INITUPGRADE
     currentChannel = provableStore.get(channelPath(portIdentifier, channelIdentifier))
-    abortTransactionUnles(currentChannel.state == UPGRADE_INIT)
+    abortTransactionUnles(currentChannel.state == INITUPGRADE)
 
     upgradeTimeout = provableStore.get(timeoutPath(portIdentifier, channelIdentifier))
 
@@ -687,8 +683,8 @@ function timeoutChannelUpgrade(
     // get underlying connection for proof verification
     connection = getConnection(currentChannel.connectionIdentifier)
 
-    // counterparty channel must be proved to still be in OPEN state or UPGRADE_INIT state (crossing hellos)
-    abortTransactionUnless(counterpartyChannel.State === OPEN || counterpartyChannel.State == UPGRADE_INIT)
+    // counterparty channel must be proved to still be in OPEN state or INITUPGRADE state (crossing hellos)
+    abortTransactionUnless(counterpartyChannel.State === OPEN || counterpartyChannel.State == INITUPGRADE)
     abortTransactionUnless(verifyChannelState(connection, proofHeight, proofChannel, currentChannel.counterpartyPortIdentifier, currentChannel.counterpartyChannelIdentifier, counterpartyChannel))
 
     // Error receipt passed in is either nil or it is a stale error receipt from a previous upgrade
