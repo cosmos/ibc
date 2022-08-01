@@ -213,7 +213,7 @@ The channel upgrade process consists of three sub-protocols: `UpgradeChannelHand
 `restoreChannel()` is a utility function that allows a chain to abort an upgrade handshake in progress, and return the `ChannelEnd` to its original pre-upgrade state while also setting the upgrade `errorReceipt`. A relayer can then send a `ChannelUpgradeCancelMsg` to the counterparty so that it can restore its `ChannelEnd` to its pre-upgrade state as well. Once both channel ends are back to the pre-upgrade state, packet processing will resume with the original channel and application parameters.
 
 ```typescript
-function restoreChannel() {
+function restoreChannel(portIdentifier: Identifier, channelIdentifier: Identifier) {
     // cancel upgrade
     // write an error receipt with the current sequence into the error path
     // and restore original channel
@@ -287,6 +287,9 @@ function chanUpgradeInit(
         proposedUpgradeChannel.counterpartyPortIdentier == currentChannel.counterpartyPortIdentifier &&
         proposedUpgradeChannel.counterpartyChannelIdentifier == currentChannel.counterpartyChannelIdentifier
     )
+
+    // new channel version must be nonempty
+    abortTransactionUnless(proposedUpgradeChannel.Version != "")
 
     // current ordering must be a valid ordering of packets
     // in the proposed ordering
@@ -365,6 +368,11 @@ function chanUpgradeTry(
         proposedUpgradeChannel.counterpartyChannelIdentifier == currentChannel.counterpartyChannelIdentifier
     )
 
+    // either timeout height or timestamp must be non-zero
+    // if the upgrade feature is implemented on the TRY chain, then a relayer may submit a TRY transaction after the timeout.
+    // this will restore the channel on the executing chain and allow counterparty to use the ChannelUpgradeCancelMsg to restore their channel.
+    abortTransactionUnless(timeoutHeight != 0 || timeoutTimestamp != 0)
+
     // current ordering must be a valid ordering of packets
     // in the proposed ordering
     // e.g. ORDERED -> UNORDERED, ORDERED -> DAG
@@ -372,6 +380,15 @@ function chanUpgradeTry(
         currentChannel.ordering.subsetOf(proposedUpgradeChannel.ordering)
     )
 
+    // new channel version must be nonempty
+    abortTransactionUnless(proposedUpgradeChannel.Version != "")
+
+    // both channel ends must be mutually compatible.
+    // this means that the ordering must be the same and 
+    // any future introduced fields that must be compatible
+    // should also be checked
+    abortTransactionUnless(counterpartyChannel.ordering != proposedUpgradeChannel.ordering)
+    
     // construct upgradeTimeout so it can be verified against counterparty state
     upgradeTimeout = UpgradeTimeout{
         timeoutHeight: timeoutHeight,
@@ -414,7 +431,7 @@ function chanUpgradeTry(
         // if the proposed upgrades on either side are incompatible, then we will restore the channel and cancel the upgrade.
         currentChannel.state = TRYUPGRADE
         if !currentChannel.IsEqual(proposedUpgradeChannel) {
-            restoreChannel()
+            restoreChannel(portIdentifier, channelIdentifier)
             return
         }
     } else if currentChannel.state == OPEN {
@@ -426,30 +443,13 @@ function chanUpgradeTry(
         abortTransactionUnless(false)
     }
 
-    // either timeout height or timestamp must be non-zero
-    // if the upgrade feature is implemented on the TRY chain, then a relayer may submit a TRY transaction after the timeout.
-    // this will restore the channel on the executing chain and allow counterparty to use the ChannelUpgradeCancelMsg to restore their channel.
-    if timeoutHeight == 0 && timeoutTimestamp == 0 {
-        restoreChannel()
-        return
-    }
-    
-
     // counterparty-specified timeout must not have exceeded
     if (currentHeight() > timeoutHeight && timeoutHeight != 0) ||
         (currentTimestamp() > timeoutTimestamp && timeoutTimestamp != 0) {
-        restoreChannel()
+        restoreChannel(portIdentifier, channelIdentifier)
         return
     }
 
-    // both channel ends must be mutually compatible.
-    // this function has been left unspecified since it will depend on the specific structure of the new channel.
-    // It is the responsibility of implementations to make sure that the proposed new channels
-    // on either side are correctly constructed according to the new version selected.
-    if !IsCompatible(counterpartyChannel, proposedUpgradeChannel) {
-        restoreChannel()
-        return
-    }
 
     // call modules onChanUpgradeTry callback
     module = lookupModule(portIdentifier)
@@ -465,7 +465,7 @@ function chanUpgradeTry(
     )
     // restore channel if callback returned error
     if err != nil {
-        restoreChannel()
+        restoreChannel(portIdentifier, channelIdentifier)
         return
     }
 
@@ -508,17 +508,17 @@ function chanUpgradeAck(
 
     // counterparty must be in TRY state
     if counterpartyChannel.State != TRYUPGRADE {
-        restoreChannel()
+        restoreChannel(portIdentifier, channelIdentifier)
         return
     }
 
-    // verify channels are mutually compatible
-    // this will also check counterparty chosen version is valid
-    // this function has been left unspecified since it will depend on the specific structure of the new channel.
-    // It is the responsibility of implementations to make sure that the proposed new channels
-    // on either side are correctly constructed according to the new version selected.
-    if !IsCompatible(counterpartyChannel, channel) {
-        restoreChannel()
+
+    // both channel ends must be mutually compatible.
+    // this means that the ordering must be the same and 
+    // any future introduced fields that must be compatible
+    // should also be checked
+    if counterpartyChannel.ordering != proposedUpgradeChannel.ordering {
+        restoreChannel(portIdentifier, channelIdentifier)
         return
     }
 
@@ -532,7 +532,7 @@ function chanUpgradeAck(
     )
     // restore channel if callback returned error
     if err != nil {
-        restoreChannel()
+        restoreChannel(portIdentifier, channelIdentifier)
         return
     }
 
