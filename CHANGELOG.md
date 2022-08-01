@@ -38,3 +38,6 @@ Ref: https://keepachangelog.com/en/1.0.0/
 # Changelog
 
 ## [Unreleased]
+
+### Improvements
+* [\#802](https://github.com/cosmos/ibc/pull/802) Move `ClientState` to the `provableStore` and add `ClientState` validation in `connOpenTry` and `connOpenAck`
