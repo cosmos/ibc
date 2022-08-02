@@ -121,7 +121,7 @@ CCV provides the following system properties.
   - `hp` is the largest height on the provider chain that satisfies `hp << hc`, i.e., `Power(pc,hp,val) = Power(cc,hc,val)`, where `pc` is the provider chain;
   - `hp'` is the smallest height on the provider chain that satisfies `hc' << hp'`, i.e., `val` cannot completely unbond on the provider chain before `hp'`;
   - `sumUnbonding(hp, h, val)` is the sum of all tokens `val` start unbonding on the provider at all heights `hu`, such that `hp < hu <= h`;
-  - `sumSlash(h, hs, hp, val)` is the sum of the slashes of `val` at all heights `hs` for infractions committed at `hp`, such that `hp < hs <= h`.
+  - `sumSlash(hp, h, val)` is the sum of the slashes of `val` at all heights `hs` for infractions committed at `hp`, such that `hp < hs <= h`.
   
   Then for all heights `h` on the provider chain, 
    ```
