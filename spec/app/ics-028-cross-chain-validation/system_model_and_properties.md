@@ -126,7 +126,7 @@ CCV provides the following system properties.
   Then for all heights `h` on the provider chain, 
    ```
   hp <= h < hp': 
-  Power(cc,hc,val) <= VP( pBonded(h,val) + sumUnbonding(h, hu, val) + sumSlash(h, hs, hp, val) )
+  Power(cc,hc,val) <= VP( pBonded(h,val) + sumUnbonding(hp, h, val) + sumSlash(hp, h, val) )
   ```
 
   > **Note**: The reason for `+ sumUnbonding(h, hu, val)` in the above inequality is that tokens that `val` start unbonding after `hp` have contributed to the power granted to `val` at height `hc` on `cc` (i.e., `Power(cc,hc,val)`). 
