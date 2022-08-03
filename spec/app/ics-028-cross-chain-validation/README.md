@@ -6,7 +6,7 @@ category: IBC/APP
 requires: 25, 26, 20
 author: Marius Poke <marius@informal.systems>, Aditya Sripal <aditya@interchain.io>, Jovan Komatovic <jovan.komatovic@epfl.ch>, Cezara Dragoi <cezara.dragoi@inria.fr>, Josef Widder <josef@informal.systems>
 created: 2022-06-27
-modified: 2022-06-27
+modified: 2022-08-03
 ---
 
 <!-- omit in toc -->
@@ -47,10 +47,13 @@ Interchain Security [Go implementation](https://github.com/cosmos/interchain-sec
 
 (links to or descriptions of other implementations)
 
+-->
+
 ## History
 
-(changelog and notable inspirations / references)
--->
+Jun 27, 2022 - Draft written
+
+Aug 3, 2022 - Revision of *Bond-Based Consumer Voting Power* property
 
 ## Copyright
 

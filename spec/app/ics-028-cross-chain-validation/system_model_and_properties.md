@@ -95,11 +95,14 @@ Between the provider chain and each consumer chain, a separate (unique) CCV chan
 We use the following notations:
 - `ts(h)` is the timestamp of a block with height `h`, i.e., `ts(h) = B.currentTimestamp()`, where `B` is the block at height `h`;
 - `pBonded(h,val)` is the number of tokens bonded by validator `val` on the provider chain at block height `h`; 
-  note that `pBonded(h,val)` includes also unbonding tokens (i.e., tokens in the process of being unbonded);
+- `pUnbonding(h,val)` is the number of tokens a validator `val` starts unbonding on the provider at at block height `h`;
 - `VP(T)` is the voting power associated to a number `T` of tokens;
-- `Power(cc,h,val)` is the voting power granted to a validator `val` on a consumer chain `cc` at block height `h`;
+- `Power(c,h,val)` is the voting power granted to a validator `val` on a chain `c` at block height `h`;
 - `Token(power)` is the amount of tokens necessary to be bonded (on the provider chain) by a validator to be granted `power` voting power, 
   i.e., `Token(VP(T)) = T`;
+- `slash(val, h, hi, sf)` is the amount of token slashed from a validator `val` on the provider chain (i.e., `pc`) at height `h` for an infraction (with a slashing fraction of `sf`) committed at (provider) height `hi`, 
+  i.e., `slash(val, h, hi, sf) = sf * Token(Power(pc,hi,val))`;
+  note that the infraction can be committed also on a consumer chain, in which case `hi` is the corresponding height on the provider chain.
 
 Also, we use `ha << hb` to denote an order relation between heights, i.e., the block at height `ha` *happens before* the block at height `hb`. 
 For heights on the same chain, `<<` is equivalent to `<`, i.e., `ha << hb` entails `hb` is larger than `ha`.
@@ -116,23 +119,31 @@ CCV provides the following system properties.
   - `val` has `Power(cc,hc,val)` voting power on `cc` at height `hc`;
   - `hc'` is the smallest height on `cc` that satisfies `ts(hc') >= ts(hc) + UnbondingPeriod`, i.e., `val` cannot completely unbond on `cc` before `hc'`;   
   - `hp` is the largest height on the provider chain that satisfies `hp << hc`, i.e., `Power(pc,hp,val) = Power(cc,hc,val)`, where `pc` is the provider chain;
-  - `hp'` is the smallest height on the provider chain that satisfies `hc' << hp'`, i.e., `val` cannot completely unbond on the provider chain before `hp'`.  
+  - `hp'` is the smallest height on the provider chain that satisfies `hc' << hp'`, i.e., `val` cannot completely unbond on the provider chain before `hp'`;
+  - `sumUnbonding(hp, h, val)` is the sum of all tokens `val` start unbonding on the provider at all heights `hu`, such that `hp < hu <= h`;
+  - `sumSlash(hp, h, val)` is the sum of the slashes of `val` at all heights `hs` for infractions committed at `hp`, such that `hp < hs <= h`.
   
   Then for all heights `h` on the provider chain, 
    ```
-  hp <= h < hp': Power(cc,hc,val) <= VP(pBonded(h,val))
+  hp <= h < hp': 
+  Power(cc,hc,val) <= VP( pBonded(h,val) + sumUnbonding(hp, h, val) + sumSlash(hp, h, val) )
   ```
+
+  > **Note**: The reason for `+ sumUnbonding(hp, h, val)` in the above inequality is that tokens that `val` start unbonding after `hp` have contributed to the power granted to `val` at height `hc` on `cc` (i.e., `Power(cc,hc,val)`). 
+  > As a result, these tokens should be available for slashing until `hp'`.
+
+  > **Note**: The reason for `+ sumSlash(hp, h, val)` in the above inequality is that slashing `val` reduces its locked tokens (i.e., `pBonded(h,val)` and `sumUnbonding(hp, h, val)`), however it does not reduce the power already granted to it at height `hc` on `cc` (i.e., `Power(cc,hc,val)`).
 
   > **Intuition**: The *Bond-Based Consumer Voting Power* property ensures that validators that validate on the consumer chains have enough tokens bonded on the provider chain for a sufficient amount of time such that the security model holds. 
   > This means that if the validators misbehave on the consumer chains, their tokens bonded on the provider chain can be slashed during the unbonding period.
   > For example, if one unit of voting power requires `1.000.000` bonded tokens (i.e., `VP(1.000.000)=1`), 
   > then a validator that gets one unit of voting power on a consumer chain must have at least `1.000.000` tokens bonded on the provider chain until the unbonding period elapses on the consumer chain.
 
-- ***Slashable Consumer Misbehavior***: If a validator `val` misbehaves on a consumer chain `cc` at a block height `hi`, 
+- ***Slashable Consumer Misbehavior***: If a validator `val` commits an infraction, with a slashing fraction of `sf`, on a consumer chain `cc` at a block height `hi`, 
   then any evidence of misbehavior that is received by `cc` at height `he`, such that `ts(he) < ts(hi) + UnbondingPeriod`, 
-  MUST results in *exactly* the amount of tokens `Token(Power(cc,hi,val))` to be slashed on the provider chain. 
+  MUST results in *exactly* the amount of tokens `sf*Token(Power(cc,hi,val))` to be slashed on the provider chain. 
   Furthermore, `val` MUST NOT be slashed more than once for the same misbehavior. 
-  > **Note:** Unlike in single-chain validation, in CCV the tokens `Token(Power(cc,hi,val))` MAY be slashed even if the evidence of misbehavior is received at height `he` such that `ts(he) >= ts(hi) + UnbondingPeriod`, 
+  > **Note:** Unlike in single-chain validation, in CCV the tokens `sf*Token(Power(cc,hi,val))` MAY be slashed even if the evidence of misbehavior is received at height `he` such that `ts(he) >= ts(hi) + UnbondingPeriod`, 
   since unbonding operations need to reach maturity on both the provider and all the consumer chains.
   >
   > **Note:** The *Slashable Consumer Misbehavior* property also ensures that if a delegator starts unbonding an amount `x` of tokens from `val` before height `hi`, then `x` will not be slashed, since `x` is not part of `Token(Power(c,hi,val))`.
@@ -351,15 +362,15 @@ i.e., we informally prove the properties described in the [previous section](#de
   Then, `Power(cc,ha,val) = Power(cc,h,val)`, for all block heights `h`, such that `ha <= h < hb` (i.e., the voting power granted to `val` on `cc` in the period between `ts(ha)` and `ts(hb)` is constant).  
 
   We prove the *Bond-Based Consumer Voting Power* property through contradiction.
-  We assume there exist a height `h` on the provider chain between `hp` and `hp'` such that `Power(cc,hc,val) > VP(pBonded(h,val))`.
+  We assume there exist a height `h` on the provider chain between `hp` and `hp'` such that `Power(cc,hc,val) > VP( pBonded(h,val) + sumUnbonding(hp, h, val) + sumSlash(hp, h, val) )`.
   The following sequence of assertions leads to a contradiction.
   - Let `U1` be the latest update of `val` that is applied by `cc` before or not later than block height `hc` 
     (i.e., `U1` is the update that sets `Power(cc,hc,val)` for `val`). 
     Let `hp1` be the height at which `U1` occurs on the provider chain; let `hc1` be the height at which `U1` is applied on `cc`.
     Then, `hp1 << hc1 <= hc`, `hp1 <= hp`, and `Power(cc,hc,val) = Power(cc,hc1,val) = VP(pBonded(hp1,val))`.
-    This means that some of the tokens bonded by `val` at height `hp1` were *completely* unbonded before or not later than height `hp'` (cf. `Power(cc,hc,val) > VP(pBonded(h,val))`).
+    This means that some of the tokens bonded by `val` at height `hp1` were *completely* unbonded before or not later than height `hp'` (cf. `Power(cc,hc,val) > VP( pBonded(h,val) + sumUnbonding(hp, h, val) + sumSlash(hp, h, val) )`).
   - Let `uo` be the first such unbonding operation that is initiated on the provider chain at height `hp2`, such that `hp1 < hp2 <= hp'`. 
-    Note that at height `hp2`, the tokens unbonded by `uo` are still part of `pBonded(hp1,val)`.
+    Note that at height `hp2`, the tokens unbonded by `uo` are part of `pUnbonding(hp2,val)`.
     Let `U2` be the validator update caused by initiating `uo`.
     Let `hc2` be the height at which `U2` is applied on `cc`; clearly, `Power(cc,hc2,val) < Power(cc,hc,val)`.
     Note that the existence of `hc2` is ensured by *Validator Update To VSC Liveness* and *Apply VSC Liveness*.
@@ -369,7 +380,7 @@ i.e., we informally prove the properties described in the [previous section](#de
   - `uo` cannot complete before `ts(hc2) + UnbondingPeriod`, which means it cannot complete before `hc'` and thus it cannot complete before `hp'` (cf. `hc' << hp'`). 
 
 - ***Slashable Consumer Misbehavior***: The second part of the *Slashable Consumer Misbehavior* property (i.e., `val` is not slashed more than once for the same misbehavior) follows directly from *Evidence Provision*, *Channel Validity*, *Consumer Slashing Warranty*, *Provider Slashing Warranty*.
-  To prove the first part of the *Slashable Consumer Misbehavior* property (i.e., exactly the amount of tokens `Token(Power(cc,hi,val))` are slashed on the provider chain), we consider the following sequence of statements.
+  To prove the first part of the *Slashable Consumer Misbehavior* property (i.e., exactly the amount of tokens `sf*Token(Power(cc,hi,val))` are slashed on the provider chain), we consider the following sequence of statements.
   - The CCV module of `cc` receives at height `he` the evidence that `val` misbehaved on `cc` at height `hi` (cf. *Evidence Provision*, *Safe Blockchain*, *Life Blockchain*).
   - Let `hv` be the height when the CCV module of `cc` receives the first VSC from the provider CCV module. 
   Then, the CCV module of `cc` sends at height `h = max(he, hv)` to the provider chain a `SlashPacket` `P`, such that `P.val = val` and `P.id = HtoVSC[hi]` (cf. *Consumer Slashing Warranty*).
@@ -377,15 +388,13 @@ i.e., we informally prove the properties described in the [previous section](#de
   - The provider CCV module requests (in the same block `B`) the provider Slashing module to slash `val` for misbehaving at height `hp = VSCtoH[P.id]` (cf. *Provider Slashing Warranty*).
   - The provider Slashing module slashes the amount of tokens `val` had bonded at height `hp` except the amount that has already completely unbonded (cf. *Slashing Warranty*).
   
-  Thus, it remains to be proven that `Token(Power(cc,hi,val))` is exactly the same as the amount of tokens `val` had bonded at height `hp = VSCtoH[HtoVSC[hi]]` except the amount that has already completely unbonded. We distinguish two cases:
+  Thus, it remains to be proven that `Token(Power(cc,hi,val)) = pBonded(hp,val)`, with `hp = VSCtoH[HtoVSC[hi]]`. We distinguish two cases:
   - `HtoVSC[hi] != 0`, which means that by definition `HtoVSC[hi]` is the ID of the last VSC that update `Power(cc,hi,val)`. 
-    Also by definition, this VSC contains the last updates to the voting power at height `VSCtoH[HtoVSC[hi]]` on the provider. 
+    Also by definition, this VSC contains the last updates to the voting power at height `VSCtoH[HtoVSC[hi]]` on the provider.
+    Thus, `Token(Power(cc,hi,val)) = pBonded(hp,val)`. 
   - `HtoVSC[hi] == 0`, which means that by definition `Power(cc,hi,val)` was setup at genesis during Channel Initialization. 
     Also by definition, this is the same voting power of the provider chain block when the first VSC was provided to that consumer chain, i.e., `VSCtoH[HtoVSC[hi]]`. 
-  
-  Thus, in both cases, `pBonded(hp,val) >= Token(Power(cc,hi,val))` and `pBonded(hp,val) - Token(Power(cc,hi,val))` consists only of tokens in the process of unbonding. 
-  The tokens bonded by `val` at height `hp` that were not in the process of unbonding (i.e., `Token(Power(cc,hi,val))`) could not have completely unbonded by block `B` (cf. `ts(he) < ts(hi) + UnbondingPeriod`, *VSC Maturity and Slashing Order*, *Register Maturity Timeliness*, *Unbonding Safety*).
-  This means that *exactly* the amount of tokens `Token(Power(cc,hi,val))` is slashed on the provider chain. 
+    Thus, `Token(Power(cc,hi,val)) = pBonded(hp,val)`. 
 
 - ***Consumer Rewards Distribution***: The first part of the *Consumer Rewards Distribution* property (i.e., the tokens are eventually minted on the provider chain and then distributed among the validators) follows directly from *Distribution Liveness* and *Distribution Warranty*. 
   The second part of the *Consumer Rewards Distribution* property (i.e., the total supply of tokens is preserved) follows directly from the *Supply* property of the Fungible Token Transfer protocol (see [ICS 20](../ics-020-fungible-token-transfer/README.md)). 
