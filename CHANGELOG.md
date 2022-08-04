@@ -39,6 +39,14 @@ Ref: https://keepachangelog.com/en/1.0.0/
 
 ## [Unreleased]
 
+### API-Breaking
+
+- [\#813](https://github.com/cosmos/ibc/pull/813) Breaks up `checkValidityAndUpdateState` into `verifyClientMessage` and `UpdateState`
+- [\#813](https://github.com/cosmos/ibc/pull/813) Breaks up `checkMisbehaviourAndUpdateState` into `checkForMisbehaviour` and `UpdateStateOnMisbehaviour`
+- [\#813](https://github.com/cosmos/ibc/pull/813) Removes `Header` and `Misbehaviour` interfaces for generic `ClientMessage` interface
+- [\#813](https://github.com/cosmos/ibc/pull/813) Removes specific verify functions from ClientState interface in exchange for generic `verifyMembership` and `verifyNonMembership` methods
+- [\#813](https://github.com/cosmos/ibc/pull/813) Adds `getTimeoutAtHeight` method to ClientState interface.
+
 ### Bug Fixes
 
 - [\#808](https://github.com/cosmos/ibc/pull/808) Fix channel sequence paths in ICS4
