@@ -231,6 +231,15 @@ type latestClientHeight = (
   => Height
 ```
 
+Client types MUST define a method on the client state to fetch the timestamp at a given height
+
+```typescript
+type getTimestampAtHeight = (
+  clientState: ClientState,
+  height: Height
+) => uint64
+```
+
 #### ClientMessage
 
 A `ClientMessage` is an opaque data structure defined by a client type which provides information to update the client.
