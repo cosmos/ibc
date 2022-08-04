@@ -152,6 +152,31 @@ State machines implementing the IBC protocol are expected to respect these clien
 
 ### Data Structures
 
+#### Height
+
+`Height` is an opaque data structure defined by a client type.
+It must form a partially ordered set & provide operations for comparison.
+
+```typescript
+type Height
+```
+
+```typescript
+enum Ord {
+  LT
+  EQ
+  GT
+}
+
+type compare = (h1: Height, h2: Height) => Ord
+```
+
+A height is either `LT` (less than), `EQ` (equal to), or `GT` (greater than) another height.
+
+`>=`, `>`, `===`, `<`, `<=` are defined through the rest of this specification as aliases to `compare`.
+
+There must also be a zero-element for a height type, referred to as `0`, which is less than all non-zero heights.
+
 #### ConsensusState
 
 `ConsensusState` is an opaque data structure defined by a client type, used by the validity predicate to
@@ -180,86 +205,6 @@ The `ConsensusState` MUST define a `getTimestamp()` method which returns the tim
 type getTimestamp = ConsensusState => uint64
 ```
 
-#### Header
-
-A `Header` is an opaque data structure defined by a client type which provides information to update a `ConsensusState`.
-Headers can be submitted to an associated client to update the stored `ConsensusState`. They likely contain a height, a proof,
-a commitment root, and possibly updates to the validity predicate.
-
-```typescript
-type Header = bytes
-```
-
-#### Validity predicate
-
-A validity predicate is an opaque function defined by a client type to verify `Header`s depending on the current `ConsensusState`.
-Using the validity predicate SHOULD be far more computationally efficient than replaying the full consensus algorithm
-for the given parent `Header` and the list of network messages.
-
-The validity predicate & client state update logic are combined into a single `checkValidityAndUpdateState` type, which is defined as
-
-```typescript
-type checkValidityAndUpdateState = (Header) => Void
-```
-
-`checkValidityAndUpdateState` MUST throw an exception if the provided header was not valid.
-
-If the provided header was valid, the client MUST also mutate internal state to store
-now-finalised consensus roots and update any necessary signature authority tracking (e.g.
-changes to the validator set) for future calls to the validity predicate.
-
-Clients MAY have time-sensitive validity predicates, such that if no header is provided for a period of time
-(e.g. an unbonding period of three weeks) it will no longer be possible to update the client.
-In this case, a permissioned entity such as a chain governance system or trusted multi-signature MAY be allowed
-to intervene to unfreeze a frozen client & provide a new correct header.
-
-#### Misbehaviour predicate
-
-A misbehaviour predicate is an opaque function defined by a client type, used to check if data
-constitutes a violation of the consensus protocol. This might be two signed headers
-with different state roots but the same height, a signed header containing invalid
-state transitions, or other proof of malfeasance as defined by the consensus algorithm.
-
-The misbehaviour predicate & client state update logic are combined into a single `checkMisbehaviourAndUpdateState` type, which is defined as
-
-```typescript
-type checkMisbehaviourAndUpdateState = (bytes) => Void
-```
-
-`checkMisbehaviourAndUpdateState` MUST throw an exception if the provided proof of misbehaviour was not valid.
-
-If misbehaviour was valid, the client MUST also mutate internal state to mark appropriate heights which
-were previously considered valid as invalid, according to the nature of the misbehaviour.
-
-Once misbehaviour is detected, clients SHOULD be frozen so that no future updates can be submitted.
-A permissioned entity such as a chain governance system or trusted multi-signature MAY be allowed
-to intervene to unfreeze a frozen client & provide a new correct header.
-
-#### Height
-
-`Height` is an opaque data structure defined by a client type.
-It must form a partially ordered set & provide operations for comparison.
-
-```typescript
-type Height
-```
-
-```typescript
-enum Ord {
-  LT
-  EQ
-  GT
-}
-
-type compare = (h1: Height, h2: Height) => Ord
-```
-
-A height is either `LT` (less than), `EQ` (equal to), or `GT` (greater than) another height.
-
-`>=`, `>`, `===`, `<`, `<=` are defined through the rest of this specification as aliases to `compare`.
-
-There must also be a zero-element for a height type, referred to as `0`, which is less than all non-zero heights.
-
 #### ClientState
 
 `ClientState` is an opaque data structure defined by a client type.
@@ -285,6 +230,80 @@ type latestClientHeight = (
   clientState: ClientState)
   => Height
 ```
+
+#### ClientMessage
+
+A `ClientMessage` is an opaque data structure defined by a client type which provides information to update the client.
+`ClientMessages` can be submitted to an associated client to add new `ConsensusState(s)` and/or update the `ClientState`. They likely contain a height, a proof, a commitment root, and possibly updates to the validity predicate.
+
+```typescript
+type ClientMessage = bytes
+```
+
+#### Validity predicate
+
+A validity predicate is an opaque function defined by a client type to verify `Header`s depending on the current `ConsensusState`.
+Using the validity predicate SHOULD be far more computationally efficient than replaying the full consensus algorithm
+for the given parent `Header` and the list of network messages.
+
+The validity predicate is defined as:
+
+```typescript
+type VerifyClientMessage = (ClientMessage) => Void
+```
+
+`VerifyClientMessage` MUST throw an exception if the provided ClientMessage was not valid.
+
+#### Misbehaviour predicate
+
+A misbehaviour predicate is an opaque function defined by a client type, used to check if a ClientMessage
+constitutes a violation of the consensus protocol. This might be two signed headers
+with different state roots but the same height, a signed header containing invalid
+state transitions, or other proof of malfeasance as defined by the consensus algorithm.
+
+The misbehaviour predicate is defined as
+
+```typescript
+type checkForMisbehaviour = (ClientMessage) => bool
+```
+
+`checkForMisbehaviour` MUST throw an exception if the provided proof of misbehaviour was not valid.
+
+#### UpdateState
+
+UpdateState will update the client given a verified `ClientMessage`. Note that this function is intended for **non-misbehaviour** `ClientMessages`.
+
+```typescript
+type UpdateState = (ClientMessage) => Void
+```
+
+`verifyClientMessage` must be called before this function, and `checkForMisbehaviour` must return false before this function is called.
+
+The client MUST also mutate internal state to store
+now-finalised consensus roots and update any necessary signature authority tracking (e.g.
+changes to the validator set) for future calls to the validity predicate.
+
+Clients MAY have time-sensitive validity predicates, such that if no ClientMessage is provided for a period of time
+(e.g. an unbonding period of three weeks) it will no longer be possible to update the client.
+In this case, a permissioned entity such as a chain governance system or trusted multi-signature MAY be allowed
+to intervene to unfreeze a frozen client & provide a new correct ClientMessage.
+
+#### UpdateStateOnMisbehaviour
+
+UpdateStateOnMisbehaviour will update the client upon receiving a verified `ClientMessage` that is valid misbehaviour.
+
+```typescript
+type UpdateStateOnMisbehaviour = (ClientMessage) => Void
+```
+
+`verifyClientMessage` must be called before this function, and `checkForMisbehaviour` must return `true` before this function is called.
+
+The client MUST also mutate internal state to mark appropriate heights which
+were previously considered valid as invalid, according to the nature of the misbehaviour.
+
+Once misbehaviour is detected, clients SHOULD be frozen so that no future updates can be submitted.
+A permissioned entity such as a chain governance system or trusted multi-signature MAY be allowed
+to intervene to unfreeze a frozen client & provide a new correct ClientMessage which updates the client to a valid state.
 
 #### CommitmentProof
 
