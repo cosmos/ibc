@@ -18,7 +18,7 @@ This standard document specifies the data structures and state machine handling 
 
 ### Motivation
 
-Interchain Accounts (ICS-27) brings one of the most important features IBC offers, cross-chain transactions. Limited in this functionality is the querying of state from one chain, on another chain. Adding cross-chain querying via the Cross-chain Queries module gives unlimited flexibility to chains to build IBC enabled protocols around Interchain Accounts and beyond.
+We expect on-chain applications to depend on reads from other chains, e.g., a particular application on a chain may need to know the current price of the token of a second chain. While the IBC protocol enables on-chain applications to talk to other chains, using it for simply querying the state of chains would be too expensive: it would require to maintain an open channel between the querying chain and any other chain, and use the full IBC stack for every query request. Note that the latter implies exchanging packets between chains and therefore committing transactions at the queried chain, which may disrupt its operation if the load of query requests is high. Cross-chain queries solve this issue. It enables on-chain applications to query the state of other chains seamlessly: without involving the queried chain, and requiring very little from the querying chain.
 
 ### Definitions 
 
@@ -48,7 +48,7 @@ Interchain Accounts (ICS-27) brings one of the most important features IBC offer
 
 - **Censorship-resistant querying chain:**  The querying chain cannot selectively omit valid transactions.
 
-> For example, This means that if a relayer submits a valid transaction to the querying chain, the transaction is guaranteed to be included in a committed block within a bounded time.
+> For example, this means that if a relayer submits a valid transaction to the querying chain, the transaction is guaranteed to be eventually included in a committed block. Note that Tendermint does not currently guarantees this.
 
 - **Correct relayer:** There is at least one live relayer between the querying and queried chains where the relayer correctly follows the protocol.
 
