@@ -48,7 +48,7 @@ We expect on-chain applications to depend on reads from other chains, e.g., a pa
 
 - **Censorship-resistant querying chain:**  The querying chain cannot selectively omit valid transactions.
 
-> For example, this means that if a relayer submits a valid transaction to the querying chain, the transaction is guaranteed to be eventually included in a committed block. Note that Tendermint does not currently guarantees this.
+> For example, this means that if a relayer submits a valid transaction to the querying chain, the transaction is guaranteed to be eventually included in a committed block. Note that Tendermint does not currently guarantee this.
 
 - **Correct relayer:** There is at least one live relayer between the querying and queried chains where the relayer correctly follows the protocol.
 
