@@ -157,23 +157,22 @@ function routePacket(
     proof: CommitmentProof,
     proofHeight: Height,
     srcConnectionHops: [Identifier],
-    provingConnectionIdentifier: Identifier,
-    counterpartyPortIdentifier: Identifier,
-    counterpartyChannelIdentifier: Identifier
+    provingConnectionIdentifier: Identifier
 ) {
 
-    // retrieve channel state 
+    // retrieve channel state. This will retrieve either the TryChannel or the AckChannel, depending which chain sends the packet
+    // this depends on srcConncetionHops
     channel = provableStore.get(append(srcConnectionHops, channelPath(packet.destPort, packet.destChannel)))
     abortTransactionUnless(channel !== null)
     abortTransactionUnless(channel.state !== CLOSED)
     // abortTransactionUnless(authenticateCapability(channelCapabilityPath(packet.sourcePort, packet.sourceChannel), capability))
-    abortTransactionUnless(packet.destPort === channel.counterpartyPortIdentifier)
-    abortTransactionUnless(packet.destChannel === channel.counterpartyChannelIdentifier)
-
-    routePrefix = srcConnectionHops.join("/")
-    abortTransactionUnless(channel.connectionHops.some(route => route.startsWith(routePrefix)))
+    // abortTransactionUnless(packet.destPort === channel.counterpartyPortIdentifier)
+    // abortTransactionUnless(packet.destChannel === channel.counterpartyChannelIdentifier)
 
     connection = getConnection(provingConnectionIdentifier)
+
+    // verify that proving connection is counterparty of the last src connection hop
+    abortTransactionUnless(srcConnectionHops[len(srcConnectionHops-1)] == connection.counterpartyConnectionIdentifier)
 
     if len(srcConnectionHops) > 1 {
         clientState = queryClient(connection.clientIdentifier)
@@ -195,12 +194,12 @@ function routePacket(
                                                                   packet.timeoutHeight,
                                                                   packet.timeoutTimestamp)))
     }
-
     
     path = routePacketPath(srcConnectionHops, packet.sourcePort, packet.sourceChannel, packet.sequence)
     provableStore.set(path, hash(packet.data, packet.timeoutHeight, packet.timeoutTimestamp))
 
     routeSuffixes = []
+    routePrefix = srcConnectionHops.join("/")
     for route in channel.connectionHops {
         if route.startsWith(routePrefix) {
             routeArray = route.split("/")
@@ -219,29 +218,20 @@ function routeAcknowledgmentPacket(
     acknowledgement: bytes,
     proof: CommitmentProof,
     proofHeight: Height,
-    secConnectionHops: [Identifier], 
-    destConnectionHops: [Identifier],
+    srcConnectionHops: [Identifier], 
     provingConnectionIdentifier: Identifier,
-    counterpartyPortIdentifier: Identifier,
-    counterpartyChannelIdentifier: Identifier
 ) {
 
-    // I think this is redundant, given that we check the route valid.
-    abortTransactionUnless(len(srcConnectionHops) != 0)
-    abortTransactionUnless(len(destConnectionHops) != 0)
-
-    // retrieve channel state 
-    channel = provableStore.get(append(srcConnectionHops, channelPath(packet.destPort, packet.destChannel)))
+    // retrieve channel state. This will retrieve either the TryChannel or the AckChannel, depending which chain sends the packet
+    // this depends on srcConncetionHops
+    channel = provableStore.get(append(srcConnectionHops, channelPath(packet.sourcePort, packet.sourceChannel)))
     abortTransactionUnless(channel !== null)
     abortTransactionUnless(channel.state !== CLOSED)
-    // abortTransactionUnless(authenticateCapability(channelCapabilityPath(packet.sourcePort, packet.sourceChannel), capability))
-    abortTransactionUnless(packet.destPort === channel.counterpartyPortIdentifier)
-    abortTransactionUnless(packet.destChannel === channel.counterpartyChannelIdentifier)
-
-    routePrefix = srcConnectionHops.join("/")
-    abortTransactionUnless(channel.connectionHops.some(route => route.startsWith(routePrefix)))
 
     connection = getConnection(provingConnectionIdentifier)
+
+    // verify that proving connection is counterparty of the last src connection hop
+    abortTransactionUnless(srcConnectionHops[len(srcConnectionHops-1)] == connection.counterpartyConnectionIdentifier)
 
     if len(srcConnectionHops) > 1 {
         clientState = queryClient(connection.clientIdentifier)
@@ -266,6 +256,7 @@ function routeAcknowledgmentPacket(
     provableStore.set(path, hash(acknowledgement))
 
     routeSuffixes = []
+    routePrefix = srcConnectionHops.join("/")
     for route in channel.connectionHops {
         if route.startsWith(routePrefix) {
             routeArray = route.split("/")
@@ -291,21 +282,15 @@ function routeTimeoutPacket(
     counterpartyChannelIdentifier: Identifier
 ) {
 
-    // I think this is redundant, given that we check the route valid.
-    abortTransactionUnless(len(srcConnectionHops) != 0)
-    abortTransactionUnless(len(destConnectionHops) != 0)
-
-    // retrieve channel state 
-    channel = provableStore.get(append(srcConnectionHops, channelPath(packet.destPort, packet.destChannel)))
+    // retrieve channel state. This will retrieve either the TryChannel or the AckChannel, depending which chain sends the packet
+    // this depends on srcConncetionHops
+    channel = provableStore.get(append(srcConnectionHops, channelPath(packet.sourcePort, packet.sourceChannel)))
     // note: the channel may have been closed
-    // abortTransactionUnless(authenticateCapability(channelCapabilityPath(packet.sourcePort, packet.sourceChannel), capability))
-    abortTransactionUnless(packet.destPort === channel.counterpartyPortIdentifier)
-    abortTransactionUnless(packet.destChannel === channel.counterpartyChannelIdentifier)
-
-    route = join(append(srcConnectionHops, destConnectionHops...), "/")
-    abortTransactionUnless(route in channel.connectionHops)
 
     connection = getConnection(provingConnectionIdentifier)
+
+    // verify that proving connection is counterparty of the last src connection hop
+    abortTransactionUnless(srcConnectionHops[len(srcConnectionHops-1)] == connection.counterpartyConnectionIdentifier)
 
     if len(srcConnectionHops) > 1 {
         clientState = queryClient(connection.clientIdentifier)
@@ -343,6 +328,7 @@ function routeTimeoutPacket(
     provableStore.set(path, 1)
 
     routeSuffixes = []
+    routePrefix = srcConnectionHops.join("/")
     for route in channel.connectionHops {
         if route.startsWith(routePrefix) {
             routeArray = route.split("/")
