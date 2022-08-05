@@ -91,6 +91,8 @@ Cross-chain queries relies on relayers operating between both chains. When a que
 
 A query request includes the height of the queried chain at which the query must be executed. The reason is that the keys being queried can have different values at different heights. Thus, a malicious relayer could choose to query a height that has a value that benefits it somehow. By letting the querying chain decide the height at which the query is executed, we can prevent relayers from affecting the result data.
 
+> Note that this mechanism does not prevent cross-chain MEV (maximal extractable value): this still creates an opportunity for altering the state on the queried chain if the height is in the future in order to change the results of the query.
+
 ### Data Structures
 
 The Cross-chain Queries module stores query requests when it processes them. 
@@ -343,11 +345,10 @@ function PruneCrossChainQueryResult(
 
 Query requests have associated a `localTimeoutHeight` and a `localTimeoutTimestamp` field that specifies the height and timestamp limit at the querying chain after which a query is considered to have failed. 
 
-The querying chain calls the `checkQueryTimeout` function to check whether a specific query has timed out. 
+There are several alternatives on how to handle timeouts. For instance, the relayer could submit timeout notifications as transactions to the querying chain. Since the relayer is untrusted, for each of these notifications, the Cross-chain Queries module of the querying chain MUST call the `checkQueryTimeout` to check if the query has indeed timed out. An alternative could be to make the Cross-chain Queries module responsible for checking if any query has timed out by iterating over the ongoing queries at the beginning of a block and calling `checkQueryTimeout`. In this case, ongoing queries should be stored indexed by `localTimeoutTimestamp` and `localTimeoutHeight` to allow iterating over them more efficiently. These are implementation details that this specification does not cover. 
 
-> There are several alternatives on how to handle timeouts. For instance, the relayer could submit timeout notifications as transactions to the querying chain. Since the relayer is untrusted, for each of these notifications, the Cross-chain Queries module of the querying chain MUST call the `checkQueryTimeout` to check if the query has indeed timed out. An alternative could be to make the Cross-chain Queries module responsible for checking if any query has timed out by iterating over the ongoing queries at the beginning of a block and calling `checkQueryTimeout`. In this case, ongoing queries should be stored indexed by `localTimeoutTimestamp` and `localTimeoutHeight` to allow iterating over them more efficiently. These are implementation details that this specification does not cover. 
-
-We pass the relayer address just as in `CrossChainQueryResponse` to allow for possible incentivization here as well.
+Assume that the relayer is in charge of submitting timeout notifications as transactions. The `checkQueryTimeout` function would look as follows. Note that
+we pass the relayer address just as in `CrossChainQueryResponse` to allow for possible incentivization here as well.
 
 ```typescript
 function checkQueryTimeout(
