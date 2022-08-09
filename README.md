@@ -61,6 +61,7 @@ All standards at or past the "Draft" stage are listed here in order of their ICS
 | -------------------------------------------------------- | ----------------------- | ----- | --------------- |
 | [20](spec/app/ics-020-fungible-token-transfer/README.md) | Fungible Token Transfer | Candidate | [ibc-go](https://github.com/cosmos/ibc-go/tree/main/modules/apps/transfer) |
 | [27](spec/app/ics-027-interchain-accounts/README.md)     | Interchain Accounts     | Candidate | [ibc-go](https://github.com/cosmos/ibc-go/tree/main/modules/apps/27-interchain-accounts) |
+| [28](spec/app/ics-028-cross-chain-validation/README.md)  | Cross-Chain Validation  | Draft | |
 | [29](spec/app/ics-029-fee-payment) | General Relayer Incentivisation Mechanism | Candidate | [ibc-go](https://github.com/cosmos/ibc-go/tree/main/modules/apps/29-fee) |
 | [30](spec/app/ics-030-middleware) | IBC Application Middleware | N/A | N/A |
 | [721](spec/app/ics-721-nft-transfer) | Non-Fungible Token Transfer | Candidate | [bianjieai](https://github.com/bianjieai/ibc-go/tree/ics-721-nft-transfer) |
