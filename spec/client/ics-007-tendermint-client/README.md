@@ -119,15 +119,24 @@ This is designed to allow the height to reset to `0` while the revision number i
 
 ### Headers
 
-The Tendermint client headers include the height, the timestamp, the commitment root, the complete validator set, and the signatures by the validators who committed the block.
+The Tendermint headers include the height, the timestamp, the commitment root, the hashed validator set, and the signatures by the validators who committed the block. The header submitted to the on-chain client will include the unhashed validator set, and a trusted height and validator set to update from. This reduces the amount of state maintained by the on-chain client and prevents race conditions on relayer updates.
 
 ```typescript
-interface Header {
+interface TendermintSignedHeader {
   height: uint64
   timestamp: uint64
   commitmentRoot: []byte
-  validatorSet: List<Pair<Address, uint64>>
+  validatorHash: []byte
   signatures: []Signature
+}
+```
+
+```typescript
+interface Header {
+  TendermintSignedHeader
+  validatorSet: List<Pair<Address, uint64>>
+  trustedHeight: Height
+  trustedValidatorSet: List<Pair<Address, uint64>>
 }
 ```
 
@@ -140,7 +149,6 @@ Tendermint client `Misbehaviour` consists of two headers at the same height both
 
 ```typescript
 interface Misbehaviour {
-  fromHeight: Height
   h1: Header
   h2: Header
 }
@@ -213,8 +221,24 @@ verifyHeader(clientState, header) {
     assert(currentTimestamp() - clientState.latestTimestamp < clientState.trustingPeriod)
     // assert header timestamp is less than trust period in the future. This should be resolved with an intermediate header.
     assert(header.timestamp - clientState.latestTimeStamp < trustingPeriod)
+    // trusted height revision must be the same as header revision
+    // if revisions are different, use upgrade client instead
+    // trusted height must be less than header height
+    assert(header.height.revisionNumber == header.trustedHeight.revisionNumber)
+    assert(header.height.revisionHeight > header.trustedHeight.revisionHeight)
+    // fetch the consensus state at the trusted height
+    consensusState = get("clients/{identifier}/consensusStates/{header.trustedHeight}")
+    // assert that header's trusted validator set hashes to consensus state's validator hash
+    assert(hash(header.trustedValidatorSet) == consensusState.nextValidatorsHash)
+
     // call the `verify` function
-    assert(verify(clientState.validatorSet, clientState.latestHeight, clientState.trustingPeriod, maxClockDrift, header))
+    assert(verify(
+      header.trustedValidatorSet,
+      clientState.latestHeight,
+      clientState.trustingPeriod,
+      clientState.maxClockDrift,
+      header.TendermintSignedHeader,
+    ))
 }
 ```
 
@@ -228,19 +252,10 @@ function verifyMisbehaviour(
     assert(misbehaviour.h1.height === misbehaviour.h2.height)
     // assert that the commitments are different
     assert(misbehaviour.h1.commitmentRoot !== misbehaviour.h2.commitmentRoot)
-    // fetch the previously verified commitment root & validator set
-    consensusState = get("clients/{identifier}/consensusStates/{misbehaviour.fromHeight}")
-    // assert that the timestamp is not from more than an trusting period ago
-    assert(currentTimestamp() - misbehaviour.timestamp < clientState.trustingPeriod)
-    // check if the light client "would have been fooled"
-    assert(
-      verify(consensusState.validatorSet, misbehaviour.fromHeight, misbehaviour.h1) &&
-      verify(consensusState.validatorSet, misbehaviour.fromHeight, misbehaviour.h2)
-      )
-    // set the frozen height
-    clientState.frozenHeight = min(clientState.frozenHeight, misbehaviour.h1.height) // which is same as h2.height
-    // save the client
-    set("clients/{identifier}", clientState)
+    
+    // verify both headers in misbehaviour would have been accepted by client
+    verifyHeader(clientState, misbehaviour.h1)
+    verifyHeader(clientState, misbehaviour.h2)
 }
 ```
 
