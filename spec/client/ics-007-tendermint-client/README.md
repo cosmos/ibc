@@ -380,178 +380,47 @@ Tendermint client state verification functions check a Merkle proof against a pr
 These functions utilise the `proofSpecs` with which the client was initialised.
 
 ```typescript
-function verifyClientConsensusState(
+function verifyMembership(
   clientState: ClientState,
   height: Height,
-  prefix: CommitmentPrefix,
+  delayTimePeriod: uint64,
+  delayBlockPeriod: uint64,
   proof: CommitmentProof,
-  clientIdentifier: Identifier,
-  consensusStateHeight: Height,
-  consensusState: ConsensusState) {
-    path = applyPrefix(prefix, "clients/{clientIdentifier}/consensusState/{consensusStateHeight}")
+  path: CommitmentPath,
+  value: []byte) {
     // check that the client is at a sufficient height
     assert(clientState.latestHeight >= height)
     // check that the client is unfrozen or frozen at a higher height
     assert(clientState.frozenHeight === null || clientState.frozenHeight > height)
+    // assert that enough time has elapsed
+    assert(currentTimestamp() >= processedTime + delayPeriodTime)
+    // assert that enough blocks have elapsed
+    assert(currentHeight() >= processedHeight + delayPeriodBlocks)
     // fetch the previously verified commitment root & verify membership
     root = get("clients/{identifier}/consensusStates/{height}")
     // verify that the provided consensus state has been stored
-    assert(root.verifyMembership(path, consensusState, proof))
+    assert(root.verifyMembership(path, value, proof))
 }
 
-function verifyConnectionState(
+function verifyNonMembership(
   clientState: ClientState,
   height: Height,
-  prefix: CommitmentPrefix,
+  delayTimePeriod: uint64,
+  delayBlockPeriod: uint64,
   proof: CommitmentProof,
-  connectionIdentifier: Identifier,
-  connectionEnd: ConnectionEnd) {
-    path = applyPrefix(prefix, "connections/{connectionIdentifier}")
+  path: CommitmentPath) {
     // check that the client is at a sufficient height
     assert(clientState.latestHeight >= height)
     // check that the client is unfrozen or frozen at a higher height
     assert(clientState.frozenHeight === null || clientState.frozenHeight > height)
-    // fetch the previously verified commitment root & verify membership
-    root = get("clients/{identifier}/consensusStates/{height}")
-    // verify that the provided connection end has been stored
-    assert(root.verifyMembership(path, connectionEnd, proof))
-}
-
-function verifyChannelState(
-  clientState: ClientState,
-  height: Height,
-  prefix: CommitmentPrefix,
-  proof: CommitmentProof,
-  portIdentifier: Identifier,
-  channelIdentifier: Identifier,
-  channelEnd: ChannelEnd) {
-    path = applyPrefix(prefix, "ports/{portIdentifier}/channels/{channelIdentifier}")
-    // check that the client is at a sufficient height
-    assert(clientState.latestHeight >= height)
-    // check that the client is unfrozen or frozen at a higher height
-    assert(clientState.frozenHeight === null || clientState.frozenHeight > height)
-    // fetch the previously verified commitment root & verify membership
-    root = get("clients/{identifier}/consensusStates/{height}")
-    // verify that the provided channel end has been stored
-    assert(root.verifyMembership(clientState.proofSpecs, path, channelEnd, proof))
-}
-
-function verifyPacketData(
-  clientState: ClientState,
-  height: Height,
-  delayPeriodTime: uint64,
-  delayPeriodBlocks: uint64,
-  prefix: CommitmentPrefix,
-  proof: CommitmentProof,
-  portIdentifier: Identifier,
-  channelIdentifier: Identifier,
-  sequence: uint64,
-  data: bytes) {
-    path = applyPrefix(prefix, "ports/{portIdentifier}/channels/{channelIdentifier}/packets/{sequence}")
-    // check that the client is at a sufficient height
-    assert(clientState.latestHeight >= height)
-    // check that the client is unfrozen or frozen at a higher height
-    assert(clientState.frozenHeight === null || clientState.frozenHeight > height)
-    // fetch the processed time
-    processedTime = get("clients/{identifier}/processedTimes/{height}")
-    // fetch the processed height
-    processedHeight = get("clients/{identifier}/processedHeights/{height}")
     // assert that enough time has elapsed
     assert(currentTimestamp() >= processedTime + delayPeriodTime)
     // assert that enough blocks have elapsed
     assert(currentHeight() >= processedHeight + delayPeriodBlocks)
     // fetch the previously verified commitment root & verify membership
     root = get("clients/{identifier}/consensusStates/{height}")
-    // verify that the provided commitment has been stored
-    assert(root.verifyMembership(clientState.proofSpecs, path, hash(data), proof))
-}
-
-function verifyPacketAcknowledgement(
-  clientState: ClientState,
-  height: Height,
-  delayPeriodTime: uint64,
-  delayPeriodBlocks: uint64,
-  prefix: CommitmentPrefix,
-  proof: CommitmentProof,
-  portIdentifier: Identifier,
-  channelIdentifier: Identifier,
-  sequence: uint64,
-  acknowledgement: bytes) {
-    path = applyPrefix(prefix, "ports/{portIdentifier}/channels/{channelIdentifier}/acknowledgements/{sequence}")
-    // check that the client is at a sufficient height
-    assert(clientState.latestHeight >= height)
-    // check that the client is unfrozen or frozen at a higher height
-    assert(clientState.frozenHeight === null || clientState.frozenHeight > height)
-    // fetch the processed time
-    processedTime = get("clients/{identifier}/processedTimes/{height}")
-    // fetch the processed height
-    processedHeight = get("clients/{identifier}/processedHeights/{height}")
-    // assert that enough time has elapsed
-    assert(currentTimestamp() >= processedTime + delayPeriodTime)
-    // assert that enough blocks have elapsed
-    assert(currentHeight() >= processedHeight + delayPeriodBlocks)
-    // fetch the previously verified commitment root & verify membership
-    root = get("clients/{identifier}/consensusStates/{height}")
-    // verify that the provided acknowledgement has been stored
-    assert(root.verifyMembership(clientState.proofSpecs, path, hash(acknowledgement), proof))
-}
-
-function verifyPacketReceiptAbsence(
-  clientState: ClientState,
-  height: Height,
-  delayPeriodTime: uint64,
-  delayPeriodBlocks: uint64,
-  prefix: CommitmentPrefix,
-  proof: CommitmentProof,
-  portIdentifier: Identifier,
-  channelIdentifier: Identifier,
-  sequence: uint64) {
-    path = applyPrefix(prefix, "ports/{portIdentifier}/channels/{channelIdentifier}/receipts/{sequence}")
-    // check that the client is at a sufficient height
-    assert(clientState.latestHeight >= height)
-    // check that the client is unfrozen or frozen at a higher height
-    assert(clientState.frozenHeight === null || clientState.frozenHeight > height)
-    // fetch the processed time
-    processedTime = get("clients/{identifier}/processedTimes/{height}")
-    // fetch the processed height
-    processedHeight = get("clients/{identifier}/processedHeights/{height}")
-    // assert that enough time has elapsed
-    assert(currentTimestamp() >= processedTime + delayPeriodTime)
-    // assert that enough blocks have elapsed
-    assert(currentHeight() >= processedHeight + delayPeriodBlocks)
-    // fetch the previously verified commitment root & verify membership
-    root = get("clients/{identifier}/consensusStates/{height}")
-    // verify that no acknowledgement has been stored
-    assert(root.verifyNonMembership(clientState.proofSpecs, path, proof))
-}
-
-function verifyNextSequenceRecv(
-  clientState: ClientState,
-  height: Height,
-  delayPeriodTime: uint64,
-  delayPeriodBlocks: uint64,
-  prefix: CommitmentPrefix,
-  proof: CommitmentProof,
-  portIdentifier: Identifier,
-  channelIdentifier: Identifier,
-  nextSequenceRecv: uint64) {
-    path = applyPrefix(prefix, "ports/{portIdentifier}/channels/{channelIdentifier}/nextSequenceRecv")
-    // check that the client is at a sufficient height
-    assert(clientState.latestHeight >= height)
-    // check that the client is unfrozen or frozen at a higher height
-    assert(clientState.frozenHeight === null || clientState.frozenHeight > height)
-    // fetch the processed time
-    processedTime = get("clients/{identifier}/processedTimes/{height}")
-    // fetch the processed height
-    processedHeight = get("clients/{identifier}/processedHeights/{height}")
-    // assert that enough time has elapsed
-    assert(currentTimestamp() >= processedTime + delayPeriodTime)
-    // assert that enough blocks have elapsed
-    assert(currentHeight() >= processedHeight + delayPeriodBlocks)
-    // fetch the previously verified commitment root & verify membership
-    root = get("clients/{identifier}/consensusStates/{height}")
-    // verify that the nextSequenceRecv is as claimed
-    assert(root.verifyMembership(clientState.proofSpecs, path, nextSequenceRecv, proof))
+    // verify that the provided consensus state has been stored
+    assert(root.verifyMembership(path, proof))
 }
 ```
 
