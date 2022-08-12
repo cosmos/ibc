@@ -71,4 +71,4 @@ All standards at or past the "Draft" stage are listed here in order of their ICS
 
 The Interchain Standards are also translated into the following languages:
 
-- [Chinese](https://github.com/octopus-network/ibc-spec-cn).
+- [Chinese](https://github.com/octopus-network/ibc-spec-cn)
