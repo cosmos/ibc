@@ -78,6 +78,20 @@ interface Header {
 }
 ```
 
+### Signature Verification
+
+The solomachine public key must sign over the following struct:
+
+```typescript
+interface SignBytes {
+  sequence: uint64
+  timestamp: uint64  
+  diversifier: string
+  path: []byte
+  data: []byte
+}
+```
+
 ### Misbehaviour 
 
 `Misbehaviour` for solo machines consists of a sequence and two signatures over different messages at that sequence.
@@ -85,7 +99,9 @@ interface Header {
 ```typescript
 interface SignatureAndData {
   sig: Signature
+  path: Path
   data: []byte
+  timestamp: Timestamop
 }
 
 interface Misbehaviour {
@@ -129,43 +145,73 @@ function latestClientHeight(clientState: ClientState): uint64 {
 
 ### Validity predicate
 
-The solo machine client `checkValidityAndUpdateState` function checks that the currently registered public key has signed over the new public key with the correct sequence.
+The solo machine client `verifyClientMessage` function checks that the currently registered public key and diversifier signed over the client message at the expected sequence. If the client message is an update, then it must be the current sequence. If the client message is misbehaviour then it must be the sequence of the misbehaviour.
 
 ```typescript
-function checkValidityAndUpdateState(
+function verifyClientMessage(
   clientState: ClientState,
-  header: Header) {
-  assert(header.sequence === clientState.consensusState.sequence)
-  assert(header.timestamp >= clientstate.consensusState.timestamp)
-  assert(checkSignature(header.newPublicKey, header.sequence, header.diversifier, header.signature))
-  clientState.consensusState.publicKey = header.newPublicKey
-  clientState.consensusState.diversifier = header.newDiversifier
-  clientState.consensusState.timestamp = header.timestamp
-  clientState.consensusState.sequence++
+  clientMsg: ClientMessage) {
+  switch typeof(ClientMessage) {
+    case Header:
+      assert(header.sequence === clientState.consensusState.sequence)
+      assert(header.timestamp >= clientstate.consensusState.timestamp)
+      assert(checkSignature(header.newPublicKey, header.sequence, header.diversifier, header.signature))
+    // misbehaviour only suppported for current public key and diversifier on solomachine
+    case Misbehaviour:
+      h1 = misbehaviour.h1
+      h2 = misbehaviour.h2
+      pubkey = clientState.consensusState.publicKey
+      diversifier = clientState.consensusState.diversifier
+      timestamp = clientState.consensusState.timestamp
+      // assert that timestamp could have fooled the light client
+      assert(misbehaviour.h1.signature.timestamp >= timestamp)
+      assert(misbehaviour.h2.signature.timestamp >= timestamp)
+      // assert that signature data is different
+      assert(misbehaviour.h1.signature.data !== misbehaviour.h2.signature.data)
+      // assert that the signatures validate
+      assert(checkSignature(pubkey, misbehaviour.sequence, diversifier, misbehaviour.h1.signature.data))
+      assert(checkSignature(pubkey, misbehaviour.sequence, diversifier, misbehaviour.h2.signature.data))
+  }
 }
 ```
 
 ### Misbehaviour predicate
 
-Any duplicate signature on different messages by the current public key freezes a solo machine client.
+Since misbehaviour is checked in `verifyClientMessage`, if the client message is of type `Misbehaviour` then we return true
 
 ```typescript
-function checkMisbehaviourAndUpdateState(
+function checkForMisbehaviour(
   clientState: ClientState,
-  misbehaviour: Misbehaviour) {
-    h1 = misbehaviour.h1
-    h2 = misbehaviour.h2
-    pubkey = clientState.consensusState.publicKey
-    diversifier = clientState.consensusState.diversifier
-    timestamp = clientState.consensusState.timestamp
-    // assert that timestamp could have fooled the light client
-    assert(misbehaviour.h1.signature.timestamp >= timestamp)
-    assert(misbehaviour.h2.signature.timestamp >= timestamp)
-    // assert that signature data is different
-    assert(misbehaviour.h1.signature.data !== misbehaviour.h2.signature.data)
-    // assert that the signatures validate
-    assert(checkSignature(pubkey, misbehaviour.sequence, diversifier, misbehaviour.h1.signature.data))
-    assert(checkSignature(pubkey, misbehaviour.sequence, diversifier, misbehaviour.h2.signature.data))
+  clientMessage: ClientMessage) => bool {
+    switch typeof(ClientMessage) {
+    case Misbehaviour:
+      return true
+    }
+    return false
+}
+```
+
+### Update Functions
+
+`UpdateState` updates the function for a regular update:
+
+```typescript
+function updateState(
+  clientState: ClientState,
+  clientMessage: ClientMessage) {
+    clientState.consensusState.publicKey = header.newPublicKey
+    clientState.consensusState.diversifier = header.newDiversifier
+    clientState.consensusState.timestamp = header.timestamp
+    clientState.consensusState.sequence++
+}
+```
+
+`UpdateStateOnMisbehaviour` updates the function after receving valid misbehaviour:
+
+```typescript
+function updateStateOnMisbehaviour(
+  clientState: ClientState,
+  clientMessage: ClientMessage) {
     // freeze the client
     clientState.frozen = true
 }
@@ -178,152 +224,56 @@ All solo machine client state verification functions simply check a signature, w
 Note that value concatenation should be implemented in a state-machine-specific escaped fashion.
 
 ```typescript
-function verifyClientState(
+function verifyMembership(
   clientState: ClientState,
   height: uint64,
-  prefix: CommitmentPrefix,
+  // delayPeriod is unsupported on solomachines
+  // thus these fields are ignored
+  delayTimePeriod: uint64,
+  delayBlockPeriod: uint64,
   proof: CommitmentProof,
-  clientIdentifier: Identifier,
-  counterpartyClientState: ClientState) {
-    path = applyPrefix(prefix, "clients/{clientIdentifier}/clientState")
-    // ICS 003 will not increment the proof height after connection verification
-    // the solo machine client must increment the proof height to ensure it matches 
+  path: CommitmentPath,
+  value: []byte) {
     // the expected sequence used in the signature
-    abortTransactionUnless(height + 1 == clientState.consensusState.sequence)
     abortTransactionUnless(!clientState.frozen)
     abortTransactionUnless(proof.timestamp >= clientState.consensusState.timestamp)
-    value = clientState.consensusState.sequence + clientState.consensusState.diversifier + proof.timestamp + path + counterpartyClientState
-    assert(checkSignature(clientState.consensusState.pubKey, value, proof.sig))
+    sigBytes = SignBytes(
+      Sequence: clientState.consensusState.sequence,
+      Timestamp: proof.timestamp,
+      Diversifier: clientState.consensusState.diversifier,
+      path: CommitmentPath.String(),
+      data: value,
+    )
+    assert(checkSignature(clientState.consensusState.pubKey, sigBytes, proof.sig))
+
+    // increment sequence on each verification to provide
+    // replay protection
     clientState.consensusState.sequence++
     clientState.consensusState.timestamp = proof.timestamp
 }
 
-function verifyClientConsensusState(
+function verifyNonMembership(
   clientState: ClientState,
   height: uint64,
-  prefix: CommitmentPrefix,
+  // delayPeriod is unsupported on solomachines
+  // thus these fields are ignored
+  delayTimePeriod: uint64,
+  delayBlockPeriod: uint64,
   proof: CommitmentProof,
-  clientIdentifier: Identifier,
-  consensusStateHeight: uint64,
-  consensusState: ConsensusState) {
-    path = applyPrefix(prefix, "clients/{clientIdentifier}/consensusState/{consensusStateHeight}")
-    // ICS 003 will not increment the proof height after connection or client state verification
-    // the solo machine client must increment the proof height by 2 to ensure it matches 
-    // the expected sequence used in the signature
-    abortTransactionUnless(height + 2 == clientState.consensusState.sequence)
+  path: CommitmentPath) {
     abortTransactionUnless(!clientState.frozen)
     abortTransactionUnless(proof.timestamp >= clientState.consensusState.timestamp)
-    value = clientState.consensusState.sequence + clientState.consensusState.diversifier + proof.timestamp + path + consensusState
+    sigBytes = SignBytes(
+      Sequence: clientState.consensusState.sequence,
+      Timestamp: proof.timestamp,
+      Diversifier: clientState.consensusState.diversifier,
+      path: CommitmentPath.String(),
+      data: nil,
+    )
     assert(checkSignature(clientState.consensusState.pubKey, value, proof.sig))
-    clientState.consensusState.sequence++
-    clientState.consensusState.timestamp = proof.timestamp
-}
 
-function verifyConnectionState(
-  clientState: ClientState,
-  height: uint64,
-  prefix: CommitmentPrefix,
-  proof: CommitmentProof,
-  connectionIdentifier: Identifier,
-  connectionEnd: ConnectionEnd) {
-    path = applyPrefix(prefix, "connection/{connectionIdentifier}")
-    abortTransactionUnless(height == clientState.consensusState.sequence)
-    abortTransactionUnless(!clientState.frozen)
-    abortTransactionUnless(proof.timestamp >= clientState.consensusState.timestamp)
-    value = clientState.consensusState.sequence + clientState.consensusState.diversifier + proof.timestamp + path + connectionEnd
-    assert(checkSignature(clientState.consensusState.pubKey, value, proof.sig))
-    clientState.consensusState.sequence++
-    clientState.consensusState.timestamp = proof.timestamp
-}
-
-function verifyChannelState(
-  clientState: ClientState,
-  height: uint64,
-  prefix: CommitmentPrefix,
-  proof: CommitmentProof,
-  portIdentifier: Identifier,
-  channelIdentifier: Identifier,
-  channelEnd: ChannelEnd) {
-    path = applyPrefix(prefix, "ports/{portIdentifier}/channels/{channelIdentifier}")
-    abortTransactionUnless(height == clientState.consensusState.sequence)
-    abortTransactionUnless(!clientState.frozen)
-    abortTransactionUnless(proof.timestamp >= clientState.consensusState.timestamp)
-    value = clientState.consensusState.sequence + clientState.consensusState.diversifier + proof.timestamp + path + channelEnd
-    assert(checkSignature(clientState.consensusState.pubKey, value, proof.sig))
-    clientState.consensusState.sequence++
-    clientState.consensusState.timestamp = proof.timestamp
-}
-
-function verifyPacketData(
-  clientState: ClientState,
-  height: uint64,
-  prefix: CommitmentPrefix,
-  proof: CommitmentProof,
-  portIdentifier: Identifier,
-  channelIdentifier: Identifier,
-  sequence: uint64,
-  data: bytes) {
-    path = applyPrefix(prefix, "ports/{portIdentifier}/channels/{channelIdentifier}/packets/{sequence}")
-    abortTransactionUnless(height == clientState.consensusState.sequence)
-    abortTransactionUnless(!clientState.frozen)
-    abortTransactionUnless(proof.timestamp >= clientState.consensusState.timestamp)
-    value = clientState.consensusState.sequence + clientState.consensusState.diversifier + proof.timestamp + path + data
-    assert(checkSignature(clientState.consensusState.pubKey, value, proof.sig))
-    clientState.consensusState.sequence++
-    clientState.consensusState.timestamp = proof.timestamp
-}
-
-function verifyPacketAcknowledgement(
-  clientState: ClientState,
-  height: uint64,
-  prefix: CommitmentPrefix,
-  proof: CommitmentProof,
-  portIdentifier: Identifier,
-  channelIdentifier: Identifier,
-  sequence: uint64,
-  acknowledgement: bytes) {
-    path = applyPrefix(prefix, "ports/{portIdentifier}/channels/{channelIdentifier}/acknowledgements/{sequence}")
-    abortTransactionUnless(height == clientState.consensusState.sequence)
-    abortTransactionUnless(!clientState.frozen)
-    abortTransactionUnless(proof.timestamp >= clientState.consensusState.timestamp)
-    value = clientState.consensusState.sequence + clientState.consensusState.diversifier + proof.timestamp + path + acknowledgement
-    assert(checkSignature(clientState.consensusState.pubKey, value, proof.sig))
-    clientState.consensusState.sequence++
-    clientState.consensusState.timestamp = proof.timestamp
-}
-
-function verifyPacketReceiptAbsence(
-  clientState: ClientState,
-  height: uint64,
-  prefix: CommitmentPrefix,
-  proof: CommitmentProof,
-  portIdentifier: Identifier,
-  channelIdentifier: Identifier,
-  sequence: uint64) {
-    path = applyPrefix(prefix, "ports/{portIdentifier}/channels/{channelIdentifier}/receipts/{sequence}")
-    abortTransactionUnless(height == clientState.consensusState.sequence)
-    abortTransactionUnless(!clientState.frozen)
-    abortTransactionUnless(proof.timestamp >= clientState.consensusState.timestamp)
-    value = clientState.consensusState.sequence + clientState.consensusState.diversifier + proof.timestamp + path
-    assert(checkSignature(clientState.consensusState.pubKey, value, proof.sig))
-    clientState.consensusState.sequence++
-    clientState.consensusState.timestamp = proof.timestamp
-}
-
-function verifyNextSequenceRecv(
-  clientState: ClientState,
-  height: uint64,
-  prefix: CommitmentPrefix,
-  proof: CommitmentProof,
-  portIdentifier: Identifier,
-  channelIdentifier: Identifier,
-  nextSequenceRecv: uint64) {
-    path = applyPrefix(prefix, "ports/{portIdentifier}/channels/{channelIdentifier}/nextSequenceRecv")
-    abortTransactionUnless(height == clientState.consensusState.sequence)
-    abortTransactionUnless(!clientState.frozen)
-    abortTransactionUnless(proof.timestamp >= clientState.consensusState.timestamp)
-    value = clientState.consensusState.sequence + clientState.consensusState.diversifier + proof.timestamp + path + nextSequenceRecv
-    assert(checkSignature(clientState.consensusState.pubKey, value, proof.sig))
+    // increment sequence on each verification to provide
+    // replay protection
     clientState.consensusState.sequence++
     clientState.consensusState.timestamp = proof.timestamp
 }
@@ -353,6 +303,7 @@ None at present.
 
 December 9th, 2019 - Initial version
 December 17th, 2019 - Final first draft
+August 15th, 2022 - Changes to align with 02-client-refactor in [\#813](https://github.com/cosmos/ibc/pull/813)
 
 ## Copyright
 
