@@ -70,7 +70,6 @@ The `Height` of a solo machine is just a `uint64`, with the usual comparison ope
 
 ```typescript
 interface Header {
-  sequence: uint64
   timestamp: uint64
   signature: Signature
   newPublicKey: PublicKey
@@ -153,25 +152,60 @@ function verifyClientMessage(
   clientMsg: ClientMessage) {
   switch typeof(ClientMessage) {
     case Header:
-      assert(header.sequence === clientState.consensusState.sequence)
-      assert(header.timestamp >= clientstate.consensusState.timestamp)
-      assert(checkSignature(header.newPublicKey, header.sequence, header.diversifier, header.signature))
+      verifyHeader(clientState, clientMessage)
     // misbehaviour only suppported for current public key and diversifier on solomachine
     case Misbehaviour:
-      h1 = misbehaviour.h1
-      h2 = misbehaviour.h2
-      pubkey = clientState.consensusState.publicKey
-      diversifier = clientState.consensusState.diversifier
-      timestamp = clientState.consensusState.timestamp
-      // assert that timestamp could have fooled the light client
-      assert(misbehaviour.h1.signature.timestamp >= timestamp)
-      assert(misbehaviour.h2.signature.timestamp >= timestamp)
-      // assert that signature data is different
-      assert(misbehaviour.h1.signature.data !== misbehaviour.h2.signature.data)
-      // assert that the signatures validate
-      assert(checkSignature(pubkey, misbehaviour.sequence, diversifier, misbehaviour.h1.signature.data))
-      assert(checkSignature(pubkey, misbehaviour.sequence, diversifier, misbehaviour.h2.signature.data))
+      
   }
+}
+
+function verifyHeader(
+  clientState: clientState,
+  clientMessage: clientMessage) {
+    assert(header.timestamp >= clientstate.consensusState.timestamp)
+    headerData = {
+      NewPublicKey: header.newPublicKey,
+      NewDiversifier: header.newDiversifier,
+    }
+    sigBytes = SignBytes(
+      Sequence: clientState.consensusState.sequence,
+      Timestamp: header.timestamp,
+      Diversifier: clientState.consensusState.diversifier,
+      Path: []byte{"SENTINEL_HEADER_PATH"}
+      Value: marshal(headerData)
+    )
+    assert(checkSignature(cs.consensusState.publicKey, sigBytes, header.signature))
+}
+
+function verifyMisbehaviour(
+  clientState: clientState,
+  misbehaviour: Misbehaviour) {
+    s1 = misbehaviour.signatureOne
+    s2 = misbehaviour.signatureTwo
+    pubkey = clientState.consensusState.publicKey
+    diversifier = clientState.consensusState.diversifier
+    timestamp = clientState.consensusState.timestamp
+    // assert that timestamp could have fooled the light client
+    assert(misbehaviour.s1.timestamp >= timestamp)
+    assert(misbehaviour.s2.timestamp >= timestamp)
+    // assert that the signatures validate and that they are different
+    sigBytes1 = SignBytes(
+      Sequence: misbehaviour.sequence,
+      Timestamp: s1.timestamp,
+      Diversifier: cs.consensusState.diversifier,
+      Path: s1.path,
+      Data: s1.data
+    )
+    sigBytes2 = SignBytes(
+      Sequence: misbehaviour.sequence,
+      Timestamp: s2.timestamp,
+      Diversifier: cs.consensusState.diversifier,
+      Path: s2.path,
+      Data: s2,.data
+    )
+    assert(sigBytes1 != sigBytes2)
+    assert(checkSignature(pubkey, sigBytes1, clientState.consensusState.publicKey))
+    assert(checkSignature(pubkey, sigBytes2, clientState.consensusState.publicKey))
 }
 ```
 
@@ -226,6 +260,8 @@ Note that value concatenation should be implemented in a state-machine-specific 
 ```typescript
 function verifyMembership(
   clientState: ClientState,
+  // provided height is unnecessary for solomachine
+  // since clientState maintains the expected sequence
   height: uint64,
   // delayPeriod is unsupported on solomachines
   // thus these fields are ignored
@@ -254,6 +290,8 @@ function verifyMembership(
 
 function verifyNonMembership(
   clientState: ClientState,
+  // provided height is unnecessary for solomachine
+  // since clientState maintains the expected sequence
   height: uint64,
   // delayPeriod is unsupported on solomachines
   // thus these fields are ignored
