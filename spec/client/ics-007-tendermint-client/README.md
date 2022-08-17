@@ -208,7 +208,8 @@ function verifyClientMessage(
       case Header:
         verifyHeader(clientState, clientMsg)
       case Misbehaviour:
-        verifyMisbehaviour(clientState, clientMsg)
+        verifyHeader(clientState, clientMsg.h1)
+        verifyHeader(clientState, clientMsg.h2)
     }
 }
 ```
@@ -239,23 +240,6 @@ verifyHeader(clientState, header) {
       clientState.maxClockDrift,
       header.TendermintSignedHeader,
     ))
-}
-```
-
-Verify validity of misbehaviour sent to the Tendermint client
-
-```typescript
-function verifyMisbehaviour(
-  clientState: ClientState,
-  misbehaviour: Misbehaviour) {
-    // assert that the heights are the same
-    assert(misbehaviour.h1.height === misbehaviour.h2.height)
-    // assert that the commitments are different
-    assert(misbehaviour.h1.commitmentRoot !== misbehaviour.h2.commitmentRoot)
-    
-    // verify both headers in misbehaviour would have been accepted by client
-    verifyHeader(clientState, misbehaviour.h1)
-    verifyHeader(clientState, misbehaviour.h2)
 }
 ```
 
@@ -290,8 +274,10 @@ function checkForMisbehaviour(
           return true
         }
       case Misbehaviour:
-        // misbehaviour already proven in VerifyClientMessage
-        return true
+        // assert that the heights are the same
+        assert(misbehaviour.h1.height === misbehaviour.h2.height)
+        // assert that the commitments are different
+        assert(misbehaviour.h1.commitmentRoot !== misbehaviour.h2.commitmentRoot)
     }
 }
 ```
