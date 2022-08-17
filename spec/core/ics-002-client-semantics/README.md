@@ -100,7 +100,11 @@ types may require additional properties.
   it enables proofs of inclusion or non-inclusion of particular values at particular paths 
   in the state of the remote state machine at particular `Height`s.
 
-* `ValidityPredicate` is a function that validates state updates. 
+* `ClientMessage` is an arbitrary message defined by the client type that relayers can submit in order to update the client.
+  The ClientMessage may be intended as a regular update which may add new consensus state for proof verification, or it may contain
+  misbehaviour which should freeze the client.
+
+* `ValidityPredicate` is a function that validates a ClientMessage sent by a relayer in order to update the client. 
   Using the `ValidityPredicate` SHOULD be more computationally efficient than executing `Consensus`.
 
 * `ConsensusState` is the *trusted view* of the state of a state machine at a particular `Height`.
