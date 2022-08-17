@@ -251,9 +251,9 @@ type ClientMessage = bytes
 
 #### Validity predicate
 
-A validity predicate is an opaque function defined by a client type to verify `Header`s depending on the current `ConsensusState`.
+A validity predicate is an opaque function defined by a client type to verify `ClientMessage`s depending on the current `ConsensusState`.
 Using the validity predicate SHOULD be far more computationally efficient than replaying the full consensus algorithm
-for the given parent `Header` and the list of network messages.
+for the given parent `ClientMessage` and the list of network messages.
 
 The validity predicate is defined as:
 
@@ -266,7 +266,7 @@ type VerifyClientMessage = (ClientMessage) => Void
 #### Misbehaviour predicate
 
 A misbehaviour predicate is an opaque function defined by a client type, used to check if a ClientMessage
-constitutes a violation of the consensus protocol. This might be two signed headers
+constitutes a violation of the consensus protocol. For example, if the state machine is a blockchain; this might be two signed headers
 with different state roots but the same height, a signed header containing invalid
 state transitions, or other proof of malfeasance as defined by the consensus algorithm.
 
@@ -325,8 +325,8 @@ at a particular finalised height (necessarily associated with a particular commi
 Client types must define functions to authenticate internal state of the state machine which the client tracks.
 Internal implementation details may differ (for example, a loopback client could simply read directly from the state and require no proofs).
 
-- The `delayPeriodTime` is passed to the verification functions for packet-related proofs in order to allow packets to specify a period of time which must pass after a header is verified before the packet is allowed to be processed.
-- The `delayPeriodBlocks` is passed to the verification functions for packet-related proofs in order to allow packets to specify a period of blocks which must pass after a header is verified before the packet is allowed to be processed.
+- The `delayPeriodTime` is passed to the verification functions for packet-related proofs in order to allow packets to specify a period of time which must pass after a consensus state is added before it can be used for packet-related verification.
+- The `delayPeriodBlocks` is passed to the verification functions for packet-related proofs in order to allow packets to specify a period of blocks which must pass after a consensus state is added before it can be used for packet-related verification.
 
 ##### Required functions
 
@@ -371,10 +371,10 @@ type verifyNonMembership = (
 
 These query endpoints are assumed to be exposed over HTTP or an equivalent RPC API by nodes of the chain associated with a particular client.
 
-`queryHeader` MUST be defined by the chain which is validated by a particular client, and should allow for retrieval of headers by height. This endpoint is assumed to be untrusted.
+`queryUpdate` MUST be defined by the chain which is validated by a particular client, and should allow for retrieval of clientMessage for a given height. This endpoint is assumed to be untrusted.
 
 ```typescript
-type queryHeader = (height: Height) => Header
+type queryUpdate = (height: Height) => ClientMessage
 ```
 
 `queryChainConsensusState` MAY be defined by the chain which is validated by a particular client, to allow for the retrieval of the current consensus state which can be used to construct a new client.
@@ -551,8 +551,8 @@ the specific paths which must be queried are defined by each client type.
 
 #### Update
 
-Updating a client is done by submitting a new `Header`. The `Identifier` is used to point to the
-stored `ClientState` that the logic will update. When a new `Header` is verified with
+Updating a client is done by submitting a new `ClientMessage`. The `Identifier` is used to point to the
+stored `ClientState` that the logic will update. When a new `ClientMessage` is verified with
 the stored `ClientState`'s validity predicate and `ConsensusState`, the client MUST
 update its internal state accordingly, possibly finalising commitment roots and
 updating the signature authority logic in the stored consensus state.
@@ -576,11 +576,11 @@ function updateClient(
     
     foundMisbehaviour := clientState.CheckForMisbehaviour(clientMessage)
     if foundMisbehaviour {
-        clientState.UpdateStateOnMisbehaviour(header)
+        clientState.UpdateStateOnMisbehaviour(clientMessage)
         // emit misbehaviour event
     }
     else {    
-        clientState.UpdateState(clientMessage) // expects no-op on duplicate header
+        clientState.UpdateState(clientMessage) // expects no-op on duplicate clientMessage
         // emit update event
     }
 }
@@ -610,191 +610,7 @@ function submitMisbehaviourToClient(
 
 ### Example Implementation
 
-An example validity predicate is constructed for a chain running a single-operator consensus algorithm,
-where the valid blocks are signed by the operator. The operator signing Key
-can be changed while the chain is running.
-
-The client-specific types are then defined as follows:
-
-- `ConsensusState` stores the latest height and latest public key
-- `ClientMessage` for UpdateState contain a height, a new commitment root, a signature by the operator, and possibly a new public key
-- `ClientMessage` for UpdateStateForMisbehaviour contains two conflicting commitment roots signed by the same operator at the same height
-- `verifyClientMessage` verifies that the operator did sign the given commitment root at the given height
-- `checkForMisbehaviour` verifies that the two commitment roots in ClientMessage are different for the same height
-- `checkValidityAndUpdateState` checks that the submitted height is monotonically increasing, then mutates the internal state
-- `checkMisbehaviourAndUpdateState` mutates the internal state for misbehaviour
-
-```typescript
-type Height = uint64
-
-function compare(h1: Height, h2: Height): Ord {
-  if h1 < h2
-    return LT
-  else if h1 === h2
-    return EQ
-  else
-    return GT
-}
-
-// information on when a header was received by the client
-// this will be used to verify delay period has passed
-// during proof verification
-interface MessageReceiptInfo{
-  height: Height
-  time: uint64
-}
-
-interface ClientState {
-  frozen: boolean
-  pastPublicKeys: Set<PublicKey>
-  verifiedRoots: Map<uint64, CommitmentRoot>
-  messageReceipts: Map<uint64, MessageReceiptInfo>
-}
-
-interface ConsensusState {
-  sequence: uint64
-  publicKey: PublicKey
-}
-
-interface Header {
-  sequence: uint64
-  commitmentRoot: CommitmentRoot
-  signature: Signature
-  newPublicKey: Maybe<PublicKey>
-}
-
-interface ClientMessage {
-  headers: List<Header>
-}
-
-// algorithm run by operator to commit a new block
-function commit(
-  commitmentRoot: CommitmentRoot,
-  sequence: uint64,
-  newPublicKey: Maybe<PublicKey>): Header {
-    signature = privateKey.sign(commitmentRoot, sequence, newPublicKey)
-    header = {sequence, commitmentRoot, signature, newPublicKey}
-    return header
-}
-
-// initialisation function defined by the client type
-function initialise(consensusState: ConsensusState): () {
-  clientState = {
-    frozen: false,
-    pastPublicKeys: Set.singleton(consensusState.publicKey),
-    verifiedRoots: Map.empty()
-  }
-  provableStore.set(identifier, clientState)
-}
-
-// validity predicate function defined by the client type
-function verifyClientMessage(
-  clientState: ClientState,
-  clientMessage: ClientMessage,
-) {
-    for h in clientMessage.headers {
-      abortTransactionUnless(consensusState.publicKey.verify(h.signature))
-    }
-}
-
-// misbehaviour predicate function defined by the client type
-function checkForMisbehaviour(
-  clientState: ClientState,
-  clientMessage: ClientMessage,
-) bool {
-    if len(clientMessage.Headers != 2) {
-      return false
-    }
-    // headers must be at same height
-    if clientMessage.headers[0].sequence != clientMessage.headers[1].sequence {
-      return false
-    }
-    // headers must have different roots
-    if clientMessage.headers[1].commitmentRoot == clientMessage.headers[1].commitmentRoot {
-      return false
-    }
-    return true
-}
-
-// updateState function defined by the client type
-function updateState(
-  clientState: ClientState,
-  clientMessage: ClientMessage) {
-    // supports 1 update at a time
-    abortTransactionUnless(len(clientMessage.headers) = 1)
-    header = clientMessage.headers[0]
-    abortTransactionUnless(consensusState.sequence + 1 === header.sequence)
-    if (header.newPublicKey !== null) {
-      consensusState.publicKey = header.newPublicKey
-      clientState.pastPublicKeys.add(header.newPublicKey)
-    }
-    consensusState.sequence = header.sequence
-    clientState.verifiedRoots[sequence] = header.commitmentRoot
-    // store the height and time at which the client received the header
-    // so we can ensure that delay period has passed before we use this header for proof verification
-    messageReceipt = MessageReceiptInfo{
-      height: currentHeight(),
-      time: currentTimestamp()
-    }
-    clientState.messageReceipts[sequence] = messageReceipt
-}
-
-// updateStateOnMisbehaviour function defined by the client type
-function updateStateOnMisbehaviour(
-  clientState: ClientState,
-  clientMessage: ClientMessage) {
-    clientState.frozen = true
-}
-
-// verifyMembership function defined by the client type
-function verifyMembership(
-  clientState: ClientState,
-  height: Height,
-  delayPeriodTime: uint64,
-  delayPeriodBlocks: uint64,
-  proof: CommitmentProof,
-  path: CommitmentPath,
-  value: bytes) => boolean {
-    abortTransactionUnless(!clientState.frozen)
-    if delayPeriodBlocks != 0 {
-      // ensure that `delayPeriodBlocks` has passed since receiving the header for this height
-      // before using in proof verification
-      receivedHeight = clientState.messageReceipts[height].height
-      abortTransactionUnless(currentHeight() - receivedHeight >= delayPeriodBlocks)
-    }
-    if delayPeriodTime != 0 {
-      // ensure that `delayPeriodTime` has passed since receiving the header for this height
-      // before using in proof verification
-      receivedTime = clientState.messageReceipts[height].time
-      abortTransactionUnless(currentTimestamp() - receivedTime >= delayPeriodTime)
-    }
-    return clientState.verifiedRoots[height].verifyMembership(path, value, proof)
-}
-
-// verifyNonMembership function defined by the client type
-function verifyNonMembership(
-  clientState: ClientState,
-  height: Height,
-  prefix: CommitmentPrefix,
-  delayPeriodTime: uint64,
-  delayPeriodBlocks: uint64,
-  proof: CommitmentProof,
-  path) => boolean {
-    abortTransactionUnless(!clientState.frozen)
-    if delayPeriodBlocks != 0 {
-      // ensure that `delayPeriodBlocks` has passed since receiving the header for this height
-      // before using in proof verification
-      receivedHeight = clientState.messageReceipts[height].height
-      abortTransactionUnless(currentHeight() - receivedHeight >= delayPeriodBlocks)
-    }
-    if delayPeriodTime != 0 {
-      // ensure that `delayPeriodTime` has passed since receiving the header for this height
-      // before using in proof verification
-      receivedTime = clientState.messageReceipts[height].time
-      abortTransactionUnless(currentTimestamp() - receivedTime >= delayPeriodTime)
-    }
-    return clientState.verifiedRoots[height].verifyNonMembership(path, proof)
-}
+Please see the ibc-go implementations of light clients for examples of how to implement your own: https://github.com/cosmos/ibc-go/blob/main/modules/light-clients
 
 ### Properties & Invariants
 
