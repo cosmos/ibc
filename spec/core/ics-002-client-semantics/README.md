@@ -223,7 +223,7 @@ Client types MUST define a method to initialise a client state with a provided c
 type initialise = (consensusState: ConsensusState) => ClientState
 ```
 
-Client types MUST define a method to fetch the current height (height of the most recent validated header).
+Client types MUST define a method to fetch the current height (height of the most recent validated state update).
 
 ```typescript
 type latestClientHeight = (
@@ -293,7 +293,7 @@ now-finalised consensus roots and update any necessary signature authority track
 changes to the validator set) for future calls to the validity predicate.
 
 Clients MAY have time-sensitive validity predicates, such that if no ClientMessage is provided for a period of time
-(e.g. an unbonding period of three weeks) it will no longer be possible to update the client.
+(e.g. an unbonding period of three weeks) it will no longer be possible to update the client, i.e., the client is being frozen. 
 In this case, a permissioned entity such as a chain governance system or trusted multi-signature MAY be allowed
 to intervene to unfreeze a frozen client & provide a new correct ClientMessage.
 
@@ -578,18 +578,17 @@ function updateClient(
     if foundMisbehaviour {
         clientState.UpdateStateOnMisbehaviour(header)
         // emit misbehaviour event
-        return 
     }
-    
-    clientState.UpdateState(clientMessage) // expects no-op on duplicate header
-    // emit update event
-    return
+    else {    
+        clientState.UpdateState(clientMessage) // expects no-op on duplicate header
+        // emit update event
+    }
 }
 ```
 
 #### Misbehaviour
 
-If a relayer wishes to explicitly submit misbehaviour. They may alert the client to the misbehaviour directly, possibly invalidating
+A relayer may alert the client to the misbehaviour directly, possibly invalidating
 previously valid state roots & preventing future updates.
 
 ```typescript
