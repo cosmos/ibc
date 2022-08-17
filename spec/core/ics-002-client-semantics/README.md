@@ -573,10 +573,9 @@ to allow governance mechanisms to perform these actions
 ```typescript
 function updateClient(
   id: Identifier,
+  clientState: ClientState,
   clientMessage: ClientMessage) {
-    if err := clientState.VerifyClientMessage(clientMessage); err != nil {
-        return err
-    }
+    clientState.VerifyClientMessage(clientMessage)
     
     foundMisbehaviour := clientState.CheckForMisbehaviour(clientMessage)
     if foundMisbehaviour {
