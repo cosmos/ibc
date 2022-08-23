@@ -59,10 +59,15 @@ function routeChanOpenAck(
   tryChannel: ChannelEnd,
   proofTry: CommitmentProof,
   proofHeight: Height) {
-    abortTransactionUnless(len(srcConnectionHops) != 0)
-    abortTransactionUnless(len(destConnectionHops) != 0)
+
+    //verify that the route determined by srcConnectionHops and destConnectionHops is one of the tryChannel
+    //after verifying tryChannel at the previous hop, this means that this route is legit
+    route = join(append(srcConnectionHops, destConnectionHops...), "/")
+    abortTransactionUnless(route in tryChannel.connectionHops)
 
     connection = getConnection(provingConnectionIdentifier)
+    abortTransactionUnless(connection !== null)
+    abortTransactionUnless(connection.state === OPEN)
     
     // verify that proving connection is counterparty of the last src connection hop
     abortTransactionUnless(srcConnectionHops[len(srcConnectionHops-1)] == connection.counterpartyConnectionIdentifier)
@@ -77,23 +82,6 @@ function routeChanOpenAck(
         // prove that previous hop (original source) stored channel under channel path
         verifyChannelState(connection, proofHeight, proofTry, counterpartyPortIdentifier, counterpartyChannelIdentifier, tryChannel)
     }
-
-    // create unique path for the source route: provingConnectionIdentifier/sourceHops
-    path = append(provingConnectionIdentifier, srcConnectionHops, channelPath(counterpartyPortIdentifier, counterpartyChannelIdentifier))
-
-    // merge destHops into a route and
-    // append the route to the routeInfo if it does not already exist.
-    routeInfo = store.get(path)
-    route = mergeHops(destHops)
-    if routeInfo == nil {
-        routeInfo = RouteInfo{
-            DestHops: [route],
-        }
-    } else {
-        routes = append(routeInfo.destHops, route)
-        routeInfo.DestHops = routes
-    }
-    store.set(path, routeInfo)
 }
 
 // routeChanOpenConfirm routes an ACK to the confirmation chain
@@ -109,10 +97,14 @@ function routeChanOpenConfirm(
     proofAck: CommitmentProof,
     proofHeight: Height
 ) {
-    abortTransactionUnless(len(srcConnectionHops) != 0)
-    abortTransactionUnless(len(destConnectionHops) != 0)
+    //verify that the route determined by srcConnectionHops and destConnectionHops is one of the tryChannel
+    //after verifying tryChannel at the previous hop, this means that this route is legit
+    route = join(append(srcConnectionHops, destConnectionHops...), "/")
+    abortTransactionUnless(route in ackChannel.connectionHops)
 
     connection = getConnection(provingConnectionIdentifier)
+    abortTransactionUnless(connection !== null)
+    abortTransactionUnless(connection.state === OPEN)
 
     // verify that proving connection is counterparty of the last src connection hop
     abortTransactionUnless(srcConnectionHops[len(srcConnectionHops-1)] == connection.counterpartyConnectionIdentifier)
@@ -121,29 +113,12 @@ function routeChanOpenConfirm(
         // prove that previous hop stored channel under channel path and prefixed by srcConnectionHops[0:len(srcConnectionHops)-1]
         path = append(srcConnectionHops[0:len(srcConnectionHops)-1], channelPath(portIdentifier, channelIdentifier))
         client = queryClient(connection.clientIdentifier)
-        value = protobuf.marshal(tryChannel)
+        value = protobuf.marshal(ackChannel)
         verifyMembership(clientState, proofHeight, 0, 0, proofTry, path, value)
     } else {
         // prove that previous hop (original src) stored channel under channel path
         verifyChannelState(connection, proofHeight, proofTry, counterpartyPortIdentifier, counterpartyChannelIdentifier, tryChannel)
     }
-
-    // create unique path for the source route: provingConnectionIdentifier/sourceHops
-    path = append(provingConnectionIdentifier, srcConnectionHops, channelPath(counterpartyPortIdentifier, counterpartyChannelIdentifier))
-
-    // merge destHops into a route and
-    // append the route to the routeInfo if it does not already exist.
-    routeInfo = store.get(path)
-    route = mergeHops(destHops)
-    if routeInfo == nil {
-        routeInfo = RouteInfo{
-            DestHops: [route],
-        }
-    } else {
-        routes = append(routeInfo.destHops, route)
-        routeInfo.DestHops = routes
-    }
-    store.set(path, routeInfo)
 }
 ```
 
@@ -165,9 +140,6 @@ function routePacket(
     channel = provableStore.get(append(srcConnectionHops, channelPath(packet.destPort, packet.destChannel)))
     abortTransactionUnless(channel !== null)
     abortTransactionUnless(channel.state !== CLOSED)
-    // abortTransactionUnless(authenticateCapability(channelCapabilityPath(packet.sourcePort, packet.sourceChannel), capability))
-    // abortTransactionUnless(packet.destPort === channel.counterpartyPortIdentifier)
-    // abortTransactionUnless(packet.destChannel === channel.counterpartyChannelIdentifier)
 
     connection = getConnection(provingConnectionIdentifier)
 
