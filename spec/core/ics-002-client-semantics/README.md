@@ -270,7 +270,7 @@ type VerifyClientMessage = (ClientMessage) => Void
 #### Misbehaviour predicate
 
 A misbehaviour predicate is an opaque function defined by a client type, used to check if a ClientMessage
-constitutes a violation of the consensus protocol. For example, if the state machine is a blockchain; this might be two signed headers
+constitutes a violation of the consensus protocol. For example, if the state machine is a blockchain, this might be two signed headers
 with different state roots but the same height, a signed header containing invalid
 state transitions, or other proof of malfeasance as defined by the consensus algorithm.
 
@@ -331,8 +331,6 @@ Internal implementation details may differ (for example, a loopback client could
 
 - The `delayPeriodTime` is passed to the verification functions for packet-related proofs in order to allow packets to specify a period of time which must pass after a consensus state is added before it can be used for packet-related verification.
 - The `delayPeriodBlocks` is passed to the verification functions for packet-related proofs in order to allow packets to specify a period of blocks which must pass after a consensus state is added before it can be used for packet-related verification.
-
-##### Required functions
 
 `verifyMembership` is a generic proof verification method which verifies a proof of the existence of a value at a given `CommitmentPath` at the specified height.
 The caller is expected to construct the full `CommitmentPath` from a `CommitmentPrefix` and a standardized path (as defined in [ICS 24](../ics-024-host-requirements/README.md#path-space)). If the caller desires a particular delay period to be enforced,
@@ -573,8 +571,11 @@ to allow governance mechanisms to perform these actions
 ```typescript
 function updateClient(
   id: Identifier,
-  clientState: ClientState,
   clientMessage: ClientMessage) {
+    // get clientState from store with id
+    clientState = provableStore.get(clientStatePath(id))
+    abortTransactionUnless(clientState !== null)
+
     clientState.VerifyClientMessage(clientMessage)
     
     foundMisbehaviour := clientState.CheckForMisbehaviour(clientMessage)
@@ -598,22 +599,16 @@ previously valid state roots & preventing future updates.
 function submitMisbehaviourToClient(
   id: Identifier,
   clientMessage: ClientMessage) {
-    clientType = provableStore.get(clientTypePath(id))
-    abortTransactionUnless(clientType !== null)
     clientState = provableStore.get(clientStatePath(id))
     abortTransactionUnless(clientState !== null)
     // authenticate client message
     clientState.verifyClientMessage(clientMessage)
     // check that client message is valid instance of misbehaviour
-    clientState.checkForMisbehaviour(clientMessage)
+    abortTransactionUnless(clientState.checkForMisbehaviour(clientMessage))
     // update state based on misbehaviour
     clientState.UpdateStateOnMisbehaviour(misbehaviour)
 }
 ```
-
-### Example Implementation
-
-Please see the ibc-go implementations of light clients for examples of how to implement your own: https://github.com/cosmos/ibc-go/blob/main/modules/light-clients
 
 ### Properties & Invariants
 
@@ -629,7 +624,7 @@ New client types can be added by IBC implementations at-will as long as they con
 
 ## Example Implementation
 
-Coming soon.
+Please see the ibc-go implementations of light clients for examples of how to implement your own: https://github.com/cosmos/ibc-go/blob/main/modules/light-clients
 
 ## Other Implementations
 
