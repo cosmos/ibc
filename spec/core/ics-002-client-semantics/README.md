@@ -324,7 +324,7 @@ to intervene to unfreeze a frozen client & provide a new correct ClientMessage w
 It is utilised to verify presence or absence of a particular key/value pair in state
 at a particular finalised height (necessarily associated with a particular commitment root).
 
-#### State verification
+### State verification
 
 Client types must define functions to authenticate internal state of the state machine which the client tracks.
 Internal implementation details may differ (for example, a loopback client could simply read directly from the state and require no proofs).
@@ -367,7 +367,7 @@ type verifyNonMembership = (
   => boolean
 ```
 
-#### Query interface
+### Query interface
 
 ##### Chain queries
 
