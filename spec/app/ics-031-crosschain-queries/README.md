@@ -193,6 +193,7 @@ The `CrossChainQueryRequest` function is called when the Cross-chain Queries mod
 
 ```typescript
 function CrossChainQueryRequest(
+  type: QueryType,
   path: CommitmentPath,
   queryHeight: Height,
   localTimeoutHeight: Height,
@@ -214,6 +215,7 @@ function CrossChainQueryRequest(
 
     // Create a query request record.
     query = CrossChainQuery{queryIdentifier,
+                            type,
                             path,
                             queryHeight,
                             localTimeoutHeight,
