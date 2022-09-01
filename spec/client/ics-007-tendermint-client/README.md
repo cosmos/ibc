@@ -63,15 +63,12 @@ The Tendermint client state tracks the current revision, current validator set, 
 ```typescript
 interface ClientState {
   chainID: string
-  validatorSet: List<Pair<Address, uint64>>
   trustLevel: Rational
   trustingPeriod: uint64
   unbondingPeriod: uint64
   latestHeight: Height
-  latestTimestamp: uint64
   frozenHeight: Maybe<uint64>
-  upgradeCommitmentPrefix: CommitmentPrefix
-  upgradeKey: []byte
+  upgradePath: []string
   maxClockDrift: uint64
   proofSpecs: []ProofSpec
 }
@@ -134,9 +131,18 @@ interface TendermintSignedHeader {
 ```typescript
 interface Header {
   TendermintSignedHeader
+  identifier: string
   validatorSet: List<Pair<Address, uint64>>
   trustedHeight: Height
   trustedValidatorSet: List<Pair<Address, uint64>>
+}
+
+// GetHeight will return the header Height in the IBC ClientHeight
+// format.
+// Implementations may use the revision number to increment the height
+// across height-resetting upgrades. See ibc-go for an example
+func (Header) GetHeight() {
+  return Height{0, height}
 }
 ```
 
@@ -149,6 +155,7 @@ Tendermint client `Misbehaviour` consists of two headers at the same height both
 
 ```typescript
 interface Misbehaviour {
+  identifier: string
   h1: Header
   h2: Header
 }
@@ -163,25 +170,22 @@ Tendermint client initialisation requires a (subjectively chosen) latest consens
 ```typescript
 function initialise(
   chainID: string, consensusState: ConsensusState,
-  validatorSet: List<Pair<Address, uint64>>, trustLevel: Fraction,
-  height: Height, trustingPeriod: uint64, unbondingPeriod: uint64,
-  upgradeCommitmentPrefix: CommitmentPrefix, upgradeKey: []byte,
-  maxClockDrift: uint64, proofSpecs: []ProofSpec): ClientState {
+  trustLevel: Fraction, height: Height, trustingPeriod: uint64, unbondingPeriod: uint64,
+  upgradePath: []string, maxClockDrift: uint64, proofSpecs: []ProofSpec): ClientState {
     assert(trustingPeriod < unbondingPeriod)
     assert(height > 0)
     assert(trustLevel > 0 && trustLevel < 1)
+    // implementations may define a identifier generation function
+    identifier = generateClientIdentifier()
     set("clients/{identifier}/consensusStates/{height}", consensusState)
     return ClientState{
       chainID,
-      validatorSet,
       trustLevel,
       latestHeight: height,
-      latestTimestamp: consensusState.timestamp,
       trustingPeriod,
       unbondingPeriod,
       frozenHeight: null,
-      upgradeCommitmentPrefix,
-      upgradeKey,
+      upgradePath,
       maxClockDrift,
       proofSpecs
     }
@@ -196,20 +200,19 @@ function latestClientHeight(clientState: ClientState): Height {
 }
 ```
 
-### VerifyClientMessage
+### Validity Predicate
 
 Tendermint client validity checking uses the bisection algorithm described in the [Tendermint spec](https://github.com/tendermint/spec/tree/master/spec/consensus/light-client). If the provided header is valid, the client state is updated & the newly verified commitment written to the store.
 
 ```typescript
 function verifyClientMessage(
-  clientState: ClientState,
   clientMsg: ClientMessage) {
     switch typeof(clientMsg) {
       case Header:
-        verifyHeader(clientState, clientMsg)
+        verifyHeader(clientMsg)
       case Misbehaviour:
-        verifyHeader(clientState, clientMsg.h1)
-        verifyHeader(clientState, clientMsg.h2)
+        verifyHeader(clientMsg.h1)
+        verifyHeader(clientMsg.h2)
     }
 }
 ```
@@ -217,7 +220,8 @@ function verifyClientMessage(
 Verify validity of regular update to the Tendermint client
 
 ```typescript
-verifyHeader(clientState, header) {
+function verifyHeader(header: Header) {
+    clientState = get("clients/{header.identifier}/clientState)
     // assert trusting period has not yet passed
     assert(currentTimestamp() - clientState.latestTimestamp < clientState.trustingPeriod)
     // assert header timestamp is less than trust period in the future. This should be resolved with an intermediate header.
@@ -225,15 +229,15 @@ verifyHeader(clientState, header) {
     // trusted height revision must be the same as header revision
     // if revisions are different, use upgrade client instead
     // trusted height must be less than header height
-    assert(header.height.revisionNumber == header.trustedHeight.revisionNumber)
-    assert(header.height.revisionHeight > header.trustedHeight.revisionHeight)
+    assert(header.GetHeight().revisionNumber == header.trustedHeight.revisionNumber)
+    assert(header.GetHeight().revisionHeight > header.trustedHeight.revisionHeight)
     // fetch the consensus state at the trusted height
-    consensusState = get("clients/{identifier}/consensusStates/{header.trustedHeight}")
+    consensusState = get("clients/{header.identifier}/consensusStates/{header.trustedHeight}")
     // assert that header's trusted validator set hashes to consensus state's validator hash
     assert(hash(header.trustedValidatorSet) == consensusState.nextValidatorsHash)
 
-    // call the `verify` function
-    assert(verify(
+    // call the tendermint client's `verify` function
+    assert(tmClient.verify(
       header.trustedValidatorSet,
       clientState.latestHeight,
       clientState.trustingPeriod,
@@ -243,21 +247,21 @@ verifyHeader(clientState, header) {
 }
 ```
 
-### CheckForMisbehaviour
+### Misbehaviour Predicate
 
 CheckForMisbehaviour will check if an update contains evidence of Misbehaviour. If the ClientMessage is a header we check for implicit evidence of misbehaviour by checking if there already exists a conflicting consensus state in the store or if the header breaks time monotonicity.
 
 ```typescript
 function checkForMisbehaviour(
-  clientState: clientState,
   clientMsg: clientMessage) => bool {
+    clientState = get("clients/{clientMsg.identifier}/clientState)
     switch typeof(clientMsg) {
       case Header:
         // fetch consensusstate at header height if it exists
-        consensusState = get("clients/{identifier}/consensusStates/{header.Height}")
+        consensusState = get("clients/{clientMsg.identifier}/consensusStates/{header.GetHeight()}")
         // if consensus state exists and conflicts with the header
         // then the header is evidence of misbehaviour
-        if consensusState != nil && consensusState.commitmentRoot != header.AppHash {
+        if consensusState != nil && consensusState.commitmentRoot != header.commitmentRoot {
           return true
         }
 
@@ -265,8 +269,8 @@ function checkForMisbehaviour(
         // if header is not monotonically increasing with respect to neighboring consensus states
         // then return true
         // NOTE: implementation must have ability to iterate ascending/descending by height
-        prevConsState = getPreviousConsensusState(header.Height)
-        nextConsState = getNextConsensusState(header.Height)
+        prevConsState = getPreviousConsensusState(header.GetHeight())
+        nextConsState = getNextConsensusState(header.GetHeight())
         if prevConsState.timestamp >= header.timestamp {
           return true
         }
@@ -288,28 +292,26 @@ UpdateState will perform a regular update for the Tendermint client. It will add
 
 ```typescript
 function updateState(
-  clientState: clientState,
   clientMsg: clientMessage) {
+    clientState = get("clients/{clientMsg.identifier}/clientState)
     header = Header(clientMessage)
     // only update the clientstate if the header height is higher
     // than clientState latest height
-    if clientState.height < header.height {
-      // update validator set
-      clientState.validatorSet = header.validatorSet
+    if clientState.height < header.GetHeight() {
       // update latest height
-      clientState.latestHeight = header.height
-      // update latest timestamp
-      clientState.latestTimestamp = header.timestamp
+      clientState.latestHeight = header.GetHeight()
 
       // save the client
-      set("clients/{identifier}", clientState)
+      set("clients/{clientMsg.identifier}/clientState", clientState)
     }
 
     // create recorded consensus state, save it
     consensusState = ConsensusState{header.timestamp, header.validatorSet, header.commitmentRoot}
-    set("clients/{identifier}/consensusStates/{header.height}", consensusState)
-    set("clients/{identifier}/processedTimes/{header.height}", currentTimestamp())
-    set("clients/{identifier}/processedHeights/{header.height}", currentHeight())
+    set("clients/{clientMsg.identifier}/consensusStates/{header.GetHeight()}", consensusState)
+    // these may be stored as private metadata within the client in order to verify
+    // that the delay period has passed in proof verification
+    set("clients/{clientMsg.identifier}/processedTimes/{header.GetHeight()}", currentTimestamp())
+    set("clients/{clientMsg.identifier}/processedHeights/{header.GetHeight()}", currentHeight())
 }
 ```
 
@@ -318,12 +320,11 @@ function updateState(
 UpdateStateOnMisbehaviour will set the frozen height to a non-zero sentinel height to freeze the entire client.
 
 ```typescript
-function updateStateOnMisbehaviour(
-  clientState: clientState,
-  clientMsg: clientMessage) {
+function updateStateOnMisbehaviour(clientMsg: clientMessage) {
+    clientState = get("clients/{clientMsg.identifier}/clientState)
     misbehaviour = Misbehaviour(clientMessage)
     clientState.frozenHeight = Height{0, 1}
-    set("clients/{identifier}", clientState)
+    set("clients/{clientMsg.identifier}/clientState", clientState)
 }
 ```
 
@@ -350,12 +351,12 @@ function upgradeClientState(
     // check that the client is unfrozen or frozen at a higher height
     assert(clientState.frozenHeight === null || clientState.frozenHeight > height)
     // fetch the previously verified commitment root & verify membership
-    root = get("clients/{identifier}/consensusStates/{height}")
+    root = get("clients/{clientMsg.identifier}/consensusStates/{height}")
     // verify that the provided consensus state has been stored
     assert(root.verifyMembership(path, newClientState, proof))
     // update client state
     clientState = newClientState
-    set("clients/{identifier}", clientState)
+    set("clients/{clientMsg.identifier}/clientState", clientState)
 }
 ```
 
@@ -383,7 +384,10 @@ function verifyMembership(
     // assert that enough blocks have elapsed
     assert(currentHeight() >= processedHeight + delayPeriodBlocks)
     // fetch the previously verified commitment root & verify membership
-    root = get("clients/{identifier}/consensusStates/{height}")
+    // Implementations may choose how to pass in the identifier
+    // ibc-go provides the identifier-prefixed store to this method
+    // so that all state reads are for the client in question
+    root = get("clients/{clientIdentifier}/consensusStates/{height}")
     // verify that <path, value> has been stored
     assert(root.verifyMembership(path, value, proof))
 }
@@ -404,6 +408,9 @@ function verifyNonMembership(
     // assert that enough blocks have elapsed
     assert(currentHeight() >= processedHeight + delayPeriodBlocks)
     // fetch the previously verified commitment root & verify membership
+    // Implementations may choose how to pass in the identifier
+    // ibc-go provides the identifier-prefixed store to this method
+    // so that all state reads are for the client in question
     root = get("clients/{identifier}/consensusStates/{height}")
     // verify that nothing has been stored at path
     assert(root.verifyMembership(path, proof))
