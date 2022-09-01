@@ -322,7 +322,6 @@ UpdateStateOnMisbehaviour will set the frozen height to a non-zero sentinel heig
 ```typescript
 function updateStateOnMisbehaviour(clientMsg: clientMessage) {
     clientState = get("clients/{clientMsg.identifier}/clientState)
-    misbehaviour = Misbehaviour(clientMessage)
     clientState.frozenHeight = Height{0, 1}
     set("clients/{clientMsg.identifier}/clientState", clientState)
 }
@@ -389,7 +388,7 @@ function verifyMembership(
     // so that all state reads are for the client in question
     root = get("clients/{clientIdentifier}/consensusStates/{height}")
     // verify that <path, value> has been stored
-    assert(root.verifyMembership(path, value, proof))
+    assert(verifyMembership(root, proof, path, value))
 }
 
 function verifyNonMembership(
@@ -413,7 +412,7 @@ function verifyNonMembership(
     // so that all state reads are for the client in question
     root = get("clients/{identifier}/consensusStates/{height}")
     // verify that nothing has been stored at path
-    assert(root.verifyMembership(path, proof))
+    assert(verifyMembership(root, proof, path))
 }
 ```
 
