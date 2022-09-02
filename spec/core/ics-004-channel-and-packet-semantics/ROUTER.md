@@ -107,7 +107,6 @@ function routeChanOpenTry(
     provableStore.set(routeChannelPath(append(srcConnectionHops), portIdentifier, channelIdentifier), initChannel)    
 
 }
-
 ```
 
 ```typescript
@@ -133,9 +132,9 @@ function routeChanOpenAck(
     route = join(append(srcConnectionHops, destConnectionHops...), "/")
     abortTransactionUnless(route in tryChannel.connectionHops)
 
-    abortTransactionUnless(initChannel.state == TRYOPEN)
-    abortTransactionUnless(initChannel.counterpartyPortIdentifier == portIdentifier)
-    abortTransactionUnless(initChannel.counterpartyChannelIdentifier == channelIdentifier)
+    abortTransactionUnless(tryChannel.state == TRYOPEN)
+    abortTransactionUnless(tryChannel.counterpartyPortIdentifier == portIdentifier)
+    abortTransactionUnless(tryChannel.counterpartyChannelIdentifier == channelIdentifier)
 
     abortTransactionUnless(provableStore.get(routeChannelPath(append(srcConnectionHops), portIdentifier, channelIdentifier)) !== null)
 
@@ -181,9 +180,9 @@ function routeChanOpenConfirm(
     route = join(append(srcConnectionHops, destConnectionHops...), "/")
     abortTransactionUnless(route in ackChannel.connectionHops)
 
-    abortTransactionUnless(initChannel.state == TRYOPEN)
-    abortTransactionUnless(initChannel.counterpartyPortIdentifier == portIdentifier)
-    abortTransactionUnless(initChannel.counterpartyChannelIdentifier == channelIdentifier)
+    abortTransactionUnless(ackChannel.state == TRYOPEN)
+    abortTransactionUnless(ackChannel.counterpartyPortIdentifier == portIdentifier)
+    abortTransactionUnless(ackChannel.counterpartyChannelIdentifier == channelIdentifier)
 
     connection = getConnection(provingConnectionIdentifier)
     abortTransactionUnless(connection !== null)
@@ -225,6 +224,8 @@ function routePacket(
     // retrieve channel state.
     // this retrieves either the TryChannel or the AckChannel, depending which chain sends the packet
     // this depends on srcConncetionHops
+    // we use packet.destPort, packet.destChannel because the channel state is stored under the counterparties
+    // port and channel
     channel = provableStore.get(append(srcConnectionHops, channelPath(packet.destPort, packet.destChannel)))
     abortTransactionUnless(channel !== null)
     abortTransactionUnless(channel.state !== CLOSED)
@@ -284,6 +285,8 @@ function routeAcknowledgmentPacket(
 
     // retrieve channel state. This will retrieve either the TryChannel or the AckChannel, depending which chain sends the packet
     // this depends on srcConncetionHops
+    // we use packet.sourcePort, packet.sourceChannel because the relevant channel state is stored under the counterparties
+    // port and channel of the packet's sender
     channel = provableStore.get(append(srcConnectionHops, channelPath(packet.sourcePort, packet.sourceChannel)))
     abortTransactionUnless(channel !== null)
     abortTransactionUnless(channel.state !== CLOSED)
