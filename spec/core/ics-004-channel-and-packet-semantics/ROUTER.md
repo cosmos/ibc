@@ -43,6 +43,55 @@ interface RouteInfo {
 ### Channel Handshake
 
 ```typescript
+// srcConnectionHops is the list of identifiers routing back to the initializing chain
+// destConnectionHops is the list of identifiers routing to the TRY chain
+// NOTE: since srcConnectionHops is routing in the opposite direction, it will contain all the counterparty connection identifiers from the connection identifiers specified by the initializing chain up to this point.
+// For example, if the route specified by the initializing chain is "connection-1/connection-3"
+// Then `routeChanOpenTry` may be called on the router chain with srcConnectionHops: "connection-4", destConnectionHops: "connection-3"
+// where connection-4 is the counterparty connectionID on the router chain to connection-1 on the initializing chain
+// and connection-3 is the connection on the router chain to the next hop in the route which in this case is the TRY chain.
+function routeChanOpenTry(
+    srcConnectionHops: [Identifier],
+    destConnectionHops: [Identifier],
+    provingConnectionIdentifier: Identifier,
+    counterpartyPortIdentifier: Identifier,
+    counterpartyChannelIdentifier: Identifier,
+    initChannel: ChannelEnd,
+    proofInit: CommitmentProof,
+    proofHeight: Height
+) {
+
+    //verify that the route determined by srcConnectionHops and destConnectionHops is one of the tryChannel
+    //after verifying tryChannel at the previous hop, this means that this route is legit
+    route = join(append(srcConnectionHops, destConnectionHops...), "/")
+    abortTransactionUnless(route in initChannel.connectionHops)
+
+    connection = getConnection(provingConnectionIdentifier)
+    abortTransactionUnless(connection !== null)
+    abortTransactionUnless(connection.state === OPEN)
+
+    // verify that proving connection is counterparty of the last src connection hop
+    abortTransactionUnless(srcConnectionHops[len(srcConnectionHops)-1] == connection.counterpartyConnectionIdentifier)
+
+    if srcConnectionHops > 1 {
+        // prove that previous hop stored channel under channel path and prefixed by srcConnectionHops[0:len(srcConnectionHops)-1]
+        path = append(srcConnectionHops[0:len(srcConnectionHops)-2], channelPath(portIdentifier, channelIdentifier))
+        client = queryClient(connection.clientIdentifier)
+        value = protobuf.marshal(initChannel)
+        verifyMembership(client, proofHeight, 0, 0, proofInit, path, value)
+    } else {
+        // prove that previous hop (original source) stored channel under channel path
+        verifyChannelState(connection, proofHeight, proofInit, counterpartyPortIdentifier, counterpartyChannelIdentifier, initChannel)
+    }
+    
+    // verification passed, storing the channel under the route prefix
+    provableStore.set(append(srcConnectionHops, channelPath(packet.destPort, packet.destChannel)), initChannel)    
+
+}
+
+```
+
+```typescript
 // srcConnectionHops is the list of identifiers routing back to the TRY chain
 // destConnectionHops is the list of identifiers routing to the ACK chain
 // NOTE: since srcConnectionHops is routing in the opposite direction, it will contain all the counterparty connection identifiers from the connection identifiers specified by the TRY chain up to this point.
@@ -70,11 +119,11 @@ function routeChanOpenAck(
     abortTransactionUnless(connection.state === OPEN)
     
     // verify that proving connection is counterparty of the last src connection hop
-    abortTransactionUnless(srcConnectionHops[len(srcConnectionHops-1)] == connection.counterpartyConnectionIdentifier)
+    abortTransactionUnless(srcConnectionHops[len(srcConnectionHops1-1)] == connection.counterpartyConnectionIdentifier)
 
     if srcConnectionHops > 1 {
         // prove that previous hop stored channel under channel path and prefixed by srcConnectionHops[0:len(srcConnectionHops)-1]
-        path = append(srcConnectionHops[0:len(srcConnectionHops)-1], channelPath(portIdentifier, channelIdentifier))
+        path = append(srcConnectionHops[0:len(srcConnectionHops)-2], channelPath(portIdentifier, channelIdentifier))
         client = queryClient(connection.clientIdentifier)
         value = protobuf.marshal(tryChannel)
         verifyMembership(clientState, proofHeight, 0, 0, proofTry, path, value)
@@ -82,6 +131,11 @@ function routeChanOpenAck(
         // prove that previous hop (original source) stored channel under channel path
         verifyChannelState(connection, proofHeight, proofTry, counterpartyPortIdentifier, counterpartyChannelIdentifier, tryChannel)
     }
+
+    // verification passed, storing the channel under the route prefix
+    // note that tryChannel does not overwrites the possibly already stored initChannel, as the route's prefix
+    // is different: it contains the connections ids from the destination to the source
+    provableStore.set(append(srcConnectionHops, channelPath(packet.destPort, packet.destChannel)), tryChannel)
 }
 
 // routeChanOpenConfirm routes an ACK to the confirmation chain
@@ -107,11 +161,11 @@ function routeChanOpenConfirm(
     abortTransactionUnless(connection.state === OPEN)
 
     // verify that proving connection is counterparty of the last src connection hop
-    abortTransactionUnless(srcConnectionHops[len(srcConnectionHops-1)] == connection.counterpartyConnectionIdentifier)
+    abortTransactionUnless(srcConnectionHops[len(srcConnectionHops1)-1] == connection.counterpartyConnectionIdentifier)
 
     if srcConnectionHops > 1 {
         // prove that previous hop stored channel under channel path and prefixed by srcConnectionHops[0:len(srcConnectionHops)-1]
-        path = append(srcConnectionHops[0:len(srcConnectionHops)-1], channelPath(portIdentifier, channelIdentifier))
+        path = append(srcConnectionHops[0:len(srcConnectionHops)-2], channelPath(portIdentifier, channelIdentifier))
         client = queryClient(connection.clientIdentifier)
         value = protobuf.marshal(ackChannel)
         verifyMembership(clientState, proofHeight, 0, 0, proofTry, path, value)
@@ -119,6 +173,10 @@ function routeChanOpenConfirm(
         // prove that previous hop (original src) stored channel under channel path
         verifyChannelState(connection, proofHeight, proofTry, counterpartyPortIdentifier, counterpartyChannelIdentifier, tryChannel)
     }
+
+    // verification passed, storing the channel under the route prefix
+    // note that ackChannel does overwrites the possibly already stored initChannel
+    provableStore.set(append(srcConnectionHops, channelPath(packet.destPort, packet.destChannel)), tryChannel)
 }
 ```
 
