@@ -18,27 +18,40 @@ The following document specifies the interfaces and state machine logic that IBC
 
 #### RouteInfoPath
 
-The route info path includes the connectionID on the executing chain along with the path to the executing chain and the source port and channelID.
+Channel structures are stored under a store path prefix unique to a combination of a port identifier and channel identifier:
 
 ```typescript
-function routeInfoPath(connectionId: Identifier, route: Identifier, portIdentifier: Identifer, channelIdentifier: Identifier) {
-    return "routeInfo/connectionId/{connectionId}/route/{route}/portIdentifier/{portIdentifier}/channelIdentifier/{channelIdentifier}"
+function routeChannelPath(route: Identifier , portIdentifier: Identifier, channelIdentifier: Identifier): Path {
+    return "routeChannelEnds/routes/{route}/ports/{portIdentifier}/channels/{channelIdentifier}"
+}
+```
+
+Constant-size commitments to packet data fields are stored under the packet sequence number:
+
+```typescript
+function routePacketCommitmentPath(route: Identifier, portIdentifier: Identifier, channelIdentifier: Identifier, sequence: uint64): Path {
+    return "routeCommitments/routes/{route}/ports/{portIdentifier}/channels/{channelIdentifier}/packets/" + sequence
+}
+```
+
+Packet acknowledgement data are stored under the `routePacketAcknowledgementPath`:
+
+```typescript
+function routePacketAcknowledgementPath(route: Identifier, portIdentifier: Identifier, channelIdentifier: Identifier, sequence: uint64): Path {
+    return "routeAcks/routes/{route}/ports/{portIdentifier}/channels/{channelIdentifier}/acknowledgements/" + sequence
+}
+```
+
+Packet timeout data are stored under the `routePacketTimeoutPath`:
+
+```typescript
+function routePacketTimeoutPath(route: Identifier, portIdentifier: Identifier, channelIdentifier: Identifier, sequence: uint64): Path {
+    return "routeTimeouts/routes/{route}/ports/{portIdentifier}/channels/{channelIdentifier}/timeouts/" + sequence
 }
 ```
 
 ### Data Structures
 
-In order to implement the Router specification for ICS-4, the chain must store the following `routeInfo` data under the `routeInfoPath`
-
-```typescript
-interface RouteInfo {
-    // this is a list of the continued routes from the current chain to the destination chain
-    // since there may be multiple routes for a given channel that includes the same chain,
-    // this may be a list of Identifiers.
-    // Each Identifier is a route (ie a joined list of connection identifiers by `/`)
-    destHops: [Identifier],
-}
-```
 
 ### Channel Handshake
 
@@ -54,8 +67,8 @@ function routeChanOpenTry(
     srcConnectionHops: [Identifier],
     destConnectionHops: [Identifier],
     provingConnectionIdentifier: Identifier,
-    counterpartyPortIdentifier: Identifier,
-    counterpartyChannelIdentifier: Identifier,
+    portIdentifier: Identifier,
+    channelIdentifier: Identifier,
     initChannel: ChannelEnd,
     proofInit: CommitmentProof,
     proofHeight: Height
@@ -66,6 +79,12 @@ function routeChanOpenTry(
     route = join(append(srcConnectionHops, destConnectionHops...), "/")
     abortTransactionUnless(route in initChannel.connectionHops)
 
+    abortTransactionUnless(initChannel.state == INIT)
+    abortTransactionUnless(initChannel.counterpartyPortIdentifier == portIdentifier)
+    abortTransactionUnless(initChannel.counterpartyChannelIdentifier == channelIdentifier)
+
+    abortTransactionUnless(provableStore.get(routeChannelPath(append(srcConnectionHops), portIdentifier, channelIdentifier)) !== null)
+
     connection = getConnection(provingConnectionIdentifier)
     abortTransactionUnless(connection !== null)
     abortTransactionUnless(connection.state === OPEN)
@@ -74,18 +93,18 @@ function routeChanOpenTry(
     abortTransactionUnless(srcConnectionHops[len(srcConnectionHops)-1] == connection.counterpartyConnectionIdentifier)
 
     if srcConnectionHops > 1 {
-        // prove that previous hop stored channel under channel path and prefixed by srcConnectionHops[0:len(srcConnectionHops)-1]
-        path = append(srcConnectionHops[0:len(srcConnectionHops)-2], channelPath(portIdentifier, channelIdentifier))
+        // prove that previous hop stored channel under channel path and prefixed by srcConnectionHops[0:len(srcConnectionHops)-2]
+        prefixRoute = append(srcConnectionHops[0:len(srcConnectionHops)-2])
         client = queryClient(connection.clientIdentifier)
         value = protobuf.marshal(initChannel)
-        verifyMembership(client, proofHeight, 0, 0, proofInit, path, value)
+        verifyMembership(client, proofHeight, 0, 0, proofInit, routeChannelPath(prefixRoute, portIdentifier, channelIdentifier), value)
     } else {
         // prove that previous hop (original source) stored channel under channel path
-        verifyChannelState(connection, proofHeight, proofInit, counterpartyPortIdentifier, counterpartyChannelIdentifier, initChannel)
+        verifyChannelState(connection, proofHeight, proofInit, portIdentifier, channelIdentifier, initChannel)
     }
     
     // verification passed, storing the channel under the route prefix
-    provableStore.set(append(srcConnectionHops, channelPath(packet.destPort, packet.destChannel)), initChannel)    
+    provableStore.set(routeChannelPath(append(srcConnectionHops), portIdentifier, channelIdentifier), initChannel)    
 
 }
 
@@ -103,8 +122,8 @@ function routeChanOpenAck(
   srcConnectionHops: [Identifier],
   destConnectionHops: [Identifier],
   provingConnectionIdentifier: Identifier,
-  counterpartyPortIdentifier: Identifier,
-  counterpartyChannelIdentifier: Identifier,
+  portIdentifier: Identifier,
+  channelIdentifier: Identifier,
   tryChannel: ChannelEnd,
   proofTry: CommitmentProof,
   proofHeight: Height) {
@@ -114,6 +133,12 @@ function routeChanOpenAck(
     route = join(append(srcConnectionHops, destConnectionHops...), "/")
     abortTransactionUnless(route in tryChannel.connectionHops)
 
+    abortTransactionUnless(initChannel.state == TRYOPEN)
+    abortTransactionUnless(initChannel.counterpartyPortIdentifier == portIdentifier)
+    abortTransactionUnless(initChannel.counterpartyChannelIdentifier == channelIdentifier)
+
+    abortTransactionUnless(provableStore.get(routeChannelPath(append(srcConnectionHops), portIdentifier, channelIdentifier)) !== null)
+
     connection = getConnection(provingConnectionIdentifier)
     abortTransactionUnless(connection !== null)
     abortTransactionUnless(connection.state === OPEN)
@@ -122,20 +147,20 @@ function routeChanOpenAck(
     abortTransactionUnless(srcConnectionHops[len(srcConnectionHops1-1)] == connection.counterpartyConnectionIdentifier)
 
     if srcConnectionHops > 1 {
-        // prove that previous hop stored channel under channel path and prefixed by srcConnectionHops[0:len(srcConnectionHops)-1]
-        path = append(srcConnectionHops[0:len(srcConnectionHops)-2], channelPath(portIdentifier, channelIdentifier))
+        // prove that previous hop stored channel under channel path and prefixed by srcConnectionHops[0:len(srcConnectionHops)-2]
+        prefixRoute = append(srcConnectionHops[0:len(srcConnectionHops)-2])
         client = queryClient(connection.clientIdentifier)
         value = protobuf.marshal(tryChannel)
-        verifyMembership(clientState, proofHeight, 0, 0, proofTry, path, value)
+        verifyMembership(clientState, proofHeight, 0, 0, proofTry, routeChannelPath(prefixRoute, portIdentifier, channelIdentifier), value)
     } else {
         // prove that previous hop (original source) stored channel under channel path
-        verifyChannelState(connection, proofHeight, proofTry, counterpartyPortIdentifier, counterpartyChannelIdentifier, tryChannel)
+        verifyChannelState(connection, proofHeight, proofTry, portIdentifier, channelIdentifier, tryChannel)
     }
 
     // verification passed, storing the channel under the route prefix
     // note that tryChannel does not overwrites the possibly already stored initChannel, as the route's prefix
     // is different: it contains the connections ids from the destination to the source
-    provableStore.set(append(srcConnectionHops, channelPath(packet.destPort, packet.destChannel)), tryChannel)
+    provableStore.set(routeChannelPath(append(srcConnectionHops), portIdentifier, channelIdentifier), tryChannel)    
 }
 
 // routeChanOpenConfirm routes an ACK to the confirmation chain
@@ -156,6 +181,10 @@ function routeChanOpenConfirm(
     route = join(append(srcConnectionHops, destConnectionHops...), "/")
     abortTransactionUnless(route in ackChannel.connectionHops)
 
+    abortTransactionUnless(initChannel.state == TRYOPEN)
+    abortTransactionUnless(initChannel.counterpartyPortIdentifier == portIdentifier)
+    abortTransactionUnless(initChannel.counterpartyChannelIdentifier == channelIdentifier)
+
     connection = getConnection(provingConnectionIdentifier)
     abortTransactionUnless(connection !== null)
     abortTransactionUnless(connection.state === OPEN)
@@ -164,19 +193,19 @@ function routeChanOpenConfirm(
     abortTransactionUnless(srcConnectionHops[len(srcConnectionHops1)-1] == connection.counterpartyConnectionIdentifier)
 
     if srcConnectionHops > 1 {
-        // prove that previous hop stored channel under channel path and prefixed by srcConnectionHops[0:len(srcConnectionHops)-1]
-        path = append(srcConnectionHops[0:len(srcConnectionHops)-2], channelPath(portIdentifier, channelIdentifier))
+        // prove that previous hop stored channel under channel path and prefixed by srcConnectionHops[0:len(srcConnectionHops)-2]
+        prefixRoute = append(srcConnectionHops[0:len(srcConnectionHops)-2])
         client = queryClient(connection.clientIdentifier)
         value = protobuf.marshal(ackChannel)
-        verifyMembership(clientState, proofHeight, 0, 0, proofTry, path, value)
+        verifyMembership(clientState, proofHeight, 0, 0, proofTry, routeChannelPath(prefixRoute, portIdentifier, channelIdentifier), value)
     } else {
         // prove that previous hop (original src) stored channel under channel path
-        verifyChannelState(connection, proofHeight, proofTry, counterpartyPortIdentifier, counterpartyChannelIdentifier, tryChannel)
+        verifyChannelState(connection, proofHeight, proofTry, portIdentifier, channelIdentifier, tryChannel)
     }
 
     // verification passed, storing the channel under the route prefix
     // note that ackChannel does overwrites the possibly already stored initChannel
-    provableStore.set(append(srcConnectionHops, channelPath(packet.destPort, packet.destChannel)), ackChannel)
+    provableStore.set(routeChannelPath(append(srcConnectionHops), portIdentifier, channelIdentifier), ackChannel)    
 }
 ```
 
@@ -193,7 +222,8 @@ function routePacket(
     provingConnectionIdentifier: Identifier
 ) {
 
-    // retrieve channel state. This will retrieve either the TryChannel or the AckChannel, depending which chain sends the packet
+    // retrieve channel state.
+    // this retrieves either the TryChannel or the AckChannel, depending which chain sends the packet
     // this depends on srcConncetionHops
     channel = provableStore.get(append(srcConnectionHops, channelPath(packet.destPort, packet.destChannel)))
     abortTransactionUnless(channel !== null)
@@ -202,17 +232,17 @@ function routePacket(
     connection = getConnection(provingConnectionIdentifier)
 
     // verify that proving connection is counterparty of the last src connection hop
-    abortTransactionUnless(srcConnectionHops[len(srcConnectionHops-1)] == connection.counterpartyConnectionIdentifier)
+    abortTransactionUnless(srcConnectionHops[len(srcConnectionHops)-1] == connection.counterpartyConnectionIdentifier)
 
     if len(srcConnectionHops) > 1 {
         clientState = queryClient(connection.clientIdentifier)
-        prefix = srcConnectionHops[0:len(srcConnectionHops)-2]
+        routePrefix = append(srcConnectionHops[0:len(srcConnectionHops)-2])
         abortTransactionUnless(verifyMembership(clientState,
                                                 proofHeight,
                                                 0,
                                                 0,
                                                 proof,
-                                                routePacketPath(prefix, packet.sourcePort, packet.sourceChannel, packet.sequence),
+                                                routePacketCommitmentPath(routePrefix, packet.sourcePort, packet.sourceChannel, packet.sequence),
                                                 hash(packet.data, packet.timeoutHeight, packet.timeoutTimestamp)))
     } else {
         abortTransactionUnless(connection.verifyPacketData(proofHeight,
@@ -225,13 +255,13 @@ function routePacket(
                                                                   packet.timeoutTimestamp)))
     }
     
-    path = routePacketPath(srcConnectionHops, packet.sourcePort, packet.sourceChannel, packet.sequence)
+    path = routePacketCommitmentPath(append(srcConnectionHops), packet.sourcePort, packet.sourceChannel, packet.sequence)
     provableStore.set(path, hash(packet.data, packet.timeoutHeight, packet.timeoutTimestamp))
 
     routeSuffixes = []
-    routePrefix = srcConnectionHops.join("/")
+    prefix = srcConnectionHops.join("/")
     for route in channel.connectionHops {
-        if route.startsWith(routePrefix) {
+        if route.startsWith(prefix) {
             routeArray = route.split("/")
             indexStart = routeArray.indexOf(len(srcConnectionHops)-1) + 2
             routeSuffixes.push(routeArray[indexStart:len(routeArray)-1].join("/"))
@@ -265,13 +295,13 @@ function routeAcknowledgmentPacket(
 
     if len(srcConnectionHops) > 1 {
         clientState = queryClient(connection.clientIdentifier)
-        prefix = srcConnectionHops[0:len(srcConnectionHops)-2]
+        routePrefix = append(srcConnectionHops[0:len(srcConnectionHops)-2])
         abortTransactionUnless(verifyMembership(clientState,
                                                 proofHeight,
                                                 0,
                                                 0,
                                                 proof,
-                                                routeAckPath(prefix, packet.destPort, packet.destChannel, packet.sequence),
+                                                routePacketAcknowledgementPath(routePrefix, packet.destPort, packet.destChannel, packet.sequence),
                                                 hash(acknowledgement)))
     } else {
         abortTransactionUnless(connection.verifyPacketAcknowledgement(proofHeight,
@@ -282,13 +312,13 @@ function routeAcknowledgmentPacket(
                                                                       acknowledgement))
     }
 
-    path = routeAckPath(srcConnectionHops, packet.destPort, packet.destChannel, packet.sequence)
+    path = routePacketAcknowledgementPath(append(srcConnectionHops), packet.destPort, packet.destChannel, packet.sequence)
     provableStore.set(path, hash(acknowledgement))
 
     routeSuffixes = []
-    routePrefix = srcConnectionHops.join("/")
+    prefix = srcConnectionHops.join("/")
     for route in channel.connectionHops {
-        if route.startsWith(routePrefix) {
+        if route.startsWith(prefix) {
             routeArray = route.split("/")
             indexStart = routeArray.indexOf(len(srcConnectionHops)-1) + 2
             routeSuffixes.push(routeArray[indexStart:len(routeArray)-1].join("/"))
@@ -324,13 +354,13 @@ function routeTimeoutPacket(
 
     if len(srcConnectionHops) > 1 {
         clientState = queryClient(connection.clientIdentifier)
-        prefix = srcConnectionHops[0:len(srcConnectionHops)-2]
+        routePrefix = append(srcConnectionHops[0:len(srcConnectionHops)-2])
         abortTransactionUnless(verifyMembership(clientState,
                                                 proofHeight,
                                                 0,
                                                 0,
                                                 proof,
-                                                routeTimeoutPath(prefix, packet.destPort, packet.destChannel, packet.sequence),
+                                                routePacketRoutePath(routePrefix, packet.destPort, packet.destChannel, packet.sequence),
                                                 1))
     } else {
         abortTransactionUnless((packet.timeoutHeight > 0 && proofHeight >= packet.timeoutHeight) ||
