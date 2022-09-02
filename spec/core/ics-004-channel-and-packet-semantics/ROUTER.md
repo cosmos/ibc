@@ -176,7 +176,7 @@ function routeChanOpenConfirm(
 
     // verification passed, storing the channel under the route prefix
     // note that ackChannel does overwrites the possibly already stored initChannel
-    provableStore.set(append(srcConnectionHops, channelPath(packet.destPort, packet.destChannel)), tryChannel)
+    provableStore.set(append(srcConnectionHops, channelPath(packet.destPort, packet.destChannel)), ackChannel)
 }
 ```
 
