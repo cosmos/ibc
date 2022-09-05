@@ -221,7 +221,7 @@ Verify validity of regular update to the Tendermint client
 
 ```typescript
 function verifyHeader(header: Header) {
-    clientState = get("clients/{header.identifier}/clientState)
+    clientState = get("clients/{header.identifier}/clientState")
     // assert trusting period has not yet passed
     assert(currentTimestamp() - clientState.latestTimestamp < clientState.trustingPeriod)
     // assert header timestamp is less than trust period in the future. This should be resolved with an intermediate header.
@@ -254,7 +254,7 @@ CheckForMisbehaviour will check if an update contains evidence of Misbehaviour. 
 ```typescript
 function checkForMisbehaviour(
   clientMsg: clientMessage) => bool {
-    clientState = get("clients/{clientMsg.identifier}/clientState)
+    clientState = get("clients/{clientMsg.identifier}/clientState")
     switch typeof(clientMsg) {
       case Header:
         // fetch consensusstate at header height if it exists
