@@ -125,13 +125,16 @@ function onChanOpenInit(
   channelIdentifier: Identifier,
   counterpartyPortIdentifier: Identifier,
   counterpartyChannelIdentifier: Identifier,
-  version: string) {
+  version: string) => (version: string, err: Error) {
   // only unordered channels allowed
   abortTransactionUnless(order === UNORDERED)
-  // assert that version is "ics20-1"
-  abortTransactionUnless(version === "ics20-1")
+  // assert that version is "ics20-1" or empty
+  // if empty, we return the default transfer version to core IBC
+  // as the version for this channel
+  abortTransactionUnless(version === "ics20-1" || version === "")
   // allocate an escrow address
   channelEscrowAddresses[channelIdentifier] = newAddress()
+  return "ics20-1", nil
 }
 ```
 
@@ -143,15 +146,16 @@ function onChanOpenTry(
   channelIdentifier: Identifier,
   counterpartyPortIdentifier: Identifier,
   counterpartyChannelIdentifier: Identifier,
-  version: string,
-  counterpartyVersion: string) {
+  counterpartyVersion: string) => (version: string, err: Error) {
   // only unordered channels allowed
   abortTransactionUnless(order === UNORDERED)
   // assert that version is "ics20-1"
-  abortTransactionUnless(version === "ics20-1")
   abortTransactionUnless(counterpartyVersion === "ics20-1")
   // allocate an escrow address
   channelEscrowAddresses[channelIdentifier] = newAddress()
+  // return version that this chain will use given the
+  // counterparty version
+  return "ics20-1", nil
 }
 ```
 
@@ -203,35 +207,43 @@ In plain English, between chains `A` and `B`:
   an acknowledgement of failure is preferable to aborting the transaction since it more easily enables the sending chain
   to take appropriate action based on the nature of the failure.
 
-`createOutgoingPacket` must be called by a transaction handler in the module which performs appropriate signature checks, specific to the account owner on the host state machine.
+`sendFungibleTokens` must be called by a transaction handler in the module which performs appropriate signature checks, specific to the account owner on the host state machine.
 
 ```typescript
-function createOutgoingPacket(
+function sendFungibleTokens(
   denomination: string,
   amount: uint256,
   sender: string,
   receiver: string,
-  source: boolean,
-  destPort: string,
-  destChannel: string,
   sourcePort: string,
   sourceChannel: string,
   timeoutHeight: Height,
   timeoutTimestamp: uint64) {
-  prefix = "{sourcePort}/{sourceChannel}/"
-  // we are the source if the denomination is not prefixed
-  source = denomination.slice(0, len(prefix)) !== prefix
-  if source {
-    // determine escrow account
-    escrowAccount = channelEscrowAddresses[sourceChannel]
-    // escrow source tokens (assumed to fail if balance insufficient)
-    bank.TransferCoins(sender, escrowAccount, denomination, amount)
-  } else {
-    // receiver is source chain, burn vouchers
-    bank.BurnCoins(sender, denomination, amount)
-  }
-  FungibleTokenPacketData data = FungibleTokenPacketData{denomination, amount, sender, receiver}
-  handler.sendPacket(Packet{timeoutHeight, timeoutTimestamp, destPort, destChannel, sourcePort, sourceChannel, data}, getCapability("port"))
+    prefix = "{sourcePort}/{sourceChannel}/"
+    // we are the source if the denomination is not prefixed
+    source = denomination.slice(0, len(prefix)) !== prefix
+    if source {
+      // determine escrow account
+      escrowAccount = channelEscrowAddresses[sourceChannel]
+      // escrow source tokens (assumed to fail if balance insufficient)
+      bank.TransferCoins(sender, escrowAccount, denomination, amount)
+    } else {
+      // receiver is source chain, burn vouchers
+      bank.BurnCoins(sender, denomination, amount)
+    }
+
+    // create FungibleTokenPacket data
+    data = FungibleTokenPacketData{denomination, amount, sender, receiver}
+
+    // send packet using the interface defined in ICS4
+    handler.sendPacket(
+      getCapability("port"),
+      sourcePort,
+      sourceChannel,
+      timeoutHeight,
+      timeoutTimestamp,
+      data
+    )
 }
 ```
 

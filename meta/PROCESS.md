@@ -74,7 +74,7 @@ IBC standardisation will follow an adaptation of the [TC 39](https://tc39.github
 - _**Spec Quality**_:
   * Final: All changes as a result of implementation experience are integrated
 - _**Changes Expected Post-Acceptance**_:
-  * None
+  * Backward-compatible fixes or breaking changes that are supported by a backwards-compatibility preserving upgrade protocol
 - _**Implementation Types Expected**_:
   * Shipping/Production
 
