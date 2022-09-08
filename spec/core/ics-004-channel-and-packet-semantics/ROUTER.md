@@ -212,7 +212,7 @@ function routeChanCloseConfirm(
   proofHeight: Height) {
 
     // retrieve channel state.
-    channel = provableStore.get(append(srcConnectionHops, channelPath(portIdentifier, channelIdentifier)))
+    channel = provableStore.get(routeChannelPath(append(srcConnectionHops), portIdentifier, channelIdentifier))
     abortTransactionUnless(channel !== null)
     abortTransactionUnless(channel.state !== CLOSED)
 
@@ -257,7 +257,7 @@ function routePacket(
     // retrieve channel state.
     // this retrieves either the TryChannel or the AckChannel, depending which chain sends the packet
     // this depends on srcConncetionHops
-    channel = provableStore.get(append(srcConnectionHops, channelPath(packet.sourcePort, packet.sourceChannel)))
+    channel = provableStore.get(routeChannelPath(append(srcConnectionHops), packet.sourcePort, packet.sourceChannel))
     abortTransactionUnless(channel !== null)
     abortTransactionUnless(channel.state !== CLOSED)
 
@@ -316,7 +316,7 @@ function routeAcknowledgmentPacket(
 
     // retrieve channel state. This will retrieve either the TryChannel or the AckChannel, depending which chain sends the packet
     // this depends on srcConncetionHops
-    channel = provableStore.get(append(srcConnectionHops, channelPath(packet.destPort, packet.destChannel)))
+    channel = provableStore.get(routeChannelPath(append(srcConnectionHops), packet.destPort, packet.destChannel))
     abortTransactionUnless(channel !== null)
     abortTransactionUnless(channel.state !== CLOSED)
 
@@ -373,7 +373,7 @@ function routeTimeoutPacket(
 
     // retrieve channel state. This will retrieve either the TryChannel or the AckChannel, depending which chain sends the packet
     // this depends on srcConncetionHops
-    channel = provableStore.get(append(srcConnectionHops, channelPath(packet.destPort, packet.destChannel)))
+    channel = provableStore.get(routeChannelPath(append(srcConnectionHops), packet.destPort, packet.destChannel))
     abortTransactionUnless(channel !== null)
     abortTransactionUnless(channel.state !== CLOSED)
 
@@ -439,11 +439,12 @@ function routeTimeoutOnClose(
     nextSequenceRecv: uint64,
     srcConnectionHops: [Identifier],
     provingConnectionIdentifier: Identifier,
+    counterpartyConnectionHops: [Identifier]
 ) {
 
     // retrieve channel state. This will retrieve either the TryChannel or the AckChannel, depending which chain sends the packet
     // this depends on srcConncetionHops
-    channel = provableStore.get(append(srcConnectionHops, channelPath(packet.destPort, packet.destChannel)))
+    channel = provableStore.get(routeChannelPath(append(srcConnectionHops), packet.destPort, packet.destChannel))
     abortTransactionUnless(channel !== null)
     abortTransactionUnless(channel.state !== CLOSED)
 
@@ -463,10 +464,9 @@ function routeTimeoutOnClose(
                                                 routePacketTimeoutPath(prefix, packet.destPort, packet.destChannel, packet.sequence),
                                                 1))
     } else {
-        counterpartyChannel = provableStore.get(append(srcConnectionHops, channelPath(packet.destPort, packet.destChannel)))
         // check that the opposing channel end has closed
-        expected = ChannelEnd{CLOSED, counterpartyChannel.order, packet.destPort,
-                              packet.destChannel, counterpartyChannel.connectionHops, counterpartyChannel.version}
+        expected = ChannelEnd{CLOSED, channel.order, packet.sourcePort,
+                              packet.sourceChannel, channel.connectionHops, channel.version}
         abortTransactionUnless(connection.verifyChannelState(
                                proofHeight,
                                proof,
