@@ -324,8 +324,9 @@ function chanOpenInit(
 
     // optimistic channel handshakes are allowed
     // so next connection does not need to be OPEN but it does need to exist for each proposed route
-    for i := 0; i < len(connectionHops); i++ {
-      hops = splitRoute(connectionHops[i])
+    for i in 0..len(connectionHops)-1 {
+      route = connectionHops[i]
+      hops = route.split("/")
       nextHopConnectionId = hops[0]
       connection = provableStore.get(connectionPath(nextHopConnectionId))
 
@@ -370,9 +371,9 @@ function chanOpenTry(
     
     // handshake messages must be proven against
     // every possible route
-    for i := 0; i < len(connectionHops); i++ {
-      hops = splitRoute(connectionHops[i])
-
+    for i in 0..len(connectionHops)-1 {
+      route = connectionHops[i]
+      hops = route.split("/")
       nextHopConnectionId = getNextHop(hops[0])
       connection = provableStore.get(connectionPath(nextHopConnectionId))
 
@@ -382,7 +383,7 @@ function chanOpenTry(
       client = queryClient(connection.clientIdentifier)
       value = protobuf.marshal(initChannel)
 
-      if len(hops == 1) {
+      if len(hops) == 1 {
         abortTransactionUnless(connection.verifyChannelState(
           proofHeight[i],
           proofInit[i],
@@ -391,16 +392,15 @@ function chanOpenTry(
           initChannel
         ))
       } else {
-        counterpartyHops = splitRoute(initChannel.connectionHops[i])
+        counterpartyHops = initChannel.connectionHops[i].split("/")
 
         // we prove that the last hop from the initChannel for this route is the counterparty for the first hop of our route
         abortTransactionUnless(connection.counterpartyConnectionIdentifier == counterpartyHops[len(counterpartyHops)-1])
 
         // we then prove that the next connection in this route stored
         // the initChannel under the full connectionHops stored on initChannel
-        path = append(initChannel.connectionHops[i], channelPath(counterpartyPortIdentifier, counterpartyChannelIdentifier))
-
-        verifyMembership(client, proofHeight[i], 0, 0, proofInit[i], path, value)
+        prefixRoute = append(counterpartyHops[0:len(counterpartyHops)-2])
+        verifyMembership(client, proofHeight[i], 0, 0, proofInit[i], routeChannelPath(prefixRoute, counterpartyPortIdentifier, counterpartyChannelIdentifier), value)
       }
     }
     
@@ -440,8 +440,9 @@ function chanOpenAck(
 
     // handshake messages must be proven against
     // every possible route
-    for i := 0; i < len(connectionHops); i++ {
-      hops = splitRoute(connectionHops[i])
+    for i in 0..len(connectionHops)-1 {
+      route = connectionHops[i]
+      hops = route.split("/")
 
       nextHopConnectionId = getNextHop(hops[0])
       connection = provableStore.get(connectionPath(nextHopConnectionId))
@@ -452,7 +453,7 @@ function chanOpenAck(
       client = queryClient(connection.clientIdentifier)
       value = protobuf.marshal(tryChannel)
 
-      if len(hops == 1) {
+      if len(hops) == 1 {
         abortTransactionUnless(connection.verifyChannelState(
           proofHeight[i],
           proofTry[i],
@@ -461,21 +462,22 @@ function chanOpenAck(
           tryChannel
         ))
       } else {
-        counterpartyHops = splitRoute(tryChannel.connectionHops[i])
+        counterpartyHops = tryChannel.connectionHops[i].split("/")
 
         // we prove that the last hop from the tryChannel for this route is the counterparty for the first hop of our route
         abortTransactionUnless(connection.counterpartyConnectionIdentifier == counterpartyHops[len(counterpartyHops)-1])
 
         // we then prove that the next connection in this route stored
         // the tryChannel under the full connectionHops stored on tryChannel
-        path = append(try.connectionHops[i], channelPath(channel.counterpartyPortIdentifier, channel.counterpartyChannelIdentifier))
-
-        verifyMembership(client, proofHeight[i], 0, 0, proofTry[i], path, value)
+        prefixRoute = append(counterpartyHops[0:len(counterpartyHops)-2])
+        verifyMembership(client, proofHeight[i], 0, 0, proofInit[i], routeChannelPath(prefixRoute, channel.counterpartyPortIdentifier, channel.counterpartyChannelIdentifier), value)
       }
     }
     
     channel.state = OPEN
-    channel.version = counterpartyVersion
+    // MANUEL: not complete sure about this.
+    // MANUEL: originally, the counterpartyVersion was passed as an argument
+    channel.version = tryChannel.version
     channel.counterpartyChannelIdentifier = counterpartyChannelIdentifier
     provableStore.set(channelPath(portIdentifier, channelIdentifier), channel)
 }
@@ -503,8 +505,9 @@ function chanOpenConfirm(
 
     // handshake messages must be proven against
     // every possible route
-    for i := 0; i < len(connectionHops); i++ {
-      hops = splitRoute(connectionHops[i])
+    for i in 0..len(connectionHops)-1 {
+      route = connectionHops[i]
+      hops = route.split("/")
 
       nextHopConnectionId = getNextHop(hops[0])
       connection = provableStore.get(connectionPath(nextHopConnectionId))
@@ -524,16 +527,15 @@ function chanOpenConfirm(
           ackChannel
         ))
       } else {
-        counterpartyHops = splitRoute(ackChannel.connectionHops[i])
+        counterpartyHops = ackChannel.connectionHops[i].split("/")
 
         // we prove that the last hop from the tryChannel for this route is the counterparty for the first hop of our route
         abortTransactionUnless(connection.counterpartyConnectionIdentifier == counterpartyHops[len(counterpartyHops)-1])
 
         // we then prove that the next connection in this route stored
         // the tryChannel under the full connectionHops stored on tryChannel
-        path = append(ackChannel.connectionHops[i], channelPath(channel.counterpartyPortIdentifier, channel.counterpartyChannelIdentifier))
-
-        verifyMembership(client, proofHeight[i], 0, 0, proofAck[i], path, value)
+        prefixRoute = append(counterpartyHops[0:len(counterpartyHops)-2])
+        verifyMembership(client, proofHeight[i], 0, 0, proofInit[i], routeChannelPath(prefixRoute, channel.counterpartyPortIdentifier, channel.counterpartyChannelIdentifier), value)
       }
     }
 
@@ -558,9 +560,17 @@ function chanCloseInit(
     channel = provableStore.get(channelPath(portIdentifier, channelIdentifier))
     abortTransactionUnless(channel !== null)
     abortTransactionUnless(channel.state !== CLOSED)
-    connection = provableStore.get(connectionPath(channel.connectionHops[0]))
-    abortTransactionUnless(connection !== null)
-    abortTransactionUnless(connection.state === OPEN)
+
+    // MANUEL: we probably should not required that all connections are opened, but do best effort, given that there is at least one opened.
+    for i in 0..len(connectionHops)-1 {
+      route = connectionHops[i]
+      hops = route.split("/")
+      nextHopConnectionId = hops[0]
+      connection = provableStore.get(connectionPath(nextHopConnectionId))
+      abortTransactionUnless(connection !== null)
+      abortTransactionUnless(connection.state === OPEN)
+    }
+
     channel.state = CLOSED
     provableStore.set(channelPath(portIdentifier, channelIdentifier), channel)
 }
@@ -592,9 +602,13 @@ function chanCloseConfirm(
     channel = provableStore.get(channelPath(portIdentifier, channelIdentifier))
     abortTransactionUnless(channel !== null)
     abortTransactionUnless(channel.state !== CLOSED)
-    connection = provableStore.get(connectionPath(channel.connectionHops[0]))
+
+    connection = provableStore.get(connectionPath(provingConnectionIdentifier))
     abortTransactionUnless(connection !== null)
     abortTransactionUnless(connection.state === OPEN)
+
+    // verify that proving connection is counterparty of the last src connection hop
+    abortTransactionUnless(srcConnectionHops[len(srcConnectionHops)-1] === connection.counterpartyConnectionIdentifier)
 
     closedChannel = ChannelEnd{CLOSED, channel.order, portIdentifier,
                                channelIdentifier, counterpartyConnectionHops, channel.version}
@@ -604,10 +618,10 @@ function chanCloseConfirm(
         prefixRoute = append(srcConnectionHops[0:len(srcConnectionHops)-2])
         client = queryClient(connection.clientIdentifier)
         value = protobuf.marshal(closedChannel)
-        verifyMembership(clientState, proofHeight, 0, 0, proofInit, routeChannelPath(prefixRoute, portIdentifier, channelIdentifier), value)
+        verifyMembership(clientState, proofHeight, 0, 0, proofInit, routeChannelPath(prefixRoute, channel.counterpartyPortIdentifier, channel.counterpartyChannelIdentifier), value)
     } else {
         // prove that previous hop (original src) stored channel under channel path
-        verifyChannelState(connection, proofHeight, proofInit, portIdentifier, channelIdentifier, closedChannel)
+        verifyChannelState(connection, proofHeight, proofInit, channel.counterpartyPortIdentifier, channel.counterpartyChannelIdentifier, closedChannel)
     }
 
     channel.state = CLOSED

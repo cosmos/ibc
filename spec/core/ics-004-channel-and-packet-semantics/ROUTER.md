@@ -18,6 +18,8 @@ The following document specifies the interfaces and state machine logic that IBC
 
 #### RouteInfoPath
 
+// MANUEL: We probably need to move these paths definitions to README.md because they are used there.
+
 Channel structures are stored under a store path prefix unique to a combination of a port identifier and channel identifier:
 
 ```typescript
@@ -81,7 +83,7 @@ function routeChanOpenTry(
 
     abortTransactionUnless(initChannel.state == INIT)
 
-    abortTransactionUnless(provableStore.get(routeChannelPath(append(srcConnectionHops), portIdentifier, channelIdentifier)) !== null)
+    abortTransactionUnless(provableStore.get(routeChannelPath(append(srcConnectionHops), portIdentifier, channelIdentifier)) === null)
 
     connection = getConnection(provingConnectionIdentifier)
     abortTransactionUnless(connection !== null)
@@ -255,9 +257,7 @@ function routePacket(
     // retrieve channel state.
     // this retrieves either the TryChannel or the AckChannel, depending which chain sends the packet
     // this depends on srcConncetionHops
-    // we use packet.destPort, packet.destChannel because the channel state is stored under the counterparties
-    // port and channel
-    channel = provableStore.get(append(srcConnectionHops, channelPath(packet.destPort, packet.destChannel)))
+    channel = provableStore.get(append(srcConnectionHops, channelPath(packet.sourcePort, packet.sourceChannel)))
     abortTransactionUnless(channel !== null)
     abortTransactionUnless(channel.state !== CLOSED)
 
@@ -316,9 +316,7 @@ function routeAcknowledgmentPacket(
 
     // retrieve channel state. This will retrieve either the TryChannel or the AckChannel, depending which chain sends the packet
     // this depends on srcConncetionHops
-    // we use packet.sourcePort, packet.sourceChannel because the relevant channel state is stored under the counterparties
-    // port and channel of the packet's sender
-    channel = provableStore.get(append(srcConnectionHops, channelPath(packet.sourcePort, packet.sourceChannel)))
+    channel = provableStore.get(append(srcConnectionHops, channelPath(packet.destPort, packet.destChannel)))
     abortTransactionUnless(channel !== null)
     abortTransactionUnless(channel.state !== CLOSED)
 
@@ -353,9 +351,9 @@ function routeAcknowledgmentPacket(
     prefix = srcConnectionHops.join("/")
     for route in channel.connectionHops {
         if route.startsWith(prefix) {
-            routeArray = route.split("/")
-            indexStart = routeArray.indexOf(len(srcConnectionHops)-1) + 2
-            routeSuffixes.push(routeArray[indexStart:len(routeArray)-1].join("/"))
+            hops = route.split("/")
+            indexStart = hops.indexOf(len(srcConnectionHops)-1) + 2
+            routeSuffixes.push(hops[indexStart:len(hops)-1].join("/"))
         }
     }
 
@@ -375,7 +373,7 @@ function routeTimeoutPacket(
 
     // retrieve channel state. This will retrieve either the TryChannel or the AckChannel, depending which chain sends the packet
     // this depends on srcConncetionHops
-    channel = provableStore.get(append(srcConnectionHops, channelPath(packet.sourcePort, packet.sourceChannel)))
+    channel = provableStore.get(append(srcConnectionHops, channelPath(packet.destPort, packet.destChannel)))
     abortTransactionUnless(channel !== null)
     abortTransactionUnless(channel.state !== CLOSED)
 
@@ -445,7 +443,7 @@ function routeTimeoutOnClose(
 
     // retrieve channel state. This will retrieve either the TryChannel or the AckChannel, depending which chain sends the packet
     // this depends on srcConncetionHops
-    channel = provableStore.get(append(srcConnectionHops, channelPath(packet.sourcePort, packet.sourceChannel)))
+    channel = provableStore.get(append(srcConnectionHops, channelPath(packet.destPort, packet.destChannel)))
     abortTransactionUnless(channel !== null)
     abortTransactionUnless(channel.state !== CLOSED)
 
