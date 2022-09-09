@@ -244,13 +244,7 @@ This section describes the internal state of the CCV module. For simplicity, the
   In pre-CCV state, the consumer CCV module MUST NOT pass validator updates to the underlying consensus engine.
 - `providerClient: Identifier` identifies the client of the provider chain (on the consumer chain) that the CCV channel is build upon.
 - `providerChannel: Identifier` identifies the consumer's channel end of the CCV channel.
-- `validatorSet: <string, CrossChainValidator>` is a mapping that stores the validators in the validator set of the consumer chain. Each validator is described by a `CrossChainValidator` data structure, which is defined as
-  ```typescript
-  interface CrossChainValidator {
-    address: string // validator address, i.e., the hash of its public key
-    power: int64
-  }
-  ```
+- `ccvValidatorSet: <string, ValidatorUpdate>` is a mapping that stores the validators in the validator set of the consumer chain.
 - `pendingChanges: [ValidatorUpdate]` is a list of `ValidatorUpdate`s received, but not yet applied to the validator set. 
   It is emptied on every `EndBlock()`. The list exposes the following interface:
   ```typescript

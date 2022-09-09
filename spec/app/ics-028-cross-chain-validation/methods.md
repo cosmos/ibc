@@ -85,6 +85,7 @@ function EndBlock(): [ValidatorUpdate] {
 // CCF: Consumer Chain Function
 // implements the AppModule interface
 function BeginBlock() {
+    BeginBlockInit()
     BeginBlockCCR()
     BeginBlockCIS()
 }
@@ -96,6 +97,7 @@ function BeginBlock() {
 - **Precondition**
   - True. 
 - **Postcondition**
+  - `BeginBlockInit()` is invoked (see [[CCV-CCF-BBLOCK-INIT.1]](#ccv-ccf-bblock-init1), i.e., it contains the `BeginBlock()` logic needed for the Channel Initialization sub-protocol).
   - `BeginBlockCCR()` is invoked (see [[CCV-CCF-BBLOCK-CCR.1]](#ccv-ccf-bblock-ccr1), i.e., it contains the `BeginBlock()` logic needed for the Consumer Chain Removal sub-protocol).
   - `BeginBlockCIS()` is invoked (see [[CCV-CCF-BBLOCK-CIS.1]](#ccv-ccf-bblock-cis1), i.e., it contains the `BeginBlock()` logic needed for the Consumer Initiated Slashing sub-protocol).
 - **Error Condition**
@@ -606,14 +608,21 @@ function onChanOpenTry(
     // assert that the counterpartyVersion matches the expected version
     abortTransactionUnless(counterpartyVersion == ccvVersion)
     
-    // get the client state associated with this client ID in order 
-    // to get access to the consumer chain ID
-    clientId = getClient(channelIdentifier)
-    clientState = clientKeeper.GetClientState(clientId)
+    // get the client state associated with the underlying client
+    channelEnd = provableStore.get("channelEnds/ports/{portIdentifier}/channels/{channelIdentifier}")
+    abortTransactionUnless(channelEnd != nil AND len(channelEnd.connectionHops) == 1)
+    connId = channelEnd.connectionHops[0]
+    connectionEnd = provableStore.get("connections/{connId}")
+    clientState = provableStore.get("clients/{connectionEnd.clientIdentifier}/clientState")
+
+    if clientState.chainId IN chainToConnection.Keys() {
+      // if a connection is stored for this consumer chain, 
+      // verify that the underlying connection is the expected one
+      abortTransactionUnless(chainToConnection[clientState.chainId] == connId)
+    }
     
-    // require the CCV channel to be built on top 
-    // of the expected client of the consumer chain
-    abortTransactionUnless(chainToClient[clientState.chainId] == clientId)
+    // verify that the underlying client is the expected client of the consumer chain
+    abortTransactionUnless(chainToClient[clientState.chainId] == connectionEnd.clientIdentifier)
 
     // require that no other CCV channel exists for this consumer chain
     abortTransactionUnless(clientState.chainId NOTIN chainToChannel.Keys())
@@ -636,6 +645,9 @@ function onChanOpenTry(
     - `portIdentifier != ProviderPortId`;
     - `counterpartyPortIdentifier != ConsumerPortId`;
     - `counterpartyVersion != ccvVersion`;
+    - no channel with `portIdentifier` and `channelIdentifier` exists;
+    - the channel has more than one connection hop;
+    - a connection is stored for this consumer chain and doesn't match the underlying connection of this channel;
     - the channel is not built on top of the client created for this consumer chain;
     - another CCV channel for this consumer chain already exists.
   - A `CCVHandshakeMetadata` is returned, with `providerDistributionAccount` set to the the address of the distribution module account on the provider chain and `version` set to `ccvVersion`.
@@ -675,19 +687,18 @@ function onChanOpenAck(
 function onChanOpenConfirm(
   portIdentifier: Identifier,
   channelIdentifier: Identifier) {
-    // get the client state associated with this client ID in order 
-    // to get access to the consumer chain ID
-    clientId = getClient(channelIdentifier)
-    clientState = clientKeeper.GetClientState(clientId)
+    // get the client state associated with the underlying client
+    channelEnd = provableStore.get("channelEnds/ports/{portIdentifier}/channels/{channelIdentifier}")
+    abortTransactionUnless(channelEnd != nil AND len(channelEnd.connectionHops) == 1)
+    connId = channelEnd.connectionHops[0]
+    connectionEnd = provableStore.get("connections/{connId}")
+    clientState = provableStore.get("clients/{connectionEnd.clientIdentifier}/clientState")
 
-    // Verify that there isn't already a CCV channel for the consumer chain
-    // If there is, then close the channel.
-    if clientState.chainId IN chainToChannel {
-      channelKeeper.ChanCloseInit(channelIdentifier)
-      abortTransactionUnless(FALSE)
-    }
+    // require that no other CCV channel exists for this consumer chain
+    abortTransactionUnless(clientState.chainId NOTIN chainToChannel.Keys())
 
     // set channel mappings
+    chainToConnection[clientState.chainId] = connId
     chainToChannel[clientState.chainId] = channelIdentifier
     channelToChain[channelIdentifier] = clientState.chainId
     // set initialHeights for this consumer chain
@@ -701,12 +712,13 @@ function onChanOpenConfirm(
 - **Precondition** 
   - True.
 - **Postcondition**
-  - If a CCV channel for this consumer chain already exists, then 
-    - the channel closing handshake is initiated for the underlying channel;
-    - the transaction is aborted.
-  - Otherwise, 
-    - the channel mappings are set, i.e., `chainToChannel` and `channelToChain`;
-    - `initialHeights[chainId]` is set to the current height.
+  - The transaction is aborted if any of the following conditions are true:
+    - no channel with `portIdentifier` and `channelIdentifier` exists;
+    - the channel has more than one connection hop;
+    - another CCV channel for this consumer chain already exists.
+  - The connection mapping is set, i.e., `chainToConnection`.
+  - The channel mappings are set, i.e., `chainToChannel` and `channelToChain`.
+  - `initialHeights[chainId]` is set to the current height.
 - **Error Condition**
   - None.
 
@@ -736,7 +748,7 @@ function InitGenesis(gs: ConsumerGenesisState): [ValidatorUpdate] {
     abortSystemUnless(gs.initialValSet == gs.providerConsensusState.validatorSet)
   }
   if gs.distributionChannelId != "" {
-      channelEnd = provableStore.get("channelEnds/ports/{ics20Port}/channels/{gs.distributionChannelId}")
+      channelEnd = provableStore.get("channelEnds/ports/transfer/channels/{gs.distributionChannelId}")
       abortSystemUnless(channelEnd != nil)
   }
 
@@ -771,15 +783,29 @@ function InitGenesis(gs: ConsumerGenesisState): [ValidatorUpdate] {
 
   // set the initial validator set for the consumer chain
   foreach val IN gs.initialValSet {
-    ccVal := CrossChainValidator{
-      address: hash(val.pubKey),
-      power: val.power
-    }
-    validatorSet[ccVal.address] = ccVal
+    ccvValidatorSet[hash(val.pubKey)] = val
   }
 
   // set distribution channel ID
   distributionChannelId = gs.distributionChannelId
+
+  // initiate handshake 
+  if preCCV {
+    // initiate CCV channel opening handshake
+    // i.e., use handleChanOpenInit as defined in ICS-26
+    datagram = ChanOpenInit{
+      order: ORDERED,
+      connectionHops: [gs.connId], // same as the CCV channel
+      portIdentifier: ConsumerPortId,
+      counterpartyPortIdentifier: ProviderPortId,
+      version: ccvVersion,
+    }
+    handleChanOpenInit(datagram)
+  }
+  else {
+    // initiate connection opening handshake
+    // TODO
+  }
 
   return gs.initialValSet
 }
@@ -797,8 +823,10 @@ function InitGenesis(gs: ConsumerGenesisState): [ValidatorUpdate] {
   - Otherwise, a client of the provider chain is created and the client ID is stored into `providerClient`.
   - `consumerUnbondingPeriod` is set using the unbonding period from the client of the provider chain.
   - `HtoVSC` for the current block is set to `0`.
-  - The `validatorSet` mapping is populated with the initial validator set.
+  - The `ccvValidatorSet` mapping is populated with the initial validator set.
   - The ID of the distribution token transfer channel is set to `gs.distributionChannelId`.
+  - If `preCCV == true`, the CCV channel opening handshake is initialized.
+  - Otherwise, the connection opening handshake is initialized.
   - The initial validator set is returned to the consensus engine.
 - **Error Condition**
   - The genesis state contains an empty initial validator set.
@@ -843,8 +871,11 @@ function onChanOpenInit(
    
     // require that the client ID of the client associated 
     // with this channel matches the expected provider client id
-    clientId = getClient(channelIdentifier)   
-    abortTransactionUnless(providerClient != clientId)
+    channelEnd = provableStore.get("channelEnds/ports/{portIdentifier}/channels/{channelIdentifier}")
+    abortTransactionUnless(channelEnd != nil AND len(channelEnd.connectionHops) == 1)
+    connId = channelEnd.connectionHops[0]
+    connectionEnd = provableStore.get("connections/{connId}")
+    abortTransactionUnless(providerClient != connectionEnd.clientIdentifier)
 
     return ccvVersion
 }
@@ -916,16 +947,31 @@ function onChanOpenAck(
     // set the address of the distribution module account on the provider chain
     providerDistributionAccount = md.providerDistributionAccount
 
-    // initiate opening handshake for the distribution token transfer channel
-    // over the same connection as the CCV channel
-    // i.e., ChanOpenInit (as required by ICS20)
-    distributionChannelId = channelKeeper.ChanOpenInit(
-      UNORDERED, // order
-      channelKeeper.GetConnectionHops(channelIdentifier), // connectionHops: same as the CCV channel
-      "transfer", // portIdentifier
-      "transfer", // counterpartyPortIdentifier
-      "ics20-1" // version
-    )
+    if distributionChannelId == "" {
+      // initiate opening handshake for the distribution token transfer channel
+      // over the same connection as the CCV channel
+      // i.e., use handleChanOpenInit as defined in ICS-26
+      datagram = ChanOpenInit{
+          order: UNORDERED,
+          connectionHops: channelKeeper.GetConnectionHops(channelIdentifier), // same as the CCV channel
+          portIdentifier: "transfer",
+          counterpartyPortIdentifier: "transfer",
+          version: "ics20-1",
+      }
+      distributionChannelId = handleChanOpenInit(datagram)
+    }
+
+    // set the channel as the provider channel
+    providerChannel = channelIdentifier
+
+    // send pending slash requests;
+    // note: this can happen only if preCCV == false
+    SendPendingSlashRequests()
+
+    if preCCV {
+      // replace valset with initial valset
+      stakingKeeper.ReplaceValset(ccvValidatorSet.Values()) 
+    }
 }
 ```
 - **Caller**
@@ -940,11 +986,12 @@ function onChanOpenAck(
     - `providerChannel` is already set;
     - `md.version != ccvVersion`.
   - The address of the distribution module account on the provider chain is set to `md.providerDistributionAccount`.
-  - The distribution token transfer channel opening handshake is initiated and `distributionChannelId` is set to the resulting channel ID.
+  - If `distributionChannelId` is not set, the distribution token transfer channel opening handshake is initiated and `distributionChannelId` is set to the resulting channel ID.
+  - The CCV channel is marked as established, i.e., `providerChannel` is set to this channel.
+  - The pending slash requests are sent to the provider chain (see [CCV-CCF-SNDPESLASH.1](#ccv-ccf-sndpeslash1)).
+  - If `preCCV == true`, the valset in the staking module is replaced with the `ccvValidatorSet`.
 - **Error Condition**
   - None.
-
-> **Note:** The initialization sub-protocol on the consumer chain finalizes on receiving the first `VSCPacket` and setting `providerChannel` to the ID of the channel on which it receives the packet (see `onRecvVSCPacket` method).
 
 <!-- omit in toc -->
 #### **[CCV-CCF-COCONFIRM.1]**
@@ -966,6 +1013,32 @@ function onChanOpenConfirm(
   - True.
 - **Postcondition** 
   - The transaction is always aborted; hence, the state is not changed.
+- **Error Condition**
+  - None.
+
+<!-- omit in toc -->
+#### **[CCV-CCF-BBLOCK-INIT.1]**
+```typescript
+// CCF: Consumer Chain Function
+function BeginBlockInit() {
+  if preCCV {  
+    ownConsensusState = getConsensusState(getCurrentHeight())
+    if ownConsensusState.validatorSet == ccvValidatorSet.Values() {
+      // pre-CCV state is over; upgrade chain to consumer chain
+      // - remove staking module and replace with CCV module
+      // - set preCCV to false
+    }
+  }
+}
+```
+- **Caller**
+  - The `BeginBlock()` method.
+- **Trigger Event**
+  - A `BeginBlock` message is received from the consensus engine; `BeginBlock` messages are sent once per block.
+- **Precondition**
+  - True. 
+- **Postcondition**
+  - If `preCCV == true` and the current validator set matches the `ccvValidatorSet` (i.e., the initial validator set), then the chain MUST be upgraded to a full consumer chain.
 - **Error Condition**
   - None.
 
@@ -1161,16 +1234,15 @@ function onChanCloseConfirm(
 // CCF: Consumer Chain Function
 function BeginBlockCCR() {
   if providerChannel != "" AND channelKeeper.GetChannelState(providerChannel) == CLOSED {
-      // the CCV channel was established, but it was then closed; 
-      // the consumer chain is no longer safe
+    // the CCV channel was established, but it was then closed; 
+    // the consumer chain is no longer safe
 
-      // cleanup state, e.g., 
-      // providerChannel = ""
+    // cleanup state, e.g., 
+    // providerChannel = ""
 
-      // shut down consumer chain
-      abortSystemUnless(FALSE)
-    } 
-  }
+    // shut down consumer chain
+    abortSystemUnless(FALSE)
+  } 
 }
 ```
 - **Caller**
@@ -1453,7 +1525,8 @@ function GetUnbondingsFromVSC(
 // PCF: Provider Chain Function
 // implements a Staking module hook
 function AfterUnbondingInitiated(opId: uint64) {
-  // get the IDs of all consumer chains registered with this provider chain
+  // get the IDs of all consumer chains registered with this provider chain;
+  // note: this includes also consumer chains in the pre-CCV state
   chainIds = chainToClient.Keys()
   if len(chainIds) > 0 {
     // create and store a new unbonding operation
@@ -1497,21 +1570,12 @@ function onRecvVSCPacket(packet: Packet): bytes {
   // check whether the packet was sent on the CCV channel
   if providerChannel != "" && providerChannel != packet.getDestinationChannel() {
     // packet sent on a channel other than the established provider channel;
-    // close channel and return error acknowledgement
-    channelKeeper.ChanCloseInit(packet.getDestinationChannel())
+    // return error acknowledgement
     return VSCPacketError
   }
 
   // set HtoVSC mapping
   HtoVSC[getCurrentHeight() + 1] = packet.data.id
-  
-  // check whether the CCV channel is established
-  if providerChannel == "" {
-    // set the channel as the provider channel
-    providerChannel = packet.getDestinationChannel()
-    // send pending slash requests
-    SendPendingSlashRequests()
-  }
 
   // store the list of updates from the packet
   pendingChanges.Append(packet.data.updates)
@@ -1519,6 +1583,10 @@ function onRecvVSCPacket(packet: Packet): bytes {
   // calculate and store the maturity timestamp for the VSC
   maturityTimestamp = currentTimestamp().Add(consumerUnbondingPeriod)
   maturingVSCs.Add(packet.data.id, maturityTimestamp)
+
+  // TODO maturityTimestamp is computed from the currentTS, but the pendingChanges 
+  // may be sent to the consensus engine later if preCCV == true; 
+  // figure out if this is a problem  
 
   // reset outstandingDowntime for validators in packet.data.downtimeSlashAcks
   foreach valAddr IN packet.data.downtimeSlashAcks {
@@ -1535,14 +1603,9 @@ function onRecvVSCPacket(packet: Packet): bytes {
 - **Precondition**
   - True.
 - **Postcondition**
-  - If `providerChannel` is set and does not match the channel (with ID `packet.getDestinationChannel()`) on which the packet was received, then 
-    - the closing handshake for the channel with ID `packet.getDestinationChannel()` is initiated;
-    - an error acknowledgement is returned.
+  - If `providerChannel` is set and does not match the channel (with ID `packet.getDestinationChannel()`) on which the packet was received, then an error acknowledgement is returned.
   - Otherwise,
     - the height of the subsequent block is mapped to `packet.data.id` (i.e., the `HtoVSC` mapping) ;  
-    - if `providerChannel` is not set, then 
-      - the CCV channel is marked as established, i.e., `providerChannel = packet.getDestinationChannel()`;
-      - the pending slash requests are sent to the provider chain (see [CCV-CCF-SNDPESLASH.1](#ccv-ccf-sndpeslash1));
     - `packet.data.updates` are appended to `pendingChanges`;
     - `(packet.data.id, maturityTimestamp)` is added to `maturingVSCs`, where `maturityTimestamp = currentTimestamp() + consumerUnbondingPeriod`;
     - for each `valAddr` in the slash acknowledgments received from the provider chain, `outstandingDowntime[valAddr]` is set to false;
@@ -1602,7 +1665,7 @@ function EndBlockVSU(): [ValidatorUpdate] {
     UnbondMaturePackets()
   }
 
-  if pendingChanges.IsEmpty() {
+  if preCCV OR pendingChanges.IsEmpty() {
     // do nothing
     return []
   }
@@ -1614,8 +1677,14 @@ function EndBlockVSU(): [ValidatorUpdate] {
   // remove all pending changes
   pendingChanges.RemoveAll()
 
-  // update validatorSet
+  // update ccvValidatorSet
   UpdateValidatorSet(changes)
+
+  if preCCV {
+    // in pre-CCV state, MUST not pass validator set updates 
+    // to the underlying consensus engine
+    return []
+  }
 
   // return the validator set updates
   return changes
@@ -1629,12 +1698,13 @@ function EndBlockVSU(): [ValidatorUpdate] {
   - True. 
 - **Postcondition**
   - If `providerChannel != ""`, `UnbondMaturePackets()` is invoked;
-  - If `pendingChanges` is empty, the state is not changed.
+  - If `preCCV == true` or `pendingChanges` is empty, the state is not changed.
   - Otherwise,
     - the pending changes are aggregated and stored in `changes`;
     - `pendingChanges` is emptied;
     - `UpdateValidatorSet(changes)` is invoked;
-    - `changes` is returned.
+    - if `preCCV == true`, an empty list is returned;
+    - otherwise, `changes` is returned.
 - **Error Condition**
   - None.
 
@@ -1645,31 +1715,27 @@ function EndBlockVSU(): [ValidatorUpdate] {
 function UpdateValidatorSet(changes: [ValidatorUpdate]) {
   foreach update IN changes {
     addr := hash(update.pubKey)
-    if addr NOT IN validatorSet.Keys() {
+    if addr NOT IN ccvValidatorSet.Keys() {
       // new validator bonded;
       // note that due pendingChanges.Aggregate(), 
       // a validator can be added to the valset and 
       // then removed in the subsequent block, 
       // resulting in update.power == 0 
       if update.power > 0 {
-        // add new CrossChainValidator to validator set
-        val := CrossChainValidator{
-          address: addr,
-          power: update.power
-        }
-        validatorSet[addr] = val
+        // add new validator to validator set
+        ccvValidatorSet[addr] = update
         // call AfterCCValidatorBonded hook
         AfterCCValidatorBonded(addr)
       }
     }
     else if update.power == 0 {
       // existing validator begins unbonding
-      validatorSet.Remove(addr)
+      ccvValidatorSet.Remove(addr)
       // call AfterCCValidatorBeginUnbonding hook
       AfterCCValidatorBeginUnbonding(addr)
     }
     else {
-      validatorSet[addr].power = update.power
+      ccvValidatorSet[addr].power = update.power
     }
   }
 }
@@ -1683,10 +1749,10 @@ function UpdateValidatorSet(changes: [ValidatorUpdate]) {
 - **Postcondition**
   - For each validator `update` in `changes`,
     - if the validator is not in the validator set and `update.power > 0`, then 
-      - a new `CrossChainValidator` is added to `validatorSet`;
+      - a new validator is added to `ccvValidatorSet`;
       - the `AfterCCValidatorBonded` hook is called;
     - otherwise, if the validator's new power is `0`, then,
-      - the validator is removed from `validatorSet`;
+      - the validator is removed from `ccvValidatorSet`;
       - the `AfterCCValidatorBeginUnbonding` hook is called;
     - otherwise, the validator's power is updated.
 - **Error Condition**
@@ -1765,7 +1831,6 @@ function onRecvSlashPacket(packet: Packet): bytes {
   // check whether the packet was received on an established CCV channel
   if packet.getDestinationChannel() NOT IN channelToChain.Keys() {
     // packet received on a non-established channel; incorrect behavior
-    channelKeeper.ChanCloseInit(packet.getDestinationChannel())
     return SlashPacketError
   }
 
@@ -1808,9 +1873,7 @@ function onRecvSlashPacket(packet: Packet): bytes {
 - **Precondition**
   - True.
 - **Postcondition**
-  - If the channel the packet was received on is not an established CCV channel, then
-    - the channel closing handshake is initiated;
-    - an error acknowledgment is returned.
+  - If the channel the packet was received on is not an established CCV channel, then an error acknowledgment is returned.
   - Otherwise,
     - if `packet.data.vscId == 0`, `infractionHeight` is set to `initialHeights[chainId]`, with `chainId = channelToChain[packet.getDestinationChannel()]`, i.e., the height when the CCV channel to this consumer chain is established;
     - otherwise, `infractionHeight` is set to `VSCtoH[packet.data.vscId]`, i.e., the height at which the voting power was last updated by the validator updates in the VSC with ID `packet.data.vscId`;
