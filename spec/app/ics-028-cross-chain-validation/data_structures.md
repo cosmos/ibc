@@ -64,6 +64,7 @@ The CCV module is initialized through the `InitGenesis` method when the chain is
   ```
   - `preCCV` is a flag indicating whether the consumer CCV module starts in pre-CCV state. 
     In pre-CCV state the consumer CCV module MUST NOT pass validator updates to the underlying consensus engine.
+    If `preCCV == true`, then `connId` must be set.
   - `connId` is the ID of the connection end on the consumer chain on top of which the CCV channel will be established.
     If `connId == ""`, a new client of the provider chain and a new connection on top of this client are created.
   - `providerClientState` is the client state used to create a new client of the provider chain (as defined in [ICS 2](../../core/ics-002-client-semantics)).
@@ -238,7 +239,9 @@ This section describes the internal state of the CCV module. For simplicity, the
 [&uparrow; Back to Outline](#outline)
 
 - `ConsumerPortId = "consumer"` is the port ID the consumer CCV module is expected to bind to.
-- `consumerUnbondingPeriod: Duration"` is the unbonding period on the consumer chain. 
+- `consumerUnbondingPeriod: Duration` is the unbonding period on the consumer chain.
+- `preCCV: Bool` is a flag indicating whether the consumer CCV module starts in pre-CCV state. 
+  In pre-CCV state, the consumer CCV module MUST NOT pass validator updates to the underlying consensus engine.
 - `providerClient: Identifier` identifies the client of the provider chain (on the consumer chain) that the CCV channel is build upon.
 - `providerChannel: Identifier` identifies the consumer's channel end of the CCV channel.
 - `validatorSet: <string, CrossChainValidator>` is a mapping that stores the validators in the validator set of the consumer chain. Each validator is described by a `CrossChainValidator` data structure, which is defined as

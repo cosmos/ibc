@@ -719,29 +719,52 @@ function onChanOpenConfirm(
 // implements the AppModule interface
 function InitGenesis(gs: ConsumerGenesisState): [ValidatorUpdate] {
   // ValidateGenesis
-  // - contains a valid providerClientState  
-  abortSystemUnless(gs.providerClientState != nil AND gs.providerClientState.Valid())
-  // - contains a valid providerConsensusState
-  abortSystemUnless(gs.providerConsensusState != nil AND gs.providerConsensusState.Valid())
   // - contains a non-empty initial validator set
   abortSystemUnless(gs.initialValSet NOT empty)
-  // - contains an initial validator set that matches 
-  //   the validator set in the providerConsensusState (e.g., ICS 7)
-  abortSystemUnless(gs.initialValSet == gs.providerConsensusState.validatorSet)
+  // - contains a valid connId or ""
+  if gs.preCCV {
+    connectionEnd = provableStore.get("connections/{gs.connId}")
+    abortSystemUnless(connectionEnd != nil)
+  }
+  else {
+    // - contains a valid providerClientState  
+    abortSystemUnless(gs.providerClientState != nil AND gs.providerClientState.Valid())
+    // - contains a valid providerConsensusState
+    abortSystemUnless(gs.providerConsensusState != nil AND gs.providerConsensusState.Valid())
+    // - contains an initial validator set that matches 
+    //   the validator set in the providerConsensusState (e.g., ICS 7)
+    abortSystemUnless(gs.initialValSet == gs.providerConsensusState.validatorSet)
+  }
+  if gs.distributionChannelId != "" {
+      channelEnd = provableStore.get("channelEnds/ports/{ics20Port}/channels/{gs.distributionChannelId}")
+      abortSystemUnless(channelEnd != nil)
+  }
 
   // bind to ConsumerPortId port 
   err = portKeeper.bindPort(ConsumerPortId)
   // check whether the capability for the port can be claimed
   abortSystemUnless(err == nil)
 
-  // create client of the provider chain 
-  clientId = clientKeeper.CreateClient(gs.providerClientState, gs.providerConsensusState)
+  // set pre-CCV state
+  preCCV = gs.preCCV
 
-  // store the ID of the client of the provider chain
-  providerClient = clientId
+  if preCCV {
+    // start consumer chain in pre-CCV state;
+    // store the ID of the client of the provider chain
+    providerClient = connectionEnd.clientIdentifier
+
+    clientState = provableStore.get("clients/{connectionEnd.clientIdentifier}/clientState")
+  }
+  else {
+    // start consumer chain in normal CCV state;
+    // create client of the provider chain and store the ID
+    providerClient = clientKeeper.CreateClient(gs.providerClientState, gs.providerConsensusState)
+    
+    clientState = gs.providerClientState
+  }
 
   // compute (and store) the consumer unbonding period from the provider unbonding period
-  consumerUnbondingPeriod = ComputeConsumerUnbondingPeriod(gs.providerClientState.unbondingTime)
+  consumerUnbondingPeriod = ComputeConsumerUnbondingPeriod(clientState.unbondingTime)
 
   // set default value for HtoVSC
   HtoVSC[getCurrentHeight()] = 0
@@ -755,6 +778,9 @@ function InitGenesis(gs: ConsumerGenesisState): [ValidatorUpdate] {
     validatorSet[ccVal.address] = ccVal
   }
 
+  // set distribution channel ID
+  distributionChannelId = gs.distributionChannelId
+
   return gs.initialValSet
 }
 ```
@@ -766,16 +792,22 @@ function InitGenesis(gs: ConsumerGenesisState): [ValidatorUpdate] {
   - The consumer CCV module is in the initial state.  
 - **Postcondition**
   - The capability for the port `ConsumerPortId` is claimed.
-  - A client of the provider chain is created and the client ID is stored into `providerClient`.
-  - `consumerUnbondingPeriod` is set to `ComputeConsumerUnbondingPeriod(gs.providerClientState.unbondingTime)`.
+  - `preCCV` is set to `gs.preCCV`.
+  - If `preCCV == true`, the ID of the client on which the connection with `gs.connId` is built is stored into `providerClient`.
+  - Otherwise, a client of the provider chain is created and the client ID is stored into `providerClient`.
+  - `consumerUnbondingPeriod` is set using the unbonding period from the client of the provider chain.
   - `HtoVSC` for the current block is set to `0`.
   - The `validatorSet` mapping is populated with the initial validator set.
+  - The ID of the distribution token transfer channel is set to `gs.distributionChannelId`.
   - The initial validator set is returned to the consensus engine.
 - **Error Condition**
-  - The genesis state contains no valid provider client state, where the validity is defined in the corresponding client specification (e.g., [ICS 7](../../client/ics-007-tendermint-client)).
-  - The genesis state contains no valid provider consensus state, where the validity is defined in the corresponding client specification (e.g., [ICS 7](../../client/ics-007-tendermint-client))..
   - The genesis state contains an empty initial validator set.
-  - The genesis state contains an initial validator set that does not match the validator set in the provider consensus state.
+  - If the genesis state `preCCV` field is set to `true`, then the genesis state contains no valid connection ID.
+  - Otherwise,  
+    - the genesis state contains no valid provider client state, where the validity is defined in the corresponding client specification (e.g., [ICS 7](../../client/ics-007-tendermint-client);
+    - the genesis state contains no valid provider consensus state, where the validity is defined in the corresponding client specification (e.g., [ICS 7](../../client/ics-007-tendermint-client));
+    - the genesis state contains an initial validator set that does not match the validator set in the provider consensus state;
+  - The genesis state contains an invalid distribution channel ID.
   - The capability for the port `ConsumerPortId` cannot be claimed.
 
 > **Note**: CCV assumes that all the correct validators in the initial validator set of the consumer chain receive the _same_ consumer chain binary and consumer chain genesis state. 
