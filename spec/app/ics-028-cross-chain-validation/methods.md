@@ -413,26 +413,77 @@ function CreateConsumerClient(p: SpawnConsumerChainProposal) {
     return
   }
 
-  // create client state
-  clientState = ClientState{
-    chainId: p.chainId,
-    // use the unbonding period on the provider to compute 
-    // the unbonding period on the consumer
-    unbondingPeriod: ComputeConsumerUnbondingPeriod(stakingKeeper.UnbondingTime()),
-    latestHeight: p.initialHeight, // the height when the client was last updated
-  }
-
-  // create consensus state;
+  // set consumer chain initial validator set, i.e.,
   // the validator set is the same as the validator set 
   // from own consensus state at current height
   ownConsensusState = getConsensusState(getCurrentHeight())
-  consensusState = ConsensusState{
-    validatorSet: ownConsensusState.validatorSet,
-  }
+  initialValSet = ownConsensusState.validatorSet
 
-  // create consumer chain client and store it
-  clientId = clientKeeper.CreateClient(clientState, consensusState)
-  chainToClient[p.chainId] = clientId
+  if p.connId != "" { // connection ID provided
+    // check validity
+    connectionEnd = provableStore.get("connections/{p.connId}")
+    if connectionEnd == nil {
+      // invalid proposal: cannot find connection
+      return
+    }
+    clientState = provableStore.get("clients/{connectionEnd.clientIdentifier}/clientState")
+    if clientState.chainID != p.chainId {
+      // invalid proposal: connection not to expected chain ID
+      return
+    }
+    // store client ID
+    chainToClient[p.chainId] = connectionEnd.clientIdentifier
+    // store connection ID
+    chainToConnection[p.chainId] = connId
+
+    // create and store ConsumerGenesisState
+    consumerGenesisState[p.chainId] = ConsumerGenesisState {
+      // consumer chain MUST start in pre-CCV state, i.e.,
+      // the consumer CCV module MUST NOT pass validator updates
+      // to the underlying consensus engine
+      preCCV: true,
+      connId: connectionEnd.counterpartyConnectionIdentifier,
+      providerClientState: nil,
+      providerConsensusState: nil,
+      initialValSet: initialValSet,
+      distributionChannelId: p.distributionChannelId,
+    }
+  } 
+  else {
+    // a new client of the consumer chain will be created
+    if p.initialHeight == 0 {
+      // invalid proposal: initial height cannot be zero
+      return
+    }
+    // create client state
+    clientState = ClientState{
+      chainId: p.chainId,
+      // use the unbonding period on the provider to compute 
+      // the unbonding period on the consumer
+      unbondingPeriod: ComputeConsumerUnbondingPeriod(stakingKeeper.UnbondingTime()),
+      latestHeight: p.initialHeight, // the height when the client was last updated
+    }
+    // create consensus state
+    consensusState = ConsensusState{
+      validatorSet: initialValSet,
+    }
+    // create consumer chain client and store it
+    clientId = clientKeeper.CreateClient(clientState, consensusState)
+    chainToClient[p.chainId] = clientId
+    
+    // create and store ConsumerGenesisState
+    consumerGenesisState[p.chainId] = ConsumerGenesisState {
+      // consumer chain MUST NOT start in pre-CCV state, i.e.,
+      // the consumer CCV module MUST pass validator updates
+      // to the underlying consensus engine
+      preCCV: false,
+      connId: "",
+      providerClientState: getHostClientState(getCurrentHeight()),
+      providerConsensusState: ownConsensusState,
+      initialValSet: initialValSet,
+      distributionChannelId: p.distributionChannelId,
+    }
+  }
 
   // store lockUnbondingOnTimeout flag
   lockUnbondingOnTimeout[p.chainId] = p.lockUnbondingOnTimeout
@@ -447,17 +498,31 @@ function CreateConsumerClient(p: SpawnConsumerChainProposal) {
 - **Postcondition** 
   - If a client for `p.chainId` already exists, the state is not changed.
   - Otherwise, 
-    - a client state is created with `chainId = p.chainId` and `unbondingPeriod` set to `ComputeConsumerUnbondingPeriod(stakingKeeper.UnbondingTime())`;
-    - a consensus state is created with `validatorSet` set to the validator set the provider chain own consensus state at current height;
-    - a client of the consumer chain is created and the client ID is added to `chainToClient`;
+    - the validator set of the provider chain own consensus state at current height is set as the initial validator set of the consumer chain;
+    - if `p.connId` is set, then
+      - if a connection end with ID `p.connId` cannot be found, the state is not changed;
+      - otherwise, 
+        - if the connection with ID `p.connId` is not to the chain with ID `p.chainId`, the state is not changed;
+        - otherwise, 
+          - both the client ID and connection ID are stored;
+          - a `ConsumerGenesisState` is created and stored;
+    - otherwise,
+      - if `p.initialHeight` is zero, the state is not changed;
+      - otherwise, 
+        - a client state is created with `chainId = p.chainId` and `unbondingPeriod` set to `ComputeConsumerUnbondingPeriod(stakingKeeper.UnbondingTime())`;
+        - a consensus state is created with `validatorSet` set to the initial validator set of the consumer chain;
+        - a client of the consumer chain is created and the client ID is stored;
+        - a `ConsumerGenesisState` is created and stored;
     - `lockUnbondingOnTimeout[p.chainId]` is set to `p.lockUnbondingOnTimeout`.
 - **Error Condition**
   - None.
 
-> **Note:** Creating a client of a remote chain requires a `ClientState` and a `ConsensusState` (for an example, take a look at [ICS 7](../../client/ics-007-tendermint-client)).
+> **Note:** For the case when the `clientId` field of the `SpawnConsumerChainProposal` is not set, creating a client of a remote chain requires a `ClientState` and a `ConsensusState` (for an example, take a look at [ICS 7](../../client/ics-007-tendermint-client)).
 > `ConsensusState` requires setting a validator set of the remote chain. 
 > The provider chain uses the fact that the validator set of the consumer chain is the same as its own validator set. 
 > The rest of information to create a `ClientState` it receives through the governance proposal.
+
+> **Note:** Bootstrapping the consumer CCV module requires a `ConsumerGenesisState` (see the [CCV Data Structures](./data_structures.md#ccv-data-structures) section). The provider CCV module creates such a `ConsumerGenesisState` when handling a governance proposal `SpawnConsumerChainProposal`.
 
 <!-- omit in toc -->
 #### **[CCV-PCF-BBLOCK-INIT.1]**
