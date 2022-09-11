@@ -34,52 +34,89 @@ The IBC handler interface & IBC routing module interface are as defined in [ICS 
 
 ### Data Structures
 
-Only one packet data type is required: `FungibleTokenPacketData`, which specifies the denomination, amount, sending account, and receiving account.
+Only one packet data type is required: `AtomicSwapPacketData`, which specifies the type of swap message, data(protobuf marshalled) and memo.
 
-```typescript
-interface Coin {
-  denom: string
-  amount: uint256
-  decimal: uint8
+```proto
+enum SwapMessageType {
+  // Default zero value enumeration
+  TYPE_UNSPECIFIED = 0 [(gogoproto.enumvalue_customname) = "UNSPECIFIED"];
+
+  TYPE_MSG_MAKE_SWAP = 1 [(gogoproto.enumvalue_customname) = "MAKE_SWAP"];
+  TYPE_MSG_TAKE_SWAP = 2 [(gogoproto.enumvalue_customname) = "TAKE_SWAP"];
+  TYPE_MSG_CANCEL_SWAP = 3 [(gogoproto.enumvalue_customname) = "CANCEL_SWAP"];
 }
-interface FungibleTokenSwapPacketData {
-  tokenIn: Coin
-  tokenOut: Coin
-  sender: string
-  receiver: string
+
+// AtomicSwapPacketData is comprised of a raw transaction, type of transaction and optional memo field.
+message AtomicSwapPacketData {
+  SwapMessageType   type = 1;
+  bytes  data = 2;
+  string memo = 3;
+}
+
+```
+
+所有的`AtomicSwapPacketData`会根据它的类型转发到相应的Message handler去execute。共有3种类型，他们是：
+
+
+```proto
+message SwapMaker {
+  // the port on which the packet will be sent
+  string source_port = 1 [(gogoproto.moretags) = "yaml:\"source_port\""];
+  // the channel by which the packet will be sent
+  string source_channel = 2 [(gogoproto.moretags) = "yaml:\"source_channel\""];
+  // the tokens to be sell
+  cosmos.base.v1beta1.Coin  sell_token = 3 [(gogoproto.nullable) = false];
+  cosmos.base.v1beta1.Coin  buy_token = 4 [(gogoproto.nullable) = false];
+  // the sender address
+  string maker_address = 5 [(gogoproto.moretags) = "yaml:\"maker_address\""];
+  // the sender's address on the destination chain
+  string maker_receiving_address = 6 [(gogoproto.moretags) = "yaml:\"maker_receiving_address\""];
+  // if desired_taker is specified,
+  // only the desired_taker is allowed to take this order
+  // this is address on destination chain
+  string desired_taker = 7;
+  int64 create_timestamp = 8;
+}
+
+```
+
+```proto
+message SwapTaker {
+  string order_id = 1;
+  // the tokens to be sell
+  cosmos.base.v1beta1.Coin  sell_token = 2 [(gogoproto.nullable) = false];
+  // the sender address
+  string taker_address = 3 [(gogoproto.moretags) = "yaml:\"taker_address\""];
+  // the sender's address on the destination chain
+  string taker_receiving_address = 4 [(gogoproto.moretags) = "yaml:\"taker_receiving_address\""];
+  int64 create_timestamp = 5;
 }
 ```
 
-As tokens are sent across chains using the ICS 20 protocol, they begin to accrue a record of channels for which they have been transferred across. This information is encoded into the `denom` field. 
-
-The ics20 token denominations are represented the form `{ics20Port}/{ics20Channel}/{denom}`, where `ics20Port` and `ics20Channel` are an ics20 port and channel on the current chain for which the funds exist. The prefixed port and channel pair indicate which channel the funds were previously sent through. If `{denom}` contains `/`, then it must also be in the ics20 form which indicates that this token has a multi-hop record. Note that this requires that the `/` (slash character) is prohibited in non-IBC token denomination names.
-
-A sending chain may be acting as a source or sink zone. When a chain is sending tokens across a port and channel which are not equal to the last prefixed port and channel pair, it is acting as a source zone. When tokens are sent from a source zone, the destination port and channel will be prefixed onto the denomination (once the tokens are received) adding another hop to a tokens record. When a chain is sending tokens across a port and channel which are equal to the last prefixed port and channel pair, it is acting as a sink zone. When tokens are sent from a sink zone, the last prefixed port and channel pair on the denomination is removed (once the tokens are received), undoing the last hop in the tokens record. A more complete explanation is [present in the ibc-go implementation](https://github.com/cosmos/ibc-go/blob/457095517b7832c42ecf13571fee1e550fec02d0/modules/apps/transfer/keeper/relay.go#L18-L49).
-
-The acknowledgement data type describes whether the transfer succeeded or failed, and the reason for failure (if any).
-
-```typescript
-type FungibleTokenPacketAcknowledgement = FungibleTokenPacketSuccess | FungibleTokenPacketError;
-
-interface FungibleTokenPacketSuccess {
-  // This is binary 0x01 base64 encoded
-  result: "AQ=="
-}
-
-interface FungibleTokenPacketError {
-  error: string
+```proto
+message SwapCancel {
+  string order_id = 1;
+  string maker_address = 2;
 }
 ```
 
-Note that both the `FungibleTokenPacketData` as well as `FungibleTokenPacketAcknowledgement` must be JSON-encoded (not Protobuf encoded) when they serialized into packet data. Also note that `uint256` is string encoded when converted to JSON, but must be a valid decimal number of the form `[0-9]+`.
 
-The fungible token transfer bridge module tracks escrow addresses associated with particular channels in state. Fields of the `ModuleState` are assumed to be in scope.
-
+Both chains(source chain and destination chain) maintain a seperated order book in state, 
 ```typescript
-interface ModuleState {
-  channelEscrowAddresses: Map<Identifier, string>
+interface OrderBook {
+  string id = 1;
+  SwapMaker maker = 2;
+  Status status = 3;
+  FillStatus fill_status = 4;
+  string channel_id = 5;
+  repeated SwapTaker takers = 6;
+  int64 cancel_timestamp = 7;
+  int64 complete_timestamp = 8;
 }
 ```
+### Life scope and control flow
+
+
 
 ### Sub-protocols
 
@@ -328,26 +365,6 @@ function onTimeoutPacketClose(packet: Packet) {
 }
 ```
 
-#### Reasoning
-
-##### Correctness
-
-This implementation preserves both fungibility & supply.
-
-Fungibility: If tokens have been sent to the counterparty chain, they can be redeemed back in the same denomination & amount on the source chain.
-
-Supply: Redefine supply as unlocked tokens. All send-recv pairs sum to net zero. Source chain can change supply.
-
-##### Multi-chain notes
-
-This specification does not directly handle the "diamond problem", where a user sends a token originating on chain A to chain B, then to chain D, and wants to return it through D -> C -> A — since the supply is tracked as owned by chain B (and the denomination will be "{portOnD}/{channelOnD}/{portOnB}/{channelOnB}/denom"), chain C cannot serve as the intermediary. It is not yet clear whether that case should be dealt with in-protocol or not — it may be fine to just require the original path of redemption (and if there is frequent liquidity and some surplus on both paths the diamond path will work most of the time). Complexities arising from long redemption paths may lead to the emergence of central chains in the network topology.
-
-In order to track all of the denominations moving around the network of chains in various paths, it may be helpful for a particular chain to implement a registry which will track the "global" source chain for each denomination. End-user service providers (such as wallet authors) may want to integrate such a registry or keep their own mapping of canonical source chains and human-readable names in order to improve UX.
-
-#### Optional addenda
-
-- Each chain, locally, could elect to keep a lookup table to use short, user-friendly local denominations in state which are translated to and from the longer denominations when sending and receiving packets. 
-- Additional restrictions may be imposed on which other machines may be connected to & which channels may be established.
 
 ## Backwards Compatibility
 
@@ -355,14 +372,14 @@ Not applicable.
 
 ## Forwards Compatibility
 
-This initial standard uses version "ics20-1" in the channel handshake.
+This initial standard uses version "ics31-1" in the channel handshake.
 
 A future version of this standard could use a different version in the channel handshake,
 and safely alter the packet data format & packet handler semantics.
 
 ## Example Implementation
 
-Coming soon.
+https://github.com/sideprotocol/ibcswap
 
 ## Other Implementations
 
@@ -370,17 +387,7 @@ Coming soon.
 
 ## History
 
-Jul 15, 2019 - Draft written
-
-Jul 29, 2019 - Major revisions; cleanup
-
-Aug 25, 2019 - Major revisions, more cleanup
-
-Feb 3, 2020 - Revisions to handle acknowledgements of success & failure
-
-Feb 24, 2020 - Revisions to infer source field, inclusion of version string
-
-July 27, 2020 - Re-addition of source field
+Aug 15, 2022 - Draft written
 
 ## Copyright
 
