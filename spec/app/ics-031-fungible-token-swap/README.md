@@ -36,21 +36,21 @@ The IBC handler interface & IBC routing module interface are as defined in [ICS 
 
 Only one packet data type is required: `AtomicSwapPacketData`, which specifies the type of swap message, data(protobuf marshalled) and memo.
 
-```proto
+```typescript
 enum SwapMessageType {
   // Default zero value enumeration
-  TYPE_UNSPECIFIED = 0 [(gogoproto.enumvalue_customname) = "UNSPECIFIED"];
+  TYPE_UNSPECIFIED = 0,
 
-  TYPE_MSG_MAKE_SWAP = 1 [(gogoproto.enumvalue_customname) = "MAKE_SWAP"];
-  TYPE_MSG_TAKE_SWAP = 2 [(gogoproto.enumvalue_customname) = "TAKE_SWAP"];
-  TYPE_MSG_CANCEL_SWAP = 3 [(gogoproto.enumvalue_customname) = "CANCEL_SWAP"];
+  TYPE_MSG_MAKE_SWAP = 1, 
+  TYPE_MSG_TAKE_SWAP = 2,
+  TYPE_MSG_CANCEL_SWAP = 3,
 }
 
 // AtomicSwapPacketData is comprised of a raw transaction, type of transaction and optional memo field.
-message AtomicSwapPacketData {
-  SwapMessageType   type = 1;
-  bytes  data = 2;
-  string memo = 3;
+interface AtomicSwapPacketData {
+  type: SwapMessageType;
+  data: types[];
+  memo: string;
 }
 
 ```
@@ -58,65 +58,80 @@ message AtomicSwapPacketData {
 所有的`AtomicSwapPacketData`会根据它的类型转发到相应的Message handler去execute。共有3种类型，他们是：
 
 
-```proto
-message MakeSwap {
+```typescript
+interface MakeSwap {
   // the port on which the packet will be sent
-  string source_port = 1 [(gogoproto.moretags) = "yaml:\"source_port\""];
+  source_port string
   // the channel by which the packet will be sent
-  string source_channel = 2 [(gogoproto.moretags) = "yaml:\"source_channel\""];
+  source_channel: string;
   // the tokens to be sell
-  cosmos.base.v1beta1.Coin  sell_token = 3 [(gogoproto.nullable) = false];
-  cosmos.base.v1beta1.Coin  buy_token = 4 [(gogoproto.nullable) = false];
+  sell_token : Coin
+  buy_token: Coin;
   // the sender address
-  string maker_address = 5 [(gogoproto.moretags) = "yaml:\"maker_address\""];
+  maker_address: string;
   // the sender's address on the destination chain
-  string maker_receiving_address = 6 [(gogoproto.moretags) = "yaml:\"maker_receiving_address\""];
+  maker_receiving_address string;
   // if desired_taker is specified,
   // only the desired_taker is allowed to take this order
   // this is address on destination chain
-  string desired_taker = 7;
-  int64 create_timestamp = 8;
+  desired_taker: string;
+  create_timestamp: int64;
 }
 
 ```
 
-```proto
-message TakeSwap {
-  string order_id = 1;
+```typescript
+interface TakeSwap {
+  order_id: string
   // the tokens to be sell
-  cosmos.base.v1beta1.Coin  sell_token = 2 [(gogoproto.nullable) = false];
+  sell_token: Coin;
   // the sender address
-  string taker_address = 3 [(gogoproto.moretags) = "yaml:\"taker_address\""];
+  taker_address: string;
   // the sender's address on the destination chain
-  string taker_receiving_address = 4 [(gogoproto.moretags) = "yaml:\"taker_receiving_address\""];
-  int64 create_timestamp = 5;
+  taker_receiving_address: string;
+  create_timestamp: int64
 }
 ```
 
-```proto
-message CancelSwap {
-  string order_id = 1;
-  string maker_address = 2;
+```typescript
+interface CancelSwap {
+  order_id: string;
+  maker_address: string;
 }
 ```
 
 
 Both chains(source chain and destination chain) maintain a seperated order book in state, 
 ```typescript
-interface OrderBook {
-  string id;
-  SwapMaker maker;
-  Status status;
-  FillStatus fill_status;
-  string channel_id;
-  SwapTaker[] takers;
-  int64 cancel_timestamp;
-  int64 complete_timestamp;
+enum Status {
+  INITIAL = 0,
+  SYNC = 1,
+  CANCEL = 2,
+  COMPLETE = 3,
 }
+
+enum FillStatus {
+  NONE_FILL = 0,
+  PARTIAL_FILL = 1,
+  COMPLETE_FILL = 2,
+}
+
+interface OrderBook {
+  id: string
+  maker: MakeSwap
+  status: Status
+  fill_status: FillStatus
+  channel_id: string
+  takers: TakeSwap[]
+  cancel_timestamp: int64
+  complete_timestamp: int64
+}
+
+
 ```
 ### Life scope and control flow
 
-
+<img src="./ibcswap.png"/>
 
 ### Sub-protocols
 
