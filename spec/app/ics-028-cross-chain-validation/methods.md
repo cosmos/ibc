@@ -1591,23 +1591,8 @@ function onRecvVSCPacket(packet: Packet): bytes {
   // set HtoVSC mapping
   HtoVSC[getCurrentHeight() + 1] = packet.data.id
 
-  // store the list of updates from the packet
-  pendingChanges.Append(packet.data.updates)
-
-  // calculate and store the maturity timestamp for the VSC
-  maturityTimestamp = currentTimestamp().Add(consumerUnbondingPeriod)
-  maturingVSCs.Add(packet.data.id, maturityTimestamp)
-
-  // TODO maturityTimestamp is computed from the currentTS, but the pendingChanges 
-  // may be sent to the consensus engine later if preCCV == true; 
-  // figure out if this is a problem
-  
-  // TODO same (^^) for outstandingDowntime !!!
-
-  // reset outstandingDowntime for validators in packet.data.downtimeSlashAcks
-  foreach valAddr IN packet.data.downtimeSlashAcks {
-    outstandingDowntime[valAddr] = FALSE
-  }
+  // store the packet data
+  receivedVSCs.Append(packet.data)
 
   return VSCPacketSuccess
 }
@@ -1622,9 +1607,7 @@ function onRecvVSCPacket(packet: Packet): bytes {
   - If `providerChannel` is set and does not match the channel (with ID `packet.getDestinationChannel()`) on which the packet was received, then an error acknowledgement is returned.
   - Otherwise,
     - the height of the subsequent block is mapped to `packet.data.id` (i.e., the `HtoVSC` mapping) ;  
-    - `packet.data.updates` are appended to `pendingChanges`;
-    - `(packet.data.id, maturityTimestamp)` is added to `maturingVSCs`, where `maturityTimestamp = currentTimestamp() + consumerUnbondingPeriod`;
-    - for each `valAddr` in the slash acknowledgments received from the provider chain, `outstandingDowntime[valAddr]` is set to false;
+    - `packet.data` is appended to `receivedVSCs`.
     - a successful acknowledgement is returned.
 - **Error Condition**
   - None.
@@ -1681,29 +1664,20 @@ function EndBlockVSU(): [ValidatorUpdate] {
     UnbondMaturePackets()
   }
 
-  if preCCV OR pendingChanges.IsEmpty() {
+  if preCCV {
     // do nothing
     return []
   }
-  // aggregate the pending changes
-  changes = pendingChanges.Aggregate()
-  // Note: in the implementation, the aggregation is done directly 
-  // when receiving a VSCPacket via the AccumulateChanges method.
+  else {
+    // handle received VSCs
+    changes = HandleReceivedVSCs()
 
-  // remove all pending changes
-  pendingChanges.RemoveAll()
+    // update ccvValidatorSet
+    UpdateValidatorSet(changes)
 
-  // update ccvValidatorSet
-  UpdateValidatorSet(changes)
-
-  if preCCV {
-    // in pre-CCV state, MUST not pass validator set updates 
-    // to the underlying consensus engine
-    return []
+    // return the validator set updates
+    return changes
   }
-
-  // return the validator set updates
-  return changes
 }
 ```
 - **Caller**
@@ -1714,23 +1688,59 @@ function EndBlockVSU(): [ValidatorUpdate] {
   - True. 
 - **Postcondition**
   - If `providerChannel != ""`, `UnbondMaturePackets()` is invoked;
-  - If `preCCV == true` or `pendingChanges` is empty, the state is not changed.
+  - If `preCCV == true`, the state is not changed.
   - Otherwise,
-    - the pending changes are aggregated and stored in `changes`;
-    - `pendingChanges` is emptied;
+    - the data items in `receivedVSCs` are handled (see [[CCV-CCF-HAREVSC.1]](#ccv-ccf-harevsc1)), which results in a list `changes` of validator updates;
     - `UpdateValidatorSet(changes)` is invoked;
-    - if `preCCV == true`, an empty list is returned;
-    - otherwise, `changes` is returned.
+    - `changes` is returned.
 - **Error Condition**
   - None.
 
-> TODO:
-> 
-> **Note**: The provider CCV module may send `VSCPacket`s to consumer chains that are in the pre-CCV state (see [[CCV-PCF-EBLOCK-VSU.1]](#ccv-pcf-eblock-vsu1)). 
-> On receiveing these `VSCPacket`s, the consumer CCV module adds the validator updates (contained within) to the `pendingChanges` list (see [[CCV-CCF-RCVVSC.1]](#ccv-ccf-rcvvsc1)).
-> Then, if the consumer CCV module is not in the pre-CCV state, the updates in the `pendingChanges` list are aggregated in `EndBlock` and the result is passed to the underlying consensus engine. 
-> When `preCCV == true` though, these updates are passed to the consensus engine at a later time.
-> Since the `VSC` maturity timestamp is computed on receiving `VSCPacket`s, there may be the case that some unbonding operation will reach maturity before `consumerUnbondingPeriod` elapses.
+<!-- omit in toc -->
+#### **[CCV-CCF-HAREVSC.1]**
+```typescript
+// CCF: Consumer Chain Function
+function HandleReceivedVSCs(): [ValidatorUpdate] {
+  changes = []
+  foreach data IN receivedVSCs {
+    // store the list of updates
+    changes.Append(data.updates)
+
+    // calculate and store the maturity timestamp for the VSC
+    maturityTimestamp = currentTimestamp().Add(consumerUnbondingPeriod)
+    maturingVSCs.Add(data.id, maturityTimestamp)
+
+    // reset outstandingDowntime for validators in data.downtimeSlashAcks
+    foreach valAddr IN data.downtimeSlashAcks {
+      outstandingDowntime[valAddr] = FALSE
+    }
+  }
+  // remove all entries
+  receivedVSCs = []
+
+  // aggregate the updates, 
+  // i.e., keep only the latest update per validator;
+  // note: in the implementation, the aggregation is done directly 
+  // when receiving a VSCPacket via the AccumulateChanges method
+  return changes.Aggregate()
+}
+```
+- **Caller**
+  - The `EndBlock()` method.
+- **Trigger Event**
+  - An `EndBlock` message is received from the consensus engine.
+- **Precondition**
+  - `preCCV == false`.
+- **Postcondition**
+  - For each `data` item in the list `receivedVSCs`,
+    - `data.updates` are appended to `changes`, where `changes` is initialy an empty list of validator updates;
+    - `(data.id, maturityTimestamp)` is added to `maturingVSCs`, where `maturityTimestamp = currentTimestamp() + consumerUnbondingPeriod`;
+    - for each `valAddr` in the slash acknowledgments received from the provider chain, `outstandingDowntime[valAddr]` is set to false.
+  - `receivedVSCs` is emptied.
+  - The updates in `changes` are aggregated, i.e., only the latest update per validator is kept, and returned.
+- **Error Condition**
+  - None.
+
 
 <!-- omit in toc -->
 #### **[CCV-CCF-UPVALS.1]**
@@ -1741,7 +1751,7 @@ function UpdateValidatorSet(changes: [ValidatorUpdate]) {
     addr := hash(update.pubKey)
     if addr NOT IN ccvValidatorSet.Keys() {
       // new validator bonded;
-      // note that due pendingChanges.Aggregate(), 
+      // note that due changes.Aggregate(), 
       // a validator can be added to the valset and 
       // then removed in the subsequent block, 
       // resulting in update.power == 0 
@@ -1769,7 +1779,7 @@ function UpdateValidatorSet(changes: [ValidatorUpdate]) {
 - **Trigger Event**
   - An `EndBlock` message is received from the consensus engine.
 - **Precondition**
-  - `changes` contains the aggregated validator updates from `pendingChanges` before it was emptied. 
+  - - `preCCV == false`.
 - **Postcondition**
   - For each validator `update` in `changes`,
     - if the validator is not in the validator set and `update.power > 0`, then 
