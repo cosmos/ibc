@@ -410,14 +410,18 @@ function SpawnConsumerChainProposalHandler(p: SpawnConsumerChainProposal) {
 // PCF: Provider Chain Function
 // Utility method
 function CreateConsumerClient(p: SpawnConsumerChainProposal) {
-  // check that a client for this chain does not exist
+  // check that no other consumer chain with the same chain ID exists
   if p.chainId IN chainToClient.Keys() {
+    // ignore governance proposal
     return
   }
 
   // set consumer chain initial validator set, i.e.,
   // the validator set is the same as the validator set 
   // from own consensus state at current height
+  // 
+  // TODO: ownConsensusState.validatorSet VS consensusState.nextValidatorsHash
+  //       specify which validator set is used as the initial val set
   ownConsensusState = getConsensusState(getCurrentHeight())
   initialValSet = ownConsensusState.validatorSet
 
@@ -433,6 +437,8 @@ function CreateConsumerClient(p: SpawnConsumerChainProposal) {
       // invalid proposal: connection not to expected chain ID
       return
     }
+    // TODO: check whether client is not expired
+
     // store client ID
     chainToClient[p.chainId] = connectionEnd.clientIdentifier
     // store connection ID
@@ -694,7 +700,8 @@ function onChanOpenConfirm(
     connectionEnd = provableStore.get("connections/{connId}")
     clientState = provableStore.get("clients/{connectionEnd.clientIdentifier}/clientState")
 
-    // require that no other CCV channel exists for this consumer chain
+    // require that no other CCV channel exists for this consumer chain;
+    // note: this is a sanity check; this check should always pass by construction
     abortTransactionUnless(clientState.chainId NOTIN chainToChannel.Keys())
 
     // set channel mappings
@@ -733,8 +740,8 @@ function InitGenesis(gs: ConsumerGenesisState): [ValidatorUpdate] {
   // ValidateGenesis
   // - contains a non-empty initial validator set
   abortSystemUnless(gs.initialValSet NOT empty)
-  // - contains a valid connId or ""
   if gs.preCCV {
+    // - contains a valid connId
     connectionEnd = provableStore.get("connections/{gs.connId}")
     abortSystemUnless(connectionEnd != nil)
   }
@@ -748,6 +755,8 @@ function InitGenesis(gs: ConsumerGenesisState): [ValidatorUpdate] {
     abortSystemUnless(gs.initialValSet == gs.providerConsensusState.validatorSet)
   }
   if gs.distributionChannelId != "" {
+      // - if distributionChannelId is provided, it must the ID
+      //   of a channel connected to the "transfer" port
       channelEnd = provableStore.get("channelEnds/ports/transfer/channels/{gs.distributionChannelId}")
       abortSystemUnless(channelEnd != nil)
   }
@@ -804,7 +813,7 @@ function InitGenesis(gs: ConsumerGenesisState): [ValidatorUpdate] {
   }
   else {
     // initiate connection opening handshake
-    // TODO
+    // TODO: although not need for security, may help relayers
   }
 
   return gs.initialValSet
@@ -965,7 +974,9 @@ function onChanOpenAck(
     providerChannel = channelIdentifier
 
     // send pending slash requests;
-    // note: this can happen only if preCCV == false
+    // note: this can happen only if preCCV == false, as the ABCI application 
+    // can invoke SendSlashRequest only once the chain is upgraded to 
+    // a consumer chain, see BeginBlockInit below
     SendPendingSlashRequests()
 
     if preCCV {
@@ -988,8 +999,9 @@ function onChanOpenAck(
   - The address of the distribution module account on the provider chain is set to `md.providerDistributionAccount`.
   - If `distributionChannelId` is not set, the distribution token transfer channel opening handshake is initiated and `distributionChannelId` is set to the resulting channel ID.
   - The CCV channel is marked as established, i.e., `providerChannel` is set to this channel.
-  - The pending slash requests are sent to the provider chain (see [CCV-CCF-SNDPESLASH.1](#ccv-ccf-sndpeslash1)).
-  - If `preCCV == true`, the valset in the staking module is replaced with the `ccvValidatorSet`.
+  - The pending slash requests are sent to the provider chain (see [[CCV-CCF-SNDPESLASH.1]](#ccv-ccf-sndpeslash1)).
+    Note that this can happen only if `preCCV == false`, as the ABCI application can invoke `SendSlashRequest` only once the chain is upgraded to a consumer chain (see [[CCV-CCF-BBLOCK-INIT.1]](#ccv-ccf-bblock-init1)).
+  - If `preCCV == true`, the valset in the staking module is replaced with the `ccvValidatorSet`, i.e., the initial validator set.
 - **Error Condition**
   - None.
 
@@ -1027,6 +1039,7 @@ function BeginBlockInit() {
       // pre-CCV state is over; upgrade chain to consumer chain
       // - remove staking module and replace with CCV module
       // - set preCCV to false
+      preCCV = false
     }
   }
 }
@@ -1039,6 +1052,7 @@ function BeginBlockInit() {
   - True. 
 - **Postcondition**
   - If `preCCV == true` and the current validator set matches the `ccvValidatorSet` (i.e., the initial validator set), then the chain MUST be upgraded to a full consumer chain.
+  The upgrade mechanism is outside the scope of this specification. 
 - **Error Condition**
   - None.
 
@@ -1586,7 +1600,9 @@ function onRecvVSCPacket(packet: Packet): bytes {
 
   // TODO maturityTimestamp is computed from the currentTS, but the pendingChanges 
   // may be sent to the consensus engine later if preCCV == true; 
-  // figure out if this is a problem  
+  // figure out if this is a problem
+  
+  // TODO same (^^) for outstandingDowntime !!!
 
   // reset outstandingDowntime for validators in packet.data.downtimeSlashAcks
   foreach valAddr IN packet.data.downtimeSlashAcks {
@@ -1707,6 +1723,14 @@ function EndBlockVSU(): [ValidatorUpdate] {
     - otherwise, `changes` is returned.
 - **Error Condition**
   - None.
+
+> TODO:
+> 
+> **Note**: The provider CCV module may send `VSCPacket`s to consumer chains that are in the pre-CCV state (see [[CCV-PCF-EBLOCK-VSU.1]](#ccv-pcf-eblock-vsu1)). 
+> On receiveing these `VSCPacket`s, the consumer CCV module adds the validator updates (contained within) to the `pendingChanges` list (see [[CCV-CCF-RCVVSC.1]](#ccv-ccf-rcvvsc1)).
+> Then, if the consumer CCV module is not in the pre-CCV state, the updates in the `pendingChanges` list are aggregated in `EndBlock` and the result is passed to the underlying consensus engine. 
+> When `preCCV == true` though, these updates are passed to the consensus engine at a later time.
+> Since the `VSC` maturity timestamp is computed on receiving `VSCPacket`s, there may be the case that some unbonding operation will reach maturity before `consumerUnbondingPeriod` elapses.
 
 <!-- omit in toc -->
 #### **[CCV-CCF-UPVALS.1]**
