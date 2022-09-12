@@ -59,7 +59,7 @@ message AtomicSwapPacketData {
 
 
 ```proto
-message SwapMaker {
+message MakeSwap {
   // the port on which the packet will be sent
   string source_port = 1 [(gogoproto.moretags) = "yaml:\"source_port\""];
   // the channel by which the packet will be sent
@@ -81,7 +81,7 @@ message SwapMaker {
 ```
 
 ```proto
-message SwapTaker {
+message TakeSwap {
   string order_id = 1;
   // the tokens to be sell
   cosmos.base.v1beta1.Coin  sell_token = 2 [(gogoproto.nullable) = false];
@@ -94,7 +94,7 @@ message SwapTaker {
 ```
 
 ```proto
-message SwapCancel {
+message CancelSwap {
   string order_id = 1;
   string maker_address = 2;
 }
@@ -104,14 +104,14 @@ message SwapCancel {
 Both chains(source chain and destination chain) maintain a seperated order book in state, 
 ```typescript
 interface OrderBook {
-  string id = 1;
-  SwapMaker maker = 2;
-  Status status = 3;
-  FillStatus fill_status = 4;
-  string channel_id = 5;
-  repeated SwapTaker takers = 6;
-  int64 cancel_timestamp = 7;
-  int64 complete_timestamp = 8;
+  string id;
+  SwapMaker maker;
+  Status status;
+  FillStatus fill_status;
+  string channel_id;
+  SwapTaker[] takers;
+  int64 cancel_timestamp;
+  int64 complete_timestamp;
 }
 ```
 ### Life scope and control flow
