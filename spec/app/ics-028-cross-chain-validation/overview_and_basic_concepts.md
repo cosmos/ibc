@@ -134,6 +134,8 @@ CCV must handle the following types of operations:
 ### Channel Initialization
 [&uparrow; Back to Outline](#outline)
 
+> TODO: update overview to account for chain started in preCCV state
+
 The following figure shows an overview of the CCV Channel initialization. 
 
 ![Channel Initialization Overview](./figures/ccv-init-overview.png?raw=true)
