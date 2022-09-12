@@ -259,8 +259,12 @@ The following properties define the guarantees of CCV on *registering* on the pr
 In this section we argue the correctness of the CCV protocol described in the [Technical Specification](./technical_specification.md), 
 i.e., we informally prove the properties described in the [previous section](#desired-properties).
 
-- ***Channel Uniqueness***: The provider chain side of the CCV channel is established when the provider CCV module receives the first `ChanOpenConfirm` message; all subsequent `ChanOpenConfirm` messages result in the underlying channel being closed (cf. *Safe Blockchain*). 
-  Similarly, the consumer chain side of the CCV channel is established when the consumer CCV module receives the first `VSCPacket` and ignores any packets received on different channels (cf. *Safe Blockchain*). 
+- ***Channel Uniqueness***: The consumer chain side of the CCV channel is established when the consumer CCV module receives the _first_ `ChanOpenAck` message that is successfully executed; all subsequent `ChanOpenAck` messages will fail (cf. *Safe Blockchain*).
+  Let `ccvChannel` denote this channel. Then, `ccvChannel` is the only `OPEN` channel that can be connected to a port owned by the consumer CCV module.
+  The provider chain side of the CCV channel is established when the provider CCV module receives the _first_ `ChanOpenConfirm` message that is successfully executed; all subsequent `ChanOpenAck` messages will fail (cf. *Safe Blockchain*). 
+  The `ccvChannel` is the only channel for which `ChanOpenConfirm` can be successfully executed (cf. *Safe Blockchain*, i.e., IBC channel opening handshake guarantee). 
+  As a result, `ccvChannel` is unique. 
+  Moreover, ts existence is guaranteed by the *Correct Relayer* assumption.
 
 - ***Channel Validity***: Follows directly from the *Safe Blockchain* assumption.
 
