@@ -135,7 +135,26 @@ interface OrderBook {
 
 ### Sub-protocols
 
-The sub-protocols described herein should be implemented in a "fungible token transfer bridge" module with access to a bank module and to the IBC routing module.
+The sub-protocols described herein should be implemented in a "fungible token Atomic Swap" module with access to a bank module and to the IBC routing module.
+```ts
+function createSwap(request MakeSwap) {
+
+}
+```
+
+
+```ts
+function fillSwap(request TakeSwap) {
+
+}
+```
+
+
+```ts
+function cancelSwap(request CancelSwap) {
+
+}
+```
 
 #### Port & channel setup
 
@@ -143,7 +162,7 @@ The `setup` function must be called exactly once when the module is created (per
 
 ```typescript
 function setup() {
-  capability = routingModule.bindPort("bank", ModuleCallbacks{
+  capability = routingModule.bindPort("atomicswap", ModuleCallbacks{
     onChanOpenInit,
     onChanOpenTry,
     onChanOpenAck,
@@ -172,7 +191,7 @@ that the module itself doesn't need to worry about what connections or channels 
 Both machines `A` and `B` accept new channels from any module on another machine, if and only if:
 
 - The channel being created is unordered.
-- The version string is `ics20-1`.
+- The version string is `ics31-1`.
 
 ```typescript
 function onChanOpenInit(
@@ -185,13 +204,12 @@ function onChanOpenInit(
   version: string) => (version: string, err: Error) {
   // only unordered channels allowed
   abortTransactionUnless(order === UNORDERED)
-  // assert that version is "ics20-1" or empty
+  // assert that version is "ics31-1" or empty
   // if empty, we return the default transfer version to core IBC
   // as the version for this channel
-  abortTransactionUnless(version === "ics20-1" || version === "")
-  // allocate an escrow address
-  channelEscrowAddresses[channelIdentifier] = newAddress()
-  return "ics20-1", nil
+  abortTransactionUnless(version === "ics31-1" || version === "")
+
+  return "ics31-1", nil
 }
 ```
 
@@ -206,13 +224,10 @@ function onChanOpenTry(
   counterpartyVersion: string) => (version: string, err: Error) {
   // only unordered channels allowed
   abortTransactionUnless(order === UNORDERED)
-  // assert that version is "ics20-1"
-  abortTransactionUnless(counterpartyVersion === "ics20-1")
-  // allocate an escrow address
-  channelEscrowAddresses[channelIdentifier] = newAddress()
-  // return version that this chain will use given the
-  // counterparty version
-  return "ics20-1", nil
+  // assert that version is "ics31-1"
+  abortTransactionUnless(counterpartyVersion === "ics31-1")
+
+  return "ics31-1", nil
 }
 ```
 
@@ -223,8 +238,8 @@ function onChanOpenAck(
   counterpartyChannelIdentifier: Identifier,
   counterpartyVersion: string) {
   // port has already been validated
-  // assert that counterparty selected version is "ics20-1"
-  abortTransactionUnless(counterpartyVersion === "ics20-1")
+  // assert that counterparty selected version is "ics31-1"
+  abortTransactionUnless(counterpartyVersion === "ics31-1")
 }
 ```
 
@@ -267,30 +282,7 @@ In plain English, between chains `A` and `B`:
 `sendFungibleTokens` must be called by a transaction handler in the module which performs appropriate signature checks, specific to the account owner on the host state machine.
 
 ```typescript
-function sendFungibleTokens(
-  denomination: string,
-  amount: uint256,
-  sender: string,
-  receiver: string,
-  sourcePort: string,
-  sourceChannel: string,
-  timeoutHeight: Height,
-  timeoutTimestamp: uint64) {
-    prefix = "{sourcePort}/{sourceChannel}/"
-    // we are the source if the denomination is not prefixed
-    source = denomination.slice(0, len(prefix)) !== prefix
-    if source {
-      // determine escrow account
-      escrowAccount = channelEscrowAddresses[sourceChannel]
-      // escrow source tokens (assumed to fail if balance insufficient)
-      bank.TransferCoins(sender, escrowAccount, denomination, amount)
-    } else {
-      // receiver is source chain, burn vouchers
-      bank.BurnCoins(sender, denomination, amount)
-    }
-
-    // create FungibleTokenPacket data
-    data = FungibleTokenPacketData{denomination, amount, sender, receiver}
+function sendAtomicSwapPacket(swapPacket AtomicSwapPacketData) {
 
     // send packet using the interface defined in ICS4
     handler.sendPacket(
@@ -299,7 +291,7 @@ function sendFungibleTokens(
       sourceChannel,
       timeoutHeight,
       timeoutTimestamp,
-      data
+      swapPacket.getBytes(), // Should be proto marshalled bytes.
     )
 }
 ```
@@ -307,30 +299,51 @@ function sendFungibleTokens(
 `onRecvPacket` is called by the routing module when a packet addressed to this module has been received.
 
 ```typescript
-function onRecvPacket(packet: Packet) {
-  FungibleTokenPacketData data = packet.data
-  // construct default acknowledgement of success
-  FungibleTokenPacketAcknowledgement ack = FungibleTokenPacketAcknowledgement{true, null}
-  prefix = "{packet.sourcePort}/{packet.sourceChannel}/"
-  // we are the source if the packets were prefixed by the sending chain
-  source = data.denom.slice(0, len(prefix)) === prefix
-  if source {
-    // receiver is source chain: unescrow tokens
-    // determine escrow account
-    escrowAccount = channelEscrowAddresses[packet.destChannel]
-    // unescrow tokens to receiver (assumed to fail if balance insufficient)
-    err = bank.TransferCoins(escrowAccount, data.receiver, data.denom.slice(len(prefix)), data.amount)
-    if (err !== nil)
-      ack = FungibleTokenPacketAcknowledgement{false, "transfer coins failed"}
-  } else {
-    prefix = "{packet.destPort}/{packet.destChannel}/"
-    prefixedDenomination = prefix + data.denom
-    // sender was source, mint vouchers to receiver (assumed to fail if balance insufficient)
-    err = bank.MintCoins(data.receiver, prefixedDenomination, data.amount)
-    if (err !== nil)
-      ack = FungibleTokenPacketAcknowledgement{false, "mint coins failed"}
-  }
-  return ack
+function onRecvPacket(data: AtomicSwapPacketData) {
+  switch data.Type {
+	case TYPE_MSG_MAKE_SWAP:
+		var msg types.MsgMakeSwapRequest
+
+		if err := types.ModuleCdc.Unmarshal(data.Data, &msg); err != nil {
+			return err
+		}
+		if err := k.executeMakeSwap(ctx, packet, &msg); err != nil {
+			return err
+		}
+
+		return nil
+
+	case TYPE_MSG_TAKE_SWAP:
+		var msg types.MsgTakeSwapRequest
+
+		if err := types.ModuleCdc.Unmarshal(data.Data, &msg); err != nil {
+			return err
+		}
+		if err2 := k.executeTakeSwap(ctx, packet, &msg); err2 != nil {
+			return err2
+		} else {
+			return nil
+		}
+
+	case TYPE_MSG_CANCEL_SWAP:
+		var msg types.MsgCancelSwapRequest
+
+		if err := types.ModuleCdc.Unmarshal(data.Data, &msg); err != nil {
+			return err
+		}
+		if err2 := k.executeCancelSwap(ctx, packet, &msg); err2 != nil {
+			return err2
+		} else {
+			return nil
+		}
+
+	default:
+		return types.ErrUnknownDataPacket
+	}
+
+	ctx.EventManager().EmitTypedEvents(&data)
+
+	return nil
 }
 ```
 
@@ -338,18 +351,49 @@ function onRecvPacket(packet: Packet) {
 
 ```typescript
 function onAcknowledgePacket(
-  packet: Packet,
+  packet: AtomicSwapPacketData,
   acknowledgement: bytes) {
-  // if the transfer failed, refund the tokens
-  if (!ack.success)
-    refundTokens(packet)
+switch ack.Response.(type) {
+	case *channeltypes.Acknowledgement_Error:
+		return k.refundPacketToken(ctx, packet, data)
+	default:
+		switch data.Type {
+		case TYPE_MSG_TAKE_SWAP:
+			var msg types.MsgTakeSwapRequest
+
+			if err := types.ModuleCdc.Unmarshal(data.Data, &msg); err != nil {
+				return err
+			}
+			// check order status
+			if order, ok := k.GetLimitOrder(ctx, msg.OrderId); ok {
+				k.executeTakeSwap(ctx, order, &msg, StepAcknowledgement)
+			} else {
+				return types.ErrOrderDoesNotExists
+			}
+			break
+
+		case TYPE_MSG_CANCEL_SWAP:
+			var msg types.MsgCancelSwapRequest
+
+			if err := types.ModuleCdc.Unmarshal(data.Data, &msg); err != nil {
+				return err
+			}
+			if err2 := k.executeCancel(ctx, &msg, StepAcknowledgement); err2 != nil {
+				return err2
+			} else {
+				return nil
+			}
+			break
+		}
+	}
+	return nil
 }
 ```
 
 `onTimeoutPacket` is called by the routing module when a packet sent by this module has timed-out (such that it will not be received on the destination chain).
 
 ```typescript
-function onTimeoutPacket(packet: Packet) {
+function onTimeoutPacket(packet: AtomicSwapPacketData) {
   // the packet timed-out, so refund the tokens
   refundTokens(packet)
 }
@@ -358,24 +402,14 @@ function onTimeoutPacket(packet: Packet) {
 `refundTokens` is called by both `onAcknowledgePacket`, on failure, and `onTimeoutPacket`, to refund escrowed tokens to the original sender.
 
 ```typescript
-function refundTokens(packet: Packet) {
+function refundTokens(packet: AtomicSwapPacketData) {
   FungibleTokenPacketData data = packet.data
-  prefix = "{packet.sourcePort}/{packet.sourceChannel}/"
-  // we are the source if the denomination is not prefixed
-  source = data.denom.slice(0, len(prefix)) !== prefix
-  if source {
-    // sender was source chain, unescrow tokens back to sender
-    escrowAccount = channelEscrowAddresses[packet.srcChannel]
-    bank.TransferCoins(escrowAccount, data.sender, data.denom, data.amount)
-  } else {
-    // receiver was source chain, mint vouchers back to sender
-    bank.MintCoins(data.sender, data.denom, data.amount)
-  }
+  //send tokens from module to message sender
 }
 ```
 
 ```typescript
-function onTimeoutPacketClose(packet: Packet) {
+function onTimeoutPacketClose(packet: AtomicSwapPacketData) {
   // can't happen, only unordered channels allowed
 }
 ```
