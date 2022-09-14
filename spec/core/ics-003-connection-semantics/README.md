@@ -360,13 +360,14 @@ function connOpenTry(
   proofClient: CommitmentProof,
   proofConsensus: CommitmentProof,
   proofHeight: Height,
+  proofHostConsensusState: CommitmentProof,
   consensusHeight: Height) {
     // generate a new identifier
     identifier = generateIdentifier()
     
     abortTransactionUnless(validateSelfClient(clientState))
     abortTransactionUnless(consensusHeight < getCurrentHeight())
-    expectedConsensusState = getConsensusState(consensusHeight)
+    expectedConsensusState = getConsensusState(consensusHeight, proofHostConsensusState)
     expectedConnectionEnd = ConnectionEnd{INIT, "", getCommitmentPrefix(), counterpartyClientIdentifier,
                              clientIdentifier, counterpartyVersions, delayPeriodTime, delayPeriodBlocks}
 
@@ -396,13 +397,14 @@ function connOpenAck(
   proofTry: CommitmentProof,
   proofClient: CommitmentProof,
   proofConsensus: CommitmentProof,
+  proofHostConsensusState: CommitmentProof,
   proofHeight: Height,
   consensusHeight: Height) {
     abortTransactionUnless(consensusHeight < getCurrentHeight())
     abortTransactionUnless(validateSelfClient(clientState))
     connection = provableStore.get(connectionPath(identifier))
     abortTransactionUnless((connection.state === INIT && connection.version.indexOf(version) !== -1)
-    expectedConsensusState = getConsensusState(consensusHeight)
+    expectedConsensusState = getConsensusState(consensusHeight, proofHostConsensusState)
     expectedConnectionEnd = ConnectionEnd{TRYOPEN, identifier, getCommitmentPrefix(),
                              connection.counterpartyClientIdentifier, connection.clientIdentifier,
                              version, connection.delayPeriodTime, connection.delayPeriodBlocks}
