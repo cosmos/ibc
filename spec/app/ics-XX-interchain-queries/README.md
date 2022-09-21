@@ -12,7 +12,7 @@ modified: 2022-08-30
 
 ## Synopsis
 
-This document serves as a guide for a better understanding of the implementation of interchain queries via ABCI Query
+This standard document specifies chain structure, packet flow and authentication logic for the Interchain Queries module. This allows for one blockchain to query for on-chain data from another block chain via ABCI queries.
 
 ### Motivation
 
@@ -149,7 +149,7 @@ message InterchainQueryPacketAck {
 }
 ```
 
-`CosmosQuery` contains a list of tendermint ABCI query requests. It should be used when sending queries to an SDK host chain.
+`CosmosQuery` contains a list of Tendermint ABCI query requests. It should be used when sending queries to an SDK host chain.
 ```proto
 message CosmosQuery {
   repeated tendermint.abci.RequestQuery requests = 1 [(gogoproto.nullable) = false];
