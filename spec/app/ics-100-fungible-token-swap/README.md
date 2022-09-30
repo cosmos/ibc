@@ -1,5 +1,5 @@
 ---
-ics: 31
+ics: 100
 title: Fungible Token Swap
 stage: draft
 category: IBC/APP
