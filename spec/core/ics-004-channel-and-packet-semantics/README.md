@@ -628,6 +628,17 @@ function recvPacket(
     // do sequence check before any state changes
     if channel.order == ORDERED || channel.order == ORDERED_ALLOW_TIMEOUT {
         nextSequenceRecv = provableStore.get(nextSequenceRecvPath(packet.destPort, packet.destChannel))
+        if (packet.sequence < nextSequenceRecv) {
+          emitLogEntry("recvPacket", {
+            sequence: packet.sequence, 
+            timeoutHeight: packet.timeoutHeight, 
+            port: packet.destPort, 
+            channel: packet.destChannel,
+            timeoutTimestamp: packet.timeoutTimestamp, 
+            data: packet.data
+          })
+        }
+
         abortTransactionUnless(packet.sequence === nextSequenceRecv)
     }
 
@@ -670,7 +681,19 @@ function recvPacket(
         // for unordered channels we must set the receipt so it can be verified on the other side
         // this receipt does not contain any data, since the packet has not yet been processed
         // it's the sentinel success receipt: []byte{0x01}
-        abortTransactionUnless(provableStore.get(packetReceiptPath(packet.destPort, packet.destChannel, packet.sequence) === null))
+        packetRecepit = provableStore.get(packetReceiptPath(packet.destPort, packet.destChannel, packet.sequence))
+        if (packetRecepit != null) {
+          emitLogEntry("recvPacket", {
+            sequence: packet.sequence, 
+            timeoutHeight: packet.timeoutHeight, 
+            port: packet.destPort, 
+            channel: packet.destChannel,
+            timeoutTimestamp: packet.timeoutTimestamp, 
+            data: packet.data
+          })
+        }
+
+        abortTransactionUnless(packetRecepit === null))
         provableStore.set(
           packetReceiptPath(packet.destPort, packet.destChannel, packet.sequence),
           SUCCESFUL_RECEIPT
@@ -679,8 +702,14 @@ function recvPacket(
     }
     
     // log that a packet has been received
-    emitLogEntry("recvPacket", {sequence: packet.sequence, timeoutHeight: packet.timeoutHeight, port: packet.destPort, channel: packet.destChannel,
-                                timeoutTimestamp: packet.timeoutTimestamp, data: packet.data})
+    emitLogEntry("recvPacket", {
+      sequence: packet.sequence, 
+      timeoutHeight: packet.timeoutHeight, 
+      port: packet.destPort, 
+      channel: packet.destChannel,
+      timeoutTimestamp: packet.timeoutTimestamp, 
+      data: packet.data
+    })
 
     // return transparent packet
     return packet
