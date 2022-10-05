@@ -48,3 +48,22 @@ Any user on a different chain with the correct token denomination can accept the
 The escrow account on each respective chain transfers the corresponding token amounts to each user's receiving address, without requiring the usual ibc transfer.
 
 ### Data Structures
+
+Only one packet data type is required: AtomicSwapPacketData, which specifies the swap message type, data(protobuf marshalled) and a memo field.
+
+```
+enum SwapMessageType {
+  // Default zero value enumeration
+  TYPE_UNSPECIFIED = 0,
+  TYPE_MSG_MAKE_SWAP = 1,
+  TYPE_MSG_TAKE_SWAP = 2,
+  TYPE_MSG_CANCEL_SWAP = 3,
+}
+
+// AtomicSwapPacketData is comprised of a raw transaction, type of transaction and optional memo field.
+interface AtomicSwapPacketData {
+  type: SwapMessageType;
+  data: types[];
+  memo: string;
+}
+```
