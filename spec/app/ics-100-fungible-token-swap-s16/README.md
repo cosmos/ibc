@@ -20,7 +20,7 @@ Users may wish to exchange tokens without transfering tokens away from its nativ
 
 ### Definitions
 
-`Atomic Swap`: An exchange of tokens from separate chains without transfering tokens away from its native chain.
+`Atomic Swap`: An exchange of tokens from separate chains without transfering tokens away from its origin chain.
 
 `Order`: an offer to exchange quantity X of token A for quantity Y of token B. Tokens offered are sent to an escrow account (owned by the module)
 
@@ -45,4 +45,4 @@ A user offers tokens for exchange by making an order. The order specifies the qu
 
 Any user on a different chain with the correct token denomination can accept the offer by taking the order. The taker sends the desired amount of tokens to the chain's escrow account.
 
-The escrow account on each respective chain transfers the corresponding token amounts to each user's receiving address on each token's native chain, without requiring the usual ibc transfer.
+The escrow account on each respective chain transfers the corresponding token amounts to each user's receiving address, without requiring the usual ibc transfer.
