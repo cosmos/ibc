@@ -24,8 +24,8 @@ Users may wish to exchange tokens without transfering tokens away from its nativ
 
 ### Desired Properties
 
-- Permissionless
-- Gaurantee of exchange
+- `Permissionless`: no need to whitelist connections, modules, or denominations.
+- `Gaurantee of exchange`: no occurence of a user receiving promised tokens without giving promised tokens or vice versa.
 - Escrow account
 - Refundable
 - Maintains basic orderbook
