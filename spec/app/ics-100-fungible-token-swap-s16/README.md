@@ -41,8 +41,8 @@ Users may wish to exchange tokens without transfering tokens away from its nativ
 
 ### General Design
 
-A user offers tokens for exchange by making an order. The order specifies the quantity and price of exchange, and sends the offered tokens to the escrow account.
+A user offers tokens for exchange by making an order. The order specifies the quantity and price of exchange, and sends the offered tokens to the chain's escrow account.
 
-Any user on a different chain with the correct token denomination can accept the offer by taking the order. The taker sends the desired amount of tokens to the escrow account for exchange.
+Any user on a different chain with the correct token denomination can accept the offer by taking the order. The taker sends the desired amount of tokens to the chain's escrow account.
 
-The escrow accounts transfers the corresponding token amounts to each user's receiving address on each token's native chain, without requiring the usual ibc transfer.
+The escrow account on each respective chain transfers the corresponding token amounts to each user's receiving address on each token's native chain, without requiring the usual ibc transfer.
