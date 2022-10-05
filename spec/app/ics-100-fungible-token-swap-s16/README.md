@@ -67,3 +67,46 @@ interface AtomicSwapPacketData {
 	memo: string;
 }
 ```
+
+All `AtomicSwapPacketData` will be forwarded to the corresponding message handler to execute according to its type. There are 3 types:
+
+```typescript
+interface MakeSwap {
+  // the port on which the packet will be sent
+  source_port string
+  // the channel by which the packet will be sent
+  source_channel: string;
+  // the tokens to be sell
+  sell_token : Coin
+  buy_token: Coin;
+  // the sender address
+  maker_address: string;
+  // the sender's address on the destination chain
+  maker_receiving_address string;
+  // if desired_taker is specified,
+  // only the desired_taker is allowed to take this order
+  // this is address on destination chain
+  desired_taker: string;
+  create_timestamp: int64;
+}
+```
+
+```typescript
+interface TakeSwap {
+	order_id: string;
+	// the tokens to be sell
+	sell_token: Coin;
+	// the sender address
+	taker_address: string;
+	// the sender's address on the destination chain
+	taker_receiving_address: string;
+	create_timestamp: int64;
+}
+```
+
+```typescript
+interface CancelSwap {
+	order_id: string;
+	maker_address: string;
+}
+```
