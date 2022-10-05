@@ -51,19 +51,19 @@ The escrow account on each respective chain transfers the corresponding token am
 
 Only one packet data type is required: AtomicSwapPacketData, which specifies the swap message type, data(protobuf marshalled) and a memo field.
 
-```
+```typescript
 enum SwapMessageType {
-  // Default zero value enumeration
-  TYPE_UNSPECIFIED = 0,
-  TYPE_MSG_MAKE_SWAP = 1,
-  TYPE_MSG_TAKE_SWAP = 2,
-  TYPE_MSG_CANCEL_SWAP = 3,
+	// Default zero value enumeration
+	TYPE_UNSPECIFIED = 0,
+	TYPE_MSG_MAKE_SWAP = 1,
+	TYPE_MSG_TAKE_SWAP = 2,
+	TYPE_MSG_CANCEL_SWAP = 3,
 }
 
 // AtomicSwapPacketData is comprised of a raw transaction, type of transaction and optional memo field.
 interface AtomicSwapPacketData {
-  type: SwapMessageType;
-  data: types[];
-  memo: string;
+	type: SwapMessageType;
+	data: types[];
+	memo: string;
 }
 ```
