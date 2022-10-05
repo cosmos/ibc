@@ -22,11 +22,17 @@ Users may wish to exchange tokens without transfering tokens away from its nativ
 
 `Atomic Swap`: An exchange of tokens from separate chains without transfering tokens away from its native chain.
 
+`Order`: an offer to exchange quantity X of token A for quantity Y of token B. Tokens offered are sent to an escrow account (owned by the module)
+
+`Maker`: A user that makes or initiates an Order.
+
+`Taker`: Is the counterparty who takes or responses to an Order.
+
 ### Desired Properties
 
-- `Permissionless`: no need to whitelist connections, modules, or denominations.
-- `Gaurantee of exchange`: no occurence of a user receiving promised tokens without giving promised tokens or vice versa.
-- Escrow account
-- Refundable
-- Maintains basic orderbook
-- Partial filled orders
+-   `Permissionless`: no need to whitelist connections, modules, or denominations.
+-   `Gaurantee of exchange`: no occurence of a user receiving tokens without the equivalent promised exchange.
+-   `Escrow enabled`: an account owned by the module will hold tokens and facilitate exchange.
+-   `Refundable`: tokens are refunded by escrow when an Order is cancelled
+-   `Basic orderbook`: a store of Orders functioning as a orderbook system
+-   `Partial filled orders`: allows Takers to partially fill an order by a Maker
