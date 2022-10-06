@@ -143,3 +143,25 @@ interface OrderBook {
 
 The following illustrates the flow:
 <img src="./ibcswap.png"/>
+
+### Sub-protocols
+
+The sub-protocols described herein should be implemented in a "Fungible Token Atomic Swap" module with access to a bank module and to the IBC routing module.
+
+```ts
+function createSwap(request MakeSwap) {
+
+}
+```
+
+```ts
+function fillSwap(request TakeSwap) {
+
+}
+```
+
+```ts
+function cancelSwap(request CancelSwap) {
+
+}
+```
