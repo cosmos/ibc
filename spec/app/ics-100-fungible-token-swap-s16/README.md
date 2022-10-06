@@ -30,12 +30,12 @@ Users may wish to exchange tokens without transfering tokens away from its nativ
 
 ### Desired Properties
 
--   `Permissionless`: no need to whitelist connections, modules, or denominations.
--   `Gaurantee of exchange`: no occurence of a user receiving tokens without the equivalent promised exchange.
--   `Escrow enabled`: an account owned by the module will hold tokens and facilitate exchange.
--   `Refundable`: tokens are refunded by escrow when an orders is cancelled
--   `Basic orderbook`: a store of orders functioning as an orderbook system
--   `Partial filled orders`: allows takers to partially fill an order by a maker
+- `Permissionless`: no need to whitelist connections, modules, or denominations.
+- `Gaurantee of exchange`: no occurence of a user receiving tokens without the equivalent promised exchange.
+- `Escrow enabled`: an account owned by the module will hold tokens and facilitate exchange.
+- `Refundable`: tokens are refunded by escrow when an orders is cancelled
+- `Basic orderbook`: a store of orders functioning as an orderbook system
+- `Partial filled orders`: allows takers to partially fill an order by a maker
 
 ## Technical Specification
 
@@ -60,7 +60,7 @@ enum SwapMessageType {
 	TYPE_MSG_CANCEL_SWAP = 3,
 }
 
-// AtomicSwapPacketData is comprised of a raw transaction, type of transaction and optional memo field.
+// AtomicSwapPacketData is comprised of a swap message type, raw transaction and optional memo field.
 interface AtomicSwapPacketData {
 	type: SwapMessageType;
 	data: types[];
@@ -76,7 +76,7 @@ interface MakeSwap {
   source_port string
   // the channel by which the packet will be sent
   source_channel: string;
-  // the tokens to be sell
+  // the tokens to be exchanged
   sell_token : Coin
   buy_token: Coin;
   // the sender address
@@ -110,3 +110,36 @@ interface CancelSwap {
 	maker_address: string;
 }
 ```
+
+Both the source chain and destination chain maintain separate orderbooks. Created orders are saved in both source chain and destination chain.
+
+```typescript
+enum Status {
+	INITIAL = 0,
+	SYNC = 1,
+	CANCEL = 2,
+	COMPLETE = 3,
+}
+
+enum FillStatus {
+	NONE_FILL = 0,
+	PARTIAL_FILL = 1,
+	COMPLETE_FILL = 2,
+}
+
+interface OrderBook {
+	id: string;
+	maker: MakeSwap;
+	status: Status;
+	fill_status: FillStatus;
+	channel_id: string;
+	takers: TakeSwap[];
+	cancel_timestamp: int64;
+	complete_timestamp: int64;
+}
+```
+
+### Life scope and control flow
+
+The following illustrates the flow:
+<img src="./ibcswap.png"/>
