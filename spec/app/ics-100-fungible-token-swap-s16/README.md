@@ -413,3 +413,31 @@ function onTimeoutPacketClose(packet: AtomicSwapPacketData) {
 	// can't happen, only unordered channels allowed
 }
 ```
+
+## Backwards Compatibility
+
+Not applicable.
+
+## Forwards Compatibility
+
+This initial standard uses version "ics100-1" in the channel handshake.
+
+A future version of this standard could use a different version in the channel handshake,
+and safely alter the packet data format & packet handler semantics.
+
+## Example Implementation
+
+https://github.com/sideprotocol/ibcswap
+
+## Other Implementations
+
+Coming soon.
+
+## History
+
+Aug 15, 2022 - Draft written
+Oct 6, 2022 - Draft revised
+
+## Copyright
+
+All content herein is licensed under [Apache 2.0](https://www.apache.org/licenses/LICENSE-2.0).
