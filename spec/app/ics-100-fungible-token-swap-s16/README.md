@@ -268,3 +268,148 @@ function onChanCloseConfirm(portIdentifier: Identifier, channelIdentifier: Ident
 	// no action necessary
 }
 ```
+
+#### Packet relay
+
+Between the source chain and destination chain:
+
+- When making an order, tokens are sent to the escrow account and the order is stored in the orderbook on both chains.
+- When taking an order, tokens are sent to the escrow account and the order is updated on both chains. Tokens on both chains are escrowed to the respective destination addresses.
+- When a packet times-out, the tokens are unescrowed back to the user
+- When a packet acknowledgement fails, the tokens are unescrowed back to the user
+- When an order is canceled, the tokens are unescrowed back to the user.
+
+`sendAtomicSwapPacket` must be called by a transaction handler in the module which performs appropriate signature checks, specific to the account owner on the host state machine.
+
+```typescript
+function sendAtomicSwapPacket(swapPacket AtomicSwapPacketData) {
+
+    // send packet using the interface defined in ICS4
+    handler.sendPacket(
+      getCapability("port"),
+      sourcePort,
+      sourceChannel,
+      timeoutHeight,
+      timeoutTimestamp,
+      swapPacket.getBytes(), // Should be proto marshalled bytes.
+    )
+}
+```
+
+`onRecvPacket` is called by the routing module when a packet addressed to this module has been received.
+
+```typescript
+function onRecvPacket(data: AtomicSwapPacketData) {
+  switch data.Type {
+	case TYPE_MSG_MAKE_SWAP:
+		var msg types.MsgMakeSwapRequest
+
+		if err := types.ModuleCdc.Unmarshal(data.Data, &msg); err != nil {
+			return err
+		}
+		if err := k.executeMakeSwap(ctx, packet, &msg); err != nil {
+			return err
+		}
+
+		return nil
+
+	case TYPE_MSG_TAKE_SWAP:
+		var msg types.MsgTakeSwapRequest
+
+		if err := types.ModuleCdc.Unmarshal(data.Data, &msg); err != nil {
+			return err
+		}
+		if err2 := k.executeTakeSwap(ctx, packet, &msg); err2 != nil {
+			return err2
+		} else {
+			return nil
+		}
+
+	case TYPE_MSG_CANCEL_SWAP:
+		var msg types.MsgCancelSwapRequest
+
+		if err := types.ModuleCdc.Unmarshal(data.Data, &msg); err != nil {
+			return err
+		}
+		if err2 := k.executeCancelSwap(ctx, packet, &msg); err2 != nil {
+			return err2
+		} else {
+			return nil
+		}
+
+	default:
+		return types.ErrUnknownDataPacket
+	}
+
+	ctx.EventManager().EmitTypedEvents(&data)
+
+	return nil
+}
+```
+
+`onAcknowledgePacket` is called by the routing module when a packet sent by this module has been acknowledged.
+
+```typescript
+function onAcknowledgePacket(
+  packet: AtomicSwapPacketData,
+  acknowledgement: bytes) {
+switch ack.Response.(type) {
+	case *channeltypes.Acknowledgement_Error:
+		return k.refundPacketToken(ctx, packet, data)
+	default:
+		switch data.Type {
+		case TYPE_MSG_TAKE_SWAP:
+			var msg types.MsgTakeSwapRequest
+
+			if err := types.ModuleCdc.Unmarshal(data.Data, &msg); err != nil {
+				return err
+			}
+			// check order status
+			if order, ok := k.GetLimitOrder(ctx, msg.OrderId); ok {
+				k.executeTakeSwap(ctx, order, &msg, StepAcknowledgement)
+			} else {
+				return types.ErrOrderDoesNotExists
+			}
+			break
+
+		case TYPE_MSG_CANCEL_SWAP:
+			var msg types.MsgCancelSwapRequest
+
+			if err := types.ModuleCdc.Unmarshal(data.Data, &msg); err != nil {
+				return err
+			}
+			if err2 := k.executeCancel(ctx, &msg, StepAcknowledgement); err2 != nil {
+				return err2
+			} else {
+				return nil
+			}
+			break
+		}
+	}
+	return nil
+}
+```
+
+`onTimeoutPacket` is called by the routing module when a packet sent by this module has timed-out (such that the tokens will be refunded).
+
+```typescript
+function onTimeoutPacket(packet: AtomicSwapPacketData) {
+	// the packet timed-out, so refund the tokens
+	refundTokens(packet);
+}
+```
+
+`refundTokens` is called by both `onAcknowledgePacket` on failure, and `onTimeoutPacket`, to refund escrowed tokens to the original owner.
+
+```typescript
+function refundTokens(packet: AtomicSwapPacketData) {
+  FungibleTokenPacketData data = packet.data
+  //send tokens from module to message sender
+}
+```
+
+```typescript
+function onTimeoutPacketClose(packet: AtomicSwapPacketData) {
+	// can't happen, only unordered channels allowed
+}
+```
