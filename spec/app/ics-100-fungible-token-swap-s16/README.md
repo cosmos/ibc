@@ -146,7 +146,7 @@ The following illustrates the flow:
 
 ### Sub-protocols
 
-The sub-protocols described herein should be implemented in a "Fungible Token Atomic Swap" module with access to a bank module and to the IBC routing module.
+The sub-protocols described herein should be implemented in a "Fungible Token Swap" module with access to a bank module and to the IBC routing module.
 
 ```ts
 function createSwap(request MakeSwap) {
@@ -165,3 +165,29 @@ function cancelSwap(request CancelSwap) {
 
 }
 ```
+
+#### Port & channel setup
+
+The fungible token swap module on a chain must always bind to a port with the id `atomicswap`
+
+The `setup` function must be called exactly once when the module is created (perhaps when the blockchain itself is initialised) to bind to the appropriate port and create an escrow address (owned by the module).
+
+```typescript
+function setup() {
+  capability = routingModule.bindPort("atomicswap", ModuleCallbacks{
+    onChanOpenInit,
+    onChanOpenTry,
+    onChanOpenAck,
+    onChanOpenConfirm,
+    onChanCloseInit,
+    onChanCloseConfirm,
+    onRecvPacket,
+    onTimeoutPacket,
+    onAcknowledgePacket,
+    onTimeoutPacketClose
+  })
+  claimCapability("port", capability)
+}
+```
+
+Once the setup function has been called, channels can be created via the IBC routing module.
