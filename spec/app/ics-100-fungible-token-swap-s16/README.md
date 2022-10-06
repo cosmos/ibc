@@ -111,7 +111,7 @@ interface CancelSwap {
 }
 ```
 
-Both the source chain and destination chain maintain separate orderbooks. Created orders are saved in both source chain and destination chain.
+Both the source chain and destination chain maintain separate orderbooks. Orders are saved in both source chain and destination chain.
 
 ```typescript
 enum Status {
