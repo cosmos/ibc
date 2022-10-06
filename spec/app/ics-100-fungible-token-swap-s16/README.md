@@ -49,7 +49,7 @@ The escrow account on each respective chain transfers the corresponding token am
 
 ### Data Structures
 
-Only one packet data type is required: AtomicSwapPacketData, which specifies the swap message type, data(protobuf marshalled) and a memo field.
+Only one packet data type is required: `AtomicSwapPacketData`, which specifies the swap message type, data(protobuf marshalled) and a memo field.
 
 ```typescript
 enum SwapMessageType {
@@ -191,3 +191,80 @@ function setup() {
 ```
 
 Once the setup function has been called, channels can be created via the IBC routing module.
+
+#### Channel lifecycle management
+
+An fungible token swap module will accept new channels from any module on another machine, if and only if:
+
+- The channel being created is unordered.
+- The version string is `ics100-1`.
+
+```typescript
+function onChanOpenInit(
+  order: ChannelOrder,
+  connectionHops: [Identifier],
+  portIdentifier: Identifier,
+  channelIdentifier: Identifier,
+  counterpartyPortIdentifier: Identifier,
+  counterpartyChannelIdentifier: Identifier,
+  version: string) => (version: string, err: Error) {
+  // only unordered channels allowed
+  abortTransactionUnless(order === UNORDERED)
+  // assert that version is "ics100-1" or empty
+  // if empty, we return the default transfer version to core IBC
+  // as the version for this channel
+  abortTransactionUnless(version === "ics100-1" || version === "")
+
+  return "ics100-1", nil
+}
+```
+
+```typescript
+function onChanOpenTry(
+  order: ChannelOrder,
+  connectionHops: [Identifier],
+  portIdentifier: Identifier,
+  channelIdentifier: Identifier,
+  counterpartyPortIdentifier: Identifier,
+  counterpartyChannelIdentifier: Identifier,
+  counterpartyVersion: string) => (version: string, err: Error) {
+  // only unordered channels allowed
+  abortTransactionUnless(order === UNORDERED)
+  // assert that version is "ics100-1"
+  abortTransactionUnless(counterpartyVersion === "ics100-1")
+
+  return "ics100-1", nil
+}
+```
+
+```typescript
+function onChanOpenAck(
+	portIdentifier: Identifier,
+	channelIdentifier: Identifier,
+	counterpartyChannelIdentifier: Identifier,
+	counterpartyVersion: string
+) {
+	// port has already been validated
+	// assert that counterparty selected version is "ics31-1"
+	abortTransactionUnless(counterpartyVersion === "ics100-1");
+}
+```
+
+```typescript
+function onChanOpenConfirm(portIdentifier: Identifier, channelIdentifier: Identifier) {
+	// accept channel confirmations, port has already been validated, version has already been validated
+}
+```
+
+```typescript
+function onChanCloseInit(portIdentifier: Identifier, channelIdentifier: Identifier) {
+	// always abort transaction
+	abortTransactionUnless(FALSE);
+}
+```
+
+```typescript
+function onChanCloseConfirm(portIdentifier: Identifier, channelIdentifier: Identifier) {
+	// no action necessary
+}
+```
