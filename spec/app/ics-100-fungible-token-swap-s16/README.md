@@ -5,7 +5,7 @@ stage: draft
 category: IBC/APP
 requires: 25, 26
 kind: instantiation
-author: Ping Liang <18786721@qq.com>
+author: Ping Liang <18786721@qq.com>, Edward Gunawan <edward@s16.ventures>
 created: 2022-07-27
 modified: 2022-07-27
 ---
@@ -33,9 +33,8 @@ Users may wish to exchange tokens without transfering tokens away from its nativ
 - `Permissionless`: no need to whitelist connections, modules, or denominations.
 - `Gaurantee of exchange`: no occurence of a user receiving tokens without the equivalent promised exchange.
 - `Escrow enabled`: an account owned by the module will hold tokens and facilitate exchange.
-- `Refundable`: tokens are refunded by escrow when an orders is cancelled
+- `Refundable`: tokens are refunded by escrow when an order is cancelled
 - `Basic orderbook`: a store of orders functioning as an orderbook system
-- `Partial filled orders`: allows takers to partially fill an order by a maker
 
 ## Technical Specification
 
@@ -142,6 +141,7 @@ interface OrderBook {
 ### Life scope and control flow
 
 The following illustrates the flow:
+
 <img src="./ibcswap.png"/>
 
 ### Sub-protocols
