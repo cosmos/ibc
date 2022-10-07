@@ -5,58 +5,69 @@ stage: draft
 category: IBC/APP
 requires: 25, 26
 kind: instantiation
-author: Ping Liang <18786721@qq.com>
-created: 2022-07-27 
-modified: 2022-07-27
+author: Ping Liang <18786721@qq.com>, Edward Gunawan <edward@s16.ventures>
+created: 2022-07-27
+modified: 2022-10-07
 ---
 
 ## Synopsis
 
-This standard document specifies packet data structure, state machine handling logic, and encoding details for the transfer of fungible tokens over an IBC channel between two modules on separate chains. The state machine logic presented allows for safe multi-chain denomination handling with permissionless channel opening. This logic constitutes a "fungible token swap module", interfacing between the IBC routing module and an existing asset tracking module on the host state machine.
+This standard document specifies packet data structure, state machine handling logic, and encoding details for the atomic swap of fungible tokens over an IBC channel between two modules on separate chains.
 
 ### Motivation
 
-Users of a set of chains connected over the IBC protocol might wish to utilise an asset issued on one chain on another chain, perhaps to make use of additional features such as exchange or privacy protection, while retaining fungibility with the original asset on the issuing chain. This application-layer standard describes a protocol for transferring fungible tokens between chains connected with IBC which preserves asset fungibility, preserves asset ownership, limits the impact of Byzantine faults, and requires no additional permissioning.
+Users may wish to exchange tokens without transfering tokens away from its native chain. ICS-100 enabled chains can facilitate atomic swaps between users and their tokens located on the different chains. This is useful for exchanges between specific users at specific prices, and opens opportunities for new application designs.
 
 ### Definitions
 
-The IBC handler interface & IBC routing module interface are as defined in [ICS 25](../../core/ics-025-handler-interface) and [ICS 26](../../core/ics-026-routing-module), respectively.
+`Atomic Swap`: An exchange of tokens from separate chains without transfering tokens away from its source chain.
+
+`Order`: an offer to exchange quantity X of token A for quantity Y of token B. Tokens offered are sent to an escrow account (owned by the module)
+
+`Maker`: A user that makes or initiates an order.
+
+`Taker`: Is the counterparty who takes or responds to an order.
 
 ### Desired Properties
 
-- Preservation of fungibility (two-way peg).
-- Preservation of total supply (constant or inflationary on a single source chain & module).
-- Permissionless token transfers, no need to whitelist connections, modules, or denominations.
-- Symmetric (all chains implement the same logic, no in-protocol differentiation of hubs & zones).
-- Fault containment: prevents Byzantine-inflation of tokens originating on chain `A`, as a result of chain `B`'s Byzantine behaviour (though any users who sent tokens to chain `B` may be at risk).
+- `Permissionless`: no need to whitelist connections, modules, or denominations.
+- `Gaurantee of exchange`: no occurence of a user receiving tokens without the equivalent promised exchange.
+- `Escrow enabled`: an account owned by the module will hold tokens and facilitate exchange.
+- `Refundable`: tokens are refunded by escrow when an order is cancelled
+- `Basic orderbook`: a store of orders functioning as an orderbook system
 
 ## Technical Specification
 
+### General Design
+
+A user offers tokens for exchange by making an order. The order specifies the quantity and price of exchange, and sends the offered tokens to the chain's escrow account.
+
+Any user on a different chain with the correct token denomination can accept the offer by taking the order. The taker sends the desired amount of tokens to the chain's escrow account.
+
+The escrow account on each respective chain transfers the corresponding token amounts to each user's receiving address, without requiring the usual ibc transfer.
+
 ### Data Structures
 
-Only one packet data type is required: `AtomicSwapPacketData`, which specifies the type of swap message, data(protobuf marshalled) and memo.
+Only one packet data type is required: `AtomicSwapPacketData`, which specifies the swap message type, data(protobuf marshalled) and a memo field.
 
 ```typescript
 enum SwapMessageType {
   // Default zero value enumeration
   TYPE_UNSPECIFIED = 0,
-
-  TYPE_MSG_MAKE_SWAP = 1, 
+  TYPE_MSG_MAKE_SWAP = 1,
   TYPE_MSG_TAKE_SWAP = 2,
   TYPE_MSG_CANCEL_SWAP = 3,
 }
 
-// AtomicSwapPacketData is comprised of a raw transaction, type of transaction and optional memo field.
+// AtomicSwapPacketData is comprised of a swap message type, raw transaction and optional memo field.
 interface AtomicSwapPacketData {
   type: SwapMessageType;
   data: types[];
   memo: string;
 }
-
 ```
 
-所有的`AtomicSwapPacketData`会根据它的类型转发到相应的Message handler去execute。共有3种类型，他们是：
-
+All `AtomicSwapPacketData` will be forwarded to the corresponding message handler to execute according to its type. There are 3 types:
 
 ```typescript
 interface MakeSwap {
@@ -64,7 +75,7 @@ interface MakeSwap {
   source_port string
   // the channel by which the packet will be sent
   source_channel: string;
-  // the tokens to be sell
+  // the tokens to be exchanged
   sell_token : Coin
   buy_token: Coin;
   // the sender address
@@ -77,19 +88,18 @@ interface MakeSwap {
   desired_taker: string;
   create_timestamp: int64;
 }
-
 ```
 
 ```typescript
 interface TakeSwap {
-  order_id: string
+  order_id: string;
   // the tokens to be sell
   sell_token: Coin;
   // the sender address
   taker_address: string;
   // the sender's address on the destination chain
   taker_receiving_address: string;
-  create_timestamp: int64
+  create_timestamp: int64;
 }
 ```
 
@@ -100,8 +110,8 @@ interface CancelSwap {
 }
 ```
 
+Both the source chain and destination chain maintain separate orderbooks. Orders are saved in both source chain and destination chain.
 
-Both chains(source chain and destination chain) maintain a seperated order book in state, 
 ```typescript
 enum Status {
   INITIAL = 0,
@@ -117,38 +127,38 @@ enum FillStatus {
 }
 
 interface OrderBook {
-  id: string
-  maker: MakeSwap
-  status: Status
-  fill_status: FillStatus
-  channel_id: string
-  takers: TakeSwap[]
-  cancel_timestamp: int64
-  complete_timestamp: int64
+  id: string;
+  maker: MakeSwap;
+  status: Status;
+  fill_status: FillStatus;
+  channel_id: string;
+  takers: TakeSwap[];
+  cancel_timestamp: int64;
+  complete_timestamp: int64;
 }
-
-
 ```
+
 ### Life scope and control flow
+
+The following illustrates the flow:
 
 <img src="./ibcswap.png"/>
 
 ### Sub-protocols
 
-The sub-protocols described herein should be implemented in a "fungible token Atomic Swap" module with access to a bank module and to the IBC routing module.
+The sub-protocols described herein should be implemented in a "Fungible Token Swap" module with access to a bank module and to the IBC routing module.
+
 ```ts
 function createSwap(request MakeSwap) {
 
 }
 ```
 
-
 ```ts
 function fillSwap(request TakeSwap) {
 
 }
 ```
-
 
 ```ts
 function cancelSwap(request CancelSwap) {
@@ -157,6 +167,8 @@ function cancelSwap(request CancelSwap) {
 ```
 
 #### Port & channel setup
+
+The fungible token swap module on a chain must always bind to a port with the id `atomicswap`
 
 The `setup` function must be called exactly once when the module is created (perhaps when the blockchain itself is initialised) to bind to the appropriate port and create an escrow address (owned by the module).
 
@@ -178,20 +190,14 @@ function setup() {
 }
 ```
 
-Once the `setup` function has been called, channels can be created through the IBC routing module between instances of the fungible token transfer module on separate chains.
+Once the setup function has been called, channels can be created via the IBC routing module.
 
-An administrator (with the permissions to create connections & channels on the host state machine) is responsible for setting up connections to other state machines & creating channels
-to other instances of this module (or another module supporting this interface) on other chains. This specification defines packet handling semantics only, and defines them in such a fashion
-that the module itself doesn't need to worry about what connections or channels might or might not exist at any point in time.
+#### Channel lifecycle management
 
-#### Routing module callbacks
-
-##### Channel lifecycle management
-
-Both machines `A` and `B` accept new channels from any module on another machine, if and only if:
+An fungible token swap module will accept new channels from any module on another machine, if and only if:
 
 - The channel being created is unordered.
-- The version string is `ics31-1`.
+- The version string is `ics100-1`.
 
 ```typescript
 function onChanOpenInit(
@@ -204,12 +210,12 @@ function onChanOpenInit(
   version: string) => (version: string, err: Error) {
   // only unordered channels allowed
   abortTransactionUnless(order === UNORDERED)
-  // assert that version is "ics31-1" or empty
+  // assert that version is "ics100-1" or empty
   // if empty, we return the default transfer version to core IBC
   // as the version for this channel
-  abortTransactionUnless(version === "ics31-1" || version === "")
+  abortTransactionUnless(version === "ics100-1" || version === "")
 
-  return "ics31-1", nil
+  return "ics100-1", nil
 }
 ```
 
@@ -224,10 +230,10 @@ function onChanOpenTry(
   counterpartyVersion: string) => (version: string, err: Error) {
   // only unordered channels allowed
   abortTransactionUnless(order === UNORDERED)
-  // assert that version is "ics31-1"
-  abortTransactionUnless(counterpartyVersion === "ics31-1")
+  // assert that version is "ics100-1"
+  abortTransactionUnless(counterpartyVersion === "ics100-1")
 
-  return "ics31-1", nil
+  return "ics100-1", nil
 }
 ```
 
@@ -236,50 +242,44 @@ function onChanOpenAck(
   portIdentifier: Identifier,
   channelIdentifier: Identifier,
   counterpartyChannelIdentifier: Identifier,
-  counterpartyVersion: string) {
+  counterpartyVersion: string
+) {
   // port has already been validated
   // assert that counterparty selected version is "ics31-1"
-  abortTransactionUnless(counterpartyVersion === "ics31-1")
+  abortTransactionUnless(counterpartyVersion === "ics100-1");
 }
 ```
 
 ```typescript
-function onChanOpenConfirm(
-  portIdentifier: Identifier,
-  channelIdentifier: Identifier) {
+function onChanOpenConfirm(portIdentifier: Identifier, channelIdentifier: Identifier) {
   // accept channel confirmations, port has already been validated, version has already been validated
 }
 ```
 
 ```typescript
-function onChanCloseInit(
-  portIdentifier: Identifier,
-  channelIdentifier: Identifier) {
-    // always abort transaction
-    abortTransactionUnless(FALSE)
+function onChanCloseInit(portIdentifier: Identifier, channelIdentifier: Identifier) {
+  // always abort transaction
+  abortTransactionUnless(FALSE);
 }
 ```
 
 ```typescript
-function onChanCloseConfirm(
-  portIdentifier: Identifier,
-  channelIdentifier: Identifier) {
+function onChanCloseConfirm(portIdentifier: Identifier, channelIdentifier: Identifier) {
   // no action necessary
 }
 ```
 
-##### Packet relay
+#### Packet relay
 
-In plain English, between chains `A` and `B`:
+Between the source chain and destination chain:
 
-- When acting as the source zone, the bridge module escrows an existing local asset denomination on the sending chain and mints vouchers on the receiving chain.
-- When acting as the sink zone, the bridge module burns local vouchers on the sending chains and unescrows the local asset denomination on the receiving chain.
-- When a packet times-out, local assets are unescrowed back to the sender or vouchers minted back to the sender appropriately.
-- Acknowledgement data is used to handle failures, such as invalid denominations or invalid destination accounts. Returning
-  an acknowledgement of failure is preferable to aborting the transaction since it more easily enables the sending chain
-  to take appropriate action based on the nature of the failure.
+- When making an order, tokens are sent to the escrow account and the order is stored in the orderbook on both chains.
+- When taking an order, tokens are sent to the escrow account and the order is updated on both chains. Tokens on both chains are escrowed to the respective destination addresses.
+- When a packet times-out, the tokens are unescrowed back to the user
+- When a packet acknowledgement fails, the tokens are unescrowed back to the user
+- When an order is canceled, the tokens are unescrowed back to the user.
 
-`sendFungibleTokens` must be called by a transaction handler in the module which performs appropriate signature checks, specific to the account owner on the host state machine.
+`sendAtomicSwapPacket` must be called by a transaction handler in the module which performs appropriate signature checks, specific to the account owner on the host state machine.
 
 ```typescript
 function sendAtomicSwapPacket(swapPacket AtomicSwapPacketData) {
@@ -301,49 +301,49 @@ function sendAtomicSwapPacket(swapPacket AtomicSwapPacketData) {
 ```typescript
 function onRecvPacket(data: AtomicSwapPacketData) {
   switch data.Type {
-	case TYPE_MSG_MAKE_SWAP:
-		var msg types.MsgMakeSwapRequest
+  case TYPE_MSG_MAKE_SWAP:
+    var msg types.MsgMakeSwapRequest
 
-		if err := types.ModuleCdc.Unmarshal(data.Data, &msg); err != nil {
-			return err
-		}
-		if err := k.executeMakeSwap(ctx, packet, &msg); err != nil {
-			return err
-		}
+    if err := types.ModuleCdc.Unmarshal(data.Data, &msg); err != nil {
+      return err
+    }
+    if err := k.executeMakeSwap(ctx, packet, &msg); err != nil {
+      return err
+    }
 
-		return nil
+    return nil
 
-	case TYPE_MSG_TAKE_SWAP:
-		var msg types.MsgTakeSwapRequest
+  case TYPE_MSG_TAKE_SWAP:
+    var msg types.MsgTakeSwapRequest
 
-		if err := types.ModuleCdc.Unmarshal(data.Data, &msg); err != nil {
-			return err
-		}
-		if err2 := k.executeTakeSwap(ctx, packet, &msg); err2 != nil {
-			return err2
-		} else {
-			return nil
-		}
+    if err := types.ModuleCdc.Unmarshal(data.Data, &msg); err != nil {
+      return err
+    }
+    if err2 := k.executeTakeSwap(ctx, packet, &msg); err2 != nil {
+      return err2
+    } else {
+      return nil
+    }
 
-	case TYPE_MSG_CANCEL_SWAP:
-		var msg types.MsgCancelSwapRequest
+  case TYPE_MSG_CANCEL_SWAP:
+    var msg types.MsgCancelSwapRequest
 
-		if err := types.ModuleCdc.Unmarshal(data.Data, &msg); err != nil {
-			return err
-		}
-		if err2 := k.executeCancelSwap(ctx, packet, &msg); err2 != nil {
-			return err2
-		} else {
-			return nil
-		}
+    if err := types.ModuleCdc.Unmarshal(data.Data, &msg); err != nil {
+      return err
+    }
+    if err2 := k.executeCancelSwap(ctx, packet, &msg); err2 != nil {
+      return err2
+    } else {
+      return nil
+    }
 
-	default:
-		return types.ErrUnknownDataPacket
-	}
+  default:
+    return types.ErrUnknownDataPacket
+  }
 
-	ctx.EventManager().EmitTypedEvents(&data)
+  ctx.EventManager().EmitTypedEvents(&data)
 
-	return nil
+  return nil
 }
 ```
 
@@ -354,52 +354,52 @@ function onAcknowledgePacket(
   packet: AtomicSwapPacketData,
   acknowledgement: bytes) {
 switch ack.Response.(type) {
-	case *channeltypes.Acknowledgement_Error:
-		return k.refundPacketToken(ctx, packet, data)
-	default:
-		switch data.Type {
-		case TYPE_MSG_TAKE_SWAP:
-			var msg types.MsgTakeSwapRequest
+  case *channeltypes.Acknowledgement_Error:
+    return k.refundPacketToken(ctx, packet, data)
+  default:
+    switch data.Type {
+    case TYPE_MSG_TAKE_SWAP:
+      var msg types.MsgTakeSwapRequest
 
-			if err := types.ModuleCdc.Unmarshal(data.Data, &msg); err != nil {
-				return err
-			}
-			// check order status
-			if order, ok := k.GetLimitOrder(ctx, msg.OrderId); ok {
-				k.executeTakeSwap(ctx, order, &msg, StepAcknowledgement)
-			} else {
-				return types.ErrOrderDoesNotExists
-			}
-			break
+      if err := types.ModuleCdc.Unmarshal(data.Data, &msg); err != nil {
+        return err
+      }
+      // check order status
+      if order, ok := k.GetLimitOrder(ctx, msg.OrderId); ok {
+        k.executeTakeSwap(ctx, order, &msg, StepAcknowledgement)
+      } else {
+        return types.ErrOrderDoesNotExists
+      }
+      break
 
-		case TYPE_MSG_CANCEL_SWAP:
-			var msg types.MsgCancelSwapRequest
+    case TYPE_MSG_CANCEL_SWAP:
+      var msg types.MsgCancelSwapRequest
 
-			if err := types.ModuleCdc.Unmarshal(data.Data, &msg); err != nil {
-				return err
-			}
-			if err2 := k.executeCancel(ctx, &msg, StepAcknowledgement); err2 != nil {
-				return err2
-			} else {
-				return nil
-			}
-			break
-		}
-	}
-	return nil
+      if err := types.ModuleCdc.Unmarshal(data.Data, &msg); err != nil {
+        return err
+      }
+      if err2 := k.executeCancel(ctx, &msg, StepAcknowledgement); err2 != nil {
+        return err2
+      } else {
+        return nil
+      }
+      break
+    }
+  }
+  return nil
 }
 ```
 
-`onTimeoutPacket` is called by the routing module when a packet sent by this module has timed-out (such that it will not be received on the destination chain).
+`onTimeoutPacket` is called by the routing module when a packet sent by this module has timed-out (such that the tokens will be refunded).
 
 ```typescript
 function onTimeoutPacket(packet: AtomicSwapPacketData) {
   // the packet timed-out, so refund the tokens
-  refundTokens(packet)
+  refundTokens(packet);
 }
 ```
 
-`refundTokens` is called by both `onAcknowledgePacket`, on failure, and `onTimeoutPacket`, to refund escrowed tokens to the original sender.
+`refundTokens` is called by both `onAcknowledgePacket` on failure, and `onTimeoutPacket`, to refund escrowed tokens to the original owner.
 
 ```typescript
 function refundTokens(packet: AtomicSwapPacketData) {
@@ -414,14 +414,13 @@ function onTimeoutPacketClose(packet: AtomicSwapPacketData) {
 }
 ```
 
-
 ## Backwards Compatibility
 
 Not applicable.
 
 ## Forwards Compatibility
 
-This initial standard uses version "ics31-1" in the channel handshake.
+This initial standard uses version "ics100-1" in the channel handshake.
 
 A future version of this standard could use a different version in the channel handshake,
 and safely alter the packet data format & packet handler semantics.
@@ -437,6 +436,8 @@ Coming soon.
 ## History
 
 Aug 15, 2022 - Draft written
+
+Oct 6, 2022 - Draft revised
 
 ## Copyright
 
