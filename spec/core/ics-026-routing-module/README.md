@@ -41,7 +41,7 @@ The functions `newCapability` & `authenticateCapability` are defined as in [ICS 
 
 Modules must expose the following function signatures to the routing module, which are called upon the receipt of various datagrams:
 
-#### **ChanOpenInit**
+#### **OnChanOpenInit**
 
 `onChanOpenInit` will verify that the relayer-chosen parameters
 are valid and perform any custom `INIT` logic.
@@ -68,7 +68,7 @@ function onChanOpenInit(
 }
 ```
 
-#### **ChanOpenTry**
+#### **OnChanOpenTry**
 
 `onChanOpenTry` will verify the INIT-chosen parameters along with the
 counterparty-chosen version string and perform custom `TRY` logic.
