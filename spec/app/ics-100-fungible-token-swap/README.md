@@ -120,17 +120,10 @@ enum Status {
   COMPLETE = 3,
 }
 
-enum FillStatus {
-  NONE_FILL = 0,
-  PARTIAL_FILL = 1,
-  COMPLETE_FILL = 2,
-}
-
 interface OrderBook {
   id: string;
   maker: MakeSwap;
   status: Status;
-  fill_status: FillStatus;
   channel_id: string;
   takers: TakeSwap[];
   cancel_timestamp: int64;
