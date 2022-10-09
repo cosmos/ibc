@@ -133,6 +133,12 @@ interface OrderBook {
 
 ### Life scope and control flow
 
+#### Making a swap
+
+1. User creates an order on the source chain with specified parameters (see type `MakeSwap`).  The order is saved on the source chain
+2. An `AtomicSwapPacketData` is relayed to the destination chain where `onRecvPacket` the order is also saved on the destination chain.  
+3. A packet is subsequently relayed back for acknowledgement. A packet timeout or a failure during `onAcknolwedgePacket` will result in a refund of the escrowed tokens.
+
 The following illustrates the flow:
 
 <img src="./ibcswap.png"/>
