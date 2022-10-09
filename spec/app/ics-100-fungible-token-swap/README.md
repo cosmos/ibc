@@ -149,7 +149,7 @@ interface OrderBook {
 
 1.  The taker cancels a previously created order.
 2.  An `AtomicSwapPacketData` is relayed to the source chain where `onRecvPacket` the order is cancelled on the destination chain.
-3.  A packaet is relayed back where upon acknowledgement the order on the source chain is also cancelled.
+3.  A packet is relayed back where upon acknowledgement the order on the source chain is also cancelled.
 
 ### Sub-protocols
 
