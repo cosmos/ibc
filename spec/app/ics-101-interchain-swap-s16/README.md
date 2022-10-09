@@ -12,7 +12,7 @@ requires: 24, 25
 
 ## Synopsis
 
-This standard document specifies the X, Y and Z for token exchange through single-sided liquidity pools over an IBC channel between separate chains.
+This standard document specifies the packet data structure, state machine handling logic, and encoding details for token exchange through single-sided liquidity pools over an IBC channel between separate chains.
 
 ### Motivation
 
