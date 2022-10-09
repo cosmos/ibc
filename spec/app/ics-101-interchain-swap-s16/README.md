@@ -38,7 +38,7 @@ Users might also prefer single asset pools over dual assets pools as it removes 
 
 ### Data Structures
 
-Only one packet data type is required: `IBCSwapDataPacket`, which specifies the swap message type, data(protobuf marshalled).
+Only one packet data type is required: `IBCSwapDataPacket`, which specifies the message type and data(protobuf marshalled).  It is a wrapper for interchain swap messages.
 
 ```ts
 enum MessageType {
@@ -55,4 +55,74 @@ interface IBCSwapDataPacket {
     data: Uint8Array, // Bytes
 }
 ```
+
+### Sub-protocols
+
+IBCSwap implements the following sub-protocols:
+```protobuf
+  rpc DelegateCreatePool(MsgCreatePoolRequest) returns (MsgCreatePoolResponse);
+  rpc DelegateSingleDeposit(MsgSingleDepositRequest) returns (MsgSingleDepositResponse);
+  rpc DelegateWithdraw(MsgWithdrawRequest) returns (MsgWithdrawResponse);
+  rpc DelegateLeftSwap(MsgLeftSwapRequest) returns (MsgSwapResponse);
+  rpc DelegateRightSwap(MsgRightSwapRequest) returns (MsgSwapResponse);
+```
+
+#### Interfaces for sub-protocols
+
+``` ts
+interface MsgCreatePoolRequest {
+    sender: string,
+    denoms: string[],
+    decimals: [],
+    weight: string,
+}
+
+interface MsgCreatePoolResponse {}
+```
+```ts
+interface MsgDepositRequest {
+    sender: string,
+    tokens: Coin[],
+}
+interface MsgSingleDepositResponse {
+    pool_token: Coin[];
+}
+```
+```ts
+interface MsgWithdrawRequest {
+    sender: string,
+    poolCoin: Coin,
+    denomOut: string, // optional, if not set, withdraw native coin to sender.
+}
+interface MsgWithdrawResponse {
+   tokens: Coin[];
+}
+```
+ ```ts
+ interface MsgLeftSwapRequest {
+    sender: string,
+    tokenIn: Coin,
+    denomOut: string,
+    slippage: number; // max tolerated slippage
+    recipient: string, 
+}
+interface MsgSwapResponse {
+   tokens: Coin[];
+}
+```
+ ```ts
+interface MsgRightSwapRequest {
+    sender: string,
+    denomIn: string,
+    tokenOut: Coin,
+    slippage: number; // max tolerated slippage 
+    recipient: string,
+}
+interface MsgSwapResponse {
+   tokens: Coin[];
+}
+```
+
+
+
 
