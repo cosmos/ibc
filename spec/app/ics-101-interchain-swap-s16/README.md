@@ -38,7 +38,7 @@ Users might also prefer single asset pools over dual assets pools as it removes 
 - `Swap Fees`: supports the collection of fees which are distributed to liquidity providers and acts as incentive for participation.
 - `Weighted Math`: allows the configuration of pool weights so users can choose their levels of exposure between the tokens.  Spot price of tokens are defined entirely by the weights and balances of the token pair, which are further explain in the [balancer docs](https://dev.balancer.fi/resources/pool-math/weighted-math#spot-price).
 
-$$ V = {&Pi;_t} $$
+$$ V = {&Pi;_tB_t^W_t} $$
 
 ## Technical Specification
 
