@@ -38,9 +38,7 @@ Users might also prefer single asset pools over dual assets pools as it removes 
 - `Swap Fees`: supports the collection of fees which are distributed to liquidity providers and acts as incentive for participation.
 - `Weighted Math`: allows the configuration of pool weights so users can choose their levels of exposure between the tokens.  The value function V is defined As:
 
-$$ V = {&Pi;_tB_t^{W_t}} $$
-
-Where
+$$ V = {&Pi;_tB_t^{W_t}} $$Where
 - $t$ ranges over the tokens in the pool
 - $B_t$ is the balance of the token in the pool
 - $W_t$ is the normalized weight of the tokens, such that the sum of all normalized weights is 1.
