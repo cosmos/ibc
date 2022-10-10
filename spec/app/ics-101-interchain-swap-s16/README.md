@@ -34,7 +34,7 @@ Users might also prefer single asset pools over dual assets pools as it removes 
 - `Decentralization`: all parameters are managed on chain.  Does not require any central authority or entity to function.  Also does not require a single blockchain, acting as a hub, to function.
 - `Gaurantee of Exchange`: no occurence of a user receiving tokens without the equivalent promised exchange.
 - `Swap Fees`: supports the collection of fees which are distributed to liquidity providers and acts as incentive for participation.
-- `Weighted Pools`: allows the configuration of pool weights so users can choose their levels of exposure between the tokens.  Spot price of tokens are defined entirely by the weights and balances of the token pair, which are further explain in the [balancer docs].(https://dev.balancer.fi/resources/pool-math/weighted-math#spot-price)
+- `Weighted Pools`: allows the configuration of pool weights so users can choose their levels of exposure between the tokens.  Spot price of tokens are defined entirely by the weights and balances of the token pair, which are further explain in the [balancer docs](https://dev.balancer.fi/resources/pool-math/weighted-math#spot-price).
 
 ## Technical Specification
 
