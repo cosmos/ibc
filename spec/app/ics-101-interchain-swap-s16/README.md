@@ -39,7 +39,7 @@ Users might also prefer single asset pools over dual assets pools as it removes 
 - `Weighted Math`: allows the configuration of pool weights so users can choose their levels of exposure between the tokens.  The value function V is defined As:
 
 $$ V = {&Pi;_tB_t^{W_t}} $$
-<br>
+
 Where
 - $t$ ranges over the tokens in the pool
 - $B_t$ is the balance of the token in the pool
