@@ -576,7 +576,14 @@ function onTimeoutPacket(packet: Packet) {
 }
 ```
 
-Note that interchain accounts controller modules should not execute any logic upon packet receipt, i.e. the `OnRecvPacket` callback should not be called, and in case it is called, it should simply return an error acknowledgement.
+Note that interchain accounts controller modules should not execute any logic upon packet receipt, i.e. the `OnRecvPacket` callback should not be called, and in case it is called, it should simply return an error acknowledgement:
+
+```typescript
+// Called on Controller Chain by Relayer
+function OnRecvPacket(packet Packet) {
+  return NewErrorAcknowledgement(ErrInvalidChannelFlow)
+}
+```
 
 ### Identifier formats
 
