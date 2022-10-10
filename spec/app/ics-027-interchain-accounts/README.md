@@ -528,7 +528,7 @@ function onChanCloseConfirm(
 
 ```typescript
 // Called on Host Chain by Relayer
-function OnRecvPacket(packet Packet) {
+function onRecvPacket(packet Packet) {
   ack = NewResultAcknowledgement([]byte{byte(1)})
 
 	// only attempt the application logic if the packet data
@@ -570,6 +570,7 @@ function onAcknowledgePacket(
 ```
 
 ```typescript
+// Called on Controller Chain by Relayer
 function onTimeoutPacket(packet: Packet) {
     // call underlying app's OnTimeoutPacket callback 
     // see ICS-30 middleware for more information
@@ -580,7 +581,7 @@ Note that interchain accounts controller modules should not execute any logic up
 
 ```typescript
 // Called on Controller Chain by Relayer
-function OnRecvPacket(packet Packet) {
+function onRecvPacket(packet Packet) {
   return NewErrorAcknowledgement(ErrInvalidChannelFlow)
 }
 ```
