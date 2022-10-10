@@ -24,9 +24,11 @@ Users might also prefer single asset pools over dual assets pools as it removes 
 
 `Single-sided liquidity pools`: a liquidity pool that does not require users to deposit both token denominations -- one is enough.
 
+`Weighted pools`: liquidity pools characterized by the percentage weight of each token denomination maintained within.
+
 `Left side swap`: a token exchange that specifies the desired quantity to be sold.
 
-`Right side swap`: a token exchange that specifies the desired quantity to be purchased
+`Right side swap`: a token exchange that specifies the desired quantity to be purchased.
 
 ### Desired Properties
 
@@ -34,7 +36,7 @@ Users might also prefer single asset pools over dual assets pools as it removes 
 - `Decentralization`: all parameters are managed on chain.  Does not require any central authority or entity to function.  Also does not require a single blockchain, acting as a hub, to function.
 - `Gaurantee of Exchange`: no occurence of a user receiving tokens without the equivalent promised exchange.
 - `Swap Fees`: supports the collection of fees which are distributed to liquidity providers and acts as incentive for participation.
-- `Weighted Pools`: allows the configuration of pool weights so users can choose their levels of exposure between the tokens.  Spot price of tokens are defined entirely by the weights and balances of the token pair, which are further explain in the [balancer docs](https://dev.balancer.fi/resources/pool-math/weighted-math#spot-price).
+- `Weighted Math`: allows the configuration of pool weights so users can choose their levels of exposure between the tokens.  Spot price of tokens are defined entirely by the weights and balances of the token pair, which are further explain in the [balancer docs](https://dev.balancer.fi/resources/pool-math/weighted-math#spot-price).
 
 ## Technical Specification
 
