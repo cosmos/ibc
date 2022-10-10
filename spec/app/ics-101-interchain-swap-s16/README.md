@@ -36,9 +36,7 @@ Users might also prefer single asset pools over dual assets pools as it removes 
 - `Decentralization`: all parameters are managed on chain.  Does not require any central authority or entity to function.  Also does not require a single blockchain, acting as a hub, to function.
 - `Gaurantee of Exchange`: no occurence of a user receiving tokens without the equivalent promised exchange.
 - `Swap Fees`: supports the collection of fees which are distributed to liquidity providers and acts as incentive for participation.
-- `Weighted Math`: allows the configuration of pool weights so users can choose their levels of exposure between the tokens. The value function V is defined As:<br />
-
-$$ V = {&Pi;_tB_t^{W_t}} $$
+- `Weighted Math`: allows the configuration of pool weights so users can choose their levels of exposure between the tokens. The value function V is defined As:$$ V = {&Pi;_tB_t^{W_t}} $$
 <br />
 Where
 - $t$ ranges over the tokens in the pool
