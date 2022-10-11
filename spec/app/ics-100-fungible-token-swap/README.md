@@ -133,9 +133,23 @@ interface OrderBook {
 
 ### Life scope and control flow
 
-The following illustrates the flow:
+#### Making a swap
 
-<img src="./ibcswap.png"/>
+1. User creates an order on the source chain with specified parameters (see type `MakeSwap`).  Tokens are sent to the escrow address owned by the module. The order is saved on the source chain
+2. An `AtomicSwapPacketData` is relayed to the destination chain where `onRecvPacket` the order is also saved on the destination chain.  
+3. A packet is subsequently relayed back for acknowledgement. A packet timeout or a failure during `onAcknowledgePacket` will result in a refund of the escrowed tokens.
+
+#### Taking a swap
+
+1. A user takes an order on the destination chain by triggering `TakeSwap`.  Tokens are sent to the escrow address owned by the module.
+2. An `AtomicSwapPacketData` is relayed to the source chain where `onRecvPacket` the escrowed tokens are sent to the destination address.  
+3. A packet is subsequently relayed back for acknowledgement. Upon acknowledgement escrowed tokens on the destination chain is sent to the related destination address.  A packet timeout or a failure during `onAcknowledgePacket` will result in a refund of the escrowed tokens.
+
+#### Cancelling a swap
+
+1.  The taker cancels a previously created order.
+2.  An `AtomicSwapPacketData` is relayed to the source chain where `onRecvPacket` the order is cancelled on the destination chain.
+3.  A packet is relayed back where upon acknowledgement the order on the source chain is also cancelled.
 
 ### Sub-protocols
 
@@ -263,14 +277,6 @@ function onChanCloseConfirm(portIdentifier: Identifier, channelIdentifier: Ident
 ```
 
 #### Packet relay
-
-Between the source chain and destination chain:
-
-- When making an order, tokens are sent to the escrow account and the order is stored in the orderbook on both chains.
-- When taking an order, tokens are sent to the escrow account and the order is updated on both chains. Tokens on both chains are escrowed to the respective destination addresses.
-- When a packet times-out, the tokens are unescrowed back to the user
-- When a packet acknowledgement fails, the tokens are unescrowed back to the user
-- When an order is canceled, the tokens are unescrowed back to the user.
 
 `sendAtomicSwapPacket` must be called by a transaction handler in the module which performs appropriate signature checks, specific to the account owner on the host state machine.
 
