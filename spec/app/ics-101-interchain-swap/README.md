@@ -1,50 +1,89 @@
 ---
 ics: 101
-title: Interchain Sawp
+title: Interchain Swap
 stage: draft
 category: IBC/APP
 kind: instantiation
-author: Ping(ping@side.one)
-created: (creation date)
-modified: 2022-07-27
+author: Ping <ping@side.one>, Edward Gunawan <edward@s16.ventures>
+created: 2022-10-09
+modified: 2022-10-11
 requires: 24, 25
 ---
 
 ## Synopsis
 
-(high-level description of and rationale for specification)
+This standard document specifies the packet data structure, state machine handling logic, and encoding details for token exchange through single-sided liquidity pools over an IBC channel between separate chains.
 
 ### Motivation
 
-(rationale for existence of standard)
- - Build a fully decentralised exchange p2p network, that each chain play a role in the exchange network. Assets can be swapped directly between any two blockchain(in where ibcswap is integrated ) in networks
- - Users usually are preferred to one assets to pool than two assets with a percentage splits
- - Reduce impermanent loss for liquidity provider
+ICS-101 Interchain Swaps enables chains their own token pricing mechanism and exchange protocol via IBC transactions.  Each chain can thus play a role in a fully decentralised exchange network.
+
+Users might also prefer single asset pools over dual assets pools as it removes the risk of impermanent loss.
 
 ### Definitions
- - Liquidity
- - Single sided liquidity pool
- - Automatic Marker Maker(AMM)
- - Farming & Rewards
- - Pool Weight, used in AMM, 每次添加流动性或者删除流动性的时候调整相应资产的pool weight
- - Left Side Swap: Input how many coins you want to sell, output an amount you will receive
- - Right Side Swap: Input how many coins you want to buy, output an amount you need to pay
+
+`Interchain swap`: a IBC token swap protocol, built on top of an automated marketing making system, which leverages liquidity pools and incentives.  Each chain that integrates this app becomes part of a decentralized exchange network.
+
+`Automated market makers(AMM)`: are decentralized exchanges that pool liquidity and allow tokens to be traded in a permissionless and automatic way.  Usually uses an invariant for token swapping calculation.  In this interchain standard, the Balancer algorithm is implemented.
+
+`Weighted pools`: liquidity pools characterized by the percentage weight of each token denomination maintained within.
+
+`Single-sided liquidity pools`: a liquidity pool that does not require users to deposit both token denominations -- one is enough.
+
+`Left-side swap`: a token exchange that specifies the desired quantity to be sold.
+
+`Right-side swap`: a token exchange that specifies the desired quantity to be purchased.
 
 ### Desired Properties
 
-(desired characteristics / properties of protocol, effects if properties are violated)
+- `Permissionless`: no need to whitelist connections, modules, or denominations.  Individual implementations may have their own permissioning scheme, however the protocol must not require permissioning from a trusted party to be secure.
+- `Decentralization`: all parameters are managed on chain.  Does not require any central authority or entity to function.  Also does not require a single blockchain, acting as a hub, to function.
+- `Gaurantee of Exchange`: no occurence of a user receiving tokens without the equivalent promised exchange.
+- `Liquidity Incentives`: supports the collection of fees which are distributed to liquidity providers and acts as incentive for liquidity participation.
+- `Weighted Math`: allows the configuration of pool weights so users can choose their levels of exposure between the tokens.
 
- - Permissionless: An interchain account may be created by any actor without the approval of a third party (e.g. chain governance). Note: Individual implementations may implement their own permissioning scheme, however the protocol must not require permissioning from a trusted party to be secure.
- - Decentralization: All parameters are managed on its chain,  no one, (even no single blockchain), control all things.
- - Community Driven:
 
 ## Technical Specification
 
-(main part of standard document - not all subsections are required)
+### Algorithms
 
-(detailed technical specification: syntax, semantics, sub-protocols, algorithms, data structures, etc)
+#### Invariant
+
+A constant invariant is maintained after trades which takes into consider token weights and balance.  The value function V is defined as:
+
+$$V = {&Pi;_tB_t^{W_t}}$$ 
+
+Where
+
+- $t$ ranges over the tokens in the pool
+- $B_t$ is the balance of the token in the pool
+- $W_t$ is the normalized weight of the tokens, such that the sum of all normalized weights is 1. 
+
+#### Spot Price
+
+Spot price of tokens are defined entirely by the weights and balances of the token pair.  The sport price between any two tokens, $SpotPrice_i^{o}$, or in short $SP_i^o$, is the ratio of the token balances normalized by their weights:
+
+$$SP_i^o = (B_i/W_i)/(B_o/W_o)$$ 
+
+- $B_i$ is the balance of token $i$, the token being sold by the trader which is going into the pool
+- $B_o$ is the balance of token $o$, the token being bought by the trader which is going out of the pool
+- $W_i$ is the weight of token $i$
+- $W_o$ is the weight of token $o$
+
+#### Fees
+
+Traders pay swap fees when they trade with a pool. these fees can be customized with a minimum value of 0.0001% and a maximum value of 10%. 
+
+The fees go to liquidity providers in exchange for depositing their tokens in the pool to facilitate trades. Trade fees are collected at the time of a swap, and goes directly into the pool, increasing the pool balance. For a trade with a given $inputToken$ and $outputToken$, the amount collected by the pool as a fee is 
+
+$$Amount_{fee} = Amount_{inputToken} * swapFee$$ 
+
+As the pool collects fees, liquidity providers automatically collect fees through their proportional ownership of the pool balance.
+
 
 ### Data Structures
+
+Only one packet data type is required: `IBCSwapDataPacket`, which specifies the message type and data(protobuf marshalled).  It is a wrapper for interchain swap messages.
 
 ```ts
 enum MessageType {
@@ -62,10 +101,9 @@ interface IBCSwapDataPacket {
 }
 ```
 
-IBCSwapDataPacket is a wrap which wrap all sepecific messages
-
 ### Sub-protocols
-IBCSwap implements following sub-protocols:
+
+IBCSwap implements the following sub-protocols:
 ```protobuf
   rpc DelegateCreatePool(MsgCreatePoolRequest) returns (MsgCreatePoolResponse);
   rpc DelegateSingleDeposit(MsgSingleDepositRequest) returns (MsgSingleDepositResponse);
@@ -73,11 +111,9 @@ IBCSwap implements following sub-protocols:
   rpc DelegateLeftSwap(MsgLeftSwapRequest) returns (MsgSwapResponse);
   rpc DelegateRightSwap(MsgRightSwapRequest) returns (MsgSwapResponse);
 ```
-(sub-protocols, if applicable)
 
-#### structure of sub protocols:
+#### Interfaces for sub-protocols
 
- - Create Pool
 ``` ts
 interface MsgCreatePoolRequest {
     sender: string,
@@ -88,8 +124,6 @@ interface MsgCreatePoolRequest {
 
 interface MsgCreatePoolResponse {}
 ```
-
-- Single Sided Deposit
 ```ts
 interface MsgDepositRequest {
     sender: string,
@@ -99,8 +133,6 @@ interface MsgSingleDepositResponse {
     pool_token: Coin[];
 }
 ```
-
-- Withdraw
 ```ts
 interface MsgWithdrawRequest {
     sender: string,
@@ -111,7 +143,6 @@ interface MsgWithdrawResponse {
    tokens: Coin[];
 }
 ```
- - Left Side Swap
  ```ts
  interface MsgLeftSwapRequest {
     sender: string,
@@ -124,7 +155,6 @@ interface MsgSwapResponse {
    tokens: Coin[];
 }
 ```
- - Right Side Swap
  ```ts
 interface MsgRightSwapRequest {
     sender: string,
@@ -138,13 +168,15 @@ interface MsgSwapResponse {
 }
 ```
 
-### Port and Channel Setup
+#### Port & channel setup
+
+The fungible token swap module on a chain must always bind to a port with the id `interchainswap`
 
 The `setup` function must be called exactly once when the module is created (perhaps when the blockchain itself is initialised) to bind to the appropriate port and create an escrow address (owned by the module).
 
 ```typescript
 function setup() {
-  capability = routingModule.bindPort("bank", ModuleCallbacks{
+  capability = routingModule.bindPort("interchainswap", ModuleCallbacks{
     onChanOpenInit,
     onChanOpenTry,
     onChanOpenAck,
@@ -160,20 +192,14 @@ function setup() {
 }
 ```
 
-Once the `setup` function has been called, channels can be created through the IBC routing module between instances of the fungible token transfer module on separate chains.
+Once the setup function has been called, channels can be created via the IBC routing module.
 
-An administrator (with the permissions to create connections & channels on the host state machine) is responsible for setting up connections to other state machines & creating channels
-to other instances of this module (or another module supporting this interface) on other chains. This specification defines packet handling semantics only, and defines them in such a fashion
-that the module itself doesn't need to worry about what connections or channels might or might not exist at any point in time.
+#### Channel lifecycle management
 
-#### Routing module callbacks
-
-##### Channel lifecycle management
-
-Both machines `A` and `B` accept new channels from any module on another machine, if and only if:
+An interchain swap module will accept new channels from any module on another machine, if and only if:
 
 - The channel being created is unordered.
-- The version string is `ics20-1`.
+- The version string is `ics101-1`.
 
 ```typescript
 function onChanOpenInit(
@@ -223,7 +249,9 @@ function onChanOpenAck(
 }
 ```
 
-### Packet Relay
+#### Packet relay
+
+`SendIBCSwapDelegationDataPacket` must be called by a transaction handler in the module which performs appropriate signature checks, specific to the account owner on the host state machine.
 
 ```ts
 function SendIBCSwapDelegationDataPacket(
@@ -246,7 +274,7 @@ function SendIBCSwapDelegationDataPacket(
 
 ```
 
-onRecvPacket:
+`onRecvPacket` is called by the routing module when a packet addressed to this module has been received.
 
 ```go
 func (im IBCModule) OnRecvPacket(
@@ -352,7 +380,7 @@ func (im IBCModule) OnRecvPacket(
 }
 ```
 
-onAcknowledgePacket
+`onAcknowledgePacket` is called by the routing module when a packet sent by this module has been acknowledged.
 
 ```go
 
@@ -444,7 +472,8 @@ func (im IBCModule) OnAcknowledgementPacket(
 }
 ```
 
-onTimeoutPacket and OnFailure
+`onTimeoutPacket` is called by the routing module when a packet sent by this module has timed-out (such that the tokens will be refunded).  Tokens are also refunded on failure.
+
 ```ts
 function onTimeoutPacket(packet: Packet) {
   // the packet timed-out, so refund the tokens
@@ -473,34 +502,31 @@ function refundToken(packet: Packet) {
 }
 ```
 
-
-### IBCSwap Relayer Listener
-
-
-
-### Properties & Invariants
-
-(properties & invariants maintained by the protocols specified, if applicable)
-
 ## Backwards Compatibility
 
-(discussion of compatibility or lack thereof with previous standards)
+Not applicable.
 
 ## Forwards Compatibility
 
-(discussion of compatibility or lack thereof with expected future standards)
+Coming soon.
 
 ## Example Implementation
 
-(link to or description of concrete example implementation)
+https://github.com/sideprotocol/ibcswap
 
 ## Other Implementations
 
-(links to or descriptions of other implementations)
+Coming soon.
 
 ## History
 
-(changelog and notable inspirations / references)
+Oct 9, 2022 - Draft written
+
+Oct 11, 2022 - Draft revised
+
+## References
+
+https://dev.balancer.fi/resources/pool-math/weighted-math#spot-price
 
 ## Copyright
 
