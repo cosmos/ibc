@@ -4,9 +4,9 @@ title: Interchain Swap
 stage: draft
 category: IBC/APP
 kind: instantiation
-author: Ping(ping@side.one)
-created: (creation date)
-modified: 2022-07-27
+author: Ping <ping@side.one>, Edward Gunawan <edward@s16.ventures>
+created: 2022-10-09
+modified: 2022-10-11
 requires: 24, 25
 ---
 
@@ -69,6 +69,8 @@ $$SP_i^o = (B_i/W_i)/(B_o/W_o)$$
 - $B_o$ is the balance of token $o$, the token being bought by the trader which is going out of the pool
 - $W_i$ is the weight of token $i$
 - $W_o$ is the weight of token $o$
+
+Futher explanation can be found in the [balancer docs](https://dev.balancer.fi/resources/pool-math/weighted-math#spot-price).
 
 #### Fees
 
@@ -521,6 +523,8 @@ Coming soon.
 ## History
 
 Oct 9, 2022 - Draft written
+
+Oct 11, 2022 - Draft revised
 
 ## Copyright
 
