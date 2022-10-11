@@ -1,6 +1,6 @@
 ---
 ics: 101
-title: Interchain Sawp
+title: Interchain Swap
 stage: draft
 category: IBC/APP
 kind: instantiation
@@ -61,7 +61,11 @@ Where
 
 #### Spot Price
 
-Spot price of tokens are defined entirely by the weights and balances of the token pair, which are further explain in the [balancer docs](https://dev.balancer.fi/resources/pool-math/weighted-math#spot-price).
+Spot price of tokens are defined entirely by the weights and balances of the token pair.  The sport price between any two tokens, $SpotPrice_i^{o}$, or in short $SP_i^o$, is the ratio of the token balances normalized by their weights:
+
+$$SP_i^o = (B_i/Wi)/(B_o/W_o)$$ 
+
+which are further explain in the [balancer docs](https://dev.balancer.fi/resources/pool-math/weighted-math#spot-price).
 
 #### Fees
 
