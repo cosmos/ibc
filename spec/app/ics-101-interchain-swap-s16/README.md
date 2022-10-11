@@ -70,8 +70,6 @@ $$SP_i^o = (B_i/W_i)/(B_o/W_o)$$
 - $W_i$ is the weight of token $i$
 - $W_o$ is the weight of token $o$
 
-Futher explanation can be found in the [balancer docs](https://dev.balancer.fi/resources/pool-math/weighted-math#spot-price).
-
 #### Fees
 
 Traders pay swap fees when they trade with a pool. these fees can be customized with a minimum value of 0.0001% and a maximum value of 10%. 
@@ -525,6 +523,10 @@ Coming soon.
 Oct 9, 2022 - Draft written
 
 Oct 11, 2022 - Draft revised
+
+## References
+
+https://dev.balancer.fi/resources/pool-math/weighted-math#spot-price
 
 ## Copyright
 
