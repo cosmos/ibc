@@ -22,7 +22,7 @@ Users might also prefer single asset pools over dual assets pools as it removes 
 
 ### Definitions
 
-`Interchain Swap` is IBC token swap protocol, which consist of AMM, Liquidity Pool and Fees Incentive.
+`Interchain Swap` is IBC token swap protocol, which consist of AMM, Liquidity Pool and Fees Incentive. each chain integrate this app is part of decentralised exchange network
 
 `AMM`, Auto Market maker. usually, use a invariant for swap,  Balancer algo is used in this specification.
 
