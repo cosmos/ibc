@@ -22,7 +22,7 @@ Users might also prefer single asset pools over dual assets pools as it removes 
 
 ### Definitions
 
-`Interchain Swap` is IBC token swap protocol, which consist of AMM, Liquidity Pool and Fees Incentive. each chain integrate this app is part of decentralised exchange network
+`Interchain Swap` is IBC token swap protocol, which consist of AMM, Liquidity Pool and liquidity Incentive. each chain integrate this app is part of decentralised exchange network
 
 `AMM`, Auto Market maker. usually, use a invariant for swap,  Balancer algo is used in this specification.
 
@@ -56,7 +56,7 @@ allows the configuration of pool weights so users can choose their levels of exp
 
 - `Fees`
 
-Traders pay swap fees when they trade with a pool. these fees can be customized with a minimum value of 0.0001% and a maximum value of 10%. The fees ultimately go to Liquidity Providers in exchange for them putting their tokens in the pool to facilitate trades. Trade fees are collected at the time of a swap, and it goes directly into the pool, growing the pool's balance. For a trade with a given  and , the amount collected by the pool as a fee is . As the pool collects fees, Balancer Pool Tokens automatically collect fees because they represent a proportional share of the pool. 
+Traders pay swap fees when they trade with a pool. these fees can be customized with a minimum value of 0.0001% and a maximum value of 10%. The fees ultimately go to Liquidity Providers in exchange for them putting their tokens in the pool to facilitate trades. Trade fees are collected at the time of a swap, and it goes directly into the pool, growing the pool's balance. For a trade with a given  and , the amount collected by the pool as a fee is . As the pool collects fees, Balancer Pool Tokens automatically collect fees because they represent a proportional share of the pool.
 
 
 ### Data Structures
