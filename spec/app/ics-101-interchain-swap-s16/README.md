@@ -63,9 +63,15 @@ Where
 
 Spot price of tokens are defined entirely by the weights and balances of the token pair, which are further explain in the [balancer docs](https://dev.balancer.fi/resources/pool-math/weighted-math#spot-price).
 
-- `Fees`
+#### Fees
 
-Traders pay swap fees when they trade with a pool. these fees can be customized with a minimum value of 0.0001% and a maximum value of 10%. The fees go to liquidity providers in exchange for depositing their tokens in the pool to facilitate trades. Trade fees are collected at the time of a swap, and goes directly into the pool, increasing the pool balance. For a trade with a given $InputToken$ and $OutputToken, the amount collected by the pool as a fee is . As the pool collects fees, Balancer Pool Tokens automatically collect fees because they represent a proportional share of the pool.
+Traders pay swap fees when they trade with a pool. these fees can be customized with a minimum value of 0.0001% and a maximum value of 10%. 
+
+The fees go to liquidity providers in exchange for depositing their tokens in the pool to facilitate trades. Trade fees are collected at the time of a swap, and goes directly into the pool, increasing the pool balance. For a trade with a given $inputToken$ and $outputToken$, the amount collected by the pool as a fee is 
+
+$$Amount_fee = Amount_inputToken x swapFee$$ 
+
+As the pool collects fees, liquditiy providers automatically collect fees through their propertional ownership of the pool balance.
 
 
 ### Data Structures
