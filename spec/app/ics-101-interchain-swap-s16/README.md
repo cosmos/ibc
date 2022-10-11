@@ -63,9 +63,12 @@ Where
 
 Spot price of tokens are defined entirely by the weights and balances of the token pair.  The sport price between any two tokens, $SpotPrice_i^{o}$, or in short $SP_i^o$, is the ratio of the token balances normalized by their weights:
 
-$$SP_i^o = (B_i/Wi)/(B_o/W_o)$$ 
+$$SP_i^o = B_i/Wi/B_o/W_o$$ 
 
-which are further explain in the [balancer docs](https://dev.balancer.fi/resources/pool-math/weighted-math#spot-price).
+- $B_i$ is the balance of token $i$, the token being sold by the trader which is going into the pool
+- $B_o$ is the balance of token $o$, the token being bought by the trader which is going out of the pool
+- $W_i$ is the weight of token $i$
+- $W_o$ is the weight of token $o$
 
 #### Fees
 
