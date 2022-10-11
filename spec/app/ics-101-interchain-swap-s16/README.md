@@ -69,7 +69,7 @@ Traders pay swap fees when they trade with a pool. these fees can be customized 
 
 The fees go to liquidity providers in exchange for depositing their tokens in the pool to facilitate trades. Trade fees are collected at the time of a swap, and goes directly into the pool, increasing the pool balance. For a trade with a given $inputToken$ and $outputToken$, the amount collected by the pool as a fee is 
 
-$$Amount_fee = Amount_inputToken x swapFee$$ 
+$$Amount_{fee} = Amount_{inputToken} * swapFee$$ 
 
 As the pool collects fees, liquditiy providers automatically collect fees through their propertional ownership of the pool balance.
 
