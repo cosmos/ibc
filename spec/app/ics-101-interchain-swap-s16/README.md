@@ -22,9 +22,9 @@ Users might also prefer single asset pools over dual assets pools as it removes 
 
 ### Definitions
 
-`Interchain Swap`: a IBC token swap protocol, built on top of an automated marketing making (AMM) system, which leverages liquidity pools and incentives.  Each chain that integrates this app becomes part of a decentralized exchange network.
+`Interchain swap`: a IBC token swap protocol, built on top of an automated marketing making system, which leverages liquidity pools and incentives.  Each chain that integrates this app becomes part of a decentralized exchange network.
 
-`AMM`: stands for Automated Market Makers, which are decentralized exchanges that pool liquidity and allow tokens to be traded in a permissionless and automatic way.  Usually uses an invariant for token swapping calculation.  In this interchain standard, the Balancer algorithm is implemented.
+`Automated market makers (AMM)`: are decentralized exchanges that pool liquidity and allow tokens to be traded in a permissionless and automatic way.  Usually uses an invariant for token swapping calculation.  In this interchain standard, the Balancer algorithm is implemented.
 
 `Weighted pools`: liquidity pools characterized by the percentage weight of each token denomination maintained within.
 
@@ -71,7 +71,7 @@ The fees go to liquidity providers in exchange for depositing their tokens in th
 
 $$Amount_{fee} = Amount_{inputToken} * swapFee$$ 
 
-As the pool collects fees, liquditiy providers automatically collect fees through their propertional ownership of the pool balance.
+As the pool collects fees, liquditiy providers automatically collect fees through their proportional ownership of the pool balance.
 
 
 ### Data Structures
