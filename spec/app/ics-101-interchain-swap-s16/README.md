@@ -30,9 +30,9 @@ Users might also prefer single asset pools over dual assets pools as it removes 
 
 `Single-sided liquidity pools`: a liquidity pool that does not require users to deposit both token denominations -- one is enough.
 
-`Left side swap`: a token exchange that specifies the desired quantity to be sold.
+`Left-side swap`: a token exchange that specifies the desired quantity to be sold.
 
-`Right side swap`: a token exchange that specifies the desired quantity to be purchased.
+`Right-side swap`: a token exchange that specifies the desired quantity to be purchased.
 
 ### Desired Properties
 
