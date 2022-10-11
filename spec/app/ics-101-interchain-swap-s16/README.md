@@ -22,9 +22,9 @@ Users might also prefer single asset pools over dual assets pools as it removes 
 
 ### Definitions
 
-`Interchain Swap` is IBC token swap protocol, which consist of AMM, Liquidity Pool and liquidity Incentive. each chain integrate this app is part of decentralised exchange network
+`Interchain Swap`: a IBC token swap protocol, built on top of an automated marketing making (AMM) system, which leverages liquidity pools and incentives.  Each chain that integrates this app becomes part of a decentralized exchange network.
 
-`AMM`, Auto Market maker. usually, use a invariant for swap,  Balancer algo is used in this specification.
+`AMM`: stands for Automated Market Makers, which are decentralized exchanges that pool liquidity and allow tokens to be traded in a permissionless and automatic way.  Usually uses an invariant for token swapping calculation.  In this interchain standard, the Balancer algorithm is implemented.
 
 `Weighted pools`: liquidity pools characterized by the percentage weight of each token denomination maintained within.
 
@@ -39,24 +39,33 @@ Users might also prefer single asset pools over dual assets pools as it removes 
 - `Permissionless`: no need to whitelist connections, modules, or denominations.  Individual implementations may have their own permissioning scheme, however the protocol must not require permissioning from a trusted party to be secure.
 - `Decentralization`: all parameters are managed on chain.  Does not require any central authority or entity to function.  Also does not require a single blockchain, acting as a hub, to function.
 - `Gaurantee of Exchange`: no occurence of a user receiving tokens without the equivalent promised exchange.
-- `Incentive for Liquidity`: supports the collection of fees which are distributed to liquidity providers and acts as incentive for liquidity participation.
+- `Liquidity Incentives`: supports the collection of fees which are distributed to liquidity providers and acts as incentive for liquidity participation.
+- `Weighted Math`: allows the configuration of pool weights so users can choose their levels of exposure between the tokens.
 
 
 ## Technical Specification
 
-### Algorithm 
+### Algorithms
 
-- `AMM Invariant:`
+#### Invariant
 
-allows the configuration of pool weights so users can choose their levels of exposure between the tokens.  The value function V is defined as:
+A constant invariant is maintained after trades which takes into consider token weights and balance.  The value function V is defined as:
 
- $V = {&Pi;_tB_t^{W_t}}$ 
- 
- where $t$ ranges over the tokens in the pool, $B_t$ is the balance of the token in the pool, and $W_t$ is the normalized weight of the tokens, such that the sum of all normalized weights is 1. Spot price of tokens are defined entirely by the weights and balances of the token pair, which are further explain in the [balancer docs](https://dev.balancer.fi/resources/pool-math/weighted-math#spot-price).
+$$V = {&Pi;_tB_t^{W_t}}$$ 
+
+Where
+
+- $t$ ranges over the tokens in the pool
+- $B_t$ is the balance of the token in the pool
+- $W_t$ is the normalized weight of the tokens, such that the sum of all normalized weights is 1. 
+
+#### Spot Price
+
+Spot price of tokens are defined entirely by the weights and balances of the token pair, which are further explain in the [balancer docs](https://dev.balancer.fi/resources/pool-math/weighted-math#spot-price).
 
 - `Fees`
 
-Traders pay swap fees when they trade with a pool. these fees can be customized with a minimum value of 0.0001% and a maximum value of 10%. The fees ultimately go to Liquidity Providers in exchange for them putting their tokens in the pool to facilitate trades. Trade fees are collected at the time of a swap, and it goes directly into the pool, growing the pool's balance. For a trade with a given  and , the amount collected by the pool as a fee is . As the pool collects fees, Balancer Pool Tokens automatically collect fees because they represent a proportional share of the pool.
+Traders pay swap fees when they trade with a pool. these fees can be customized with a minimum value of 0.0001% and a maximum value of 10%. The fees go to liquidity providers in exchange for depositing their tokens in the pool to facilitate trades. Trade fees are collected at the time of a swap, and goes directly into the pool, increasing the pool balance. For a trade with a given $InputToken $ and $OutputToken, the amount collected by the pool as a fee is . As the pool collects fees, Balancer Pool Tokens automatically collect fees because they represent a proportional share of the pool.
 
 
 ### Data Structures
