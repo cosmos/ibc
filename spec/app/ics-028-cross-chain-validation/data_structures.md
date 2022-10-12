@@ -75,11 +75,11 @@ The CCV module is initialized through the `InitGenesis` method when the chain is
   - `distributionChannelId` is the ID of a token transfer channel (as defined in [ICS 20](../../app/ics-020-fungible-token-transfer)) used for the Reward Distribution sub-protocol. 
     If `distributionChannelId == ""`, a new token transfer channel is created on top of the same connection as the CCV channel.
 
-The provider CCV module handles governance proposals to spawn new consumer chains and to stop existing consumer chains. 
+The provider CCV module handles governance proposals to add new consumer chains and to remove existing consumer chains. 
 While the structure of governance proposals is specific to every ABCI application (for an example, see the `Proposal` interface in the [Governance module documentation](https://docs.cosmos.network/v0.44/modules/gov/) of Cosmos SDK),
-this specification expects the following fields to be part of the proposals to spawn new consumer chains (i.e., `SpawnConsumerChainProposal`) and to stop existing ones (i.e., `StopConsumerChainProposal`):
+this specification expects the following fields to be part of the proposals to add new consumer chains (i.e., `ConsumerAdditionProposal`) and to remove existing ones (i.e., `ConsumerRemovalProposal`):
   ```typescript
-  interface SpawnConsumerChainProposal {
+  interface ConsumerAdditionProposal {
     chainId: string
     spawnTime: Timestamp
     connId: Identifier
@@ -102,7 +102,7 @@ this specification expects the following fields to be part of the proposals to s
   - `lockUnbondingOnTimeout` is a boolean value that indicates whether the funds corresponding to the outstanding unbonding operations are to be released in case of a timeout. 
     If `lockUnbondingOnTimeout == true`, a governance proposal to stop the timed out consumer chain would be necessary to release the locked funds. 
   ```typescript
-  interface StopConsumerChainProposal {
+  interface ConsumerRemovalProposal {
     chainId: string
     stopTime: Timestamp
   }
@@ -187,8 +187,8 @@ This section describes the internal state of the CCV module. For simplicity, the
 [&uparrow; Back to Outline](#outline)
 
 - `ProviderPortId = "provider"` is the port ID the provider CCV module is expected to bind to.
-- `pendingSpawnProposals: [SpawnConsumerChainProposal]` is a list of pending governance proposals to spawn new consumer chains. 
-- `pendingStopProposals: [StopConsumerChainProposal]` is a list of pending governance proposals to stop existing consumer chains. 
+- `pendingConsumerAdditionProposals: [ConsumerAdditionProposal]` is a list of pending governance proposals to add new consumer chains. 
+- `pendingConsumerRemovalProposals: [ConsumerRemovalProposal]` is a list of pending governance proposals to remove existing consumer chains. 
   Both lists of pending governance proposals expose the following interface: 
 ```typescript
   interface [Proposal] {

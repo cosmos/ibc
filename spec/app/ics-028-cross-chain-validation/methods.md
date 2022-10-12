@@ -378,29 +378,29 @@ function InitGenesis(state: ProviderGenesisState): [ValidatorUpdate] {
   - For any consumer state in the `ProviderGenesisState`, the channel ID is not valid (cf. the validation function defined in [ICS 4](../../core/ics-004-channel-and-packet-semantics)).
 
 <!-- omit in toc -->
-#### **[CCV-PCF-SPCCPROP.1]**
+#### **[CCV-PCF-HCAPROP.1]**
 ```typescript
 // PCF: Provider Chain Function
 // implements governance proposal Handler 
-function SpawnConsumerChainProposalHandler(p: SpawnConsumerChainProposal) {
+function HandleConsumerAdditionProposal(p: ConsumerAdditionProposal) {
   if currentTimestamp() > p.spawnTime {
     CreateConsumerClient(p)
   }
   else {
-    // store the proposal as a pending spawn proposal
-    pendingSpawnProposals.Append(p)
+    // store the proposal as a pending addition proposal
+    pendingConsumerAdditionProposals.Append(p)
   }
 }
 ```
 - **Caller**
   - `EndBlock()` method of Governance module.
 - **Trigger Event**
-  - A governance proposal `SpawnConsumerChainProposal` has passed (i.e., it got the necessary votes).
+  - A governance proposal `ConsumerAdditionProposal` has passed (i.e., it got the necessary votes).
 - **Precondition** 
   - True. 
 - **Postcondition** 
-  - If the spawn time has already passed, `CreateConsumerClient(p)` is invoked, with `p` the `SpawnConsumerChainProposal`. 
-  - Otherwise, the proposal is appended to the list of pending spawn proposals, i.e., `pendingSpawnProposals`.
+  - If the spawn time has already passed, `CreateConsumerClient(p)` is invoked, with `p` the `ConsumerAdditionProposal`. 
+  - Otherwise, the proposal is appended to the list of pending addition proposals, i.e., `pendingConsumerAdditionProposals`.
 - **Error Condition**
   - None.
 
@@ -409,7 +409,7 @@ function SpawnConsumerChainProposalHandler(p: SpawnConsumerChainProposal) {
 ```typescript
 // PCF: Provider Chain Function
 // Utility method
-function CreateConsumerClient(p: SpawnConsumerChainProposal) {
+function CreateConsumerClient(p: ConsumerAdditionProposal) {
   // check that no other consumer chain with the same chain ID exists
   if p.chainId IN chainToClient.Keys() {
     // ignore governance proposal
@@ -498,9 +498,9 @@ function CreateConsumerClient(p: SpawnConsumerChainProposal) {
 }
 ```
 - **Caller**
-  - Either `SpawnConsumerChainProposalHandler` (see [CCV-PCF-SPCCPROP.1](#ccv-pcf-spccprop1)) or `BeginBlockInit()` (see [CCV-PCF-BBLOCK-INIT.1](#ccv-pcf-bblock-init1)).
+  - Either `HandleConsumerAdditionProposal` (see [CCV-PCF-HCAPROP.1](#ccv-pcf-hcaprop1)) or `BeginBlockInit()` (see [CCV-PCF-BBLOCK-INIT.1](#ccv-pcf-bblock-init1)).
 - **Trigger Event**
-  - A governance proposal `SpawnConsumerChainProposal` `p` has passed (i.e., it got the necessary votes).
+  - A governance proposal `ConsumerAdditionProposal` `p` has passed (i.e., it got the necessary votes).
 - **Precondition** 
   - `currentTimestamp() > p.spawnTime`.
 - **Postcondition** 
@@ -525,24 +525,24 @@ function CreateConsumerClient(p: SpawnConsumerChainProposal) {
 - **Error Condition**
   - None.
 
-> **Note:** For the case when the `clientId` field of the `SpawnConsumerChainProposal` is not set, creating a client of a remote chain requires a `ClientState` and a `ConsensusState` (for an example, take a look at [ICS 7](../../client/ics-007-tendermint-client)).
+> **Note:** For the case when the `clientId` field of the `ConsumerAdditionProposal` is not set, creating a client of a remote chain requires a `ClientState` and a `ConsensusState` (for an example, take a look at [ICS 7](../../client/ics-007-tendermint-client)).
 > `ConsensusState` requires setting a validator set of the remote chain. 
 > The provider chain uses the fact that the validator set of the consumer chain is the same as its own validator set. 
 > The rest of information to create a `ClientState` it receives through the governance proposal.
 
-> **Note:** Bootstrapping the consumer CCV module requires a `ConsumerGenesisState` (see the [CCV Data Structures](./data_structures.md#ccv-data-structures) section). The provider CCV module creates such a `ConsumerGenesisState` when handling a governance proposal `SpawnConsumerChainProposal`.
+> **Note:** Bootstrapping the consumer CCV module requires a `ConsumerGenesisState` (see the [CCV Data Structures](./data_structures.md#ccv-data-structures) section). The provider CCV module creates such a `ConsumerGenesisState` when handling a governance proposal `ConsumerAdditionProposal`.
 
 <!-- omit in toc -->
 #### **[CCV-PCF-BBLOCK-INIT.1]**
 ```typescript
 // PCF: Provider Chain Function
 function BeginBlockInit() {
-  // iterate over the pending spawn proposals and create 
+  // iterate over the pending addition proposals and create 
   // the consumer client if the spawn time has passed
-  foreach p IN pendingSpawnProposals {
+  foreach p IN pendingConsumerAdditionProposals {
     if currentTimestamp() > p.spawnTime {
       CreateConsumerClient(p)
-      pendingSpawnProposals.Remove(p)
+      pendingConsumerAdditionProposals.Remove(p)
     }
   }
 }
@@ -554,9 +554,9 @@ function BeginBlockInit() {
 - **Precondition**
   - True. 
 - **Postcondition**
-  - For each `SpawnConsumerChainProposal` `p` in the list of pending spawn proposals `pendingSpawnProposals`, if `currentTimestamp() > p.spawnTime`, then
+  - For each `ConsumerAdditionProposal` `p` in the list of pending addition proposals `pendingConsumerAdditionProposals`, if `currentTimestamp() > p.spawnTime`, then
     - `CreateConsumerClient(p)` is invoked;
-    - `p` is removed from `pendingSpawnProposals`.
+    - `p` is removed from `pendingConsumerAdditionProposals`.
 - **Error Condition**
   - None.
   
@@ -1060,30 +1060,30 @@ function BeginBlockInit() {
 [&uparrow; Back to Outline](#outline)
 
 <!-- omit in toc -->
-#### **[CCV-PCF-STCCPROP.1]**
+#### **[CCV-PCF-HCRPROP.1]**
 ```typescript
 // PCF: Provider Chain Function
 // implements governance proposal Handler 
-function StopConsumerChainProposalHandler(p: StopConsumerChainProposal) {
+function HandleConsumerRemovalProposal(p: ConsumerRemovalProposal) {
   if currentTimestamp() >= p.stopTime {
     // stop the consumer chain and do not lock the unbonding
     StopConsumerChain(p.chainId, false)
   }
   else {
-    // store the proposal as a pending stop proposal
-    pendingStopProposals.Append(p)
+    // store the proposal as a pending removal proposal
+    pendingConsumerRemovalProposals.Append(p)
   }
 }
 ```
 - **Caller**
   - `EndBlock()` method of Governance module.
 - **Trigger Event**
-  - A governance proposal `StopConsumerChainProposal` has passed (i.e., it got the necessary votes).
+  - A governance proposal `ConsumerRemovalProposal` has passed (i.e., it got the necessary votes).
 - **Precondition** 
   - True. 
 - **Postcondition** 
-  - If the spawn time has already passed, `StopConsumerChain(p.chainId, false)` is invoked, with `p` the `StopConsumerChainProposal`. 
-  - Otherwise, the proposal is appended to the list of pending stop proposals, i.e., `pendingStopProposals`.
+  - If the stop time has already passed, `StopConsumerChain(p.chainId, false)` is invoked, with `p` the `ConsumerRemovalProposal`. 
+  - Otherwise, the proposal is appended to the list of pending removal proposals, i.e., `pendingConsumerRemovalProposals`.
 - **Error Condition**
   - None.
 
@@ -1128,7 +1128,7 @@ function StopConsumerChain(chainId: string, lockUnbonding: Bool) {
 }
 ```
 - **Caller**
-  - `StopConsumerChainProposalHandler` (see [CCV-PCF-STCCPROP.1](#ccv-pcf-stccprop1)) 
+  - `HandleConsumerRemovalProposal` (see [CCV-PCF-HCRPROP.1](#ccv-pcf-hcrprop1)) 
     or `BeginBlockCCR()` (see [CCV-PCF-BBLOCK-CCR.1](#ccv-pcf-bblock-ccr1)) 
     or `onTimeoutVSCPacket()` (see [CCV-PCF-TOVSC.1](#ccv-pcf-tovsc1)).
 - **Trigger Event**
@@ -1171,13 +1171,13 @@ function StopConsumerChain(chainId: string, lockUnbonding: Bool) {
 ```typescript
 // PCF: Provider Chain Function
 function BeginBlockCCR() {
-  // iterate over the pending stop proposals 
+  // iterate over the pending removal proposals 
   // and stop the consumer chain
-  foreach p IN pendingStopProposals {
+  foreach p IN pendingConsumerRemovalProposals {
     if currentTimestamp() > p.stopTime {
       // stop the consumer chain and do not lock the unbonding
       StopConsumerChain(p.chainId, false)
-      pendingStopProposals.Remove(p)
+      pendingConsumerRemovalProposals.Remove(p)
     }
   }
 }
@@ -1189,9 +1189,9 @@ function BeginBlockCCR() {
 - **Precondition**
   - True. 
 - **Postcondition**
-  - For each `StopConsumerChainProposal` `p` in the list of pending spawn proposals `pendingStopProposals`, if `currentTimestamp() > p.stopTime`, then
+  - For each `ConsumerRemovalProposal` `p` in the list of pending removal proposals `pendingConsumerRemovalProposals`, if `currentTimestamp() > p.stopTime`, then
     - `StopConsumerChain(p.chainId, false)` is invoked;
-    - `p` is removed from `pendingStopProposals`.
+    - `p` is removed from `pendingConsumerRemovalProposals`.
 - **Error Condition**
   - None.
 
