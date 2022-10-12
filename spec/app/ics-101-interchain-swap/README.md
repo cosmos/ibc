@@ -34,6 +34,8 @@ Users might also prefer single asset pools over dual assets pools as it removes 
 
 `Right-side swap`: a token exchange that specifies the desired quantity to be purchased.
 
+`Pool State`, the value of invariant of a pool, including symbols, balances, weight etcs
+
 ### Desired Properties
 
 - `Permissionless`: no need to whitelist connections, modules, or denominations.  Individual implementations may have their own permissioning scheme, however the protocol must not require permissioning from a trusted party to be secure.
@@ -80,6 +82,345 @@ $$Amount_{fee} = Amount_{inputToken} * swapFee$$
 
 As the pool collects fees, liquidity providers automatically collect fees through their proportional ownership of the pool balance.
 
+
+### Control Flow And Life Scope
+
+Unlike traditional swap pool, they only have one pool state in a smart contract, Interchain Swap has a inter-mirror `Pool State` on both chains, pool states of the mirror pool would be synced by IBC transactions, see `MessageTypes` in data structure for details.
+
+in order to implement interchain swap, we introduce two roles: `Message Delegator` and `Relay Listener`, 
+
+Mesage Delegator will pre-process(validate msgs, lock assets) the request, and then forward all transactions to the relayer,
+
+```go
+func (k Keeper) DelegateCreatePool(goctx context.Context, msg *types.MsgCreatePoolRequest) (*types.MsgCreatePoolResponse, error) {
+	ctx := sdk.UnwrapSDKContext(goctx)
+
+	if err := msg.ValidateBasic(); err != nil {
+		return nil, err
+	}
+
+	_, err1 := sdk.AccAddressFromBech32(msg.Sender)
+	if err1 != nil {
+		return nil, err1
+	}
+
+	pool := types.NewBalancerLiquidityPool(msg.Denoms, msg.Decimals, msg.Weight)
+	if err := pool.Validate(); err != nil {
+		return nil, err
+	}
+
+	// count native tokens
+	count := 0
+	for _, denom := range msg.Denoms {
+		if k.bankKeeper.HasSupply(ctx, denom) {
+			count += 1
+			pool.UpdateAssetPoolSide(denom, types.PoolSide_POOL_SIDE_NATIVE_ASSET)
+		} else {
+			pool.UpdateAssetPoolSide(denom, types.PoolSide_POOL_SIDE_REMOTE_ASSET)
+		}
+	}
+	if count == 0 {
+		return nil, types.ErrNoNativeTokenInPool
+	}
+
+	msgByte, err0 := types.ModuleCdc.Marshal(msg)
+	if err0 != nil {
+		return nil, err0
+	}
+
+	packet := types.NewIBCSwapPacketData(types.CREATE_POOL, msgByte, nil)
+	if err := k.SendIBCSwapDelegationDataPacket(ctx, msg.SourcePort, msg.SourceChannel, msg.TimeoutHeight, msg.TimeoutTimestamp, packet); err != nil {
+		return nil, err
+	}
+
+	ctx.EventManager().EmitTypedEvents(msg)
+
+	return &types.MsgCreatePoolResponse{}, nil
+}
+
+func (k Keeper) DelegateSingleDeposit(goctx context.Context, msg *types.MsgSingleDepositRequest) (*types.MsgSingleDepositResponse, error) {
+	ctx := sdk.UnwrapSDKContext(goctx)
+
+	if err := msg.ValidateBasic(); err != nil {
+		return nil, err
+	}
+
+	sender, err1 := sdk.AccAddressFromBech32(msg.Sender)
+	if err1 != nil {
+		return nil, err1
+	}
+
+	// deposit assets to the swap module
+	length := len(msg.Tokens)
+	var coins = make([]sdk.Coin, length)
+	for i := 0; i < length; i++ {
+		coins[i] = *msg.Tokens[i]
+	}
+	k.bankKeeper.SendCoinsFromAccountToModule(ctx, sender, types.ModuleName, sdk.NewCoins(coins...))
+
+	msgByte, err0 := types.ModuleCdc.Marshal(msg)
+	if err0 != nil {
+		return nil, err0
+	}
+
+	packet := types.NewIBCSwapPacketData(types.SINGLE_DEPOSIT, msgByte, nil)
+	if err := k.SendIBCSwapDelegationDataPacket(ctx, msg.SourcePort, msg.SourceChannel, msg.TimeoutHeight, msg.TimeoutTimestamp, packet); err != nil {
+		return nil, err
+	}
+
+	ctx.EventManager().EmitTypedEvents(msg)
+
+	return &types.MsgSingleDepositResponse{}, nil
+}
+
+func (k Keeper) DelegateWithdraw(ctx2 context.Context, msg *types.MsgWithdrawRequest) (*types.MsgWithdrawResponse, error) {
+	ctx := sdk.UnwrapSDKContext(ctx2)
+
+	if err := msg.ValidateBasic(); err != nil {
+		return nil, err
+	}
+
+	sender, err1 := sdk.AccAddressFromBech32(msg.Sender)
+	if err1 != nil {
+		return nil, err1
+	}
+
+	// deposit assets to the swap module
+	k.bankKeeper.SendCoinsFromAccountToModule(ctx, sender, types.ModuleName, sdk.NewCoins(*msg.PoolToken))
+
+	msgByte, err0 := types.ModuleCdc.Marshal(msg)
+	if err0 != nil {
+		return nil, err0
+	}
+
+	packet := types.NewIBCSwapPacketData(types.WITHDRAW, msgByte, nil)
+	if err := k.SendIBCSwapDelegationDataPacket(ctx, msg.SourcePort, msg.SourceChannel, msg.TimeoutHeight, msg.TimeoutTimestamp, packet); err != nil {
+		return nil, err
+	}
+
+	ctx.EventManager().EmitTypedEvents(msg)
+
+	return &types.MsgWithdrawResponse{}, nil
+}
+
+func (k Keeper) DelegateLeftSwap(goctx context.Context, msg *types.MsgLeftSwapRequest) (*types.MsgSwapResponse, error) {
+	ctx := sdk.UnwrapSDKContext(goctx)
+
+	if err := msg.ValidateBasic(); err != nil {
+		return nil, err
+	}
+
+	sender, err1 := sdk.AccAddressFromBech32(msg.Sender)
+	if err1 != nil {
+		return nil, err1
+	}
+
+	// deposit assets to the swap module
+	k.bankKeeper.SendCoinsFromAccountToModule(ctx, sender, types.ModuleName, sdk.NewCoins(*msg.TokenIn))
+
+	msgByte, err0 := types.ModuleCdc.Marshal(msg)
+	if err0 != nil {
+		return nil, err0
+	}
+
+	packet := types.NewIBCSwapPacketData(types.LEFT_SWAP, msgByte, nil)
+	if err := k.SendIBCSwapDelegationDataPacket(ctx, msg.SourcePort, msg.SourceChannel, msg.TimeoutHeight, msg.TimeoutTimestamp, packet); err != nil {
+		return nil, err
+	}
+
+	ctx.EventManager().EmitTypedEvents(msg)
+
+	return &types.MsgSwapResponse{}, nil
+}
+
+func (k Keeper) DelegateRightSwap(goctx context.Context, msg *types.MsgRightSwapRequest) (*types.MsgSwapResponse, error) {
+	ctx := sdk.UnwrapSDKContext(goctx)
+
+	if err := msg.ValidateBasic(); err != nil {
+		return nil, err
+	}
+
+	sender, err1 := sdk.AccAddressFromBech32(msg.Sender)
+	if err1 != nil {
+		return nil, err1
+	}
+
+	k.bankKeeper.SendCoinsFromAccountToModule(ctx, sender, types.ModuleName, sdk.NewCoins(*msg.TokenIn))
+
+	msgByte, err0 := types.ModuleCdc.Marshal(msg)
+	if err0 != nil {
+		return nil, err0
+	}
+
+	packet := types.NewIBCSwapPacketData(types.RIGHT_SWAP, msgByte, nil)
+	if err := k.SendIBCSwapDelegationDataPacket(ctx, msg.SourcePort, msg.SourceChannel, msg.TimeoutHeight, msg.TimeoutTimestamp, packet); err != nil {
+		return nil, err
+	}
+
+	ctx.EventManager().EmitTypedEvents(msg)
+
+	return &types.MsgSwapResponse{}, nil
+}
+```
+
+Relay Listener would handle every transactions, and execute the business logic.
+
+```go
+func (k Keeper) OnCreatePoolReceived(ctx sdk.Context, msg *types.MsgCreatePoolRequest) (*types.MsgCreatePoolResponse, error) {
+
+	if err := msg.ValidateBasic(); err != nil {
+		return nil, err
+	}
+
+	_, err1 := sdk.AccAddressFromBech32(msg.Sender)
+	if err1 != nil {
+		return nil, err1
+	}
+
+	pool := types.NewBalancerLiquidityPool(msg.Denoms, msg.Decimals, msg.Weight)
+	if err := pool.Validate(); err != nil {
+		return nil, err
+	}
+
+	// count native tokens
+	count := 0
+	for _, denom := range msg.Denoms {
+		if k.bankKeeper.HasSupply(ctx, denom) {
+			count += 1
+			pool.UpdateAssetPoolSide(denom, types.PoolSide_POOL_SIDE_NATIVE_ASSET)
+		} else {
+			pool.UpdateAssetPoolSide(denom, types.PoolSide_POOL_SIDE_REMOTE_ASSET)
+		}
+	}
+	if count == 0 {
+		return nil, types.ErrNoNativeTokenInPool
+	}
+
+	k.SetBalancerPool(ctx, pool)
+
+	return &types.MsgCreatePoolResponse{
+		PoolId: pool.Id,
+	}, nil
+
+}
+
+func (k Keeper) OnSingleDepositReceived(ctx sdk.Context, msg *types.MsgSingleDepositRequest) (*types.MsgSingleDepositResponse, error) {
+	if err := msg.ValidateBasic(); err != nil {
+		return nil, err
+	}
+
+	amm, err := k.CreateIBCSwapAMM(ctx, msg.PoolId)
+	if err != nil {
+		return nil, err
+	}
+
+	poolToken, err := amm.Deposit(msg.Tokens)
+	if err != nil {
+		return nil, err
+	}
+
+	k.SetBalancerPool(ctx, *amm.Pool) // update pool states
+
+	return &types.MsgSingleDepositResponse{
+		PoolToken: &poolToken,
+	}, nil
+}
+
+func (k Keeper) OnWithdrawReceived(ctx sdk.Context, msg *types.MsgWithdrawRequest) (*types.MsgWithdrawResponse, error) {
+	if err := msg.ValidateBasic(); err != nil {
+		return nil, err
+	}
+
+	amm, err := k.CreateIBCSwapAMM(ctx, msg.PoolToken.Denom) // Pool Token denomination is the pool Id
+	if err != nil {
+		return nil, err
+	}
+
+	outToken, err := amm.Withdraw(msg.PoolToken, msg.DenomOut)
+	if err != nil {
+		return nil, err
+	}
+
+	k.SetBalancerPool(ctx, *amm.Pool) // update pool states
+
+	// only output one asset in the pool
+	return &types.MsgWithdrawResponse{
+		Tokens: []*sdk.Coin{
+			&outToken,
+		},
+	}, nil
+}
+
+func (k Keeper) OnLeftSwapReceived(ctx sdk.Context, msg *types.MsgLeftSwapRequest) (*types.MsgSwapResponse, error) {
+	if err := msg.ValidateBasic(); err != nil {
+		return nil, err
+	}
+
+	poolId := types.GeneratePoolId([]string{msg.TokenIn.Denom, msg.DenomOut})
+
+	amm, err := k.CreateIBCSwapAMM(ctx, poolId) // Pool Token denomination is the pool Id
+	if err != nil {
+		return nil, err
+	}
+
+	outToken, err := amm.LeftSwap(msg.TokenIn, msg.DenomOut)
+	if err != nil {
+		return nil, err
+	}
+
+	k.SetBalancerPool(ctx, *amm.Pool) // update pool states
+
+	// only output one asset in the pool
+	return &types.MsgSwapResponse{
+		TokenOut: &outToken,
+	}, nil
+}
+
+func (k Keeper) OnRightSwapReceived(ctx sdk.Context, msg *types.MsgRightSwapRequest) (*types.MsgSwapResponse, error) {
+	if err := msg.ValidateBasic(); err != nil {
+		return nil, err
+	}
+
+	poolId := types.GeneratePoolId([]string{msg.TokenIn.Denom, msg.TokenOut.Denom})
+
+	amm, err := k.CreateIBCSwapAMM(ctx, poolId) // Pool Token denomination is the pool Id
+	if err != nil {
+		return nil, err
+	}
+
+	outToken, err := amm.RightSwap(msg.TokenIn.Denom, msg.TokenOut)
+	if err != nil {
+		return nil, err
+	}
+
+	k.SetBalancerPool(ctx, *amm.Pool) // update pool states
+
+	// only output one asset in the pool
+	return &types.MsgSwapResponse{
+		TokenOut: &outToken,
+	}, nil
+}
+
+func (k Keeper) OnCreatePoolAcknowledged(ctx sdk.Context, request *types.MsgCreatePoolRequest, response *types.MsgCreatePoolResponse) error {
+
+}
+
+func (k Keeper) OnSingleDepositAcknowledged(ctx sdk.Context, request *types.MsgSingleDepositRequest, response *types.MsgSingleDepositResponse) error {
+
+}
+
+func (k Keeper) OnWithdrawAcknowledged(ctx sdk.Context, request *types.MsgWithdrawRequest, response *types.MsgWithdrawResponse) error {
+
+}
+
+func (k Keeper) OnLeftSwapAcknowledged(ctx sdk.Context, request *types.MsgLeftSwapRequest, response *types.MsgSwapResponse) error {
+
+}
+
+func (k Keeper) OnRightSwapAcknowledged(ctx sdk.Context, request *types.MsgRightSwapRequest, response *types.MsgSwapResponse) error {
+
+}
+```
 
 ### Data Structures
 
