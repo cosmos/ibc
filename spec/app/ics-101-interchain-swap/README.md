@@ -34,7 +34,7 @@ Users might also prefer single asset pools over dual assets pools as it removes 
 
 `Right-side swap`: a token exchange that specifies the desired quantity to be purchased.
 
-`Pool State`, the value of invariant of a pool, including symbols, balances, weight etcs
+`Pool State`: the invariant value of a liquidity pool which is derived from its token balances and weights inside.
 
 ### Desired Properties
 
@@ -51,7 +51,7 @@ Users might also prefer single asset pools over dual assets pools as it removes 
 
 #### Invariant
 
-A constant invariant is maintained after trades which takes into consider token weights and balance.  The value function V is defined as:
+A constant invariant is maintained after trades which takes into consider token weights and balance.  The value function V (pool state) is defined as:
 
 $$V = {&Pi;_tB_t^{W_t}}$$ 
 
@@ -104,9 +104,11 @@ interface IBCSwapDataPacket {
 
 ### Sub-protocols
 
-Unlike traditional swap pool, they only have one pool state in a smart contract, Interchain Swap has a inter-mirror `Pool State` on both chains, pool states of the mirror pool would be synced by IBC transactions, you can see as following.
+Traditional liquidity pools typically maintain its pool state in one location.  
 
-**IBCSwap implements the following sub-protocols: **
+A liquidity pool in the interchain swap protocol maintains its pool state on both its source chain and destination chain.  The pool states mirror each other and are synced through IBC packet relays, which we elaborate on in the following sub-protocols.
+
+IBCSwap implements the following sub-protocols:
 
 ```protobuf
   rpc DelegateCreatePool(MsgCreatePoolRequest) returns (MsgCreatePoolResponse);
@@ -174,9 +176,7 @@ interface MsgSwapResponse {
 
 ### Control Flow And Life Scope
 
-in order to implement interchain swap, we introduce two roles: `Message Delegator` and `Relay Listener`, 
-
-Mesage Delegator will pre-process(validate msgs, lock assets) the request, and then forward all transactions to the relayer,
+To implement interchain swap, we introduce the `Message Delegator` and `Relay Listener`. The `Message Delegator` will pre-process the request (validate msgs, lock assets, etc), and then forward the transactions to the relayer.
 
 ```go
 func (k Keeper) DelegateCreatePool(goctx context.Context, msg *types.MsgCreatePoolRequest) (*types.MsgCreatePoolResponse, error) {
@@ -350,7 +350,7 @@ func (k Keeper) DelegateRightSwap(goctx context.Context, msg *types.MsgRightSwap
 }
 ```
 
-Relay Listener would handle every transactions, and execute txs on received, then send the result as an acknoledgement. therefore the relay on source chain could update pool state according to the result in the acknowledgement.
+The `Relay Listener` handle all transactions, execute transactions when received, and send the result as an acknowledgement. In this way, packets relayed on the source chain update pool states on the destination chain according to results in the acknowledgement.
 
 ```go
 func (k Keeper) OnCreatePoolReceived(ctx sdk.Context, msg *types.MsgCreatePoolRequest) (*types.MsgCreatePoolResponse, error) {
