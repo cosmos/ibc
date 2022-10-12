@@ -34,7 +34,7 @@ Users might also prefer single asset pools over dual assets pools as it removes 
 
 `Right-side swap`: a token exchange that specifies the desired quantity to be purchased.
 
-`Pool State`: the invariant value of a liquidity pool which is derived from its token balances and weights inside.
+`Pool state`: the entire state of a liquidity pool including its invariant value which is derived from its token balances and weights inside.
 
 ### Desired Properties
 
@@ -51,7 +51,7 @@ Users might also prefer single asset pools over dual assets pools as it removes 
 
 #### Invariant
 
-A constant invariant is maintained after trades which takes into consider token weights and balance.  The value function V (pool state) is defined as:
+A constant invariant is maintained after trades which takes into consider token weights and balance.  The value function V is defined as:
 
 $$V = {&Pi;_tB_t^{W_t}}$$ 
 
