@@ -176,7 +176,7 @@ interface MsgSwapResponse {
 
 ### Control Flow And Life Scope
 
-To implement interchain swap, we introduce the `Message Delegator` and `Relay Listener`. The `Message Delegator` will pre-process the request (validate msgs, lock assets), and then forward the transactions to the relayer.
+To implement interchain swap, we introduce the `Message Delegator` and `Relay Listener`. The `Message Delegator` will pre-process the request (validate msgs, lock assets, etc), and then forward the transactions to the relayer.
 
 ```go
 func (k Keeper) DelegateCreatePool(goctx context.Context, msg *types.MsgCreatePoolRequest) (*types.MsgCreatePoolResponse, error) {
