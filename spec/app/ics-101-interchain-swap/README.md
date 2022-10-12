@@ -82,6 +82,25 @@ $$Amount_{fee} = Amount_{inputToken} * swapFee$$
 
 As the pool collects fees, liquidity providers automatically collect fees through their proportional ownership of the pool balance.
 
+### Data Structures
+
+Only one packet data type is required: `IBCSwapDataPacket`, which specifies the message type and data(protobuf marshalled).  It is a wrapper for interchain swap messages.
+
+```ts
+enum MessageType {
+    Create,
+    Deposit,
+    Withdraw,
+    LeftSwap,
+    RightSwap,
+}
+
+// IBCSwapDataPacket is used to wrap message for relayer.
+interface IBCSwapDataPacket {
+    msgType: MessageType,
+    data: Uint8Array, // Bytes
+}
+```
 
 ### Control Flow And Life Scope
 
@@ -419,26 +438,6 @@ func (k Keeper) OnLeftSwapAcknowledged(ctx sdk.Context, request *types.MsgLeftSw
 
 func (k Keeper) OnRightSwapAcknowledged(ctx sdk.Context, request *types.MsgRightSwapRequest, response *types.MsgSwapResponse) error {
 
-}
-```
-
-### Data Structures
-
-Only one packet data type is required: `IBCSwapDataPacket`, which specifies the message type and data(protobuf marshalled).  It is a wrapper for interchain swap messages.
-
-```ts
-enum MessageType {
-    Create,
-    Deposit,
-    Withdraw,
-    LeftSwap,
-    RightSwap,
-}
-
-// IBCSwapDataPacket is used to wrap message for relayer.
-interface IBCSwapDataPacket {
-    msgType: MessageType,
-    data: Uint8Array, // Bytes
 }
 ```
 
