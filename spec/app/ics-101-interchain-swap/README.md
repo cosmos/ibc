@@ -102,9 +102,77 @@ interface IBCSwapDataPacket {
 }
 ```
 
-### Control Flow And Life Scope
+### Sub-protocols
 
-Unlike traditional swap pool, they only have one pool state in a smart contract, Interchain Swap has a inter-mirror `Pool State` on both chains, pool states of the mirror pool would be synced by IBC transactions, see `MessageTypes` in data structure for details.
+Unlike traditional swap pool, they only have one pool state in a smart contract, Interchain Swap has a inter-mirror `Pool State` on both chains, pool states of the mirror pool would be synced by IBC transactions, you can see as following.
+
+**IBCSwap implements the following sub-protocols: **
+
+```protobuf
+  rpc DelegateCreatePool(MsgCreatePoolRequest) returns (MsgCreatePoolResponse);
+  rpc DelegateSingleDeposit(MsgSingleDepositRequest) returns (MsgSingleDepositResponse);
+  rpc DelegateWithdraw(MsgWithdrawRequest) returns (MsgWithdrawResponse);
+  rpc DelegateLeftSwap(MsgLeftSwapRequest) returns (MsgSwapResponse);
+  rpc DelegateRightSwap(MsgRightSwapRequest) returns (MsgSwapResponse);
+```
+
+#### Interfaces for sub-protocols
+
+``` ts
+interface MsgCreatePoolRequest {
+    sender: string,
+    denoms: string[],
+    decimals: [],
+    weight: string,
+}
+
+interface MsgCreatePoolResponse {}
+```
+```ts
+interface MsgDepositRequest {
+    sender: string,
+    tokens: Coin[],
+}
+interface MsgSingleDepositResponse {
+    pool_token: Coin[];
+}
+```
+```ts
+interface MsgWithdrawRequest {
+    sender: string,
+    poolCoin: Coin,
+    denomOut: string, // optional, if not set, withdraw native coin to sender.
+}
+interface MsgWithdrawResponse {
+   tokens: Coin[];
+}
+```
+ ```ts
+ interface MsgLeftSwapRequest {
+    sender: string,
+    tokenIn: Coin,
+    denomOut: string,
+    slippage: number; // max tolerated slippage
+    recipient: string, 
+}
+interface MsgSwapResponse {
+   tokens: Coin[];
+}
+```
+ ```ts
+interface MsgRightSwapRequest {
+    sender: string,
+    denomIn: string,
+    tokenOut: Coin,
+    slippage: number; // max tolerated slippage 
+    recipient: string,
+}
+interface MsgSwapResponse {
+   tokens: Coin[];
+}
+```
+
+### Control Flow And Life Scope
 
 in order to implement interchain swap, we introduce two roles: `Message Delegator` and `Relay Listener`, 
 
@@ -438,73 +506,6 @@ func (k Keeper) OnLeftSwapAcknowledged(ctx sdk.Context, request *types.MsgLeftSw
 
 func (k Keeper) OnRightSwapAcknowledged(ctx sdk.Context, request *types.MsgRightSwapRequest, response *types.MsgSwapResponse) error {
 
-}
-```
-
-### Sub-protocols
-
-IBCSwap implements the following sub-protocols:
-```protobuf
-  rpc DelegateCreatePool(MsgCreatePoolRequest) returns (MsgCreatePoolResponse);
-  rpc DelegateSingleDeposit(MsgSingleDepositRequest) returns (MsgSingleDepositResponse);
-  rpc DelegateWithdraw(MsgWithdrawRequest) returns (MsgWithdrawResponse);
-  rpc DelegateLeftSwap(MsgLeftSwapRequest) returns (MsgSwapResponse);
-  rpc DelegateRightSwap(MsgRightSwapRequest) returns (MsgSwapResponse);
-```
-
-#### Interfaces for sub-protocols
-
-``` ts
-interface MsgCreatePoolRequest {
-    sender: string,
-    denoms: string[],
-    decimals: [],
-    weight: string,
-}
-
-interface MsgCreatePoolResponse {}
-```
-```ts
-interface MsgDepositRequest {
-    sender: string,
-    tokens: Coin[],
-}
-interface MsgSingleDepositResponse {
-    pool_token: Coin[];
-}
-```
-```ts
-interface MsgWithdrawRequest {
-    sender: string,
-    poolCoin: Coin,
-    denomOut: string, // optional, if not set, withdraw native coin to sender.
-}
-interface MsgWithdrawResponse {
-   tokens: Coin[];
-}
-```
- ```ts
- interface MsgLeftSwapRequest {
-    sender: string,
-    tokenIn: Coin,
-    denomOut: string,
-    slippage: number; // max tolerated slippage
-    recipient: string, 
-}
-interface MsgSwapResponse {
-   tokens: Coin[];
-}
-```
- ```ts
-interface MsgRightSwapRequest {
-    sender: string,
-    denomIn: string,
-    tokenOut: Coin,
-    slippage: number; // max tolerated slippage 
-    recipient: string,
-}
-interface MsgSwapResponse {
-   tokens: Coin[];
 }
 ```
 
