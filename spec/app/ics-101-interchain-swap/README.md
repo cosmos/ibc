@@ -34,7 +34,7 @@ Users might also prefer single asset pools over dual assets pools as it removes 
 
 `Right-side swap`: a token exchange that specifies the desired quantity to be purchased.
 
-`Pool State`: the invariant value of a liquidity pool which is derived from the token balances and weights inside.
+`Pool State`: the invariant value of a liquidity pool which is derived from its token balances and weights inside.
 
 ### Desired Properties
 
@@ -106,7 +106,7 @@ interface IBCSwapDataPacket {
 
 Traditional liquidity pools typically maintain its pool state in one location.  
 
-A liquidity pool in the interchain swap protocol maintains its pool state on both its source chain and destination chain.  The pool states mirror each other and are synced through IBC packet relays, which we elaborate in the following sub-protocols.
+A liquidity pool in the interchain swap protocol maintains its pool state on both its source chain and destination chain.  The pool states mirror each other and are synced through IBC packet relays, which we elaborate on in the following sub-protocols.
 
 IBCSwap implements the following sub-protocols:
 
