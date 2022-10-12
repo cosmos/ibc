@@ -350,7 +350,7 @@ func (k Keeper) DelegateRightSwap(goctx context.Context, msg *types.MsgRightSwap
 }
 ```
 
-Relay Listener would handle every transactions, and execute the business logic.
+Relay Listener would handle every transactions, and execute txs on received, then send the result as an acknoledgement. therefore the relay on source chain could update pool state according to the result in the acknowledgement.
 
 ```go
 func (k Keeper) OnCreatePoolReceived(ctx sdk.Context, msg *types.MsgCreatePoolRequest) (*types.MsgCreatePoolResponse, error) {
