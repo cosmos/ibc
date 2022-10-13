@@ -630,12 +630,16 @@ function recvPacket(
         nextSequenceRecv = provableStore.get(nextSequenceRecvPath(packet.destPort, packet.destChannel))
         if (packet.sequence < nextSequenceRecv) {
           emitLogEntry("recvPacket", {
-            sequence: packet.sequence, 
+            data: packet.data 
             timeoutHeight: packet.timeoutHeight, 
-            port: packet.destPort, 
-            channel: packet.destChannel,
-            timeoutTimestamp: packet.timeoutTimestamp, 
-            data: packet.data
+            timeoutTimestamp: packet.timeoutTimestamp,
+            sequence: packet.sequence,
+            sourcePort: packet.sourcePort, 
+            sourceChannel: packet.sourceChannel,
+            destPort: packet.destPort, 
+            destChannel: packet.destChannel,
+            order: channel.order,
+            connection: channel.connectionHops[0]
           })
         }
 
@@ -684,12 +688,16 @@ function recvPacket(
         packetRecepit = provableStore.get(packetReceiptPath(packet.destPort, packet.destChannel, packet.sequence))
         if (packetRecepit != null) {
           emitLogEntry("recvPacket", {
-            sequence: packet.sequence, 
+            data: packet.data 
             timeoutHeight: packet.timeoutHeight, 
-            port: packet.destPort, 
-            channel: packet.destChannel,
-            timeoutTimestamp: packet.timeoutTimestamp, 
-            data: packet.data
+            timeoutTimestamp: packet.timeoutTimestamp,
+            sequence: packet.sequence,
+            sourcePort: packet.sourcePort, 
+            sourceChannel: packet.sourceChannel,
+            destPort: packet.destPort, 
+            destChannel: packet.destChannel,
+            order: channel.order,
+            connection: channel.connectionHops[0]
           })
         }
 
@@ -703,12 +711,16 @@ function recvPacket(
     
     // log that a packet has been received
     emitLogEntry("recvPacket", {
-      sequence: packet.sequence, 
+      data: packet.data 
       timeoutHeight: packet.timeoutHeight, 
-      port: packet.destPort, 
-      channel: packet.destChannel,
-      timeoutTimestamp: packet.timeoutTimestamp, 
-      data: packet.data
+      timeoutTimestamp: packet.timeoutTimestamp,
+      sequence: packet.sequence,
+      sourcePort: packet.sourcePort, 
+      sourceChannel: packet.sourceChannel,
+      destPort: packet.destPort, 
+      destChannel: packet.destChannel,
+      order: channel.order,
+      connection: channel.connectionHops[0]
     })
 
     // return transparent packet
