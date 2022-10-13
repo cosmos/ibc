@@ -629,6 +629,7 @@ function recvPacket(
     if channel.order == ORDERED || channel.order == ORDERED_ALLOW_TIMEOUT {
         nextSequenceRecv = provableStore.get(nextSequenceRecvPath(packet.destPort, packet.destChannel))
         if (packet.sequence < nextSequenceRecv) {
+          // event is emitted even if transaction is aborted
           emitLogEntry("recvPacket", {
             data: packet.data 
             timeoutHeight: packet.timeoutHeight, 
