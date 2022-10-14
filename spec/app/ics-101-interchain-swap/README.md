@@ -39,7 +39,7 @@ Users might also prefer single asset pools over dual assets pools as it removes 
 ### Desired Properties
 
 - `Permissionless`: no need to whitelist connections, modules, or denominations.  Individual implementations may have their own permissioning scheme, however the protocol must not require permissioning from a trusted party to be secure.
-- `Decentralization`: all parameters are managed on chain.  Does not require any central authority or entity to function.  Also does not require a single blockchain, acting as a hub, to function.
+- `Decentralization`: all parameters are managed on chain via governance.  Does not require any central authority or entity to function.  Also does not require a single blockchain, acting as a hub, to function.
 - `Gaurantee of Exchange`: no occurence of a user receiving tokens without the equivalent promised exchange.
 - `Liquidity Incentives`: supports the collection of fees which are distributed to liquidity providers and acts as incentive for liquidity participation.
 - `Weighted Math`: allows the configuration of pool weights so users can choose their levels of exposure between the tokens.
@@ -51,7 +51,7 @@ Users might also prefer single asset pools over dual assets pools as it removes 
 
 #### Invariant
 
-A constant invariant is maintained after trades which takes into consider token weights and balance.  The value function V is defined as:
+A constant invariant is maintained after trades which takes into consideration token weights and balance.  The value function $V$ is defined as:
 
 $$V = {&Pi;_tB_t^{W_t}}$$ 
 
@@ -63,7 +63,7 @@ Where
 
 #### Spot Price
 
-Spot price of tokens are defined entirely by the weights and balances of the token pair.  The sport price between any two tokens, $SpotPrice_i^{o}$, or in short $SP_i^o$, is the ratio of the token balances normalized by their weights:
+Spot prices of tokens are defined entirely by the weights and balances of the token pair.  The spot price between any two tokens, $SpotPrice_i^{o}$, or in short $SP_i^o$, is the ratio of the token balances normalized by their weights:
 
 $$SP_i^o = (B_i/W_i)/(B_o/W_o)$$ 
 
@@ -74,7 +74,7 @@ $$SP_i^o = (B_i/W_i)/(B_o/W_o)$$
 
 #### Fees
 
-Traders pay swap fees when they trade with a pool. these fees can be customized with a minimum value of 0.0001% and a maximum value of 10%. 
+Traders pay swap fees when they trade with a pool. These fees can be customized with a minimum value of 0.0001% and a maximum value of 10%. 
 
 The fees go to liquidity providers in exchange for depositing their tokens in the pool to facilitate trades. Trade fees are collected at the time of a swap, and goes directly into the pool, increasing the pool balance. For a trade with a given $inputToken$ and $outputToken$, the amount collected by the pool as a fee is 
 
