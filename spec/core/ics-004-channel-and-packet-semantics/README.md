@@ -560,6 +560,9 @@ function sendPacket(
 
     // check if the calling module owns the sending port
     abortTransactionUnless(authenticateCapability(channelCapabilityPath(sourcePort, sourceChannel), capability))
+
+    // disallow packets with a zero timeoutHeight and timeoutTimestamp
+    abortTransactionUnless(packet.timeoutHeight !== 0 || packet.timeoutTimestamp !== 0)
     
     // check that the timeout height hasn't already passed in the local client tracking the receiving chain
     latestClientHeight = provableStore.get(clientPath(connection.clientIdentifier)).latestClientHeight()
