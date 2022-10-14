@@ -206,13 +206,12 @@ Tendermint client validity checking uses the bisection algorithm described in th
 
 ```typescript
 function verifyClientMessage(
-  clientMsg: ClientMessage) {
+  clientMsg: ClientMessage) => bool {
     switch typeof(clientMsg) {
       case Header:
-        verifyHeader(clientMsg)
+        return verifyHeader(clientMsg)
       case Misbehaviour:
-        verifyHeader(clientMsg.h1)
-        verifyHeader(clientMsg.h2)
+        return verifyHeader(clientMsg.h1) && verifyHeader(clientMsg.h2)
     }
 }
 ```
@@ -220,30 +219,40 @@ function verifyClientMessage(
 Verify validity of regular update to the Tendermint client
 
 ```typescript
-function verifyHeader(header: Header) {
+function verifyHeader(header: Header) => bool {
     clientState = get("clients/{header.identifier}/clientState")
-    // assert trusting period has not yet passed
-    assert(currentTimestamp() - clientState.latestTimestamp < clientState.trustingPeriod)
-    // assert header timestamp is less than trust period in the future. This should be resolved with an intermediate header.
-    assert(header.timestamp - clientState.latestTimeStamp < trustingPeriod)
+    // trusting period must have not yet passed
+    if clientState.latestTimestamp + clientState.trustingPeriod > currentTimestamp() {
+      return false
+    }
+    // header timestamp must be less than or equal to the trusting period in the future. This should be resolved with an intermediate header.
+    if clientState.latestTimeStamp + clientState.trustingPeriod > header.timestamp {
+      return false
+    }
     // trusted height revision must be the same as header revision
     // if revisions are different, use upgrade client instead
-    // trusted height must be less than header height
-    assert(header.GetHeight().revisionNumber == header.trustedHeight.revisionNumber)
-    assert(header.GetHeight().revisionHeight > header.trustedHeight.revisionHeight)
+    if header.GetHeight().revisionNumber != header.trustedHeight.revisionNumber {
+      return false
+    }
+    // trusted height must be less than or equal to header height
+    if header.GetHeight().revisionHeight <= header.trustedHeight.revisionHeight {
+      return false
+    }
     // fetch the consensus state at the trusted height
     consensusState = get("clients/{header.identifier}/consensusStates/{header.trustedHeight}")
-    // assert that header's trusted validator set hashes to consensus state's validator hash
-    assert(hash(header.trustedValidatorSet) == consensusState.nextValidatorsHash)
+    // header's trusted validator set must hash to consensus state's validator hash
+    if header.trustedValidatorSet) != consensusState.nextValidatorsHash {
+      return false
+    }
 
     // call the tendermint client's `verify` function
-    assert(tmClient.verify(
+    return tmClient.verify(
       header.trustedValidatorSet,
       clientState.latestHeight,
       clientState.trustingPeriod,
       clientState.maxClockDrift,
       header.TendermintSignedHeader,
-    ))
+    )
 }
 ```
 

@@ -262,7 +262,7 @@ for the given parent `ClientMessage` and the list of network messages.
 The validity predicate is defined as:
 
 ```typescript
-type VerifyClientMessage = (ClientMessage) => Void
+type VerifyClientMessage = (ClientMessage) => bool
 ```
 
 `VerifyClientMessage` MUST throw an exception if the provided ClientMessage was not valid.
@@ -576,7 +576,7 @@ function updateClient(
     clientState = provableStore.get(clientStatePath(id))
     abortTransactionUnless(clientState !== null)
 
-    clientState.VerifyClientMessage(clientMessage)
+    abortTransactionUnless(clientState.VerifyClientMessage(clientMessage))
     
     foundMisbehaviour := clientState.CheckForMisbehaviour(clientMessage)
     if foundMisbehaviour {
@@ -602,7 +602,7 @@ function submitMisbehaviourToClient(
     clientState = provableStore.get(clientStatePath(id))
     abortTransactionUnless(clientState !== null)
     // authenticate client message
-    clientState.verifyClientMessage(clientMessage)
+    abortTransactionUnless(clientState.verifyClientMessage(clientMessage))
     // check that client message is valid instance of misbehaviour
     abortTransactionUnless(clientState.checkForMisbehaviour(clientMessage))
     // update state based on misbehaviour
