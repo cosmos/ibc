@@ -42,8 +42,13 @@ interface FungibleTokenPacketData {
   amount: uint256
   sender: string
   receiver: string
+  metadata: bytes
 }
 ```
+
+Note: Since earlier versions of this specification did not include a `metadata` field, implementations must ensure that the new packet data is still compatible with chains that expect the old packet data. A legacy implementation MUST be able to unmarshal a new packet data with a `nil` metadata into the legacy `FungibleTokenPacketData` struct. Similarly, an implementation supporting `metadata` must be able to unmarshal a legacy packet data into the current struct with the metadata field set to `nil`.
+
+The `metadata` field is not used within transfer, however it may be used either for external off-chain users (i.e. a memo) or for middleware wrapping transfer that can parse and execute custom logic on the basis of the passed in metadata. Chains should ensure that there is some length limit on the entire packet data to ensure that the packet does not become a DOS vector. However, these do not need to be protocol-defined limits. If the receiver cannot accept a packet because of length limitations, this will lead to a timeout on the sender side.
 
 As tokens are sent across chains using the ICS 20 protocol, they begin to accrue a record of channels for which they have been transferred across. This information is encoded into the `denom` field. 
 

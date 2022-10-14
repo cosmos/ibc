@@ -76,7 +76,7 @@ The CCV module is initialized through the `InitGenesis` method when the chain is
     If `distributionChannelId == ""`, a new token transfer channel is created on top of the same connection as the CCV channel.
 
 The provider CCV module handles governance proposals to add new consumer chains and to remove existing consumer chains. 
-While the structure of governance proposals is specific to every ABCI application (for an example, see the `Proposal` interface in the [Governance module documentation](https://docs.cosmos.network/v0.44/modules/gov/) of Cosmos SDK),
+While the structure of governance proposals is specific to every ABCI application (for an example, see the `Proposal` interface in the [Governance module documentation](https://docs.cosmos.network/v0.45/modules/gov/) of Cosmos SDK),
 this specification expects the following fields to be part of the proposals to add new consumer chains (i.e., `ConsumerAdditionProposal`) and to remove existing ones (i.e., `ConsumerRemovalProposal`):
   ```typescript
   interface ConsumerAdditionProposal {
@@ -118,7 +118,7 @@ interface CCVHandshakeMetadata {
   version: string
 }
 ```
-This specification assumes that the provider CCV module has access to the address of the distribution module account through the `GetDistributionAccountAddress()` method. For an example, take a look at the [auth module](https://docs.cosmos.network/v0.44/modules/auth/) of Cosmos SDK. 
+This specification assumes that the provider CCV module has access to the address of the distribution module account through the `GetDistributionAccountAddress()` method. For an example, take a look at the [auth module](https://docs.cosmos.network/v0.45/modules/auth/) of Cosmos SDK. 
 
 During the CCV channel opening handshake, the provider chain adds the address of its distribution module account to the channel version as metadata (as described in [ICS 4](../../core/ics-004-channel-and-packet-semantics/README.md#definitions)). 
 The metadata structure is described by the following interface:
@@ -128,7 +128,7 @@ interface CCVHandshakeMetadata {
   version: string
 }
 ```
-This specification assumes that the provider CCV module has access to the address of the distribution module account through the `GetDistributionAccountAddress()` method. For an example, take a look at the [auth module](https://docs.cosmos.network/v0.44/modules/auth/) of Cosmos SDK. 
+This specification assumes that the provider CCV module has access to the address of the distribution module account through the `GetDistributionAccountAddress()` method. For an example, take a look at the [auth module](https://docs.cosmos.network/v0.45/modules/auth/) of Cosmos SDK. 
 
 ## CCV Packets
 [&uparrow; Back to Outline](#outline)
