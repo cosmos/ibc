@@ -187,6 +187,7 @@ This section describes the internal state of the CCV module. For simplicity, the
 [&uparrow; Back to Outline](#outline)
 
 - `ProviderPortId = "provider"` is the port ID the provider CCV module is expected to bind to.
+- `vscTimeout: uint64` is the maximum time duration between sending any `VSCPacket` to any consumer chain and receiving the corresponding `VSCMaturedPacket`, without timing out the consumer chain and consequently removing it.
 - `pendingConsumerAdditionProposals: [ConsumerAdditionProposal]` is a list of pending governance proposals to add new consumer chains. 
 - `pendingConsumerRemovalProposals: [ConsumerRemovalProposal]` is a list of pending governance proposals to remove existing consumer chains. 
   Both lists of pending governance proposals expose the following interface: 
@@ -217,6 +218,7 @@ This section describes the internal state of the CCV module. For simplicity, the
   }
 - `vscId: uint64` is a monotonic strictly increasing and positive ID that is used to uniquely identify the VSCs sent to the consumer chains. 
   Note that `0` is used as a special ID for the mapping from consumer heights to provider heights.
+- `vscTimeoutTimestamps: Map<string, [uint64]>` is a mapping from consumer chain IDs to an order list of timeout timestamps (see `vscTimeout`), one for every `VSCPacket` sent for which the corresponding `VSCMaturedPacket` was not received.
 - `initialHeights: Map<string, Height>` is a mapping from consumer chain IDs to the heights on the provider chain. 
   For every consumer chain, the mapping stores the height when the CCV channel to that consumer chain is established. 
   Note that the provider validator set at this height matches the validator set at the height when the first VSC is provided to that consumer chain.

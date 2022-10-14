@@ -42,7 +42,7 @@ furthermore, the *Correct Relayer* assumption relies on both *Safe Blockchain* a
   - First, every packet sent on the CCV channel is relayed to the receiving end before the packet timeout elapses.
   - Second, a correct relayer will eventually relay packets on the token transfer channel.   
   
-  Clearly, the CCV protocol is responsible of setting the timeouts (i.e., `timeoutHeight` and `timeoutTimestamp`), for the packets sent on the CCV channel, such that the *Correct Relayer* assumption is feasible.
+  Clearly, the CCV protocol is responsible of setting the timeouts (see `ccvTimeoutTimestamp`, `vscTimeout` in the [CCV State](data_structures.md#ccv-state)), such that the *Correct Relayer* assumption is feasible.
   > **Discussion**: IBC relies on timeouts to signal that a sent packet is not going to be received on the other end. 
   > Once an ordered IBC channel timeouts, the channel is closed (see [ICS 4](../../core/ics-004-channel-and-packet-semantics)). 
   > The *Correct Relayer* assumption is necessary to ensure that the CCV channel **cannot** ever timeout and, as a result, cannot transit to the closed state. 

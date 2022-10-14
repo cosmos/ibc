@@ -1130,9 +1130,10 @@ function StopConsumerChain(chainId: string, lockUnbonding: Bool) {
 - **Caller**
   - `HandleConsumerRemovalProposal` (see [CCV-PCF-HCRPROP.1](#ccv-pcf-hcrprop1)) 
     or `BeginBlockCCR()` (see [CCV-PCF-BBLOCK-CCR.1](#ccv-pcf-bblock-ccr1)) 
-    or `onTimeoutVSCPacket()` (see [CCV-PCF-TOVSC.1](#ccv-pcf-tovsc1)).
+    or `onTimeoutVSCPacket()` (see [CCV-PCF-TOVSC.1](#ccv-pcf-tovsc1))
+    or `RemoveTimedoutConsumers()` (see [CCV-PCF-RMTOCC.1](#ccv-pcf-rmtocc1))
 - **Trigger Event**
-  - Either a governance proposal to stop the consumer chain with `chainId` has passed (i.e., it got the necessary votes) or a packet sent on the CCV channel to the consumer chain with `chainId` has timed out.
+  - Either a governance proposal to stop the consumer chain with `chainId` has passed (i.e., it got the necessary votes) or a `VSCPacket` sent on the CCV channel to the consumer chain with `chainId` has timed out.
 - **Precondition**
   - True.
 - **Postcondition**
@@ -1337,6 +1338,9 @@ The *validator set update* sub-protocol enables the provider chain
 ```typescript
 // PCF: Provider Chain Function
 function EndBlockVSU() {
+  // removed timed out consumer chains
+  RemoveTimedoutConsumers()
+
   // get list of validator updates from the provider Staking module
   valUpdates = stakingKeeper.GetValidatorUpdates()
 
@@ -1373,6 +1377,8 @@ function EndBlockVSU() {
           ccvTimeoutTimestamp,
           data
         )
+        // add VSC timeout timestamp to vscTimeoutTimestamps[chainId]
+        vscTimeoutTimestamps[chainId].Append(currentTimestamp().Add(vscTimeout))
       }
 
       // remove pending VSCPackets
@@ -1399,10 +1405,45 @@ function EndBlockVSU() {
     - If there is an established CCV channel for the the consumer chain with `chainId`, then
       - for each `VSCPacketData` in the list of pending VSCPackets associated to `chainId`
         - a packet with the `VSCPacketData` is sent on the channel associated with the consumer chain with `chainId`;
+        - the VSC timeout timestamp is appended to the `vscTimeoutTimestamps[chainId]` list;
       - all the pending VSCPackets associated to `chainId` are removed.
   - `vscId` is incremented.
 - **Error Condition**
   - None.
+
+
+<!-- omit in toc -->
+#### **[CCV-PCF-RMTOCC.1]**
+```typescript
+// PCF: Provider Chain Function
+function RemoveTimedoutConsumers() {
+  // iterate over vscTimeoutTimestamps
+  for chainId IN vscTimeoutTimestamps.Keys() {
+    // check get first timestamp, i.e., the smallest
+    if currentTimestamp() > vscTimeoutTimestamps[chainId][0] {
+      // vscTimeout expired: 
+      // stop the consumer chain and use lockUnbondingOnTimeout 
+      // to decide whether to lock the unbonding
+      StopConsumerChain(chainId, lockUnbondingOnTimeout[chainId])
+    }
+  }
+}
+```
+- **Caller**
+  - The `EndBlockVSU()` method.
+- **Trigger Event**
+  - An `EndBlock` message is received from the consensus engine.
+- **Precondition**
+  - True. 
+- **Postcondition**
+  - For each consumer chain ID `chainId` in `vscTimeoutTimestamps.Keys()`,
+    - if the oldest timestamp in `vscTimeoutTimestamps[chainId]` (i.e., `vscTimeoutTimestamps[chainId][0]`) is smaller than the current timestamp, then the consumer chain with ID `chainId` is stopped.
+- **Error Condition**
+  - None.
+
+> **Note**: To avoid false positives where a consumer chain is unnecessarily removed, 
+> `vscTimeout` MUST be larger than `consumerUnbondingPeriod` and 
+> SHOULD account for the time needed to relay the `VSCPacket` to the consumer and the corresponding `VSCMaturedPacket` back to the provider.
 
 <!-- omit in toc -->
 #### **[CCV-PCF-ACKVSC.1]**
@@ -1481,6 +1522,9 @@ function onRecvVSCMaturedPacket(packet: Packet): bytes {
   // clean up vscToUnbondingOps mapping
   vscToUnbondingOps.Remove((chainId, vscId))
 
+  // remove first VSC timeout timestamp from vscTimeoutTimestamps[chainId]
+  vscTimeoutTimestamps[chainId] = vscTimeoutTimestamps[chainId][1:]
+
   return VSCMaturedPacketSuccess
 }
 ```
@@ -1499,6 +1543,7 @@ function onRecvVSCMaturedPacket(packet: Packet): bytes {
       - the `UnbondingCanComplete()` method of the Staking module is invoked;
       - the entry `op` is removed from `unbondingOps`.
   - `(chainId, vscId)` is removed from `vscToUnbondingOps`.
+  - The first timeout timestamp in `vscTimeoutTimestamps[chainId]` is removed.
   - A successful acknowledgment is returned.
 - **Error Condition**
   - None.
