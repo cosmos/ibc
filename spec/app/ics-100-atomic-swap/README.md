@@ -1,11 +1,11 @@
 ---
 ics: 100
-title: Fungible Token Swap
+title: Atomic Swap
 stage: draft
 category: IBC/APP
 requires: 25, 26
 kind: instantiation
-author: Ping Liang <18786721@qq.com>, Edward Gunawan <edward@s16.ventures>
+author: Ping Liang <ping@side.one>, Edward Gunawan <edward@s16.ventures>
 created: 2022-07-27
 modified: 2022-10-07
 ---
