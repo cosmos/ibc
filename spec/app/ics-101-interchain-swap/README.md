@@ -853,7 +853,7 @@ Coming soon.
 
 ## Example Implementation
 
-https://github.com/sideprotocol/ibcswap
+https://github.com/ibcswap/ibcswap
 
 ## Other Implementations
 

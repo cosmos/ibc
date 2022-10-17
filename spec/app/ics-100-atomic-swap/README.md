@@ -426,7 +426,7 @@ and safely alter the packet data format & packet handler semantics.
 
 ## Example Implementation
 
-https://github.com/sideprotocol/ibcswap
+https://github.com/ibcswap/ibcswap
 
 ## Other Implementations
 
