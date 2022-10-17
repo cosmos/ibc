@@ -6,9 +6,9 @@ category: IBC/TAO
 kind: interface
 requires: 23, 24
 required-by: 3
-author: Juwoon Yun <joon@tendermint.com>, Christopher Goes <cwgoes@tendermint.com>
+author: Juwoon Yun <joon@tendermint.com>, Christopher Goes <cwgoes@tendermint.com>, Aditya Sripal <aditya@interchain.io>
 created: 2019-02-25
-modified: 2020-01-13
+modified: 2022-08-04
 ---
 
 ## Synopsis
@@ -100,7 +100,11 @@ types may require additional properties.
   it enables proofs of inclusion or non-inclusion of particular values at particular paths 
   in the state of the remote state machine at particular `Height`s.
 
-* `ValidityPredicate` is a function that validates state updates. 
+* `ClientMessage` is an arbitrary message defined by the client type that relayers can submit in order to update the client.
+  The ClientMessage may be intended as a regular update which may add new consensus state for proof verification, or it may contain
+  misbehaviour which should freeze the client.
+
+* `ValidityPredicate` is a function that validates a ClientMessage sent by a relayer in order to update the client. 
   Using the `ValidityPredicate` SHOULD be more computationally efficient than executing `Consensus`.
 
 * `ConsensusState` is the *trusted view* of the state of a state machine at a particular `Height`.
@@ -152,6 +156,31 @@ State machines implementing the IBC protocol are expected to respect these clien
 
 ### Data Structures
 
+#### Height
+
+`Height` is an opaque data structure defined by a client type.
+It must form a partially ordered set & provide operations for comparison.
+
+```typescript
+type Height
+```
+
+```typescript
+enum Ord {
+  LT
+  EQ
+  GT
+}
+
+type compare = (h1: Height, h2: Height) => Ord
+```
+
+A height is either `LT` (less than), `EQ` (equal to), or `GT` (greater than) another height.
+
+`>=`, `>`, `===`, `<`, `<=` are defined through the rest of this specification as aliases to `compare`.
+
+There must also be a zero-element for a height type, referred to as `0`, which is less than all non-zero heights.
+
 #### ConsensusState
 
 `ConsensusState` is an opaque data structure defined by a client type, used by the validity predicate to
@@ -180,86 +209,6 @@ The `ConsensusState` MUST define a `getTimestamp()` method which returns the tim
 type getTimestamp = ConsensusState => uint64
 ```
 
-#### Header
-
-A `Header` is an opaque data structure defined by a client type which provides information to update a `ConsensusState`.
-Headers can be submitted to an associated client to update the stored `ConsensusState`. They likely contain a height, a proof,
-a commitment root, and possibly updates to the validity predicate.
-
-```typescript
-type Header = bytes
-```
-
-#### Validity predicate
-
-A validity predicate is an opaque function defined by a client type to verify `Header`s depending on the current `ConsensusState`.
-Using the validity predicate SHOULD be far more computationally efficient than replaying the full consensus algorithm
-for the given parent `Header` and the list of network messages.
-
-The validity predicate & client state update logic are combined into a single `checkValidityAndUpdateState` type, which is defined as
-
-```typescript
-type checkValidityAndUpdateState = (Header) => Void
-```
-
-`checkValidityAndUpdateState` MUST throw an exception if the provided header was not valid.
-
-If the provided header was valid, the client MUST also mutate internal state to store
-now-finalised consensus roots and update any necessary signature authority tracking (e.g.
-changes to the validator set) for future calls to the validity predicate.
-
-Clients MAY have time-sensitive validity predicates, such that if no header is provided for a period of time
-(e.g. an unbonding period of three weeks) it will no longer be possible to update the client.
-In this case, a permissioned entity such as a chain governance system or trusted multi-signature MAY be allowed
-to intervene to unfreeze a frozen client & provide a new correct header.
-
-#### Misbehaviour predicate
-
-A misbehaviour predicate is an opaque function defined by a client type, used to check if data
-constitutes a violation of the consensus protocol. This might be two signed headers
-with different state roots but the same height, a signed header containing invalid
-state transitions, or other proof of malfeasance as defined by the consensus algorithm.
-
-The misbehaviour predicate & client state update logic are combined into a single `checkMisbehaviourAndUpdateState` type, which is defined as
-
-```typescript
-type checkMisbehaviourAndUpdateState = (bytes) => Void
-```
-
-`checkMisbehaviourAndUpdateState` MUST throw an exception if the provided proof of misbehaviour was not valid.
-
-If misbehaviour was valid, the client MUST also mutate internal state to mark appropriate heights which
-were previously considered valid as invalid, according to the nature of the misbehaviour.
-
-Once misbehaviour is detected, clients SHOULD be frozen so that no future updates can be submitted.
-A permissioned entity such as a chain governance system or trusted multi-signature MAY be allowed
-to intervene to unfreeze a frozen client & provide a new correct header.
-
-#### Height
-
-`Height` is an opaque data structure defined by a client type.
-It must form a partially ordered set & provide operations for comparison.
-
-```typescript
-type Height
-```
-
-```typescript
-enum Ord {
-  LT
-  EQ
-  GT
-}
-
-type compare = (h1: Height, h2: Height) => Ord
-```
-
-A height is either `LT` (less than), `EQ` (equal to), or `GT` (greater than) another height.
-
-`>=`, `>`, `===`, `<`, `<=` are defined through the rest of this specification as aliases to `compare`.
-
-There must also be a zero-element for a height type, referred to as `0`, which is less than all non-zero heights.
-
 #### ClientState
 
 `ClientState` is an opaque data structure defined by a client type.
@@ -278,7 +227,7 @@ Client types MUST define a method to initialise a client state with a provided c
 type initialise = (consensusState: ConsensusState) => ClientState
 ```
 
-Client types MUST define a method to fetch the current height (height of the most recent validated header).
+Client types MUST define a method to fetch the current height (height of the most recent validated state update).
 
 ```typescript
 type latestClientHeight = (
@@ -286,127 +235,102 @@ type latestClientHeight = (
   => Height
 ```
 
+Client types MUST define a method on the client state to fetch the timestamp at a given height
+
+```typescript
+type getTimestampAtHeight = (
+  clientState: ClientState,
+  height: Height
+) => uint64
+```
+
+#### ClientMessage
+
+A `ClientMessage` is an opaque data structure defined by a client type which provides information to update the client.
+`ClientMessages` can be submitted to an associated client to add new `ConsensusState(s)` and/or update the `ClientState`. They likely contain a height, a proof, a commitment root, and possibly updates to the validity predicate.
+
+```typescript
+type ClientMessage = bytes
+```
+
+#### Validity predicate
+
+A validity predicate is an opaque function defined by a client type to verify `ClientMessage`s depending on the current `ConsensusState`.
+Using the validity predicate SHOULD be far more computationally efficient than replaying the full consensus algorithm
+for the given parent `ClientMessage` and the list of network messages.
+
+The validity predicate is defined as:
+
+```typescript
+type VerifyClientMessage = (ClientMessage) => Void
+```
+
+`VerifyClientMessage` MUST throw an exception if the provided ClientMessage was not valid.
+
+#### Misbehaviour predicate
+
+A misbehaviour predicate is an opaque function defined by a client type, used to check if a ClientMessage
+constitutes a violation of the consensus protocol. For example, if the state machine is a blockchain, this might be two signed headers
+with different state roots but the same height, a signed header containing invalid
+state transitions, or other proof of malfeasance as defined by the consensus algorithm.
+
+The misbehaviour predicate is defined as
+
+```typescript
+type checkForMisbehaviour = (ClientMessage) => bool
+```
+
+`checkForMisbehaviour` MUST throw an exception if the provided proof of misbehaviour was not valid.
+
+#### UpdateState
+
+UpdateState will update the client given a verified `ClientMessage`. Note that this function is intended for **non-misbehaviour** `ClientMessages`.
+
+```typescript
+type UpdateState = (ClientMessage) => Void
+```
+
+`verifyClientMessage` must be called before this function, and `checkForMisbehaviour` must return false before this function is called.
+
+The client MUST also mutate internal state to store
+now-finalised consensus roots and update any necessary signature authority tracking (e.g.
+changes to the validator set) for future calls to the validity predicate.
+
+Clients MAY have time-sensitive validity predicates, such that if no ClientMessage is provided for a period of time
+(e.g. an unbonding period of three weeks) it will no longer be possible to update the client, i.e., the client is being frozen. 
+In this case, a permissioned entity such as a chain governance system or trusted multi-signature MAY be allowed
+to intervene to unfreeze a frozen client & provide a new correct ClientMessage.
+
+#### UpdateStateOnMisbehaviour
+
+UpdateStateOnMisbehaviour will update the client upon receiving a verified `ClientMessage` that is valid misbehaviour.
+
+```typescript
+type UpdateStateOnMisbehaviour = (ClientMessage) => Void
+```
+
+`verifyClientMessage` must be called before this function, and `checkForMisbehaviour` must return `true` before this function is called.
+
+The client MUST also mutate internal state to mark appropriate heights which
+were previously considered valid as invalid, according to the nature of the misbehaviour.
+
+Once misbehaviour is detected, clients SHOULD be frozen so that no future updates can be submitted.
+A permissioned entity such as a chain governance system or trusted multi-signature MAY be allowed
+to intervene to unfreeze a frozen client & provide a new correct ClientMessage which updates the client to a valid state.
+
 #### CommitmentProof
 
 `CommitmentProof` is an opaque data structure defined by a client type in accordance with [ICS 23](../ics-023-vector-commitments).
 It is utilised to verify presence or absence of a particular key/value pair in state
 at a particular finalised height (necessarily associated with a particular commitment root).
 
-#### State verification
+### State verification
 
 Client types must define functions to authenticate internal state of the state machine which the client tracks.
 Internal implementation details may differ (for example, a loopback client could simply read directly from the state and require no proofs).
 
-- The `delayPeriodTime` is passed to packet-related verification functions in order to allow packets to specify a period of time which must pass after a header is verified before the packet is allowed to be processed.
-- The `delayPeriodBlocks` is passed to packet-related verification functions in order to allow packets to specify a period of blocks which must pass after a header is verified before the packet is allowed to be processed.
-
-##### Required functions
-
-`verifyClientConsensusState` verifies a proof of the consensus state of the specified client stored on the target state machine.
-
-```typescript
-type verifyClientConsensusState = (
-  clientState: ClientState,
-  height: Height,
-  proof: CommitmentProof,
-  clientIdentifier: Identifier,
-  consensusStateHeight: Height,
-  consensusState: ConsensusState)
-  => boolean
-```
-
-`verifyConnectionState` verifies a proof of the connection state of the specified connection end stored on the target state machine.
-
-```typescript
-type verifyConnectionState = (
-  clientState: ClientState,
-  height: Height,
-  prefix: CommitmentPrefix,
-  proof: CommitmentProof,
-  connectionIdentifier: Identifier,
-  connectionEnd: ConnectionEnd)
-  => boolean
-```
-
-`verifyChannelState` verifies a proof of the channel state of the specified channel end, under the specified port, stored on the target state machine.
-
-```typescript
-type verifyChannelState = (
-  clientState: ClientState,
-  height: Height,
-  prefix: CommitmentPrefix,
-  proof: CommitmentProof,
-  portIdentifier: Identifier,
-  channelIdentifier: Identifier,
-  channelEnd: ChannelEnd)
-  => boolean
-```
-
-`verifyPacketData` verifies a proof of an outgoing packet commitment at the specified port, specified channel, and specified sequence.
-
-```typescript
-type verifyPacketData = (
-  clientState: ClientState,
-  height: Height,
-  delayPeriodTime: uint64,
-  delayPeriodBlocks: uint64,
-  prefix: CommitmentPrefix,
-  proof: CommitmentProof,
-  portIdentifier: Identifier,
-  channelIdentifier: Identifier,
-  sequence: uint64,
-  data: bytes)
-  => boolean
-```
-
-`verifyPacketAcknowledgement` verifies a proof of an incoming packet acknowledgement at the specified port, specified channel, and specified sequence.
-
-```typescript
-type verifyPacketAcknowledgement = (
-  clientState: ClientState,
-  height: Height,
-  delayPeriodTime: uint64,
-  delayPeriodBlocks: uint64,
-  prefix: CommitmentPrefix,
-  proof: CommitmentProof,
-  portIdentifier: Identifier,
-  channelIdentifier: Identifier,
-  sequence: uint64,
-  acknowledgement: bytes)
-  => boolean
-```
-
-`verifyPacketReceiptAbsence` verifies a proof of the absence of an incoming packet receipt at the specified port, specified channel, and specified sequence.
-
-```typescript
-type verifyPacketReceiptAbsence = (
-  clientState: ClientState,
-  height: Height,
-  delayPeriodTime: uint64,
-  delayPeriodBlocks: uint64,
-  prefix: CommitmentPrefix,
-  proof: CommitmentProof,
-  portIdentifier: Identifier,
-  channelIdentifier: Identifier,
-  sequence: uint64)
-  => boolean
-```
-
-`verifyNextSequenceRecv` verifies a proof of the next sequence number to be received of the specified channel at the specified port.
-
-```typescript
-type verifyNextSequenceRecv = (
-  clientState: ClientState,
-  height: Height,
-  delayPeriodTime: uint64,
-  delayPeriodBlocks: uint64,
-  prefix: CommitmentPrefix,
-  proof: CommitmentProof,
-  portIdentifier: Identifier,
-  channelIdentifier: Identifier,
-  nextSequenceRecv: uint64)
-  => boolean
-```
+- The `delayPeriodTime` is passed to the verification functions for packet-related proofs in order to allow packets to specify a period of time which must pass after a consensus state is added before it can be used for packet-related verification.
+- The `delayPeriodBlocks` is passed to the verification functions for packet-related proofs in order to allow packets to specify a period of blocks which must pass after a consensus state is added before it can be used for packet-related verification.
 
 `verifyMembership` is a generic proof verification method which verifies a proof of the existence of a value at a given `CommitmentPath` at the specified height.
 The caller is expected to construct the full `CommitmentPath` from a `CommitmentPrefix` and a standardized path (as defined in [ICS 24](../ics-024-host-requirements/README.md#path-space)). If the caller desires a particular delay period to be enforced,
@@ -443,17 +367,16 @@ type verifyNonMembership = (
   => boolean
 ```
 
-
-#### Query interface
+### Query interface
 
 ##### Chain queries
 
 These query endpoints are assumed to be exposed over HTTP or an equivalent RPC API by nodes of the chain associated with a particular client.
 
-`queryHeader` MUST be defined by the chain which is validated by a particular client, and should allow for retrieval of headers by height. This endpoint is assumed to be untrusted.
+`queryUpdate` MUST be defined by the chain which is validated by a particular client, and should allow for retrieval of clientMessage for a given height. This endpoint is assumed to be untrusted.
 
 ```typescript
-type queryHeader = (height: Height) => Header
+type queryUpdate = (height: Height) => ClientMessage
 ```
 
 `queryChainConsensusState` MAY be defined by the chain which is validated by a particular client, to allow for the retrieval of the current consensus state which can be used to construct a new client.
@@ -474,7 +397,7 @@ This specification defines a single function to query the state of a client by-i
 
 ```typescript
 function queryClientState(identifier: Identifier): ClientState {
-  return privateStore.get(clientStatePath(identifier))
+  return provableStore.get(clientStatePath(identifier))
 }
 ```
 
@@ -616,7 +539,7 @@ function createClient(
   clientType: ClientType,
   consensusState: ConsensusState) {
     abortTransactionUnless(validateClientIdentifier(id))
-    abortTransactionUnless(privateStore.get(clientStatePath(id)) === null)
+    abortTransactionUnless(provableStore.get(clientStatePath(id)) === null)
     abortSystemUnless(provableStore.get(clientTypePath(id)) === null)
     clientType.initialise(consensusState)
     provableStore.set(clientTypePath(id), clientType)
@@ -630,8 +553,8 @@ the specific paths which must be queried are defined by each client type.
 
 #### Update
 
-Updating a client is done by submitting a new `Header`. The `Identifier` is used to point to the
-stored `ClientState` that the logic will update. When a new `Header` is verified with
+Updating a client is done by submitting a new `ClientMessage`. The `Identifier` is used to point to the
+stored `ClientState` that the logic will update. When a new `ClientMessage` is verified with
 the stored `ClientState`'s validity predicate and `ConsensusState`, the client MUST
 update its internal state accordingly, possibly finalising commitment roots and
 updating the signature authority logic in the stored consensus state.
@@ -648,226 +571,42 @@ to allow governance mechanisms to perform these actions
 ```typescript
 function updateClient(
   id: Identifier,
-  header: Header) {
-    clientType = provableStore.get(clientTypePath(id))
-    abortTransactionUnless(clientType !== null)
-    clientState = privateStore.get(clientStatePath(id))
+  clientMessage: ClientMessage) {
+    // get clientState from store with id
+    clientState = provableStore.get(clientStatePath(id))
     abortTransactionUnless(clientState !== null)
-    clientType.checkValidityAndUpdateState(clientState, header)
+
+    clientState.VerifyClientMessage(clientMessage)
+    
+    foundMisbehaviour := clientState.CheckForMisbehaviour(clientMessage)
+    if foundMisbehaviour {
+        clientState.UpdateStateOnMisbehaviour(clientMessage)
+        // emit misbehaviour event
+    }
+    else {    
+        clientState.UpdateState(clientMessage) // expects no-op on duplicate clientMessage
+        // emit update event
+    }
 }
 ```
 
 #### Misbehaviour
 
-If the client detects proof of misbehaviour, the client can be alerted, possibly invalidating
+A relayer may alert the client to the misbehaviour directly, possibly invalidating
 previously valid state roots & preventing future updates.
 
 ```typescript
 function submitMisbehaviourToClient(
   id: Identifier,
-  misbehaviour: bytes) {
-    clientType = provableStore.get(clientTypePath(id))
-    abortTransactionUnless(clientType !== null)
-    clientState = privateStore.get(clientStatePath(id))
+  clientMessage: ClientMessage) {
+    clientState = provableStore.get(clientStatePath(id))
     abortTransactionUnless(clientState !== null)
-    clientType.checkMisbehaviourAndUpdateState(clientState, misbehaviour)
-}
-```
-
-### Example Implementation
-
-An example validity predicate is constructed for a chain running a single-operator consensus algorithm,
-where the valid blocks are signed by the operator. The operator signing Key
-can be changed while the chain is running.
-
-The client-specific types are then defined as follows:
-
-- `ConsensusState` stores the latest height and latest public key
-- `Header`s contain a height, a new commitment root, a signature by the operator, and possibly a new public key
-- `checkValidityAndUpdateState` checks that the submitted height is monotonically increasing and that the signature is correct, then mutates the internal state
-- `checkMisbehaviourAndUpdateState` checks for two headers with the same height & different commitment roots, then mutates the internal state
-
-```typescript
-type Height = uint64
-
-function compare(h1: Height, h2: Height): Ord {
-  if h1 < h2
-    return LT
-  else if h1 === h2
-    return EQ
-  else
-    return GT
-}
-
-interface ClientState {
-  frozen: boolean
-  pastPublicKeys: Set<PublicKey>
-  verifiedRoots: Map<uint64, CommitmentRoot>
-}
-
-interface ConsensusState {
-  sequence: uint64
-  publicKey: PublicKey
-}
-
-interface Header {
-  sequence: uint64
-  commitmentRoot: CommitmentRoot
-  signature: Signature
-  newPublicKey: Maybe<PublicKey>
-}
-
-interface Misbehaviour {
-  h1: Header
-  h2: Header
-}
-
-// algorithm run by operator to commit a new block
-function commit(
-  commitmentRoot: CommitmentRoot,
-  sequence: uint64,
-  newPublicKey: Maybe<PublicKey>): Header {
-    signature = privateKey.sign(commitmentRoot, sequence, newPublicKey)
-    header = {sequence, commitmentRoot, signature, newPublicKey}
-    return header
-}
-
-// initialisation function defined by the client type
-function initialise(consensusState: ConsensusState): () {
-  clientState = {
-    frozen: false,
-    pastPublicKeys: Set.singleton(consensusState.publicKey),
-    verifiedRoots: Map.empty()
-  }
-  privateStore.set(identifier, clientState)
-}
-
-// validity predicate function defined by the client type
-function checkValidityAndUpdateState(
-  clientState: ClientState,
-  header: Header) {
-    abortTransactionUnless(consensusState.sequence + 1 === header.sequence)
-    abortTransactionUnless(consensusState.publicKey.verify(header.signature))
-    if (header.newPublicKey !== null) {
-      consensusState.publicKey = header.newPublicKey
-      clientState.pastPublicKeys.add(header.newPublicKey)
-    }
-    consensusState.sequence = header.sequence
-    clientState.verifiedRoots[sequence] = header.commitmentRoot
-}
-
-function verifyClientConsensusState(
-  clientState: ClientState,
-  height: Height,
-  prefix: CommitmentPrefix,
-  proof: CommitmentProof,
-  clientIdentifier: Identifier,
-  consensusState: ConsensusState) {
-    path = applyPrefix(prefix, "clients/{clientIdentifier}/consensusStates/{height}")
-    abortTransactionUnless(!clientState.frozen)
-    return clientState.verifiedRoots[sequence].verifyMembership(path, consensusState, proof)
-}
-
-function verifyConnectionState(
-  clientState: ClientState,
-  height: Height,
-  prefix: CommitmentPrefix,
-  proof: CommitmentProof,
-  connectionIdentifier: Identifier,
-  connectionEnd: ConnectionEnd) {
-    path = applyPrefix(prefix, "connections/{connectionIdentifier}")
-    abortTransactionUnless(!clientState.frozen)
-    return clientState.verifiedRoots[sequence].verifyMembership(path, connectionEnd, proof)
-}
-
-function verifyChannelState(
-  clientState: ClientState,
-  height: Height,
-  prefix: CommitmentPrefix,
-  proof: CommitmentProof,
-  portIdentifier: Identifier,
-  channelIdentifier: Identifier,
-  channelEnd: ChannelEnd) {
-    path = applyPrefix(prefix, "ports/{portIdentifier}/channels/{channelIdentifier}")
-    abortTransactionUnless(!clientState.frozen)
-    return clientState.verifiedRoots[sequence].verifyMembership(path, channelEnd, proof)
-}
-
-function verifyPacketData(
-  clientState: ClientState,
-  height: Height,
-  delayPeriodTime: uint64,
-  delayPeriodBlocks: uint64,
-  prefix: CommitmentPrefix,
-  proof: CommitmentProof,
-  portIdentifier: Identifier,
-  channelIdentifier: Identifier,
-  sequence: uint64,
-  data: bytes) {
-    path = applyPrefix(prefix, "ports/{portIdentifier}/channels/{channelIdentifier}/packets/{sequence}")
-    abortTransactionUnless(!clientState.frozen)
-    return clientState.verifiedRoots[sequence].verifyMembership(path, hash(data), proof)
-}
-
-function verifyPacketAcknowledgement(
-  clientState: ClientState,
-  height: Height,
-  delayPeriodTime: uint64,
-  delayPeriodBlocks: uint64,
-  prefix: CommitmentPrefix,
-  proof: CommitmentProof,
-  portIdentifier: Identifier,
-  channelIdentifier: Identifier,
-  sequence: uint64,
-  acknowledgement: bytes) {
-    path = applyPrefix(prefix, "ports/{portIdentifier}/channels/{channelIdentifier}/acknowledgements/{sequence}")
-    abortTransactionUnless(!clientState.frozen)
-    return clientState.verifiedRoots[sequence].verifyMembership(path, hash(acknowledgement), proof)
-}
-
-function verifyPacketReceiptAbsence(
-  clientState: ClientState,
-  height: Height,
-  prefix: CommitmentPrefix,
-  delayPeriodTime: uint64,
-  delayPeriodBlocks: uint64,
-  proof: CommitmentProof,
-  portIdentifier: Identifier,
-  channelIdentifier: Identifier,
-  sequence: uint64) {
-    path = applyPrefix(prefix, "ports/{portIdentifier}/channels/{channelIdentifier}/receipts/{sequence}")
-    abortTransactionUnless(!clientState.frozen)
-    return clientState.verifiedRoots[sequence].verifyNonMembership(path, proof)
-}
-
-function verifyNextSequenceRecv(
-  clientState: ClientState,
-  height: Height,
-  delayPeriodTime: uint64,
-  delayPeriodBlocks: uint64,
-  prefix: CommitmentPrefix,
-  proof: CommitmentProof,
-  portIdentifier: Identifier,
-  channelIdentifier: Identifier,
-  nextSequenceRecv: uint64) {
-    path = applyPrefix(prefix, "ports/{portIdentifier}/channels/{channelIdentifier}/nextSequenceRecv")
-    abortTransactionUnless(!clientState.frozen)
-    return clientState.verifiedRoots[sequence].verifyMembership(path, nextSequenceRecv, proof)
-}
-
-// misbehaviour verification function defined by the client type
-// any duplicate signature by a past or current key freezes the client
-function checkMisbehaviourAndUpdateState(
-  clientState: ClientState,
-  misbehaviour: Misbehaviour) {
-    h1 = misbehaviour.h1
-    h2 = misbehaviour.h2
-    abortTransactionUnless(clientState.pastPublicKeys.contains(h1.publicKey))
-    abortTransactionUnless(h1.sequence === h2.sequence)
-    abortTransactionUnless(h1.commitmentRoot !== h2.commitmentRoot || h1.publicKey !== h2.publicKey)
-    abortTransactionUnless(h1.publicKey.verify(h1.signature))
-    abortTransactionUnless(h2.publicKey.verify(h2.signature))
-    clientState.frozen = true
+    // authenticate client message
+    clientState.verifyClientMessage(clientMessage)
+    // check that client message is valid instance of misbehaviour
+    abortTransactionUnless(clientState.checkForMisbehaviour(clientMessage))
+    // update state based on misbehaviour
+    clientState.UpdateStateOnMisbehaviour(misbehaviour)
 }
 ```
 
@@ -885,7 +624,7 @@ New client types can be added by IBC implementations at-will as long as they con
 
 ## Example Implementation
 
-Coming soon.
+Please see the ibc-go implementations of light clients for examples of how to implement your own: https://github.com/cosmos/ibc-go/blob/main/modules/light-clients
 
 ## Other Implementations
 
@@ -902,6 +641,10 @@ Aug 15, 2019 - Major rework for clarity around client interface
 Jan 13, 2020 - Revisions for client type separation & path alterations
 
 Jan 26, 2020 - Addition of query interface
+
+Jul 27, 2022 - Addition of `verifyClientState` function, and move `ClientState` to the `provableStore`
+
+August 4, 2022 - Changes to ClientState interface and associated handler to align with changes in 02-client-refactor ADR: https://github.com/cosmos/ibc-go/pull/1871
 
 ## Copyright
 

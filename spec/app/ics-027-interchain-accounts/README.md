@@ -527,7 +527,8 @@ function onChanCloseConfirm(
 `onRecvPacket` is called by the routing module when a packet addressed to this module has been received.
 
 ```typescript
-function OnRecvPacket(packet Packet) {
+// Called on Host Chain by Relayer
+function onRecvPacket(packet Packet) {
   ack = NewResultAcknowledgement([]byte{byte(1)})
 
 	// only attempt the application logic if the packet data
@@ -559,6 +560,7 @@ function OnRecvPacket(packet Packet) {
 `onAcknowledgePacket` is called by the routing module when a packet sent by this module has been acknowledged.
 
 ```typescript
+// Called on Controller Chain by Relayer
 function onAcknowledgePacket(
   packet: Packet,
   acknowledgement: bytes) {
@@ -568,9 +570,19 @@ function onAcknowledgePacket(
 ```
 
 ```typescript
+// Called on Controller Chain by Relayer
 function onTimeoutPacket(packet: Packet) {
     // call underlying app's OnTimeoutPacket callback 
     // see ICS-30 middleware for more information
+}
+```
+
+Note that interchain accounts controller modules should not execute any logic upon packet receipt, i.e. the `OnRecvPacket` callback should not be called, and in case it is called, it should simply return an error acknowledgement:
+
+```typescript
+// Called on Controller Chain by Relayer
+function onRecvPacket(packet Packet) {
+  return NewErrorAcknowledgement(ErrInvalidChannelFlow)
 }
 ```
 

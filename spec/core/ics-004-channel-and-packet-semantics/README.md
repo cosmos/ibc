@@ -200,15 +200,15 @@ The `nextSequenceSend`, `nextSequenceRecv`, and `nextSequenceAck` unsigned integ
 
 ```typescript
 function nextSequenceSendPath(portIdentifier: Identifier, channelIdentifier: Identifier): Path {
-    return "seqSends/ports/{portIdentifier}/channels/{channelIdentifier}/nextSequenceSend"
+    return "nextSequenceSend/ports/{portIdentifier}/channels/{channelIdentifier}"
 }
 
 function nextSequenceRecvPath(portIdentifier: Identifier, channelIdentifier: Identifier): Path {
-    return "seqRecvs/ports/{portIdentifier}/channels/{channelIdentifier}/nextSequenceRecv"
+    return "nextSequenceRecv/ports/{portIdentifier}/channels/{channelIdentifier}"
 }
 
 function nextSequenceAckPath(portIdentifier: Identifier, channelIdentifier: Identifier): Path {
-    return "seqAcks/ports/{portIdentifier}/channels/{channelIdentifier}/nextSequenceAck"
+    return "nextSequenceAck/ports/{portIdentifier}/channels/{channelIdentifier}"
 }
 ```
 
@@ -560,6 +560,9 @@ function sendPacket(
 
     // check if the calling module owns the sending port
     abortTransactionUnless(authenticateCapability(channelCapabilityPath(sourcePort, sourceChannel), capability))
+
+    // disallow packets with a zero timeoutHeight and timeoutTimestamp
+    abortTransactionUnless(packet.timeoutHeight !== 0 || packet.timeoutTimestamp !== 0)
     
     // check that the timeout height hasn't already passed in the local client tracking the receiving chain
     latestClientHeight = provableStore.get(clientPath(connection.clientIdentifier)).latestClientHeight()
@@ -856,7 +859,7 @@ function timeoutPacket(
     // check that timeout height or timeout timestamp has passed on the other end
     abortTransactionUnless(
       (packet.timeoutHeight > 0 && proofHeight >= packet.timeoutHeight) ||
-      (packet.timeoutTimestamp > 0 && connection.getTimestampAtHeight(proofHeight) > packet.timeoutTimestamp))
+      (packet.timeoutTimestamp > 0 && connection.getTimestampAtHeight(proofHeight) >= packet.timeoutTimestamp))
 
     // verify we actually sent this packet, check the store
     abortTransactionUnless(provableStore.get(packetCommitmentPath(packet.sourcePort, packet.sourceChannel, packet.sequence))
