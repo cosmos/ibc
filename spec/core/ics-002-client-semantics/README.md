@@ -265,7 +265,7 @@ The validity predicate is defined as:
 type VerifyClientMessage = (ClientMessage) => bool
 ```
 
-`VerifyClientMessage` MUST throw an exception if the provided ClientMessage was not valid.
+`VerifyClientMessage` MUST throw an exception if the provided `ClientMessage` was not valid.
 
 #### Misbehaviour predicate
 

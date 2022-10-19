@@ -222,11 +222,11 @@ Verify validity of regular update to the Tendermint client
 function verifyHeader(header: Header) => bool {
     clientState = get("clients/{header.identifier}/clientState")
     // trusting period must have not yet passed
-    if clientState.latestTimestamp + clientState.trustingPeriod > currentTimestamp() {
+    if currentTimestamp() >= clientState.latestTimestamp + clientState.trustingPeriod {
       return false
     }
-    // header timestamp must be less than or equal to the trusting period in the future. This should be resolved with an intermediate header.
-    if clientState.latestTimeStamp + clientState.trustingPeriod > header.timestamp {
+    // header timestamp must be less than the trusting period in the future. This should be resolved with an intermediate header.
+    if header.timestamp >= clientState.latestTimeStamp + clientState.trustingPeriod {
       return false
     }
     // trusted height revision must be the same as header revision
@@ -241,7 +241,7 @@ function verifyHeader(header: Header) => bool {
     // fetch the consensus state at the trusted height
     consensusState = get("clients/{header.identifier}/consensusStates/{header.trustedHeight}")
     // header's trusted validator set must hash to consensus state's validator hash
-    if header.trustedValidatorSet) != consensusState.nextValidatorsHash {
+    if header.trustedValidatorSet != consensusState.nextValidatorsHash {
       return false
     }
 
