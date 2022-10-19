@@ -174,7 +174,7 @@ function initialise(
   upgradePath: []string, maxClockDrift: uint64, proofSpecs: []ProofSpec): ClientState {
     assert(trustingPeriod < unbondingPeriod)
     assert(height > 0)
-    assert(trustLevel > 0 && trustLevel < 1)
+    assert(trustLevel >= 1/3 && trustLevel <= 1)
     // implementations may define a identifier generation function
     identifier = generateClientIdentifier()
     set("clients/{identifier}/consensusStates/{height}", consensusState)
