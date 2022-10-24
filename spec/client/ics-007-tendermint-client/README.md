@@ -24,7 +24,7 @@ Functions & terms are as defined in [ICS 2](../../core/ics-002-client-semantics)
 
 `currentTimestamp` is as defined in [ICS 24](../../core/ics-024-host-requirements).
 
-The Tendermint light client uses the generalised Merkle proof format as defined in ICS 8.
+The Tendermint light client uses the generalised Merkle proof format as defined in [ICS 23](../../core/ics-023-vector-commitments).
 
 `hash` is a generic collision-resistant hash function, and can easily be configured.
 
