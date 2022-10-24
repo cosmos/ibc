@@ -689,8 +689,8 @@ function recvPacket(
         // for unordered channels we must set the receipt so it can be verified on the other side
         // this receipt does not contain any data, since the packet has not yet been processed
         // it's the sentinel success receipt: []byte{0x01}
-        packetRecepit = provableStore.get(packetReceiptPath(packet.destPort, packet.destChannel, packet.sequence))
-        if (packetRecepit != null) {
+        packetReceipt = provableStore.get(packetReceiptPath(packet.destPort, packet.destChannel, packet.sequence))
+        if (packetReceipt != null) {
           emitLogEntry("recvPacket", {
             data: packet.data 
             timeoutHeight: packet.timeoutHeight, 
