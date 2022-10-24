@@ -271,19 +271,22 @@ The following figure shows an overview of the Consumer Initiated Slashing operat
 
 ![Consumer Initiated Slashing](./figures/ccv-evidence-overview.png?raw=true)
 
-- At (evidence) height `Hc2`, the consumer chain receives evidence that a validator `V` misbehaved at (infraction) height `Hc1`. 
+- At (evidence) height `Hc2`, the consumer chain receives evidence that a validator `V` misbehaved at (infraction) height `Hc1`.
   As a result, the consumer CCV module sends a `SlashPacket` to the provider chain: 
-  It makes a request to slash `V`, but it replaces the infraction height `Hc1` with `HtoVSC[Hc1]`, 
+  It makes a request to slash `V`, but it replaces the infraction height `Hc1` with `HtoVSC[Hc1]`,
   i.e., the ID of the VSC that updated the "misbehaving voting power" or `0` if such a VSC does not exist.
-- The provider CCV module receives at (slashing) height `Hp1` the `SlashPacket` with `vscId = HtoVSC[Hc1]`. 
-  As a result, it requests the provider Slashing module to slash `V`, but it set the infraction height to `VSCtoH[vscId]`, i.e., 
-    - if `vscId != 0`, the height on the provider chain where the voting power was updated by the VSC with ID `vscId`;
-    - otherwise, the height at which the CCV channel to this consumer chain was established.
-  > **Note**: As a consequence of slashing (and potentially jailing) `V`, the Staking module updates accordingly `V`'s voting power. This update MUST be visible in the next VSC provided to the consumer chains.  
+- The provider CCV module receives at (slashing) height `Hp1` the `SlashPacket` with `vscId = HtoVSC[Hc1]`.
+  As a result, it stores the `SlashPacket` in the `pendingSlashPackets` queue, which exists to throttle voting power changes from consumer initiated slashing. The queued `SlashPacket` will eventually be dequeued and processed by `EndBlockCIS` in an appropriate EndBlock routine. When any `SlashPacket` is handled in `handleSlashPacket`, the ccv module requests the provider Slashing module to slash `V`, but it sets the infraction height to `VSCtoH[vscId]`, i.e.,
+  - if `vscId != 0`, the height on the provider chain where the voting power was updated by the VSC with ID `vscId`;
+  - otherwise, the height at which the CCV channel to this consumer chain was established.
+  > **Note**: As a consequence of slashing (and jailing/tombstoning) `V`, the Staking module updates accordingly `V`'s voting power. This update MUST be visible in the next VSC provided to the consumer chains.
+
+Note that `SlashPacket` handling is limited over time to mitigate the worst-case scenario of ICS; Malicious consumer binaries that cause many slash packets to be sent to the provider in a short period of time. Since voting power changes from slashing are effectively throttled with ICS, non-byzantine validators have extra time to act upon the attack in such a scenario.
 
 For a more detailed description of Consumer Initiated Slashing, take a look at the [technical specification](./methods.md#consumer-initiated-slashing).
 
 ### Reward Distribution
+
 [&uparrow; Back to Outline](#outline)
 
 In the context of single-chain validation, the *Distribution module*, i.e., a module of the ABCI application, handles the distribution of rewards (i.e., block production rewards and transaction fees) to every validator account based on their total voting power; 
@@ -300,7 +303,7 @@ The operation consists of two steps that are depicted in the following figure:
 - At regular intervals (e.g., every `1000` blocks), the consumer CCV module sends the accumulated rewards to the distribution module account on the provider chain through an IBC token transfer packet (as defined in [ICS 20](../ics-020-fungible-token-transfer/README.md)). 
   Note that the IBC transfer packet is sent over a separate unordered channel. 
   As a result, the reward distribution is not synchronized with the other CCV operations,
-  e.g., some validators may miss out on some rewards by unbonding before an IBC transfer packet is received, 
+  e.g., some validators may miss out on some rewards by unbonding before an IBC transfer packet is received,
   while other validators may get some extra rewards by bonding before an IBC transfer packet is received.
 
 > **Note**: From the perspective of the distribution module account on the provider chain, the rewards coming from the consumer chains are indistinguishable  from locally collected rewards and thus, are distributed to all the validators and their delegators.

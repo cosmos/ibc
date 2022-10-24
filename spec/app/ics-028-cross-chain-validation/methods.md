@@ -1638,30 +1638,12 @@ function UnbondMaturePackets() {
   - None.
 
 ### Consumer Initiated Slashing
+
 [&uparrow; Back to Outline](#outline)
 
 <!-- omit in toc -->
-#### **[CCV-PCF-EBLOCK-CIS.1]**
-```typescript
-// PCF: Provider Chain Function
-function EndBlockCIS() {
-  // set VSCtoH mapping
-  VSCtoH[vscId] = getCurrentHeight() + 1
-}
-```
-- **Caller**
-  - The `EndBlock()` method.
-- **Trigger Event**
-  - An `EndBlock` message is received from the consensus engine; `EndBlock` messages are sent once per block.
-- **Precondition**
-  - True. 
-- **Postcondition**
-  - `vscId` is mapped to the height of the subsequent block. 
-- **Error Condition**
-  - None.
+#### **[CCV-PCF-RCVSLASH.2]**
 
-<!-- omit in toc -->
-#### **[CCV-PCF-RCVSLASH.1]**
 ```typescript
 // PCF: Provider Chain Function
 function onRecvSlashPacket(packet: Packet): bytes {
@@ -1682,6 +1664,85 @@ function onRecvSlashPacket(packet: Packet): bytes {
     infractionHeight = VSCtoH[packet.data.vscId]
   }
 
+  slashPacketQueue = getPendingSlashPackets()
+  slashPacketQueue.Enqueue(packet)
+
+  return SlashPacketSuccess
+}
+```
+
+- **Caller**
+  - The `onRecvPacket()` method.
+- **Trigger Event**
+  - The provider IBC routing module receives a `SlashPacket` on a channel owned by the provider CCV module.
+- **Precondition**
+  - True.
+- **Postcondition**
+  - If the channel the packet was received on is not an established CCV channel, then
+    - the channel closing handshake is initiated;
+    - an error acknowledgment is returned.
+  - Otherwise,
+    - if `packet.data.vscId == 0`, `infractionHeight` is set to `initialHeights[chainId]`, with `chainId = channelToChain[packet.getDestinationChannel()]`, i.e., the height when the CCV channel to this consumer chain is established;
+    - otherwise, `infractionHeight` is set to `VSCtoH[packet.data.vscId]`, i.e., the height at which the voting power was last updated by the validator updates in the VSC with ID `packet.data.vscId`;
+    - a successful acknowledgment is returned.
+- **Error Condition**
+  - None.
+
+<!-- omit in toc -->
+#### **[CCV-PCF-EBLOCK-CIS.1]**
+
+```typescript
+// PCF: Provider Chain Function
+function EndBlockCIS() {
+
+  // set VSCtoH mapping
+  VSCtoH[vscId] = getCurrentHeight() + 1
+
+  // int64 with units of [% voting power] 
+  meter = getSlashGasMeter() 
+
+  // Handle slash packets while a strictly positive amount of gas remains
+  while meter.HasPositiveGasLeft() {
+    // Remove next slash packet from queue to be handled
+    nextSlashPacket = getPendingSlashPackets().Pop()
+    // Get necessary gas to handle slash packet (voting power % of to-be-jailed validator)
+    gas = getGas(nextSlashPacket)
+    // Consume appropriate slash gas for packet (even if meter goes negative)
+    meter -= gas
+    // Handle packet as defined below
+    handleSlashPacket(nextSlashPacket)
+  } 
+
+  // Replenish slash meter every hour
+  if getCurrentBlockTime() > getLastSlashMeterReplenishTime() + time.Hour {
+    // Get gas per hour amount from on-chain param, units of [% voting power]
+    gph = getGasPerHour()
+    // Replenish gas  
+    meter += gph
+    setLastSlashMeterReplenishTime(getCurrentBlockTime())
+  }
+}
+```
+
+- **Caller**
+  - The `EndBlock()` method.
+- **Trigger Event**
+  - An `EndBlock` message is received from the consensus engine; `EndBlock` messages are sent once per block.
+- **Precondition**
+  - True.
+- **Postcondition**
+  - `vscId` is mapped to the height of the subsequent block.
+  - Appropriate number of pending slash packets are handled, slash gas is decremented from slash meter.
+  - Slash meter is appropriately replenished once per hour.
+- **Error Condition**
+  - None.
+
+<!-- omit in toc -->
+#### **[CCV-PCF-HPacket]**
+
+```typescript
+// PCF: Provider Chain Function
+function handleSlashPacket(packet: Packet) {
   // request the Slashing module to slash the validator
   // using the slashFactor set on the provider chain
   slashFactor = slashingKeeper.GetSlashFactor(packet.data.downtime)
@@ -1700,27 +1761,20 @@ function onRecvSlashPacket(packet: Packet): bytes {
     // add validator to list of downtime slash requests for chainId
     downtimeSlashRequests[chainId].Append(packet.data.valAddress)
   }
-
-  return SlashPacketSuccess
 }
 ```
+
 - **Caller**
-  - The `onRecvPacket()` method.
+  - `EndBlockCIS`
 - **Trigger Event**
-  - The provider IBC routing module receives a `SlashPacket` on a channel owned by the provider CCV module.
+  - `packet` is next in `pendingSlashPackets` queue, and slash meter has enough slash gas to warrant the handling of this packet.
 - **Precondition**
-  - True.
+  - `packet` was removed from front of `pendingSlashPackets` queue.
+  - appropriate gas amount has been consumed for `packet`.
 - **Postcondition**
-  - If the channel the packet was received on is not an established CCV channel, then
-    - the channel closing handshake is initiated;
-    - an error acknowledgment is returned.
-  - Otherwise,
-    - if `packet.data.vscId == 0`, `infractionHeight` is set to `initialHeights[chainId]`, with `chainId = channelToChain[packet.getDestinationChannel()]`, i.e., the height when the CCV channel to this consumer chain is established;
-    - otherwise, `infractionHeight` is set to `VSCtoH[packet.data.vscId]`, i.e., the height at which the voting power was last updated by the validator updates in the VSC with ID `packet.data.vscId`;
-    - a request is made to the Slashing module to slash `slashFactor` of the tokens bonded at `infractionHeight` by the validator with address `packet.data.valAddress`, where `slashFactor` is the slashing factor set on the provider chain;
-    - a request is made to the Slashing module to jail the validator with address `packet.data.valAddress` for a period `jailTime`, where `jailTime` is the jailing time set on the provider chain;
-    - if the slash request is for downtime, the validator's address `packet.data.valAddress` is added to the list of downtime slash requests from this `chainId`;
-    - a successful acknowledgment is returned.
+  - a request is made to the Slashing module to slash `slashFactor` of the tokens bonded at `infractionHeight` by the validator with address `packet.data.valAddress`, where `slashFactor` is the slashing factor set on the provider chain;
+  - a request is made to the Slashing module to jail the validator with address `packet.data.valAddress` for a period `jailTime`, where `jailTime` is the jailing time set on the provider chain;
+  - if the slash request is for downtime, the validator's address `packet.data.valAddress` is added to the list of downtime slash requests from this `chainId`;
 - **Error Condition**
   - None.
 
