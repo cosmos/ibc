@@ -50,6 +50,7 @@ Ref: https://keepachangelog.com/en/1.0.0/
 ### Bug Fixes
 
 - [\#808](https://github.com/cosmos/ibc/pull/808) Fix channel sequence paths in ICS4
+- [\#863](https://github.com/cosmos/ibc/pull/863) Fix allowed range for `trustLevel`
 
 ### Improvements
 
