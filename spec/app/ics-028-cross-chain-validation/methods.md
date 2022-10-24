@@ -1714,16 +1714,16 @@ function EndBlockCIS() {
     handleSlashPacket(nextSlashPacket)
   } 
 
-  // Replenish slash meter every hour
-  if getCurrentBlockTime() > getLastSlashMeterReplenishTime() + time.Hour {
-    // Get gas allowance per hour from on-chain param, units of [% voting power]
-    gph = getGasPerHour()
-    // Replenish gas up to gas allowance per hour. That is, if meter was negative
+  // Replenish slash meter every SlashMeterReplenishPeriod, an on-chain param
+  if getCurrentBlockTime() > getLastSlashMeterReplenishTime() + getSlashMeterReplenishPeriod() {
+    // Get slash gas allowance per replenish period from on-chain param, units of [% voting power]
+    sga = getSlashGasAllowance()
+    // Replenish gas up to gas allowance per period. That is, if meter was negative
     // before being replenished, it'll gain some additional gas. However, if the meter
-    // was 0 or positive in value, it'll be replenished only up to it's allowance for the hour.
-    meter += gph
-    if meter > gph {
-      meter = gph
+    // was 0 or positive in value, it'll be replenished only up to it's allowance for the period.
+    meter += sga
+    if meter > sga {
+      meter = sga
     }
     setLastSlashMeterReplenishTime(getCurrentBlockTime())
   }
