@@ -1684,6 +1684,7 @@ function onRecvSlashPacket(packet: Packet): bytes {
   - Otherwise,
     - if `packet.data.vscId == 0`, `infractionHeight` is set to `initialHeights[chainId]`, with `chainId = channelToChain[packet.getDestinationChannel()]`, i.e., the height when the CCV channel to this consumer chain is established;
     - otherwise, `infractionHeight` is set to `VSCtoH[packet.data.vscId]`, i.e., the height at which the voting power was last updated by the validator updates in the VSC with ID `packet.data.vscId`;
+    - The slash packet is enqueued and persisted in the `pendingSlashPackets` queue.
     - a successful acknowledgment is returned.
 - **Error Condition**
   - None.
@@ -1698,11 +1699,11 @@ function EndBlockCIS() {
   // set VSCtoH mapping
   VSCtoH[vscId] = getCurrentHeight() + 1
 
-  // int64 with units of [% voting power] 
+  // meter is an int64 with units of [% voting power] 
   meter = getSlashGasMeter() 
 
   // Handle slash packets while a strictly positive amount of gas remains
-  while meter.HasPositiveGasLeft() {
+  while meter > 0 {
     // Remove next slash packet from queue to be handled
     nextSlashPacket = getPendingSlashPackets().Pop()
     // Get necessary gas to handle slash packet (voting power % of to-be-jailed validator)
@@ -1715,7 +1716,7 @@ function EndBlockCIS() {
 
   // Replenish slash meter every hour
   if getCurrentBlockTime() > getLastSlashMeterReplenishTime() + time.Hour {
-    // Get gas per hour amount from on-chain param, units of [% voting power]
+    // Get gas allowance per hour from on-chain param, units of [% voting power]
     gph = getGasPerHour()
     // Replenish gas  
     meter += gph
@@ -1767,7 +1768,7 @@ function handleSlashPacket(packet: Packet) {
 - **Caller**
   - `EndBlockCIS`
 - **Trigger Event**
-  - `packet` is next in `pendingSlashPackets` queue, and slash meter has enough slash gas to warrant the handling of this packet.
+  - `packet` is next in `pendingSlashPackets` queue and slash meter had positive gas before being decremented for this packet.
 - **Precondition**
   - `packet` was removed from front of `pendingSlashPackets` queue.
   - appropriate gas amount has been consumed for `packet`.

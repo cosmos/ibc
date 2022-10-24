@@ -281,7 +281,7 @@ The following figure shows an overview of the Consumer Initiated Slashing operat
   - otherwise, the height at which the CCV channel to this consumer chain was established.
   > **Note**: As a consequence of slashing (and jailing/tombstoning) `V`, the Staking module updates accordingly `V`'s voting power. This update MUST be visible in the next VSC provided to the consumer chains.
 
-Note that `SlashPacket` handling is limited over time to mitigate the worst-case scenario of ICS; Malicious consumer binaries that cause many slash packets to be sent to the provider in a short period of time. Since voting power changes from slashing are effectively throttled with ICS, non-byzantine validators have extra time to act upon the attack in such a scenario.
+Note that `SlashPacket` handling is limited over time to mitigate the worst-case scenario of ICS; Malicious consumer binaries that cause many slash packets to be sent to the provider in a short period of time. Since voting power changes from slashing/jailing are effectively throttled with ICS, non-byzantine validators have extra time to act upon the attack in such a scenario.
 
 For a more detailed description of Consumer Initiated Slashing, take a look at the [technical specification](./methods.md#consumer-initiated-slashing).
 
