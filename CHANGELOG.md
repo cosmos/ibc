@@ -59,4 +59,5 @@ Ref: https://keepachangelog.com/en/1.0.0/
 - [\#806](https://github.com/cosmos/ibc/pull/806) Adds previous version to UpgradeInit and UpgradeTry callback arguments
 - [\#807](https://github.com/cosmos/ibc/pull/807) Upgrade keys will now prefix the channel path to align with the rest of ICS4 keys
 - [\#842](https://github.com/cosmos/ibc/pull/842) Adds metadata field to FungibleTokenPacketData
+- [\#844](https://github.com/cosmos/ibc/pull/844) Adds event emission in `recvPacket` when `packet.sequence < nextSequenceRecv` for ordered channels and when `packetRecepit != null` for unordered channels
 - [\#845](https://github.com/cosmos/ibc/pull/845) Adds explanation about `onRecvPacket` callback returning an error in interchain accounts controller modules
