@@ -143,7 +143,7 @@ The following figure shows an overview of the CCV Channel initialization.
 Consumer chains are created through governance proposals. For an example of how governance proposals work, take a look at the [Governance module documentation](https://docs.cosmos.network/v0.45/modules/gov/) of Cosmos SDK.
 
 The channel initialization consists of four phases:
-- **Create clients**: The provider CCV module handles every passed proposal to spawn a new consumer chain. 
+- **Create clients**: The provider CCV module handles every passed proposal to add a new consumer chain. 
   Once it receives a proposal, it creates a client of the consumer chain (as defined in [ICS 2](../../core/ics-002-client-semantics)). 
   Then, the operators of validators in the validator set of the provider chain must each start a full node (i.e., a validator) of the consumer chain. 
   Once the consumer chain starts, the application receives an `InitChain` message from the consensus engine 
