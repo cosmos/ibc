@@ -297,7 +297,7 @@ interface ClientMisbehaviour {
 ```
 
 ```typescript
-function handleClientMisbehaviour(datagram: ClientUpdate) {
+function handleClientMisbehaviour(datagram: ClientMisbehaviour) {
     handler.submitMisbehaviourToClient(datagram.identifier, datagram.evidence)
 }
 ```
