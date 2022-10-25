@@ -1654,16 +1654,6 @@ function onRecvSlashPacket(packet: Packet): bytes {
     return SlashPacketError
   }
 
-  // get the height that maps to the VSC ID in the packet data
-  if packet.data.vscId == 0 {
-    // the infraction happened before sending any VSC to this chain
-    chainId = channelToChain[packet.getDestinationChannel()]
-    infractionHeight = initialHeights[chainId]
-  }
-  else {
-    infractionHeight = VSCtoH[packet.data.vscId]
-  }
-
   slashPacketQueue = getPendingSlashPackets()
   slashPacketQueue.Enqueue(packet)
 
@@ -1749,6 +1739,17 @@ function EndBlockCIS() {
 ```typescript
 // PCF: Provider Chain Function
 function handleSlashPacket(packet: Packet) {
+
+  // get the height that maps to the VSC ID in the packet data
+  if packet.data.vscId == 0 {
+    // the infraction happened before sending any VSC to this chain
+    chainId = channelToChain[packet.getDestinationChannel()]
+    infractionHeight = initialHeights[chainId]
+  }
+  else {
+    infractionHeight = VSCtoH[packet.data.vscId]
+  }
+
   // request the Slashing module to slash the validator
   // using the slashFactor set on the provider chain
   slashFactor = slashingKeeper.GetSlashFactor(packet.data.downtime)
