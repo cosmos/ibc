@@ -1696,6 +1696,14 @@ function EndBlockCIS() {
   while meter > 0 {
     // Remove next slash packet from queue to be handled
     nextSlashPacket = getPendingSlashPackets().Pop()
+
+    // Drop slash packet if it is relevant to a validator that is currently unbonded,
+    // jailed, or tombstoned. This alleviates spam affecting the packet queue as much.
+    validator = nextSlashPacket.GetValidator()
+    if validator.IsUnbonded() || validator.IsJailed() || validator.IsTombstoned() {
+      continue
+    }
+
     // Get necessary gas to handle slash packet (voting power % of to-be-jailed validator)
     gas = getGas(nextSlashPacket)
     // Consume appropriate slash gas for packet (even if meter goes negative)
