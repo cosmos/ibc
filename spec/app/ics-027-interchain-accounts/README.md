@@ -585,7 +585,7 @@ function onRecvPacket(packet Packet) {
 
 ### Identifier formats
 
-These are the default formats that the port identifiers on each side of an interchain accounts channel.
+These are the default formats that the port identifiers on each side of an interchain accounts channel. THe controller portID **must** include the owner address so that when a message is sent to the controller module, the sender of the message can be verified against the portID before sending the ICA packet. The controller chain is responsible for proper access control to ensure that the sender of the ICA message has successfully authenticated before the message reaches the controller module.
 
 Controller Port Identifier: `icacontroller-{owner-account-address}`
 
