@@ -585,7 +585,7 @@ function onRecvPacket(packet Packet) {
 
 ### Identifier formats
 
-These are the formats that the port identifiers on each side of an interchain accounts channel must follow to be accepted by a correct interchain accounts module.
+These are the default formats that the port identifiers on each side of an interchain accounts channel.
 
 Controller Port Identifier: `icacontroller-{owner-account-address}`
 
