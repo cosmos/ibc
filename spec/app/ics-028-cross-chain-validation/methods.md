@@ -1654,11 +1654,12 @@ function onRecvSlashPacket(packet: Packet): bytes {
     return SlashPacketError
   }
 
-  // Drop slash packet if it is relevant to a validator that is currently unbonded,
-  // jailed, or tombstoned. This alleviates spam affecting the packet queue as much.
+  // Handle slash packet immediately if it is relevant to a validator that is currently unbonded,
+  // jailed, or tombstoned. This alleviates spam packets affecting the packet queue.
   validator = nextSlashPacket.GetValidator()
   if validator.IsUnbonded() || validator.IsJailed() || validator.IsTombstoned() {
-    continue
+    handleSlashPacket(packet)
+    return SlashPacketSuccess
   }
 
   slashPacketQueue = getPendingSlashPackets()
@@ -1703,7 +1704,6 @@ function EndBlockCIS() {
   while meter > 0 {
     // Remove next slash packet from queue to be handled
     nextSlashPacket = getPendingSlashPackets().Pop()
-
     // Get necessary gas to handle slash packet (voting power % of to-be-jailed validator)
     gas = getGas(nextSlashPacket)
     // Consume appropriate slash gas for packet (even if meter goes negative)
