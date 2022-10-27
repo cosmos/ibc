@@ -1654,14 +1654,6 @@ function onRecvSlashPacket(packet: Packet): bytes {
     return SlashPacketError
   }
 
-  // Handle slash packet immediately if it is relevant to a validator that is currently unbonded,
-  // jailed, or tombstoned. This alleviates spam packets affecting the packet queue.
-  validator = nextSlashPacket.GetValidator()
-  if validator.IsUnbonded() || validator.IsJailed() || validator.IsTombstoned() {
-    handleSlashPacket(packet)
-    return SlashPacketSuccess
-  }
-
   slashPacketQueue = getPendingSlashPackets()
   slashPacketQueue.Enqueue(packet)
 
