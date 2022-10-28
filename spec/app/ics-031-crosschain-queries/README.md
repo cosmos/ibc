@@ -171,7 +171,7 @@ interface CrossChainQueryResult struct {
 - The `type` field specifies the type of query.
 - The `path` field is the path queried at the queried chain.
 - The `result` field indicates whether the query was correctly executed at the queried chain and if the queried path exists.
-- The `udpateHeight` field indicates the height at which the queried chain updated the queried path with `data`.
+- The `updateHeight` field indicates the height at which the queried chain updated the queried path with `data`.
 - The `data` field is an opaque bytestring that contains the value associated with the queried path in case `result = SUCCESS`.
 
 ### Store paths
