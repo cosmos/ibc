@@ -195,16 +195,16 @@ function verifyMisbehaviour(misbehaviour: Misbehaviour) {
     sigBytes1 = SignBytes(
       Sequence: misbehaviour.sequence,
       Timestamp: s1.timestamp,
-      Diversifier: cs.consensusState.diversifier,
+      Diversifier: diversifier,
       Path: s1.path,
       Data: s1.data
     )
     sigBytes2 = SignBytes(
       Sequence: misbehaviour.sequence,
       Timestamp: s2.timestamp,
-      Diversifier: cs.consensusState.diversifier,
+      Diversifier: diversifier,
       Path: s2.path,
-      Data: s2,.data
+      Data: s2.data
     )
     assert(sigBytes1 != sigBytes2)
     assert(checkSignature(pubkey, sigBytes1, clientState.consensusState.publicKey))
@@ -236,6 +236,7 @@ function updateState(clientMessage: ClientMessage) {
     clientState.consensusState.diversifier = header.newDiversifier
     clientState.consensusState.timestamp = header.timestamp
     clientState.consensusState.sequence++
+    set("clients/{identifier}/clientState", clientState)
 }
 ```
 
@@ -245,6 +246,7 @@ function updateState(clientMessage: ClientMessage) {
 function updateStateOnMisbehaviour(clientMessage: ClientMessage) {
     // freeze the client
     clientState.frozen = true
+    set("clients/{identifier}/clientState", clientState)
 }
 ```
 
@@ -265,7 +267,7 @@ function verifyMembership(
   delayBlockPeriod: uint64,
   proof: CommitmentProof,
   path: CommitmentPath,
-  value: []byte) {
+  value: []byte): boolean {
     // the expected sequence used in the signature
     abortTransactionUnless(!clientState.frozen)
     abortTransactionUnless(proof.timestamp >= clientState.consensusState.timestamp)
@@ -273,15 +275,19 @@ function verifyMembership(
       Sequence: clientState.consensusState.sequence,
       Timestamp: proof.timestamp,
       Diversifier: clientState.consensusState.diversifier,
-      path: CommitmentPath.String(),
+      path: path.String(),
       data: value,
     )
-    assert(checkSignature(clientState.consensusState.pubKey, sigBytes, proof.sig))
+    proven = checkSignature(clientState.consensusState.pubKey, sigBytes, proof.sig)
+    if !proven {
+      return false
+    }
 
     // increment sequence on each verification to provide
     // replay protection
     clientState.consensusState.sequence++
     clientState.consensusState.timestamp = proof.timestamp
+    return true
 }
 
 function verifyNonMembership(
@@ -293,22 +299,26 @@ function verifyNonMembership(
   delayTimePeriod: uint64,
   delayBlockPeriod: uint64,
   proof: CommitmentProof,
-  path: CommitmentPath) {
+  path: CommitmentPath): boolean {
     abortTransactionUnless(!clientState.frozen)
     abortTransactionUnless(proof.timestamp >= clientState.consensusState.timestamp)
     sigBytes = SignBytes(
       Sequence: clientState.consensusState.sequence,
       Timestamp: proof.timestamp,
       Diversifier: clientState.consensusState.diversifier,
-      path: CommitmentPath.String(),
+      path: path.String(),
       data: nil,
     )
-    assert(checkSignature(clientState.consensusState.pubKey, value, proof.sig))
+    proven = checkSignature(clientState.consensusState.pubKey, value, proof.sig)
+    if !proven {
+      return false
+    }
 
     // increment sequence on each verification to provide
     // replay protection
     clientState.consensusState.sequence++
     clientState.consensusState.timestamp = proof.timestamp
+    return true
 }
 ```
 
