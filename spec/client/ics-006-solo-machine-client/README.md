@@ -70,12 +70,15 @@ The `Height` of a solo machine is just a `uint64`, with the usual comparison ope
 
 ```typescript
 interface Header {
+  sequence: uint64
   timestamp: uint64
   signature: Signature
   newPublicKey: PublicKey
   newDiversifier: string
 }
 ```
+
+`Header` implements the ClientMessage interface.
 
 ### Signature Verification
 
@@ -110,6 +113,8 @@ interface Misbehaviour {
 }
 ```
 
+`Misbehaviour` implements the ClientState interface.
+
 ### Signatures
 
 Signatures are provided in the `Proof` field of client state verification functions. They include data & a timestamp, which must also be signed over.
@@ -142,26 +147,26 @@ function latestClientHeight(clientState: ClientState): uint64 {
 }
 ```
 
+### ClientState Methods
+
+All of the functions defined below are methods on the `ClientState` interface. Thus, the solomachine clientstate is always in scope for these functions.
+
 ### Validity predicate
 
 The solo machine client `verifyClientMessage` function checks that the currently registered public key and diversifier signed over the client message at the expected sequence. If the client message is an update, then it must be the current sequence. If the client message is misbehaviour then it must be the sequence of the misbehaviour.
 
 ```typescript
-function verifyClientMessage(
-  clientState: ClientState,
-  clientMsg: ClientMessage) {
+function  verifyClientMessage(clientMsg: ClientMessage) {
   switch typeof(ClientMessage) {
     case Header:
-      verifyHeader(clientState, clientMessage)
+      verifyHeader(clientMessage)
     // misbehaviour only suppported for current public key and diversifier on solomachine
     case Misbehaviour:
-      
+      verifyMisbehaviour(clientMessage)
   }
 }
 
-function verifyHeader(
-  clientState: clientState,
-  clientMessage: clientMessage) {
+function verifyHeader(header: header) {
     assert(header.timestamp >= clientstate.consensusState.timestamp)
     headerData = {
       NewPublicKey: header.newPublicKey,
@@ -177,9 +182,7 @@ function verifyHeader(
     assert(checkSignature(cs.consensusState.publicKey, sigBytes, header.signature))
 }
 
-function verifyMisbehaviour(
-  clientState: clientState,
-  misbehaviour: Misbehaviour) {
+function verifyMisbehaviour(misbehaviour: Misbehaviour) {
     s1 = misbehaviour.signatureOne
     s2 = misbehaviour.signatureTwo
     pubkey = clientState.consensusState.publicKey
@@ -214,9 +217,7 @@ function verifyMisbehaviour(
 Since misbehaviour is checked in `verifyClientMessage`, if the client message is of type `Misbehaviour` then we return true
 
 ```typescript
-function checkForMisbehaviour(
-  clientState: ClientState,
-  clientMessage: ClientMessage) => bool {
+function checkForMisbehaviour(clientMessage: ClientMessage) => bool {
     switch typeof(ClientMessage) {
     case Misbehaviour:
       return true
@@ -230,9 +231,7 @@ function checkForMisbehaviour(
 `UpdateState` updates the function for a regular update:
 
 ```typescript
-function updateState(
-  clientState: ClientState,
-  clientMessage: ClientMessage) {
+function updateState(clientMessage: ClientMessage) {
     clientState.consensusState.publicKey = header.newPublicKey
     clientState.consensusState.diversifier = header.newDiversifier
     clientState.consensusState.timestamp = header.timestamp
@@ -243,9 +242,7 @@ function updateState(
 `UpdateStateOnMisbehaviour` updates the function after receving valid misbehaviour:
 
 ```typescript
-function updateStateOnMisbehaviour(
-  clientState: ClientState,
-  clientMessage: ClientMessage) {
+function updateStateOnMisbehaviour(clientMessage: ClientMessage) {
     // freeze the client
     clientState.frozen = true
 }
@@ -259,7 +256,6 @@ Note that value concatenation should be implemented in a state-machine-specific 
 
 ```typescript
 function verifyMembership(
-  clientState: ClientState,
   // provided height is unnecessary for solomachine
   // since clientState maintains the expected sequence
   height: uint64,
@@ -289,7 +285,6 @@ function verifyMembership(
 }
 
 function verifyNonMembership(
-  clientState: ClientState,
   // provided height is unnecessary for solomachine
   // since clientState maintains the expected sequence
   height: uint64,
