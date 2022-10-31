@@ -560,6 +560,9 @@ function sendPacket(
 
     // check if the calling module owns the sending port
     abortTransactionUnless(authenticateCapability(channelCapabilityPath(sourcePort, sourceChannel), capability))
+
+    // disallow packets with a zero timeoutHeight and timeoutTimestamp
+    abortTransactionUnless(packet.timeoutHeight !== 0 || packet.timeoutTimestamp !== 0)
     
     // check that the timeout height hasn't already passed in the local client tracking the receiving chain
     latestClientHeight = provableStore.get(clientPath(connection.clientIdentifier)).latestClientHeight()
@@ -628,6 +631,22 @@ function recvPacket(
     // do sequence check before any state changes
     if channel.order == ORDERED || channel.order == ORDERED_ALLOW_TIMEOUT {
         nextSequenceRecv = provableStore.get(nextSequenceRecvPath(packet.destPort, packet.destChannel))
+        if (packet.sequence < nextSequenceRecv) {
+          // event is emitted even if transaction is aborted
+          emitLogEntry("recvPacket", {
+            data: packet.data 
+            timeoutHeight: packet.timeoutHeight, 
+            timeoutTimestamp: packet.timeoutTimestamp,
+            sequence: packet.sequence,
+            sourcePort: packet.sourcePort, 
+            sourceChannel: packet.sourceChannel,
+            destPort: packet.destPort, 
+            destChannel: packet.destChannel,
+            order: channel.order,
+            connection: channel.connectionHops[0]
+          })
+        }
+
         abortTransactionUnless(packet.sequence === nextSequenceRecv)
     }
 
@@ -670,7 +689,23 @@ function recvPacket(
         // for unordered channels we must set the receipt so it can be verified on the other side
         // this receipt does not contain any data, since the packet has not yet been processed
         // it's the sentinel success receipt: []byte{0x01}
-        abortTransactionUnless(provableStore.get(packetReceiptPath(packet.destPort, packet.destChannel, packet.sequence) === null))
+        packetReceipt = provableStore.get(packetReceiptPath(packet.destPort, packet.destChannel, packet.sequence))
+        if (packetReceipt != null) {
+          emitLogEntry("recvPacket", {
+            data: packet.data 
+            timeoutHeight: packet.timeoutHeight, 
+            timeoutTimestamp: packet.timeoutTimestamp,
+            sequence: packet.sequence,
+            sourcePort: packet.sourcePort, 
+            sourceChannel: packet.sourceChannel,
+            destPort: packet.destPort, 
+            destChannel: packet.destChannel,
+            order: channel.order,
+            connection: channel.connectionHops[0]
+          })
+        }
+
+        abortTransactionUnless(packetRecepit === null))
         provableStore.set(
           packetReceiptPath(packet.destPort, packet.destChannel, packet.sequence),
           SUCCESFUL_RECEIPT
@@ -679,8 +714,18 @@ function recvPacket(
     }
     
     // log that a packet has been received
-    emitLogEntry("recvPacket", {sequence: packet.sequence, timeoutHeight: packet.timeoutHeight, port: packet.destPort, channel: packet.destChannel,
-                                timeoutTimestamp: packet.timeoutTimestamp, data: packet.data})
+    emitLogEntry("recvPacket", {
+      data: packet.data 
+      timeoutHeight: packet.timeoutHeight, 
+      timeoutTimestamp: packet.timeoutTimestamp,
+      sequence: packet.sequence,
+      sourcePort: packet.sourcePort, 
+      sourceChannel: packet.sourceChannel,
+      destPort: packet.destPort, 
+      destChannel: packet.destChannel,
+      order: channel.order,
+      connection: channel.connectionHops[0]
+    })
 
     // return transparent packet
     return packet
@@ -856,7 +901,7 @@ function timeoutPacket(
     // check that timeout height or timeout timestamp has passed on the other end
     abortTransactionUnless(
       (packet.timeoutHeight > 0 && proofHeight >= packet.timeoutHeight) ||
-      (packet.timeoutTimestamp > 0 && connection.getTimestampAtHeight(proofHeight) > packet.timeoutTimestamp))
+      (packet.timeoutTimestamp > 0 && connection.getTimestampAtHeight(proofHeight) >= packet.timeoutTimestamp))
 
     // verify we actually sent this packet, check the store
     abortTransactionUnless(provableStore.get(packetCommitmentPath(packet.sourcePort, packet.sourceChannel, packet.sequence))
