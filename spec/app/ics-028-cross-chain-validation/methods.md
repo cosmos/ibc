@@ -1689,33 +1689,31 @@ function EndBlockCIS() {
   // set VSCtoH mapping
   VSCtoH[vscId] = getCurrentHeight() + 1
 
-  // meter is an int64 with units of [% voting power] 
-  meter = getSlashGasMeter() 
+  // meter is an int representing units of voting power 
+  meter = getJailMeter() 
 
-  // Handle slash packets while a strictly positive amount of gas remains
+  // Handle slash packets while a strictly positive amount of voting power remains in jail meter
   while meter > 0 {
     // Remove next slash packet from queue to be handled
     nextSlashPacket = getPendingSlashPackets().Pop()
-    // Get necessary gas to handle slash packet (voting power % of to-be-jailed validator)
-    gas = getGas(nextSlashPacket)
-    // Consume appropriate slash gas for packet (even if meter goes negative)
-    meter -= gas
     // Handle packet as defined below
     handleSlashPacket(nextSlashPacket)
+    // Consume appropriate voting power for validator in packet (even if meter goes negative)
+    meter -= getVotingPower(nextSlashPacket.Validator)
   } 
 
-  // Replenish slash meter every SlashMeterReplenishPeriod, an on-chain param
-  if getCurrentBlockTime() > getLastSlashMeterReplenishTime() + getSlashMeterReplenishPeriod() {
-    // Get slash gas allowance per replenish period from on-chain param, units of [% voting power]
-    sga = getSlashGasAllowance()
-    // Replenish gas up to gas allowance per period. That is, if meter was negative
-    // before being replenished, it'll gain some additional gas. However, if the meter
+  // Replenish jail meter every JailMeterReplenishPeriod, an on-chain param
+  if getCurrentBlockTime() > getLastJailMeterReplenishTime() + getJailMeterReplenishPeriod() {
+    // Get voting power jailing allowance per replenish period from on-chain param, units of voting power 
+    jailAllowance = getJailAllowance()
+    // Replenish voting power up to allowance per period. That is, if meter was negative
+    // before being replenished, it'll gain some additional voting power. However, if the meter
     // was 0 or positive in value, it'll be replenished only up to it's allowance for the period.
-    meter += sga
-    if meter > sga {
-      meter = sga
+    meter += jailAllowance
+    if meter > jailAllowance {
+      meter = jailAllowance
     }
-    setLastSlashMeterReplenishTime(getCurrentBlockTime())
+    setLastJailMeterReplenishTime(getCurrentBlockTime())
   }
 }
 ```
@@ -1728,8 +1726,8 @@ function EndBlockCIS() {
   - True.
 - **Postcondition**
   - `vscId` is mapped to the height of the subsequent block.
-  - Appropriate number of pending slash packets are handled, slash gas is decremented from slash meter.
-  - Slash meter is appropriately replenished once per hour.
+  - Appropriate number of pending slash packets are handled, voting power is decremented from jail meter.
+  - jail meter is appropriately replenished once per hour.
 - **Error Condition**
   - None.
 
@@ -1774,10 +1772,10 @@ function handleSlashPacket(packet: Packet) {
 - **Caller**
   - `EndBlockCIS`
 - **Trigger Event**
-  - `packet` is next in `pendingSlashPackets` queue and slash meter had positive gas before being decremented for this packet.
+  - `packet` is next in `pendingSlashPackets` queue and jail meter had positive voting power before being decremented for this packet.
 - **Precondition**
   - `packet` was removed from front of `pendingSlashPackets` queue.
-  - appropriate gas amount has been consumed for `packet`.
+  - appropriate voting power amount has been consumed for `packet`.
 - **Postcondition**
   - a request is made to the Slashing module to slash `slashFactor` of the tokens bonded at `infractionHeight` by the validator with address `packet.data.valAddress`, where `slashFactor` is the slashing factor set on the provider chain;
   - a request is made to the Slashing module to jail the validator with address `packet.data.valAddress` for a period `jailTime`, where `jailTime` is the jailing time set on the provider chain;
