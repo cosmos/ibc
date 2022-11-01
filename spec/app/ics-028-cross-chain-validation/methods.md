@@ -538,6 +538,10 @@ function CreateConsumerClient(p: ConsumerAdditionProposal) {
 
 > **Note:** Bootstrapping the consumer CCV module requires a `ConsumerGenesisState` (see the [CCV Data Structures](./data_structures.md#ccv-data-structures) section). The provider CCV module creates such a `ConsumerGenesisState` when handling a governance proposal `ConsumerAdditionProposal`.
 
+> **Note:** If the channel initialization for a consumer chain exceeds the `initTimeout` period, then the provider chain removes that consumer. 
+> As a result, all further attempts on the consumer side to established the CCV channel will fail. 
+> This means that the consumer chain requires some sort of social consensus to either restart the process of becoming a consumer chain or transitioning back to a sovereign chain. 
+
 <!-- omit in toc -->
 #### **[CCV-PCF-BBLOCK-INIT.1]**
 ```typescript
