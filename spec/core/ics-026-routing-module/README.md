@@ -455,7 +455,7 @@ interface ChanOpenTry {
   channelIdentifier: Identifier
   counterpartyPortIdentifier: Identifier
   counterpartyChannelIdentifier: Identifier
-  version: string // deprecated
+  version: string
   counterpartyVersion: string
   proofInit: CommitmentProof
   proofHeight: Height
