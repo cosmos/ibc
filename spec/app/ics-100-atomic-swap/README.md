@@ -252,7 +252,7 @@ function onChanOpenAck(
   counterpartyVersion: string
 ) {
   // port has already been validated
-  // assert that counterparty selected version is "ics31-1"
+  // assert that counterparty selected version is "ics100-1"
   abortTransactionUnless(counterpartyVersion === "ics100-1");
 }
 ```
