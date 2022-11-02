@@ -392,7 +392,7 @@ switch ack.Response.(type) {
 `onTimeoutPacket` is called by the routing module when a packet sent by this module has timed-out (such that the tokens will be refunded).
 
 ```typescript
-function onTimeoutPacket(packet: AtomicSwapPacketData) {
+function onTimeoutPacket(packet: Packet) {
   // the packet timed-out, so refund the tokens
   refundTokens(packet);
 }
