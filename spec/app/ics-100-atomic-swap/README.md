@@ -401,8 +401,8 @@ function onTimeoutPacket(packet: Packet) {
 `refundTokens` is called by both `onAcknowledgePacket` on failure, and `onTimeoutPacket`, to refund escrowed tokens to the original owner.
 
 ```typescript
-function refundTokens(packet: AtomicSwapPacketData) {
-  FungibleTokenPacketData data = packet.data
+function refundTokens(packet: Packet) {
+  AtomicSwapPacketData data = packet.data
   //send tokens from module to message sender
 }
 ```
