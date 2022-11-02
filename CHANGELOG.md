@@ -41,6 +41,7 @@ Ref: https://keepachangelog.com/en/1.0.0/
 
 ### API-Breaking
 
+- [\#873](https://github.com/cosmos/ibc/pull/873) Defines the connection `Version` datatype and adjusts the signature of `getCompatibleVersions()` and `pickVersion()` accordingly
 - [\#813](https://github.com/cosmos/ibc/pull/813) Breaks up `checkValidityAndUpdateState` into `verifyClientMessage` and `UpdateState`
 - [\#813](https://github.com/cosmos/ibc/pull/813) Breaks up `checkMisbehaviourAndUpdateState` into `checkForMisbehaviour` and `UpdateStateOnMisbehaviour`
 - [\#813](https://github.com/cosmos/ibc/pull/813) Removes `Header` and `Misbehaviour` interfaces for generic `ClientMessage` interface
