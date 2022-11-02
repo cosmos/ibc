@@ -143,7 +143,7 @@ interface OrderBook {
 
 1. A user takes an order on the destination chain by triggering `TakeSwap`.  Tokens are sent to the escrow address owned by the module.
 2. An `AtomicSwapPacketData` is relayed to the source chain where `onRecvPacket` the escrowed tokens are sent to the destination address.  
-3. A packet is subsequently relayed back for acknowledgement. Upon acknowledgement escrowed tokens on the destination chain is sent to the related destination address.  A packet timeout or a failure during `onAcknowledgePacket` will result in a refund of the escrowed tokens.
+3. A packet is subsequently relayed back for acknowledgement. Upon acknowledgement escrowed tokens on the destination chain are sent to the related destination address. A packet timeout or a failure during `onAcknowledgePacket` will result in a refund of the escrowed tokens.
 
 #### Cancelling a swap
 
