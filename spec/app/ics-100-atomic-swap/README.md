@@ -44,7 +44,7 @@ A user offers tokens for exchange by making an order. The order specifies the qu
 
 Any user on a different chain with the correct token denomination can accept the offer by taking the order. The taker sends the desired amount of tokens to the chain's escrow account.
 
-The escrow account on each respective chain transfers the corresponding token amounts to each user's receiving address, without requiring the usual ibc transfer.
+The escrow account on each respective chain transfers the corresponding token amounts to each user's local receiving address, without requiring the usual ibc transfer.
 
 ### Data Structures
 
