@@ -20,13 +20,17 @@ Users may wish to exchange tokens without transfering tokens away from its nativ
 
 ### Definitions
 
-`Atomic Swap`: An exchange of tokens from separate chains without transfering tokens away from its source chain.
+`Atomic Swap`: An exchange of tokens from separate chains without transfering tokens from one blockchain to another.
 
 `Order`: an offer to exchange quantity X of token A for quantity Y of token B. Tokens offered are sent to an escrow account (owned by the module)
 
 `Maker`: A user that makes or initiates an order.
 
 `Taker`: Is the counterparty who takes or responds to an order.
+
+`Maker Chain`: The blockchain where a maker makes or initiaties an order.
+
+`Taker Chain`: The blockchain where a taker takes or responds to an order.
 
 ### Desired Properties
 
@@ -40,11 +44,13 @@ Users may wish to exchange tokens without transfering tokens away from its nativ
 
 ### General Design
 
-A user offers tokens for exchange by making an order. The order specifies the quantity and price of exchange, and sends the offered tokens to the chain's escrow account.
+<img src="./ibcswap.png"/>
 
-Any user on a different chain with the correct token denomination can accept the offer by taking the order. The taker sends the desired amount of tokens to the chain's escrow account.
+A maker offers token A in exchange for token B by making an order. The order specifies the quantity and price of exchange, and sends the offered token A to the maker chain's escrow account.
 
-The escrow account on each respective chain transfers the corresponding token amounts to each user's local receiving address, without requiring the usual ibc transfer.
+Any taker on a different chain with   token B can accept the offer by taking the order. The taker sends the desired amount of token B to the taker chain's escrow account.
+
+The escrow account on each respective chain transfers the corresponding token amounts to each user's receiving address, without requiring the usual ibc transfer.
 
 ### Data Structures
 
@@ -80,11 +86,11 @@ interface MakeSwap {
   buy_token: Coin;
   // the sender address
   maker_address: string;
-  // the sender's address on the destination chain
+  // the sender's address on the taker chain
   maker_receiving_address string;
   // if desired_taker is specified,
   // only the desired_taker is allowed to take this order
-  // this is address on destination chain
+  // this is address on the taker chain
   desired_taker: string;
   create_timestamp: int64;
 }
@@ -97,7 +103,7 @@ interface TakeSwap {
   sell_token: Coin;
   // the sender address
   taker_address: string;
-  // the sender's address on the destination chain
+  // the sender's address on the taker chain
   taker_receiving_address: string;
   create_timestamp: int64;
 }
@@ -110,7 +116,7 @@ interface CancelSwap {
 }
 ```
 
-Both the source chain and destination chain maintain separate orderbooks. Orders are saved in both source chain and destination chain.
+Both the maker chain and taker chain maintain separate orderbooks. Orders are saved in both maker chain and taker chain.
 
 ```typescript
 enum Status {
@@ -135,21 +141,21 @@ interface OrderBook {
 
 #### Making a swap
 
-1. User creates an order on the source chain with specified parameters (see type `MakeSwap`).  Tokens are sent to the escrow address owned by the module. The order is saved on the source chain
-2. An `AtomicSwapPacketData` is relayed to the destination chain where `onRecvPacket` the order is also saved on the destination chain.  
+1. User creates an order on the maker chain with specified parameters (see type `MakeSwap`).  Tokens are sent to the escrow address owned by the module. The order is saved on the maker chain
+2. An `AtomicSwapPacketData` is relayed to the taker chain where `onRecvPacket` the order is also saved on the taker chain.  
 3. A packet is subsequently relayed back for acknowledgement. A packet timeout or a failure during `onAcknowledgePacket` will result in a refund of the escrowed tokens.
 
 #### Taking a swap
 
-1. A user takes an order on the destination chain by triggering `TakeSwap`.  Tokens are sent to the escrow address owned by the module.
-2. An `AtomicSwapPacketData` is relayed to the source chain where `onRecvPacket` the escrowed tokens are sent to the destination address.  
-3. A packet is subsequently relayed back for acknowledgement. Upon acknowledgement escrowed tokens on the destination chain are sent to the related destination address. A packet timeout or a failure during `onAcknowledgePacket` will result in a refund of the escrowed tokens.
+1. A user takes an order on the taker chain by triggering `TakeSwap`.  Tokens are sent to the escrow address owned by the module.
+2. An `AtomicSwapPacketData` is relayed to the maker chain where `onRecvPacket` the escrowed tokens are sent to the destination address.  
+3. A packet is subsequently relayed back for acknowledgement. Upon acknowledgement escrowed tokens on the taker chain is sent to the related destination address.  A packet timeout or a failure during `onAcknowledgePacket` will result in a refund of the escrowed tokens.
 
 #### Cancelling a swap
 
 1.  The taker cancels a previously created order.
-2.  An `AtomicSwapPacketData` is relayed to the source chain where `onRecvPacket` the order is cancelled on the destination chain.
-3.  A packet is relayed back where upon acknowledgement the order on the source chain is also cancelled.
+2.  An `AtomicSwapPacketData` is relayed to the maker chain where `onRecvPacket` the order is cancelled on the taker chain.
+3.  A packet is relayed back where upon acknowledgement the order on the maker chain is also cancelled.
 
 ### Sub-protocols
 
