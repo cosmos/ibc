@@ -258,7 +258,7 @@ function onChanOpenAck(
   counterpartyVersion: string
 ) {
   // port has already been validated
-  // assert that counterparty selected version is "ics31-1"
+  // assert that counterparty selected version is "ics100-1"
   abortTransactionUnless(counterpartyVersion === "ics100-1");
 }
 ```
@@ -398,7 +398,7 @@ switch ack.Response.(type) {
 `onTimeoutPacket` is called by the routing module when a packet sent by this module has timed-out (such that the tokens will be refunded).
 
 ```typescript
-function onTimeoutPacket(packet: AtomicSwapPacketData) {
+function onTimeoutPacket(packet: Packet) {
   // the packet timed-out, so refund the tokens
   refundTokens(packet);
 }
@@ -407,8 +407,8 @@ function onTimeoutPacket(packet: AtomicSwapPacketData) {
 `refundTokens` is called by both `onAcknowledgePacket` on failure, and `onTimeoutPacket`, to refund escrowed tokens to the original owner.
 
 ```typescript
-function refundTokens(packet: AtomicSwapPacketData) {
-  FungibleTokenPacketData data = packet.data
+function refundTokens(packet: Packet) {
+  AtomicSwapPacketData data = packet.data
   //send tokens from module to message sender
 }
 ```
