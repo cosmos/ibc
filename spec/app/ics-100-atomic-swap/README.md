@@ -62,7 +62,6 @@ enum SwapMessageType {
   TYPE_UNSPECIFIED = 0,
   TYPE_MSG_MAKE_SWAP = 1,
   TYPE_MSG_TAKE_SWAP = 2,
-  TYPE_MSG_CANCEL_SWAP = 3,
 }
 
 // AtomicSwapPacketData is comprised of a swap message type, raw transaction and optional memo field.
@@ -73,7 +72,7 @@ interface AtomicSwapPacketData {
 }
 ```
 
-All `AtomicSwapPacketData` will be forwarded to the corresponding message handler to execute according to its type. There are 3 types:
+All `AtomicSwapPacketData` will be forwarded to the corresponding message handler to execute according to its type. There are 2 types:
 
 ```typescript
 interface MakeSwap {
@@ -93,6 +92,7 @@ interface MakeSwap {
   // this is address on the taker chain
   desired_taker: string;
   create_timestamp: int64;
+  expired_timestamp: int64;
 }
 ```
 
@@ -106,13 +106,6 @@ interface TakeSwap {
   // the sender's address on the taker chain
   taker_receiving_address: string;
   create_timestamp: int64;
-}
-```
-
-```typescript
-interface CancelSwap {
-  order_id: string;
-  maker_address: string;
 }
 ```
 
@@ -144,6 +137,7 @@ interface OrderBook {
 1. User creates an order on the maker chain with specified parameters (see type `MakeSwap`).  Tokens are sent to the escrow address owned by the module. The order is saved on the maker chain
 2. An `AtomicSwapPacketData` is relayed to the taker chain where `onRecvPacket` the order is also saved on the taker chain.  
 3. A packet is subsequently relayed back for acknowledgement. A packet timeout or a failure during `onAcknowledgePacket` will result in a refund of the escrowed tokens.
+4. An order should not be taken once the current time is later than expired timestamp, and all expired orders should refund its escrow tokens at `block begin` function(todo: figout the name).
 
 #### Taking a swap
 
@@ -151,30 +145,18 @@ interface OrderBook {
 2. An `AtomicSwapPacketData` is relayed to the maker chain where `onRecvPacket` the escrowed tokens are sent to the destination address.  
 3. A packet is subsequently relayed back for acknowledgement. Upon acknowledgement escrowed tokens on the taker chain is sent to the related destination address.  A packet timeout or a failure during `onAcknowledgePacket` will result in a refund of the escrowed tokens.
 
-#### Cancelling a swap
-
-1.  The taker cancels a previously created order.
-2.  An `AtomicSwapPacketData` is relayed to the maker chain where `onRecvPacket` the order is cancelled on the taker chain.
-3.  A packet is relayed back where upon acknowledgement the order on the maker chain is also cancelled.
-
 ### Sub-protocols
 
 The sub-protocols described herein should be implemented in a "Fungible Token Swap" module with access to a bank module and to the IBC routing module.
 
 ```ts
-function createSwap(request MakeSwap) {
+function makeSwap(request MakeSwap) {
 
 }
 ```
 
 ```ts
-function fillSwap(request TakeSwap) {
-
-}
-```
-
-```ts
-function cancelSwap(request CancelSwap) {
+function takeSwap(request TakeSwap) {
 
 }
 ```
