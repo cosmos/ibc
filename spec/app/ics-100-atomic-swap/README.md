@@ -75,7 +75,7 @@ interface AtomicSwapPacketData {
 All `AtomicSwapPacketData` will be forwarded to the corresponding message handler to execute according to its type. There are 2 types:
 
 ```typescript
-interface MakeSwap {
+interface MakeSwapMsg {
   // the port on which the packet will be sent
   source_port string
   // the channel by which the packet will be sent
@@ -97,7 +97,7 @@ interface MakeSwap {
 ```
 
 ```typescript
-interface TakeSwap {
+interface TakeSwapMsg {
   order_id: string;
   // the tokens to be sell
   sell_token: Coin;
@@ -121,13 +121,29 @@ enum Status {
 
 interface OrderBook {
   id: string;
-  maker: MakeSwap;
+  maker: MakeSwapMsg;
   status: Status;
   channel_id: string;
-  takers: TakeSwap[];
+  taker: TakeSwap;
   cancel_timestamp: int64;
   complete_timestamp: int64;
+  
+  createOrder(msg: MakeSwapMsg) OrderBook {
+    return {
+        id : generateOrderId(msg)
+        status: Status.INITIAL
+        maker: msg,
+    }
+  }
 }
+
+// Order id is a global unique string
+function generateOrderId(msg MakeSwapMsg) {
+    cosnt bytes = protobuf.encode(msg)
+    return sha265(bytes)
+}
+
+
 ```
 
 ### Life scope and control flow
@@ -137,7 +153,7 @@ interface OrderBook {
 1. User creates an order on the maker chain with specified parameters (see type `MakeSwap`).  Tokens are sent to the escrow address owned by the module. The order is saved on the maker chain
 2. An `AtomicSwapPacketData` is relayed to the taker chain where `onRecvPacket` the order is also saved on the taker chain.  
 3. A packet is subsequently relayed back for acknowledgement. A packet timeout or a failure during `onAcknowledgePacket` will result in a refund of the escrowed tokens.
-4. An order should not be taken once the current time is later than expired timestamp, and all expired orders should refund its escrow tokens at `block begin` function(todo: figout the name).
+4. An order should not be taken once the current time is later than expired timestamp, and all expired orders should refund its escrow tokens at `BeginBlock` function.
 
 #### Taking a swap
 
@@ -150,14 +166,53 @@ interface OrderBook {
 The sub-protocols described herein should be implemented in a "Fungible Token Swap" module with access to a bank module and to the IBC routing module.
 
 ```ts
-function makeSwap(request MakeSwap) {
-
+function makeSwap(request MakeSwapMsg) {
+    const balance = bank_keeper.getBalances(request.make_address)
+    abortTransactionUnless(balance.amount > request.sell_token.Amount)
+    // found the escrow address by source port and source channel
+    const escrowAddr = escrowAddress(request.sourcePort, request.sourceChannel)
+    // lock the sell_token to escrow account
+    const err = bankkeeper.sendCoins(request.maker_address, escrowAddr, request.sell_token)
+    abortTransactionUnless(err == null)
+    // constraction IBC data packet
+    const packet = {
+        type: SwapMessageType.TYPE_MSG_MAKE_SWAP,
+        data: protobuf.encode(request), // encode the request message to protobuf bytes.
+        memo: "",
+    }
+    sendAtomicSwapPacket(packet)
+    
+    // create order and save order on Make chain.
+    const order = OrderBook.createOrder(msg)
+    //save order to store
+    store.save(order)
 }
 ```
 
 ```ts
-function takeSwap(request TakeSwap) {
-
+function takeSwap(request TakeSwapMsg) {
+    const order = OrderBook.findOrderById(request.order_id)
+    abortTransactionUnless(order != null)
+    abortTransactionUnless(order.expired_timestamp < Now().timestamp())
+    abortTransactionUnless(order.maker.buy_token.denom === request.sell_token.denom)
+    abortTransactionUnless(order.maker.buy_token.amount === request.sell_token.amount)
+    
+    const balance = bank_keeper.getBalances(request.taker_address)
+    abortTransactionUnless(balance.amount > request.sell_token.Amount)
+    // found the escrow address by source port and source channel
+    const escrowAddr = escrowAddress(request.sourcePort, request.sourceChannel)
+    // lock the sell_token to escrow account
+    const err = bankkeeper.sendCoins(request.taker_address, escrowAddr, request.sell_token)
+    abortTransactionUnless(err == null)
+    // constract IBC data packet
+    const packet = {
+        type: SwapMessageType.TYPE_MSG_TAKE_SWAP,
+        data: protobuf.encode(request), // encode the request message to protobuf bytes.
+        memo: "",
+    } 
+    sendAtomicSwapPacket(packet)
+    
+    order.taker = request
 }
 ```
 
@@ -270,7 +325,6 @@ function onChanCloseConfirm(portIdentifier: Identifier, channelIdentifier: Ident
 
 ```typescript
 function sendAtomicSwapPacket(swapPacket AtomicSwapPacketData) {
-
     // send packet using the interface defined in ICS4
     handler.sendPacket(
       getCapability("port"),
@@ -286,51 +340,41 @@ function sendAtomicSwapPacket(swapPacket AtomicSwapPacketData) {
 `onRecvPacket` is called by the routing module when a packet addressed to this module has been received.
 
 ```typescript
-function onRecvPacket(data: AtomicSwapPacketData) {
-  switch data.Type {
-  case TYPE_MSG_MAKE_SWAP:
-    var msg types.MsgMakeSwapRequest
-
-    if err := types.ModuleCdc.Unmarshal(data.Data, &msg); err != nil {
-      return err
-    }
-    if err := k.executeMakeSwap(ctx, packet, &msg); err != nil {
-      return err
-    }
-
-    return nil
-
-  case TYPE_MSG_TAKE_SWAP:
-    var msg types.MsgTakeSwapRequest
-
-    if err := types.ModuleCdc.Unmarshal(data.Data, &msg); err != nil {
-      return err
-    }
-    if err2 := k.executeTakeSwap(ctx, packet, &msg); err2 != nil {
-      return err2
-    } else {
-      return nil
-    }
-
-  case TYPE_MSG_CANCEL_SWAP:
-    var msg types.MsgCancelSwapRequest
-
-    if err := types.ModuleCdc.Unmarshal(data.Data, &msg); err != nil {
-      return err
-    }
-    if err2 := k.executeCancelSwap(ctx, packet, &msg); err2 != nil {
-      return err2
-    } else {
-      return nil
-    }
-
-  default:
-    return types.ErrUnknownDataPacket
+function onRecvPacket(packet: AtomicSwapPacketData) {
+  switch packet.type {
+      case TYPE_MSG_MAKE_SWAP:
+        const make_msg = protobuf.decode(packet.bytes)
+        
+        // check if buy_token is native token on taker chain
+        const supply = bank_keeper.getSuppy(make_msg.buy_token.denom)
+        abortTransactionUnless(supply > 0)
+        
+        // create order and save order on taker chain.
+        const order = OrderBook.createOrder(msg)
+        order.status = Status.SYNC
+        //save order to store
+        store.save(order)
+        break;
+      case TYPE_MSG_TAKE_SWAP:
+        const take_msg = protobuf.decode(packet.bytes)
+        const order = OrderBook.findOrderById(take_msg.order_id)
+        abortTransactionUnless(order != null)
+        abortTransactionUnless(order.status == Status.SYNC)
+        abortTransactionUnless(order.expired_timestamp < Now().timestamp())
+        abortTransactionUnless(take_msg.sell_token.denom == order.maker.buy_token.denom)
+        abortTransactionUnless(take_msg.sell_token.amount == order.maker.buy_token.amount)
+        
+        // send maker.sell_token to taker's receiving address
+        bank_keeper.sendCoins(escrowAddr, take_msg.taker_receiving_address, order.maker.sell_token)
+        
+        // update status of order
+        order.status = Status.COMPLETE
+        order.complete_timestamp = take_msg.create_timestamp
+        store.save(order)
+        break;
+      default:
+        throw new Error("ErrUnknownDataPacket")
   }
-
-  ctx.EventManager().EmitTypedEvents(&data)
-
-  return nil
 }
 ```
 
@@ -340,40 +384,35 @@ function onRecvPacket(data: AtomicSwapPacketData) {
 function onAcknowledgePacket(
   packet: AtomicSwapPacketData,
   acknowledgement: bytes) {
-switch ack.Response.(type) {
-  case *channeltypes.Acknowledgement_Error:
-    return k.refundPacketToken(ctx, packet, data)
-  default:
-    switch data.Type {
-    case TYPE_MSG_TAKE_SWAP:
-      var msg types.MsgTakeSwapRequest
-
-      if err := types.ModuleCdc.Unmarshal(data.Data, &msg); err != nil {
-        return err
-      }
-      // check order status
-      if order, ok := k.GetLimitOrder(ctx, msg.OrderId); ok {
-        k.executeTakeSwap(ctx, order, &msg, StepAcknowledgement)
-      } else {
-        return types.ErrOrderDoesNotExists
-      }
-      break
-
-    case TYPE_MSG_CANCEL_SWAP:
-      var msg types.MsgCancelSwapRequest
-
-      if err := types.ModuleCdc.Unmarshal(data.Data, &msg); err != nil {
-        return err
-      }
-      if err2 := k.executeCancel(ctx, &msg, StepAcknowledgement); err2 != nil {
-        return err2
-      } else {
-        return nil
-      }
-      break
-    }
+  // ack is failed
+  if (!ack.success) {
+    refundToken(packet) 
+  } else {
+    switch packet.type {
+      case TYPE_MSG_MAKE_SWAP:
+        const make_msg = protobuf.decode(packet.bytes)
+        
+        // create order and save order on taker chain.
+        const order = OrderBook.findOrderById(make_msg)
+        order.status = Status.SYNC
+        //save order to store
+        store.save(order)
+        break;
+      case TYPE_MSG_TAKE_SWAP:
+        const take_msg = protobuf.decode(packet.bytes)
+        
+        // create order and save order on taker chain.
+        const order = OrderBook.findOrderById(take_msg.order_id)
+        order.status = Status.COMPLETE
+        //save order to store
+        store.save(order)
+        
+        //send tokens to maker
+        bank_keeper.sendCoins(escrowAddr, order.maker.maker_receiving_address, take_msg.sell_token)
+        break;
+      default:
+        throw new Error("ErrUnknownDataPacket")
   }
-  return nil
 }
 ```
 
@@ -392,6 +431,16 @@ function onTimeoutPacket(packet: Packet) {
 function refundTokens(packet: Packet) {
   AtomicSwapPacketData data = packet.data
   //send tokens from module to message sender
+  switch packet.type {
+      case TYPE_MSG_MAKE_SWAP:
+          const msg = protobuf.decode(data)
+          bank_keeper.sendCoins(escrowAddr, msg.maker_address, msg.sell_token)
+          break;
+      case TYPE_MSG_TAKE_SWAP:
+          const msg = protobuf.decode(data)
+          bank_keeper.sendCoins(escrowAddr, msg.taker_address, msg.sell_token)
+      }
+  }
 }
 ```
 
