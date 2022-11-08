@@ -20,7 +20,9 @@ Channels are payload-agnostic. The modules which send and receive IBC packets de
 
 The interblockchain communication protocol uses a cross-chain message passing model. IBC *packets* are relayed from one blockchain to the other by external relayer processes. Chain `A` and chain `B` confirm new blocks independently, and packets from one chain to the other may be delayed, censored, or re-ordered arbitrarily. Packets are visible to relayers and can be read from a blockchain by any relayer process and submitted to any other blockchain.
 
-> The IBC protocol must provide ordering (for ordered channels) and exactly-once delivery guarantees to allow applications to reason about the combined state of connected modules on two chains. For example, an application may wish to allow a single tokenized asset to be transferred between and held on multiple blockchains while preserving fungibility and conservation of supply. The application can mint asset vouchers on chain `B` when a particular IBC packet is committed to chain `B`, and require outgoing sends of that packet on chain `A` to escrow an equal amount of the asset on chain `A` until the vouchers are later redeemed back to chain `A` with an IBC packet in the reverse direction. This ordering guarantee along with correct application logic can ensure that total supply is preserved across both chains and that any vouchers minted on chain `B` can later be redeemed back to chain `A`.
+The IBC protocol must provide ordering (for ordered channels) and exactly-once delivery guarantees to allow applications to reason about the combined state of connected modules on two chains. 
+
+> **Example**: An application may wish to allow a single tokenized asset to be transferred between and held on multiple blockchains while preserving fungibility and conservation of supply. The application can mint asset vouchers on chain `B` when a particular IBC packet is committed to chain `B`, and require outgoing sends of that packet on chain `A` to escrow an equal amount of the asset on chain `A` until the vouchers are later redeemed back to chain `A` with an IBC packet in the reverse direction. This ordering guarantee along with correct application logic can ensure that total supply is preserved across both chains and that any vouchers minted on chain `B` can later be redeemed back to chain `A`.
 
 In order to provide the desired ordering, exactly-once delivery, and module permissioning semantics to the application layer, the interblockchain communication protocol must implement an abstraction to enforce these semantics — channels are this abstraction.
 
@@ -42,7 +44,9 @@ A *bidirectional* channel is a channel where packets can flow in both directions
 
 A *unidirectional* channel is a channel where packets can only flow in one direction: from `A` to `B` (or from `B` to `A`, the order of naming is arbitrary).
 
-An *ordered* channel is a channel where packets are delivered exactly in the order which they were sent.
+An *ordered* channel is a channel where packets are delivered exactly in the order which they were sent. This channel type offers a very strict guarantee of ordering. Either, the packets are received in the order they were sent, or if a packet in the sequence times out; then all future packets are also not receivable and the channel closes.
+
+An *ordered_allow_timeout* channel is a less strict version of the *ordered* channel. Here, the channel logic will take a *best effort* approach to delivering the packets in order. In a stream of packets, the channel will relay all packets in order and if a packet in the stream times out, the timeout logic for that packet will execute and the rest of the later packets will continue processing in order. Thus, we **do not close** the channel on a timeout with this channel type.
 
 An *unordered* channel is a channel where packets can be delivered in any order, which may differ from the order in which they were sent.
 
@@ -50,6 +54,7 @@ An *unordered* channel is a channel where packets can be delivered in any order,
 enum ChannelOrder {
   ORDERED,
   UNORDERED,
+  ORDERED_ALLOW_TIMEOUT,
 }
 ```
 
@@ -73,14 +78,14 @@ interface ChannelEnd {
 ```
 
 - The `state` is the current state of the channel end.
-- The `ordering` field indicates whether the channel is ordered or unordered.
+- The `ordering` field indicates whether the channel is `unordered`, `ordered`, or `ordered_allow_timeout`.
 - The `counterpartyPortIdentifier` identifies the port on the counterparty chain which owns the other end of the channel.
 - The `counterpartyChannelIdentifier` identifies the channel end on the counterparty chain.
 - The `nextSequenceSend`, stored separately, tracks the sequence number for the next packet to be sent.
 - The `nextSequenceRecv`, stored separately, tracks the sequence number for the next packet to be received.
 - The `nextSequenceAck`, stored separately, tracks the sequence number for the next packet to be acknowledged.
 - The `connectionHops` stores the list of connection identifiers, in order, along which packets sent on this channel will travel. At the moment this list must be of length 1. In the future multi-hop channels may be supported.
-- The `version` string stores an opaque channel version, which is agreed upon during the handshake. This can determine module-level configuration such as which packet encoding is used for the channel. This version is not used by the core IBC protocol.
+- The `version` string stores an opaque channel version, which is agreed upon during the handshake. This can determine module-level configuration such as which packet encoding is used for the channel. This version is not used by the core IBC protocol. If the version string contains structured metadata for the application to parse and interpret, then it is considered best practice to encode all metadata in a JSON struct and include the marshalled string in the version field.
 
 Channel ends have a *state*:
 
@@ -130,6 +135,15 @@ An `OpaquePacket` is a packet, but cloaked in an obscuring data type by the host
 type OpaquePacket = object
 ```
 
+In order to enable new channel types (e.g. ORDERED_ALLOW_TIMEOUT), the protocol introduces standardized packet receipts that will serve as sentinel values for the receiving chain to expliclity write to its store the outcome of a `recvPacket`.
+
+```typescript
+enum PacketReceipt {
+  SUCCESSFUL_RECEIPT,
+  TIMEOUT_RECEIPT,
+}
+```
+
 ### Desired Properties
 
 #### Efficiency
@@ -145,8 +159,9 @@ type OpaquePacket = object
 
 #### Ordering
 
-- On ordered channels, packets should be sent and received in the same order: if packet *x* is sent before packet *y* by a channel end on chain `A`, packet *x* must be received before packet *y* by the corresponding channel end on chain `B`.
-- On unordered channels, packets may be sent and received in any order. Unordered packets, like ordered packets, have individual timeouts specified in terms of the destination chain's height.
+- On *ordered* channels, packets should be sent and received in the same order: if packet *x* is sent before packet *y* by a channel end on chain `A`, packet *x* must be received before packet *y* by the corresponding channel end on chain `B`. If packet *x* is sent before packet *y* by a channel and packet *x* is timed out; then packet *y* and any packet sent after *x* cannot be received.
+- On *ordered_allow_timeout* channels, packets should be sent and received in the same order: if packet *x* is sent before packet *y* by a channel end on chain `A`, packet *x* must be received **or** timed out before packet *y* by the corresponding channel end on chain `B`.
+- On *unordered* channels, packets may be sent and received in any order. Unordered packets, like ordered packets, have individual timeouts specified in terms of the destination chain's height.
 
 #### Permissioning
 
@@ -185,15 +200,15 @@ The `nextSequenceSend`, `nextSequenceRecv`, and `nextSequenceAck` unsigned integ
 
 ```typescript
 function nextSequenceSendPath(portIdentifier: Identifier, channelIdentifier: Identifier): Path {
-    return "seqSends/ports/{portIdentifier}/channels/{channelIdentifier}/nextSequenceSend"
+    return "nextSequenceSend/ports/{portIdentifier}/channels/{channelIdentifier}"
 }
 
 function nextSequenceRecvPath(portIdentifier: Identifier, channelIdentifier: Identifier): Path {
-    return "seqRecvs/ports/{portIdentifier}/channels/{channelIdentifier}/nextSequenceRecv"
+    return "nextSequenceRecv/ports/{portIdentifier}/channels/{channelIdentifier}"
 }
 
 function nextSequenceAckPath(portIdentifier: Identifier, channelIdentifier: Identifier): Path {
-    return "seqAcks/ports/{portIdentifier}/channels/{channelIdentifier}/nextSequenceAck"
+    return "nextSequenceAck/ports/{portIdentifier}/channels/{channelIdentifier}"
 }
 ```
 
@@ -201,17 +216,18 @@ Constant-size commitments to packet data fields are stored under the packet sequ
 
 ```typescript
 function packetCommitmentPath(portIdentifier: Identifier, channelIdentifier: Identifier, sequence: uint64): Path {
-    return "commitments/ports/{portIdentifier}/channels/{channelIdentifier}/packets/" + sequence
+    return "commitments/ports/{portIdentifier}/channels/{channelIdentifier}/packets/{sequence}"
 }
 ```
 
 Absence of the path in the store is equivalent to a zero-bit.
 
-Packet receipt data are stored under the `packetReceiptPath`
+Packet receipt data are stored under the `packetReceiptPath`. In the case of a successful receive, the destination chain writes a sentinel success value of `SUCCESSFUL_RECEIPT`.
+Some channel types MAY write a sentinel timeout value `TIMEOUT_RECEIPT` if the packet is received after the specified timeout.
 
 ```typescript
 function packetReceiptPath(portIdentifier: Identifier, channelIdentifier: Identifier, sequence: uint64): Path {
-    return "receipts/ports/{portIdentifier}/channels/{channelIdentifier}/receipts/" + sequence
+    return "receipts/ports/{portIdentifier}/channels/{channelIdentifier}/receipts/{sequence}"
 }
 ```
 
@@ -219,7 +235,7 @@ Packet acknowledgement data are stored under the `packetAcknowledgementPath`:
 
 ```typescript
 function packetAcknowledgementPath(portIdentifier: Identifier, channelIdentifier: Identifier, sequence: uint64): Path {
-    return "acks/ports/{portIdentifier}/channels/{channelIdentifier}/acknowledgements/" + sequence
+    return "acks/ports/{portIdentifier}/channels/{channelIdentifier}/sequences/{sequence}"
 }
 ```
 
@@ -315,7 +331,6 @@ function chanOpenTry(
   order: ChannelOrder,
   connectionHops: [Identifier],
   portIdentifier: Identifier,
-  previousIdentifier: Identifier,
   counterpartyChosenChannelIdentifer: Identifier,
   counterpartyPortIdentifier: Identifier,
   counterpartyChannelIdentifier: Identifier,
@@ -323,22 +338,8 @@ function chanOpenTry(
   counterpartyVersion: string,
   proofInit: CommitmentProof,
   proofHeight: Height): CapabilityKey {
-    if (previousIdentifier !== "") {
-      previous = provableStore.get(channelPath(portIdentifier, channelIdentifier))
-      abortTransactionUnless(
-        (previous !== null) &&
-        (previous.state === INIT &&
-         previous.order === order &&
-         previous.counterpartyPortIdentifier === counterpartyPortIdentifier &&
-         previous.counterpartyChannelIdentifier === "" &&
-         previous.connectionHops === connectionHops &&
-         previous.version === version)
-        )
-      channelIdentifier = previousIdentifier
-    } else {
-      // generate a new identifier if the provided identifier was the sentinel empty-string
-      channelIdentifier = generateIdentifier()
-    }
+    channelIdentifier = generateIdentifier()
+
     abortTransactionUnless(validateChannelIdentifier(portIdentifier, channelIdentifier))
     abortTransactionUnless(connectionHops.length === 1) // for v1 of the IBC protocol
     abortTransactionUnless(authenticateCapability(portPath(portIdentifier), portCapability))
@@ -358,12 +359,12 @@ function chanOpenTry(
                          counterpartyChannelIdentifier, connectionHops, version}
     provableStore.set(channelPath(portIdentifier, channelIdentifier), channel)
     channelCapability = newCapability(channelCapabilityPath(portIdentifier, channelIdentifier))
-    // only reset sequences if the previous channel didn't exist, else we might overwrite optimistically-sent packets
-    if (previous === null) {
-      provableStore.set(nextSequenceSendPath(portIdentifier, channelIdentifier), 1)
-      provableStore.set(nextSequenceRecvPath(portIdentifier, channelIdentifier), 1)
-      provableStore.set(nextSequenceAckPath(portIdentifier, channelIdentifier), 1)
-    }
+
+    // initialize channel sequences
+    provableStore.set(nextSequenceSendPath(portIdentifier, channelIdentifier), 1)
+    provableStore.set(nextSequenceRecvPath(portIdentifier, channelIdentifier), 1)
+    provableStore.set(nextSequenceAckPath(portIdentifier, channelIdentifier), 1)
+
     return channelCapability
 }
 ```
@@ -375,12 +376,12 @@ counterparty module on the other chain.
 function chanOpenAck(
   portIdentifier: Identifier,
   channelIdentifier: Identifier,
+  counterpartyChannelIdentifier: Identifier,
   counterpartyVersion: string,
-  counterpartyChannelIdentifier: string,
   proofTry: CommitmentProof,
   proofHeight: Height) {
     channel = provableStore.get(channelPath(portIdentifier, channelIdentifier))
-    abortTransactionUnless(channel.state === INIT || channel.state === TRYOPEN)
+    abortTransactionUnless(channel.state === INIT)
     abortTransactionUnless(authenticateCapability(channelCapabilityPath(portIdentifier, channelIdentifier), capability))
     connection = provableStore.get(connectionPath(channel.connectionHops[0]))
     abortTransactionUnless(connection !== null)
@@ -526,15 +527,14 @@ Represented spatially, packet transit between two machines can be rendered as fo
 
 ##### Sending packets
 
-The `sendPacket` function is called by a module in order to send an IBC packet on a channel end owned by the calling module to the corresponding module on the counterparty chain.
+The `sendPacket` function is called by a module in order to send *data* (in the form of an IBC packet) on a channel end owned by the calling module.
 
 Calling modules MUST execute application logic atomically in conjunction with calling `sendPacket`.
 
 The IBC handler performs the following steps in order:
 
 - Checks that the channel & connection are open to send packets
-- Checks that the calling module owns the sending port
-- Checks that the packet metadata matches the channel & connection information
+- Checks that the calling module owns the sending port (see [ICS 5](../ics-005-port-allocation))
 - Checks that the timeout height specified has not already passed on the destination chain
 - Increments the send sequence counter associated with the channel
 - Stores a constant-size commitment to the packet data & packet timeout
@@ -542,35 +542,44 @@ The IBC handler performs the following steps in order:
 Note that the full packet is not stored in the state of the chain - merely a short hash-commitment to the data & timeout value. The packet data can be calculated from the transaction execution and possibly returned as log output which relayers can index.
 
 ```typescript
-function sendPacket(packet: Packet) {
-    channel = provableStore.get(channelPath(packet.sourcePort, packet.sourceChannel))
+function sendPacket(
+  capability: CapabilityKey,
+  sourcePort: Identifier,
+  sourceChannel: Identifier,
+  timeoutHeight: Height,
+  timeoutTimestamp: uint64,
+  data: bytes) {
+    channel = provableStore.get(channelPath(sourcePort, sourceChannel))
 
-    // optimistic sends are permitted once the handshake has started
+    // check that the channel & connection are open to send packets; 
+    // note: optimistic sends are permitted once the handshake has started
     abortTransactionUnless(channel !== null)
     abortTransactionUnless(channel.state !== CLOSED)
-    abortTransactionUnless(authenticateCapability(channelCapabilityPath(packet.sourcePort, packet.sourceChannel), capability))
-    abortTransactionUnless(packet.destPort === channel.counterpartyPortIdentifier)
-    abortTransactionUnless(packet.destChannel === channel.counterpartyChannelIdentifier)
     connection = provableStore.get(connectionPath(channel.connectionHops[0]))
-
     abortTransactionUnless(connection !== null)
 
-    // sanity-check that the timeout height hasn't already passed in our local client tracking the receiving chain
+    // check if the calling module owns the sending port
+    abortTransactionUnless(authenticateCapability(channelCapabilityPath(sourcePort, sourceChannel), capability))
+
+    // disallow packets with a zero timeoutHeight and timeoutTimestamp
+    abortTransactionUnless(packet.timeoutHeight !== 0 || packet.timeoutTimestamp !== 0)
+    
+    // check that the timeout height hasn't already passed in the local client tracking the receiving chain
     latestClientHeight = provableStore.get(clientPath(connection.clientIdentifier)).latestClientHeight()
     abortTransactionUnless(packet.timeoutHeight === 0 || latestClientHeight < packet.timeoutHeight)
 
-    nextSequenceSend = provableStore.get(nextSequenceSendPath(packet.sourcePort, packet.sourceChannel))
-    abortTransactionUnless(packet.sequence === nextSequenceSend)
+    // increment the send sequence counter
+    sequence = provableStore.get(nextSequenceSendPath(packet.sourcePort, packet.sourceChannel))
+    provableStore.set(nextSequenceSendPath(packet.sourcePort, packet.sourceChannel), sequence+1)
 
-    // all assertions passed, we can alter state
+    // store commitment to the packet data & packet timeout
+    provableStore.set(
+      packetCommitmentPath(sourcePort, sourceChannel, sequence),
+      hash(data, timeoutHeight, timeoutTimestamp)
+    )
 
-    nextSequenceSend = nextSequenceSend + 1
-    provableStore.set(nextSequenceSendPath(packet.sourcePort, packet.sourceChannel), nextSequenceSend)
-    provableStore.set(packetCommitmentPath(packet.sourcePort, packet.sourceChannel, packet.sequence),
-                      hash(packet.data, packet.timeoutHeight, packet.timeoutTimestamp))
-
-    // log that a packet has been sent
-    emitLogEntry("sendPacket", {sequence: packet.sequence, data: packet.data, timeoutHeight: packet.timeoutHeight, timeoutTimestamp: packet.timeoutTimestamp})
+    // log that a packet can be safely sent
+    emitLogEntry("sendPacket", {sequence: sequence, data: data, timeoutHeight: timeoutHeight, timeoutTimestamp: timeoutTimestamp})
 }
 ```
 
@@ -585,11 +594,11 @@ The IBC handler performs the following steps in order:
 - Checks that the channel & connection are open to receive packets
 - Checks that the calling module owns the receiving port
 - Checks that the packet metadata matches the channel & connection information
-- Checks that the packet sequence is the next sequence the channel end expects to receive (for ordered channels)
-- Checks that the timeout height has not yet passed
+- Checks that the packet sequence is the next sequence the channel end expects to receive (for ordered and ordered_allow_timeout channels)
+- Checks that the timeout height and timestamp have not yet passed
 - Checks the inclusion proof of packet data commitment in the outgoing chain's state
 - Sets a store path to indicate that the packet has been received (unordered channels only)
-- Increments the packet receive sequence associated with the channel end (ordered channels only)
+- Increments the packet receive sequence associated with the channel end (ordered and ordered_allow_timeout channels only)
 
 We pass the address of the `relayer` that signed and submitted the packet to enable a module to optionally provide some rewards. This provides a foundation for fee payment, but can be used for other techniques as well (like calculating a leaderboard).
 
@@ -610,9 +619,6 @@ function recvPacket(
     abortTransactionUnless(connection !== null)
     abortTransactionUnless(connection.state === OPEN)
 
-    abortTransactionUnless(packet.timeoutHeight === 0 || getConsensusHeight() < packet.timeoutHeight)
-    abortTransactionUnless(packet.timeoutTimestamp === 0 || currentTimestamp() < packet.timeoutTimestamp)
-
     abortTransactionUnless(connection.verifyPacketData(
       proofHeight,
       proof,
@@ -622,27 +628,104 @@ function recvPacket(
       concat(packet.data, packet.timeoutHeight, packet.timeoutTimestamp)
     ))
 
-    // all assertions passed (except sequence check), we can alter state
+    // do sequence check before any state changes
+    if channel.order == ORDERED || channel.order == ORDERED_ALLOW_TIMEOUT {
+        nextSequenceRecv = provableStore.get(nextSequenceRecvPath(packet.destPort, packet.destChannel))
+        if (packet.sequence < nextSequenceRecv) {
+          // event is emitted even if transaction is aborted
+          emitLogEntry("recvPacket", {
+            data: packet.data 
+            timeoutHeight: packet.timeoutHeight, 
+            timeoutTimestamp: packet.timeoutTimestamp,
+            sequence: packet.sequence,
+            sourcePort: packet.sourcePort, 
+            sourceChannel: packet.sourceChannel,
+            destPort: packet.destPort, 
+            destChannel: packet.destChannel,
+            order: channel.order,
+            connection: channel.connectionHops[0]
+          })
+        }
 
-    if (channel.order === ORDERED) {
-      nextSequenceRecv = provableStore.get(nextSequenceRecvPath(packet.destPort, packet.destChannel))
-      abortTransactionUnless(packet.sequence === nextSequenceRecv)
-      nextSequenceRecv = nextSequenceRecv + 1
-      provableStore.set(nextSequenceRecvPath(packet.destPort, packet.destChannel), nextSequenceRecv)
-    } else {
-      // for unordered channels we must set the receipt so it can be verified on the other side
-      // this receipt does not contain any data, since the packet has not yet been processed
-      // it's just a single store key set to an empty string to indicate that the packet has been received
-      abortTransactionUnless(provableStore.get(packetReceiptPath(packet.destPort, packet.destChannel, packet.sequence) === null))
-      provableStore.set(
-        packetReceiptPath(packet.destPort, packet.destChannel, packet.sequence),
-        "1"
-      )
+        abortTransactionUnless(packet.sequence === nextSequenceRecv)
     }
 
+    switch channel.order {
+      case ORDERED:
+      case UNORDERED:
+        abortTransactionUnless(packet.timeoutHeight === 0 || getConsensusHeight() < packet.timeoutHeight)
+        abortTransactionUnless(packet.timeoutTimestamp === 0 || currentTimestamp() < packet.timeoutTimestamp)
+        break;
+
+      case ORDERED_ALLOW_TIMEOUT:
+        // for ORDERED_ALLOW_TIMEOUT, we do not abort on timeout
+        // instead increment next sequence recv and write the sentinel timeout value in packet receipt
+        // then return
+        if (getConsensusHeight() >= packet.timeoutHeight && packet.timeoutHeight != 0) || (currentTimestamp() >= packet.timeoutTimestamp && packet.timeoutTimestamp != 0) {
+          nextSequenceRecv = nextSequenceRecv + 1
+          provableStore.set(nextSequenceRecvPath(packet.destPort, packet.destChannel), nextSequenceRecv)
+          provableStore.set(
+          packetReceiptPath(packet.destPort, packet.destChannel, packet.sequence),
+            TIMEOUT_RECEIPT
+          )
+        }
+        return;
+
+      default:
+        // unsupported channel type
+        abortTransactionUnless(false)
+    }
+
+    // all assertions passed (except sequence check), we can alter state
+
+    switch channel.order {
+      case ORDERED:
+      case ORDERED_ALLOW_TIMEOUT:
+        nextSequenceRecv = nextSequenceRecv + 1
+        provableStore.set(nextSequenceRecvPath(packet.destPort, packet.destChannel), nextSequenceRecv)
+        break;
+
+      case UNORDERED:
+        // for unordered channels we must set the receipt so it can be verified on the other side
+        // this receipt does not contain any data, since the packet has not yet been processed
+        // it's the sentinel success receipt: []byte{0x01}
+        packetReceipt = provableStore.get(packetReceiptPath(packet.destPort, packet.destChannel, packet.sequence))
+        if (packetReceipt != null) {
+          emitLogEntry("recvPacket", {
+            data: packet.data 
+            timeoutHeight: packet.timeoutHeight, 
+            timeoutTimestamp: packet.timeoutTimestamp,
+            sequence: packet.sequence,
+            sourcePort: packet.sourcePort, 
+            sourceChannel: packet.sourceChannel,
+            destPort: packet.destPort, 
+            destChannel: packet.destChannel,
+            order: channel.order,
+            connection: channel.connectionHops[0]
+          })
+        }
+
+        abortTransactionUnless(packetRecepit === null))
+        provableStore.set(
+          packetReceiptPath(packet.destPort, packet.destChannel, packet.sequence),
+          SUCCESFUL_RECEIPT
+        )
+      break;
+    }
+    
     // log that a packet has been received
-    emitLogEntry("recvPacket", {sequence: packet.sequence, timeoutHeight: packet.timeoutHeight, port: packet.destPort, channel: packet.destChannel,
-                                timeoutTimestamp: packet.timeoutTimestamp, data: packet.data})
+    emitLogEntry("recvPacket", {
+      data: packet.data 
+      timeoutHeight: packet.timeoutHeight, 
+      timeoutTimestamp: packet.timeoutTimestamp,
+      sequence: packet.sequence,
+      sourcePort: packet.sourcePort, 
+      sourceChannel: packet.sourceChannel,
+      destPort: packet.destPort, 
+      destChannel: packet.destChannel,
+      order: channel.order,
+      connection: channel.connectionHops[0]
+    })
 
     // return transparent packet
     return packet
@@ -732,7 +815,7 @@ function acknowledgePacket(
     ))
 
     // abort transaction unless acknowledgement is processed in order
-    if (channel.order === ORDERED) {
+    if (channel.order === ORDERED || channel.order == ORDERED_ALLOW_TIMEOUT) {
       nextSequenceAck = provableStore.get(nextSequenceAckPath(packet.sourcePort, packet.sourceChannel))
       abortTransactionUnless(packet.sequence === nextSequenceAck)
       nextSequenceAck = nextSequenceAck + 1
@@ -793,6 +876,8 @@ In the case of an unordered channel, `timeoutPacket` checks the absence of the r
 
 If relations are enforced between timeout heights of subsequent packets, safe bulk timeouts of all packets prior to a timed-out packet can be performed. This specification omits details for now.
 
+Since we allow optimistic sending of packets (i.e. sending a packet before a channel opens), we must also allow optimistic timing out of packets. With optimistic sends, the packet may be sent on a channel that eventually opens or a channel that will never open. If the channel does open after the packet has timed out, then the packet will never be received on the counterparty so we can safely timeout optimistically. If the channel never opens, then we MUST timeout optimistically so that any state changes made during the optimistic send by the application can be safely reverted.
+
 We pass the `relayer` address just as in [Receiving packets](#receiving-packets) to allow for possible incentivization here as well.
 
 ```typescript
@@ -805,7 +890,6 @@ function timeoutPacket(
 
     channel = provableStore.get(channelPath(packet.sourcePort, packet.sourceChannel))
     abortTransactionUnless(channel !== null)
-    abortTransactionUnless(channel.state === OPEN)
 
     abortTransactionUnless(authenticateCapability(channelCapabilityPath(packet.sourcePort, packet.sourceChannel), capability))
     abortTransactionUnless(packet.destChannel === channel.counterpartyChannelIdentifier)
@@ -817,42 +901,76 @@ function timeoutPacket(
     // check that timeout height or timeout timestamp has passed on the other end
     abortTransactionUnless(
       (packet.timeoutHeight > 0 && proofHeight >= packet.timeoutHeight) ||
-      (packet.timeoutTimestamp > 0 && connection.getTimestampAtHeight(proofHeight) > packet.timeoutTimestamp))
+      (packet.timeoutTimestamp > 0 && connection.getTimestampAtHeight(proofHeight) >= packet.timeoutTimestamp))
 
     // verify we actually sent this packet, check the store
     abortTransactionUnless(provableStore.get(packetCommitmentPath(packet.sourcePort, packet.sourceChannel, packet.sequence))
            === hash(packet.data, packet.timeoutHeight, packet.timeoutTimestamp))
 
-    if channel.order === ORDERED {
-      // ordered channel: check that packet has not been received
-      abortTransactionUnless(nextSequenceRecv <= packet.sequence)
-      // ordered channel: check that the recv sequence is as claimed
-      abortTransactionUnless(connection.verifyNextSequenceRecv(
-        proofHeight,
-        proof,
-        packet.destPort,
-        packet.destChannel,
-        nextSequenceRecv
-      ))
-    } else
-      // unordered channel: verify absence of receipt at packet index
-      abortTransactionUnless(connection.verifyPacketReceiptAbsence(
-        proofHeight,
-        proof,
-        packet.destPort,
-        packet.destChannel,
-        packet.sequence
-      ))
+    switch channel.order {
+      case ORDERED:
+        // ordered channel: check that packet has not been received
+        // only allow timeout on next sequence so all sequences before the timed out packet are processed (received/timed out)
+        // before this packet times out
+        abortTransactionUnless(nextSequenceRecv == packet.sequence)
+        // ordered channel: check that the recv sequence is as claimed
+        abortTransactionUnless(connection.verifyNextSequenceRecv(
+          proofHeight,
+          proof,
+          packet.destPort,
+          packet.destChannel,
+          nextSequenceRecv
+        ))
+        break;
+
+      case UNORDERED:
+        // unordered channel: verify absence of receipt at packet index
+        abortTransactionUnless(connection.verifyPacketReceiptAbsence(
+          proofHeight,
+          proof,
+          packet.destPort,
+          packet.destChannel,
+          packet.sequence
+        ))
+        break;
+
+      // NOTE: For ORDERED_ALLOW_TIMEOUT, the relayer must first attempt the receive on the destination chain
+      // before the timeout receipt can be written and subsequently proven on the sender chain in timeoutPacket
+      case ORDERED_ALLOW_TIMEOUT:
+        // ordered channel: check that packet has not been received
+        // only allow timeout on next sequence so all sequences before the timed out packet are processed (received/timed out)
+        // before this packet times out
+        abortTransactionUnless(nextSequenceRecv == packet.sequence)
+        abortTransactionUnless(connection.verifyPacketReceipt(
+          proofHeight,
+          proof,
+          packet.destPort,
+          packet.destChannel,
+          packet.sequence
+          TIMEOUT_RECEIPT,
+        ))
+        break;
+
+      default:
+        // unsupported channel type
+        abortTransactionUnless(true)
+    } 
 
     // all assertions passed, we can alter state
 
     // delete our commitment
     provableStore.delete(packetCommitmentPath(packet.sourcePort, packet.sourceChannel, packet.sequence))
 
+    // only close on strictly ORDERED channels
     if channel.order === ORDERED {
       // ordered channel: close the channel
       channel.state = CLOSED
       provableStore.set(channelPath(packet.sourcePort, packet.sourceChannel), channel)
+    }
+    // on ORDERED_ALLOW_TIMEOUT, increment NextSequenceAck so that next packet can be acknowledged after this packet timed out.
+    if channel.order === ORDERED_ALLOW_TIMEOUT {
+      nextSequenceAck = nextSequenceAck + 1
+      provableStore.set(nextSequenceAckPath(packet.srcPort, packet.srcChannel), nextSequenceAck)
     }
 
     // return transparent packet
@@ -903,7 +1021,7 @@ function timeoutOnClose(
       expected
     ))
 
-    if channel.order === ORDERED {
+    if channel.order === ORDERED || channel.order == ORDERED_ALLOW_TIMEOUT {
       // ordered channel: check that the recv sequence is as claimed
       abortTransactionUnless(connection.verifyNextSequenceRecv(
         proofHeight,
@@ -928,12 +1046,6 @@ function timeoutOnClose(
 
     // delete our commitment
     provableStore.delete(packetCommitmentPath(packet.sourcePort, packet.sourceChannel, packet.sequence))
-
-    if channel.order === ORDERED {
-      // ordered channel: close the channel
-      channel.state = CLOSED
-      provableStore.set(channelPath(packet.sourcePort, packet.sourceChannel), channel)
-    }
 
     // return transparent packet
     return packet
@@ -1011,6 +1123,8 @@ Jul 29, 2019 - Revisions to handle timeouts after connection closure
 Aug 13, 2019 - Various edits
 
 Aug 25, 2019 - Cleanup
+
+Jan 10, 2022 - Add ORDERED_ALLOW_TIMEOUT channel type and appropriate logic
 
 ## Copyright
 

@@ -1,4 +1,4 @@
 # Default owners for repository
-# 2/3 quorum required for merge
+# 2/n quorum required for merge
 
-*       @milosevic @adityasripal @cwgoes
+*       @mpoke @adityasripal @cwgoes @colin-axner

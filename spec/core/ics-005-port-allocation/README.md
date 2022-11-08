@@ -48,7 +48,7 @@ The IBC specification makes no assumptions of module functionality other than th
 - Once a module has bound to a port, no other modules can use that port until the module releases it
 - A module can, on its option, release a port or transfer it to another module
 - A single module can bind to multiple ports at once
-- Ports are allocated first-come first-serve and "reserved" ports for known modules can be bound when the chain is first started
+- Ports are allocated first-come first-serve, and "reserved" ports for known modules can be bound when the chain is first started
 
 As a helpful comparison, the following analogies to TCP are roughly accurate:
 

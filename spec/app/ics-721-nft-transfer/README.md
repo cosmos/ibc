@@ -7,7 +7,7 @@ requires: 25, 26
 kind: instantiation
 author: Haifeng Xi <haifeng@bianjie.ai>
 created: 2021-11-10
-modified: 2022-05-18
+modified: 2022-11-08
 ---
 
 > This standard document follows the same design principles of [ICS 20](../ics-020-fungible-token-transfer) and inherits most of its content therefrom, while replacing `bank` module based asset tracking logic with that of the `nft` module.
@@ -26,7 +26,7 @@ The IBC handler interface & IBC routing module interface are as defined in [ICS 
 
 ### Desired Properties
 
-- Preservation of non-fungibility (i.e., only one instance of any token is *live* across all the IBC-connected blockchains).
+- Preservation of non-fungibility (i.e., only one instance of any token is _live_ across all the IBC-connected blockchains).
 - Permissionless token transfers, no need to whitelist connections, modules, or `classId`s.
 - Symmetric (all chains implement the same logic, no in-protocol differentiation of hubs & zones).
 - Fault containment: prevents Byzantine-creation of tokens originating on chain `A`, as a result of chain `B`'s Byzantine behavior.
@@ -39,21 +39,25 @@ Only one packet data type is required: `NonFungibleTokenPacketData`, which speci
 
 ```typescript
 interface NonFungibleTokenPacketData {
-  classId: string
-  classUri: string
-  tokenIds: []string
-  tokenUris: []string
-  sender: string
-  receiver: string
+  classId: string;
+  classUri: string;
+  tokenIds: string[];
+  tokenUris: string[];
+  tokenData: byte[][];
+  sender: string;
+  receiver: string;
 }
 ```
+
 `classId` uniquely identifies the class/collection which the tokens being transferred belong to in the sending chain. In the case of an ERC-1155 compliant smart contract, for example, this could be a string representation of the top 128 bits of the token ID.
 
 `classUri` is optional, but will be extremely beneficial for cross-chain interoperability with NFT marketplaces like OpenSea, where [class/collection metadata](https://docs.opensea.io/docs/contract-level-metadata) can be added for better user experience.
 
-`tokenIds` uniquely identifies some tokens of the given class that are being transferred.  In the case of an ERC-1155 compliant smart contract, for example, a `tokenId` could be a string representation of the bottom 128 bits of the token ID.
+`tokenIds` uniquely identifies some tokens of the given class that are being transferred. In the case of an ERC-1155 compliant smart contract, for example, a `tokenId` could be a string representation of the bottom 128 bits of the token ID.
 
-Each `tokenId` has a corresponding entry in `tokenUris`, which refers to an off-chain resource that is typically an immutable JSON file containing the token's metadata.
+Each `tokenId` has a corresponding entry in `tokenUris` which, if present, refers to an off-chain resource that is typically an immutable JSON file containing the token's metadata.
+
+Each `tokenId` has a corresponding entry in `tokenData` which, if present, contains some opaque application data associated with the token (e.g., royalty parameters).
 
 As tokens are sent across chains using the ICS-721 protocol, they begin to accrue a record of channels across which they have been transferred. This record information is encoded into the `classId` field.
 
@@ -75,15 +79,17 @@ A -> B -> C -> A -> C -> B -> A
 The acknowledgement data type describes whether the transfer succeeded or failed, and the reason for failure (if any).
 
 ```typescript
-type NonFungibleTokenPacketAcknowledgement = NonFungibleTokenPacketSuccess | NonFungibleTokenPacketError;
+type NonFungibleTokenPacketAcknowledgement =
+  | NonFungibleTokenPacketSuccess
+  | NonFungibleTokenPacketError;
 
 interface NonFungibleTokenPacketSuccess {
   // This is binary 0x01 base64 encoded
-  success: "AQ=="
+  success: "AQ==";
 }
 
 interface NonFungibleTokenPacketError {
-  error: string
+  error: string;
 }
 ```
 
@@ -93,7 +99,7 @@ The non-fungible token transfer bridge module maintains a separate escrow addres
 
 ```typescript
 interface ModuleState {
-  channelEscrowAddresses: Map<Identifier, string>
+  channelEscrowAddresses: Map<Identifier, string>;
 }
 ```
 
@@ -104,9 +110,7 @@ The sub-protocols described herein should be implemented in a "non-fungible toke
 The NFT asset tracking module should implement the following functions:
 
 ```typescript
-function SaveClass(
-  classId: string,
-  classUri: string) {
+function SaveClass(classId: string, classUri: string) {
   // creates a new NFT Class identified by classId
 }
 ```
@@ -116,42 +120,35 @@ function Mint(
   classId: string,
   tokenId: string,
   tokenUri: string,
-  receiver: string) {
+  tokenData: byte[],
+  receiver: string
+) {
   // creates a new NFT identified by <classId,tokenId>
   // receiver becomes owner of the newly minted NFT
 }
 ```
 
 ```typescript
-function Transfer(
-  classId: string,
-  tokenId: string,
-  receiver: string) {
+function Transfer(classId: string, tokenId: string, receiver: string) {
   // transfers the NFT identified by <classId,tokenId> to receiver
   // receiver becomes new owner of the NFT
 }
 ```
 
 ```typescript
-function Burn(
-  classId: string,
-  tokenId: string) {
+function Burn(classId: string, tokenId: string) {
   // destroys the NFT identified by <classId,tokenId>
 }
 ```
 
 ```typescript
-function GetOwner(
-  classId: string,
-  tokenId: string) {
+function GetOwner(classId: string, tokenId: string) {
   // returns current owner of the NFT identified by <classId,tokenId>
 }
 ```
 
 ```typescript
-function GetNFT(
-  classId: string,
-  tokenId: string) {
+function GetNFT(classId: string, tokenId: string) {
   // returns NFT identified by <classId,tokenId>
 }
 ```
@@ -186,8 +183,8 @@ function setup() {
     onTimeoutPacket,
     onAcknowledgePacket,
     onTimeoutPacketClose
-  })
-  claimCapability("port", capability)
+  });
+  claimCapability("port", capability);
 }
 ```
 
@@ -207,32 +204,35 @@ Both machines `A` and `B` accept new channels from any module on another machine
 ```typescript
 function onChanOpenInit(
   order: ChannelOrder,
-  connectionHops: [Identifier],
+  connectionHops: Identifier[],
   portIdentifier: Identifier,
   channelIdentifier: Identifier,
   counterpartyPortIdentifier: Identifier,
   counterpartyChannelIdentifier: Identifier,
-  version: string) {
+  version: string) (version: string, err: Error) {
   // only unordered channels allowed
-  abortTransactionUnless(order === UNORDERED)
+  abortTransactionUnless(order === UNORDERED);
   // assert that version is "ics721-1"
-  abortTransactionUnless(version === "ics721-1")
+  // or relayer passed in empty version
+  abortTransactionUnless(version === "ics721-1" || version === "");
+  return "ics721-1", nil;
 }
 ```
 
 ```typescript
 function onChanOpenTry(
   order: ChannelOrder,
-  connectionHops: [Identifier],
+  connectionHops: Identifier[],
   portIdentifier: Identifier,
   channelIdentifier: Identifier,
   counterpartyPortIdentifier: Identifier,
   counterpartyChannelIdentifier: Identifier,
-  counterpartyVersion: string) {
+  counterpartyVersion: string) (version: string, err: Error) {
   // only unordered channels allowed
-  abortTransactionUnless(order === UNORDERED)
+  abortTransactionUnless(order === UNORDERED);
   // assert that version is "ics721-1"
-  abortTransactionUnless(counterpartyVersion === "ics721-1")
+  abortTransactionUnless(counterpartyVersion === "ics721-1");
+  return "ics721-1", nil;
 }
 ```
 
@@ -241,38 +241,42 @@ function onChanOpenAck(
   portIdentifier: Identifier,
   channelIdentifier: Identifier,
   counterpartyChannelIdentifier: Identifier,
-  counterpartyVersion: string) {
+  counterpartyVersion: string
+) {
   // port has already been validated
   // assert that version is "ics721-1"
-  abortTransactionUnless(counterpartyVersion === "ics721-1")
+  abortTransactionUnless(counterpartyVersion === "ics721-1");
   // allocate an escrow address
-  channelEscrowAddresses[channelIdentifier] = newAddress()
+  channelEscrowAddresses[channelIdentifier] = newAddress();
 }
 ```
 
 ```typescript
 function onChanOpenConfirm(
   portIdentifier: Identifier,
-  channelIdentifier: Identifier) {
+  channelIdentifier: Identifier
+) {
   // accept channel confirmations, port has already been validated, version has already been validated
   // allocate an escrow address
-  channelEscrowAddresses[channelIdentifier] = newAddress()
+  channelEscrowAddresses[channelIdentifier] = newAddress();
 }
 ```
 
 ```typescript
 function onChanCloseInit(
   portIdentifier: Identifier,
-  channelIdentifier: Identifier) {
+  channelIdentifier: Identifier
+) {
   // abort and return error to prevent channel closing by user
-  abortTransactionUnless(FALSE)
+  abortTransactionUnless(FALSE);
 }
 ```
 
 ```typescript
 function onChanCloseConfirm(
   portIdentifier: Identifier,
-  channelIdentifier: Identifier) {
+  channelIdentifier: Identifier
+) {
   // no action necessary
 }
 ```
@@ -289,7 +293,7 @@ function onChanCloseConfirm(
 ```typescript
 function createOutgoingPacket(
   classId: string,
-  tokenIds: []string,
+  tokenIds: string[],
   sender: string,
   receiver: string,
   source: boolean,
@@ -299,24 +303,26 @@ function createOutgoingPacket(
   sourceChannel: string,
   timeoutHeight: Height,
   timeoutTimestamp: uint64) {
-  prefix = "{sourcePort}/{sourceChannel}/"
+  prefix = sourcePort + '/' + sourceChannel;
   // we are source chain if classId is not prefixed with sourcePort and sourceChannel
-  source = classId.slice(0, len(prefix)) !== prefix
-  tokenUris = []
+  source = classId.slice(0, len(prefix)) !== prefix;
+  tokenUris = [];
+  tokenData = [];
   for (let tokenId in tokenIds) {
     // ensure that sender is token owner
-    abortTransactionUnless(sender === nft.GetOwner(classId, tokenId))
-    if source {
-      // escrow token
-      nft.Transfer(classId, tokenId, channelEscrowAddresses[sourceChannel])
-    } else {
-      // we are sink chain, burn voucher
-      nft.Burn(classId, tokenId)
+    abortTransactionUnless(sender === nft.GetOwner(classId, tokenId));
+    if source { // we are source chain, escrow token
+      nft.Transfer(classId, tokenId, channelEscrowAddresses[sourceChannel]);
     }
-    tokenUris.push(nft.GetNFT(classId, tokenId).GetUri())
+    else { // we are sink chain, burn voucher
+      nft.Burn(classId, tokenId);
+    }
+    token = nft.GetNFT(classId, tokenId);
+    tokenUris.push(token.GetUri());
+    tokenData.push(token.GetData());
   }
-  NonFungibleTokenPacketData data = NonFungibleTokenPacketData{classId, nft.GetClass(classId).GetUri(), tokenIds, tokenUris, sender, receiver}
-  ics4Handler.sendPacket(Packet{timeoutHeight, timeoutTimestamp, destPort, destChannel, sourcePort, sourceChannel, data}, getCapability("port"))
+  NonFungibleTokenPacketData data = NonFungibleTokenPacketData{classId, nft.GetClass(classId).GetUri(), tokenIds, tokenUris, tokenData, sender, receiver};
+  ics4Handler.sendPacket(Packet{timeoutHeight, timeoutTimestamp, destPort, destChannel, sourcePort, sourceChannel, data}, getCapability("port"));
 }
 ```
 
@@ -324,32 +330,35 @@ function createOutgoingPacket(
 
 ```typescript
 function onRecvPacket(packet: Packet) {
-  NonFungibleTokenPacketData data = packet.data
+  NonFungibleTokenPacketData data = packet.data;
   // construct default acknowledgement of success
-  NonFungibleTokenPacketAcknowledgement ack = NonFungibleTokenPacketAcknowledgement{true, null}
-  err = ProcessReceivedPacketData(data)
+  NonFungibleTokenPacketAcknowledgement ack = NonFungibleTokenPacketAcknowledgement{true, null};
+  err = ProcessReceivedPacketData(data);
   if (err !== null) {
-    ack = NonFungibleTokenPacketAcknowledgement{false, err.Error()}
+    ack = NonFungibleTokenPacketAcknowledgement{false, err.Error()};
   }
-  return ack
+  return ack;
 }
 
 function ProcessReceivedPacketData(data: NonFungibleTokenPacketData) {
-  prefix = "{packet.sourcePort}/{packet.sourceChannel}/"
+  prefix = "{packet.sourcePort}/{packet.sourceChannel}/";
   // we are source chain if classId is prefixed with packet's sourcePort and sourceChannel
-  source = data.classId.slice(0, len(prefix)) === prefix
+  source = data.classId.slice(0, len(prefix)) === prefix;
   for (var i in data.tokenIds) {
-    if source {
-      // unescrow token to receiver
-      nft.Transfer(data.classId.slice(len(prefix)), data.tokenIds[i], data.receiver)
-    } else { // we are sink chain
-      prefixedClassId = "{packet.destPort}/{packet.destChannel}/" + data.classId
+    if source { // we are source chain, un-escrow token to receiver
+      if (data.tokenData[i] !== nil) { // update token data
+        token = nft.GetNFT(data.classId.slice(len(prefix)), data.tokenIds[i]);
+        token.SetData(tokenData[i]);
+      }  
+      nft.Transfer(data.classId.slice(len(prefix)), data.tokenIds[i], data.receiver);
+    }
+    else { // we are sink chain, mint voucher to receiver
+      prefixedClassId = "{packet.destPort}/{packet.destChannel}/" + data.classId;
       // create NFT class if it doesn't exist already
       if (nft.HasClass(prefixedClassId) === false) {
-        nft.SaveClass(data.classId, data.classUri)
+        nft.SaveClass(data.classId, data.classUri);
       }
-      // mint voucher to receiver
-      nft.Mint(prefixedClassId, data.tokenIds[i], data.tokenUris[i], data.receiver)
+      nft.Mint(prefixedClassId, data.tokenIds[i], data.tokenUris[i], data.tokenData[i], data.receiver);
     }
   }
 }
@@ -358,12 +367,9 @@ function ProcessReceivedPacketData(data: NonFungibleTokenPacketData) {
 `onAcknowledgePacket` is called by the routing module when a packet sent by this module has been acknowledged.
 
 ```typescript
-function onAcknowledgePacket(
-  packet: Packet,
-  acknowledgement: bytes) {
+function onAcknowledgePacket(packet: Packet, acknowledgement: bytes) {
   // if the transfer failed, refund the tokens
-  if (!ack.success)
-    refundToken(packet)
+  if (!ack.success) refundToken(packet);
 }
 ```
 
@@ -372,7 +378,7 @@ function onAcknowledgePacket(
 ```typescript
 function onTimeoutPacket(packet: Packet) {
   // the packet timed-out, so refund the tokens
-  refundToken(packet)
+  refundToken(packet);
 }
 ```
 
@@ -380,17 +386,15 @@ function onTimeoutPacket(packet: Packet) {
 
 ```typescript
 function refundToken(packet: Packet) {
-  NonFungibleTokenPacketData data = packet.data
+  NonFungibleTokenPacketData data = packet.data;
   prefix = "{packet.sourcePort}/{packet.sourceChannel}/"
   // we are the source if the classId is not prefixed with the packet's sourcePort and sourceChannel
-  source = data.classId.slice(0, len(prefix)) !== prefix
-  for (var i in data.tokenIds) { {
-    if source {
-      // unescrow token back to sender
+  source = data.classId.slice(0, len(prefix)) !== prefix;
+  for (var i in data.tokenIds) {
+    if source { // we are source chain, un-escrow token back to sender
       nft.Transfer(data.classId, data.tokenIds[i], data.sender)
-    } else {
-      // we are sink chain, mint voucher back to sender
-      nft.Mint(data.classId, data.tokenIds[i], data.tokenUris[i], data.sender)
+    } else { // we are sink chain, mint voucher back to sender
+      nft.Mint(data.classId, data.tokenIds[i], data.tokenUris[i], data.tokenData[i], data.sender)
     }
   }
 }
@@ -408,8 +412,8 @@ function onTimeoutPacketClose(packet: Packet) {
 
 This implementation preserves token non-fungibility and redeemability.
 
-* Non-fungibility: Only one instance of any token is *live* across all the IBC-connected blockchains.
-* Redeemability: If tokens have been sent to the counterparty chain, they can be redeemed back in the same `classId` & `tokenId` on the source chain.
+- Non-fungibility: Only one instance of any token is _live_ across all the IBC-connected blockchains.
+- Redeemability: If tokens have been sent to the counterparty chain, they can be redeemed back in the same `classId` & `tokenId` on the source chain.
 
 #### Optional addenda
 
@@ -417,6 +421,7 @@ This implementation preserves token non-fungibility and redeemability.
 - Additional restrictions may be imposed on which other machines may be connected to & which channels may be established.
 
 ## Further Discussion
+
 Extended and complex use cases such as royalties, marketplaces or permissioned transfers can be supported on top of this specification. Solutions could be modules, hooks, [IBC middleware](../ics-030-middleware) and so on. Designing a guideline for this is out of the scope.
 
 It is assumed that application logic in host state machines will be responsible for metadata immutability of IBC tokens minted according to this specification. For any IBC token, NFT applications are strongly advised to check upstream blockchains (all the way back to the source) to ensure its metadata has not been modified along the way. If it is decided, sometime in the future, to accommodate NFT metadata mutability over IBC, we will update this specification or create an entirely new specification -- by using advanced DID features perhaps.
@@ -440,17 +445,19 @@ Coming soon.
 Coming soon.
 
 ## History
-| Date          | Description                                          |
-| ------------- | ---------------------------------------------------- |
-| Nov 10, 2021  | Initial draft - adapted from ICS 20 spec               |
-| Nov 17, 2021  | Revised to better accommodate smart contracts      |
-| Nov 17, 2021  | Renamed from ICS 21 to ICS 721                       |
-| Nov 18, 2021  | Revised to allow for multiple tokens in one packet |
-| Feb 10, 2022  | Revised to incorporate feedbacks from IBC team     |
-| Mar 03, 2022  | Revised to make TRY callback consistent with PR#629         |
-| Mar 11, 2022  | Added example to illustrate the prefix concept         |
-| Mar 30, 2022  | Added NFT module definition and fixed pseudo-code errors |
-| May 18, 2002  | Added paragraph about NFT metadata mutability |
+
+| Date         | Description                                              |
+| ------------ | -------------------------------------------------------- |
+| Nov 10, 2021 | Initial draft - adapted from ICS 20 spec                 |
+| Nov 17, 2021 | Revised to better accommodate smart contracts            |
+| Nov 17, 2021 | Renamed from ICS 21 to ICS 721                           |
+| Nov 18, 2021 | Revised to allow for multiple tokens in one packet       |
+| Feb 10, 2022 | Revised to incorporate feedbacks from IBC team           |
+| Mar 03, 2022 | Revised to make TRY callback consistent with PR#629      |
+| Mar 11, 2022 | Added example to illustrate the prefix concept           |
+| Mar 30, 2022 | Added NFT module definition and fixed pseudo-code errors |
+| May 18, 2022 | Added paragraph about NFT metadata mutability            |
+| Nov 08, 2022 | Added `tokenData` to PacketData                          |
 
 ## Copyright
 

@@ -7,7 +7,7 @@ requires: 4, 25, 26
 kind: instantiation
 author: Aditya Sripal <aditya@interchain.berlin>, Ethan Frey <ethan@confio.tech>
 created: 2021-06-01
-modified: 2021-06-18
+modified: 2022-07-06
 ---
 
 ## Synopsis
@@ -20,7 +20,7 @@ IBC applications are designed to be self-contained modules that implement their 
 
 Without a middleware approach, developers must choose whether to place this extension in application logic inside each relevant application; or place the logic in core IBC. Placing it in each application is redundant and prone to error. Placing the logic in core IBC requires an opt-in from all applications and violates the abstraction barrier between core IBC (TAO) and the application. Either case is not scalable as the number of extensions increase, since this must either increase code bloat in applications or core IBC handlers.
 
-Middleware allows developers to define the extensions as seperate modules that can wrap over the base application. This middleware can thus perform its own custom logic, and pass data into the application so that it may run its logic without being aware of the middleware's existence. This allows both the application and the middleware to implement its own isolated logic while still being able to run as part of a single packet flow.
+Middleware allows developers to define the extensions as separate modules that can wrap over the base application. This middleware can thus perform its own custom logic, and pass data into the application so that it may run its logic without being aware of the middleware's existence. This allows both the application and the middleware to implement its own isolated logic while still being able to run as part of a single packet flow.
 
 ### Definitions
 
@@ -47,9 +47,19 @@ In order to function as IBC Middleware, a module must implement the IBC applicat
 
 When nesting an application, the module must make sure that it is in the middle of communication between core IBC and the application in both directions. Developers should do this by registering the top-level module directly with the IBC router (not any nested applications). The nested applications in turn, must be given access only to the middleware's `WriteAcknowledgement` and `SendPacket` rather than to the core IBC handlers directly.
 
-Additionally, the middleware must take care to ensure that the application logic can execute its own version negotiation without interference from the nesting middleware. In order to do this, the middleware will prepend the version with its own middleware version string. In the application callbacks, the middleware must do its own version negotiation on the prefix and then strip out the prefix before handing over the data to the nested application's callback. This is only relevant if the middleware expects a compatible counterparty middleware at the same level on the counterparty stack. Middleware that only executes on a single side of the channel MUST NOT modify the channel version.
+Additionally, the middleware must take care to ensure that the application logic can execute its own version negotiation without interference from the nesting middleware. In order to do this, the middleware will format the version in a JSON-encoded string containing the middleware version and the application version (and potentially also other custom parameter fields). The application version may as well be a JSON-encoded string, possibly including further middleware and app versions, if the application stack consists of multiple milddlewares wrapping a base application.  The format of the version string is as follows:
 
-Version: `{middleware_version}:{app_version}`
+```json
+{
+    "<middleware_version_key>": "<middleware_version_value>",
+    "app_version": "<application_version_value>",
+    // ... other custom parameter fields
+}
+```
+
+The `<middleware_version_key>` key in the JSON struct should be replaced by the actual name of the key for the corresponding middleware (e.g. `fee_version` for ICS-29 fee middleware).
+
+In the application callbacks, the middleware can unmarshal the version string and retrieve the middleware and application versions. It must do its own version negotiation on `<middleware_version_value>` and then hand over `<application_version_value>` to the nested application's callback. This is only relevant if the middleware expects a compatible counterparty middleware at the same level on the counterparty stack. Middleware that only executes on a single side of the channel MUST NOT modify the channel version.
 
 Each application stack must reserve its own unique port with core IBC. Thus two stacks with the same base application must bind to separate ports.
 
@@ -58,17 +68,28 @@ Each application stack must reserve its own unique port with core IBC. Thus two 
 ```typescript
 // Middleware implements the ICS26 Module interface
 interface Middleware extends ICS26Module {
-    app: ICS26Module // middleware has acccess to an underlying application which may be wrapped by more middleware
-    ics4Wrapper: ICS4Wrapper // middleware has access to ICS4Wrapper which may be core IBC Channel Handler or a higher-level middleware that wraps this middleware.
+    // middleware has acccess to an underlying application which may be wrapped 
+    // by more middleware.
+    app: ICS26Module
+    // middleware has access to ICS4Wrapper which may be core IBC Channel Handler 
+    // or a higher-level middleware that wraps this middleware.
+    ics4Wrapper: ICS4Wrapper 
 }
 ```
 
 ```typescript
 // This is implemented by ICS4 and all middleware that are wrapping base application.
-// The base application will call `sendPacket` or `writeAcknowledgement` of the middleware directly above them
-// which will call the next middleware until it reaches the core IBC handler.
+// The base application will call `sendPacket` or `writeAcknowledgement` of the
+// middleware directly above them which will call the next middleware until it reaches
+// the core IBC handler.
 interface ICS4Wrapper {
-    sendPacket(packet: Packet)
+    sendPacket(
+      capability: CapabilityKey,
+      sourcePort: Identifier,
+      sourceChannel: Identifier,
+      timeoutHeight: Height,
+      timeoutTimestamp: uint64,
+      data: bytes)
     writeAcknowledgement(packet: Packet, ack: Acknowledgement)
 }
 ```
@@ -83,80 +104,157 @@ function onChanOpenInit(
   channelIdentifier: Identifier,
   counterpartyPortIdentifier: Identifier,
   counterpartyChannelIdentifier: Identifier,
-  version: string) {
-    middlewareVersion, appVersion = splitMiddlewareVersion(version)
+  version: string): (version: string, err: Error) {
+    if version != "" {
+        // try to unmarshal JSON-encoded version string and pass 
+        // the app-specific version to app callback.
+        // otherwise, pass version directly to app callback.
+        metadata, err = UnmarshalJSON(version)
+        if err != nil {
+            // call the underlying application's onChanOpenInit callback
+            return app.onChanOpenInit(
+                order,
+                connectionHops,
+                portIdentifier,
+                channelIdentifier,
+                counterpartyPortIdentifier,
+                counterpartyChannelIdentifier,
+                version,
+            )
+        }
+    } else {
+        metadata = {
+            // set middleware version to default value
+            middlewareVersion: defaultMiddlewareVersion,
+            // allow application to return its default version
+            appVersion: "",
+        }
+    }
+
     doCustomLogic()
-    app.OnChanOpenInit(
+    
+    // call the underlying application's OnChanOpenInit callback.
+    // if the version string is empty, OnChanOpenInit is expected to return
+    // a default version string representing the version(s) it supports
+    appVersion, err = app.OnChanOpenInit(
         order,
         connectionHops,
         portIdentifier,
         channelIdentifier,
         counterpartyPortIdentifier,
         counterpartyChannelIdentifier,
-        appVersion, // note we only pass app version here
+        metadata.appVersion, // note we only pass app version here
     )
+    abortTransactionUnless(err != nil)
+
+    // a new version string is constructed with the app version returned 
+    // by the underlying application, in case it is different than the 
+    // one passed by the caller
+    metadata = {
+        // note this should have a different field name specific to middleware
+        middlewareVersion: metadata.middlewareVersion,
+        appVersion: appVersion,
+    }
+
+    return MarshallJSON(metadata), nil
 }
 
-function OnChanOpenTry(
+function onChanOpenTry(
   order: ChannelOrder,
   connectionHops: [Identifier],
   portIdentifier: Identifier,
   channelIdentifier: Identifier,
   counterpartyPortIdentifier: Identifier,
   counterpartyChannelIdentifier: Identifier,
-  version: string,
-  counterpartyVersion: string) {
-      cpMiddlewareVersion, cpAppVersion = splitMiddlewareVersion(counterpartyVersion)
-      middlewareVersion, appVersion = splitMiddlewareVersion(version)
-      if !isCompatible(cpMiddlewareVersion, middlewareVersion) {
-          return error
-      }
-      doCustomLogic()
+  counterpartyVersion: string): (version: string, err: Error) {
+    // try to unmarshal JSON-encoded version string and pass 
+    // the app-specific version to app callback.
+    // otherwise, pass version directly to app callback.
+    cpMetadata, err = UnmarshalJSON(counterpartyVersion)
+    if err != nil {
+        // call the underlying application's OnChanOpenTry callback
+        return app.onChanOpenTry(
+            order,
+            connectionHops,
+            portIdentifier,
+            channelIdentifier,
+            counterpartyPortIdentifier,
+            counterpartyChannelIdentifier,
+            counterpartyVersion,
+        )
+    }
 
-      // call the underlying applications OnChanOpenTry callback
-      app.OnChanOpenTry(
-          order,
-          connectionHops,
-          portIdentifier,
-          channelIdentifier,
-          counterpartyPortIdentifier,
-          counterpartyChannelIdentifier,
-          cpAppVersion, // note we only pass counterparty app version here
-          appVersion, // only pass app version
-      )
+    // select mutually compatible middleware version
+    if !isCompatible(cpMetadata.middlewareVersion) {
+        return "", error
+    }
+    middlewareVersion = selectMiddlewareVersion(cpMetadata.middlewareVersion)
+
+    doCustomLogic()
+
+    // call the underlying application's OnChanOpenTry callback
+    appVersion, err = app.OnChanOpenTry(
+        order,
+        connectionHops,
+        portIdentifier,
+        channelIdentifier,
+        counterpartyPortIdentifier,
+        counterpartyChannelIdentifier,
+        cpMetadata.appVersion, // note we only pass counterparty app version here
+    )
+    abortTransactionUnless(err != nil)
+
+    // a new version string is constructed with the final middleware version
+    // that is selected and the app version returned by the underlying
+    // application (which may be different than the one passed by the caller)
+    metadata = {
+        // note this should have a different field name specific to middleware
+        middlewareVersion: middlewareVersion,
+        appVersion: appVersion,
+    }
+
+    return MarshalJSON(metadata), nil
 }
 
 function onChanOpenAck(
   portIdentifier: Identifier,
   channelIdentifier: Identifier,
-  version: string) {
-      middlewareVersion, appVersion = splitMiddlewareVersion(version)
-      if !isCompatible(middlewareVersion) {
-          return error
-      }
-      doCustomLogic()
-      
-      // call the underlying applications OnChanOpenTry callback
-      app.OnChanOpenAck(portIdentifier, channelIdentifier, appVersion)
-}
+  counterpartyChannelIdentifier: Identifier,
+  counterpartyVersion: string) {
+    cpMetadata, err = UnmarshalJSON(counterpartyVersion)
+    if err != nil {
+        // call the underlying application's OnChanOpenAck callback
+        return app.onChanOpenAck(
+            portIdentifier, 
+            channelIdentifier, 
+            counterpartyChannelIdentifier,
+            counterpartyVersion,
+        )
+    }
 
-function OnChanOpenConfirm(
-    portIdentifier: Identifier,
-    channelIdentifier: Identifier) {
+    if !isSupported(cpMetadata.middlewareVersion) {
+        return error
+    } 
     doCustomLogic()
-
-    app.OnChanOpenConfirm(portIdentifier, channelIdentifier)
+    
+    // call the underlying application's OnChanOpenAck callback
+    return app.onChanOpenAck(
+        portIdentifier, 
+        channelIdentifier, 
+        counterpartyChannelIdentifier,
+        cpMetadata.appVersion,
+    )
 }
 
-function splitMiddlewareVersion(version: string): []string {
-    splitVersions = split(version,  ":")
-    middlewareVersion = version[0]
-    appVersion = join(version[1:], ":")
-    return []string{middlewareVersion, appVersion}
+function onChanOpenConfirm(
+  portIdentifier: Identifier,
+  channelIdentifier: Identifier) {
+    doCustomLogic()
+    app.OnChanOpenConfirm(portIdentifier, channelIdentifier)
 }
 ```
 
-NOTE: Middleware that does not need to negotiate with a counterparty middleware on the remote stack will not implement the version splitting and negotiation, and will simply perform its own custom logic on the callbacks without relying on the counterparty behaving similarly.
+NOTE: Middleware that does not need to negotiate with a counterparty middleware on the remote stack will not implement the version unmarshaling and negotiation, and will simply perform its own custom logic on the callbacks without relying on the counterparty behaving similarly.
 
 #### Packet Callbacks
 
@@ -178,7 +276,7 @@ function onAcknowledgePacket(packet: Packet, acknowledgement: bytes, relayer: st
     // middleware may modify ack
     app_ack = getAppAcknowledgement(acknowledgement)
 
-    app.OnAcknowledgePacket(packet, app_ack, relayer)
+    app.onAcknowledgePacket(packet, app_ack, relayer)
 
     doCustomLogic()
 }
@@ -186,7 +284,7 @@ function onAcknowledgePacket(packet: Packet, acknowledgement: bytes, relayer: st
 function onTimeoutPacket(packet: Packet, relayer: string) {
     doCustomLogic()
 
-    app.OnTimeoutPacket(packet, relayer)
+    app.onTimeoutPacket(packet, relayer)
 
     doCustomLogic()
 }
@@ -211,16 +309,28 @@ function writeAcknowledgement(
     // middleware may modify acknowledgement
     ack_bytes = doCustomLogic(acknowledgement)
 
-    return ics4.writeAcknowledgement(packet, ack_bytes)
+    return ics4Wrapper.writeAcknowledgement(packet, ack_bytes)
 }
 ```
 
 ```typescript
-function sendPacket(app_packet: Packet) {
+function sendPacket(
+  capability: CapabilityKey,
+  sourcePort: Identifier,
+  sourceChannel: Identifier,
+  timeoutHeight: Height,
+  timeoutTimestamp: uint64,
+  app_data: bytes) {
     // middleware may modify packet
-    packet = doCustomLogic(app_packet)
+    data = doCustomLogic(app_data)
 
-    return ics4.sendPacket(packet)
+    return ics4Wrapper.sendPacket(
+      capability,
+      sourcePort,
+      sourceChannel,
+      timeoutHeight,
+      timeoutTimestamp,
+      data)
 }
 ```
 
@@ -251,6 +361,8 @@ Coming soon.
 ## History
 
 June 22, 2021 - Draft submitted
+
+July 6, 2022 - Update with latest changes from implementation
 
 ## Copyright
 
