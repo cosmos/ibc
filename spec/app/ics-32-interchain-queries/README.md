@@ -1,5 +1,5 @@
 ---
-ics: TBD
+ics: 32
 title: Interchain Queries
 stage: Draft
 category: IBC/APP
