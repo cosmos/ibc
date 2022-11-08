@@ -369,6 +369,7 @@ function onRecvPacket(packet: AtomicSwapPacketData) {
         
         // update status of order
         order.status = Status.COMPLETE
+        order.taker = take_msg
         order.complete_timestamp = take_msg.create_timestamp
         store.save(order)
         break;
@@ -404,7 +405,8 @@ function onAcknowledgePacket(
         // create order and save order on taker chain.
         const order = OrderBook.findOrderById(take_msg.order_id)
         order.status = Status.COMPLETE
-        //save order to store
+        order.taker = take_msg
+        order.complete_timestamp = take_msg.create_timestamp
         store.save(order)
         
         //send tokens to maker
