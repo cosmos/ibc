@@ -83,13 +83,13 @@ interface MakeSwapMsg {
   // the tokens to be exchanged
   sell_token : Coin
   buy_token: Coin;
-  // the sender address
+  // the maker's address
   maker_address: string;
-  // the sender's address on the taker chain
+  // the maker's address on the taker chain
   maker_receiving_address string;
   // if desired_taker is specified,
   // only the desired_taker is allowed to take this order
-  // this is address on the taker chain
+  // this is the address on the taker chain
   desired_taker: string;
   create_timestamp: int64;
   expired_timestamp: int64;
@@ -101,9 +101,9 @@ interface TakeSwapMsg {
   order_id: string;
   // the tokens to be sell
   sell_token: Coin;
-  // the sender address
+  // the taker's address
   taker_address: string;
-  // the sender's address on the taker chain
+  // the taker's address on the maker chain
   taker_receiving_address: string;
   create_timestamp: int64;
 }
@@ -476,6 +476,8 @@ Coming soon.
 Aug 15, 2022 - Draft written
 
 Oct 6, 2022 - Draft revised
+
+Nov 8, 2022 - Draft revised
 
 ## Copyright
 
