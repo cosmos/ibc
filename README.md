@@ -14,6 +14,7 @@ See [ROADMAP.md](meta/ROADMAP.md) for a public up-to-date version of our roadmap
 
 ## What is IBC?
 
+<!-- markdown-link-check-disable-next-line -->
 For a high-level explanation of what IBC is and how it works, please read [this blog post](https://blog.cosmos.network/eli5-what-is-ibc-a212f518715f).
 
 ## Interchain Standards
