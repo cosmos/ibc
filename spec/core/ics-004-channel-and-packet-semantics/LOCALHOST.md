@@ -25,11 +25,11 @@ function recvPacket(packet: OpaquePacket,
 
     // get the underlying connectionID for this channel
     channel = provableStore.get(channelPath(packet.destPort, packet.destChannel))
-    connectionID = channel.connecti
+    connectionID = channel.connectionHops[0]
 
     //construct the expectedState and keypath
     expectedState = commitPacket(packet)
-    keyPath = channelPath(packet.sourcePort, packet.sourceChannel, packet.Sequence)
+    keyPath = packetCommitmentPath(packet.sourcePort, packet.sourceChannel, packet.Sequence)
 
 
     verifyPacketCommitment(connectionID, keyPath, expectedState, proof, proofHeight)
