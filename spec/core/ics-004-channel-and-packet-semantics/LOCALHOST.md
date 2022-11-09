@@ -2,7 +2,7 @@
 
 ## Rationale
 
-IBC provide the ICS-26 interface for two mutually-untrusted applications to negotiate a communication channel and start sending messages to each other. This interface is now widely adopted by applications (both smart contracts and static modules) so that they can speak to applications on remote chains. However, there is no way to reuse this interface to communicate with applications on the same chain. So applications that wish to communicate with counterparties on remote and local state machines must for the moment have two separate implementations to handle both cases. This is a dev-UX issue that we can solve by providing localhost functionality (analogous to localhost for the internet protocol).
+IBC provides the ICS-26 interface for two mutually-untrusted applications to negotiate a communication channel and start sending messages to each other. This interface is now widely adopted by applications (both smart contracts and static modules) so that they can speak to applications on remote chains. However, there is no way to reuse this interface to communicate with applications on the same chain. So applications that wish to communicate with counterparties on remote and local state machines must for the moment have two separate implementations to handle both cases. This is a dev-UX issue that we can solve by providing localhost functionality (analogous to localhost for the internet protocol).
 
 One approach is to implement this feature at the client layer. However this leads to a number of inefficiencies. Firstly, it requires the creation of a connection (handshake messages mediated by relayers) to be sent from the state machine back to itself in order to connect. It then requires that state that exists at the channel layer be routed all the way into the client so that it can then be inspected for verification purposes. Lastly, it does not immediately lend itself to future improvements that might make localhost packet flows atomic.
 
@@ -33,6 +33,10 @@ function recvPacket(packet: OpaquePacket,
 
 
     verifyPacketCommitment(connectionID, keyPath, expectedState, proof, proofHeight)
+    
+    // post-verification logic
+    
+    return packet
 }
 
 // private function created to abstract the verification logic of localhost and remote chains from the rest of channel logic
@@ -41,12 +45,12 @@ function recvPacket(packet: OpaquePacket,
 // however, a future refactor that abstracts verification at the connection layer
 // may remove the need for this additional argument.
 function verifyPacketCommitment(connectionID: string, packet: Packet, keyPath: bytes, expectedState: bytes, proof: CommitmentProof, proofHeight: Height) {
-    if connectionID == LocalHostConnection {
+    if connectionID == LocalhostConnection {
         // verify packet by checking if the expected state 
         // exists in our own state at the given keyPath
         // NOTE: proof and proofHeight are ignored in this case
         actualState = provableStore.get(keyPath)
-        abortTransactionUnless(expectedState == actualState)
+        abortTransactionUnless(expectedState === actualState)
     } else {
         abortTransactionUnless(connection !== null)
         abortTransactionUnless(connection.state === OPEN)
