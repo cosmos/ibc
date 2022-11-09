@@ -433,16 +433,23 @@ function onTimeoutPacket(packet: Packet) {
 function refundTokens(packet: Packet) {
   AtomicSwapPacketData data = packet.data
   //send tokens from module to message sender
+  cosnt order_id;
   switch packet.type {
       case TYPE_MSG_MAKE_SWAP:
           const msg = protobuf.decode(data)
           bank_keeper.sendCoins(escrowAddr, msg.maker_address, msg.sell_token)
+          order_id = generateOrderId(msg)
           break;
       case TYPE_MSG_TAKE_SWAP:
           const msg = protobuf.decode(data)
           bank_keeper.sendCoins(escrowAddr, msg.taker_address, msg.sell_token)
+          order = msg.order_id
       }
   }
+  // update order state to cancel
+  order = Orderbook.findOrderById(orderId)
+  order.status = Status.CANCEL
+  store.save(order)
 }
 ```
 
