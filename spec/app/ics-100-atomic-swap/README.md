@@ -77,9 +77,9 @@ All `AtomicSwapPacketData` will be forwarded to the corresponding message handle
 
 ```typescript
 interface MakeSwapMsg {
-  // the port on which the packet will be sent, user sepecify when they create the order
+  // the port on which the packet will be sent, specified by the maker when the order is created
   source_port string
-  // the channel by which the packet will be sent, user sepecify when they create the order
+  // the channel by which the packet will be sent, specified by the maker when the order is created
   source_channel: string;
   // the tokens to be exchanged
   sell_token : Coin
@@ -161,20 +161,18 @@ function generateOrderId(msg MakeSwapMsg) {
 1. User creates an order on the maker chain with specified parameters (see type `MakeSwap`).  Tokens are sent to the escrow address owned by the module. The order is saved on the maker chain
 2. An `AtomicSwapPacketData` is relayed to the taker chain where `onRecvPacket` the order is also saved on the taker chain.  
 3. A packet is subsequently relayed back for acknowledgement. A packet timeout or a failure during `onAcknowledgePacket` will result in a refund of the escrowed tokens.
-4. An order should not be taken once the current time is later than expired timestamp, and all expired orders should not allow to trade, but can be canceled.
 
 #### Taking a swap
 
-1. A user takes an order on the taker chain by triggering `TakeSwap`.  Tokens are sent to the escrow address owned by the module.
+1. A user takes an order on the taker chain by triggering `TakeSwap`.  Tokens are sent to the escrow address owned by the module.  An order cannot be taken if the current time is later than the `expired_timestamp`
 2. An `AtomicSwapPacketData` is relayed to the maker chain where `onRecvPacket` the escrowed tokens are sent to the destination address.  
 3. A packet is subsequently relayed back for acknowledgement. Upon acknowledgement escrowed tokens on the taker chain is sent to the related destination address.  A packet timeout or a failure during `onAcknowledgePacket` will result in a refund of the escrowed tokens.
 
 #### Cancelling a swap
 
-1.  The maker cancels a previously created order.
-2.  An `AtomicSwapPacketData` is relayed to the maker chain where `onRecvPacket` the order is cancelled on the taker chain. if the make order has take order in-flight, the cancel order will be rejected.
-3.  A packet is relayed back where upon acknowledgement the order on the maker chain is also cancelled.
-4.  Only refund if the taker chain confirmed the cancel request
+1.  The maker cancels a previously created order.  Expired orders can also be cancelled.
+2.  An `AtomicSwapPacketData` is relayed to the taker chain where `onRecvPacket` the order is cancelled on the taker chain. If the order is in the process of being taken (a packet with `TakeSwapMsg` is being relayed from the taker chain to the maker chain), the cancellation will be rejected.
+3.  A packet is relayed back where upon acknowledgement the order on the maker chain is also cancelled.  The refund only occurs if the taker chain confirmed the cancellation request.
 
 ### Sub-protocols
 
@@ -184,12 +182,12 @@ The sub-protocols described herein should be implemented in a "Fungible Token Sw
 function makeSwap(request MakeSwapMsg) {
     const balance = bank_keeper.getBalances(request.make_address)
     abortTransactionUnless(balance.amount > request.sell_token.Amount)
-    // found the escrow address by source port and source channel
+    // gets escrow address by source port and source channel
     const escrowAddr = escrowAddress(request.sourcePort, request.sourceChannel)
-    // lock the sell_token to escrow account
+    // locks the sell_token to the escrow account
     const err = bankkeeper.sendCoins(request.maker_address, escrowAddr, request.sell_token)
     abortTransactionUnless(err == null)
-    // constraction IBC data packet
+    // contructs the IBC data packet
     const packet = {
         type: SwapMessageType.TYPE_MSG_MAKE_SWAP,
         data: protobuf.encode(request), // encode the request message to protobuf bytes.
@@ -197,9 +195,9 @@ function makeSwap(request MakeSwapMsg) {
     }
     sendAtomicSwapPacket(packet)
     
-    // create order and save order on Make chain.
+    // creates and saves order on the maker chain.
     const order = OrderBook.createOrder(msg)
-    //save order to store
+    //saves order to store
     store.save(order)
 }
 ```
@@ -215,12 +213,12 @@ function takeSwap(request TakeSwapMsg) {
     
     const balance = bank_keeper.getBalances(request.taker_address)
     abortTransactionUnless(balance.amount > request.sell_token.Amount)
-    // found the escrow address by source port and source channel
+    // gets the escrow address by source port and source channel
     const escrowAddr = escrowAddress(request.sourcePort, request.sourceChannel)
-    // lock the sell_token to escrow account
+    // locks the sell_token to the escrow account
     const err = bankkeeper.sendCoins(request.taker_address, escrowAddr, request.sell_token)
     abortTransactionUnless(err == null)
-    // constract IBC data packet
+    // constructs the IBC data packet
     const packet = {
         type: SwapMessageType.TYPE_MSG_TAKE_SWAP,
         data: protobuf.encode(request), // encode the request message to protobuf bytes.
@@ -228,8 +226,8 @@ function takeSwap(request TakeSwapMsg) {
     } 
     sendAtomicSwapPacket(packet)
     
-    //update state of order
-    order.taker = request // mark the order has been occupied
+    //update order state
+    order.taker = request // mark that the order has been occupied
     store.save(order)
 }
 ```
@@ -238,13 +236,13 @@ function takeSwap(request TakeSwapMsg) {
 ```ts
 function cancelSwap(request TakeCancelMsg) {
     const order = OrderBook.findOrderById(request.order_id)
-    // check if the order exists
+    // checks if the order exists
     abortTransactionUnless(order != null)
-    // make sure the sender is the owner of the order.
+    // make sure the sender is the maker of the order.
     abortTransactionUnless(order.maker.maker_address == request.maker_address)
     abortTransactionUnless(order.status == Status.SYNC || order.status == Status.INITIAL)
     
-    // constract IBC data packet
+    // constructs the IBC data packet
     const packet = {
         type: SwapMessageType.TYPE_MSG_CANCEL_SWAP,
         data: protobuf.encode(request), // encode the request message to protobuf bytes.
@@ -384,14 +382,14 @@ function onRecvPacket(packet: AtomicSwapPacketData) {
       case TYPE_MSG_MAKE_SWAP:
         const make_msg = protobuf.decode(packet.bytes)
         
-        // check if buy_token is native token on taker chain
+        // check if buy_token is native token on the taker chain
         const supply = bank_keeper.getSuppy(make_msg.buy_token.denom)
         abortTransactionUnless(supply > 0)
         
-        // create order and save order on taker chain.
+        // create and save order on the taker chain.
         const order = OrderBook.createOrder(msg)
         order.status = Status.SYNC
-        //save order to store
+        //saves order to store
         store.save(order)
         break;
       case TYPE_MSG_TAKE_SWAP:
@@ -444,7 +442,7 @@ function onAcknowledgePacket(
       case TYPE_MSG_MAKE_SWAP:
         const make_msg = protobuf.decode(packet.bytes)
         
-        // create order and save order on taker chain.
+        // create and save order on the taker chain.
         const order = OrderBook.findOrderById(make_msg)
         order.status = Status.SYNC
         //save order to store
@@ -453,7 +451,7 @@ function onAcknowledgePacket(
       case TYPE_MSG_TAKE_SWAP:
         const take_msg = protobuf.decode(packet.bytes)
         
-        // create order and save order on taker chain.
+        // create and save order on the taker chain.
         const order = OrderBook.findOrderById(take_msg.order_id)
         order.status = Status.COMPLETE
         order.taker = take_msg
@@ -466,7 +464,7 @@ function onAcknowledgePacket(
       case TYPE_MSG_CANCEL_SWAP:
         const cancel_msg = protobuf.decode(packet.bytes)
         
-        // create order and save order on taker chain.
+        // create and save order on the taker chain.
         const order = OrderBook.findOrderById(cancel_msg.order_id)
         // update state on maker chain
         order.status = Status.CANCEL
@@ -548,7 +546,7 @@ Aug 15, 2022 - Draft written
 
 Oct 6, 2022 - Draft revised
 
-Nov 8, 2022 - Draft revised
+Nov 11, 2022 - Draft revised
 
 ## Copyright
 
