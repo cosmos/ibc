@@ -62,6 +62,7 @@ enum SwapMessageType {
   TYPE_UNSPECIFIED = 0,
   TYPE_MSG_MAKE_SWAP = 1,
   TYPE_MSG_TAKE_SWAP = 2,
+  TYPE_MSG_CANCEL_SWAP = 3,
 }
 
 // AtomicSwapPacketData is comprised of a swap message type, raw transaction and optional memo field.
@@ -72,13 +73,13 @@ interface AtomicSwapPacketData {
 }
 ```
 
-All `AtomicSwapPacketData` will be forwarded to the corresponding message handler to execute according to its type. There are 2 types:
+All `AtomicSwapPacketData` will be forwarded to the corresponding message handler to execute according to its type. There are 3 types:
 
 ```typescript
 interface MakeSwapMsg {
-  // the port on which the packet will be sent
+  // the port on which the packet will be sent, user sepecify when they create the order
   source_port string
-  // the channel by which the packet will be sent
+  // the channel by which the packet will be sent, user sepecify when they create the order
   source_channel: string;
   // the tokens to be exchanged
   sell_token : Coin
@@ -106,6 +107,13 @@ interface TakeSwapMsg {
   // the sender's address on the taker chain
   taker_receiving_address: string;
   create_timestamp: int64;
+}
+```
+
+```typescript
+interface TakeCancelMsg {
+  order_id: string;
+  maker_address: string;
 }
 ```
 
@@ -153,13 +161,20 @@ function generateOrderId(msg MakeSwapMsg) {
 1. User creates an order on the maker chain with specified parameters (see type `MakeSwap`).  Tokens are sent to the escrow address owned by the module. The order is saved on the maker chain
 2. An `AtomicSwapPacketData` is relayed to the taker chain where `onRecvPacket` the order is also saved on the taker chain.  
 3. A packet is subsequently relayed back for acknowledgement. A packet timeout or a failure during `onAcknowledgePacket` will result in a refund of the escrowed tokens.
-4. An order should not be taken once the current time is later than expired timestamp, and all expired orders should refund its escrow tokens at `BeginBlock` function.
+4. An order should not be taken once the current time is later than expired timestamp, and all expired orders should not allow to trade, but can be canceled.
 
 #### Taking a swap
 
 1. A user takes an order on the taker chain by triggering `TakeSwap`.  Tokens are sent to the escrow address owned by the module.
 2. An `AtomicSwapPacketData` is relayed to the maker chain where `onRecvPacket` the escrowed tokens are sent to the destination address.  
 3. A packet is subsequently relayed back for acknowledgement. Upon acknowledgement escrowed tokens on the taker chain is sent to the related destination address.  A packet timeout or a failure during `onAcknowledgePacket` will result in a refund of the escrowed tokens.
+
+#### Cancelling a swap
+
+1.  The maker cancels a previously created order.
+2.  An `AtomicSwapPacketData` is relayed to the maker chain where `onRecvPacket` the order is cancelled on the taker chain. if the make order has take order in-flight, the cancel order will be rejected.
+3.  A packet is relayed back where upon acknowledgement the order on the maker chain is also cancelled.
+4.  Only refund if the taker chain confirmed the cancel request
 
 ### Sub-protocols
 
@@ -196,6 +211,7 @@ function takeSwap(request TakeSwapMsg) {
     abortTransactionUnless(order.expired_timestamp < Now().timestamp())
     abortTransactionUnless(order.maker.buy_token.denom === request.sell_token.denom)
     abortTransactionUnless(order.maker.buy_token.amount === request.sell_token.amount)
+    abortTransactionUnless(order.taker == null)
     
     const balance = bank_keeper.getBalances(request.taker_address)
     abortTransactionUnless(balance.amount > request.sell_token.Amount)
@@ -212,7 +228,30 @@ function takeSwap(request TakeSwapMsg) {
     } 
     sendAtomicSwapPacket(packet)
     
-    order.taker = request
+    //update state of order
+    order.taker = request // mark the order has been occupied
+    store.save(order)
+}
+```
+
+
+```ts
+function cancelSwap(request TakeCancelMsg) {
+    const order = OrderBook.findOrderById(request.order_id)
+    // check if the order exists
+    abortTransactionUnless(order != null)
+    // make sure the sender is the owner of the order.
+    abortTransactionUnless(order.maker.maker_address == request.maker_address)
+    abortTransactionUnless(order.status == Status.SYNC || order.status == Status.INITIAL)
+    
+    // constract IBC data packet
+    const packet = {
+        type: SwapMessageType.TYPE_MSG_CANCEL_SWAP,
+        data: protobuf.encode(request), // encode the request message to protobuf bytes.
+        memo: "",
+    } 
+    // the request is sent to the taker chain, and the taker chain decides if the cancel order is accepted or not
+    sendAtomicSwapPacket(packet)
 }
 ```
 
@@ -373,6 +412,18 @@ function onRecvPacket(packet: AtomicSwapPacketData) {
         order.complete_timestamp = take_msg.create_timestamp
         store.save(order)
         break;
+      case TYPE_MSG_CANCEL_SWAP:
+        const cancel_msg = protobuf.decode(packet.bytes)
+        const order = OrderBook.findOrderById(cancel_msg.order_id)
+        abortTransactionUnless(order != null)
+        abortTransactionUnless(order.status == Status.SYNC || order.status == Status.INITIAL)
+        abortTransactionUnless(order.taker != null) // the maker order has not been occupied 
+        
+        // update status of order
+        order.status = Status.CANCEL
+        order.cancel_timestamp = cancel_msg.create_timestamp
+        store.save(order)
+        break;
       default:
         throw new Error("ErrUnknownDataPacket")
   }
@@ -411,6 +462,19 @@ function onAcknowledgePacket(
         
         //send tokens to maker
         bank_keeper.sendCoins(escrowAddr, order.maker.maker_receiving_address, take_msg.sell_token)
+        break;
+      case TYPE_MSG_CANCEL_SWAP:
+        const cancel_msg = protobuf.decode(packet.bytes)
+        
+        // create order and save order on taker chain.
+        const order = OrderBook.findOrderById(cancel_msg.order_id)
+        // update state on maker chain
+        order.status = Status.CANCEL
+        order.cancel_timestamp = cancel_msg.create_timestamp
+        store.save(order)
+        
+        //send tokens back to maker
+        bank_keeper.sendCoins(escrowAddr, order.maker.maker_address, order.maker.sell_token)
         break;
       default:
         throw new Error("ErrUnknownDataPacket")
