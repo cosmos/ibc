@@ -12,7 +12,7 @@ modified: 2022-11-11
 
 ## Synopsis
 
-This document describes a standard for IBC multi-hop routing. Multi-hop routing specifies a way to route messages across a path of IBC enabled blockchains utilizing multiple pre-existing IBC connections.
+This document describes a standard for multi-hop IBC channels. Multi-hop channels specifies a way to route messages across a path of IBC enabled blockchains utilizing multiple pre-existing IBC connections.
 
 ### Motivation
 
