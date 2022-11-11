@@ -50,6 +50,8 @@ For both channel handshake and packet messages, additional connection hops are d
 
 The spec for channel handshakes and packets remains the same. See [ICS 4](https://github.com/cosmos/ibc/tree/main/spec/core/ics-004-channel-and-packet-semantics).
 
+In terms of connection topology, a user would be able to determine a viable channel path from source -> destination using information from the [chain registry](https://github.com/cosmos/chain-registry). They can also independently verify this information via network queries.
+
 ### Multihop Relaying
 
 Relayers would deliver channel handshake and IBC packets as they currently do except that they are required to provide more proof of the channel path. Relayers would scan packet events for the connectionHops field and determine if the packet is multi-hop by checking the number of hops in the field. If the number of hops is greater than one then the packet is a multi-hop packet and will need extra proof data.
@@ -61,6 +63,8 @@ For each multi-hop channel (detailed proof logic below):
 - Query for proof of connection and consensus state for each intermediate connection in the channel path to the destination connection.
 - Query proof of packet commitment or handshake message commitment on source chain.
 - Submit proofs and data to RPC endpoint on destination chain.
+
+Relayers are connection topology aware with configurations sourced from the [chain registry](https://github.com/cosmos/chain-registry).
 
 ### Proof Generation & Verification
 
