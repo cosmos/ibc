@@ -94,6 +94,8 @@ interface MakeSwapMsg {
   desired_taker: string;
   create_timestamp: int64;
   expired_timestamp: int64;
+  timeout_height: int64,
+  timeout_timestamp: int64,
 }
 ```
 
@@ -107,6 +109,8 @@ interface TakeSwapMsg {
   // the taker's address on the maker chain
   taker_receiving_address: string;
   create_timestamp: int64;
+  timeout_height: int64,
+  timeout_timestamp: int64,
 }
 ```
 
@@ -114,6 +118,8 @@ interface TakeSwapMsg {
 interface TakeCancelMsg {
   order_id: string;
   maker_address: string;
+  timeout_height: int64,
+  timeout_timestamp: int64,
 }
 ```
 
@@ -131,7 +137,10 @@ interface OrderBook {
   id: string;
   maker: MakeSwapMsg;
   status: Status;
-  channel_id: string;
+  // set onRecieved(), Make sure that the take order can only be sent to the chain the make order came from
+  port_id_on_taker_chain: string;
+  // set onRecieved(), Make sure that the take order can only be sent to the chain the make order came from
+  channel_id_on_taker_chain: string;
   taker: TakeSwap;
   cancel_timestamp: int64;
   complete_timestamp: int64;
@@ -193,7 +202,7 @@ function makeSwap(request MakeSwapMsg) {
         data: protobuf.encode(request), // encode the request message to protobuf bytes.
         memo: "",
     }
-    sendAtomicSwapPacket(packet)
+    sendAtomicSwapPacket(packet, request.source_port, request.source_channel, request.timeout_height, request.timeout_timestamp)
     
     // creates and saves order on the maker chain.
     const order = OrderBook.createOrder(msg)
@@ -224,7 +233,7 @@ function takeSwap(request TakeSwapMsg) {
         data: protobuf.encode(request), // encode the request message to protobuf bytes.
         memo: "",
     } 
-    sendAtomicSwapPacket(packet)
+    sendAtomicSwapPacket(packet, order.port_id_on_taker_chain, order.channel_id_on_taker_chain, request.timeout_height, request.timeout_timestamp)
     
     //update order state
     order.taker = request // mark that the order has been occupied
@@ -249,7 +258,8 @@ function cancelSwap(request TakeCancelMsg) {
         memo: "",
     } 
     // the request is sent to the taker chain, and the taker chain decides if the cancel order is accepted or not
-    sendAtomicSwapPacket(packet)
+    // the cancelation can only be sent to the same chain as the make order.
+    sendAtomicSwapPacket(packet, order.maker.source_port_id, order.maker.source_channel_id request.timeout_height, request.timeout_timestamp)
 }
 ```
 
@@ -361,7 +371,10 @@ function onChanCloseConfirm(portIdentifier: Identifier, channelIdentifier: Ident
 `sendAtomicSwapPacket` must be called by a transaction handler in the module which performs appropriate signature checks, specific to the account owner on the host state machine.
 
 ```typescript
-function sendAtomicSwapPacket(swapPacket AtomicSwapPacketData) {
+function sendAtomicSwapPacket(
+    swapPacket AtomicSwapPacketData, 
+    sourcePort, sourceChannel, timeoutHeight, timeoutTimestamp: int64
+) {
     // send packet using the interface defined in ICS4
     handler.sendPacket(
       getCapability("port"),
@@ -377,7 +390,7 @@ function sendAtomicSwapPacket(swapPacket AtomicSwapPacketData) {
 `onRecvPacket` is called by the routing module when a packet addressed to this module has been received.
 
 ```typescript
-function onRecvPacket(packet: AtomicSwapPacketData) {
+function onRecvPacket(packet channeltypes.Packet) {
   switch packet.type {
       case TYPE_MSG_MAKE_SWAP:
         const make_msg = protobuf.decode(packet.bytes)
@@ -389,6 +402,8 @@ function onRecvPacket(packet: AtomicSwapPacketData) {
         // create and save order on the taker chain.
         const order = OrderBook.createOrder(msg)
         order.status = Status.SYNC
+        order.port_id_on_taker_chain = packet.destinationPort
+        order.channel_id_on_taker_chain = packet.destinationChannel
         //saves order to store
         store.save(order)
         break;
