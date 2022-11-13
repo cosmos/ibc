@@ -457,7 +457,7 @@ function onAcknowledgePacket(
       case TYPE_MSG_MAKE_SWAP:
         const make_msg = protobuf.decode(packet.bytes)
         
-        // create and save order on the taker chain.
+        // update order status on the maker chain.
         const order = OrderBook.findOrderById(make_msg)
         order.status = Status.SYNC
         //save order to store
@@ -466,7 +466,7 @@ function onAcknowledgePacket(
       case TYPE_MSG_TAKE_SWAP:
         const take_msg = protobuf.decode(packet.bytes)
         
-        // create and save order on the taker chain.
+        // update order status on the taker chain.
         const order = OrderBook.findOrderById(take_msg.order_id)
         order.status = Status.COMPLETE
         order.taker = take_msg
@@ -479,7 +479,7 @@ function onAcknowledgePacket(
       case TYPE_MSG_CANCEL_SWAP:
         const cancel_msg = protobuf.decode(packet.bytes)
         
-        // create and save order on the taker chain.
+        // update order status on the maker chain.
         const order = OrderBook.findOrderById(cancel_msg.order_id)
         // update state on maker chain
         order.status = Status.CANCEL
