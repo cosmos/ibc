@@ -4,20 +4,23 @@ title: GRANDPA Client
 stage: draft
 category: IBC/TAO
 kind: instantiation
-author: Yuanchao Sun <ys@cdot.network>, John Wu <john@cdot.network>
+author: Julian Sun <julian@oct.network>, Rivers Yang <rivers@oct.network>
 created: 2020-03-15
+modified: 2022-11-11
 implements: 2
 ---
 
 ## Synopsis
 
-This specification document describes a client (verification algorithm) for a blockchain using GRANDPA.
+This specification document describes a client (verification algorithm) for a blockchain using GRANDPA finality gadget with BEEFY protocol.
 
-GRANDPA (GHOST-based Recursive Ancestor Deriving Prefix Agreement) is a finality gadget that will be used by the Polkadot relay chain. It now has a Rust implementation and is part of the Substrate, so likely blockchains built using Substrate will use GRANDPA as its finality gadget.
+GRANDPA (GHOST-based Recursive ANcestor Deriving Prefix Agreement) is the finality gadget that is implemented for the Polkadot Relay Chain. It now has a Rust implementation and is part of the Substrate. Solo chains built using Substrate may also use GRANDPA as its finality gadget.
+
+[The BEEFY protocol](https://github.com/paritytech/grandpa-bridge-gadget/blob/master/docs/beefy.md) is a gadget that runs alongside GRANDPA finality gadget. It is designed to build a light client for GRANDPA that can be efficiently verified. Refer to [the Octopus appchain template](https://github.com/octopus-network/barnacle/blob/44ad1f12a838b98c9592e9aba4b2c8d0407df34f/runtime/src/lib.rs#L493) to enable BEEFY in Substrate.
 
 ### Motivation
 
-Blockchains using GRANDPA finality gadget might like to interface with other replicated state machines or solo machines over IBC.
+State machines of various sorts replicated using the GRANDPA finality gadget might like to interface with other replicated state machines or solo machines over IBC.
 
 ### Definitions
 
@@ -29,179 +32,260 @@ This specification must satisfy the client interface defined in ICS 2.
 
 ## Technical Specification
 
-This specification depends on correct instantiation of the [GRANDPA finality gadget](https://github.com/w3f/consensus/blob/master/pdf/grandpa.pdf) and its light client algorithm.
+This specification depends on the correct instantiation of the BEEFY protocol.
+This specification also depends on the correct implementation of the following algorithms:
+* `secp256k1Recover` to recover the public key from a secp256k1 signature.
+* `verifyMerkleProof` to verify a Merkle proof.
+* `verifyMMRProof` to verify an MMR proof. Refer to [Merkle Mountain Ranges](https://github.com/opentimestamps/opentimestamps-server/blob/master/doc/merkle-mountain-range.md).
 
 ### Client state
 
-The GRANDPA client state tracks latest height and a possible frozen height.
+The GRANDPA client state tracks the latest MMR root, the latest height that the MMR root is updated, a possible frozen height, the current and the next validator set.
 
 ```typescript
 interface ClientState {
+  latestMMRRoot: []byte
   latestHeight: uint64
   frozenHeight: Maybe<uint64>
-}
-```
-
-### Authority set
-
-A set of authorities for GRANDPA.
-
-```typescript
-interface AuthoritySet {
-  // this is incremented every time the set changes
-  setId: uint64
-  authorities: List<Pair<AuthorityId, AuthorityWeight>>
+  currentValidatorSet: ValidatorSet
+  nextValidatorSet: ValidatorSet
 }
 ```
 
 ### Consensus state
 
-The GRANDPA client tracks authority set and commitment root for all previously verified consensus states.
+The GRANDPA client tracks the commitment root for all previously verified consensus states (these can be pruned after the unbonding period has passed, but should not be pruned beforehand).
 
 ```typescript
 interface ConsensusState {
-  authoritySet: AuthoritySet
   commitmentRoot: []byte
 }
 ```
 
+### Validator set
+
+The validator set of a GRANDPA client consists of the set id, a Merkle root of validator addresses and the number of validators in the set.
+
+```typescript
+interface ValidatorSet {
+  id: uint64
+  root: []byte
+  length: uint32
+}
+```
+
+### MMRLeaf
+
+The MMR leaf contains:
+1. Block number and parent block hash.
+2. Merkle Tree Root Hash of next BEEFY validator set.
+3. Arbitrary extra leaf data to be used by downstream pallets to include custom data.
+
+```typescript
+interface MMRLeaf {
+  version: uint8
+  parentNumber: uint32
+  parentHash: []byte
+  beefyNextAuthoritySet: ValidatorSet
+  leafExtra: []byte
+}
+```
+
+### SignedMMRRoot
+
+An MMR root signed by GRANDPA validators as part of the BEEFY protocol.
+The MMR root also contains the height of the MMR root stored and the related validator set id.
+
+```typescript
+
+type Signature = [65]byte
+
+interface SignedMMRRoot {
+  root: []byte
+  blockNumber: uint64
+  validatorSetId: uint64
+  signatures: []Maybe<Signature>
+}
+```
+
+### MMRRoot
+
+```typescript
+interface MMRRoot {
+  signedMMRRoot: SignedMMRRoot
+  validatorMerkleProofs: []MerkleProof
+}
+```
+
+MMRRoot implements `ClientMessage` interface.
+
 ### Headers
 
-The GRANDPA client headers include the height, the commitment root, a justification of block and authority set.
-(In fact, here is a proof of authority set rather than the authority set itself, but we can using a fixed key to verify
-the proof and extract the real set, the details are ignored here)
+The GRANDPA headers include the height, the commitment root and the MMR proof of the header.
 
 ```typescript
 interface Header {
   height: uint64
   commitmentRoot: []byte
-  justification: Justification
-  authoritySet: AuthoritySet
+  leaf: MMRLeaf
+  proof: MMRProof
 }
 ```
 
-### Justification
-
-A GRANDPA justification for block finality, it includes a commit message and an ancestry proof including all headers routing all precommit target blocks to the commit target block.
-For example, the latest blocks are A - B - C - D - E - F, where A is the last finalised block, F is the point where a majority for vote (they may on B, C, D, E, F) can be collected. Then the proof need to include all headers from F back to A.
-
-```typescript
-interface Justification {
-  round: uint64
-  commit: Commit
-  votesAncestries: []Header
-}
-```
-
-### Commit
-
-A commit message which is an aggregate of signed precommits.
-
-```typescript
-interface Commit {
-  precommits: []SignedPrecommit
-}
-
-interface SignedPrecommit {
-  targetHash: Hash
-  signature: Signature
-  id: AuthorityId
-}
-```
+Header implements `ClientMessage` interface.
 
 ### Misbehaviour
-
+ 
 The `Misbehaviour` type is used for detecting misbehaviour and freezing the client - to prevent further packet flow - if applicable.
-GRANDPA client `Misbehaviour` consists of two headers at the same height both of which the light client would have considered valid.
+GRANDPA client `Misbehaviour` consists of two signed MMR roots at the same height both of which the light client would have considered valid.
 
 ```typescript
 interface Misbehaviour {
   fromHeight: uint64
-  h1: Header
-  h2: Header
+  signedMMRRoot1: SignedMMRRoot
+  validatorMerkleProofs1: []MerkleProof
+  signedMMRRoot2: SignedMMRRoot
+  validatorMerkleProofs2: []MerkleProof
 }
 ```
 
+Misbehaviour implements `ClientMessage` interface.
+
 ### Client initialisation
 
-GRANDPA client initialisation requires a (subjectively chosen) latest consensus state, including the full authority set.
+GRANDPA client initialisation requires a (subjectively chosen) latest height, including the full validator set at that height and the next validator set.
 
 ```typescript
-function initialise(identifier: Identifier, height: uint64, consensusState: ConsensusState): ClientState {
-    set("clients/{identifier}/consensusStates/{height}", consensusState)
+function initialise(height: uint64, initialValidatorSet: ValidatorSet, nextValidatorSet: ValidatorSet): ClientState {
+    assert(height > 0)
     return ClientState{
+      latestMMRRoot: nil,
       latestHeight: height,
       frozenHeight: null,
+      currentValidatorSet: initialValidatorSet,
+      nextValidatorSet 
     }
 }
 ```
 
-The GRANDPA client `latestClientHeight` function returns the latest stored height, which is updated every time a new (more recent) header is validated.
+The GRANDPA client `latestClientHeight` function returns the latest stored height, which is updated every time a new (more recent) MMR root is validated.
 
 ```typescript
-function latestClientHeight(clientState: ClientState): uint64 {
+function latestClientHeight(clientState: ClientState): Height {
   return clientState.latestHeight
 }
 ```
 
 ### Validity predicate
 
-GRANDPA client validity checking verifies a header is signed by the current authority set and verifies the authority set proof to determine if there is a expected change to the authority set. If the provided header is valid, the client state is updated & the newly verified commitment written to the store.
+GRANDPA client validity checking verifies that an MMR root is signed by the current validator set. If the provided MMR root is valid, the client state is updated & the newly verified MMR root is written to the store. The validity also checking a provided header can be validated by the MMR root. If the provided header is valid, the consensus state is updated. We use MMR root to advance the client state and relay headers on demand.
 
 ```typescript
-function checkValidityAndUpdateState(
-  clientState: ClientState,
-  header: Header) {
-    // assert header height is newer than any we know
-    assert(header.height > clientState.latestHeight)
-    consensusState = get("clients/{identifier}/consensusStates/{clientState.latestHeight}")
-    // verify that the provided header is valid
-    assert(verify(consensusState.authoritySet, header))
-    // update latest height
-    clientState.latestHeight = header.height
-    // create recorded consensus state, save it
-    consensusState = ConsensusState{header.authoritySet, header.commitmentRoot}
-    set("clients/{identifier}/consensusStates/{header.height}", consensusState)
-    // save the client
-    set("clients/{identifier}", clientState)
-}
-
-function verify(
-  authoritySet: AuthoritySet,
-  header: Header): boolean {
-  let visitedHashes: Hash[]
-  for (const signedPrecommit of Header.justification.commit.precommits) {
-    if (checkSignature(authoritySet, signedPrecommit)) {
-      visitedHashes.push(signedPrecommit.targetHash)
+function verifyClientMessage(
+  clientMsg: ClientMessage) {
+    switch typeof(clientMsg) {
+      case MMRRoot:
+        verifyMMR(clientMsg.signedMMRRoot, clientMsg.validatorMerkleProofs)
+      case Header:
+        verifyCommitment(clientMsg.commitmentRoot, clientMsg.leaf, clientMsg.proof)
+      case Misbehaviour:
+        verifyMMR(clientMsg.signedMMRRoot1, clientMsg.validatorMerkleProofs1)
+        verifyMMR(clientMsg.signedMMRRoot2, clientMsg.validatorMerkleProofs2)
     }
-  }
-  return visitedHashes.equals(Header.justification.votesAncestries.map(hash))
+}
+```
+
+```typescript
+function verifyMMR(signedMMRRoot: SignedMMRRoot, validatorMerkleProofs: []MerkleProof) {
+    clientState = get("clients/{header.identifier}/clientState")
+    // the block height of the new MMR root must be greater than the latest height
+    assert(signedMMRRoot.blockNumber > clientState.latestHeight)
+    for _, signature := range signedMMRRoot.signatures {
+      validatorAddress = secp256k1Recover(signature)
+      assert(validatorAddress != null)
+      found = false
+      for _, proof := range validatorMerkleProofs {
+        if proof.leaf == validatorAddress {
+          found = true
+          assert(verifyMerkleProof(clientState.currentValidatorSet.root, proof.leaf, proof.proof))
+        }
+      }
+      assert(found)
+    }
+}
+```
+
+```typescript
+function verifyCommitment(height: uint64, root: []byte, leaf: MMRLeaf, proof: MMRProof) {
+    clientState = get("clients/{header.identifier}/clientState")
+    // the block height of the header must be less than the latest height to verify by the latest MMR root.
+    assert(height < clientState.latestHeight)
+    assert(verifyMMRProof(root, leaf, proof))
 }
 ```
 
 ### Misbehaviour predicate
 
-GRANDPA client misbehaviour checking determines whether or not two conflicting headers at the same height would have convinced the light client.
+GRANDPA client misbehaviour checking determines whether or not two conflicting signed MMR roots at the same height would have convinced the light client.
 
 ```typescript
-function checkMisbehaviourAndUpdateState(
-  clientState: ClientState,
-  misbehaviour: Misbehaviour) {
-    // assert that the heights are the same
-    assert(misbehaviour.h1.height === misbehaviour.h2.height)
-    // assert that the commitments are different
-    assert(misbehaviour.h1.commitmentRoot !== misbehaviour.h2.commitmentRoot)
-    // fetch the previously verified commitment root & authority set
-    consensusState = get("clients/{identifier}/consensusStates/{misbehaviour.fromHeight}")
-    // check if the light client "would have been fooled"
-    assert(
-      verify(consensusState.authoritySet, misbehaviour.h1) &&
-      verify(consensusState.authoritySet, misbehaviour.h2)
-      )
-    // set the frozen height
-    clientState.frozenHeight = min(clientState.frozenHeight, misbehaviour.h1.height) // which is same as h2.height
-    // save the client
-    set("clients/{identifier}", clientState)
+function checkForMisbehaviour(
+  clientMsg: clientMessage) => bool {
+    switch typeof(clientMsg) {
+      case MMRRoot:
+      case Header:
+      case Misbehaviour:
+        // assert that the MMR roots are different
+        assert(misbehaviour.signedMMRRoot1.root !== misbehaviour.signedMMRRoot2.root)
+    }
+}
+```
+
+### UpdateState
+
+UpdateState will perform a regular update for the GRANDPA client. If the height of the new MMR root is higher than the latest height in the client state, then the client state will be updated. And commitment roots validated by MMR root will be stored in consensus state.
+
+```typescript
+function updateState(
+  clientMsg: clientMessage) {
+    clientState = get("clients/{clientMsg.identifier}/clientState")
+    switch typeof(clientMsg) {
+      case MMRRoot:
+        signedMMRRoot = MMRRoot(clientMessage)
+        // only update the client state if the MMR height is higher than latest height
+        if clientState.height < signedMMRRoot.blockNumber {
+          // update latest height
+          clientState.latestHeight = signedMMRRoot.blockNumber
+          clientState.latestMMRRoot = signedMMRRoot.root
+          // save the client
+          set("clients/{clientMsg.identifier}/clientState", clientState)
+        }
+      case Header:
+        header = MMRRoot(clientMessage)
+        // create recorded consensus state, save it
+        consensusState = ConsensusState{header.commitmentRoot}
+        set("clients/{clientMsg.identifier}/consensusStates/{header.height}", consensusState)
+        // update the next validator set if it changes
+        if clientState.currentValidatorSet.id + 1 == header.leaf.beefyNextAuthoritySet.id {
+          clientState.currentValidatorSet = header.leaf.beefyNextAuthoritySet
+        }
+        // save the client
+        set("clients/{clientMsg.identifier}/clientState", clientState)
+      case Misbehaviour:
+    }
+}
+```
+
+### UpdateStateOnMisbehaviour
+
+UpdateStateOnMisbehaviour will set the frozen height to a non-zero sentinel height to freeze the entire client.
+
+```typescript
+function updateStateOnMisbehaviour(clientMsg: clientMessage) {
+    clientState = get("clients/{clientMsg.identifier}/clientState")
+    misbehaviour = Misbehaviour(clientMessage)
+    clientState.frozenHeight = misbehaviour.fromHeight
+    set("clients/{clientMsg.identifier}/clientState", clientState)
 }
 ```
 
@@ -209,145 +293,50 @@ function checkMisbehaviourAndUpdateState(
 
 GRANDPA client state verification functions check a Merkle proof against a previously validated commitment root.
 
+These functions utilise the `proofSpecs` with which the client was initialised.
+
 ```typescript
-function verifyClientConsensusState(
+function verifyMembership(
   clientState: ClientState,
-  height: uint64,
-  prefix: CommitmentPrefix,
+  height: Height,
   proof: CommitmentProof,
-  clientIdentifier: Identifier,
-  consensusStateHeight: uint64,
-  consensusState: ConsensusState) {
-    path = applyPrefix(prefix, "clients/{clientIdentifier}/consensusState/{consensusStateHeight}")
+  path: CommitmentPath,
+  value: []byte) {
     // check that the client is at a sufficient height
     assert(clientState.latestHeight >= height)
     // check that the client is unfrozen or frozen at a higher height
     assert(clientState.frozenHeight === null || clientState.frozenHeight > height)
     // fetch the previously verified commitment root & verify membership
-    root = get("clients/{identifier}/consensusStates/{height}")
-    // verify that the provided consensus state has been stored
-    assert(root.verifyMembership(path, consensusState, proof))
+    // Implementations may choose how to pass in the identifier
+    // ibc-go provides the identifier-prefixed store to this method
+    // so that all state reads are for the client in question
+    root = get("clients/{clientIdentifier}/consensusStates/{height}")
+    // verify that <path, value> has been stored
+    assert(verifyMembership(root, proof, path, value))
 }
 
-function verifyConnectionState(
+function verifyNonMembership(
   clientState: ClientState,
-  height: uint64,
-  prefix: CommitmentPrefix,
+  height: Height,
   proof: CommitmentProof,
-  connectionIdentifier: Identifier,
-  connectionEnd: ConnectionEnd) {
-    path = applyPrefix(prefix, "connections/{connectionIdentifier}")
+  path: CommitmentPath) {
     // check that the client is at a sufficient height
     assert(clientState.latestHeight >= height)
     // check that the client is unfrozen or frozen at a higher height
     assert(clientState.frozenHeight === null || clientState.frozenHeight > height)
     // fetch the previously verified commitment root & verify membership
+    // Implementations may choose how to pass in the identifier
+    // ibc-go provides the identifier-prefixed store to this method
+    // so that all state reads are for the client in question
     root = get("clients/{identifier}/consensusStates/{height}")
-    // verify that the provided connection end has been stored
-    assert(root.verifyMembership(path, connectionEnd, proof))
-}
-
-function verifyChannelState(
-  clientState: ClientState,
-  height: uint64,
-  prefix: CommitmentPrefix,
-  proof: CommitmentProof,
-  portIdentifier: Identifier,
-  channelIdentifier: Identifier,
-  channelEnd: ChannelEnd) {
-    path = applyPrefix(prefix, "ports/{portIdentifier}/channels/{channelIdentifier}")
-    // check that the client is at a sufficient height
-    assert(clientState.latestHeight >= height)
-    // check that the client is unfrozen or frozen at a higher height
-    assert(clientState.frozenHeight === null || clientState.frozenHeight > height)
-    // fetch the previously verified commitment root & verify membership
-    root = get("clients/{identifier}/consensusStates/{height}")
-    // verify that the provided channel end has been stored
-    assert(root.verifyMembership(path, channelEnd, proof))
-}
-
-function verifyPacketData(
-  clientState: ClientState,
-  height: uint64,
-  prefix: CommitmentPrefix,
-  proof: CommitmentProof,
-  portIdentifier: Identifier,
-  channelIdentifier: Identifier,
-  sequence: uint64,
-  data: bytes) {
-    path = applyPrefix(prefix, "ports/{portIdentifier}/channels/{channelIdentifier}/packets/{sequence}")
-    // check that the client is at a sufficient height
-    assert(clientState.latestHeight >= height)
-    // check that the client is unfrozen or frozen at a higher height
-    assert(clientState.frozenHeight === null || clientState.frozenHeight > height)
-    // fetch the previously verified commitment root & verify membership
-    root = get("clients/{identifier}/consensusStates/{height}")
-    // verify that the provided commitment has been stored
-    assert(root.verifyMembership(path, hash(data), proof))
-}
-
-function verifyPacketAcknowledgement(
-  clientState: ClientState,
-  height: uint64,
-  prefix: CommitmentPrefix,
-  proof: CommitmentProof,
-  portIdentifier: Identifier,
-  channelIdentifier: Identifier,
-  sequence: uint64,
-  acknowledgement: bytes) {
-    path = applyPrefix(prefix, "ports/{portIdentifier}/channels/{channelIdentifier}/acknowledgements/{sequence}")
-    // check that the client is at a sufficient height
-    assert(clientState.latestHeight >= height)
-    // check that the client is unfrozen or frozen at a higher height
-    assert(clientState.frozenHeight === null || clientState.frozenHeight > height)
-    // fetch the previously verified commitment root & verify membership
-    root = get("clients/{identifier}/consensusStates/{height}")
-    // verify that the provided acknowledgement has been stored
-    assert(root.verifyMembership(path, hash(acknowledgement), proof))
-}
-
-function verifyPacketReceiptAbsence(
-  clientState: ClientState,
-  height: uint64,
-  prefix: CommitmentPrefix,
-  proof: CommitmentProof,
-  portIdentifier: Identifier,
-  channelIdentifier: Identifier,
-  sequence: uint64) {
-    path = applyPrefix(prefix, "ports/{portIdentifier}/channels/{channelIdentifier}/acknowledgements/{sequence}")
-    // check that the client is at a sufficient height
-    assert(clientState.latestHeight >= height)
-    // check that the client is unfrozen or frozen at a higher height
-    assert(clientState.frozenHeight === null || clientState.frozenHeight > height)
-    // fetch the previously verified commitment root & verify membership
-    root = get("clients/{identifier}/consensusStates/{height}")
-    // verify that no acknowledgement has been stored
-    assert(root.verifyNonMembership(path, proof))
-}
-
-function verifyNextSequenceRecv(
-  clientState: ClientState,
-  height: uint64,
-  prefix: CommitmentPrefix,
-  proof: CommitmentProof,
-  portIdentifier: Identifier,
-  channelIdentifier: Identifier,
-  nextSequenceRecv: uint64) {
-    path = applyPrefix(prefix, "ports/{portIdentifier}/channels/{channelIdentifier}/nextSequenceRecv")
-    // check that the client is at a sufficient height
-    assert(clientState.latestHeight >= height)
-    // check that the client is unfrozen or frozen at a higher height
-    assert(clientState.frozenHeight === null || clientState.frozenHeight > height)
-    // fetch the previously verified commitment root & verify membership
-    root = get("clients/{identifier}/consensusStates/{height}")
-    // verify that the nextSequenceRecv is as claimed
-    assert(root.verifyMembership(path, nextSequenceRecv, proof))
+    // verify that nothing has been stored at path
+    assert(verifyMembership(root, proof, path))
 }
 ```
 
 ### Properties & Invariants
 
-Correctness guarantees as provided by the GRANDPA light client algorithm.
+Correctness guarantees as provided by the BEEFY protocol.
 
 ## Backwards Compatibility
 
@@ -368,6 +357,8 @@ None at present.
 ## History
 
 March 15, 2020 - Initial version
+
+November 11, 2022 - Update based on BEEFY protocol
 
 ## Copyright
 
