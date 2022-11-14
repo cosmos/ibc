@@ -52,6 +52,7 @@ Ref: https://keepachangelog.com/en/1.0.0/
 
 - [\#808](https://github.com/cosmos/ibc/pull/808) Fix channel sequence paths in ICS4
 - [\#863](https://github.com/cosmos/ibc/pull/863) Fix allowed range for `trustLevel`
+- [\#878](https://github.com/cosmos/ibc/pull/878) Removes broken localhost client spec ICS9
 
 ### Improvements
 
