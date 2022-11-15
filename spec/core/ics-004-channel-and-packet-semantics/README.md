@@ -552,7 +552,6 @@ function sendPacket(
     channel = provableStore.get(channelPath(sourcePort, sourceChannel))
 
     // check that the channel is not closed to send packets; 
-    // note: optimistic sends are permitted once the handshake has started
     abortTransactionUnless(channel !== null)
     abortTransactionUnless(channel.state !== CLOSED)
     connection = provableStore.get(connectionPath(channel.connectionHops[0]))
