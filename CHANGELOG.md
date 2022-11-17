@@ -41,6 +41,7 @@ Ref: https://keepachangelog.com/en/1.0.0/
 
 ### API-Breaking
 
+- [\#873](https://github.com/cosmos/ibc/pull/873) Defines the connection `Version` datatype and adjusts the signature of `getCompatibleVersions()` and `pickVersion()` accordingly
 - [\#813](https://github.com/cosmos/ibc/pull/813) Breaks up `checkValidityAndUpdateState` into `verifyClientMessage` and `UpdateState`
 - [\#813](https://github.com/cosmos/ibc/pull/813) Breaks up `checkMisbehaviourAndUpdateState` into `checkForMisbehaviour` and `UpdateStateOnMisbehaviour`
 - [\#813](https://github.com/cosmos/ibc/pull/813) Removes `Header` and `Misbehaviour` interfaces for generic `ClientMessage` interface
@@ -50,6 +51,8 @@ Ref: https://keepachangelog.com/en/1.0.0/
 ### Bug Fixes
 
 - [\#808](https://github.com/cosmos/ibc/pull/808) Fix channel sequence paths in ICS4
+- [\#863](https://github.com/cosmos/ibc/pull/863) Fix allowed range for `trustLevel`
+- [\#878](https://github.com/cosmos/ibc/pull/878) Removes broken localhost client spec ICS9
 
 ### Improvements
 
@@ -58,3 +61,6 @@ Ref: https://keepachangelog.com/en/1.0.0/
 - [\#804](https://github.com/cosmos/ibc/pull/804) Increment upgrade sequence at the start of a new handshake rather than the end of a completed handshake
 - [\#806](https://github.com/cosmos/ibc/pull/806) Adds previous version to UpgradeInit and UpgradeTry callback arguments
 - [\#807](https://github.com/cosmos/ibc/pull/807) Upgrade keys will now prefix the channel path to align with the rest of ICS4 keys
+- [\#842](https://github.com/cosmos/ibc/pull/842) Adds metadata field to FungibleTokenPacketData
+- [\#844](https://github.com/cosmos/ibc/pull/844) Adds event emission in `recvPacket` when `packet.sequence < nextSequenceRecv` for ordered channels and when `packetRecepit != null` for unordered channels
+- [\#845](https://github.com/cosmos/ibc/pull/845) Adds explanation about `onRecvPacket` callback returning an error in interchain accounts controller modules

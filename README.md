@@ -14,6 +14,7 @@ See [ROADMAP.md](meta/ROADMAP.md) for a public up-to-date version of our roadmap
 
 ## What is IBC?
 
+<!-- markdown-link-check-disable-next-line -->
 For a high-level explanation of what IBC is and how it works, please read [this blog post](https://blog.cosmos.network/eli5-what-is-ibc-a212f518715f).
 
 ## Interchain Standards
@@ -46,7 +47,6 @@ All standards at or past the "Draft" stage are listed here in order of their ICS
 | [6](spec/client/ics-006-solo-machine-client/README.md)          | Solo Machine Client        | Candidate | [ibc-go](https://github.com/cosmos/ibc-go/tree/main/modules/light-clients/06-solomachine) |
 | [7](spec/client/ics-007-tendermint-client/README.md)            | Tendermint Client          | Candidate | [ibc-go](https://github.com/cosmos/ibc-go/tree/main/modules/light-clients/07-tendermint) |
 | [8](spec/client/ics-008-wasm-client/README.md)                  | Wasm Client                | Draft | |
-| [9](spec/client/ics-009-loopback-client/README.md)              | Loopback Client            | Draft | |
 | [10](spec/client/ics-010-grandpa-client/README.md)              | GRANDPA Client             | Draft | |
 
 ### Relayer
