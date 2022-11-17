@@ -65,7 +65,7 @@ All standards at or past the "Draft" stage are listed here in order of their ICS
 | [29](spec/app/ics-029-fee-payment) | General Relayer Incentivisation Mechanism | Candidate | [ibc-go](https://github.com/cosmos/ibc-go/tree/main/modules/apps/29-fee) |
 | [30](spec/app/ics-030-middleware) | IBC Application Middleware | N/A | N/A |
 | [31](spec/app/ics-031-crosschain-queries) | Cross-Chain Queries | Draft | N/A |
-| [32](spec/app/ics-032-interchain-queries) | Interchain Queries | Draft | [ibc-go](https://github.com/strangelove-ventures/ibc-go/tree/feature/icq_implementation/modules/apps/32-icq) <!-- Link will need to be updated -->
+| [32](spec/app/ics-032-interchain-queries) | Interchain Queries | Draft | [ibc-go](https://github.com/strangelove-ventures/ibc-go/tree/icq_implementation/modules/apps/32-icq) <!-- Link will need to be updated -->
 | [721](spec/app/ics-721-nft-transfer) | Non-Fungible Token Transfer | Candidate | [bianjieai](https://github.com/bianjieai/ibc-go/tree/ics-721-nft-transfer) |
 
 ## Translations
