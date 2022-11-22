@@ -319,8 +319,7 @@ function createOutgoingPacket(
     abortTransactionUnless(sender === nft.GetOwner(classId, tokenId))
     if source { // we are source chain, escrow token
       nft.Transfer(classId, tokenId, channelEscrowAddresses[sourceChannel])
-    }
-    else { // we are sink chain, burn voucher
+    } else { // we are sink chain, burn voucher
       nft.Burn(classId, tokenId)
     }
     token = nft.GetNFT(classId, tokenId)
@@ -358,8 +357,7 @@ function ProcessReceivedPacketData(data: NonFungibleTokenPacketData) {
         nft.Update(token)
       }
       nft.Transfer(data.classId.slice(len(prefix)), data.tokenIds[i], data.receiver)
-    }
-    else { // we are sink chain, mint voucher to receiver
+    } else { // we are sink chain, mint voucher to receiver
       prefixedClassId = data.destPort + '/' + data.destChannel + '/' + data.classId
       // create NFT class if it doesn't exist already
       if (nft.HasClass(prefixedClassId) === false) {
