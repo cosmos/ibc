@@ -533,7 +533,7 @@ Calling modules MUST execute application logic atomically in conjunction with ca
 
 The IBC handler performs the following steps in order:
 
-- Checks that the channel & connection are open to send packets
+- Checks that the channel is not closed to send packets
 - Checks that the calling module owns the sending port (see [ICS 5](../ics-005-port-allocation))
 - Checks that the timeout height specified has not already passed on the destination chain
 - Increments the send sequence counter associated with the channel
@@ -551,8 +551,7 @@ function sendPacket(
   data: bytes) {
     channel = provableStore.get(channelPath(sourcePort, sourceChannel))
 
-    // check that the channel & connection are open to send packets; 
-    // note: optimistic sends are permitted once the handshake has started
+    // check that the channel is not closed to send packets; 
     abortTransactionUnless(channel !== null)
     abortTransactionUnless(channel.state !== CLOSED)
     connection = provableStore.get(connectionPath(channel.connectionHops[0]))
