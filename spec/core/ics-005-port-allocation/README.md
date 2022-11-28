@@ -214,7 +214,7 @@ The IBC handler MUST implement the `releasePort` function, which allows a module
 > Warning: releasing a port will allow other modules to bind to that port and possibly intercept incoming channel opening handshakes. Modules should release ports only when doing so is safe.
 
 ```typescript
-function releasePort(capability: CapabilityKey) {
+function releasePort(id: Identifier, capability: CapabilityKey) {
     abortTransactionUnless(authenticateCapability(portPath(id), capability))
     releaseCapability(capability)
 }
