@@ -64,3 +64,4 @@ Ref: https://keepachangelog.com/en/1.0.0/
 - [\#842](https://github.com/cosmos/ibc/pull/842) Adds metadata field to FungibleTokenPacketData
 - [\#844](https://github.com/cosmos/ibc/pull/844) Adds event emission in `recvPacket` when `packet.sequence < nextSequenceRecv` for ordered channels and when `packetRecepit != null` for unordered channels
 - [\#845](https://github.com/cosmos/ibc/pull/845) Adds explanation about `onRecvPacket` callback returning an error in interchain accounts controller modules
+- [\#886](https://github.com/cosmos/ibc/pull/886) Makes `icacontroller-` prefix optional in ICA controller port identifier
