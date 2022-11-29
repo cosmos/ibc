@@ -176,7 +176,7 @@ function verifyHeader(header: header) {
       Sequence: clientState.consensusState.sequence,
       Timestamp: header.timestamp,
       Diversifier: clientState.consensusState.diversifier,
-      Path: []byte{"SENTINEL_HEADER_PATH"}
+      Path: []byte{"solomachine:header"}
       Value: marshal(headerData)
     )
     assert(checkSignature(cs.consensusState.publicKey, sigBytes, header.signature))
