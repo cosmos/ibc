@@ -447,7 +447,7 @@ function CreateConsumerClient(p: ConsumerAdditionProposal) {
       providerConsensusState: nil,
       counterpartyClientId: "",
       initialValSet: initialValSet,
-      distributionChannelId: p.distributionChannelId,
+      transferChannelId: p.transferChannelId,
     }
   } 
   else {
@@ -479,7 +479,7 @@ function CreateConsumerClient(p: ConsumerAdditionProposal) {
       providerConsensusState: ownConsensusState,
       counterpartyClientId: clientId,
       initialValSet: initialValSet,
-      distributionChannelId: p.distributionChannelId,
+      transferChannelId: p.transferChannelId,
     }
   }
 
@@ -714,10 +714,10 @@ function InitGenesis(gs: ConsumerGenesisState): [ValidatorUpdate] {
     //   the validator set in the providerConsensusState (e.g., ICS 7)
     abortSystemUnless(gs.initialValSet == gs.providerConsensusState.validatorSet)
   }
-  if gs.distributionChannelId != "" {
-      // - if distributionChannelId is provided, it must the ID
+  if gs.transferChannelId != "" {
+      // - if transferChannelId is provided, it must the ID
       //   of a channel connected to the "transfer" port
-      channelEnd = provableStore.get("channelEnds/ports/transfer/channels/{gs.distributionChannelId}")
+      channelEnd = provableStore.get("channelEnds/ports/transfer/channels/{gs.transferChannelId}")
       abortSystemUnless(channelEnd != nil)
   }
 
@@ -732,16 +732,12 @@ function InitGenesis(gs: ConsumerGenesisState): [ValidatorUpdate] {
   if preCCV {
     // start consumer chain in pre-CCV state;
     // store the ID of the client of the provider chain
-    providerClient = connectionEnd.clientIdentifier
-
-    clientState = provableStore.get("clients/{connectionEnd.clientIdentifier}/clientState")
+    providerClientId = connectionEnd.clientIdentifier
   }
   else {
     // start consumer chain in normal CCV state;
     // create client of the provider chain and store the ID
-    providerClient = clientKeeper.CreateClient(gs.providerClientState, gs.providerConsensusState)
-    
-    clientState = gs.providerClientState
+    providerClientId = clientKeeper.CreateClient(gs.providerClientState, gs.providerConsensusState)
   }
 
   // set the consumer unbonding period
@@ -756,7 +752,7 @@ function InitGenesis(gs: ConsumerGenesisState): [ValidatorUpdate] {
   }
 
   // set distribution channel ID
-  distributionChannelId = gs.distributionChannelId
+  distributionChannelId = gs.transferChannelId
 
   // initiate handshake 
   if preCCV {
@@ -775,7 +771,7 @@ function InitGenesis(gs: ConsumerGenesisState): [ValidatorUpdate] {
     // initiate connection opening handshake
     // i.e., use handleConnOpenInit as defined in ICS-26
     datagram = ConnOpenInit{
-      clientIdentifier: providerClient,
+      clientIdentifier: providerClientId,
       counterpartyClientIdentifier: gs.counterpartyClientId,
       version: "ccv"
     }
@@ -805,12 +801,12 @@ function InitGenesis(gs: ConsumerGenesisState): [ValidatorUpdate] {
 - **Postcondition**
   - The capability for the port `ConsumerPortId` is claimed.
   - `preCCV` is set to `gs.preCCV`.
-  - If `preCCV == true`, the ID of the client on which the connection with `gs.connId` is built is stored into `providerClient`.
-  - Otherwise, a client of the provider chain is created and the client ID is stored into `providerClient`.
+  - If `preCCV == true`, the ID of the client on which the connection with `gs.connId` is built is stored into `providerClientId`.
+  - Otherwise, a client of the provider chain is created and the client ID is stored into `providerClientId`.
   - `ConsumerUnbondingPeriod` is set to `gs.unbondingPeriod`.
   - `HtoVSC` for the current block is set to `0`.
   - The `ccvValidatorSet` mapping is populated with the initial validator set.
-  - The ID of the distribution token transfer channel is set to `gs.distributionChannelId`.
+  - The ID of the distribution token transfer channel is set to `gs.transferChannelId`.
   - If `preCCV == true`, the CCV channel opening handshake is initialized.
   - Otherwise, the connection opening handshake is initialized.
   - The initial validator set is returned to the consensus engine.
@@ -861,7 +857,7 @@ function onChanOpenInit(
     abortTransactionUnless(channelEnd != nil AND len(channelEnd.connectionHops) == 1)
     connId = channelEnd.connectionHops[0]
     connectionEnd = provableStore.get("connections/{connId}")
-    abortTransactionUnless(providerClient != connectionEnd.clientIdentifier)
+    abortTransactionUnless(providerClientId != connectionEnd.clientIdentifier)
 
     return ccvVersion
 }

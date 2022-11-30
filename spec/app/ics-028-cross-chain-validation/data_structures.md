@@ -61,7 +61,7 @@ The CCV module is initialized through the `InitGenesis` method when the chain is
     providerConsensusState: ConsensusState
     counterpartyClientId: Identifier
     initialValSet: [ValidatorUpdate]
-    distributionChannelId: Identifier
+    transferChannelId: Identifier
   }
   ```
   - `preCCV` is a flag indicating whether the consumer CCV module starts in pre-CCV state. 
@@ -78,8 +78,8 @@ The CCV module is initialized through the `InitGenesis` method when the chain is
     Note that `counterpartyClientId` is only needed to allow the consumer CCV module to initiate the connection opening handshake.
     If `connId != ""`, then `counterpartyClientId` is ignored.
   - `initialValSet` is the first validator set that will start validating on this consumer chain.
-  - `distributionChannelId` is the ID of a token transfer channel (as defined in [ICS 20](../../app/ics-020-fungible-token-transfer)) used for the Reward Distribution sub-protocol. 
-    If `distributionChannelId == ""`, a new token transfer channel is created on top of the same connection as the CCV channel.
+  - `transferChannelId` is the ID of a token transfer channel (as defined in [ICS 20](../../app/ics-020-fungible-token-transfer)) used for the Reward Distribution sub-protocol. 
+    If `transferChannelId == ""`, a new token transfer channel is created on top of the same connection as the CCV channel.
 
 The provider CCV module handles governance proposals to add new consumer chains and to remove existing consumer chains. 
 While the structure of governance proposals is specific to every ABCI application (for an example, see the `Proposal` interface in the [Governance module documentation](https://docs.cosmos.network/v0.45/modules/gov/) of Cosmos SDK),
@@ -90,7 +90,7 @@ this specification expects the following fields to be part of the proposals to a
     spawnTime: Timestamp
     connId: Identifier
     unbondingPeriod: Duration
-    distributionChannelId: Identifier
+    transferChannelId: Identifier
     lockUnbondingOnTimeout: Bool
   }
   ```
@@ -100,9 +100,9 @@ this specification expects the following fields to be part of the proposals to a
     If `connId == ""`, a new client of the consumer chain and a new connection on top of this client are created.
     Note that a sovereign chain can transition to a consumer chain while maintaining existing IBC channels to other chains by providing a valid `connId`. 
   - `unbondingPeriod` is the unbonding period on the consumer chain.
-  - `distributionChannelId` is the ID of a token transfer channel (as defined in [ICS 20](../../app/ics-020-fungible-token-transfer)) used for the Reward Distribution sub-protocol. 
-    If `distributionChannelId == ""`, a new token transfer channel is created on top of the same connection as the CCV channel. 
-    Note that `distributionChannelId` is the ID of the channel end on the consumer chain.
+  - `transferChannelId` is the ID of a token transfer channel (as defined in [ICS 20](../../app/ics-020-fungible-token-transfer)) used for the Reward Distribution sub-protocol. 
+    If `transferChannelId == ""`, a new token transfer channel is created on top of the same connection as the CCV channel. 
+    Note that `transferChannelId` is the ID of the channel end on the consumer chain.
   - `lockUnbondingOnTimeout` is a boolean value that indicates whether the funds corresponding to the outstanding unbonding operations are to be released in case of a timeout. 
     If `lockUnbondingOnTimeout == true`, a governance proposal to stop the timed out consumer chain would be necessary to release the locked funds. 
   ```typescript
@@ -249,7 +249,7 @@ This section describes the internal state of the CCV module. For simplicity, the
 - `ConsumerUnbondingPeriod: Duration` is the unbonding period on the consumer chain.
 - `preCCV: Bool` is a flag indicating whether the consumer CCV module starts in pre-CCV state. 
   In pre-CCV state, the consumer CCV module MUST NOT pass validator updates to the underlying consensus engine.
-- `providerClient: Identifier` identifies the client of the provider chain (on the consumer chain) that the CCV channel is build upon.
+- `providerClientId: Identifier` identifies the client of the provider chain (on the consumer chain) that the CCV channel is build upon.
 - `providerChannel: Identifier` identifies the consumer's channel end of the CCV channel.
 - `ccvValidatorSet: <string, ValidatorUpdate>` is a mapping that stores the validators in the validator set of the consumer chain.
 - `receivedVSCs: [VSCPacketData]` is a list of data items (i.e., `VSCPacketData`) received in `VSCPacket`s that are not yet applied. 
