@@ -453,6 +453,7 @@ function CreateConsumerClient(p: ConsumerAdditionProposal) {
       connId: connectionEnd.counterpartyConnectionIdentifier,
       providerClientState: nil,
       providerConsensusState: nil,
+      counterpartyClientId: "",
       initialValSet: initialValSet,
       distributionChannelId: p.distributionChannelId,
     }
@@ -488,6 +489,7 @@ function CreateConsumerClient(p: ConsumerAdditionProposal) {
       connId: "",
       providerClientState: getHostClientState(getCurrentHeight()),
       providerConsensusState: ownConsensusState,
+      counterpartyClientId: clientId,
       initialValSet: initialValSet,
       distributionChannelId: p.distributionChannelId,
     }
@@ -804,7 +806,7 @@ function InitGenesis(gs: ConsumerGenesisState): [ValidatorUpdate] {
     // i.e., use handleChanOpenInit as defined in ICS-26
     datagram = ChanOpenInit{
       order: ORDERED,
-      connectionHops: [gs.connId], // same as the CCV channel
+      connectionHops: [gs.connId],
       portIdentifier: ConsumerPortId,
       counterpartyPortIdentifier: ProviderPortId,
       version: ccvVersion,
@@ -813,7 +815,24 @@ function InitGenesis(gs: ConsumerGenesisState): [ValidatorUpdate] {
   }
   else {
     // initiate connection opening handshake
-    // TODO: although not need for security, may help relayers
+    // i.e., use handleConnOpenInit as defined in ICS-26
+    datagram = ConnOpenInit{
+      clientIdentifier: providerClient,
+      counterpartyClientIdentifier: gs.counterpartyClientId,
+      version: "ccv"
+    }
+    connId = handleConnOpenInit(datagram)
+
+    // initiate CCV channel opening handshake
+    // i.e., use handleChanOpenInit as defined in ICS-26
+    datagram = ChanOpenInit{
+      order: ORDERED,
+      connectionHops: [connId],
+      portIdentifier: ConsumerPortId,
+      counterpartyPortIdentifier: ProviderPortId,
+      version: ccvVersion,
+    }
+    handleChanOpenInit(datagram)
   }
 
   return gs.initialValSet

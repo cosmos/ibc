@@ -58,6 +58,7 @@ The CCV module is initialized through the `InitGenesis` method when the chain is
     connId: Identifier
     providerClientState: ClientState
     providerConsensusState: ConsensusState
+    counterpartyClientId: Identifier
     initialValSet: [ValidatorUpdate]
     distributionChannelId: Identifier
   }
@@ -71,6 +72,9 @@ The CCV module is initialized through the `InitGenesis` method when the chain is
     If `connId != ""`, then `providerClientState` is ignored.
   - `providerConsensusState` is the consensus state used to create a new client of the provider chain (as defined in [ICS 2](../../core/ics-002-client-semantics)).
     If `connId != ""`, then `providerConsensusState` is ignored.
+  - `counterpartyClientId` is the ID of the client of the consumer chain on the provider chain. 
+    Note that `counterpartyClientId` is only needed to allow the consumer CCV module to initiate the connection opening handshake.
+    If `connId != ""`, then `counterpartyClientId` is ignored.
   - `initialValSet` is the first validator set that will start validating on this consumer chain.
   - `distributionChannelId` is the ID of a token transfer channel (as defined in [ICS 20](../../app/ics-020-fungible-token-transfer)) used for the Reward Distribution sub-protocol. 
     If `distributionChannelId == ""`, a new token transfer channel is created on top of the same connection as the CCV channel.
