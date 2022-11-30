@@ -8,7 +8,7 @@ requires: 23
 required-by: 2, 3, 4, 5, 18
 author: Christopher Goes <cwgoes@tendermint.com>
 created: 2019-04-16
-modified: 2022-07-05
+modified: 2022-09-14
 ---
 
 ## Synopsis
@@ -170,10 +170,14 @@ Host state machines MUST define a unique `ConsensusState` type fulfilling the re
 Host state machines MUST provide the ability to introspect their own consensus state, with `getConsensusState`:
 
 ```typescript
-type getConsensusState = (height: Height) => ConsensusState
+type getConsensusState = (height: Height, proof?: bytes) => ConsensusState
 ```
 
 `getConsensusState` MUST return the consensus state for at least some number `n` of contiguous recent heights, where `n` is constant for the host state machine. Heights older than `n` MAY be safely pruned (causing future calls to fail for those heights).
+
+We provide an optional proof data which comes from the `MsgConnectionOpenAck` or `MsgConnectionOpenTry` for host state machines which are unable to introspect their own `ConsensusState` and must rely on off-chain data.
+<br />
+In this case host state machines MUST maintain a map of `n` block numbers to header hashes where the proof would contain full header which can be hashed and compared with the on-chain record.
 
 Host state machines MUST provide the ability to introspect this stored recent consensus state count `n`, with `getStoredRecentConsensusStateCount`:
 
