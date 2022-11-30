@@ -383,13 +383,8 @@ function InitGenesis(state: ProviderGenesisState): [ValidatorUpdate] {
 // PCF: Provider Chain Function
 // implements governance proposal Handler 
 function HandleConsumerAdditionProposal(p: ConsumerAdditionProposal) {
-  if currentTimestamp() > p.spawnTime {
-    CreateConsumerClient(p)
-  }
-  else {
     // store the proposal as a pending addition proposal
     pendingConsumerAdditionProposals.Append(p)
-  }
 }
 ```
 - **Caller**
@@ -399,8 +394,35 @@ function HandleConsumerAdditionProposal(p: ConsumerAdditionProposal) {
 - **Precondition** 
   - True. 
 - **Postcondition** 
-  - If the spawn time has already passed, `CreateConsumerClient(p)` is invoked, with `p` the `ConsumerAdditionProposal`. 
-  - Otherwise, the proposal is appended to the list of pending addition proposals, i.e., `pendingConsumerAdditionProposals`.
+  - The proposal is appended to the list of pending addition proposals, i.e., `pendingConsumerAdditionProposals`.
+- **Error Condition**
+  - None.
+
+<!-- omit in toc -->
+#### **[CCV-PCF-BBLOCK-INIT.1]**
+```typescript
+// PCF: Provider Chain Function
+function BeginBlockInit() {
+  // iterate over the pending addition proposals and create 
+  // the consumer client if the spawn time has passed
+  foreach p IN pendingConsumerAdditionProposals {
+    if currentTimestamp() > p.spawnTime {
+      CreateConsumerClient(p)
+      pendingConsumerAdditionProposals.Remove(p)
+    }
+  }
+}
+```
+- **Caller**
+  - The `BeginBlock()` method.
+- **Trigger Event**
+  - A `BeginBlock` message is received from the consensus engine; `BeginBlock` messages are sent once per block.
+- **Precondition**
+  - True. 
+- **Postcondition**
+  - For each `ConsumerAdditionProposal` `p` in the list of pending addition proposals `pendingConsumerAdditionProposals`, if `currentTimestamp() > p.spawnTime`, then
+    - `CreateConsumerClient(p)` is invoked;
+    - `p` is removed from `pendingConsumerAdditionProposals`.
 - **Error Condition**
   - None.
 
@@ -526,37 +548,8 @@ function CreateConsumerClient(p: ConsumerAdditionProposal) {
 > **Note:** For the case when the `clientId` field of the `ConsumerAdditionProposal` is not set, creating a client of a remote chain requires a `ClientState` and a `ConsensusState` (for an example, take a look at [ICS 7](../../client/ics-007-tendermint-client)).
 > `ConsensusState` requires setting a validator set of the remote chain. 
 > The provider chain uses the fact that the validator set of the consumer chain is the same as its own validator set. 
-> The rest of information to create a `ClientState` it receives through the governance proposal.
 
 > **Note:** Bootstrapping the consumer CCV module requires a `ConsumerGenesisState` (see the [CCV Data Structures](./data_structures.md#ccv-data-structures) section). The provider CCV module creates such a `ConsumerGenesisState` when handling a governance proposal `ConsumerAdditionProposal`.
-
-<!-- omit in toc -->
-#### **[CCV-PCF-BBLOCK-INIT.1]**
-```typescript
-// PCF: Provider Chain Function
-function BeginBlockInit() {
-  // iterate over the pending addition proposals and create 
-  // the consumer client if the spawn time has passed
-  foreach p IN pendingConsumerAdditionProposals {
-    if currentTimestamp() > p.spawnTime {
-      CreateConsumerClient(p)
-      pendingConsumerAdditionProposals.Remove(p)
-    }
-  }
-}
-```
-- **Caller**
-  - The `BeginBlock()` method.
-- **Trigger Event**
-  - A `BeginBlock` message is received from the consensus engine; `BeginBlock` messages are sent once per block.
-- **Precondition**
-  - True. 
-- **Postcondition**
-  - For each `ConsumerAdditionProposal` `p` in the list of pending addition proposals `pendingConsumerAdditionProposals`, if `currentTimestamp() > p.spawnTime`, then
-    - `CreateConsumerClient(p)` is invoked;
-    - `p` is removed from `pendingConsumerAdditionProposals`.
-- **Error Condition**
-  - None.
   
 <!-- omit in toc -->
 #### **[CCV-PCF-COINIT.1]**
@@ -1080,14 +1073,8 @@ function BeginBlockInit() {
 // PCF: Provider Chain Function
 // implements governance proposal Handler 
 function HandleConsumerRemovalProposal(p: ConsumerRemovalProposal) {
-  if currentTimestamp() >= p.stopTime {
-    // stop the consumer chain and do not lock the unbonding
-    StopConsumerChain(p.chainId, false)
-  }
-  else {
     // store the proposal as a pending removal proposal
     pendingConsumerRemovalProposals.Append(p)
-  }
 }
 ```
 - **Caller**
@@ -1097,8 +1084,36 @@ function HandleConsumerRemovalProposal(p: ConsumerRemovalProposal) {
 - **Precondition** 
   - True. 
 - **Postcondition** 
-  - If the stop time has already passed, `StopConsumerChain(p.chainId, false)` is invoked, with `p` the `ConsumerRemovalProposal`. 
-  - Otherwise, the proposal is appended to the list of pending removal proposals, i.e., `pendingConsumerRemovalProposals`.
+  - The proposal is appended to the list of pending removal proposals, i.e., `pendingConsumerRemovalProposals`.
+- **Error Condition**
+  - None.
+
+<!-- omit in toc -->
+#### **[CCV-PCF-BBLOCK-CCR.1]**
+```typescript
+// PCF: Provider Chain Function
+function BeginBlockCCR() {
+  // iterate over the pending removal proposals 
+  // and stop the consumer chain
+  foreach p IN pendingConsumerRemovalProposals {
+    if currentTimestamp() > p.stopTime {
+      // stop the consumer chain and do not lock the unbonding
+      StopConsumerChain(p.chainId, false)
+      pendingConsumerRemovalProposals.Remove(p)
+    }
+  }
+}
+```
+- **Caller**
+  - The `BeginBlock()` method.
+- **Trigger Event**
+  - A `BeginBlock` message is received from the consensus engine; `BeginBlock` messages are sent once per block.
+- **Precondition**
+  - True. 
+- **Postcondition**
+  - For each `ConsumerRemovalProposal` `p` in the list of pending removal proposals `pendingConsumerRemovalProposals`, if `currentTimestamp() > p.stopTime`, then
+    - `StopConsumerChain(p.chainId, false)` is invoked;
+    - `p` is removed from `pendingConsumerRemovalProposals`.
 - **Error Condition**
   - None.
 
@@ -1180,35 +1195,6 @@ function StopConsumerChain(chainId: string, lockUnbonding: Bool) {
 > 
 > - The second scenario (i.e., a timeout) is only possible if the *Correct Relayer* assumption is violated (see the [Assumptions](./system_model_and_properties.md#assumptions) section), 
 > which is necessary to guarantee both the *Bond-Based Consumer Voting Power* and *Slashable Consumer Misbehavior* properties (see the [Assumptions](./system_model_and_properties.md#correctness-reasoning) section).
-
-<!-- omit in toc -->
-#### **[CCV-PCF-BBLOCK-CCR.1]**
-```typescript
-// PCF: Provider Chain Function
-function BeginBlockCCR() {
-  // iterate over the pending removal proposals 
-  // and stop the consumer chain
-  foreach p IN pendingConsumerRemovalProposals {
-    if currentTimestamp() > p.stopTime {
-      // stop the consumer chain and do not lock the unbonding
-      StopConsumerChain(p.chainId, false)
-      pendingConsumerRemovalProposals.Remove(p)
-    }
-  }
-}
-```
-- **Caller**
-  - The `BeginBlock()` method.
-- **Trigger Event**
-  - A `BeginBlock` message is received from the consensus engine; `BeginBlock` messages are sent once per block.
-- **Precondition**
-  - True. 
-- **Postcondition**
-  - For each `ConsumerRemovalProposal` `p` in the list of pending removal proposals `pendingConsumerRemovalProposals`, if `currentTimestamp() > p.stopTime`, then
-    - `StopConsumerChain(p.chainId, false)` is invoked;
-    - `p` is removed from `pendingConsumerRemovalProposals`.
-- **Error Condition**
-  - None.
 
 <!-- omit in toc -->
 #### **[CCV-PCF-CCINIT.1]**
