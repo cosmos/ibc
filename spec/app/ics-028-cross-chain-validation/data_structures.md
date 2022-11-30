@@ -87,7 +87,6 @@ this specification expects the following fields to be part of the proposals to a
     chainId: string
     spawnTime: Timestamp
     connId: Identifier
-    initialHeight: Height
     distributionChannelId: Identifier
     lockUnbondingOnTimeout: Bool
   }
@@ -95,11 +94,8 @@ this specification expects the following fields to be part of the proposals to a
   - `chainId` is the proposed chain ID of the new consumer chain. It must be different from all other consumer chain IDs of the executing provider chain.
   - `spawnTime` is the time on the provider chain at which the consumer chain genesis is finalized and all validators are responsible to start their consumer chain validator node.
   - `connId` is the ID of the connection end on the provider chain on top of which the CCV channel will be established.
-    If `connId == ""`, a new client of the consumer chain and a new connection on top of this client are created; in this case, `initialHeight` must be set (see below).
+    If `connId == ""`, a new client of the consumer chain and a new connection on top of this client are created.
     Note that a sovereign chain can transition to a consumer chain while maintaining existing IBC channels to other chains by providing a valid `connId`. 
-  - `initialHeight` is the proposed initial height of new consumer chain. 
-    If `connId != ""`, then `initialHeight` is ignored. Otherwise, it is used to create a client of the consumer chain. 
-    For an example, take a look at the `Height` defined in [ICS 7](../../client/ics-007-tendermint-client).
   - `distributionChannelId` is the ID of a token transfer channel (as defined in [ICS 20](../../app/ics-020-fungible-token-transfer)) used for the Reward Distribution sub-protocol. 
     If `distributionChannelId == ""`, a new token transfer channel is created on top of the same connection as the CCV channel. 
     Note that `distributionChannelId` is the ID of the channel end on the consumer chain.

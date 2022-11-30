@@ -459,18 +459,15 @@ function CreateConsumerClient(p: ConsumerAdditionProposal) {
     }
   } 
   else {
-    // a new client of the consumer chain will be created
-    if p.initialHeight == 0 {
-      // invalid proposal: initial height cannot be zero
-      return
-    }
     // create client state
     clientState = ClientState{
       chainId: p.chainId,
       // use the unbonding period on the provider to compute 
       // the unbonding period on the consumer
       unbondingPeriod: ComputeConsumerUnbondingPeriod(stakingKeeper.UnbondingTime()),
-      latestHeight: p.initialHeight, // the height when the client was last updated
+      // the height when the client was last updated is set to the first possible height; 
+      // for example, in the case of a Tendermint Client, this is Height{0, 1} (see ICS-7)
+      latestHeight: 0, 
     }
     // create consensus state
     consensusState = ConsensusState{
@@ -517,7 +514,6 @@ function CreateConsumerClient(p: ConsumerAdditionProposal) {
           - both the client ID and connection ID are stored;
           - a `ConsumerGenesisState` is created and stored;
     - otherwise,
-      - if `p.initialHeight` is zero, the state is not changed;
       - otherwise, 
         - a client state is created with `chainId = p.chainId` and `unbondingPeriod` set to `ComputeConsumerUnbondingPeriod(stakingKeeper.UnbondingTime())`;
         - a consensus state is created with `validatorSet` set to the initial validator set of the consumer chain;
