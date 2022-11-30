@@ -334,7 +334,7 @@ function chanOpenTry(
   counterpartyChosenChannelIdentifer: Identifier,
   counterpartyPortIdentifier: Identifier,
   counterpartyChannelIdentifier: Identifier,
-  version: string, // deprecated
+  version: string,
   counterpartyVersion: string,
   proofInit: CommitmentProof,
   proofHeight: Height): CapabilityKey {
@@ -533,7 +533,7 @@ Calling modules MUST execute application logic atomically in conjunction with ca
 
 The IBC handler performs the following steps in order:
 
-- Checks that the channel & connection are open to send packets
+- Checks that the channel is not closed to send packets
 - Checks that the calling module owns the sending port (see [ICS 5](../ics-005-port-allocation))
 - Checks that the timeout height specified has not already passed on the destination chain
 - Increments the send sequence counter associated with the channel
@@ -551,8 +551,7 @@ function sendPacket(
   data: bytes) {
     channel = provableStore.get(channelPath(sourcePort, sourceChannel))
 
-    // check that the channel & connection are open to send packets; 
-    // note: optimistic sends are permitted once the handshake has started
+    // check that the channel is not closed to send packets; 
     abortTransactionUnless(channel !== null)
     abortTransactionUnless(channel.state !== CLOSED)
     connection = provableStore.get(connectionPath(channel.connectionHops[0]))
@@ -631,6 +630,22 @@ function recvPacket(
     // do sequence check before any state changes
     if channel.order == ORDERED || channel.order == ORDERED_ALLOW_TIMEOUT {
         nextSequenceRecv = provableStore.get(nextSequenceRecvPath(packet.destPort, packet.destChannel))
+        if (packet.sequence < nextSequenceRecv) {
+          // event is emitted even if transaction is aborted
+          emitLogEntry("recvPacket", {
+            data: packet.data 
+            timeoutHeight: packet.timeoutHeight, 
+            timeoutTimestamp: packet.timeoutTimestamp,
+            sequence: packet.sequence,
+            sourcePort: packet.sourcePort, 
+            sourceChannel: packet.sourceChannel,
+            destPort: packet.destPort, 
+            destChannel: packet.destChannel,
+            order: channel.order,
+            connection: channel.connectionHops[0]
+          })
+        }
+
         abortTransactionUnless(packet.sequence === nextSequenceRecv)
     }
 
@@ -673,7 +688,23 @@ function recvPacket(
         // for unordered channels we must set the receipt so it can be verified on the other side
         // this receipt does not contain any data, since the packet has not yet been processed
         // it's the sentinel success receipt: []byte{0x01}
-        abortTransactionUnless(provableStore.get(packetReceiptPath(packet.destPort, packet.destChannel, packet.sequence) === null))
+        packetReceipt = provableStore.get(packetReceiptPath(packet.destPort, packet.destChannel, packet.sequence))
+        if (packetReceipt != null) {
+          emitLogEntry("recvPacket", {
+            data: packet.data 
+            timeoutHeight: packet.timeoutHeight, 
+            timeoutTimestamp: packet.timeoutTimestamp,
+            sequence: packet.sequence,
+            sourcePort: packet.sourcePort, 
+            sourceChannel: packet.sourceChannel,
+            destPort: packet.destPort, 
+            destChannel: packet.destChannel,
+            order: channel.order,
+            connection: channel.connectionHops[0]
+          })
+        }
+
+        abortTransactionUnless(packetRecepit === null))
         provableStore.set(
           packetReceiptPath(packet.destPort, packet.destChannel, packet.sequence),
           SUCCESFUL_RECEIPT
@@ -682,8 +713,18 @@ function recvPacket(
     }
     
     // log that a packet has been received
-    emitLogEntry("recvPacket", {sequence: packet.sequence, timeoutHeight: packet.timeoutHeight, port: packet.destPort, channel: packet.destChannel,
-                                timeoutTimestamp: packet.timeoutTimestamp, data: packet.data})
+    emitLogEntry("recvPacket", {
+      data: packet.data 
+      timeoutHeight: packet.timeoutHeight, 
+      timeoutTimestamp: packet.timeoutTimestamp,
+      sequence: packet.sequence,
+      sourcePort: packet.sourcePort, 
+      sourceChannel: packet.sourceChannel,
+      destPort: packet.destPort, 
+      destChannel: packet.destChannel,
+      order: channel.order,
+      connection: channel.connectionHops[0]
+    })
 
     // return transparent packet
     return packet
