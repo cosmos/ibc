@@ -22,7 +22,7 @@ The interblockchain communication protocol is designed to facilitate module-to-m
 elements of code executing on sovereign ledgers. In order to provide the desired end-to-end semantics, the IBC handler must permission channels to particular modules.
 This specification defines the *port allocation and ownership* system which realises that model.
 
-Conventions may emerge as to what kind of module logic is bound to a particular port name, such as "bank" for fungible token handling or "staking" for interchain collateralisation.
+Conventions may emerge as to what kind of module logic is bound to a particular port name, such as "transfer" for fungible token handling or "staking" for interchain collateralisation.
 This is analogous to port 80's common use for HTTP servers — the protocol cannot enforce that particular module logic is actually bound to conventional ports, so
 users must check that themselves. Ephemeral ports with pseudorandom identifiers may be created for temporary protocol handling.
 
@@ -33,6 +33,8 @@ Optionally, the host state machine can elect to expose port binding only to a sp
 by generating a capability key specifically for the ability to bind ports. The module manager
 can then control which ports modules can bind to with a custom rule-set, and transfer ports to modules only when it
 has validated the port name & module. This role can be played by the routing module (see [ICS 26](../ics-026-routing-module)).
+
+The host state machine may also choose to allow modules to multiplex on a given port. This enables multiple applications to package data to their respective counterparties on a single packet, thus enabling atomic cross-chain execution. The host state machine must also define a strict ordering of modules through which the packet data gets routed. If the host chain and counterparty must agree on the module ordering, then this must be negotiated during the channel handshake. Each module may modify the packet data before subsequent modules are executed. Thus, the modules multiplexed on the same port must all be mutually trusted.
 
 ### Definitions
 
@@ -45,7 +47,7 @@ The IBC specification makes no assumptions of module functionality other than th
 
 ### Desired Properties
 
-- Once a module has bound to a port, no other modules can use that port until the module releases it
+- A group of modules may bind to a single port in a particular order
 - A module can, on its option, release a port or transfer it to another module
 - A single module can bind to multiple ports at once
 - Ports are allocated first-come first-serve, and "reserved" ports for known modules can be bound when the chain is first started
