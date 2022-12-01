@@ -239,6 +239,8 @@ This section describes the internal state of the CCV module. For simplicity, the
   It enables the provider CCV module to match a `VSCMaturedPacket{vscId}`, received from a consumer chain with `chainId`, with the corresponding unbonding operations. 
   As a result, `chainId` can be removed from the list of consumer chains that are still unbonding these operations. 
   For more details see how received `VSCMaturedPacket`s [are handled](#ccv-pcf-rcvmat1).
+- `maturedUnbondingOps: [uint64]` is a list of IDs of matured unbonding operations (from the perspective of the consumer chains), for which notifications can be sent to the Staking module (see `stakingKeeper.UnbondingCanComplete`). 
+  Note that `maturedUnbondingOps` is emptied at the end of each block.
 - `downtimeSlashRequests: Map<string, [string]>` is a mapping from `chainId`s to lists of validator addresses, 
   i.e., `downtimeSlashRequests[chainId]` contains all the validator addresses for which the provider chain received slash requests for downtime from the consumer chain with `chainId`.
 
