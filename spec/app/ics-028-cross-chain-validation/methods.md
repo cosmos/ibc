@@ -932,8 +932,8 @@ function StopConsumerChain(chainId: string, lockUnbonding: Bool) {
       unbondingOps[id].unbondingChainIds.Remove(chainId)
       // if the unbonding operation has unbonded on all consumer chains
       if unbondingOps[id].unbondingChainIds.IsEmpty() {
-        // notify the Staking module that the unbonding can complete
-        stakingKeeper.UnbondingCanComplete(id)
+        // append the id of the unbonding to maturedUnbondingOps
+        maturedUnbondingOps.Append(id)
         // remove unbonding operation
         unbondingOps.Remove(id)
       }
@@ -966,8 +966,8 @@ function StopConsumerChain(chainId: string, lockUnbonding: Bool) {
     - if `lockUnbonding == false`, then 
       - `chainId` is removed from all outstanding unbonding operations;
       -  if an outstanding unbonding operation has matured on all consumer chains, 
-        - the `UnbondingCanComplete()` method of the Staking module is invoked;
-        - the unbonding operation is removed from `unbondingOps`;
+        - the matured unbonding operation is added to `maturedUnbondingOps`;
+        - the matured unbonding operation is removed from `unbondingOps`;
       - all the entries with `chainId` are removed from the `vscToUnbondingOps` mapping.
 - **Error Condition**
   - None
@@ -1154,11 +1154,17 @@ The *validator set update* sub-protocol enables the provider chain
 ```typescript
 // PCF: Provider Chain Function
 function EndBlockVSU() {
+  // notify the Staking module to complete all matured unbondings
+  for id IN maturedUnbondingOps {
+    stakingKeeper.UnbondingCanComplete(id)
+  }
+  maturedUnbondingOps.RemoveAll()
+
   // get list of validator updates from the provider Staking module
   valUpdates = stakingKeeper.GetValidatorUpdates()
 
   // iterate over all consumer chains registered with this provider chain
-  foreach chainId in chainToClient.Keys() {
+  foreach chainId IN chainToClient.Keys() {
     // check whether there are changes in the validator set;
     // note that this also entails unbonding operations 
     // w/o changes in the voting power of the validators in the validator set
@@ -1207,6 +1213,8 @@ function EndBlockVSU() {
 - **Precondition**
   - True. 
 - **Postcondition**
+  - For every matured unbonding operation in `maturedUnbondingOps`, the Staking module is notified that the unbonding can complete.
+  - All unbonding operation in `maturedUnbondingOps` are removed.
   - A list of validator updates `valUpdates` is obtained from the provider Staking module.
   - For every consumer chain with `chainId`
     - If either `valUpdates` is not empty or there were unbonding operations initiated during this block, then 
@@ -1289,8 +1297,8 @@ function onRecvVSCMaturedPacket(packet: Packet): bytes {
     op.unbondingChainIds.Remove(chainId)
     // if the unbonding operation has unbonded on all consumer chains
     if op.unbondingChainIds.IsEmpty() {
-      // notify the Staking module that the unbonding can complete
-      stakingKeeper.UnbondingCanComplete(op.id)
+      // append the id of the unbonding to maturedUnbondingOps
+      maturedUnbondingOps.Append(op.id)
       // remove unbonding operation
       unbondingOps.Remove(op.id)
     }
@@ -1313,8 +1321,8 @@ function onRecvVSCMaturedPacket(packet: Packet): bytes {
   - For each unbonding operation `op` returned by `GetUnbondingsFromVSC(chainId, packet.data.id)`
     - `chainId` is removed from `op.unbondingChainIds`;
     - if `op.unbondingChainIds` is empty,
-      - the `UnbondingCanComplete()` method of the Staking module is invoked;
-      - the entry `op` is removed from `unbondingOps`.
+      - `op.id` is added to `maturedUnbondingOps`;
+      - `op.id` is removed from `unbondingOps`.
   - `(chainId, vscId)` is removed from `vscToUnbondingOps`.
   - A successful acknowledgment is returned.
 - **Error Condition**
