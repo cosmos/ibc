@@ -57,6 +57,8 @@ Aug 3, 2022 - Revision of *Bond-Based Consumer Voting Power* property
 
 Aug 29, 2022 - Notify Staking module of matured unbondings in `EndBlock()`
 
+Dec 1, 2022 - Enable existing chains to become consumer chains
+
 ## Copyright
 
 All content herein is licensed under [Apache 2.0](https://www.apache.org/licenses/LICENSE-2.0).

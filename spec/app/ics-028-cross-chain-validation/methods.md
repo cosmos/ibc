@@ -1010,9 +1010,13 @@ function BeginBlockInit() {
     ownConsensusState = getConsensusState(getCurrentHeight())
     if ownConsensusState.validatorSet == ccvValidatorSet.Values() {
       // pre-CCV state is over; upgrade chain to consumer chain
-      // - remove staking module and replace with CCV module
-      // - set preCCV to false
-      preCCV = false
+      //  - set preCCV to false
+      //  - the existing staking module no longer provides 
+      //    validator updates to the underlying consensus engine
+      //  - the CCV module starts providing validator updates 
+      //    to the underlying consensus engine
+      //  - for safety, the existing staking module must be kept 
+      //    for at least the unbonding period
     }
   }
 }
