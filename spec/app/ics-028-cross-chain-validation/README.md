@@ -6,7 +6,7 @@ category: IBC/APP
 requires: 25, 26, 20
 author: Marius Poke <marius@informal.systems>, Aditya Sripal <aditya@interchain.io>, Jovan Komatovic <jovan.komatovic@epfl.ch>, Cezara Dragoi <cezara.dragoi@inria.fr>, Josef Widder <josef@informal.systems>
 created: 2022-06-27
-modified: 2022-08-29
+modified: 2022-12-02
 ---
 
 <!-- omit in toc -->
@@ -57,7 +57,7 @@ Aug 3, 2022 - Revision of *Bond-Based Consumer Voting Power* property
 
 Aug 29, 2022 - Notify Staking module of matured unbondings in `EndBlock()`
 
-Dec 1, 2022 - Enable existing chains to become consumer chains
+Dec 2, 2022 - Enable existing chains to become consumer chains
 
 ## Copyright
 
