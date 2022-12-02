@@ -267,24 +267,40 @@ If not provided, the default `validateConnectionIdentifier` function will always
 
 #### Versioning
 
-During the handshake process, two ends of a connection come to agreement on a version bytestring associated
-with that connection. At the moment, the contents of this version bytestring are opaque to the IBC core protocol.
-In the future, it might be used to indicate what kinds of channels can utilise the connection in question, or
-what encoding formats channel-related datagrams will use. At present, host state machine MAY utilise the version data
-to negotiate encodings, priorities, or connection-specific metadata related to custom logic on top of IBC.
+During the handshake process, two ends of a connection come to agreement on a
+version associated with that connection. This `Version` datatype is defined as:
 
-Host state machines MAY also safely ignore the version data or specify an empty string. It is assumed that the two chains running the opening handshake have at least one compatible version in common (i.e., the compatible versions of the two chains must have a non-empty intersection). If the two chains do not have any mutually acceptable versions, the handshake will fail.
+```typescript
+interface Version {
+  identifier: string
+  features: [string]
+}
+```
+
+The `identifier` field specifies a unique version identifier. A value of `"1"`
+specifies IBC 1.0.0.
+
+The `features` field specifies a list of features compatible with the specified
+identifier. The values `"ORDER_UNORDERED"` and `"ORDER_ORDERED"` specify
+unordered and ordered channels, respectively. 
+
+Host state machine MUST utilise the version data to negotiate encodings,
+priorities, or connection-specific metadata related to custom logic on top of
+IBC. It is assumed that the two chains running the opening handshake have at
+least one compatible version in common (i.e., the compatible versions of the two
+chains must have a non-empty intersection). If the two chains do not have any
+mutually acceptable versions, the handshake will fail.
 
 An implementation MUST define a function `getCompatibleVersions` which returns the list of versions it supports, ranked by descending preference order.
 
 ```typescript
-type getCompatibleVersions = () => []string
+type getCompatibleVersions = () => [Version]
 ```
 
-An implementation MUST define a function `pickVersion` to choose a version from a list of versions. Note that if the two chains performing the handshake implement different `pickVersion` functions, a (possibly misbehaving) relayer may be able to stall the handshake by executing `INIT` and `OPENTRY` on both chains, at which point they will pick different versions and be unable to continue.
+An implementation MUST define a function `pickVersion` to choose a version from a list of versions.
 
 ```typescript
-type pickVersion = ([]string) => string
+type pickVersion = ([Version]) => Version
 ```
 
 #### Opening Handshake
@@ -360,13 +376,15 @@ function connOpenTry(
   proofClient: CommitmentProof,
   proofConsensus: CommitmentProof,
   proofHeight: Height,
-  consensusHeight: Height) {
+  consensusHeight: Height,
+  hostConsensusStateProof?: bytes,
+) {
     // generate a new identifier
     identifier = generateIdentifier()
     
     abortTransactionUnless(validateSelfClient(clientState))
     abortTransactionUnless(consensusHeight < getCurrentHeight())
-    expectedConsensusState = getConsensusState(consensusHeight)
+    expectedConsensusState = getConsensusState(consensusHeight, hostConsensusStateProof)
     expectedConnectionEnd = ConnectionEnd{INIT, "", getCommitmentPrefix(), counterpartyClientIdentifier,
                              clientIdentifier, counterpartyVersions, delayPeriodTime, delayPeriodBlocks}
 
@@ -397,12 +415,14 @@ function connOpenAck(
   proofClient: CommitmentProof,
   proofConsensus: CommitmentProof,
   proofHeight: Height,
-  consensusHeight: Height) {
+  consensusHeight: Height,
+  hostConsensusStateProof?: bytes,
+) {
     abortTransactionUnless(consensusHeight < getCurrentHeight())
     abortTransactionUnless(validateSelfClient(clientState))
     connection = provableStore.get(connectionPath(identifier))
     abortTransactionUnless((connection.state === INIT && connection.version.indexOf(version) !== -1)
-    expectedConsensusState = getConsensusState(consensusHeight)
+    expectedConsensusState = getConsensusState(consensusHeight, hostConsensusStateProof)
     expectedConnectionEnd = ConnectionEnd{TRYOPEN, identifier, getCommitmentPrefix(),
                              connection.counterpartyClientIdentifier, connection.clientIdentifier,
                              version, connection.delayPeriodTime, connection.delayPeriodBlocks}

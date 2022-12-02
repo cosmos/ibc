@@ -38,7 +38,7 @@ This document only defines desired properties, not a concrete implementation —
 
 ## Technical Specification
 
-Below we define a behaviour and an overview of datatypes. For data type definition look at [confio/ics23](https://github.com/confio/ics23/blob/master/proofs.proto) repository.
+Below we define a behaviour and an overview of datatypes. For data type definition look at [cosmos/ics23](https://github.com/cosmos/ics23/blob/master/proto/cosmos/ics23/v1/proofs.proto) repository.
 
 
 ### Datatypes

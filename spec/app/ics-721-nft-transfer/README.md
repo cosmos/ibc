@@ -7,7 +7,7 @@ requires: 25, 26
 kind: instantiation
 author: Haifeng Xi <haifeng@bianjie.ai>
 created: 2021-11-10
-modified: 2022-05-18
+modified: 2022-11-08
 ---
 
 > This standard document follows the same design principles of [ICS 20](../ics-020-fungible-token-transfer) and inherits most of its content therefrom, while replacing `bank` module based asset tracking logic with that of the `nft` module.
@@ -41,8 +41,9 @@ Only one packet data type is required: `NonFungibleTokenPacketData`, which speci
 interface NonFungibleTokenPacketData {
   classId: string
   classUri: string
-  tokenIds: []string
-  tokenUris: []string
+  tokenIds: string[]
+  tokenUris: string[]
+  tokenData: byte[][]
   sender: string
   receiver: string
 }
@@ -54,7 +55,9 @@ interface NonFungibleTokenPacketData {
 
 `tokenIds` uniquely identifies some tokens of the given class that are being transferred. In the case of an ERC-1155 compliant smart contract, for example, a `tokenId` could be a string representation of the bottom 128 bits of the token ID.
 
-Each `tokenId` has a corresponding entry in `tokenUris`, which refers to an off-chain resource that is typically an immutable JSON file containing the token's metadata.
+Each `tokenId` has a corresponding entry in `tokenUris` which, if present, refers to an off-chain resource that is typically an immutable JSON file containing the token's metadata.
+
+Each `tokenId` has another corresponding entry in `tokenData` which, if present, contains some opaque application data associated with the token (e.g., royalty parameters).
 
 As tokens are sent across chains using the ICS-721 protocol, they begin to accrue a record of channels across which they have been transferred. This record information is encoded into the `classId` field.
 
@@ -78,15 +81,15 @@ The acknowledgement data type describes whether the transfer succeeded or failed
 ```typescript
 type NonFungibleTokenPacketAcknowledgement =
   | NonFungibleTokenPacketSuccess
-  | NonFungibleTokenPacketError;
+  | NonFungibleTokenPacketError
 
 interface NonFungibleTokenPacketSuccess {
   // This is binary 0x01 base64 encoded
-  success: "AQ==";
+  success: "AQ=="
 }
 
 interface NonFungibleTokenPacketError {
-  error: string;
+  error: string
 }
 ```
 
@@ -96,7 +99,7 @@ The non-fungible token transfer bridge module maintains a separate escrow addres
 
 ```typescript
 interface ModuleState {
-  channelEscrowAddresses: Map<Identifier, string>;
+  channelEscrowAddresses: Map<Identifier, string>
 }
 ```
 
@@ -117,6 +120,7 @@ function Mint(
   classId: string,
   tokenId: string,
   tokenUri: string,
+  tokenData: byte[],
   receiver: string
 ) {
   // creates a new NFT identified by <classId,tokenId>
@@ -134,6 +138,12 @@ function Transfer(classId: string, tokenId: string, receiver: string) {
 ```typescript
 function Burn(classId: string, tokenId: string) {
   // destroys the NFT identified by <classId,tokenId>
+}
+```
+
+```typescript
+function Update(token: nft.NFT) {
+  // updates the NFT identified by <token.classId,token.tokenId>
 }
 ```
 
@@ -200,7 +210,7 @@ Both machines `A` and `B` accept new channels from any module on another machine
 ```typescript
 function onChanOpenInit(
   order: ChannelOrder,
-  connectionHops: [Identifier],
+  connectionHops: Identifier[],
   portIdentifier: Identifier,
   channelIdentifier: Identifier,
   counterpartyPortIdentifier: Identifier,
@@ -218,7 +228,7 @@ function onChanOpenInit(
 ```typescript
 function onChanOpenTry(
   order: ChannelOrder,
-  connectionHops: [Identifier],
+  connectionHops: Identifier[],
   portIdentifier: Identifier,
   channelIdentifier: Identifier,
   counterpartyPortIdentifier: Identifier,
@@ -241,9 +251,9 @@ function onChanOpenAck(
 ) {
   // port has already been validated
   // assert that version is "ics721-1"
-  abortTransactionUnless(counterpartyVersion === "ics721-1");
+  abortTransactionUnless(counterpartyVersion === "ics721-1")
   // allocate an escrow address
-  channelEscrowAddresses[channelIdentifier] = newAddress();
+  channelEscrowAddresses[channelIdentifier] = newAddress()
 }
 ```
 
@@ -254,7 +264,7 @@ function onChanOpenConfirm(
 ) {
   // accept channel confirmations, port has already been validated, version has already been validated
   // allocate an escrow address
-  channelEscrowAddresses[channelIdentifier] = newAddress();
+  channelEscrowAddresses[channelIdentifier] = newAddress()
 }
 ```
 
@@ -264,7 +274,7 @@ function onChanCloseInit(
   channelIdentifier: Identifier
 ) {
   // abort and return error to prevent channel closing by user
-  abortTransactionUnless(FALSE);
+  abortTransactionUnless(FALSE)
 }
 ```
 
@@ -289,7 +299,7 @@ function onChanCloseConfirm(
 ```typescript
 function createOutgoingPacket(
   classId: string,
-  tokenIds: []string,
+  tokenIds: string[],
   sender: string,
   receiver: string,
   source: boolean,
@@ -299,23 +309,24 @@ function createOutgoingPacket(
   sourceChannel: string,
   timeoutHeight: Height,
   timeoutTimestamp: uint64) {
-  prefix = "{sourcePort}/{sourceChannel}/"
+  prefix = sourcePort + '/' + sourceChannel
   // we are source chain if classId is not prefixed with sourcePort and sourceChannel
   source = classId.slice(0, len(prefix)) !== prefix
   tokenUris = []
+  tokenData = []
   for (let tokenId in tokenIds) {
     // ensure that sender is token owner
     abortTransactionUnless(sender === nft.GetOwner(classId, tokenId))
-    if source {
-      // escrow token
+    if source { // we are source chain, escrow token
       nft.Transfer(classId, tokenId, channelEscrowAddresses[sourceChannel])
-    } else {
-      // we are sink chain, burn voucher
+    } else { // we are sink chain, burn voucher
       nft.Burn(classId, tokenId)
     }
-    tokenUris.push(nft.GetNFT(classId, tokenId).GetUri())
+    token = nft.GetNFT(classId, tokenId)
+    tokenUris.push(token.GetUri())
+    tokenData.push(token.GetData())
   }
-  NonFungibleTokenPacketData data = NonFungibleTokenPacketData{classId, nft.GetClass(classId).GetUri(), tokenIds, tokenUris, sender, receiver}
+  NonFungibleTokenPacketData data = NonFungibleTokenPacketData{classId, nft.GetClass(classId).GetUri(), tokenIds, tokenUris, tokenData, sender, receiver}
   ics4Handler.sendPacket(Packet{timeoutHeight, timeoutTimestamp, destPort, destChannel, sourcePort, sourceChannel, data}, getCapability("port"))
 }
 ```
@@ -335,21 +346,24 @@ function onRecvPacket(packet: Packet) {
 }
 
 function ProcessReceivedPacketData(data: NonFungibleTokenPacketData) {
-  prefix = "{packet.sourcePort}/{packet.sourceChannel}/"
+  prefix = data.sourcePort + '/' + data.sourceChannel
   // we are source chain if classId is prefixed with packet's sourcePort and sourceChannel
   source = data.classId.slice(0, len(prefix)) === prefix
   for (var i in data.tokenIds) {
-    if source {
-      // unescrow token to receiver
+    if source { // we are source chain, un-escrow token to receiver
+      if (data.tokenData[i] !== nil) { // update token data
+        token = nft.GetNFT(data.classId.slice(len(prefix)), data.tokenIds[i])
+        token.SetData(data.tokenData[i])
+        nft.Update(token)
+      }
       nft.Transfer(data.classId.slice(len(prefix)), data.tokenIds[i], data.receiver)
-    } else { // we are sink chain
-      prefixedClassId = "{packet.destPort}/{packet.destChannel}/" + data.classId
+    } else { // we are sink chain, mint voucher to receiver
+      prefixedClassId = data.destPort + '/' + data.destChannel + '/' + data.classId
       // create NFT class if it doesn't exist already
       if (nft.HasClass(prefixedClassId) === false) {
         nft.SaveClass(data.classId, data.classUri)
       }
-      // mint voucher to receiver
-      nft.Mint(prefixedClassId, data.tokenIds[i], data.tokenUris[i], data.receiver)
+      nft.Mint(prefixedClassId, data.tokenIds[i], data.tokenUris[i], data.tokenData[i], data.receiver)
     }
   }
 }
@@ -360,7 +374,7 @@ function ProcessReceivedPacketData(data: NonFungibleTokenPacketData) {
 ```typescript
 function onAcknowledgePacket(packet: Packet, acknowledgement: bytes) {
   // if the transfer failed, refund the tokens
-  if (!ack.success) refundToken(packet);
+  if (!ack.success) refundToken(packet)
 }
 ```
 
@@ -369,7 +383,7 @@ function onAcknowledgePacket(packet: Packet, acknowledgement: bytes) {
 ```typescript
 function onTimeoutPacket(packet: Packet) {
   // the packet timed-out, so refund the tokens
-  refundToken(packet);
+  refundToken(packet)
 }
 ```
 
@@ -378,16 +392,14 @@ function onTimeoutPacket(packet: Packet) {
 ```typescript
 function refundToken(packet: Packet) {
   NonFungibleTokenPacketData data = packet.data
-  prefix = "{packet.sourcePort}/{packet.sourceChannel}/"
+  prefix = data.sourcePort + '/' + data.sourceChannel
   // we are the source if the classId is not prefixed with the packet's sourcePort and sourceChannel
   source = data.classId.slice(0, len(prefix)) !== prefix
-  for (var i in data.tokenIds) { {
-    if source {
-      // unescrow token back to sender
+  for (var i in data.tokenIds) {
+    if source { // we are source chain, un-escrow token back to sender
       nft.Transfer(data.classId, data.tokenIds[i], data.sender)
-    } else {
-      // we are sink chain, mint voucher back to sender
-      nft.Mint(data.classId, data.tokenIds[i], data.tokenUris[i], data.sender)
+    } else { // we are sink chain, mint voucher back to sender
+      nft.Mint(data.classId, data.tokenIds[i], data.tokenUris[i], data.tokenData[i], data.sender)
     }
   }
 }
@@ -450,6 +462,7 @@ Coming soon.
 | Mar 11, 2022 | Added example to illustrate the prefix concept           |
 | Mar 30, 2022 | Added NFT module definition and fixed pseudo-code errors |
 | May 18, 2022 | Added paragraph about NFT metadata mutability            |
+| Nov 08, 2022 | Added `tokenData` to PacketData                          |
 
 ## Copyright
 
