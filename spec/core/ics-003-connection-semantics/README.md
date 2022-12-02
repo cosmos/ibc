@@ -125,6 +125,7 @@ function clientConnectionsPath(clientIdentifier: Identifier): Path {
 function addConnectionToClient(
   clientIdentifier: Identifier,
   connectionIdentifier: Identifier) {
+    abortTransactionUnless(queryClientState(clientIdentifier) !== null)
     conns = privateStore.get(clientConnectionsPath(clientIdentifier))
     conns.add(connectionIdentifier)
     privateStore.set(clientConnectionsPath(clientIdentifier), conns)
@@ -356,7 +357,7 @@ function connOpenInit(
     connection = ConnectionEnd{state, "", counterpartyPrefix,
       clientIdentifier, counterpartyClientIdentifier, versions, delayPeriodTime, delayPeriodBlocks}
     provableStore.set(connectionPath(identifier), connection)
-    addConnectionToClient(clientIdentifier, identifier)
+    addConnectionToClient(clientIdentifier, identifier) // aborts transaction if no client state is found
 }
 ```
 
@@ -385,21 +386,22 @@ function connOpenTry(
     abortTransactionUnless(validateSelfClient(clientState))
     abortTransactionUnless(consensusHeight < getCurrentHeight())
     expectedConsensusState = getConsensusState(consensusHeight, hostConsensusStateProof)
+    abortTransactionUnless(expectedConsensusState !== null)
     expectedConnectionEnd = ConnectionEnd{INIT, "", getCommitmentPrefix(), counterpartyClientIdentifier,
                              clientIdentifier, counterpartyVersions, delayPeriodTime, delayPeriodBlocks}
 
     versionsIntersection = intersection(counterpartyVersions, getCompatibleVersions())
-    version = pickVersion(versionsIntersection) // throws if there is no intersection
+    version = pickVersion(versionsIntersection) // aborts transaction if there is no intersection
 
     connection = ConnectionEnd{TRYOPEN, counterpartyConnectionIdentifier, counterpartyPrefix,
-                               clientIdentifier, counterpartyClientIdentifier, version, delayPeriodTime, delayPeriodBlocks}
+                               clientIdentifier, counterpartyClientIdentifier, [version], delayPeriodTime, delayPeriodBlocks}
     abortTransactionUnless(connection.verifyConnectionState(proofHeight, proofInit, counterpartyConnectionIdentifier, expectedConnectionEnd))
     abortTransactionUnless(connection.verifyClientState(proofHeight, proofClient, clientState))
     abortTransactionUnless(connection.verifyClientConsensusState(
       proofHeight, proofConsensus, counterpartyClientIdentifier, consensusHeight, expectedConsensusState))
 
     provableStore.set(connectionPath(identifier), connection)
-    addConnectionToClient(clientIdentifier, identifier)
+    addConnectionToClient(clientIdentifier, identifier) // aborts transaction if no client state is found
 }
 ```
 
@@ -421,17 +423,19 @@ function connOpenAck(
     abortTransactionUnless(consensusHeight < getCurrentHeight())
     abortTransactionUnless(validateSelfClient(clientState))
     connection = provableStore.get(connectionPath(identifier))
-    abortTransactionUnless((connection.state === INIT && connection.version.indexOf(version) !== -1)
+    abortTransactionUnless(connection !== null)
+    abortTransactionUnless((connection.state === INIT && connection.versions.indexOf(version) !== -1)
     expectedConsensusState = getConsensusState(consensusHeight, hostConsensusStateProof)
+    abortTransactionUnless(expectedConsensusState !== null)
     expectedConnectionEnd = ConnectionEnd{TRYOPEN, identifier, getCommitmentPrefix(),
                              connection.counterpartyClientIdentifier, connection.clientIdentifier,
-                             version, connection.delayPeriodTime, connection.delayPeriodBlocks}
+                             [version], connection.delayPeriodTime, connection.delayPeriodBlocks}
     abortTransactionUnless(connection.verifyConnectionState(proofHeight, proofTry, counterpartyIdentifier, expectedConnectionEnd))
     abortTransactionUnless(connection.verifyClientState(proofHeight, proofClient, clientState))
     abortTransactionUnless(connection.verifyClientConsensusState(
       proofHeight, proofConsensus, connection.counterpartyClientIdentifier, consensusHeight, expectedConsensusState))
     connection.state = OPEN
-    connection.version = version
+    connection.versions = [version]
     connection.counterpartyConnectionIdentifier = counterpartyIdentifier
     provableStore.set(connectionPath(identifier), connection)
 }
@@ -445,9 +449,10 @@ function connOpenConfirm(
   proofAck: CommitmentProof,
   proofHeight: Height) {
     connection = provableStore.get(connectionPath(identifier))
+    abortTransactionUnless(connection !== null)
     abortTransactionUnless(connection.state === TRYOPEN)
     expected = ConnectionEnd{OPEN, identifier, getCommitmentPrefix(), connection.counterpartyClientIdentifier,
-                             connection.clientIdentifier, connection.version, connection.delayPeriodTime, connection.delayPeriodBlocks}
+                             connection.clientIdentifier, connection.versions, connection.delayPeriodTime, connection.delayPeriodBlocks}
     abortTransactionUnless(connection.verifyConnectionState(proofHeight, proofAck, connection.counterpartyConnectionIdentifier, expected))
     connection.state = OPEN
     provableStore.set(connectionPath(identifier), connection)
