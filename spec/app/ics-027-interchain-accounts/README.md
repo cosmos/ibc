@@ -431,9 +431,6 @@ function onChanOpenTry(
   abortTransactionUnless(order === ORDERED)
   // validate port ID
   abortTransactionUnless(portIdentifier === "icahost")
-  // only allow channels to be created on host chain if the counteparty port ID
-  // is in the expected controller portID format.
-  abortTransactionUnless(validateControllerPortParams(counterpartyPortIdentifier))
   // create the interchain account with the counterpartyPortIdentifier
   // and the underlying connectionID on the host chain.
   address = RegisterInterchainAccount(counterpartyPortIdentifier, connectionID)
@@ -588,7 +585,7 @@ function onRecvPacket(packet Packet) {
 
 ### Identifier formats
 
-These are the formats that the port identifiers on each side of an interchain accounts channel must follow to be accepted by a correct interchain accounts module.
+These are the default formats that the port identifiers on each side of an interchain accounts channel. THe controller portID **must** include the owner address so that when a message is sent to the controller module, the sender of the message can be verified against the portID before sending the ICA packet. The controller chain is responsible for proper access control to ensure that the sender of the ICA message has successfully authenticated before the message reaches the controller module.
 
 Controller Port Identifier: `icacontroller-{owner-account-address}`
 
