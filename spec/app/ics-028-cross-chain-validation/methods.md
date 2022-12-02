@@ -1122,6 +1122,8 @@ function StopConsumerChain(chainId: string, lockUnbonding: Bool) {
   pendingVSCPackets.Remove(chainId)
   initialHeights.Remove(chainId)
   downtimeSlashRequests.Remove(chainId)
+  initTimeoutTimestamps.Remove(chainId)
+  vscSendTimestamps.Remove((chainId, *))
 
   if !lockUnbonding {
     // remove chainId form all outstanding unbonding operations
@@ -1189,10 +1191,10 @@ function StopConsumerChain(chainId: string, lockUnbonding: Bool) {
 ```typescript
 // PCF: Provider Chain Function
 function EndBlockCCR() {
-  // iterate over vscTimeoutTimestamps
-  for chainId IN vscTimeoutTimestamps.Keys() {
+  // iterate over vscSendTimestamps
+  for (chainId, vscId) IN vscSendTimestamps.Keys() {
     // check get first timestamp, i.e., the smallest
-    if currentTimestamp() > vscTimeoutTimestamps[chainId][0] {
+    if currentTimestamp() > vscSendTimestamps[(chainId, vscId)] + vscTimeout {
       // vscTimeout expired: 
       // stop the consumer chain and use lockUnbondingOnTimeout 
       // to decide whether to lock the unbonding
@@ -1217,8 +1219,8 @@ function EndBlockCCR() {
 - **Precondition**
   - True. 
 - **Postcondition**
-  - For each consumer chain ID `chainId` in `vscTimeoutTimestamps.Keys()`,
-    - if the oldest timestamp in `vscTimeoutTimestamps[chainId]` (i.e., `vscTimeoutTimestamps[chainId][0]`) is smaller than the current timestamp, then the consumer chain with ID `chainId` is stopped.
+  - For each consumer chain ID `chainId` in `vscSendTimestamps.Keys()`,
+    - if `vscSendTimestamps[(chainId, vscId)] + vscTimeout` is smaller than the current timestamp, then the consumer chain with ID `chainId` is stopped.
   - For each consumer chain ID `chainId` in `initTimeoutTimestamps.Keys()`,
     - if the timestamp in `initTimeoutTimestamps[chainId]` is smaller than the current timestamp, then the consumer chain with ID `chainId` is stopped.
 - **Error Condition**
@@ -1412,8 +1414,8 @@ function EndBlockVSU() {
           ccvTimeoutTimestamp,
           data
         )
-        // add VSC timeout timestamp to vscTimeoutTimestamps[chainId]
-        vscTimeoutTimestamps[chainId].Append(currentTimestamp().Add(vscTimeout))
+        // add VSC send timestamp to vscSendTimestamps
+        vscSendTimestamps[(vscId, chainId)] = currentTimestamp()
       }
 
       // remove pending VSCPackets
@@ -1442,7 +1444,7 @@ function EndBlockVSU() {
     - If there is an established CCV channel for the the consumer chain with `chainId`, then
       - for each `VSCPacketData` in the list of pending VSCPackets associated to `chainId`
         - a packet with the `VSCPacketData` is sent on the channel associated with the consumer chain with `chainId`;
-        - the VSC timeout timestamp is appended to the `vscTimeoutTimestamps[chainId]` list;
+        - `vscSendTimestamps[(vscId, chainId)]` is set to the current timestamp;
       - all the pending VSCPackets associated to `chainId` are removed.
   - `vscId` is incremented.
 - **Error Condition**
@@ -1525,8 +1527,8 @@ function onRecvVSCMaturedPacket(packet: Packet): bytes {
   // clean up vscToUnbondingOps mapping
   vscToUnbondingOps.Remove((chainId, vscId))
 
-  // remove first VSC timeout timestamp from vscTimeoutTimestamps[chainId]
-  vscTimeoutTimestamps[chainId] = vscTimeoutTimestamps[chainId][1:]
+  // clean up vscSendTimestamps mapping
+  vscSendTimestamps.Remove((chainId, vscId))
 
   return VSCMaturedPacketSuccess
 }
@@ -1546,7 +1548,7 @@ function onRecvVSCMaturedPacket(packet: Packet): bytes {
       - `op.id` is added to `maturedUnbondingOps`;
       - `op.id` is removed from `unbondingOps`.
   - `(chainId, vscId)` is removed from `vscToUnbondingOps`.
-  - The first timeout timestamp in `vscTimeoutTimestamps[chainId]` is removed.
+  - `(chainId, vscId)` is removed from `vscSendTimestamps`.
   - A successful acknowledgment is returned.
 - **Error Condition**
   - None.
