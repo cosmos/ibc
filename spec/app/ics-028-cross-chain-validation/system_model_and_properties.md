@@ -140,6 +140,10 @@ CCV provides the following system properties.
   > For example, if one unit of voting power requires `1.000.000` bonded tokens (i.e., `VP(1.000.000)=1`), 
   > then a validator that gets one unit of voting power on a consumer chain must have at least `1.000.000` tokens bonded on the provider chain until the unbonding period elapses on the consumer chain.
 
+  > **Note**: When an existing chain becomes a consumer chain (see [Channel Initialization: Existing Chains](overview_and_basic_concepts.md#channel-initialization-existing-chains)), the existing validator set is replaced by the provider validator set. 
+  > For safety, the stake bonded by the existing validator set must remain bonded until the unbonding period elapses. 
+  > Thus, the existing Staking module must be kept for at least the unbonding period. 
+
 - ***Slashable Consumer Misbehavior***: If a validator `val` commits an infraction, with a slashing fraction of `sf`, on a consumer chain `cc` at a block height `hi`, 
   then any evidence of misbehavior that is received by `cc` at height `he`, such that `ts(he) < ts(hi) + UnbondingPeriod`, 
   MUST results in *exactly* the amount of tokens `sf*Token(Power(cc,hi,val))` to be slashed on the provider chain. 
