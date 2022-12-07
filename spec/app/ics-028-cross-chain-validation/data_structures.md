@@ -191,6 +191,9 @@ This section describes the internal state of the CCV module. For simplicity, the
 [&uparrow; Back to Outline](#outline)
 
 - `ProviderPortId = "provider"` is the port ID the provider CCV module is expected to bind to.
+- `initTimeout: uint64` is the maximum time duration the Channel Initialization subprotocol may execute, 
+  i.e., for any consumer chain, if the CCV channel is not established within `initTimeout` since the consumer chain was registered, then the consumer chain is removed. 
+- `vscTimeout: uint64` is the maximum time duration between sending any `VSCPacket` to any consumer chain and receiving the corresponding `VSCMaturedPacket`, without timing out the consumer chain and consequently removing it.
 - `pendingConsumerAdditionProposals: [ConsumerAdditionProposal]` is a list of pending governance proposals to add new consumer chains. 
 - `pendingConsumerRemovalProposals: [ConsumerRemovalProposal]` is a list of pending governance proposals to remove existing consumer chains. 
   Both lists of pending governance proposals expose the following interface: 
@@ -208,6 +211,7 @@ This section describes the internal state of the CCV module. For simplicity, the
 - `chainToConnection: Map<string, Identifier>` is a mapping from consumer chain IDs to the associated connection IDs.
 - `chainToChannel: Map<string, Identifier>` is a mapping from consumer chain IDs to the CCV channel IDs.
 - `channelToChain: Map<Identifier, string>` is a mapping from CCV channel IDs to consumer chain IDs.
+- `initTimeoutTimestamps: Map<string, uint64>` is a mapping from consumer chain IDs to init timeout timestamps, see `initTimeout`.
 - `pendingVSCPackets: Map<string, [VSCPacketData]>` is a mapping from consumer chain IDs to a list of pending `VSCPacketData`s that must be sent to the consumer chain once the CCV channel is established. The map exposes the following interface: 
   ```typescript
   interface Map<string, [VSCPacketData]> {
@@ -221,6 +225,7 @@ This section describes the internal state of the CCV module. For simplicity, the
   }
 - `vscId: uint64` is a monotonic strictly increasing and positive ID that is used to uniquely identify the VSCs sent to the consumer chains. 
   Note that `0` is used as a special ID for the mapping from consumer heights to provider heights.
+- `vscSendTimestamps: Map<(string, uint64), uint64>` is a mapping from `(chainId, vscId)` tuples to the timestamps of sending `VSCPacket`s.
 - `initialHeights: Map<string, Height>` is a mapping from consumer chain IDs to the heights on the provider chain. 
   For every consumer chain, the mapping stores the height when the CCV channel to that consumer chain is established. 
   Note that the provider validator set at this height matches the validator set at the height when the first VSC is provided to that consumer chain.
