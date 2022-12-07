@@ -54,30 +54,59 @@ The CCV module is initialized through the `InitGenesis` method when the chain is
 - On the consumer chain, the genesis state is described by the following interface:
   ```typescript
   interface ConsumerGenesisState {
+    preCCV: Bool
+    unbondingPeriod: Duration
+    connId: Identifier
     providerClientState: ClientState
     providerConsensusState: ConsensusState
+    counterpartyClientId: Identifier
     initialValSet: [ValidatorUpdate]
+    transferChannelId: Identifier
   }
   ```
+  - `preCCV` is a flag indicating whether the consumer CCV module starts in pre-CCV state. 
+    In pre-CCV state the consumer CCV module MUST NOT pass validator updates to the underlying consensus engine.
+    If `preCCV == true`, then `connId` must be set.
+  - `unbondingPeriod` is the unbonding period on the consumer chain.
+  - `connId` is the ID of the connection end on the consumer chain on top of which the CCV channel will be established.
+    If `connId == ""`, a new client of the provider chain and a new connection on top of this client are created.
+  - `providerClientState` is the client state used to create a new client of the provider chain (as defined in [ICS 2](../../core/ics-002-client-semantics)).
+    If `connId != ""`, then `providerClientState` is ignored.
+  - `providerConsensusState` is the consensus state used to create a new client of the provider chain (as defined in [ICS 2](../../core/ics-002-client-semantics)).
+    If `connId != ""`, then `providerConsensusState` is ignored.
+  - `counterpartyClientId` is the ID of the client of the consumer chain on the provider chain. 
+    Note that `counterpartyClientId` is only needed to allow the consumer CCV module to initiate the connection opening handshake.
+    If `connId != ""`, then `counterpartyClientId` is ignored.
+  - `initialValSet` is the first validator set that will start validating on this consumer chain.
+  - `transferChannelId` is the ID of a token transfer channel (as defined in [ICS 20](../../app/ics-020-fungible-token-transfer)) used for the Reward Distribution sub-protocol. 
+    If `transferChannelId == ""`, a new token transfer channel is created on top of the same connection as the CCV channel.
 
-The provider CCV module handles governance proposals to spawn new consumer chains and to stop existing consumer chains. 
+The provider CCV module handles governance proposals to add new consumer chains and to remove existing consumer chains. 
 While the structure of governance proposals is specific to every ABCI application (for an example, see the `Proposal` interface in the [Governance module documentation](https://docs.cosmos.network/v0.45/modules/gov/) of Cosmos SDK),
-this specification expects the following fields to be part of the proposals to spawn new consumer chains (i.e., `SpawnConsumerChainProposal`) and to stop existing ones (i.e., `StopConsumerChainProposal`):
+this specification expects the following fields to be part of the proposals to add new consumer chains (i.e., `ConsumerAdditionProposal`) and to remove existing ones (i.e., `ConsumerRemovalProposal`):
   ```typescript
-  interface SpawnConsumerChainProposal {
+  interface ConsumerAdditionProposal {
     chainId: string
-    initialHeight: Height
     spawnTime: Timestamp
+    connId: Identifier
+    unbondingPeriod: Duration
+    transferChannelId: Identifier
     lockUnbondingOnTimeout: Bool
   }
   ```
   - `chainId` is the proposed chain ID of the new consumer chain. It must be different from all other consumer chain IDs of the executing provider chain.
-  - `initialHeight` is the proposed initial height of new consumer chain. 
-    For an example, take a look at the `Height` defined in [ICS 7](../../client/ics-007-tendermint-client).
   - `spawnTime` is the time on the provider chain at which the consumer chain genesis is finalized and all validators are responsible to start their consumer chain validator node.
-  - `lockUnbondingOnTimeout` is a boolean value that indicates whether the funds corresponding to the outstanding unbonding operations are to be released in case of a timeout. In case `lockUnbondingOnTimeout == true`, a governance proposal to stop the timed out consumer chain would be necessary to release the locked funds. 
+  - `connId` is the ID of the connection end on the provider chain on top of which the CCV channel will be established.
+    If `connId == ""`, a new client of the consumer chain and a new connection on top of this client are created.
+    Note that a sovereign chain can transition to a consumer chain while maintaining existing IBC channels to other chains by providing a valid `connId`. 
+  - `unbondingPeriod` is the unbonding period on the consumer chain.
+  - `transferChannelId` is the ID of a token transfer channel (as defined in [ICS 20](../../app/ics-020-fungible-token-transfer)) used for the Reward Distribution sub-protocol. 
+    If `transferChannelId == ""`, a new token transfer channel is created on top of the same connection as the CCV channel. 
+    Note that `transferChannelId` is the ID of the channel end on the consumer chain.
+  - `lockUnbondingOnTimeout` is a boolean value that indicates whether the funds corresponding to the outstanding unbonding operations are to be released in case of a timeout. 
+    If `lockUnbondingOnTimeout == true`, a governance proposal to stop the timed out consumer chain would be necessary to release the locked funds. 
   ```typescript
-  interface StopConsumerChainProposal {
+  interface ConsumerRemovalProposal {
     chainId: string
     stopTime: Timestamp
   }
@@ -162,8 +191,8 @@ This section describes the internal state of the CCV module. For simplicity, the
 [&uparrow; Back to Outline](#outline)
 
 - `ProviderPortId = "provider"` is the port ID the provider CCV module is expected to bind to.
-- `pendingSpawnProposals: [SpawnConsumerChainProposal]` is a list of pending governance proposals to spawn new consumer chains. 
-- `pendingStopProposals: [StopConsumerChainProposal]` is a list of pending governance proposals to stop existing consumer chains. 
+- `pendingConsumerAdditionProposals: [ConsumerAdditionProposal]` is a list of pending governance proposals to add new consumer chains. 
+- `pendingConsumerRemovalProposals: [ConsumerRemovalProposal]` is a list of pending governance proposals to remove existing consumer chains. 
   Both lists of pending governance proposals expose the following interface: 
 ```typescript
   interface [Proposal] {
@@ -176,6 +205,7 @@ This section describes the internal state of the CCV module. For simplicity, the
   ```
 - `lockUnbondingOnTimeout: Map<string, Bool>` is a mapping from consumer chain IDs to the boolean values indicating whether the funds corresponding to the in progress unbonding operations are to be released in case of a timeout.
 - `chainToClient: Map<string, Identifier>` is a mapping from consumer chain IDs to the associated client IDs.
+- `chainToConnection: Map<string, Identifier>` is a mapping from consumer chain IDs to the associated connection IDs.
 - `chainToChannel: Map<string, Identifier>` is a mapping from consumer chain IDs to the CCV channel IDs.
 - `channelToChain: Map<Identifier, string>` is a mapping from CCV channel IDs to consumer chain IDs.
 - `pendingVSCPackets: Map<string, [VSCPacketData]>` is a mapping from consumer chain IDs to a list of pending `VSCPacketData`s that must be sent to the consumer chain once the CCV channel is established. The map exposes the following interface: 
@@ -218,34 +248,13 @@ This section describes the internal state of the CCV module. For simplicity, the
 [&uparrow; Back to Outline](#outline)
 
 - `ConsumerPortId = "consumer"` is the port ID the consumer CCV module is expected to bind to.
-- `consumerUnbondingPeriod: Duration"` is the unbonding period on the consumer chain. 
-- `providerClient: Identifier` identifies the client of the provider chain (on the consumer chain) that the CCV channel is build upon.
+- `ConsumerUnbondingPeriod: Duration` is the unbonding period on the consumer chain.
+- `preCCV: Bool` is a flag indicating whether the consumer CCV module starts in pre-CCV state. 
+  In pre-CCV state, the consumer CCV module MUST NOT pass validator updates to the underlying consensus engine.
+- `providerClientId: Identifier` identifies the client of the provider chain (on the consumer chain) that the CCV channel is build upon.
 - `providerChannel: Identifier` identifies the consumer's channel end of the CCV channel.
-- `validatorSet: <string, CrossChainValidator>` is a mapping that stores the validators in the validator set of the consumer chain. Each validator is described by a `CrossChainValidator` data structure, which is defined as
-  ```typescript
-  interface CrossChainValidator {
-    address: string // validator address, i.e., the hash of its public key
-    power: int64
-  }
-  ```
-- `pendingChanges: [ValidatorUpdate]` is a list of `ValidatorUpdate`s received, but not yet applied to the validator set. 
-  It is emptied on every `EndBlock()`. The list exposes the following interface:
-  ```typescript
-  interface [ValidatorUpdate] {
-    // append updates to the list;
-    // the list is modified
-    Append(updates: [ValidatorUpdate]) 
-
-    // return an aggregated list of updates, i.e., 
-    // keep only the latest update per validator;
-    // the original list is not modified
-    Aggregate(): [ValidatorUpdate]
-
-    // remove all the updates from the list;
-    // the list is modified
-    RemoveAll()
-  }
-  ```
+- `ccvValidatorSet: <string, ValidatorUpdate>` is a mapping that stores the validators in the validator set of the consumer chain.
+- `receivedVSCs: [VSCPacketData]` is a list of data items (i.e., `VSCPacketData`) received in `VSCPacket`s that are not yet applied. 
 - `HtoVSC: Map<Height, uint64>` is a mapping from consumer chain heights to VSC IDs. It enables the mapping from consumer heights to provider heights., i.e.,
   - if `HtoVSC[h] == 0`, then the voting power on the consumer chain at height `h` was setup at genesis during Channel Initialization;
   - otherwise, the voting power on the consumer chain at height `h` was updated by the VSC with ID `HtoVSC[h]`.

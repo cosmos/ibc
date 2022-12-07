@@ -9,6 +9,8 @@
 - [Definition](#definition)
 - [Overview](#overview)
   - [Channel Initialization](#channel-initialization)
+    - [Channel Initialization: New Chains](#channel-initialization-new-chains)
+    - [Channel Initialization: Existing Chains](#channel-initialization-existing-chains)
   - [Validator Set Update](#validator-set-update)
     - [Completion of Unbonding Operations](#completion-of-unbonding-operations)
   - [Consumer Initiated Slashing](#consumer-initiated-slashing)
@@ -134,41 +136,69 @@ CCV must handle the following types of operations:
 ### Channel Initialization
 [&uparrow; Back to Outline](#outline)
 
-The following figure shows an overview of the CCV Channel initialization. 
+The CCV Channel initialization differentiates between chains that start directly as consumer chains and existing chains that transition to consumer chains.
+In both cases, consumer chains are created through governance proposals. For an example of how governance proposals work, take a look at the [Governance module documentation](https://docs.cosmos.network/v0.45/modules/gov/) of Cosmos SDK.
 
-![Channel Initialization Overview](./figures/ccv-init-overview.png?raw=true)
+#### Channel Initialization: New Chains
 
-Consumer chains are created through governance proposals. For an example of how governance proposals work, take a look at the [Governance module documentation](https://docs.cosmos.network/v0.45/modules/gov/) of Cosmos SDK.
+The following figure shows an overview of the CCV Channel initialization for new chains. 
 
-The channel initialization consists of four phases:
-- **Create clients**: The provider CCV module handles every passed proposal to spawn a new consumer chain. 
-  Once it receives a proposal, it creates a client of the consumer chain (as defined in [ICS 2](../../core/ics-002-client-semantics)). 
-  Then, the operators of validators in the validator set of the provider chain must each start a full node (i.e., a validator) of the consumer chain. 
+![Channel Initialization Overview: New Chain](./figures/ccv-init-overview.png?raw=true)
+
+The channel initialization for new chains consists of three phases:
+- **Create clients**: Once the provider CCV module receives a proposal to add a new consumer chain with an empty connection ID, it creates a client of the consumer chain (as defined in [ICS 2](../../core/ics-002-client-semantics)) and a genesis state of the consumer CCV module. 
+  Then, the operators of validators in the validator set of the provider chain must each query the provider for the CCV genesis state and start a validator node of the consumer chain. 
   Once the consumer chain starts, the application receives an `InitChain` message from the consensus engine 
   (for more details, take a look at the [ABCI specification](https://github.com/tendermint/spec/blob/v0.7.1/spec/abci/abci.md#initchain)). 
   The `InitChain` message triggers the call to the `InitGenesis()` method of the consumer CCV module, which creates a client of the provider chain.
   For client creation, both a `ClientState` and a `ConsensusState` are necessary (as defined in [ICS 2](../../core/ics-002-client-semantics));
-  both are contained in the `GenesisState` of the consumer CCV module.
-  The `GenesisState` is distributed to all operators that need to start a full node of the consumer chain 
-  (the mechanism of distributing the `GenesisState` is outside the scope of this specification).
+  both are contained in the genesis state of the consumer CCV module.
+  The genesis state is distributed to all operators that need to start a full node of the consumer chain 
+  (the mechanism of distributing the genesis state is outside the scope of this specification).
+  Finally, the consumer CCV module initiates both the connection handshake (as defined in [ICS 3](../../core/ics-003-connection-semantics)) and the channel handshake (as defined in [ICS 4](../../core/ics-004-channel-and-packet-semantics)).
   > Note that at genesis, the validator set of the consumer chain matches the validator set of the provider chain.
-- **Connection handshake**: A relayer (as defined in [ICS 18](../../relayer/ics-018-relayer-algorithms)) is responsible for initiating the connection handshake (as defined in [ICS 3](../../core/ics-003-connection-semantics)). 
-- **Channel handshake**: A relayer is responsible for initiating the channel handshake (as defined in [ICS 4](../../core/ics-004-channel-and-packet-semantics)). 
-  The channel handshake MUST be initiated on the consumer chain. 
+- **Connection handshake**: A relayer (as defined in [ICS 18](../../relayer/ics-018-relayer-algorithms)) is responsible for completing the connection handshake (as defined in [ICS 3](../../core/ics-003-connection-semantics)). 
+- **Channel handshake**: A relayer is responsible for completing the channel handshake (as defined in [ICS 4](../../core/ics-004-channel-and-packet-semantics)).
   The handshake consists of four messages that need to be received for a channel built on top of the expected clients. 
+  Note that the channel handshake is initiated on the consumer chain. 
   - *OnChanOpenInit*: On receiving a `ChanOpenInit` message, the consumer CCV module verifies that the underlying client associated with this channel is the expected client of the provider chain (i.e., created during genesis).
   - *OnChanOpenTry*: On receiving a `ChanOpenTry` message, the provider CCV module verifies that the underlying client associated with this channel is the expected client of the consumer chain (i.e., created when handling the governance proposal).
-  - *OnChanOpenAck*: On receiving a `ChanOpenAck` message, the consumer CCV module initiates the opening handshake for the token transfer channel required by the Reward Distribution operation (see the [Reward Distribution](#reward-distribution) section).
+  - *OnChanOpenAck*: On receiving the *FIRST* `ChanOpenAck` message, the consumer CCV module considers its side of the CCV channel to be established.
+  Also, if a transfer channel ID was not provided in the governance proposal, the consumer CCV module initiates the opening handshake for the token transfer channel required by the Reward Distribution operation (see the [Reward Distribution](#reward-distribution) section).
   - *OnChanOpenConfirm*: On receiving the *FIRST* `ChanOpenConfirm` message, the provider CCV module considers its side of the CCV channel to be established.
-- **Channel completion**: Once the provider chain side of the CCV channel is established, 
-  the provider CCV module provides VSCs (i.e., validator set changes) to the consumer chain (see the [Validator Set Update](#validator-set-update) section). 
-  On receiving the *FIRST* `VSCPacket`, the consumer CCV module considers its side of the CCV channel to be established. 
-  From this moment onwards, the consumer chain is secured by the provider chain.
 
-> **Note**: As long as the [assumptions required by CCV](./system_model_and_properties.md#assumptions) hold (e.g., *Correct Relayer*), every governance proposal to spawn a new consumer chain that passes on the provider chain results eventually in a CCV channel being created. 
+
+#### Channel Initialization: Existing Chains
+
+The following figure shows an overview of the CCV Channel initialization for existing chains. 
+
+![Channel Initialization Overview: Existing Chain](./figures/ccv-preccv-init-overview.png?raw=true)
+
+The channel initialization for existing chains consists of three phases:
+- **Start consumer CCV module**: Once the provider CCV module receives a proposal to add a new consumer chain with a valid *connection ID*, it creates a genesis state of the consumer CCV module.
+  Then, the existing chain must upgrade by adding the consumer CCV module and  initialize it using the CCV genesis state created by the provider.
+  Once the consumer CCV module starts, it initiates the channel handshake (as defined in [ICS 4](../../core/ics-004-channel-and-packet-semantics)).
+
+- **Channel handshake**: A relayer is responsible for completing the channel handshake (as defined in [ICS 4](../../core/ics-004-channel-and-packet-semantics)).
+  The handshake consists of four messages that need to be received for a channel built on top of the expected clients (i.e., the clients used by the connection provided in the governance proposal). 
+  Note that the channel handshake is initiated on the consumer chain. 
+  - *OnChanOpenInit*: On receiving a `ChanOpenInit` message, the consumer CCV module verifies that the underlying client associated with this channel is the expected client of the provider chain.
+  - *OnChanOpenTry*: On receiving a `ChanOpenTry` message, the provider CCV module verifies that the underlying client associated with this channel is the expected client of the consumer chain.
+  - *OnChanOpenAck*: On receiving the *FIRST* `ChanOpenAck` message, the consumer CCV module considers its side of the CCV channel to be established.
+  Also, if a transfer channel ID was not provided in the governance proposal, the consumer CCV module initiates the opening handshake for the token transfer channel required by the Reward Distribution operation (see the [Reward Distribution](#reward-distribution) section).
+  Finally, the consumer CCV module makes a requests to the Staking module of the existing chain to replace its validator set with the initial validator set from the CCV genesis state created by the provider.
+    > Note that this is the same as the provider validator set when the governance proposal was handled.
+  - *OnChanOpenConfirm*: On receiving the *FIRST* `ChanOpenConfirm` message, the provider CCV module considers its side of the CCV channel to be established.
+
+- **Transition to consumer chain**: Once the validator set on the existing chain is replace by the initial validator set (from the CCV genesis state created by the provider), the existing chain becomes a consumer chain.
+
+
+
+
+> **Note**: For both new and existing chains, as long as the [assumptions required by CCV](./system_model_and_properties.md#assumptions) hold (e.g., *Correct Relayer*), every governance proposal to spawn a new consumer chain that passes on the provider chain results eventually in a CCV channel being created. 
 > Furthermore, the "*FIRST*" keyword in the above description ensures the uniqueness of the CCV channel, i.e., all subsequent attempts to create another CCV channel to the same consumer chain will fail.
 
-> **Note**: Until the CCV channel is established, the initial validator set of the consumer chain cannot be updated (see the [Validator Set Update](#validator-set-update) section) and the validators from this initial set cannot be slashed (see the [Consumer Initiated Slashing](#consumer-initiated-slashing) section).
+> **Note**: For both new and existing chains, until the CCV channel is established, the initial validator set of the consumer chain cannot be updated (see the [Validator Set Update](#validator-set-update) section) and the validators from this initial set cannot be slashed (see the [Consumer Initiated Slashing](#consumer-initiated-slashing) section).
 > This means that the consumer chain is *not yet secured* by the provider chain.
 > Thus, to reduce the attack surface during channel initialization, the consumer chain SHOULD enable user transactions only after the CCV channel is established (i.e., after receiving the first VSC). 
 > As a consequence, a malicious initial validator set can only influence the initialization of the CCV channel. 
