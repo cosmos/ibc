@@ -38,11 +38,12 @@ furthermore, the *Correct Relayer* assumption relies on both *Safe Blockchain* a
 - ***Live Blockchain***: Both the provider and the consumer chains are *live*. This means that, for every chain, the underlying consensus engine satisfies liveness (i.e., new blocks are eventually added to the chain).
   > **Note**: Both *Safe Blockchain* and *Live Blockchain* assumptions require the consensus engine's assumptions to hold, e.g., less than a third of the voting power is Byzantine. For an example, take a look at the [Tendermint Paper](https://arxiv.org/pdf/1807.04938.pdf).
 
-- ***Correct Relayer***: There is at least one *correct*, *live* relayer between the provider and consumer chains. This assumption has two implications.
-  - First, every packet sent on the CCV channel is relayed to the receiving end before the packet timeout elapses.
-  - Second, a correct relayer will eventually relay packets on the token transfer channel.   
+- ***Correct Relayer***: There is at least one *correct*, *live* relayer between the provider and consumer chains. This assumption has the following implications.
+  - The opening handshake messages on the CCV channel are relayed before the Channel Initialization subprotocol times out (see `initTimeout`).
+  - Every packet sent on the CCV channel is relayed to the receiving end before the packet timeout elapses (see both `vscTimeout` and `ccvTimeoutTimestamp`).
+  - A correct relayer will eventually relay packets on the token transfer channel.   
   
-  Clearly, the CCV protocol is responsible of setting the timeouts (i.e., `timeoutHeight` and `timeoutTimestamp`), for the packets sent on the CCV channel, such that the *Correct Relayer* assumption is feasible.
+  Clearly, the CCV protocol is responsible of setting the timeouts (see `ccvTimeoutTimestamp`, `vscTimeout`, `initTimeout` in the [CCV State](data_structures.md#ccv-state)), such that the *Correct Relayer* assumption is feasible.
   > **Discussion**: IBC relies on timeouts to signal that a sent packet is not going to be received on the other end. 
   > Once an ordered IBC channel timeouts, the channel is closed (see [ICS 4](../../core/ics-004-channel-and-packet-semantics)). 
   > The *Correct Relayer* assumption is necessary to ensure that the CCV channel **cannot** ever timeout and, as a result, cannot transit to the closed state. 

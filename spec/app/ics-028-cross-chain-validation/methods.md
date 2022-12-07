@@ -55,6 +55,7 @@ function BeginBlock() {
 // implements the AppModule interface
 function EndBlock(): [ValidatorUpdate] {
   EndBlockCIS()
+  EndBlockCCR()
   EndBlockVSU()
 
   // do not return anything to the consensus engine
@@ -69,6 +70,7 @@ function EndBlock(): [ValidatorUpdate] {
   - True. 
 - **Postcondition**
   - `EndBlockCIS()` is invoked (see [[CCV-PCF-EBLOCK-CIS.1]](#ccv-pcf-eblock-cis1), i.e., it contains the `EndBlock()` logic needed for the Consumer Initiated Slashing sub-protocol).
+  - `EndBlockCCR()` is invoked (see [[CCV-PCF-EBLOCK-CCR.1]](#ccv-pcf-eblock-ccr1), i.e., it contains the `EndBlock()` logic needed for the Consumer Chain Removal sub-protocol).
   - `EndBlockVSU()` is invoked (see [[CCV-PCF-EBLOCK-VSU.1]](#ccv-pcf-eblock-vsu1), i.e., it contains the `EndBlock()` logic needed for the Validator Set Update sub-protocol).
 - **Error Condition**
   - None.
@@ -485,6 +487,9 @@ function CreateConsumerClient(p: ConsumerAdditionProposal) {
 
   // store lockUnbondingOnTimeout flag
   lockUnbondingOnTimeout[p.chainId] = p.lockUnbondingOnTimeout
+
+  // add init timeout timestamp for this consumer chain
+  initTimeoutTimestamps[p.chainId] = currentTimestamp().Add(initTimeout)
 }
 ```
 - **Caller**
@@ -511,6 +516,7 @@ function CreateConsumerClient(p: ConsumerAdditionProposal) {
         - a client of the consumer chain is created and the client ID is stored;
         - a `ConsumerGenesisState` is created and stored;
     - `lockUnbondingOnTimeout[p.chainId]` is set to `p.lockUnbondingOnTimeout`.
+    - The init timeout timestamp is computed and stored in `initTimeoutTimestamps[p.chainId]`.
 - **Error Condition**
   - None.
 
@@ -519,7 +525,11 @@ function CreateConsumerClient(p: ConsumerAdditionProposal) {
 > The provider chain uses the fact that the validator set of the consumer chain is the same as its own validator set. 
 
 > **Note:** Bootstrapping the consumer CCV module requires a `ConsumerGenesisState` (see the [CCV Data Structures](./data_structures.md#ccv-data-structures) section). The provider CCV module creates such a `ConsumerGenesisState` when handling a governance proposal `ConsumerAdditionProposal`.
-  
+
+> **Note:** If the channel initialization for a consumer chain exceeds the `initTimeout` period, then the provider chain removes that consumer. 
+> As a result, all further attempts on the consumer side to established the CCV channel will fail. 
+> This means that the consumer chain requires some sort of social consensus to either restart the process of becoming a consumer chain or transitioning back to a sovereign chain. 
+ 
 <!-- omit in toc -->
 #### **[CCV-PCF-COINIT.1]**
 ```typescript
@@ -670,6 +680,9 @@ function onChanOpenConfirm(
     channelToChain[channelIdentifier] = clientState.chainId
     // set initialHeights for this consumer chain
     initialHeights[chainId] = getCurrentHeight()
+   
+   // remove init timeout timestamp
+   initTimeoutTimestamps.Remove(clientState.chainId)
 }
 ```
 - **Caller**
@@ -686,6 +699,7 @@ function onChanOpenConfirm(
   - The connection mapping is set, i.e., `chainToConnection`.
   - The channel mappings are set, i.e., `chainToChannel` and `channelToChain`.
   - `initialHeights[chainId]` is set to the current height.
+  - The init timeout timestamp for the consumer chain with ID `clientState.chainId` is removed.
 - **Error Condition**
   - None.
 
@@ -1108,6 +1122,8 @@ function StopConsumerChain(chainId: string, lockUnbonding: Bool) {
   pendingVSCPackets.Remove(chainId)
   initialHeights.Remove(chainId)
   downtimeSlashRequests.Remove(chainId)
+  initTimeoutTimestamps.Remove(chainId)
+  vscSendTimestamps.Remove((chainId, *))
 
   if !lockUnbonding {
     // remove chainId form all outstanding unbonding operations
@@ -1129,9 +1145,13 @@ function StopConsumerChain(chainId: string, lockUnbonding: Bool) {
 - **Caller**
   - `HandleConsumerRemovalProposal` (see [CCV-PCF-HCRPROP.1](#ccv-pcf-hcrprop1)) 
     or `BeginBlockCCR()` (see [CCV-PCF-BBLOCK-CCR.1](#ccv-pcf-bblock-ccr1)) 
-    or `onTimeoutVSCPacket()` (see [CCV-PCF-TOVSC.1](#ccv-pcf-tovsc1)).
+    or `onTimeoutVSCPacket()` (see [CCV-PCF-TOVSC.1](#ccv-pcf-tovsc1))
+    or `EndBlockCCR()` (see [CCV-PCF-EBLOCK-CCR.1](#ccv-pcf-eblock-ccr1)).
 - **Trigger Event**
-  - Either a governance proposal to stop the consumer chain with `chainId` has passed (i.e., it got the necessary votes) or a packet sent on the CCV channel to the consumer chain with `chainId` has timed out.
+  - One of the following events:
+    - a governance proposal to stop the consumer chain with `chainId` has passed (i.e., it got the necessary votes);
+    - a `VSCPacket` sent on the CCV channel to the consumer chain with `chainId` has timed out;
+    - the channel initialization has timed out. 
 - **Precondition**
   - True.
 - **Postcondition**
@@ -1164,6 +1184,51 @@ function StopConsumerChain(chainId: string, lockUnbonding: Bool) {
 > 
 > - The second scenario (i.e., a timeout) is only possible if the *Correct Relayer* assumption is violated (see the [Assumptions](./system_model_and_properties.md#assumptions) section), 
 > which is necessary to guarantee both the *Bond-Based Consumer Voting Power* and *Slashable Consumer Misbehavior* properties (see the [Assumptions](./system_model_and_properties.md#correctness-reasoning) section).
+
+
+<!-- omit in toc -->
+#### **[CCV-PCF-EBLOCK-CCR.1]**
+```typescript
+// PCF: Provider Chain Function
+function EndBlockCCR() {
+  // iterate over vscSendTimestamps
+  for (chainId, vscId) IN vscSendTimestamps.Keys() {
+    // check get first timestamp, i.e., the smallest
+    if currentTimestamp() > vscSendTimestamps[(chainId, vscId)] + vscTimeout {
+      // vscTimeout expired: 
+      // stop the consumer chain and use lockUnbondingOnTimeout 
+      // to decide whether to lock the unbonding
+      StopConsumerChain(chainId, lockUnbondingOnTimeout[chainId])
+    }
+  }
+
+  // iterate over initTimeoutTimestamps
+  for chainId IN initTimeoutTimestamps.Keys() {
+    if currentTimestamp() > initTimeoutTimestamps[chainId] {
+      // initTimeout expired:
+      // stop the consumer chain and unlock the unbonding 
+      StopConsumerChain(chainId, false)
+    }
+  }
+}
+```
+- **Caller**
+  - The `EndBlock()` method.
+- **Trigger Event**
+  - An `EndBlock` message is received from the consensus engine; `EndBlock` messages are sent once per block.
+- **Precondition**
+  - True. 
+- **Postcondition**
+  - For each consumer chain ID `chainId` in `vscSendTimestamps.Keys()`,
+    - if `vscSendTimestamps[(chainId, vscId)] + vscTimeout` is smaller than the current timestamp, then the consumer chain with ID `chainId` is stopped.
+  - For each consumer chain ID `chainId` in `initTimeoutTimestamps.Keys()`,
+    - if the timestamp in `initTimeoutTimestamps[chainId]` is smaller than the current timestamp, then the consumer chain with ID `chainId` is stopped.
+- **Error Condition**
+  - None.
+
+> **Note**: To avoid false positives where a consumer chain is unnecessarily removed, 
+> `vscTimeout` MUST be larger than `consumerUnbondingPeriod` and 
+> SHOULD account for the time needed to relay the `VSCPacket` to the consumer and the corresponding `VSCMaturedPacket` back to the provider.
 
 <!-- omit in toc -->
 #### **[CCV-PCF-CCINIT.1]**
@@ -1349,6 +1414,8 @@ function EndBlockVSU() {
           ccvTimeoutTimestamp,
           data
         )
+        // add VSC send timestamp to vscSendTimestamps
+        vscSendTimestamps[(vscId, chainId)] = currentTimestamp()
       }
 
       // remove pending VSCPackets
@@ -1377,6 +1444,7 @@ function EndBlockVSU() {
     - If there is an established CCV channel for the the consumer chain with `chainId`, then
       - for each `VSCPacketData` in the list of pending VSCPackets associated to `chainId`
         - a packet with the `VSCPacketData` is sent on the channel associated with the consumer chain with `chainId`;
+        - `vscSendTimestamps[(vscId, chainId)]` is set to the current timestamp;
       - all the pending VSCPackets associated to `chainId` are removed.
   - `vscId` is incremented.
 - **Error Condition**
@@ -1459,6 +1527,9 @@ function onRecvVSCMaturedPacket(packet: Packet): bytes {
   // clean up vscToUnbondingOps mapping
   vscToUnbondingOps.Remove((chainId, vscId))
 
+  // clean up vscSendTimestamps mapping
+  vscSendTimestamps.Remove((chainId, vscId))
+
   return VSCMaturedPacketSuccess
 }
 ```
@@ -1477,6 +1548,7 @@ function onRecvVSCMaturedPacket(packet: Packet): bytes {
       - `op.id` is added to `maturedUnbondingOps`;
       - `op.id` is removed from `unbondingOps`.
   - `(chainId, vscId)` is removed from `vscToUnbondingOps`.
+  - `(chainId, vscId)` is removed from `vscSendTimestamps`.
   - A successful acknowledgment is returned.
 - **Error Condition**
   - None.
