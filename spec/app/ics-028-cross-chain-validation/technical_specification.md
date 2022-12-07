@@ -47,10 +47,21 @@ Before describing the data structures and sub-protocols of the CCV protocol, we 
 
 - The consumer CCV module interacts with the IBC Token Transfer module ([ICS 20](../ics-020-fungible-token-transfer/README.md)) via `transferKeeper`.
 
-- For the [Initialization sub-protocol](#initialization), the provider CCV module interacts with a Governance module by handling governance proposals to spawn new consumer chains. 
+- For the [Initialization sub-protocol](#initialization), the provider CCV module interacts with a Governance module by handling governance proposals to add new consumer chains. 
   If such proposals pass, then all validators on the provider chain MUST validate the consumer chain at spawn time; 
   otherwise they get slashed. 
-  For an example of how governance proposals work, take a look at the [Governance module documentation](https://docs.cosmos.network/v0.45/modules/gov/) of Cosmos SDK. 
+  For an example of how governance proposals work, take a look at the [Governance module documentation](https://docs.cosmos.network/v0.45/modules/gov/) of Cosmos SDK.
+
+- The consumer pre-CCV module (i.e., the CCV module with `preCCV == true`) interacts with a Staking module on the consumer chain. 
+  Note that once `preCCV` is set to `false`, the Staking module MUST no longer provide validator updates to the underlying consensus engine. 
+  For an example of how staking works, take a look at the [Staking module documentation](https://docs.cosmos.network/v0.45/modules/staking/) of Cosmos SDK. 
+  The interaction is defined by the following interface:
+  ```typescript 
+  interface StakingKeeper {
+    // replace the validator set with valset
+    ReplaceValset(valset: [ValidatorUpdate])
+  }
+  ```
 
 - The provider CCV module interacts with a Staking module on the provider chain. 
   For an example of how staking works, take a look at the [Staking module documentation](https://docs.cosmos.network/v0.45/modules/staking/) of Cosmos SDK. 
