@@ -78,7 +78,7 @@ interface Header {
 }
 ```
 
-`Header` implements the ClientMessage interface.
+`Header` implements the `ClientMessage` interface.
 
 ### Signature Verification
 
@@ -101,9 +101,9 @@ interface SignBytes {
 ```typescript
 interface SignatureAndData {
   sig: Signature
-  path: Path
+  path: []byte
   data: []byte
-  timestamp: Timestamop
+  timestamp: Timestamp
 }
 
 interface Misbehaviour {
@@ -113,7 +113,7 @@ interface Misbehaviour {
 }
 ```
 
-`Misbehaviour` implements the ClientState interface.
+`Misbehaviour` implements the `ClientMessage` interface.
 
 ### Signatures
 
@@ -149,14 +149,14 @@ function latestClientHeight(clientState: ClientState): uint64 {
 
 ### ClientState Methods
 
-All of the functions defined below are methods on the `ClientState` interface. Thus, the solomachine clientstate is always in scope for these functions.
+All of the functions defined below are methods on the `ClientState` interface. Thus, the solomachine client state is always in scope for these functions.
 
 ### Validity predicate
 
 The solo machine client `verifyClientMessage` function checks that the currently registered public key and diversifier signed over the client message at the expected sequence. If the client message is an update, then it must be the current sequence. If the client message is misbehaviour then it must be the sequence of the misbehaviour.
 
 ```typescript
-function  verifyClientMessage(clientMsg: ClientMessage) {
+function verifyClientMessage(clientMsg: ClientMessage) {
   switch typeof(ClientMessage) {
     case Header:
       verifyHeader(clientMessage)
@@ -172,14 +172,14 @@ function verifyHeader(header: header) {
       NewPublicKey: header.newPublicKey,
       NewDiversifier: header.newDiversifier,
     }
-    sigBytes = SignBytes(
+    signBytes = SignBytes(
       Sequence: clientState.consensusState.sequence,
       Timestamp: header.timestamp,
       Diversifier: clientState.consensusState.diversifier,
       Path: []byte{"solomachine:header"}
       Value: marshal(headerData)
     )
-    assert(checkSignature(cs.consensusState.publicKey, sigBytes, header.signature))
+    assert(checkSignature(cs.consensusState.publicKey, signBytes, header.signature))
 }
 
 function verifyMisbehaviour(misbehaviour: Misbehaviour) {
@@ -214,7 +214,7 @@ function verifyMisbehaviour(misbehaviour: Misbehaviour) {
 
 ### Misbehaviour predicate
 
-Since misbehaviour is checked in `verifyClientMessage`, if the client message is of type `Misbehaviour` then we return true
+Since misbehaviour is checked in `verifyClientMessage`, if the client message is of type `Misbehaviour` then we return true:
 
 ```typescript
 function checkForMisbehaviour(clientMessage: ClientMessage) => bool {
@@ -271,14 +271,14 @@ function verifyMembership(
     // the expected sequence used in the signature
     abortTransactionUnless(!clientState.frozen)
     abortTransactionUnless(proof.timestamp >= clientState.consensusState.timestamp)
-    sigBytes = SignBytes(
+    signBytes = SignBytes(
       Sequence: clientState.consensusState.sequence,
       Timestamp: proof.timestamp,
       Diversifier: clientState.consensusState.diversifier,
       path: path.String(),
       data: value,
     )
-    proven = checkSignature(clientState.consensusState.pubKey, sigBytes, proof.sig)
+    proven = checkSignature(clientState.consensusState.publicKey, signBytes, proof.sig)
     if !proven {
       return false
     }
@@ -302,14 +302,14 @@ function verifyNonMembership(
   path: CommitmentPath): boolean {
     abortTransactionUnless(!clientState.frozen)
     abortTransactionUnless(proof.timestamp >= clientState.consensusState.timestamp)
-    sigBytes = SignBytes(
+    signBytes = SignBytes(
       Sequence: clientState.consensusState.sequence,
       Timestamp: proof.timestamp,
       Diversifier: clientState.consensusState.diversifier,
       path: path.String(),
       data: nil,
     )
-    proven = checkSignature(clientState.consensusState.pubKey, value, proof.sig)
+    proven = checkSignature(clientState.consensusState.publicKey, signBytes, proof.sig)
     if !proven {
       return false
     }
