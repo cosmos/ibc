@@ -68,7 +68,7 @@ enum SwapMessageType {
 // AtomicSwapPacketData is comprised of a swap message type, raw transaction and optional memo field.
 interface AtomicSwapPacketData {
   type: SwapMessageType;
-  data: types[];
+  data: []byte;
   memo: string;
 }
 ```
