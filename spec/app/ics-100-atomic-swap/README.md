@@ -205,7 +205,7 @@ function makeSwap(request MakeSwapMsg) {
     sendAtomicSwapPacket(packet, request.source_port, request.source_channel, request.timeout_height, request.timeout_timestamp)
     
     // creates and saves order on the maker chain.
-    const order = OrderBook.createOrder(msg)
+    const order = OrderBook.createOrder(request)
     //saves order to store
     store.save(order)
 }
