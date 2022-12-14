@@ -93,7 +93,7 @@ interface MakeSwapMsg {
   // this is the address on the taker chain
   desired_taker: string;
   creation_timestamp: int64;
-  expired_timestamp: int64;
+  expiration_timestamp: int64;
   timeout_height: int64,
   timeout_timestamp: int64,
 }
