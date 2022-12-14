@@ -22,7 +22,7 @@ Users may wish to exchange tokens without transfering tokens away from its nativ
 
 `Atomic Swap`: An exchange of tokens from separate chains without transfering tokens from one blockchain to another.
 
-`Order`: an offer to exchange quantity X of token A for quantity Y of token B. Tokens offered are sent to an escrow account (owned by the module)
+`Order`: An offer to exchange quantity X of token A for quantity Y of token B. Tokens offered are sent to an escrow account (owned by the module).
 
 `Maker`: A user that makes or initiates an order.
 
