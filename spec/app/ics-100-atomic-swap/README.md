@@ -215,7 +215,7 @@ function makeSwap(request MakeSwapMsg) {
 function takeSwap(request TakeSwapMsg) {
     const order = OrderBook.findOrderById(request.order_id)
     abortTransactionUnless(order != null)
-    abortTransactionUnless(order.expired_timestamp < Now().timestamp())
+    abortTransactionUnless(order.expired_timestamp < currentTimestamp())
     abortTransactionUnless(order.maker.buy_token.denom === request.sell_token.denom)
     abortTransactionUnless(order.maker.buy_token.amount === request.sell_token.amount)
     abortTransactionUnless(order.taker == null)
@@ -259,7 +259,7 @@ function cancelSwap(request TakeCancelMsg) {
     } 
     // the request is sent to the taker chain, and the taker chain decides if the cancel order is accepted or not
     // the cancelation can only be sent to the same chain as the make order.
-    sendAtomicSwapPacket(packet, order.maker.source_port_id, order.maker.source_channel_id request.timeout_height, request.timeout_timestamp)
+    sendAtomicSwapPacket(packet, order.maker.source_port, order.maker.source_channel request.timeout_height, request.timeout_timestamp)
 }
 ```
 
@@ -400,7 +400,7 @@ function onRecvPacket(packet channeltypes.Packet) {
         abortTransactionUnless(supply > 0)
         
         // create and save order on the taker chain.
-        const order = OrderBook.createOrder(msg)
+        const order = OrderBook.createOrder(make_msg)
         order.status = Status.SYNC
         order.port_id_on_taker_chain = packet.destinationPort
         order.channel_id_on_taker_chain = packet.destinationChannel
@@ -412,7 +412,7 @@ function onRecvPacket(packet channeltypes.Packet) {
         const order = OrderBook.findOrderById(take_msg.order_id)
         abortTransactionUnless(order != null)
         abortTransactionUnless(order.status == Status.SYNC)
-        abortTransactionUnless(order.expired_timestamp < Now().timestamp())
+        abortTransactionUnless(order.expired_timestamp < currentTimestamp())
         abortTransactionUnless(take_msg.sell_token.denom == order.maker.buy_token.denom)
         abortTransactionUnless(take_msg.sell_token.amount == order.maker.buy_token.amount)
         
@@ -458,7 +458,7 @@ function onAcknowledgePacket(
         const make_msg = protobuf.decode(packet.bytes)
         
         // update order status on the maker chain.
-        const order = OrderBook.findOrderById(make_msg)
+        const order = OrderBook.findOrder(generateOrderId(make_msg))
         order.status = Status.SYNC
         //save order to store
         store.save(order)
