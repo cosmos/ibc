@@ -48,7 +48,7 @@ Users may wish to exchange tokens without transfering tokens away from its nativ
 
 A maker offers token A in exchange for token B by making an order. The order specifies the quantity and price of exchange, and sends the offered token A to the maker chain's escrow account.
 
-Any taker on a different chain with   token B can accept the offer by taking the order. The taker sends the desired amount of token B to the taker chain's escrow account.
+Any taker on a different chain with token B can accept the offer by taking the order. The taker sends the desired amount of token B to the taker chain's escrow account.
 
 The escrow account on each respective chain transfers the corresponding token amounts to each user's receiving address, without requiring the usual ibc transfer.
 
