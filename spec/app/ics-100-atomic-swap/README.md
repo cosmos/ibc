@@ -92,7 +92,7 @@ interface MakeSwapMsg {
   // only the desired_taker is allowed to take this order
   // this is the address on the taker chain
   desired_taker: string;
-  create_timestamp: int64;
+  creation_timestamp: int64;
   expired_timestamp: int64;
   timeout_height: int64,
   timeout_timestamp: int64,
