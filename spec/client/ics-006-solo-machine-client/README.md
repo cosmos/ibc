@@ -70,7 +70,7 @@ The `Height` of a solo machine is just a `uint64`, with the usual comparison ope
 
 ```typescript
 interface Header {
-  sequence: uint64
+  sequence: uint64 // deprecated
   timestamp: uint64
   signature: Signature
   newPublicKey: PublicKey
@@ -167,7 +167,6 @@ function verifyClientMessage(clientMsg: ClientMessage) {
 }
 
 function verifyHeader(header: header) {
-    assert(header.sequence === clientState.consensusState.sequence)
     assert(header.timestamp >= clientstate.consensusState.timestamp)
     headerData = {
       NewPubKey: header.newPubKey,
