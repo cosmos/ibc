@@ -149,7 +149,7 @@ function latestClientHeight(clientState: ClientState): uint64 {
 
 ### ClientState Methods
 
-All of the functions defined below are methods on the `ClientState` interface. Thus, the solomachine client state is always in scope for these functions.
+All of the functions defined below are methods on the `ClientState` interface. Thus, the solo machine client state is always in scope for these functions.
 
 ### Validity predicate
 
@@ -176,7 +176,7 @@ function verifyHeader(header: header) {
       Sequence: clientState.consensusState.sequence,
       Timestamp: header.timestamp,
       Diversifier: clientState.consensusState.diversifier,
-      Path: []byte{"solomachine:header"}
+      Path: []byte{"solomachine:header"},
       Value: marshal(headerData)
     )
     assert(checkSignature(cs.consensusState.publicKey, signBytes, header.signature))
@@ -226,7 +226,7 @@ function checkForMisbehaviour(clientMessage: ClientMessage) => bool {
 
 ### Update Functions
 
-`UpdateState` updates the function for a regular update:
+`UpdateState` updates the solo machine `ConsensusState` values using the provided client message header:
 
 ```typescript
 function updateState(clientMessage: ClientMessage) {
