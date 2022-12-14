@@ -79,7 +79,7 @@ All `AtomicSwapPacketData` will be forwarded to the corresponding message handle
 interface MakeSwapMsg {
   // the port on which the packet will be sent, specified by the maker when the order is created
   source_port string;
-  // the channel by which the packet will be sent, specified by the maker when the order is created
+  // the channel on which the packet will be sent, specified by the maker when the order is created
   source_channel: string;
   // the tokens to be exchanged
   sell_token : Coin
