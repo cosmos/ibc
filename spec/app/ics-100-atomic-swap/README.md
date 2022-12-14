@@ -35,7 +35,7 @@ Users may wish to exchange tokens without transfering tokens away from its nativ
 ### Desired Properties
 
 - `Permissionless`: no need to whitelist connections, modules, or denominations.
-- `Gaurantee of exchange`: no occurence of a user receiving tokens without the equivalent promised exchange.
+- `Guarantee of exchange`: no occurence of a user receiving tokens without the equivalent promised exchange.
 - `Escrow enabled`: an account owned by the module will hold tokens and facilitate exchange.
 - `Refundable`: tokens are refunded by escrow when an order is cancelled
 - `Basic orderbook`: a store of orders functioning as an orderbook system
