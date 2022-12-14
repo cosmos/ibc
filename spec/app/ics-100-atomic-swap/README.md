@@ -82,7 +82,7 @@ interface MakeSwapMsg {
   // the channel on which the packet will be sent, specified by the maker when the order is created
   source_channel: string;
   // the tokens to be exchanged
-  sell_token : Coin
+  sell_token : Coin;
   buy_token: Coin;
   // the maker's address
   maker_address: string;
