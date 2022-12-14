@@ -153,7 +153,7 @@ All of the functions defined below are methods on the `ClientState` interface. T
 
 ### Validity predicate
 
-The solo machine client `verifyClientMessage` function checks that the currently registered public key and diversifier signed over the client message at the expected sequence. If the client message is an update, then it must be the current sequence. If the client message is misbehaviour then it must be the sequence of the misbehaviour.
+The solo machine client `verifyClientMessage` function checks that the currently registered public key signed over the client message at the expected sequence with the current diversifier included in the client message. If the client message is an update, then it must be the current sequence. If the client message is misbehaviour then it must be the sequence of the misbehaviour.
 
 ```typescript
 function verifyClientMessage(clientMsg: ClientMessage) {
@@ -251,8 +251,6 @@ function updateStateOnMisbehaviour(clientMessage: ClientMessage) {
 ### State verification functions
 
 All solo machine client state verification functions simply check a signature, which must be provided by the solo machine.
-
-Note that value concatenation should be implemented in a state-machine-specific escaped fashion.
 
 ```typescript
 function verifyMembership(
