@@ -167,9 +167,10 @@ function verifyClientMessage(clientMsg: ClientMessage) {
 }
 
 function verifyHeader(header: header) {
+    assert(header.sequence === clientState.consensusState.sequence)
     assert(header.timestamp >= clientstate.consensusState.timestamp)
     headerData = {
-      NewPublicKey: header.newPublicKey,
+      NewPubKey: header.newPubKey,
       NewDiversifier: header.newDiversifier,
     }
     signBytes = SignBytes(
@@ -188,9 +189,6 @@ function verifyMisbehaviour(misbehaviour: Misbehaviour) {
     pubkey = clientState.consensusState.publicKey
     diversifier = clientState.consensusState.diversifier
     timestamp = clientState.consensusState.timestamp
-    // assert that timestamp could have fooled the light client
-    assert(misbehaviour.s1.timestamp >= timestamp)
-    assert(misbehaviour.s2.timestamp >= timestamp)
     // assert that the signatures validate and that they are different
     sigBytes1 = SignBytes(
       Sequence: misbehaviour.sequence,
@@ -206,9 +204,10 @@ function verifyMisbehaviour(misbehaviour: Misbehaviour) {
       Path: s2.path,
       Data: s2.data
     )
-    assert(sigBytes1 != sigBytes2)
-    assert(checkSignature(pubkey, sigBytes1, clientState.consensusState.publicKey))
-    assert(checkSignature(pubkey, sigBytes2, clientState.consensusState.publicKey))
+    // either the path or data must be different in order for the misbehaviour to be valid
+    assert(s1.path != s2.path || s1.data != s2.data)
+    assert(checkSignature(pubkey, sigBytes1, misbehaviour.signatureOne.signature))
+    assert(checkSignature(pubkey, sigBytes2, misbehaviour.signatureTwo.signature))
 }
 ```
 
@@ -232,7 +231,7 @@ function checkForMisbehaviour(clientMessage: ClientMessage) => bool {
 
 ```typescript
 function updateState(clientMessage: ClientMessage) {
-    clientState.consensusState.publicKey = header.newPublicKey
+    clientState.consensusState.publicKey = header.newPubKey
     clientState.consensusState.diversifier = header.newDiversifier
     clientState.consensusState.timestamp = header.timestamp
     clientState.consensusState.sequence++
@@ -287,6 +286,11 @@ function verifyMembership(
     // replay protection
     clientState.consensusState.sequence++
     clientState.consensusState.timestamp = proof.timestamp
+    // unlike other clients, we must set the client state here because we
+    // mutate the clientState (increment sequence and set timestamp)
+    // thus the verification methods are stateful for the solomachine
+    // in order to prevent replay attacks
+    set("clients/{identifier}/clientState", clientState)
     return true
 }
 
@@ -318,6 +322,11 @@ function verifyNonMembership(
     // replay protection
     clientState.consensusState.sequence++
     clientState.consensusState.timestamp = proof.timestamp
+    // unlike other clients, we must set the client state here because we
+    // mutate the clientState (increment sequence and set timestamp)
+    // thus the verification methods are stateful for the solomachine
+    // in order to prevent replay attacks
+    set("clients/{identifier}/clientState", clientState)
     return true
 }
 ```
