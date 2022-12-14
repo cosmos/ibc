@@ -189,7 +189,7 @@ The sub-protocols described herein should be implemented in a "Fungible Token Sw
 
 ```ts
 function makeSwap(request MakeSwapMsg) {
-    const balance = bank_keeper.getBalances(request.make_address)
+    const balance = bank.getBalances(request.make_address)
     abortTransactionUnless(balance.amount > request.sell_token.Amount)
     // gets escrow address by source port and source channel
     const escrowAddr = escrowAddress(request.sourcePort, request.sourceChannel)
