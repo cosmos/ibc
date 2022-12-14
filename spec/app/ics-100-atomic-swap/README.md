@@ -54,7 +54,7 @@ The escrow account on each respective chain transfers the corresponding token am
 
 ### Data Structures
 
-Only one packet data type is required: `AtomicSwapPacketData`, which specifies the swap message type, data(protobuf marshalled) and a memo field.
+Only one packet data type is required: `AtomicSwapPacketData`, which specifies the swap message type, data (protobuf marshalled) and a memo field.
 
 ```typescript
 enum SwapMessageType {
