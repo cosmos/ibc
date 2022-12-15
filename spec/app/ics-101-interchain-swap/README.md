@@ -84,6 +84,173 @@ As the pool collects fees, liquidity providers automatically collect fees throug
 
 ### Data Structures
 
+#### Pool Structure
+```ts
+interface Coin {
+    amount: int32
+    denom: string
+}
+```
+```ts
+enum PoolSide {
+  POOL_SIDE_PENDING = 0;
+  POOL_SIDE_NATIVE_ASSET = 1;
+  POOL_SIDE_REMOTE_ASSET = 2;
+}
+```
+```ts
+// PoolStatus defines if the pool is ready for trading
+enum PoolStatus {
+  POOL_STATUS_READY = 0;
+  POOL_STATUS_INITIAL = 1;
+}
+```
+```ts
+enum PoolType {
+  POOL_TYPE_WEIGHTED_CROSS_CHAIN = 0;
+  POOL_TYPE_WEIGHTED_INTERN_CHAIN = 1;
+}
+```
+```ts
+interface PoolAsset {
+  side: PoolSide;
+  balance: Coin;
+  // percentage
+  weight: int32;
+  decimals: int32;
+}
+```
+```ts
+interface InterchainLiquidityPool {
+  id: string;
+  assets []PoolAsset;
+  // the issued amount of pool token in the pool. the denom is a prefix ("pool") + pool id
+  supply: Coin;
+}
+```
+
+#### IBC Market Maker
+```ts
+class InterchainMarketMaker {
+	pool :InterchainLiquidityPool
+	// basis point
+	feeRate: int32
+	constructor(pool: InterchainLiquidityPool, feeRate: int32) {
+	    this.pool = pool;
+	    this.feeRate = feeRate
+	}
+    
+    // MarketPrice Bi / Wi / (Bo / Wo)
+    function marketPrice(denomIn, denomOut string): float64 {
+        const tokenIn = this.Pool.findAssetByDenom(denomIn)
+        const tokenOut = this.Pool.findAssetByDenom(denomOut)
+        const balanceIn = tokenIn.balance.amount
+        const balanceOut = tokenOut.balance.amount
+        const weightIn := tokenIn.weight
+        const weightOut := tokenOut.weight
+    
+        return balanceIn / weightIn / (balanceOut / weightOut)
+    }
+    
+    // P_issued = P_supply * ((1 + At/Bt) ** Wt -1)
+    function depositSingleAsset(token: Coin): Coin {
+        const asset = this.pool.findAssetByDenom(token.denom)
+        const amount = token.amount
+        const supply = this.pool.supply.amount
+        const weight = asset.weight / 100
+        const issueAmount = supply * (math.pow(1+amount/asset.balance, weight) - 1)
+
+        asset.balance.amount += token.amount // update balance of the asset
+        
+        return {
+            amount: issueAmount,
+            denom: this.pool.supply.denom
+        }
+    }
+    
+    // input the supply token, output the expected token.
+    // At = Bt * (1 - (1 - P_redeemed / P_supply) ** 1/Wt)
+    function withdraw(redeem: Coin, denomOut: string): Coin {
+     
+        const asset = this.pool.findAssetByDenom(denomOut)
+
+        abortTransactionUnless(asset != null)
+        abortTransactionUnless(redeem.amount <= asset.balance.amount)
+        abortTransactionUnless(redeem.denom == this.pool.supply.denom)
+        
+        const balance = asset.balance.amount
+        const supply = this.pool.supply.amount
+        const weight = asset.weight / 100 // convert int to percent
+
+        const amountOut = balance * (1 - ( 1 - redeem.amount / supply) ** (1/weight))
+        return {
+            amount: amountOut,
+            denom: denomOut,
+        }
+    }
+    
+    // LeftSwap implements OutGivenIn
+    // Input how many coins you want to sell, output an amount you will receive
+    // Ao = Bo * ((1 - Bi / (Bi + Ai)) ** Wi/Wo)
+    function leftSwap(amountIn: Coin, denomOut: string): Coin {
+    
+        const assetIn = this.pool.findAssetByDenom(amountIn.denom)
+        abortTransactionUnless(assetIn != null)
+        
+        const assetOut = this.pool.findAssetByDenom(denomOut)
+        abortTransactionUnless(assetOut != null)
+    
+        // redeem.weight is percentage
+        const balanceOut = assetOut.balance.amount
+        const balanceIn = assetIn.balance.amount
+        const weightIn = assetIn.weight / 100
+        const weightOut = assetOut.weight / 100
+        const amount = this.minusFees(amountIn.amount)
+        
+        const amountOut := balanceOut * ((1- balanceIn / (balanceIn + amount) ** (weightIn/weightOut))
+        
+        return {
+            amount: amountOut,
+            denom:denomOut
+        }
+    }
+    
+    // RightSwap implements InGivenOut
+    // Input how many coins you want to buy, output an amount you need to pay
+    // Ai = Bi * ((Bo/(Bo - Ao)) ** Wo/Wi -1)
+    function rightSwap(amountIn: Coin, amountOut: Coin) Coin {
+    
+        const assetIn = this.pool.findAssetByDenom(amountIn.denom)
+        abortTransactionUnless(assetIn != null)
+        const AssetOut = this.pool.findAssetByDenom(amountOut.denom)
+        abortTransactionUnless(assetOut != null)
+        
+        const balanceIn = assetIn.balance.amount
+        const balanceOut = assetOut.balance.amount
+        const weightIn = assetIn.weight / 100
+        const weightOut = assetOut.weight / 100
+    
+        const amount = balanceIn * ((balanceOut/(balanceOut - amountOut.amount) ** (weightOut/weightIn) - 1)
+    
+        abortTransactionUnless(amountIn.amount > amount)
+    
+        return {
+            amount,
+            denom: amountIn.denom
+        }
+    }
+    
+    // amount - amount * feeRate / 10000
+    function minusFees(amount sdk.Int) sdk.Int {
+        return amount * (1 - this.pool.feeRate / 10000))
+    }
+    
+    
+}
+```
+
+#### Data packets
+
 Only one packet data type is required: `IBCSwapDataPacket`, which specifies the message type and data(protobuf marshalled).  It is a wrapper for interchain swap messages.
 
 ```ts
@@ -94,11 +261,12 @@ enum MessageType {
     LeftSwap,
     RightSwap,
 }
-
+```
+```ts
 // IBCSwapDataPacket is used to wrap message for relayer.
 interface IBCSwapDataPacket {
     msgType: MessageType,
-    data: Uint8Array, // Bytes
+    data: []byte, // Bytes
 }
 ```
 
@@ -122,6 +290,8 @@ IBCSwap implements the following sub-protocols:
 
 ``` ts
 interface MsgCreatePoolRequest {
+    sourcePort: string,
+    sourceChannel: string,
     sender: string,
     denoms: string[],
     decimals: [],
@@ -136,7 +306,7 @@ interface MsgDepositRequest {
     tokens: Coin[],
 }
 interface MsgSingleDepositResponse {
-    pool_token: Coin[];
+    poolToken: Coin;
 }
 ```
 ```ts
@@ -150,7 +320,7 @@ interface MsgWithdrawResponse {
 }
 ```
  ```ts
- interface MsgLeftSwapRequest {
+interface MsgLeftSwapRequest {
     sender: string,
     tokenIn: Coin,
     denomOut: string,
@@ -179,63 +349,43 @@ interface MsgSwapResponse {
 To implement interchain swap, we introduce the `Message Delegator` and `Relay Listener`. The `Message Delegator` will pre-process the request (validate msgs, lock assets, etc), and then forward the transactions to the relayer.
 
 ```go
-func (k Keeper) DelegateCreatePool(goctx context.Context, msg *types.MsgCreatePoolRequest) (*types.MsgCreatePoolResponse, error) {
-	ctx := sdk.UnwrapSDKContext(goctx)
+function delegateCreatePool(msg: MsgCreatePoolRequest) : MsgCreatePoolResponse {
 
-	if err := msg.ValidateBasic(); err != nil {
-		return nil, err
-	}
+    // ICS 24 host check if both port and channel are validate
+    abortTransactionUnless(host.portIdentifierValidator(msg.sourcePort))
+	abortTransactionUnless(host.channelIdentifierValidator(msg.sourceChannel));
 
-	_, err1 := sdk.AccAddressFromBech32(msg.Sender)
-	if err1 != nil {
-		return nil, err1
-	}
-
-	pool := types.NewBalancerLiquidityPool(msg.Denoms, msg.Decimals, msg.Weight)
-	if err := pool.Validate(); err != nil {
-		return nil, err
-	}
-
-	// count native tokens
-	count := 0
-	for _, denom := range msg.Denoms {
-		if k.bankKeeper.HasSupply(ctx, denom) {
-			count += 1
-			pool.UpdateAssetPoolSide(denom, types.PoolSide_POOL_SIDE_NATIVE_ASSET)
-		} else {
-			pool.UpdateAssetPoolSide(denom, types.PoolSide_POOL_SIDE_REMOTE_ASSET)
-		}
-	}
-	if count == 0 {
-		return nil, types.ErrNoNativeTokenInPool
-	}
-
-	msgByte, err0 := types.ModuleCdc.Marshal(msg)
-	if err0 != nil {
-		return nil, err0
-	}
-
-	packet := types.NewIBCSwapPacketData(types.CREATE_POOL, msgByte, nil)
-	if err := k.SendIBCSwapDelegationDataPacket(ctx, msg.SourcePort, msg.SourceChannel, msg.TimeoutHeight, msg.TimeoutTimestamp, packet); err != nil {
-		return nil, err
-	}
-
-	ctx.EventManager().EmitTypedEvents(msg)
-
-	return &types.MsgCreatePoolResponse{}, nil
+    // Only two assets in a pool
+    abortTransactionUnless(msg.denoms.length != 2)
+    abortTransactionUnless(msg.decimals.length != 2)
+    abortTransactionUnless(msg.weight.split(':').length != 2) // weight: "50:50"
+        
+	cosnt pool = newBalancerLiquidityPool(msg.denoms, msg.decimals, msg.weight)
+	
+    const localAssetCount = 0
+    for(var denom in msg.denoms) {
+       if (bank.hasSupply(denom)) {
+          localAssetCount += 1
+       }
+    }
+    // should have 1 native asset on the chain
+    abortTransactionUnless(localAssetCount == 1)
+	
+    // contructs the IBC data packet
+    const packet = {
+        type: MessageType.Create,
+        data: protobuf.encode(msg), // encode the request message to protobuf bytes.
+        memo: "",
+    }
+    sendAtomicSwapPacket(packet, msg.sourcePort, msg.sourceChannel, msg.timeoutHeight, msg.timeoutTimestamp)
+    
+    return new MsgCreatePoolResponse()
 }
 
-func (k Keeper) DelegateSingleDeposit(goctx context.Context, msg *types.MsgSingleDepositRequest) (*types.MsgSingleDepositResponse, error) {
-	ctx := sdk.UnwrapSDKContext(goctx)
-
-	if err := msg.ValidateBasic(); err != nil {
-		return nil, err
-	}
-
-	sender, err1 := sdk.AccAddressFromBech32(msg.Sender)
-	if err1 != nil {
-		return nil, err1
-	}
+function delegateSingleDeposit(msg MsgSingleDepositRequest) : MsgSingleDepositResponse {
+	
+    abortTransactionUnless(msg.sender != null)
+    abortTransactionUnless(msg.token.lenght > 0)
 
 	// deposit assets to the swap module
 	length := len(msg.Tokens)
