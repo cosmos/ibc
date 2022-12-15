@@ -7,7 +7,7 @@ requires: 25, 26
 kind: instantiation
 author: Haifeng Xi <haifeng@bianjie.ai>
 created: 2021-11-10
-modified: 2022-12-14
+modified: 2022-12-15
 ---
 
 > This standard document follows the same design principles of [ICS 20](../ics-020-fungible-token-transfer) and inherits most of its content therefrom, while replacing `bank` module based asset tracking logic with that of the `nft` module.
@@ -41,29 +41,53 @@ Only one packet data type is required: `NonFungibleTokenPacketData`, which speci
 interface NonFungibleTokenPacketData {
   classId: string
   classUri: string
-  classData: byte[]
+  classData: string
   tokenIds: string[]
   tokenUris: string[]
-  tokenData: byte[][]
+  tokenData: string[]
   sender: string
   receiver: string
   memo: string
 }
 ```
 
-`classId` uniquely identifies the class/collection which the tokens being transferred belong to in the sending chain. In the case of an ERC-1155 compliant smart contract, for example, this could be a string representation of the top 128 bits of the token ID.
+`classId` is a required field that SHOULD never be empty, it uniquely identifies the class/collection/contract which the tokens being transferred belong to in the sending chain. In the case of an ERC-1155 compliant smart contract, for example, this could be a string representation of the top 128 bits of the token ID.
 
-`classUri` is an optional field which, if present, contains off-chain [class metadata](https://docs.opensea.io/docs/contract-level-metadata) that could be extremely beneficial for cross-chain interoperability with NFT marketplaces like OpenSea.
+`classUri` is an optional field which, if present and not empty, contains off-chain [class metadata](https://docs.opensea.io/docs/contract-level-metadata) that could be extremely beneficial for cross-chain interoperability with NFT marketplaces like OpenSea.
 
-`classData`is an optional field which, if present, contains opaque on-chain class metadata such as royalty related parameters.
+`classData`is an optional field which, if present and not empty, contains on-chain class metadata such as royalty related parameters.
 
-`tokenIds` uniquely identifies some tokens of the given class that are being transferred. In the case of an ERC-1155 compliant smart contract, for example, a `tokenId` could be a string representation of the bottom 128 bits of the token ID.
+`tokenIds` array is an optional field which, if present, SHOULD have a size greater than zero and contain non-empty entries that uniquely identify tokens (of the given class) that are being transferred. In the case of an ERC-1155 compliant smart contract, for example, a `tokenId` could be a string representation of the bottom 128 bits of the token ID.
 
-Each `tokenId` has a corresponding entry in `tokenUris` which, if not empty, refers to an off-chain resource that is typically an immutable JSON file containing the token's metadata.
+`tokenUris` array is an optional field which, if present, SHOULD have the same size as `tokenIds`. Each `tokenUris` entry, if not empty, refers to an off-chain resource that is typically an immutable JSON file containing metadata associated with the token identified by the corresponding `tokenIds` entry.
 
-Each `tokenId` has another corresponding entry in `tokenData` which, if not null, contains opaque on-chain application data associated with the token.
+`tokenData` array is an optional field which, if present, SHOULD have the same size as `tokenIds`. Each `tokenData` entry, if not empty, contains on-chain application data associated with the token identified by the corresponding `tokenIds` entry.
 
-The `memo` field is not used within the token transfer, however, it may be used either for external off-chain users (i.e. exchanges) or for middleware wrapping transfer that can parse and execute custom logic on the basis of the passed in memo. If the memo is intended to be parsed and interpreted by higher-level middleware, then these middlewares are advised to namespace their additions to the memo string so that they do not overwrite each other. Chains should ensure that there is some length limit on the entire packet data to ensure that the packet does not become a DOS vector. However, these do not need to be protocol-defined limits. If the receiver cannot accept a packet because of length limitations, this will lead to a timeout on the sender side.
+Both `tokenData` entries and `classData` SHOULD be Base64 encoded JSON strings that have the following structure:
+
+```json
+{
+  "key1" : { "value":"...", "mime":"..."},
+  "key2" : { "value":"...", "mime":"..."},
+  ...
+}
+```
+
+`mime` is an optional property that specifies the media type of the corresponding key-value. If a key-value is of the default type of string, then `mime` can be omitted. Otherwise, `mime` MUST be non-empty and have a value that comes from this [list](https://www.iana.org/assignments/media-types/media-types.xhtml).
+
+Chain applications are advised to namespace the keys; to achieve maximum interoperability across applications, standardization of these namespaces is desired but out of the scope.
+
+An example of `classData` content (raw JSON before being Base64 encoded) is shown below:
+
+```json
+{
+  "opensea:name" : { "value":"Crypto Creatures" },
+  "opensea:image" : { "value":"...(Base64 encoded media binary)", "mime":"image/png"},
+  "opensea:seller_fee_basis_points" : { "value":"100" }
+}
+```
+
+The optional `memo` field is not used within the transfer, however, it may be used either for external off-chain users (i.e. exchanges) or for middleware wrapping transfer that can parse and execute custom logic on the basis of the passed-in memo. If the memo is intended to be parsed and interpreted by higher-level middleware, then these middlewares are advised to namespace their additions to the memo string so that they do not overwrite each other. Chains should ensure that there is some length limit on the entire packet data to ensure that the packet does not become a DOS vector. However, these do not need to be protocol-defined limits. If the receiver cannot accept a packet because of length limitations, this will lead to a timeout on the sender side.
 
 As tokens are sent across chains using the ICS-721 protocol, they begin to accrue a record of channels across which they have been transferred. This record information is encoded into the `classId` field.
 
@@ -116,24 +140,24 @@ The sub-protocols described herein should be implemented in a "non-fungible toke
 The NFT asset tracking module should implement the following functions:
 
 ```typescript
-function CreateOrUpdateClass(classId: string, classUri: string, classData: byte[]) {
+function CreateOrUpdateClass(classId: string, classUri: string, classData: string) {
   // creates a new NFT Class identified by classId
   // if classId already exists, app logic may choose to update class metadata accordingly
 }
 ```
 
 ```typescript
-function Mint(classId: string, tokenId: string, tokenUri: string, tokenData: byte[], receiver: string) {
+function Mint(classId: string, tokenId: string, tokenUri: string, tokenData: string, receiver: string) {
   // creates a new NFT identified by <classId,tokenId>
   // receiver becomes owner of the newly minted NFT
 }
 ```
 
 ```typescript
-function Transfer(classId: string, tokenId: string, receiver: string, tokenData: byte[]) {
+function Transfer(classId: string, tokenId: string, receiver: string, tokenData: string) {
   // transfers the NFT identified by <classId,tokenId> to receiver
   // receiver becomes new owner of the NFT
-  // if tokenData is not null, app logic may choose to update token data accordingly
+  // if tokenData is not empty, app logic may choose to update token data accordingly
 }
 ```
 
@@ -152,13 +176,6 @@ function GetOwner(classId: string, tokenId: string) {
 ```typescript
 function GetNFT(classId: string, tokenId: string) {
   // returns NFT identified by <classId,tokenId>
-}
-```
-
-```typescript
-function HasClass(classId: string) {
-  // returns true if NFT Class identified by classId already exists;
-  // returns false otherwise
 }
 ```
 
@@ -322,7 +339,7 @@ function createOutgoingPacket(
     tokenUris.push(token.GetUri())
     tokenData.push(token.GetData())
   }
-  NonFungibleTokenPacketData data = NonFungibleTokenPacketData{classId, nft.GetClass(classId).GetUri(), tokenIds, tokenUris, tokenData, sender, receiver}
+  NonFungibleTokenPacketData data = NonFungibleTokenPacketData{classId, nft.GetClass(classId).GetUri(), nft.GetClass(classId).GetData(), tokenIds, tokenUris, tokenData, sender, receiver}
   ics4Handler.sendPacket(Packet{timeoutHeight, timeoutTimestamp, destPort, destChannel, sourcePort, sourceChannel, data}, getCapability("port"))
 }
 ```
@@ -452,6 +469,7 @@ Coming soon.
 | May 18, 2022 | Added paragraph about NFT metadata mutability            |
 | Nov 08, 2022 | Added `tokenData` to PacketData                          |
 | Dec 14, 2022 | Added `classData` and `memo` to PacketData               |
+| Dec 15, 2022 | Tightened spec on `classData` and `tokenData`            |
 
 ## Copyright
 
