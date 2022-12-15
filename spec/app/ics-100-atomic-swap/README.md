@@ -64,7 +64,9 @@ enum SwapMessageType {
   TYPE_MSG_TAKE_SWAP = 2,
   TYPE_MSG_CANCEL_SWAP = 3,
 }
+```
 
+```typescript
 // AtomicSwapPacketData is comprised of a swap message type, raw transaction and optional memo field.
 interface AtomicSwapPacketData {
   type: SwapMessageType;
@@ -78,48 +80,56 @@ All `AtomicSwapPacketData` will be forwarded to the corresponding message handle
 ```typescript
 interface MakeSwapMsg {
   // the port on which the packet will be sent, specified by the maker when the order is created
-  source_port string;
+  sourcePort string;
   // the channel on which the packet will be sent, specified by the maker when the order is created
-  source_channel: string;
+  sourceChannel: string;
   // the tokens to be exchanged
-  sell_token : Coin;
-  buy_token: Coin;
+  sellToken : Coin;
+  buyToken: Coin;
   // the maker's address
-  maker_address: string;
+  makerAddress: string;
   // the maker's address on the taker chain
-  maker_receiving_address string;
-  // if desired_taker is specified,
-  // only the desired_taker is allowed to take this order
+  makerReceivingAddress string;
+  // if desiredTaker is specified,
+  // only the desiredTaker is allowed to take this order
   // this is the address on the taker chain
-  desired_taker: string;
-  creation_timestamp: int64;
-  expiration_timestamp: int64;
-  timeout_height: int64,
-  timeout_timestamp: int64,
+  desiredTaker: string;
+  creationTimestamp: int64;
+  expirationTimestamp: int64;
+  timeoutHeight: int64,
+  timeoutTimestamp: int64,
 }
 ```
 
 ```typescript
 interface TakeSwapMsg {
-  order_id: string;
+  orderId: string;
   // the tokens to be sell
-  sell_token: Coin;
+  sellToken: Coin;
   // the taker's address
-  taker_address: string;
+  takerAddress: string;
   // the taker's address on the maker chain
-  taker_receiving_address: string;
-  create_timestamp: int64;
-  timeout_height: int64,
-  timeout_timestamp: int64,
+  takerReceivingAddress: string;
+  creationTimestamp: int64;
+  timeoutHeight: int64,
+  timeoutTimestamp: int64,
 }
 ```
 
 ```typescript
 interface TakeCancelMsg {
-  order_id: string;
-  maker_address: string;
-  timeout_height: int64,
-  timeout_timestamp: int64,
+  orderId: string;
+  makerAddress: string;
+  timeoutHeight: int64,
+  timeoutTimestamp: int64,
+}
+```
+
+Note: Coin is sdk.Coin, 
+```ts
+interface Coin {
+  amount: int64,
+  denom: string
 }
 ```
 
@@ -138,12 +148,12 @@ interface OrderBook {
   maker: MakeSwapMsg;
   status: Status;
   // set onRecieved(), Make sure that the take order can only be sent to the chain the make order came from
-  port_id_on_taker_chain: string;
+  portIdOnTakerChain: string;
   // set onRecieved(), Make sure that the take order can only be sent to the chain the make order came from
-  channel_id_on_taker_chain: string;
+  channelIdOnTakerChain: string;
   taker: TakeSwap;
-  cancel_timestamp: int64;
-  complete_timestamp: int64;
+  cancelTimestamp: int64;
+  completeTimestamp: int64;
   
   createOrder(msg: MakeSwapMsg) OrderBook {
     return {
@@ -193,8 +203,8 @@ function makeSwap(request MakeSwapMsg) {
     abortTransactionUnless(balance.amount > request.sell_token.Amount)
     // gets escrow address by source port and source channel
     const escrowAddr = escrowAddress(request.sourcePort, request.sourceChannel)
-    // locks the sell_token to the escrow account
-    const err = bankkeeper.sendCoins(request.maker_address, escrowAddr, request.sell_token)
+    // locks the sellToken to the escrow account
+    const err = bank.sendCoins(request.makerAddress, escrowAddr, request.sellToken)
     abortTransactionUnless(err == null)
     // contructs the IBC data packet
     const packet = {
@@ -202,7 +212,7 @@ function makeSwap(request MakeSwapMsg) {
         data: protobuf.encode(request), // encode the request message to protobuf bytes.
         memo: "",
     }
-    sendAtomicSwapPacket(packet, request.source_port, request.source_channel, request.timeout_height, request.timeout_timestamp)
+    sendAtomicSwapPacket(packet, request.sourcePort, request.sourceChannel, request.timeoutHeight, request.timeoutTimestamp)
     
     // creates and saves order on the maker chain.
     const order = OrderBook.createOrder(request)
@@ -213,19 +223,21 @@ function makeSwap(request MakeSwapMsg) {
 
 ```ts
 function takeSwap(request TakeSwapMsg) {
-    const order = OrderBook.findOrderById(request.order_id)
+    const order = store.findOrderById(request.orderId)
     abortTransactionUnless(order != null)
-    abortTransactionUnless(order.expired_timestamp < currentTimestamp())
-    abortTransactionUnless(order.maker.buy_token.denom === request.sell_token.denom)
-    abortTransactionUnless(order.maker.buy_token.amount === request.sell_token.amount)
+    abortTransactionUnless(order.expirationTimestamp < currentTimestamp())
+    abortTransactionUnless(order.maker.buyToken.denom === request.sellToken.denom)
+    abortTransactionUnless(order.maker.buyToken.amount === request.sellToken.amount)
     abortTransactionUnless(order.taker == null)
+    //if `desiredTaker` is set, only the desiredTaker can accept the order.
+    abortTransactionUnless(order.maker.desiredTaker != null && order.maker.desiredTaker != request.takerAddress)
     
-    const balance = bank_keeper.getBalances(request.taker_address)
-    abortTransactionUnless(balance.amount > request.sell_token.Amount)
+    const balance = bank.getBalances(request.takerAddress)
+    abortTransactionUnless(balance.amount > request.sellToken.amount)
     // gets the escrow address by source port and source channel
     const escrowAddr = escrowAddress(request.sourcePort, request.sourceChannel)
-    // locks the sell_token to the escrow account
-    const err = bankkeeper.sendCoins(request.taker_address, escrowAddr, request.sell_token)
+    // locks the sellToken to the escrow account
+    const err = bank.sendCoins(request.takerAddress, escrowAddr, request.sellToken)
     abortTransactionUnless(err == null)
     // constructs the IBC data packet
     const packet = {
@@ -233,7 +245,7 @@ function takeSwap(request TakeSwapMsg) {
         data: protobuf.encode(request), // encode the request message to protobuf bytes.
         memo: "",
     } 
-    sendAtomicSwapPacket(packet, order.port_id_on_taker_chain, order.channel_id_on_taker_chain, request.timeout_height, request.timeout_timestamp)
+    sendAtomicSwapPacket(packet, order.portIdOnTakerChain, order.channelIdOnTakerChain, request.timeoutHeight, request.timeoutTimestamp)
     
     //update order state
     order.taker = request // mark that the order has been occupied
@@ -244,11 +256,11 @@ function takeSwap(request TakeSwapMsg) {
 
 ```ts
 function cancelSwap(request TakeCancelMsg) {
-    const order = OrderBook.findOrderById(request.order_id)
+    const order = store.findOrderById(request.orderId)
     // checks if the order exists
     abortTransactionUnless(order != null)
     // make sure the sender is the maker of the order.
-    abortTransactionUnless(order.maker.maker_address == request.maker_address)
+    abortTransactionUnless(order.maker.makerAddress == request.makerAddress)
     abortTransactionUnless(order.status == Status.SYNC || order.status == Status.INITIAL)
     
     // constructs the IBC data packet
@@ -259,7 +271,7 @@ function cancelSwap(request TakeCancelMsg) {
     } 
     // the request is sent to the taker chain, and the taker chain decides if the cancel order is accepted or not
     // the cancelation can only be sent to the same chain as the make order.
-    sendAtomicSwapPacket(packet, order.maker.source_port, order.maker.source_channel request.timeout_height, request.timeout_timestamp)
+    sendAtomicSwapPacket(packet, order.maker.sourcePort, order.maker.sourceChannel request.timeoutHeight, request.timeoutTimestamp)
 }
 ```
 
@@ -329,7 +341,10 @@ function onChanOpenTry(
   abortTransactionUnless(order === UNORDERED)
   // assert that version is "ics100-1"
   abortTransactionUnless(counterpartyVersion === "ics100-1")
-
+  
+  // allocate an escrow address
+  channelEscrowAddresses[channelIdentifier] = newAddress()
+  
   return "ics100-1", nil
 }
 ```
@@ -391,50 +406,52 @@ function sendAtomicSwapPacket(
 
 ```typescript
 function onRecvPacket(packet channeltypes.Packet) {
-  switch packet.type {
+  const swapPaket: AtomicSwapPacketData =  packet.data
+  switch swapPaket.type {
       case TYPE_MSG_MAKE_SWAP:
-        const make_msg = protobuf.decode(packet.bytes)
+        const makeMsg = protobuf.decode(swapPaket.data)
         
         // check if buy_token is native token on the taker chain
-        const supply = bank_keeper.getSuppy(make_msg.buy_token.denom)
+        const supply = bank.getSuppy(makeMsg.buyToken.denom)
         abortTransactionUnless(supply > 0)
         
         // create and save order on the taker chain.
-        const order = OrderBook.createOrder(make_msg)
+        const order = OrderBook.createOrder(makeMsg)
         order.status = Status.SYNC
-        order.port_id_on_taker_chain = packet.destinationPort
-        order.channel_id_on_taker_chain = packet.destinationChannel
+        order.portIdOnTakerChain = packet.destinationPort
+        order.channelIdOnTakerChain = packet.destinationChannel
         //saves order to store
         store.save(order)
         break;
       case TYPE_MSG_TAKE_SWAP:
-        const take_msg = protobuf.decode(packet.bytes)
-        const order = OrderBook.findOrderById(take_msg.order_id)
+        const takeMsg = protobuf.decode(swapPaket.data)
+        const order = store.findOrderById(takeMsg.orderId)
         abortTransactionUnless(order != null)
         abortTransactionUnless(order.status == Status.SYNC)
-        abortTransactionUnless(order.expired_timestamp < currentTimestamp())
-        abortTransactionUnless(take_msg.sell_token.denom == order.maker.buy_token.denom)
-        abortTransactionUnless(take_msg.sell_token.amount == order.maker.buy_token.amount)
+        abortTransactionUnless(order.expiredTimestamp < currentTimestamp())
+        abortTransactionUnless(take_msg.sellToken.denom == order.maker.buyToken.denom)
+        abortTransactionUnless(take_msg.sellToken.amount == order.maker.buyToken.amount)
         
-        // send maker.sell_token to taker's receiving address
-        bank_keeper.sendCoins(escrowAddr, take_msg.taker_receiving_address, order.maker.sell_token)
+        const escrowAddr = escrowAddress(packet.destinationPort, packet.destinationChannel)
+        // send maker.sellToken to taker's receiving address
+        bank.sendCoins(escrowAddr, takeMsg.takerReceivingAddress, order.maker.sellToken)
         
         // update status of order
         order.status = Status.COMPLETE
-        order.taker = take_msg
-        order.complete_timestamp = take_msg.create_timestamp
+        order.taker = takeMsg
+        order.completeTimestamp = takeMsg.creationTimestamp
         store.save(order)
         break;
       case TYPE_MSG_CANCEL_SWAP:
-        const cancel_msg = protobuf.decode(packet.bytes)
-        const order = OrderBook.findOrderById(cancel_msg.order_id)
+        const cancelMsg = protobuf.decode(swapPaket.data)
+        const order = store.findOrderById(cancelMsg.orderId)
         abortTransactionUnless(order != null)
         abortTransactionUnless(order.status == Status.SYNC || order.status == Status.INITIAL)
         abortTransactionUnless(order.taker != null) // the maker order has not been occupied 
         
         // update status of order
         order.status = Status.CANCEL
-        order.cancel_timestamp = cancel_msg.create_timestamp
+        order.cancelTimestamp = cancelMsg.creationTimestamp 
         store.save(order)
         break;
       default:
@@ -447,47 +464,51 @@ function onRecvPacket(packet channeltypes.Packet) {
 
 ```typescript
 function onAcknowledgePacket(
-  packet: AtomicSwapPacketData,
+  packet channeltypes.Packet
   acknowledgement: bytes) {
   // ack is failed
   if (!ack.success) {
     refundToken(packet) 
   } else {
-    switch packet.type {
+    
+    const swapPaket: AtomicSwapPacketData = protobuf.decode(packet.data)
+    const escrowAddr = escrowAddress(packet.sourcePort, packet.sourceChannel)
+    
+    switch swapPaket.type {
       case TYPE_MSG_MAKE_SWAP:
-        const make_msg = protobuf.decode(packet.bytes)
+        const makeMsg = protobuf.decode(swapPaket.data)
         
         // update order status on the maker chain.
-        const order = OrderBook.findOrder(generateOrderId(make_msg))
+        const order = store.findOrderById(generateOrderId(makeMsg))
         order.status = Status.SYNC
         //save order to store
         store.save(order)
         break;
       case TYPE_MSG_TAKE_SWAP:
-        const take_msg = protobuf.decode(packet.bytes)
+        const takeMsg = protobuf.decode(swapPaket.data)
         
         // update order status on the taker chain.
-        const order = OrderBook.findOrderById(take_msg.order_id)
+        const order = store.findOrderById(takeMsg.orderId)
         order.status = Status.COMPLETE
-        order.taker = take_msg
-        order.complete_timestamp = take_msg.create_timestamp
+        order.taker = takeMsg
+        order.completeTimestamp = takeMsg.creationTimestamp
         store.save(order)
         
         //send tokens to maker
-        bank_keeper.sendCoins(escrowAddr, order.maker.maker_receiving_address, take_msg.sell_token)
+        bank.sendCoins(escrowAddr, order.maker.makerReceivingAddress, takeMsg.sellToken)
         break;
       case TYPE_MSG_CANCEL_SWAP:
-        const cancel_msg = protobuf.decode(packet.bytes)
+        const cancelMsg = protobuf.decode(swapPaket.data)
         
         // update order status on the maker chain.
-        const order = OrderBook.findOrderById(cancel_msg.order_id)
+        const order = store.findOrderById(cancelMsg.orderId)
         // update state on maker chain
         order.status = Status.CANCEL
-        order.cancel_timestamp = cancel_msg.create_timestamp
+        order.cancelTimestamp = cancelMsg.creationTimestamp
         store.save(order)
         
         //send tokens back to maker
-        bank_keeper.sendCoins(escrowAddr, order.maker.maker_address, order.maker.sell_token)
+        bank.sendCoins(escrowAddr, order.maker.makerAddress, order.maker.sellToken)
         break;
       default:
         throw new Error("ErrUnknownDataPacket")
@@ -508,23 +529,25 @@ function onTimeoutPacket(packet: Packet) {
 
 ```typescript
 function refundTokens(packet: Packet) {
-  AtomicSwapPacketData data = packet.data
+  const swapPacket: AtomicSwapPacketData = protobuf.decode(packet.data)
+  const escrowAddr = escrowAddress(packet.sourcePort, packet.sourceChannel)
+  
   //send tokens from module to message sender
-  cosnt order_id;
-  switch packet.type {
+  let orderId;
+  switch swapPaket.type {
       case TYPE_MSG_MAKE_SWAP:
-          const msg = protobuf.decode(data)
-          bank_keeper.sendCoins(escrowAddr, msg.maker_address, msg.sell_token)
+          const msg = protobuf.decode(swapPacket.data)
+          bank_keeper.sendCoins(escrowAddr, msg.makerAddress, msg.sellToken)
           order_id = generateOrderId(msg)
           break;
       case TYPE_MSG_TAKE_SWAP:
-          const msg = protobuf.decode(data)
-          bank_keeper.sendCoins(escrowAddr, msg.taker_address, msg.sell_token)
-          order = msg.order_id
+          const msg = protobuf.decode(swapPacket.data)
+          bank_keeper.sendCoins(escrowAddr, msg.takerAddress, msg.sellToken)
+          order = msg.orderId
       }
   }
   // update order state to cancel
-  order = Orderbook.findOrderById(orderId)
+  order = store.findOrderById(orderId)
   order.status = Status.CANCEL
   store.save(order)
 }
