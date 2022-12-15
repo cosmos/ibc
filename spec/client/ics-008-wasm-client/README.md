@@ -5,26 +5,31 @@ stage: draft
 category: IBC/TAO
 kind: instantiation
 implements: 2
-author: Parth Desai <parth@chorus.one>, Mateusz Kaczanowski <mateusz@chorus.one>
+author: Parth Desai <parth@chorus.one>, Mateusz Kaczanowski <mateusz@chorus.one>, Blas Rodriguez Irizar <blas@composable.finance>
 created: 2020-10-13
-modified: 2020-10-13
+modified: 2022-12-15
 ---
 
 ## Synopsis
 
-This specification document describes an interface to a client (verification algorithm) stored as a Wasm bytecode for a blockchain.
+This specification document describes an interface to a light client stored as a WASM bytecode for a blockchain.
 
 ### Motivation
 
 Currently adding a new client implementation or upgrading an existing one requires a hard upgrade because the client implementations are part of the static chain binary. Any change to the on-chain light client code is dependent on chain governance to approve an upgrade before it can be deployed.
 
-This may be acceptable when adding new client types, since the number of unique consensus algorithms that need to be supported is currently small. However, this process will become very tedious when it comes to upgrading light clients.
+This may be acceptable when adding new client types since the number of unique consensus algorithms that need to be supported is currently small. However, this process will become very tedious when it comes to upgrading light clients.
 
 Without dynamically upgradable light clients, a chain that wishes to upgrade its consensus algorithm (and thus break existing light clients) must wait for all counterparty chains to perform a hard upgrade that adds support for the upgraded light client before it itself can perform an upgrade on its chain. Examples of a consensus-breaking upgrade would be an upgrade from Tendermint v1 to a light-client breaking Tendermint v2 or switching from Tendermint consensus to Honeybadger. Changes to the internal state-machine logic will not affect consensus, e.g. changes to staking module do not require an IBC upgrade.
 
-Requiring all counterparties to statically add new client implementations to their binaries will inevitably slow the pace of upgrades in the IBC network, since the deployment of an upgrade on even a very experimental, fast-moving chain will be blocked by an upgrade to a high-value chain that will be inherently more conservative.
+Requiring all counterparties to statically add new client implementations to their binaries will inevitably slow the pace of upgrades in the IBC network since the deployment of an upgrade on even a very experimental, fast-moving chain will be blocked by an upgrade to a high-value chain that will be inherently more conservative.
 
-Once the IBC network broadly adopts dynamically upgradable clients, a chain may upgrade its consensus algorithm whenever it wishes and relayers may upgrade the client code of all counterparty chains without requiring the counterparty chains to perform an upgrade themselves. This prevents a dependency on counterparty chains when considering upgrading one's own consensus algorithm.
+Once the IBC network broadly adopts dynamically upgradable clients, a chain may upgrade its consensus algorithm whenever it wishes and relayers may upgrade the client code of all counterparty chains without requiring the counterparty chains to perform an upgrade themselves. This prevents a dependency on counterparty chains when considering upgrading one's consensus algorithm.
+
+Another reason why this interface is beneficial is that it removes the dependency between Light clients and the Go programming language. By using WASM
+as a compilation target, light clients can be written in any programming language whose toolchain includes WASM as a compilation target. Examples of
+these are Go, Rust, C, and C++.
+
 
 ### Definitions
 
@@ -45,16 +50,16 @@ This specification must satisfy the client interface defined in ICS 2.
 
 ## Technical Specification
 
-This specification depends on the correct instantiation of the `Wasm client` and is decoupled from any specific implementation of the target `blockchain` consensus algorithm.
+This specification depends on the correct instantiation of the `WASM client` and is decoupled from any specific implementation of the target `blockchain` consensus algorithm.
 
 ### Client state
 
-The Wasm client state tracks location of the Wasm bytecode via `codeId`. Binary data represented by `data` field is opaque and only interpreted by the Wasm Client Code. `type` represents client type.
-`type` and `codeId` both are immutable.
+The Wasm client state tracks the location of the Wasm bytecode via `codeHash`. Binary data represented by `data` field is opaque and only interpreted by the Wasm Client Code. `type` represents client type.
+`type` and `codeHash` both are immutable.
 
 ```typescript
 interface ClientState {
-  codeId: []byte
+  codeHash: []byte
   data: []byte
   latestHeight: Height
 }
@@ -62,12 +67,12 @@ interface ClientState {
 
 ### Consensus state
 
-The Wasm consensus state tracks the timestamp (block time), `Wasm Client code` specific fields and commitment root for all previously verified consensus states.
-`type` and `codeId` both are immutable.
+The Wasm consensus state tracks the timestamp (block time), `WASM Client` code-specific fields and commitment root for all previously verified consensus states.
+`type` and `codeHash` both are immutable.
 
 ```typescript
 interface ConsensusState {
-  codeId: []byte
+  codeHash: []byte
   data: []byte
   timestamp: uint64
 }
@@ -103,7 +108,7 @@ This is designed to allow the height to reset to `0` while the revision number i
 
 ### Headers
 
-Contents of Wasm client headers depend upon `Wasm Client Code`.
+Contents of Wasm client headers depend upon `WASM Client` Code.
 
 ```typescript
 interface Header {
@@ -395,7 +400,7 @@ Not applicable.
 
 ## Forwards Compatibility
 
-As long as `Wasm Client Code` keeps interface consistent with `ICS 02` it should be forward compatible
+As long as `Wasm Client Code` keeps its interface consistent with `ICS 02` it should be forward compatible
 
 ## Example Implementation
 
