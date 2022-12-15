@@ -183,7 +183,7 @@ function generateOrderId(msg MakeSwapMsg) {
 
 #### Taking a swap
 
-1. A user takes an order on the taker chain by triggering `TakeSwap`.  Tokens are sent to the escrow address owned by the module.  An order cannot be taken if the current time is later than the `expired_timestamp`
+1. A user takes an order on the taker chain by triggering `TakeSwap`.  Tokens are sent to the escrow address owned by the module.  An order cannot be taken if the current time is later than the `expirationTimestamp`
 2. An `AtomicSwapPacketData` is relayed to the maker chain where `onRecvPacket` the escrowed tokens are sent to the destination address.  
 3. A packet is subsequently relayed back for acknowledgement. Upon acknowledgement escrowed tokens on the taker chain is sent to the related destination address.  A packet timeout or a failure during `onAcknowledgePacket` will result in a refund of the escrowed tokens.
 
@@ -229,7 +229,7 @@ function takeSwap(request TakeSwapMsg) {
     abortTransactionUnless(order.maker.buyToken.denom === request.sellToken.denom)
     abortTransactionUnless(order.maker.buyToken.amount === request.sellToken.amount)
     abortTransactionUnless(order.taker == null)
-    //if `desiredTaker` is set, only the desiredTaker can accept the order.
+    // if `desiredTaker` is set, only the desiredTaker can accept the order.
     abortTransactionUnless(order.maker.desiredTaker != null && order.maker.desiredTaker != request.takerAddress)
     
     const balance = bank.getBalances(request.takerAddress)
@@ -429,9 +429,11 @@ function onRecvPacket(packet channeltypes.Packet) {
         abortTransactionUnless(order != null)
         abortTransactionUnless(order.status == Status.SYNC)
         abortTransactionUnless(order.expiredTimestamp < currentTimestamp())
-        abortTransactionUnless(take_msg.sellToken.denom == order.maker.buyToken.denom)
-        abortTransactionUnless(take_msg.sellToken.amount == order.maker.buyToken.amount)
-        
+        abortTransactionUnless(takeMsg.sellToken.denom == order.maker.buyToken.denom)
+        abortTransactionUnless(takeMsg.sellToken.amount == order.maker.buyToken.amount)
+        // if `desiredTaker` is set, only the desiredTaker can accept the order.
+        abortTransactionUnless(order.maker.desiredTaker != null && order.maker.desiredTaker != takeMsg.takerAddress)
+    
         const escrowAddr = escrowAddress(packet.destinationPort, packet.destinationChannel)
         // send maker.sellToken to taker's receiving address
         bank.sendCoins(escrowAddr, takeMsg.takerReceivingAddress, order.maker.sellToken)
