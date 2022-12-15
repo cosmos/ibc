@@ -116,7 +116,7 @@ The sub-protocols described herein should be implemented in a "non-fungible toke
 The NFT asset tracking module should implement the following functions:
 
 ```typescript
-function SaveClass(classId: string, classUri: string, classData: string) {
+function CreateOrUpdateClass(classId: string, classUri: string, classData: byte[]) {
   // creates a new NFT Class identified by classId
   // if classId already exists, app logic may choose to update class metadata accordingly
 }
@@ -350,7 +350,7 @@ function ProcessReceivedPacketData(data: NonFungibleTokenPacketData) {
       nft.Transfer(data.classId.slice(len(prefix)), data.tokenIds[i], data.receiver, data.tokenData[i])
     } else { // we are sink chain, mint voucher to receiver
       prefixedClassId = data.destPort + '/' + data.destChannel + '/' + data.classId
-      nft.SaveClass(prefixedClassId, data.classUri, data.classData)
+      nft.CreateOrUpdateClass(prefixedClassId, data.classUri, data.classData)
       nft.Mint(prefixedClassId, data.tokenIds[i], data.tokenUris[i], data.tokenData[i], data.receiver)
     }
   }
