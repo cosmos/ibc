@@ -510,7 +510,7 @@ function delegateRightSwap(msg MsgRightSwapRequest) {
     abortTransactionUnless(msg.slippage > 0)
     abortTransactionUnless(msg.recipient != null)
     
-    const pool = store.findPoolById([tokenIn.denom, tokenOut.denom])
+    const pool = store.findPoolById(generatePoolId[tokenIn.denom, tokenOut.denom]))
     abortTransactionUnless(pool != null)
     abortTransactionUnless(pool.status == PoolStatus.POOL_STATUS_READY)
 	
@@ -638,7 +638,7 @@ function onRightSwapReceived(msg MsgRightSwapRequest) MsgSwapResponse {
     abortTransactionUnless(msg.slippage > 0)
     abortTransactionUnless(msg.recipient != null)
     
-    const pool = store.findPoolById([tokenIn.denom, tokenOut.denom])
+    const pool = store.findPoolById(generatePoolId[tokenIn.denom, tokenOut.denom]))
     abortTransactionUnless(pool != null)
     abortTransactionUnless(pool.status == PoolStatus.POOL_STATUS_READY)
     // fetch fee rate from the params module, maintained by goverance
@@ -685,7 +685,7 @@ function onWithdrawAcknowledged(request: MsgWithdrawRequest, response: MsgWithdr
 }
 
 function onLeftSwapAcknowledged(request: MsgLeftSwapRequest, response: MsgSwapResponse) {
-    const pool = store.findPoolById([request.tokenIn.denom, request.tokenOut.denom])
+    const pool = store.findPoolById(generatePoolId[request.tokenIn.denom, request.tokenOut.denom]))
     abortTransactionUnless(pool != null)
     
     const assetOut = pool.findAssetByDenom(request.tokenOut.denom)
@@ -699,7 +699,7 @@ function onLeftSwapAcknowledged(request: MsgLeftSwapRequest, response: MsgSwapRe
 }
 
 function onRightSwapAcknowledged(request: MsgRightSwapRequest, response: MsgSwapResponse) {
-    const pool = store.findPoolById([request.tokenIn.denom, request.tokenOut.denom])
+    const pool = store.findPoolById(generatePoolId([request.tokenIn.denom, request.tokenOut.denom]))
     abortTransactionUnless(pool != null)
     
     const assetOut = pool.findAssetByDenom(request.tokenOut.denom)
