@@ -1,5 +1,5 @@
 ---
-ics: 32
+ics: 33
 title: Multi-hop Channel
 stage: draft
 required-by: 4
@@ -40,13 +40,13 @@ Associated definitions are as defined in referenced prior standards (where the f
 
 ## Technical Specification
 
-The bulk of the spec will be around proof generation and verification. Channel handshake and packet message types will remain the same. Round trip messaging semantics and flow will remain the same as well. There is additional work on the verifier side on the destination chain as well as the relayers who need to query for proofs. 
+The bulk of the spec will be around proof generation and verification. IBC connections remain unchanged. Addiitonally, channel handshake and packet message types as well as general round trip messaging semantics and flow will remain the same. There is additional work on the verifier side on the destination chain as well as the relayers who need to query for proofs.
 
-Messages passed over multiple hops require proof of the connection path from source chain to destination chain as well as the packet commitment on the source chain. The connection path is proven by verifying the connection state and consensus state of each connection segment in the path to the destination chain. On a high level, this can be thought of as a connection path proof chain where the destination chain can prove the each segment of the connection path by proving the state of the prior connection within the next chains state root.
+Messages passed over multiple hops require proof of the connection path from source chain to destination chain as well as the packet commitment on the source chain. The connection path is proven by verifying the connection state and consensus state of each connection in the path to the destination chain. On a high level, this can be thought of as a channel path proof chain where the destination chain can prove a key/value on the source chain by iteratively proving each connection and consensus state in the channel path starting with the consensus state associated with the final client on the destination chain. Each subsequent consensus state and connection is proven until the source chain's consensus state is proven which can then be used to prove the desired key/value on the source chain.
 
 ### Channel Handshake and Packet Messages
 
-For both channel handshake and packet messages, additional connection hops are defined in the pre-existing `connectionHops` field. The connection IDs along the channel path must be pre-existing to guarantee delivery to the correct recipient. See `Path Forgery Protection` for more info.
+For both channel handshake and packet messages, additional connection hops are defined in the pre-existing `connectionHops` field. The connection IDs along the channel path must be pre-existing and in the `OPEN` state to guarantee delivery to the correct recipient. See `Path Forgery Protection` for more info.
 
 The spec for channel handshakes and packets remains the same. See [ICS 4](https://github.com/cosmos/ibc/tree/main/spec/core/ics-004-channel-and-packet-semantics).
 
@@ -54,15 +54,16 @@ In terms of connection topology, a user would be able to determine a viable chan
 
 ### Multihop Relaying
 
-Relayers would deliver channel handshake and IBC packets as they currently do except that they are required to provide more proof of the channel path. Relayers would scan packet events for the connectionHops field and determine if the packet is multi-hop by checking the number of hops in the field. If the number of hops is greater than one then the packet is a multi-hop packet and will need extra proof data.
+Relayers would deliver channel handshake and IBC packets as they currently do except that they are required to provide proof of the channel path. Relayers would scan packet events for the connectionHops field and determine if the packet is multi-hop by checking the number of hops in the field. If the number of hops is greater than one then the packet is a multi-hop packet and will need extra proof data.
 
 For each multi-hop channel (detailed proof logic below):
 
-- Scan source chain for IBC messages to relay.
-- Read the connectionHops field in from the scanned message to determine the channel path.
-- Query for proof of connection and consensus state for each intermediate connection in the channel path to the destination connection.
-- Query proof of packet commitment or handshake message commitment on source chain.
-- Submit proofs and data to RPC endpoint on destination chain.
+1. Scan source chain for IBC messages to relay.
+2. Read the connectionHops field in from the scanned message to determine the channel path.
+3. Lookup connection endpoints via chain registry configuration and ensure each connection in the channel path is updated to include the key/value to be proven on the source chain.
+4. Query for proof of connection and consensus state for each intermediate connection in the channel path to the destination connection.
+5. Query proof of packet commitment or handshake message commitment on source chain.
+6. Submit proofs and data to RPC endpoint on destination chain.
 
 Relayers are connection topology aware with configurations sourced from the [chain registry](https://github.com/cosmos/chain-registry).
 
@@ -70,44 +71,142 @@ Relayers are connection topology aware with configurations sourced from the [cha
 
 Graphical depiction of proof generation.
 
-![graphical_proof.png](graphical_proof.png)
+![graphical_proof.jpg](graphical_proof.jpg)
 
 Proof steps.
 
 ![proof_steps.png](proof_steps.png)
 
-Pseudocode proof generation for a channel between chains `A -> B -> C`.
+Pseudocode proof generation for a channel between `N` chains `C[0] --> C[i] --> C[N]`
 
-```typescript
-function queryBatchProof(client: Client, keys: []string) {
-    stateProofs = []
-    for key in keys {
-        resp = client.QueryABCI(abci.RequestQuery{
-            Path:   "store/ibc/key",
-            Height: height,
-            Data:   key,
-            Prove:  true,
-        })
-        proof = ConvertProofs(resp.ProofOps)
-        stateProofs = append(stateProofs, proof.Proofs[0])
-    }
-    return CombineProofs(stateProofs)
+```go
+
+// generic proof struct
+type ProofData struct {
+    Key   *MerklePath
+    Value []]byte
+    Proof []byte
 }
 
-// Query B & A for connectionState and consensusState kvs 
-keys = [
-    "ibc/connections/{id}",
-    "ibc/consensusStates/{height}",
-]
-batchStateProofB = queryBatchProof(clientB, keys)
-batchStateProofA = queryBatchProof(clientA, keys)
+// set of proofs for a multihop message
+type MultihopProof struct {
+    KeyProof *ProofData           // the key/value proof on the source chain
+    ConsensusProofs []*ProofData  // array of consensus proofs starting with proof of chain0 state root on chain1
+    ConnectionProofs []*ProofData // array of connection proofs starting with proof of conn10 on chain1
+}
 
-// Query A for channel handshake and/or packet messages
-keys = [
-    "ibc/channelEnds/ports/{portID}/channels/{channelID}",
-    "ibc/commitments/ports/{portID}/channels/{channelID}/packets/{sequence}"
-]
-batchMessageProofA = queryBatchProof(clientA, keys)
+// Generate proof of key/value at the proofHeight on source chain, chain0. 
+func GenerateMultihopProof(chains []*Chain, key string, value []byte, proofHeight exported.Height) *MultihopProof {
+
+    assert(len(chains) > 2)
+
+    var multihopProof MultihopProof
+    chain0 := chains[0] // source chain
+    chain1 := chains[1] // first hop chain
+ 
+    height01 := chain1.GetClientStateHeight(chain0) // height of chain0's client state on chain1
+    assert(height01 >= proofHeight) // ensure that chain0's client state is update to date
+
+    // query the key/value proof on the source chain at the proof height
+    keyProof, _ := chain0.QueryProofAtHeight([]byte(keyPathToProve), int64(proofHeight.GetRevisionHeight()))
+    prefixedKey := commitmenttypes.ApplyPrefix(chain0.GetPrefix(), commitmenttypes.NewMerklePath(key))
+
+    // assign the key/value proof
+    multihopProof.KeyProof = &ProofData{
+        Key:   &prefixedKey,
+        Value: nil,          // proven values are constructed during verification
+        Proof: proof,
+    }
+
+    // generate and assign consensus and connection proofs
+    multihopProof.ConsensusProofs = GenerateConsensusProofs(chains)
+    multihopProof.ConnectionProofs = GenerateConnectionProofs(chains)
+
+    return &multihopProof
+}
+
+// GenerateConsensusProofs generates consensus state proofs starting from the source chain to the N-1'th chain.
+// Compute proof for each chain 3-tuple starting from the source chain, C0 to the destination chain, CN
+// Step 1: |C0 ---> C1 ---> C2| ---> C3 ... ---> CN
+//         (i)     (i+1)   (i+2)
+// Step 2: C0 ---> |C1 ---> C2 ---> C3| ... ---> CN 
+//                 (i)    (i+1)    (i+2)
+// Step N-3:  C0 ---> C1 ...  ---> |CN-2 --> CN-1 ---> CN|
+//                                   (i)    (i+1)    (i+2)
+func GenerateConsensusProofs(chains []*Chain, height) []*ProofData {
+    assert(len(chains) > 2)
+
+    var proofs []*ProofData
+
+    // iterate all but the last two chains
+    for i := 0; i < len(chains)-2; i++ {
+  
+        previousChain := chains[i]   // previous chains state root is on currentChain and is the source chain for i==0.
+        currentChain  := chains[i+1] // currentChain is where the proof is queried and generated
+        nextChain     := chains[i+2] // nextChain holds the state root of the currentChain
+
+        currentHeight := GetClientStateHeight(currentChain, sourceChain) // height of previous chain state on current chain
+        nextHeight := GetClientStateHeight(nextChain, currentChain)      // height of current chain state on next chain
+
+        // consensus state of previous chain on current chain at currentHeight which is the height of A's client state on B
+        consensusState := GetConsensusState(currentChain, prevChain.ClientID, currentHeight)
+
+        // prefixed key for consensus state of previous chain 
+        consensusKey := GetPrefixedConsensusStateKey(currentChain, currentHeight)
+
+        // proof of previous chain's consensus state at currentHeight on currentChain at nextHeight
+        consensusProof := GetConsensusStateProof(currentChain, nextHeight, currentHeight, currentChain.ClientID)
+  
+        proofs = append(consStateProofs, &ProofData{
+            Key:   &consensusKey,
+            Value: consensusState,
+            Proof: consensusProof,
+        })
+    }
+     return proofs       
+  }
+
+// GenerateConnectionProofs generates connection state proofs starting with C1 -->  starting from the source chain to the N-1'th chain.
+// Compute proof for each chain 3-tuple starting from the source chain, C0 to the destination chain, CN
+// Step 1: |C0 ---> C1 ---> C2| ---> C3 ... ---> CN
+//         (i)     (i+1)   (i+2)
+// Step 2: C0 ---> |C1 ---> C2 ---> C3| ... ---> CN 
+//                 (i)    (i+1)    (i+2)
+// Step N-3:  C0 ---> C1 ...  ---> |CN-2 --> CN-1 ---> CN|
+//                                   (i)    (i+1)    (i+2)
+func GenerateConnectionProofs(chains []*Chain) []*ProofData {
+    assert(len(chains) > 2)
+
+    var proofs []*ProofData
+
+    // iterate all but the last two chains
+    for i := 0; i < len(chains)-2; i++ {
+  
+        previousChain := chains[i]  // previous chains state root is on currentChain and is the source chain for i==0.
+        currentChain := chains[i+1] // currentChain is where the proof is queried and generated
+        nextChain := chains[i+2]    // nextChain holds the state root of the currentChain
+
+        currentHeight := currentChain.GetClientStateHeight(sourceChain) // height of previous chain state on current chain
+        nextHeight := nextChain.GetClientStateHeight(currentChain)      // height of current chain state on next chain
+
+        // prefixed key for the connection from currentChain to prevChain
+        connectionKey := GetPrefixedConnectionKey(currentChain)
+
+        // proof of current chain's connection to previous Chain.
+        connectionEnd := GetConnection(currentChain)
+
+        // Query proof of the currentChain's connection with the previousChain at nextHeight
+        // (currentChain's state root height on nextChain)
+        connectionProof := GetConnectionProof(currentChain, nextHeight)
+  
+        proofs = append(proofs, &ProofData{
+            Key:   &connectionKey,
+            Value: connectionEnd,
+            Proof: connectionProof,
+        })
+    }
+    return proofs       
+}
 ```
 
 Pseudocode proof verification of a channel between chains `A -> B -> C` .
