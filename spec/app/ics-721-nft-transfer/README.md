@@ -51,19 +51,19 @@ interface NonFungibleTokenPacketData {
 }
 ```
 
-`classId` is a required field that SHOULD never be empty, it uniquely identifies the class/collection/contract which the tokens being transferred belong to in the sending chain. In the case of an ERC-1155 compliant smart contract, for example, this could be a string representation of the top 128 bits of the token ID.
+`classId` is a required field that MUST never be empty, it uniquely identifies the class/collection/contract which the tokens being transferred belong to in the sending chain. In the case of an ERC-1155 compliant smart contract, for example, this could be a string representation of the top 128 bits of the token ID.
 
-`classUri` is an optional field which, if present and not empty, contains off-chain [class metadata](https://docs.opensea.io/docs/contract-level-metadata) that could be extremely beneficial for cross-chain interoperability with NFT marketplaces like OpenSea.
+`classUri` is an optional field which, if present, MUST be non-empty and refer to an off-chain resource that is typically a JSON file containing the [class metadata](https://docs.opensea.io/docs/contract-level-metadata); this could be extremely beneficial for cross-chain interoperability with NFT marketplaces like OpenSea.
 
-`classData`is an optional field which, if present and not empty, contains on-chain class metadata such as royalty related parameters.
+`classData` is an optional field which, if present, MUST be non-empty and contain on-chain class metadata such as royalty related parameters.
 
-`tokenIds` array is an optional field which, if present, SHOULD have a size greater than zero and contain non-empty entries that uniquely identify tokens (of the given class) that are being transferred. In the case of an ERC-1155 compliant smart contract, for example, a `tokenId` could be a string representation of the bottom 128 bits of the token ID.
+`tokenIds` array is an optional field which, if present, MUST have a size greater than zero and hold non-empty entries that uniquely identify tokens (of the given class) that are being transferred. In the case of an ERC-1155 compliant smart contract, for example, a `tokenId` could be a string representation of the bottom 128 bits of the token ID.
 
-`tokenUris` array is an optional field which, if present, SHOULD have the same size as `tokenIds`. Each `tokenUris` entry, if not empty, refers to an off-chain resource that is typically an immutable JSON file containing metadata associated with the token identified by the corresponding `tokenIds` entry.
+`tokenUris` array is an optional field which, if present, MUST have the same size as `tokenIds` and hold non-empty entries each of which refers to an off-chain resource that is typically an immutable JSON file containing metadata associated with the token identified by the corresponding `tokenIds` entry.
 
-`tokenData` array is an optional field which, if present, SHOULD have the same size as `tokenIds`. Each `tokenData` entry, if not empty, contains on-chain application data associated with the token identified by the corresponding `tokenIds` entry.
+`tokenData` array is an optional field which, if present, MUST have the same size as `tokenIds` and hold non-empty entries each of which contains on-chain application data associated with the token identified by the corresponding `tokenIds` entry.
 
-Both `tokenData` entries and `classData` SHOULD be Base64 encoded JSON strings that have the following structure:
+Both `tokenData` entries and `classData` MUST be Base64 encoded strings which SHOULD have the following JSON structure:
 
 ```json
 {
