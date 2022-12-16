@@ -57,7 +57,7 @@ interface NonFungibleTokenPacketData {
 
 `classData` is an optional field which, if present, MUST be non-empty and contain on-chain class metadata such as royalty related parameters.
 
-`tokenIds` array is an optional field which, if present, MUST have a size greater than zero and hold non-empty entries that uniquely identify tokens (of the given class) that are being transferred. In the case of an ERC-1155 compliant smart contract, for example, a `tokenId` could be a string representation of the bottom 128 bits of the token ID.
+`tokenIds` array is a required field that MUST have a size greater than zero and hold non-empty entries that uniquely identify tokens (of the given class) that are being transferred. In the case of an ERC-1155 compliant smart contract, for example, a `tokenId` could be a string representation of the bottom 128 bits of the token ID.
 
 `tokenUris` array is an optional field which, if present, MUST have the same size as `tokenIds` and hold non-empty entries each of which refers to an off-chain resource that is typically an immutable JSON file containing metadata associated with the token identified by the corresponding `tokenIds` entry.
 
