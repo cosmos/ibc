@@ -71,7 +71,7 @@ Relayers are connection topology aware with configurations sourced from the [cha
 
 Graphical depiction of proof generation.
 
-![graphical_proof.png](graphical_proof.png)
+![graphical_proof.jpg](graphical_proof.jpg)
 
 Proof steps.
 
@@ -104,9 +104,7 @@ func GenerateMultihopProof(chains []*Chain, key string, value []byte, proofHeigh
     var multihopProof MultihopProof
     chain0 := chains[0] // source chain
     chain1 := chains[1] // first hop chain
-    chain2 := chains[2] // second hop chain
  
-    height12 := chain2.GetClientStateHeight(chain1) // height of chain1's client state on chain2
     height01 := chain1.GetClientStateHeight(chain0) // height of chain0's client state on chain1
     assert(height01 >= proofHeight) // ensure that chain0's client state is update to date
 
@@ -136,7 +134,7 @@ func GenerateMultihopProof(chains []*Chain, key string, value []byte, proofHeigh
 //                 (i)    (i+1)    (i+2)
 // Step N-3:  C0 ---> C1 ...  ---> |CN-2 --> CN-1 ---> CN|
 //                                   (i)    (i+1)    (i+2)
-func GenerateConsensusProofs(chains []*Chain) []*ProofData {
+func GenerateConsensusProofs(chains []*Chain, height) []*ProofData {
     assert(len(chains) > 2)
 
     var proofs []*ProofData
@@ -144,17 +142,17 @@ func GenerateConsensusProofs(chains []*Chain) []*ProofData {
     // iterate all but the last two chains
     for i := 0; i < len(chains)-2; i++ {
   
-        previousChain    := chains[i]   // previous chains state root is on currentChain and is the source chain for i==0.
-        currentChain := chains[i+1] // currentChain is where the proof is queried and generated
-        nextChain    := chains[i+2] // nextChain holds the state root of the currentChain
+        previousChain := chains[i]   // previous chains state root is on currentChain and is the source chain for i==0.
+        currentChain  := chains[i+1] // currentChain is where the proof is queried and generated
+        nextChain     := chains[i+2] // nextChain holds the state root of the currentChain
 
         currentHeight := GetClientStateHeight(currentChain, sourceChain) // height of previous chain state on current chain
         nextHeight := GetClientStateHeight(nextChain, currentChain)      // height of current chain state on next chain
 
         // consensus state of previous chain on current chain at currentHeight which is the height of A's client state on B
-        consensusState, found := GetConsensusState(currentChain, prevChain.ClientID, currentHeight)
-        assert(found)
+        consensusState := GetConsensusState(currentChain, prevChain.ClientID, currentHeight)
 
+        // prefixed key for consensus state of previous chain 
         consensusKey := GetPrefixedConsensusStateKey(currentChain, currentHeight)
 
         // proof of previous chain's consensus state at currentHeight on currentChain at nextHeight
@@ -162,7 +160,7 @@ func GenerateConsensusProofs(chains []*Chain) []*ProofData {
   
         proofs = append(consStateProofs, &ProofData{
             Key:   &consensusKey,
-            Value: value,
+            Value: consensusState,
             Proof: consensusProof,
         })
     }
@@ -185,140 +183,30 @@ func GenerateConnectionProofs(chains []*Chain) []*ProofData {
     // iterate all but the last two chains
     for i := 0; i < len(chains)-2; i++ {
   
-        previousChain := chains[i]   // previous chains state root is on currentChain and is the source chain for i==0.
+        previousChain := chains[i]  // previous chains state root is on currentChain and is the source chain for i==0.
         currentChain := chains[i+1] // currentChain is where the proof is queried and generated
-        nextChain := chains[i+2] // nextChain holds the state root of the currentChain
+        nextChain := chains[i+2]    // nextChain holds the state root of the currentChain
 
         currentHeight := currentChain.GetClientStateHeight(sourceChain) // height of previous chain state on current chain
         nextHeight := nextChain.GetClientStateHeight(currentChain)      // height of current chain state on next chain
 
-        // consensus state of previous chain on current chain at currentHeight which is the height of A's client state on B
-        consensusState, found := currentChain.GetConsensusState(previousChain.ClientID, currentHeight)
-        assert(found)
-
-        // get the prefixed key for the connection from currentChain to prevChain
+        // prefixed key for the connection from currentChain to prevChain
         connectionKey := GetPrefixedConnectionKey(currentChain)
 
-        // proof of A's consensus state (heightAB) on B at height BC
-        connection, _ := GetConnection(currentChain)
+        // proof of current chain's connection to previous Chain.
+        connectionEnd := GetConnection(currentChain)
+
+        // Query proof of the currentChain's connection with the previousChain at nextHeight
+        // (currentChain's state root height on nextChain)
+        connectionProof := GetConnectionProof(currentChain, nextHeight)
   
-        proofs = append(consStateProofs, &ProofData{
+        proofs = append(proofs, &ProofData{
             Key:   &connectionKey,
-            Value: value,
-            Proof: consensusProof,
+            Value: connectionEnd,
+            Proof: connectionProof,
         })
     }
-     return proofs       
-  }
-  // now to connection proof verification
-  connectionKey, err := GetPrefixedConnectionKey(self)
-  if err != nil {
-   return nil, nil, err
-  }
-
-  connectionProof, _ := GetConnectionProof(self, heightBC, self.ConnectionID)
-  var connectionMerkleProof commitmenttypes.MerkleProof
-  if err := self.Chain.Codec.Unmarshal(connectionProof, &connectionMerkleProof); err != nil {
-   return nil, nil, fmt.Errorf("failed to get proof for consensus state on chain %s: %w", self.Chain.ChainID, err)
-  }
-
-  connection := self.GetConnection()
-  value, err = connection.Marshal()
-  if err != nil {
-   return nil, nil, fmt.Errorf("failed to marshal connection end: %w", err)
-  }
-
-
-  connectionProofs = append(connectionProofs, &channeltypes.MultihopProof{
-   Proof:       connectionProof,
-   Value:       value,
-   PrefixedKey: &connectionKey,
-  })
- }
-
- return consStateProofs, connectionProofs, nil
-}
-
-// GenerateMultiHopConsensusProof generates a proof of consensus state of paths[0].EndpointA verified on
-// paths[len(paths)-1].EndpointB and all intermediate consensus states.
-// TODO: Would it be beneficial to batch the consensus state and connection proofs?
-func GenerateConnectionProofs(chains []*Chain) []*ProofData {
- assert(len(chains) > 2)
-
- var consStateProofs []*channeltypes.MultihopProof
- var connectionProofs []*channeltypes.MultihopProof
-
- // iterate all but the last path
- for i := 0; i < len(paths)-1; i++ {
-  path, nextPath := paths[i], paths[i+1]
-
-  self := path.EndpointB // self is where the proof is queried and generated
-  next := nextPath.EndpointB
-
-  heightAB := self.GetClientState().GetLatestHeight() // height of A on B
-  heightBC := next.GetClientState().GetLatestHeight() // height of B on C
-
-  // consensus state of A on B at height AB which is the height of A's client state on B
-  consStateAB, found := self.Chain.GetConsensusState(self.ClientID, heightAB)
-  if !found {
-   return nil, nil, fmt.Errorf(
-    "consensus state not found for height %s on chain %s",
-    heightAB,
-    self.Chain.ChainID,
-   )
-  }
-
-  keyPrefixedConsAB, err := GetConsensusStatePrefix(self, heightAB)
-  if err != nil {
-   return nil, nil, fmt.Errorf("failed to get consensus state prefix at height %d and revision %d: %w", heightAB.GetRevisionHeight(), heightAB.GetRevisionHeight(), err)
-  }
-
-  // proof of A's consensus state (heightAB) on B at height BC
-  consensusProof, _ := GetConsStateProof(self, heightBC, heightAB, self.ClientID)
-
-  var consensusStateMerkleProof commitmenttypes.MerkleProof
-  if err := self.Chain.Codec.Unmarshal(consensusProof, &consensusStateMerkleProof); err != nil {
-   return nil, nil, fmt.Errorf("failed to get proof for consensus state on chain %s: %w", self.Chain.ChainID, err)
-  }
-
-  value, err := self.Chain.Codec.MarshalInterface(consStateAB)
-  if err != nil {
-   return nil, nil, fmt.Errorf("failed to marshal consensus state: %w", err)
-  }
-
-  consStateProofs = append(consStateProofs, &channeltypes.MultihopProof{
-   Proof:       consensusProof,
-   Value:       value,
-   PrefixedKey: &keyPrefixedConsAB,
-  })
-
-  // now to connection proof verification
-  connectionKey, err := GetPrefixedConnectionKey(self)
-  if err != nil {
-   return nil, nil, err
-  }
-
-  connectionProof, _ := GetConnectionProof(self, heightBC, self.ConnectionID)
-  var connectionMerkleProof commitmenttypes.MerkleProof
-  if err := self.Chain.Codec.Unmarshal(connectionProof, &connectionMerkleProof); err != nil {
-   return nil, nil, fmt.Errorf("failed to get proof for consensus state on chain %s: %w", self.Chain.ChainID, err)
-  }
-
-  connection := self.GetConnection()
-  value, err = connection.Marshal()
-  if err != nil {
-   return nil, nil, fmt.Errorf("failed to marshal connection end: %w", err)
-  }
-
-
-  connectionProofs = append(connectionProofs, &channeltypes.MultihopProof{
-   Proof:       connectionProof,
-   Value:       value,
-   PrefixedKey: &connectionKey,
-  })
- }
-
- return consStateProofs, connectionProofs, nil
+    return proofs       
 }
 ```
 
