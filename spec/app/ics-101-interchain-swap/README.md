@@ -821,7 +821,7 @@ function sendInterchainIBCSwapDataPacket(
 
 `onRecvPacket` is called by the routing module when a packet addressed to this module has been received.
 
-```go
+```ts
 function onRecvPacket(packet: Packet) {
 
     IBCSwapPacketData swapPacket = packet.data
@@ -855,22 +855,22 @@ function onRecvPacket(packet: Packet) {
         ack = new IBCSwapDataPacketError()
     }
 
-	// NOTE: acknowledgement will be written synchronously during IBC handler execution.
-	return ack
+    // NOTE: acknowledgement will be written synchronously during IBC handler execution.
+    return ack
 }
 ```
 
 `onAcknowledgePacket` is called by the routing module when a packet sent by this module has been acknowledged.
 
-```go
+```ts
 
 // OnAcknowledgementPacket implements the IBCModule interface
 function OnAcknowledgementPacket(
 	packet: channeltypes.Packet,
 	ack channeltypes.Acknowledgement,
 )  {
-	var ack channeltypes.Acknowledgement
 
+    var ack channeltypes.Acknowledgement
     if (!ack.success()) {
         refund(packet)
     } else {
@@ -893,7 +893,7 @@ function OnAcknowledgementPacket(
         }
     }
 
-	return nil
+    return nil
 }
 ```
 
