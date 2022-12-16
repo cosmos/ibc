@@ -392,7 +392,7 @@ interface MsgSwapResponse {
 
 To implement interchain swap, we introduce the `Message Delegator` and `Relay Listener`. The `Message Delegator` will pre-process the request (validate msgs, lock assets, etc), and then forward the transactions to the relayer.
 
-```go
+```ts
 function delegateCreatePool(msg: MsgCreatePoolRequest) {
 
     // ICS 24 host check if both port and channel are validate
@@ -439,11 +439,11 @@ function delegateSingleDeposit(msg MsgSingleDepositRequest) {
         abortTransactionUnless(balance.amount >= token.amount)
     }
 
-	// deposit assets to the escrowed account
-	const escrowAddr = escrowAddress(pool.encounterPartyPort, pool.encounterPartyChannel)
-	bank.sendCoins(msg.sender, escrowAddr, msg.tokens)
+    // deposit assets to the escrowed account
+    const escrowAddr = escrowAddress(pool.encounterPartyPort, pool.encounterPartyChannel)
+    bank.sendCoins(msg.sender, escrowAddr, msg.tokens)
 
-	// constructs the IBC data packet
+    // constructs the IBC data packet
     const packet = {
         type: MessageType.Deposit,
         data: protobuf.encode(msg), // encode the request message to protobuf bytes.
@@ -464,11 +464,11 @@ function delegateWithdraw(msg MsgWithdrawRequest) {
     abortTransactionUnless(outToken != null)
     abortTransactionUnless(outToken.poolSide == PoolSide.Native)
 
-	// lock pool token to the swap module
-	const escrowAddr = escrowAddress(pool.encounterPartyPort, pool.encouterPartyChannel)
-	bank.sendCoins(msg.sender, escrowAddr, msg.poolToken)
+    // lock pool token to the swap module
+    const escrowAddr = escrowAddress(pool.encounterPartyPort, pool.encouterPartyChannel)
+    bank.sendCoins(msg.sender, escrowAddr, msg.poolToken)
 
-	// constructs the IBC data packet
+    // constructs the IBC data packet
     const packet = {
         type: MessageType.Withdraw,
         data: protobuf.encode(msg), // encode the request message to protobuf bytes.
@@ -513,12 +513,12 @@ function delegateRightSwap(msg MsgRightSwapRequest) {
     const pool = store.findPoolById(generatePoolId[tokenIn.denom, tokenOut.denom]))
     abortTransactionUnless(pool != null)
     abortTransactionUnless(pool.status == PoolStatus.POOL_STATUS_READY)
-	
-	// lock swap-in token to the swap module
-	const escrowAddr = escrowAddress(pool.encounterPartyPort, pool.encouterPartyChannel)
-	bank.sendCoins(msg.sender, escrowAddr, msg.tokenIn)
+    
+    // lock swap-in token to the swap module
+    const escrowAddr = escrowAddress(pool.encounterPartyPort, pool.encouterPartyChannel)
+    bank.sendCoins(msg.sender, escrowAddr, msg.tokenIn)
 
-	// contructs the IBC data packet
+    // contructs the IBC data packet
     const packet = {
         type: MessageType.Rightswap,
         data: protobuf.encode(msg), // encode the request message to protobuf bytes.
@@ -530,7 +530,7 @@ function delegateRightSwap(msg MsgRightSwapRequest) {
 
 The `Relay Listener` handle all transactions, execute transactions when received, and send the result as an acknowledgement. In this way, packets relayed on the source chain update pool states on the destination chain according to results in the acknowledgement.
 
-```go
+```ts
 function onCreatePoolReceived(msg: MsgCreatePoolRequest, destPort: string, destChannel: string): MsgCreatePoolResponse {
 
     // Only two assets in a pool
@@ -564,7 +564,7 @@ function onCreatePoolReceived(msg: MsgCreatePoolRequest, destPort: string, destC
 
 function onSingleDepositReceived(msg: MsgSingleDepositRequest): MsgSingleDepositResponse {
 	
-	abortTransactionUnless(msg.sender != null)
+    abortTransactionUnless(msg.sender != null)
     abortTransactionUnless(msg.tokens.lenght > 0)
     
     const pool = store.findPoolById(msg.poolId)
@@ -573,12 +573,12 @@ function onSingleDepositReceived(msg: MsgSingleDepositRequest): MsgSingleDeposit
     // fetch fee rate from the params module, maintained by goverance
     const feeRate = params.getPoolFeeRate()
 
-	const amm = InterchainMarketMaker.initialize(pool, feeRate)
-	const poolToken = amm.depositSingleAsset(msg.tokens[0])
-	
-	store.savePool(amm.pool) // update pool states
-
-	return { poolToken }
+    const amm = InterchainMarketMaker.initialize(pool, feeRate)
+    const poolToken = amm.depositSingleAsset(msg.tokens[0])
+    
+    store.savePool(amm.pool) // update pool states
+    
+    return { poolToken }
 }
 
 function onWithdrawReceived(msg: MsgWithdrawRequest) MsgWithdrawResponse {
@@ -591,14 +591,14 @@ function onWithdrawReceived(msg: MsgWithdrawRequest) MsgWithdrawResponse {
     
     // fetch fee rate from the params module, maintained by goverance
     const feeRate = params.getPoolFeeRate()
-
-	const amm = InterchainMarketMaker.initialize(pool, feeRate)
-	const outToken = amm.withdraw(msg.poolCoin, msg.denomOut)
-	store.savePool(amm.pool) // update pool states
-	
-	// the outToken will sent to msg's sender in `onAcknowledgement()`
-
-	return { tokens: outToken }
+    
+    const amm = InterchainMarketMaker.initialize(pool, feeRate)
+    const outToken = amm.withdraw(msg.poolCoin, msg.denomOut)
+    store.savePool(amm.pool) // update pool states
+    
+    // the outToken will sent to msg's sender in `onAcknowledgement()`
+    
+    return { tokens: outToken }
 }
 
 function onLeftSwapReceived(msg: MsgLeftSwapRequest) MsgSwapResponse {
@@ -613,21 +613,21 @@ function onLeftSwapReceived(msg: MsgLeftSwapRequest) MsgSwapResponse {
     abortTransactionUnless(pool != null)
     // fetch fee rate from the params module, maintained by goverance
     const feeRate = params.getPoolFeeRate()
-
-	const amm = InterchainMarketMaker.initialize(pool, feeRate)
-	const outToken = amm.leftSwap(msg.tokenIn, msg.tokenOut.denom)
-	
-	const expected = msg.tokenOut.amount
-	
-	// tolerance check
-	abortTransactionUnless(outToken.amount > expected * (1 - msg.slippage / 10000))
-	
-	const escrowAddr = escrowAddress(pool.encounterPartyPort, pool.encouterPartyChannel)
-	bank.sendCoins(escrowAddr, msg.recipient, outToken)
-	
-	store.savePool(amm.pool) // update pool states
-	
-	return { tokens: outToken }
+    
+    const amm = InterchainMarketMaker.initialize(pool, feeRate)
+    const outToken = amm.leftSwap(msg.tokenIn, msg.tokenOut.denom)
+    
+    const expected = msg.tokenOut.amount
+    
+    // tolerance check
+    abortTransactionUnless(outToken.amount > expected * (1 - msg.slippage / 10000))
+    
+    const escrowAddr = escrowAddress(pool.encounterPartyPort, pool.encouterPartyChannel)
+    bank.sendCoins(escrowAddr, msg.recipient, outToken)
+    
+    store.savePool(amm.pool) // update pool states
+    
+    return { tokens: outToken }
 }
 
 function onRightSwapReceived(msg MsgRightSwapRequest) MsgSwapResponse {
