@@ -93,52 +93,83 @@ interface Coin {
 ```
 ```ts
 enum PoolSide {
-  POOL_SIDE_PENDING = 0;
-  POOL_SIDE_NATIVE_ASSET = 1;
-  POOL_SIDE_REMOTE_ASSET = 2;
+  Native = 1;
+  Remote = 2;
 }
 ```
 ```ts
 // PoolStatus defines if the pool is ready for trading
 enum PoolStatus {
-  POOL_STATUS_READY = 0;
-  POOL_STATUS_INITIAL = 1;
+  POOL_STATUS_INITIAL = 0;
+  POOL_STATUS_READY = 1;
 }
 ```
-```ts
-enum PoolType {
-  POOL_TYPE_WEIGHTED_CROSS_CHAIN = 0;
-  POOL_TYPE_WEIGHTED_INTERN_CHAIN = 1;
-}
-```
+
 ```ts
 interface PoolAsset {
   side: PoolSide;
   balance: Coin;
   // percentage
   weight: int32;
-  decimals: int32;
+  decimal: int32;
 }
 ```
 ```ts
 interface InterchainLiquidityPool {
   id: string;
   assets []PoolAsset;
-  // the issued amount of pool token in the pool. the denom is a prefix ("pool") + pool id
+  // the issued amount of pool token in the pool. the denom is pool id
   supply: Coin;
+  status: PoolStatus;
+  encounterPartyPort: string;
+  encounterPartyChannel: string;
+  constructor(denoms: []string, decimals: []number, weight: string, portId string, channelId string) {
+  
+    this.id = generatePoolId(denoms)
+    this.supply = {
+       amount: 0,
+       denom: this.id
+    }
+    this.status = PoolStatus.POOL_STATUS_INITIAL
+    this.encounterPartyPort = portId
+    this.encounterPartyChannel = channelId
+    
+    // construct assets
+    const weights = weight.split(':').length
+    if(denoms.lenght === decimals.lenght && denoms.lenght === weight.split(':').length) {
+        for(let i=0; i < denoms.lenght; i++) {
+            this.assets.push({
+               side: store.hasSupply(denom[i]) ? PoolSide.Native: PoolSide.Remote,
+               balance: {
+                 amount: 0,
+                 denom: denom[i],
+               },
+               weight: number(weights[i])
+               decimal: decimals[i]
+            })
+        }
+    }
+  }
 }
 ```
-
+```ts
+function generatePoolId(denoms: []string) {
+    return "pool" + sha256(denoms.sort().join(''))
+}
+```
 #### IBC Market Maker
 ```ts
 class InterchainMarketMaker {
-	pool :InterchainLiquidityPool
-	// basis point
-	feeRate: int32
-	constructor(pool: InterchainLiquidityPool, feeRate: int32) {
-	    this.pool = pool;
-	    this.feeRate = feeRate
-	}
+    pool :InterchainLiquidityPool
+    // basis point
+    feeRate: int32
+	
+    static initialize(pool: InterchainLiquidityPool, feeRate: int32) : InterchainMarketMaker {
+        return {
+            pool: pool,
+            feeRate: feeRate,
+        }
+    }
     
     // MarketPrice Bi / Wi / (Bo / Wo)
     function marketPrice(denomIn, denomOut string): float64 {
@@ -175,6 +206,7 @@ class InterchainMarketMaker {
         const asset = this.pool.findAssetByDenom(denomOut)
 
         abortTransactionUnless(asset != null)
+        abortTransactionUnless(this.pool.status === PoolStatus.POOL_STATUS_READY)
         abortTransactionUnless(redeem.amount <= asset.balance.amount)
         abortTransactionUnless(redeem.denom == this.pool.supply.denom)
         
@@ -193,7 +225,7 @@ class InterchainMarketMaker {
     // Input how many coins you want to sell, output an amount you will receive
     // Ao = Bo * ((1 - Bi / (Bi + Ai)) ** Wi/Wo)
     function leftSwap(amountIn: Coin, denomOut: string): Coin {
-    
+        
         const assetIn = this.pool.findAssetByDenom(amountIn.denom)
         abortTransactionUnless(assetIn != null)
         
@@ -219,7 +251,7 @@ class InterchainMarketMaker {
     // Input how many coins you want to buy, output an amount you need to pay
     // Ai = Bi * ((Bo/(Bo - Ao)) ** Wo/Wi -1)
     function rightSwap(amountIn: Coin, amountOut: Coin) Coin {
-    
+          
         const assetIn = this.pool.findAssetByDenom(amountIn.denom)
         abortTransactionUnless(assetIn != null)
         const AssetOut = this.pool.findAssetByDenom(amountOut.denom)
@@ -244,8 +276,6 @@ class InterchainMarketMaker {
     function minusFees(amount sdk.Int) sdk.Int {
         return amount * (1 - this.pool.feeRate / 10000))
     }
-    
-    
 }
 ```
 
@@ -265,8 +295,21 @@ enum MessageType {
 ```ts
 // IBCSwapDataPacket is used to wrap message for relayer.
 interface IBCSwapDataPacket {
-    msgType: MessageType,
+    type: MessageType,
     data: []byte, // Bytes
+}
+```
+
+```typescript
+type IBCSwapDataAcknowledgement = IBCSwapDataPacketSuccess | IBCSwapDataPacketError;
+
+interface IBCSwapDataPacketSuccess {
+  // This is binary 0x01 base64 encoded
+  result: "AQ=="
+}
+
+interface IBCSwapDataPacketError {
+  error: string
 }
 ```
 
@@ -293,8 +336,8 @@ interface MsgCreatePoolRequest {
     sourcePort: string,
     sourceChannel: string,
     sender: string,
-    denoms: string[],
-    decimals: [],
+    denoms: []string,
+    decimals: []int32,
     weight: string,
 }
 
@@ -302,8 +345,9 @@ interface MsgCreatePoolResponse {}
 ```
 ```ts
 interface MsgDepositRequest {
+    poolId: string
     sender: string,
-    tokens: Coin[],
+    tokens: Coin[], // only one element for now, might have two in the feature 
 }
 interface MsgSingleDepositResponse {
     poolToken: Coin;
@@ -313,28 +357,28 @@ interface MsgSingleDepositResponse {
 interface MsgWithdrawRequest {
     sender: string,
     poolCoin: Coin,
-    denomOut: string, // optional, if not set, withdraw native coin to sender.
+    denomOut: string,
 }
 interface MsgWithdrawResponse {
-   tokens: Coin[];
+   tokens: []Coin;
 }
 ```
  ```ts
 interface MsgLeftSwapRequest {
     sender: string,
     tokenIn: Coin,
-    denomOut: string,
+    tokenOut: Coin,
     slippage: number; // max tolerated slippage
     recipient: string, 
 }
 interface MsgSwapResponse {
-   tokens: Coin[];
+   tokens: []Coin;
 }
 ```
  ```ts
 interface MsgRightSwapRequest {
     sender: string,
-    denomIn: string,
+    tokenIn: Coin,
     tokenOut: Coin,
     slippage: number; // max tolerated slippage 
     recipient: string,
@@ -349,18 +393,19 @@ interface MsgSwapResponse {
 To implement interchain swap, we introduce the `Message Delegator` and `Relay Listener`. The `Message Delegator` will pre-process the request (validate msgs, lock assets, etc), and then forward the transactions to the relayer.
 
 ```go
-function delegateCreatePool(msg: MsgCreatePoolRequest) : MsgCreatePoolResponse {
+function delegateCreatePool(msg: MsgCreatePoolRequest) {
 
     // ICS 24 host check if both port and channel are validate
     abortTransactionUnless(host.portIdentifierValidator(msg.sourcePort))
-	abortTransactionUnless(host.channelIdentifierValidator(msg.sourceChannel));
+    abortTransactionUnless(host.channelIdentifierValidator(msg.sourceChannel));
 
     // Only two assets in a pool
     abortTransactionUnless(msg.denoms.length != 2)
     abortTransactionUnless(msg.decimals.length != 2)
     abortTransactionUnless(msg.weight.split(':').length != 2) // weight: "50:50"
+    abortTransactionUnless( !store.hasPool(generatePoolId(msg.denoms)) )
         
-	cosnt pool = newBalancerLiquidityPool(msg.denoms, msg.decimals, msg.weight)
+    cosnt pool = new InterchainLiquidityPool(msg.denoms, msg.decimals, msg.weight, msg.sourcePort, msg.sourceChannel)
 	
     const localAssetCount = 0
     for(var denom in msg.denoms) {
@@ -369,293 +414,302 @@ function delegateCreatePool(msg: MsgCreatePoolRequest) : MsgCreatePoolResponse {
        }
     }
     // should have 1 native asset on the chain
-    abortTransactionUnless(localAssetCount == 1)
+    abortTransactionUnless(localAssetCount >= 1)
 	
-    // contructs the IBC data packet
+    // constructs the IBC data packet
     const packet = {
         type: MessageType.Create,
         data: protobuf.encode(msg), // encode the request message to protobuf bytes.
-        memo: "",
     }
-    sendAtomicSwapPacket(packet, msg.sourcePort, msg.sourceChannel, msg.timeoutHeight, msg.timeoutTimestamp)
+    sendInterchainIBCSwapDataPacket(packet, msg.sourcePort, msg.sourceChannel, msg.timeoutHeight, msg.timeoutTimestamp)
     
-    return new MsgCreatePoolResponse()
 }
 
-function delegateSingleDeposit(msg MsgSingleDepositRequest) : MsgSingleDepositResponse {
+function delegateSingleDeposit(msg MsgSingleDepositRequest) {
 	
     abortTransactionUnless(msg.sender != null)
+    abortTransactionUnless(msg.tokens.lenght > 0)
+    
+    const pool = store.findPoolById(msg.poolId)
+    abortTransactionUnless(pool != null)
+    
+    for(var token in msg.tokens) {
+        const balance = bank.queryBalance(sender, token.denom)
+        // should have enough balance
+        abortTransactionUnless(balance.amount >= token.amount)
+    }
+
+	// deposit assets to the escrowed account
+	const escrowAddr = escrowAddress(pool.encounterPartyPort, pool.encounterPartyChannel)
+	bank.sendCoins(msg.sender, escrowAddr, msg.tokens)
+
+	// constructs the IBC data packet
+    const packet = {
+        type: MessageType.Deposit,
+        data: protobuf.encode(msg), // encode the request message to protobuf bytes.
+    }
+    sendInterchainIBCSwapDataPacket(packet, msg.sourcePort, msg.sourceChannel, msg.timeoutHeight, msg.timeoutTimestamp)
+}
+
+function delegateWithdraw(msg MsgWithdrawRequest) {
+
+    abortTransactionUnless(msg.sender != null)
     abortTransactionUnless(msg.token.lenght > 0)
+    
+    const pool = store.findPoolById(msg.poolToken.denom)
+    abortTransactionUnless(pool != null)
+    abortTransactionUnless(pool.status == PoolStatus.POOL_STATUS_READY)
+    
+    const outToken = this.pool.findAssetByDenom(msg.denomOut)
+    abortTransactionUnless(outToken != null)
+    abortTransactionUnless(outToken.poolSide == PoolSide.Native)
 
-	// deposit assets to the swap module
-	length := len(msg.Tokens)
-	var coins = make([]sdk.Coin, length)
-	for i := 0; i < length; i++ {
-		coins[i] = *msg.Tokens[i]
-	}
-	k.bankKeeper.SendCoinsFromAccountToModule(ctx, sender, types.ModuleName, sdk.NewCoins(coins...))
+	// lock pool token to the swap module
+	const escrowAddr = escrowAddress(pool.encounterPartyPort, pool.encouterPartyChannel)
+	bank.sendCoins(msg.sender, escrowAddr, msg.poolToken)
 
-	msgByte, err0 := types.ModuleCdc.Marshal(msg)
-	if err0 != nil {
-		return nil, err0
-	}
+	// constructs the IBC data packet
+    const packet = {
+        type: MessageType.Withdraw,
+        data: protobuf.encode(msg), // encode the request message to protobuf bytes.
+    }
+    sendInterchainIBCSwapDataPacket(packet, msg.sourcePort, msg.sourceChannel, msg.timeoutHeight, msg.timeoutTimestamp)
 
-	packet := types.NewIBCSwapPacketData(types.SINGLE_DEPOSIT, msgByte, nil)
-	if err := k.SendIBCSwapDelegationDataPacket(ctx, msg.SourcePort, msg.SourceChannel, msg.TimeoutHeight, msg.TimeoutTimestamp, packet); err != nil {
-		return nil, err
-	}
-
-	ctx.EventManager().EmitTypedEvents(msg)
-
-	return &types.MsgSingleDepositResponse{}, nil
 }
 
-func (k Keeper) DelegateWithdraw(ctx2 context.Context, msg *types.MsgWithdrawRequest) (*types.MsgWithdrawResponse, error) {
-	ctx := sdk.UnwrapSDKContext(ctx2)
+function delegateLeftSwap(msg MsgLeftSwapRequest) {
+    
+    abortTransactionUnless(msg.sender != null)
+    abortTransactionUnless(msg.tokenIn != null && msg.tokenIn.amount > 0)
+    abortTransactionUnless(msg.tokenOut != null && msg.tokenOut.amount > 0)
+    abortTransactionUnless(msg.slippage > 0)
+    abortTransactionUnless(msg.recipient != null)
+    
+    const pool = store.findPoolById([tokenIn.denom, denomOut])
+    abortTransactionUnless(pool != null)
+    abortTransactionUnless(pool.status == PoolStatus.POOL_STATUS_READY)
 
-	if err := msg.ValidateBasic(); err != nil {
-		return nil, err
-	}
+	// lock swap-in token to the swap module
+	const escrowAddr = escrowAddress(pool.encounterPartyPort, pool.encouterPartyChannel)
+	bank.sendCoins(msg.sender, escrowAddr, msg.tokenIn)
 
-	sender, err1 := sdk.AccAddressFromBech32(msg.Sender)
-	if err1 != nil {
-		return nil, err1
-	}
+	// contructs the IBC data packet
+    const packet = {
+        type: MessageType.Leftswap,
+        data: protobuf.encode(msg), // encode the request message to protobuf bytes.
+    }
+    sendInterchainIBCSwapDataPacket(packet, msg.sourcePort, msg.sourceChannel, msg.timeoutHeight, msg.timeoutTimestamp)
 
-	// deposit assets to the swap module
-	k.bankKeeper.SendCoinsFromAccountToModule(ctx, sender, types.ModuleName, sdk.NewCoins(*msg.PoolToken))
-
-	msgByte, err0 := types.ModuleCdc.Marshal(msg)
-	if err0 != nil {
-		return nil, err0
-	}
-
-	packet := types.NewIBCSwapPacketData(types.WITHDRAW, msgByte, nil)
-	if err := k.SendIBCSwapDelegationDataPacket(ctx, msg.SourcePort, msg.SourceChannel, msg.TimeoutHeight, msg.TimeoutTimestamp, packet); err != nil {
-		return nil, err
-	}
-
-	ctx.EventManager().EmitTypedEvents(msg)
-
-	return &types.MsgWithdrawResponse{}, nil
 }
 
-func (k Keeper) DelegateLeftSwap(goctx context.Context, msg *types.MsgLeftSwapRequest) (*types.MsgSwapResponse, error) {
-	ctx := sdk.UnwrapSDKContext(goctx)
+function delegateRightSwap(msg MsgRightSwapRequest) {
+   
+    abortTransactionUnless(msg.sender != null)
+    abortTransactionUnless(msg.tokenIn != null && msg.tokenIn.amount > 0)
+    abortTransactionUnless(msg.tokenOut != null && msg.tokenOut.amount > 0)
+    abortTransactionUnless(msg.slippage > 0)
+    abortTransactionUnless(msg.recipient != null)
+    
+    const pool = store.findPoolById([tokenIn.denom, tokenOut.denom])
+    abortTransactionUnless(pool != null)
+    abortTransactionUnless(pool.status == PoolStatus.POOL_STATUS_READY)
+	
+	// lock swap-in token to the swap module
+	const escrowAddr = escrowAddress(pool.encounterPartyPort, pool.encouterPartyChannel)
+	bank.sendCoins(msg.sender, escrowAddr, msg.tokenIn)
 
-	if err := msg.ValidateBasic(); err != nil {
-		return nil, err
-	}
+	// contructs the IBC data packet
+    const packet = {
+        type: MessageType.Rightswap,
+        data: protobuf.encode(msg), // encode the request message to protobuf bytes.
+    }
+    sendInterchainIBCSwapDataPacket(packet, msg.sourcePort, msg.sourceChannel, msg.timeoutHeight, msg.timeoutTimestamp)
 
-	sender, err1 := sdk.AccAddressFromBech32(msg.Sender)
-	if err1 != nil {
-		return nil, err1
-	}
-
-	// deposit assets to the swap module
-	k.bankKeeper.SendCoinsFromAccountToModule(ctx, sender, types.ModuleName, sdk.NewCoins(*msg.TokenIn))
-
-	msgByte, err0 := types.ModuleCdc.Marshal(msg)
-	if err0 != nil {
-		return nil, err0
-	}
-
-	packet := types.NewIBCSwapPacketData(types.LEFT_SWAP, msgByte, nil)
-	if err := k.SendIBCSwapDelegationDataPacket(ctx, msg.SourcePort, msg.SourceChannel, msg.TimeoutHeight, msg.TimeoutTimestamp, packet); err != nil {
-		return nil, err
-	}
-
-	ctx.EventManager().EmitTypedEvents(msg)
-
-	return &types.MsgSwapResponse{}, nil
-}
-
-func (k Keeper) DelegateRightSwap(goctx context.Context, msg *types.MsgRightSwapRequest) (*types.MsgSwapResponse, error) {
-	ctx := sdk.UnwrapSDKContext(goctx)
-
-	if err := msg.ValidateBasic(); err != nil {
-		return nil, err
-	}
-
-	sender, err1 := sdk.AccAddressFromBech32(msg.Sender)
-	if err1 != nil {
-		return nil, err1
-	}
-
-	k.bankKeeper.SendCoinsFromAccountToModule(ctx, sender, types.ModuleName, sdk.NewCoins(*msg.TokenIn))
-
-	msgByte, err0 := types.ModuleCdc.Marshal(msg)
-	if err0 != nil {
-		return nil, err0
-	}
-
-	packet := types.NewIBCSwapPacketData(types.RIGHT_SWAP, msgByte, nil)
-	if err := k.SendIBCSwapDelegationDataPacket(ctx, msg.SourcePort, msg.SourceChannel, msg.TimeoutHeight, msg.TimeoutTimestamp, packet); err != nil {
-		return nil, err
-	}
-
-	ctx.EventManager().EmitTypedEvents(msg)
-
-	return &types.MsgSwapResponse{}, nil
 }
 ```
 
 The `Relay Listener` handle all transactions, execute transactions when received, and send the result as an acknowledgement. In this way, packets relayed on the source chain update pool states on the destination chain according to results in the acknowledgement.
 
 ```go
-func (k Keeper) OnCreatePoolReceived(ctx sdk.Context, msg *types.MsgCreatePoolRequest) (*types.MsgCreatePoolResponse, error) {
+function onCreatePoolReceived(msg: MsgCreatePoolRequest, destPort: string, destChannel: string): MsgCreatePoolResponse {
 
-	if err := msg.ValidateBasic(); err != nil {
-		return nil, err
-	}
+    // Only two assets in a pool
+    abortTransactionUnless(msg.denoms.length != 2)
+    abortTransactionUnless(msg.decimals.length != 2)
+    abortTransactionUnless(msg.weight.split(':').length != 2) // weight format: "50:50"
+    abortTransactionUnless( !store.hasPool(generatePoolId(msg.denoms)) )
 
-	_, err1 := sdk.AccAddressFromBech32(msg.Sender)
-	if err1 != nil {
-		return nil, err1
-	}
+    // construct mirror pool on destination chain
+    cosnt pool = new InterchainLiquidityPool(msg.denoms, msg.decimals, msg.weight, destPort, destChannel)
 
-	pool := types.NewBalancerLiquidityPool(msg.Denoms, msg.Decimals, msg.Weight)
-	if err := pool.Validate(); err != nil {
-		return nil, err
-	}
+    // count native tokens
+    const count = 0
+    for(var denom in msg.denoms {
+        if bank.hasSupply(ctx, denom) {
+            count += 1
+            pool.updateAssetPoolSide(denom, PoolSide.Native)
+        } else {
+            pool.updateAssetPoolSide(denom, PoolSide.Remote)
+        }
+    }
+    // only one token (could be either native or IBC token) is validate 
+    abortTransactionUnless(count == 1)
 
-	// count native tokens
-	count := 0
-	for _, denom := range msg.Denoms {
-		if k.bankKeeper.HasSupply(ctx, denom) {
-			count += 1
-			pool.UpdateAssetPoolSide(denom, types.PoolSide_POOL_SIDE_NATIVE_ASSET)
-		} else {
-			pool.UpdateAssetPoolSide(denom, types.PoolSide_POOL_SIDE_REMOTE_ASSET)
-		}
-	}
-	if count == 0 {
-		return nil, types.ErrNoNativeTokenInPool
-	}
+    store.savePool(pool)
 
-	k.SetBalancerPool(ctx, pool)
-
-	return &types.MsgCreatePoolResponse{
-		PoolId: pool.Id,
-	}, nil
-
+    return {
+        poolId: pool.id,
+    }
 }
 
-func (k Keeper) OnSingleDepositReceived(ctx sdk.Context, msg *types.MsgSingleDepositRequest) (*types.MsgSingleDepositResponse, error) {
-	if err := msg.ValidateBasic(); err != nil {
-		return nil, err
-	}
+function onSingleDepositReceived(msg: MsgSingleDepositRequest): MsgSingleDepositResponse {
+	
+	abortTransactionUnless(msg.sender != null)
+    abortTransactionUnless(msg.tokens.lenght > 0)
+    
+    const pool = store.findPoolById(msg.poolId)
+    abortTransactionUnless(pool != null)
+    
+    // fetch fee rate from the params module, maintained by goverance
+    const feeRate = params.getPoolFeeRate()
 
-	amm, err := k.CreateIBCSwapAMM(ctx, msg.PoolId)
-	if err != nil {
-		return nil, err
-	}
+	const amm = InterchainMarketMaker.initialize(pool, feeRate)
+	const poolToken = amm.depositSingleAsset(msg.tokens[0])
+	
+	store.savePool(amm.pool) // update pool states
 
-	poolToken, err := amm.Deposit(msg.Tokens)
-	if err != nil {
-		return nil, err
-	}
-
-	k.SetBalancerPool(ctx, *amm.Pool) // update pool states
-
-	return &types.MsgSingleDepositResponse{
-		PoolToken: &poolToken,
-	}, nil
+	return { poolToken }
 }
 
-func (k Keeper) OnWithdrawReceived(ctx sdk.Context, msg *types.MsgWithdrawRequest) (*types.MsgWithdrawResponse, error) {
-	if err := msg.ValidateBasic(); err != nil {
-		return nil, err
-	}
+function onWithdrawReceived(msg: MsgWithdrawRequest) MsgWithdrawResponse {
+    abortTransactionUnless(msg.sender != null)
+    abortTransactionUnless(msg.denomOut != null)
+    abortTransactionUnless(msg.poolCoin.amount > 0)
+    
+    const pool = store.findPoolById(msg.poolCoin.denom)
+    abortTransactionUnless(pool != null)
+    
+    // fetch fee rate from the params module, maintained by goverance
+    const feeRate = params.getPoolFeeRate()
 
-	amm, err := k.CreateIBCSwapAMM(ctx, msg.PoolToken.Denom) // Pool Token denomination is the pool Id
-	if err != nil {
-		return nil, err
-	}
+	const amm = InterchainMarketMaker.initialize(pool, feeRate)
+	const outToken = amm.withdraw(msg.poolCoin, msg.denomOut)
+	store.savePool(amm.pool) // update pool states
+	
+	// the outToken will sent to msg's sender in `onAcknowledgement()`
 
-	outToken, err := amm.Withdraw(msg.PoolToken, msg.DenomOut)
-	if err != nil {
-		return nil, err
-	}
-
-	k.SetBalancerPool(ctx, *amm.Pool) // update pool states
-
-	// only output one asset in the pool
-	return &types.MsgWithdrawResponse{
-		Tokens: []*sdk.Coin{
-			&outToken,
-		},
-	}, nil
+	return { tokens: outToken }
 }
 
-func (k Keeper) OnLeftSwapReceived(ctx sdk.Context, msg *types.MsgLeftSwapRequest) (*types.MsgSwapResponse, error) {
-	if err := msg.ValidateBasic(); err != nil {
-		return nil, err
-	}
+function onLeftSwapReceived(msg: MsgLeftSwapRequest) MsgSwapResponse {
 
-	poolId := types.GeneratePoolId([]string{msg.TokenIn.Denom, msg.DenomOut})
+    abortTransactionUnless(msg.sender != null)
+    abortTransactionUnless(msg.tokenIn != null && msg.tokenIn.amount > 0)
+    abortTransactionUnless(msg.tokenOut != null && msg.tokenOut.amount > 0)
+    abortTransactionUnless(msg.slippage > 0)
+    abortTransactionUnless(msg.recipient != null)
 
-	amm, err := k.CreateIBCSwapAMM(ctx, poolId) // Pool Token denomination is the pool Id
-	if err != nil {
-		return nil, err
-	}
+    const pool = store.findPoolById(generatePoolId([tokenIn.denom, denomOut])) 
+    abortTransactionUnless(pool != null)
+    // fetch fee rate from the params module, maintained by goverance
+    const feeRate = params.getPoolFeeRate()
 
-	outToken, err := amm.LeftSwap(msg.TokenIn, msg.DenomOut)
-	if err != nil {
-		return nil, err
-	}
-
-	k.SetBalancerPool(ctx, *amm.Pool) // update pool states
-
-	// only output one asset in the pool
-	return &types.MsgSwapResponse{
-		TokenOut: &outToken,
-	}, nil
+	const amm = InterchainMarketMaker.initialize(pool, feeRate)
+	const outToken = amm.leftSwap(msg.tokenIn, msg.tokenOut.denom)
+	
+	const expected = msg.tokenOut.amount
+	
+	// tolerance check
+	abortTransactionUnless(outToken.amount > expected * (1 - msg.slippage / 10000))
+	
+	const escrowAddr = escrowAddress(pool.encounterPartyPort, pool.encouterPartyChannel)
+	bank.sendCoins(escrowAddr, msg.recipient, outToken)
+	
+	store.savePool(amm.pool) // update pool states
+	
+	return { tokens: outToken }
 }
 
-func (k Keeper) OnRightSwapReceived(ctx sdk.Context, msg *types.MsgRightSwapRequest) (*types.MsgSwapResponse, error) {
-	if err := msg.ValidateBasic(); err != nil {
-		return nil, err
-	}
+function onRightSwapReceived(msg MsgRightSwapRequest) MsgSwapResponse {
 
-	poolId := types.GeneratePoolId([]string{msg.TokenIn.Denom, msg.TokenOut.Denom})
+    abortTransactionUnless(msg.sender != null)
+    abortTransactionUnless(msg.tokenIn != null && msg.tokenIn.amount > 0)
+    abortTransactionUnless(msg.tokenOut != null && msg.tokenOut.amount > 0)
+    abortTransactionUnless(msg.slippage > 0)
+    abortTransactionUnless(msg.recipient != null)
+    
+    const pool = store.findPoolById([tokenIn.denom, tokenOut.denom])
+    abortTransactionUnless(pool != null)
+    abortTransactionUnless(pool.status == PoolStatus.POOL_STATUS_READY)
+    // fetch fee rate from the params module, maintained by goverance
+    const feeRate = params.getPoolFeeRate()
 
-	amm, err := k.CreateIBCSwapAMM(ctx, poolId) // Pool Token denomination is the pool Id
-	if err != nil {
-		return nil, err
-	}
-
-	outToken, err := amm.RightSwap(msg.TokenIn.Denom, msg.TokenOut)
-	if err != nil {
-		return nil, err
-	}
-
-	k.SetBalancerPool(ctx, *amm.Pool) // update pool states
-
-	// only output one asset in the pool
-	return &types.MsgSwapResponse{
-		TokenOut: &outToken,
-	}, nil
+    const amm = InterchainMarketMaker.initialize(pool, feeRate)
+    const minTokenIn = amm.rightSwap(msg.tokenIn, msg.tokenOut)
+    
+    // tolerance check
+    abortTransactionUnless(tokenIn.amount > minTokenIn.amount)
+    abortTransactionUnless((tokenIn.amount - minTokenIn.amount)/minTokenIn.amount > msg.slippage / 10000))
+    
+    const escrowAddr = escrowAddress(pool.encounterPartyPort, pool.encouterPartyChannel)
+    bank.sendCoins(escrowAddr, msg.recipient, msg.tokenOut)
+    
+    store.savePool(amm.pool) // update pool states
+    
+    return { tokens: minTokenIn }
 }
 
-func (k Keeper) OnCreatePoolAcknowledged(ctx sdk.Context, request *types.MsgCreatePoolRequest, response *types.MsgCreatePoolResponse) error {
-
+function onCreatePoolAcknowledged(request: MsgCreatePoolRequest, response: MsgCreatePoolResponse) {
+    // do nothing
 }
 
-func (k Keeper) OnSingleDepositAcknowledged(ctx sdk.Context, request *types.MsgSingleDepositRequest, response *types.MsgSingleDepositResponse) error {
-
+function onSingleDepositAcknowledged(request: MsgSingleDepositRequest, response: MsgSingleDepositResponse) {
+    const pool = store.findPoolById(msg.poolId)
+    abortTransactionUnless(pool != null)
+    pool.supply.amount += response.tokens.amount
+    store.savePool(pool)
+    
+    bank.mintCoin(MODULE_NAME, reponse.token)
+    bank.sendCoinsFromModuleToAccount(MODULE_NAME, msg.sender, response.tokens)
 }
 
-func (k Keeper) OnWithdrawAcknowledged(ctx sdk.Context, request *types.MsgWithdrawRequest, response *types.MsgWithdrawResponse) error {
-
+function onWithdrawAcknowledged(request: MsgWithdrawRequest, response: MsgWithdrawResponse) {
+    const pool = store.findPoolById(msg.poolId)
+    abortTransactionUnless(pool != null)
+    abortTransactionUnless(pool.supply.amount >= response.tokens.amount)
+    pool.supply.amount -= response.tokens.amount
+    store.savePool(pool)
+    
+    bank.sendCoinsFromAccountToModule(msg.sender, MODULE_NAME, response.tokens)
+    bank.burnCoin(MODULE_NAME, reponse.token)
 }
 
-func (k Keeper) OnLeftSwapAcknowledged(ctx sdk.Context, request *types.MsgLeftSwapRequest, response *types.MsgSwapResponse) error {
-
+function onLeftSwapAcknowledged(request: MsgLeftSwapRequest, response: MsgSwapResponse) {
+    const pool = store.findPoolById([request.tokenIn.denom, request.tokenOut.denom])
+    abortTransactionUnless(pool != null)
+    
+    const assetOut = pool.findAssetByDenom(request.tokenOut.denom)
+    abortTransactionUnless(assetOut.balance.amount >= response.tokens.amount)
+    assetOut.balance.amount -= response.tokens.amount
+    
+    const assetIn = pool.findAssetByDenom(request.tokenIn.denom)
+    assetIn.balance.amount += request.tokenIn.amount
+    
+    store.savePool(pool)
 }
 
-func (k Keeper) OnRightSwapAcknowledged(ctx sdk.Context, request *types.MsgRightSwapRequest, response *types.MsgSwapResponse) error {
-
+function onRightSwapAcknowledged(request: MsgRightSwapRequest, response: MsgSwapResponse) {
+    const pool = store.findPoolById([request.tokenIn.denom, request.tokenOut.denom])
+    abortTransactionUnless(pool != null)
+    
+    const assetOut = pool.findAssetByDenom(request.tokenOut.denom)
+    abortTransactionUnless(assetOut.balance.amount >= response.tokens.amount)
+    assetOut.balance.amount -= request.tokenOut.amount
+    
+    const assetIn = pool.findAssetByDenom(request.tokenIn.denom)
+    assetIn.balance.amount += request.tokenIn.amount
+    
+    store.savePool(pool)
 }
 ```
 
@@ -742,10 +796,10 @@ function onChanOpenAck(
 
 #### Packet relay
 
-`SendIBCSwapDelegationDataPacket` must be called by a transaction handler in the module which performs appropriate signature checks, specific to the account owner on the host state machine.
+`sendInterchainIBCSwapDataPacket` must be called by a transaction handler in the module which performs appropriate signature checks, specific to the account owner on the host state machine.
 
 ```ts
-function SendIBCSwapDelegationDataPacket(
+function sendInterchainIBCSwapDataPacket(
   swapPacket: IBCSwapPacketData,
   sourcePort: string,
   sourceChannel: string,
@@ -768,103 +822,38 @@ function SendIBCSwapDelegationDataPacket(
 `onRecvPacket` is called by the routing module when a packet addressed to this module has been received.
 
 ```go
-func (im IBCModule) OnRecvPacket(
-	ctx sdk.Context,
-	packet channeltypes.Packet,
-	relayer sdk.AccAddress,
-) ibcexported.Acknowledgement {
-	ack := channeltypes.NewResultAcknowledgement([]byte{byte(1)})
+function onRecvPacket(packet: Packet) {
 
-	var data types.IBCSwapPacketData
-	var ackErr error
-	if err := types.ModuleCdc.UnmarshalJSON(packet.GetData(), &data); err != nil {
-		ackErr = sdkerrors.Wrapf(sdkerrors.ErrInvalidType, "cannot unmarshal ICS-101 interchain swap packet data")
-		ack = channeltypes.NewErrorAcknowledgement(ackErr)
-	}
-
-	// only attempt the application logic if the packet data
-	// was successfully decoded
-	if ack.Success() {
-
-		switch data.Type {
-		case types.CREATE_POOL:
-			var msg types.MsgCreatePoolRequest
-			if err := types.ModuleCdc.Unmarshal(data.Data, &msg); err != nil {
-				ackErr = sdkerrors.Wrapf(sdkerrors.ErrInvalidType, "cannot unmarshal ICS-101 interchain swap message")
-				ack = channeltypes.NewErrorAcknowledgement(ackErr)
-			}
-			if res, err := im.keeper.OnCreatePoolReceived(ctx, &msg); err != nil {
-				ackErr = sdkerrors.Wrapf(sdkerrors.ErrInvalidType, "cannot unmarshal ICS-101 interchain swap message")
-				ack = channeltypes.NewErrorAcknowledgement(ackErr)
-			} else if result, errEncode := types.ModuleCdc.Marshal(res); errEncode != nil {
-				ack = channeltypes.NewErrorAcknowledgement(errEncode)
-			} else {
-				ack = channeltypes.NewResultAcknowledgement(result)
-			}
-			break
-		case types.SINGLE_DEPOSIT:
-			var msg types.MsgSingleDepositRequest
-			if err := types.ModuleCdc.Unmarshal(data.Data, &msg); err != nil {
-				ackErr = sdkerrors.Wrapf(sdkerrors.ErrInvalidType, "cannot unmarshal ICS-101 interchain swap message")
-				ack = channeltypes.NewErrorAcknowledgement(ackErr)
-			}
-			if res, err := im.keeper.OnSingleDepositReceived(ctx, &msg); err != nil {
-				ackErr = sdkerrors.Wrapf(sdkerrors.ErrInvalidType, "cannot unmarshal ICS-101 interchain swap message")
-				ack = channeltypes.NewErrorAcknowledgement(ackErr)
-			} else if result, errEncode := types.ModuleCdc.Marshal(res); errEncode != nil {
-				ack = channeltypes.NewErrorAcknowledgement(errEncode)
-			} else {
-				ack = channeltypes.NewResultAcknowledgement(result)
-			}
-			break
-		case types.WITHDRAW:
-			var msg types.MsgWithdrawRequest
-			if err := types.ModuleCdc.Unmarshal(data.Data, &msg); err != nil {
-				ackErr = sdkerrors.Wrapf(sdkerrors.ErrInvalidType, "cannot unmarshal ICS-101 interchain swap message")
-				ack = channeltypes.NewErrorAcknowledgement(ackErr)
-			}
-			if res, err := im.keeper.OnWithdrawReceived(ctx, &msg); err != nil {
-				ackErr = sdkerrors.Wrapf(sdkerrors.ErrInvalidType, "cannot unmarshal ICS-101 interchain swap message")
-				ack = channeltypes.NewErrorAcknowledgement(ackErr)
-			} else if result, errEncode := types.ModuleCdc.Marshal(res); errEncode != nil {
-				ack = channeltypes.NewErrorAcknowledgement(errEncode)
-			} else {
-				ack = channeltypes.NewResultAcknowledgement(result)
-			}
-			break
-		case types.LEFT_SWAP:
-			var msg types.MsgLeftSwapRequest
-			if err := types.ModuleCdc.Unmarshal(data.Data, &msg); err != nil {
-				ackErr = sdkerrors.Wrapf(sdkerrors.ErrInvalidType, "cannot unmarshal ICS-101 interchain swap message")
-				ack = channeltypes.NewErrorAcknowledgement(ackErr)
-			}
-			if res, err := im.keeper.OnLeftSwapReceived(ctx, &msg); err != nil {
-				ackErr = sdkerrors.Wrapf(sdkerrors.ErrInvalidType, "cannot unmarshal ICS-101 interchain swap message")
-				ack = channeltypes.NewErrorAcknowledgement(ackErr)
-			} else if result, errEncode := types.ModuleCdc.Marshal(res); errEncode != nil {
-				ack = channeltypes.NewErrorAcknowledgement(errEncode)
-			} else {
-				ack = channeltypes.NewResultAcknowledgement(result)
-			}
-			break
-		case types.RIGHT_SWAP:
-			var msg types.MsgRightSwapRequest
-			if err := types.ModuleCdc.Unmarshal(data.Data, &msg); err != nil {
-				ackErr = sdkerrors.Wrapf(sdkerrors.ErrInvalidType, "cannot unmarshal ICS-101 interchain swap message")
-				ack = channeltypes.NewErrorAcknowledgement(ackErr)
-			}
-			if res, err := im.keeper.OnRightSwapReceived(ctx, &msg); err != nil {
-				ackErr = sdkerrors.Wrapf(sdkerrors.ErrInvalidType, "cannot unmarshal ICS-101 interchain swap message")
-				ack = channeltypes.NewErrorAcknowledgement(ackErr)
-			} else if result, errEncode := types.ModuleCdc.Marshal(res); errEncode != nil {
-				ack = channeltypes.NewErrorAcknowledgement(errEncode)
-			} else {
-				ack = channeltypes.NewResultAcknowledgement(result)
-			}
-			break
-		}
-
-	}
+    IBCSwapPacketData swapPacket = packet.data
+    // construct default acknowledgement of success
+    const ack: IBCSwapDataAcknowledgement = new IBCSwapDataPacketSuccess()
+    
+    try{
+        switch swapPacket.type {
+        case CREATE_POOL:
+            var msg: MsgCreatePoolRequest = protobuf.decode(swapPacket.data)
+            onCreatePoolReceived(msg, packet.destPortId, packet.destChannelId)
+            break
+        case SINGLE_DEPOSIT:
+            var msg: MsgSingleDepositRequest = protobuf.decode(swapPacket.data)
+            onSingleDepositReceived(msg)
+            break
+        case WITHDRAW:
+            var msg: MsgWithdrawRequest = protobuf.decode(swapPacket.data)
+            onWithdrawReceived(msg)
+            break
+        case LEFT_SWAP:  
+            var msg: MsgLeftSwapRequest = protobuf.decode(swapPacket.data)
+            onLeftswapReceived(msg)
+            break
+        case RIGHT_SWAP:  
+            var msg: MsgRightSwapRequest = protobuf.decode(swapPacket.data)
+            onRightReceived(msg)
+            break
+        }
+    } catch {
+        ack = new IBCSwapDataPacketError()
+    }
 
 	// NOTE: acknowledgement will be written synchronously during IBC handler execution.
 	return ack
@@ -876,88 +865,33 @@ func (im IBCModule) OnRecvPacket(
 ```go
 
 // OnAcknowledgementPacket implements the IBCModule interface
-func (im IBCModule) OnAcknowledgementPacket(
-	ctx sdk.Context,
-	packet channeltypes.Packet,
-	acknowledgement []byte,
-	relayer sdk.AccAddress,
-) error {
+function OnAcknowledgementPacket(
+	packet: channeltypes.Packet,
+	ack channeltypes.Acknowledgement,
+)  {
 	var ack channeltypes.Acknowledgement
-	if err := types.ModuleCdc.UnmarshalJSON(acknowledgement, &ack); err != nil {
-		return sdkerrors.Wrapf(sdkerrors.ErrUnknownRequest, "cannot unmarshal ICS-101 ibcswap packet acknowledgement: %v", err)
-	}
-	var data types.IBCSwapPacketData
-	if err := types.ModuleCdc.UnmarshalJSON(packet.GetData(), &data); err != nil {
-		return sdkerrors.Wrapf(sdkerrors.ErrUnknownRequest, "cannot unmarshal ICS-101 ibcswap packet data: %s", err.Error())
-	}
 
-	switch data.Type {
-	case types.CREATE_POOL:
-		var request types.MsgCreatePoolRequest
-		if err := types.ModuleCdc.Unmarshal(data.Data, &request); err != nil {
-			return err
-		}
-		var response types.MsgCreatePoolResponse
-		if err := types.ModuleCdc.Unmarshal(ack.GetResult(), &response); err != nil {
-			return err
-		}
-		if err := im.keeper.OnCreatePoolAcknowledged(ctx, &request, &response); err != nil {
-			return err
-		}
-		break
-	case types.SINGLE_DEPOSIT:
-		var request types.MsgSingleDepositRequest
-		if err := types.ModuleCdc.Unmarshal(data.Data, &request); err != nil {
-			return err
-		}
-		var response types.MsgSingleDepositResponse
-		if err := types.ModuleCdc.Unmarshal(ack.GetResult(), &response); err != nil {
-			return err
-		}
-		if err := im.keeper.OnSingleDepositAcknowledged(ctx, &request, &response); err != nil {
-			return err
-		}
-		break
-	case types.WITHDRAW:
-		var request types.MsgWithdrawRequest
-		if err := types.ModuleCdc.Unmarshal(data.Data, &request); err != nil {
-			return err
-		}
-		var response types.MsgWithdrawResponse
-		if err := types.ModuleCdc.Unmarshal(ack.GetResult(), &response); err != nil {
-			return err
-		}
-		if err := im.keeper.OnWithdrawAcknowledged(ctx, &request, &response); err != nil {
-			return err
-		}
-		break
-	case types.LEFT_SWAP:
-		var request types.MsgLeftSwapRequest
-		if err := types.ModuleCdc.Unmarshal(data.Data, &request); err != nil {
-			return err
-		}
-		var response types.MsgSwapResponse
-		if err := types.ModuleCdc.Unmarshal(ack.GetResult(), &response); err != nil {
-			return err
-		}
-		if err := im.keeper.OnLeftSwapAcknowledged(ctx, &request, &response); err != nil {
-			return err
-		}
-		break
-	case types.RIGHT_SWAP:
-		var request types.MsgRightSwapRequest
-		if err := types.ModuleCdc.Unmarshal(data.Data, &request); err != nil {
-			return err
-		}
-		var response types.MsgSwapResponse
-		if err := types.ModuleCdc.Unmarshal(ack.GetResult(), &response); err != nil {
-			return err
-		}
-		if err := im.keeper.OnRightSwapAcknowledged(ctx, &request, &response); err != nil {
-			return err
-		}
-		break
-	}
+    if (!ack.success()) {
+        refund(packet)
+    } else {
+        const swapPacket = protobuf.decode(packet.data)
+        switch swapPacket.type {
+        case CREATE_POOL:
+            onCreatePoolAcknowledged(msg)
+            break;
+        case SINGLE_DEPOSIT:
+            onSingleDepositAcknowledged(msg)
+            break;
+        case WITHDRAW:
+            onWithdrawAcknowledged(msg)
+            break;
+        case LEFT_SWAP:
+            onLeftSwapAcknowledged(msg)
+            break;
+        case RIGHT_SWAP:
+            onRightSwapAcknowledged(msg)
+        }
+    }
 
 	return nil
 }
