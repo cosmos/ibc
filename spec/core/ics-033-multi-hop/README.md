@@ -297,6 +297,7 @@ Coming soon.
 ## History
 
 Dec 16, 2022 - Revisions to channel spec and proof verification
+
 Nov 11, 2022 - Initial draft
 
 ## Copyright
