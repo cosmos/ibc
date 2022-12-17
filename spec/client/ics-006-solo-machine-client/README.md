@@ -167,46 +167,46 @@ function verifyClientMessage(clientMsg: ClientMessage) {
 }
 
 function verifyHeader(header: header) {
-    assert(header.timestamp >= clientstate.consensusState.timestamp)
-    headerData = {
-      NewPubKey: header.newPubKey,
-      NewDiversifier: header.newDiversifier,
-    }
-    signBytes = SignBytes(
-      Sequence: clientState.consensusState.sequence,
-      Timestamp: header.timestamp,
-      Diversifier: clientState.consensusState.diversifier,
-      Path: []byte{"solomachine:header"},
-      Value: marshal(headerData)
-    )
-    assert(checkSignature(cs.consensusState.publicKey, signBytes, header.signature))
+  assert(header.timestamp >= clientstate.consensusState.timestamp)
+  headerData = {
+    newPubKey: header.newPubKey,
+    newDiversifier: header.newDiversifier,
+  }
+  signBytes = SignBytes(
+    sequence: clientState.consensusState.sequence,
+    timestamp: header.timestamp,
+    diversifier: clientState.consensusState.diversifier,
+    path: []byte{"solomachine:header"},
+    value: marshal(headerData)
+  )
+  assert(checkSignature(cs.consensusState.publicKey, signBytes, header.signature))
 }
 
 function verifyMisbehaviour(misbehaviour: Misbehaviour) {
-    s1 = misbehaviour.signatureOne
-    s2 = misbehaviour.signatureTwo
-    pubkey = clientState.consensusState.publicKey
-    diversifier = clientState.consensusState.diversifier
-    timestamp = clientState.consensusState.timestamp
-    // assert that the signatures validate and that they are different
-    sigBytes1 = SignBytes(
-      Sequence: misbehaviour.sequence,
-      Timestamp: s1.timestamp,
-      Diversifier: diversifier,
-      Path: s1.path,
-      Data: s1.data
-    )
-    sigBytes2 = SignBytes(
-      Sequence: misbehaviour.sequence,
-      Timestamp: s2.timestamp,
-      Diversifier: diversifier,
-      Path: s2.path,
-      Data: s2.data
-    )
-    // either the path or data must be different in order for the misbehaviour to be valid
-    assert(s1.path != s2.path || s1.data != s2.data)
-    assert(checkSignature(pubkey, sigBytes1, misbehaviour.signatureOne.signature))
-    assert(checkSignature(pubkey, sigBytes2, misbehaviour.signatureTwo.signature))
+  s1 = misbehaviour.signatureOne
+  s2 = misbehaviour.signatureTwo
+  pubkey = clientState.consensusState.publicKey
+  diversifier = clientState.consensusState.diversifier
+  timestamp = clientState.consensusState.timestamp
+  // assert that the signatures validate and that they are different
+  sigBytes1 = SignBytes(
+    sequence: misbehaviour.sequence,
+    timestamp: s1.timestamp,
+    diversifier: diversifier,
+    path: s1.path,
+    data: s1.data
+  )
+  sigBytes2 = SignBytes(
+    sequence: misbehaviour.sequence,
+    timestamp: s2.timestamp,
+    diversifier: diversifier,
+    path: s2.path,
+    data: s2.data
+  )
+  // either the path or data must be different in order for the misbehaviour to be valid
+  assert(s1.path != s2.path || s1.data != s2.data)
+  assert(checkSignature(pubkey, sigBytes1, misbehaviour.signatureOne.signature))
+  assert(checkSignature(pubkey, sigBytes2, misbehaviour.signatureTwo.signature))
 }
 ```
 
@@ -216,11 +216,11 @@ Since misbehaviour is checked in `verifyClientMessage`, if the client message is
 
 ```typescript
 function checkForMisbehaviour(clientMessage: ClientMessage) => bool {
-    switch typeof(ClientMessage) {
-    case Misbehaviour:
-      return true
-    }
-    return false
+  switch typeof(ClientMessage) {
+  case Misbehaviour:
+    return true
+  }
+  return false
 }
 ```
 
@@ -230,11 +230,11 @@ function checkForMisbehaviour(clientMessage: ClientMessage) => bool {
 
 ```typescript
 function updateState(clientMessage: ClientMessage) {
-    clientState.consensusState.publicKey = header.newPubKey
-    clientState.consensusState.diversifier = header.newDiversifier
-    clientState.consensusState.timestamp = header.timestamp
-    clientState.consensusState.sequence++
-    set("clients/{identifier}/clientState", clientState)
+  clientState.consensusState.publicKey = header.newPubKey
+  clientState.consensusState.diversifier = header.newDiversifier
+  clientState.consensusState.timestamp = header.timestamp
+  clientState.consensusState.sequence++
+  set("clients/{identifier}/clientState", clientState)
 }
 ```
 
@@ -242,9 +242,9 @@ function updateState(clientMessage: ClientMessage) {
 
 ```typescript
 function updateStateOnMisbehaviour(clientMessage: ClientMessage) {
-    // freeze the client
-    clientState.frozen = true
-    set("clients/{identifier}/clientState", clientState)
+  // freeze the client
+  clientState.frozen = true
+  set("clients/{identifier}/clientState", clientState)
 }
 ```
 
@@ -268,9 +268,9 @@ function verifyMembership(
     abortTransactionUnless(!clientState.frozen)
     abortTransactionUnless(proof.timestamp >= clientState.consensusState.timestamp)
     signBytes = SignBytes(
-      Sequence: clientState.consensusState.sequence,
-      Timestamp: proof.timestamp,
-      Diversifier: clientState.consensusState.diversifier,
+      sequence: clientState.consensusState.sequence,
+      timestamp: proof.timestamp,
+      diversifier: clientState.consensusState.diversifier,
       path: path.String(),
       data: value,
     )
@@ -304,9 +304,9 @@ function verifyNonMembership(
     abortTransactionUnless(!clientState.frozen)
     abortTransactionUnless(proof.timestamp >= clientState.consensusState.timestamp)
     signBytes = SignBytes(
-      Sequence: clientState.consensusState.sequence,
-      Timestamp: proof.timestamp,
-      Diversifier: clientState.consensusState.diversifier,
+      sequence: clientState.consensusState.sequence,
+      timestamp: proof.timestamp,
+      diversifier: clientState.consensusState.diversifier,
       path: path.String(),
       data: nil,
     )
