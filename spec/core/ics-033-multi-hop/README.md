@@ -73,7 +73,11 @@ Graphical depiction of proof generation.
 
 ![graphical_proof.jpg](graphical_proof.jpg)
 
-Proof steps.
+Relayer Multihop Proof Queries.
+
+![relayer_proof_queries.jpg](relayer_proof_queries.jpg)
+
+
 
 ![proof_steps.png](proof_steps.png)
 
@@ -208,6 +212,25 @@ func GenerateConnectionProofs(chains []*Chain) []*ProofData {
     return proofs       
 }
 ```
+
+### Multi-hop Proof Verification Steps
+
+The followin outlines the general proof verification steps specific to a multi-hop IBC message.
+
+1. Unpack the multihop proof bytes into consensus, connection, and channel/commitment proof data.
+2. Iterate through connection proof data and verify each connectionEnd is in the OPEN state. Check connectionHops during channel handshake.
+3. Starting with known `ConsensusState[N-1]` at the given `proofHeight` on `ChainN` prove the prior chain's consensus and connection state.
+4. Repeat step 3, proving `ConsensusState[i-1]` and `Conn[i-1,i]` until `ConsensusState0` on the source chain is proven.
+   - Start with i = N-1
+   - ConsensusState <= ConsensusState[i-1] on Chain[i]
+   - ConsensusProofs[i].Proof.VerifyMembership(ConsensusState.GetRoot(), ConsensusProofs[i].Key, ConsensusProofs[i].Value)
+   - ConnectionProofs[i].Proof.VerifyMembership(ConsensusState.GetRoot(), ConsensusProofs[i].Key, ConsensusProofs[i].Value)
+   - Set ConsensusState from unmarshalled ConsensusProofs[i].Value
+5. Finally, prove the expected channel or packet commitment in `ConsensusState0`
+
+For more details see [ICS4](https://github.com/cosmos/ibc/tree/main/spec/core/ics-004-channel-and-packet-semantics).
+
+### Multi-hop Proof Verification Pseudo Code
 
 Pseudocode proof verification of a channel between chains `A -> B -> C` .
 

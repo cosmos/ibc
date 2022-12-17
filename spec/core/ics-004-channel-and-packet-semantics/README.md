@@ -21,7 +21,7 @@ Channels are payload-agnostic. The modules which send and receive IBC packets de
 
 The interblockchain communication protocol uses a cross-chain message passing model. IBC *packets* are relayed from one blockchain to the other by external relayer processes. Chain `A` and chain `B` confirm new blocks independently, and packets from one chain to the other may be delayed, censored, or re-ordered arbitrarily. Packets are visible to relayers and can be read from a blockchain by any relayer process and submitted to any other blockchain.
 
-The IBC protocol must provide ordering (for ordered channels) and exactly-once delivery guarantees to allow applications to reason about the combined state of connected modules on two chains. 
+The IBC protocol must provide ordering (for ordered channels) and exactly-once delivery guarantees to allow applications to reason about the combined state of connected modules on two chains.
 
 > **Example**: An application may wish to allow a single tokenized asset to be transferred between and held on multiple blockchains while preserving fungibility and conservation of supply. The application can mint asset vouchers on chain `B` when a particular IBC packet is committed to chain `B`, and require outgoing sends of that packet on chain `A` to escrow an equal amount of the asset on chain `A` until the vouchers are later redeemed back to chain `A` with an IBC packet in the reverse direction. This ordering guarantee along with correct application logic can ensure that total supply is preserved across both chains and that any vouchers minted on chain `B` can later be redeemed back to chain `A`.
 
@@ -88,7 +88,7 @@ interface ChannelEnd {
 - The `nextSequenceSend`, stored separately, tracks the sequence number for the next packet to be sent.
 - The `nextSequenceRecv`, stored separately, tracks the sequence number for the next packet to be received.
 - The `nextSequenceAck`, stored separately, tracks the sequence number for the next packet to be acknowledged.
-- The `connectionHops` stores the list of connection identifiers, in order, along which packets sent on this channel will travel. At the moment this list must be of length 1. In the future multi-hop channels may be supported.
+- The `connectionHops` stores the list of connection identifiers, in order, along which packets sent on this channel will travel. A list length is greater than 1 indicates a multi-hop channel.
 - The `version` string stores an opaque channel version, which is agreed upon during the handshake. This can determine module-level configuration such as which packet encoding is used for the channel. This version is not used by the core IBC protocol. If the version string contains structured metadata for the application to parse and interpret, then it is considered best practice to encode all metadata in a JSON struct and include the marshalled string in the version field.
 
 See the [upgrade spec](./UPGRADES.md) for details on `upgradeSequence`.
@@ -189,7 +189,7 @@ The architecture of clients, connections, channels and packets:
 
 ### Preliminaries
 
-#### Store paths 
+#### Store paths
 
 Channel structures are stored under a store path prefix unique to a combination of a port identifier and channel identifier:
 
@@ -272,7 +272,7 @@ The validation function `validatePortIdentifier` MAY be provided.
 type validateChannelIdentifier = (portIdentifier: Identifier, channelIdentifier: Identifier) => boolean
 ```
 
-If not provided, the default `validateChannelIdentifier` function will always return `true`. 
+If not provided, the default `validateChannelIdentifier` function will always return `true`.
 
 #### Channel lifecycle management
 
@@ -305,7 +305,7 @@ function writeChannel(
   connectionHops: [Identifier],
   version: string) {
     channel = ChannelEnd{
-      state, order, 
+      state, order,
       counterpartyPortIdentifier, counterpartyChannelIdentifier,
       connectionHops, version
     }
@@ -336,10 +336,11 @@ function chanOpenInit(
     channelIdentifier = generateIdentifier()
     abortTransactionUnless(validateChannelIdentifier(portIdentifier, channelIdentifier))
 
-    abortTransactionUnless(connectionHops.length === 1) // for v1 of the IBC protocol
-
     abortTransactionUnless(provableStore.get(channelPath(portIdentifier, channelIdentifier)) === null)
     connection = provableStore.get(connectionPath(connectionHops[0]))
+
+    // TODO: Should multi-hop channels require proof that all connections
+    // in the channel path exist and are OPEN during INIT?
 
     // optimistic channel handshakes are allowed
     abortTransactionUnless(connection !== null)
@@ -364,30 +365,47 @@ function chanOpenTry(
   counterpartyPortIdentifier: Identifier,
   counterpartyChannelIdentifier: Identifier,
   counterpartyVersion: string,
-  proofInit: CommitmentProof,
+  proofInit: CommitmentProof | MultihopProof,
   proofHeight: Height): (channelIdentifier: Identifier, channelCapability: CapabilityKey) {
     channelIdentifier = generateIdentifier()
 
     abortTransactionUnless(validateChannelIdentifier(portIdentifier, channelIdentifier))
-    abortTransactionUnless(connectionHops.length === 1) // for v1 of the IBC protocol
     abortTransactionUnless(authenticateCapability(portPath(portIdentifier), portCapability))
-    
+
     connection = provableStore.get(connectionPath(connectionHops[0]))
     abortTransactionUnless(connection !== null)
     abortTransactionUnless(connection.state === OPEN)
 
+    let counterpartyHops: []
+    if (connectionHops.length > 1) {
+      counterpartyHops = getCounterPartyHops(proofInit)
+    } else {
+      counterpartyHops = [connection.counterpartyConnectionIdentifier]
+    }
+
+
     expected = ChannelEnd{
       INIT, order, portIdentifier,
-      "", [connection.counterpartyConnectionIdentifier], 
+      "", counterpartyHops,
       counterpartyVersion
     }
-    abortTransactionUnless(connection.verifyChannelState(
-      proofHeight,
-      proofInit,
-      counterpartyPortIdentifier,
-      counterpartyChannelIdentifier,
-      expected
-    ))
+
+    if (connectionHops.length > 1) {
+      consensusState = provableStore.get(consensusStatePath(connection.ClientId, proofHeight)
+      abortTransactionUnless(VerifyMultihopProof(
+        consensusState,
+        connectionHops,
+        proofInit,
+        expected)
+    } else {
+      abortTransactionUnless(connection.verifyChannelState(
+        proofHeight,
+        proofInit,
+        counterpartyPortIdentifier,
+        counterpartyChannelIdentifier,
+        expected
+      ))
+    }
 
     channelCapability = newCapability(channelCapabilityPath(portIdentifier, channelIdentifier))
 
@@ -414,14 +432,14 @@ function chanOpenAck(
     channel = provableStore.get(channelPath(portIdentifier, channelIdentifier))
     abortTransactionUnless(channel.state === INIT)
     abortTransactionUnless(authenticateCapability(channelCapabilityPath(portIdentifier, channelIdentifier), capability))
-    
+
     connection = provableStore.get(connectionPath(channel.connectionHops[0]))
     abortTransactionUnless(connection !== null)
     abortTransactionUnless(connection.state === OPEN)
-    
+
     expected = ChannelEnd{
       TRYOPEN, channel.order, portIdentifier,
-      channelIdentifier, [connection.counterpartyConnectionIdentifier], 
+      channelIdentifier, [connection.counterpartyConnectionIdentifier],
       counterpartyVersion
     }
     abortTransactionUnless(connection.verifyChannelState(
@@ -431,7 +449,7 @@ function chanOpenAck(
       counterpartyChannelIdentifier,
       expected
     ))
-    
+
     channel.state = OPEN
     channel.version = counterpartyVersion
     channel.counterpartyChannelIdentifier = counterpartyChannelIdentifier
@@ -452,11 +470,11 @@ function chanOpenConfirm(
     abortTransactionUnless(channel !== null)
     abortTransactionUnless(channel.state === TRYOPEN)
     abortTransactionUnless(authenticateCapability(channelCapabilityPath(portIdentifier, channelIdentifier), capability))
-    
+
     connection = provableStore.get(connectionPath(channel.connectionHops[0]))
     abortTransactionUnless(connection !== null)
     abortTransactionUnless(connection.state === OPEN)
-    
+
     expected = ChannelEnd{
       OPEN, channel.order, portIdentifier,
       channelIdentifier, [connection.counterpartyConnectionIdentifier],
@@ -469,7 +487,7 @@ function chanOpenConfirm(
       channel.counterpartyChannelIdentifier,
       expected
     ))
-    
+
     channel.state = OPEN
     provableStore.set(channelPath(portIdentifier, channelIdentifier), channel)
 }
@@ -560,7 +578,7 @@ The module can interface with the IBC handler through [ICS 25](../ics-025-handle
     1. Packet sent over the newly created channel from *1* to *2* (this ICS)
 1. Successful completion of handshakes (if either handshake fails, the connection/channel can be closed & the packet timed-out)
     1. Connection opening handshake completes successfully (see [ICS 3](../ics-003-connection-semantics)) (this will require participation of a relayer process)
-    1. Channel opening handshake completes successfully (this ICS) (this will require participation of a relayer process) 
+    1. Channel opening handshake completes successfully (this ICS) (this will require participation of a relayer process)
 1. Packet confirmation on machine *B*, module *2* (or packet timeout if the timeout height has passed) (this will require participation of a relayer process)
 1. Acknowledgement (possibly) relayed back from module *2* on machine *B* to module *1* on machine *A*
 
@@ -595,7 +613,7 @@ function sendPacket(
   data: bytes): uint64 {
     channel = provableStore.get(channelPath(sourcePort, sourceChannel))
 
-    // check that the channel must be OPEN to send packets; 
+    // check that the channel must be OPEN to send packets;
     abortTransactionUnless(channel !== null)
     abortTransactionUnless(channel.state === OPEN)
     connection = provableStore.get(connectionPath(channel.connectionHops[0]))
@@ -606,7 +624,7 @@ function sendPacket(
 
     // disallow packets with a zero timeoutHeight and timeoutTimestamp
     abortTransactionUnless(timeoutHeight !== 0 || timeoutTimestamp !== 0)
-    
+
     // check that the timeout height hasn't already passed in the local client tracking the receiving chain
     latestClientHeight = provableStore.get(clientPath(connection.clientIdentifier)).latestClientHeight()
     abortTransactionUnless(timeoutHeight === 0 || latestClientHeight < timeoutHeight)
@@ -623,9 +641,9 @@ function sendPacket(
 
     // log that a packet can be safely sent
     emitLogEntry("sendPacket", {
-      sequence: sequence, 
-      data: data, 
-      timeoutHeight: timeoutHeight, 
+      sequence: sequence,
+      data: data,
+      timeoutHeight: timeoutHeight,
       timeoutTimestamp: timeoutTimestamp
     })
 
@@ -686,13 +704,13 @@ function recvPacket(
         if (packet.sequence < nextSequenceRecv) {
           // event is emitted even if transaction is aborted
           emitLogEntry("recvPacket", {
-            data: packet.data 
-            timeoutHeight: packet.timeoutHeight, 
+            data: packet.data
+            timeoutHeight: packet.timeoutHeight,
             timeoutTimestamp: packet.timeoutTimestamp,
             sequence: packet.sequence,
-            sourcePort: packet.sourcePort, 
+            sourcePort: packet.sourcePort,
             sourceChannel: packet.sourceChannel,
-            destPort: packet.destPort, 
+            destPort: packet.destPort,
             destChannel: packet.destChannel,
             order: channel.order,
             connection: channel.connectionHops[0]
@@ -744,13 +762,13 @@ function recvPacket(
         packetReceipt = provableStore.get(packetReceiptPath(packet.destPort, packet.destChannel, packet.sequence))
         if (packetReceipt != null) {
           emitLogEntry("recvPacket", {
-            data: packet.data 
-            timeoutHeight: packet.timeoutHeight, 
+            data: packet.data
+            timeoutHeight: packet.timeoutHeight,
             timeoutTimestamp: packet.timeoutTimestamp,
             sequence: packet.sequence,
-            sourcePort: packet.sourcePort, 
+            sourcePort: packet.sourcePort,
             sourceChannel: packet.sourceChannel,
-            destPort: packet.destPort, 
+            destPort: packet.destPort,
             destChannel: packet.destChannel,
             order: channel.order,
             connection: channel.connectionHops[0]
@@ -764,16 +782,16 @@ function recvPacket(
         )
       break;
     }
-    
+
     // log that a packet has been received
     emitLogEntry("recvPacket", {
-      data: packet.data 
-      timeoutHeight: packet.timeoutHeight, 
+      data: packet.data
+      timeoutHeight: packet.timeoutHeight,
       timeoutTimestamp: packet.timeoutTimestamp,
       sequence: packet.sequence,
-      sourcePort: packet.sourcePort, 
+      sourcePort: packet.sourcePort,
       sourceChannel: packet.sourceChannel,
-      destPort: packet.destPort, 
+      destPort: packet.destPort,
       destChannel: packet.destChannel,
       order: channel.order,
       connection: channel.connectionHops[0]
@@ -821,11 +839,11 @@ function writeAcknowledgement(
     // log that a packet has been acknowledged
     emitLogEntry("writeAcknowledgement", {
       sequence: packet.sequence,
-      timeoutHeight: packet.timeoutHeight, 
-      port: packet.destPort, 
+      timeoutHeight: packet.timeoutHeight,
+      port: packet.destPort,
       channel: packet.destChannel,
-      timeoutTimestamp: packet.timeoutTimestamp, 
-      data: packet.data, 
+      timeoutTimestamp: packet.timeoutTimestamp,
+      data: packet.data,
       acknowledgement
     })
 }
@@ -915,7 +933,7 @@ The acknowledgement returned from the remote chain is defined as arbitrary bytes
 may either encode a successful execution or a failure (anything besides a timeout). There is no generic way to
 distinguish the two cases, which requires that any client-side packet visualiser understands every app-specific protocol
 in order to distinguish the case of successful or failed relay. In order to reduce this issue, we offer an additional
-specification for acknowledgement formats, which [SHOULD](https://www.ietf.org/rfc/rfc2119.txt) be used by the 
+specification for acknowledgement formats, which [SHOULD](https://www.ietf.org/rfc/rfc2119.txt) be used by the
 app-specific protocols.
 
 ```proto
@@ -930,7 +948,7 @@ message Acknowledgement {
 If an application uses a different format for acknowledgement bytes, it MUST not deserialise to a valid protobuf message
 of this format. Note that all packets contain exactly one non-empty field, and it must be result or error.  The field
 numbers 21 and 22 were explicitly chosen to avoid accidental conflicts with other protobuf message formats used
-for acknowledgements. The first byte of any message with this format will be the non-ASCII values `0xaa` (result) 
+for acknowledgements. The first byte of any message with this format will be the non-ASCII values `0xaa` (result)
 or `0xb2` (error).
 
 #### Timeouts
@@ -1031,7 +1049,7 @@ function timeoutPacket(
       default:
         // unsupported channel type
         abortTransactionUnless(true)
-    } 
+    }
 
     // all assertions passed, we can alter state
 
