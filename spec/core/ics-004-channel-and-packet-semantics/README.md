@@ -84,7 +84,7 @@ interface ChannelEnd {
 - The `nextSequenceSend`, stored separately, tracks the sequence number for the next packet to be sent.
 - The `nextSequenceRecv`, stored separately, tracks the sequence number for the next packet to be received.
 - The `nextSequenceAck`, stored separately, tracks the sequence number for the next packet to be acknowledged.
-- The `connectionHops` stores the list of connection identifiers, in order, along which packets sent on this channel will travel. At the moment this list must be of length 1. In the future multi-hop channels may be supported.
+- The `connectionHops` stores the list of connection identifiers, in order, along which packets sent on this channel will travel. A list length is greater than 1 indicates a multi-hop channel.
 - The `version` string stores an opaque channel version, which is agreed upon during the handshake. This can determine module-level configuration such as which packet encoding is used for the channel. This version is not used by the core IBC protocol. If the version string contains structured metadata for the application to parse and interpret, then it is considered best practice to encode all metadata in a JSON struct and include the marshalled string in the version field.
 
 Channel ends have a *state*:
@@ -305,10 +305,11 @@ function chanOpenInit(
     channelIdentifier = generateIdentifier()
     abortTransactionUnless(validateChannelIdentifier(portIdentifier, channelIdentifier))
 
-    abortTransactionUnless(connectionHops.length === 1) // for v1 of the IBC protocol
-
     abortTransactionUnless(provableStore.get(channelPath(portIdentifier, channelIdentifier)) === null)
     connection = provableStore.get(connectionPath(connectionHops[0]))
+
+    // TODO: Should multi-hop channels require proof that all connections
+    // in the channel path exist and are OPEN during INIT?
 
     // optimistic channel handshakes are allowed
     abortTransactionUnless(connection !== null)
@@ -335,25 +336,42 @@ function chanOpenTry(
   counterpartyChannelIdentifier: Identifier,
   version: string,
   counterpartyVersion: string,
-  proofInit: CommitmentProof,
+  proofInit: CommitmentProof | MultihopProof,
   proofHeight: Height): CapabilityKey {
     channelIdentifier = generateIdentifier()
 
     abortTransactionUnless(validateChannelIdentifier(portIdentifier, channelIdentifier))
-    abortTransactionUnless(connectionHops.length === 1) // for v1 of the IBC protocol
     abortTransactionUnless(authenticateCapability(portPath(portIdentifier), portCapability))
     connection = provableStore.get(connectionPath(connectionHops[0]))
     abortTransactionUnless(connection !== null)
     abortTransactionUnless(connection.state === OPEN)
+
+    let counterpartyHops: []
+    if (connectionHops.length > 1) {
+      counterpartyHops = getCounterPartyHops(proofInit)
+    } else {
+      counterpartyHops = [connection.counterpartyConnectionIdentifier]
+    }
+
     expected = ChannelEnd{INIT, order, portIdentifier,
-                          "", [connection.counterpartyConnectionIdentifier], counterpartyVersion}
-    abortTransactionUnless(connection.verifyChannelState(
-      proofHeight,
-      proofInit,
-      counterpartyPortIdentifier,
-      counterpartyChannelIdentifier,
-      expected
-    ))
+                          "", counterpartyHops, counterpartyVersion}
+
+    if (connectionHops.length > 1) {
+      consensusState = provableStore.get(consensusStatePath(connection.ClientId, proofHeight)
+      abortTransactionUnless(VerifyMultihopProof(
+        consensusState,
+        connectionHops,
+        proofInit,
+        expected)
+    } else {
+      abortTransactionUnless(connection.verifyChannelState(
+        proofHeight,
+        proofInit,
+        counterpartyPortIdentifier,
+        counterpartyChannelIdentifier,
+        expected
+      ))
+    }
     channel = ChannelEnd{TRYOPEN, order, counterpartyPortIdentifier,
                          counterpartyChannelIdentifier, connectionHops, version}
     provableStore.set(channelPath(portIdentifier, channelIdentifier), channel)
