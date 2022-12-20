@@ -308,9 +308,6 @@ function chanOpenInit(
     abortTransactionUnless(provableStore.get(channelPath(portIdentifier, channelIdentifier)) === null)
     connection = provableStore.get(connectionPath(connectionHops[0]))
 
-    // TODO: Should multi-hop channels require proof that all connections
-    // in the channel path exist and are OPEN during INIT?
-
     // optimistic channel handshakes are allowed
     abortTransactionUnless(connection !== null)
     abortTransactionUnless(authenticateCapability(portPath(portIdentifier), portCapability))
