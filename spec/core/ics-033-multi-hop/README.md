@@ -85,21 +85,23 @@ Pseudocode proof generation for a channel between `N` chains `C[0] --> C[i] --> 
 
 ```go
 
-// generic proof struct
+// ProofData is a generic proof struct.
 type ProofData struct {
     Key   *MerklePath
     Value []]byte
     Proof []byte
 }
 
-// set of proofs for a multihop message
+// MultihopProof defines set of proofs to verify a multihop message.
+// Consensus and Connection proofs are ordered from source to destination but not including the
+// chain[N-1] consensus state on chainN (dest) since it is already known on the destination chain.
 type MultihopProof struct {
     KeyProof *ProofData           // the key/value proof on the source chain
-    ConsensusProofs []*ProofData  // array of consensus proofs starting with proof of chain0 state root on chain1
+    ConsensusProofs []*ProofData  // array of consensus proofs starting with proof of chain0 state root on chain1.
     ConnectionProofs []*ProofData // array of connection proofs starting with proof of conn10 on chain1
 }
 
-// Generate proof of key/value at the proofHeight on source chain, chain0. 
+// GenerateMultihopProof generates proof of a key/value at the proofHeight on source chain (chain0). 
 func GenerateMultihopProof(chains []*Chain, key string, value []byte, proofHeight exported.Height) *MultihopProof {
 
     assert(len(chains) > 2)
@@ -112,13 +114,12 @@ func GenerateMultihopProof(chains []*Chain, key string, value []byte, proofHeigh
     assert(height01 >= proofHeight) // ensure that chain0's client state is update to date
 
     // query the key/value proof on the source chain at the proof height
-    keyProof, _ := chain0.QueryProofAtHeight([]byte(keyPathToProve), int64(proofHeight.GetRevisionHeight()))
-    prefixedKey := commitmenttypes.ApplyPrefix(chain0.GetPrefix(), commitmenttypes.NewMerklePath(key))
+    keyProof, _ := chain0.QueryProofAtHeight([]byte(key), int64(proofHeight.GetRevisionHeight()))
 
     // assign the key/value proof
     multihopProof.KeyProof = &ProofData{
-        Key:   &prefixedKey,
-        Value: nil,          // proven values are constructed during verification
+        Key:   nil,    // key to prove constructed during verification
+        Value: nil,    // proven values are constructed during verification
         Proof: proof,
     }
 
