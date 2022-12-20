@@ -74,6 +74,17 @@ interface AtomicSwapPacketData {
   memo: string;
 }
 ```
+```typescript
+type AtomicSwapPacketAcknowledgement = AtomicSwapPacketAcknowledgementSuccess | AtomicSwapPacketAcknowledgementFailure
+interface AtomicSwapPacketAcknowledgementSuccess {
+  // This is binary 0x01 base64 encoded
+  result: "AQ=="
+}
+
+interface AtomicSwapPacketAcknowledgementFailure {
+    error: string
+}
+```
 
 All `AtomicSwapPacketData` will be forwarded to the corresponding message handler to execute according to its type. There are 3 types:
 
@@ -323,7 +334,10 @@ function onChanOpenInit(
   // if empty, we return the default transfer version to core IBC
   // as the version for this channel
   abortTransactionUnless(version === "ics100-1" || version === "")
-
+  
+  // allocate an escrow address
+  channelEscrowAddresses[channelIdentifier] = newAddress()
+  
   return "ics100-1", nil
 }
 ```
@@ -402,16 +416,19 @@ function sendAtomicSwapPacket(
 }
 ```
 
-`onRecvPacket` is called by the routing module when a packet addressed to this module has been received.
+`onRecvPacket` is called by the routing module when a packet addressed to this module has been received. 
 
 ```typescript
 function onRecvPacket(packet channeltypes.Packet) {
   const swapPaket: AtomicSwapPacketData =  packet.data
+  
+  AtomicSwapPacketAcknowledgement ack = new AtomicSwapPacketAcknowledgementSuccess()
+  
   switch swapPaket.type {
       case TYPE_MSG_MAKE_SWAP:
         const makeMsg = protobuf.decode(swapPaket.data)
         
-        // check if buy_token is native token on the taker chain
+        // check if buyToken is a valid token on the taker chain, could be either native or ibc token
         const supply = bank.getSupply(makeMsg.buyToken.denom)
         abortTransactionUnless(supply > 0)
         
@@ -421,11 +438,14 @@ function onRecvPacket(packet channeltypes.Packet) {
         order.portIdOnTakerChain = packet.destinationPort
         order.channelIdOnTakerChain = packet.destinationChannel
         //saves order to store
-        store.save(order)
+        const err = store.save(order)
+        if(err != null) {
+            ack = new AtomicSwapPacketAcknowledgementFailure("Failed to save the order on taker chain") 
+        }
         break;
       case TYPE_MSG_TAKE_SWAP:
         const takeMsg = protobuf.decode(swapPaket.data)
-        const order = store.findOrderById(takeMsg.orderId)
+        const order = store.findOrderById(packet.destinationChannel, takeMsg.orderId) // store key is channelId + orderId
         abortTransactionUnless(order != null)
         abortTransactionUnless(order.status == Status.SYNC)
         abortTransactionUnless(order.expiredTimestamp < currentTimestamp())
@@ -436,7 +456,10 @@ function onRecvPacket(packet channeltypes.Packet) {
     
         const escrowAddr = escrowAddress(packet.destinationPort, packet.destinationChannel)
         // send maker.sellToken to taker's receiving address
-        bank.sendCoins(escrowAddr, takeMsg.takerReceivingAddress, order.maker.sellToken)
+        const err = bank.sendCoins(escrowAddr, takeMsg.takerReceivingAddress, order.maker.sellToken)
+        if(err != null) {
+            ack = new AtomicSwapPacketAcknowledgementFailure("transfer coins failed") 
+        }
         
         // update status of order
         order.status = Status.COMPLETE
@@ -446,7 +469,7 @@ function onRecvPacket(packet channeltypes.Packet) {
         break;
       case TYPE_MSG_CANCEL_SWAP:
         const cancelMsg = protobuf.decode(swapPaket.data)
-        const order = store.findOrderById(cancelMsg.orderId)
+        const order = store.findOrderById(packet.destinationChannel, cancelMsg.orderId)
         abortTransactionUnless(order != null)
         abortTransactionUnless(order.status == Status.SYNC || order.status == Status.INITIAL)
         abortTransactionUnless(order.taker != null) // the maker order has not been occupied 
@@ -454,11 +477,16 @@ function onRecvPacket(packet channeltypes.Packet) {
         // update status of order
         order.status = Status.CANCEL
         order.cancelTimestamp = cancelMsg.creationTimestamp 
-        store.save(order)
+        const err = store.save(order)
+        if(err != null) {
+            ack = new AtomicSwapPacketAcknowledgementFailure("failed to cancel order on taker chain") 
+        }
         break;
       default:
-        throw new Error("ErrUnknownDataPacket")
+        ack = new AtomicSwapPacketAcknowledgementFailure("unknown data packet") 
   }
+  
+  return ack
 }
 ```
 
@@ -481,7 +509,7 @@ function onAcknowledgePacket(
         const makeMsg = protobuf.decode(swapPaket.data)
         
         // update order status on the maker chain.
-        const order = store.findOrderById(generateOrderId(makeMsg))
+        const order = store.findOrderById(packet.sourceChannel, generateOrderId(makeMsg))
         order.status = Status.SYNC
         //save order to store
         store.save(order)
@@ -490,7 +518,7 @@ function onAcknowledgePacket(
         const takeMsg = protobuf.decode(swapPaket.data)
         
         // update order status on the taker chain.
-        const order = store.findOrderById(takeMsg.orderId)
+        const order = store.findOrderById(packet.sourceChannel, takeMsg.orderId)
         order.status = Status.COMPLETE
         order.taker = takeMsg
         order.completeTimestamp = takeMsg.creationTimestamp
@@ -503,7 +531,7 @@ function onAcknowledgePacket(
         const cancelMsg = protobuf.decode(swapPaket.data)
         
         // update order status on the maker chain.
-        const order = store.findOrderById(cancelMsg.orderId)
+        const order = store.findOrderById(packet.sourceChannel, cancelMsg.orderId)
         // update state on maker chain
         order.status = Status.CANCEL
         order.cancelTimestamp = cancelMsg.creationTimestamp
