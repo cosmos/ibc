@@ -343,7 +343,7 @@ function chanOpenTry(
     abortTransactionUnless(connection !== null)
     abortTransactionUnless(connection.state === OPEN)
 
-    let counterpartyHops: []
+    let counterpartyHops: []string = []
     if (connectionHops.length > 1) {
       counterpartyHops = getCounterPartyHops(proofInit)
     } else {
@@ -354,12 +354,18 @@ function chanOpenTry(
                           "", counterpartyHops, counterpartyVersion}
 
     if (connectionHops.length > 1) {
-      consensusState = provableStore.get(consensusStatePath(connection.ClientId, proofHeight)
+      consensusState = provableStore.get(consensusStatePath(connection.ClientId, proofHeight))
+      key = host.ChannelPath(counterparty.PortId, counterparty.ChannelId)
+      counterpartyConnectionEnd = abortTransactionUnless(getMultihopConnectionEnd(proofInit))
+      prefix = counterpartyConnectionEnd.GetCounterparty().GetPrefix()
+
       abortTransactionUnless(VerifyMultihopProof(
         consensusState,
         connectionHops,
         proofInit,
-        expected)
+        prefix,
+        key
+        expected))
     } else {
       abortTransactionUnless(connection.verifyChannelState(
         proofHeight,
@@ -392,7 +398,7 @@ function chanOpenAck(
   channelIdentifier: Identifier,
   counterpartyChannelIdentifier: Identifier,
   counterpartyVersion: string,
-  proofTry: CommitmentProof,
+  proofTry: CommitmentProof | MultihopProof,
   proofHeight: Height) {
     channel = provableStore.get(channelPath(portIdentifier, channelIdentifier))
     abortTransactionUnless(channel.state === INIT)
@@ -400,15 +406,40 @@ function chanOpenAck(
     connection = provableStore.get(connectionPath(channel.connectionHops[0]))
     abortTransactionUnless(connection !== null)
     abortTransactionUnless(connection.state === OPEN)
+
+    let counterpartyHops: []string = []
+    if (connectionHops.length > 1) {
+      counterpartyHops = getCounterPartyHops(proofTry)
+    } else {
+      counterpartyHops = [connection.counterpartyConnectionIdentifier]
+    }
+
     expected = ChannelEnd{TRYOPEN, channel.order, portIdentifier,
-                          channelIdentifier, [connection.counterpartyConnectionIdentifier], counterpartyVersion}
-    abortTransactionUnless(connection.verifyChannelState(
-      proofHeight,
-      proofTry,
-      channel.counterpartyPortIdentifier,
-      counterpartyChannelIdentifier,
-      expected
-    ))
+                          channelIdentifier, counterpartyHops, counterpartyVersion}
+
+    if (connectionHops.length > 1) {
+      consensusState = provableStore.get(consensusStatePath(connection.ClientId, proofHeight))
+      key = host.ChannelPath(counterparty.PortId, counterparty.ChannelId)
+      counterpartyConnectionEnd = abortTransactionUnless(getMultihopConnectionEnd(proofTry))
+      prefix = counterpartyConnectionEnd.GetCounterparty().GetPrefix()
+
+      abortTransactionUnless(VerifyMultihopProof(
+        consensusState,
+        connectionHops,
+        proofTry,
+        prefix,
+        key
+        expected))
+    } else {
+      abortTransactionUnless(connection.verifyChannelState(
+        proofHeight,
+        proofTry,
+        channel.counterpartyPortIdentifier,
+        counterpartyChannelIdentifier,
+        expected
+      ))
+    }
+
     channel.state = OPEN
     channel.version = counterpartyVersion
     channel.counterpartyChannelIdentifier = counterpartyChannelIdentifier
@@ -423,7 +454,7 @@ of the handshake-originating module on the other chain and finish the channel op
 function chanOpenConfirm(
   portIdentifier: Identifier,
   channelIdentifier: Identifier,
-  proofAck: CommitmentProof,
+  proofAck: CommitmentProof | MultihopProof,
   proofHeight: Height) {
     channel = provableStore.get(channelPath(portIdentifier, channelIdentifier))
     abortTransactionUnless(channel !== null)
@@ -432,15 +463,40 @@ function chanOpenConfirm(
     connection = provableStore.get(connectionPath(channel.connectionHops[0]))
     abortTransactionUnless(connection !== null)
     abortTransactionUnless(connection.state === OPEN)
+
+    let counterpartyHops: []string = []
+    if (connectionHops.length > 1) {
+      counterpartyHops = getCounterPartyHops(proofAck)
+    } else {
+      counterpartyHops = [connection.counterpartyConnectionIdentifier]
+    }
+
     expected = ChannelEnd{OPEN, channel.order, portIdentifier,
-                          channelIdentifier, [connection.counterpartyConnectionIdentifier], channel.version}
-    abortTransactionUnless(connection.verifyChannelState(
-      proofHeight,
-      proofAck,
-      channel.counterpartyPortIdentifier,
-      channel.counterpartyChannelIdentifier,
-      expected
-    ))
+                          channelIdentifier, counterpartyHops, channel.version}
+
+    if (connectionHops.length > 1) {
+      consensusState = provableStore.get(consensusStatePath(connection.ClientId, proofHeight))
+      key = host.ChannelPath(counterparty.PortId, counterparty.ChannelId)
+      counterpartyConnectionEnd = abortTransactionUnless(getMultihopConnectionEnd(proofAck))
+      prefix = counterpartyConnectionEnd.GetCounterparty().GetPrefix()
+
+      abortTransactionUnless(VerifyMultihopProof(
+        consensusState,
+        connectionHops,
+        proofTry,
+        prefix,
+        key
+        expected))
+    } else {
+      abortTransactionUnless(connection.verifyChannelState(
+        proofHeight,
+        proofAck,
+        channel.counterpartyPortIdentifier,
+        channel.counterpartyChannelIdentifier,
+        expected
+      ))
+    }
+
     channel.state = OPEN
     provableStore.set(channelPath(portIdentifier, channelIdentifier), channel)
 }
@@ -496,17 +552,65 @@ function chanCloseConfirm(
     connection = provableStore.get(connectionPath(channel.connectionHops[0]))
     abortTransactionUnless(connection !== null)
     abortTransactionUnless(connection.state === OPEN)
+
+    let counterpartyHops: []string = []
+    if (connectionHops.length > 1) {
+      counterpartyHops = getCounterPartyHops(proofInit)
+    } else {
+      counterpartyHops = [connection.counterpartyConnectionIdentifier]
+    }
+
     expected = ChannelEnd{CLOSED, channel.order, portIdentifier,
-                          channelIdentifier, [connection.counterpartyConnectionIdentifier], channel.version}
-    abortTransactionUnless(connection.verifyChannelState(
-      proofHeight,
-      proofInit,
-      channel.counterpartyPortIdentifier,
-      channel.counterpartyChannelIdentifier,
-      expected
-    ))
+                          channelIdentifier, counterpartyHops, channel.version}
+
+    if (connectionHops.length > 1) {
+      consensusState = provableStore.get(consensusStatePath(connection.ClientId, proofHeight))
+      key = host.ChannelPath(counterparty.PortId, counterparty.ChannelId)
+      counterpartyConnectionEnd = abortTransactionUnless(getMultihopConnectionEnd(proofInit))
+      prefix = counterpartyConnectionEnd.GetCounterparty().GetPrefix()
+
+      abortTransactionUnless(VerifyMultihopProof(
+        consensusState,
+        connectionHops,
+        proofTry,
+        prefix,
+        key
+        expected))
+    } else {
+      abortTransactionUnless(connection.verifyChannelState(
+        proofHeight,
+        proofInit,
+        channel.counterpartyPortIdentifier,
+        channel.counterpartyChannelIdentifier,
+        expected
+      ))
+    }
+
     channel.state = CLOSED
     provableStore.set(channelPath(portIdentifier, channelIdentifier), channel)
+}
+```
+
+##### Multihop utility functions
+
+```typescript
+// Return the connectionEnd corresponding to the source chain
+function getMultihopConnectionEnd(proof: MultihopProof): ConnectionEnd {
+  return abortTransactionUnless(Unmarshal(proof.ConnectionProofs[0].Value)
+}
+
+// Return the counterparty connectionHops
+function getCounterPartyHops(proof: MultihopProof, lastConnection: ConnectionEnd) string[] {
+ let counterpartyHops: string[] = []
+ for connData in proofs.ConnectionProofs {
+  connectionEnd = abortTransactionUnless(Unmarshal(connData.Value))
+  counterpartyHops.push(connectionEnd.GetCounterparty().GetConnectionID())
+ }
+
+ // add the last connection representing chain[N-1] 
+ counterpartyHops.push(lastConnection.GetCounterparty().GetConnectionID())
+
+ return counterpartyHops
 }
 ```
 
@@ -626,7 +730,7 @@ We pass the address of the `relayer` that signed and submitted the packet to ena
 ```typescript
 function recvPacket(
   packet: OpaquePacket,
-  proof: CommitmentProof,
+  proof: CommitmentProof | MultihopProof,
   proofHeight: Height,
   relayer: string): Packet {
 
@@ -641,14 +745,23 @@ function recvPacket(
     abortTransactionUnless(connection !== null)
     abortTransactionUnless(connection.state === OPEN)
 
-    abortTransactionUnless(connection.verifyPacketData(
-      proofHeight,
-      proof,
-      packet.sourcePort,
-      packet.sourceChannel,
-      packet.sequence,
-      hash(packet.data, packet.timeoutHeight, packet.timeoutTimestamp)
-    ))
+    if (len(channel.connectionHops) > 1) {
+      consensusState = provableStore.get(consensusStatePath(connection.ClientId, proofHeight))
+      key = host.PacketCommitmentPath(packet.GetDestPort(), packet.GetDestChannel(), packet.GetSequence())
+      commitment = types.CommitPacket(packet)
+      counterpartyConnectionEnd = abortTransactionUnless(getMultihopConnectionEnd(proof))
+      prefix = counterpartyConnectionEnd.GetCounterparty().GetPrefix()
+      abortTransactionUnless(VerifyMultihopProof(k.cdc, consensusState, channel.ConnectionHops, proof, prefix, key, commitment))
+    } else {
+      abortTransactionUnless(connection.verifyPacketData(
+        proofHeight,
+        proof,
+        packet.sourcePort,
+        packet.sourceChannel,
+        packet.sequence,
+        hash(packet.data, packet.timeoutHeight, packet.timeoutTimestamp)
+      ))
+    }
 
     // do sequence check before any state changes
     if channel.order == ORDERED || channel.order == ORDERED_ALLOW_TIMEOUT {
@@ -806,7 +919,7 @@ We pass the `relayer` address just as in [Receiving packets](#receiving-packets)
 function acknowledgePacket(
   packet: OpaquePacket,
   acknowledgement: bytes,
-  proof: CommitmentProof,
+  proof: CommitmentProof | MultihopProof,
   proofHeight: Height,
   relayer: string): Packet {
 
@@ -827,14 +940,23 @@ function acknowledgePacket(
            === hash(packet.data, packet.timeoutHeight, packet.timeoutTimestamp))
 
     // abort transaction unless correct acknowledgement on counterparty chain
-    abortTransactionUnless(connection.verifyPacketAcknowledgement(
-      proofHeight,
-      proof,
-      packet.destPort,
-      packet.destChannel,
-      packet.sequence,
-      acknowledgement
-    ))
+    if (len(channel.connectionHops) > 1) {
+      consensusState = provableStore.get(consensusStatePath(connection.ClientId, proofHeight))
+      key = host.PacketAcknowledgementPath(packet.GetDestPort(), packet.GetDestChannel(), packet.GetSequence())
+      value = types.CommitAcknowledgement(acknowledgement)
+      counterpartyConnectionEnd = abortTransactionUnless(getMultihopConnectionEnd(proof))
+      prefix = counterpartyConnectionEnd.GetCounterparty().GetPrefix()
+      abortTransactionUnless(VerifyMultihopProof(k.cdc, consensusState, channel.ConnectionHops, proof, prefix, key, value))
+    } else {
+      abortTransactionUnless(connection.verifyPacketAcknowledgement(
+        proofHeight,
+        proof,
+        packet.destPort,
+        packet.destChannel,
+        packet.sequence,
+        acknowledgement
+      ))
+    }
 
     // abort transaction unless acknowledgement is processed in order
     if (channel.order === ORDERED || channel.order == ORDERED_ALLOW_TIMEOUT) {

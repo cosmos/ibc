@@ -250,7 +250,7 @@ func VerifyMultihopProof(
  prefix exported.Prefix,
  key string,
  value []byte,
-) error {
+) {
     // deserialize proof bytes into multihop proofs
     proofs := abortTransactionUnless(Unmarshal(proof))
 
@@ -272,42 +272,41 @@ func VerifyMultihopProof(
  
     // verify each consensus state and connection state starting going from Z --> A
     // finally verify the keyproof on A within B's verified view of A's consensus state.
-    return verifyMultiHopProofMembership(consensusState, &proofs, &prefixedKey, value)
+    abortTransactionUnless(VerifyMultiHopProofMembership(consensusState, &proofs, &prefixedKey, value))
 }
 
 // VerifyMultiHopProofMembership verifies a multihop membership proof including all intermediate state proofs.
-func verifyMultiHopProofMembership(
+func VerifyMultiHopProofMembership(
     consensusState exported.ConsensusState,
     proofs *MsgMultihopProofs,
     prefixedKey commitmenttypes.MerklePath,
     value []byte,
-) error {
-
+) {
     abortTransactionUnless(len(proofs.ConsensusProofs) >= 1)
     abortTransactionUnless(len(proofs.ConnectionProofs) == len(proofs.ConsensusProofs))
  
     abortTransactionUnless(VerifyMultiHopConsensusStateProof(consensusState, proofs.ConsensusProofs, proofs.ConnectionProofs))
 
-    keyProof := abortTransactionUnless(Unmarshal(proofs.KeyProof.Proof)
+    keyProof := abortTransactionUnless(Unmarshal(proofs.KeyProof.Proof))
     
     // the consensus state of the source chain (chain[0] on chain[1])
     consState := abortTransactionUnless(UnmarshalInterface(proofs.ConsensusProofs[0].Value))
 
-    return keyProof.VerifyMembership(
+    abortTransactionUnless(keyProof.VerifyMembership(
         commitmenttypes.GetSDKSpecs(),
         consState.GetRoot(),
         prefixedKey,
         value,
-    )
+    ))
 }
 
-// VerifyMultiHopConsensusStateProof verifies the consensus state of each consecutive consensus/connection state starting from chain[N-1] on the destination (chain[N]) and finally proving the source chain consensus/connection state 
+// VerifyMultiHopConsensusStateProof verifies the consensus state of each consecutive consensus/connection state starting
+// from chain[N-1] on the destination (chain[N]) and finally proving the source chain consensus/connection state.
 func VerifyMultiHopConsensusStateProof(
  consensusState exported.ConsensusState,
  consensusProofs []*MultihopProof,
  connectionProofs []*MultihopProof,
-) error {
-
+) {
     // reverse iterate through proofs to prove from destination to source
     for i := len(consensusProofs) - 1; i >= 0; i-- {
         consStateProof := consensusProofs[i]
@@ -335,8 +334,6 @@ func VerifyMultiHopConsensusStateProof(
         // update the consensusState to chain[i] to prove the next consensus/connection states
         consensusState = consState
     }
- 
-    return nil
 }
 ```
 
