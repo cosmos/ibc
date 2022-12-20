@@ -239,7 +239,7 @@ function makeSwap(request MakeSwapMsg) {
 
 ```ts
 function takeSwap(request TakeSwapMsg) {
-    const order = store.findOrderById(request.sourceChannelId, request.orderId)
+    const order = store.findOrderById(request.sourceChannel, request.orderId)
     abortTransactionUnless(order != null)
     abortTransactionUnless(order.expirationTimestamp < currentTimestamp())
     abortTransactionUnless(order.maker.buyToken.denom === request.sellToken.denom)
@@ -276,7 +276,7 @@ function takeSwap(request TakeSwapMsg) {
 
 ```ts
 function cancelSwap(request TakeCancelMsg) {
-    const order = store.findOrderById(request.sourceChannelId, request.orderId)
+    const order = store.findOrderById(request.sourceChannel, request.orderId)
     // checks if the order exists
     abortTransactionUnless(order != null)
     // make sure the sender is the maker of the order.
@@ -521,7 +521,7 @@ function onAcknowledgePacket(
         const makeMsg = protobuf.decode(swapPaket.data)
         
         // update order status on the maker chain.
-        const order = store.findOrderById(makeMsg.sourceChannelId, generateOrderId(makeMsg))
+        const order = store.findOrderById(makeMsg.sourceChannel, generateOrderId(makeMsg))
         order.status = Status.SYNC
         //save order to store
         store.save(order)
@@ -530,7 +530,7 @@ function onAcknowledgePacket(
         const takeMsg = protobuf.decode(swapPaket.data)
         
         // update order status on the taker chain.
-        const order = store.findOrderById(takeMsg.sourceChannelId,takeMsg.orderId)
+        const order = store.findOrderById(takeMsg.sourceChannel, takeMsg.orderId)
         order.status = Status.COMPLETE
         order.taker = takeMsg
         order.completeTimestamp = takeMsg.creationTimestamp
@@ -543,7 +543,7 @@ function onAcknowledgePacket(
         const cancelMsg = protobuf.decode(swapPaket.data)
         
         // update order status on the maker chain.
-        const order = store.findOrderById(cannelMsg.sourceChannelId, cancelMsg.orderId)
+        const order = store.findOrderById(cannelMsg.sourceChannel, cancelMsg.orderId)
         // update state on maker chain
         order.status = Status.CANCEL
         order.cancelTimestamp = cancelMsg.creationTimestamp
