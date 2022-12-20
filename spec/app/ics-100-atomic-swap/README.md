@@ -109,6 +109,7 @@ interface MakeSwapMsg {
   expirationTimestamp: int64;
   timeoutHeight: int64,
   timeoutTimestamp: int64,
+  nonce: string, // a random digit string.
 }
 ```
 
