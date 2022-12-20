@@ -74,6 +74,9 @@ interface Middleware extends ICS26Module {
     // middleware has access to ICS4Wrapper which may be core IBC Channel Handler 
     // or a higher-level middleware that wraps this middleware.
     ics4Wrapper: ICS4Wrapper 
+    // app wrapper provides access to the base layer application in order to retreive
+    // the base application's version, packet data, and acknowledgement
+    appWrapper: AppWrapper
 }
 ```
 
@@ -91,6 +94,17 @@ interface ICS4Wrapper {
       timeoutTimestamp: uint64,
       data: bytes)
     writeAcknowledgement(packet: Packet, ack: Acknowledgement)
+}
+```
+
+```typescript
+// AppWrapper is an interface designed to get information on the base IBC application
+// regardless of where you are in the current stack. This will allow middleware to act
+// on the base application data
+interface AppWrapper {
+    getAppVersion(portID: Identifier, channelId: Identifier, version: string): (string)
+    getAppPacketData(portID: Identifier, channelId: Identifier, packetData: bytes): (bytes)
+    getAppAcknowledgement(portID: Identifier, channelId: Identifier, acknowledgement: bytes): (bytes)
 }
 ```
 
