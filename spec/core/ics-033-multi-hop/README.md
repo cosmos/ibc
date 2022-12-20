@@ -104,14 +104,14 @@ type MultihopProof struct {
 // GenerateMultihopProof generates proof of a key/value at the proofHeight on source chain (chain0). 
 func GenerateMultihopProof(chains []*Chain, key string, value []byte, proofHeight exported.Height) *MultihopProof {
 
-    assert(len(chains) > 2)
+    abortTransactionUnless(len(chains) > 2)
 
     var multihopProof MultihopProof
     chain0 := chains[0] // source chain
     chain1 := chains[1] // first hop chain
  
     height01 := chain1.GetClientStateHeight(chain0) // height of chain0's client state on chain1
-    assert(height01 >= proofHeight) // ensure that chain0's client state is update to date
+    abortTransactionUnless(height01 >= proofHeight) // ensure that chain0's client state is update to date
 
     // query the key/value proof on the source chain at the proof height
     keyProof, _ := chain0.QueryProofAtHeight([]byte(key), int64(proofHeight.GetRevisionHeight()))
@@ -233,45 +233,113 @@ For more details see [ICS4](https://github.com/cosmos/ibc/tree/main/spec/core/ic
 
 ### Multi-hop Proof Verification Pseudo Code
 
-Pseudocode proof verification of a channel between chains `A -> B -> C` .
+Pseudocode proof generation for a channel between `N` chains `C[0] --> C[i] --> C[N]`
 
-```typescript
-function verifyMembership(
-    root: CommitmentRoot, 
-    commitments: map[CommmitmentPath]bytes,
-    batchProof: CommitmentProof) {
-    // verifies the commitments in the commitment root using a batch proof
+```go
+// VerifyMultihopProof verifies a multihop proof.
+// Inputs: consensusState - The consensusState for chain[N-1], which is known on the destination chain (chain[N]).
+//         connectionHops - The expected connectionHops for the channel from the source chain to the destination chain.
+//         proof          - The serialized multihop proof data.
+//         prefix         - Merkleprefix to be combined with key to generate Merklepath for the key/value proof verification.
+//         key            - The key to prove in the source chain's state root.
+//         value          - The value to prove in the source chain's state root.
+func VerifyMultihopProof(
+ consensusState exported.ConsensusState,
+ connectionHops []string,
+ proof []byte,
+ prefix exported.Prefix,
+ key string,
+ value []byte,
+) error {
+    // deserialize proof bytes into multihop proofs
+    proofs := abortTransactionUnless(Unmarshal(proof))
+
+    // check all connections are in OPEN state and that the connection IDs match and are in the right order
+    for i, connData := range proofs.ConnectionProofs {
+        connectionEnd := abortTransactionUnless(Unmarshal(connData.Value))
+
+        // Verify the rest of the connectionHops (first hop already verified)
+        // 1. check the connectionHop values match the proofs and are in the same order.
+        parts := strings.Split(connData.PrefixedKey.GetKeyPath()[len(connData.PrefixedKey.KeyPath)-1], "/")
+        abortTransactionUnless(parts[len(parts)-1] == connectionHops[i+1])
+
+        // 2. check that the connectionEnd's are in the OPEN state.
+        abortTransactionUnless(connectionEnd.GetState() == int32(connectiontypes.OPEN))
+    }
+
+    // create prefixed key for proof verification
+    prefixedKey := abortTransactionUnless(commitmenttypes.ApplyPrefix(prefix, commitmenttypes.NewMerklePath(key)))
+ 
+    // verify each consensus state and connection state starting going from Z --> A
+    // finally verify the keyproof on A within B's verified view of A's consensus state.
+    return verifyMultiHopProofMembership(consensusState, &proofs, &prefixedKey, value)
 }
 
-// Prove B's connectionState and consensusState on C
-commitmentsB = map[CommitmentPath]bytes{
-    connectionB: bytes,
-    consensusStateB: bytes,
+// VerifyMultiHopProofMembership verifies a multihop membership proof including all intermediate state proofs.
+func verifyMultiHopProofMembership(
+    consensusState exported.ConsensusState,
+    proofs *MsgMultihopProofs,
+    prefixedKey commitmenttypes.MerklePath,
+    value []byte,
+) error {
+
+    abortTransactionUnless(len(proofs.ConsensusProofs) >= 1)
+    abortTransactionUnless(len(proofs.ConnectionProofs) == len(proofs.ConsensusProofs))
+ 
+    abortTransactionUnless(VerifyMultiHopConsensusStateProof(consensusState, proofs.ConsensusProofs, proofs.ConnectionProofs))
+
+    keyProof := abortTransactionUnless(Unmarshal(proofs.KeyProof.Proof)
+    
+    // the consensus state of the source chain (chain[0] on chain[1])
+    consState := abortTransactionUnless(UnmarshalInterface(proofs.ConsensusProofs[0].Value))
+
+    return keyProof.VerifyMembership(
+        commitmenttypes.GetSDKSpecs(),
+        consState.GetRoot(),
+        prefixedKey,
+        value,
+    )
 }
-verifyMembership(
-    rootC: CommitmentRoot, 
-    commitmentsB: map[CommitmentPath]bytes, 
-    batchProofB: CommitmentProof)
 
-// Verify that the clientID from the connectionState is the same as in the consenstateState commitment path
-// Prove A's connectionState and consensusState on B
-commitmentsA = map[CommitmentPath]bytes{
-    connectionA: bytes,
-    consensusStateA: bytes,
+// VerifyMultiHopConsensusStateProof verifies the consensus state of each consecutive consensus/connection state starting from chain[N-1] on the destination (chain[N]) and finally proving the source chain consensus/connection state 
+func VerifyMultiHopConsensusStateProof(
+ consensusState exported.ConsensusState,
+ consensusProofs []*MultihopProof,
+ connectionProofs []*MultihopProof,
+) error {
+
+    // reverse iterate through proofs to prove from destination to source
+    for i := len(consensusProofs) - 1; i >= 0; i-- {
+        consStateProof := consensusProofs[i]
+        connectionProof := connectionProofs[i]
+        conState := abortTransactionUnless(UnmarshalInterface(consStateProof.Value))
+
+        // prove the consensus state of chain[i] in chain[i+1]
+        consensusProof := abortTransactionUnless(Unmarshal(consStateProof.Proof))
+        abortTransactionUnless(consensusProof.VerifyMembership(
+            commitmenttypes.GetSDKSpecs(),
+            consensusState.GetRoot(),
+            *consStateProof.PrefixedKey,
+            consStateProof.Value,
+        ))
+
+        // prove the connection state of chain[i] in chain[i+1]
+        connectionProof := abortTransactionUnless(Unmarshal(connectionProof.Proof))
+        abortTransactionUnless(connectionProof.VerifyMembership(
+            commitmenttypes.GetSDKSpecs(),
+            consensusState.GetRoot(),
+            *connectionProof.PrefixedKey,
+            connectionProof.Value, // this should be from connectionHops
+        ))
+
+        // update the consensusState to chain[i] to prove the next consensus/connection states
+        consensusState = consState
+    }
+ 
+    return nil
 }
-verifyMembership(
-    rootB: CommitmentRoot, 
-    commitmentsA: map[CommitmentPath]bytes, 
-    batchProofA: CommitmentProof)
-
-// Repeat for all intermediate roots
-
-// Verify the proven connection ID's match the connections in connectionHops
-verifyConnectionIDs(connectionHops: []string, provenConnectionIDs: []string)
-
-// Verify the message/packet commitment on the source chain root
-verifyMembership(rootA: CommitmentRoot, packetCommitmentA: CommitmentPath, commitmentProofA: CommitmentProof, value: bytes)
 ```
+
 
 ### Path Forgery Protection
 
