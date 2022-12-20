@@ -412,7 +412,7 @@ function onRecvPacket(packet channeltypes.Packet) {
         const makeMsg = protobuf.decode(swapPaket.data)
         
         // check if buy_token is native token on the taker chain
-        const supply = bank.getSuppy(makeMsg.buyToken.denom)
+        const supply = bank.getSupply(makeMsg.buyToken.denom)
         abortTransactionUnless(supply > 0)
         
         // create and save order on the taker chain.
