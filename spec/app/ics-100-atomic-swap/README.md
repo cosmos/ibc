@@ -90,9 +90,9 @@ All `AtomicSwapPacketData` will be forwarded to the corresponding message handle
 
 ```typescript
 interface MakeSwapMsg {
-  // the port on which the packet will be sent, specified by the maker when the order is created
+  // the port on which the packet will be sent, specified by the maker when the message is created
   sourcePort string;
-  // the channel on which the packet will be sent, specified by the maker when the order is created
+  // the channel on which the packet will be sent, specified by the maker when the message is created
   sourceChannel: string;
   // the tokens to be exchanged
   sellToken : Coin;
@@ -109,12 +109,14 @@ interface MakeSwapMsg {
   expirationTimestamp: int64;
   timeoutHeight: int64,
   timeoutTimestamp: int64,
-  nonce: string, // a random digit string.
+  nonce: string, // a random 6 digits string.
 }
 ```
 
 ```typescript
 interface TakeSwapMsg {
+  // the channel on which the packet will be sent, specified by the taker when the message is created
+  sourceChannel: string;
   orderId: string;
   // the tokens to be sell
   sellToken: Coin;
@@ -130,6 +132,8 @@ interface TakeSwapMsg {
 
 ```typescript
 interface TakeCancelMsg {
+  // the channel on which the packet will be sent, specified by the maker when the message is created
+  sourceChannel: string;
   orderId: string;
   makerAddress: string;
   timeoutHeight: int64,
@@ -235,7 +239,7 @@ function makeSwap(request MakeSwapMsg) {
 
 ```ts
 function takeSwap(request TakeSwapMsg) {
-    const order = store.findOrderById(request.orderId)
+    const order = store.findOrderById(request.sourceChannelId, request.orderId)
     abortTransactionUnless(order != null)
     abortTransactionUnless(order.expirationTimestamp < currentTimestamp())
     abortTransactionUnless(order.maker.buyToken.denom === request.sellToken.denom)
@@ -243,6 +247,9 @@ function takeSwap(request TakeSwapMsg) {
     abortTransactionUnless(order.taker == null)
     // if `desiredTaker` is set, only the desiredTaker can accept the order.
     abortTransactionUnless(order.maker.desiredTaker != null && order.maker.desiredTaker != request.takerAddress)
+    
+    // check if this take message send to the correct chain
+    abortTransactionUnless(order.channelIdOnTakerChain == request.sourceChannelId)
     
     const balance = bank.getBalances(request.takerAddress)
     abortTransactionUnless(balance.amount > request.sellToken.amount)
@@ -257,6 +264,7 @@ function takeSwap(request TakeSwapMsg) {
         data: protobuf.encode(request), // encode the request message to protobuf bytes.
         memo: "",
     } 
+    
     sendAtomicSwapPacket(packet, order.portIdOnTakerChain, order.channelIdOnTakerChain, request.timeoutHeight, request.timeoutTimestamp)
     
     //update order state
@@ -268,12 +276,15 @@ function takeSwap(request TakeSwapMsg) {
 
 ```ts
 function cancelSwap(request TakeCancelMsg) {
-    const order = store.findOrderById(request.orderId)
+    const order = store.findOrderById(request.sourceChannelId, request.orderId)
     // checks if the order exists
     abortTransactionUnless(order != null)
     // make sure the sender is the maker of the order.
     abortTransactionUnless(order.maker.makerAddress == request.makerAddress)
     abortTransactionUnless(order.status == Status.SYNC || order.status == Status.INITIAL)
+    
+    // check if this take message send to the correct chain
+    abortTransactionUnless(request.sourceChannelId == order.maker.sourceChannel)
     
     // constructs the IBC data packet
     const packet = {
@@ -438,7 +449,7 @@ function onRecvPacket(packet channeltypes.Packet) {
         order.status = Status.SYNC
         order.portIdOnTakerChain = packet.destinationPort
         order.channelIdOnTakerChain = packet.destinationChannel
-        //saves order to store
+        // saves order to store
         const err = store.save(order)
         if(err != null) {
             ack = new AtomicSwapPacketAcknowledgementFailure("Failed to save the order on taker chain") 
@@ -446,7 +457,7 @@ function onRecvPacket(packet channeltypes.Packet) {
         break;
       case TYPE_MSG_TAKE_SWAP:
         const takeMsg = protobuf.decode(swapPaket.data)
-        const order = store.findOrderById(packet.destinationChannel, takeMsg.orderId) // store key is channelId + orderId
+        const order = store.findOrderById(packet.destinationChannel, takeMsg.orderId)
         abortTransactionUnless(order != null)
         abortTransactionUnless(order.status == Status.SYNC)
         abortTransactionUnless(order.expiredTimestamp < currentTimestamp())
@@ -510,7 +521,7 @@ function onAcknowledgePacket(
         const makeMsg = protobuf.decode(swapPaket.data)
         
         // update order status on the maker chain.
-        const order = store.findOrderById(packet.sourceChannel, generateOrderId(makeMsg))
+        const order = store.findOrderById(makeMsg.sourceChannelId, generateOrderId(makeMsg))
         order.status = Status.SYNC
         //save order to store
         store.save(order)
@@ -519,7 +530,7 @@ function onAcknowledgePacket(
         const takeMsg = protobuf.decode(swapPaket.data)
         
         // update order status on the taker chain.
-        const order = store.findOrderById(packet.sourceChannel, takeMsg.orderId)
+        const order = store.findOrderById(takeMsg.sourceChannelId,takeMsg.orderId)
         order.status = Status.COMPLETE
         order.taker = takeMsg
         order.completeTimestamp = takeMsg.creationTimestamp
@@ -532,7 +543,7 @@ function onAcknowledgePacket(
         const cancelMsg = protobuf.decode(swapPaket.data)
         
         // update order status on the maker chain.
-        const order = store.findOrderById(packet.sourceChannel, cancelMsg.orderId)
+        const order = store.findOrderById(cannelMsg.sourceChannelId, cancelMsg.orderId)
         // update state on maker chain
         order.status = Status.CANCEL
         order.cancelTimestamp = cancelMsg.creationTimestamp
@@ -568,17 +579,17 @@ function refundTokens(packet: Packet) {
   switch swapPaket.type {
       case TYPE_MSG_MAKE_SWAP:
           const msg = protobuf.decode(swapPacket.data)
-          bank_keeper.sendCoins(escrowAddr, msg.makerAddress, msg.sellToken)
-          order_id = generateOrderId(msg)
+          bank.sendCoins(escrowAddr, msg.makerAddress, msg.sellToken)
+          orderId = generateOrderId(msg)
           break;
       case TYPE_MSG_TAKE_SWAP:
           const msg = protobuf.decode(swapPacket.data)
-          bank_keeper.sendCoins(escrowAddr, msg.takerAddress, msg.sellToken)
+          bank.sendCoins(escrowAddr, msg.takerAddress, msg.sellToken)
           order = msg.orderId
       }
   }
   // update order state to cancel
-  order = store.findOrderById(orderId)
+  order = store.findOrderById(packet.sourceChannel, orderId)
   order.status = Status.CANCEL
   store.save(order)
 }
