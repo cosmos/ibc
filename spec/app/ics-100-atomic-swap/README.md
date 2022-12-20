@@ -63,7 +63,7 @@ The escrow account on each respective chain transfers the corresponding token am
 
 An order without takers can be cancelled.  This enables users to rectify mistakes, such as inputting an incorrect price or taker address.  Upon cancellation escrowed tokens will be refunded. 
 
-In addition, all orders are required to have an customizable expiration time.  Expired orders will also have its escrowed tokens refunded.  
+In addition, all orders are required to have an expiration time.  Expired orders will also have its escrowed tokens refunded.  This expiration time is customizeable.
 
 ### Data Structures
 
