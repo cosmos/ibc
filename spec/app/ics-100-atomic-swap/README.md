@@ -133,18 +133,18 @@ interface TakeSwapMsg {
 ```typescript
 interface TakeCancelMsg {
   // the channel on which the packet will be sent, specified by the maker when the message is created
-  sourceChannel: string;
-  orderId: string;
-  makerAddress: string;
-  timeoutHeight: int64,
-  timeoutTimestamp: int64,
+  sourceChannel: string
+  orderId: string
+  makerAddress: string
+  timeoutHeight: int64
+  timeoutTimestamp: int64
 }
 ```
 
 Note: `Coin` is `sdk.Coin`, 
 ```ts
 interface Coin {
-  amount: int64,
+  amount: int64
   denom: string
 }
 ```
@@ -161,15 +161,15 @@ enum Status {
 
 interface OrderBook {
   id: string;
-  maker: MakeSwapMsg;
-  status: Status;
+  maker: MakeSwapMsg
+  status: Status
   // set onReceived(), Make sure that the take order can only be sent to the chain the make order came from
-  portIdOnTakerChain: string;
+  portIdOnTakerChain: string
   // set onReceived(), Make sure that the take order can only be sent to the chain the make order came from
-  channelIdOnTakerChain: string;
-  taker: TakeSwap;
-  cancelTimestamp: int64;
-  completeTimestamp: int64;
+  channelIdOnTakerChain: string
+  taker: TakeSwap
+  cancelTimestamp: int64
+  completeTimestamp: int64
   
   createOrder(msg: MakeSwapMsg) OrderBook {
     return {
@@ -182,8 +182,8 @@ interface OrderBook {
 
 // Order id is a global unique string
 function generateOrderId(msg MakeSwapMsg) {
-    cosnt bytes = protobuf.encode(msg)
-    return sha265(bytes)
+  cosnt bytes = protobuf.encode(msg)
+  return sha265(bytes)
 }
 
 
