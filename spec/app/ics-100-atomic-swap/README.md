@@ -32,10 +32,6 @@ Users may wish to exchange tokens without transfering tokens away from its nativ
 
 `Taker Chain`: The blockchain where a taker takes or responds to an order.
 
-`Maker Tokens`: Tokens a maker escrows to exchange for another token.
-
-`Taker Tokens`: Tokens a taker escrows to exchange for another token.
-
 ### Desired Properties
 
 - `Permissionless`: no need to whitelist connections, modules, or denominations.
@@ -43,7 +39,7 @@ Users may wish to exchange tokens without transfering tokens away from its nativ
 - `Escrow enabled`: an account owned by the module will hold tokens and facilitate exchange.
 - `Refundable`: tokens are refunded by escrow when an order is cancelled, expired, or when a timeout occurs.
 - `Order cancellation`: orders without takers can be cancelled.
-- `Order expiration`: all orders have an expiration time.
+- `Message expiration`: all messages have an expiration time.
 - `Basic orderbook`: a store of orders functioning as an orderbook system.
 
 ## Technical Specification
@@ -56,7 +52,7 @@ A maker offers token A in exchange for token B by making an order. The order spe
 
 An order without takers can be cancelled.  This enables users to rectify mistakes, such as inputting an incorrect price or taker address.  Upon cancellation escrowed tokens will be refunded. 
 
-In addition, all orders are required to have an expiration time.  Expired orders will also have its escrowed tokens refunded.  This expiration time is customizeable.
+In addition, all messages are required to have an expiration time.  Expired messages will also have its escrowed tokens refunded.  This expiration time is customizable.
 
 ### Data Structures
 
@@ -199,13 +195,13 @@ function generateOrderId(msg MakeSwapMsg) {
 
 #### Making a swap
 
-1. A maker creates an order on the maker chain with specified parameters (see type `MakeSwap`).  Maker tokens are sent to the escrow address owned by the module. The order is saved on the maker chain
+1. A maker creates an order on the maker chain with specified parameters (see type `MakeSwap`).  Maker's sell tokens are sent to the escrow address owned by the module. The order is saved on the maker chain
 2. An `AtomicSwapPacketData` is relayed to the taker chain where `onRecvPacket` the order is also saved on the taker chain.  
 3. A packet is subsequently relayed back for acknowledgement. A packet timeout or a failure during `onAcknowledgePacket` will result in a refund of the escrowed tokens.
 
 #### Taking a swap
 
-1. A taker takes an order on the taker chain by triggering `TakeSwap`.  Taker tokens are sent to the escrow address owned by the module.  An order cannot be taken if the current time is later than the `expirationTimestamp`
+1. A taker takes an order on the taker chain by triggering `TakeSwap`.  Taker's sell tokens are sent to the escrow address owned by the module.  An order cannot be taken if the current time is later than the `expirationTimestamp`
 2. An `AtomicSwapPacketData` is relayed to the maker chain where `onRecvPacket` the escrowed tokens are sent to the taker address on the maker chain.
 3. A packet is subsequently relayed back for acknowledgement. Upon acknowledgement escrowed tokens on the taker chain are sent to to the maker address on the taker chain. A packet timeout or a failure during `onAcknowledgePacket` will result in a refund of the escrowed tokens.
 
