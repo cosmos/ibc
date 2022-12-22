@@ -32,12 +32,18 @@ Users may wish to exchange tokens without transfering tokens away from its nativ
 
 `Taker Chain`: The blockchain where a taker takes or responds to an order.
 
+`Maker Tokens`: Tokens a maker escrows to exchange for another token.
+
+`Taker Tokens`: Tokens a taker escrows to exchange for another token.
+
 ### Desired Properties
 
 - `Permissionless`: no need to whitelist connections, modules, or denominations.
 - `Guarantee of exchange`: no occurence of a user receiving tokens without the equivalent promised exchange.
 - `Escrow enabled`: an account owned by the module will hold tokens and facilitate exchange.
-- `Refundable`: tokens are refunded by escrow when an order is cancelled.
+- `Refundable`: tokens are refunded by escrow when an order is cancelled, expired, or when a timeout occurs.
+- `Order cancellation`: orders without takers can be cancelled.
+- `Order expiration`: all orders have an expiration time.
 - `Basic orderbook`: a store of orders functioning as an orderbook system.
 
 ## Technical Specification
@@ -46,11 +52,11 @@ Users may wish to exchange tokens without transfering tokens away from its nativ
 
 <img src="./ibcswap.png"/>
 
-A maker offers token A in exchange for token B by making an order. The order specifies the quantity and price of exchange, and sends the offered token A to the maker chain's escrow account.
+A maker offers token A in exchange for token B by making an order. The order specifies the quantity and price of exchange, and sends the offered token A to the maker chain's escrow account. Any taker on a different chain with token B can accept the offer by taking the order. The taker sends the desired amount of token B to the taker chain's escrow account. The escrow account on each respective chain transfers the corresponding token amounts to each user's receiving address, without requiring the usual IBC transfer.
 
-Any taker on a different chain with token B can accept the offer by taking the order. The taker sends the desired amount of token B to the taker chain's escrow account.
+An order without takers can be cancelled.  This enables users to rectify mistakes, such as inputting an incorrect price or taker address.  Upon cancellation escrowed tokens will be refunded. 
 
-The escrow account on each respective chain transfers the corresponding token amounts to each user's receiving address, without requiring the usual IBC transfer.
+In addition, all orders are required to have an expiration time.  Expired orders will also have its escrowed tokens refunded.  This expiration time is customizeable.
 
 ### Data Structures
 
@@ -131,7 +137,7 @@ interface TakeSwapMsg {
 ```
 
 ```typescript
-interface TakeCancelMsg {
+interface CancelSwapMsg {
   // the channel on which the packet will be sent, specified by the maker when the message is created
   sourceChannel: string
   orderId: string
@@ -193,19 +199,19 @@ function generateOrderId(msg MakeSwapMsg) {
 
 #### Making a swap
 
-1. User creates an order on the maker chain with specified parameters (see type `MakeSwap`).  Tokens are sent to the escrow address owned by the module. The order is saved on the maker chain.
+1. A maker creates an order on the maker chain with specified parameters (see type `MakeSwap`).  Maker tokens are sent to the escrow address owned by the module. The order is saved on the maker chain
 2. An `AtomicSwapPacketData` is relayed to the taker chain where `onRecvPacket` the order is also saved on the taker chain.  
 3. A packet is subsequently relayed back for acknowledgement. A packet timeout or a failure during `onAcknowledgePacket` will result in a refund of the escrowed tokens.
 
 #### Taking a swap
 
-1. A user takes an order on the taker chain by triggering `TakeSwap`.  Tokens are sent to the escrow address owned by the module.  An order cannot be taken if the current time is later than the `expirationTimestamp`
+1. A taker takes an order on the taker chain by triggering `TakeSwap`.  Taker tokens are sent to the escrow address owned by the module.  An order cannot be taken if the current time is later than the `expirationTimestamp`
 2. An `AtomicSwapPacketData` is relayed to the maker chain where `onRecvPacket` the escrowed tokens are sent to the taker address on the maker chain.
 3. A packet is subsequently relayed back for acknowledgement. Upon acknowledgement escrowed tokens on the taker chain are sent to to the maker address on the taker chain. A packet timeout or a failure during `onAcknowledgePacket` will result in a refund of the escrowed tokens.
 
 #### Cancelling a swap
 
-1.  The maker cancels a previously created order.  Expired orders can also be cancelled.
+1.  A maker cancels a previously created order.  Expired orders can also be cancelled.
 2.  An `AtomicSwapPacketData` is relayed to the taker chain where `onRecvPacket` the order is cancelled on the taker chain. If the order is in the process of being taken (a packet with `TakeSwapMsg` is being relayed from the taker chain to the maker chain), the cancellation will be rejected.
 3.  A packet is relayed back where upon acknowledgement the order on the maker chain is also cancelled.  The refund only occurs if the taker chain confirmed the cancellation request.
 
@@ -275,7 +281,7 @@ function takeSwap(request TakeSwapMsg) {
 
 
 ```ts
-function cancelSwap(request TakeCancelMsg) {
+function cancelSwap(request CancelSwapMsg) {
   const order = store.findOrderById(request.sourceChannel, request.orderId)
   // checks if the order exists
   abortTransactionUnless(order != null)
@@ -293,7 +299,7 @@ function cancelSwap(request TakeCancelMsg) {
     memo: "",
   } 
   // the request is sent to the taker chain, and the taker chain decides if the cancel order is accepted or not
-  // the cancelation can only be sent to the same chain as the make order.
+  // the cancellation can only be sent to the same chain as the make order.
   sendAtomicSwapPacket(packet, order.maker.sourcePort, order.maker.sourceChannel request.timeoutHeight, request.timeoutTimestamp)
 }
 ```
