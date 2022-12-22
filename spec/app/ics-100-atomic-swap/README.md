@@ -254,7 +254,7 @@ function takeSwap(request TakeSwapMsg) {
   const balance = bank.getBalances(request.takerAddress)
   abortTransactionUnless(balance.amount > request.sellToken.amount)
   // gets the escrow address by source port and source channel
-  const escrowAddr = escrowAddress(request.sourcePort, request.sourceChannel)
+  const escrowAddr = escrowAddress(order.portIdOnTakerChain, request.sourceChannel)
   // locks the sellToken to the escrow account
   const err = bank.sendCoins(request.takerAddress, escrowAddr, request.sellToken)
   abortTransactionUnless(err === null)
@@ -469,7 +469,7 @@ function onRecvPacket(packet channeltypes.Packet) {
       // if `desiredTaker` is set, only the desiredTaker can accept the order.
       abortTransactionUnless(order.maker.desiredTaker !== null && order.maker.desiredTaker !== takeMsg.takerAddress)
     
-      const escrowAddr = escrowAddress(packet.destinationPort, packet.destinationChannel)
+      const escrowAddr = escrowAddress(order.portIdOnTakerChain, packet.destinationChannel)
       // send maker.sellToken to taker's receiving address
       const err = bank.sendCoins(escrowAddr, takeMsg.takerReceivingAddress, order.maker.sellToken)
       if (err != null) {
