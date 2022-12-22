@@ -169,7 +169,7 @@ interface OrderBook {
   portIdOnTakerChain: string
   // set onReceived(), Make sure that the take order can only be sent to the chain the make order came from
   channelIdOnTakerChain: string
-  taker: TakeSwap
+  taker: TakeSwapMsg
   cancelTimestamp: int64
   completeTimestamp: int64
   
