@@ -215,25 +215,25 @@ The sub-protocols described herein should be implemented in a "Fungible Token Sw
 
 ```ts
 function makeSwap(request MakeSwapMsg) {
-    const balance = bank.getBalances(request.makerAddress)
-    abortTransactionUnless(balance.amount > request.sellToken.Amount)
-    // gets escrow address by source port and source channel
-    const escrowAddr = escrowAddress(request.sourcePort, request.sourceChannel)
-    // locks the sellToken to the escrow account
-    const err = bank.sendCoins(request.makerAddress, escrowAddr, request.sellToken)
-    abortTransactionUnless(err === null)
-    // contructs the IBC data packet
-    const packet = {
-        type: SwapMessageType.TYPE_MSG_MAKE_SWAP,
-        data: protobuf.encode(request), // encode the request message to protobuf bytes
-        memo: ""
-    }
-    sendAtomicSwapPacket(packet, request.sourcePort, request.sourceChannel, request.timeoutHeight, request.timeoutTimestamp)
+  const balance = bank.getBalances(request.makerAddress)
+  abortTransactionUnless(balance.amount > request.sellToken.Amount)
+  // gets escrow address by source port and source channel
+  const escrowAddr = escrowAddress(request.sourcePort, request.sourceChannel)
+  // locks the sellToken to the escrow account
+  const err = bank.sendCoins(request.makerAddress, escrowAddr, request.sellToken)
+  abortTransactionUnless(err === null)
+  // contructs the IBC data packet
+  const packet = {
+    type: SwapMessageType.TYPE_MSG_MAKE_SWAP,
+    data: protobuf.encode(request), // encode the request message to protobuf bytes
+    memo: ""
+  }
+  sendAtomicSwapPacket(packet, request.sourcePort, request.sourceChannel, request.timeoutHeight, request.timeoutTimestamp)
     
-    // creates and saves order on the maker chain.
-    const order = OrderBook.createOrder(request)
-    //saves order to store
-    store.save(order)
+  // creates and saves order on the maker chain.
+  const order = OrderBook.createOrder(request)
+  //saves order to store
+  store.save(order)
 }
 ```
 
