@@ -591,10 +591,13 @@ function refundTokens(packet: Packet) {
       bank.sendCoins(escrowAddr, msg.takerAddress, msg.sellToken)
       order = msg.orderId
   }
+  
   // update order state to cancel
-  order = store.findOrderById(packet.sourceChannel, orderId)
-  order.status = Status.CANCEL
-  store.save(order)
+  if (orderId) {
+      order = store.findOrderById(packet.sourceChannel, orderId)
+      order.status = Status.CANCEL
+      store.save(order)
+  }
 }
 ```
 
