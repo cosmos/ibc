@@ -595,7 +595,7 @@ function refundTokens(packet: Packet) {
     case TYPE_MSG_TAKE_SWAP:
       const msg = protobuf.decode(swapPacket.data)
       bank.sendCoins(escrowAddr, msg.takerAddress, msg.sellToken)
-      order = msg.orderId
+      orderId = msg.orderId
   }
   
   // update order state to cancel
