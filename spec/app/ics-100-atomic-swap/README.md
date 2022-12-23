@@ -37,9 +37,8 @@ Users may wish to exchange tokens without transfering tokens away from its nativ
 - `Permissionless`: no need to whitelist connections, modules, or denominations.
 - `Guarantee of exchange`: no occurence of a user receiving tokens without the equivalent promised exchange.
 - `Escrow enabled`: an account owned by the module will hold tokens and facilitate exchange.
-- `Refundable`: tokens are refunded by escrow when an order is cancelled, expired, or when a timeout occurs.
+- `Refundable`: tokens are refunded by escrow when a timeout occurs, or when an order is cancelled.
 - `Order cancellation`: orders without takers can be cancelled.
-- `Message expiration`: all messages have an expiration time.
 - `Basic orderbook`: a store of orders functioning as an orderbook system.
 
 ## Technical Specification
@@ -52,7 +51,7 @@ A maker offers token A in exchange for token B by making an order. The order spe
 
 An order without takers can be cancelled.  This enables users to rectify mistakes, such as inputting an incorrect price or taker address.  Upon cancellation escrowed tokens will be refunded. 
 
-In addition, all messages are required to have an expiration time.  Expired messages will also have its escrowed tokens refunded.  This expiration time is customizable.
+When making or taking an order, a timeout window is specified in the relayed data packet.  A timeout will result in escrowed tokens refunded back.  This timeout window is customizeable.
 
 ### Data Structures
 
