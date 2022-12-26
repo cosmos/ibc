@@ -104,7 +104,7 @@ function compare(a: Height, b: Height): Ord {
 }
 ```
 
-This is designed to allow the height to reset to `0` while the revision number increases by one in order to preserve timeouts through zero-height upgrades.
+This is designed to allow the height to reset to `0` while the revision number increases by one to preserve timeouts through zero-height upgrades.
 
 ### Headers
 
@@ -125,8 +125,7 @@ Wasm client `Misbehaviour` consists of two conflicting headers both of which the
 ```typescript
 interface Misbehaviour {
   clientId: string
-  h1: Header
-  h2: Header
+  data: []byte
 }
 ```
 
@@ -140,6 +139,7 @@ function initialise(
     initializationData: []byte,
     consensusState: []byte,
   ): ClientState {
+
     codeHandle = getWasmCode(wasmCodeId)
     assert(codeHandle.isInitializationDataValid(initializationData, consensusState))
 
@@ -159,13 +159,16 @@ function latestClientHeight(clientState: ClientState): Height {
 
 ### Validity predicate
 
-Wasm client validity checking uses underlying Wasm Client code. If the provided header is valid, the client state is updated & the newly verified commitment written to the store.
+Wasm client validity checking uses underlying Wasm Client code. If the provided header is valid, the client state is updated & the newly verified commitment is written to the store.
 
 ```typescript
-function checkValidityAndUpdateState(
-  clientState: ClientState,
+function CheckSubstituteAndUpdateState(
+  substituteClient: ClientState,
   header: Header) {
     store = getStore("clients/{identifier}")
+
+    consensusState, err := GetConsensusState(subjectClientStore, cdc, c.LatestHeight)
+
     codeHandle = clientState.codeHandle()
 
     // verify that provided header is valid and state is saved
@@ -178,7 +181,7 @@ function checkValidityAndUpdateState(
 Wasm client misbehaviour checking determines whether or not two conflicting headers at the same height would have convinced the light client.
 
 ```typescript
-function checkMisbehaviourAndUpdateState(
+function checkForMisbehaviour(
   clientState: ClientState,
   misbehaviour: Misbehaviour) {
     store = getStore("clients/{identifier}")
@@ -207,8 +210,6 @@ function upgradeClientState(
     set("clients/{identifier}", clientState)
 }
 ```
-
-In case of Wasm client, upgrade of `Wasm Client Code` is also possible via blockchain specific management functionality.
 
 ### State verification functions
 
@@ -303,29 +304,34 @@ function verifyNextSequenceRecv(
 
 ### Wasm Client Code Interface
 
-#### What is code handle?
-Code handle is an object that facilitates interaction between Wasm code and go code. For example, consider the method `isValidClientState` which could be implemented like this:
-
+#### Interaction between Go and WASM?
+When an instruction needs to be executed in WASM code, functions are executed using a `wasmvm`.
+The process requires packaging all the arguments to be executed by a specific function (including
+pointers to `KVStore`s if needed), pointing to a code hash, and a `sdk.GasMeter` to properly account
+for gas usage during the execution of the function.
 ```go
-func (c *CodeHandle) isValidClientState(clientState ClientState, height u64) {
+func (c *CodeHandle) isValidClientState(clientState ClientState, height u64) (*types.Response, error) {
     clientStateData := json.Serialize(clientState)
     packedData := pack(clientStateData, height)
     // VM specific code to call Wasm contract
+    desercost := types.UFraction{Numerator: 1, Denominator: 1}
+    resp, gasUsed, err := WasmVM.Execute(codeID, env, msgInfo, msg, store, cosmwasm.GoAPI{}, nil, gasMeter, gasMeter.Limit(), desercost)
+	  if &ctx != nil {
+		consumeGas(ctx, gasUsed)
+	  }
+    return resp, err
 }
 ```
 
 #### Wasm Client interface
-Every Wasm client code need to support ingestion of below messages in order to be used as light client.
+Every Wasm client code needs to support the ingestion of the below messages to be used as a light client.
 
 ```rust
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
 #[serde(rename_all = "snake_case")]
 pub struct MisbehaviourMessage {
-    pub client_state: Vec<u8>,
-    pub consensus_state: Vec<u8>,
-    pub height: Height,
-    pub header1: Vec<u8>,
-    pub header2: Vec<u8>,
+    pub client_id: Vec<u8>,
+    pub data: Vec<u8>,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
