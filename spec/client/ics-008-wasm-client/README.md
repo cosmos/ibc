@@ -309,17 +309,55 @@ When an instruction needs to be executed in WASM code, functions are executed us
 The process requires packaging all the arguments to be executed by a specific function (including
 pointers to `KVStore`s if needed), pointing to a code hash, and a `sdk.GasMeter` to properly account
 for gas usage during the execution of the function.
+
+
 ```go
-func (c *CodeHandle) isValidClientState(clientState ClientState, height u64) (*types.Response, error) {
+func (c *CodeHandle) isValidClientState(ctx sdk.Context, clientState ClientState, height u64) (*types.Response, error) {
     clientStateData := json.Serialize(clientState)
     packedData := pack(clientStateData, height)
     // VM specific code to call Wasm contract
     desercost := types.UFraction{Numerator: 1, Denominator: 1}
-    resp, gasUsed, err := WasmVM.Execute(codeID, env, msgInfo, msg, store, cosmwasm.GoAPI{}, nil, gasMeter, gasMeter.Limit(), desercost)
-	  if &ctx != nil {
+    return callContract(codeID, ctx, store, packedData)
+}
+```
+
+```go
+func callContract(codeID []byte, ctx sdk.Context, store sdk.KVStore, msg []byte) (*types.Response, error) {
+	gasMeter := ctx.GasMeter()
+	chainID := ctx.BlockHeader().ChainID
+	height := ctx.BlockHeader().Height
+	// safety checks before casting below
+	if height < 0 {
+		panic("Block height must never be negative")
+	}
+	sec := ctx.BlockTime().Unix()
+	if sec < 0 {
+		panic("Block (unix) time must never be negative ")
+	}
+	env := types.Env{
+		Block: types.BlockInfo{
+			Height:  uint64(height),
+			Time:    uint64(sec),
+			ChainID: chainID,
+		},
+		Contract: types.ContractInfo{
+			Address: "",
+		},
+	}
+
+	return callContractWithEnvAndMeter(codeID, ctx, store, env, gasMeter, msg)
+}
+```
+
+```go
+func callContractWithEnvAndMeter(codeID cosmwasm.Checksum, ctx sdk.Context, store sdk.KVStore, env types.Env, gasMeter sdk.GasMeter, msg []byte) (*types.Response, error) {
+	msgInfo := types.MessageInfo{}
+	desercost := types.UFraction{Numerator: 1, Denominator: 1}
+	resp, gasUsed, err := WasmVM.Execute(codeID, env, msgInfo, msg, store, cosmwasm.GoAPI{}, nil, gasMeter, gasMeter.Limit(), desercost)
+	if &ctx != nil {
 		consumeGas(ctx, gasUsed)
-	  }
-    return resp, err
+	}
+	return resp, err
 }
 ```
 
