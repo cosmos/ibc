@@ -216,7 +216,7 @@ function upgradeClientState(
 Wasm client state verification functions check a Merkle proof against a previously validated commitment root.
 
 ```go
-	func VerifyUpgradeAndUpdateState(
+	func (c ClientState) VerifyUpgradeAndUpdateState(
 		ctx sdk.Context,
 		cdc codec.BinaryCodec,
 		store sdk.KVStore,
@@ -245,83 +245,108 @@ Wasm client state verification functions check a Merkle proof against a previous
   return nil
   }
 
+
+  	func (c ClientState) VerifyMembership(
+		ctx sdk.Context,
+		clientStore sdk.KVStore,
+		cdc codec.BinaryCodec,
+		height Height,
+		delayTimePeriod uint64,
+		delayBlockPeriod uint64,
+		proof []byte,
+		path Path,
+		value []byte,
+	) error {
+    	const VerifyClientMessage = "verify_membership"
+    inner := make(map[string]interface{})
+    inner["height"] = height
+    inner["delay_time_period"] = delayTimePeriod
+    inner["delay_block_period"] = delayBlockPeriod
+    inner["proof"] = proof
+    inner["path"] = path
+    inner["value"] = value
+    payload := make(map[string]map[string]interface{})
+    payload[VerifyClientMessage] = inner
+
+    _, err := call[contractResult](payload, &c, ctx, clientStore)
+    return err
+  }
+
+  func (c ClientState) VerifyNonMembership(
+	ctx sdk.Context,
+	clientStore sdk.KVStore,
+	cdc codec.BinaryCodec,
+	height exported.Height,
+	delayTimePeriod uint64,
+	delayBlockPeriod uint64,
+	proof []byte,
+	path []byte,
+) error {
+	const VerifyClientMessage = "verify_non_membership"
+	inner := make(map[string]interface{})
+	inner["height"] = height
+	inner["delay_time_period"] = delayTimePeriod
+	inner["delay_block_period"] = delayBlockPeriod
+	inner["proof"] = proof
+	inner["path"] = path
+	payload := make(map[string]map[string]interface{})
+	payload[VerifyClientMessage] = inner
+
+	_, err := call[contractResult](payload, &c, ctx, clientStore)
+	return err
+}
+
+func (c ClientState) VerifyClientMessage(ctx sdk.Context, cdc codec.BinaryCodec, clientStore sdk.KVStore, clientMsg exported.ClientMessage) error {
+  encodedData := packData(clientMsg, c)
+	_, err := call[contractResult](encodedData, &c, ctx, clientStore)
+	return err
+}
+
+func (c ClientState) CheckForMisbehaviour(ctx sdk.Context, cdc codec.BinaryCodec, clientStore sdk.KVStore, msg exported.ClientMessage) bool {
+	wasmMisbehaviour, ok := msg.(*Misbehaviour)
+	if !ok {
+		return false
+	}
+  encodedData := packData(wasmMisbehaviour)
+	_, err := call[contractResult](encodedData, &c, ctx, clientStore)
+	if err != nil {
+		panic(err)
+	}
+
+	return true
+}
+
+// UpdateStateOnMisbehaviour should perform appropriate state changes on a client state given that misbehaviour has been detected and verified
+func (c ClientState) UpdateStateOnMisbehaviour(ctx sdk.Context, cdc codec.BinaryCodec, clientStore sdk.KVStore, clientMsg exported.ClientMessage) {
+    encodedData := packData(clientMsg, c)
+	_, err = callContract(c.CodeId, ctx, clientStore, encodedData)
+	if err != nil {
+		panic(err)
+	}
+}
+
+func (c ClientState) UpdateState(ctx sdk.Context, cdc codec.BinaryCodec, clientStore sdk.KVStore, clientMsg exported.ClientMessage) []exported.Height {
+  clientMsgConcrete := make(map[string]interface{})
+  switch clientMsg := clientMsg.(type) {
+    case *Header:
+      clientMsgConcrete["header"] = clientMsg
+    case *Misbehaviour:
+      clientMsgConcrete["misbehaviour"] = clientMsg
+  }
+  encodedData := packData(clientMsgConcrete)
+	output, err := call[contractResult](  encodedData := packData(clientMsgConcrete)
+, &c, ctx, clientStore)
+	if err != nil {
+		panic(err)
+	}
+  if err := json.Unmarshal(output.Data, &c); err != nil {
+  panic(sdkerrors.Wrapf(ErrUnableToUnmarshalPayload, fmt.Sprintf("underlying error: %s", err.Error())))
+}
+	SetClientState(clientStore, cdc, &c)
+	return []exported.Height{c.LatestHeight}
+}
+
 ```
-
-```typescript
-function verifyConnectionState(
-  clientState: ClientState,
-  height: Height,
-  prefix: CommitmentPrefix,
-  proof: CommitmentProof,
-  connectionIdentifier: Identifier,
-  connectionEnd: ConnectionEnd) {
-    codeHandle = clientState.codeHandle()
-    assert(codeHandle.verifyConnectionState(clientState, height, prefix, proof, connectionIdentifier, connectionEnd))
-}
-
-function verifyChannelState(
-  clientState: ClientState,
-  height: Height,
-  prefix: CommitmentPrefix,
-  proof: CommitmentProof,
-  portIdentifier: Identifier,
-  channelIdentifier: Identifier,
-  channelEnd: ChannelEnd) {
-    codeHandle = clientState.codeHandle()
-    assert(codeHandle.verifyChannelState(clientState, height, prefix, proof, portIdentifier, channelIdentifier, channelEnd))
-}
-
-function verifyPacketCommitment(
-  clientState: ClientState,
-  height: Height,
-  prefix: CommitmentPrefix,
-  proof: CommitmentProof,
-  portIdentifier: Identifier,
-  channelIdentifier: Identifier,
-  sequence: uint64,
-  commitment: bytes) {
-    codeHandle = clientState.codeHandle()
-    assert(codeHandle.verifyPacketCommitment(clientState, height, prefix, proof, portIdentifier, channelIdentifier, sequence, commitment))
-}
-
-function verifyPacketAcknowledgement(
-  clientState: ClientState,
-  height: Height,
-  prefix: CommitmentPrefix,
-  proof: CommitmentProof,
-  portIdentifier: Identifier,
-  channelIdentifier: Identifier,
-  sequence: uint64,
-  acknowledgement: bytes) {
-    codeHandle = clientState.codeHandle()
-    assert(codeHandle.verifyPacketAcknowledgement(clientState, height, prefix, proof, portportIdentifier, channelIdentifier, sequence, acknowledgement))
-}
-
-function verifyPacketReceiptAbsence(
-  clientState: ClientState,
-  height: Height,
-  prefix: CommitmentPrefix,
-  proof: CommitmentProof,
-  portIdentifier: Identifier,
-  channelIdentifier: Identifier,
-  sequence: uint64) {
-    codeHandle = clientState.codeHandle()
-    assert(codeHandle.verifyPacketReceiptAbsence(clientState, height, prefix, proof, portIdentifier, channelIdentifier, sequence))
-}
-
-function verifyNextSequenceRecv(
-  clientState: ClientState,
-  height: Height,
-  prefix: CommitmentPrefix,
-  proof: CommitmentProof,
-  portIdentifier: Identifier,
-  channelIdentifier: Identifier,
-  nextSequenceRecv: uint64) {
-    codeHandle = clientState.codeHandle()
-    assert(codeHandle.verifyNextSequenceRecv(clientState, height, prefix, proof, portIdentifier, channelIdentifier, nextSequenceRecv))
-}
-```
-
 ### Wasm Client Code Interface
 
 #### Interaction between Go and WASM?
