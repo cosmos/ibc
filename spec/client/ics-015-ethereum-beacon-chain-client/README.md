@@ -781,11 +781,14 @@ struct ConsensusState {
 }
 
 impl ConsensusState {
-  fn from(header: BeaconHeader, payload: ExecutionPayloadProof) -> Self {
-    ConsensusState {
+  fn from(header: BeaconHeader, payload: ExecutionPayloadProof) -> (Height, Self) {
+    let consensus_state = ConsensusState {
       state_root: payload.state_root,
       timestamp: GENESIS_TIMESTAMP + (header.slot * 12), // 12 seconds per slot.
-    }
+    };
+    let height = Height::new(0, payload.block_number);
+
+    (height, consensus_state)
   }
 }
 
