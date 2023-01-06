@@ -859,13 +859,13 @@ fn check_for_misbehaviour(
   client_id: ClientId,
   message: ClientMessage,
 ) -> Result<bool, Error> {
-  if matches!(client_message, ClientMessage::Misbehaviour(_)) {
+  if matches!(message, ClientMessage::Misbehaviour(_)) {
     return Ok(true)
   }
 
   // we also check that this update doesn't include competing consensus states for heights we
   // already processed.
-  let header = match client_message {
+  let header = match message {
     ClientMessage::Header(header) => header,
     _ => unreachable!("We've checked for misbehavior; qed"),
   };
@@ -894,7 +894,7 @@ fn update_state(
   mut client_state: ClientState,
   message: ClientMessage,
 ) -> Result<(ClientState, Vec<(Height, ConsensusState)>), Error> {
-  let header = match client_message {
+  let header = match message {
     ClientMessage::Header(header) => header,
     _ => unreachable!("We've checked for misbehavior; qed"),
   };
@@ -926,7 +926,7 @@ fn update_state(
 /// The update function for a misbehaviour
 /// [source](https://github.com/cosmos/ibc/blob/main/spec/core/ics-002-client-semantics/README.md#updatestateonmisbehaviour)
 fn update_state_on_misbehaviour(message: ClientMessage) -> Result<(), Error> {
-  client_state.frozen_height = Some(Height::new(0, client_state.latest_para_height as u64));
+  client_state.frozen_height = Some(Height::new(0, message.execution_payload.block_number));
   Ok(client_state)
 }
 
