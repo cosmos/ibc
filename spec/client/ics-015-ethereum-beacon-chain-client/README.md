@@ -1,5 +1,5 @@
 ---
-ics: 10
+ics: 15
 title: Ethereum beacon chain client
 stage: draft
 category: IBC/TAO
@@ -801,9 +801,9 @@ struct ClientState {
 enum ClientMessage {
   Header(LightClientUpdate),
   Misbehaviour {
-		header_1: LightClientUpdate,
-		header_2: LightClientUpdate,
-	},
+    header_1: LightClientUpdate,
+    header_2: LightClientUpdate,
+  },
 }
 ```
 
@@ -840,7 +840,7 @@ fn verify_client_message(client_state: ClientState, message: ClientMessage) -> R
     ClientMessage::Header(update) => verify_sync_committee_attestation(client_state.state, update)?,
     ClientMessage::Misbehaviour { header_1, header_2 } => {
       if header_1.execution_payload.block_number !=
-        header_1.execution_payload.block_number
+        header_2.execution_payload.block_number
       {
         Err(Error::InvalidMisbehaviour)?
       }
