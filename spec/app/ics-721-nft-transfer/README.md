@@ -67,8 +67,8 @@ Both `tokenData` entries and `classData` MUST be Base64 encoded strings which SH
 
 ```json
 {
-  "key1" : { "value":"...", "mime":"..."},
-  "key2" : { "value":"...", "mime":"..."},
+  "key1" : { "value":"...", "mime":"..." },
+  "key2" : { "value":"...", "mime":"..." },
   ...
 }
 ```
@@ -82,7 +82,7 @@ An example of `classData` content (raw JSON before being Base64 encoded) is show
 ```json
 {
   "opensea:name" : { "value":"Crypto Creatures" },
-  "opensea:image" : { "value":"...(Base64 encoded media binary)", "mime":"image/png"},
+  "opensea:image" : { "value":"...(Base64 encoded media binary)", "mime":"image/png" },
   "opensea:seller_fee_basis_points" : { "value":"100" }
 }
 ```
