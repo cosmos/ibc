@@ -156,7 +156,7 @@ State machines implementing the IBC protocol are expected to respect these clien
 
 ### Data Structures
 
-#### Height
+#### `Height`
 
 `Height` is an opaque data structure defined by a client type.
 It must form a partially ordered set & provide operations for comparison.
@@ -181,7 +181,7 @@ A height is either `LT` (less than), `EQ` (equal to), or `GT` (greater than) ano
 
 There must also be a zero-element for a height type, referred to as `0`, which is less than all non-zero heights.
 
-#### ConsensusState
+#### `ConsensusState`
 
 `ConsensusState` is an opaque data structure defined by a client type, used by the validity predicate to
 verify new commits & state roots. Likely the structure will contain the last commit produced by
@@ -209,7 +209,7 @@ The `ConsensusState` MUST define a `getTimestamp()` method which returns the tim
 type getTimestamp = ConsensusState => uint64
 ```
 
-#### ClientState
+#### `ClientState`
 
 `ClientState` is an opaque data structure defined by a client type.
 It may keep arbitrary internal state to track verified roots and past misbehaviours.
@@ -221,10 +221,10 @@ but they must expose this common set of query functions to the IBC handler.
 type ClientState = bytes
 ```
 
-Client types MUST define a method to initialise a client state with a provided consensus state, writing to internal state as appropriate.
+Client types MUST define a method to initialise a client state with the provided client identifier and consensus state, writing to internal state as appropriate.
 
 ```typescript
-type initialise = (consensusState: ConsensusState) => ClientState
+type initialise = (identifier: Identifier, consensusState: ConsensusState) => ClientState
 ```
 
 Client types MUST define a method to fetch the current height (height of the most recent validated state update).
@@ -244,7 +244,7 @@ type getTimestampAtHeight = (
 ) => uint64
 ```
 
-#### ClientMessage
+#### `ClientMessage`
 
 A `ClientMessage` is an opaque data structure defined by a client type which provides information to update the client.
 `ClientMessages` can be submitted to an associated client to add new `ConsensusState(s)` and/or update the `ClientState`. They likely contain a height, a proof, a commitment root, and possibly updates to the validity predicate.
@@ -282,7 +282,7 @@ type checkForMisbehaviour = (ClientMessage) => bool
 
 `checkForMisbehaviour` MUST throw an exception if the provided proof of misbehaviour was not valid.
 
-#### UpdateState
+#### `UpdateState`
 
 UpdateState will update the client given a verified `ClientMessage`. Note that this function is intended for **non-misbehaviour** `ClientMessages`.
 
@@ -301,7 +301,7 @@ Clients MAY have time-sensitive validity predicates, such that if no ClientMessa
 In this case, a permissioned entity such as a chain governance system or trusted multi-signature MAY be allowed
 to intervene to unfreeze a frozen client & provide a new correct ClientMessage.
 
-#### UpdateStateOnMisbehaviour
+#### `UpdateStateOnMisbehaviour`
 
 UpdateStateOnMisbehaviour will update the client upon receiving a verified `ClientMessage` that is valid misbehaviour.
 
@@ -318,7 +318,7 @@ Once misbehaviour is detected, clients SHOULD be frozen so that no future update
 A permissioned entity such as a chain governance system or trusted multi-signature MAY be allowed
 to intervene to unfreeze a frozen client & provide a new correct ClientMessage which updates the client to a valid state.
 
-#### CommitmentProof
+#### `CommitmentProof`
 
 `CommitmentProof` is an opaque data structure defined by a client type in accordance with [ICS 23](../ics-023-vector-commitments).
 It is utilised to verify presence or absence of a particular key/value pair in state
@@ -332,7 +332,7 @@ Internal implementation details may differ (for example, a loopback client could
 - The `delayPeriodTime` is passed to the verification functions for packet-related proofs in order to allow packets to specify a period of time which must pass after a consensus state is added before it can be used for packet-related verification.
 - The `delayPeriodBlocks` is passed to the verification functions for packet-related proofs in order to allow packets to specify a period of blocks which must pass after a consensus state is added before it can be used for packet-related verification.
 
-`verifyMembership` is a generic proof verification method which verifies a proof of the existence of a value at a given `CommitmentPath` at the specified height.
+`verifyMembership` is a generic proof verification method which verifies a proof of the existence of a value at a given `CommitmentPath` at the specified height. It MUST return an error is the verification is not successful. 
 The caller is expected to construct the full `CommitmentPath` from a `CommitmentPrefix` and a standardized path (as defined in [ICS 24](../ics-024-host-requirements/README.md#path-space)). If the caller desires a particular delay period to be enforced,
 then it can pass in a non-zero `delayPeriodTime` or `delayPeriodBlocks`. If a delay period is not necessary, the caller must pass in 0 for `delayPeriodTime` and `delayPeriodBlocks`,
 and the client will not enforce any delay period for verification.
@@ -346,10 +346,10 @@ type verifyMembership = (
   proof: CommitmentProof,
   path: CommitmentPath,
   value: bytes)
-  => boolean
+  => Error
 ```
 
-`verifyNonMembership` is a generic proof verification method which verifies a proof of absence of a given `CommitmentPath` at the specified height.
+`verifyNonMembership` is a generic proof verification method which verifies a proof of absence of a given `CommitmentPath` at the specified height. It MUST return an error is the verification is not successful. 
 The caller is expected to construct the full `CommitmentPath` from a `CommitmentPrefix` and a standardized path (as defined in [ICS 24](../ics-024-host-requirements/README.md#path-space)). If the caller desires a particular delay period to be enforced,
 then it can pass in a non-zero `delayPeriodTime` or `delayPeriodBlocks`. If a delay period is not necessary, the caller must pass in 0 for `delayPeriodTime` and `delayPeriodBlocks`,
 and the client will not enforce any delay period for verification.
@@ -364,7 +364,7 @@ type verifyNonMembership = (
   delayPeriodBlocks: uint64,
   proof: CommitmentProof,
   path: CommitmentPath)
-  => boolean
+  => Error
 ```
 
 ### Query interface
@@ -531,18 +531,18 @@ logical correctness.
 
 #### Create
 
-Calling `createClient` with the specified identifier & initial consensus state creates a new client.
+Calling `createClient` with the client type and initial consensus state creates a new client.
 
 ```typescript
 function createClient(
-  id: Identifier,
   clientType: ClientType,
   consensusState: ConsensusState) {
-    abortTransactionUnless(validateClientIdentifier(id))
-    abortTransactionUnless(provableStore.get(clientStatePath(id)) === null)
-    abortSystemUnless(provableStore.get(clientTypePath(id)) === null)
-    clientType.initialise(consensusState)
-    provableStore.set(clientTypePath(id), clientType)
+    // implementations may define a identifier generation function
+    identifier = generateClientIdentifier()
+    abortTransactionUnless(provableStore.get(clientStatePath(identifier)) === null)
+    abortSystemUnless(provableStore.get(clientTypePath(identifier)) === null)
+    clientType.initialise(identifier, consensusState)
+    provableStore.set(clientTypePath(identifier), clientType)
 }
 ```
 
