@@ -71,7 +71,7 @@ enum SwapMessageType {
 // AtomicSwapPacketData is comprised of a swap message type, raw transaction and optional memo field.
 interface AtomicSwapPacketData {
   type: SwapMessageType
-  data: []byte
+  data: bytes
   memo: string
 }
 ```
@@ -173,11 +173,11 @@ interface OrderBook {
   cancelTimestamp: uint64
   completeTimestamp: uint64
   
-  createOrder(msg: MakeSwapMsg) OrderBook {
-    return {
-        id : generateOrderId(msg),
-        status: Status.INITIAL,
-        maker: msg
+  createOrder(msg: MakeSwapMsg): OrderBook {
+    return OrderBook{
+      id : generateOrderId(msg),
+      status: Status.INITIAL,
+      maker: msg
     }
   }
 }
