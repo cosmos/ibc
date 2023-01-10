@@ -51,7 +51,7 @@ A maker offers token A in exchange for token B by making an order. The order spe
 
 An order without takers can be cancelled.  This enables users to rectify mistakes, such as inputting an incorrect price or taker address.  Upon cancellation escrowed tokens will be refunded. 
 
-When making or taking an order, a timeout window is specified in the relayed data packet.  A timeout will result in escrowed tokens refunded back.  This timeout window is customizeable.
+When making or taking an order, a timeout window is specified in the relayed data packet.  A timeout will result in escrowed tokens refunded back.  This timeout window is customizable.
 
 ### Data Structures
 
@@ -76,13 +76,13 @@ interface AtomicSwapPacketData {
 }
 ```
 ```typescript
-type AtomicSwapPacketAcknowledgement = AtomicSwapPacketAcknowledgementSuccess | AtomicSwapPacketAcknowledgementFailure
-interface AtomicSwapPacketAcknowledgementSuccess {
+type AtomicSwapPacketAcknowledgement = AtomicSwapPacketSuccess | AtomicSwapPacketError
+interface AtomicSwapPacketSuccess {
   // This is binary 0x01 base64 encoded
   result: "AQ=="
 }
 
-interface AtomicSwapPacketAcknowledgementFailure {
+interface AtomicSwapPacketError {
   error: string
 }
 ```
@@ -92,11 +92,11 @@ All `AtomicSwapPacketData` will be forwarded to the corresponding message handle
 ```typescript
 interface MakeSwapMsg {
   // the port on which the packet will be sent, specified by the maker when the message is created
-  sourcePort string
+  sourcePort: string
   // the channel on which the packet will be sent, specified by the maker when the message is created
   sourceChannel: string
   // the tokens to be exchanged
-  sellToken : Coin
+  sellToken: Coin
   buyToken: Coin
   // the maker's address
   makerAddress: string
@@ -106,10 +106,10 @@ interface MakeSwapMsg {
   // only the desiredTaker is allowed to take this order
   // this is the address on the taker chain
   desiredTaker: string
-  creationTimestamp: int64
-  expirationTimestamp: int64
-  timeoutHeight: int64
-  timeoutTimestamp: int64
+  creationTimestamp: uint64
+  expirationTimestamp: uint64
+  timeoutHeight: Height
+  timeoutTimestamp: uint64
   nonce: string // a random 6 digits string
 }
 ```
@@ -125,9 +125,9 @@ interface TakeSwapMsg {
   takerAddress: string
   // the taker's address on the maker chain
   takerReceivingAddress: string
-  creationTimestamp: int64
-  timeoutHeight: int64
-  timeoutTimestamp: int64
+  creationTimestamp: uint64
+  timeoutHeight: Height
+  timeoutTimestamp: uint64
 }
 ```
 
@@ -137,12 +137,13 @@ interface CancelSwapMsg {
   sourceChannel: string
   orderId: string
   makerAddress: string
-  timeoutHeight: int64
-  timeoutTimestamp: int64
+  timeoutHeight: Height
+  timeoutTimestamp: uint64
 }
 ```
 
-Note: `Coin` is `sdk.Coin`, 
+where `Coin` is an interface that consists of an amount and a denomination:
+
 ```ts
 interface Coin {
   amount: int64
@@ -161,7 +162,7 @@ enum Status {
 }
 
 interface OrderBook {
-  id: string;
+  id: string
   maker: MakeSwapMsg
   status: Status
   // set onReceived(), Make sure that the take order can only be sent to the chain the make order came from
@@ -169,8 +170,8 @@ interface OrderBook {
   // set onReceived(), Make sure that the take order can only be sent to the chain the make order came from
   channelIdOnTakerChain: string
   taker: TakeSwapMsg
-  cancelTimestamp: int64
-  completeTimestamp: int64
+  cancelTimestamp: uint64
+  completeTimestamp: uint64
   
   createOrder(msg: MakeSwapMsg) OrderBook {
     return {
@@ -183,31 +184,29 @@ interface OrderBook {
 
 // Order id is a global unique string
 function generateOrderId(msg MakeSwapMsg) {
-  cosnt bytes = protobuf.encode(msg)
+  const bytes = protobuf.encode(msg)
   return sha265(bytes)
 }
-
-
 ```
 
 ### Life scope and control flow
 
 #### Making a swap
 
-1. A maker creates an order on the maker chain with specified parameters (see type `MakeSwap`).  The maker's sell tokens are sent to the escrow address owned by the module. The order is saved on the maker chain
-2. An `AtomicSwapPacketData` is relayed to the taker chain where `onRecvPacket` the order is also saved on the taker chain.  
+1. A maker creates an order on the maker chain with specified parameters (see type `MakeSwap`).  The maker's sell tokens are sent to the escrow address owned by the module. The order is saved on the maker chain.
+2. An `AtomicSwapPacketData` is relayed to the taker chain where in `onRecvPacket` the order is also saved on the taker chain.  
 3. A packet is subsequently relayed back for acknowledgement. A packet timeout or a failure during `onAcknowledgePacket` will result in a refund of the escrowed tokens.
 
 #### Taking a swap
 
-1. A taker takes an order on the taker chain by triggering `TakeSwap`.  The taker's sell tokens are sent to the escrow address owned by the module.  An order cannot be taken if the current time is later than the `expirationTimestamp`
-2. An `AtomicSwapPacketData` is relayed to the maker chain where `onRecvPacket` the escrowed tokens are sent to the taker address on the maker chain.
+1. A taker takes an order on the taker chain by triggering `TakeSwap`.  The taker's sell tokens are sent to the escrow address owned by the module.  An order cannot be taken if the current time is later than the `expirationTimestamp`.
+2. An `AtomicSwapPacketData` is relayed to the maker chain where in `onRecvPacket` the escrowed tokens are sent to the taker address on the maker chain.
 3. A packet is subsequently relayed back for acknowledgement. Upon acknowledgement escrowed tokens on the taker chain are sent to to the maker address on the taker chain. A packet timeout or a failure during `onAcknowledgePacket` will result in a refund of the escrowed tokens.
 
 #### Cancelling a swap
 
 1.  A maker cancels a previously created order.  Expired orders can also be cancelled.
-2.  An `AtomicSwapPacketData` is relayed to the taker chain where `onRecvPacket` the order is cancelled on the taker chain. If the order is in the process of being taken (a packet with `TakeSwapMsg` is being relayed from the taker chain to the maker chain), the cancellation will be rejected.
+2.  An `AtomicSwapPacketData` is relayed to the taker chain where in `onRecvPacket` the order is cancelled on the taker chain. If the order is in the process of being taken (a packet with `TakeSwapMsg` is being relayed from the taker chain to the maker chain), the cancellation will be rejected.
 3.  A packet is relayed back where upon acknowledgement the order on the maker chain is also cancelled.  The refund only occurs if the taker chain confirmed the cancellation request.
 
 ### Sub-protocols
@@ -215,7 +214,7 @@ function generateOrderId(msg MakeSwapMsg) {
 The sub-protocols described herein should be implemented in a "Fungible Token Swap" module with access to a bank module and to the IBC routing module.
 
 ```ts
-function makeSwap(request MakeSwapMsg) {
+function makeSwap(request: MakeSwapMsg) {
   const balance = bank.getBalances(request.makerAddress)
   abortTransactionUnless(balance.amount > request.sellToken.Amount)
   // gets escrow address by source port and source channel
@@ -239,7 +238,7 @@ function makeSwap(request MakeSwapMsg) {
 ```
 
 ```ts
-function takeSwap(request TakeSwapMsg) {
+function takeSwap(request: TakeSwapMsg) {
   const order = store.findOrderById(request.sourceChannel, request.orderId)
   abortTransactionUnless(order !== null)
   abortTransactionUnless(order.expirationTimestamp < currentTimestamp())
@@ -249,7 +248,7 @@ function takeSwap(request TakeSwapMsg) {
   // if `desiredTaker` is set, only the desiredTaker can accept the order.
   abortTransactionUnless(order.maker.desiredTaker !== null && order.maker.desiredTaker !== request.takerAddress)
     
-  // check if this take message send to the correct chain
+  // check if this take message sent to the correct chain
   abortTransactionUnless(order.channelIdOnTakerChain === request.sourceChannel)
     
   const balance = bank.getBalances(request.takerAddress)
@@ -268,23 +267,22 @@ function takeSwap(request TakeSwapMsg) {
     
   sendAtomicSwapPacket(packet, order.portIdOnTakerChain, order.channelIdOnTakerChain, request.timeoutHeight, request.timeoutTimestamp)
     
-  //update order state
+  // update order state
   order.taker = request // mark that the order has been occupied
   store.save(order)
 }
 ```
 
-
 ```ts
-function cancelSwap(request CancelSwapMsg) {
+function cancelSwap(request: CancelSwapMsg) {
   const order = store.findOrderById(request.sourceChannel, request.orderId)
   // checks if the order exists
-  abortTransactionUnless(order != null)
+  abortTransactionUnless(order !== null)
   // make sure the sender is the maker of the order.
   abortTransactionUnless(order.maker.makerAddress == request.makerAddress)
   abortTransactionUnless(order.status == Status.SYNC || order.status == Status.INITIAL)
     
-  // check if this take message send to the correct chain
+  // check if this cancel message sent to the correct chain
   abortTransactionUnless(request.sourceChannel == order.maker.sourceChannel)
     
   // constructs the IBC data packet
@@ -436,9 +434,9 @@ function sendAtomicSwapPacket(
 
 ```typescript
 function onRecvPacket(packet channeltypes.Packet) {
-  const swapPaket: AtomicSwapPacketData =  packet.data
+  const swapPaket: AtomicSwapPacketData = packet.data
   
-  AtomicSwapPacketAcknowledgement ack = new AtomicSwapPacketAcknowledgementSuccess()
+  AtomicSwapPacketAcknowledgement ack = AtomicSwapPacketAcknowledgement{true, null}
   
   switch swapPaket.type {
     case TYPE_MSG_MAKE_SWAP:
@@ -455,8 +453,8 @@ function onRecvPacket(packet channeltypes.Packet) {
       order.channelIdOnTakerChain = packet.destinationChannel
       // saves order to store
       const err = store.save(order)
-      if(err != null) {
-        ack = new AtomicSwapPacketAcknowledgementFailure("Failed to save the order on taker chain") 
+      if (err != null) {
+        ack = AtomicSwapPacketAcknowledgement{false, "dailed to save the order on taker chain"}
       }
       break;
     case TYPE_MSG_TAKE_SWAP:
@@ -474,7 +472,7 @@ function onRecvPacket(packet channeltypes.Packet) {
       // send maker.sellToken to taker's receiving address
       const err = bank.sendCoins(escrowAddr, takeMsg.takerReceivingAddress, order.maker.sellToken)
       if (err != null) {
-        ack = new AtomicSwapPacketAcknowledgementFailure("transfer coins failed") 
+        ack = AtomicSwapPacketAcknowledgement{false, "transfer coins failed"}
       }
         
       // update status of order
@@ -495,11 +493,11 @@ function onRecvPacket(packet channeltypes.Packet) {
       order.cancelTimestamp = cancelMsg.creationTimestamp 
       const err = store.save(order)
       if (err != null) {
-        ack = new AtomicSwapPacketAcknowledgementFailure("failed to cancel order on taker chain") 
+        ack = AtomicSwapPacketAcknowledgement{false, "failed to cancel order on taker chain"}
       }
       break;
     default:
-      ack = new AtomicSwapPacketAcknowledgementFailure("unknown data packet") 
+      ack = AtomicSwapPacketAcknowledgement{false, "unknown data packet"} 
   }
   
   return ack
@@ -510,11 +508,11 @@ function onRecvPacket(packet channeltypes.Packet) {
 
 ```typescript
 function onAcknowledgePacket(
-  packet channeltypes.Packet
+  packet: channeltypes.Packet
   acknowledgement: bytes) {
   // ack is failed
   if (!ack.success) {
-    refundToken(packet) 
+    refundTokens(packet) 
   } else {
     
     const swapPaket: AtomicSwapPacketData = protobuf.decode(packet.data)
@@ -527,7 +525,7 @@ function onAcknowledgePacket(
         // update order status on the maker chain.
         const order = store.findOrderById(makeMsg.sourceChannel, generateOrderId(makeMsg))
         order.status = Status.SYNC
-        //save order to store
+        // save order to store
         store.save(order)
         break;
       case TYPE_MSG_TAKE_SWAP:
@@ -572,7 +570,7 @@ function onAcknowledgePacket(
 ```typescript
 function onTimeoutPacket(packet: Packet) {
   // the packet timed-out, so refund the tokens
-  refundTokens(packet);
+  refundTokens(packet)
 }
 ```
 
@@ -583,7 +581,7 @@ function refundTokens(packet: Packet) {
   const swapPacket: AtomicSwapPacketData = protobuf.decode(packet.data)
   const escrowAddr = escrowAddress(packet.sourcePort, packet.sourceChannel)
   
-  //send tokens from module to message sender
+  // send tokens from module to message sender
   switch swapPaket.type {
     case TYPE_MSG_MAKE_SWAP:
       const msg = protobuf.decode(swapPacket.data)
