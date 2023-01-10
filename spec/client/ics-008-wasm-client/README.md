@@ -13,6 +13,7 @@ modified: 2022-12-15
 ## Synopsis
 
 This specification document describes an interface to a light client stored as a WASM bytecode for a blockchain.
+Changes to ClientState interface and associated handler to align with changes in 02-client-refactor ADR: https://github.com/cosmos/ibc-go/pull/1871
 
 ### Motivation
 
@@ -42,6 +43,8 @@ Functions & terms are as defined in [ICS 2](../../core/ics-002-client-semantics)
 `Wasm Client` refers to a particular instance of `Wasm Client Code` defined as a tuple `(Wasm Client Code, ClientID)`.
 
 `Wasm VM` refers to a virtual machine capable of executing valid Wasm bytecode.
+
+`VerifyClientMessage`, `CheckForMisbehaviour`, `UpdateStateOnMisbehaviour`, and `UpdateState`are as defined in [ADR-006](https://github.com/cosmos/ibc-go/blob/main/docs/architecture/adr-006-02-client-refactor.md)
 
 
 ### Desired Properties
@@ -257,18 +260,9 @@ Wasm client state verification functions check a Merkle proof against a previous
 		path Path,
 		value []byte,
 	) error {
-    	const VerifyClientMessage = "verify_membership"
-    inner := make(map[string]interface{})
-    inner["height"] = height
-    inner["delay_time_period"] = delayTimePeriod
-    inner["delay_block_period"] = delayBlockPeriod
-    inner["proof"] = proof
-    inner["path"] = path
-    inner["value"] = value
-    payload := make(map[string]map[string]interface{})
-    payload[VerifyClientMessage] = inner
-
-    _, err := call[contractResult](payload, &c, ctx, clientStore)
+    const VerifyClientMessage = "verify_membership"
+    encodedData := packData(height, delayTimePeriod, delayBlockPeriod, proof, path, value, VerifyClientMessage)
+    _, err := callContract(c.CodeId, ctx, clientStore, encodedData)
     return err
   }
 
@@ -283,17 +277,9 @@ Wasm client state verification functions check a Merkle proof against a previous
 	path []byte,
 ) error {
 	const VerifyClientMessage = "verify_non_membership"
-	inner := make(map[string]interface{})
-	inner["height"] = height
-	inner["delay_time_period"] = delayTimePeriod
-	inner["delay_block_period"] = delayBlockPeriod
-	inner["proof"] = proof
-	inner["path"] = path
-	payload := make(map[string]map[string]interface{})
-	payload[VerifyClientMessage] = inner
-
-	_, err := call[contractResult](payload, &c, ctx, clientStore)
-	return err
+  encodedData := packData(height, delayTimePeriod, delayBlockPeriod, proof, path, value, VerifyClientMessage)
+  _, err := callContract(c.CodeId, ctx, clientStore, encodedData)
+  return err
 }
 
 func (c ClientState) VerifyClientMessage(ctx sdk.Context, cdc codec.BinaryCodec, clientStore sdk.KVStore, clientMsg exported.ClientMessage) error {
@@ -342,6 +328,34 @@ func (c ClientState) UpdateState(ctx sdk.Context, cdc codec.BinaryCodec, clientS
   if err := json.Unmarshal(output.Data, &c); err != nil {
   panic(sdkerrors.Wrapf(ErrUnableToUnmarshalPayload, fmt.Sprintf("underlying error: %s", err.Error())))
 }
+
+func CheckSubstituteAndUpdateState(ctx sdk.Context, cdc codec.BinaryCodec, subjectClientStore, substituteClientStore sdk.KVStore, substituteClient ClientState) error {
+  	var (
+		SubjectPrefix    = []byte("subject/")
+		SubstitutePrefix = []byte("substitute/")
+	)
+
+	consensusState, err := GetConsensusState(subjectClientStore, cdc, c.LatestHeight)
+	if err != nil {
+		return sdkerrors.Wrapf(
+			err, "unexpected error: could not get consensus state from clientstore at height: %d", c.GetLatestHeight(),
+		)
+	}
+
+	store := NewWrappedStore(subjectClientStore, subjectClientStore, SubjectPrefix, SubstitutePrefix)
+
+	const CheckSubstituteAndUpdateState = "check_substitute_and_update_state"
+  encodedData := packData(consensusState, substituteClient)
+	output, err := call[clientStateCallResponse](encodedData, &c, ctx, store)
+	if err != nil {
+		return err
+	}
+  //TODO: this will likely change - looks a bit ugly lol
+	output.resetImmutables(&c)
+	return nil
+}
+
+
 	SetClientState(clientStore, cdc, &c)
 	return []exported.Height{c.LatestHeight}
 }
