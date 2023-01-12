@@ -4,10 +4,9 @@ title: NEAR Client
 stage: draft
 category: IBC/TAO
 kind: instantiation
-implements: -
+implements: 1
 author: Rivers Yang <rivers@oct.network>
 created: 2023-1-12
-modified: -
 ---
 
 ## Synopsis
@@ -94,11 +93,11 @@ Comparison between heights is implemented as follows:
 
 ```typescript
 function compare(a: Height, b: Height): Ord {
-  if (a.height < b.height)
-    return LT
-  else if (a.height === b.height)
-    return EQ
-  return GT
+    if (a.height < b.height)
+        return LT
+    else if (a.height === b.height)
+        return EQ
+    return GT
 }
 ```
 
@@ -308,11 +307,11 @@ function updateState(clientMessage: clientMessage) {
     // only update the clientstate if the header height is higher
     // than clientState latest height
     if clientState.height < header.getHeight() {
-      // update latest height
-      clientState.latestHeight = header.getHeight()
+        // update latest height
+        clientState.latestHeight = header.getHeight()
 
-      // save the client
-      set("clients/{clientMsg.identifier}/clientState", clientState)
+        // save the client
+        set("clients/{clientMsg.identifier}/clientState", clientState)
     }
 
     currentBps = clientState.getBlockProducersOf(header.getEpochId())
