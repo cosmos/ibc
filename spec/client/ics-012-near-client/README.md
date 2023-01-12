@@ -4,7 +4,7 @@ title: NEAR Client
 stage: draft
 category: IBC/TAO
 kind: instantiation
-implements: 1
+implements: none
 author: Rivers Yang <rivers@oct.network>
 created: 2023-1-12
 ---
@@ -64,7 +64,7 @@ interface ClientState {
 
 ### Consensus state
 
-The NEAR client tracks the block producers of current epoch and header (refer to [Headers section](#headers)) for all previously verified consensus states (these can be pruned after the unbonding period has passed, but should not be pruned beforehand).
+The NEAR client tracks the block producers of current epoch and header (refer to [Headers section](#headers)) for all previously verified consensus states (these can be pruned after switching to the epoch after the next, but should not be pruned beforehand).
 
 ```typescript
 interface ValidatorStakeView {
@@ -176,6 +176,10 @@ TBD (currently not applicable in NEAR protocol)
 The NEAR client initialisation requires a latest consensus state (the latest header and the block producers of the epoch of the header).
 
 ```typescript
+function (Header) getHeight(): Height {
+    return self.lightClientBlockView.innerLite.height
+}
+
 function initialise(
   trustingPeriod: uint64,
   latestTimestamp: uint64,
@@ -186,10 +190,10 @@ function initialise(
     assert(consensusState.header.getHeight() > 0)
     // implementations may define a identifier generation function
     identifier = generateClientIdentifier()
-    set("clients/{identifier}/consensusStates/{consensusState.header.getHeight()}", consensusState)
     height = Height {
         height: consensusState.header.getHeight()
     }
+    set("clients/{identifier}/consensusStates/{height}", consensusState)
     return ClientState {
         trustingPeriod
         latestHeight: height
@@ -205,11 +209,10 @@ function initialise(
 The NEAR client validity checking uses spec described in the [NEAR light client specification](https://nomicon.io/ChainSpec/LightClient) by adding an extra checking for the previous state root of chunks. If the provided header is valid, the client state is updated and the newly verified header is written to the store.
 
 ```typescript
-function verifyClientMessage(
-  clientMsg: ClientMessage) {
-    switch typeof(clientMsg) {
+function verifyClientMessage(clientMessage: ClientMessage) {
+    switch typeof(clientMessage) {
       case Header:
-        verifyHeader(clientMsg)
+        verifyHeader(clientMessage)
     }
 }
 ```
@@ -217,10 +220,6 @@ function verifyClientMessage(
 Verify validity of regular update to the NEAR client
 
 ```typescript
-function (Header) getHeight(): Height {
-    return self.lightClientBlockView.innerLite.height
-}
-
 function (Header) getEpochId(): CryptoHash {
     return self.lightClientBlockView.innerLite.epochId
 }
@@ -230,7 +229,7 @@ function (Header) getNextEpochId(): CryptoHash {
 }
 
 function (ClientState) getBlockProducersOf(epochId: CryptoHash): List<ValidatorStakeView> {
-    consensusState = get("clients/{clientMsg.identifier}/consensusStates/{self.latestHeight}")
+    consensusState = get("clients/{clientMessage.identifier}/consensusStates/{self.latestHeight}")
     if epochId === consensusState.header.getEpochId() {
         return consensusState.currentBps
     } else if epochId === consensusState.header.getNextEpochId() {
@@ -241,7 +240,7 @@ function (ClientState) getBlockProducersOf(epochId: CryptoHash): List<ValidatorS
 }
 
 function verifyHeader(header: Header) {
-    clientState = get("clients/{header.identifier}/clientState")
+    clientState = get("clients/{clientMessage.identifier}/clientState")
 
     latestHeader = clientState.getLatestHeader()
     approvalMessage = header.lightClientBlockView.approvalMessage()
@@ -249,21 +248,26 @@ function verifyHeader(header: Header) {
     // (1) The height of the block is higher than the height of the current head.
     assert(clientState.latestHeight < header.getHeight())
 
-    // (2) The epoch of the block is equal to the epochId or nextEpochId known for the current head.
+    // (2) The epoch of the block is equal to the epochId or nextEpochId
+    //     known for the current head.
     assert(header.getEpochId() in
         [latestHeader.getEpochId(), latestHeader.getNextEpochId()])
 
-    // (3) If the epoch of the block is equal to the nextEpochId of the head, then nextBps is not null.
+    // (3) If the epoch of the block is equal to the nextEpochId of the head,
+    //     then nextBps is not null.
     assert(not(header.getEpochId() == latestHeader.getNextEpochId()
         && header.lightClientBlockView.nextBps === null))
 
-    // (4) approvalsAfterNext contain valid signatures on approvalMessage from the block producers of the corresponding epoch
-    // (5) The signatures present in approvalsAfterNext correspond to more than 2/3 of the total stake
+    // (4) approvalsAfterNext contain valid signatures on approvalMessage
+    //     from the block producers of the corresponding epoch.
+    // (5) The signatures present in approvalsAfterNext correspond to
+    //     more than 2/3 of the total stake.
     totalStake = 0
     approvedStake = 0
 
     epochBlockProducers = clientState.getBlockProducersOf(header.getEpochId())
-    for maybeSignature, blockProducer in zip(header.lightClientBlockView.approvalsAfterNext, epochBlockProducers) {
+    for maybeSignature, blockProducer in
+      zip(header.lightClientBlockView.approvalsAfterNext, epochBlockProducers) {
         totalStake += blockProducer.stake
 
         if maybeSignature === null {
@@ -284,11 +288,13 @@ function verifyHeader(header: Header) {
 
     // (6) If nextBps is not none, hash(borsh(nextBps)) corresponds to the nextBpHash in innerLite
     if header.lightClientBlockView.nextBps !== null {
-        assert(hash(borsh(header.lightClientBlockView.nextBps)) === header.lightClientBlockView.innerLite.nextBpHash)
+        assert(hash(borsh(header.lightClientBlockView.nextBps))
+            === header.lightClientBlockView.innerLite.nextBpHash)
     }
 
     // (7) Check the prevStateRoot is the root of merklized prevStateRootOfChunks
-    assert(header.lightClientBlockView.innerLite.prevStateRoot === merklize(header.prevStateRootOfChunks).root)
+    assert(header.lightClientBlockView.innerLite.prevStateRoot
+        === merklize(header.prevStateRootOfChunks).root)
 }
 ```
 
@@ -302,7 +308,7 @@ UpdateState will perform a regular update for the NEAR client. It will add a con
 
 ```typescript
 function updateState(clientMessage: clientMessage) {
-    clientState = get("clients/{clientMsg.identifier}/clientState)
+    clientState = get("clients/{clientMessage.identifier}/clientState")
     header = Header(clientMessage)
     // only update the clientstate if the header height is higher
     // than clientState latest height
@@ -311,13 +317,13 @@ function updateState(clientMessage: clientMessage) {
         clientState.latestHeight = header.getHeight()
 
         // save the client
-        set("clients/{clientMsg.identifier}/clientState", clientState)
+        set("clients/{clientMessage.identifier}/clientState", clientState)
     }
 
     currentBps = clientState.getBlockProducersOf(header.getEpochId())
     // create recorded consensus state, save it
     consensusState = ConsensusState { currentBps, header }
-    set("clients/{clientMsg.identifier}/consensusStates/{header.getHeight()}", consensusState)
+    set("clients/{clientMessage.identifier}/consensusStates/{header.getHeight()}", consensusState)
 }
 ```
 
@@ -346,12 +352,12 @@ function upgradeClientState(
     // check that the client is at a sufficient height
     assert(clientState.latestHeight >= height)
     // fetch the previously verified commitment root & verify membership
-    root = get("clients/{clientMsg.identifier}/consensusStates/{height}")
+    root = get("clients/{clientMessage.identifier}/consensusStates/{height}")
     // verify that the provided consensus state has been stored
     assert(root.verifyMembership(path, newClientState, proof))
     // update client state
     clientState = newClientState
-    set("clients/{clientMsg.identifier}/clientState", clientState)
+    set("clients/{clientMessage.identifier}/clientState", clientState)
 }
 ```
 
@@ -390,9 +396,9 @@ function verifyMembership(
     // Implementations may choose how to pass in the identifier
     // ibc-go provides the identifier-prefixed store to this method
     // so that all state reads are for the client in question
-    root = get("clients/{clientIdentifier}/consensusStates/{height}")
+    header = get("clients/{clientMessage.identifier}/consensusStates/{height}")
     // verify that <path, value> has been stored
-    assert(root.verifyMembership(path, value, proof))
+    assert(header.verifyMembership(path, value, proof))
 }
 
 function (ConsensusState) verifyNonMembership(
@@ -423,9 +429,9 @@ function verifyNonMembership(
     // Implementations may choose how to pass in the identifier
     // ibc-go provides the identifier-prefixed store to this method
     // so that all state reads are for the client in question
-    root = get("clients/{identifier}/consensusStates/{height}")
+    header = get("clients/{clientMessage.identifier}/consensusStates/{height}")
     // verify that nothing has been stored at path
-    assert(root.verifyNonMembership(path, proof))
+    assert(header.verifyNonMembership(path, proof))
 }
 ```
 
