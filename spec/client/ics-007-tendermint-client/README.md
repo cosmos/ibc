@@ -302,7 +302,7 @@ function checkForMisbehaviour(
 ```typescript
 function updateState(
   clientMsg: clientMessage) {
-    clientState = provableStore.get("clients/{clientMsg.identifier}/clientState)
+    clientState = provableStore.get("clients/{clientMsg.identifier}/clientState")
     header = Header(clientMessage)
     // only update the clientstate if the header height is higher
     // than clientState latest height
