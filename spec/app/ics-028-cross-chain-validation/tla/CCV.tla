@@ -579,4 +579,12 @@ We can define change completion, but we don't model it. Best approximation:
 Inv702 ==
   boundedDrift => EventuallyMatureOnProvider
 
+Inv ==
+  /\ Inv411
+  /\ Inv601
+  /\ Inv602
+  /\ Inv603
+  /\ Inv701
+  /\ Inv702
+
 =============================================================================
