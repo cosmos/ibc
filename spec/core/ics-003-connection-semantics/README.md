@@ -125,7 +125,6 @@ function clientConnectionsPath(clientIdentifier: Identifier): Path {
 function addConnectionToClient(
   clientIdentifier: Identifier,
   connectionIdentifier: Identifier) {
-    abortTransactionUnless(queryClientState(clientIdentifier) !== null)
     conns = privateStore.get(clientConnectionsPath(clientIdentifier))
     conns.add(connectionIdentifier)
     privateStore.set(clientConnectionsPath(clientIdentifier), conns)
@@ -344,8 +343,12 @@ function connOpenInit(
   version: string,
   delayPeriodTime: uint64,
   delayPeriodBlocks: uint64) {
+    // generate a new identifier
     identifier = generateIdentifier()
+
+    abortTransactionUnless(queryClientState(clientIdentifier) !== null)
     abortTransactionUnless(provableStore.get(connectionPath(identifier)) == null)
+    
     state = INIT
     if version != "" {
       // manually selected version must be one we can support
@@ -383,6 +386,7 @@ function connOpenTry(
     // generate a new identifier
     identifier = generateIdentifier()
     
+    abortTransactionUnless(queryClientState(clientIdentifier) !== null)
     abortTransactionUnless(validateSelfClient(clientState))
     abortTransactionUnless(consensusHeight < getCurrentHeight())
     expectedConsensusState = getConsensusState(consensusHeight, hostConsensusStateProof)
