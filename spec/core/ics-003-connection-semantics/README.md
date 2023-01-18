@@ -360,7 +360,7 @@ function connOpenInit(
     connection = ConnectionEnd{state, "", counterpartyPrefix,
       clientIdentifier, counterpartyClientIdentifier, versions, delayPeriodTime, delayPeriodBlocks}
     provableStore.set(connectionPath(identifier), connection)
-    addConnectionToClient(clientIdentifier, identifier) // aborts transaction if no client state is found
+    addConnectionToClient(clientIdentifier, identifier)
 }
 ```
 
@@ -405,7 +405,7 @@ function connOpenTry(
       proofHeight, proofConsensus, counterpartyClientIdentifier, consensusHeight, expectedConsensusState))
 
     provableStore.set(connectionPath(identifier), connection)
-    addConnectionToClient(clientIdentifier, identifier) // aborts transaction if no client state is found
+    addConnectionToClient(clientIdentifier, identifier)
 }
 ```
 
