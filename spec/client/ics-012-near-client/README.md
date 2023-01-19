@@ -38,7 +38,7 @@ type Signature = ED25519Signature
 
 `merklize` is a generic function which can construct a merkle tree from an array which the element in it can be serialized by `borsh`. This function should return the merkle root of the tree at least.
 
-In NEAR protocol, the block producers are changed by time (about 12 hours). The period is known as `epoch` and the id of a epoch is represented by a `CryptoHash`.
+In NEAR protocol, the block producers are changed by time (about 12 hours). The period is known as `epoch` and the id of an epoch is represented by a `CryptoHash`.
 
 ### Desired Properties
 
@@ -50,13 +50,14 @@ This specification is based on the [NEAR light client specification](https://nom
 
 ### Client state
 
-The NEAR client state tracks the latest height and cached heights.
+The NEAR client state tracks the following data:
 
 ```typescript
 interface ClientState {
     trustingPeriod: uint64
     latestHeight: Height
     latestTimestamp: uint64
+    frozenHeight: Maybe<uint64>
     upgradeCommitmentPrefix: []byte
     upgradeKey: []bype
 }
@@ -64,7 +65,7 @@ interface ClientState {
 
 ### Consensus state
 
-The NEAR client tracks the block producers of current epoch and header (refer to [Headers section](#headers)) for all previously verified consensus states (these can be pruned after switching to the epoch after the next, but should not be pruned beforehand).
+The NEAR client tracks the block producers of current epoch and header (refer to [Headers section](#headers)) for all previously verified consensus states (these can be pruned after a certain period, but should not be pruned beforehand).
 
 ```typescript
 interface ValidatorStakeView {
@@ -103,39 +104,39 @@ function compare(a: Height, b: Height): Ord {
 
 ### Headers
 
-The NEAR client headers include the `LightClientBlockView` and previou state root of chunks. The entire block producers for next epoch and approvals for the block after the next are included in `LightClientBlockView`.
+The NEAR client headers include the `LightClientBlock` and previou state root of chunks. The entire block producers for next epoch and approvals for the block after the next are included in `LightClientBlock`.
 
 ```typescript
-interface BlockHeaderInnerLiteView {
+interface BlockHeaderInnerLite {
     height: Height
     epochId: CryptoHash
     nextEpochId: CryptoHash
     prevStateRoot: CryptoHash
     outcomeRoot: CryptoHash
-    timestampNanosec: uint64
+    timestamp: uint64   // in nanoseconds
     nextBpHash: CryptoHash
     blockMerkleRoot: CryptoHash
 }
 
-interface LightClientBlockView {
+interface LightClientBlock {
     prevBlockHash: CryptoHash
     nextBlockInnerHash: CryptoHash,
-    innerLite: BlockHeaderInnerLiteView
+    innerLite: BlockHeaderInnerLite
     innerRestHash: CryptoHash
     nextBps: Maybe<List<ValidatorStakeView>>
     approvalsAfterNext: List<Maybe<Signature>>
 }
 
 interface Header {
-    lightClientBlockView: LightClientBlockView
+    lightClientBlock: LightClientBlock
     prevStateRootOfChunks: List<CryptoHash>
 }
 ```
 
-The current block hash, next block hash and approval message can be calcuated from `LightClientBlockView`.
+The current block hash, next block hash and approval message can be calcuated from `LightClientBlock`. The signatures in `approvalsAfterNext` are provided by current block producers by signing the approval message.
 
 ```typescript
-function (LightClientBlockView) currentBlockHash(): CryptoHash {
+function (LightClientBlock) currentBlockHash(): CryptoHash {
     return hash(concat(
         hash(concat(
           hash(borsh(self.innerLite)),
@@ -145,7 +146,7 @@ function (LightClientBlockView) currentBlockHash(): CryptoHash {
     ))
 }
 
-function (LightClientBlockView) nextBlockHash(): CryptoHash {
+function (LightClientBlock) nextBlockHash(): CryptoHash {
     return hash(
         concat(self.nextBlockInnerHash,
         self.currentBlockHash()
@@ -157,7 +158,7 @@ enum ApprovalInner {
     Skip(uint64)
 }
 
-function (LightClientBlockView) approvalMessage(): []byte {
+function (LightClientBlock) approvalMessage(): []byte {
     return concat(
         borsh(ApprovalInner::Endorsement(self.nextBlockHash())),
         littleEndian(self.innerLite.height + 2)
@@ -165,11 +166,30 @@ function (LightClientBlockView) approvalMessage(): []byte {
 }
 ```
 
+We also defines the `CommitmentRoot` of `Header` as:
+
+```typescript
+function (Header) commitmentRoot(): CryptoHash {
+    return self.lightClientBlock.innerLite.prevStateRoot
+}
+```
+
 Header implements `ClientMessage` interface.
 
 ### Misbehaviour
 
-TBD (currently not applicable in NEAR protocol)
+The `Misbehaviour` type is used for detecting misbehaviour and freezing the client - to prevent further packet flow - if applicable.
+The NEAR client `Misbehaviour` consists of two headers at the same height both of which the light client would have considered valid.
+
+```typescript
+interface Misbehaviour {
+    identifier: string
+    header1: Header
+    header2: Header
+}
+```
+
+> As the slashing policy is NOT applicable in NEAR protocol for now, this section is only for references.
 
 ### Client initialisation
 
@@ -177,7 +197,7 @@ The NEAR client initialisation requires a latest consensus state (the latest hea
 
 ```typescript
 function (Header) getHeight(): Height {
-    return self.lightClientBlockView.innerLite.height
+    return self.lightClientBlock.innerLite.height
 }
 
 function initialise(
@@ -193,11 +213,12 @@ function initialise(
     height = Height {
         height: consensusState.header.getHeight()
     }
-    set("clients/{identifier}/consensusStates/{height}", consensusState)
+    set("clients/{identifier}/consensusStates/{consensusState.header.getHeight()}", consensusState)
     return ClientState {
         trustingPeriod
         latestHeight: height
         latestTimestamp
+        frozenHeight: null
         upgradeCommitmentPrefix
         upgradeKey
     }
@@ -221,19 +242,18 @@ Verify validity of regular update to the NEAR client
 
 ```typescript
 function (Header) getEpochId(): CryptoHash {
-    return self.lightClientBlockView.innerLite.epochId
+    return self.lightClientBlock.innerLite.epochId
 }
 
 function (Header) getNextEpochId(): CryptoHash {
-    return self.lightClientBlockView.innerLite.nextEpochId
+    return self.lightClientBlock.innerLite.nextEpochId
 }
 
-function (ClientState) getBlockProducersOf(epochId: CryptoHash): List<ValidatorStakeView> {
-    consensusState = get("clients/{clientMessage.identifier}/consensusStates/{self.latestHeight}")
-    if epochId === consensusState.header.getEpochId() {
-        return consensusState.currentBps
-    } else if epochId === consensusState.header.getNextEpochId() {
-        return consensusState.header.lightClientBlockView.nextBps
+function (ConsensusState) getBlockProducersOf(epochId: CryptoHash): List<ValidatorStakeView> {
+    if epochId === self.header.getEpochId() {
+        return self.currentBps
+    } else if epochId === self.header.getNextEpochId() {
+        return self.header.lightClientBlock.nextBps
     } else {
         return null
     }
@@ -243,7 +263,7 @@ function verifyHeader(header: Header) {
     clientState = get("clients/{clientMessage.identifier}/clientState")
 
     latestHeader = clientState.getLatestHeader()
-    approvalMessage = header.lightClientBlockView.approvalMessage()
+    approvalMessage = header.lightClientBlock.approvalMessage()
 
     // (1) The height of the block is higher than the height of the current head.
     assert(clientState.latestHeight < header.getHeight())
@@ -256,7 +276,7 @@ function verifyHeader(header: Header) {
     // (3) If the epoch of the block is equal to the nextEpochId of the head,
     //     then nextBps is not null.
     assert(not(header.getEpochId() == latestHeader.getNextEpochId()
-        && header.lightClientBlockView.nextBps === null))
+        && header.lightClientBlock.nextBps === null))
 
     // (4) approvalsAfterNext contain valid signatures on approvalMessage
     //     from the block producers of the corresponding epoch.
@@ -267,7 +287,7 @@ function verifyHeader(header: Header) {
 
     epochBlockProducers = clientState.getBlockProducersOf(header.getEpochId())
     for maybeSignature, blockProducer in
-      zip(header.lightClientBlockView.approvalsAfterNext, epochBlockProducers) {
+      zip(header.lightClientBlock.approvalsAfterNext, epochBlockProducers) {
         totalStake += blockProducer.stake
 
         if maybeSignature === null {
@@ -283,24 +303,69 @@ function verifyHeader(header: Header) {
         ))
     }
 
-    threshold = totalStake * 2 / 3
-    assert(approvedStake > threshold)
+    assert(approvedStake * 3 > totalStake * 2)
 
     // (6) If nextBps is not none, hash(borsh(nextBps)) corresponds to the nextBpHash in innerLite
-    if header.lightClientBlockView.nextBps !== null {
-        assert(hash(borsh(header.lightClientBlockView.nextBps))
-            === header.lightClientBlockView.innerLite.nextBpHash)
+    if header.lightClientBlock.nextBps !== null {
+        assert(hash(borsh(header.lightClientBlock.nextBps))
+            === header.lightClientBlock.innerLite.nextBpHash)
     }
 
     // (7) Check the prevStateRoot is the root of merklized prevStateRootOfChunks
-    assert(header.lightClientBlockView.innerLite.prevStateRoot
+    assert(header.lightClientBlock.innerLite.prevStateRoot
         === merklize(header.prevStateRootOfChunks).root)
 }
 ```
 
 ### Misbehaviour Predicate
 
-TBD (currently not applicable in NEAR protocol)
+CheckForMisbehaviour will check if an update contains evidence of Misbehaviour. If the `ClientMessage` is a header we check for implicit evidence of misbehaviour by checking if there already exists a conflicting consensus state in the store or if the header breaks time monotonicity.
+
+```typescript
+function (Header) timestamp(): uint64 {
+    return self.lightClientBlock.innerLite.timestamp
+}
+
+function (ConsensusState) timestamp(): uint64 {
+    return self.header.lightClientBlock.innerLite.timestamp
+}
+
+function checkForMisbehaviour(
+  clientMsg: clientMessage) => bool {
+    clientState = get("clients/{clientMsg.identifier}/clientState")
+    switch typeof(clientMsg) {
+        case Header:
+            // fetch consensusstate at header height if it exists
+            consensusState = get("clients/{clientMsg.identifier}/consensusStates/{header.getHeight()}")
+            // if consensus state exists and conflicts with the header
+            // then the header is evidence of misbehaviour
+            if consensusState != nil
+              && consensusState.header.commitmentRoot() != header.commitmentRoot() {
+                return true
+            }
+
+            // check for time monotonicity misbehaviour
+            // if header is not monotonically increasing with respect to neighboring consensus states
+            // then return true
+            // NOTE: implementation must have ability to iterate ascending/descending by height
+            prevConsState = getPreviousConsensusState(header.getHeight())
+            nextConsState = getNextConsensusState(header.getHeight())
+            if prevConsState.timestamp() >= header.timestamp() {
+                return true
+            }
+            if nextConsState != nil && nextConsState.timestamp() <= header.timestamp() {
+                return true
+            }
+        case Misbehaviour:
+            // assert that the heights are the same
+            assert(misbehaviour.header1.getHeight() === misbehaviour.header2.getHeight())
+            // assert that the commitments are different
+            assert(misbehaviour.header1.commitmentRoot() !== misbehaviour.header2.commitmentRoot())
+    }
+}
+```
+
+> As the slashing policy is NOT applicable in NEAR protocol for now, this section is only for references.
 
 ### UpdateState
 
@@ -309,10 +374,12 @@ UpdateState will perform a regular update for the NEAR client. It will add a con
 ```typescript
 function updateState(clientMessage: clientMessage) {
     clientState = get("clients/{clientMessage.identifier}/clientState")
-    header = Header(clientMessage)
+    consensusState = get("clients/{clientMessage.identifier}/consensusStates/{clientState.latestHeight}")
+
+    header = clientMessage.getHeader()
     // only update the clientstate if the header height is higher
     // than clientState latest height
-    if clientState.height < header.getHeight() {
+    if clientState.latestHeight < header.getHeight() {
         // update latest height
         clientState.latestHeight = header.getHeight()
 
@@ -320,16 +387,35 @@ function updateState(clientMessage: clientMessage) {
         set("clients/{clientMessage.identifier}/clientState", clientState)
     }
 
-    currentBps = clientState.getBlockProducersOf(header.getEpochId())
+    currentBps = consensusState.getBlockProducersOf(header.getEpochId())
     // create recorded consensus state, save it
-    consensusState = ConsensusState { currentBps, header }
-    set("clients/{clientMessage.identifier}/consensusStates/{header.getHeight()}", consensusState)
+    newConsensusState = ConsensusState { currentBps, header }
+    set("clients/{clientMessage.identifier}/consensusStates/{header.getHeight()}", newConsensusState)
 }
 ```
 
 ### UpdateStateOnMisbehaviour
 
-TBD (currently not applicable in NEAR protocol)
+UpdateStateOnMisbehaviour will set the frozen height to a non-zero sentinel height to freeze the entire client.
+
+```typescript
+function updateStateOnMisbehaviour(clientMsg: clientMessage) {
+    clientState = get("clients/{clientMsg.identifier}/clientState")
+    if checkForMisbehaviour(clientMsg) === true {
+        switch typeof(clientMsg) {
+            case Header:
+                prevConsState = getPreviousConsensusState(header.getHeight())
+                clientState.frozenHeight = prevConsState.header.getHeight()
+            case Misbehaviour:
+                prevConsState = getPreviousConsensusState(clientMessage.header1.getHeight())
+                clientState.frozenHeight = prevConsState.header.getHeight()
+        }
+    }
+    set("clients/{clientMsg.identifier}/clientState", clientState)
+}
+```
+
+> As the slashing policy is NOT applicable in NEAR protocol for now, this section is only for references.
 
 ### Upgrades
 
@@ -363,7 +449,7 @@ function upgradeClientState(
 
 ### State verification functions
 
-The NEAR client state verification functions check a MPT (Merkle Patricia Tree) proof against a previously validated consensus state.
+The NEAR client state verification functions check a MPT (Merkle Patricia Tree) proof against a previously validated consensus state. The client should provide both membership verification and non-membership verification.
 
 ```typescript
 function (ConsensusState) verifyMembership(
