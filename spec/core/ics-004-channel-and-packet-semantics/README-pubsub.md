@@ -70,7 +70,13 @@ function broadcastChanOpen(
     abortTransactionUnless(provableStore.get(channelPath(portIdentifier, channelIdentifier)) === null)
 
     abortTransactionUnless(authenticateCapability(portPath(portIdentifier), portCapability))
-    channel = ChannelEnd{OPEN, order, "", "", "", version}
+    channel = ChannelEnd{state: OPEN,
+                         ordering: order,
+                         counterpartyPortIdentifier: "",
+                         counterpartyChannelIdentifier: "",
+                         connectionHops: "",
+                         version: version}
+
     provableStore.set(channelPath(portIdentifier, channelIdentifier), channel)
     channelCapability = newCapability(channelCapabilityPath(portIdentifier, channelIdentifier))
     provableStore.set(nextSequenceSendPath(portIdentifier, channelIdentifier), 1)
@@ -101,7 +107,12 @@ function broadcastChanSubscribe(
     connection = provableStore.get(connectionPath(connectionHops[0]))
     abortTransactionUnless(connection !== null)
     abortTransactionUnless(connection.state === OPEN)
-    expected = ChannelEnd{OPEN, order, "", "", "", counterpartyVersion}
+    expected = ChannelEnd{state: OPEN,
+                         ordering: order,
+                         counterpartyPortIdentifier: "",
+                         counterpartyChannelIdentifier: "",
+                         connectionHops: "",
+                         version: counterpartyVersion}
     abortTransactionUnless(connection.verifyChannelState(
       proofHeight,
       proofInit,
@@ -109,8 +120,13 @@ function broadcastChanSubscribe(
       counterpartyChannelIdentifier,
       expected
     ))
-    channel = ChannelEnd{OPEN, order, counterpartyPortIdentifier,
-                         counterpartyChannelIdentifier, connectionHops, version}
+    channel = ChannelEnd{state: OPEN,
+                         ordering: order,
+                         counterpartyPortIdentifier: counterpartyPortIdentifier,
+                         counterpartyChannelIdentifier: counterpartyChannelIdentifier,
+                         connectionHops: connectionHops,
+                         version: version}
+    
     provableStore.set(channelPath(portIdentifier, channelIdentifier), channel)
     channelCapability = newCapability(channelCapabilityPath(portIdentifier, channelIdentifier))
 
