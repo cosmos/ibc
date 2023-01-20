@@ -189,7 +189,7 @@ function broadcastPacket(
     sequence = provableStore.get(nextSequenceSendPath(packet.sourcePort, packet.sourceChannel))
     provableStore.set(nextSequenceSendPath(packet.sourcePort, packet.sourceChannel), sequence+1)
 
-    // store commitment to the packet data & packet timeout
+    // store commitment to the packet data
     provableStore.set(
       packetCommitmentPath(sourcePort, sourceChannel, sequence),
       hash(data)
