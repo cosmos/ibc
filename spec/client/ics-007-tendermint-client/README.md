@@ -116,14 +116,15 @@ This is designed to allow the height to reset to `0` while the revision number i
 
 ### Headers
 
-The Tendermint headers include the height, the timestamp, the commitment root, the hash of the validator set, and the signatures by the validators who committed the block. The header submitted to the on-chain client also includes the entire validator set, and a trusted height and validator set to update from. This reduces the amount of state maintained by the on-chain client and prevents race conditions on relayer updates.
+The Tendermint headers include the height, the timestamp, the commitment root, the hash of the validator set, the hash of the next validator set, and the signatures by the validators who committed the block. The header submitted to the on-chain client also includes the entire validator set, and a trusted height and validator set to update from. This reduces the amount of state maintained by the on-chain client and prevents race conditions on relayer updates.
 
 ```typescript
 interface TendermintSignedHeader {
   height: uint64
   timestamp: uint64
   commitmentRoot: []byte
-  validatorHash: []byte
+  validatorsHash: []byte
+  nextValidatorsHash: []byte
   signatures: []Signature
 }
 ```
@@ -306,7 +307,7 @@ function updateState(
     }
 
     // create recorded consensus state, save it
-    consensusState = ConsensusState{header.timestamp, header.validatorSet, header.commitmentRoot}
+    consensusState = ConsensusState{header.timestamp, header.nextValidatorsHash, header.commitmentRoot}
     set("clients/{clientMsg.identifier}/consensusStates/{header.GetHeight()}", consensusState)
     // these may be stored as private metadata within the client in order to verify
     // that the delay period has passed in proof verification
