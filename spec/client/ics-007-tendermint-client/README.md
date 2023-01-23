@@ -76,12 +76,12 @@ interface ClientState {
 
 ### Consensus state
 
-The Tendermint client tracks the timestamp (block time), validator set, and commitment root for all previously verified consensus states (these can be pruned after the unbonding period has passed, but should not be pruned beforehand).
+The Tendermint client tracks the timestamp (block time), the hash of the next validator set, and commitment root for all previously verified consensus states (these can be pruned after the unbonding period has passed, but should not be pruned beforehand).
 
 ```typescript
 interface ConsensusState {
   timestamp: uint64
-  validatorSet: List<Pair<Address, uint64>>
+  nextValidatorsHash: []byte
   commitmentRoot: []byte
 }
 ```
@@ -225,7 +225,7 @@ function verifyHeader(header: Header) {
     // assert trusting period has not yet passed
     assert(currentTimestamp() - clientState.latestTimestamp < clientState.trustingPeriod)
     // assert header timestamp is less than trust period in the future. This should be resolved with an intermediate header.
-    assert(header.timestamp - clientState.latestTimeStamp < trustingPeriod)
+    assert(header.timestamp - clientState.latestTimeStamp < clientState.trustingPeriod)
     // trusted height revision must be the same as header revision
     // if revisions are different, use upgrade client instead
     // trusted height must be less than header height
