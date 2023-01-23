@@ -38,6 +38,20 @@ On `SendPacket`, the execution flow goes from the base application to the top la
 
 On `ReceivePacket`, the middleware must process its own packet data, and then pass the `app_packet_data` to the underlying application. It may also choose to use the `app_packet_data` as part of its logic execution if it knows how to unmarshal the underlying data.
 
+Since the `OnRecvPacket` callback expects the full packet to be passed in, the packet data must be mutated like so:
+
+```typescript
+packetData = unmarshal(packet.data)
+
+// do whatever logic with middleware packet data
+handleMiddlewareData(packetData.MiddlewareData)
+
+// reassign packet data bytes before passing packet to next handler
+packet.Data = packetData.AppPacketData
+
+return im.app.OnRecvPacket(ctx, packet, relayer)
+```
+
 The state machine must provide a way for users to pass in input data that can be marshalled into the full nested packet data. This will enable users to send data not just to the base application but also to higher-level middleware(s). Since this is state-machine specific, it will not be specified here.
 
 ## Acknowledgement Structuring For Middleware
