@@ -331,7 +331,6 @@ function chanOpenTry(
   order: ChannelOrder,
   connectionHops: [Identifier],
   portIdentifier: Identifier,
-  counterpartyChosenChannelIdentifer: Identifier,
   counterpartyPortIdentifier: Identifier,
   counterpartyChannelIdentifier: Identifier,
   version: string,
@@ -561,20 +560,20 @@ function sendPacket(
     abortTransactionUnless(authenticateCapability(channelCapabilityPath(sourcePort, sourceChannel), capability))
 
     // disallow packets with a zero timeoutHeight and timeoutTimestamp
-    abortTransactionUnless(packet.timeoutHeight !== 0 || packet.timeoutTimestamp !== 0)
+    abortTransactionUnless(timeoutHeight !== 0 || timeoutTimestamp !== 0)
     
     // check that the timeout height hasn't already passed in the local client tracking the receiving chain
     latestClientHeight = provableStore.get(clientPath(connection.clientIdentifier)).latestClientHeight()
-    abortTransactionUnless(packet.timeoutHeight === 0 || latestClientHeight < packet.timeoutHeight)
+    abortTransactionUnless(timeoutHeight === 0 || latestClientHeight < timeoutHeight)
 
     // increment the send sequence counter
-    sequence = provableStore.get(nextSequenceSendPath(packet.sourcePort, packet.sourceChannel))
-    provableStore.set(nextSequenceSendPath(packet.sourcePort, packet.sourceChannel), sequence+1)
+    sequence = provableStore.get(nextSequenceSendPath(sourcePort, sourceChannel))
+    provableStore.set(nextSequenceSendPath(sourcePort, sourceChannel), sequence+1)
 
     // store commitment to the packet data & packet timeout
     provableStore.set(
       packetCommitmentPath(sourcePort, sourceChannel, sequence),
-      hash(data, timeoutHeight, timeoutTimestamp)
+      hash(hash(data), timeoutHeight, timeoutTimestamp)
     )
 
     // log that a packet can be safely sent
@@ -615,6 +614,7 @@ function recvPacket(
     abortTransactionUnless(packet.sourcePort === channel.counterpartyPortIdentifier)
     abortTransactionUnless(packet.sourceChannel === channel.counterpartyChannelIdentifier)
 
+    connection = provableStore.get(connectionPath(channel.connectionHops[0]))
     abortTransactionUnless(connection !== null)
     abortTransactionUnless(connection.state === OPEN)
 
@@ -624,7 +624,7 @@ function recvPacket(
       packet.sourcePort,
       packet.sourceChannel,
       packet.sequence,
-      concat(packet.data, packet.timeoutHeight, packet.timeoutTimestamp)
+      hash(packet.data, packet.timeoutHeight, packet.timeoutTimestamp)
     ))
 
     // do sequence check before any state changes
@@ -704,10 +704,10 @@ function recvPacket(
           })
         }
 
-        abortTransactionUnless(packetRecepit === null))
+        abortTransactionUnless(packetReceipt === null))
         provableStore.set(
           packetReceiptPath(packet.destPort, packet.destChannel, packet.sequence),
-          SUCCESFUL_RECEIPT
+          SUCCESSFUL_RECEIPT
         )
       break;
     }
