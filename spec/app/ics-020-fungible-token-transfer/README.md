@@ -325,7 +325,7 @@ function onTimeoutPacketClose(packet: Packet) {
 }
 ```
 
-### Using the Memo Field
+#### Using the Memo Field
 
 Note: Since earlier versions of this specification did not include a `memo` field, implementations must ensure that the new packet data is still compatible with chains that expect the old packet data. A legacy implementation MUST be able to unmarshal a new packet data with an empty string memo into the legacy `FungibleTokenPacketData` struct. Similarly, an implementation supporting `memo` must be able to unmarshal a legacy packet data into the current struct with the `memo` field set to the empty string.
 
