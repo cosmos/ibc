@@ -404,6 +404,8 @@ Feb 24, 2020 - Revisions to infer source field, inclusion of version string
 
 July 27, 2020 - Re-addition of source field
 
+Nov 11, 2022 - Addition of a memo field
+
 ## Copyright
 
 All content herein is licensed under [Apache 2.0](https://www.apache.org/licenses/LICENSE-2.0).
