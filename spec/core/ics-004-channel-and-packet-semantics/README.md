@@ -573,7 +573,7 @@ function sendPacket(
     // store commitment to the packet data & packet timeout
     provableStore.set(
       packetCommitmentPath(sourcePort, sourceChannel, sequence),
-      hash(data, timeoutHeight, timeoutTimestamp)
+      hash(hash(data), timeoutHeight, timeoutTimestamp)
     )
 
     // log that a packet can be safely sent
