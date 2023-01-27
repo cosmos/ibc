@@ -223,7 +223,7 @@ function validateSelfClient(counterpartyClientState: ClientState) {
   }
 
   // assert that the counterparty client has a height less than the host height
-  if counterpartyClientState.latestHeight >== hostClientState.latestHeight {
+  if counterpartyClientState.latestHeight >= hostClientState.latestHeight {
     return false
   }
 

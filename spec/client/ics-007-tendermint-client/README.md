@@ -281,6 +281,9 @@ function checkForMisbehaviour(
           return true
         }
       case Misbehaviour:
+        if (misbehaviour.h1.height < misbehaviour.h2.height) {
+          return false
+        }
         // if heights are equal check that this is valid misbehaviour of a fork
         if (misbehaviour.h1.height === misbehaviour.h2.height && misbehaviour.h1.commitmentRoot !== misbehaviour.h2.commitmentRoot) {
           return true
