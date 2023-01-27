@@ -89,7 +89,7 @@ interface ICS4Wrapper {
       sourceChannel: Identifier,
       timeoutHeight: Height,
       timeoutTimestamp: uint64,
-      data: bytes)
+      data: bytes): uint64
     writeAcknowledgement(packet: Packet, ack: Acknowledgement)
 }
 ```
@@ -320,7 +320,7 @@ function sendPacket(
   sourceChannel: Identifier,
   timeoutHeight: Height,
   timeoutTimestamp: uint64,
-  app_data: bytes) {
+  app_data: bytes): uint64 {
     // middleware may modify packet
     data = doCustomLogic(app_data)
 

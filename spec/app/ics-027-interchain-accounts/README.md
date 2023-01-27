@@ -77,7 +77,7 @@ function SendTx(
   connectionId: Identifier,
   portId: Identifier, 
   icaPacketData: InterchainAccountPacketData, 
-  timeoutTimestamp uint64) {
+  timeoutTimestamp uint64): uint64 {
     // check if there is a currently active channel for
     // this portId and connectionId, which also implies an 
     // interchain account has been registered using 
@@ -93,7 +93,7 @@ function SendTx(
     abortTransactionUnless(icaPacketData.data != nil)
 
     // send icaPacketData to the host chain on the active channel
-    handler.sendPacket(
+    sequence = handler.sendPacket(
       capability,
       portId, // source port ID
       activeChannelID, // source channel ID 
@@ -101,6 +101,8 @@ function SendTx(
       timeoutTimestamp,
       icaPacketData
     )
+
+    return sequence
 }
 ```
 
