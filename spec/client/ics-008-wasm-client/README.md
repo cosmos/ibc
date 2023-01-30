@@ -55,6 +55,24 @@ This specification must satisfy the client interface defined in ICS 2.
 
 This specification depends on the correct instantiation of the `WASM client` and is decoupled from any specific implementation of the target `blockchain` consensus algorithm.
 
+### Storage management
+
+Light client operations defined in the `02-client` spec are not always stateless. For that, there is a need
+to allow the underlying light client implementation to access client and consensus data structures, and after
+performing certain computations, to update the storage with the new versions of them.
+
+The current implementation chooses to receive the updated value from the wasm module directly, and persist
+it into the storage at the `08-wasm` level. Alternatively, this could be delegated to the wasm implementation
+directly.
+
+### WASM VM
+
+The purpose of this module is to delegate light client logic to a module written in wasm. For that,
+the `08-wasm` module needs to have a reference (or a handler) to a wasm VM. At a higher level, the
+[wasmd](https://github.com/CosmWasm/wasmd) module can be used for the aforementioned operation. Alternatively,
+this module can directly call the [wasmvm](https://github.com/CosmWasm/wasmvm), to interact with
+the VM with less overhead.
+
 ### Client state
 
 The Wasm client state tracks the location of the Wasm bytecode via `codeHash`. Binary data represented by `data` field is opaque and only interpreted by the Wasm Client Code. `type` represents client type.
