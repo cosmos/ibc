@@ -21,7 +21,7 @@ Currently adding a new client implementation or upgrading an existing one requir
 
 This may be acceptable when adding new client types since the number of unique consensus algorithms that need to be supported is currently small. However, this process will become very tedious when it comes to upgrading light clients.
 
-Without dynamically upgradable light clients, a chain that wishes to upgrade its consensus algorithm (and thus break existing light clients) must wait for all counterparty chains to perform a hard upgrade that adds support for the upgraded light client before it itself can perform an upgrade on its chain. Examples of a consensus-breaking upgrade would be an upgrade from Tendermint v1 to a light-client breaking Tendermint v2 or switching from Tendermint consensus to Honeybadger. Changes to the internal state-machine logic will not affect consensus, e.g. changes to staking module do not require an IBC upgrade.
+Without dynamically upgradable light clients, a chain that wishes to upgrade its consensus algorithm (and thus break existing light clients) must wait for all counterparty chains to perform a hard upgrade that adds support for the upgraded light client before it can perform an upgrade on its chain. Examples of a consensus-breaking upgrade would be an upgrade from Tendermint v1 to a light-client breaking Tendermint v2 or switching from Tendermint consensus to Honeybadger. Changes to the internal state-machine logic will not affect consensus, e.g. changes to the staking module do not require an IBC upgrade.
 
 Requiring all counterparties to statically add new client implementations to their binaries will inevitably slow the pace of upgrades in the IBC network since the deployment of an upgrade on even a very experimental, fast-moving chain will be blocked by an upgrade to a high-value chain that will be inherently more conservative.
 
@@ -57,9 +57,10 @@ This specification depends on the correct instantiation of the `WASM client` and
 
 ### Storage management
 
-Light client operations defined in the `02-client` spec are not always stateless. For that, there is a need
-to allow the underlying light client implementation to access client and consensus data structures, and after
-performing certain computations, to update the storage with the new versions of them.
+Light client operations defined in the `02-client` can be stateful, that is, they may modify the
+state kept in storage. For that, there is a need to allow the underlying light client implementation
+to access client and consensus data structures, and after performing certain computations, to
+update the storage with the new versions of them.
 
 The current implementation chooses to receive the updated value from the wasm module directly, and persist
 it into the storage at the `08-wasm` level. Alternatively, this could be delegated to the wasm implementation
@@ -72,6 +73,48 @@ the `08-wasm` module needs to have a reference (or a handler) to a wasm VM. At a
 [wasmd](https://github.com/CosmWasm/wasmd) module can be used for the aforementioned operation. Alternatively,
 this module can directly call the [wasmvm](https://github.com/CosmWasm/wasmvm), to interact with
 the VM with less overhead.
+
+
+### Gas Costs
+
+
+```typescript
+const GasMultiplier uint64 = 100
+const maxGasLimit = uint64(0x7FFFFFFFFFFFFFFF)
+```
+
+```typescript
+  function consumeGas(ctx: sdk.Context, gas: uint64) {
+  let consumed := gas / GasMultiplier
+  ctx.GasMeter().ConsumeGas(consumed, "wasm contract")
+  // throw OutOfGas error if we ran out (got exactly to zero due to better limit enforcing)
+  if ctx.GasMeter().IsOutOfGas() {
+    // returns an out of gas error - panics?
+    // TODO: ask what's the best thing to do here
+  }
+}
+```
+
+### Calling a contract
+
+```go
+// Calls vm.Execute with internally constructed Gas meter and environment
+// TODO: Move this into a public method on the 28-wasm keeper
+func callContract(codeID []byte, ctx sdk.Context, store sdk.KVStore, msg []byte) (*types.Response, error) {}
+```
+
+```typescript
+function (codeID: cosmwasm.Checksum, ctx: sdk.Context, store: sdk.KVStore, env: types.Env, gasMeter: sdk.GasMeter, msg: []byte) [*types.Response, error] {
+  let msgInfo = createMsgInfo{
+    Sender: "",
+    Funds:  nil,
+  };
+  let [resp, gasUsed, err] = executeVM(codeID, env, msgInfo, msg, store, gasMeter, gasMeter.Limit());
+  consumeGas(ctx, gasUsed);
+  return [resp, err]
+}
+```
+
 
 ### Client state
 
