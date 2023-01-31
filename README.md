@@ -53,7 +53,7 @@ All standards at or past the "Draft" stage are listed here in order of their ICS
 
 | Interchain Standard Number                                       | Standard Title             | Stage | Implementations |
 | ---------------------------------------------------------------- | -------------------------- | ----- | --------------- |
-| [18](spec/relayer/ics-018-relayer-algorithms/README.md)          | Relayer Algorithms         | Finalised | [go-relayer](https://github.com/cosmos/relayer), [rust-relayer](https://github.com/informalsystems/ibc-rs), [ts-relayer](https://github.com/confio/ts-relayer) |
+| [18](spec/relayer/ics-018-relayer-algorithms/README.md)          | Relayer Algorithms         | Finalized | [go-relayer](https://github.com/cosmos/relayer), [rust-relayer](https://github.com/informalsystems/ibc-rs), [ts-relayer](https://github.com/confio/ts-relayer) |
 
 ### App
 
@@ -62,10 +62,10 @@ All standards at or past the "Draft" stage are listed here in order of their ICS
 | [20](spec/app/ics-020-fungible-token-transfer/README.md) | Fungible Token Transfer | Candidate | [ibc-go](https://github.com/cosmos/ibc-go/tree/main/modules/apps/transfer) |
 | [27](spec/app/ics-027-interchain-accounts/README.md)     | Interchain Accounts     | Candidate | [ibc-go](https://github.com/cosmos/ibc-go/tree/main/modules/apps/27-interchain-accounts) |
 | [28](spec/app/ics-028-cross-chain-validation/README.md)  | Cross-Chain Validation  | Draft | |
-| [29](spec/app/ics-029-fee-payment) | General Relayer Incentivisation Mechanism | Candidate | [ibc-go](https://github.com/cosmos/ibc-go/tree/main/modules/apps/29-fee) |
+| [29](spec/app/ics-029-fee-payment) | General Relayer Incentivization Mechanism | Candidate | [ibc-go](https://github.com/cosmos/ibc-go/tree/main/modules/apps/29-fee) |
 | [30](spec/app/ics-030-middleware) | IBC Application Middleware | N/A | N/A |
 | [31](spec/app/ics-031-crosschain-queries) | Cross-Chain Queries | Draft | N/A |
-| [32](spec/app/ics-032-interchain-queries) | Interchain Queries | Draft | [ibc-go](https://github.com/strangelove-ventures/ibc-go/tree/icq_implementation/modules/apps/32-icq) <!-- Link will need to be updated -->
+| [32](https://github.com/strangelove-ventures/async-icq) | Interchain Queries | Candidate (Outsourced) | |
 | [721](spec/app/ics-721-nft-transfer) | Non-Fungible Token Transfer | Candidate | [bianjieai](https://github.com/bianjieai/ibc-go/tree/ics-721-nft-transfer) |
 
 ## Translations
