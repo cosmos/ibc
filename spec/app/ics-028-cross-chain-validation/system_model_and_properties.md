@@ -250,7 +250,7 @@ The following properties define the guarantees of CCV on *registering* on the pr
   - if `vscId = 0`, `h` is the height of the block when the provider chain established a CCV channel to `cc`;
   - otherwise, `h` is the height of the block immediately subsequent to the block when the provider chain provided to `cc` the VSC with ID `vscId`.
   
-  Furthermore, the provider CCV module MUST make this request before registering any maturity notifications received from `cc` after the `SlashPacket`.
+  Furthermore, the provider CCV module MUST make this slash request before registering any maturity notifications received from `cc` after the `SlashPacket`.
 
 - ***VSC Maturity and Slashing Order***: If a consumer chain sends to the provider chain a `SlashPacket` before a maturity notification of a VSC, then the provider chain MUST NOT receive the maturity notification before the `SlashPacket`.
   > **Note**: *VSC Maturity and Slashing Order* requires the VSC maturity notifications to be sent through their own IBC packets (i.e., `VSCMaturedPacket`s) instead of e.g., through acknowledgements of `VSCPacket`s. 
