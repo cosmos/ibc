@@ -76,12 +76,12 @@ interface ClientState {
 
 ### Consensus state
 
-The Tendermint client tracks the timestamp (block time), validator set, and commitment root for all previously verified consensus states (these can be pruned after the unbonding period has passed, but should not be pruned beforehand).
+The Tendermint client tracks the timestamp (block time), the hash of the next validator set, and commitment root for all previously verified consensus states (these can be pruned after the unbonding period has passed, but should not be pruned beforehand).
 
 ```typescript
 interface ConsensusState {
   timestamp: uint64
-  validatorSet: List<Pair<Address, uint64>>
+  nextValidatorsHash: []byte
   commitmentRoot: []byte
 }
 ```
@@ -116,14 +116,15 @@ This is designed to allow the height to reset to `0` while the revision number i
 
 ### Headers
 
-The Tendermint headers include the height, the timestamp, the commitment root, the hash of the validator set, and the signatures by the validators who committed the block. The header submitted to the on-chain client also includes the entire validator set, and a trusted height and validator set to update from. This reduces the amount of state maintained by the on-chain client and prevents race conditions on relayer updates.
+The Tendermint headers include the height, the timestamp, the commitment root, the hash of the validator set, the hash of the next validator set, and the signatures by the validators who committed the block. The header submitted to the on-chain client also includes the entire validator set, and a trusted height and validator set to update from. This reduces the amount of state maintained by the on-chain client and prevents race conditions on relayer updates.
 
 ```typescript
 interface TendermintSignedHeader {
   height: uint64
   timestamp: uint64
   commitmentRoot: []byte
-  validatorHash: []byte
+  validatorsHash: []byte
+  nextValidatorsHash: []byte
   signatures: []Signature
 }
 ```
@@ -223,7 +224,7 @@ function verifyHeader(header: Header) {
     // assert trusting period has not yet passed
     assert(currentTimestamp() - clientState.latestTimestamp < clientState.trustingPeriod)
     // assert header timestamp is less than trust period in the future. This should be resolved with an intermediate header.
-    assert(header.timestamp - clientState.latestTimeStamp < trustingPeriod)
+    assert(header.timestamp - clientState.latestTimeStamp < clientState.trustingPeriod)
     // trusted height revision must be the same as header revision
     // if revisions are different, use upgrade client instead
     // trusted height must be less than header height
@@ -318,8 +319,9 @@ function updateState(
     }
 
     // create recorded consensus state, save it
-    consensusState = ConsensusState{header.timestamp, header.validatorSet, header.commitmentRoot}
+    consensusState = ConsensusState{header.timestamp, header.nextValidatorsHash, header.commitmentRoot}
     provableStore.set("clients/{clientMsg.identifier}/consensusStates/{header.GetHeight()}", consensusState)
+
     // these may be stored as private metadata within the client in order to verify
     // that the delay period has passed in proof verification
     provableStore.set("clients/{clientMsg.identifier}/processedTimes/{header.GetHeight()}", currentTimestamp())
