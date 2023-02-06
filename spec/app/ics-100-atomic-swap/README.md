@@ -18,9 +18,7 @@ This standard document specifies packet data structure, state machine handling l
 
 Users may wish to exchange tokens without transferring tokens away from their native chain. ICS-100 enabled chains can facilitate atomic swaps between users and their tokens located on the different chains. This is useful for exchanges between specific users at specific prices, and opens opportunities for new application designs.
 
-For example, a token exchange would require only one transaction from an user, compared to multiple transactions when using ICS-20.
-
-Additionally, users can minimize trade slippage compared to using a liquidity pool, given there is a willing counter-party.
+For example, a token exchange would require only one transaction from an user, compared to multiple transactions when using ICS-20.  Additionally, users can minimize trade slippage compared to using a liquidity pool, given there is a willing counter-party.
 
 ### Definitions
 
