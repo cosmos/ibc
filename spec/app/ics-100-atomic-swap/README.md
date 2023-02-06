@@ -434,7 +434,7 @@ function sendAtomicSwapPacket(
 
 ```typescript
 function onRecvPacket(packet channeltypes.Packet) {
-  const swapPaket: AtomicSwapPacketData = packet.data
+  const swapPacket: AtomicSwapPacketData = packet.data
   
   AtomicSwapPacketAcknowledgement ack = AtomicSwapPacketAcknowledgement{true, null}
   
