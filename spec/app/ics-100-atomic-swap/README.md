@@ -216,7 +216,7 @@ The sub-protocols described herein should be implemented in a "Fungible Token Sw
 ```ts
 function makeSwap(request: MakeSwapMsg) {
   const balance = bank.getBalances(request.makerAddress)
-  abortTransactionUnless(balance.amount > request.sellToken.Amount)
+  abortTransactionUnless(balance.amount >= request.sellToken.Amount)
   // gets escrow address by source port and source channel
   const escrowAddr = escrowAddress(request.sourcePort, request.sourceChannel)
   // locks the sellToken to the escrow account
@@ -252,7 +252,7 @@ function takeSwap(request: TakeSwapMsg) {
   abortTransactionUnless(order.channelIdOnTakerChain === request.sourceChannel)
     
   const balance = bank.getBalances(request.takerAddress)
-  abortTransactionUnless(balance.amount > request.sellToken.amount)
+  abortTransactionUnless(balance.amount >= request.sellToken.amount)
   // gets the escrow address by source port and source channel
   const escrowAddr = escrowAddress(order.portIdOnTakerChain, order.channelIdOnTakerChain)
   // locks the sellToken to the escrow account
