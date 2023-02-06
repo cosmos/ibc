@@ -16,7 +16,7 @@ This standard document specifies packet data structure, state machine handling l
 
 ### Motivation
 
-Users may wish to exchange tokens without transfering tokens away from its native chain. ICS-100 enabled chains can facilitate atomic swaps between users and their tokens located on the different chains. This is useful for exchanges between specific users at specific prices, and opens opportunities for new application designs.
+Users may wish to exchange tokens without transferring tokens away from their native chain. ICS-100 enabled chains can facilitate atomic swaps between users and their tokens located on the different chains. This is useful for exchanges between specific users at specific prices, and opens opportunities for new application designs.
 
 ### Definitions
 
