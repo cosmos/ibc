@@ -220,7 +220,7 @@ function makeSwap(request: MakeSwapMsg) {
   // gets escrow address by source port and source channel
   const escrowAddr = escrowAddress(request.sourcePort, request.sourceChannel)
   // locks the sellToken to the escrow account
-  const err = bank.sendCoins(request.makerAddress, escrowAddr, request.sellToken)
+  const err = bank.sendCoins(request.makerAddress, escrowAddr, request.sellToken.amount, request.sellToken.denom)
   abortTransactionUnless(err === null)
   // contructs the IBC data packet
   const packet = {
@@ -256,7 +256,7 @@ function takeSwap(request: TakeSwapMsg) {
   // gets the escrow address by source port and source channel
   const escrowAddr = escrowAddress(order.portIdOnTakerChain, order.channelIdOnTakerChain)
   // locks the sellToken to the escrow account
-  const err = bank.sendCoins(request.takerAddress, escrowAddr, request.sellToken)
+  const err = bank.sendCoins(request.takerAddress, escrowAddr, request.sellToken.amount, request.sellToken.denom)
   abortTransactionUnless(err === null)
   // constructs the IBC data packet
   const packet = {
@@ -470,7 +470,7 @@ function onRecvPacket(packet channeltypes.Packet) {
     
       const escrowAddr = escrowAddress(order.portIdOnTakerChain, order.channelIdOnTakerChain)
       // send maker.sellToken to taker's receiving address
-      const err = bank.sendCoins(escrowAddr, takeMsg.takerReceivingAddress, order.maker.sellToken)
+      const err = bank.sendCoins(escrowAddr, takeMsg.takerReceivingAddress, order.maker.sellToken.amount, order.maker.sellToken.denom)
       if (err != null) {
         ack = AtomicSwapPacketAcknowledgement{false, "transfer coins failed"}
       }
@@ -535,7 +535,7 @@ function onAcknowledgePacket(
         const order = store.findOrderById(takeMsg.sourceChannel, takeMsg.orderId)
         
         // send tokens to maker
-        bank.sendCoins(escrowAddr, order.maker.makerReceivingAddress, takeMsg.sellToken)
+        bank.sendCoins(escrowAddr, order.maker.makerReceivingAddress, takeMsg.sellToken.amount, takeMsg.sellToken.denom)
         
         order.status = Status.COMPLETE
         order.taker = takeMsg
@@ -550,7 +550,7 @@ function onAcknowledgePacket(
         const order = store.findOrderById(cannelMsg.sourceChannel, cancelMsg.orderId)
         
         // send tokens back to maker
-        bank.sendCoins(escrowAddr, order.maker.makerAddress, order.maker.sellToken)
+        bank.sendCoins(escrowAddr, order.maker.makerAddress, order.maker.sellToken.amount, order.maker.sellToken.denom)
         
         // update state on maker chain
         order.status = Status.CANCEL
@@ -585,7 +585,7 @@ function refundTokens(packet: Packet) {
   switch swapPaket.type {
     case TYPE_MSG_MAKE_SWAP:
       const msg = protobuf.decode(swapPacket.data)
-      bank.sendCoins(escrowAddr, msg.makerAddress, msg.sellToken)
+      bank.sendCoins(escrowAddr, msg.makerAddress, msg.sellToken.amount, msg.sellToken.denom)
       const orderId = generateOrderId(msg)
       const order = store.findOrderById(packet.sourceChannel, orderId)
       order.status = Status.CANCEL
@@ -593,7 +593,7 @@ function refundTokens(packet: Packet) {
       break;
     case TYPE_MSG_TAKE_SWAP:
       const msg = protobuf.decode(swapPacket.data)
-      bank.sendCoins(escrowAddr, msg.takerAddress, msg.sellToken)
+      bank.sendCoins(escrowAddr, msg.takerAddress, msg.sellToken.amount, msg.sellToken.denom)
       const order = store.findOrderById(packet.sourceChannel, msg.orderId)
       order.taker = null // release the occupation
       store.save(order)
