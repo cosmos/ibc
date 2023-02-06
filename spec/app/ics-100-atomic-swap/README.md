@@ -438,7 +438,7 @@ function onRecvPacket(packet channeltypes.Packet) {
   
   AtomicSwapPacketAcknowledgement ack = AtomicSwapPacketAcknowledgement{true, null}
   
-  switch swapPaket.type {
+  switch swapPacket.type {
     case TYPE_MSG_MAKE_SWAP:
       const makeMsg = protobuf.decode(swapPaket.data)
         
