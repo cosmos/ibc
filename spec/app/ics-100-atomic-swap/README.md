@@ -151,17 +151,18 @@ interface Coin {
 }
 ```
 
-Both the maker chain and taker chain maintain separate orderbooks. Orders are saved in both maker chain and taker chain.
+Both the maker chain and taker chain maintain separate order store. Orders are saved in both maker chain and taker chain.
 
 ```typescript
+// Status of order 
 enum Status {
-  INITIAL = 0,
-  SYNC = 1,
-  CANCEL = 2,
-  COMPLETE = 3,
+  INITIAL = 0, // initialed on maker chain
+  SYNC = 1, // synced to the taker chain
+  CANCEL = 2, // canceled 
+  COMPLETE = 3, // completed
 }
 
-interface OrderBook {
+interface Order {
   id: string
   maker: MakeSwapMsg
   status: Status
@@ -180,6 +181,11 @@ interface OrderBook {
       maker: msg
     }
   }
+}
+
+// generate path for store
+function orderPath(channel: Identifier, id: Identifier): Path {
+    return "channel/{channel}/order/{id}"
 }
 
 // Order id is a global unique string
@@ -232,14 +238,14 @@ function makeSwap(request: MakeSwapMsg) {
     
   // creates and saves order on the maker chain.
   const order = OrderBook.createOrder(request)
-  //saves order to store
-  store.save(order)
+  // saves order to store
+  privateStore.set(orderPath(order.sourceChannel, order.orderId), order)
 }
 ```
 
 ```ts
 function takeSwap(request: TakeSwapMsg) {
-  const order = store.findOrderById(request.sourceChannel, request.orderId)
+  const order = privateStore.get(orderPath(request.sourceChannel, request.orderId))
   abortTransactionUnless(order !== null)
   abortTransactionUnless(order.expirationTimestamp < currentTimestamp())
   abortTransactionUnless(order.maker.buyToken.denom === request.sellToken.denom)
@@ -269,13 +275,13 @@ function takeSwap(request: TakeSwapMsg) {
     
   // update order state
   order.taker = request // mark that the order has been occupied
-  store.save(order)
+  privateStore.set(orderPath(order.sourceChannel, order.orderId), order)
 }
 ```
 
 ```ts
 function cancelSwap(request: CancelSwapMsg) {
-  const order = store.findOrderById(request.sourceChannel, request.orderId)
+  const order = privateStore.get(orderPath(request.sourceChannel, request.orderId))
   // checks if the order exists
   abortTransactionUnless(order !== null)
   // make sure the sender is the maker of the order.
@@ -452,14 +458,14 @@ function onRecvPacket(packet channeltypes.Packet) {
       order.portIdOnTakerChain = packet.destinationPort
       order.channelIdOnTakerChain = packet.destinationChannel
       // saves order to store
-      const err = store.save(order)
+      const err = privateStore.set(orderPath(packet.destinationChannel, order.orderId), order)
       if (err != null) {
         ack = AtomicSwapPacketAcknowledgement{false, "dailed to save the order on taker chain"}
       }
       break;
     case TYPE_MSG_TAKE_SWAP:
       const takeMsg = protobuf.decode(swapPaket.data)
-      const order = store.findOrderById(packet.destinationChannel, takeMsg.orderId)
+      const order = privateStore.get(orderPath(packet.destinationChannel, takeMsg.orderId))
       abortTransactionUnless(order !== null)
       abortTransactionUnless(order.status === Status.SYNC)
       abortTransactionUnless(order.expiredTimestamp < currentTimestamp())
@@ -479,11 +485,11 @@ function onRecvPacket(packet channeltypes.Packet) {
       order.status = Status.COMPLETE
       order.taker = takeMsg
       order.completeTimestamp = takeMsg.creationTimestamp
-      store.save(order)
+      privateStore.set(orderPath(packet.destinationChannel, takeMsg.orderId), order)
       break;
     case TYPE_MSG_CANCEL_SWAP:
       const cancelMsg = protobuf.decode(swapPaket.data)
-      const order = store.findOrderById(packet.destinationChannel, cancelMsg.orderId)
+      const order = privateStore.get(orderPath(packet.destinationChannel, cancelMsg.orderId))
       abortTransactionUnless(order !== null)
       abortTransactionUnless(order.status === Status.SYNC || order.status == Status.INITIAL)
       abortTransactionUnless(order.taker !== null) // the maker order has not been occupied 
@@ -491,7 +497,7 @@ function onRecvPacket(packet channeltypes.Packet) {
       // update status of order
       order.status = Status.CANCEL
       order.cancelTimestamp = cancelMsg.creationTimestamp 
-      const err = store.save(order)
+      const err = privateStore.set(orderPath(packet.destinationChannel, cancelMsg.orderId), order)
       if (err != null) {
         ack = AtomicSwapPacketAcknowledgement{false, "failed to cancel order on taker chain"}
       }
@@ -523,16 +529,16 @@ function onAcknowledgePacket(
         const makeMsg = protobuf.decode(swapPaket.data)
         
         // update order status on the maker chain.
-        const order = store.findOrderById(makeMsg.sourceChannel, generateOrderId(makeMsg))
+        const order = privateStore.get(orderPath(makeMsg.sourceChannel, generateOrderId(makeMsg)))
         order.status = Status.SYNC
         // save order to store
-        store.save(order)
+        privateStore.set(orderPath(makeMsg.sourceChannel, generateOrderId(makeMsg)), order)
         break;
       case TYPE_MSG_TAKE_SWAP:
         const takeMsg = protobuf.decode(swapPaket.data)
         
         // update order status on the taker chain.
-        const order = store.findOrderById(takeMsg.sourceChannel, takeMsg.orderId)
+        const order = privateStore.get(orderPath(takeMsg.sourceChannel, takeMsg.orderId))
         
         // send tokens to maker
         bank.sendCoins(escrowAddr, order.maker.makerReceivingAddress, takeMsg.sellToken.amount, takeMsg.sellToken.denom)
@@ -540,14 +546,14 @@ function onAcknowledgePacket(
         order.status = Status.COMPLETE
         order.taker = takeMsg
         order.completeTimestamp = takeMsg.creationTimestamp
-        store.save(order)
+        privateStore.set(orderPath(takeMsg.sourceChannel, takeMsg.orderId), order)
         
         break;
       case TYPE_MSG_CANCEL_SWAP:
         const cancelMsg = protobuf.decode(swapPaket.data)
         
         // update order status on the maker chain.
-        const order = store.findOrderById(cannelMsg.sourceChannel, cancelMsg.orderId)
+        const order = privateStore.get(orderPath(cannelMsg.sourceChannel, cancelMsg.orderId))
         
         // send tokens back to maker
         bank.sendCoins(escrowAddr, order.maker.makerAddress, order.maker.sellToken.amount, order.maker.sellToken.denom)
@@ -555,7 +561,7 @@ function onAcknowledgePacket(
         // update state on maker chain
         order.status = Status.CANCEL
         order.cancelTimestamp = cancelMsg.creationTimestamp
-        store.save(order)
+        privateStore.set(orderPath(cannelMsg.sourceChannel, cancelMsg.orderId), order)
         
         break;
       default:
@@ -587,16 +593,16 @@ function refundTokens(packet: Packet) {
       const msg = protobuf.decode(swapPacket.data)
       bank.sendCoins(escrowAddr, msg.makerAddress, msg.sellToken.amount, msg.sellToken.denom)
       const orderId = generateOrderId(msg)
-      const order = store.findOrderById(packet.sourceChannel, orderId)
+      const order = privateStore.get(orderPath(order.sourceChannel, order.orderId))
       order.status = Status.CANCEL
-      store.save(order)
+      privateStore.set(orderPath(order.sourceChannel, order.orderId), order)
       break;
     case TYPE_MSG_TAKE_SWAP:
       const msg = protobuf.decode(swapPacket.data)
       bank.sendCoins(escrowAddr, msg.takerAddress, msg.sellToken.amount, msg.sellToken.denom)
-      const order = store.findOrderById(packet.sourceChannel, msg.orderId)
+      const order = privateStore.get(orderPath(packet.sourceChannel, msg.orderId))
       order.taker = null // release the occupation
-      store.save(order)
+      privateStore.set(orderPath(order.sourceChannel, order.orderId), order)
       break;
     case TYPE_MSG_CANCEL_SWAP:
       // do nothing, only send tokens back when cancel msg is acknowledged.
