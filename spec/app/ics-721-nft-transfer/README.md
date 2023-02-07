@@ -321,7 +321,7 @@ function createOutgoingPacket(
   sourcePort: string,
   sourceChannel: string,
   timeoutHeight: Height,
-  timeoutTimestamp: uint64) {
+  timeoutTimestamp: uint64): uint64 {
   prefix = sourcePort + '/' + sourceChannel
   // we are source chain if classId is not prefixed with sourcePort and sourceChannel
   source = classId.slice(0, len(prefix)) !== prefix
@@ -340,7 +340,8 @@ function createOutgoingPacket(
     tokenData.push(token.GetData())
   }
   NonFungibleTokenPacketData data = NonFungibleTokenPacketData{classId, nft.GetClass(classId).GetUri(), nft.GetClass(classId).GetData(), tokenIds, tokenUris, tokenData, sender, receiver}
-  ics4Handler.sendPacket(Packet{timeoutHeight, timeoutTimestamp, destPort, destChannel, sourcePort, sourceChannel, data}, getCapability("port"))
+  sequence = ics4Handler.sendPacket(Packet{timeoutHeight, timeoutTimestamp, destPort, destChannel, sourcePort, sourceChannel, data}, getCapability("port"))
+  return sequence
 }
 ```
 

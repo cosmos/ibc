@@ -537,6 +537,7 @@ The IBC handler performs the following steps in order:
 - Checks that the timeout height specified has not already passed on the destination chain
 - Increments the send sequence counter associated with the channel
 - Stores a constant-size commitment to the packet data & packet timeout
+- Returns the sequence number of the sent packet
 
 Note that the full packet is not stored in the state of the chain - merely a short hash-commitment to the data & timeout value. The packet data can be calculated from the transaction execution and possibly returned as log output which relayers can index.
 
@@ -547,7 +548,7 @@ function sendPacket(
   sourceChannel: Identifier,
   timeoutHeight: Height,
   timeoutTimestamp: uint64,
-  data: bytes) {
+  data: bytes): uint64 {
     channel = provableStore.get(channelPath(sourcePort, sourceChannel))
 
     // check that the channel is not closed to send packets; 
@@ -577,7 +578,14 @@ function sendPacket(
     )
 
     // log that a packet can be safely sent
-    emitLogEntry("sendPacket", {sequence: sequence, data: data, timeoutHeight: timeoutHeight, timeoutTimestamp: timeoutTimestamp})
+    emitLogEntry("sendPacket", {
+      sequence: sequence, 
+      data: data, 
+      timeoutHeight: timeoutHeight, 
+      timeoutTimestamp: timeoutTimestamp
+    })
+
+    return sequence
 }
 ```
 

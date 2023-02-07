@@ -223,7 +223,7 @@ function sendFungibleTokens(
   sourcePort: string,
   sourceChannel: string,
   timeoutHeight: Height,
-  timeoutTimestamp: uint64) {
+  timeoutTimestamp: uint64): uint64 {
     prefix = "{sourcePort}/{sourceChannel}/"
     // we are the source if the denomination is not prefixed
     source = denomination.slice(0, len(prefix)) !== prefix
@@ -241,7 +241,7 @@ function sendFungibleTokens(
     data = FungibleTokenPacketData{denomination, amount, sender, receiver}
 
     // send packet using the interface defined in ICS4
-    handler.sendPacket(
+    sequence = handler.sendPacket(
       getCapability("port"),
       sourcePort,
       sourceChannel,
@@ -249,6 +249,8 @@ function sendFungibleTokens(
       timeoutTimestamp,
       data
     )
+
+    return sequence
 }
 ```
 

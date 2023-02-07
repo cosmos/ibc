@@ -509,7 +509,7 @@ function sendPacket(
   sourceChannel: Identifier,
   timeoutHeight: Height,
   timeoutTimestamp: uint64,
-  data: bytes) {
+  data: bytes): uint64 {
     // ics4Wrapper may be core IBC or higher-level middleware
     return ics4Wrapper.sendPacket(
       capability,
