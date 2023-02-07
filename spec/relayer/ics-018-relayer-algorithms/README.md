@@ -73,7 +73,7 @@ should check that the destination chain has not yet received the packet by check
 
 Packets in an unordered channel can be relayed in an event-based fashion.
 The relayer should watch the source chain for events emitted whenever packets
-are send, then compose the packet using the data in the event log. Subsequently,
+are sent, then compose the packet using the data in the event log. Subsequently,
 the relayer should check whether the destination chain has received the packet
 already by querying for the presence of an acknowledgement at the packet's sequence
 number, and if one is not yet present the relayer should relay the packet.
