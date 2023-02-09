@@ -454,6 +454,7 @@ function onRecvPacket(packet channeltypes.Packet) {
       const supply = bank.getSupply(makeMsg.buyToken.denom)
       if (supply <= 0) {
         ack = AtomicSwapPacketAcknowledgement{false, "sell token does not exist on the taker chain"}
+        break;
       }
         
       // create and save order on the taker chain.
@@ -483,6 +484,7 @@ function onRecvPacket(packet channeltypes.Packet) {
       const err = bank.sendCoins(escrowAddr, takeMsg.takerReceivingAddress, order.maker.sellToken.amount, order.maker.sellToken.denom)
       if (err != null) {
         ack = AtomicSwapPacketAcknowledgement{false, "transfer coins failed"}
+        break;
       }
         
       // update status of order
