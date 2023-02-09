@@ -458,10 +458,8 @@ function onRecvPacket(packet channeltypes.Packet) {
       }
         
       // create and save order on the taker chain.
-      const order = OrderBook.createOrder(makeMsg)
+      const order = createOrder(makeMsg, packet)
       order.status = Status.SYNC
-      order.portIdOnTakerChain = packet.destinationPort
-      order.channelIdOnTakerChain = packet.destinationChannel
       // saves order to store
       const err = privateStore.set(order.orderId, order)
       if (err != null) {
