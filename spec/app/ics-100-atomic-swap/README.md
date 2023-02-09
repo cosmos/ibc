@@ -476,8 +476,8 @@ function onRecvPacket(packet channeltypes.Packet) {
       abortTransactionUnless(takeMsg.sellToken.amount === order.maker.buyToken.amount)
       // if `desiredTaker` is set, only the desiredTaker can accept the order.
       abortTransactionUnless(order.maker.desiredTaker !== null && order.maker.desiredTaker !== takeMsg.takerAddress)
-    
-      const escrowAddr = escrowAddress(order.portIdOnTakerChain, order.channelIdOnTakerChain)
+  
+      const escrowAddr = escrowAddress(order.maker.sourcePort, order.maker.sourceChannel)
       // send maker.sellToken to taker's receiving address
       const err = bank.sendCoins(escrowAddr, takeMsg.takerReceivingAddress, order.maker.sellToken.amount, order.maker.sellToken.denom)
       if (err != null) {
