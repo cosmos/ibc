@@ -452,7 +452,9 @@ function onRecvPacket(packet channeltypes.Packet) {
         
       // check if buyToken is a valid token on the taker chain, could be either native or ibc token
       const supply = bank.getSupply(makeMsg.buyToken.denom)
-      abortTransactionUnless(supply > 0)
+      if (supply <= 0) {
+        ack = AtomicSwapPacketAcknowledgement{false, "sell token does not exist on the taker chain"}
+      }
         
       // create and save order on the taker chain.
       const order = OrderBook.createOrder(makeMsg)
