@@ -463,7 +463,7 @@ function onRecvPacket(packet channeltypes.Packet) {
       // saves order to store
       const err = privateStore.set(orderPath(packet.destinationChannel, order.orderId), order)
       if (err != null) {
-        ack = AtomicSwapPacketAcknowledgement{false, "dailed to save the order on taker chain"}
+        ack = AtomicSwapPacketAcknowledgement{false, "failed to save the order on taker chain"}
       }
       break;
     case TYPE_MSG_TAKE_SWAP:
