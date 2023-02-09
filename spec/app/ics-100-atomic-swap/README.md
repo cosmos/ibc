@@ -18,9 +18,11 @@ This standard document specifies packet data structure, state machine handling l
 
 Users may wish to exchange tokens without transferring tokens away from their native chain. ICS-100 enabled chains can facilitate atomic swaps between users and their tokens located on the different chains. This is useful for exchanges between specific users at specific prices, and opens opportunities for new application designs.
 
+For example, a token exchange would require only one transaction from an user, compared to multiple transactions when using ICS-20.  Additionally, users can minimize trade slippage compared to using a liquidity pool, given there is a willing counter-party.
+
 ### Definitions
 
-`Atomic Swap`: An exchange of tokens from separate chains without transfering tokens from one blockchain to another.
+`Atomic Swap`: An exchange of tokens from separate chains without transfering tokens from one blockchain to another.  The exchange either happens or it doesn't -- there is no other alternative.
 
 `Order`: An offer to exchange quantity X of token A for quantity Y of token B. Tokens offered are sent to an escrow account (owned by the module).
 
@@ -40,6 +42,7 @@ Users may wish to exchange tokens without transferring tokens away from their na
 - `Refundable`: tokens are refunded by escrow when a timeout occurs, or when an order is cancelled.
 - `Order cancellation`: orders without takers can be cancelled.
 - `Basic orderbook`: a store of orders functioning as an orderbook system.
+- `Atomicity`: an exchange of one token for another where it is either a total success or a total failure.
 
 ## Technical Specification
 
@@ -460,7 +463,7 @@ function onRecvPacket(packet channeltypes.Packet) {
       // saves order to store
       const err = privateStore.set(orderPath(packet.destinationChannel, order.orderId), order)
       if (err != null) {
-        ack = AtomicSwapPacketAcknowledgement{false, "dailed to save the order on taker chain"}
+        ack = AtomicSwapPacketAcknowledgement{false, "failed to save the order on taker chain"}
       }
       break;
     case TYPE_MSG_TAKE_SWAP:
