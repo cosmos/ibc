@@ -15,7 +15,9 @@ This specification document describes a client (verification algorithm) for a MA
 
 ### Motivation
 
-Blockchains using MAPO client finality gadget might like to interface with MAPO protocol state machines 
+MAP Protocol provides a provably secure full-chain infrastructure based on light client and zero-knowledge technology, and has been connected to Polygon, NEAR, and BNB smart chains for cross-chain transactions and communications in December 2022; Ethereum 2.0 and Klaytn is being tested and will be launched on the mainnet in January 2023, and will continue to access more mainchains to expand a greater cross-chain ecology and diversity.
+
+So we hope that the blockchain using the MAPO protocol can be connected with other cosmos ecological blockchains through IBC.
 
 ### Definitions
 
