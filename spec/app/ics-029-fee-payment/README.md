@@ -164,7 +164,7 @@ function RegisterCounterpartyPayee(relayer: string, counterPartyAddress: string)
 // for the packet. In the case where the previous amount is zero, the provided 
 // fees are the initial escrow amount.
 // They may set a separate receiveFee, ackFee, and timeoutFee to be paid
-// for each step in the packet flow. The caller must send max(receiveFee+ackFee, timeoutFee)
+// for each step in the packet flow. The caller must send (receiveFee + ackFee + timeoutFee)
 // to the fee module to be locked in escrow to provide payout for any potential 
 // packet flow.
 // The caller may optionally specify an array of relayer addresses. This MAY be
@@ -172,7 +172,7 @@ function RegisterCounterpartyPayee(relayer: string, counterPartyAddress: string)
 // address. For example, fee module may choose to only pay out relayer if the 
 // relayer address was specified in the `EscrowPacketFee`.
 function EscrowPacketFee(packet: Packet, receiveFee: Fee, ackFee: Fee, timeoutFee: Fee, relayers: []string) {
-    // escrow max(receiveFee+ackFee, timeoutFee) for this packet
+    // escrow (receiveFee + ackFee + timeoutFee) for this packet
     // do custom logic with provided relayer addresses if necessary
 }
 
