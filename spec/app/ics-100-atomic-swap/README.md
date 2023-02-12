@@ -174,7 +174,7 @@ interface Order {
 function createOrder(msg: MakeSwapMsg, packet: channelType.Packet): Order {
     const path = orderPath(packet)
     return Order{
-      id : generateOrderId(path, msg),
+      id : generateOrderId(packet),
       status: Status.INITIAL,
       path: path,
       maker: msg,
@@ -185,10 +185,10 @@ function orderPath(packet: channelType.Packet): string {
     return `channel/${packet.sourceChannel}/port/${packet.sourcePort}/channel/${packet.destChannel}/port/${packet.destPort}/sequence/${packet.sequence}`
 
 }
-// Order id is a global unique string
-function generateOrderId(path string, msg MakeSwapMsg) : string {
-  const bytes = protobuf.encode(msg)
-  return sha265(path.toByte() + bytes)
+// Order id is a global unique string, since packet contains sourceChannel, SourcePort, distChannel, distPort, sequence and msg data
+function generateOrderId(packet: channelType.Packet) : string {
+  const bytes = protobuf.encode(packet)
+  return sha265(bytes)
 }
 
 function extractSourceChannelForTakerMsg(path: string) : string {
@@ -533,7 +533,7 @@ function onAcknowledgePacket(
         const makeMsg = protobuf.decode(swapPaket.data)
         
         // update order status on the maker chain.
-        const order = privateStore.get(generateOrderId(makeMsg, packet))
+        const order = privateStore.get(generateOrderId(packet))
         order.status = Status.SYNC
         // save order to store
         privateStore.set(order.id, order)
@@ -596,7 +596,7 @@ function refundTokens(packet: Packet) {
     case TYPE_MSG_MAKE_SWAP:
       const msg = protobuf.decode(swapPacket.data)
       bank.sendCoins(escrowAddr, msg.makerAddress, msg.sellToken.amount, msg.sellToken.denom)
-      const orderId = generateOrderId(msg, packet)
+      const orderId = generateOrderId(packet)
       const order = privateStore.get(order.orderId)
       order.status = Status.CANCEL
       privateStore.set(order.orderId, order)
