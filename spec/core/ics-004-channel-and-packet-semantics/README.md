@@ -596,7 +596,7 @@ function chanCloseConfirm(
 ```typescript
 // Return the connectionEnd corresponding to the source chain
 function getMultihopConnectionEnd(proof: MultihopProof): ConnectionEnd {
-  return abortTransactionUnless(Unmarshal(proof.ConnectionProofs[0].Value)
+  return abortTransactionUnless(Unmarshal(proof.ConnectionProofs[0].Value))
 }
 
 // Return the counterparty connectionHops
