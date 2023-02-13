@@ -216,7 +216,7 @@ func GenerateConnectionProofs(chains []*Chain) []*ProofData {
 
 ### Multi-hop Proof Verification Steps
 
-The followin outlines the general proof verification steps specific to a multi-hop IBC message.
+The following outlines the general proof verification steps specific to a multi-hop IBC message.
 
 1. Unpack the multihop proof bytes into consensus, connection, and channel/commitment proof data.
 2. Iterate through connection proof data and verify each connectionEnd is in the OPEN state. Check connectionHops during channel handshake.
