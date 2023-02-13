@@ -311,7 +311,6 @@ func VerifyMultiHopConsensusStateProof(
     for i := len(consensusProofs) - 1; i >= 0; i-- {
         consStateProof := consensusProofs[i]
         connectionProof := connectionProofs[i]
-        conState := abortTransactionUnless(UnmarshalInterface(consStateProof.Value))
 
         // prove the consensus state of chain[i] in chain[i+1]
         consensusProof := abortTransactionUnless(Unmarshal(consStateProof.Proof))
@@ -332,7 +331,7 @@ func VerifyMultiHopConsensusStateProof(
         ))
 
         // update the consensusState to chain[i] to prove the next consensus/connection states
-        consensusState = consState
+        consensusState = abortTransactionUnless(UnmarshalInterface(consStateProof.Value))
     }
 }
 ```
