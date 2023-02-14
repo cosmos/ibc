@@ -71,15 +71,16 @@ Relayers are connection topology aware with configurations sourced from the [cha
 
 Graphical depiction of proof generation.
 
-![graphical_proof.jpg](graphical_proof.jpg)
+![proof_generation.png](proof_generation.png)
 
-Relayer Multihop Proof Queries.
+Relayer multi-hop proof queries.
 
-![relayer_proof_queries.jpg](relayer_proof_queries.jpg)
+![proof_query.png](proof_query.png)
 
 
+Multi-hop proof verfication logic.
 
-![proof_steps.png](proof_steps.png)
+![proof_verification.png](proof_verification.png)
 
 Pseudocode proof generation for a channel between `N` chains `C[0] --> C[i] --> C[N]`
 
