@@ -285,7 +285,8 @@ func VerifyMultiHopProofMembership(
     abortTransactionUnless(len(proofs.ConsensusProofs) >= 1)
     abortTransactionUnless(len(proofs.ConnectionProofs) == len(proofs.ConsensusProofs))
  
-    abortTransactionUnless(VerifyMultiHopConsensusStateProof(consensusState, proofs.ConsensusProofs, proofs.ConnectionProofs))
+    // verify intermediate consensus and connection states
+    abortTransactionUnless(VerifyMultiHopConsensusAndConnectionStateProofs(consensusState, proofs.ConsensusProofs, proofs.ConnectionProofs))
 
     keyProof := abortTransactionUnless(Unmarshal(proofs.KeyProof.Proof))
     
@@ -300,29 +301,28 @@ func VerifyMultiHopProofMembership(
     ))
 }
 
-// VerifyMultiHopConsensusStateProof verifies the consensus state of each consecutive consensus/connection state starting
-// from chain[N-1] on the destination (chain[N]) and finally proving the source chain consensus/connection state.
-func VerifyMultiHopConsensusStateProof(
+// VerifyMultiHopConsensusAndConnectionStateProofs verifies the state of each intermediate consensus and
+// connection state starting from chain[N-1] on the destination (chain[N]) and finally proving the source
+// chain consensus and connection state.
+func VerifyMultiHopConsensusAndConnectionStateProofs(
  consensusState exported.ConsensusState,
  consensusProofs []*MultihopProof,
  connectionProofs []*MultihopProof,
 ) {
     // reverse iterate through proofs to prove from destination to source
     for i := len(consensusProofs) - 1; i >= 0; i-- {
-        consStateProof := consensusProofs[i]
-        connectionProof := connectionProofs[i]
 
         // prove the consensus state of chain[i] in chain[i+1]
-        consensusProof := abortTransactionUnless(Unmarshal(consStateProof.Proof))
+        consensusProof := abortTransactionUnless(Unmarshal(consensusProofs[i].Proof))
         abortTransactionUnless(consensusProof.VerifyMembership(
             commitmenttypes.GetSDKSpecs(),
             consensusState.GetRoot(),
-            *consStateProof.PrefixedKey,
-            consStateProof.Value,
+            *consensusProof.PrefixedKey,
+            consensusProof.Value,
         ))
 
         // prove the connection state of chain[i] in chain[i+1]
-        connectionProof := abortTransactionUnless(Unmarshal(connectionProof.Proof))
+        connectionProof := abortTransactionUnless(Unmarshal(connectionProofs[i].Proof))
         abortTransactionUnless(connectionProof.VerifyMembership(
             commitmenttypes.GetSDKSpecs(),
             consensusState.GetRoot(),
@@ -331,7 +331,7 @@ func VerifyMultiHopConsensusStateProof(
         ))
 
         // update the consensusState to chain[i] to prove the next consensus/connection states
-        consensusState = abortTransactionUnless(UnmarshalInterface(consStateProof.Value))
+        consensusState = abortTransactionUnless(UnmarshalInterface(consensusProof.Value))
     }
 }
 ```
