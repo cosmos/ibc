@@ -254,8 +254,25 @@ func VerifyMultihopProof(
     // deserialize proof bytes into multihop proofs
     proofs := abortTransactionUnless(Unmarshal(proof))
 
+    // verify connection states and ordering
+    abortTransactionUnless(VerifyConnectionStates(proofs.ConnectionProofs, connectionHops))
+
+    // verify intermediate consensus and connection states from destination --> source
+    abortTransactionUnless(len(proofs.ConsensusProofs) >= 1)
+    abortTransactionUnless(len(proofs.ConnectionProofs) == len(proofs.ConsensusProofs))
+    abortTransactionUnless(VerifyMultiHopConsensusAndConnectionStateProofs(consensusState, proofs.ConsensusProofs, proofs.ConnectionProofs))
+
+    // verify the keyproof on source chain's consensus state.
+    abortTransactionUnless(VerifyMultiHopKeyProof(proofs, prefix, key, value))
+}
+
+// VerifyConnectionStates checks that each connection in the multihop proof is OPEN and matches the connections in connectionHops.
+func VerifyConnectionStates(
+    connectionProofs []*MultihopProof,
+    connectionHops []string,
+) {
     // check all connections are in OPEN state and that the connection IDs match and are in the right order
-    for i, connData := range proofs.ConnectionProofs {
+    for i, connData := range connectionProofs {
         connectionEnd := abortTransactionUnless(Unmarshal(connData.Value))
 
         // Verify the rest of the connectionHops (first hop already verified)
@@ -266,39 +283,6 @@ func VerifyMultihopProof(
         // 2. check that the connectionEnd's are in the OPEN state.
         abortTransactionUnless(connectionEnd.GetState() == int32(connectiontypes.OPEN))
     }
-
-    // create prefixed key for proof verification
-    prefixedKey := abortTransactionUnless(commitmenttypes.ApplyPrefix(prefix, commitmenttypes.NewMerklePath(key)))
- 
-    // verify each consensus state and connection state starting going from Z --> A
-    // finally verify the keyproof on A within B's verified view of A's consensus state.
-    abortTransactionUnless(VerifyMultiHopProofMembership(consensusState, &proofs, &prefixedKey, value))
-}
-
-// VerifyMultiHopProofMembership verifies a multihop membership proof including all intermediate state proofs.
-func VerifyMultiHopProofMembership(
-    consensusState exported.ConsensusState,
-    proofs *MsgMultihopProofs,
-    prefixedKey commitmenttypes.MerklePath,
-    value []byte,
-) {
-    abortTransactionUnless(len(proofs.ConsensusProofs) >= 1)
-    abortTransactionUnless(len(proofs.ConnectionProofs) == len(proofs.ConsensusProofs))
- 
-    // verify intermediate consensus and connection states
-    abortTransactionUnless(VerifyMultiHopConsensusAndConnectionStateProofs(consensusState, proofs.ConsensusProofs, proofs.ConnectionProofs))
-
-    keyProof := abortTransactionUnless(Unmarshal(proofs.KeyProof.Proof))
-    
-    // the consensus state of the source chain (chain[0] on chain[1])
-    consState := abortTransactionUnless(UnmarshalInterface(proofs.ConsensusProofs[0].Value))
-
-    abortTransactionUnless(keyProof.VerifyMembership(
-        commitmenttypes.GetSDKSpecs(),
-        consState.GetRoot(),
-        prefixedKey,
-        value,
-    ))
 }
 
 // VerifyMultiHopConsensusAndConnectionStateProofs verifies the state of each intermediate consensus and
@@ -327,11 +311,44 @@ func VerifyMultiHopConsensusAndConnectionStateProofs(
             commitmenttypes.GetSDKSpecs(),
             consensusState.GetRoot(),
             *connectionProof.PrefixedKey,
-            connectionProof.Value, // this should be from connectionHops
+            connectionProof.Value,
         ))
 
         // update the consensusState to chain[i] to prove the next consensus/connection states
         consensusState = abortTransactionUnless(UnmarshalInterface(consensusProof.Value))
+    }
+}
+
+// VerifyMultiHopKeyProof verifies a key in the source chain consensus state.
+func VerifyMultiHopKeyProof(
+    proofs *MsgMultihopProof,
+    prefix exported.Prefix,
+    key string,
+    value []byte,
+) {
+    // create prefixed key for proof verification
+    prefixedKey := abortTransactionUnless(commitmenttypes.ApplyPrefix(prefix, commitmenttypes.NewMerklePath(key)))
+
+    // extract source chain consensus state from consensus proofs
+    sourceConsensusState := abortTransactionUnless(UnmarshalInterface(proofs.ConsensusProofs[0].Value))
+
+    // assign the key proof to verify on the source chain
+    keyProof := abortTransactionUnless(Unmarshal(proofs.KeyProof.Proof))
+
+    // prove membership if value provided else prove non-membership
+    if (value != nil) {
+        abortTransactionUnless(keyProof.VerifyMembership(
+            commitmenttypes.GetSDKSpecs(),
+            sourceConsensusState.GetRoot(),
+            prefixedKey,
+            value,
+        ))
+    } else {
+        abortTransactionUnless(keyProof.VerifyNonMembership(
+            commitmenttypes.GetSDKSpecs(),
+            sourceConsensusState.GetRoot(),
+            prefixedKey,
+        ))
     }
 }
 ```
