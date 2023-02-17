@@ -470,7 +470,7 @@ function onRecvPacket(packet channeltypes.Packet) {
       const takeMsg = protobuf.decode(swapPaket.data)
       const order = privateStore.get(takeMsg.orderId)
       abortTransactionUnless(order !== null)
-      abortTransactionUnless(order.status === Status.SYNC)
+      // abortTransactionUnless(order.status === Status.SYNC) 
       abortTransactionUnless(order.expiredTimestamp < currentTimestamp())
       abortTransactionUnless(takeMsg.sellToken.denom === order.maker.buyToken.denom)
       abortTransactionUnless(takeMsg.sellToken.amount === order.maker.buyToken.amount)
