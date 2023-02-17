@@ -40,7 +40,7 @@ Associated definitions are as defined in referenced prior standards (where the f
 
 ## Technical Specification
 
-The bulk of the spec will be around proof generation and verification. IBC connections remain unchanged. Addiitonally, channel handshake and packet message types as well as general round trip messaging semantics and flow will remain the same. There is additional work on the verifier side on the destination chain as well as the relayers who need to query for proofs.
+The bulk of the spec will be around proof generation and verification. IBC connections remain unchanged. Additionally, channel handshake and packet message types as well as general round trip messaging semantics and flow will remain the same. There is additional work on the verifier side on the destination chain as well as the relayers who need to query for proofs.
 
 Messages passed over multiple hops require proof of the connection path from source chain to destination chain as well as the packet commitment on the source chain. The connection path is proven by verifying the connection state and consensus state of each connection in the path to the destination chain. On a high level, this can be thought of as a channel path proof chain where the destination chain can prove a key/value on the source chain by iteratively proving each connection and consensus state in the channel path starting with the consensus state associated with the final client on the destination chain. Each subsequent consensus state and connection is proven until the source chain's consensus state is proven which can then be used to prove the desired key/value on the source chain.
 
@@ -61,7 +61,7 @@ For each multi-hop channel (detailed proof logic below):
 1. Scan source chain for IBC messages to relay.
 2. Read the connectionHops field in from the scanned message to determine the channel path.
 3. Lookup connection endpoints via chain registry configuration and ensure each connection in the channel path is updated to include the key/value to be proven on the source chain.
-4. Query for proof of connection and consensus state for each intermediate connection in the channel path to the destination connection.
+4. Query for proof of connection, clientstate, and consensus state for each intermediate connection in the channel path to the destination connection.
 5. Query proof of packet commitment or handshake message commitment on source chain.
 6. Submit proofs and data to RPC endpoint on destination chain.
 
@@ -76,7 +76,6 @@ Graphical depiction of proof generation.
 Relayer multi-hop proof queries.
 
 ![proof_query.png](proof_query.png)
-
 
 Multi-hop proof verfication logic.
 
@@ -97,9 +96,10 @@ type ProofData struct {
 // Consensus and Connection proofs are ordered from source to destination but not including the
 // chain[N-1] consensus state on chainN (dest) since it is already known on the destination chain.
 type MultihopProof struct {
-    KeyProof *ProofData           // the key/value proof on the source chain
-    ConsensusProofs []*ProofData  // array of consensus proofs starting with proof of chain0 state root on chain1.
-    ConnectionProofs []*ProofData // array of connection proofs starting with proof of conn10 on chain1
+    KeyProof *ProofData            // the key/value proof on the source chain (consensusState[0])
+    ConsensusProofs []*ProofData   // array of consensus proofs starting with proof of consensusState[0] state root on chain1 (consensusState[1])
+    ConnectionProofs []*ProofData  // array of connection proofs starting with proof of conn[1,0] on chain1 (consensusState[1])
+    ClientStateProofs []*ProofData // array of clientstate proofs starting with proof of source client (clientstate[0]) on chain1 (consensusState[1])
 }
 
 // GenerateMultihopProof generates proof of a key/value at the proofHeight on source chain (chain0). 
@@ -124,9 +124,10 @@ func GenerateMultihopProof(chains []*Chain, key string, value []byte, proofHeigh
         Proof: proof,
     }
 
-    // generate and assign consensus and connection proofs
+    // generate and assign consensus, clientState, and connection proofs
     multihopProof.ConsensusProofs = GenerateConsensusProofs(chains)
     multihopProof.ConnectionProofs = GenerateConnectionProofs(chains)
+    multihopProof.ClientStateProofs = GenerateClientStateProofs(chains)
 
     return &multihopProof
 }
@@ -213,6 +214,48 @@ func GenerateConnectionProofs(chains []*Chain) []*ProofData {
     }
     return proofs       
 }
+
+// GenerateClientStateProofs generates client state proofs starting with C1 -->  starting from the source chain to the N-1'th chain.
+// Compute proof for each chain 3-tuple starting from the source chain, C0 to the destination chain, CN
+// Step 1: |C0 ---> C1 ---> C2| ---> C3 ... ---> CN
+//         (i)     (i+1)   (i+2)
+// Step 2: C0 ---> |C1 ---> C2 ---> C3| ... ---> CN 
+//                 (i)    (i+1)    (i+2)
+// Step N-3:  C0 ---> C1 ...  ---> |CN-2 --> CN-1 ---> CN|
+//                                   (i)    (i+1)    (i+2)
+func GenerateClientStateProofs(chains []*Chain) []*ProofData {
+    assert(len(chains) > 2)
+
+    var proofs []*ProofData
+
+    // iterate all but the last two chains
+    for i := 0; i < len(chains)-2; i++ {
+  
+        previousChain := chains[i]  // previous chains state root is on currentChain and is the source chain for i==0.
+        currentChain := chains[i+1] // currentChain is where the proof is queried and generated
+        nextChain := chains[i+2]    // nextChain holds the state root of the currentChain
+
+        currentHeight := currentChain.GetClientStateHeight(sourceChain) // height of previous chain state on current chain
+        nextHeight := nextChain.GetClientStateHeight(currentChain)      // height of current chain state on next chain
+
+        // prefixed key for the connection from currentChain to prevChain
+        clientStateKey := GetPrefixedClientStateKey(currentChain)
+
+        // current chain's view of previous chains client state.
+        clientState := GetClientState(currentChain)
+
+        // Query proof of the currentChain's clientState with the previousChain at nextHeight
+        // (currentChain's state root height on nextChain)
+        clientStateProof := GetClientStateProof(currentChain, nextHeight)
+  
+        proofs = append(proofs, &ProofData{
+            Key:   &clientStateKey,
+            Value: clientState,
+            Proof: clientStateProof,
+        })
+    }
+    return proofs       
+}
 ```
 
 ### Multi-hop Proof Verification Steps
@@ -221,14 +264,16 @@ The following outlines the general proof verification steps specific to a multi-
 
 1. Unpack the multihop proof bytes into consensus, connection, and channel/commitment proof data.
 2. Iterate through connection proof data and verify each connectionEnd is in the OPEN state. Check connectionHops during channel handshake.
-3. Starting with known `ConsensusState[N-1]` at the given `proofHeight` on `ChainN` prove the prior chain's consensus and connection state.
-4. Repeat step 3, proving `ConsensusState[i-1]` and `Conn[i-1,i]` until `ConsensusState0` on the source chain is proven.
+3. Iterate through each clientState and verify the status is active and the clientID matches the clientID for the corresponding consensusState.
+4. Starting with known `ConsensusState[N-1]` at the given `proofHeight` on `ChainN` prove the prior chain's consensus, clientState, and connection state.
+5. Repeat step 3, proving `ConsensusState[i-1]`, `ClientState[i-1]`, and `Conn[i-1,i]` until `ConsensusState[0]` on the source chain is proven.
    - Start with i = N-1
    - ConsensusState <= ConsensusState[i-1] on Chain[i]
    - ConsensusProofs[i].Proof.VerifyMembership(ConsensusState.GetRoot(), ConsensusProofs[i].Key, ConsensusProofs[i].Value)
-   - ConnectionProofs[i].Proof.VerifyMembership(ConsensusState.GetRoot(), ConsensusProofs[i].Key, ConsensusProofs[i].Value)
+   - ConnectionProofs[i].Proof.VerifyMembership(ConsensusState.GetRoot(), ConnectionProofs[i].Key, ConnectionProofs[i].Value)
+   - ClientStateProofs[i].Proof.VerifyMembership(ConsensusState.GetRoot(), ClientStateProofs[i].Key, ClientStateProofs[i].Value)
    - Set ConsensusState from unmarshalled ConsensusProofs[i].Value
-5. Finally, prove the expected channel or packet commitment in `ConsensusState0`
+6. Finally, prove the expected channel or packet commitment in `ConsensusState[0]`
 
 For more details see [ICS4](https://github.com/cosmos/ibc/tree/main/spec/core/ics-004-channel-and-packet-semantics).
 
