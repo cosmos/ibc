@@ -164,7 +164,7 @@ The result query path is a private path that stores the result of completed quer
 
 ```typescript
 function queryResultPath(id: Identifier): Path {
-    return "queries/{id}/result"
+    return "result/queries/{id}"
 }
 ```
 
