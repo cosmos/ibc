@@ -131,8 +131,9 @@ interface Signature {
 The solo machine client `initialise` function starts an unfrozen client with the initial consensus state.
 
 ```typescript
-function initialise(consensusState: ConsensusState): ClientState {
-  return {
+function initialise(identifier: Identifier, consensusState: ConsensusState): ClientState {
+  provableStore.set("clients/{identifier}/consensusStates/{height}", consensusState)
+  return ClientState{
     frozen: false,
     consensusState
   }
@@ -147,7 +148,7 @@ function latestClientHeight(clientState: ClientState): uint64 {
 }
 ```
 
-### ClientState Methods
+### `ClientState` Methods
 
 All of the functions defined below are methods on the `ClientState` interface. Thus, the solo machine client state is always in scope for these functions.
 
@@ -234,7 +235,7 @@ function updateState(clientMessage: ClientMessage) {
   clientState.consensusState.diversifier = header.newDiversifier
   clientState.consensusState.timestamp = header.timestamp
   clientState.consensusState.sequence++
-  set("clients/{identifier}/clientState", clientState)
+  provableStore.set("clients/{identifier}/clientState", clientState)
 }
 ```
 
@@ -244,7 +245,7 @@ function updateState(clientMessage: ClientMessage) {
 function updateStateOnMisbehaviour(clientMessage: ClientMessage) {
   // freeze the client
   clientState.frozen = true
-  set("clients/{identifier}/clientState", clientState)
+  provableStore.set("clients/{identifier}/clientState", clientState)
 }
 ```
 
@@ -263,7 +264,7 @@ function verifyMembership(
   delayBlockPeriod: uint64,
   proof: CommitmentProof,
   path: CommitmentPath,
-  value: []byte): boolean {
+  value: []byte): Error {
     // the expected sequence used in the signature
     abortTransactionUnless(!clientState.frozen)
     abortTransactionUnless(proof.timestamp >= clientState.consensusState.timestamp)
@@ -276,7 +277,7 @@ function verifyMembership(
     )
     proven = checkSignature(clientState.consensusState.publicKey, signBytes, proof.sig)
     if !proven {
-      return false
+      return error
     }
 
     // increment sequence on each verification to provide
@@ -287,8 +288,8 @@ function verifyMembership(
     // mutate the clientState (increment sequence and set timestamp)
     // thus the verification methods are stateful for the solomachine
     // in order to prevent replay attacks
-    set("clients/{identifier}/clientState", clientState)
-    return true
+    provableStore.set("clients/{identifier}/clientState", clientState)
+    return nil
 }
 
 function verifyNonMembership(
@@ -300,7 +301,7 @@ function verifyNonMembership(
   delayTimePeriod: uint64,
   delayBlockPeriod: uint64,
   proof: CommitmentProof,
-  path: CommitmentPath): boolean {
+  path: CommitmentPath): Error {
     abortTransactionUnless(!clientState.frozen)
     abortTransactionUnless(proof.timestamp >= clientState.consensusState.timestamp)
     signBytes = SignBytes(
@@ -312,7 +313,7 @@ function verifyNonMembership(
     )
     proven = checkSignature(clientState.consensusState.publicKey, signBytes, proof.sig)
     if !proven {
-      return false
+      return error
     }
 
     // increment sequence on each verification to provide
@@ -323,8 +324,8 @@ function verifyNonMembership(
     // mutate the clientState (increment sequence and set timestamp)
     // thus the verification methods are stateful for the solomachine
     // in order to prevent replay attacks
-    set("clients/{identifier}/clientState", clientState)
-    return true
+    provableStore.set("clients/{identifier}/clientState", clientState)
+    return nil
 }
 ```
 
