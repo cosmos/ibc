@@ -299,13 +299,13 @@ func VerifyMultihopProof(
 ) {
     // deserialize proof bytes into multihop proofs
     proofs := abortTransactionUnless(Unmarshal(proof))
+    abortTransactionUnless(len(proofs.ConsensusProofs) >= 1)
+    abortTransactionUnless(len(proofs.ConnectionProofs) == len(proofs.ConsensusProofs))
 
     // verify connection states and ordering
     abortTransactionUnless(VerifyConnectionStates(proofs.ConnectionProofs, connectionHops))
 
     // verify intermediate consensus and connection states from destination --> source
-    abortTransactionUnless(len(proofs.ConsensusProofs) >= 1)
-    abortTransactionUnless(len(proofs.ConnectionProofs) == len(proofs.ConsensusProofs))
     abortTransactionUnless(VerifyMultiHopConsensusAndConnectionStateProofs(consensusState, proofs.ConsensusProofs, proofs.ConnectionProofs))
 
     // verify the keyproof on source chain's consensus state.
