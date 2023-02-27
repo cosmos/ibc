@@ -9,6 +9,6 @@
 
 # CODEOWNERS for the specs
 
-/spec/apps @adityasripal @cwgoes @colin-axner @angbrav
+/spec/app @adityasripal @cwgoes @colin-axner @angbrav
 
-/spec/apps/ics-028-cross-chain-validation @mpoke @adityasripal @cwgoes @angbrav
+/spec/app/ics-028-cross-chain-validation @mpoke @adityasripal @cwgoes @angbrav
