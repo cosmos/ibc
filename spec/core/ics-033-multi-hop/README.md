@@ -262,18 +262,20 @@ func GenerateClientStateProofs(chains []*Chain) []*ProofData {
 
 The following outlines the general proof verification steps specific to a multi-hop IBC message.
 
-1. Unpack the multihop proof bytes into consensus, connection, and channel/commitment proof data.
-2. Iterate through connection proof data and verify each connectionEnd is in the OPEN state. Check connectionHops during channel handshake.
-3. Iterate through each clientState and verify the status is active and the clientID matches the clientID for the corresponding consensusState.
-4. Starting with known `ConsensusState[N-1]` at the given `proofHeight` on `ChainN` prove the prior chain's consensus, clientState, and connection state.
-5. Repeat step 3, proving `ConsensusState[i-1]`, `ClientState[i-1]`, and `Conn[i-1,i]` until `ConsensusState[0]` on the source chain is proven.
+1. Unpack the multihop proof bytes into consensus states, connection states, client states and channel/commitment proof data.
+2. Check the counterparty client on the receiving end is active and the client height is greater than or equal to the proof height.
+3. Iterate through the connections states to determine the maximum delayPeriod for the channel path and verify that the counterparty consensus state on the receiving chain satisfies the delay requirement.
+4. Iterate through connection state proofs and verify each connectionEnd is in the OPEN state and check that the connection ids match the channel connectionHops.
+5. Iterate through each client state and verify that no clients are frozen and the clientID matches the clientID for the corresponding consensus state.
+6. Verify the intermediate state proofs. Starting with known `ConsensusState[N-1]` at the given `proofHeight` on `ChainN` prove the prior chain's consensus, clientState, and connection state.
+7. Repeat step 3, proving `ConsensusState[i-1]`, `ClientState[i-1]`, and `Conn[i-1,i]` until `ConsensusState[0]` on the source chain is proven.
    - Start with i = N-1
    - ConsensusState <= ConsensusState[i-1] on Chain[i]
    - ConsensusProofs[i].Proof.VerifyMembership(ConsensusState.GetRoot(), ConsensusProofs[i].Key, ConsensusProofs[i].Value)
    - ConnectionProofs[i].Proof.VerifyMembership(ConsensusState.GetRoot(), ConnectionProofs[i].Key, ConnectionProofs[i].Value)
    - ClientStateProofs[i].Proof.VerifyMembership(ConsensusState.GetRoot(), ClientStateProofs[i].Key, ClientStateProofs[i].Value)
    - Set ConsensusState from unmarshalled ConsensusProofs[i].Value
-6. Finally, prove the expected channel or packet commitment in `ConsensusState[0]`
+8. Finally, prove the expected channel or packet commitment in `ConsensusState[0]`
 
 For more details see [ICS4](https://github.com/cosmos/ibc/tree/main/spec/core/ics-004-channel-and-packet-semantics).
 
@@ -300,16 +302,21 @@ func VerifyMultihopProof(
     // deserialize proof bytes into multihop proofs
     proofs := abortTransactionUnless(Unmarshal(proof))
     abortTransactionUnless(len(proofs.ConsensusProofs) >= 1)
+    abortTransactionUnless(len(proofs.ConnectionProofs) >= 1)
+    abortTransactionUnless(len(proofs.ClientProofs) >= 1)
     abortTransactionUnless(len(proofs.ConnectionProofs) == len(proofs.ConsensusProofs))
 
     // verify connection states and ordering
     abortTransactionUnless(VerifyConnectionStates(proofs.ConnectionProofs, connectionHops))
 
-    // verify intermediate consensus and connection states from destination --> source
-    abortTransactionUnless(VerifyMultiHopConsensusAndConnectionStateProofs(consensusState, proofs.ConsensusProofs, proofs.ConnectionProofs))
+    // verify client states are not frozen
+    abortTransactionUnless(VerifyClientStates(proofs.ClientStates))
 
-    // verify the keyproof on source chain's consensus state.
-    abortTransactionUnless(VerifyMultiHopKeyProof(proofs, prefix, key, value))
+    // verify intermediate consensus, connection, and client states from destination --> source
+    abortTransactionUnless(VerifyIntermediateStateProofs(consensusState, proofs.ConsensusProofs, proofs.ConnectionProofs, proofs.ClientProofs))
+
+    // verify a key/value proof on source chain's consensus state.
+    abortTransactionUnless(VerifyKeyValueProof(proofs, prefix, key, value))
 }
 
 // VerifyConnectionStates checks that each connection in the multihop proof is OPEN and matches the connections in connectionHops.
@@ -331,18 +338,29 @@ func VerifyConnectionStates(
     }
 }
 
-// VerifyMultiHopConsensusAndConnectionStateProofs verifies the state of each intermediate consensus and
-// connection state starting from chain[N-1] on the destination (chain[N]) and finally proving the source
-// chain consensus and connection state.
-func VerifyMultiHopConsensusAndConnectionStateProofs(
+// Verify ClientStates checks that each client in the proof chain is not frozen.
+func VerifyClientStates(
+    clientStateProofs []*MultihopProof,
+) {
+    for i, data := range clientStateProofs {
+        clientState := abortTransactionUnless(Unmarshal(data.Value))
+        abortTransactionUnless(clientState.CheckFrozen() == false)
+    }
+}
+
+// VerifyIntermediateStateProofs verifies the state of each intermediate consensus, connection, and
+// client state starting from chain[N-1] on the destination (chain[N]) and finally proving the source
+// chain consensus, connection, and client state.
+func VerifyIntermediateStateProofs(
  consensusState exported.ConsensusState,
  consensusProofs []*MultihopProof,
  connectionProofs []*MultihopProof,
+ clientProofs []*MultihopProof,
 ) {
     // reverse iterate through proofs to prove from destination to source
     for i := len(consensusProofs) - 1; i >= 0; i-- {
 
-        // prove the consensus state of chain[i] in chain[i+1]
+        // prove the consensus state of chain[i] on chain[i+1]
         consensusProof := abortTransactionUnless(Unmarshal(consensusProofs[i].Proof))
         abortTransactionUnless(consensusProof.VerifyMembership(
             commitmenttypes.GetSDKSpecs(),
@@ -351,7 +369,7 @@ func VerifyMultiHopConsensusAndConnectionStateProofs(
             consensusProof.Value,
         ))
 
-        // prove the connection state of chain[i] in chain[i+1]
+        // prove the connection state of chain[i] on chain[i+1]
         connectionProof := abortTransactionUnless(Unmarshal(connectionProofs[i].Proof))
         abortTransactionUnless(connectionProof.VerifyMembership(
             commitmenttypes.GetSDKSpecs(),
@@ -360,13 +378,23 @@ func VerifyMultiHopConsensusAndConnectionStateProofs(
             connectionProof.Value,
         ))
 
+        // prove the client state of chain[i] on chain[i+1]
+        clientProof := abortTransactionUnless(Unmarshal(clientProofs[i].Proof))
+        abortTransactionUnless(clientProof.VerifyMembership(
+            commitmenttypes.GetSDKSpecs(),
+            consensusState.GetRoot(),
+            *clientProof.PrefixedKey,
+            clientProof.Value,
+        ))
+
+
         // update the consensusState to chain[i] to prove the next consensus/connection states
         consensusState = abortTransactionUnless(UnmarshalInterface(consensusProof.Value))
     }
 }
 
-// VerifyMultiHopKeyProof verifies a key in the source chain consensus state.
-func VerifyMultiHopKeyProof(
+// VerifyKeyValueProof verifies a key in the source chain consensus state.
+func VerifyKeyValueProof(
     proofs *MsgMultihopProof,
     prefix exported.Prefix,
     key string,
