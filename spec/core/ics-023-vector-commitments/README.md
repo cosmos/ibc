@@ -274,11 +274,11 @@ Commitment algorithms are expected to be fixed. New algorithms can be introduced
 
 ## Example Implementation
 
-Coming soon.
+Repository for [Go implementation of ICS 23](https://github.com/cosmos/ics23/tree/master/go).
 
 ## Other Implementations
 
-Coming soon.
+Repository for [Rust implementation of ICS 23](https://github.com/cosmos/ics23/tree/master/rust).
 
 ## History
 

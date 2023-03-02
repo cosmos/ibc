@@ -723,11 +723,11 @@ routing modules are closely tied to the IBC handler interface.
 
 ## Example Implementation
 
-Coming soon.
+Repository for [Go implementation of ICS 26 for Cosmos SDK chains](https://github.com/cosmos/ibc-go/tree/main/modules/core/keeper).
 
 ## Other Implementations
 
-Coming soon.
+Repository for [Rust implementation of ICS 26](https://github.com/cosmos/ibc-rs/tree/main/crates/ibc/src/core/ics26_routing).
 
 ## History
 

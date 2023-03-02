@@ -498,11 +498,11 @@ The consensus state can only be updated as allowed by the `updateConsensusState`
 
 ## Example Implementation
 
-Coming soon.
+Repository for [Go implementation of ICS 03 for Cosmos SDK chains](https://github.com/cosmos/ibc-go/tree/main/modules/core/03-connection).
 
 ## Other Implementations
 
-Coming soon.
+Repository for [Rust implementation of ICS 03](https://github.com/cosmos/ibc-rs/tree/main/crates/ibc/src/core/ics03_connection).
 
 ## History
 

@@ -386,11 +386,11 @@ and safely alter the packet data format & packet handler semantics.
 
 ## Example Implementation
 
-Coming soon.
+Repository for [Go implementation of ICS 20 for Cosmos SDK chains](https://github.com/cosmos/ibc-go/tree/main/modules/apps/transfer).
 
 ## Other Implementations
 
-Coming soon.
+Repository for [Rust implementation of ICS 20](https://github.com/cosmos/ibc-rs/tree/main/crates/ibc/src/applications/transfer).
 
 ## History
 

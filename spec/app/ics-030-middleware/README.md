@@ -352,7 +352,7 @@ Not applicable.
 
 ## Example Implementation
 
-Coming soon.
+Repository for [Go implementation for Cosmos SDK chains of ICS 29 following ICS 30 design pattern](https://github.com/cosmos/ibc-go/tree/main/modules/apps/29-fee).
 
 ## Other Implementations
 

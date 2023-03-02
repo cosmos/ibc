@@ -1111,11 +1111,11 @@ Data structures & encoding can be versioned at the connection or channel level. 
 
 ## Example Implementation
 
-Coming soon.
+Repository for [Go implementation of ICS 04 for Cosmos SDK chains](https://github.com/cosmos/ibc-go/tree/main/modules/core/04-channel).
 
 ## Other Implementations
 
-Coming soon.
+Repository for [Rust implementation of ICS 04](https://github.com/cosmos/ibc-rs/tree/main/crates/ibc/src/core/ics04_channel).
 
 ## History
 

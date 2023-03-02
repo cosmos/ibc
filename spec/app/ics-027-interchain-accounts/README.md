@@ -597,7 +597,7 @@ The `icacontroller-` prefix on the controller port identifier is optional and ho
 
 ## Example Implementation
 
-Repository for Cosmos-SDK implementation of ICS-27: https://github.com/cosmos/ibc-go
+Repository for [Go implementation of ICS 27 for Cosmos SDK chains](https://github.com/cosmos/ibc-go/tree/main/modules/apps/27-interchain-accounts).
 
 ## Future Improvements
 

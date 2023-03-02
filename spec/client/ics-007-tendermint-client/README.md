@@ -453,11 +453,11 @@ Not applicable. Alterations to the client verification algorithm will require a 
 
 ## Example Implementation
 
-None yet.
+Repository for [Go implementation of ICS 07 for Cosmos SDK chains](https://github.com/cosmos/ibc-go/tree/main/modules/light-clients/07-tendermint).
 
 ## Other Implementations
 
-None at present.
+Repository for [Rust implementation of ICS 07](https://github.com/cosmos/ibc-rs/tree/main/crates/ibc/src/clients/ics07_tendermint).
 
 ## History
 

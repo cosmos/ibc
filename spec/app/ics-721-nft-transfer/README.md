@@ -449,7 +449,7 @@ A future version of this standard could use a different version in the channel h
 
 ## Example Implementation
 
-Coming soon.
+Repository for [Go implementation of ICS 721 for Cosmos SDK chains](https://github.com/bianjieai/nft-transfer).
 
 ## Other Implementations
 

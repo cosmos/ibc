@@ -581,7 +581,7 @@ Not applicable.
 
 ## Example Implementation
 
-Coming soon.
+Repository for [Go implementation of ICS 29 for Cosmos SDK chains](https://github.com/cosmos/ibc-go/tree/main/modules/apps/29-fee).
 
 ## Other Implementations
 

@@ -383,11 +383,11 @@ Key/value store functionality and consensus state type are unlikely to change du
 
 ## Example Implementation
 
-Coming soon.
+Repository for [Go implementation of ICS 24 for Cosmos SDK chains](https://github.com/cosmos/ibc-go/tree/main/modules/core/24-host).
 
 ## Other Implementations
 
-Coming soon.
+Repository for [Rust implementation of ICS 24](https://github.com/cosmos/ibc-rs/tree/main/crates/ibc/src/core/ics24_host).
 
 ## History
 
