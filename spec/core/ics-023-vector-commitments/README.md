@@ -91,6 +91,12 @@ The `CommitmentPath` returned by `applyPrefix` does not need to be serialisable 
 type applyPrefix = (prefix: CommitmentPrefix, path: Path) => CommitmentPath
 ```
 
+The function `removePrefix` is the inverse operation of `applyPrefix`, i.e. it returns the bytestring key without the store prefix.
+
+```typescript
+type removePrefix = (prefix: CommitmentPrefix, path: CommitmentPath) => Path
+```
+
 #### Proof
 
 A `CommitmentProof` demonstrates membership or non-membership for an element or set of elements, verifiable in conjunction with a known commitment root. Proofs should be succinct.
