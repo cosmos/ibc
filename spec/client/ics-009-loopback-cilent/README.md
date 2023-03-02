@@ -91,7 +91,7 @@ Implementations **may** also allow the creation of more connections associated w
 
 Relayers supporting localhost packet flow must be adapted to submit messages from sending applications back to the originating chain.
 
-This would require first checking the underlying connection identifier on any channel-level messages. If the underlying connection identifier is `connection-localhost`, then the relayer must construct the message and send it back to the originating chain. The message MUST be constructed with a sentinel byte for the proof (`[]byte{0x01}`), since the loopback client does not need Merkle proofs of the state of a remote ledger. The proof height in the message may be zero, since it is ignored by the loopback client.
+This would require first checking the underlying connection identifier on any channel-level messages. If the underlying connection identifier is `connection-localhost`, then the relayer must construct the message and send it back to the originating chain. The message MUST be constructed with a sentinel byte for the proof (`[]byte{0x01}`), since the loopback client does not need Merkle proofs of the state of a remote ledger; the proof height in the message may be zero, since it is ignored by the loopback client.
 
 Implementations **may** choose to implement loopback such that the next message in the handshake or packet flow is automatically called without relayer-driven transactions. However, implementors must take care to ensure that automatic message execution does not cause gas consumption issues.
 
@@ -133,7 +133,7 @@ function checkForMisbehaviour(
 
 ### `UpdateState`
 
-`UpdateState` will perform a regular update for the loopback client client. If the header is higher than the lastest height on the `clientState`, then the `clientState` will be updated.
+`UpdateState` will perform a regular update for the loopback client. If the header is higher than the lastest height on the `clientState`, then the `clientState` will be updated.
 
 ```typescript
 function updateState(
@@ -164,7 +164,7 @@ function updateStateOnMisbehaviour(clientMsg: clientMessage) {
 
 ### State verification functions
 
-State verification functions simply need to read state from the local ledger. Verification is thus simplified to just comparing bytes stored under the standardized key paths. The loopback client needs read-only access to the complete IBC store of the local ledger, and not only to its own client identifier-prefixed store.
+State verification functions simply need to read state from the local ledger and compare with the bytes stored under the standardized key paths. The loopback client needs read-only access to the complete IBC store of the local ledger, and not only to its own client identifier-prefixed store.
 
 ```typescript
 function verifyMembership(
