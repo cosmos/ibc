@@ -6,7 +6,7 @@ category: IBC/TAO
 kind: instantiation
 author: Christopher Goes <cwgoes@tendermint.com>
 created: 2020-01-17
-modified: 2020-01-17
+modified: 2023-03-02
 requires: 2
 implements: 2
 ---
