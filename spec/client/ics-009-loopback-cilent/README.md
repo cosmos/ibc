@@ -158,8 +158,7 @@ function updateState(
 `UpdateStateOnMisbehaviour` is unsupported by the loopback client and performs a no-op.
 
 ```typescript
-function updateStateOnMisbehaviour(clientMsg: clientMessage) {
-}
+function updateStateOnMisbehaviour(clientMsg: clientMessage) { }
 ```
 
 ### State verification functions
