@@ -182,7 +182,7 @@ function verifyMembership(
     // e.g. in ibc-go implementation this is "ibc"
     // since verification is done on the IBC store of the local ledger
     // the prefix needs to be removed from the path to retrieve the
-    // correct the key in the store
+    // correct key in the store
     unprefixedPath = removePrefix(getCommitmentPrefix(), path)
     
     // The complete (not only client identifier-prefixed) store is needed
@@ -204,7 +204,7 @@ function verifyNonMembership(
     // e.g. in ibc-go implementation this is "ibc"
     // since verification is done on the IBC store of the local ledger
     // the prefix needs to be removed from the path to retrieve the
-    // correct the key in the store
+    // correct key in the store
     unprefixedPath = removePrefix(getCommitmentPrefix(), path)
 
     // The complete (not only client identifier-prefixed) store is needed
