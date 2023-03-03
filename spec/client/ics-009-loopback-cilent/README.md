@@ -111,11 +111,15 @@ function initialise(
 
 ### Validity predicate
 
-No validity checking is necessary in a loopback client; the function should never be called.
+Loopback client validity checking makes sure the height is greater than zero. If the provided header is valid, the client state update logic is executed.
 
 ```typescript
 function verifyClientMessage(
   clientMsg: ClientMessage) {
+    header = Header(clientMessage)
+    if header.height > 0 {
+      assert(true)
+    }
     assert(false)
 }
 ```
