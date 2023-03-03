@@ -227,17 +227,16 @@ Wasm client validity checking uses underlying Wasm Client code. If the provided 
 
 ```typescript
 function CheckSubstituteAndUpdateState(
+  clientState: ClientState,
   substituteClient: ClientState,
+  subjectClientStore: KVStore, substituteClientStore: KVStore,
   header: Header) {
-    store = getStore("clients/{identifier}")
+    let store = getStore("subject/substitute")
+    let consensusState = GetConsensusState(subjectClientStore, clientState.LatestHeight)
+    let encodedData = packData(consensusState, clientState, substituteClient)
+    let out = callContract(c.CodeId, ctx, store, encodedData)
+    // TODO: assert that there is no error
 
-    consensusState, err := GetConsensusState(subjectClientStore, cdc, c.LatestHeight)
-
-    codeHandle = clientState.codeHandle()
-
-    // verify that provided header is valid and state is saved
-    assert(codeHandle.validateHeaderAndCreateConsensusState(store, clientState, header))
-}
 ```
 
 ### Misbehaviour predicate
@@ -279,47 +278,34 @@ function upgradeClientState(
 
 Wasm client state verification functions check a Merkle proof against a previously validated commitment root.
 
-```go
-	func (c ClientState) VerifyUpgradeAndUpdateState(
-		ctx sdk.Context,
-		cdc codec.BinaryCodec,
-		store sdk.KVStore,
-		newClient ClientState,
-		newConsState ConsensusState,
-		proofUpgradeClient,
-		proofUpgradeConsState []byte,
+```typescript
+	function () VerifyUpgradeAndUpdateState(
+    c: ClientState,
+		store: KVStore,
+		newClient: ClientState,
+		newConsState: ConsensusState,
+		proofUpgradeClient: []byte,
+		proofUpgradeConsState: []byte,
 	) error {
-    // check that consensus state is of type wasm consensusstate
-    	wasmUpgradeConsState, ok := newConsState.(*ConsensusState)
-	if !ok {
-		return sdkerrors.Wrapf(clienttypes.ErrInvalidConsensus, "upgraded consensus state must be wasm light consensus state. expected %T, got: %T",
-			&ConsensusState{}, wasmUpgradeConsState)
-	}
-	// last height of current counterparty chain must be client's latest height
-	lastHeight := c.LatestHeight
-	_, err := GetConsensusState(store, cdc, lastHeight)
-	if err != nil {
-		return sdkerrors.Wrap(err, "could not retrieve consensus state for lastHeight")
-	}
-  encodedData := packData(newClient, proofUpgradeClient, proofUpgradeConsState)
-  out, err := callContract(c.CodeId, ctx, store, encodedData)
-	if err != nil {
-		return sdkerrors.Wrapf(ErrUnableToCall, fmt.Sprintf("underlying error: %s", err.Error()))
-	}
-  return nil
+    // last height of current counterparty chain must be client's latest height
+    let lastHeight = c.LatestHeight
+    let err = GetConsensusState(store, cdc, lastHeight)
+    assert(err == null)
+    let encodedData =  packData(newClient, proofUpgradeClient, proofUpgradeConsState)
+    let err = callContract(c.CodeId, ctx, store, encodedData)
+    assert(err == null)
+    return null
   }
-
-
-  	func (c ClientState) VerifyMembership(
-		ctx sdk.Context,
-		clientStore sdk.KVStore,
-		cdc codec.BinaryCodec,
-		height Height,
-		delayTimePeriod uint64,
-		delayBlockPeriod uint64,
-		proof []byte,
-		path Path,
-		value []byte,
+  
+  function VerifyMembership(
+    c: ClientState,
+		clientStore: KVStore,
+		height: Height,
+		delayTimePeriod: uint64,
+		delayBlockPeriod: uint64,
+		proof: []byte,
+		path: Path,
+		value :[]byte,
 	) error {
     const VerifyClientMessage = "verify_membership"
     encodedData := packData(height, delayTimePeriod, delayBlockPeriod, proof, path, value, VerifyClientMessage)
