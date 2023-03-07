@@ -315,7 +315,6 @@ function createOutgoingPacket(
   tokenIds: string[],
   sender: string,
   receiver: string,
-  source: boolean,
   destPort: string,
   destChannel: string,
   sourcePort: string,
