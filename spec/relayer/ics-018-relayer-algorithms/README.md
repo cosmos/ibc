@@ -152,7 +152,7 @@ function pendingDatagrams(chain: Chain, counterparty: Chain): List<Set<Datagram>
         version: remoteEnd.version,
         proofTry: remoteEnd.proof(),
         proofConsensus: remoteEnd.client.consensusState.proof(),
-        proofHeight: remoteEnd.client.height,
+        proofHeight: counterpartyHeight,
         consensusHeight: remoteEnd.client.height,
       })
     else if (localEnd.state === OPEN && remoteEnd.state === TRYOPEN)
@@ -193,7 +193,7 @@ function pendingDatagrams(chain: Chain, counterparty: Chain): List<Set<Datagram>
         channelIdentifier: localEnd.channelIdentifier,
         version: remoteEnd.version,
         proofTry: remoteEnd.proof(),
-        proofHeight: localEnd.client.height,
+        proofHeight: counterpartyHeight,
       })
     else if (localEnd.state === OPEN && remoteEnd.state === TRYOPEN)
       // Handshake has confirmed locally (3 steps done), relay `chanOpenConfirm` to the remote end
