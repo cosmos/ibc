@@ -384,13 +384,10 @@ This initial standard uses version "ics20-1" in the channel handshake.
 A future version of this standard could use a different version in the channel handshake,
 and safely alter the packet data format & packet handler semantics.
 
-## Example Implementation
+## Example Implementations
 
-Repository for [Go implementation of ICS 20 for Cosmos SDK chains](https://github.com/cosmos/ibc-go/tree/main/modules/apps/transfer).
-
-## Other Implementations
-
-Repository for [Rust implementation of ICS 20](https://github.com/cosmos/ibc-rs/tree/main/crates/ibc/src/applications/transfer).
+- Implementation of ICS 20 in Go can be found in [ibc-go repository](https://github.com/cosmos/ibc-go).
+- Implementation of ICS 20 in Rust can be found in [ibc-rs repository](https://github.com/cosmos/ibc-rs).
 
 ## History
 

@@ -357,13 +357,9 @@ Not applicable.
 
 Not applicable. Alterations to the client verification algorithm will require a new client standard.
 
-## Example Implementation
+## Example Implementations
 
 None yet.
-
-## Other Implementations
-
-None at present.
 
 ## History
 

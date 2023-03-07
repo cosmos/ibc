@@ -451,9 +451,9 @@ Not applicable.
 
 Not applicable. Alterations to the client verification algorithm will require a new client standard.
 
-## Example Implementation
+## Example Implementations
 
-Repository for [Go implementation of ICS 07 for Cosmos SDK chains](https://github.com/cosmos/ibc-go/tree/main/modules/light-clients/07-tendermint).
+- Implementation of ICS 07 in Go can be found in [ibc-go repository](https://github.com/cosmos/ibc-go).
 
 ## Other Implementations
 

@@ -381,13 +381,10 @@ Key/value store functionality and consensus state type are unlikely to change du
 
 `submitDatagram` can change over time as relayers should be able to update their processes.
 
-## Example Implementation
+## Example Implementations
 
-Repository for [Go implementation of ICS 24 for Cosmos SDK chains](https://github.com/cosmos/ibc-go/tree/main/modules/core/24-host).
-
-## Other Implementations
-
-Repository for [Rust implementation of ICS 24](https://github.com/cosmos/ibc-rs/tree/main/crates/ibc/src/core/ics24_host).
+- Implementation of ICS 24 in Go can be found in [ibc-go repository](https://github.com/cosmos/ibc-go).
+- Implementation of ICS 24 in Rust can be found in [ibc-rs repository](https://github.com/cosmos/ibc-rs).
 
 ## History
 

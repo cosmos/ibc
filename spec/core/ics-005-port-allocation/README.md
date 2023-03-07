@@ -232,13 +232,10 @@ Not applicable.
 
 Port binding is not a wire protocol, so interfaces can change independently on separate chains as long as the ownership semantics are unaffected.
 
-## Example Implementation
+## Example Implementations
 
-Repository for [Go implementation of ICS 05 for Cosmos SDK chains](https://github.com/cosmos/ibc-go/tree/main/modules/core/05-port).
-
-## Other Implementations
-
-Repository for [Rust implementation of ICS 05](https://github.com/cosmos/ibc-rs/tree/main/crates/ibc/src/core/ics05_port).
+- Implementation of ICS 05 in Go can be found in [ibc-go repository](https://github.com/cosmos/ibc-go).
+- Implementation of ICS 05 in Rust can be found in [ibc-rs repository](https://github.com/cosmos/ibc-rs).
 
 ## History
 

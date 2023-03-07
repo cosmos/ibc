@@ -341,9 +341,9 @@ Not applicable.
 
 Not applicable. Alterations to the client verification algorithm will require a new client standard.
 
-## Example Implementation
+## Example Implementations
 
-Repository for [Go implementation of ICS 06 for Cosmos SDK chains](https://github.com/cosmos/ibc-go/tree/main/modules/light-clients/06-solomachine).
+- Implementation of ICS 06 in Go can be found in [ibc-go repository](https://github.com/cosmos/ibc-go).
 
 ## Other Implementations
 

@@ -1109,13 +1109,10 @@ Not applicable.
 
 Data structures & encoding can be versioned at the connection or channel level. Channel logic is completely agnostic to packet data formats, which can be changed by the modules any way they like at any time.
 
-## Example Implementation
+## Example Implementations
 
-Repository for [Go implementation of ICS 04 for Cosmos SDK chains](https://github.com/cosmos/ibc-go/tree/main/modules/core/04-channel).
-
-## Other Implementations
-
-Repository for [Rust implementation of ICS 04](https://github.com/cosmos/ibc-rs/tree/main/crates/ibc/src/core/ics04_channel).
+- Implementation of ICS 04 in Go can be found in [ibc-go repository](https://github.com/cosmos/ibc-go).
+- Implementation of ICS 04 in Rust can be found in [ibc-rs repository](https://github.com/cosmos/ibc-rs).
 
 ## History
 

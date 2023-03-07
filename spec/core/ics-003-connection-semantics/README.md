@@ -496,13 +496,10 @@ A future version of this ICS will include version negotiation in the opening han
 
 The consensus state can only be updated as allowed by the `updateConsensusState` function defined by the consensus protocol chosen when the connection is established.
 
-## Example Implementation
+## Example Implementations
 
-Repository for [Go implementation of ICS 03 for Cosmos SDK chains](https://github.com/cosmos/ibc-go/tree/main/modules/core/03-connection).
-
-## Other Implementations
-
-Repository for [Rust implementation of ICS 03](https://github.com/cosmos/ibc-rs/tree/main/crates/ibc/src/core/ics03_connection).
+- Implementation of ICS 03 in Go can be found in [ibc-go repository](https://github.com/cosmos/ibc-go).
+- Implementation of ICS 03 in Rust can be found in [ibc-rs repository](https://github.com/cosmos/ibc-rs).
 
 ## History
 

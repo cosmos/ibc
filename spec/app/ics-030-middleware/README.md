@@ -350,9 +350,9 @@ The Middleware approach is a design pattern already enabled by current IBC. This
 
 Not applicable.
 
-## Example Implementation
+## Example Implementations
 
-Repository for [Go implementation for Cosmos SDK chains of ICS 29 following ICS 30 design pattern](https://github.com/cosmos/ibc-go/tree/main/modules/apps/29-fee).
+- Implementation of ICS 29 in Go following ICS 30 design pattern can be found in [ibc-go repository](https://github.com/cosmos/ibc-go).
 
 ## Other Implementations
 

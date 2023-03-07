@@ -92,7 +92,7 @@ The specification may have any or all of the following sub-components, as approp
     The technical specification should be detailed enough such that separate correct implementations of the specification without knowledge of each other are compatible.
 - *Backwards Compatibility* - A discussion of compatibility (or lack thereof) with previous feature or protocol versions.
 - *Forwards Compatibility* - A discussion of compatibility (or lack thereof) with future possible or expected features or protocol versions.
-- *Example Implementation* - A concrete example implementation or description of an expected implementation to serve as the primary reference for implementers.
+- *Example Implementations* - Concrete example implementations or descriptions of expected implementations to serve as the primary reference for implementers.
 - *Other Implementations* - A list of candidate or finalised implementations (external references, not inline).
 
 ### History

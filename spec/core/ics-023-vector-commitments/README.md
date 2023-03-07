@@ -272,13 +272,9 @@ Not applicable.
 
 Commitment algorithms are expected to be fixed. New algorithms can be introduced by versioning connections and channels.
 
-## Example Implementation
+## Example Implementations
 
-Repository for [Go implementation of ICS 23](https://github.com/cosmos/ics23/tree/master/go).
-
-## Other Implementations
-
-Repository for [Rust implementation of ICS 23](https://github.com/cosmos/ics23/tree/master/rust).
+- Implementations of ICS 23 in Go and Rust can be found in [cosmos/ics23 repository](https://github.com/cosmos/ics23).
 
 ## History
 

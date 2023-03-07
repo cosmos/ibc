@@ -72,11 +72,7 @@ Not applicable.
 
 This interface MAY change when implemented on new chains (or upgrades to an existing chain) as long as the semantics remain the same.
 
-## Example Implementation
-
-Coming soon.
-
-## Other Implementations
+## Example Implementations
 
 Coming soon.
 

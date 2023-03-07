@@ -579,9 +579,9 @@ With the forward relayer correctly embedded in the acknowledgement, and the reve
 
 Not applicable.
 
-## Example Implementation
+## Example Implementations
 
-Repository for [Go implementation of ICS 29 for Cosmos SDK chains](https://github.com/cosmos/ibc-go/tree/main/modules/apps/29-fee).
+- Implementation of ICS 29 in Go can be found in [ibc-go repository](https://github.com/cosmos/ibc-go).
 
 ## Other Implementations
 
