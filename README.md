@@ -66,6 +66,7 @@ All standards at or past the "Draft" stage are listed here in order of their ICS
 | [30](spec/app/ics-030-middleware) | IBC Application Middleware | N/A | N/A | Protocol team |
 | [31](spec/app/ics-031-crosschain-queries) | Cross-Chain Queries | Draft | N/A | Protocol team |
 | [32](https://github.com/strangelove-ventures/async-icq) | Interchain Queries | Candidate | [async-icq](https://github.com/strangelove-ventures/async-icq) | [Strangelove Ventures](https://strange.love) |
+| [100](spec/app/ics-100-atomic-swap) | Atomic swap | Candidate | [ibcswap](https://github.com/ibcswap/ibcswap) | [Side Labs](https://side.one) |
 | [721](spec/app/ics-721-nft-transfer) | Non-Fungible Token Transfer | Candidate | [nft-transfer](https://github.com/bianjieai/nft-transfer) | [IRIS Network](https://www.irisnet.org) |
 
 ## Translations
