@@ -258,10 +258,50 @@ function verifyNextSequenceRecv(
   return verifyMembership(clientState, height, connection.delayPeriodTime, connection.delayPeriodBlocks, proof, path, nextSequenceRecv)
 }
 
+function verifyMultihopProof(
+  connection: ConnectionEnd,
+  height: Height,
+  proof: MultihopProof,
+  connectionHops: String[],
+  key: String,
+  value: ArrayBuffer) {
+    multihopConnectionEnd = abortTransactionUnless(getMultihopConnectionEnd(proof))
+    prefix = multihopConnectionEnd.GetCounterparty().GetPrefix()
+    client = queryClient(connection.clientIdentifier)
+    consensusState = queryConsensusState(connection.clientIdentifier, height)
+
+    abortTransactionUnless(client.Status() === "active")
+    abortTransactionUnless(client.GetLatestHeight() >= height)
+
+    delayPeriod = abortTransactionUnless(getMaximumDelayPeriod(proof, connection))
+    expectedTimePerBlock := queryMaxExpectedTimePerBlock()
+
+    abortTransactionUnless(multihop.VerifyDelayPeriodPassed(height, delayPeriod, expectedTimePerBlock)) // see ics-033
+    
+    return multihop.VerifyMultihopProof(consensusState, connectionHops, proof, prefix, key, value) // see ics-033
+}
+
 function getTimestampAtHeight(
   connection: ConnectionEnd,
   height: Height) {
     return queryConsensusState(connection.clientIdentifier, height).getTimestamp()
+}
+
+// Return the connectionEnd corresponding to the source chain.
+function getMultihopConnectionEnd(proof: MultihopProof): ConnectionEnd {
+  return abortTransactionUnless(Unmarshal(proof.ConnectionProofs[0].Value))
+}
+
+// Return the maximum delay period across all connections in the channel path.
+function getMaximumDelayPeriod(proof: MultihopProof, lastConnection: ConnectionEnd): number {
+  let delayPeriod = lastConnection.GetDelayPeriod()
+  for connData in range proofs.ConnectionProofs {
+    let connectionEnd = abortTransactionUnless(Unmarshal(connData.Value))
+    if (connectionEnd.DelayPeriod > delayPeriod) {
+      delayPeriod = connectionEnd.DelayPeriod
+    }
+  }
+  return delayPeriod
 }
 ```
 

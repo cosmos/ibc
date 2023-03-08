@@ -393,7 +393,7 @@ function chanOpenTry(
       counterpartyConnectionEnd = abortTransactionUnless(getMultihopConnectionEnd(proofInit))
       prefix = counterpartyConnectionEnd.GetCounterparty().GetPrefix()
 
-      abortTransactionUnless(VerifyMultihopProof(
+      abortTransactionUnless(connection.verifyMultihopProof(
         consensusState,
         connectionHops,
         proofInit,
@@ -456,7 +456,7 @@ function chanOpenAck(
       counterpartyConnectionEnd = abortTransactionUnless(getMultihopConnectionEnd(proofTry))
       prefix = counterpartyConnectionEnd.GetCounterparty().GetPrefix()
 
-      abortTransactionUnless(VerifyMultihopProof(
+      abortTransactionUnless(connection.verifyMultihopProof(
         consensusState,
         connectionHops,
         proofTry,
@@ -514,7 +514,7 @@ function chanOpenConfirm(
       counterpartyConnectionEnd = abortTransactionUnless(getMultihopConnectionEnd(proofAck))
       prefix = counterpartyConnectionEnd.GetCounterparty().GetPrefix()
 
-      abortTransactionUnless(VerifyMultihopProof(
+      abortTransactionUnless(connection.verifyMultihopProof(
         consensusState,
         connectionHops,
         proofTry,
@@ -603,7 +603,67 @@ function chanCloseConfirm(
       counterpartyConnectionEnd = abortTransactionUnless(getMultihopConnectionEnd(proofInit))
       prefix = counterpartyConnectionEnd.GetCounterparty().GetPrefix()
 
-      abortTransactionUnless(VerifyMultihopProof(
+      abortTransactionUnless(connection.verifyMultihopProof(
+        consensusState,
+        connectionHops,
+        proofTry,
+        prefix,
+        key
+        expected))
+    } else {
+      abortTransactionUnless(connection.verifyChannelState(
+        proofHeight,
+        proofInit,
+        channel.counterpartyPortIdentifier,
+        channel.counterpartyChannelIdentifier,
+        expected
+      ))
+    }
+
+    channel.state = CLOSED
+    provableStore.set(channelPath(portIdentifier, channelIdentifier), channel)
+}
+```
+
+The `chanCloseFrozen` function is called by a relayer to force close a multi-hop channel if any client state in the
+channel path is frozen. A relayer should send proof of the frozen client state to each end of the channel with a
+proof of the frozen client state in the channel path starting from each channel end up until the first frozen client.
+The multi-hop proof for each channel end will be different and consist of a proof formed starting from each channel
+end up to the frozen client.
+
+
+
+Once closed, channels cannot be reopened and identifiers cannot be reused. Identifier reuse is prevented because
+we want to prevent potential replay of previously sent packets. The replay problem is analogous to using sequence
+numbers with signed messages, except where the light client algorithm "signs" the messages (IBC packets), and the replay
+prevention sequence is the combination of port identifier, channel identifier, and packet sequence - hence we cannot
+allow the same port identifier & channel identifier to be reused again with a sequence reset to zero, since this
+might allow packets to be replayed. It would be possible to safely reuse identifiers if timeouts of a particular
+maximum height/time were mandated & tracked, and future specification versions may incorporate this feature.
+
+```typescript
+function chanCloseFrozen(
+  portIdentifier: Identifier,
+  channelIdentifier: Identifier,
+  proofFrozen: MultihopProof,
+  proofHeight: Height) {
+    abortTransactionUnless(authenticateCapability(channelCapabilityPath(portIdentifier, channelIdentifier), capability))
+    channel = provableStore.get(channelPath(portIdentifier, channelIdentifier))
+    abortTransactionUnless(channel !== null)
+    abortTransactionUnless(channel.connectionHops.length === 1)
+    abortTransactionUnless(channel.state !== CLOSED)
+    connection = provableStore.get(connectionPath(channel.connectionHops[0]))
+    abortTransactionUnless(connection !== null)
+    abortTransactionUnless(connection.state === OPEN)
+
+    // prove the connection end prior to misbehavior on the misbehaving chain
+    if (connectionHops.length > 1) {
+      consensusState = provableStore.get(consensusStatePath(connection.ClientId, proofHeight))
+      key = host.ChannelPath(counterparty.PortId, counterparty.ChannelId)
+      counterpartyConnectionEnd = abortTransactionUnless(getMultihopConnectionEnd(proofInit))
+      prefix = counterpartyConnectionEnd.GetCounterparty().GetPrefix()
+
+      abortTransactionUnless(connection.verifyMultihopProof(
         consensusState,
         connectionHops,
         proofTry,
@@ -628,23 +688,18 @@ function chanCloseConfirm(
 ##### Multihop utility functions
 
 ```typescript
-// Return the connectionEnd corresponding to the source chain
-function getMultihopConnectionEnd(proof: MultihopProof): ConnectionEnd {
-  return abortTransactionUnless(Unmarshal(proof.ConnectionProofs[0].Value))
-}
-
 // Return the counterparty connectionHops
 function getCounterPartyHops(proof: MultihopProof, lastConnection: ConnectionEnd) string[] {
- let counterpartyHops: string[] = []
- for connData in proofs.ConnectionProofs {
-  connectionEnd = abortTransactionUnless(Unmarshal(connData.Value))
-  counterpartyHops.push(connectionEnd.GetCounterparty().GetConnectionID())
- }
+  let counterpartyHops: string[] = []
+  for connData in proofs.ConnectionProofs {
+    connectionEnd = abortTransactionUnless(Unmarshal(connData.Value))
+    counterpartyHops.push(connectionEnd.GetCounterparty().GetConnectionID())
+   }
 
- // add the last connection representing chain[N-1]
- counterpartyHops.push(lastConnection.GetCounterparty().GetConnectionID())
+  // add the last connection representing chain[N-1]
+  counterpartyHops.push(lastConnection.GetCounterparty().GetConnectionID())
 
- return counterpartyHops
+  return counterpartyHops
 }
 ```
 
