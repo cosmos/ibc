@@ -96,6 +96,7 @@ type ProofData struct {
 // Consensus and Connection proofs are ordered from source to destination but not including the
 // chain[N-1] consensus state on chainN (dest) since it is already known on the destination chain.
 type MultihopProof struct {
+    KeyProofIndex uint32           // the index of the consensus state to prove the key/value on, normally 0
     KeyProof *ProofData            // the key/value proof on the source chain (consensusState[0])
     ConsensusProofs []*ProofData   // array of consensus proofs starting with proof of consensusState[0] state root on chain1 (consensusState[1])
     ConnectionProofs []*ProofData  // array of connection proofs starting with proof of conn[1,0] on chain1 (consensusState[1])
@@ -345,8 +346,8 @@ func VerifyKeyValueProof(
     // create prefixed key for proof verification
     prefixedKey := abortTransactionUnless(commitmenttypes.ApplyPrefix(prefix, commitmenttypes.NewMerklePath(key)))
 
-    // extract source chain consensus state from consensus proofs
-    sourceConsensusState := abortTransactionUnless(UnmarshalInterface(proofs.ConsensusProofs[0].Value))
+    // extract indexed consensus state from consensus proofs
+    consensusState := abortTransactionUnless(UnmarshalInterface(proofs.ConsensusProofs[proofs.KeyProofIndex].Value))
 
     // assign the key proof to verify on the source chain
     keyProof := abortTransactionUnless(Unmarshal(proofs.KeyProof.Proof))
@@ -355,14 +356,14 @@ func VerifyKeyValueProof(
     if (value != nil) {
         abortTransactionUnless(keyProof.VerifyMembership(
             commitmenttypes.GetSDKSpecs(),
-            sourceConsensusState.GetRoot(),
+            consensusState.GetRoot(),
             prefixedKey,
             value,
         ))
     } else {
         abortTransactionUnless(keyProof.VerifyNonMembership(
             commitmenttypes.GetSDKSpecs(),
-            sourceConsensusState.GetRoot(),
+            consensusState.GetRoot(),
             prefixedKey,
         ))
     }

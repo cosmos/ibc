@@ -388,16 +388,13 @@ function chanOpenTry(
     }
 
     if (connectionHops.length > 1) {
-      consensusState = provableStore.get(consensusStatePath(connection.ClientId, proofHeight))
       key = host.ChannelPath(counterparty.PortId, counterparty.ChannelId)
-      counterpartyConnectionEnd = abortTransactionUnless(getMultihopConnectionEnd(proofInit))
-      prefix = counterpartyConnectionEnd.GetCounterparty().GetPrefix()
 
       abortTransactionUnless(connection.verifyMultihopProof(
-        consensusState,
-        connectionHops,
+        connection,
+        proofHeight,
         proofInit,
-        prefix,
+        connectionHops,
         key
         expected))
     } else {
@@ -631,7 +628,10 @@ proof of the frozen client state in the channel path starting from each channel 
 The multi-hop proof for each channel end will be different and consist of a proof formed starting from each channel
 end up to the frozen client.
 
-
+The multi-hop proof starts on the misbehaving chain and extends to a channel end. However, the frozen client exists
+on the next blockchain in the channel path so the key/value proof is indexed to evaluate on the consensus state holding
+that client state. The client state path requires knowledge of the client id which can be determined from the
+connectionEnd on the misbehaving chain prior to the misbehavior submission.
 
 Once closed, channels cannot be reopened and identifiers cannot be reused. Identifier reuse is prevented because
 we want to prevent potential replay of previously sent packets. The replay problem is analogous to using sequence
@@ -656,32 +656,31 @@ function chanCloseFrozen(
     abortTransactionUnless(connection !== null)
     abortTransactionUnless(connection.state === OPEN)
 
-    // prove the connection end prior to misbehavior on the misbehaving chain
-    if (connectionHops.length > 1) {
-      consensusState = provableStore.get(consensusStatePath(connection.ClientId, proofHeight))
-      key = host.ChannelPath(counterparty.PortId, counterparty.ChannelId)
-      counterpartyConnectionEnd = abortTransactionUnless(getMultihopConnectionEnd(proofInit))
-      prefix = counterpartyConnectionEnd.GetCounterparty().GetPrefix()
+    // connectionEnd on misbehaving chain representing the counterparty connection on the next chain
+    let counterpartyConnectionEnd = proofFrozen.ConnectionProofs[0].Value
 
-      abortTransactionUnless(connection.verifyMultihopProof(
-        consensusState,
-        connectionHops,
-        proofTry,
-        prefix,
-        key
-        expected))
-    } else {
-      abortTransactionUnless(connection.verifyChannelState(
-        proofHeight,
-        proofInit,
-        channel.counterpartyPortIdentifier,
-        channel.counterpartyChannelIdentifier,
-        expected
-      ))
-    }
+    // key path to frozen client state
+    let key = host.FullClientStatePath(counterpartyConnectionEnd.ClientId)
 
-    channel.state = CLOSED
-    provableStore.set(channelPath(portIdentifier, channelIdentifier), channel)
+    // frozen client state
+    let frozenClientState = proofFrozen.KeyProof.Value
+
+    // truncated connectionHops. e.g. client B on chain C is frozen: A, B, C, D -> B, C, D
+    let connectionHops = channel.ConnectionHops[:len(mProof.ConnectionProofs)]
+
+    // ensure client state is frozen by checking FrozenHeight
+    abortTransactionUnless(frozenClientState.FrozenHeight !== Height(0,0)
+
+    abortTransactionUnless(connection.verifyMultihopProof(
+      connection,
+      proofHeight,
+      proofFrozen,
+      connectionHops,
+      key
+      frozenClientState))
+
+  channel.state = FROZEN
+  provableStore.set(channelPath(portIdentifier, channelIdentifier), channel)
 }
 ```
 
@@ -836,12 +835,15 @@ function recvPacket(
     abortTransactionUnless(connection.state === OPEN)
 
     if (len(channel.connectionHops) > 1) {
-      consensusState = provableStore.get(consensusStatePath(connection.ClientId, proofHeight))
-      key = host.PacketCommitmentPath(packet.GetDestPort(), packet.GetDestChannel(), packet.GetSequence())
-      commitment = types.CommitPacket(packet)
-      counterpartyConnectionEnd = abortTransactionUnless(getMultihopConnectionEnd(proof))
-      prefix = counterpartyConnectionEnd.GetCounterparty().GetPrefix()
-      abortTransactionUnless(VerifyMultihopProof(k.cdc, consensusState, channel.ConnectionHops, proof, prefix, key, commitment))
+      key = host.PacketCommitmentPath(packet.GetSourcePort(), packet.GetSourceChannel(), packet.GetSequence())
+      abortTransactionUnless(connection.verifyMultihopProof(
+        connection,
+        proofHeight,
+        proof,
+        channel.ConnectionHops,
+        key,
+        hash(packet.data, packet.timeoutHeight, packet.timeoutTimestamp)
+      ))
     } else {
       abortTransactionUnless(connection.verifyPacketData(
         proofHeight,
@@ -1040,12 +1042,15 @@ function acknowledgePacket(
 
     // abort transaction unless correct acknowledgement on counterparty chain
     if (len(channel.connectionHops) > 1) {
-      consensusState = provableStore.get(consensusStatePath(connection.ClientId, proofHeight))
       key = host.PacketAcknowledgementPath(packet.GetDestPort(), packet.GetDestChannel(), packet.GetSequence())
-      value = types.CommitAcknowledgement(acknowledgement)
-      counterpartyConnectionEnd = abortTransactionUnless(getMultihopConnectionEnd(proof))
-      prefix = counterpartyConnectionEnd.GetCounterparty().GetPrefix()
-      abortTransactionUnless(VerifyMultihopProof(k.cdc, consensusState, channel.ConnectionHops, proof, prefix, key, value))
+      abortTransactionUnless(connection.VerifyMultihopProof(
+        connection,
+        proofHeight,
+        proof,
+        channel.ConnectionHops,
+        key,
+        acknowledgement
+      ))
     } else {
       abortTransactionUnless(connection.verifyPacketAcknowledgement(
         proofHeight,
