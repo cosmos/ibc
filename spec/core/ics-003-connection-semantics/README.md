@@ -258,7 +258,7 @@ function verifyNextSequenceRecv(
   return verifyMembership(clientState, height, connection.delayPeriodTime, connection.delayPeriodBlocks, proof, path, nextSequenceRecv)
 }
 
-function verifyMultihopProof(
+function verifyMultihopMembership(
   connection: ConnectionEnd,
   height: Height,
   proof: MultihopProof,
@@ -273,12 +273,36 @@ function verifyMultihopProof(
     abortTransactionUnless(client.Status() === "active")
     abortTransactionUnless(client.GetLatestHeight() >= height)
 
-    delayPeriod = abortTransactionUnless(getMaximumDelayPeriod(proof, connection))
-    expectedTimePerBlock := queryMaxExpectedTimePerBlock()
-
-    abortTransactionUnless(multihop.VerifyDelayPeriodPassed(height, delayPeriod, expectedTimePerBlock)) // see ics-033
+    // verify maximum delay period has passed
+    maxDelayPeriod = abortTransactionUnless(getMaximumDelayPeriod(proof, connection))
+    expectedTimePerBlock = queryMaxExpectedTimePerBlock()
+    blockDelay = getBlockDelay(timeDelay, expectedTimePerBlock)
+    abortTransactionUnless(verifyDelayPeriodPassed(height, maxDelayPeriod, blockDelay))
     
-    return multihop.VerifyMultihopProof(consensusState, connectionHops, proof, prefix, key, value) // see ics-033
+    return multihop.VerifyMultihopMembership(consensusState, connectionHops, proof, prefix, key, value) // see ics-033
+}
+
+function verifyMultihopNonMembership(
+  connection: ConnectionEnd,
+  height: Height,
+  proof: MultihopProof,
+  connectionHops: String[],
+  key: String) {
+    multihopConnectionEnd = abortTransactionUnless(getMultihopConnectionEnd(proof))
+    prefix = multihopConnectionEnd.GetCounterparty().GetPrefix()
+    client = queryClient(connection.clientIdentifier)
+    consensusState = queryConsensusState(connection.clientIdentifier, height)
+
+    abortTransactionUnless(client.Status() === "active")
+    abortTransactionUnless(client.GetLatestHeight() >= height)
+
+    // verify maximum delay period has passed
+    maxDelayPeriod = abortTransactionUnless(getMaximumDelayPeriod(proof, connection))
+    expectedTimePerBlock = queryMaxExpectedTimePerBlock()
+    blockDelay = getBlockDelay(timeDelay, expectedTimePerBlock)
+    abortTransactionUnless(verifyDelayPeriodPassed(height, maxDelayPeriod, blockDelay))
+    
+    return multihop.VerifyMultihopNonMembership(consensusState, connectionHops, proof, prefix, key) // see ics-033
 }
 
 function getTimestampAtHeight(
@@ -294,9 +318,9 @@ function getMultihopConnectionEnd(proof: MultihopProof): ConnectionEnd {
 
 // Return the maximum delay period across all connections in the channel path.
 function getMaximumDelayPeriod(proof: MultihopProof, lastConnection: ConnectionEnd): number {
-  let delayPeriod = lastConnection.GetDelayPeriod()
+  delayPeriod = lastConnection.GetDelayPeriod()
   for connData in range proofs.ConnectionProofs {
-    let connectionEnd = abortTransactionUnless(Unmarshal(connData.Value))
+    connectionEnd = abortTransactionUnless(Unmarshal(connData.Value))
     if (connectionEnd.DelayPeriod > delayPeriod) {
       delayPeriod = connectionEnd.DelayPeriod
     }

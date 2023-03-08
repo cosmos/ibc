@@ -239,14 +239,14 @@ For more details see [ICS4](https://github.com/cosmos/ibc/tree/main/spec/core/ic
 Pseudocode proof generation for a channel between `N` chains `C[0] --> C[i] --> C[N]`
 
 ```go
-// VerifyMultihopProof verifies a multihop proof.
+// VerifyMultihopMembership verifies a multihop membership proof.
 // Inputs: consensusState - The consensusState for chain[N-1], which is known on the destination chain (chain[N]).
 //         connectionHops - The expected connectionHops for the channel from the source chain to the destination chain.
 //         proof          - The serialized multihop proof data.
 //         prefix         - Merkleprefix to be combined with key to generate Merklepath for the key/value proof verification.
-//         key            - The key to prove in the source chain's state root.
-//         value          - The value to prove in the source chain's state root.
-func VerifyMultihopProof(
+//         key            - The key to prove in the indexed consensus state.
+//         value          - The value to prove in the indexed consensus state.
+func VerifyMultihopMembership(
     consensusState exported.ConsensusState,
     connectionHops []string,
     proof []byte,
@@ -259,14 +259,42 @@ func VerifyMultihopProof(
     abortTransactionUnless(len(proofs.ConsensusProofs) >= 1)
     abortTransactionUnless(len(proofs.ConnectionProofs) == len(proofs.ConsensusProofs))
 
-    // verify connection states and ordering
-    abortTransactionUnless(VerifyConnectionStates(proofs.ConnectionProofs, connectionHops))
+    // verify connection hop ordering and connections are in OPEN state
+    abortTransactionUnless(VerifyConnectionHops(proofs.ConnectionProofs, connectionHops))
 
     // verify intermediate consensus and connection states from destination --> source
-    abortTransactionUnless(VerifyIntermediateStateProofs(consensusState, proofs.ConsensusProofs, proofs.ConnectionProofs))
+    abortTransactionUnless(VerifyConsensusAndConnectionStates(consensusState, proofs.ConsensusProofs, proofs.ConnectionProofs))
 
     // verify a key/value proof on source chain's consensus state.
-    abortTransactionUnless(VerifyKeyValueProof(proofs, prefix, key, value))
+    abortTransactionUnless(VerifyKeyMembership(proofs, prefix, key, value))
+}
+
+// VerifyMultihopNonMembership verifies a multihop non-membership proof.
+// Inputs: consensusState - The consensusState for chain[N-1], which is known on the destination chain (chain[N]).
+//         connectionHops - The expected connectionHops for the channel from the source chain to the destination chain.
+//         proof          - The serialized multihop proof data.
+//         prefix         - Merkleprefix to be combined with key to generate Merklepath for the key/value proof verification.
+//         key            - The key to prove absent in the indexed consensus state
+func VerifyMultihopNonMembership(
+    consensusState exported.ConsensusState,
+    connectionHops []string,
+    proof []byte,
+    prefix exported.Prefix,
+    key string,
+) {
+    // deserialize proof bytes into multihop proofs
+    proofs := abortTransactionUnless(Unmarshal(proof))
+    abortTransactionUnless(len(proofs.ConsensusProofs) >= 1)
+    abortTransactionUnless(len(proofs.ConnectionProofs) == len(proofs.ConsensusProofs))
+
+    // verify connection hop ordering and connections are in OPEN state
+    abortTransactionUnless(VerifyConnectionHops(proofs.ConnectionProofs, connectionHops))
+
+    // verify intermediate consensus and connection states from destination --> source
+    abortTransactionUnless(VerifyConsensusAndConnectionStates(consensusState, proofs.ConsensusProofs, proofs.ConnectionProofs))
+
+    // verify a key/value proof on source chain's consensus state.
+    abortTransactionUnless(VerifyKeyNonMembership(proofs, prefix, key))
 }
 
 // VerifyDelayPeriodPassed will ensure that at least delayTimePeriod amount of time and delayBlockPeriod number of blocks have passed
@@ -280,11 +308,11 @@ func VerifyDelayPeriodPassed(
     blockDelay := getBlockDelay(timeDelay, expectedTimePerBlock)
 
     // tendermint client implementation
-    return tmclient.VerifyDelayPeriodPassed(proofHeight, timeDelay, blockDelay)
+    return tendermint.VerifyDelayPeriodPassed(proofHeight, timeDelay, blockDelay)
 }
 
-// VerifyConnectionStates checks that each connection in the multihop proof is OPEN and matches the connections in connectionHops.
-func VerifyConnectionStates(
+// VerifyConnectionHops checks that each connection in the multihop proof is OPEN and matches the connections in connectionHops.
+func VerifyConnectionHops(
     connectionProofs []*MultihopProof,
     connectionHops []string,
 ) {
@@ -302,10 +330,10 @@ func VerifyConnectionStates(
     }
 }
 
-// VerifyIntermediateStateProofs verifies the state of each intermediate consensus, connection, and
+// VerifyConsensusAndConnectionStates verifies the state of each intermediate consensus, connection, and
 // client state starting from chain[N-1] on the destination (chain[N]) and finally proving the source
 // chain consensus, connection, and client state.
-func VerifyIntermediateStateProofs(
+func VerifyConsensusAndConnectionStates(
  consensusState exported.ConsensusState,
  consensusProofs []*MultihopProof,
  connectionProofs []*MultihopProof,
@@ -336,8 +364,8 @@ func VerifyIntermediateStateProofs(
     }
 }
 
-// VerifyKeyValueProof verifies a key in the source chain consensus state.
-func VerifyKeyValueProof(
+// VerifyKeyMembership verifies a key in the indexed chain consensus state.
+func VerifyKeyMembership(
     proofs *MsgMultihopProof,
     prefix exported.Prefix,
     key string,
@@ -352,24 +380,37 @@ func VerifyKeyValueProof(
     // assign the key proof to verify on the source chain
     keyProof := abortTransactionUnless(Unmarshal(proofs.KeyProof.Proof))
 
-    // prove membership if value provided else prove non-membership
-    if (value != nil) {
-        abortTransactionUnless(keyProof.VerifyMembership(
-            commitmenttypes.GetSDKSpecs(),
-            consensusState.GetRoot(),
-            prefixedKey,
-            value,
-        ))
-    } else {
-        abortTransactionUnless(keyProof.VerifyNonMembership(
-            commitmenttypes.GetSDKSpecs(),
-            consensusState.GetRoot(),
-            prefixedKey,
-        ))
-    }
+    abortTransactionUnless(keyProof.VerifyMembership(
+        commitmenttypes.GetSDKSpecs(),
+        consensusState.GetRoot(),
+        prefixedKey,
+        value,
+    ))
+   
+}
+
+// VerifyKeyNonMembership verifies a key in the indexed chain consensus state.
+func VerifyKeyNonMembership(
+    proofs *MsgMultihopProof,
+    prefix exported.Prefix,
+    key string,
+) {
+    // create prefixed key for proof verification
+    prefixedKey := abortTransactionUnless(commitmenttypes.ApplyPrefix(prefix, commitmenttypes.NewMerklePath(key)))
+
+    // extract indexed consensus state from consensus proofs
+    consensusState := abortTransactionUnless(UnmarshalInterface(proofs.ConsensusProofs[proofs.KeyProofIndex].Value))
+
+    // assign the key proof to verify on the source chain
+    keyProof := abortTransactionUnless(Unmarshal(proofs.KeyProof.Proof))
+
+    abortTransactionUnless(keyProof.VerifyNonMembership(
+        commitmenttypes.GetSDKSpecs(),
+        consensusState.GetRoot(),
+        prefixedKey,
+    ))
 }
 ```
-
 
 ### Path Forgery Protection
 
