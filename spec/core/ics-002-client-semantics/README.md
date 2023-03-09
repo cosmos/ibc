@@ -8,7 +8,7 @@ requires: 23, 24
 required-by: 3
 author: Juwoon Yun <joon@tendermint.com>, Christopher Goes <cwgoes@tendermint.com>, Aditya Sripal <aditya@interchain.io>
 created: 2019-02-25
-modified: 2023-03-07
+modified: 2023-03-09
 ---
 
 ## Synopsis
