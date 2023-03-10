@@ -17,22 +17,20 @@ Changes to ClientState interface and associated handler to align with changes in
 
 ### Motivation
 
-Currently adding a new client implementation or upgrading an existing one requires a hard upgrade because the client implementations are part of the static chain binary. Any change to the on-chain light client code is dependent on chain governance to approve an upgrade before it can be deployed.
+Currently, adding a new client implementation or upgrading an existing one requires a hard upgrade because the client implementations are part of the static chain binary. Any change to the on-chain light client code depends on chain governance approving an upgrade before it can be deployed.
 
 This may be acceptable when adding new client types since the number of unique consensus algorithms that need to be supported is currently small. However, this process will become very tedious when it comes to upgrading light clients.
 
-Without dynamically upgradable light clients, a chain that wishes to upgrade its consensus algorithm (and thus break existing light clients) must wait for all counterparty chains to perform a hard upgrade that adds support for the upgraded light client before it can perform an upgrade on its chain. Examples of a consensus-breaking upgrade would be an upgrade from Tendermint v1 to a light-client breaking Tendermint v2 or switching from Tendermint consensus to Honeybadger. Changes to the internal state-machine logic will not affect consensus, e.g. changes to the staking module do not require an IBC upgrade.
+Without dynamically upgradable light clients, a chain that wishes to upgrade its consensus algorithm (and thus break existing light clients) must wait for all counterparty chains to perform a hard upgrade that adds support for the upgraded light client before it can perform an upgrade on its chain. Examples of a consensus-breaking upgrade would be an upgrade from Tendermint v1 to a light-client breaking Tendermint v2 or switching from Tendermint consensus to Honeybadger. Changes to the internal state-machine logic will not affect consensus. E.g., changes to the staking module do not require an IBC upgrade.
 
-Requiring all counterparties to statically add new client implementations to their binaries will inevitably slow the pace of upgrades in the IBC network since the deployment of an upgrade on even a very experimental, fast-moving chain will be blocked by an upgrade to a high-value chain that will be inherently more conservative.
+Requiring all counterparties to add statically new client implementations to their binaries will inevitably slow the pace of upgrades in the IBC network since the deployment of an upgrade on even a very experimental, fast-moving chain will be blocked by an upgrade to a high-value chain that will be inherently more conservative.
 
-Once the IBC network broadly adopts dynamically upgradable clients, a chain may upgrade its consensus algorithm whenever it wishes and relayers may upgrade the client code of all counterparty chains without requiring the counterparty chains to perform an upgrade themselves. This prevents a dependency on counterparty chains when considering upgrading one's consensus algorithm.
+Once the IBC network broadly adopts dynamically upgradable clients, a chain may upgrade its consensus algorithm whenever it wishes, and relayers may upgrade the client code of all counterparty chains without requiring the counterparty chains to perform an upgrade themselves. This prevents a dependency on counterparty chains when considering upgrading one's consensus algorithm.
 
-Another reason why this interface is beneficial is that it removes the dependency between Light clients and the Go programming language. By using WASM
-as a compilation target, light clients can be written in any programming language whose toolchain includes WASM as a compilation target. Examples of
-these are Go, Rust, C, and C++.
+Another reason why this interface is beneficial is that it removes the dependency between Light clients and the Go programming language. Using WASM as a compilation target, light clients can be written in any programming language whose toolchain includes WASM as a compilation target. Examples of these are Go, Rust, C, and C++.
 
-
-### Definitions
+### Def
+ions
 
 Functions & terms are as defined in [ICS 2](../../core/ics-002-client-semantics).
 
@@ -49,7 +47,7 @@ Functions & terms are as defined in [ICS 2](../../core/ics-002-client-semantics)
 
 ### Desired Properties
 
-This specification must satisfy the client interface defined in ICS 2.
+This specification must satisfy the client interface defined in [ICS 2.](../../core/ics-002-client-semantics).
 
 ## Technical Specification
 
@@ -57,9 +55,9 @@ This specification depends on the correct instantiation of the `WASM client` and
 
 ### Storage management
 
-Light client operations defined in the `02-client` can be stateful, that is, they may modify the
+Light client operations defined in the `02-client` can be stateful; they may modify the
 state kept in storage. For that, there is a need to allow the underlying light client implementation
-to access client and consensus data structures, and after performing certain computations, to
+to access client and consensus data structures and, after performing certain computations, to
 update the storage with the new versions of them.
 
 The current implementation chooses to receive the updated value from the wasm module directly, and persist
@@ -69,9 +67,9 @@ directly.
 ### WASM VM
 
 The purpose of this module is to delegate light client logic to a module written in wasm. For that,
-the `08-wasm` module needs to have a reference (or a handler) to a wasm VM. At a higher level, the
+the `08-wasm` module needs a reference (or a handler) to a wasm VM. At a higher level, the
 [wasmd](https://github.com/CosmWasm/wasmd) module can be used for the aforementioned operation. Alternatively,
-this module can directly call the [wasmvm](https://github.com/CosmWasm/wasmvm), to interact with
+this module can directly call the [wasmvm](https://github.com/CosmWasm/wasmvm) to interact with
 the VM with less overhead.
 
 
@@ -89,8 +87,7 @@ const maxGasLimit = uint64(0x7FFFFFFFFFFFFFFF)
   ctx.GasMeter().ConsumeGas(consumed, "wasm contract")
   // throw OutOfGas error if we ran out (got exactly to zero due to better limit enforcing)
   if ctx.GasMeter().IsOutOfGas() {
-    // returns an out of gas error - panics?
-    // TODO: ask what's the best thing to do here
+    // returns an out of gas error
   }
 }
 ```
@@ -99,7 +96,6 @@ const maxGasLimit = uint64(0x7FFFFFFFFFFFFFFF)
 
 ```go
 // Calls vm.Execute with internally constructed Gas meter and environment
-// TODO: Move this into a public method on the 28-wasm keeper
 func callContract(codeID []byte, ctx sdk.Context, store sdk.KVStore, msg []byte) (*types.Response, error) {}
 ```
 
@@ -118,8 +114,7 @@ function (codeID: cosmwasm.Checksum, ctx: sdk.Context, store: sdk.KVStore, env: 
 
 ### Client state
 
-The Wasm client state tracks the location of the Wasm bytecode via `codeHash`. Binary data represented by `data` field is opaque and only interpreted by the Wasm Client Code. `type` represents client type.
-`type` and `codeHash` both are immutable.
+The Wasm client state tracks the location of the Wasm bytecode via `codeHash`. Binary data represented by the `data` field is opaque and only interpreted by the Wasm Client Code. The `type`field represents client type.` type` and `codeHash` are both immutable.
 
 ```typescript
 interface ClientState {
@@ -131,8 +126,7 @@ interface ClientState {
 
 ### Consensus state
 
-The Wasm consensus state tracks the timestamp (block time), `WASM Client` code-specific fields and commitment root for all previously verified consensus states.
-`type` and `codeHash` both are immutable.
+The Wasm consensus state tracks the timestamp (block time), `WASM Client` code-specific fields, and commitment root for all previously verified consensus states.`type` and `codeHash` are both immutable.
 
 ```typescript
 interface ConsensusState {
@@ -144,7 +138,7 @@ interface ConsensusState {
 
 ### Height
 
-The height of a Wasm light client instance consists of two `uint64`s: the revision number, and the height in the revision.
+The height of a Wasm light client instance consists of two `uint64`s: the revision number and the height in the revision.
 
 ```typescript
 interface Height {
@@ -183,8 +177,7 @@ interface Header {
 
 ### Misbehaviour
 
-The `Misbehaviour` type is used for detecting misbehaviour and freezing the client - to prevent further packet flow - if applicable.
-Wasm client `Misbehaviour` consists of two conflicting headers both of which the light client would have considered valid.
+If applicable, the Misbehaviour type is used for detecting misbehaviour and freezing the client - to prevent further packet flow. Wasm client Misbehaviour consists of two conflicting headers, both of which the light client would have considered valid.
 
 ```typescript
 interface Misbehaviour {
@@ -193,12 +186,12 @@ interface Misbehaviour {
 }
 ```
 
-### Client initialisation
+### Client initialization
 
-Wasm client initialisation requires a (subjectively chosen) latest consensus state interpretable by the target Wasm Client Code. `wasmCodeId` field is unique identifier for `Wasm Client Code`, and `initializationData` refers to opaque data required for initialization of the particular client managed by that Wasm Client Code.
+Wasm client initialization requires a (subjectively chosen) latest consensus state interpretable by the target Wasm Client Code. `wasmCodeId` field is a unique identifier for `Wasm Client Code`, and `initializationData` refers to opaque data required for initialization of the particular client managed by that Wasm Client Code.
 
 ```typescript
-function initialise(
+function initialize(
     wasmCodeId: String,
     initializationData: []byte,
     consensusState: []byte,
@@ -208,7 +201,7 @@ function initialise(
     assert(codeHandle.isInitializationDataValid(initializationData, consensusState))
 
     store = getStore("clients/{identifier}")
-    return codeHandle.initialise(store, initializationData, consensusState)
+    return codeHandle.initialize(store, initializationData, consensusState)
 }
 ```
 
@@ -235,7 +228,6 @@ function CheckSubstituteAndUpdateState(
     let consensusState = GetConsensusState(subjectClientStore, clientState.LatestHeight)
     let encodedData = packData(consensusState, clientState, substituteClient)
     let out = callContract(c.CodeId, ctx, store, encodedData)
-    // TODO: assert that there is no error
 
 ```
 
@@ -257,7 +249,7 @@ function checkForMisbehaviour(
 
 The chain which this light client is tracking can elect to write a special pre-determined key in state to allow the light client to update its client state (e.g. with a new chain ID or revision) in preparation for an upgrade.
 
-As the client state change will be performed immediately, once the new client state information is written to the predetermined key, the client will no longer be able to follow blocks on the old chain, so it must upgrade promptly.
+As the client state change will be performed immediately, once the new client state information is written to the pre-determined key, the client will no longer be able to follow blocks on the old chain, so it must upgrade promptly.
 
 ```typescript
 function upgradeClientState(
@@ -397,7 +389,6 @@ func CheckSubstituteAndUpdateState(ctx sdk.Context, cdc codec.BinaryCodec, subje
 	if err != nil {
 		return err
 	}
-  //TODO: this will likely change - looks a bit ugly lol
 	output.resetImmutables(&c)
 	return nil
 }
