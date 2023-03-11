@@ -224,13 +224,16 @@ The following outlines the general proof verification steps specific to a multi-
 3. Iterate through the connections states to determine the maximum `delayPeriod` for the channel path and verify that the counterparty consensus state on the receiving chain satisfies the delay requirement.
 4. Iterate through connection state proofs and verify each connectionEnd is in the OPEN state and check that the connection ids match the channel connectionHops.
 5. Verify the intermediate state proofs. Starting with known `ConsensusState[N-1]` at the given `proofHeight` on `ChainN` prove the prior chain's consensus and connection state.
-6. Repeat step 3, proving `ConsensusState[i-1]`, and `Conn[i-1,i]` until `ConsensusState[0]` on the source chain is proven.
+6. Verify that the client id in each consensus state proof key matches the client id in the ConnectionEnd in the previous connection state proof.
+7. Repeat step 3, proving `ConsensusState[i-1]`, and `Conn[i-1,i]` until `ConsensusState[0]` on the source chain is proven.
    - Start with i = N-1
-   - ConsensusState <= ConsensusState[i-1] on Chain[i]
+   - ConsensusState <- ConsensusProof[i-1].Value on Chain[i]
+   - ConnectionEnd <- ConnectionProof[i-1].Value on Chain[i]
+   - Verify ParseClientID(ConsensusProofs[i].Key) == ConnectionEnd.ClientID
    - ConsensusProofs[i].Proof.VerifyMembership(ConsensusState.GetRoot(), ConsensusProofs[i].Key, ConsensusProofs[i].Value)
    - ConnectionProofs[i].Proof.VerifyMembership(ConsensusState.GetRoot(), ConnectionProofs[i].Key, ConnectionProofs[i].Value)
    - Set ConsensusState from unmarshalled ConsensusProofs[i].Value
-7. Finally, prove the expected channel or packet commitment in `ConsensusState[0]`
+8. Finally, prove the expected channel or packet commitment in `ConsensusState[0]`
 
 For more details see [ICS4](https://github.com/cosmos/ibc/tree/main/spec/core/ics-004-channel-and-packet-semantics).
 
@@ -339,7 +342,12 @@ func VerifyConsensusAndConnectionStates(
  connectionProofs []*MultihopProof,
 ) {
     // reverse iterate through proofs to prove from destination to source
+    var clientID string
     for i := len(consensusProofs) - 1; i >= 0; i-- {
+
+        // check the clientID from the previous connection is part of the next
+        // consensus state's key path.
+        abortTransactionUnless(VerifyClientID(clientID, consensusProofs[i].PrefixedKey))
 
         // prove the consensus state of chain[i] on chain[i+1]
         consensusProof := abortTransactionUnless(Unmarshal(consensusProofs[i].Proof))
@@ -358,6 +366,10 @@ func VerifyConsensusAndConnectionStates(
             *connectionProof.PrefixedKey,
             connectionProof.Value,
         ))
+
+        var connection ConnectionEnd
+        abortTransactionUnless(connectionProof.Value, &connection)
+        clientID = connection.ClientID
 
         // update the consensusState to chain[i] to prove the next consensus/connection states
         consensusState = abortTransactionUnless(UnmarshalInterface(consensusProof.Value))
@@ -409,6 +421,12 @@ func VerifyKeyNonMembership(
         consensusState.GetRoot(),
         prefixedKey,
     ))
+}
+
+// VerifyClientID verifies that the client id in the provided key matches an expected client id.
+func VerifyClientID(expectedClientID string, key string) {
+    clientID := strings.Split(key, "/")[1] // /clients/<clientid>/...
+    abortTransactionUnless(expectedClientID == clientID)
 }
 ```
 
