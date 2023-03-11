@@ -337,9 +337,9 @@ func VerifyConnectionHops(
 // client state starting from chain[N-1] on the destination (chain[N]) and finally proving the source
 // chain consensus, connection, and client state.
 func VerifyConsensusAndConnectionStates(
- consensusState exported.ConsensusState,
- consensusProofs []*MultihopProof,
- connectionProofs []*MultihopProof,
+    consensusState exported.ConsensusState,
+    consensusProofs []*MultihopProof,
+    connectionProofs []*MultihopProof,
 ) {
     // reverse iterate through proofs to prove from destination to source
     var clientID string
