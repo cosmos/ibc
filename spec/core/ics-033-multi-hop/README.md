@@ -151,7 +151,7 @@ func GenerateConsensusProofs(chains []*Chain, height) []*ProofData {
         currentChain  := chains[i+1] // currentChain is where the proof is queried and generated
         nextChain     := chains[i+2] // nextChain holds the state root of the currentChain
 
-        currentHeight := GetClientStateHeight(currentChain, sourceChain) // height of previous chain state on current chain
+        consensusHeight := GetClientStateHeight(currentChain, previousChain.ClientID) // height of previous chain client state on current chain
         nextHeight := GetClientStateHeight(nextChain, currentChain)      // height of current chain state on next chain
 
         // consensus state of previous chain on current chain at currentHeight which is the height of A's client state on B
