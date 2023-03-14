@@ -98,7 +98,7 @@ type ProofData struct {
 type MultihopProof struct {
     KeyProofIndex uint32           // the index of the consensus state to prove the key/value on, normally 0
     KeyProof *ProofData            // the key/value proof on the source chain (consensusState[0])
-    ConsensusProofs []*ProofData   // array of consensus proofs starting with proof of consensusState[0] state root on chain1 (consensusState[1])
+    ConsensusProofs []*ProofData   // array of consensus proofs starting with proof of consensusState[0] on chain1
     ConnectionProofs []*ProofData  // array of connection proofs starting with proof of conn[1,0] on chain1 (consensusState[1])
 }
 
