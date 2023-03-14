@@ -146,7 +146,7 @@ function updateStateOnMisbehaviour(clientMsg: clientMessage) { }
 
 ### State verification functions
 
-State verification functions simply need to read state from the local ledger and compare with the bytes stored under the standardized key paths. The loopback client needs read-only access to the complete IBC store of the local ledger, and not only to its own client identifier-prefixed store.
+State verification functions simply need to read state from the local ledger and compare with the bytes stored under the standardized key paths. The loopback client needs read-only access to the **entire IBC store** of the local ledger, and not only to its own client identifier-prefixed store.
 
 ```typescript
 function verifyMembership(
