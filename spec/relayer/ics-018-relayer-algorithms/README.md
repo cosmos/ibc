@@ -267,13 +267,10 @@ Not applicable. The relayer process is off-chain and can be upgraded or downgrad
 
 Not applicable. The relayer process is off-chain and can be upgraded or downgraded as necessary.
 
-## Example Implementation
+## Example Implementations
 
-Coming soon.
-
-## Other Implementations
-
-Coming soon.
+- Implementation of ICS 18 in Go can be found in [cosmos/relayer repository](https://github.com/cosmos/relayer).
+- Implementation of ICS 18 in Rust can be found in [informalsystems/hermes repository](https://github.com/informalsystems/hermes).
 
 ## History
 

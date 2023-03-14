@@ -37,9 +37,9 @@ The communication between the provider and the consumer chains is done through t
 
 -->
 
-## Example Implementation
+## Example Implementations
 
-Interchain Security [Go implementation](https://github.com/cosmos/interchain-security).
+- Interchain Security [Go implementation](https://github.com/cosmos/interchain-security).
 
 
 <!--

@@ -446,9 +446,9 @@ This initial standard uses version "ics721-1" in the channel handshake.
 
 A future version of this standard could use a different version in the channel handshake, and safely alter the packet data format & packet handler semantics.
 
-## Example Implementation
+## Example Implementations
 
-Coming soon.
+- Implementation of ICS 721 in Go can be found in [bianjieai/nft-transfer repository](https://github.com/bianjieai/nft-transfer).
 
 ## Other Implementations
 

@@ -350,9 +350,9 @@ The Middleware approach is a design pattern already enabled by current IBC. This
 
 Not applicable.
 
-## Example Implementation
+## Example Implementations
 
-Coming soon.
+- Implementation of ICS 29 in Go following ICS 30 design pattern can be found in [ibc-go repository](https://github.com/cosmos/ibc-go).
 
 ## Other Implementations
 

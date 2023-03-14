@@ -341,9 +341,9 @@ Not applicable.
 
 Not applicable. Alterations to the client verification algorithm will require a new client standard.
 
-## Example Implementation
+## Example Implementations
 
-None yet.
+- Implementation of ICS 06 in Go can be found in [ibc-go repository](https://github.com/cosmos/ibc-go).
 
 ## Other Implementations
 

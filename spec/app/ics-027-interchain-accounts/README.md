@@ -595,9 +595,9 @@ Host Port Identifier: `icahost`
 
 The `icacontroller-` prefix on the controller port identifier is optional and host chains **must** not enforce that the counterparty port identifier includes it. Controller chains may decide to include it and validate that it is present in their own port identifier.
 
-## Example Implementation
+## Example Implementations
 
-Repository for Cosmos-SDK implementation of ICS-27: https://github.com/cosmos/ibc-go
+- Implementation of ICS 27 in Go can be found in [ibc-go repository](https://github.com/cosmos/ibc-go).
 
 ## Future Improvements
 

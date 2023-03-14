@@ -451,13 +451,13 @@ Not applicable.
 
 Not applicable. Alterations to the client verification algorithm will require a new client standard.
 
-## Example Implementation
+## Example Implementations
 
-None yet.
+- Implementation of ICS 07 in Go can be found in [ibc-go repository](https://github.com/cosmos/ibc-go).
 
 ## Other Implementations
 
-None at present.
+Repository for [Rust implementation of ICS 07](https://github.com/cosmos/ibc-rs/tree/main/crates/ibc/src/clients/ics07_tendermint).
 
 ## History
 
