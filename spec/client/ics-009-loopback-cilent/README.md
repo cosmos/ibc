@@ -66,19 +66,6 @@ interface Height {
 }
 ```
 
-### Header
-
-The header includes the identifier of the light client and the current block height of the local ledger.
-
-```typescript
-interface Header {
-  identifier: string
-  height: Height
-}
-```
-
-Header implements `ClientMessage` interface.
-
 ### Sentinel objects
 
 Similarly as in TCP/IP, where there exists a single loopback address, the protocol defines the existence of a single sentinel `ClientState` instance with the client identifier `09-localhost`. Creation of other loopback clients MUST be forbidden.
@@ -111,15 +98,11 @@ function initialise(
 
 ### Validity predicate
 
-Loopback client validity checking makes sure the height is greater than zero. If the provided header is valid, the client state update logic is executed.
+No validity checking is necessary in a loopback client; the function should never be called.
 
 ```typescript
 function verifyClientMessage(
   clientMsg: ClientMessage) {
-    header = Header(clientMessage)
-    if header.height > 0 {
-      assert(true)
-    }
     assert(false)
 }
 ```
@@ -137,23 +120,19 @@ function checkForMisbehaviour(
 
 ### `UpdateState`
 
-`UpdateState` will perform a regular update for the loopback client. If the header is higher than the lastest height on the `clientState`, then the `clientState` will be updated.
+`UpdateState` will perform a regular update for the loopback client. The `clientState` will be updated with the lastest height of the local ledger. This function should be called automatically at every height.
 
 ```typescript
 function updateState(
   clientMsg: clientMessage) {
     clientState = provableStore.get("clients/{clientMsg.identifier}/clientState")
-    header = Header(clientMessage)
+  
+    // retrieve the latest height from the local ledger
+    height = getSelfHeight()
+    clientState.latestHeight = header.height
 
-    // only update clientState if the header height 
-    // is higher than clientState's current latest height
-    if clientState.height < header.height {
-      // update latest height
-      clientState.latestHeight = header.height
-
-      // save the client
-      provableStore.set("clients/{clientMsg.identifier}/clientState", clientState)
-    }
+    // save the client state
+    provableStore.set("clients/{clientMsg.identifier}/clientState", clientState)
 }
 ```
 
@@ -228,13 +207,9 @@ Not applicable.
 
 Not applicable. Alterations to the client algorithm will require a new client standard.
 
-## Example Implementation
+## Example Implementations
 
-Repository for [Go implementation of ICS 09 for Cosmos SDK chains](https://github.com/cosmos/ibc-go/tree/main/modules/light-clients/09-localhost). 
-
-## Other Implementations
-
-None at present.
+- Implementation of ICS 09 in Go can be found in [ibc-go repository](https://github.com/cosmos/ibc-go). 
 
 ## History
 
