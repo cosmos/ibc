@@ -259,12 +259,14 @@ function verifyNextSequenceRecv(
 }
 
 function verifyMultihopMembership(
-  connection: ConnectionEnd,
+  connection: ConnectionEnd, // the connection end corresponding to the N-1'th chain in the channel path.
   height: Height,
   proof: MultihopProof,
   connectionHops: String[],
   key: String,
   value: ArrayBuffer) {
+
+    // the connectionEnd corresponding to the end of the multi-hop channel path (source chain).
     multihopConnectionEnd = abortTransactionUnless(getMultihopConnectionEnd(proof))
     prefix = multihopConnectionEnd.GetCounterparty().GetPrefix()
     client = queryClient(connection.clientIdentifier)
