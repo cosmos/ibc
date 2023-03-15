@@ -102,33 +102,72 @@ type MultihopProof struct {
     ConnectionProofs []*ProofData  // array of connection proofs starting with proof of conn[1,0] on chain1 (consensusState[1])
 }
 
-// GenerateMultihopProof generates proof of a key/value at the proofHeight on source chain (chain0). 
-func GenerateMultihopProof(chains []*Chain, key string, value []byte, proofHeight exported.Height) *MultihopProof {
+// GenerateMultihopProof generates proof of a key/value at the keyHeight on indexed chain (chain0).
+// Chains are provided in order from the sending (source) chain to the verifying chain.
+func GenerateMultihopProof(chains []*Chain, key string, value []byte, keyHeight exported.Height) *MultihopProof {
 
     abortTransactionUnless(len(chains) > 2)
 
-    var multihopProof MultihopProof
+    // generate and assign consensus, clientState, and connection proofs
+    var proof MultihopProof
+    proof.ConsensusProofs = GenerateConsensusProofs(chains)
+    proof.ConnectionProofs = GenerateConnectionProofs(chains)
+
     chain0 := chains[0] // source chain
-    chain1 := chains[1] // first hop chain
+    chain1 := chains[1] // next hop chain
  
     height01 := chain1.GetClientStateHeight(chain0) // height of chain0's client state on chain1
-    abortTransactionUnless(height01 >= proofHeight) // ensure that chain0's client state is update to date
+    abortTransactionUnless(height01 >= keyHeight)   // ensure that chain0's client state is update to date
 
-    // query the key/value proof on the source chain at the proof height
-    keyProof, _ := chain0.QueryProofAtHeight([]byte(key), int64(proofHeight.GetRevisionHeight()))
+    // query the key/value proof on the indexed chain at the proof height
+    keyProof, _ := chain0.QueryProofAtHeight([]byte(key), int64(keyHeight.GetRevisionHeight()))
 
     // assign the key/value proof
-    multihopProof.KeyProof = &ProofData{
-        Key:   nil,    // key to prove constructed during verification
-        Value: nil,    // proven values are constructed during verification
-        Proof: proof,
+    proof.KeyProof = &ProofData{
+        Key:   nil,  // key to prove constructed during verification
+        Value: nil,  // proven values are constructed during verification (except for frozen client proofs)
+        Proof: keyProof,
     }
 
-    // generate and assign consensus, clientState, and connection proofs
-    multihopProof.ConsensusProofs = GenerateConsensusProofs(chains)
-    multihopProof.ConnectionProofs = GenerateConnectionProofs(chains)
+    return &proof
+}
 
-    return &multihopProof
+// GenerateFrozenClientProof generate a multihop proof of a frozen channel given a set of chains starting from the misbehaving chain.
+// Chains are provided in order from the misbehaving chain to the verifying chain.
+func GenerateFrozenClientProof(chains []*Chain, keyHeight exported.Height) *MultihopProof {
+    
+    abortTransactionUnless(len(chains) > 2)
+
+    // generate and assign consensus, clientState, and connection proofs
+    var proof MultihopProof 
+    proof.ConsensusProofs = GenerateConsensusProofs(chains)
+    proof.ConnectionProofs = GenerateConnectionProofs(chains)
+
+    chain0 := chains[0] // misbehaving chain
+    chain1 := chains[1] // next hop chain
+
+    // create proof of client state on chain1
+    height01 := chain1.GetClientStateHeight(chain0) // height of chain0's client state on chain1
+    abortTransactionUnless(height01 >= keyHeight)   // ensure that chain0's client state is update to date
+
+    // connectionEnd on misbehaving chain representing the counterparty connection on the next chain
+    counterpartyConnectionEnd := abortTransactionUnless(Unmarshal(proof.ConnectionProofs[0].Value))
+
+    // key path to frozen client state
+    key := host.FullClientStatePath(counterpartyConnectionEnd.ClientId)
+    value := abortTransactionUnless(Marshal(chain1.GetClientState(counterpartyConnectionEnd.ClientId)))
+
+    // query the key/value proof on the next hop chain at the proof height
+    keyProof, _ := chain1.QueryProofAtHeight([]byte(key), int64(keyHeight.GetRevisionHeight()))
+
+    // assign the key/value proof
+    proof.KeyProof = &ProofData{
+        Key:   nil,    // key to prove constructed during verification using the provided connection state proofs
+        Value: value,  // provide the client state value
+        Proof: keyProof,
+    }
+
+    return &proof
 }
 
 // GenerateConsensusProofs generates consensus state proofs starting from the source chain to the N-1'th chain.
