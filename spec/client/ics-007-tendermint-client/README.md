@@ -367,9 +367,9 @@ function upgradeClientState(
     // Implementations may choose how to pass in the identifier
     // ibc-go provides the identifier-prefixed store to this method
     // so that all state reads are for the client in question
-    root = provableStore.get("clients/{clientIdentifier}/consensusStates/{height}")
+    consensusState = provableStore.get("clients/{clientIdentifier}/consensusStates/{height}")
     // verify that the provided consensus state has been stored
-    assert(verifyMembership(root, proof, path, newClientState))
+    assert(verifyMembership(consensusState.commitmentRoot, proof, path, newClientState))
     // update client state
     clientState = newClientState
     provableStore.set("clients/{clientIdentifier}/clientState", clientState)
