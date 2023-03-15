@@ -352,7 +352,7 @@ function upgradeClientState(
   clientState: ClientState,
   newClientState: ClientState,
   height: Height,
-  proof: CommitmentPrefix) {
+  proof: CommitmentProof) {
     // assert trusting period has not yet passed
     assert(currentTimestamp() - clientState.latestTimestamp < clientState.trustingPeriod)
     // check that the revision has been incremented
@@ -403,9 +403,9 @@ function verifyMembership(
     // Implementations may choose how to pass in the identifier
     // ibc-go provides the identifier-prefixed store to this method
     // so that all state reads are for the client in question
-    root = provableStore.get("clients/{clientIdentifier}/consensusStates/{height}")
+    consensusState = provableStore.get("clients/{clientIdentifier}/consensusStates/{height}")
     // verify that <path, value> has been stored
-    if !verifyMembership(root, proof, path, value) {
+    if !verifyMembership(consensusState.commitmentRoot, proof, path, value) {
       return error
     }
     return nil
@@ -430,9 +430,9 @@ function verifyNonMembership(
     // Implementations may choose how to pass in the identifier
     // ibc-go provides the identifier-prefixed store to this method
     // so that all state reads are for the client in question
-    root = provableStore.get("clients/{clientIdentifier}/consensusStates/{height}")
+    consensusState = provableStore.get("clients/{clientIdentifier}/consensusStates/{height}")
     // verify that nothing has been stored at path
-    if !verifyMembership(root, proof, path) {
+    if !verifyNonMembership(consensusState.commitmentRoot, proof, path) {
       return error
     }
     return nil
