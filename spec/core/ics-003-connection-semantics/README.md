@@ -262,7 +262,7 @@ function verifyMultihopMembership(
   connection: ConnectionEnd, // the connection end corresponding to the N-1'th chain in the channel path.
   height: Height,
   proof: MultihopProof,
-  connectionHops: String[],
+  connectionHops: Identifier[],
   key: CommitmentPath,
   value: bytes) {
 
@@ -286,7 +286,7 @@ function verifyMultihopNonMembership(
   connection: ConnectionEnd,
   height: Height,
   proof: MultihopProof,
-  connectionHops: String[],
+  connectionHops: Identifier[],
   key: CommitmentPath) {
     multihopConnectionEnd = abortTransactionUnless(getMultihopConnectionEnd(proof))
     prefix = multihopConnectionEnd.GetCounterparty().GetPrefix()
