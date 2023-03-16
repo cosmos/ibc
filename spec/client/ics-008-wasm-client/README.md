@@ -29,8 +29,7 @@ Once the IBC network broadly adopts dynamically upgradable clients, a chain may 
 
 Another reason why this interface is beneficial is that it removes the dependency between Light clients and the Go programming language. Using WASM as a compilation target, light clients can be written in any programming language whose toolchain includes WASM as a compilation target. Examples of these are Go, Rust, C, and C++.
 
-### Def
-ions
+### Defions
 
 Functions & terms are as defined in [ICS 2](../../core/ics-002-client-semantics).
 
@@ -83,7 +82,7 @@ const maxGasLimit = uint64(0x7FFFFFFFFFFFFFFF)
 
 ```typescript
   function consumeGas(ctx: sdk.Context, gas: uint64) {
-  let consumed := gas / GasMultiplier
+  let consumed = gas / GasMultiplier
   ctx.GasMeter().ConsumeGas(consumed, "wasm contract")
   // throw OutOfGas error if we ran out (got exactly to zero due to better limit enforcing)
   if ctx.GasMeter().IsOutOfGas() {
@@ -94,9 +93,9 @@ const maxGasLimit = uint64(0x7FFFFFFFFFFFFFFF)
 
 ### Calling a contract
 
-```go
+```typescript
 // Calls vm.Execute with internally constructed Gas meter and environment
-func callContract(codeID []byte, ctx sdk.Context, store sdk.KVStore, msg []byte) (*types.Response, error) {}
+function callContract(codeID: []byte, ctx: sdk.Context, store: sdk.KVStore, msg []byte): [*types.Response, error] {}
 ```
 
 ```typescript
@@ -239,8 +238,8 @@ Wasm client misbehaviour checking determines whether or not two conflicting head
 function checkForMisbehaviour(
   clientState: ClientState,
   misbehaviour: Misbehaviour) {
-    store = getStore("clients/{identifier}")
-    codeHandle = clientState.codeHandle()
+    let store = getStore("clients/{identifier}")
+    let codeHandle = clientState.codeHandle()
     assert(codeHandle.handleMisbehaviour(store, clientState, misbehaviour))
 }
 ```
@@ -257,11 +256,11 @@ function upgradeClientState(
   newClientState: ClientState,
   height: Height,
   proof: CommitmentPrefix) {
-    codeHandle = clientState.codeHandle()
+    let codeHandle = clientState.codeHandle()
     assert(codeHandle.verifyNewClientState(clientState, newClientState, height, proof))
 
     // update client state
-    clientState = newClientState
+    let clientState = newClientState
     set("clients/{identifier}", clientState)
 }
 ```
@@ -271,14 +270,14 @@ function upgradeClientState(
 Wasm client state verification functions check a Merkle proof against a previously validated commitment root.
 
 ```typescript
-	function () VerifyUpgradeAndUpdateState(
+	function VerifyUpgradeAndUpdateState(
     c: ClientState,
-		store: KVStore,
-		newClient: ClientState,
-		newConsState: ConsensusState,
-		proofUpgradeClient: []byte,
-		proofUpgradeConsState: []byte,
-	) error {
+	store: KVStore,
+	newClient: ClientState,
+	newConsState: ConsensusState,
+	proofUpgradeClient: []byte,
+	proofUpgradeConsState: []byte,
+	): error {
     // last height of current counterparty chain must be client's latest height
     let lastHeight = c.LatestHeight
     let err = GetConsensusState(store, cdc, lastHeight)
@@ -291,21 +290,21 @@ Wasm client state verification functions check a Merkle proof against a previous
   
   function VerifyMembership(
     c: ClientState,
-		clientStore: KVStore,
-		height: Height,
-		delayTimePeriod: uint64,
-		delayBlockPeriod: uint64,
-		proof: []byte,
-		path: Path,
-		value :[]byte,
-	) error {
+	clientStore: KVStore,
+	height: Height,
+	delayTimePeriod: uint64,
+	delayBlockPeriod: uint64,
+	proof: []byte,
+	path: Path,
+	value :[]byte,
+	): error {
     const VerifyClientMessage = "verify_membership"
-    encodedData := packData(height, delayTimePeriod, delayBlockPeriod, proof, path, value, VerifyClientMessage)
-    _, err := callContract(c.CodeId, ctx, clientStore, encodedData)
+    let encodedData = packData(height, delayTimePeriod, delayBlockPeriod, proof, path, value, VerifyClientMessage)
+    let [ _, err ] = callContract(c.CodeId, ctx, clientStore, encodedData)
     return err
   }
 
-  func (c ClientState) VerifyNonMembership(
+  func  VerifyNonMembership(
 	ctx sdk.Context,
 	clientStore sdk.KVStore,
 	cdc codec.BinaryCodec,
@@ -314,11 +313,11 @@ Wasm client state verification functions check a Merkle proof against a previous
 	delayBlockPeriod uint64,
 	proof []byte,
 	path []byte,
-) error {
-	const VerifyClientMessage = "verify_non_membership"
-  encodedData := packData(height, delayTimePeriod, delayBlockPeriod, proof, path, value, VerifyClientMessage)
-  _, err := callContract(c.CodeId, ctx, clientStore, encodedData)
-  return err
+): error {
+    const VerifyClientMessage = "verify_non_membership"
+    let  encodedData = packData(height, delayTimePeriod, delayBlockPeriod, proof, path, value, VerifyClientMessage)
+    let [_, err] = callContract(c.CodeId, ctx, clientStore, encodedData)
+    return err
 }
 
 func (c ClientState) VerifyClientMessage(ctx sdk.Context, cdc codec.BinaryCodec, clientStore sdk.KVStore, clientMsg exported.ClientMessage) error {
@@ -327,30 +326,33 @@ func (c ClientState) VerifyClientMessage(ctx sdk.Context, cdc codec.BinaryCodec,
 	return err
 }
 
-func (c ClientState) CheckForMisbehaviour(ctx sdk.Context, cdc codec.BinaryCodec, clientStore sdk.KVStore, msg exported.ClientMessage) bool {
-	wasmMisbehaviour, ok := msg.(*Misbehaviour)
+func  CheckForMisbehaviour(ctx: sdk.Context, cdc: codec.BinaryCodec, clientStore: sdk.KVStore, msg: exported.ClientMessage): bool {
+	let [ wasmMisbehaviour, ok ] = msg.(*Misbehaviour)
 	if !ok {
 		return false
 	}
-  encodedData := packData(wasmMisbehaviour)
-	_, err := call[contractResult](encodedData, &c, ctx, clientStore)
-	if err != nil {
-		panic(err)
-	}
+    encodedData := packData(wasmMisbehaviour)
+    try {
+        call[contractResult](encodedData, &c, ctx, clientStore)
 
+    } catch(err) {
+        throw(err)
+    }
 	return true
 }
 
 // UpdateStateOnMisbehaviour should perform appropriate state changes on a client state given that misbehaviour has been detected and verified
-func (c ClientState) UpdateStateOnMisbehaviour(ctx sdk.Context, cdc codec.BinaryCodec, clientStore sdk.KVStore, clientMsg exported.ClientMessage) {
+func (c ClientState) UpdateStateOnMisbehaviour(ctx: sdk.Context, cdc: codec.BinaryCodec, clientStore: sdk.KVStore, clientMsg: exported.ClientMessage) {
     encodedData := packData(clientMsg, c)
-	_, err = callContract(c.CodeId, ctx, clientStore, encodedData)
-	if err != nil {
-		panic(err)
-	}
+     try{
+        callContract(c.CodeId, ctx, clientStore, encodedData)
+     } catch (err) {
+         throw err
+     }
+
 }
 
-func (c ClientState) UpdateState(ctx sdk.Context, cdc codec.BinaryCodec, clientStore sdk.KVStore, clientMsg exported.ClientMessage) []exported.Height {
+func (c ClientState) UpdateState(ctx: sdk.Context, cdc: codec.BinaryCodec, clientStore: sdk.KVStore, clientMsg: exported.ClientMessage): []exported.Height {
   clientMsgConcrete := make(map[string]interface{})
   switch clientMsg := clientMsg.(type) {
     case *Header:
@@ -359,16 +361,15 @@ func (c ClientState) UpdateState(ctx sdk.Context, cdc codec.BinaryCodec, clientS
       clientMsgConcrete["misbehaviour"] = clientMsg
   }
   encodedData := packData(clientMsgConcrete)
-	output, err := call[contractResult](  encodedData := packData(clientMsgConcrete)
-, &c, ctx, clientStore)
-	if err != nil {
-		panic(err)
-	}
-  if err := json.Unmarshal(output.Data, &c); err != nil {
-  panic(sdkerrors.Wrapf(ErrUnableToUnmarshalPayload, fmt.Sprintf("underlying error: %s", err.Error())))
+   try {
+	output, err := call[contractResult](encodedData := packData(clientMsgConcrete), &c, ctx, clientStore)
+    json.Unmarshal(output.Data, c)
+   } catch (err) {
+       throw err
+   }
 }
 
-func CheckSubstituteAndUpdateState(ctx sdk.Context, cdc codec.BinaryCodec, subjectClientStore, substituteClientStore sdk.KVStore, substituteClient ClientState) error {
+func CheckSubstituteAndUpdateState(ctx: sdk.Context, cdc: codec.BinaryCodec, subjectClientStore: sdk.KVStore, substituteClientStore: sdk.KVStore, substituteClient: ClientState) error {
   	var (
 		SubjectPrefix    = []byte("subject/")
 		SubstitutePrefix = []byte("substitute/")
@@ -392,7 +393,6 @@ func CheckSubstituteAndUpdateState(ctx sdk.Context, cdc codec.BinaryCodec, subje
 	output.resetImmutables(&c)
 	return nil
 }
-
 
 	SetClientState(clientStore, cdc, &c)
 	return []exported.Height{c.LatestHeight}
