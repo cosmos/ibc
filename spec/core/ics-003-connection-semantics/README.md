@@ -263,8 +263,8 @@ function verifyMultihopMembership(
   height: Height,
   proof: MultihopProof,
   connectionHops: String[],
-  key: String,
-  value: ArrayBuffer) {
+  key: CommitmentPath,
+  value: bytes) {
 
     // the connectionEnd corresponding to the end of the multi-hop channel path (source chain).
     multihopConnectionEnd = abortTransactionUnless(getMultihopConnectionEnd(proof))
