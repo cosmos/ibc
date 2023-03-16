@@ -36,7 +36,7 @@ type Signature = ED25519Signature
 
 `borsh` is a generic serialization function which follows the [Borsh serialization format](https://borsh.io/).
 
-`merklize` is a generic function which can construct a merkle tree from an array which the element in it can be serialized by `borsh`. This function should return the merkle root of the tree at least.
+`merklize` is a generic function which can construct a merkle tree from an array which the element in it can be serialized by `borsh`. This function should return the merkle root of the tree at least. (In this document, we assume this function can return a tuple. We use `merklize(...).root` to denote the merkle root of the result tree.)
 
 In NEAR protocol, the block producers are changed by time (about 12 hours). The period is known as `epoch` and the id of an epoch is represented by a `CryptoHash`.
 
@@ -68,14 +68,14 @@ interface ClientState {
 The NEAR client tracks the block producers of current epoch and header (refer to [Headers section](#headers)) for all previously verified consensus states (these can be pruned after a certain period, but should not be pruned beforehand).
 
 ```typescript
-interface ValidatorStakeView {
-    accountId: String
+interface ValidatorStake {
+    accountId: string
     publicKey: PublicKey
     stake: uint128
 }
 
 interface ConsensusState {
-    currentBps: List<ValidatorStakeView>
+    currentBps: List<ValidatorStake>
     header: Header
 }
 ```
@@ -85,9 +85,7 @@ interface ConsensusState {
 The height of a NEAR client is an `uint64` number.
 
 ```typescript
-interface Height {
-    height: uint64
-}
+type Height = uint64
 ```
 
 Comparison between heights is implemented as follows:
@@ -104,7 +102,7 @@ function compare(a: Height, b: Height): Ord {
 
 ### Headers
 
-The NEAR client headers include the `LightClientBlock` and previou state root of chunks. The entire block producers for next epoch and approvals for the block after the next are included in `LightClientBlock`.
+The NEAR client headers include the `LightClientBlock` and previous state root of chunks. The entire block producers for next epoch and approvals for the block after the next are included in `LightClientBlock`.
 
 ```typescript
 interface BlockHeaderInnerLite {
@@ -120,10 +118,10 @@ interface BlockHeaderInnerLite {
 
 interface LightClientBlock {
     prevBlockHash: CryptoHash
-    nextBlockInnerHash: CryptoHash,
+    nextBlockInnerHash: CryptoHash
     innerLite: BlockHeaderInnerLite
     innerRestHash: CryptoHash
-    nextBps: Maybe<List<ValidatorStakeView>>
+    nextBps: Maybe<List<ValidatorStake>>
     approvalsAfterNext: List<Maybe<Signature>>
 }
 
@@ -133,7 +131,7 @@ interface Header {
 }
 ```
 
-The current block hash, next block hash and approval message can be calcuated from `LightClientBlock`. The signatures in `approvalsAfterNext` are provided by current block producers by signing the approval message.
+The current block hash, next block hash and approval message can be calculated from `LightClientBlock`. The signatures in `approvalsAfterNext` are provided by current block producers by signing the approval message.
 
 ```typescript
 function (LightClientBlock) currentBlockHash(): CryptoHash {
@@ -166,7 +164,7 @@ function (LightClientBlock) approvalMessage(): []byte {
 }
 ```
 
-We also defines the `CommitmentRoot` of `Header` as:
+We also define the `CommitmentRoot` of `Header` as:
 
 ```typescript
 function (Header) commitmentRoot(): CryptoHash {
@@ -206,14 +204,12 @@ function initialise(
   upgradeCommitmentPrefix: []byte,
   upgradeKey: []bype,
   consensusState: ConsensusState): ClientState {
-    assert(consensusState.currentBps.len > 0)
+    assert(len(consensusState.currentBps) > 0)
     assert(consensusState.header.getHeight() > 0)
     // implementations may define a identifier generation function
     identifier = generateClientIdentifier()
-    height = Height {
-        height: consensusState.header.getHeight()
-    }
-    set("clients/{identifier}/consensusStates/{consensusState.header.getHeight()}", consensusState)
+    height = consensusState.header.getHeight()
+    provableStore.set("clients/{identifier}/consensusStates/{height}", consensusState)
     return ClientState {
         trustingPeriod
         latestHeight: height
@@ -249,7 +245,7 @@ function (Header) getNextEpochId(): CryptoHash {
     return self.lightClientBlock.innerLite.nextEpochId
 }
 
-function (ConsensusState) getBlockProducersOf(epochId: CryptoHash): List<ValidatorStakeView> {
+function (ConsensusState) getBlockProducersOf(epochId: CryptoHash): List<ValidatorStake> {
     if epochId === self.header.getEpochId() {
         return self.currentBps
     } else if epochId === self.header.getNextEpochId() {
@@ -260,9 +256,9 @@ function (ConsensusState) getBlockProducersOf(epochId: CryptoHash): List<Validat
 }
 
 function verifyHeader(header: Header) {
-    clientState = get("clients/{clientMessage.identifier}/clientState")
+    consensusState = provableStore.get("clients/{clientMessage.identifier}/consensusStates/{clientState.latestHeight}", consensusState)
 
-    latestHeader = clientState.getLatestHeader()
+    latestHeader = consensusState.header
     approvalMessage = header.lightClientBlock.approvalMessage()
 
     // (1) The height of the block is higher than the height of the current head.
@@ -285,7 +281,7 @@ function verifyHeader(header: Header) {
     totalStake = 0
     approvedStake = 0
 
-    epochBlockProducers = clientState.getBlockProducersOf(header.getEpochId())
+    epochBlockProducers = consensusState.getBlockProducersOf(header.getEpochId())
     for maybeSignature, blockProducer in
       zip(header.lightClientBlock.approvalsAfterNext, epochBlockProducers) {
         totalStake += blockProducer.stake
@@ -296,7 +292,7 @@ function verifyHeader(header: Header) {
 
         approvedStake += blockProducer.stake
 
-        assert(verify_signature(
+        assert(verifySignature(
             public_key: blockProducer.public_key,
             signature: maybeSignature,
             message: approvalMessage
@@ -312,14 +308,13 @@ function verifyHeader(header: Header) {
     }
 
     // (7) Check the prevStateRoot is the root of merklized prevStateRootOfChunks
-    assert(header.lightClientBlock.innerLite.prevStateRoot
-        === merklize(header.prevStateRootOfChunks).root)
+    assert(header.commitmentRoot() === merklize(header.prevStateRootOfChunks).root)
 }
 ```
 
 ### Misbehaviour Predicate
 
-CheckForMisbehaviour will check if an update contains evidence of Misbehaviour. If the `ClientMessage` is a header we check for implicit evidence of misbehaviour by checking if there already exists a conflicting consensus state in the store or if the header breaks time monotonicity.
+Function `checkForMisbehaviour` will check if an update contains evidence of Misbehaviour. If the `ClientMessage` is a header we check for implicit evidence of misbehaviour by checking if there already exists a conflicting consensus state in the store or if the header breaks time monotonicity.
 
 ```typescript
 function (Header) timestamp(): uint64 {
@@ -332,11 +327,11 @@ function (ConsensusState) timestamp(): uint64 {
 
 function checkForMisbehaviour(
   clientMsg: clientMessage) => bool {
-    clientState = get("clients/{clientMsg.identifier}/clientState")
+    clientState = provableStore.get("clients/{clientMsg.identifier}/clientState")
     switch typeof(clientMsg) {
         case Header:
             // fetch consensusstate at header height if it exists
-            consensusState = get("clients/{clientMsg.identifier}/consensusStates/{header.getHeight()}")
+            consensusState = provableStore.get("clients/{clientMsg.identifier}/consensusStates/{header.getHeight()}")
             // if consensus state exists and conflicts with the header
             // then the header is evidence of misbehaviour
             if consensusState != nil
@@ -357,26 +352,35 @@ function checkForMisbehaviour(
                 return true
             }
         case Misbehaviour:
-            // assert that the heights are the same
-            assert(misbehaviour.header1.getHeight() === misbehaviour.header2.getHeight())
-            // assert that the commitments are different
-            assert(misbehaviour.header1.commitmentRoot() !== misbehaviour.header2.commitmentRoot())
+            if (misbehaviour.header1.getHeight() < misbehaviour.header2.getHeight()) {
+                return false
+            }
+            // if heights are equal check that this is valid misbehaviour of a fork
+            if (misbehaviour.header1.getHeight() === misbehaviour.header2.getHeight() && misbehaviour.header1.commitmentRoot() !== misbehaviour.header2.commitmentRoot()) {
+                return true
+            }
+            // otherwise if heights are unequal check that this is valid misbehavior of BFT time violation
+            if (misbehaviour.header1.timestamp() <= misbehaviour.header2.timestamp()) {
+                return true
+            }
+
+            return false
     }
 }
 ```
 
 > As the slashing policy is NOT applicable in NEAR protocol for now, this section is only for references.
 
-### UpdateState
+### Update State
 
-UpdateState will perform a regular update for the NEAR client. It will add a consensus state to the client store. If the header is higher than the lastest height on the clientState, then the clientState will be updated.
+Function `updateState` will perform a regular update for the NEAR client. It will add a consensus state to the client store. If the header is higher than the lastest height on the clientState, then the clientState will be updated.
 
 ```typescript
 function updateState(clientMessage: clientMessage) {
-    clientState = get("clients/{clientMessage.identifier}/clientState")
-    consensusState = get("clients/{clientMessage.identifier}/consensusStates/{clientState.latestHeight}")
+    clientState = provableStore.get("clients/{clientMessage.identifier}/clientState")
+    consensusState = provableStore.get("clients/{clientMessage.identifier}/consensusStates/{clientState.latestHeight}")
 
-    header = clientMessage.getHeader()
+    header = Header(clientMessage)
     // only update the clientstate if the header height is higher
     // than clientState latest height
     if clientState.latestHeight < header.getHeight() {
@@ -384,34 +388,32 @@ function updateState(clientMessage: clientMessage) {
         clientState.latestHeight = header.getHeight()
 
         // save the client
-        set("clients/{clientMessage.identifier}/clientState", clientState)
+        provableStore.set("clients/{clientMessage.identifier}/clientState", clientState)
     }
 
     currentBps = consensusState.getBlockProducersOf(header.getEpochId())
     // create recorded consensus state, save it
     newConsensusState = ConsensusState { currentBps, header }
-    set("clients/{clientMessage.identifier}/consensusStates/{header.getHeight()}", newConsensusState)
+    provableStore.set("clients/{clientMessage.identifier}/consensusStates/{header.getHeight()}", newConsensusState)
 }
 ```
 
-### UpdateStateOnMisbehaviour
+### Update State On Misbehaviour
 
-UpdateStateOnMisbehaviour will set the frozen height to a non-zero sentinel height to freeze the entire client.
+Function `updateStateOnMisbehaviour` will set the frozen height to a non-zero sentinel height to freeze the entire client.
 
 ```typescript
 function updateStateOnMisbehaviour(clientMsg: clientMessage) {
-    clientState = get("clients/{clientMsg.identifier}/clientState")
-    if checkForMisbehaviour(clientMsg) === true {
-        switch typeof(clientMsg) {
-            case Header:
-                prevConsState = getPreviousConsensusState(header.getHeight())
-                clientState.frozenHeight = prevConsState.header.getHeight()
-            case Misbehaviour:
-                prevConsState = getPreviousConsensusState(clientMessage.header1.getHeight())
-                clientState.frozenHeight = prevConsState.header.getHeight()
-        }
+    clientState = provableStore.get("clients/{clientMsg.identifier}/clientState")
+    switch typeof(clientMsg) {
+        case Header:
+            prevConsState = getPreviousConsensusState(header.getHeight())
+            clientState.frozenHeight = prevConsState.header.getHeight()
+        case Misbehaviour:
+            prevConsState = getPreviousConsensusState(misbehaviour.header1.getHeight())
+            clientState.frozenHeight = prevConsState.header.getHeight()
     }
-    set("clients/{clientMsg.identifier}/clientState", clientState)
+    provableStore.set("clients/{clientMsg.identifier}/clientState", clientState)
 }
 ```
 
@@ -431,19 +433,22 @@ function upgradeClientState(
   proof: CommitmentProof) {
     // assert trusting period has not yet passed
     assert(currentTimestamp() - clientState.latestTimestamp < clientState.trustingPeriod)
-    // check that the revision has been incremented
+    // check that the latest height has been incremented
     assert(newClientState.latestHeight > clientState.latestHeight)
     // check proof of updated client state in state at predetermined commitment prefix and key
     path = applyPrefix(clientState.upgradeCommitmentPrefix, clientState.upgradeKey)
     // check that the client is at a sufficient height
     assert(clientState.latestHeight >= height)
     // fetch the previously verified commitment root & verify membership
-    root = get("clients/{clientMessage.identifier}/consensusStates/{height}")
-    // verify that the provided consensus state has been stored
-    assert(root.verifyMembership(path, newClientState, proof))
+    // Implementations may choose how to pass in the identifier
+    // ibc-go provides the identifier-prefixed store to this method
+    // so that all state reads are for the client in question
+    consensusState = provableStore.get("{clientIdentifier}/consensusStates/{height}")
+    // verify that the provided client state has been stored
+    assert(consensusState.verifyMembership(path, newClientState, proof))
     // update client state
     clientState = newClientState
-    set("clients/{clientMessage.identifier}/clientState", clientState)
+    provableStore.set("{clientIdentifier}/clientState", clientState)
 }
 ```
 
@@ -459,7 +464,8 @@ function (ConsensusState) verifyMembership(
     // Check that the root in proof is one of the prevStateRoot of a chunk
     assert(hash(proof[0]) in self.header.prevStateRootOfChunks)
     // Check the value on the path is exactly the given value with proof data
-    // based on MPT construction algorithm
+    // based on MPT construction algorithm.
+    // Omit pseudocode for the verification in this document.
 }
 
 function verifyMembership(
@@ -469,7 +475,7 @@ function verifyMembership(
   delayBlockPeriod: uint64,
   proof: CommitmentProof,
   path: CommitmentPath,
-  value: []byte) {
+  value: []byte): Error {
     // check that the client is at a sufficient height
     assert(clientState.latestHeight >= height)
     // check that the client is unfrozen or frozen at a higher height
@@ -482,9 +488,12 @@ function verifyMembership(
     // Implementations may choose how to pass in the identifier
     // ibc-go provides the identifier-prefixed store to this method
     // so that all state reads are for the client in question
-    header = get("clients/{clientMessage.identifier}/consensusStates/{height}")
+    consensusState = provableStore.get("clients/{clientMessage.identifier}/consensusStates/{height}")
     // verify that <path, value> has been stored
-    assert(header.verifyMembership(path, value, proof))
+    if !consensusState.verifyMembership(path, value, proof) {
+        return Error
+    }
+    return nil
 }
 
 function (ConsensusState) verifyNonMembership(
@@ -493,7 +502,8 @@ function (ConsensusState) verifyNonMembership(
     // Check that the root in proof is one of the prevStateRoot of a chunk
     assert(hash(proof[0]) in self.header.prevStateRootOfChunks)
     // Check that there is NO value on the path with proof data
-    // based on MPT construction algorithm
+    // based on MPT construction algorithm.
+    // Omit pseudocode for the verification in this document.
 }
 
 function verifyNonMembership(
@@ -502,7 +512,7 @@ function verifyNonMembership(
   delayTimePeriod: uint64,
   delayBlockPeriod: uint64,
   proof: CommitmentProof,
-  path: CommitmentPath) {
+  path: CommitmentPath): Error {
     // check that the client is at a sufficient height
     assert(clientState.latestHeight >= height)
     // check that the client is unfrozen or frozen at a higher height
@@ -515,9 +525,12 @@ function verifyNonMembership(
     // Implementations may choose how to pass in the identifier
     // ibc-go provides the identifier-prefixed store to this method
     // so that all state reads are for the client in question
-    header = get("clients/{clientMessage.identifier}/consensusStates/{height}")
+    consensusState = provableStore.get("clients/{clientMessage.identifier}/consensusStates/{height}")
     // verify that nothing has been stored at path
-    assert(header.verifyNonMembership(path, proof))
+    if !consensusState.verifyNonMembership(path, proof) {
+        return Error
+    }
+    return nil
 }
 ```
 
