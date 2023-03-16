@@ -191,16 +191,14 @@ func GenerateConsensusProofs(chains []*Chain, height) []*ProofData {
         nextChain     := chains[i+2] // nextChain holds the state root of the currentChain
 
         consensusHeight := GetClientStateHeight(currentChain, previousChain.ClientID) // height of previous chain client state on current chain
-        nextHeight := GetClientStateHeight(nextChain, currentChain)      // height of current chain state on next chain
-
+        proofHeight := GetClientStateHeight(nextChain, currentChain.ClientID)         // height of current chain state on next chain
         // consensus state of previous chain on current chain at consensusHeight which is the height of previous chain client state on current chain
-        consensusState := GetConsensusState(currentChain, previousChain.ClientID, currentHeight)
+        consensusState := GetConsensusState(currentChain, previousChain.ClientID, consensusHeight)
 
         // prefixed key for consensus state of previous chain 
-        consensusKey := GetPrefixedConsensusStateKey(currentChain, currentHeight)
-
-        // proof of previous chain's consensus state at currentHeight on currentChain at nextHeight
-        consensusProof := GetConsensusStateProof(currentChain, nextHeight, currentHeight, currentChain.ClientID)
+        consensusKey := GetPrefixedConsensusStateKey(currentChain, previousChain.ClientID, consensusHeight)
+        // proof of previous chain's consensus state at consensusHeight on currentChain at nextHeight
+        consensusProof := GetConsensusStateProof(currentChain, proofHeight, consensusHeight, currentChain.ClientID)
   
         proofs = append(consStateProofs, &ProofData{
             Key:   &consensusKey,
@@ -231,18 +229,16 @@ func GenerateConnectionProofs(chains []*Chain) []*ProofData {
         currentChain := chains[i+1] // currentChain is where the proof is queried and generated
         nextChain := chains[i+2]    // nextChain holds the state root of the currentChain
 
-        currentHeight := currentChain.GetClientStateHeight(sourceChain) // height of previous chain state on current chain
-        nextHeight := nextChain.GetClientStateHeight(currentChain)      // height of current chain state on next chain
-
-        // prefixed key for the connection from currentChain to prevChain
-        connectionKey := GetPrefixedConnectionKey(currentChain)
-
+        connectionHeight := GetClientStateHeight(currentChain, previousChain.ClientID) // height of previous chain state on current chain
+        proofHeight := GetClientStateHeight(nextChain, currentChain.ClientID)          // height of current chain state on next chain        
+      
         // proof of current chain's connection to previous Chain.
         connectionEnd := GetConnection(currentChain)
+        connectionKey := GetPrefixedConnectionKey(currentChain)
 
         // Query proof of the currentChain's connection with the previousChain at nextHeight
         // (currentChain's state root height on nextChain)
-        connectionProof := GetConnectionProof(currentChain, nextHeight)
+        connectionProof := GetConnectionProof(currentChain, proofHeight)
   
         proofs = append(proofs, &ProofData{
             Key:   &connectionKey,
