@@ -102,9 +102,9 @@ type MultihopProof struct {
     ConnectionProofs []*ProofData  // array of connection proofs starting with proof of conn[1,0] on chain1 (consensusState[1])
 }
 
-// GenerateMultihopProof generates proof of a key/value at the keyHeight on indexed chain (chain0).
+// GenerateMultihopProof generates proof of a key/value at the proofHeight on indexed chain (chain0).
 // Chains are provided in order from the sending (source) chain to the verifying chain.
-func GenerateMultihopProof(chains []*Chain, key string, value []byte, keyHeight exported.Height) *MultihopProof {
+func GenerateMultihopProof(chains []*Chain, key string, value []byte, proofHeight exported.Height) *MultihopProof {
 
     abortTransactionUnless(len(chains) > 2)
 
@@ -117,10 +117,10 @@ func GenerateMultihopProof(chains []*Chain, key string, value []byte, keyHeight 
     chain1 := chains[1] // next hop chain
  
     height01 := chain1.GetClientStateHeight(chain0) // height of chain0's client state on chain1
-    abortTransactionUnless(height01 >= keyHeight)   // ensure that chain0's client state is update to date
+    abortTransactionUnless(height01 >= proofHeight) // ensure that chain0's client state is update to date
 
     // query the key/value proof on the indexed chain at the proof height
-    keyProof, _ := chain0.QueryProofAtHeight([]byte(key), int64(keyHeight.GetRevisionHeight()))
+    keyProof, _ := chain0.QueryProofAtHeight([]byte(key), int64(proofHeight.GetRevisionHeight()))
 
     // assign the key/value proof
     proof.KeyProof = &ProofData{
@@ -134,7 +134,7 @@ func GenerateMultihopProof(chains []*Chain, key string, value []byte, keyHeight 
 
 // GenerateFrozenClientProof generate a multihop proof of a frozen channel given a set of chains starting from the misbehaving chain.
 // Chains are provided in order from the misbehaving chain to the verifying chain.
-func GenerateFrozenClientProof(chains []*Chain, keyHeight exported.Height) *MultihopProof {
+func GenerateFrozenClientProof(chains []*Chain, proofHeight exported.Height) *MultihopProof {
     
     abortTransactionUnless(len(chains) > 2)
 
@@ -148,7 +148,7 @@ func GenerateFrozenClientProof(chains []*Chain, keyHeight exported.Height) *Mult
 
     // create proof of client state on chain1
     height01 := chain1.GetClientStateHeight(chain0) // height of chain0's client state on chain1
-    abortTransactionUnless(height01 >= keyHeight)   // ensure that chain0's client state is update to date
+    abortTransactionUnless(height01 >= proofHeight) // ensure that chain0's client state is update to date
 
     // connectionEnd on misbehaving chain representing the counterparty connection on the next chain
     counterpartyConnectionEnd := abortTransactionUnless(Unmarshal(proof.ConnectionProofs[0].Value))
@@ -178,7 +178,7 @@ func GenerateFrozenClientProof(chains []*Chain, keyHeight exported.Height) *Mult
 //                 (i)    (i+1)    (i+2)
 // Step N-3:  C0 ---> C1 ...  ---> |CN-2 --> CN-1 ---> CN|
 //                                   (i)    (i+1)    (i+2)
-func GenerateConsensusProofs(chains []*Chain, height) []*ProofData {
+func GenerateConsensusProofs(chains []*Chain) []*ProofData {
     assert(len(chains) > 2)
 
     var proofs []*ProofData
@@ -192,6 +192,8 @@ func GenerateConsensusProofs(chains []*Chain, height) []*ProofData {
 
         consensusHeight := GetClientStateHeight(currentChain, previousChain.ClientID) // height of previous chain client state on current chain
         proofHeight := GetClientStateHeight(nextChain, currentChain.ClientID)         // height of current chain state on next chain
+        abortTransactionUnless(consensusHeight >= proofHeight) // ensure that nextChain's client state is update to date
+
         // consensus state of previous chain on current chain at consensusHeight which is the height of previous chain client state on current chain
         consensusState := GetConsensusState(currentChain, previousChain.ClientID, consensusHeight)
 
@@ -231,7 +233,8 @@ func GenerateConnectionProofs(chains []*Chain) []*ProofData {
 
         connectionHeight := GetClientStateHeight(currentChain, previousChain.ClientID) // height of previous chain state on current chain
         proofHeight := GetClientStateHeight(nextChain, currentChain.ClientID)          // height of current chain state on next chain        
-      
+        abortTransactionUnless(connectionHeight >= proofHeight) // ensure that nextChain's client state is update to date
+        
         // proof of current chain's connection to previous Chain.
         connectionEnd := GetConnection(currentChain)
         connectionKey := GetPrefixedConnectionKey(currentChain)
