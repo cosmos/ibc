@@ -116,8 +116,9 @@ func GenerateMultihopProof(chains []*Chain, key string, value []byte, proofHeigh
     chain0 := chains[0] // source chain
     chain1 := chains[1] // next hop chain
  
-    height01 := chain1.GetClientStateHeight(chain0) // height of chain0's client state on chain1
-    abortTransactionUnless(height01 >= proofHeight) // ensure that chain0's client state is update to date
+    // check a consensus state at proof height is present on chain 1
+    consensusStateAtProofHeight := chain1.GetConsensusStateAtHeight(chain0, proofHeight) 
+    abortTransactionUnless(consensusStateAtProofHeight != nil) 
 
     // query the key/value proof on the indexed chain at the proof height
     keyProof, _ := chain0.QueryProofAtHeight([]byte(key), int64(proofHeight.GetRevisionHeight()))
