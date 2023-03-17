@@ -117,11 +117,11 @@ func GenerateMultihopProof(chains []*Chain, key string, value []byte, proofHeigh
     chain1 := chains[1] // next hop chain
  
     // check a consensus state at proof height is present on chain 1
-    consensusStateAtProofHeight := chain1.GetConsensusStateAtHeight(chain0, proofHeight) 
-    abortTransactionUnless(consensusStateAtProofHeight != nil) 
+    consensusStateAtProofHeight := chain1.GetConsensusStateAtHeight(chain0.ClientID, proofHeight)
+    abortTransactionUnless(consensusStateAtProofHeight != nil)
 
     // query the key/value proof on the indexed chain at the proof height
-    keyProof, _ := chain0.QueryProofAtHeight([]byte(key), int64(proofHeight.GetRevisionHeight()))
+    keyProof, _ := chain0.QueryProofAtHeight(key, proofHeight)
 
     // assign the key/value proof
     proof.KeyProof = &ProofData{
@@ -147,9 +147,9 @@ func GenerateFrozenClientProof(chains []*Chain, proofHeight exported.Height) *Mu
     chain0 := chains[0] // misbehaving chain
     chain1 := chains[1] // next hop chain
 
-    // create proof of client state on chain1
-    height01 := chain1.GetClientStateHeight(chain0) // height of chain0's client state on chain1
-    abortTransactionUnless(height01 >= proofHeight) // ensure that chain0's client state is update to date
+    // check a consensus state at proof height is present on chain 1
+    consensusStateAtProofHeight := chain1.GetConsensusStateAtHeight(chain0, proofHeight)
+    abortTransactionUnless(consensusStateAtProofHeight != nil)
 
     // connectionEnd on misbehaving chain representing the counterparty connection on the next chain
     counterpartyConnectionEnd := abortTransactionUnless(Unmarshal(proof.ConnectionProofs[0].Value))
@@ -191,17 +191,17 @@ func GenerateConsensusProofs(chains []*Chain) []*ProofData {
         currentChain  := chains[i+1] // currentChain is where the proof is queried and generated
         nextChain     := chains[i+2] // nextChain holds the state root of the currentChain
 
-        consensusHeight := GetClientStateHeight(currentChain, previousChain.ClientID) // height of previous chain client state on current chain
-        proofHeight := GetClientStateHeight(nextChain, currentChain.ClientID)         // height of current chain state on next chain
+        consensusHeight := currentChain.GetClientStateHeight(previousChain.ClientID) // height of previous chain client state on current chain
+        proofHeight := nextChain.GetClientStateHeight(currentChain.ClientID)         // height of current chain state on next chain
         abortTransactionUnless(consensusHeight >= proofHeight) // ensure that nextChain's client state is update to date
 
         // consensus state of previous chain on current chain at consensusHeight which is the height of previous chain client state on current chain
-        consensusState := GetConsensusState(currentChain, previousChain.ClientID, consensusHeight)
+        consensusState := currentChain.GetConsensusState(previousChain.ClientID, consensusHeight)
 
         // prefixed key for consensus state of previous chain 
-        consensusKey := GetPrefixedConsensusStateKey(currentChain, previousChain.ClientID, consensusHeight)
+        consensusKey := currentChain.GetPrefixedConsensusStateKey(previousChain.ClientID, consensusHeight)
         // proof of previous chain's consensus state at consensusHeight on currentChain at nextHeight
-        consensusProof := GetConsensusStateProof(currentChain, proofHeight, consensusHeight, currentChain.ClientID)
+        consensusProof := currentChain.GetConsensusStateProof(proofHeight, consensusHeight, currentChain.ClientID)
   
         proofs = append(consStateProofs, &ProofData{
             Key:   &consensusKey,
@@ -232,17 +232,17 @@ func GenerateConnectionProofs(chains []*Chain) []*ProofData {
         currentChain := chains[i+1] // currentChain is where the proof is queried and generated
         nextChain := chains[i+2]    // nextChain holds the state root of the currentChain
 
-        connectionHeight := GetClientStateHeight(currentChain, previousChain.ClientID) // height of previous chain state on current chain
-        proofHeight := GetClientStateHeight(nextChain, currentChain.ClientID)          // height of current chain state on next chain        
+        connectionHeight := currentChain.GetClientStateHeight(previousChain.ClientID) // height of previous chain state on current chain
+        proofHeight := nextChain.GetClientStateHeight(currentChain.ClientID)          // height of current chain state on next chain  
         abortTransactionUnless(connectionHeight >= proofHeight) // ensure that nextChain's client state is update to date
         
         // proof of current chain's connection to previous Chain.
-        connectionEnd := GetConnection(currentChain)
-        connectionKey := GetPrefixedConnectionKey(currentChain)
+        connectionEnd := currentChain.GetConnection(previousChain.ClientID)
+        connectionKey := currentChain.GetPrefixedConnectionKey(previousChain.ClientID)
 
         // Query proof of the currentChain's connection with the previousChain at nextHeight
         // (currentChain's state root height on nextChain)
-        connectionProof := GetConnectionProof(currentChain, proofHeight)
+        connectionProof := currentChain.GetConnectionProof(previousChain.ClientID, proofHeight)
   
         proofs = append(proofs, &ProofData{
             Key:   &connectionKey,
