@@ -271,62 +271,62 @@ Wasm client state verification functions check a Merkle proof against a previous
 
 ```typescript
 	function VerifyUpgradeAndUpdateState(
-    c: ClientState,
-	store: KVStore,
-	newClient: ClientState,
-	newConsState: ConsensusState,
-	proofUpgradeClient: []byte,
-	proofUpgradeConsState: []byte,
+        c: ClientState,
+        store: KVStore,
+        newClient: ClientState,
+        newConsState: ConsensusState,
+        proofUpgradeClient: []byte,
+        proofUpgradeConsState: []byte,
 	): error {
-    // last height of current counterparty chain must be client's latest height
-    let lastHeight = c.LatestHeight
-    let err = GetConsensusState(store, cdc, lastHeight)
-    assert(err == null)
-    let encodedData =  packData(newClient, proofUpgradeClient, proofUpgradeConsState)
-    let err = callContract(c.CodeId, ctx, store, encodedData)
-    assert(err == null)
-    return null
+        // last height of current counterparty chain must be client's latest height
+        let lastHeight = c.LatestHeight
+        let err = GetConsensusState(store, cdc, lastHeight)
+        assert(err == null)
+        let encodedData =  packData(newClient, proofUpgradeClient, proofUpgradeConsState)
+        let err = callContract(c.CodeId, ctx, store, encodedData)
+        assert(err == null)
+        return null
   }
   
   function VerifyMembership(
-    c: ClientState,
-	clientStore: KVStore,
-	height: Height,
-	delayTimePeriod: uint64,
-	delayBlockPeriod: uint64,
-	proof: []byte,
-	path: Path,
-	value :[]byte,
+        c: ClientState,
+        clientStore: KVStore,
+        height: Height,
+        delayTimePeriod: uint64,
+        delayBlockPeriod: uint64,
+        proof: []byte,
+        path: Path,
+        value :[]byte,
 	): error {
-    const VerifyClientMessage = "verify_membership"
-    let encodedData = packData(height, delayTimePeriod, delayBlockPeriod, proof, path, value, VerifyClientMessage)
-    let { _, err } = callContract(c.CodeId, ctx, clientStore, encodedData)
-    return err
+        const VerifyClientMessage = "verify_membership"
+        let encodedData = packData(height, delayTimePeriod, delayBlockPeriod, proof, path, value, VerifyClientMessage)
+        let { _, err } = callContract(c.CodeId, ctx, clientStore, encodedData)
+        return err
   }
 
-  func  VerifyNonMembership(
-	ctx sdk.Context,
-	clientStore sdk.KVStore,
-	cdc codec.BinaryCodec,
-	height exported.Height,
-	delayTimePeriod uint64,
-	delayBlockPeriod uint64,
-	proof []byte,
-	path []byte,
-): error {
-    const VerifyClientMessage = "verify_non_membership"
-    let  encodedData = packData(height, delayTimePeriod, delayBlockPeriod, proof, path, value, VerifyClientMessage)
-    let {_, err} = callContract(c.CodeId, ctx, clientStore, encodedData)
-    return err
+  function VerifyNonMembership(
+        ctx: sdk.Context,
+        clientStore: sdk.KVStore,
+        cdc: codec.BinaryCodec,
+        height: exported.Height,
+        delayTimePeriod: int,
+        delayBlockPeriod: int,
+        proof: []byte,
+        path: []byte,
+    ): error {
+        const VerifyClientMessage = "verify_non_membership"
+        let  encodedData = packData(height, delayTimePeriod, delayBlockPeriod, proof, path, value, VerifyClientMessage)
+        let {_, err} = callContract(c.CodeId, ctx, clientStore, encodedData)
+        return err
 }
 
-func (c ClientState) VerifyClientMessage(ctx sdk.Context, cdc codec.BinaryCodec, clientStore sdk.KVStore, clientMsg exported.ClientMessage) error {
-  encodedData := packData(clientMsg, c)
+function VerifyClientMessage(ctx: sdk.Context, cdc: codec.BinaryCodec, clientStore: sdk.KVStore, clientMsg: exported.ClientMessage): error {
+    encodedData := packData(clientMsg, c)
 	_, err := call[contractResult](encodedData, &c, ctx, clientStore)
 	return err
 }
 
-func  CheckForMisbehaviour(ctx: sdk.Context, cdc: codec.BinaryCodec, clientStore: sdk.KVStore, msg: exported.ClientMessage): bool {
+function CheckForMisbehaviour(ctx: sdk.Context, cdc: codec.BinaryCodec, clientStore: sdk.KVStore, msg: exported.ClientMessage): bool {
 	let { wasmMisbehaviour, ok } = msg.Misbehaviour
 	if !ok {
 		return false
@@ -342,7 +342,7 @@ func  CheckForMisbehaviour(ctx: sdk.Context, cdc: codec.BinaryCodec, clientStore
 }
 
 // UpdateStateOnMisbehaviour should perform appropriate state changes on a client state given that misbehaviour has been detected and verified
-func (c ClientState) UpdateStateOnMisbehaviour(ctx: sdk.Context, cdc: codec.BinaryCodec, clientStore: sdk.KVStore, clientMsg: exported.ClientMessage) {
+function UpdateStateOnMisbehaviour(ctx: sdk.Context, cdc: codec.BinaryCodec, clientStore: sdk.KVStore, clientMsg: exported.ClientMessage) {
     encodedData := packData(clientMsg, c)
      try{
         callContract(c.CodeId, ctx, clientStore, encodedData)
@@ -352,7 +352,7 @@ func (c ClientState) UpdateStateOnMisbehaviour(ctx: sdk.Context, cdc: codec.Bina
 
 }
 
-func (c ClientState) UpdateState(ctx: sdk.Context, cdc: codec.BinaryCodec, clientStore: sdk.KVStore, clientMsg: exported.ClientMessage): []exported.Height {
+function UpdateState(ctx: sdk.Context, cdc: codec.BinaryCodec, clientStore: sdk.KVStore, clientMsg: exported.ClientMessage): []exported.Height {
   clientMsgConcrete := make(map[string]interface{})
   switch clientMsg := clientMsg.(type) {
     case *Header:
@@ -369,7 +369,7 @@ func (c ClientState) UpdateState(ctx: sdk.Context, cdc: codec.BinaryCodec, clien
    }
 }
 
-func CheckSubstituteAndUpdateState(ctx: sdk.Context, cdc: codec.BinaryCodec, subjectClientStore: sdk.KVStore, substituteClientStore: sdk.KVStore, substituteClient: ClientState) error {
+function CheckSubstituteAndUpdateState(ctx: sdk.Context, cdc: codec.BinaryCodec, subjectClientStore: sdk.KVStore, substituteClientStore: sdk.KVStore, substituteClient: ClientState): error {
   	var (
 		SubjectPrefix    = []byte("subject/")
 		SubstitutePrefix = []byte("substitute/")
@@ -408,8 +408,8 @@ pointers to `KVStore`s if needed), pointing to a code hash, and a `sdk.GasMeter`
 for gas usage during the execution of the function.
 
 
-```go
-func (c *CodeHandle) isValidClientState(ctx sdk.Context, clientState ClientState, height u64) (*types.Response, error) {
+```typescript
+function isValidClientState(ctx: sdk.Context, clientState: ClientState, height: int): {*types.Response, error} {
     clientStateData := json.Serialize(clientState)
     packedData := pack(clientStateData, height)
     // VM specific code to call Wasm contract
@@ -418,8 +418,8 @@ func (c *CodeHandle) isValidClientState(ctx sdk.Context, clientState ClientState
 }
 ```
 
-```go
-func callContract(codeID []byte, ctx sdk.Context, store sdk.KVStore, msg []byte) (*types.Response, error) {
+```typescript
+function callContract(codeID: []byte, ctx: sdk.Context, store: sdk.KVStore, msg: []byte): {*types.Response, error} {
 	gasMeter := ctx.GasMeter()
 	chainID := ctx.BlockHeader().ChainID
 	height := ctx.BlockHeader().Height
@@ -446,15 +446,15 @@ func callContract(codeID []byte, ctx sdk.Context, store sdk.KVStore, msg []byte)
 }
 ```
 
-```go
-func callContractWithEnvAndMeter(codeID cosmwasm.Checksum, ctx sdk.Context, store sdk.KVStore, env types.Env, gasMeter sdk.GasMeter, msg []byte) (*types.Response, error) {
+```typescript
+function callContractWithEnvAndMeter(codeID: cosmwasm.Checksum, ctx: sdk.Context, store: sdk.KVStore, env: types.Env, gasMeter: sdk.GasMeter, msg: []byte): {*types.Response, error} {
 	msgInfo := types.MessageInfo{}
 	desercost := types.UFraction{Numerator: 1, Denominator: 1}
 	resp, gasUsed, err := WasmVM.Execute(codeID, env, msgInfo, msg, store, cosmwasm.GoAPI{}, nil, gasMeter, gasMeter.Limit(), desercost)
 	if &ctx != nil {
 		consumeGas(ctx, gasUsed)
 	}
-	return resp, err
+	return {resp, err}
 }
 ```
 
