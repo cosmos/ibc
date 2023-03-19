@@ -104,7 +104,7 @@ function (codeID: cosmwasm.Checksum, ctx: sdk.Context, store: sdk.KVStore, env: 
     Sender: "",
     Funds:  nil,
   };
-  let [resp, gasUsed, err] = executeVM(codeID, env, msgInfo, msg, store, gasMeter, gasMeter.Limit());
+  let {resp, gasUsed, err} = executeVM(codeID, env, msgInfo, msg, store, gasMeter, gasMeter.Limit());
   consumeGas(ctx, gasUsed);
   return [resp, err]
 }
@@ -300,7 +300,7 @@ Wasm client state verification functions check a Merkle proof against a previous
 	): error {
     const VerifyClientMessage = "verify_membership"
     let encodedData = packData(height, delayTimePeriod, delayBlockPeriod, proof, path, value, VerifyClientMessage)
-    let [ _, err ] = callContract(c.CodeId, ctx, clientStore, encodedData)
+    let { _, err } = callContract(c.CodeId, ctx, clientStore, encodedData)
     return err
   }
 
@@ -316,7 +316,7 @@ Wasm client state verification functions check a Merkle proof against a previous
 ): error {
     const VerifyClientMessage = "verify_non_membership"
     let  encodedData = packData(height, delayTimePeriod, delayBlockPeriod, proof, path, value, VerifyClientMessage)
-    let [_, err] = callContract(c.CodeId, ctx, clientStore, encodedData)
+    let {_, err} = callContract(c.CodeId, ctx, clientStore, encodedData)
     return err
 }
 
