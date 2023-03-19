@@ -327,7 +327,7 @@ func (c ClientState) VerifyClientMessage(ctx sdk.Context, cdc codec.BinaryCodec,
 }
 
 func  CheckForMisbehaviour(ctx: sdk.Context, cdc: codec.BinaryCodec, clientStore: sdk.KVStore, msg: exported.ClientMessage): bool {
-	let [ wasmMisbehaviour, ok ] = msg.(*Misbehaviour)
+	let { wasmMisbehaviour, ok } = msg.Misbehaviour
 	if !ok {
 		return false
 	}
