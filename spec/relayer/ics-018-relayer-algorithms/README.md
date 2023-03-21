@@ -112,14 +112,14 @@ function pendingDatagrams(chain: Chain, counterparty: Chain): List<Set<Datagram>
   // ICS2 : Clients
   // - Determine if light client needs to be updated (local & counterparty)
   height = chain.latestHeight()
-  clientState = counterparty.queryClientConsensusState(chain)
-  if clientState.height < height {
+  client = counterparty.queryClientConsensusState(chain)
+  if client.height < height {
     header = chain.latestHeader()
     counterpartyDatagrams.push(ClientUpdate{chain, header})
   }
   counterpartyHeight = counterparty.latestHeight()
-  clientState = chain.queryClientConsensusState(counterparty)
-  if clientState.height < counterpartyHeight {
+  client = chain.queryClientConsensusState(counterparty)
+  if client.height < counterpartyHeight {
     header = counterparty.latestHeader()
     localDatagrams.push(ClientUpdate{counterparty, header})
   }
