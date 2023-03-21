@@ -253,6 +253,24 @@ A `ClientMessage` is an opaque data structure defined by a client type which pro
 type ClientMessage = bytes
 ```
 
+### Store paths
+
+Client state paths are stored under a unique client identifier.
+
+```typescript
+function clientStatePath(id: Identifier): Path {
+  return "clients/{id}/clientState"
+}
+```
+
+Consensus state paths are stored under a unique combination of client identifier and height:
+
+```typescript
+function consensusStatePath(id: Identifier, height: Height): Path {
+  return "clients/{id}/consensusStates/{height}"
+}
+```
+
 #### Validity predicate
 
 A validity predicate is an opaque function defined by a client type to verify `ClientMessage`s depending on the current `ConsensusState`.
