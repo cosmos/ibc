@@ -140,7 +140,7 @@ function pendingDatagrams(chain: Chain, counterparty: Chain): List<Set<Datagram>
         clientIdentifier: localEnd.counterpartyClientIdentifier,
         version: localEnd.version,
         counterpartyVersion: localEnd.version,
-        proofInit: localEnd.proof(),
+        proofInit: localEnd.proof(height),
         proofConsensus: localEnd.client.consensusState.proof(),
         proofHeight: height,
         consensusHeight: localEnd.client.height,
@@ -150,7 +150,7 @@ function pendingDatagrams(chain: Chain, counterparty: Chain): List<Set<Datagram>
       localDatagrams.push(ConnOpenAck{
         identifier: localEnd.identifier,
         version: remoteEnd.version,
-        proofTry: remoteEnd.proof(),
+        proofTry: remoteEnd.proof(counterpartyHeight),
         proofConsensus: remoteEnd.client.consensusState.proof(),
         proofHeight: counterpartyHeight,
         consensusHeight: remoteEnd.client.height,
@@ -159,7 +159,7 @@ function pendingDatagrams(chain: Chain, counterparty: Chain): List<Set<Datagram>
       // Handshake has confirmed locally (3 steps done), relay `connOpenConfirm` to the remote end
       counterpartyDatagrams.push(ConnOpenConfirm{
         identifier: remoteEnd.identifier,
-        proofAck: localEnd.proof(),
+        proofAck: localEnd.proof(height),
         proofHeight: height,
       })
   }
@@ -183,7 +183,7 @@ function pendingDatagrams(chain: Chain, counterparty: Chain): List<Set<Datagram>
         counterpartyChannelIdentifier: localEnd.channelIdentifier,
         version: localEnd.version,
         counterpartyVersion: localEnd.version,
-        proofInit: localEnd.proof(),
+        proofInit: localEnd.proof(height),
         proofHeight: height,
       })
     else if (localEnd.state === INIT && remoteEnd.state === TRYOPEN)
@@ -192,7 +192,7 @@ function pendingDatagrams(chain: Chain, counterparty: Chain): List<Set<Datagram>
         portIdentifier: localEnd.portIdentifier,
         channelIdentifier: localEnd.channelIdentifier,
         version: remoteEnd.version,
-        proofTry: remoteEnd.proof(),
+        proofTry: remoteEnd.proof(counterpartyHeight),
         proofHeight: counterpartyHeight,
       })
     else if (localEnd.state === OPEN && remoteEnd.state === TRYOPEN)
@@ -200,7 +200,7 @@ function pendingDatagrams(chain: Chain, counterparty: Chain): List<Set<Datagram>
       counterpartyDatagrams.push(ChanOpenConfirm{
         portIdentifier: remoteEnd.portIdentifier,
         channelIdentifier: remoteEnd.channelIdentifier,
-        proofAck: localEnd.proof(),
+        proofAck: localEnd.proof(height),
         proofHeight: height
       })
 
