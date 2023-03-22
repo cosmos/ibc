@@ -226,11 +226,15 @@ func GenerateConsensusProofs(chains []*Chain) []*ProofData {
         // create the merkle path with the chain's prefix key
         prefixedKey := currentChain.GetMerklePath(consensusKey)
 
-        proofs = append(consStateProofs, &ProofData{
-            Key:   &prefixedKey,
-            Value: consensusState,
-            Proof: consensusProof,
-        })
+        // prepend the proofs so they are ordered from receiving end towards sending end
+        proofs = append(
+            &ProofData{
+                Key:   &prefixedKey,
+                Value: consensusState,
+                Proof: consensusProof,
+            },
+            consStateProofs
+        )
     }
      return proofs
   }
@@ -277,11 +281,15 @@ func GenerateConnectionProofs(chains []*Chain) []*ProofData {
         // create the merkle path with the chain's prefix key
         prefixedKey := currentChain.GetMerklePath(connectionKey)
 
-        proofs = append(proofs, &ProofData{
-            Key:   &prefixedKey,
-            Value: connectionEnd,
-            Proof: connectionProof,
-        })
+        // prepend the proofs so they are ordered from receiving end towards sending end
+        proofs = append(
+            &ProofData{
+                Key:   &prefixedKey,
+                Value: connectionEnd,
+                Proof: connectionProof,
+            },
+            proofs
+        )
     }
     return proofs
 }
@@ -415,7 +423,7 @@ func VerifyConsensusAndConnectionStates(
 ) {
     // reverse iterate through proofs to prove from destination to source
     var clientID string
-    for i := len(consensusProofs) - 1; i >= 0; i-- {
+    for i := 0; i < len(consensusProofs); i++ {
 
         // check the clientID from the previous connection is part of the next
         // consensus state's key path.

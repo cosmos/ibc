@@ -311,7 +311,7 @@ function getTimestampAtHeight(
 
 // Return the connectionEnd corresponding to the source chain.
 function getMultihopConnectionEnd(proof: MultihopProof): ConnectionEnd {
-  return abortTransactionUnless(Unmarshal(proof.ConnectionProofs[0].Value))
+  return abortTransactionUnless(Unmarshal(proof.ConnectionProofs[proof.ConnectionProofs.length - 1].Value))
 }
 
 // Return the maximum delay period across all connections in the channel path.

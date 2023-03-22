@@ -88,7 +88,7 @@ interface ChannelEnd {
 - The `nextSequenceSend`, stored separately, tracks the sequence number for the next packet to be sent.
 - The `nextSequenceRecv`, stored separately, tracks the sequence number for the next packet to be received.
 - The `nextSequenceAck`, stored separately, tracks the sequence number for the next packet to be acknowledged.
-- The `connectionHops` stores the list of connection identifiers, in order, along which packets sent on this channel will travel. A list length is greater than 1 indicates a multi-hop channel.
+- The `connectionHops` stores the list of connection identifiers ordered starting from the receiving end towards the sender. `connectionHops[0]` is the connection end on the receiving chain. More than one connection hop indicates a multi-hop channel.
 - The `version` string stores an opaque channel version, which is agreed upon during the handshake. This can determine module-level configuration such as which packet encoding is used for the channel. This version is not used by the core IBC protocol. If the version string contains structured metadata for the application to parse and interpret, then it is considered best practice to encode all metadata in a JSON struct and include the marshalled string in the version field.
 
 See the [upgrade spec](./UPGRADES.md) for details on `upgradeSequence`.
@@ -682,6 +682,9 @@ function getCounterPartyHops(proof: MultihopProof, lastConnection: ConnectionEnd
     connectionEnd = abortTransactionUnless(Unmarshal(connData.Value))
     counterpartyHops.push(connectionEnd.GetCounterparty().GetConnectionID())
    }
+
+  // reverse the hops so they are ordered from sender --> receiver
+  counterpartyHops = counterpartyHops.reverse()
 
   // add the last connection representing chain[N-1]
   counterpartyHops.push(lastConnection.GetCounterparty().GetConnectionID())
