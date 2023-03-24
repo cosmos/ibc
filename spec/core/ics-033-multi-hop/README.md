@@ -303,17 +303,15 @@ The following outlines the general proof verification steps specific to a multi-
 2. Check the counterparty client on the receiving end is active and the client height is greater than or equal to the proof height.
 3. Iterate through the connections states to determine the maximum `delayPeriod` for the channel path and verify that the counterparty consensus state on the receiving chain satisfies the delay requirement.
 4. Iterate through connection state proofs and verify each connectionEnd is in the OPEN state and check that the connection ids match the channel connectionHops.
-5. Verify the intermediate state proofs. Starting with known `ConsensusState[N-1]` at the given `proofHeight` on `ChainN` prove the prior chain's consensus and connection state.
+5. Verify the intermediate state proofs. Starting with known `ConsensusState[0]` at the given `proofHeight` on `Chain[N-1]` prove the prior chain's consensus and connection state.
 6. Verify that the client id in each consensus state proof key matches the client id in the ConnectionEnd in the previous connection state proof.
-7. Repeat step 3, proving `ConsensusState[i-1]`, and `Conn[i-1,i]` until `ConsensusState[0]` on the source chain is proven.
-   - Start with i = N-1
-   - ConsensusState <- ConsensusProof[i-1].Value on Chain[i]
-   - ConnectionEnd <- ConnectionProof[i-1].Value on Chain[i]
+7. Repeat step 5, proving `ConsensusState[i]`, and `Conn[i,i+1]` where `i` is the proof index starting with the consensus state on `Chain[N-2]`. `ConsensusState[N-1]` is already known on `Chain[N]`. Note that chains are indexed from sender to receiver and proofs are indexed in the opposite direction to match the connectionHops ordering.
    - Verify ParseClientID(ConsensusProofs[i].Key) == ConnectionEnd.ClientID
    - ConsensusProofs[i].Proof.VerifyMembership(ConsensusState.GetRoot(), ConsensusProofs[i].Key, ConsensusProofs[i].Value)
    - ConnectionProofs[i].Proof.VerifyMembership(ConsensusState.GetRoot(), ConnectionProofs[i].Key, ConnectionProofs[i].Value)
-   - Set ConsensusState from unmarshalled ConsensusProofs[i].Value
-8. Finally, prove the expected channel or packet commitment in `ConsensusState[0]`
+   - ConsensusState = ConsensusProofs[i].Value
+   - i++
+8. Finally, prove the expected channel or packet commitment in `ConsensusState[N-2]` (sending chain consensus state) on `Chain[1]`
 
 For more details see [ICS4](https://github.com/cosmos/ibc/tree/main/spec/core/ics-004-channel-and-packet-semantics).
 
