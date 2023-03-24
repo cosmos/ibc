@@ -40,7 +40,7 @@ CONSTANT
   MaxDrift,
   \* Maximal duration, w.r.t. the provider chain clock,
   \* by which non-responsive (initializing) chains are unilaterally dropped.
-  \* See issue #283.
+  \* See issue #283 in the interchain security repo: https://github.com/cosmos/interchain-security/issues/283.
   \* @type: $time;
   InactivityTimeout
 
