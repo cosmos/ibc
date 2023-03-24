@@ -87,7 +87,7 @@ Additionally, after every action, consumer chain statuses may promote, following
 
 # Invariants
 
-The specification implements the following invarians from [this table](https://github.com/cosmos/interchain-security/blob/main/docs/quality_assurance.md): 4.11, 6.01, 6.02, 6.03, 7.01, and 7.02 as
+The specification implements the following invarians from [this table](https://github.com/cosmos/interchain-security/blob/6036419de667590518cccd1c8fcae0d01cbe67e9/docs/old/quality_assurance.md): 4.11, 6.01, 6.02, 6.03, 7.01, and 7.02 as
 `Inv411`, `Inv601`, `Inv602`, `Inv603`, `Inv701` and `Inv702` respectively.
 See the specification for details and adjustments.
 
