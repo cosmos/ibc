@@ -117,9 +117,9 @@ function verifyChannelUpgradeSequence(
   counterpartyChannelIdentifier: Identifier,
   sequence: uint64
 ) {
-    client = queryClient(connection.clientIdentifier)
+    clientState = queryClientState(connection.clientIdentifier)
     path = applyPrefix(connection.counterpartyPrefix, channelUpgradeSequencePath(counterpartyPortIdentifier, counterpartyChannelIdentifier))
-    client.verifyMembership(height, 0, 0, proof, path, sequence)
+    return verifyMembership(clientState, height, 0, 0, proof, path, sequence)
 }
 ```
 
@@ -155,9 +155,9 @@ function verifyChannelUpgradeError(
   counterpartyChannelIdentifier: Identifier,
   upgradeErrorReceipt: ErrorReceipt
 ) {
-    client = queryClient(connection.clientIdentifier)
+    clientState = queryClientState(connection.clientIdentifier)
     path = applyPrefix(connection.counterpartyPrefix, channelUpgradeErrorPath(counterpartyPortIdentifier, counterpartyChannelIdentifier))
-    client.verifyMembership(height, 0, 0, proof, path, upgradeErrorReceipt)
+    return verifyMembership(clientState, height, 0, 0, proof, path, upgradeErrorReceipt)
 }
 ```
 
@@ -170,9 +170,9 @@ function verifyChannelUpgradeErrorAbsence(
   counterpartyPortIdentifier: Identifier,
   counterpartyChannelIdentifier: Identifier,
 ) {
-    client = queryClient(connection.clientIdentifier)
+    clientState = queryClientState(connection.clientIdentifier)
     path = applyPrefix(connection.counterpartyPrefix, channelUpgradeErrorPath(counterpartyPortIdentifier, counterpartyChannelIdentifier))
-    client.verifyNonMembership(height, 0, 0, proof, path)
+    return verifyNonMembership(clientState, height, 0, 0, proof, path)
 }
 ```
 
@@ -198,9 +198,9 @@ function verifyChannelUpgradeTimeout(
   counterpartyChannelIdentifier: Identifier,
   upgradeTimeout: UpgradeTimeout, 
 ) {
-    client = queryClient(connection.clientIdentifier)
+    clientState = queryClientState(connection.clientIdentifier)
     path = applyPrefix(connection.counterpartyPrefix, channelUpgradeTimeoutPath(counterpartyPortIdentifier, counterpartyChannelIdentifier))
-    client.verifyMembership(height, 0, 0, proof, path, upgradeTimeout)
+    return verifyMembership(clientState, height, 0, 0, proof, path, upgradeTimeout)
 }
 ```
 

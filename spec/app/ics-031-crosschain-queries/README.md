@@ -258,7 +258,7 @@ function CrossChainQueryResponse(
     abortTransactionUnless(query !== null)
 
     // Retrieve client state of the queried chain.
-    client = queryClientState(query.clientId)
+    clientState = queryClientState(query.clientId)
     abortTransactionUnless(client !== null)
 
     // Check that the relier executed the query at the requested height at the queried chain.
@@ -273,8 +273,8 @@ function CrossChainQueryResponse(
     // Verify query result using the local light client of the queried chain.
     // If the response carries data, then verify that the data is indeed the value associated with query.path at query.queryHeight at the queried chain.
     if (data !== null) {    
-        abortTransactionUnless(client.verifyMembership(
-            client,
+        abortTransactionUnless(verifyMembership(
+            clientState,
             proofHeight,
             delayPeriodTime,
             delayPeriodBlocks,
@@ -285,8 +285,8 @@ function CrossChainQueryResponse(
         result = SUCCESS
     // If there response does not carry any data, verify that query.path does not exist at query.queryHeight at the queried chain.
     } else {
-        abortTransactionUnless(client.verifyNonMembership(
-            client,
+        abortTransactionUnless(verifyNonMembership(
+            clientState,
             proofHeight,
             delayPeriodTime,
             delayPeriodBlocks,
