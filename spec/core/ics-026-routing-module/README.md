@@ -27,7 +27,7 @@ All functions provided by the IBC handler interface are defined as in [ICS 25](.
 
 The functions `newCapability` & `authenticateCapability` are defined as in [ICS 5](../ics-005-port-allocation).
 
-The function `writeChannel` is defined as in [ICS 4](../ics-004-channel-and-packet-semantics)
+The functions `writeChannel` and `writeAcknowledgement` are defined as in [ICS 4](../ics-004-channel-and-packet-semantics)
 
 ### Desired Properties
 
@@ -640,6 +640,7 @@ function handlePacketRecv(datagram: PacketRecv) {
     acknowledgement
   )
   acknowledgement = module.onRecvPacket(datagram.packet)
+  writeAcknowledgement(datagram.packet, acknowledgement)
 }
 ```
 

@@ -796,7 +796,6 @@ The IBC handler performs the following steps in order:
 function writeAcknowledgement(
   packet: Packet,
   acknowledgement: bytes) {
-
     // cannot already have written the acknowledgement
     abortTransactionUnless(provableStore.get(packetAcknowledgementPath(packet.destPort, packet.destChannel, packet.sequence) === null))
 
@@ -807,8 +806,15 @@ function writeAcknowledgement(
     )
 
     // log that a packet has been acknowledged
-    emitLogEntry("writeAcknowledgement", {sequence: packet.sequence, timeoutHeight: packet.timeoutHeight, port: packet.destPort, channel: packet.destChannel,
-                                timeoutTimestamp: packet.timeoutTimestamp, data: packet.data, acknowledgement})
+    emitLogEntry("writeAcknowledgement", {
+      sequence: packet.sequence, 
+      timeoutHeight: packet.timeoutHeight, 
+      port: packet.destPort, 
+      channel: packet.destChannel,
+      timeoutTimestamp: packet.timeoutTimestamp, 
+      data: packet.data, 
+      acknowledgement
+    })
 }
 ```
 
