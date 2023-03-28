@@ -327,7 +327,7 @@ PromoteConsumers ==
           \* Either stays INITIALIZING or is dropped ...
           /\ PacketTimeoutForConsumer(c, ccvChannelsPending'[c], currentTimes'[c], currentTimes'[ProviderChain], maturityTimes'[c], maturePackets') =>
             newStatus[c] /= Active
-          \* ... however it must be dropped if it exceed the inactivity timeout
+          \* ... however it must be dropped if it exceeds the inactivity timeout
           /\ TimeoutByInactivity(c, expectedResponders', currentTimes'[ProviderChain], maturePackets') 
             => newStatus[c] = Dropped
         )
