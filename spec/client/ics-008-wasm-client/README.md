@@ -62,18 +62,18 @@ update the storage with the new versions of them.
 The current implementation chooses to share the `Wasm Client` store between the `02-client` module (for reading), `08-wasm` module (for instantiation), and `Wasm Contract`.
 Other than instantiation, the `Wasm Contract` is responsible for updating state.
 
-### WASM VM
+### Wasm VM
 
 The purpose of this module is to delegate light client logic to a module written in wasm. For that,
 the `08-wasm` module needs a reference (or a handler) to a wasm VM and can directly call the [wasmvm](https://github.com/CosmWasm/wasmvm)
-to interact with the VM with less overhead, fewer dependencies, and finer grain control over the `Wasm Client` store than wasmd.
+to interact with the VM with less overhead, fewer dependencies, and finer grain control over the `Wasm Client` store than if using wasmd instead.
 
 
 ### Gas Costs
 
 Wasmd has thoroughly benchmarked gas adjustments for CosmWasm with which the same values are being used in `08-wasm`'s `Wasm VM`.
 
-```golang
+```typescript
 const (
 	DefaultGasMultiplier uint64 = 140_000_000
 	DefaultInstanceCost uint64 = 60_000
@@ -85,24 +85,24 @@ const (
 
 ### Client state
 
-The Wasm client state tracks the location of the Wasm bytecode via `CodeId`. Binary data represented by the `Data` field is opaque and only interpreted by the `Wasm Contract`.
+The Wasm client state tracks the location of the Wasm bytecode via `codeId`. Binary data represented by the `data` field is opaque and only interpreted by the `Wasm Contract`.
 
-```golang
-type ClientState struct {
-  Data: []byte
-  CodeId: []byte
-  LatestHeight: Height
+```typescript
+interface ClientState {
+  data: []byte
+  codeId: []byte
+  latestHeight: Height
 }
 ```
 
 ### Consensus state
 
-The Wasm consensus state tracks the timestamp (block time). Binary data represented by the `Data` field is opaque and only interpreted by the `Wasm Contract`.
+The Wasm consensus state tracks the timestamp (block time). Binary data represented by the `data` field is opaque and only interpreted by the `Wasm Contract`.
 
-```golang
-type ConsensusState struct {
-  Data: []byte
-  Timestamp: uint64
+```typescript
+interface ConsensusState {
+  data: []byte
+  timestamp: uint64
 }
 ```
 
@@ -110,10 +110,10 @@ type ConsensusState struct {
 
 The height of a Wasm light client instance consists of two `uint64`s: the revision number and the height in the revision.
 
-```golang
-type Height struct {
-  RevisionNumber: uint64
-  RevisionHeight: uint64
+```typescript
+interface Height {
+  revisionNumber: uint64
+  revisionHeight: uint64
 }
 ```
 
@@ -121,21 +121,21 @@ type Height struct {
 
 Contents of Wasm client headers depend upon `Wasm Contract`.
 
-```golang
-type Header struct {
-  Data: []byte
-  Height: Height
+```typescript
+interface Header {
+  data: []byte
+  height: Height
 }
 ```
 
 ### Misbehaviour
 
 If applicable, the Misbehaviour type is used for detecting misbehaviour and freezing the client - to prevent further packet flow. 
-Binary data represented by the `Data` field is opaque and only interpreted by the `Wasm Contract`, but will consists of two conflicting headers, both of which the `Wasm Contract` would have considered valid.
+Binary data represented by the `data` field is opaque and only interpreted by the `Wasm Contract`, but will consists of two conflicting headers, both of which the `Wasm Contract` would have considered valid.
 
-```golang
-type Misbehaviour struct {
-  Data: []byte
+```typescript
+interface Misbehaviour {
+  data: []byte
 }
 ```
 
@@ -143,40 +143,40 @@ type Misbehaviour struct {
 
 `Wasm Client` initialization requires a (subjectively chosen) latest consensus state and corresponding client state, interpretable by the `Wasm Contract`. 
 
-```golang
-  func (cs ClientState) Initialize(context sdk.Context, marshaler codec.BinaryCodec, clientStore sdk.KVStore, state exported.ConsensusState) error {}
+```typescript
+  function initialize(cs: ClientState, clientStore: sdk.KVStore, state: exported.ConsensusState) {}
 ```
 
 ### Validity predicate
 
-`Wasm Client` validity checking uses underlying `Wasm Contract`. If the provided header is valid, the client state is updated & the newly verified commitment is written to the store by the `Wasm Contract`.
+`Wasm Client` validity checking uses underlying `Wasm Contract`. If the provided header is valid, the client state will proceed to checking for misbehaviour and updating state.
 
-```golang
-  func (c ClientState) VerifyClientMessage(ctx sdk.Context, _ codec.BinaryCodec, clientStore sdk.KVStore, clientMsg exported.ClientMessage) error {}
+```typescript
+  function verifyClientMessage(cs: ClientState, clientStore: sdk.KVStore, clientMsg: exported.ClientMessage) {}
 ```
 
 ### Misbehaviour predicate
 
 `Wasm Client` misbehaviour checking determines whether or not two conflicting headers at the same height would have convinced the light client.
 
-```golang
-  func (c ClientState) CheckForMisbehaviour(ctx sdk.Context, _ codec.BinaryCodec, clientStore sdk.KVStore, msg exported.ClientMessage) bool {}
+```typescript
+  function checkForMisbehaviour(cs: ClientState, clientStore: sdk.KVStore, msg: exported.ClientMessage) {}
 ```
 
 ### UpdateState
 
 `UpdateState` will perform a regular update for the `Wasm Client`. It will add a consensus state to the client store. If the header is higher than the lastest height on the `clientState`, then the `clientState` will be updated.
 
-```golang
-  func (c ClientState) UpdateState(ctx sdk.Context, cdc codec.BinaryCodec, store sdk.KVStore, clientMsg exported.ClientMessage) []exported.Height {}
+```typescript
+  function updateState(cs: ClientState, store: sdk.KVStore, clientMsg: exported.ClientMessage) {}
 ```
 
 ### UpdateStateOnMisbehaviour
 
 `UpdateStateOnMisbehaviour` will set the frozen height to a non-zero height to freeze the entire client.
 
-```golang
-  func (c ClientState) UpdateStateOnMisbehaviour(ctx sdk.Context, _ codec.BinaryCodec, clientStore sdk.KVStore, clientMsg exported.ClientMessage) {}
+```typescript
+  function updateStateOnMisbehaviour(cs: ClientState, clientStore: sdk.KVStore, clientMsg: exported.ClientMessage) {}
 ```
 
 ### Upgrades
@@ -185,55 +185,52 @@ The chain which this light client is tracking can elect to write a special pre-d
 
 As the client state change will be performed immediately, once the new client state information is written to the pre-determined key, the client will no longer be able to follow blocks on the old chain, so it must upgrade promptly.
 
-```golang
-	func (c ClientState) VerifyUpgradeAndUpdateState(
-	  ctx sdk.Context,
-	  cdc codec.BinaryCodec,
-	  store sdk.KVStore,
-	  newClient exported.ClientState,
-	  newConsState exported.ConsensusState,
-	  proofUpgradeClient,
-	  proofUpgradeConsState []byte) error {}
+```typescript
+	function verifyUpgradeAndUpdateState(
+	  cs: ClientState,
+	  store: sdk.KVStore,
+	  newClient: exported.ClientState,
+	  newConsState: exported.ConsensusState,
+	  proofUpgradeClient: []byte,
+	  proofUpgradeConsState: []byte) {}
 ```
 
 ### Proposals
 
-Specific `Wasm Client` params such as: latest height, frozen height, trusting period (if applicable), and chain id can be updated via a governance proposal.
+Specific `Wasm Client` params such as: latest height, frozen height, trusting period (if applicable), and chain id can be updated via a governance proposal and executed after approval.
 
-```golang
-  func (c ClientState) CheckSubstituteAndUpdateState(
-	  ctx sdk.Context, _ codec.BinaryCodec, subjectClientStore,
-	  substituteClientStore sdk.KVStore, substituteClient exported.ClientState,
-  ) error {}
+```typescript
+  function checkSubstituteAndUpdateState(
+	  cs: ClientState, subjectClientStore: sdk.KVStore,
+	  substituteClientStore: sdk.KVStore, substituteClient: exported.ClientState,
+  ) {}
 ```
 
 ### State verification functions
 
 `Wasm Client` state verification functions check a proof against a previously validated commitment root.
 
-```golang
-  func (cs ClientState) VerifyMembership(
-	  ctx sdk.Context,
-	  clientStore sdk.KVStore,
-	  cdc codec.BinaryCodec,
-	  height exported.Height,
-	  delayTimePeriod uint64,
-	  delayBlockPeriod uint64,
-	  proof []byte,
-	  path exported.Path,
-	  value []byte,
-  ) error {}
+```typescript
+  function verifyMembership(
+	  cs: ClientState,
+	  clientStore: sdk.KVStore,
+	  height: exported.Height,
+	  delayTimePeriod: uint64,
+	  delayBlockPeriod: uint64,
+	  proof: []byte,
+	  path: exported.Path,
+	  value: []byte,
+  ) {}
   
-  func (cs ClientState) VerifyNonMembership(
-	  ctx sdk.Context,
-	  clientStore sdk.KVStore,
-	  cdc codec.BinaryCodec,
-	  height exported.Height,
-	  delayTimePeriod uint64,
-	  delayBlockPeriod uint64,
-	  proof []byte,
-	  path exported.Path,
-  ) error {}
+  function verifyNonMembership(
+	  cs: ClientState,
+	  clientStore: sdk.KVStore,
+	  height: exported.Height,
+	  delayTimePeriod: uint64,
+	  delayBlockPeriod: uint64,
+	  proof: []byte,
+	  path: exported.Path,
+  ) {}
 
 ```
 ### Wasm Contract Interface
