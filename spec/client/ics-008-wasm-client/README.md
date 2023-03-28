@@ -5,9 +5,9 @@ stage: draft
 category: IBC/TAO
 kind: instantiation
 implements: 2
-author: Parth Desai <parth@chorus.one>, Mateusz Kaczanowski <mateusz@chorus.one>, Blas Rodriguez Irizar <blas@composable.finance>
+author: Parth Desai <parth@chorus.one>, Mateusz Kaczanowski <mateusz@chorus.one>, Blas Rodriguez Irizar <blas@composable.finance>, Steve Miskovetz <steve@strange.love>
 created: 2020-10-13
-modified: 2022-12-15
+modified: 2023-03-28
 ---
 
 ## Synopsis
@@ -29,19 +29,19 @@ Once the IBC network broadly adopts dynamically upgradable clients, a chain may 
 
 Another reason why this interface is beneficial is that it removes the dependency between Light clients and the Go programming language. Using WASM as a compilation target, light clients can be written in any programming language whose toolchain includes WASM as a compilation target. Examples of these are Go, Rust, C, and C++.
 
-### Defions
+### Definitions
 
 Functions & terms are as defined in [ICS 2](../../core/ics-002-client-semantics).
 
 `currentTimestamp` is as defined in [ICS 24](../../core/ics-024-host-requirements).
 
-`Wasm Client Code` refers to Wasm bytecode stored in the client store, which provides a target blockchain specific implementation of [ICS 2](../../core/ics-002-client-semantics).
+`Wasm Contract` refers to Wasm bytecode stored in the `08-wasm` store, which provides a target blockchain specific implementation of [ICS 2](../../core/ics-002-client-semantics).
 
-`Wasm Client` refers to a particular instance of `Wasm Client Code` defined as a tuple `(Wasm Client Code, ClientID)`.
+`Wasm Client` refers to a particular instance of `Wasm Contract` defined as a tuple `(Wasm Contract, ClientID)`.
 
 `Wasm VM` refers to a virtual machine capable of executing valid Wasm bytecode.
 
-`VerifyClientMessage`, `CheckForMisbehaviour`, `UpdateStateOnMisbehaviour`, and `UpdateState`are as defined in [ADR-006](https://github.com/cosmos/ibc-go/blob/main/docs/architecture/adr-006-02-client-refactor.md)
+`VerifyClientMessage`, `CheckForMisbehaviour`, `UpdateStateOnMisbehaviour`, and `UpdateState` are as defined in [ADR-006](https://github.com/cosmos/ibc-go/blob/main/docs/architecture/adr-006-02-client-refactor.md)
 
 
 ### Desired Properties
@@ -50,7 +50,7 @@ This specification must satisfy the client interface defined in [ICS 2.](../../c
 
 ## Technical Specification
 
-This specification depends on the correct instantiation of the `WASM client` and is decoupled from any specific implementation of the target `blockchain` consensus algorithm.
+This specification depends on the correct instantiation of the `Wasm Client` and is decoupled from any specific implementation of the target `blockchain` consensus algorithm.
 
 ### Storage management
 
@@ -59,79 +59,50 @@ state kept in storage. For that, there is a need to allow the underlying light c
 to access client and consensus data structures and, after performing certain computations, to
 update the storage with the new versions of them.
 
-The current implementation chooses to receive the updated value from the wasm module directly, and persist
-it into the storage at the `08-wasm` level. Alternatively, this could be delegated to the wasm implementation
-directly.
+The current implementation chooses to share the `Wasm Client` store between the `02-client` module (for reading), `08-wasm` module (for instantiation), and `Wasm Contract`.
+Other than instantiation, the `Wasm Contract` is responsible for updating state.
 
 ### WASM VM
 
 The purpose of this module is to delegate light client logic to a module written in wasm. For that,
-the `08-wasm` module needs a reference (or a handler) to a wasm VM. At a higher level, the
-[wasmd](https://github.com/CosmWasm/wasmd) module can be used for the aforementioned operation. Alternatively,
-this module can directly call the [wasmvm](https://github.com/CosmWasm/wasmvm) to interact with
-the VM with less overhead.
+the `08-wasm` module needs a reference (or a handler) to a wasm VM and can directly call the [wasmvm](https://github.com/CosmWasm/wasmvm)
+to interact with the VM with less overhead, fewer dependencies, and finer grain control over the `Wasm Client` store than wasmd.
 
 
 ### Gas Costs
 
+Wasmd has thoroughly benchmarked gas adjustments for CosmWasm with which the same values are being used in `08-wasm`'s `Wasm VM`.
 
-```typescript
-const GasMultiplier uint64 = 100
-const maxGasLimit = uint64(0x7FFFFFFFFFFFFFFF)
+```golang
+const (
+	DefaultGasMultiplier uint64 = 140_000_000
+	DefaultInstanceCost uint64 = 60_000
+	DefaultCompileCost uint64 = 3
+	DefaultContractMessageDataCost uint64 = 0
+	DefaultDeserializationCostPerByte = 1
+)
 ```
-
-```typescript
-  function consumeGas(ctx: sdk.Context, gas: uint64) {
-  let consumed = gas / GasMultiplier
-  ctx.GasMeter().ConsumeGas(consumed, "wasm contract")
-  // throw OutOfGas error if we ran out (got exactly to zero due to better limit enforcing)
-  if ctx.GasMeter().IsOutOfGas() {
-    // returns an out of gas error
-  }
-}
-```
-
-### Calling a contract
-
-```typescript
-// Calls vm.Execute with internally constructed Gas meter and environment
-function callContract(codeID: []byte, ctx: sdk.Context, store: sdk.KVStore, msg []byte): [*types.Response, error] {}
-```
-
-```typescript
-function (codeID: cosmwasm.Checksum, ctx: sdk.Context, store: sdk.KVStore, env: types.Env, gasMeter: sdk.GasMeter, msg: []byte) [*types.Response, error] {
-  let msgInfo = createMsgInfo{
-    Sender: "",
-    Funds:  nil,
-  };
-  let {resp, gasUsed, err} = executeVM(codeID, env, msgInfo, msg, store, gasMeter, gasMeter.Limit());
-  consumeGas(ctx, gasUsed);
-  return [resp, err]
-}
-```
-
 
 ### Client state
 
-The Wasm client state tracks the location of the Wasm bytecode via `codeHash`. Binary data represented by the `data` field is opaque and only interpreted by the Wasm Client Code. The `type`field represents client type.` type` and `codeHash` are both immutable.
+The Wasm client state tracks the location of the Wasm bytecode via `CodeId`. Binary data represented by the `Data` field is opaque and only interpreted by the `Wasm Contract`.
 
-```typescript
-interface ClientState {
-  codeHash: []byte
-  data: []byte
-  latestHeight: Height
+```golang
+type ClientState struct {
+  Data: []byte
+  CodeId: []byte
+  LatestHeight: Height
 }
 ```
 
 ### Consensus state
 
-The Wasm consensus state tracks the timestamp (block time), `WASM Client` code-specific fields, and commitment root for all previously verified consensus states.`type` and `codeHash` are both immutable.
+The Wasm consensus state tracks the timestamp (block time). Binary data represented by the `Data` field is opaque and only interpreted by the `Wasm Contract`.
 
-```typescript
-interface ConsensusState {
-  codeHash: []byte
-  data: []byte
-  timestamp: uint64
+```golang
+type ConsensusState struct {
+  Data: []byte
+  Timestamp: uint64
 }
 ```
 
@@ -139,109 +110,73 @@ interface ConsensusState {
 
 The height of a Wasm light client instance consists of two `uint64`s: the revision number and the height in the revision.
 
-```typescript
-interface Height {
-  revisionNumber: uint64
-  revisionHeight: uint64
+```golang
+type Height struct {
+  RevisionNumber: uint64
+  RevisionHeight: uint64
 }
 ```
-
-Comparison between heights is implemented as follows:
-
-```typescript
-function compare(a: Height, b: Height): Ord {
-  if (a.revisionNumber < b.revisionNumber)
-    return LT
-  else if (a.revisionNumber === b.revisionNumber)
-    if (a.revisionHeight < b.revisionHeight)
-      return LT
-    else if (a.revisionHeight === b.revisionHeight)
-      return EQ
-  return GT
-}
-```
-
-This is designed to allow the height to reset to `0` while the revision number increases by one to preserve timeouts through zero-height upgrades.
 
 ### Headers
 
-Contents of Wasm client headers depend upon `WASM Client` Code.
+Contents of Wasm client headers depend upon `Wasm Contract`.
 
-```typescript
-interface Header {
-  data: []byte
-  height: Height
+```golang
+type Header struct {
+  Data: []byte
+  Height: Height
 }
 ```
 
 ### Misbehaviour
 
-If applicable, the Misbehaviour type is used for detecting misbehaviour and freezing the client - to prevent further packet flow. Wasm client Misbehaviour consists of two conflicting headers, both of which the light client would have considered valid.
+If applicable, the Misbehaviour type is used for detecting misbehaviour and freezing the client - to prevent further packet flow. 
+Binary data represented by the `Data` field is opaque and only interpreted by the `Wasm Contract`, but will consists of two conflicting headers, both of which the `Wasm Contract` would have considered valid.
 
-```typescript
-interface Misbehaviour {
-  clientId: string
-  data: []byte
+```golang
+type Misbehaviour struct {
+  Data: []byte
 }
 ```
 
 ### Client initialization
 
-Wasm client initialization requires a (subjectively chosen) latest consensus state interpretable by the target Wasm Client Code. `wasmCodeId` field is a unique identifier for `Wasm Client Code`, and `initializationData` refers to opaque data required for initialization of the particular client managed by that Wasm Client Code.
+`Wasm Client` initialization requires a (subjectively chosen) latest consensus state and corresponding client state, interpretable by the `Wasm Contract`. 
 
-```typescript
-function initialize(
-    wasmCodeId: String,
-    initializationData: []byte,
-    consensusState: []byte,
-  ): ClientState {
-
-    codeHandle = getWasmCode(wasmCodeId)
-    assert(codeHandle.isInitializationDataValid(initializationData, consensusState))
-
-    store = getStore("clients/{identifier}")
-    return codeHandle.initialize(store, initializationData, consensusState)
-}
-```
-
-The `latestClientHeight` function returns the latest stored height, which is updated every time a new (more recent) header is validated.
-
-```typescript
-function latestClientHeight(clientState: ClientState): Height {
-  codeHandle = clientState.codeHandle();
-  codeHandle.latestClientHeight(clientState)
-}
+```golang
+  func (cs ClientState) Initialize(context sdk.Context, marshaler codec.BinaryCodec, clientStore sdk.KVStore, state exported.ConsensusState) error {}
 ```
 
 ### Validity predicate
 
-Wasm client validity checking uses underlying Wasm Client code. If the provided header is valid, the client state is updated & the newly verified commitment is written to the store.
+`Wasm Client` validity checking uses underlying `Wasm Contract`. If the provided header is valid, the client state is updated & the newly verified commitment is written to the store by the `Wasm Contract`.
 
-```typescript
-function CheckSubstituteAndUpdateState(
-  clientState: ClientState,
-  substituteClient: ClientState,
-  subjectClientStore: KVStore, substituteClientStore: KVStore,
-  header: Header) {
-    let store = getStore("subject/substitute")
-    let consensusState = GetConsensusState(subjectClientStore, clientState.LatestHeight)
-    let encodedData = packData(consensusState, clientState, substituteClient)
-    let out = callContract(c.CodeId, ctx, store, encodedData)
-
+```golang
+  func (c ClientState) VerifyClientMessage(ctx sdk.Context, _ codec.BinaryCodec, clientStore sdk.KVStore, clientMsg exported.ClientMessage) error {}
 ```
 
 ### Misbehaviour predicate
 
-Wasm client misbehaviour checking determines whether or not two conflicting headers at the same height would have convinced the light client.
+`Wasm Client` misbehaviour checking determines whether or not two conflicting headers at the same height would have convinced the light client.
 
-```typescript
-function checkForMisbehaviour(
-  clientState: ClientState,
-  misbehaviour: Misbehaviour) {
-    let store = getStore("clients/{identifier}")
-    let codeHandle = clientState.codeHandle()
-    assert(codeHandle.handleMisbehaviour(store, clientState, misbehaviour))
-}
+```golang
+  func (c ClientState) CheckForMisbehaviour(ctx sdk.Context, _ codec.BinaryCodec, clientStore sdk.KVStore, msg exported.ClientMessage) bool {}
+```
+
+### UpdateState
+
+`UpdateState` will perform a regular update for the `Wasm Client`. It will add a consensus state to the client store. If the header is higher than the lastest height on the `clientState`, then the `clientState` will be updated.
+
+```golang
+  func (c ClientState) UpdateState(ctx sdk.Context, cdc codec.BinaryCodec, store sdk.KVStore, clientMsg exported.ClientMessage) []exported.Height {}
+```
+
+### UpdateStateOnMisbehaviour
+
+`UpdateStateOnMisbehaviour` will set the frozen height to a non-zero height to freeze the entire client.
+
+```golang
+  func (c ClientState) UpdateStateOnMisbehaviour(ctx sdk.Context, _ codec.BinaryCodec, clientStore sdk.KVStore, clientMsg exported.ClientMessage) {}
 ```
 
 ### Upgrades
@@ -250,290 +185,187 @@ The chain which this light client is tracking can elect to write a special pre-d
 
 As the client state change will be performed immediately, once the new client state information is written to the pre-determined key, the client will no longer be able to follow blocks on the old chain, so it must upgrade promptly.
 
-```typescript
-function upgradeClientState(
-  clientState: ClientState,
-  newClientState: ClientState,
-  height: Height,
-  proof: CommitmentPrefix) {
-    let codeHandle = clientState.codeHandle()
-    assert(codeHandle.verifyNewClientState(clientState, newClientState, height, proof))
+```golang
+	func (c ClientState) VerifyUpgradeAndUpdateState(
+	  ctx sdk.Context,
+	  cdc codec.BinaryCodec,
+	  store sdk.KVStore,
+	  newClient exported.ClientState,
+	  newConsState exported.ConsensusState,
+	  proofUpgradeClient,
+	  proofUpgradeConsState []byte) error {}
+```
 
-    // update client state
-    let clientState = newClientState
-    set("clients/{identifier}", clientState)
-}
+### Proposals
+
+Specific `Wasm Client` params such as: latest height, frozen height, trusting period (if applicable), and chain id can be updated via a governance proposal.
+
+```golang
+  func (c ClientState) CheckSubstituteAndUpdateState(
+	  ctx sdk.Context, _ codec.BinaryCodec, subjectClientStore,
+	  substituteClientStore sdk.KVStore, substituteClient exported.ClientState,
+  ) error {}
 ```
 
 ### State verification functions
 
-Wasm client state verification functions check a Merkle proof against a previously validated commitment root.
+`Wasm Client` state verification functions check a proof against a previously validated commitment root.
 
-```typescript
-	function VerifyUpgradeAndUpdateState(
-        c: ClientState,
-        store: KVStore,
-        newClient: ClientState,
-        newConsState: ConsensusState,
-        proofUpgradeClient: []byte,
-        proofUpgradeConsState: []byte,
-	): error {
-        // last height of current counterparty chain must be client's latest height
-        let lastHeight = c.LatestHeight
-        let err = GetConsensusState(store, cdc, lastHeight)
-        assert(err == null)
-        let encodedData =  packData(newClient, proofUpgradeClient, proofUpgradeConsState)
-        let err = callContract(c.CodeId, ctx, store, encodedData)
-        assert(err == null)
-        return null
-  }
+```golang
+  func (cs ClientState) VerifyMembership(
+	  ctx sdk.Context,
+	  clientStore sdk.KVStore,
+	  cdc codec.BinaryCodec,
+	  height exported.Height,
+	  delayTimePeriod uint64,
+	  delayBlockPeriod uint64,
+	  proof []byte,
+	  path exported.Path,
+	  value []byte,
+  ) error {}
   
-  function VerifyMembership(
-        c: ClientState,
-        clientStore: KVStore,
-        height: Height,
-        delayTimePeriod: uint64,
-        delayBlockPeriod: uint64,
-        proof: []byte,
-        path: Path,
-        value :[]byte,
-	): error {
-        const VerifyClientMessage = "verify_membership"
-        let encodedData = packData(height, delayTimePeriod, delayBlockPeriod, proof, path, value, VerifyClientMessage)
-        let { _, err } = callContract(c.CodeId, ctx, clientStore, encodedData)
-        return err
-  }
-
-  function VerifyNonMembership(
-        ctx: sdk.Context,
-        clientStore: sdk.KVStore,
-        cdc: codec.BinaryCodec,
-        height: exported.Height,
-        delayTimePeriod: int,
-        delayBlockPeriod: int,
-        proof: []byte,
-        path: []byte,
-    ): error {
-        const VerifyClientMessage = "verify_non_membership"
-        let  encodedData = packData(height, delayTimePeriod, delayBlockPeriod, proof, path, value, VerifyClientMessage)
-        let {_, err} = callContract(c.CodeId, ctx, clientStore, encodedData)
-        return err
-}
-
-function VerifyClientMessage(ctx: sdk.Context, cdc: codec.BinaryCodec, clientStore: sdk.KVStore, clientMsg: exported.ClientMessage): error {
-    encodedData := packData(clientMsg, c)
-	_, err := call[contractResult](encodedData, &c, ctx, clientStore)
-	return err
-}
-
-function CheckForMisbehaviour(ctx: sdk.Context, cdc: codec.BinaryCodec, clientStore: sdk.KVStore, msg: exported.ClientMessage): bool {
-	let { wasmMisbehaviour, ok } = msg.Misbehaviour
-	if !ok {
-		return false
-	}
-    encodedData := packData(wasmMisbehaviour)
-    try {
-        call[contractResult](encodedData, &c, ctx, clientStore)
-
-    } catch(err) {
-        throw(err)
-    }
-	return true
-}
-
-// UpdateStateOnMisbehaviour should perform appropriate state changes on a client state given that misbehaviour has been detected and verified
-function UpdateStateOnMisbehaviour(ctx: sdk.Context, cdc: codec.BinaryCodec, clientStore: sdk.KVStore, clientMsg: exported.ClientMessage) {
-    encodedData := packData(clientMsg, c)
-     try{
-        callContract(c.CodeId, ctx, clientStore, encodedData)
-     } catch (err) {
-         throw err
-     }
-
-}
-
-function UpdateState(ctx: sdk.Context, cdc: codec.BinaryCodec, clientStore: sdk.KVStore, clientMsg: exported.ClientMessage): []exported.Height {
-  clientMsgConcrete := make(map[string]interface{})
-  switch clientMsg := clientMsg.(type) {
-    case *Header:
-      clientMsgConcrete["header"] = clientMsg
-    case *Misbehaviour:
-      clientMsgConcrete["misbehaviour"] = clientMsg
-  }
-  encodedData := packData(clientMsgConcrete)
-   try {
-	output, err := call[contractResult](encodedData := packData(clientMsgConcrete), &c, ctx, clientStore)
-    json.Unmarshal(output.Data, c)
-   } catch (err) {
-       throw err
-   }
-}
-
-function CheckSubstituteAndUpdateState(ctx: sdk.Context, cdc: codec.BinaryCodec, subjectClientStore: sdk.KVStore, substituteClientStore: sdk.KVStore, substituteClient: ClientState): error {
-  	var (
-		SubjectPrefix    = []byte("subject/")
-		SubstitutePrefix = []byte("substitute/")
-	)
-
-	consensusState, err := GetConsensusState(subjectClientStore, cdc, c.LatestHeight)
-	if err != nil {
-		return sdkerrors.Wrapf(
-			err, "unexpected error: could not get consensus state from clientstore at height: %d", c.GetLatestHeight(),
-		)
-	}
-
-	store := NewWrappedStore(subjectClientStore, subjectClientStore, SubjectPrefix, SubstitutePrefix)
-
-	const CheckSubstituteAndUpdateState = "check_substitute_and_update_state"
-  encodedData := packData(consensusState, substituteClient)
-	output, err := call[clientStateCallResponse](encodedData, &c, ctx, store)
-	if err != nil {
-		return err
-	}
-	output.resetImmutables(&c)
-	return nil
-}
-
-	SetClientState(clientStore, cdc, &c)
-	return []exported.Height{c.LatestHeight}
-}
+  func (cs ClientState) VerifyNonMembership(
+	  ctx sdk.Context,
+	  clientStore sdk.KVStore,
+	  cdc codec.BinaryCodec,
+	  height exported.Height,
+	  delayTimePeriod uint64,
+	  delayBlockPeriod uint64,
+	  proof []byte,
+	  path exported.Path,
+  ) error {}
 
 ```
-### Wasm Client Code Interface
+### Wasm Contract Interface
 
-#### Interaction between Go and WASM?
+#### Interaction between Go and WASM
 When an instruction needs to be executed in WASM code, functions are executed using a `wasmvm`.
 The process requires packaging all the arguments to be executed by a specific function (including
 pointers to `KVStore`s if needed), pointing to a code hash, and a `sdk.GasMeter` to properly account
 for gas usage during the execution of the function.
 
+#### `Contract Instantiation`
+Instantiation of a contract is minimal. No data is passed in the message for the contract call, but the
+`Wasm Client` store is passed. This allows for a `Wasm Contract` to initialize any metadata that they
+need such as processed height and/or processed time.
 
-```typescript
-function isValidClientState(ctx: sdk.Context, clientState: ClientState, height: int): {*types.Response, error} {
-    clientStateData := json.Serialize(clientState)
-    packedData := pack(clientStateData, height)
-    // VM specific code to call Wasm contract
-    desercost := types.UFraction{Numerator: 1, Denominator: 1}
-    return callContract(codeID, ctx, store, packedData)
-}
-```
-
-```typescript
-function callContract(codeID: []byte, ctx: sdk.Context, store: sdk.KVStore, msg: []byte): {*types.Response, error} {
-	gasMeter := ctx.GasMeter()
-	chainID := ctx.BlockHeader().ChainID
-	height := ctx.BlockHeader().Height
-	// safety checks before casting below
-	if height < 0 {
-		panic("Block height must never be negative")
-	}
-	sec := ctx.BlockTime().Unix()
-	if sec < 0 {
-		panic("Block (unix) time must never be negative ")
-	}
-	env := types.Env{
-		Block: types.BlockInfo{
-			Height:  uint64(height),
-			Time:    uint64(sec),
-			ChainID: chainID,
-		},
-		Contract: types.ContractInfo{
-			Address: "",
-		},
-	}
-
-	return callContractWithEnvAndMeter(codeID, ctx, store, env, gasMeter, msg)
-}
-```
-
-```typescript
-function callContractWithEnvAndMeter(codeID: cosmwasm.Checksum, ctx: sdk.Context, store: sdk.KVStore, env: types.Env, gasMeter: sdk.GasMeter, msg: []byte): {*types.Response, error} {
-	msgInfo := types.MessageInfo{}
-	desercost := types.UFraction{Numerator: 1, Denominator: 1}
-	resp, gasUsed, err := WasmVM.Execute(codeID, env, msgInfo, msg, store, cosmwasm.GoAPI{}, nil, gasMeter, gasMeter.Limit(), desercost)
-	if &ctx != nil {
-		consumeGas(ctx, gasUsed)
-	}
-	return {resp, err}
-}
-```
-
-#### Wasm Client interface
-Every Wasm client code needs to support the ingestion of the below messages to be used as a light client.
+#### `Contract Query`
+Every `Wasm Contract` must to support these query messages:
 
 ```rust
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
-#[serde(rename_all = "snake_case")]
-pub struct MisbehaviourMessage {
-    pub client_id: Vec<u8>,
-    pub data: Vec<u8>,
+#[cw_serde]
+pub struct StatusMsg {}
+
+#[cw_serde]
+pub struct ExportMetadataMsg {}
+```
+
+The response for queries is as follows:
+
+```rust
+#[cw_serde]
+pub struct QueryResponse {
+	pub status: String, // Status query response
+	#[serde(skip_serializing_if = "Option::is_none")]
+	pub genesis_metadata: Option<Vec<GenesisMetadata>>, // metadata KV pairs
 }
 
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
-#[serde(rename_all = "snake_case")]
-pub struct CreateConsensusMessage {
-    pub client_state: Vec<u8>,
-    pub height: Height
+#[cw_serde]
+pub struct GenesisMetadata {
+	pub key: Vec<u8>,
+	pub value: Vec<u8>,
+}
+```
+
+#### `Contract Execute`
+Every `Wasm Contract` must support these execute messages:
+
+```rust
+#[cw_serde]
+pub struct VerifyMembershipMsg {
+	#[schemars(with = "String")]
+	#[serde(with = "Base64", default)]
+	pub proof: Bytes,
+	pub path: MerklePath,
+	#[schemars(with = "String")]
+	#[serde(with = "Base64", default)]
+	pub value: Bytes,
+	pub height: Height,
+	pub delay_block_period: u64,
+	pub delay_time_period: u64,
 }
 
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
-#[serde(rename_all = "snake_case")]
-pub struct InitializeClientStateMessage {
-    pub initialization_data: Vec<u8>,
-    pub consensus_state: Vec<u8>
+#[cw_serde]
+pub struct VerifyNonMembershipMsg {
+	#[schemars(with = "String")]
+	#[serde(with = "Base64", default)]
+	pub proof: Bytes,
+	pub path: MerklePath,
+	pub height: HeightRaw,
+	pub delay_block_period: u64,
+	pub delay_time_period: u64,
 }
 
-
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
-#[serde(rename_all = "snake_case")]
-pub enum HandleMsg {
-    HandleMisbehaviour(MisbehaviourMessage),
-    TryCreateConsensusState(CreateConsensusMessage),
-    InitializeClientState(InitializeClientStateMessage)
+#[cw_serde]
+pub struct VerifyClientMessage {
+	pub client_message: ClientMessage,
 }
 
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
-#[serde(rename_all = "snake_case")]
-pub struct ValidateClientStateMessage {
-    client_state: Vec<u8>,
-    height: Height
+#[cw_serde]
+pub enum ClientMessage {
+	Header(WasmHeader),
+	Misbehaviour(WasmMisbehaviour),
 }
 
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
-#[serde(rename_all = "snake_case")]
-pub struct ValidateNewClientStateMessage {
-    client_state: Vec<u8>,
-    new_client_state: Vec<u8>,
-    height: Height
+#[cw_serde]
+pub struct CheckForMisbehaviourMsg {
+	pub client_message: ClientMessage,
 }
 
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
-#[serde(rename_all = "snake_case")]
-pub struct ValidateInitializationDataMessage {
-    init_data: Vec<u8>,
-    consensus_state: Vec<u8>
+#[cw_serde]
+pub struct UpdateStateOnMisbehaviourMsg {
+	pub client_message: ClientMessage,
 }
 
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
-#[serde(rename_all = "snake_case")]
-pub enum ValidityPredicate {
-    ClientState(ValidateClientStateMessage),
-    NewClientState(ValidateNewClientStateMessage),
-    InitializationData(ValidateInitializationDataMessage),
+#[cw_serde]
+pub struct UpdateStateMsg {
+	pub client_message: ClientMessage,
 }
 
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
-#[serde(rename_all = "snake_case")]
-pub enum QueryMsg {
-   IsValid(ValidityPredicate),
-   LatestClientHeight(Vec<u8>),
+#[cw_serde]
+pub struct CheckSubstituteAndUpdateStateMsg {
 }
 
+#[cw_serde]
+pub struct VerifyUpgradeAndUpdateStateMsg {
+	pub upgrade_client_state: WasmClientState,
+	pub upgrade_consensus_state: WasmConsensusState,
+	#[schemars(with = "String")]
+	#[serde(with = "Base64", default)]
+	pub proof_upgrade_client: Vec<u8>,
+	#[schemars(with = "String")]
+	#[serde(with = "Base64", default)]
+	pub proof_upgrade_consensus_state: Vec<u8>,
+}
+
+```
+
+The response for execute is as follows:
+
+```rust
+#[cw_serde]
+pub struct ContractResult {
+	pub is_valid: bool, // Execute was successful
+	pub error_msg: String, // Error message
+	#[serde(skip_serializing_if = "Option::is_none")]
+	pub data: Option<Vec<u8>>, // Optional data
+	pub found_misbehaviour: bool, // Misbehaviour was found
+}
 ```
 
 ### Properties & Invariants
 
-Correctness guarantees as provided by the underlying algorithm implemented by `Wasm Client Code`.
+Correctness guarantees as provided by the underlying algorithm implemented by `Wasm Contract`.
 
 ## Backwards Compatibility
 
@@ -541,11 +373,11 @@ Not applicable.
 
 ## Forwards Compatibility
 
-As long as `Wasm Client Code` keeps its interface consistent with `ICS 02` it should be forward compatible
+As long as `Wasm Contract` keeps its interface consistent with `ICS 02` it should be forward compatible
 
 ## Example Implementation
 
-None yet.
+Implementation of ICS 08 in Go can be found in [ibc-go PR](https://github.com/cosmos/ibc-go/pull/3355).
 
 ## Other Implementations
 
