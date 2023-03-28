@@ -27,6 +27,8 @@ All functions provided by the IBC handler interface are defined as in [ICS 25](.
 
 The functions `newCapability` & `authenticateCapability` are defined as in [ICS 5](../ics-005-port-allocation).
 
+The function `writeChannel` is defined as in [ICS 4](../ics-004-channel-and-packet-semantics)
+
 ### Desired Properties
 
 - Modules should be able to bind to ports and own channels through the routing module.
@@ -424,26 +426,36 @@ interface ChanOpenInit {
 
 ```typescript
 function handleChanOpenInit(datagram: ChanOpenInit) {
-    module = lookupModule(datagram.portIdentifier)
-    version, err = module.onChanOpenInit(
-      datagram.order,
-      datagram.connectionHops,
-      datagram.portIdentifier,
-      datagram.channelIdentifier,
-      datagram.counterpartyPortIdentifier,
-      datagram.counterpartyChannelIdentifier,
-      datagram.version
-    )
-    abortTransactionUnless(err === nil)
-    handler.chanOpenInit(
-      datagram.order,
-      datagram.connectionHops,
-      datagram.portIdentifier,
-      datagram.channelIdentifier,
-      datagram.counterpartyPortIdentifier,
-      datagram.counterpartyChannelIdentifier,
-      version // pass in version returned from callback
-    )
+  module = lookupModule(datagram.portIdentifier)
+  channelIdentifier, channelCapability = handler.chanOpenInit(
+    datagram.order,
+    datagram.connectionHops,
+    datagram.portIdentifier,
+    datagram.channelIdentifier,
+    datagram.counterpartyPortIdentifier,
+    datagram.counterpartyChannelIdentifier,
+    version // pass in version returned from callback
+  )
+  version, err = module.onChanOpenInit(
+    datagram.order,
+    datagram.connectionHops,
+    datagram.portIdentifier,
+    datagram.channelIdentifier,
+    datagram.counterpartyPortIdentifier,
+    datagram.counterpartyChannelIdentifier,
+    datagram.version
+  )
+  abortTransactionUnless(err === nil)
+  writeChannel(
+    datagram.portIdentifier,
+    channelIdentifier,
+    INIT,
+    datagram.order,
+    datagram.counterpartyPortIdentifier,
+    datagram.counterpartyChannelIdentifier,
+    datagram.connectionHops,
+    version
+  )
 }
 ```
 
@@ -464,29 +476,39 @@ interface ChanOpenTry {
 
 ```typescript
 function handleChanOpenTry(datagram: ChanOpenTry) {
-    module = lookupModule(datagram.portIdentifier)
-    version, err = module.onChanOpenTry(
-      datagram.order,
-      datagram.connectionHops,
-      datagram.portIdentifier,
-      datagram.channelIdentifier,
-      datagram.counterpartyPortIdentifier,
-      datagram.counterpartyChannelIdentifier,
-      datagram.counterpartyVersion
-    )
-    abortTransactionUnless(err === nil)
-    handler.chanOpenTry(
-      datagram.order,
-      datagram.connectionHops,
-      datagram.portIdentifier,
-      datagram.channelIdentifier,
-      datagram.counterpartyPortIdentifier,
-      datagram.counterpartyChannelIdentifier,
-      version, // pass in version returned by callback
-      datagram.counterpartyVersion,
-      datagram.proofInit,
-      datagram.proofHeight
-    )
+  module = lookupModule(datagram.portIdentifier)
+  channelIdentifier, channelCapability = handler.chanOpenTry(
+    datagram.order,
+    datagram.connectionHops,
+    datagram.portIdentifier,
+    datagram.channelIdentifier,
+    datagram.counterpartyPortIdentifier,
+    datagram.counterpartyChannelIdentifier,
+    version, // pass in version returned by callback
+    datagram.counterpartyVersion,
+    datagram.proofInit,
+    datagram.proofHeight
+  )
+  version, err = module.onChanOpenTry(
+    datagram.order,
+    datagram.connectionHops,
+    datagram.portIdentifier,
+    datagram.channelIdentifier,
+    datagram.counterpartyPortIdentifier,
+    datagram.counterpartyChannelIdentifier,
+    datagram.counterpartyVersion
+  )
+  abortTransactionUnless(err === nil)
+  writeChannel(
+    datagram.portIdentifier,
+    channelIdentifier,
+    TRYOPEN,
+    datagram.order,
+    datagram.counterpartyPortIdentifier,
+    datagram.counterpartyChannelIdentifier,
+    datagram.connectionHops,
+    version
+  )
 }
 ```
 
@@ -503,22 +525,22 @@ interface ChanOpenAck {
 
 ```typescript
 function handleChanOpenAck(datagram: ChanOpenAck) {
-    module = lookupModule(datagram.portIdentifier)
-    err = module.onChanOpenAck(
-      datagram.portIdentifier,
-      datagram.channelIdentifier,
-      datagram.counterpartyChannelIdentifier,
-      datagram.counterpartyVersion
-    )
-    abortTransactionUnless(err === nil)
-    handler.chanOpenAck(
-      datagram.portIdentifier,
-      datagram.channelIdentifier,
-      datagram.counterpartyChannelIdentifier,
-      datagram.counterpartyVersion,
-      datagram.proofTry,
-      datagram.proofHeight
-    )
+  module = lookupModule(datagram.portIdentifier)
+  handler.chanOpenAck(
+    datagram.portIdentifier,
+    datagram.channelIdentifier,
+    datagram.counterpartyChannelIdentifier,
+    datagram.counterpartyVersion,
+    datagram.proofTry,
+    datagram.proofHeight
+  )
+  err = module.onChanOpenAck(
+    datagram.portIdentifier,
+    datagram.channelIdentifier,
+    datagram.counterpartyChannelIdentifier,
+    datagram.counterpartyVersion
+  )
+  abortTransactionUnless(err === nil)
 }
 ```
 
@@ -533,18 +555,18 @@ interface ChanOpenConfirm {
 
 ```typescript
 function handleChanOpenConfirm(datagram: ChanOpenConfirm) {
-    module = lookupModule(datagram.portIdentifier)
-    err = module.onChanOpenConfirm(
-      datagram.portIdentifier,
-      datagram.channelIdentifier
-    )
-    abortTransactionUnless(err === nil)
-    handler.chanOpenConfirm(
-      datagram.portIdentifier,
-      datagram.channelIdentifier,
-      datagram.proofAck,
-      datagram.proofHeight
-    )
+  module = lookupModule(datagram.portIdentifier)
+  handler.chanOpenConfirm(
+    datagram.portIdentifier,
+    datagram.channelIdentifier,
+    datagram.proofAck,
+    datagram.proofHeight
+  )
+  err = module.onChanOpenConfirm(
+    datagram.portIdentifier,
+    datagram.channelIdentifier
+  )
+  abortTransactionUnless(err === nil)
 }
 ```
 
@@ -610,14 +632,14 @@ interface PacketRecv {
 
 ```typescript
 function handlePacketRecv(datagram: PacketRecv) {
-    module = lookupModule(datagram.packet.destPort)
-    acknowledgement = module.onRecvPacket(datagram.packet)
-    handler.recvPacket(
-      datagram.packet,
-      datagram.proof,
-      datagram.proofHeight,
-      acknowledgement
-    )
+  module = lookupModule(datagram.packet.destPort)
+  handler.recvPacket(
+    datagram.packet,
+    datagram.proof,
+    datagram.proofHeight,
+    acknowledgement
+  )
+  acknowledgement = module.onRecvPacket(datagram.packet)
 }
 ```
 
@@ -632,17 +654,17 @@ interface PacketAcknowledgement {
 
 ```typescript
 function handlePacketAcknowledgement(datagram: PacketAcknowledgement) {
-    module = lookupModule(datagram.packet.sourcePort)
-    module.onAcknowledgePacket(
-      datagram.packet,
-      datagram.acknowledgement
-    )
-    handler.acknowledgePacket(
-      datagram.packet,
-      datagram.acknowledgement,
-      datagram.proof,
-      datagram.proofHeight
-    )
+  module = lookupModule(datagram.packet.sourcePort)
+  handler.acknowledgePacket(
+    datagram.packet,
+    datagram.acknowledgement,
+    datagram.proof,
+    datagram.proofHeight
+  )
+  module.onAcknowledgePacket(
+    datagram.packet,
+    datagram.acknowledgement
+  )   
 }
 ```
 
@@ -659,14 +681,14 @@ interface PacketTimeout {
 
 ```typescript
 function handlePacketTimeout(datagram: PacketTimeout) {
-    module = lookupModule(datagram.packet.sourcePort)
-    module.onTimeoutPacket(datagram.packet)
-    handler.timeoutPacket(
-      datagram.packet,
-      datagram.proof,
-      datagram.proofHeight,
-      datagram.nextSequenceRecv
-    )
+  module = lookupModule(datagram.packet.sourcePort)
+  handler.timeoutPacket(
+    datagram.packet,
+    datagram.proof,
+    datagram.proofHeight,
+    datagram.nextSequenceRecv
+  )
+  module.onTimeoutPacket(datagram.packet)
 }
 ```
 
@@ -680,13 +702,13 @@ interface PacketTimeoutOnClose {
 
 ```typescript
 function handlePacketTimeoutOnClose(datagram: PacketTimeoutOnClose) {
-    module = lookupModule(datagram.packet.sourcePort)
-    module.onTimeoutPacket(datagram.packet)
-    handler.timeoutOnClose(
-      datagram.packet,
-      datagram.proof,
-      datagram.proofHeight
-    )
+  module = lookupModule(datagram.packet.sourcePort)
+  handler.timeoutOnClose(
+    datagram.packet,
+    datagram.proof,
+    datagram.proofHeight
+  )
+  module.onTimeoutPacket(datagram.packet)
 }
 ```
 
