@@ -757,6 +757,8 @@ Jul 28, 2019 - Major revisions
 
 Aug 25, 2019 - Major revisions
 
+Mar 28, 2023 - Fixed order of executing module handlee and application callback
+
 ## Copyright
 
 All content herein is licensed under [Apache 2.0](https://www.apache.org/licenses/LICENSE-2.0).
