@@ -1171,6 +1171,8 @@ Aug 25, 2019 - Cleanup
 
 Jan 10, 2022 - Add ORDERED_ALLOW_TIMEOUT channel type and appropriate logic
 
+Mar 28, 2023 - add `writeChannel` function to write channel end after executing application callback
+
 ## Copyright
 
 All content herein is licensed under [Apache 2.0](https://www.apache.org/licenses/LICENSE-2.0).
