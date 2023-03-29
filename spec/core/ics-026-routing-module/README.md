@@ -757,7 +757,7 @@ Jul 28, 2019 - Major revisions
 
 Aug 25, 2019 - Major revisions
 
-Mar 28, 2023 - Fixed order of executing module handlee and application callback
+Mar 28, 2023 - Fix order of executing module handlee and application callback
 
 ## Copyright
 
