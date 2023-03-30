@@ -368,6 +368,10 @@ function chanUpgradeTry(
         proposedUpgradeChannel.counterpartyChannelIdentifier == currentChannel.counterpartyChannelIdentifier
     )
 
+    // connectionHops can change in a channelUpgrade, however both sides must still be each other's counterparty.
+    proposedConnection = provableStore.Get(connectionPath(proposedUpgradeChannel.ConnectionHops[0])
+    abortTransactionUnless(counterpartyChannel.ConnectionHops[0] == proposedConnection.GetCounterparty().GetConnectionId())
+
     // either timeout height or timestamp must be non-zero
     // if the upgrade feature is implemented on the TRY chain, then a relayer may submit a TRY transaction after the timeout.
     // this will restore the channel on the executing chain and allow counterparty to use the ChannelUpgradeCancelMsg to restore their channel.
@@ -492,8 +496,13 @@ function chanUpgradeAck(
     currentChannel = provableStore.get(channelPath(portIdentifier, channelIdentifier))
     abortTransactionUnless(currentChannel.state == INITUPGRADE || currentChannel.state == TRYUPGRADE)
 
-    // get underlying connection for proof verification
-    connection = getConnection(currentChannel.connectionIdentifier)
+    // connectionHops can change in a channelUpgrade, however both sides must still be each other's counterparty.
+    proposedConnection = provableStore.Get(connectionPath(proposedUpgradeChannel.ConnectionHops[0])
+    abortTransactionUnless(counterpartyChannel.ConnectionHops[0] == proposedConnection.GetCounterparty().GetConnectionId())
+
+    // get underlying connection from the original channel for proof verification
+    originalChannel = provableStore.get(channelRestorePath(portIdentifier, channelIdentifier))
+    connection = getConnection(originalChannel.connectionIdentifier)
 
     // verify proofs of counterparty state
     abortTransactionUnless(verifyChannelState(connection, proofHeight, proofChannel, currentChannel.counterpartyPortIdentifier, currentChannel.counterpartyChannelIdentifier, counterpartyChannel))
@@ -565,7 +574,8 @@ function chanUpgradeConfirm(
     // get current sequence
     sequence = provableStore.get(channelUpgradeSequencePath(portIdentifier, channelIdentifier))
 
-    // get underlying connection for proof verification
+    // get underlying connection from the original channel for proof verification
+    originalChannel = provableStore.get(channelRestorePath(portIdentifier, channelIdentifier))
     connection = getConnection(currentChannel.connectionIdentifier)
 
     // verify proofs of counterparty state
