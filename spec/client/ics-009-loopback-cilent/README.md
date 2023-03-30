@@ -27,11 +27,11 @@ Functions & terms are as defined in [ICS 2](../../core/ics-002-client-semantics)
 
 `getCommitmentPrefix` and `removePrefix` are as defined in [ICS 24](../../core/ics-024-host-requirements).
 
-### Desired Properties
+### Desired properties
 
 Intended client semantics should be preserved, and loopback abstractions should be negligible cost.
 
-## Technical Specification
+## Technical specification
 
 ### Data structures
 
@@ -87,12 +87,11 @@ Implementations **may** choose to implement loopback such that the next message 
 Loopback client initialisation requires the latest height of the local ledger.
 
 ```typescript
-function initialise(
-  height: Height): ClientState {
-    assert(height > 0)
-    return ClientState{
-      latestHeight: height
-    }
+function initialise(height: Height): ClientState {
+  assert(height > 0)
+  return ClientState{
+    latestHeight: height
+  }
 }
 ```
 
@@ -101,9 +100,8 @@ function initialise(
 No validity checking is necessary in a loopback client; the function should never be called.
 
 ```typescript
-function verifyClientMessage(
-  clientMsg: ClientMessage) {
-    assert(false)
+function verifyClientMessage(clientMsg: ClientMessage) {
+  assert(false)
 }
 ```
 
@@ -112,33 +110,31 @@ function verifyClientMessage(
 No misbehaviour checking is necessary in a loopback client; the function should never be called.
 
 ```typescript
-function checkForMisbehaviour(
-  clientMsg: clientMessage) => bool {
-    return false
+function checkForMisbehaviour(clientMsg: clientMessage) => bool {
+  return false
 }
 ```
 
-### `UpdateState`
+### Update state
 
-`UpdateState` will perform a regular update for the loopback client. The `clientState` will be updated with the lastest height of the local ledger. This function should be called automatically at every height.
+Function `updateState` will perform a regular update for the loopback client. The `clientState` will be updated with the lastest height of the local ledger. This function should be called automatically at every height.
 
 ```typescript
-function updateState(
-  clientMsg: clientMessage) {
-    clientState = provableStore.get("clients/{clientMsg.identifier}/clientState")
-  
-    // retrieve the latest height from the local ledger
-    height = getSelfHeight()
-    clientState.latestHeight = header.height
+function updateState(clientMsg: clientMessage) {
+  clientState = provableStore.get("clients/{clientMsg.identifier}/clientState")
 
-    // save the client state
-    provableStore.set("clients/{clientMsg.identifier}/clientState", clientState)
+  // retrieve the latest height from the local ledger
+  height = getSelfHeight()
+  clientState.latestHeight = header.height
+
+  // save the client state
+  provableStore.set("clients/{clientMsg.identifier}/clientState", clientState)
 }
 ```
 
-### `UpdateStateOnMisbehaviour`
+### Update state on misbehaviour
 
-`UpdateStateOnMisbehaviour` is unsupported by the loopback client and performs a no-op.
+Function `updateStateOnMisbehaviour` is unsupported by the loopback client and performs a no-op.
 
 ```typescript
 function updateStateOnMisbehaviour(clientMsg: clientMessage) { }
@@ -156,20 +152,21 @@ function verifyMembership(
   delayBlockPeriod: uint64,
   proof: CommitmentProof,
   path: CommitmentPath,
-  value: []byte): Error {
-    // path is prefixed with the store prefix of the commitment proof
-    // e.g. in ibc-go implementation this is "ibc"
-    // since verification is done on the IBC store of the local ledger
-    // the prefix needs to be removed from the path to retrieve the
-    // correct key in the store
-    unprefixedPath = removePrefix(getCommitmentPrefix(), path)
-    
-    // The complete (not only client identifier-prefixed) store is needed
-    // to  verifiy that a path has been set to a particular value
-    if provableStore.get(unprefixedPath) !== value {
-      return error
-    }
-    return nil
+  value: []byte
+): Error {
+  // path is prefixed with the store prefix of the commitment proof
+  // e.g. in ibc-go implementation this is "ibc"
+  // since verification is done on the IBC store of the local ledger
+  // the prefix needs to be removed from the path to retrieve the
+  // correct key in the store
+  unprefixedPath = removePrefix(getCommitmentPrefix(), path)
+  
+  // The complete (not only client identifier-prefixed) store is needed
+  // to  verifiy that a path has been set to a particular value
+  if provableStore.get(unprefixedPath) !== value {
+    return error
+  }
+  return nil
 }
 
 function verifyNonMembership(
@@ -178,20 +175,21 @@ function verifyNonMembership(
   delayTimePeriod: uint64,
   delayBlockPeriod: uint64,
   proof: CommitmentProof,
-  path: CommitmentPath): Error {
-    // path is prefixed with the store prefix of the commitment proof
-    // e.g. in ibc-go implementation this is "ibc"
-    // since verification is done on the IBC store of the local ledger
-    // the prefix needs to be removed from the path to retrieve the
-    // correct key in the store
-    unprefixedPath = removePrefix(getCommitmentPrefix(), path)
+  path: CommitmentPath
+): Error {
+  // path is prefixed with the store prefix of the commitment proof
+  // e.g. in ibc-go implementation this is "ibc"
+  // since verification is done on the IBC store of the local ledger
+  // the prefix needs to be removed from the path to retrieve the
+  // correct key in the store
+  unprefixedPath = removePrefix(getCommitmentPrefix(), path)
 
-    // The complete (not only client identifier-prefixed) store is needed
-    // to  verifiy that a path has not been set to a particular value
-    if provableStore.get(unprefixedPath) !== nil {
-      return error
-    }
-    return nil
+  // The complete (not only client identifier-prefixed) store is needed
+  // to  verifiy that a path has not been set to a particular value
+  if provableStore.get(unprefixedPath) !== nil {
+    return error
+  }
+  return nil
 }
 ```
 
