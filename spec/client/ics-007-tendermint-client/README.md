@@ -251,7 +251,7 @@ function verifyHeader(header: Header) {
 Function `checkForMisbehaviour` will check if an update contains evidence of Misbehaviour. If the ClientMessage is a header we check for implicit evidence of misbehaviour by checking if there already exists a conflicting consensus state in the store or if the header breaks time monotonicity.
 
 ```typescript
-function checkForMisbehaviour(clientMsg: clientMessage) => bool {
+function checkForMisbehaviour(clientMsg: clientMessage): bool {
   clientState = provableStore.get("clients/{clientMsg.identifier}/clientState")
   switch typeof(clientMsg) {
     case Header:

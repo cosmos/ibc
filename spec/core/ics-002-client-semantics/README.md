@@ -247,7 +247,7 @@ type getTimestampAtHeight = (
 #### `ClientMessage`
 
 A `ClientMessage` is an opaque data structure defined by a client type which provides information to update the client.
-`ClientMessages` can be submitted to an associated client to add new `ConsensusState(s)` and/or update the `ClientState`. They likely contain a height, a proof, a commitment root, and possibly updates to the validity predicate.
+`ClientMessage`s can be submitted to an associated client to add new `ConsensusState`(s) and/or update the `ClientState`. They likely contain a height, a proof, a commitment root, and possibly updates to the validity predicate.
 
 ```typescript
 type ClientMessage = bytes
@@ -280,10 +280,10 @@ for the given parent `ClientMessage` and the list of network messages.
 The validity predicate is defined as:
 
 ```typescript
-type VerifyClientMessage = (ClientMessage) => Void
+type verifyClientMessage = (ClientMessage) => Void
 ```
 
-`VerifyClientMessage` MUST throw an exception if the provided ClientMessage was not valid.
+`verifyClientMessage` MUST throw an exception if the provided ClientMessage was not valid.
 
 #### Misbehaviour predicate
 
@@ -300,12 +300,12 @@ type checkForMisbehaviour = (ClientMessage) => bool
 
 `checkForMisbehaviour` MUST throw an exception if the provided proof of misbehaviour was not valid.
 
-#### `UpdateState`
+#### Update state
 
-UpdateState will update the client given a verified `ClientMessage`. Note that this function is intended for **non-misbehaviour** `ClientMessages`.
+Function `updateState` is an opaque function defined by a client type that will update the client given a verified `ClientMessage`. Note that this function is intended for **non-misbehaviour** `ClientMessage`s.
 
 ```typescript
-type UpdateState = (ClientMessage) => Void
+type updateState = (ClientMessage) => Void
 ```
 
 `verifyClientMessage` must be called before this function, and `checkForMisbehaviour` must return false before this function is called.
@@ -319,12 +319,12 @@ Clients MAY have time-sensitive validity predicates, such that if no ClientMessa
 In this case, a permissioned entity such as a chain governance system or trusted multi-signature MAY be allowed
 to intervene to unfreeze a frozen client & provide a new correct ClientMessage.
 
-#### `UpdateStateOnMisbehaviour`
+#### Update state on misbehaviour
 
-UpdateStateOnMisbehaviour will update the client upon receiving a verified `ClientMessage` that is valid misbehaviour.
+Function `updateStateOnMisbehaviour` is an opaque function defined by a client type that will update the client upon receiving a verified `ClientMessage` that is valid misbehaviour.
 
 ```typescript
-type UpdateStateOnMisbehaviour = (ClientMessage) => Void
+type updateStateOnMisbehaviour = (ClientMessage) => Void
 ```
 
 `verifyClientMessage` must be called before this function, and `checkForMisbehaviour` must return `true` before this function is called.
@@ -594,16 +594,16 @@ function updateClient(
     clientState = provableStore.get(clientStatePath(id))
     abortTransactionUnless(clientState !== null)
 
-    clientState.VerifyClientMessage(clientMessage)
+    verifyClientMessage(clientMessage)
     
     foundMisbehaviour := clientState.CheckForMisbehaviour(clientMessage)
     if foundMisbehaviour {
-        clientState.UpdateStateOnMisbehaviour(clientMessage)
-        // emit misbehaviour event
+      updateStateOnMisbehaviour(clientMessage)
+      // emit misbehaviour event
     }
     else {    
-        clientState.UpdateState(clientMessage) // expects no-op on duplicate clientMessage
-        // emit update event
+      updateState(clientMessage) // expects no-op on duplicate clientMessage
+      // emit update event
     }
 }
 ```
@@ -620,11 +620,11 @@ function submitMisbehaviourToClient(
     clientState = provableStore.get(clientStatePath(id))
     abortTransactionUnless(clientState !== null)
     // authenticate client message
-    clientState.verifyClientMessage(clientMessage)
+    verifyClientMessage(clientMessage)
     // check that client message is valid instance of misbehaviour
     abortTransactionUnless(clientState.checkForMisbehaviour(clientMessage))
     // update state based on misbehaviour
-    clientState.UpdateStateOnMisbehaviour(misbehaviour)
+    updateStateOnMisbehaviour(misbehaviour)
 }
 ```
 

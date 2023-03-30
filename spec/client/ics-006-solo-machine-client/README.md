@@ -148,11 +148,7 @@ function latestClientHeight(clientState: ClientState): uint64 {
 }
 ```
 
-### `ClientState` methods
-
-All of the functions defined below are methods on the `ClientState` interface. Thus, the solo machine client state is always in scope for these functions.
-
-#### Validity predicate
+### Validity predicate
 
 The solo machine client `verifyClientMessage` function checks that the currently registered public key signed over the client message at the expected sequence with the current diversifier included in the client message. If the client message is an update, then it must be the current sequence. If the client message is misbehaviour then it must be the sequence of the misbehaviour.
 
@@ -168,6 +164,7 @@ function verifyClientMessage(clientMsg: ClientMessage) {
 }
 
 function verifyHeader(header: header) {
+  clientState = provableStore.get("clients/{clientMsg.identifier}/clientState")
   assert(header.timestamp >= clientstate.consensusState.timestamp)
   headerData = {
     newPubKey: header.newPubKey,
@@ -184,6 +181,7 @@ function verifyHeader(header: header) {
 }
 
 function verifyMisbehaviour(misbehaviour: Misbehaviour) {
+  clientState = provableStore.get("clients/{clientMsg.identifier}/clientState")
   s1 = misbehaviour.signatureOne
   s2 = misbehaviour.signatureTwo
   pubkey = clientState.consensusState.publicKey
@@ -211,12 +209,12 @@ function verifyMisbehaviour(misbehaviour: Misbehaviour) {
 }
 ```
 
-#### Misbehaviour predicate
+### Misbehaviour predicate
 
 Since misbehaviour is checked in `verifyClientMessage`, if the client message is of type `Misbehaviour` then we return true:
 
 ```typescript
-function checkForMisbehaviour(clientMessage: ClientMessage) => bool {
+function checkForMisbehaviour(clientMessage: ClientMessage): bool {
   switch typeof(ClientMessage) {
   case Misbehaviour:
     return true
@@ -225,12 +223,13 @@ function checkForMisbehaviour(clientMessage: ClientMessage) => bool {
 }
 ```
 
-#### Update functions
+### Update functions
 
 Function `updateState` updates the solo machine `ConsensusState` values using the provided client message header:
 
 ```typescript
 function updateState(clientMessage: ClientMessage) {
+  clientState = provableStore.get("clients/{clientMsg.identifier}/clientState")
   clientState.consensusState.publicKey = header.newPubKey
   clientState.consensusState.diversifier = header.newDiversifier
   clientState.consensusState.timestamp = header.timestamp
@@ -243,18 +242,20 @@ Function `updateStateOnMisbehaviour` updates the function after receving valid m
 
 ```typescript
 function updateStateOnMisbehaviour(clientMessage: ClientMessage) {
+  clientState = provableStore.get("clients/{clientMsg.identifier}/clientState")
   // freeze the client
   clientState.frozen = true
   provableStore.set("clients/{identifier}/clientState", clientState)
 }
 ```
 
-#### State verification functions
+### State verification functions
 
 All solo machine client state verification functions simply check a signature, which must be provided by the solo machine.
 
 ```typescript
 function verifyMembership(
+  clientState: ClientState,
   // provided height is unnecessary for solomachine
   // since clientState maintains the expected sequence
   height: uint64,
@@ -294,6 +295,7 @@ function verifyMembership(
 }
 
 function verifyNonMembership(
+  clientState: ClientState,
   // provided height is unnecessary for solomachine
   // since clientState maintains the expected sequence
   height: uint64,
