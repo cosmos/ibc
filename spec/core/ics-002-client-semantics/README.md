@@ -8,7 +8,7 @@ requires: 23, 24
 required-by: 3
 author: Juwoon Yun <joon@tendermint.com>, Christopher Goes <cwgoes@tendermint.com>, Aditya Sripal <aditya@interchain.io>
 created: 2019-02-25
-modified: 2023-03-09
+modified: 2023-03-31
 ---
 
 ## Synopsis
@@ -159,7 +159,6 @@ In case of misbehavior, the behaviour of the `ValidityPredicate` might differ fr
 the remote state machine and its `Consensus` (since clients do not execute the `Consensus` of the 
 remote state machine). In this case, a `Misbehaviour` SHOULD be submitted to the host state machine, 
 which would result in the client being frozen and higher-level intervention being necessary. 
-Additionally, a slashable bond may be assigned to a client for economic security.
 
 
 In the modular case, `ValidityPredicate` MUST reflect the behaviour of the remote logical blockchain where
@@ -268,6 +267,48 @@ type getTimestampAtHeight = (
 ) => uint64
 ```
 
+Client types MUST define methods to verify membership and non membership proofs.
+
+```typescript
+type verifyMembership = (
+  height: Height,
+  delayTimePeriod: uint64,
+  delayBlockPeriod: uint64,
+  proof: []byte,
+  path: []byte,
+  value: []byte,
+) => error
+
+type verifyNonMembership = (
+  height: Height,
+  delayTimePeriod: uint64,
+  delayBlockPeriod: uint64,
+  proof: []byte,
+  path: []byte,
+) => error
+```
+
+Client types MUST define methods to handle client messages for managing state.
+
+```
+type verifyClientMessage(clientMsg: ClientMessage) => error
+
+type checkForMisbehaviour(clientMsg: ClientMessage) => bool
+
+type updateStateOnMisbehaviour(clientMsg: ClientMessage)
+
+type updateState(clientMsg: ClientMessage) => []Height
+```
+
+Client types MAY define a list of client dependencies on existing clients.
+
+```
+type clientDependencies() => []Identifier
+```
+
+Client types MUST define methods to handle client messages for managing state.
+
+
 #### `ClientMessage`
 
 A `ClientMessage` is an opaque data structure defined by a client type which provides information to update the client.
@@ -341,16 +382,6 @@ were previously considered valid as invalid, according to the nature of the misb
 Once misbehaviour is detected, clients SHOULD be frozen so that no future updates can be submitted.
 A permissioned entity such as a chain governance system or trusted multi-signature MAY be allowed
 to intervene to unfreeze a frozen client & provide a new correct ClientMessage which updates the client to a valid state.
-
-Optionally, if there exists a bond assigned to this client, the client may include slashing logic to incentivize both reporting 
-of good behaviour and reporting of misbehaviour. This mechanism can also be used in connecting optimistic rollups where you can 
-have an attester bond some economic stake in order to secure lower latency client updates.
-
-The client bond address are based on cosmos SDK [ADR-028](https://github.com/cosmos/cosmos-sdk/blob/main/docs/architecture/adr-028-public-key-addresses.md). 
-
-```typescript
-address.Module(moduleName, subModuleName, clientID, "bonded_tokens_pool")
-```
 
 #### `CommitmentProof`
 
@@ -582,7 +613,7 @@ Calling `createClient` with the client type and initial consensus state creates 
 
 ```typescript
 function createClient(
-  clientType: ClientType,
+  clientState: ClientState,
   consensusState: ConsensusState,
   clientDependencies: []Identifier) {
     // implementations may define a identifier generation function
@@ -630,7 +661,7 @@ function updateClient(
         dependencies.push(provableStore.get(clientStatePath(clientID)))
     }
 
-    clientState.VerifyClientMessage(clientMessage, dependencies)
+    clientState.verifyClientMessage(clientMessage, dependencies)
     
     foundMisbehaviour := clientState.CheckForMisbehaviour(clientMessage)
     if foundMisbehaviour {
@@ -655,45 +686,19 @@ function submitMisbehaviourToClient(
   clientMessage: ClientMessage) {
     clientState = provableStore.get(clientStatePath(id))
     abortTransactionUnless(clientState !== null)
+
+    // get client dependencies (conditional client) 
+    dependencies = []
+    for (const clientID of clientState.clientDependencies) {
+        dependencies.push(provableStore.get(clientStatePath(clientID)))
+    }
+
     // authenticate client message
-    clientState.verifyClientMessage(clientMessage)
+    clientState.verifyClientMessage(clientMessage, dependencies)
     // check that client message is valid instance of misbehaviour
     abortTransactionUnless(clientState.checkForMisbehaviour(clientMessage))
     // update state based on misbehaviour
     clientState.UpdateStateOnMisbehaviour(misbehaviour)
-    // slash bond if any
-    bondAddress = address.Module(moduleName, subModuleName, id, "bonded_tokens_pool")
-    bank.iterateAccountBalances(bondAddress, (token: Coin) {
-        // slashed bond is paid out to the misbehaviour reporter
-        bank.sendCoinsFromModuleToAccount(bondAddress, misbehaviour.payee, token)
-    })
-    clear(bonded)
-}
-```
-
-#### Bonding
-
-A slashable bond may be placed on a client to economically guarantee correct behaviour and/or incentivize reporting of misbehaviour.
-
-```typescript
-function bondToken(
-  id: Identifier,
-  sender: string,
-  token: Coin) {
-    bondAddress = address.Module(moduleName, subModuleName, id, "bonded_tokens_pool")
-    bank.sendCoinsFromAccountToModule(sender, bondAddress, token)
-    bonded[sender][token.denom] = bonded[sender][token.denom].add(token)
-}
-
-function unbondToken(
-  id: Identifier,
-  receiver: string,
-  token: Coin) {
-    if (bonded[receiver][token.denom].isGTE(token) {
-        bondAddress = address.Module(moduleName, subModuleName, id, "bonded_tokens_pool")
-        bank.sendCoinsFromModuleToAccount(bondAddress, receiver, token)
-        bonded[receiver][token.denom] = bonded[receiver][token.denom].sub(token)
-    }
 }
 ```
 
@@ -733,7 +738,7 @@ Jul 27, 2022 - Addition of `verifyClientState` function, and move `ClientState` 
 
 August 4, 2022 - Changes to ClientState interface and associated handler to align with changes in 02-client-refactor ADR: https://github.com/cosmos/ibc-go/pull/1871
 
-March 9, 2023 - Adds conditional clients and bonding
+March 31, 2023 - Adds client dependencies to ClientState and adds ClientState interface methods
 
 ## Copyright
 
