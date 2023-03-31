@@ -306,9 +306,6 @@ Client types MAY define a list of client dependencies on existing clients.
 type clientDependencies() => []Identifier
 ```
 
-Client types MUST define methods to handle client messages for managing state.
-
-
 #### `ClientMessage`
 
 A `ClientMessage` is an opaque data structure defined by a client type which provides information to update the client.
