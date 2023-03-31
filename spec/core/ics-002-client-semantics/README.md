@@ -160,7 +160,6 @@ the remote state machine and its `Consensus` (since clients do not execute the `
 remote state machine). In this case, a `Misbehaviour` SHOULD be submitted to the host state machine, 
 which would result in the client being frozen and higher-level intervention being necessary. 
 
-
 In the modular case, `ValidityPredicate` MUST reflect the behaviour of the remote logical blockchain where
 the logical chain can be split up into multiple parts. For each logical part, different types of proofs can be accepted
 to prove the execution of that part. 
@@ -611,13 +610,11 @@ Calling `createClient` with the client type and initial consensus state creates 
 ```typescript
 function createClient(
   clientState: ClientState,
-  consensusState: ConsensusState,
-  clientDependencies: []Identifier) {
+  consensusState: ConsensusState) {
     // implementations may define a identifier generation function
-    identifier = generateClientIdentifier()
-    abortTransactionUnless(provableStore.get(clientStatePath(identifier)) === null)
-    abortSystemUnless(provableStore.get(clientTypePath(identifier)) === null)
-    clientType.initialise(identifier, consensusState, clientDependencies)
+    // an auto incrementing counter in the identifier avoids naming conflicts
+    identifier = generateClientIdentifier(clientState.clientType)
+    clientState.initialise(provableStore.get(identifier), consensusState)
     provableStore.set(clientTypePath(identifier), clientType)
 }
 ```
