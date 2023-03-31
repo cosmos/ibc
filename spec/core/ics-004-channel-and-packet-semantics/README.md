@@ -761,7 +761,7 @@ The IBC handler performs the following steps in order:
 function writeAcknowledgement(
   packet: Packet,
   acknowledgement: bytes) {
-    // acknowledgement should not be empty
+    // acknowledgement must not be empty
     abortTransactionUnless(len(acknowledgement) !== 0)
 
     // cannot already have written the acknowledgement
