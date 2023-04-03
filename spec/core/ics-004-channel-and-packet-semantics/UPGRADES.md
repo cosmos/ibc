@@ -370,7 +370,7 @@ function chanUpgradeTry(
 
     // connectionHops can change in a channelUpgrade, however both sides must still be each other's counterparty.
     proposedConnection = provableStore.get(connectionPath(proposedUpgradeChannel.connectionHops[0])
-    abortTransactionUnless(counterpartyChannel.connectionHops[0] == proposedConnection.GetCounterparty().GetConnectionId())
+    abortTransactionUnless(counterpartyChannel.connectionHops[0] == proposedConnection.counterpartyConnectionIdentifier)
 
     // either timeout height or timestamp must be non-zero
     // if the upgrade feature is implemented on the TRY chain, then a relayer may submit a TRY transaction after the timeout.
@@ -498,7 +498,7 @@ function chanUpgradeAck(
 
     // connectionHops can change in a channelUpgrade, however both sides must still be each other's counterparty.
     proposedConnection = provableStore.get(connectionPath(proposedUpgradeChannel.connectionHops[0])
-    abortTransactionUnless(counterpartyChannel.connectionHops[0] == proposedConnection.GetCounterparty().GetConnectionId())
+    abortTransactionUnless(counterpartyChannel.connectionHops[0] == proposedConnection.counterpartyConnectionIdentifier)
 
     // get underlying connection from the original channel for proof verification
     originalChannel = provableStore.get(channelRestorePath(portIdentifier, channelIdentifier))
@@ -575,7 +575,7 @@ function chanUpgradeConfirm(
 
     // get underlying connection from the original channel for proof verification
     originalChannel = provableStore.get(channelRestorePath(portIdentifier, channelIdentifier))
-    connection = getConnection(currentChannel.connectionIdentifier)
+    connection = getConnection(originalChannel.connectionIdentifier)
 
     // verify proofs of counterparty state
     abortTransactionUnless(verifyChannelState(connection, proofHeight, proofChannel, currentChannel.counterpartyPortIdentifier, currentChannel.counterpartyChannelIdentifier, counterpartyChannel))
