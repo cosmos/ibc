@@ -4,7 +4,7 @@ title: Routing Module
 stage: Draft
 category: IBC/TAO
 kind: instantiation
-version compatibility: [ibc-go v7.0.0](https://github.com/cosmos/ibc-go/releases/tag/v7.0.0)
+version compatibility: ibc-go v7.0.0
 author: Christopher Goes <cwgoes@tendermint.com>
 created: 2019-06-09
 modified: 2019-08-25

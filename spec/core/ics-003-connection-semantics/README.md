@@ -6,7 +6,7 @@ category: IBC/TAO
 kind: instantiation
 requires: 2, 24
 required-by: 4, 25
-version compatibility: [ibc-go v7.0.0](https://github.com/cosmos/ibc-go/releases/tag/v7.0.0)
+version compatibility: ibc-go v7.0.0
 author: Christopher Goes <cwgoes@tendermint.com>, Juwoon Yun <joon@tendermint.com>
 created: 2019-03-07
 modified: 2019-08-25

@@ -5,7 +5,7 @@ stage: draft
 category: IBC/TAO
 kind: instantiation
 implements: 2
-version compatibility: [ibc-go v7.0.0](https://github.com/cosmos/ibc-go/releases/tag/v7.0.0)
+version compatibility: ibc-go v7.0.0
 author: Christopher Goes <cwgoes@tendermint.com>
 created: 2019-12-10
 modified: 2019-12-19
