@@ -450,10 +450,6 @@ A future version of this standard could use a different version in the channel h
 
 - Implementation of ICS 721 in Go can be found in [bianjieai/nft-transfer repository](https://github.com/bianjieai/nft-transfer).
 
-## Other Implementations
-
-Coming soon.
-
 ## History
 
 | Date         | Description                                              |

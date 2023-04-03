@@ -28,7 +28,7 @@ The Tendermint light client uses the generalised Merkle proof format as defined 
 
 `hash` is a generic collision-resistant hash function, and can easily be configured.
 
-### Desired properties
+### Desired Properties
 
 This specification must satisfy the client interface defined in ICS 2.
 
@@ -52,7 +52,7 @@ There is a free parameter here - namely, how far back is `A_1` willing to go (ho
 
 The necessary condition is thus that `A_1` should be willing to look up headers as old as it has stored, but should also enforce the "unbonding period" check on the misbehaviour, and avoid freezing the client if the misbehaviour is older than the unbonding period (relative to the client's local timestamp). If there are concerns about clock skew a slight delta could be added.
 
-## Technical specification
+## Technical Specification
 
 This specification depends on correct instantiation of the [Tendermint consensus algorithm](https://github.com/tendermint/spec/blob/master/spec/consensus/consensus.md) and [light client algorithm](https://github.com/tendermint/spec/blob/master/spec/light-client).
 
@@ -251,7 +251,7 @@ function verifyHeader(header: Header) {
 Function `checkForMisbehaviour` will check if an update contains evidence of Misbehaviour. If the ClientMessage is a header we check for implicit evidence of misbehaviour by checking if there already exists a conflicting consensus state in the store or if the header breaks time monotonicity.
 
 ```typescript
-function checkForMisbehaviour(clientMsg: clientMessage): bool {
+function checkForMisbehaviour(clientMsg: clientMessage): boolean {
   clientState = provableStore.get("clients/{clientMsg.identifier}/clientState")
   switch typeof(clientMsg) {
     case Header:
@@ -455,10 +455,7 @@ Not applicable. Alterations to the client verification algorithm will require a 
 ## Example Implementations
 
 - Implementation of ICS 07 in Go can be found in [ibc-go repository](https://github.com/cosmos/ibc-go).
-
-## Other Implementations
-
-Repository for [Rust implementation of ICS 07](https://github.com/cosmos/ibc-rs/tree/main/crates/ibc/src/clients/ics07_tendermint).
+- Implementation of ICS 07 in Rust can be found in [ibc-rs repository](https://github.com/cosmos/ibc-rs).
 
 ## History
 

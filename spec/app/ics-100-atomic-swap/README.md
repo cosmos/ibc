@@ -633,13 +633,9 @@ This initial standard uses version "ics100-1" in the channel handshake.
 A future version of this standard could use a different version in the channel handshake,
 and safely alter the packet data format & packet handler semantics.
 
-## Example Implementation
+## Example Implementations
 
-https://github.com/ibcswap/ibcswap
-
-## Other Implementations
-
-Coming soon.
+- Implementation of ICS 100 in Go can be found in [ibcswap repository](https://github.com/ibcswap/ibcswap).
 
 ## History
 

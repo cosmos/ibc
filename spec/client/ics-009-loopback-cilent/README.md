@@ -27,13 +27,13 @@ Functions & terms are as defined in [ICS 2](../../core/ics-002-client-semantics)
 
 `getCommitmentPrefix` and `removePrefix` are as defined in [ICS 24](../../core/ics-024-host-requirements).
 
-### Desired properties
+### Desired Properties
 
 Intended client semantics should be preserved, and loopback abstractions should be negligible cost.
 
-## Technical specification
+## Technical Specification
 
-### Data structures
+### Data Structures
 
 No consensus state, headers, or evidence data structures are required for a loopback client. The loopback client does not need to store the consensus state of a remote chain, since state verification does not require to check a Merkle proof against a previously validated commitment root.
 

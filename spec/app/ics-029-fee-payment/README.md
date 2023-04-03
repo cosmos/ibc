@@ -583,10 +583,6 @@ Not applicable.
 
 - Implementation of ICS 29 in Go can be found in [ibc-go repository](https://github.com/cosmos/ibc-go).
 
-## Other Implementations
-
-Coming soon.
-
 ## History
 
 June 8 2021 - Switched to middleware solution from implementing callbacks in ICS-4 directly.
