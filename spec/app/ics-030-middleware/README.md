@@ -354,10 +354,6 @@ Not applicable.
 
 - Implementation of ICS 29 in Go following ICS 30 design pattern can be found in [ibc-go repository](https://github.com/cosmos/ibc-go).
 
-## Other Implementations
-
-Coming soon.
-
 ## History
 
 June 22, 2021 - Draft submitted
