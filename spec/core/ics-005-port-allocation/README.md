@@ -6,6 +6,7 @@ requires: 24
 required-by: 4
 category: IBC/TAO
 kind: interface
+version compatibility: [ibc-go v7.0.0](https://github.com/cosmos/ibc-go/releases/tag/v7.0.0)
 author: Christopher Goes <cwgoes@tendermint.com>
 created: 2019-06-20
 modified: 2019-08-25

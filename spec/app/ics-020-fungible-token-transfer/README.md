@@ -5,6 +5,7 @@ stage: draft
 category: IBC/APP
 requires: 25, 26
 kind: instantiation
+version compatibility: [ibc-go v7.0.0](https://github.com/cosmos/ibc-go/releases/tag/v7.0.0)
 author: Christopher Goes <cwgoes@interchain.berlin>
 created: 2019-07-15 
 modified: 2020-02-24
