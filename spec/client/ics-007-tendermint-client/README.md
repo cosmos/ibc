@@ -28,7 +28,7 @@ The Tendermint light client uses the generalised Merkle proof format as defined 
 
 `hash` is a generic collision-resistant hash function, and can easily be configured.
 
-### Desired Properties
+### Desired properties
 
 This specification must satisfy the client interface defined in ICS 2.
 
@@ -52,7 +52,7 @@ There is a free parameter here - namely, how far back is `A_1` willing to go (ho
 
 The necessary condition is thus that `A_1` should be willing to look up headers as old as it has stored, but should also enforce the "unbonding period" check on the misbehaviour, and avoid freezing the client if the misbehaviour is older than the unbonding period (relative to the client's local timestamp). If there are concerns about clock skew a slight delta could be added.
 
-## Technical Specification
+## Technical specification
 
 This specification depends on correct instantiation of the [Tendermint consensus algorithm](https://github.com/tendermint/spec/blob/master/spec/consensus/consensus.md) and [light client algorithm](https://github.com/tendermint/spec/blob/master/spec/light-client).
 
@@ -172,22 +172,23 @@ Tendermint client initialisation requires a (subjectively chosen) latest consens
 function initialise(
   identifier: Identifier, chainID: string, consensusState: ConsensusState,
   trustLevel: Fraction, height: Height, trustingPeriod: uint64, unbondingPeriod: uint64,
-  upgradePath: []string, maxClockDrift: uint64, proofSpecs: []ProofSpec): ClientState {
-    assert(trustingPeriod < unbondingPeriod)
-    assert(height > 0)
-    assert(trustLevel >= 1/3 && trustLevel <= 1)
-    provableStore.set("clients/{identifier}/consensusStates/{height}", consensusState)
-    return ClientState{
-      chainID,
-      trustLevel,
-      latestHeight: height,
-      trustingPeriod,
-      unbondingPeriod,
-      frozenHeight: null,
-      upgradePath,
-      maxClockDrift,
-      proofSpecs
-    }
+  upgradePath: []string, maxClockDrift: uint64, proofSpecs: []ProofSpec
+): ClientState {
+  assert(trustingPeriod < unbondingPeriod)
+  assert(height > 0)
+  assert(trustLevel >= 1/3 && trustLevel <= 1)
+  provableStore.set("clients/{identifier}/consensusStates/{height}", consensusState)
+  return ClientState{
+    chainID,
+    trustLevel,
+    latestHeight: height,
+    trustingPeriod,
+    unbondingPeriod,
+    frozenHeight: null,
+    upgradePath,
+    maxClockDrift,
+    proofSpecs
+  }
 }
 ```
 
@@ -199,20 +200,19 @@ function latestClientHeight(clientState: ClientState): Height {
 }
 ```
 
-### Validity Predicate
+### Validity predicate
 
 Tendermint client validity checking uses the bisection algorithm described in the [Tendermint spec](https://github.com/tendermint/spec/tree/master/spec/consensus/light-client). If the provided header is valid, the client state is updated & the newly verified commitment written to the store.
 
 ```typescript
-function verifyClientMessage(
-  clientMsg: ClientMessage) {
-    switch typeof(clientMsg) {
-      case Header:
-        verifyHeader(clientMsg)
-      case Misbehaviour:
-        verifyHeader(clientMsg.h1)
-        verifyHeader(clientMsg.h2)
-    }
+function verifyClientMessage(clientMsg: ClientMessage) {
+  switch typeof(clientMsg) {
+    case Header:
+      verifyHeader(clientMsg)
+    case Misbehaviour:
+      verifyHeader(clientMsg.h1)
+      verifyHeader(clientMsg.h2)
+  }
 }
 ```
 
@@ -220,122 +220,120 @@ Verify validity of regular update to the Tendermint client
 
 ```typescript
 function verifyHeader(header: Header) {
-    clientState = provableStore.get("clients/{header.identifier}/clientState")
-    // assert trusting period has not yet passed
-    assert(currentTimestamp() - clientState.latestTimestamp < clientState.trustingPeriod)
-    // assert header timestamp is less than trust period in the future. This should be resolved with an intermediate header.
-    assert(header.timestamp - clientState.latestTimeStamp < clientState.trustingPeriod)
-    // trusted height revision must be the same as header revision
-    // if revisions are different, use upgrade client instead
-    // trusted height must be less than header height
-    assert(header.GetHeight().revisionNumber == header.trustedHeight.revisionNumber)
-    assert(header.GetHeight().revisionHeight > header.trustedHeight.revisionHeight)
-    // fetch the consensus state at the trusted height
-    consensusState = provableStore.get("clients/{header.identifier}/consensusStates/{header.trustedHeight}")
-    // assert that header's trusted validator set hashes to consensus state's validator hash
-    assert(hash(header.trustedValidatorSet) == consensusState.nextValidatorsHash)
+  clientState = provableStore.get("clients/{header.identifier}/clientState")
+  // assert trusting period has not yet passed
+  assert(currentTimestamp() - clientState.latestTimestamp < clientState.trustingPeriod)
+  // assert header timestamp is less than trust period in the future. This should be resolved with an intermediate header.
+  assert(header.timestamp - clientState.latestTimeStamp < clientState.trustingPeriod)
+  // trusted height revision must be the same as header revision
+  // if revisions are different, use upgrade client instead
+  // trusted height must be less than header height
+  assert(header.GetHeight().revisionNumber == header.trustedHeight.revisionNumber)
+  assert(header.GetHeight().revisionHeight > header.trustedHeight.revisionHeight)
+  // fetch the consensus state at the trusted height
+  consensusState = provableStore.get("clients/{header.identifier}/consensusStates/{header.trustedHeight}")
+  // assert that header's trusted validator set hashes to consensus state's validator hash
+  assert(hash(header.trustedValidatorSet) == consensusState.nextValidatorsHash)
 
-    // call the tendermint client's `verify` function
-    assert(tmClient.verify(
-      header.trustedValidatorSet,
-      clientState.latestHeight,
-      clientState.trustingPeriod,
-      clientState.maxClockDrift,
-      header.TendermintSignedHeader,
-    ))
+  // call the tendermint client's `verify` function
+  assert(tmClient.verify(
+    header.trustedValidatorSet,
+    clientState.latestHeight,
+    clientState.trustingPeriod,
+    clientState.maxClockDrift,
+    header.TendermintSignedHeader,
+  ))
 }
 ```
 
-### Misbehaviour Predicate
+### Misbehaviour predicate
 
-`CheckForMisbehaviour` will check if an update contains evidence of Misbehaviour. If the ClientMessage is a header we check for implicit evidence of misbehaviour by checking if there already exists a conflicting consensus state in the store or if the header breaks time monotonicity.
+Function `checkForMisbehaviour` will check if an update contains evidence of Misbehaviour. If the ClientMessage is a header we check for implicit evidence of misbehaviour by checking if there already exists a conflicting consensus state in the store or if the header breaks time monotonicity.
 
 ```typescript
-function checkForMisbehaviour(
-  clientMsg: clientMessage) => bool {
-    clientState = provableStore.get("clients/{clientMsg.identifier}/clientState")
-    switch typeof(clientMsg) {
-      case Header:
-        // fetch consensusstate at header height if it exists
-        consensusState = provableStore.get("clients/{clientMsg.identifier}/consensusStates/{header.GetHeight()}")
-        // if consensus state exists and conflicts with the header
-        // then the header is evidence of misbehaviour
-        if consensusState != nil && 
-           !(
-            consensusState.timestamp == header.timestamp &&
-            consensusState.commitmentRoot == header.commitmentRoot &&
-            consensusState.nextValidatorsHash == header.nextValidatorsHash
-           ) {
-          return true
-        }
+function checkForMisbehaviour(clientMsg: clientMessage): boolean {
+  clientState = provableStore.get("clients/{clientMsg.identifier}/clientState")
+  switch typeof(clientMsg) {
+    case Header:
+      // fetch consensusstate at header height if it exists
+      consensusState = provableStore.get("clients/{clientMsg.identifier}/consensusStates/{header.GetHeight()}")
+      // if consensus state exists and conflicts with the header
+      // then the header is evidence of misbehaviour
+      if consensusState != nil && 
+          !(
+          consensusState.timestamp == header.timestamp &&
+          consensusState.commitmentRoot == header.commitmentRoot &&
+          consensusState.nextValidatorsHash == header.nextValidatorsHash
+          ) {
+        return true
+      }
 
-        // check for time monotonicity misbehaviour
-        // if header is not monotonically increasing with respect to neighboring consensus states
-        // then return true
-        // NOTE: implementation must have ability to iterate ascending/descending by height
-        prevConsState = getPreviousConsensusState(header.GetHeight())
-        nextConsState = getNextConsensusState(header.GetHeight())
-        if prevConsState.timestamp >= header.timestamp {
-          return true
-        }
-        if nextConsState != nil && nextConsState.timestamp <= header.timestamp {
-          return true
-        }
-      case Misbehaviour:
-        if (misbehaviour.h1.height < misbehaviour.h2.height) {
-          return false
-        }
-        // if heights are equal check that this is valid misbehaviour of a fork
-        if (misbehaviour.h1.height === misbehaviour.h2.height && misbehaviour.h1.commitmentRoot !== misbehaviour.h2.commitmentRoot) {
-          return true
-        }
-        // otherwise if heights are unequal check that this is valid misbehavior of BFT time violation
-        if (misbehaviour.h1.timestamp <= misbehaviour.h2.timestamp) {
-          return true
-        }
-
+      // check for time monotonicity misbehaviour
+      // if header is not monotonically increasing with respect to neighboring consensus states
+      // then return true
+      // NOTE: implementation must have ability to iterate ascending/descending by height
+      prevConsState = getPreviousConsensusState(header.GetHeight())
+      nextConsState = getNextConsensusState(header.GetHeight())
+      if prevConsState.timestamp >= header.timestamp {
+        return true
+      }
+      if nextConsState != nil && nextConsState.timestamp <= header.timestamp {
+        return true
+      }
+    case Misbehaviour:
+      if (misbehaviour.h1.height < misbehaviour.h2.height) {
         return false
-    }
+      }
+      // if heights are equal check that this is valid misbehaviour of a fork
+      if (misbehaviour.h1.height === misbehaviour.h2.height && misbehaviour.h1.commitmentRoot !== misbehaviour.h2.commitmentRoot) {
+        return true
+      }
+      // otherwise if heights are unequal check that this is valid misbehavior of BFT time violation
+      if (misbehaviour.h1.timestamp <= misbehaviour.h2.timestamp) {
+        return true
+      }
+
+      return false
+  }
 }
 ```
 
-### `UpdateState`
+### Update state
 
-`UpdateState` will perform a regular update for the Tendermint client. It will add a consensus state to the client store. If the header is higher than the lastest height on the `clientState`, then the `clientState` will be updated.
+Function `updateState` will perform a regular update for the Tendermint client. It will add a consensus state to the client store. If the header is higher than the lastest height on the `clientState`, then the `clientState` will be updated.
 
 ```typescript
-function updateState(
-  clientMsg: clientMessage) {
-    clientState = provableStore.get("clients/{clientMsg.identifier}/clientState")
-    header = Header(clientMessage)
-    // only update the clientstate if the header height is higher
-    // than clientState latest height
-    if clientState.height < header.GetHeight() {
-      // update latest height
-      clientState.latestHeight = header.GetHeight()
+function updateState(clientMsg: clientMessage) {
+  clientState = provableStore.get("clients/{clientMsg.identifier}/clientState")
+  header = Header(clientMessage)
+  // only update the clientstate if the header height is higher
+  // than clientState latest height
+  if clientState.height < header.GetHeight() {
+    // update latest height
+    clientState.latestHeight = header.GetHeight()
 
-      // save the client
-      provableStore.set("clients/{clientMsg.identifier}/clientState", clientState)
-    }
+    // save the client
+    provableStore.set("clients/{clientMsg.identifier}/clientState", clientState)
+  }
 
-    // create recorded consensus state, save it
-    consensusState = ConsensusState{header.timestamp, header.nextValidatorsHash, header.commitmentRoot}
-    provableStore.set("clients/{clientMsg.identifier}/consensusStates/{header.GetHeight()}", consensusState)
+  // create recorded consensus state, save it
+  consensusState = ConsensusState{header.timestamp, header.nextValidatorsHash, header.commitmentRoot}
+  provableStore.set("clients/{clientMsg.identifier}/consensusStates/{header.GetHeight()}", consensusState)
 
-    // these may be stored as private metadata within the client in order to verify
-    // that the delay period has passed in proof verification
-    provableStore.set("clients/{clientMsg.identifier}/processedTimes/{header.GetHeight()}", currentTimestamp())
-    provableStore.set("clients/{clientMsg.identifier}/processedHeights/{header.GetHeight()}", currentHeight())
+  // these may be stored as private metadata within the client in order to verify
+  // that the delay period has passed in proof verification
+  provableStore.set("clients/{clientMsg.identifier}/processedTimes/{header.GetHeight()}", currentTimestamp())
+  provableStore.set("clients/{clientMsg.identifier}/processedHeights/{header.GetHeight()}", currentHeight())
 }
 ```
 
-### `UpdateStateOnMisbehaviour`
+### Update state on misbehaviour
 
-`UpdateStateOnMisbehaviour` will set the frozen height to a non-zero sentinel height to freeze the entire client.
+Function `updateStateOnMisbehaviour` will set the frozen height to a non-zero sentinel height to freeze the entire client.
 
 ```typescript
 function updateStateOnMisbehaviour(clientMsg: clientMessage) {
-  clientState = provableStore.get("clients/{clientMsg.identifier}/clientState)
+  clientState = provableStore.get("clients/{clientMsg.identifier}/clientState")
   clientState.frozenHeight = Height{0, 1}
   provableStore.set("clients/{clientMsg.identifier}/clientState", clientState)
 }
@@ -352,27 +350,28 @@ function upgradeClientState(
   clientState: ClientState,
   newClientState: ClientState,
   height: Height,
-  proof: CommitmentProof) {
-    // assert trusting period has not yet passed
-    assert(currentTimestamp() - clientState.latestTimestamp < clientState.trustingPeriod)
-    // check that the revision has been incremented
-    assert(newClientState.latestHeight.revisionNumber > clientState.latestHeight.revisionNumber)
-    // check proof of updated client state in state at predetermined commitment prefix and key
-    path = applyPrefix(clientState.upgradeCommitmentPrefix, clientState.upgradeKey)
-    // check that the client is at a sufficient height
-    assert(clientState.latestHeight >= height)
-    // check that the client is unfrozen or frozen at a higher height
-    assert(clientState.frozenHeight === null || clientState.frozenHeight > height)
-    // fetch the previously verified commitment root & verify membership
-    // Implementations may choose how to pass in the identifier
-    // ibc-go provides the identifier-prefixed store to this method
-    // so that all state reads are for the client in question
-    consensusState = provableStore.get("clients/{clientIdentifier}/consensusStates/{height}")
-    // verify that the provided consensus state has been stored
-    assert(verifyMembership(consensusState.commitmentRoot, proof, path, newClientState))
-    // update client state
-    clientState = newClientState
-    provableStore.set("clients/{clientIdentifier}/clientState", clientState)
+  proof: CommitmentProof
+) {
+  // assert trusting period has not yet passed
+  assert(currentTimestamp() - clientState.latestTimestamp < clientState.trustingPeriod)
+  // check that the revision has been incremented
+  assert(newClientState.latestHeight.revisionNumber > clientState.latestHeight.revisionNumber)
+  // check proof of updated client state in state at predetermined commitment prefix and key
+  path = applyPrefix(clientState.upgradeCommitmentPrefix, clientState.upgradeKey)
+  // check that the client is at a sufficient height
+  assert(clientState.latestHeight >= height)
+  // check that the client is unfrozen or frozen at a higher height
+  assert(clientState.frozenHeight === null || clientState.frozenHeight > height)
+  // fetch the previously verified commitment root & verify membership
+  // Implementations may choose how to pass in the identifier
+  // ibc-go provides the identifier-prefixed store to this method
+  // so that all state reads are for the client in question
+  consensusState = provableStore.get("clients/{clientIdentifier}/consensusStates/{height}")
+  // verify that the provided consensus state has been stored
+  assert(verifyMembership(consensusState.commitmentRoot, proof, path, newClientState))
+  // update client state
+  clientState = newClientState
+  provableStore.set("clients/{clientIdentifier}/clientState", clientState)
 }
 ```
 
@@ -390,25 +389,26 @@ function verifyMembership(
   delayBlockPeriod: uint64,
   proof: CommitmentProof,
   path: CommitmentPath,
-  value: []byte): Error {
-    // check that the client is at a sufficient height
-    assert(clientState.latestHeight >= height)
-    // check that the client is unfrozen or frozen at a higher height
-    assert(clientState.frozenHeight === null || clientState.frozenHeight > height)
-    // assert that enough time has elapsed
-    assert(currentTimestamp() >= processedTime + delayPeriodTime)
-    // assert that enough blocks have elapsed
-    assert(currentHeight() >= processedHeight + delayPeriodBlocks)
-    // fetch the previously verified commitment root & verify membership
-    // Implementations may choose how to pass in the identifier
-    // ibc-go provides the identifier-prefixed store to this method
-    // so that all state reads are for the client in question
-    consensusState = provableStore.get("clients/{clientIdentifier}/consensusStates/{height}")
-    // verify that <path, value> has been stored
-    if !verifyMembership(consensusState.commitmentRoot, proof, path, value) {
-      return error
-    }
-    return nil
+  value: []byte
+): Error {
+  // check that the client is at a sufficient height
+  assert(clientState.latestHeight >= height)
+  // check that the client is unfrozen or frozen at a higher height
+  assert(clientState.frozenHeight === null || clientState.frozenHeight > height)
+  // assert that enough time has elapsed
+  assert(currentTimestamp() >= processedTime + delayPeriodTime)
+  // assert that enough blocks have elapsed
+  assert(currentHeight() >= processedHeight + delayPeriodBlocks)
+  // fetch the previously verified commitment root & verify membership
+  // Implementations may choose how to pass in the identifier
+  // ibc-go provides the identifier-prefixed store to this method
+  // so that all state reads are for the client in question
+  consensusState = provableStore.get("clients/{clientIdentifier}/consensusStates/{height}")
+  // verify that <path, value> has been stored
+  if !verifyMembership(consensusState.commitmentRoot, proof, path, value) {
+    return error
+  }
+  return nil
 }
 
 function verifyNonMembership(
@@ -417,25 +417,26 @@ function verifyNonMembership(
   delayTimePeriod: uint64,
   delayBlockPeriod: uint64,
   proof: CommitmentProof,
-  path: CommitmentPath): Error {
-    // check that the client is at a sufficient height
-    assert(clientState.latestHeight >= height)
-    // check that the client is unfrozen or frozen at a higher height
-    assert(clientState.frozenHeight === null || clientState.frozenHeight > height)
-    // assert that enough time has elapsed
-    assert(currentTimestamp() >= processedTime + delayPeriodTime)
-    // assert that enough blocks have elapsed
-    assert(currentHeight() >= processedHeight + delayPeriodBlocks)
-    // fetch the previously verified commitment root & verify membership
-    // Implementations may choose how to pass in the identifier
-    // ibc-go provides the identifier-prefixed store to this method
-    // so that all state reads are for the client in question
-    consensusState = provableStore.get("clients/{clientIdentifier}/consensusStates/{height}")
-    // verify that nothing has been stored at path
-    if !verifyNonMembership(consensusState.commitmentRoot, proof, path) {
-      return error
-    }
-    return nil
+  path: CommitmentPath
+): Error {
+  // check that the client is at a sufficient height
+  assert(clientState.latestHeight >= height)
+  // check that the client is unfrozen or frozen at a higher height
+  assert(clientState.frozenHeight === null || clientState.frozenHeight > height)
+  // assert that enough time has elapsed
+  assert(currentTimestamp() >= processedTime + delayPeriodTime)
+  // assert that enough blocks have elapsed
+  assert(currentHeight() >= processedHeight + delayPeriodBlocks)
+  // fetch the previously verified commitment root & verify membership
+  // Implementations may choose how to pass in the identifier
+  // ibc-go provides the identifier-prefixed store to this method
+  // so that all state reads are for the client in question
+  consensusState = provableStore.get("clients/{clientIdentifier}/consensusStates/{height}")
+  // verify that nothing has been stored at path
+  if !verifyNonMembership(consensusState.commitmentRoot, proof, path) {
+    return error
+  }
+  return nil
 }
 ```
 

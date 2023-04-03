@@ -23,6 +23,8 @@ The core IBC protocol provides *authorisation* and *ordering* semantics for pack
 
 Client-related types & functions are as defined in [ICS 2](../ics-002-client-semantics).
 
+Channel and packet-related functions are as defined in [ICS 4](../ics-004-channel-and-packet-semantics).
+
 Commitment proof related types & functions are defined in [ICS 23](../ics-023-vector-commitments)
 
 `Identifier` and other host state machine requirements are as defined in [ICS 24](../ics-024-host-requirements). The identifier is not necessarily intended to be a human-readable name (and likely should not be, to discourage squatting or racing for identifiers).
@@ -105,7 +107,7 @@ Connection paths are stored under a unique identifier.
 
 ```typescript
 function connectionPath(id: Identifier): Path {
-    return "connections/{id}"
+  return "connections/{id}"
 }
 ```
 
@@ -113,7 +115,7 @@ A reverse mapping from clients to a set of connections (utilised to look up all 
 
 ```typescript
 function clientConnectionsPath(clientIdentifier: Identifier): Path {
-    return "clients/{clientIdentifier}/connections"
+  return "clients/{clientIdentifier}/connections"
 }
 ```
 
@@ -142,9 +144,11 @@ function verifyClientConsensusState(
   proof: CommitmentProof,
   clientIdentifier: Identifier,
   consensusStateHeight: Height,
-  consensusState: ConsensusState) {
-    client = queryClient(connection.clientIdentifier)
-    return client.verifyClientConsensusState(connection, height, connection.counterpartyPrefix, proof, clientIdentifier, consensusStateHeight, consensusState)
+  consensusState: ConsensusState
+) {
+  clientState = queryClientState(connection.clientIdentifier)
+  path = applyPrefix(connection.counterpartyPrefix, consensusStatePath(clientIdentifier, consensusStateHeight))
+  return verifyMembership(clientState, height, 0, 0, proof, path, consensusState)
 }
 
 function verifyClientState(
@@ -153,8 +157,9 @@ function verifyClientState(
   proof: CommitmentProof,
   clientState: ClientState
 ) {
-    client = queryClient(connection.clientIdentifier)
-    return client.verifyClientState(height, connection.counterpartyPrefix, proof, connection.clientIdentifier, clientState)
+  clientState = queryClientState(connection.clientIdentifier)
+  path = applyPrefix(connection.counterpartyPrefix, clientStatePath(clientIdentifier)
+  return verifyMembership(clientState, height, 0, 0, proof, path, clientState)
 }
 
 function verifyConnectionState(
@@ -162,9 +167,11 @@ function verifyConnectionState(
   height: Height,
   proof: CommitmentProof,
   connectionIdentifier: Identifier,
-  connectionEnd: ConnectionEnd) {
-    client = queryClient(connection.clientIdentifier)
-    return client.verifyConnectionState(connection, height, connection.counterpartyPrefix, proof, connectionIdentifier, connectionEnd)
+  connectionEnd: ConnectionEnd
+) {
+  clientState = queryClientState(connection.clientIdentifier)
+  path = applyPrefix(connection.counterpartyPrefix, connectionPath(connectionIdentifier))
+  return verifyMembership(clientState, height, 0, 0, proof, path, connectionEnd)
 }
 
 function verifyChannelState(
@@ -173,21 +180,25 @@ function verifyChannelState(
   proof: CommitmentProof,
   portIdentifier: Identifier,
   channelIdentifier: Identifier,
-  channelEnd: ChannelEnd) {
-    client = queryClient(connection.clientIdentifier)
-    return client.verifyChannelState(connection, height, connection.counterpartyPrefix, proof, portIdentifier, channelIdentifier, channelEnd)
+  channelEnd: ChannelEnd
+) {
+  clientState = queryClientState(connection.clientIdentifier)
+  path = applyPrefix(connection.counterpartyPrefix, channelPath(portIdentifier, channelIdentifier))
+  return verifyMembership(clientState, height, 0, 0, proof, path, channelEnd)
 }
 
-function verifyPacketData(
+function verifyPacketCommitment(
   connection: ConnectionEnd,
   height: Height,
   proof: CommitmentProof,
   portIdentifier: Identifier,
   channelIdentifier: Identifier,
   sequence: uint64,
-  data: bytes) {
-    client = queryClient(connection.clientIdentifier)
-    return client.verifyPacketData(connection, height, connection.delayPeriodTime, connection.delayPeriodBlocks, connection.counterpartyPrefix, proof, portIdentifier, channelIdentifier, sequence, data)
+  commitmentBytes: bytes
+) {
+  clientState = queryClientState(connection.clientIdentifier)
+  path = applyPrefix(connection.counterpartyPrefix, packetCommitmentPath(portIdentifier, channelIdentifier, sequence))
+  return verifyMembership(clientState, height, connection.delayPeriodTime, connection.delayPeriodBlocks, proof, path, commitmentBytes)
 }
 
 function verifyPacketAcknowledgement(
@@ -197,9 +208,11 @@ function verifyPacketAcknowledgement(
   portIdentifier: Identifier,
   channelIdentifier: Identifier,
   sequence: uint64,
-  acknowledgement: bytes) {
-    client = queryClient(connection.clientIdentifier)
-    return client.verifyPacketAcknowledgement(connection, height, connection.delayPeriodTime, connection.delayPeriodBlocks, connection.counterpartyPrefix, proof, portIdentifier, channelIdentifier, sequence, acknowledgement)
+  acknowledgement: bytes
+) {
+  clientState = queryClientState(connection.clientIdentifier)
+  path = applyPrefix(connection.counterpartyPrefix, packetAcknowledgementPath(portIdentifier, channelIdentifier, sequence))
+  return verifyMembership(clientState, height, connection.delayPeriodTime, connection.delayPeriodBlocks, proof, path, acknowledgement)
 }
 
 function verifyPacketReceiptAbsence(
@@ -208,9 +221,11 @@ function verifyPacketReceiptAbsence(
   proof: CommitmentProof,
   portIdentifier: Identifier,
   channelIdentifier: Identifier,
-  sequence: uint64) {
-    client = queryClient(connection.clientIdentifier)
-    return client.verifyPacketReceiptAbsence(connection, height, connection.delayPeriodTime, connection.delayPeriodBlocks, connection.counterpartyPrefix, proof, portIdentifier, channelIdentifier, sequence)
+  sequence: uint64
+) {
+  clientState = queryClientState(connection.clientIdentifier)
+  path = applyPrefix(connection.counterpartyPrefix, packetReceiptPath(portIdentifier, channelIdentifier, sequence))
+  return verifyNonMembership(clientState, height, connection.delayPeriodTime, connection.delayPeriodBlocks, proof, path)
 }
 
 // OPTIONAL: verifyPacketReceipt is only required to support new channel types beyond ORDERED and UNORDERED.
@@ -221,9 +236,11 @@ function verifyPacketReceipt(
   portIdentifier: Identifier,
   channelIdentifier: Identifier,
   sequence: uint64,
-  receipt: bytes) {
-    client = queryClient(connection.clientIdentifier)
-    return client.verifyPacketReceipt(connection, height, connection.delayPeriodTime, connection.delayPeriodBlocks, connection.counterpartyPrefix, proof, portIdentifier, channelIdentifier, sequence, receipt)
+  receipt: bytes
+) {
+  clientState = queryClientState(connection.clientIdentifier)
+  path = applyPrefix(connection.counterpartyPrefix, packetReceiptPath(portIdentifier, channelIdentifier, sequence))
+  return verifyMembership(clientState, height, connection.delayPeriodTime, connection.delayPeriodBlocks, connection.counterpartyPrefix, proof, portIdentifier, channelIdentifier, sequence, receipt)
 }
 
 function verifyNextSequenceRecv(
@@ -233,16 +250,17 @@ function verifyNextSequenceRecv(
   portIdentifier: Identifier,
   channelIdentifier: Identifier,
   sequence: uint64,
-  nextSequenceRecv: uint64) {
-    client = queryClient(connection.clientIdentifier)
-    return client.verifyNextSequenceRecv(connection, height, connection.delayPeriodTime, connection.delayPeriodBlocks, connection.counterpartyPrefix, proof, portIdentifier, channelIdentifier, sequence, nextSequenceRecv)
+  nextSequenceRecv: uint64
+) {
+  clientState = queryClientState(connection.clientIdentifier)
+  path = applyPrefix(connection.counterpartyPrefix, nextSequenceRecvPath(portIdentifier, channelIdentifier, sequence))
+  return verifyMembership(clientState, height, connection.delayPeriodTime, connection.delayPeriodBlocks, proof, path, nextSequenceRecv)
 }
 
 function getTimestampAtHeight(
   connection: ConnectionEnd,
   height: Height) {
-    client = queryClient(connection.clientIdentifier)
-    return client.queryConsensusState(height).getTimestamp()
+    return queryConsensusState(connection.clientIdentifier, height).getTimestamp()
 }
 ```
 

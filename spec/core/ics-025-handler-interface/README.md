@@ -36,7 +36,7 @@ Associated definitions are as defined in referenced prior standards (where the f
 
 By default, clients are unowned: any module may create a new client, query any existing client, update any existing client, and delete any existing client not in use.
 
-The handler interface exposes `createClient`, `updateClient`, `queryClientConsensusState`, `queryClient`, and `submitMisbehaviourToClient` as defined in [ICS 2](../ics-002-client-semantics).
+The handler interface exposes `createClient`, `updateClient`, `queryConsensusState`, `queryClientState`, and `submitMisbehaviourToClient` as defined in [ICS 2](../ics-002-client-semantics).
 
 ### Connection lifecycle management
 

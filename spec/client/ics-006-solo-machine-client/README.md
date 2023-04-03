@@ -24,13 +24,13 @@ Solo machine clients are roughly analogous to "implicit accounts" and can be use
 
 Functions & terms are as defined in [ICS 2](../../core/ics-002-client-semantics).
 
-### Desired Properties
+### Desired properties
 
 This specification must satisfy the client interface defined in [ICS 2](../../core/ics-002-client-semantics).
 
 Conceptually, we assume "big table of signatures in the universe" - that signatures produced are public - and incorporate replay protection accordingly.
 
-## Technical Specification
+## Technical specification
 
 This specification contains implementations for all of the functions defined by [ICS 2](../../core/ics-002-client-semantics).
 
@@ -80,7 +80,7 @@ interface Header {
 
 `Header` implements the `ClientMessage` interface.
 
-### Signature Verification
+### Signature verification
 
 The solomachine public key must sign over the following struct:
 
@@ -148,11 +148,11 @@ function latestClientHeight(clientState: ClientState): uint64 {
 }
 ```
 
-### `ClientState` Methods
+### `ClientState` methods
 
 All of the functions defined below are methods on the `ClientState` interface. Thus, the solo machine client state is always in scope for these functions.
 
-### Validity predicate
+#### Validity predicate
 
 The solo machine client `verifyClientMessage` function checks that the currently registered public key signed over the client message at the expected sequence with the current diversifier included in the client message. If the client message is an update, then it must be the current sequence. If the client message is misbehaviour then it must be the sequence of the misbehaviour.
 
@@ -211,7 +211,7 @@ function verifyMisbehaviour(misbehaviour: Misbehaviour) {
 }
 ```
 
-### Misbehaviour predicate
+#### Misbehaviour predicate
 
 Since misbehaviour is checked in `verifyClientMessage`, if the client message is of type `Misbehaviour` then we return true:
 
@@ -225,9 +225,9 @@ function checkForMisbehaviour(clientMessage: ClientMessage) => bool {
 }
 ```
 
-### Update Functions
+#### Update functions
 
-`UpdateState` updates the solo machine `ConsensusState` values using the provided client message header:
+Function `updateState` updates the solo machine `ConsensusState` values using the provided client message header:
 
 ```typescript
 function updateState(clientMessage: ClientMessage) {
@@ -239,7 +239,7 @@ function updateState(clientMessage: ClientMessage) {
 }
 ```
 
-`UpdateStateOnMisbehaviour` updates the function after receving valid misbehaviour:
+Function `updateStateOnMisbehaviour` updates the function after receving valid misbehaviour:
 
 ```typescript
 function updateStateOnMisbehaviour(clientMessage: ClientMessage) {
@@ -249,7 +249,7 @@ function updateStateOnMisbehaviour(clientMessage: ClientMessage) {
 }
 ```
 
-### State verification functions
+#### State verification functions
 
 All solo machine client state verification functions simply check a signature, which must be provided by the solo machine.
 
@@ -264,32 +264,33 @@ function verifyMembership(
   delayBlockPeriod: uint64,
   proof: CommitmentProof,
   path: CommitmentPath,
-  value: []byte): Error {
-    // the expected sequence used in the signature
-    abortTransactionUnless(!clientState.frozen)
-    abortTransactionUnless(proof.timestamp >= clientState.consensusState.timestamp)
-    signBytes = SignBytes(
-      sequence: clientState.consensusState.sequence,
-      timestamp: proof.timestamp,
-      diversifier: clientState.consensusState.diversifier,
-      path: path.String(),
-      data: value,
-    )
-    proven = checkSignature(clientState.consensusState.publicKey, signBytes, proof.sig)
-    if !proven {
-      return error
-    }
+  value: []byte
+): Error {
+  // the expected sequence used in the signature
+  abortTransactionUnless(!clientState.frozen)
+  abortTransactionUnless(proof.timestamp >= clientState.consensusState.timestamp)
+  signBytes = SignBytes(
+    sequence: clientState.consensusState.sequence,
+    timestamp: proof.timestamp,
+    diversifier: clientState.consensusState.diversifier,
+    path: path.String(),
+    data: value,
+  )
+  proven = checkSignature(clientState.consensusState.publicKey, signBytes, proof.sig)
+  if !proven {
+    return error
+  }
 
-    // increment sequence on each verification to provide
-    // replay protection
-    clientState.consensusState.sequence++
-    clientState.consensusState.timestamp = proof.timestamp
-    // unlike other clients, we must set the client state here because we
-    // mutate the clientState (increment sequence and set timestamp)
-    // thus the verification methods are stateful for the solomachine
-    // in order to prevent replay attacks
-    provableStore.set("clients/{identifier}/clientState", clientState)
-    return nil
+  // increment sequence on each verification to provide
+  // replay protection
+  clientState.consensusState.sequence++
+  clientState.consensusState.timestamp = proof.timestamp
+  // unlike other clients, we must set the client state here because we
+  // mutate the clientState (increment sequence and set timestamp)
+  // thus the verification methods are stateful for the solomachine
+  // in order to prevent replay attacks
+  provableStore.set("clients/{identifier}/clientState", clientState)
+  return nil
 }
 
 function verifyNonMembership(
@@ -301,53 +302,50 @@ function verifyNonMembership(
   delayTimePeriod: uint64,
   delayBlockPeriod: uint64,
   proof: CommitmentProof,
-  path: CommitmentPath): Error {
-    abortTransactionUnless(!clientState.frozen)
-    abortTransactionUnless(proof.timestamp >= clientState.consensusState.timestamp)
-    signBytes = SignBytes(
-      sequence: clientState.consensusState.sequence,
-      timestamp: proof.timestamp,
-      diversifier: clientState.consensusState.diversifier,
-      path: path.String(),
-      data: nil,
-    )
-    proven = checkSignature(clientState.consensusState.publicKey, signBytes, proof.sig)
-    if !proven {
-      return error
-    }
+  path: CommitmentPath
+): Error {
+  abortTransactionUnless(!clientState.frozen)
+  abortTransactionUnless(proof.timestamp >= clientState.consensusState.timestamp)
+  signBytes = SignBytes(
+    sequence: clientState.consensusState.sequence,
+    timestamp: proof.timestamp,
+    diversifier: clientState.consensusState.diversifier,
+    path: path.String(),
+    data: nil,
+  )
+  proven = checkSignature(clientState.consensusState.publicKey, signBytes, proof.sig)
+  if !proven {
+    return error
+  }
 
-    // increment sequence on each verification to provide
-    // replay protection
-    clientState.consensusState.sequence++
-    clientState.consensusState.timestamp = proof.timestamp
-    // unlike other clients, we must set the client state here because we
-    // mutate the clientState (increment sequence and set timestamp)
-    // thus the verification methods are stateful for the solomachine
-    // in order to prevent replay attacks
-    provableStore.set("clients/{identifier}/clientState", clientState)
-    return nil
+  // increment sequence on each verification to provide
+  // replay protection
+  clientState.consensusState.sequence++
+  clientState.consensusState.timestamp = proof.timestamp
+  // unlike other clients, we must set the client state here because we
+  // mutate the clientState (increment sequence and set timestamp)
+  // thus the verification methods are stateful for the solomachine
+  // in order to prevent replay attacks
+  provableStore.set("clients/{identifier}/clientState", clientState)
+  return nil
 }
 ```
 
-### Properties & Invariants
+### Properties & invariants
 
 Instantiates the interface defined in [ICS 2](../../core/ics-002-client-semantics).
 
-## Backwards Compatibility
+## Backwards compatibility
 
 Not applicable.
 
-## Forwards Compatibility
+## Forwards compatibility
 
 Not applicable. Alterations to the client verification algorithm will require a new client standard.
 
-## Example Implementations
+## Example implementations
 
 - Implementation of ICS 06 in Go can be found in [ibc-go repository](https://github.com/cosmos/ibc-go).
-
-## Other Implementations
-
-None at present.
 
 ## History
 

@@ -120,12 +120,12 @@ function verifyConnectionUpgradeError(
   proof: CommitmentProof,
   upgradeErrorReceipt: []byte, 
 ) {
-    client = queryClient(connection.clientIdentifier)
+    clientState = queryClientState(connection.clientIdentifier)
     // construct CommitmentPath
     path = applyPrefix(connection.counterpartyPrefix, connectionErrorPath(connection.counterpartyConnectionIdentifier))
     // verify upgradeErrorReceipt is stored under the constructed path
     // delay period is unnecessary for non-packet verification so pass in 0 for delay period fields
-    return client.verifyMembership(height, 0, 0, proof, path, upgradeErrorReceipt)
+    return verifyMembership(clientState, height, 0, 0, proof, path, upgradeErrorReceipt)
 }
 ```
 
@@ -136,12 +136,12 @@ function verifyConnectionUpgradeErrorAbsence(
   height: Height,
   proof: CommitmentProof,
 ) {
-    client = queryClient(connection.clientIdentifier)
+    clientState = queryClientState(connection.clientIdentifier)
     // construct CommitmentPath
     path = applyPrefix(connection.counterpartyPrefix, connectionErrorPath(connection.counterpartyConnectionIdentifier))
     // verify upgradeError path is empty
     // delay period is unnecessary for non-packet verification so pass in 0 for delay period fields
-    return client.verifyNonMembership(height, 0, 0, proof, path)
+    return verifyNonMembership(clientState, height, 0, 0, proof, path)
 }
 ```
 
@@ -165,12 +165,12 @@ function verifyConnectionUpgradeTimeout(
   proof: CommitmentProof,
   upgradeTimeout: UpgradeTimeout, 
 ) {
-    client = queryClient(connection.clientIdentifier)
+    clientState = queryClientState(connection.clientIdentifier)
     // construct CommitmentPath
     path = applyPrefix(connection.counterpartyPrefix, connectionTimeoutPath(connection.counterpartyConnectionIdentifier))
     // marshal upgradeTimeout into bytes with standardized protobuf codec
     timeoutBytes = protobuf.marshal(upgradeTimeout)
-    client.verifyMembership(height, 0, 0, proof, path, timeoutBytes)
+    return verifyMembership(clientState, height, 0, 0, proof, path, timeoutBytes)
 }
 ```
 
