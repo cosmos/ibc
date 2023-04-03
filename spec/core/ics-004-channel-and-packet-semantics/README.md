@@ -281,7 +281,28 @@ If not provided, the default `validateChannelIdentifier` function will always re
 
 ##### Opening handshake
 
-The `chanOpenInit` function is called by a module to initiate a channel opening handshake with a module on another chain.
+The `chanOpenInit` function is called by a module to initiate a channel opening handshake with a module on another chain. Functions `chanOpenInit` and `chanOpenTry` do no set the new channel end in state because the channel version might be modified by the application callback. A function `writeChannel` should be used to write the channel end in state after executing the application callback:
+
+```typescript
+function writeChannel(
+  portIdentifier: Identifier,
+  channelIdentifier: Identifier,
+  state: ChannelState,
+  order: ChannelOrder,
+  counterpartyPortIdentifier: Identifier,
+  counterpartyChannelIdentifier: Identifier,
+  connectionHops: [Identifier],
+  version: string) {
+    channel = ChannelEnd{
+      state, order, 
+      counterpartyPortIdentifier, counterpartyChannelIdentifier,
+      connectionHops, version
+    }
+    provableStore.set(channelPath(portIdentifier, channelIdentifier), channel)
+}
+```
+
+See handler functions `handleChanOpenInit` and `handleChanOpenTry` in [Channel lifecycle management](../ics-026-routing-module/README.md#channel-lifecycle-management) for more details.
 
 The opening channel must provide the identifiers of the local channel identifier, local port, remote port, and remote channel identifier.
 
@@ -301,7 +322,7 @@ function chanOpenInit(
   connectionHops: [Identifier],
   portIdentifier: Identifier,
   counterpartyPortIdentifier: Identifier,
-  version: string): CapabilityKey {
+  version: string): (channelIdentifier: Identifier, channelCapability: CapabilityKey) {
     channelIdentifier = generateIdentifier()
     abortTransactionUnless(validateChannelIdentifier(portIdentifier, channelIdentifier))
 
@@ -313,14 +334,13 @@ function chanOpenInit(
     // optimistic channel handshakes are allowed
     abortTransactionUnless(connection !== null)
     abortTransactionUnless(authenticateCapability(portPath(portIdentifier), portCapability))
-    channel = ChannelEnd{INIT, order, counterpartyPortIdentifier,
-                         "", connectionHops, version}
-    provableStore.set(channelPath(portIdentifier, channelIdentifier), channel)
+
     channelCapability = newCapability(channelCapabilityPath(portIdentifier, channelIdentifier))
     provableStore.set(nextSequenceSendPath(portIdentifier, channelIdentifier), 1)
     provableStore.set(nextSequenceRecvPath(portIdentifier, channelIdentifier), 1)
     provableStore.set(nextSequenceAckPath(portIdentifier, channelIdentifier), 1)
-    return channelCapability
+
+    return channelIdentifier, channelCapability
 }
 ```
 
@@ -336,17 +356,22 @@ function chanOpenTry(
   version: string,
   counterpartyVersion: string,
   proofInit: CommitmentProof,
-  proofHeight: Height): CapabilityKey {
+  proofHeight: Height): (channelIdentifier: Identifier, channelCapability: CapabilityKey) {
     channelIdentifier = generateIdentifier()
 
     abortTransactionUnless(validateChannelIdentifier(portIdentifier, channelIdentifier))
     abortTransactionUnless(connectionHops.length === 1) // for v1 of the IBC protocol
     abortTransactionUnless(authenticateCapability(portPath(portIdentifier), portCapability))
+    
     connection = provableStore.get(connectionPath(connectionHops[0]))
     abortTransactionUnless(connection !== null)
     abortTransactionUnless(connection.state === OPEN)
-    expected = ChannelEnd{INIT, order, portIdentifier,
-                          "", [connection.counterpartyConnectionIdentifier], counterpartyVersion}
+
+    expected = ChannelEnd{
+      INIT, order, portIdentifier,
+      "", [connection.counterpartyConnectionIdentifier], 
+      counterpartyVersion
+    }
     abortTransactionUnless(connection.verifyChannelState(
       proofHeight,
       proofInit,
@@ -354,9 +379,7 @@ function chanOpenTry(
       counterpartyChannelIdentifier,
       expected
     ))
-    channel = ChannelEnd{TRYOPEN, order, counterpartyPortIdentifier,
-                         counterpartyChannelIdentifier, connectionHops, version}
-    provableStore.set(channelPath(portIdentifier, channelIdentifier), channel)
+
     channelCapability = newCapability(channelCapabilityPath(portIdentifier, channelIdentifier))
 
     // initialize channel sequences
@@ -364,7 +387,7 @@ function chanOpenTry(
     provableStore.set(nextSequenceRecvPath(portIdentifier, channelIdentifier), 1)
     provableStore.set(nextSequenceAckPath(portIdentifier, channelIdentifier), 1)
 
-    return channelCapability
+    return channelIdentifier, channelCapability
 }
 ```
 
@@ -382,11 +405,16 @@ function chanOpenAck(
     channel = provableStore.get(channelPath(portIdentifier, channelIdentifier))
     abortTransactionUnless(channel.state === INIT)
     abortTransactionUnless(authenticateCapability(channelCapabilityPath(portIdentifier, channelIdentifier), capability))
+    
     connection = provableStore.get(connectionPath(channel.connectionHops[0]))
     abortTransactionUnless(connection !== null)
     abortTransactionUnless(connection.state === OPEN)
-    expected = ChannelEnd{TRYOPEN, channel.order, portIdentifier,
-                          channelIdentifier, [connection.counterpartyConnectionIdentifier], counterpartyVersion}
+    
+    expected = ChannelEnd{
+      TRYOPEN, channel.order, portIdentifier,
+      channelIdentifier, [connection.counterpartyConnectionIdentifier], 
+      counterpartyVersion
+    }
     abortTransactionUnless(connection.verifyChannelState(
       proofHeight,
       proofTry,
@@ -394,6 +422,7 @@ function chanOpenAck(
       counterpartyChannelIdentifier,
       expected
     ))
+    
     channel.state = OPEN
     channel.version = counterpartyVersion
     channel.counterpartyChannelIdentifier = counterpartyChannelIdentifier
@@ -414,11 +443,16 @@ function chanOpenConfirm(
     abortTransactionUnless(channel !== null)
     abortTransactionUnless(channel.state === TRYOPEN)
     abortTransactionUnless(authenticateCapability(channelCapabilityPath(portIdentifier, channelIdentifier), capability))
+    
     connection = provableStore.get(connectionPath(channel.connectionHops[0]))
     abortTransactionUnless(connection !== null)
     abortTransactionUnless(connection.state === OPEN)
-    expected = ChannelEnd{OPEN, channel.order, portIdentifier,
-                          channelIdentifier, [connection.counterpartyConnectionIdentifier], channel.version}
+    
+    expected = ChannelEnd{
+      OPEN, channel.order, portIdentifier,
+      channelIdentifier, [connection.counterpartyConnectionIdentifier],
+      channel.version
+    }
     abortTransactionUnless(connection.verifyChannelState(
       proofHeight,
       proofAck,
@@ -426,6 +460,7 @@ function chanOpenConfirm(
       channel.counterpartyChannelIdentifier,
       expected
     ))
+    
     channel.state = OPEN
     provableStore.set(channelPath(portIdentifier, channelIdentifier), channel)
 }
@@ -1138,6 +1173,8 @@ Aug 13, 2019 - Various edits
 Aug 25, 2019 - Cleanup
 
 Jan 10, 2022 - Add ORDERED_ALLOW_TIMEOUT channel type and appropriate logic
+
+Mar 28, 2023 - Add `writeChannel` function to write channel end after executing application callback
 
 ## Copyright
 
