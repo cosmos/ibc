@@ -221,10 +221,10 @@ but they must expose this common set of query functions to the IBC handler.
 type ClientState = bytes
 ```
 
-Client types MUST define a method to initialise a client state with the provided client identifier and consensus state, writing to internal state as appropriate.
+Client types MUST define a method to initialise a client state with the provided client identifier, client state and consensus state, writing to internal state as appropriate.
 
 ```typescript
-type initialise = (identifier: Identifier, consensusState: ConsensusState) => ClientState
+type initialise = (identifier: Identifier, clientState: ClientState, consensusState: ConsensusState) => Void
 ```
 
 Client types MUST define a method to fetch the current height (height of the most recent validated state update).
@@ -549,15 +549,14 @@ logical correctness.
 
 #### Create
 
-Calling `createClient` with the client type and initial consensus state creates a new client.
+Calling `createClient` with the client state and initial consensus state creates a new client.
 
 ```typescript
-function createClient(consensusState: ConsensfusState) {
+function createClient(clientState: clientState, consensusState: ConsensusState) {
   // implementations may define a identifier generation function
   identifier = generateClientIdentifier()
   abortTransactionUnless(provableStore.get(clientStatePath(identifier)) === null)
-  clientState = initialise(identifier, consensusState)
-  provableStore.set(clientStatePath(identifier), clientState)
+  initialise(identifier, clientState, consensusState)
 }
 ```
 

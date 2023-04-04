@@ -87,11 +87,11 @@ Implementations **may** choose to implement loopback such that the next message 
 Loopback client initialisation requires the latest height of the local ledger.
 
 ```typescript
-function initialise(height: Height): ClientState {
-  assert(height > 0)
-  return ClientState{
-    latestHeight: height
-  }
+function initialise(identifier: Identifier, clientState: ClientState, consensusState: ConsensusState) {
+  assert(clientState.latestHeight > 0)
+  assert(consensusState === nil)
+  
+  provableStore.set("clients/{identifier}/clientState", clientState)
 }
 ```
 

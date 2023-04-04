@@ -170,25 +170,16 @@ Tendermint client initialisation requires a (subjectively chosen) latest consens
 
 ```typescript
 function initialise(
-  identifier: Identifier, chainID: string, consensusState: ConsensusState,
-  trustLevel: Fraction, height: Height, trustingPeriod: uint64, unbondingPeriod: uint64,
-  upgradePath: []string, maxClockDrift: uint64, proofSpecs: []ProofSpec
-): ClientState {
-  assert(trustingPeriod < unbondingPeriod)
-  assert(height > 0)
-  assert(trustLevel >= 1/3 && trustLevel <= 1)
+  identifier: Identifier, 
+  clientState: ClientState, 
+  consensusState: ConsensusState
+) {
+  assert(clientState.trustingPeriod < clientState.unbondingPeriod)
+  assert(clientState.height > 0)
+  assert(clientState.trustLevel >= 1/3 && clientState.trustLevel <= 1)
+
+  provableStore.set("clients/{identifier}/clientState", clientState)
   provableStore.set("clients/{identifier}/consensusStates/{height}", consensusState)
-  return ClientState{
-    chainID,
-    trustLevel,
-    latestHeight: height,
-    trustingPeriod,
-    unbondingPeriod,
-    frozenHeight: null,
-    upgradePath,
-    maxClockDrift,
-    proofSpecs
-  }
 }
 ```
 

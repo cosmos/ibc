@@ -263,13 +263,14 @@ No message signatures or data validity checks are assumed beyond those which are
 ```typescript
 interface ClientCreate {
   identifier: Identifier
+  clientState: ClientState
   consensusState: ConsensusState
 }
 ```
 
 ```typescript
 function handleClientCreate(datagram: ClientCreate) {
-    handler.createClient(datagram.consensusState)
+    handler.createClient(datagram.clientState, datagram.consensusState)
 }
 ```
 
