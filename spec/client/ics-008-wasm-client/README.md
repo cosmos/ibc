@@ -141,11 +141,11 @@ Wasm client initialization requires a (subjectively chosen) latest consensus sta
 
 ```typescript
 function initialize(
-	identifier: Identifier,
-	data: []byte,
-	codeId: []byte,
-	consensusState: ConsensusState,
-	height: Height
+  identifier: Identifier,
+  data: []byte,
+  codeId: []byte,
+  consensusState: ConsensusState,
+  height: Height
 ): ClientState {
   provableStore.set("clients/{identifier}/consensusStates/{height}", consensusState)
 
