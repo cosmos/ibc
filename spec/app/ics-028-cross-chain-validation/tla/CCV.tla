@@ -33,7 +33,7 @@ CONSTANT
   \* Maximal time by which clocks are assumed to differ from the provider chain.
   \* Since consumer chains don't communicate, we don't care about 
   \* drift between two consumers (though it's implicitly less than MaxDrift, if
-  \* each differs from the provider chain by at most MaxDrift).
+  \* each differs from the provider chain by at most 2*MaxDrift).
   \* The specification doesn't force clocks to maintain bounded drift, 
   \* but the invariants are only verified in cases where clocks never drift too far.
   \* @type: $time;
