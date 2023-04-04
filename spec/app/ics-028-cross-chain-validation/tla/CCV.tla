@@ -257,8 +257,8 @@ Init ==
   /\ boundedDrift = TRUE
   /\ lastAction = "Init"
 
-\* We combine all (un)delegate actions, as well as (un)bonding actions into an
-\* abstract VotingPowerChange.
+\* We combine anything impacting voting powers, such as (un)delegate actions, (un)bonding actions, slashing, etc.,
+\* into an abstract VotingPowerChange.
 \* Since VPC packets are sent at most once at the end of each block,
 \* the granularity wouldn't have added value to the model.
 VotingPowerChange == 
@@ -273,7 +273,7 @@ VotingPowerChange ==
     /\ UNCHANGED << votingPowerHist, expectedResponders, maturePackets >>
     /\ lastAction' = "VotingPowerChange"
 
-RcvPacket == 
+RcvVPCPacket == 
   \E c \in ActiveConsumers:
     \* There must be a packet to be received
     /\ Len(ccvChannelsPending[c]) /= 0
@@ -292,7 +292,7 @@ RcvPacket ==
     /\ UNCHANGED providerVars
     /\ UNCHANGED currentTimes
     /\ UNCHANGED votingPowerHasChanged
-    /\ lastAction' = "RcvPacket"
+    /\ lastAction' = "RcvVPCPacket"
 
 SendMatureVSCPacket == 
   \E c \in ActiveConsumers:
@@ -383,7 +383,7 @@ EndProviderBlockAndSendPacket ==
 Next == 
   /\\/ EndProviderBlockAndSendPacket
     \/ VotingPowerChange
-    \/ RcvPacket
+    \/ RcvVPCPacket
     \/ SendMatureVSCPacket
     \/ AdvanceTime
   \* Drop timed out, possibly promote rest
