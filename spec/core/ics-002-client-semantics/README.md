@@ -552,15 +552,12 @@ logical correctness.
 Calling `createClient` with the client type and initial consensus state creates a new client.
 
 ```typescript
-function createClient(
-  clientType: ClientType,
-  consensusState: ConsensusState) {
-    // implementations may define a identifier generation function
-    identifier = generateClientIdentifier()
-    abortTransactionUnless(provableStore.get(clientStatePath(identifier)) === null)
-    abortSystemUnless(provableStore.get(clientTypePath(identifier)) === null)
-    clientType.initialise(identifier, consensusState)
-    provableStore.set(clientTypePath(identifier), clientType)
+function createClient(consensusState: ConsensfusState) {
+  // implementations may define a identifier generation function
+  identifier = generateClientIdentifier()
+  abortTransactionUnless(provableStore.get(clientStatePath(identifier)) === null)
+  clientState = initialise(identifier, consensusState)
+  provableStore.set(clientStatePath(identifier), clientState)
 }
 ```
 
