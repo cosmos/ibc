@@ -47,7 +47,7 @@ All standards at or past the "Draft" stage are listed here in order of their ICS
 | [6](spec/client/ics-006-solo-machine-client/README.md)          | Solo Machine Client        | Candidate | [ibc-go](https://github.com/cosmos/ibc-go/tree/main/modules/light-clients/06-solomachine) | Protocol team |
 | [7](spec/client/ics-007-tendermint-client/README.md)            | Tendermint Client          | Candidate | [ibc-go](https://github.com/cosmos/ibc-go/tree/main/modules/light-clients/07-tendermint) | Protocol team |
 | [8](spec/client/ics-008-wasm-client/README.md)                  | Wasm Client                | Draft | | Protocol team / [Composable Finance](https://www.composable.finance) |
-| [9](spec/client/client/ics-009-loopback-cilent/README.md)       | Loopback Client            | Draft | [ibc-go](https://github.com/cosmos/ibc-go/tree/main/modules/light-clients/09-localhost) | Protocol team |
+| [9](spec/client/ics-009-loopback-cilent/README.md)       | Loopback Client            | Draft | [ibc-go](https://github.com/cosmos/ibc-go/tree/main/modules/light-clients/09-localhost) | Protocol team |
 | [10](spec/client/ics-010-grandpa-client/README.md)              | GRANDPA Client             | Draft | | [Octopus Network](https://oct.network) |
 
 ### Relayer
