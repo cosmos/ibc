@@ -131,12 +131,11 @@ interface Signature {
 The solo machine client `initialise` function starts an unfrozen client with the initial consensus state.
 
 ```typescript
-function initialise(identifier: Identifier, consensusState: ConsensusState): ClientState {
+function initialise(identifier: Identifier, clientState: ClientState, consensusState: ConsensusState) {
+  assert(clientState.consensusState === consensusState)
+
+  provableStore.set("clients/{identifier}/clientState", clientState)
   provableStore.set("clients/{identifier}/consensusStates/{height}", consensusState)
-  return ClientState{
-    frozen: false,
-    consensusState
-  }
 }
 ```
 
@@ -234,7 +233,7 @@ function updateState(clientMessage: ClientMessage) {
   clientState.consensusState.diversifier = header.newDiversifier
   clientState.consensusState.timestamp = header.timestamp
   clientState.consensusState.sequence++
-  provableStore.set("clients/{identifier}/clientState", clientState)
+  provableStore.set("clients/{clientMsg.identifier}/clientState", clientState)
 }
 ```
 
@@ -245,7 +244,7 @@ function updateStateOnMisbehaviour(clientMessage: ClientMessage) {
   clientState = provableStore.get("clients/{clientMsg.identifier}/clientState")
   // freeze the client
   clientState.frozen = true
-  provableStore.set("clients/{identifier}/clientState", clientState)
+  provableStore.set("clients/{clientMsg.identifier}/clientState", clientState)
 }
 ```
 
