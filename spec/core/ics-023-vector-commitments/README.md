@@ -5,6 +5,7 @@ stage: draft
 required-by: 2, 24
 category: IBC/TAO
 kind: interface
+version compatibility: ibc-go v7.0.0
 author: Christopher Goes <cwgoes@tendermint.com>
 created: 2019-04-16
 modified: 2019-08-25

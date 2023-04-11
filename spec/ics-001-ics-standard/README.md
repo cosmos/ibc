@@ -71,6 +71,8 @@ See [README.md](../../README.md) for a description of the ICS acceptance stages.
 
 `replaced-by` - Another ICS standard which replaces or supplants this standard, if applicable.
 
+`version compatibility` - List of versions of implementations compatible with the ICS standard.
+
 ### Synopsis
 
 Following the header, an ICS should include a brief (~200 word) synopsis providing a high-level

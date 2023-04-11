@@ -6,6 +6,7 @@ category: IBC/TAO
 kind: interface
 requires: 23, 24
 required-by: 3
+version compatibility: ibc-go v7.0.0
 author: Juwoon Yun <joon@tendermint.com>, Christopher Goes <cwgoes@tendermint.com>, Aditya Sripal <aditya@interchain.io>
 created: 2019-02-25
 modified: 2022-08-04

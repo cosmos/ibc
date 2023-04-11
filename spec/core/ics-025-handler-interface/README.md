@@ -5,6 +5,7 @@ stage: draft
 category: IBC/TAO
 kind: instantiation
 requires: 2, 3, 4, 23, 24
+version compatibility: ibc-go v7.0.0
 author: Christopher Goes <cwgoes@tendermint.com>
 created: 2019-04-23
 modified: 2019-08-25

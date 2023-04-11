@@ -10,6 +10,7 @@ modified: (modification date)
 requires: (optional list of ics numbers)
 required-by: (optional list of ics numbers)
 implements: (optional list of ics numbers)
+version compatibility: (optional list of compatible implementations' releases)
 ---
 
 ## Synopsis
