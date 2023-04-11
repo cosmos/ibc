@@ -681,7 +681,7 @@ function getCounterPartyHops(proof: MultihopProof, lastConnection: ConnectionEnd
   // reverse the hops so they are ordered from sender --> receiver
   counterpartyHops = counterpartyHops.reverse()
 
-  // add the last connection representing chain[N-1]
+  // add the counterparty of the connection on the receiving chain
   counterpartyHops.push(lastConnection.GetCounterparty().GetConnectionID())
 
   return counterpartyHops
