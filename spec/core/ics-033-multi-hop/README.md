@@ -320,6 +320,15 @@ For more details see [ICS4](https://github.com/cosmos/ibc/tree/main/spec/core/ic
 Pseudocode proof generation for a channel between `N` chains `C[0] --> C[i] --> C[N]`
 
 ```go
+// Parse the connectionID from the connection proof key and return it.
+func parseConnectionID(prefixedKey *PrefixedKey) string {
+    abortTransactionUnless(prefixedKey.KeyPath[0] == "connections")
+    abortTransactionUnless(len(prefixedKey.KeyPath) >= 2)
+    parts := strings.Split(prefixedKey.GetKeyPath()[len(prefixedKey.KeyPath)-1], "/")
+    abortTransactionUnless(len(parts) >= 2)
+    return parts[len(parts)-1]
+}
+
 // VerifyMultihopMembership verifies a multihop membership proof.
 // Inputs: consensusState - The consensusState for chain[N-1], which is known on the destination chain (chain[N]).
 //         connectionHops - The expected connectionHops for the channel from the source chain to the destination chain.
@@ -378,18 +387,18 @@ func VerifyMultihopNonMembership(
     abortTransactionUnless(VerifyKeyNonMembership(proofs, prefix, key))
 }
 
-// VerifyDelayPeriodPassed will ensure that at least delayTimePeriod amount of time and delayBlockPeriod number of blocks have passed
+// VerifyDelayPeriodPassed will ensure that at least delayPeriodTime seconds and delayPeriodBlocks number of blocks have passed
 // since consensus state was submitted before allowing verification to continue.
 func VerifyDelayPeriodPassed(
     proofHeight exported.Height,
-    timeDelay uint64,
+    delayPeriodTime uint64,
     expectedTimePerBlock uint64,
 ) error {
     // get time and block delays
-    blockDelay := getBlockDelay(timeDelay, expectedTimePerBlock)
+    delayPeriodBlocks := getBlockDelay(delayPeriodTime, expectedTimePerBlock)
 
     // tendermint client implementation
-    return tendermint.VerifyDelayPeriodPassed(proofHeight, timeDelay, blockDelay)
+    return tendermint.VerifyDelayPeriodPassed(proofHeight, delayPeriodTime, delayPeriodBlocks)
 }
 
 // VerifyConnectionHops checks that each connection in the multihop proof is OPEN and matches the connections in connectionHops.
@@ -403,8 +412,8 @@ func VerifyConnectionHops(
 
         // Verify the rest of the connectionHops (first hop already verified)
         // 1. check the connectionHop values match the proofs and are in the same order.
-        parts := strings.Split(connData.PrefixedKey.GetKeyPath()[len(connData.PrefixedKey.KeyPath)-1], "/")
-        abortTransactionUnless(parts[len(parts)-1] == connectionHops[i+1])
+        connectionID := parseConnectionID(connData.PrefixedKey)
+        abortTransactionUnless(connectionID == connectionHops[i+1])
 
         // 2. check that the connectionEnd's are in the OPEN state.
         abortTransactionUnless(connectionEnd.GetState() == int32(connectiontypes.OPEN))

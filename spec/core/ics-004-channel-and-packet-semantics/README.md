@@ -375,7 +375,7 @@ function chanOpenTry(
 
     let counterpartyHops: []string = []
     if (connectionHops.length > 1) {
-      counterpartyHops = getCounterPartyHops(proofInit)
+      counterpartyHops = getCounterPartyHops(proofInit, connection)
     } else {
       counterpartyHops = [connection.counterpartyConnectionIdentifier]
     }
@@ -438,7 +438,7 @@ function chanOpenAck(
 
     let counterpartyHops: []string = []
     if (channel.connectionHops.length > 1) {
-      counterpartyHops = getCounterPartyHops(proofTry)
+      counterpartyHops = getCounterPartyHops(proofTry, connection)
     } else {
       counterpartyHops = [connection.counterpartyConnectionIdentifier]
     }
@@ -492,7 +492,7 @@ function chanOpenConfirm(
 
     let counterpartyHops: []string = []
     if (connectionHops.length > 1) {
-      counterpartyHops = getCounterPartyHops(proofAck)
+      counterpartyHops = getCounterPartyHops(proofAck, connection)
     } else {
       counterpartyHops = [connection.counterpartyConnectionIdentifier]
     }
@@ -577,7 +577,7 @@ function chanCloseConfirm(
 
     let counterpartyHops: []string = []
     if (connectionHops.length > 1) {
-      counterpartyHops = getCounterPartyHops(proofInit)
+      counterpartyHops = getCounterPartyHops(proofInit, connection)
     } else {
       counterpartyHops = [connection.counterpartyConnectionIdentifier]
     }
@@ -621,13 +621,8 @@ on the next blockchain in the channel path so the key/value proof is indexed to 
 that client state. The client state path requires knowledge of the client id which can be determined from the
 connectionEnd on the misbehaving chain prior to the misbehavior submission.
 
-Once closed, channels cannot be reopened and identifiers cannot be reused. Identifier reuse is prevented because
-we want to prevent potential replay of previously sent packets. The replay problem is analogous to using sequence
-numbers with signed messages, except where the light client algorithm "signs" the messages (IBC packets), and the replay
-prevention sequence is the combination of port identifier, channel identifier, and packet sequence - hence we cannot
-allow the same port identifier & channel identifier to be reused again with a sequence reset to zero, since this
-might allow packets to be replayed. It would be possible to safely reuse identifiers if timeouts of a particular
-maximum height/time were mandated & tracked, and future specification versions may incorporate this feature.
+Once frozen, it is possible for a channel to be unfrozen (reactivated) via governance processes once the misbehavior in
+the channel path has been resolved. However, this process is out-of-protocol.
 
 ```typescript
 function chanCloseFrozen(
