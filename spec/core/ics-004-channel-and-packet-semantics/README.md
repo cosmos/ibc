@@ -322,8 +322,7 @@ function chanOpenInit(
   order: ChannelOrder,
   connectionHops: [Identifier],
   portIdentifier: Identifier,
-  counterpartyPortIdentifier: Identifier,
-  version: string): (channelIdentifier: Identifier, channelCapability: CapabilityKey) {
+  counterpartyPortIdentifier: Identifier): (channelIdentifier: Identifier, channelCapability: CapabilityKey) {
     channelIdentifier = generateIdentifier()
     abortTransactionUnless(validateChannelIdentifier(portIdentifier, channelIdentifier))
 
@@ -354,7 +353,6 @@ function chanOpenTry(
   portIdentifier: Identifier,
   counterpartyPortIdentifier: Identifier,
   counterpartyChannelIdentifier: Identifier,
-  version: string,
   counterpartyVersion: string,
   proofInit: CommitmentProof,
   proofHeight: Height): (channelIdentifier: Identifier, channelCapability: CapabilityKey) {
