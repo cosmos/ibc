@@ -399,15 +399,6 @@ function chanUpgradeTry(
         timeoutTimestamp: timeoutTimestamp,
     }
 
-    // get original connection for proof verification
-    var connection
-    if currentChannel.state == INITUPGRADE {
-        originalChannel = provableStore.get(channelRestorePath(portIdentifier, channelIdentifier))
-        connection = getConnection(originalChannel.connectionIdentifier)
-    } else {
-        connection = getConnection(currentChannel.connectionIdentifier)
-    }
-
     // verify proofs of counterparty state
     abortTransactionUnless(verifyChannelState(connection, proofHeight, proofChannel, currentChannel.counterpartyPortIdentifier, currentChannel.counterpartyChannelIdentifier, counterpartyChannel))
     abortTransactionUnless(verifyChannelUpgradeTimeout(connection, proofHeight, proofUpgradeTimeout, currentChannel.counterpartyPortIdentifier, currentChannel.counterpartyChannelIdentifier, upgradeTimeout))
@@ -417,43 +408,35 @@ function chanUpgradeTry(
     // get current sequence on this channel
     currentSequence = provableStore.get(channelUpgradeSequencePath(portIdentifier, channelIdentifier))
 
-    if currentChannel.state == INITUPGRADE {
-        // if there is a crossing hello, ie an UpgradeInit has been called on both channelEnds,
-        // then we must ensure that the proposedUpgrade by the counterparty is the same as the currentChannel
-        // except for the channel state (upgrade channel will be in TRYUPGRADE and current channel will be in INITUPGRADE)
-        // if the proposed upgrades on either side are incompatible, then we will restore the channel and cancel the upgrade.
-        abortTransactionUnless(currentSequence == counterpartySequence)
+    // move upgrade sequence to fresh sequence for new upgrade attempt
+    if channel.state === types.OPEN {
+        channel.upgradeSequence = channel.upgradeSequence + 1
 
-        currentChannel.state = TRYUPGRADE
-        if !currentChannel.IsEqual(proposedUpgradeChannel) {
-            restoreChannel(portIdentifier, channelIdentifier)
-            return
-        }
-    } else if currentChannel.state == OPEN {
         // if the counterparty sequence is greater than the current sequence, we fast forward to the counterparty sequence
         // so that both channel ends are using the same sequence for the current upgrade
         // if the counterparty sequence is less than or equal to the current sequence, then either the counterparty chain is out-of-sync or
         // the message is out-of-sync and we write an error receipt with our own sequence so that the counterparty can update
         // their sequence as well. We must then increment our sequence so both sides start the next upgrade with a fresh sequence.
-        if counterpartySequence > currentSequence {
-            provableStore.set(channelUpgradeSequencePath(portIdentifier, channelIdentifier), counterpartySequence)
-        } else {
-            // error on the higher sequence so that both chains move to a fresh sequence
-            errorReceipt = ErrorReceipt{
-                sequence: currentSequence,
-                errorMsg: ""
-            }
-            provableStore.set(channelUpgradeErrorPath(portIdentifier, channelIdentifier), errorReceipt)
-            provableStore.set(channelUpgradeSequencePath(portIdentifier, channelIdentifier), currentSequence+1)
-            return
+        if counterpartyUpgradeSequence > channel.upgradeSequence {
+            channel.upgradeSequence = counterpartyUpgradeSequence
         }
 
         // this is first message in upgrade handshake on this chain so we must store original channel in restore channel path
         // in case we need to restore channel later.
         privateStore.set(channelRestorePath(portIdentifier, channelIdentifier), currentChannel)
-    } else {
-        // abort transaction if current channel is not in state: INITUPGRADE or OPEN
-        abortTransactionUnless(false)
+        provableStore.set(channelPath(portIdentifier, channelIdentifier), channel)
+    }
+
+    if counterpartySequence != channel.upgradeSequence {
+        // error on the higher sequence so that both chains move to a fresh sequence
+        maxSequence = max(counterpartySequence, channel.upgradeSequence)
+        errorReceipt = ErrorReceipt{
+            sequence: maxSequence,
+            errorMsg: ""
+        }
+        provableStore.set(channelUpgradeErrorPath(portIdentifier, channelIdentifier), errorReceipt)
+        provableStore.set(channelUpgradeSequencePath(portIdentifier, channelIdentifier), maxSequence)
+        return
     }
 
     // counterparty-specified timeout must not have exceeded
@@ -462,7 +445,6 @@ function chanUpgradeTry(
         restoreChannel(portIdentifier, channelIdentifier)
         return
     }
-
 
     // call modules onChanUpgradeTry callback
     module = lookupModule(portIdentifier)
