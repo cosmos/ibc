@@ -399,6 +399,9 @@ function chanUpgradeTry(
         timeoutTimestamp: timeoutTimestamp,
     }
 
+    // get underlying connection for proof verification
+    connection = getConnection(currentChannel.connectionIdentifier)
+
     // verify proofs of counterparty state
     abortTransactionUnless(verifyChannelState(connection, proofHeight, proofChannel, currentChannel.counterpartyPortIdentifier, currentChannel.counterpartyChannelIdentifier, counterpartyChannel))
     abortTransactionUnless(verifyChannelUpgradeTimeout(connection, proofHeight, proofUpgradeTimeout, currentChannel.counterpartyPortIdentifier, currentChannel.counterpartyChannelIdentifier, upgradeTimeout))
