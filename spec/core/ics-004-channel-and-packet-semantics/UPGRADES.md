@@ -375,9 +375,14 @@ function chanUpgradeTry(
 
     // proposedConnection must exist and be in OPEN state
     // connectionHops can change in a channelUpgrade, however both sides must still be each other's counterparty.
+<<<<<<< HEAD
     proposedConnection = provableStore.Get(connectionPath(proposedUpgradeChannel.ConnectionHops[0])
     abortTransactionUnless(proposedConnection != null && proposedConnection.state == OPEN)
     abortTransactionUnless(counterpartyChannel.ConnectionHops[0] == proposedConnection.GetCounterparty().GetConnectionId())
+=======
+    proposedConnection = provableStore.get(connectionPath(proposedUpgradeChannel.connectionHops[0])
+    abortTransactionUnless(counterpartyChannel.connectionHops[0] == proposedConnection.counterpartyConnectionIdentifier)
+>>>>>>> 58e97503bf148f2674cf63d073248c4c72754b2c
 
     // either timeout height or timestamp must be non-zero
     // if the upgrade feature is implemented on the TRY chain, then a relayer may submit a TRY transaction after the timeout.
@@ -504,8 +509,8 @@ function chanUpgradeAck(
     abortTransactionUnless(currentChannel.state == INITUPGRADE || currentChannel.state == TRYUPGRADE)
 
     // connectionHops can change in a channelUpgrade, however both sides must still be each other's counterparty.
-    proposedConnection = provableStore.Get(connectionPath(proposedUpgradeChannel.ConnectionHops[0])
-    abortTransactionUnless(counterpartyChannel.ConnectionHops[0] == proposedConnection.GetCounterparty().GetConnectionId())
+    proposedConnection = provableStore.get(connectionPath(proposedUpgradeChannel.connectionHops[0])
+    abortTransactionUnless(counterpartyChannel.connectionHops[0] == proposedConnection.counterpartyConnectionIdentifier)
 
     // get underlying connection from the original channel for proof verification
     originalChannel = provableStore.get(channelRestorePath(portIdentifier, channelIdentifier))
@@ -527,7 +532,6 @@ function chanUpgradeAck(
         restoreChannel(portIdentifier, channelIdentifier)
         return
     }
-
 
     // both channel ends must be mutually compatible.
     // this means that the ordering must be the same and 
@@ -583,7 +587,7 @@ function chanUpgradeConfirm(
 
     // get underlying connection from the original channel for proof verification
     originalChannel = provableStore.get(channelRestorePath(portIdentifier, channelIdentifier))
-    connection = getConnection(currentChannel.connectionIdentifier)
+    connection = getConnection(originalChannel.connectionIdentifier)
 
     // verify proofs of counterparty state
     abortTransactionUnless(verifyChannelState(connection, proofHeight, proofChannel, currentChannel.counterpartyPortIdentifier, currentChannel.counterpartyChannelIdentifier, counterpartyChannel))
