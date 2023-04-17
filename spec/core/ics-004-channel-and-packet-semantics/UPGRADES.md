@@ -430,6 +430,9 @@ function chanUpgradeTry(
         provableStore.set(channelPath(portIdentifier, channelIdentifier), channel)
     }
 
+    // if the counterparty sequence is not equal to the current sequence, then either the counterparty chain is out-of-sync or
+    // the message is out-of-sync and we write an error receipt with our own sequence so that the counterparty can update
+    // their sequence as well. We must then increment our sequence so both sides start the next upgrade with a fresh sequence.
     if counterpartySequence != channel.upgradeSequence {
         // error on the higher sequence so that both chains move to a fresh sequence
         maxSequence = max(counterpartySequence, channel.upgradeSequence)
