@@ -298,6 +298,11 @@ function chanUpgradeInit(
         currentChannel.ordering.subsetOf(proposedUpgradeChannel.ordering)
     )
 
+    // proposedConnection must exist and be in OPEN state for 
+    // channel upgrade to be accepted
+    proposedConnection = provableStore.Get(connectionPath(proposedUpgradeChannel.ConnectionHops[0])
+    abortTransactionUnless(proposedConnection != null && proposedConnection.state == OPEN)
+
     // either timeout height or timestamp must be non-zero
     abortTransactionUnless(counterpartyTimeoutHeight != 0 || counterpartyTimeoutTimestamp != 0)
 
@@ -368,8 +373,10 @@ function chanUpgradeTry(
         proposedUpgradeChannel.counterpartyChannelIdentifier == currentChannel.counterpartyChannelIdentifier
     )
 
+    // proposedConnection must exist and be in OPEN state
     // connectionHops can change in a channelUpgrade, however both sides must still be each other's counterparty.
     proposedConnection = provableStore.Get(connectionPath(proposedUpgradeChannel.ConnectionHops[0])
+    abortTransactionUnless(proposedConnection != null && proposedConnection.state == OPEN)
     abortTransactionUnless(counterpartyChannel.ConnectionHops[0] == proposedConnection.GetCounterparty().GetConnectionId())
 
     // either timeout height or timestamp must be non-zero
