@@ -417,9 +417,6 @@ function chanUpgradeTry(
 
         // if the counterparty sequence is greater than the current sequence, we fast forward to the counterparty sequence
         // so that both channel ends are using the same sequence for the current upgrade
-        // if the counterparty sequence is less than or equal to the current sequence, then either the counterparty chain is out-of-sync or
-        // the message is out-of-sync and we write an error receipt with our own sequence so that the counterparty can update
-        // their sequence as well. We must then increment our sequence so both sides start the next upgrade with a fresh sequence.
         if counterpartyUpgradeSequence > channel.upgradeSequence {
             channel.upgradeSequence = counterpartyUpgradeSequence
         }
