@@ -298,6 +298,11 @@ function chanUpgradeInit(
         currentChannel.ordering.subsetOf(proposedUpgradeChannel.ordering)
     )
 
+    // proposedConnection must exist and be in OPEN state for 
+    // channel upgrade to be accepted
+    proposedConnection = provableStore.Get(connectionPath(proposedUpgradeChannel.ConnectionHops[0])
+    abortTransactionUnless(proposedConnection != null && proposedConnection.state == OPEN)
+
     // either timeout height or timestamp must be non-zero
     abortTransactionUnless(counterpartyTimeoutHeight != 0 || counterpartyTimeoutTimestamp != 0)
 
@@ -368,6 +373,12 @@ function chanUpgradeTry(
         proposedUpgradeChannel.counterpartyChannelIdentifier == currentChannel.counterpartyChannelIdentifier
     )
 
+    // proposedConnection must exist and be in OPEN state
+    // connectionHops can change in a channelUpgrade, however both sides must still be each other's counterparty.
+    proposedConnection = provableStore.Get(connectionPath(proposedUpgradeChannel.ConnectionHops[0])
+    abortTransactionUnless(proposedConnection != null && proposedConnection.state == OPEN)
+    abortTransactionUnless(counterpartyChannel.connectionHops[0] == proposedConnection.counterpartyConnectionIdentifier)
+
     // either timeout height or timestamp must be non-zero
     // if the upgrade feature is implemented on the TRY chain, then a relayer may submit a TRY transaction after the timeout.
     // this will restore the channel on the executing chain and allow counterparty to use the ChannelUpgradeCancelMsg to restore their channel.
@@ -405,42 +416,37 @@ function chanUpgradeTry(
     currentChannel.counterpartyChannelIdentifier, counterpartySequence))
 
     // get current sequence on this channel
-    // if the counterparty sequence is greater than the current sequence, we fast forward to the counterparty sequence
-    // so that both channel ends are using the same sequence for the current upgrade
-    // if the counterparty sequence is less than or equal to the current sequence, then either the counterparty chain is out-of-sync or
-    // the message is out-of-sync and we write an error receipt with our own sequence so that the counterparty can update
-    // their sequence as well. We must then increment our sequence so both sides start the next upgrade with a fresh sequence.
     currentSequence = provableStore.get(channelUpgradeSequencePath(portIdentifier, channelIdentifier))
-    if counterpartySequence > currentSequence {
-        provableStore.set(channelUpgradeSequencePath(portIdentifier, channelIdentifier), counterpartySequence)
-    } else {
-        // error on the higher sequence so that both chains move to a fresh sequence
-        errorReceipt = ErrorReceipt{
-            sequence: currentSequence,
-            errorMsg: ""
-        }
-        provableStore.set(channelUpgradeErrorPath(portIdentifier, channelIdentifier), errorReceipt)
-        provableStore.set(channelUpgradeSequencePath(portIdentifier, channelIdentifier), currentSequence+1)
-        return
-    }
 
-    if currentChannel.state == INITUPGRADE {
-        // if there is a crossing hello, ie an UpgradeInit has been called on both channelEnds,
-        // then we must ensure that the proposedUpgrade by the counterparty is the same as the currentChannel
-        // except for the channel state (upgrade channel will be in TRYUPGRADE and current channel will be in INITUPGRADE)
-        // if the proposed upgrades on either side are incompatible, then we will restore the channel and cancel the upgrade.
-        currentChannel.state = TRYUPGRADE
-        if !currentChannel.IsEqual(proposedUpgradeChannel) {
-            restoreChannel(portIdentifier, channelIdentifier)
-            return
+    // move upgrade sequence to fresh sequence for new upgrade attempt
+    if channel.state === types.OPEN {
+        channel.upgradeSequence = channel.upgradeSequence + 1
+
+        // if the counterparty sequence is greater than the current sequence, we fast forward to the counterparty sequence
+        // so that both channel ends are using the same sequence for the current upgrade
+        if counterpartyUpgradeSequence > channel.upgradeSequence {
+            channel.upgradeSequence = counterpartyUpgradeSequence
         }
-    } else if currentChannel.state == OPEN {
+
         // this is first message in upgrade handshake on this chain so we must store original channel in restore channel path
         // in case we need to restore channel later.
         privateStore.set(channelRestorePath(portIdentifier, channelIdentifier), currentChannel)
-    } else {
-        // abort transaction if current channel is not in state: INITUPGRADE or OPEN
-        abortTransactionUnless(false)
+        provableStore.set(channelPath(portIdentifier, channelIdentifier), channel)
+    }
+
+    // if the counterparty sequence is not equal to the current sequence, then either the counterparty chain is out-of-sync or
+    // the message is out-of-sync and we write an error receipt with our own sequence so that the counterparty can update
+    // their sequence as well. We must then increment our sequence so both sides start the next upgrade with a fresh sequence.
+    if counterpartySequence != channel.upgradeSequence {
+        // error on the higher sequence so that both chains move to a fresh sequence
+        maxSequence = max(counterpartySequence, channel.upgradeSequence)
+        errorReceipt = ErrorReceipt{
+            sequence: maxSequence,
+            errorMsg: ""
+        }
+        provableStore.set(channelUpgradeErrorPath(portIdentifier, channelIdentifier), errorReceipt)
+        provableStore.set(channelUpgradeSequencePath(portIdentifier, channelIdentifier), maxSequence)
+        return
     }
 
     // counterparty-specified timeout must not have exceeded
@@ -449,7 +455,6 @@ function chanUpgradeTry(
         restoreChannel(portIdentifier, channelIdentifier)
         return
     }
-
 
     // call modules onChanUpgradeTry callback
     module = lookupModule(portIdentifier)
@@ -492,8 +497,13 @@ function chanUpgradeAck(
     currentChannel = provableStore.get(channelPath(portIdentifier, channelIdentifier))
     abortTransactionUnless(currentChannel.state == INITUPGRADE || currentChannel.state == TRYUPGRADE)
 
-    // get underlying connection for proof verification
-    connection = getConnection(currentChannel.connectionIdentifier)
+    // connectionHops can change in a channelUpgrade, however both sides must still be each other's counterparty.
+    proposedConnection = provableStore.get(connectionPath(proposedUpgradeChannel.connectionHops[0])
+    abortTransactionUnless(counterpartyChannel.connectionHops[0] == proposedConnection.counterpartyConnectionIdentifier)
+
+    // get underlying connection from the original channel for proof verification
+    originalChannel = provableStore.get(channelRestorePath(portIdentifier, channelIdentifier))
+    connection = getConnection(originalChannel.connectionIdentifier)
 
     // verify proofs of counterparty state
     abortTransactionUnless(verifyChannelState(connection, proofHeight, proofChannel, currentChannel.counterpartyPortIdentifier, currentChannel.counterpartyChannelIdentifier, counterpartyChannel))
@@ -511,7 +521,6 @@ function chanUpgradeAck(
         restoreChannel(portIdentifier, channelIdentifier)
         return
     }
-
 
     // both channel ends must be mutually compatible.
     // this means that the ordering must be the same and 
@@ -565,8 +574,9 @@ function chanUpgradeConfirm(
     // get current sequence
     sequence = provableStore.get(channelUpgradeSequencePath(portIdentifier, channelIdentifier))
 
-    // get underlying connection for proof verification
-    connection = getConnection(currentChannel.connectionIdentifier)
+    // get underlying connection from the original channel for proof verification
+    originalChannel = provableStore.get(channelRestorePath(portIdentifier, channelIdentifier))
+    connection = getConnection(originalChannel.connectionIdentifier)
 
     // verify proofs of counterparty state
     abortTransactionUnless(verifyChannelState(connection, proofHeight, proofChannel, currentChannel.counterpartyPortIdentifier, currentChannel.counterpartyChannelIdentifier, counterpartyChannel))
