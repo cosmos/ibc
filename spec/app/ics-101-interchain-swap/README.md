@@ -4,9 +4,9 @@ title: Interchain Swap
 stage: draft
 category: IBC/APP
 kind: instantiation
-author: Ping <ping@side.one>, Edward Gunawan <edward@s16.ventures>, Marian <marian@side.one>
+author: Ping <ping@side.one>, Edward Gunawan <edward@s16.ventures>, Jafferey Hu ,Marian <marian@side.one>
 created: 2022-10-09
-modified: 2023-04-06
+modified: 2023-04-20
 requires: 24, 25
 ---
 
@@ -29,6 +29,8 @@ Users might also prefer single asset pools over dual assets pools as it removes 
 `Weighted pools`: liquidity pools characterized by the percentage weight of each token denomination maintained within.
 
 `Single-sided liquidity pools`: a liquidity pool that does not require users to deposit both token denominations -- one is enough.
+
+`Double-sided liquidity pools`: a liquidity pool that does require users to deposit both token denominations -- require token pair.
 
 `Left-side swap`: a token exchange that specifies the desired quantity to be sold.
 
@@ -205,6 +207,24 @@ class InterchainMarketMaker {
         }
     }
 
+     // P_issued = P_supply * (1 + At/Bt)
+    function depositDoubleAsset(tokens: Coin[]): Coin[] {
+        const lpTokens = [];
+        for (const token in tokens) {
+            const asset = this.pool.findAssetByDenom(token.denom)
+            const amount = token.amount
+            const supply = this.pool.supply.amount
+            const weight = asset.weight / 100
+            const issueAmount = supply * (1+amount/asset.balance)
+            asset.balance.amount += token.amount // update balance of the asset
+            lpTokens.push({
+                amount: issueAmount,
+                denom: this.pool.supply.denom
+            });
+        }
+        return lpTokens
+    }
+
     // input the supply token, output the expected token.
     // At = Bt * (1 - (1 - P_redeemed / P_supply) ** 1/Wt)
     function withdraw(redeem: Coin, denomOut: string): Coin {
@@ -293,6 +313,7 @@ Only one packet data type is required: `IBCSwapDataPacket`, which specifies the 
 enum MessageType {
   Create,
   Deposit,
+  DoubleDeposit,
   Withdraw,
   LeftSwap,
   RightSwap,
@@ -331,6 +352,7 @@ IBCSwap implements the following sub-protocols:
 ```protobuf
   rpc DelegateCreatePool(MsgCreatePoolRequest) returns (MsgCreatePoolResponse);
   rpc DelegateSingleDeposit(MsgSingleDepositRequest) returns (MsgSingleDepositResponse);
+  rpc DelegateDoubleDeposit(MsgDoubleDepositRequest) returns (MsgDoubleDepositResponse);
   rpc DelegateWithdraw(MsgWithdrawRequest) returns (MsgWithdrawResponse);
   rpc DelegateLeftSwap(MsgLeftSwapRequest) returns (MsgSwapResponse);
   rpc DelegateRightSwap(MsgRightSwapRequest) returns (MsgSwapResponse);
@@ -359,6 +381,28 @@ interface MsgDepositRequest {
 }
 interface MsgSingleDepositResponse {
   poolToken: Coin;
+}
+```
+
+```ts
+interface LocalDeposit {
+  sender: string;
+  token: Coin;
+}
+interface RemoteDeposit {
+  sender: string;
+  sequence: int; // account transaction sequence
+  token: Coin;
+  signature: Uint8Array;
+}
+
+interface MsgDoubleDepositRequest {
+  poolId: string;
+  localDeposit: LocalDeposit;
+  remoteDeposit: RemoteDeposit;
+}
+interface MsgDoubleDepositResponse {
+  poolTokens: Coin[];
 }
 ```
 
@@ -457,6 +501,36 @@ function delegateSingleDeposit(msg MsgSingleDepositRequest) {
     // constructs the IBC data packet
     const packet = {
         type: MessageType.Deposit,
+        data: protobuf.encode(msg), // encode the request message to protobuf bytes.
+    }
+    sendInterchainIBCSwapDataPacket(packet, msg.sourcePort, msg.sourceChannel, msg.timeoutHeight, msg.timeoutTimestamp)
+}
+
+
+function delegateDoubleDeposit(msg MsgDoubleDepositRequest) {
+
+    abortTransactionUnless(msg.localDeposit.sender != null)
+    abortTransactionUnless(msg.localDeposit.token != null)
+    abortTransactionUnless(msg.remoteDeposit.sender != null)
+    abortTransactionUnless(msg.remoteDeposit.token != null)
+    abortTransactionUnless(msg.remoteDeposit.signature != null)
+    abortTransactionUnless(msg.remoteDeposit.sequence != null)
+
+
+    const pool = store.findPoolById(msg.poolId)
+    abortTransactionUnless(pool != null)
+
+    const balance = bank.queryBalance(sender, msg.localDeposit.token.denom)
+    // should have enough balance
+    abortTransactionUnless(balance.amount >= msg.localDeposit.token.amount)
+
+    // deposit assets to the escrowed account
+    const escrowAddr = escrowAddress(pool.encounterPartyPort, pool.encounterPartyChannel)
+    bank.sendCoins(msg.sender, escrowAddr, msg.tokens)
+
+    // constructs the IBC data packet
+    const packet = {
+        type: MessageType.DoubleDeposit,
         data: protobuf.encode(msg), // encode the request message to protobuf bytes.
     }
     sendInterchainIBCSwapDataPacket(packet, msg.sourcePort, msg.sourceChannel, msg.timeoutHeight, msg.timeoutTimestamp)
@@ -575,18 +649,61 @@ function onCreatePoolReceived(msg: MsgCreatePoolRequest, destPort: string, destC
 
 function onSingleDepositReceived(msg: MsgSingleDepositRequest): MsgSingleDepositResponse {
 
-    abortTransactionUnless(msg.sender != null)
-    abortTransactionUnless(msg.tokens.lenght > 0)
+    const pool = store.findPoolById(msg.poolId)
+    abortTransactionUnless(pool != null)
+
+    const amm = store.findAmmById(msg.poolId)
+
+    if(amm !== null) {
+        // fetch fee rate from the params module, maintained by goverance
+        const feeRate = params.getPoolFeeRate()
+        const amm = InterchainMarketMaker.initialize(pool, feeRate)
+    }
+
+    const poolToken = amm.singleDeposit(msg.tokens[0])
+    store.savePool(amm.pool) // update pool states
+
+    return { poolToken }
+}
+
+
+function onDoubleDepositReceived(msg: MsgSingleDepositRequest): MsgSingleDepositResponse {
+
+    abortTransactionUnless(msg.remoteDeposit.sender != null)
+    abortTransactionUnless(msg.remoteDeposit.token != null)
 
     const pool = store.findPoolById(msg.poolId)
     abortTransactionUnless(pool != null)
 
-    // fetch fee rate from the params module, maintained by goverance
-    const feeRate = params.getPoolFeeRate()
+    const amm = store.findAmmById(msg.poolId)
+    if(amm !== null) {
+        // fetch fee rate from the params module, maintained by goverance
+        const feeRate = params.getPoolFeeRate()
+        const amm = InterchainMarketMaker.initialize(pool, feeRate)
+    }
 
-    const amm = InterchainMarketMaker.initialize(pool, feeRate)
-    const poolToken = amm.depositSingleAsset(msg.tokens[0])
+    // verify signature
+    const sender = account.GetAccount(msg.remoteDeposit.sender)
+    abortTransactionUnless(sender != null)
+    abortTransactionUnless(msg.remoteDeposit.sequence != senderGetSequence())
 
+    const remoteDeposit = {
+        sender: sender.GetAddress();
+        sequence: sender.GetSequence();
+        token: msg.remoteDeposit.Token;
+    }
+    const encoder = new TextEncoder();
+    const rawRemoteDepositTx = encoder.encode(JSON.stringify(remoteDeposit));
+    const pubKey = account.GetPubKey()
+    const isValid = pubKey.VerifySignature(rawRemoteDepositTx, msg.remoteDeposit.signature)
+    abortTransactionUnless(isValid != false)
+
+    // deposit remote token
+    const poolTokens = amm.doubleSingleAsset([msg.localDeposit.token, msg.remoteDeposit.token])
+
+    // mint voucher token
+    bank.mintCoin(MODULE_NAME, poolTokens[1])
+    bank.sendCoinsFromModuleToAccount(MODULE_NAME, msg.remoteDeposit.sender,  poolTokens[1])
     store.savePool(amm.pool) // update pool states
 
     return { poolToken }
@@ -680,8 +797,22 @@ function onSingleDepositAcknowledged(request: MsgSingleDepositRequest, response:
     pool.supply.amount += response.tokens.amount
     store.savePool(pool)
 
-    bank.mintCoin(MODULE_NAME, reponse.token)
+    bank.mintCoin(MODULE_NAME,request.sender,reponse.token)
     bank.sendCoinsFromModuleToAccount(MODULE_NAME, msg.sender, response.tokens)
+}
+
+function onDoubleDepositAcknowledged(request: MsgDoubleDepositRequest, response: MsgDoubleDepositResponse) {
+    const pool = store.findPoolById(msg.poolId)
+    abortTransactionUnless(pool != null)
+
+    for(const poolToken in response.PoolTokens) {
+         pool.supply.amount += poolToken.amount
+    }
+
+    store.savePool(pool)
+
+    bank.mintCoin(MODULE_NAME,reponse.tokens[0])
+    bank.sendCoinsFromModuleToAccount(MODULE_NAME, msg.localDeposit.sender, response.tokens[0])
 }
 
 function onWithdrawAcknowledged(request: MsgWithdrawRequest, response: MsgWithdrawResponse) {
@@ -842,6 +973,12 @@ function onRecvPacket(packet: Packet) {
             var msg: MsgSingleDepositRequest = protobuf.decode(swapPacket.data)
             onSingleDepositReceived(msg)
             break
+
+        case Double_DEPOSIT:
+            var msg: MsgDoubleDepositRequest = protobuf.decode(swapPacket.data)
+            onDoubleDepositReceived(msg)
+            break
+
         case WITHDRAW:
             var msg: MsgWithdrawRequest = protobuf.decode(swapPacket.data)
             onWithdrawReceived(msg)
@@ -886,6 +1023,9 @@ function OnAcknowledgementPacket(
         case SINGLE_DEPOSIT:
             onSingleDepositAcknowledged(msg)
             break;
+        case Double_DEPOSIT:
+            onDoubleDepositAcknowledged(msg)
+            break;
         case WITHDRAW:
             onWithdrawAcknowledged(msg)
             break;
@@ -920,6 +1060,9 @@ function refundToken(packet: Packet) {
       token = packet.tokenIn
       break;
     case Deposit:
+      token = packet.tokens
+      break;
+    case DoubleDeposit:
       token = packet.tokens
       break;
     case Withdraw:
