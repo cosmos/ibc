@@ -4,7 +4,7 @@ title: Interchain Swap
 stage: draft
 category: IBC/APP
 kind: instantiation
-author: Ping <ping@side.one>, Edward Gunawan <edward@s16.ventures>, Jafferey Hu ,Marian <marian@side.one>
+author: Ping <ping@side.one>, Edward Gunawan <edward@s16.ventures>, Jafferey Hu < huzhiwei@outlook.com> , Marian <marian@side.one>
 created: 2022-10-09
 modified: 2023-04-20
 requires: 24, 25
