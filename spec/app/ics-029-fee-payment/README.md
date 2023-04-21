@@ -40,6 +40,9 @@ define a clear interface that can be easily adopted by any application, but not 
 - Support custom fee-handling logic within the same framework
 - Relayer addresses should not be forgeable
 - Enable permissionless or permissioned relaying
+- Incentivize client updates along a channel path (`updateClient` called)
+- Produces no extra client messages
+- Allows client incentives to come from multiple sources
 
 ### Definitions
 
@@ -55,6 +58,8 @@ define a clear interface that can be easily adopted by any application, but not 
 
 `timeout fee`: The fee paid for submitting the `timeoutPacket` or `timeoutOnClose` message for a given packet
 
+`client update fee`: The fee paid for submitting the `clientUpdate` for a connection hop for a given channel
+
 `source address`: The payee address selected by a relayer on the chain that sent the packet
 
 `destination address`: The address of a relayer on the chain that receives the packet
@@ -69,9 +74,9 @@ to incentivize the packet. The fee distribution may be implementation specific a
 (just high-level requirements are needed in this doc).
 
 We require that the [relayer address is exposed to application modules](https://github.com/cosmos/ibc/pull/579) for
-all packet-related messages, so the modules are able to incentivize the packet relayer. `acknowledgePacket`, `timeoutPacket`,
-and `timeoutOnClose` messages will therefore have the relayer address and be capable of sending escrowed tokens to such address.
-However, we need a way to reliably get the address of the relayer that submitted `recvPacket` on the destination chain to
+all packet-related and client update messages, so the modules are able to incentivize the packet and client update relayer. 
+`acknowledgePacket`, `timeoutPacket`, `timeoutOnClose` and `updateClient` messages will therefore have the relayer address and be capable of sending escrowed tokens to such address.
+However, we need a way to reliably get the address of the relayer that submitted `recvPacket` or `updateClient` on the destination chain to
 the source chain. In fact, we need a *source address* for this relayer to pay out to, not the *destination address* that signed
 the packet.
 
@@ -141,10 +146,11 @@ While the details may vary between fee modules, all fee modules **must** ensure 
 
 - It must allow relayers to register their counterparty payee address (i.e. source address).
 - It must have in escrow the maximum fees that all outstanding packets may pay out (or it must have ability to mint required amount of tokens)
-- It must pay the receive fee for a packet to the forward relayer specified in `PayFee` callback (if unspecified, it must refund forward fee to original fee payer(s))
-- It must pay the ack fee for a packet to the reverse relayer specified in `PayFee` callback
+- It must pay the receive fee for a packet to the forward relayer specified in `PayPacketFee` callback (if unspecified, it must refund forward fee to original fee payer(s))
+- It must pay the ack fee for a packet to the reverse relayer specified in `PayPacketFee` callback
 - It must pay the timeout fee for a packet to the timeout relayer specified in `PayTimeoutFee` callback
 - It must refund any remainder fees in escrow to the original fee payer(s) if applicable
+- It must pay the client update fee to the forward relayer specified in `PayClientUpdateFee` callback (if unspecified, it must refund forward fee to original fee payer(s))
 
 ```typescript
 // RegisterCounterpartyPayee is called by the relayer on each channelEnd and 
@@ -177,19 +183,42 @@ function EscrowPacketFee(packet: Packet, receiveFee: Fee, ackFee: Fee, timeoutFe
     // do custom logic with provided relayer addresses if necessary
 }
 
-// PayFee is a callback implemented by fee module called by the ICS-4 AcknowledgePacket handler.
-function PayFee(packet: Packet, forward_relayer: string, reverse_relayer: string) {
+// PayPacketFee is a callback implemented by fee module called by the ICS-4 AcknowledgePacket handler.
+function PayPacketFee(packet: Packet, forward_relayer: string, reverse_relayer: string) {
     // pay the forward fee to the forward relayer address
     // pay the reverse fee to the reverse relayer address
     // refund extra tokens to original fee payer(s)
     // NOTE: if forward relayer address is empty, then refund the forward fee to original fee payer(s).
 }
 
-// PayFee is a callback implemented by fee module called by the ICS-4 TimeoutPacket handler.
-function PayTimeoutFee(packet: Packet, timeout_relayer: string) {
+// PayPacketTimeoutFee is a callback implemented by fee module called by the ICS-4 TimeoutPacket handler.
+function PayPacketTimeoutFee(packet: Packet, timeout_relayer: string) {
     // pay the timeout fee to the timeout relayer address
     // refund extra tokens to original fee payer(s)
 }
+
+// EscrowClientUpdateFee is an open callback that may be called by any module/user 
+// that wishes to escrow funds in order to incentivize client updates over a channel path.
+// NOTE: These fees are escrowed in addition to any previously escrowed amount 
+// for the client update. In the case where the previous amount is zero, the provided 
+// fees are the initial escrow amount.
+// They may set separate client update fees for each connection in a multi-hop channel path.
+// The caller may optionally specify an array of relayer addresses. This MAY be
+// used by the fee module to modify fee payment logic based on ultimate relayer
+// address. For example, fee module may choose to only pay out relayer if the 
+// relayer address was specified in the `EscrowClientUpdateFee`.
+function EscrowClientUpdateFee(channelID: Identifier, clientUpdateFees: []Fee, relayers: []string) {
+    // for each idx (connection hop) in a channel path, escrow clientUpdateFees[idx] to incentivize client updates
+    // incentives are escrowed at the latest consensus heights based on the source chain's view
+    // do custom logic with provided relayer addresses if necessary
+}
+
+// PayClientUpdateFee is a callback implemented by fee module called by the ICS-4 TimeoutPacket handler.
+function PayClientUpdateFee(packet: Packet, timeout_relayer: string) {
+    // pay the timeout fee to the timeout relayer address
+    // refund extra tokens to original fee payer(s)
+}
+
 ```
 
 The fee module should also expose the following queries so that relayers may query their expected fee:
@@ -197,15 +226,19 @@ The fee module should also expose the following queries so that relayers may que
 ```typescript
 // Gets the fee expected for submitting RecvPacket msg for the given packet
 // Caller should provide the intended relayer address in case the fee is dependent on specific relayer(s).
-function GetReceiveFee(portID, channelID, sequence, relayer) Fee
+function GetPacketReceiveFee(portID, channelID, sequence, relayer) Fee
 
 // Gets the fee expected for submitting AcknowledgePacket msg for the given packet
 // Caller should provide the intended relayer address in case the fee is dependent on specific relayer(s).
-function GetAckFee(portID, channelID, sequence, relayer) Fee
+function GetPacketAckFee(portID, channelID, sequence, relayer) Fee
 
 // Gets the fee expected for submitting TimeoutPacket msg for the given packet
 // Caller should provide the intended relayer address in case the fee is dependent on specific relayer(s).
-function GetTimeoutFee(portID, channelID, sequence, relayer) Fee
+function GetPacketTimeoutFee(portID, channelID, sequence, relayer) Fee
+
+// Gets the fee expected for submitting ClientUpdate msg for a given connection hop in a channel path.
+// Caller should provide the intended relayer address in case the fee is dependent on specific relayer(s).
+function GetClientUpdateFee(portID, channelID, relayer) []Fee
 ```
 
 Since different chains may have different representations for fungible tokens and this information is not being sent to other chains; this ICS does not specify a particular representation for the `Fee`. Each chain may choose its own representation, it is incumbent on relayers to interpret the Fee correctly.
@@ -239,9 +272,9 @@ Ex:
 {"fee_version":"ics29-1","app_version":"ics20-1"}
 ```
 
-The fee middleware's handshake callbacks ensure that both modules agree on compatible fee protocol version(s), and then pass the application-specific version string to the embedded application's handshake callbacks.
+The fee middleware's channel handshake callbacks ensure that both modules agree on compatible fee protocol version(s), and then pass the application-specific version string to the embedded application's handshake callbacks.
 
-#### Handshake Callbacks
+#### Channel Handshake Callbacks
 
 ```typescript
 function onChanOpenInit(
@@ -393,6 +426,29 @@ function onChanOpenConfirm(
     // fee middleware performs no-op on ChanOpenConfirm,
     // just call underlying callback
     return app.onChanOpenConfirm(portIdentifier, channelIdentifier)
+}
+```
+
+#### Client Update Callbacks
+
+```typescript
+function onClientUpdate(
+  clientID: Identifier,
+  clientUpdate: ClientMsg,
+  updateHeights: []Height,
+  relayer: string) {
+
+    // Store information an incentivized client update so that we can pay out any incentivizes 
+    // escrowed on the source chain.
+    // On the source chain, incentives are escrowed indexed by connection hop over a channel. 
+    // The last known max height of the counterparty/destination chain client is stored.
+    // A proof showing that a new incentived client update has been applied that has a height > prev max height
+    // releases the incentives for the forward relayer.
+    update = ConstructIncentivizedUpdate(clientID, clientUpdate, updateHeights, relayer)
+    updateKey = constructIncentivizedUpdateKey(clientID, max(updateHeights))
+    privateStore.Set(updateKey, update)
+
+    return app.onClientUpdate(portIdentifier, channelIdentifier)
 }
 ```
 
