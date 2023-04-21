@@ -97,7 +97,7 @@ Alternate flow:
 1. Relayer submits `OnTimeout` which provides its address on the source chain
 1. Source application can distribute the tokens escrowed in (1) to this relayer, and potentially return remainder tokens to the original fee payer(s).
 
-### Fee details
+### Packet Fee details
 
 For an example implementation in the Cosmos SDK, we consider 3 potential fee payments, which may be defined. Each one may be
 paid out in a different token. Imagine a connection between IrisNet and the Cosmos Hub. To incentivize a packet from IrisNet to the Cosmos Hub, they may define:
@@ -115,16 +115,31 @@ The logic involved in collecting fees from users and then paying it out to the r
 
 ### Data Structures
 
-The incentivized acknowledgment written on the destination chain includes:
+The incentivized packet acknowledgment written on the destination chain includes:
 - raw bytes of the acknowledgement from the underlying application,
 - the source address of the forward relayer,
 - and a boolean indicative of receive operation success on the underlying application.
 
 ```typescript
-interface Acknowledgement {
+interface IncentivizedPacketAcknowledgement {
     appAcknowledgement: []byte
     forwardRelayerAddress: string
     underlyingAppSuccess: boolean
+}
+```
+
+The incentivized client update written on the destination chain includes:
+- the client id on the destination chain
+- raw bytes of the client update msg
+- the latest updated height
+- the source address of the forward relayer
+
+```typescript
+interface IncentivizedClientUpdate {
+    clientID: string
+    clientMsg: []byte
+    forwardRelayerAddress: string
+    height: Height
 }
 ```
 

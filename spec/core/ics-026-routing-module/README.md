@@ -157,7 +157,8 @@ function onTimeoutPacketClose(packet: Packet, relayer: string) {
 
 `onClientUpdate` propagates information on client updates up to the application layer
 including the relayer responsible for posting the update. This allows relayer incentivization
-for client updates to be built at the application layer.
+for client updates to be built at the application layer. This method is only called upon a 
+successful client update.
 
 ```typescript
 function onClientUpdate(
