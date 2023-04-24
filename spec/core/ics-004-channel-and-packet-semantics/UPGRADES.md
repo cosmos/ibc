@@ -588,56 +588,89 @@ function chanUpgradeAck(
 function chanUpgradeConfirm(
     portIdentifier: Identifier,
     channelIdentifier: Identifier,
-    counterpartyChannel: ChannelEnd,
+    counterpartyChannelState: ChannelState,
     proofChannel: CommitmentProof,
     proofUpgradeError: CommitmentProof,
     proofUpgradeSequence: CommitmentProof,
     proofHeight: Height,
 ) {
-     // if packet commitments are not empty then abort the transaction
+    // if packet commitments are not empty then abort the transaction
     abortTransactionUnless(pendingInflightPackets(portIdentifier, channelIdentifier))
 
     // current channel is in TRYUPGRADE
     currentChannel = provableStore.get(channelPath(portIdentifier, channelIdentifier))
-    abortTransactionUnless(channel.state == BLOCKUPGRADE)
+    abortTransactionUnless(channel.state == TRYUPGRADE)
 
-    // counterparty must be in OPEN state
-    abortTransactionUnless(counterpartyChannel.State == OPEN)
+    connection = getConnection(currentChannel.connectionIdentifier)
+    counterpartyHops = getCounterpartyHops(connection)
 
-    // get current sequence
-    sequence = provableStore.get(channelUpgradeSequencePath(portIdentifier, channelIdentifier))
+    // counterparty must be in OPEN or BLOCKUPGRADE state
+    if counterpartyChannelState == OPEN {
+        // get upgrade since counterparty should have upgraded to these parameters
+        upgrade = provableStore.get(channelUpgradePath(portIdentifier, channelIdentifier))
 
-    // get underlying connection from the original channel for proof verification
-    originalChannel = provableStore.get(channelRestorePath(portIdentifier, channelIdentifier))
-    connection = getConnection(originalChannel.connectionIdentifier)
+        counterpartyChannel = ChannelEnd{
+            state: OPEN,
+            ordering: upgrade.fields.ordering,
+            counterpartyPortIdentifier: portIdentifier,
+            counterpartyChannelIdentifier: channelIdentifier,
+            connectionHops: upgrade.fields.connectionHops,
+            version: upgrade.fields.version,
+            sequence: currentChannel.sequence,
+        }
+    } else if counterpartyChannelState == BLOCKUPGRADE {
+        counterpartyChannel = ChannelEnd{
+            state: BLOCKUPGRADE,
+            ordering: currentChannel.ordering,
+            counterpartyPortIdentifier: portIdentifier,
+            counterpartyChannelIdentifier: channelIdentifier,
+            connectionHops: counterpartyHops,
+            version: currentChannel.version,
+            sequence: currentChannel.sequence,
+        }
+    } else {
+        abortTransactionUnless(false)
+    }
 
-    // verify proofs of counterparty state
     abortTransactionUnless(verifyChannelState(connection, proofHeight, proofChannel, currentChannel.counterpartyPortIdentifier, currentChannel.counterpartyChannelIdentifier, counterpartyChannel))
-    // verify counterparty did not abort upgrade handshake by writing upgrade error
-    // must have absent value at upgradeError path at the current sequence
-    abortTransactionUnless(verifyUpgradeChannelErrorAbsence(connection, proofHeight, proofUpgradeError, currentChannel.counterpartyPortIdentifier, currentChannel.counterpartyChannelIdentifier))
 
-    // verify that the counterparty sequence is the same as the current sequence to ensure that the proofs were
-    // retrieved from the current upgrade attempt
-    // since all proofs are retrieved from same proof height, and there can not be multiple upgrade states in the store for a given
-    // channel at the same time
-    abortTransactionUnless(verifyUpgradeSequence(connection, proofHeight, proofUpgradeSequence, currentChannel.counterpartyPortIdentifier,
-    currentChannel.counterpartyChannelIdentifier, sequence))
+    // move channel to OPEN and adopt upgrade parameters
+    openChannelHandshake(portIdentifier, channelIdentifier)
 
     // call modules onChanUpgradeConfirm callback
     module = lookupModule(portIdentifier)
     // confirm callback must not return error since counterparty successfully upgraded
-    module.onChanUpgradeConfirm(
+    module.onChanUpgradeOpen(
         portIdentifer,
         channelIdentifier
     )
-    
-    // upgrade is complete
-    // set channel to OPEN and remove unnecessary state
-    currentChannel.state = OPEN
-    provableStore.set(channelPath(portIdentifier, channelIdentifier), currentChannel)
-    provableStore.delete(channelUpgradeTimeoutPath(portIdentifier, channelIdentifier))
-    privateStore.delete(channelRestorePath(portIdentifier, channelIdentifier))
+}
+```
+
+```typescript
+// chanUpgradeOpen can be called unilaterally on the channelEnd that is at `BLOCKUPGRADE`
+// once the packets are flushed
+function chanUpgradeOpen(
+    portIdentifier: Identifier,
+    channelIdentifier: Identifier,
+) {
+    // current channel is in BLOCKUPGRADE
+    currentChannel = provableStore.get(channelPath(portIdentifier, channelIdentifier))
+    abortTransactionUnless(channel.state == BLOCKUPGRADE)
+
+    // if packet commitments are not empty then abort the transaction
+    abortTransactionUnless(pendingInflightPackets(portIdentifier, channelIdentifier))
+
+    // move channel to OPEN and adopt upgrade parameters
+    openChannelHandshake(portIdentifier, channelIdentifier)
+
+    // call modules onChanUpgradeConfirm callback
+    module = lookupModule(portIdentifier)
+    // confirm callback must not return error since counterparty successfully upgraded
+    module.onChanUpgradeOpen(
+        portIdentifer,
+        channelIdentifier
+    )
 }
 ```
 
