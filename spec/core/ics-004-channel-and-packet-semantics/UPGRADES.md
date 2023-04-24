@@ -260,14 +260,11 @@ function blockUpgradeHandshake(
     proposedUpgradeFields: UpgradeFields,
     counterpartyChannel: ChannelEnd,
     counterpartyUpgrade: Upgrade,
+    blockingState: ChannelState,
     proofChannel: CommitmentProof,
     proofUpgrade: CommitmentProof,
     proofHeight: Height
 ) {
-    // current channel must be INITUPGRADE
-    currentChannel = provableStore.get(channelPath(portIdentifier, channelIdentifier))
-    abortTransactionUnless(channel.state == INITUPGRADE)
-
     // get underlying connection for proof verification
     connection = getConnection(currentChannel.connectionIdentifier)
     counterpartyHops = getCounterpartyHops(connection)
@@ -276,7 +273,7 @@ function blockUpgradeHandshake(
     abortTransactionUnless(verifyChannelState(connection, proofHeight, proofChannel, currentChannel.counterpartyPortIdentifier, currentChannel.counterpartyChannelIdentifier, counterpartyChannel))
     abortTransactionUnless(verifyChannelUpgrade(connection, proofHeight, proofUpgradeTimeout, currentChannel.counterpartyPortIdentifier, currentChannel.counterpartyChannelIdentifier, counterpartyUpgrade))
 
-    // new ordering must be the same as the counterparty proposed ordering
+    // proposed ordering must be the same as the counterparty proposed ordering
     if proposedUpgradeFields.ordering != counterpartyUpgradeFields.ordering {
         restoreChannel(portIdentifier, channelIdentifier)
     }
@@ -294,6 +291,28 @@ function blockUpgradeHandshake(
     publicStore.set(channelPath(portIdentifier, channelIdentifier), channel)
 
     privateStore.set(channelCounterpartyLastPacketSequencePath(portIdentifier, channelIdentifier), counterpartyUpgrade.lastPacketSent)
+}
+```
+
+`openUpgradeHandshake` will open the channel and switch the existing channel parameters to the newly agreed-upon uprade channel fields.
+
+```typescript
+function openUpgradeHandshake(
+    portIdentifier: Identifier,
+    channelIdentifier: Identifier,
+) {
+    // current channel must be BLOCKUPGRADE
+    currentChannel = provableStore.get(channelPath(portIdentifier, channelIdentifier))
+    abortTransactionUnless(channel.state == BLOCKUPGRADE)
+
+    upgrade = provableStore.get(channelUpgradePath(portIdentifier, channelIdentifier))
+
+    // switch channel fields to upgrade fields
+    // and set channel state to OPEN
+    currentChannel.ordering = upgrade.fields.ordering
+    currentChannel.version = upgrade.fields.version
+    currentChannel.connectionHops = upgrade.fields.connectionHops
+    currentchannel.state = OPEN
 }
 ```
 
@@ -315,6 +334,16 @@ function restoreChannel(
     provableStore.set(channelPath(portIdentifier, channelIdentifier), channel)
     provableStore.delete(channelUpgradePath(portIdentifier, channelIdentifier))
 }
+```
+
+`pendingInflightPackets` will return the list of in-flight packet sequences sent from this `channelEnd`. This can be monitored since the packet commitments are deleted when the packet lifecycle is complete. Thus if the packet commitment exists on the sender chain, the packet lifecycle is incomplete. The pseudocode is not provided in this spec since it will be dependent on the state machine in-question. The ibc-go implementation will use the store iterator to implement this functionality. The function signature is provided below:
+
+```typescript
+// pendingInflightPacketSequences returns the packet sequences sent on this end that have not had their lifecycle completed
+function pendingInflightPacketSequences(
+    portIdentifier: Identifier,
+    channelIdentifier: Identifier,
+) [uint64]
 ```
 
 ### Upgrade Handshake
@@ -452,8 +481,8 @@ function chanUpgradeTry(
         sequence: counterpartyUpgradeSequence,
     }
 
-    // call blockUpgrade handshake to move channel from INITUPGRADE to BLOCKUPGRADE
-    blockUpgradeHandshake(portIdentifier, channelIdentifier, upgradeFields, counterpartyChannel, counterpartyUpgrade, proofChannel, proofUpgrade, proofHeight)
+    // call blockUpgrade handshake to move channel from INITUPGRADE to TRYUPGRADE
+    blockUpgradeHandshake(portIdentifier, channelIdentifier, upgradeFields, counterpartyChannel, counterpartyUpgrade, TRYUPGRADE, proofChannel, proofUpgrade, proofHeight)
 
     // refresh currentChannel to get latest state
     currentChannel = provableStore.get(channelPath(portIdentifier, channelIdentifier))
@@ -515,9 +544,22 @@ function chanUpgradeAck(
     }
 
     upgrade = provableStore.get(channelUpgradePath(portIdentifier, channelIdentifier))
-    blockUpgradeHandshake(portIdentifier, channelIdentifier, upgrade.fields, counterpartyChannel, counterpartyUpgrade, proofChannel, proofUpgrade, proofHeight)
+
+    // in the crossing hellos case, the versions returned by both on TRY must be the same
+    if currentChannel.state == TRYUPGRADE {
+        if upgrade.fields.version != counterpartyUpgrade.fields.version {
+            restoreChannel(portIdentifier, channelIdentifier)
+        }
+    }
+
+    // prove counterparty and move our own state to BLOCKUPGRADE
+    // we can open unilaterally once packets have been flushed
+    blockUpgradeHandshake(portIdentifier, channelIdentifier, upgrade.fields, counterpartyChannel, counterpartyUpgrade, BLOCKUPGRADE, proofChannel, proofUpgrade, proofHeight)
 
     // call modules onChanUpgradeAck callback
+    // module can error on counterparty version
+    // ACK should not change state to the new parameters yet
+    // as that will happen on the onChanUpgradeOpen callback
     module = lookupModule(portIdentifier)
     err = module.onChanUpgradeAck(
         portIdentifier,
@@ -534,13 +576,11 @@ function chanUpgradeAck(
     upgrade.version = counterpartyUpgrade.version
     provableStore.set(channelUpgradePath(portIdentifier, channelIdentifier), upgrade)
 
-    
-
-    // set channel to BLOCKUPGRADE
-    currentChannel.state = BLOCKUPGRADE
-    provableStore.set(channelPath(portIdentifier, channelIdentifier), currentChannel)
-
-    // TODO: if packet commitments are empty then open the upgrade handshake
+    // if packet commitments are empty then open the upgrade handshake immediately
+    if pendingInflightPackets(portIdentifier, channelIdentifier) == nil {
+        openChannelHandshake(portIdentifier, channelIdentifier)
+        module.onChanUpgradeOpen(portIdentifier, channelIdentifier)
+    }
 }
 ```
 
@@ -554,9 +594,12 @@ function chanUpgradeConfirm(
     proofUpgradeSequence: CommitmentProof,
     proofHeight: Height,
 ) {
+     // if packet commitments are not empty then abort the transaction
+    abortTransactionUnless(pendingInflightPackets(portIdentifier, channelIdentifier))
+
     // current channel is in TRYUPGRADE
     currentChannel = provableStore.get(channelPath(portIdentifier, channelIdentifier))
-    abortTransactionUnless(channel.state == TRYUPGRADE)
+    abortTransactionUnless(channel.state == BLOCKUPGRADE)
 
     // counterparty must be in OPEN state
     abortTransactionUnless(counterpartyChannel.State == OPEN)
