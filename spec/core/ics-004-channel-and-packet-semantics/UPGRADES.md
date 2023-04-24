@@ -590,8 +590,6 @@ function chanUpgradeConfirm(
     channelIdentifier: Identifier,
     counterpartyChannelState: ChannelState,
     proofChannel: CommitmentProof,
-    proofUpgradeError: CommitmentProof,
-    proofUpgradeSequence: CommitmentProof,
     proofHeight: Height,
 ) {
     // if packet commitments are not empty then abort the transaction
