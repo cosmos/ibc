@@ -50,7 +50,7 @@ Users might also prefer single asset pools over dual assets pools as it removes 
 
 This is an overview of how Interchain Swap works 
 
-![Interchain Swap Diagram](interchain swap.svg)
+![Interchain Swap Diagram](interchain-swap.svg)
 
 ### Algorithms
 
