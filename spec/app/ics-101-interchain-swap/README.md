@@ -28,7 +28,7 @@ Users might also prefer single asset pools over dual assets pools as it removes 
 
 `Weighted pools`: liquidity pools characterized by the percentage weight of each token denomination maintained within.
 
-`Single-sided liquidity pools`: a liquidity pool that does not require users to deposit both token denominations -- one is enough.
+`Single-sided liquidity pools`: a liquidity pool that does not require users to deposit both token denominations -- one is enough. But a single deposit will affect the price of the liquidity pool, increasing the opportunity for arbitrageurs
 
 `Left-side swap`: a token exchange that specifies the desired quantity to be sold.
 
@@ -46,6 +46,10 @@ Users might also prefer single asset pools over dual assets pools as it removes 
 
 
 ## Technical Specification
+
+This is an overview of how Interchain Swap works 
+
+![Interchain Swap Diagram](interchain swap.svg)
 
 ### Algorithms
 
@@ -285,7 +289,8 @@ Only one packet data type is required: `IBCSwapDataPacket`, which specifies the 
 
 ```ts
 enum MessageType {
-    Create,
+    RequestPoolCreation,
+    ResponsePoolCreation,
     Deposit,
     Withdraw,
     LeftSwap,
