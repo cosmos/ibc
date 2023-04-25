@@ -48,6 +48,8 @@ Users might also prefer single asset pools over dual assets pools as it removes 
 
 ## Technical Specification
 
+Unlike Other Swaps. Interchain swap have two copies of pool state, each pool state are mirrored to the other. it's not always same. it will keep dynamic consistent through various IBC transactions: such as deposit, swap, withdraw.
+
 This is an overview of how Interchain Swap works 
 
 ![Interchain Swap Diagram](interchain-swap.svg)
