@@ -4,7 +4,7 @@ title: Interchain Swap
 stage: draft
 category: IBC/APP
 kind: instantiation
-author: Ping <ping@side.one>, Edward Gunawan <edward@s16.ventures>, Jafferey Hu < huzhiwei@outlook.com> , Marian <marian@side.one>
+author: Ping <ping@side.one>, Edward Gunawan <edward@s16.ventures>, Jeffrey Hu <jeffrey.hu@hashkey.com>, Marian <marian@side.one>, Jay Tipirneni <jay.tipirneni@hashkey.com>
 created: 2022-10-09
 modified: 2023-04-20
 requires: 24, 25
@@ -145,8 +145,8 @@ interface InterchainLiquidityPool {
 
     // construct assets
     const weights = weight.split(':').length
-    if(denoms.lenght === decimals.lenght && denoms.lenght === weight.split(':').length) {
-        for(let i=0; i < denoms.lenght; i++) {
+    if(denoms.length === decimals.length && denoms.length === weight.split(':').length) {
+        for(let i=0; i < denoms.length; i++) {
             this.assets.push({
                side: store.hasSupply(denom[i]) ? PoolSide.Native: PoolSide.Remote,
                balance: {
@@ -487,7 +487,7 @@ function delegateCreatePool(msg: MsgCreatePoolRequest) {
 function delegateSingleDeposit(msg MsgSingleDepositRequest) {
 
     abortTransactionUnless(msg.sender != null)
-    abortTransactionUnless(msg.tokens.lenght > 0)
+    abortTransactionUnless(msg.tokens.length > 0)
 
     const pool = store.findPoolById(msg.poolId)
     abortTransactionUnless(pool != null)
@@ -543,7 +543,7 @@ function delegateDoubleDeposit(msg MsgDoubleDepositRequest) {
 function delegateWithdraw(msg MsgWithdrawRequest) {
 
     abortTransactionUnless(msg.sender != null)
-    abortTransactionUnless(msg.token.lenght > 0)
+    abortTransactionUnless(msg.token.length > 0)
 
     const pool = store.findPoolById(msg.poolToken.denom)
     abortTransactionUnless(pool != null)
