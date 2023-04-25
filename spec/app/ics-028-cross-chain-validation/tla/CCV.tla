@@ -88,10 +88,10 @@ VARIABLES
   \* Bookkeeping of maturity times for received packets.
   \* A consumer may only send a MatureVSCPacket (i.e. notify the provider) after
   \* its local time exceeds the time designated in maturityTimes.
-  \* For each consumer chain c, and VSC packet t sent by the provider,
-  \* a) t \in DOMAIN maturityTimes[c] <=> c has received packet t 
-  \* b) if t \in DOMAIN maturityTimes[c], then maturity for t on c is 
-  \*    guarded by currentTimes[c] >= maturityTimes[c][t]
+  \* For each consumer chain c, and VSC packet p sent by the provider,
+  \* a) p \in DOMAIN maturityTimes[c] <=> c has received packet p 
+  \* b) if p \in DOMAIN maturityTimes[c], then maturity for p on c is 
+  \*    guarded by currentTimes[c] >= maturityTimes[c][p]
   \* @type: $chain -> $packet -> $time;
   maturityTimes
 
