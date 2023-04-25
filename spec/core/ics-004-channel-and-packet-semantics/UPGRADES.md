@@ -16,14 +16,13 @@ As new features get added to IBC, chains may wish the take advantage of new chan
   - either it is unsuccessful and then the channel MUST fall-back to the original channel parameters; 
   - or it is successful and then both channel ends MUST adopt the new channel parameters and the applications must process packet data appropriately.
 - Packets sent under the previously negotiated parameters must be processed under the previously negotiated parameters, packets sent under the newly negotiated parameters must be processed under the newly negotiated parameters.
-- The channel upgrade protocol should have the ability to change all channel-related parameters; however the channel upgrade protocol MUST NOT be able to change the underlying `ConnectionEnd`.
 - The channel upgrade protocol MUST NOT modify the channel identifiers.
 
 ## Technical Specification
 
 ### Data Structures
 
-The `ChannelState` and `ChannelEnd` are defined in [ICS-4](./README.md), they are reproduced here for the reader's convenience. `INITUPGRADE`, `TRYUPGRADE` are additional states added to enable the upgrade feature.
+The `ChannelState` and `ChannelEnd` are defined in [ICS-4](./README.md), they are reproduced here for the reader's convenience. `INITUPGRADE`, `TRYUPGRADE`, `BLOCKUPGRADE` are additional states added to enable the upgrade feature.
 
 #### `ChannelState`
 
@@ -33,12 +32,18 @@ enum ChannelState {
   TRYOPEN,
   OPEN,
   INITUPGRADE,
+  TRYUPGRADE,
   BLOCKUPGRADE,
 }
 ```
 
 - The chain that is proposing the upgrade should set the channel state from `OPEN` to `INITUPGRADE`
-- The counterparty chain that accepts the upgrade should set the channel state from `OPEN` to `BLOCKUPGRADE`
+- The counterparty chain that accepts the upgrade should set the channel state from `OPEN` to `TRYUPGRADE`
+- Once the initiating chain verifies the counterparty is in `TRYUPGRADE`, it must move to `BLOCKUPGRADE` in the case where there still exist in-flight packets on its end or complete the upgrade and move to `OPEN`
+- The `TRYUPGRADE` chain must prove the counterparty is in `BLOCKUPGRADE` or completed the upgrade in `OPEN` AND have no in-flight packets before it can complete the upgrade and move to `OPEN`.
+- The `BLOCKUPGRADE` chain may OPEN as soon as the in-flight packets on its end have been flushed.
+
+Both `TRYUPGRADE` and `BLOCKUPGRADE` are "blocking" states in that they will prevent the upgrade handshake from proceeding until the in-flight packets are flushed. The `TRYUPGRADE` state must additionally prove the counterparty state before proceeding to open, while the `BLOCKUPGRADE` state may move to `OPEN` unilaterally once packets are flushed on its end.
 
 #### `ChannelEnd`
 
@@ -54,9 +59,10 @@ interface ChannelEnd {
 }
 ```
 
-The desired property that the channel upgrade protocol MUST NOT modify the underlying clients or channel identifiers, means that only some fields of `ChannelEnd` are upgradable by the upgrade protocol.
-
 - `state`: The state is specified by the handshake steps of the upgrade protocol and will be mutated in place during the handshake.
+- `upgradeSequence`: The upgrade sequence will be incremented and agreed upon during the upgrade handshake and will be mutated in place.
+
+All other parameters will remain the same during the upgrade handshake until the upgrade handshake completes. When the channel is reset to `OPEN` on a successful upgrade handshake, the fields on the channel end will be switched over to the `UpgradeFields` specified in the upgrade.
 
 #### `UpgradeFields`
 
@@ -251,7 +257,7 @@ function initUpgradeChannelHandshake(
 }
 ```
 
-`blockUpgradeHandshake` will set the counterparty last packet send and continue blocking the upgrade from continuing until all in-flight packets have been flushed. When the channel is in blocked mode, any packet receive above the counterparty last packet send will be rejected. 
+`blockUpgradeHandshake` will set the counterparty last packet send and continue blocking the upgrade from continuing until all in-flight packets have been flushed. When the channel is in blocked mode, any packet receive above the counterparty last packet send will be rejected. It will verify the upgrade parameters and set the channel state to one of the blocking states (`TRYUPGRADE` or `BLOCKUPGRADE`) passed in by caller and block sendpackets. During this time; `receivePacket`, `acknowledgePacket` and `timeoutPacket` will still be allowed and processed according to the original channel parameters. The new proposed upgrade will be stored in the public store for counterparty verification.
 
 ```typescript
 function blockUpgradeHandshake(
@@ -265,6 +271,8 @@ function blockUpgradeHandshake(
     proofUpgrade: CommitmentProof,
     proofHeight: Height
 ) {
+    abortTransactionUnless(blockingState == TRYUPGRADE || blockingState == BLOCKUPGRADE)
+
     // get underlying connection for proof verification
     connection = getConnection(currentChannel.connectionIdentifier)
     counterpartyHops = getCounterpartyHops(connection)
@@ -287,7 +295,7 @@ function blockUpgradeHandshake(
         restoreChannel(portIdentifier, channelIdentifier)
     }
 
-    currentChannel.state = BLOCKUPGRADE
+    currentChannel.state = blockingState
     publicStore.set(channelPath(portIdentifier, channelIdentifier), channel)
 
     privateStore.set(channelCounterpartyLastPacketSequencePath(portIdentifier, channelIdentifier), counterpartyUpgrade.lastPacketSent)
@@ -301,9 +309,9 @@ function openUpgradeHandshake(
     portIdentifier: Identifier,
     channelIdentifier: Identifier,
 ) {
-    // current channel must be BLOCKUPGRADE
+    // current channel must be TRYUPGRADE or BLOCKUPGRADE
     currentChannel = provableStore.get(channelPath(portIdentifier, channelIdentifier))
-    abortTransactionUnless(channel.state == BLOCKUPGRADE)
+    abortTransactionUnless(channel.state == TRYUPGRADE || channel.state == BLOCKUPGRADE)
 
     upgrade = provableStore.get(channelUpgradePath(portIdentifier, channelIdentifier))
 
@@ -352,17 +360,22 @@ The upgrade handshake defines four datagrams: *ChanUpgradeInit*, *ChanUpgradeTry
 
 A successful protocol execution flows as follows (note that all calls are made through modules per [ICS 25](../ics-025-handler-interface)):
 
-| Initiator | Datagram             | Chain acted upon | Prior state (A, B)          | Posterior state (A, B)      |
-| --------- | -------------------- | ---------------- | --------------------------- | --------------------------- |
-| Actor     | `ChanUpgradeInit`    | A                | (OPEN, OPEN)                | (INITUPGRADE, OPEN)        |
-| Actor     | `ChanUpgradeTry`     | B                | (INITUPGRADE, OPEN)        | (INITUPGRADE, TRYUPGRADE) |
-| Relayer   | `ChanUpgradeAck`     | A                | (INITUPGRADE, TRYUPGRADE) | (OPEN, TRYUPGRADE)         |
-| Relayer   | `ChanUpgradeConfirm` | B                | (OPEN, TRYUPGRADE)         | (OPEN, OPEN)                |
+| Initiator | Datagram             | Chain acted upon | Prior state (A, B)              | Posterior state (A, B)          |
+| --------- | -------------------- | ---------------- | ------------------------------- | ------------------------------- |
+| Actor     | `ChanUpgradeInit`    | A                | (OPEN, OPEN)                    | (INITUPGRADE, OPEN)             |
+| Actor     | `ChanUpgradeTry`     | B                | (INITUPGRADE, OPEN)             | (INITUPGRADE, TRYUPGRADE)       |
+| Relayer   | `ChanUpgradeAck`     | A                | (INITUPGRADE, TRYUPGRADE)       | (BLOCKUPGRADE/OPEN, TRYUPGRADE) |
+| Relayer   | `ChanUpgradeConfirm` | B                | (BLOCKUPGRADE/OPEN, TRYUPGRADE) | (BLOCKUPGRADE/OPEN, OPEN)       |
+| Relayer   | `ChanUpgradeOpen`    | A                | (BLOCKUPGRADE, OPEN/TRYUPGRADE) | (OPEN, OPEN/TRYUPGRADE)         |
 
-At the end of an upgrade handshake between two chains implementing the sub-protocol, the following properties hold:
+`ChanUpgradeConfirm` and `ChanUpgradeOpen` may happen in any order. `ChanUpgradeOpen` is only necessary to call on chain A if the chain was not moved to `OPEN` on `ChanUpgradeAck`.
+
+At the end of a successful upgrade handshake between two chains implementing the sub-protocol, the following properties hold:
 
 - Each chain is running their new upgraded channel end and is processing upgraded logic and state according to the upgraded parameters.
 - Each chain has knowledge of and has agreed to the counterparty's upgraded channel parameters.
+- All packets sent before the handshake have been completely flushed (acked or timed out) with the old parameters.
+- All packets sent after a channel end moves to OPEN will either timeout using new parameters on sending channelEnd or will be received by the counterparty using new parameters.
 
 If a chain does not agree to the proposed counterparty upgraded `ChannelEnd`, it may abort the upgrade handshake by writing an `ErrorReceipt` into the `channelUpgradeErrorPath` and restoring the original channel. The `ErrorReceipt` must contain the current upgrade sequence on the erroring chain's channel end.
 
