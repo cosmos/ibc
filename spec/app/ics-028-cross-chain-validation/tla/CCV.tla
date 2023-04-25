@@ -22,7 +22,7 @@ CONSTANT
   \* during execution, but not added.
   \* @type: Set($chain);
   ConsumerChains, 
-  \* Time that needs to elapse, before a received VPC is considered
+  \* Time that needs to elapse, before a received VSC is considered
   \* mature on a chain.
   \* @type: $time;
   UnbondingPeriod,
@@ -47,8 +47,8 @@ CONSTANT
 \* Provider chain only
 VARIABLES
   \* Snapshots of the voting power on the provider chain, at the times
-  \* when a VPC packet was sent.
-  \* t \in DOMAIN votingPowerHist <=> VPC packet sent at time t
+  \* when a VSC packet was sent.
+  \* t \in DOMAIN votingPowerHist <=> VSC packet sent at time t
   \* @type: $packet -> $votingPowerOnChain;
   votingPowerHist,
   \* Current voting power on the provider chain. 
@@ -69,17 +69,17 @@ VARIABLES
 VARIABLES 
   \* Representation of the current voting power, as understood by consumer chains.
   \* Because consumer chains may not arbitrarily modify their own voting power,
-  \* but must instead update in accordance to VPC packets received from the
+  \* but must instead update in accordance to VSC packets received from the
   \* provider, it is sufficient to only track the last received packet.
   \* The voting power on chain c is then equal to votingPowerHist[votingPowerReferences[c]].
   \* @type: $chain -> $time;
   votingPowerReferences,
-  \* The queues of VPC packets, waiting to be received by consumer chains.
+  \* The queues of VSC packets, waiting to be received by consumer chains.
   \* Note that a packet being placed in the channel is not considered 
   \* received by the consumer, until the receive-action is taken.
   \* @type: $chain -> Seq($packet);
   ccvChannelsPending,
-  \* The queues of VPC packets, that have been received by consumer chains in the past.
+  \* The queues of VSC packets, that have been received by consumer chains in the past.
   \* @type: $chain -> Seq($packet);
   ccvChannelsResolved,
   \* The current times of all chains (including the provider).
@@ -100,10 +100,10 @@ VARIABLES
   \* Name of last action, for debugging
   \* @type: Str;
   lastAction,
-  \* VPC flag; Voting power may be considered to have changed, even if 
+  \* VSC flag; Voting power may be considered to have changed, even if 
   \* the (TLA) value of votingPowerRunning does not (for example, due to a sequence
   \* of delegations and un-delegations, with a net 0 change in voting power).
-  \* We use this flag to determine whether it is necessary to send a VPC packet.
+  \* We use this flag to determine whether it is necessary to send a VSC packet.
   \* @type: Bool;
   votingPowerHasChanged,
   \* Invariant flag, TRUE iff clocks never drifted too much
@@ -259,7 +259,7 @@ Init ==
 
 \* We combine anything impacting voting powers, such as (un)delegate actions, (un)bonding actions, slashing, etc.,
 \* into an abstract VotingPowerChange.
-\* Since VPC packets are sent at most once at the end of each block,
+\* Since VSC packets are sent at most once at the end of each block,
 \* the granularity wouldn't have added value to the model.
 VotingPowerChange == 
   \E newValidators \in SUBSET Nodes:
@@ -273,7 +273,7 @@ VotingPowerChange ==
     /\ UNCHANGED << votingPowerHist, expectedResponders, maturePackets >>
     /\ lastAction' = "VotingPowerChange"
 
-RcvVPCPacket == 
+RcvVSCPacket == 
   \E c \in ActiveConsumers:
     \* There must be a packet to be received
     /\ Len(ccvChannelsPending[c]) /= 0
@@ -292,7 +292,7 @@ RcvVPCPacket ==
     /\ UNCHANGED providerVars
     /\ UNCHANGED currentTimes
     /\ UNCHANGED votingPowerHasChanged
-    /\ lastAction' = "RcvVPCPacket"
+    /\ lastAction' = "RcvVSCPacket"
 
 SendMatureVSCPacket == 
   \E c \in ActiveConsumers:
@@ -353,7 +353,7 @@ AdvanceTime ==
   /\ lastAction' = "AdvanceTime"
 
 EndProviderBlockAndSendPacket ==
-  \* Packets are only sent if there is a VPC
+  \* Packets are only sent if there is a VSC
   /\ votingPowerHasChanged
   /\ LET packet == currentTimes[ProviderChain] IN
     /\ ccvChannelsPending' = 
@@ -383,7 +383,7 @@ EndProviderBlockAndSendPacket ==
 Next == 
   /\\/ EndProviderBlockAndSendPacket
     \/ VotingPowerChange
-    \/ RcvVPCPacket
+    \/ RcvVSCPacket
     \/ SendMatureVSCPacket
     \/ AdvanceTime
   \* Drop timed out, possibly promote rest
@@ -397,7 +397,7 @@ Next ==
 LastVCSMatureOnProvider ==
   LastPacketTime + UnbondingPeriod <= currentTimes[ProviderChain]
 
-VPCUpdateInProgress == 
+VSCUpdateInProgress == 
   \* some chain has pending packets
   \/ \E c \in LiveConsumers: 
     \/ Len(ccvChannelsPending[c]) /= 0

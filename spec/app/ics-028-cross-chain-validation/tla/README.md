@@ -17,7 +17,7 @@ The specification uses the following parameters:
     - `Initializing` chains are considered consumers w.r.t. the provider chain, in a state of initialization (modeling the establishment of the communication channel). They receive all messages broadcast by the provider, but cannot respond until their status changes.
     - `Active` chains are considered consumers w.r.t. the provider chain, with a fully established communication channel. They may send and receive messages.
     - `Dropped` chains are not treated as consumers w.r.t. the provider chain, and may never become consumers (again).
-  - `UnbondingPeriod: Int`: Time that needs to elapse, before a received VPC is considered mature on a chain.
+  - `UnbondingPeriod: Int`: Time that needs to elapse, before a received VSC is considered mature on a chain.
   - `Timeout: Int`: Time that needs to elapse on the provider chain after having sent a message to an `Active` chain, to which no reply was received, before that message is considered to have timed out (resulting in the removal of the related consumer chain).
   - `MaxDrift: Int`: Maximal time by which clocks are assumed to differ from the provider chain. The specification doesn't force clocks to maintain bounded drift, but the invariants are only verified in cases where clocks never drift too far.
   - `InactivityTimeout: Int`: Time that needs to elapse on the provider chain after having sent a message to an `Initializing` chain, to which no reply was received, before that message is considered to have timed out (resulting in the removal of the related consumer chain).
@@ -28,21 +28,21 @@ The mutable system components modeled are as follows:
 
   - Provider chain only:
     - `votingPowerRunning: N -> Int`: Current voting power on the provider chain of all validator nodes. The following holds true: `node \in Nodes` is a validator iff `node \in DOMAIN votingPowerRunning`.
-    - `votingPowerHist: Int -> (N -> Int)`: Snapshots of the voting power on the provider chain, at the times when a VPC packet was sent. The following holds true: `t \in DOMAIN votingPowerHist` iff VPC packet sent at time `t`.
+    - `votingPowerHist: Int -> (N -> Int)`: Snapshots of the voting power on the provider chain, at the times when a VSC packet was sent. The following holds true: `t \in DOMAIN votingPowerHist` iff VSC packet sent at time `t`.
     - `consumerStatus: C -> STATUS`: Current status for each chain in `ConsumerChains`. May be one of: `Unused`, `Initializing`, `Active`, `Dropped`.
     - `expectedResponders: Int -> Set(C)`: The set of chains live at the time a packet was sent (who are expected to reply). A chain is live, if it is either `Initializing` or `Active`.
     - `maturePackets: Set(matureVSCPacket)`: The set of `MatureVSCPacket`s sent by consumer chains to the provider chain.
   - Consumer chains or both:
-    - `votingPowerReferences: C -> Int`: Representation of the current voting power, as understood by consumer chains. Because consumer chains may not arbitrarily modify their own voting power, but must instead update in accordance to VPC packets received from the provider, it is sufficient to only track the last received packet. The voting power on chain `c` is then equal to `votingPowerHist[votingPowerReferences[c]]`.
-    - `ccvChannelsPending: C -> Seq(Int)`: The queues of VPC packets, waiting to be received by consumer chains. Note that a packet being placed in the channel is not considered received by the consumer, until the receive-action is taken.
-    - `ccvChannelsResolved: C -> Seq(Int)`: The queues of VPC packets, that have been received by consumer chains in the past.
+    - `votingPowerReferences: C -> Int`: Representation of the current voting power, as understood by consumer chains. Because consumer chains may not arbitrarily modify their own voting power, but must instead update in accordance to VSC packets received from the provider, it is sufficient to only track the last received packet. The voting power on chain `c` is then equal to `votingPowerHist[votingPowerReferences[c]]`.
+    - `ccvChannelsPending: C -> Seq(Int)`: The queues of VSC packets, waiting to be received by consumer chains. Note that a packet being placed in the channel is not considered received by the consumer, until the receive-action is taken.
+    - `ccvChannelsResolved: C -> Seq(Int)`: The queues of VSC packets, that have been received by consumer chains in the past.
     - `currentTimes: C -> Int`: The current clocks of all chains (including the provider).
     - `maturityTimes: C -> Int -> Int`: Bookkeeping of maturity times for received packets. A consumer may only send a `MatureVSCPacket` (i.e. notify the provider) after its local time exceeds the time designated in `maturityTimes`. For each consumer chain `c`, and VSC packet `t` sent by the provider, the following holds true:
       - `t \in DOMAIN maturityTimes[c]` iff `c` has received packet `t`.
       - if `t \in DOMAIN maturityTimes[c]`, then maturity for `t` on `c` is reached when `currentTimes[c] >= maturityTimes[c][t]`.
   - Bookkeeping:
     - `lastAction: Str`: Name of the last action taken, for debugging.
-    - `votingPowerHasChanged: Bool`: We use this flag to determine whether it is necessary to send a VPC packet.
+    - `votingPowerHasChanged: Bool`: We use this flag to determine whether it is necessary to send a VSC packet.
     - `boundedDrift: Bool`: Invariant flag, TRUE iff clocks never drifted too much
 
 # System actions
