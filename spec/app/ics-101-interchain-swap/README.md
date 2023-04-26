@@ -1085,8 +1085,22 @@ function refundToken(packet: Packet) {
 ## RISKS
 
 ### Pool State Inconsistency
+To maintain pool state synchronization is extreme important for Interchain Swap, since we have two mirrored pool across the two chain.
+However, Pool state synchronization could be delayed due to the relayer halt or network issues. the delay could affect swap price.
+
+Solutions: 
+ - Timeout: Swap order need to be confirmed on the counterparty chain. it would be canceled and refund if packets not arrival the counterparty on time. 
+ - Slippage Tolerance can be a way to protect loss caused by in-consistency.
+ - Single side trade: Each Token can only be trade its native chain. in inconsistency state, the backlog swap would sell lower prices than consistency state. which could help to maintain consistency.
 
 ### Price Impact Of Single Asset Deposit
+
+Single side deposit is convenient for user to deposit asset. 
+But single side deposit could break the balance of constant invariant. which means the current pool price would go higher or lower. which increase opportunity for arbitrageur 
+
+Solution:
+ - set upper limit for single side deposit. The ratio of profits taken away by arbitrageurs is directly proportional to the ratio of single-sided deposits and the quantity of that asset in the liquidity pool.
+
 
 
 ## Backwards Compatibility
