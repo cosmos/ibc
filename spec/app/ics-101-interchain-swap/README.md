@@ -1082,6 +1082,12 @@ function refundToken(packet: Packet) {
     bank.TransferCoins(escrowAccount, packet.sender, token.denom, token.amount)
 }
 ```
+## RISKS
+
+### Pool State Inconsistency
+
+### Price Impact Of Single Asset Deposit
+
 
 ## Backwards Compatibility
 
