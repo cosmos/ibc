@@ -99,7 +99,7 @@ As the pool collects fees, liquidity providers automatically collect fees throug
 
 ```ts
 interface Coin {
-  amount: int32;
+  amount: int64;
   denom: string;
 }
 ```
@@ -333,11 +333,21 @@ enum MessageType {
 ```
 
 ```ts
+interface StateChange {
+    in: Coin[],
+    out: Coin[],
+    poolToken: Coin, // could be negtive
+}
+
 // IBCSwapDataPacket is used to wrap message for relayer.
 interface IBCSwapDataPacket {
     type: MessageType,
     data: []byte, // Bytes
+    stateChange: StateChange
 }
+
+
+
 ```
 
 ```typescript
@@ -362,12 +372,12 @@ A liquidity pool in the interchain swap protocol maintains its pool state on bot
 IBCSwap implements the following sub-protocols:
 
 ```protobuf
-  rpc DelegateCreatePool(MsgCreatePoolRequest) returns (MsgCreatePoolResponse);
-  rpc DelegateSingleDeposit(MsgSingleDepositRequest) returns (MsgSingleDepositResponse);
-  rpc DelegateDoubleDeposit(MsgDoubleDepositRequest) returns (MsgDoubleDepositResponse);
-  rpc DelegateWithdraw(MsgWithdrawRequest) returns (MsgWithdrawResponse);
-  rpc DelegateLeftSwap(MsgLeftSwapRequest) returns (MsgSwapResponse);
-  rpc DelegateRightSwap(MsgRightSwapRequest) returns (MsgSwapResponse);
+  rpc CreatePool(MsgCreatePoolRequest) returns (MsgCreatePoolResponse);
+  rpc SingleDeposit(MsgSingleDepositRequest) returns (MsgSingleDepositResponse);
+  rpc DoubleDeposit(MsgDoubleDepositRequest) returns (MsgDoubleDepositResponse);
+  rpc Withdraw(MsgWithdrawRequest) returns (MsgWithdrawResponse);
+  rpc LeftSwap(MsgLeftSwapRequest) returns (MsgSwapResponse);
+  rpc RightSwap(MsgRightSwapRequest) returns (MsgSwapResponse);
 ```
 
 #### Interfaces for sub-protocols
@@ -457,8 +467,10 @@ interface MsgSwapResponse {
 
 ### Control Flow And Life Scope
 
+These are methods of `Swap Initiator`, which execute main logic and output a state change, state change is need to be executed on both local and remote 
+
 ```ts
-function delegateCreatePool(msg: MsgCreatePoolRequest) {
+function createPool(msg: MsgCreatePoolRequest) {
 
     // ICS 24 host check if both port and channel are validate
     abortTransactionUnless(host.portIdentifierValidator(msg.sourcePort))
@@ -490,7 +502,7 @@ function delegateCreatePool(msg: MsgCreatePoolRequest) {
 
 }
 
-function delegateSingleDeposit(msg MsgSingleDepositRequest) {
+function singleDeposit(msg MsgSingleDepositRequest) {
 
     abortTransactionUnless(msg.sender != null)
     abortTransactionUnless(msg.tokens.lenght > 0)
@@ -517,7 +529,7 @@ function delegateSingleDeposit(msg MsgSingleDepositRequest) {
 }
 
 
-function delegateDoubleDeposit(msg MsgDoubleDepositRequest) {
+function doubleDeposit(msg MsgDoubleDepositRequest) {
 
     abortTransactionUnless(msg.localDeposit.sender != null)
     abortTransactionUnless(msg.localDeposit.token != null)
@@ -546,7 +558,7 @@ function delegateDoubleDeposit(msg MsgDoubleDepositRequest) {
     sendInterchainIBCSwapDataPacket(packet, msg.sourcePort, msg.sourceChannel, msg.timeoutHeight, msg.timeoutTimestamp)
 }
 
-function delegateWithdraw(msg MsgWithdrawRequest) {
+function withdraw(msg MsgWithdrawRequest) {
 
     abortTransactionUnless(msg.sender != null)
     abortTransactionUnless(msg.token.lenght > 0)
@@ -572,7 +584,7 @@ function delegateWithdraw(msg MsgWithdrawRequest) {
 
 }
 
-function delegateLeftSwap(msg MsgLeftSwapRequest) {
+function leftSwap(msg MsgLeftSwapRequest) {
 
     abortTransactionUnless(msg.sender != null)
     abortTransactionUnless(msg.tokenIn != null && msg.tokenIn.amount > 0)
@@ -597,7 +609,7 @@ function delegateLeftSwap(msg MsgLeftSwapRequest) {
 
 }
 
-function delegateRightSwap(msg MsgRightSwapRequest) {
+function rightSwap(msg MsgRightSwapRequest) {
 
     abortTransactionUnless(msg.sender != null)
     abortTransactionUnless(msg.tokenIn != null && msg.tokenIn.amount > 0)
@@ -623,7 +635,7 @@ function delegateRightSwap(msg MsgRightSwapRequest) {
 }
 ```
 
-The `Relay Listener` handle all transactions, execute transactions when received, and send the result as an acknowledgement. In this way, packets relayed on the source chain update pool states on the destination chain according to results in the acknowledgement.
+The `State Updater` handle all transactions, update states and sent tokens when received, and send the result as an acknowledgement. In this way, packets relayed on the source chain update pool states on the destination chain according to results in the acknowledgement.
 
 ```ts
 function onCreatePoolReceived(msg: MsgCreatePoolRequest, destPort: string, destChannel: string): MsgCreatePoolResponse {
@@ -657,7 +669,7 @@ function onCreatePoolReceived(msg: MsgCreatePoolRequest, destPort: string, destC
     }
 }
 
-function onSingleDepositReceived(msg: MsgSingleDepositRequest): MsgSingleDepositResponse {
+function onSingleDepositReceived(msg: MsgSingleDepositRequest, state: StateChange): MsgSingleDepositResponse {
 
     const pool = store.findPoolById(msg.poolId)
     abortTransactionUnless(pool != null)
@@ -677,7 +689,7 @@ function onSingleDepositReceived(msg: MsgSingleDepositRequest): MsgSingleDeposit
 }
 
 
-function onDoubleDepositReceived(msg: MsgSingleDepositRequest): MsgSingleDepositResponse {
+function onDoubleDepositReceived(msg: MsgSingleDepositRequest, state: StateChange): MsgSingleDepositResponse {
 
     abortTransactionUnless(msg.remoteDeposit.sender != null)
     abortTransactionUnless(msg.remoteDeposit.token != null)
@@ -719,7 +731,7 @@ function onDoubleDepositReceived(msg: MsgSingleDepositRequest): MsgSingleDeposit
     return { poolToken }
 }
 
-function onWithdrawReceived(msg: MsgWithdrawRequest) MsgWithdrawResponse {
+function onWithdrawReceived(msg: MsgWithdrawRequest, state: StateChange) MsgWithdrawResponse {
     abortTransactionUnless(msg.sender != null)
     abortTransactionUnless(msg.denomOut != null)
     abortTransactionUnless(msg.poolCoin.amount > 0)
@@ -739,7 +751,7 @@ function onWithdrawReceived(msg: MsgWithdrawRequest) MsgWithdrawResponse {
     return { tokens: outToken }
 }
 
-function onLeftSwapReceived(msg: MsgLeftSwapRequest) MsgSwapResponse {
+function onLeftSwapReceived(msg: MsgLeftSwapRequest, state: StateChange) MsgSwapResponse {
 
     abortTransactionUnless(msg.sender != null)
     abortTransactionUnless(msg.tokenIn != null && msg.tokenIn.amount > 0)
@@ -768,7 +780,7 @@ function onLeftSwapReceived(msg: MsgLeftSwapRequest) MsgSwapResponse {
     return { tokens: outToken }
 }
 
-function onRightSwapReceived(msg MsgRightSwapRequest) MsgSwapResponse {
+function onRightSwapReceived(msg MsgRightSwapRequest, state: StateChange) MsgSwapResponse {
 
     abortTransactionUnless(msg.sender != null)
     abortTransactionUnless(msg.tokenIn != null && msg.tokenIn.amount > 0)
