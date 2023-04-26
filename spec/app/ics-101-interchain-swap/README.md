@@ -50,6 +50,10 @@ Users might also prefer single asset pools over dual assets pools as it removes 
 
 Unlike Other Swaps. Interchain swap have two copies of pool state, each pool state are mirrored to the other. it's not always same. it will keep dynamic consistent through various IBC transactions: such as deposit, swap, withdraw.
 
+To implement interchain swap, we introduce the `Swap Initiator` and `State Updater`. The `Swap Initiator` will pre-process the request and execute the swap (validate msgs, lock assets, etc), and then forward the transactions to the relayer. The `State Updater` just simply update the states sent from `Swap Initiator`(keep the pool state consistency).
+
+Each chain could be either `Swap Initiator` or `State Updater`, it's depend on where the swap is created.
+
 This is an overview of how Interchain Swap works 
 
 ![Interchain Swap Diagram](interchain-swap.svg)
@@ -81,7 +85,7 @@ $$SP_i^o = (B_i/W_i)/(B_o/W_o)$$
 
 #### Fees
 
-Traders pay swap fees when they trade with a pool. These fees can be customized with a minimum value of 0.0001% and a maximum value of 10%.
+Traders pay swap fees when they trade with a pool. These fees can be customized with a minimum value of 0.01% and a maximum value of 10%. To avoid use decimal, we use basis point for `feeRate`, 1 = 0.01%, 100 = 1%
 
 The fees go to liquidity providers in exchange for depositing their tokens in the pool to facilitate trades. Trade fees are collected at the time of a swap, and goes directly into the pool, increasing the pool balance. For a trade with a given $inputToken$ and $outputToken$, the amount collected by the pool as a fee is
 
@@ -172,6 +176,8 @@ function generatePoolId(denoms: []string) {
 
 #### IBC Market Maker
 
+Market Maker is stateless, which is initialized with few parameters: such liquidity pool and fee rates. Note, For a trading pair, the `feeRate` on each chain could be different. which can be updated by governance.
+
 ```ts
 class InterchainMarketMaker {
     pool :InterchainLiquidityPool
@@ -213,7 +219,7 @@ class InterchainMarketMaker {
         }
     }
 
-     // P_issued = P_supply * (1 + At/Bt)
+    // P_issued = P_supply * (1 + At/Bt)
     function depositDoubleAsset(tokens: Coin[]): Coin[] {
         const lpTokens = [];
         for (const token in tokens) {
@@ -450,8 +456,6 @@ interface MsgSwapResponse {
 ```
 
 ### Control Flow And Life Scope
-
-To implement interchain swap, we introduce the `Message Delegator` and `Relay Listener`. The `Message Delegator` will pre-process the request (validate msgs, lock assets, etc), and then forward the transactions to the relayer.
 
 ```ts
 function delegateCreatePool(msg: MsgCreatePoolRequest) {
