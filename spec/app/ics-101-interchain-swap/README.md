@@ -184,13 +184,11 @@ Interchain Market Maker is a core component for swap calculation, which is state
 class InterchainMarketMaker {
     pool :InterchainLiquidityPool
     // basis point
-    feeRate: int32
+    feeRate: number // int32
 
-    static initialize(pool: InterchainLiquidityPool, feeRate: int32) : InterchainMarketMaker {
-        return {
-            pool: pool,
-            feeRate: feeRate,
-        }
+    construct(pool: InterchainLiquidityPool, feeRate: number) : InterchainMarketMaker {
+        this.pool = pool,
+        this.feeRate = feeRate,
     }
 
     // MarketPrice Bi / Wi / (Bo / Wo)
@@ -402,7 +400,7 @@ interface MsgCreatePoolResponse {}
 interface MsgDepositRequest {
   poolId: string;
   sender: string;
-  tokens: Coin[]; // only one element for now, might have two in the feature
+  token: Coin;
 }
 interface MsgSingleDepositResponse {
   poolToken: Coin;
@@ -516,20 +514,22 @@ function singleDeposit(msg MsgSingleDepositRequest) {
     const pool = store.findPoolById(msg.poolId)
     abortTransactionUnless(pool != null)
 
-    for(var token in msg.tokens) {
-        const balance = bank.queryBalance(sender, token.denom)
-        // should have enough balance
-        abortTransactionUnless(balance.amount >= token.amount)
-    }
+    const balance = bank.queryBalance(msg.sender, msg.token.denom)
+    // should have enough balance
+    abortTransactionUnless(balance.amount >= token.amount)
 
     // deposit assets to the escrowed account
     const escrowAddr = escrowAddress(pool.encounterPartyPort, pool.encounterPartyChannel)
     bank.sendCoins(msg.sender, escrowAddr, msg.tokens)
 
+    cosnt amm = new InterchainMarketMaker(pool, params.getPoolFeeRate())
+    cosnt poolToken = amm.depositSingleAsset(msg.token)
+    
     // constructs the IBC data packet
     const packet = {
         type: MessageType.Deposit,
         data: protobuf.encode(msg), // encode the request message to protobuf bytes.
+        stateChange: { poolToken }
     }
     sendInterchainIBCSwapDataPacket(packet, msg.sourcePort, msg.sourceChannel, msg.timeoutHeight, msg.timeoutTimestamp)
 }
@@ -555,11 +555,15 @@ function doubleDeposit(msg MsgDoubleDepositRequest) {
     // deposit assets to the escrowed account
     const escrowAddr = escrowAddress(pool.encounterPartyPort, pool.encounterPartyChannel)
     bank.sendCoins(msg.sender, escrowAddr, msg.tokens)
+    
+    cosnt amm = new InterchainMarketMaker(pool, params.getPoolFeeRate())
+    cosnt poolToken = amm.depositSingleAsset(msg.token)
 
     // constructs the IBC data packet
     const packet = {
         type: MessageType.DoubleDeposit,
         data: protobuf.encode(msg), // encode the request message to protobuf bytes.
+        stateChange: { poolToken },
     }
     sendInterchainIBCSwapDataPacket(packet, msg.sourcePort, msg.sourceChannel, msg.timeoutHeight, msg.timeoutTimestamp)
 }
@@ -580,11 +584,18 @@ function withdraw(msg MsgWithdrawRequest) {
     // lock pool token to the swap module
     const escrowAddr = escrowAddress(pool.encounterPartyPort, pool.encouterPartyChannel)
     bank.sendCoins(msg.sender, escrowAddr, msg.poolToken)
+    
+    cosnt amm = new InterchainMarketMaker(pool, params.getPoolFeeRate())
+    cosnt outAmount = amm.withdraw(msg.poolToken)
 
     // constructs the IBC data packet
     const packet = {
         type: MessageType.Withdraw,
         data: protobuf.encode(msg), // encode the request message to protobuf bytes.
+        stateChange: {
+            poolToken: msg.poolToken,
+            out: outAmount,
+        }
     }
     sendInterchainIBCSwapDataPacket(packet, msg.sourcePort, msg.sourceChannel, msg.timeoutHeight, msg.timeoutTimestamp)
 
@@ -605,11 +616,15 @@ function leftSwap(msg MsgLeftSwapRequest) {
 	// lock swap-in token to the swap module
 	const escrowAddr = escrowAddress(pool.encounterPartyPort, pool.encouterPartyChannel)
 	bank.sendCoins(msg.sender, escrowAddr, msg.tokenIn)
+	
+	cosnt amm = new InterchainMarketMaker(pool, params.getPoolFeeRate())
+    cosnt outAmount = amm.leftSwap(msg.tokenIn, denomOut)
 
 	// contructs the IBC data packet
     const packet = {
         type: MessageType.Leftswap,
         data: protobuf.encode(msg), // encode the request message to protobuf bytes.
+        stateChange: { in: msg.tokenIn, out: outAmount }
     }
     sendInterchainIBCSwapDataPacket(packet, msg.sourcePort, msg.sourceChannel, msg.timeoutHeight, msg.timeoutTimestamp)
 
@@ -630,11 +645,16 @@ function rightSwap(msg MsgRightSwapRequest) {
     // lock swap-in token to the swap module
     const escrowAddr = escrowAddress(pool.encounterPartyPort, pool.encouterPartyChannel)
     bank.sendCoins(msg.sender, escrowAddr, msg.tokenIn)
+    
+	cosnt amm = new InterchainMarketMaker(pool, params.getPoolFeeRate())
+    cosnt inAmount = amm.rightSwap(msg.tokenIn, msg.tokenOut)
+    abortTransactionUnless(msg.tokenIn > inAmount)
 
     // contructs the IBC data packet
     const packet = {
         type: MessageType.Rightswap,
         data: protobuf.encode(msg), // encode the request message to protobuf bytes.
+        stateChange: {in: msg.TokenIn, out: msg.TokenOut }
     }
     sendInterchainIBCSwapDataPacket(packet, msg.sourcePort, msg.sourceChannel, msg.timeoutHeight, msg.timeoutTimestamp)
 
@@ -676,22 +696,19 @@ function onCreatePoolReceived(msg: MsgCreatePoolRequest, destPort: string, destC
 }
 
 function onSingleDepositReceived(msg: MsgSingleDepositRequest, state: StateChange): MsgSingleDepositResponse {
-
+    
     const pool = store.findPoolById(msg.poolId)
     abortTransactionUnless(pool != null)
-
-    const amm = store.findAmmById(msg.poolId)
-
-    if(amm !== null) {
-        // fetch fee rate from the params module, maintained by goverance
-        const feeRate = params.getPoolFeeRate()
-        const amm = InterchainMarketMaker.initialize(pool, feeRate)
-    }
-
-    const poolToken = amm.singleDeposit(msg.tokens[0])
-    store.savePool(amm.pool) // update pool states
-
-    return { poolToken }
+    
+    // add deposit asset
+    const assetIn = pool.findAssetByDenom(state.in.denom)
+    assetIn.balance.amount += state.in.amount
+    
+    // add pool token to keep consistency, no need to mint pool token since the deposit is executed on the source chain.
+    pool.supply.amount += state.poolToken.amount
+    store.savePool(pool)
+    
+    return { poolToken: state.poolToken }
 }
 
 
@@ -707,7 +724,7 @@ function onDoubleDepositReceived(msg: MsgSingleDepositRequest, state: StateChang
     if(amm !== null) {
         // fetch fee rate from the params module, maintained by goverance
         const feeRate = params.getPoolFeeRate()
-        const amm = InterchainMarketMaker.initialize(pool, feeRate)
+        const amm = new InterchainMarketMaker(pool, feeRate)
     }
 
     // verify signature
@@ -748,7 +765,7 @@ function onWithdrawReceived(msg: MsgWithdrawRequest, state: StateChange) MsgWith
     // fetch fee rate from the params module, maintained by goverance
     const feeRate = params.getPoolFeeRate()
 
-    const amm = InterchainMarketMaker.initialize(pool, feeRate)
+    const amm = new InterchainMarketMaker(pool, feeRate)
     const outToken = amm.withdraw(msg.poolCoin, msg.denomOut)
     store.savePool(amm.pool) // update pool states
 
@@ -770,7 +787,7 @@ function onLeftSwapReceived(msg: MsgLeftSwapRequest, state: StateChange) MsgSwap
     // fetch fee rate from the params module, maintained by goverance
     const feeRate = params.getPoolFeeRate()
 
-    const amm = InterchainMarketMaker.initialize(pool, feeRate)
+    const amm = new InterchainMarketMaker(pool, feeRate)
     const outToken = amm.leftSwap(msg.tokenIn, msg.tokenOut.denom)
 
     const expected = msg.tokenOut.amount
@@ -800,7 +817,7 @@ function onRightSwapReceived(msg MsgRightSwapRequest, state: StateChange) MsgSwa
     // fetch fee rate from the params module, maintained by goverance
     const feeRate = params.getPoolFeeRate()
 
-    const amm = InterchainMarketMaker.initialize(pool, feeRate)
+    const amm = new InterchainMarketMaker(pool, feeRate)
     const minTokenIn = amm.rightSwap(msg.tokenIn, msg.tokenOut)
 
     // tolerance check
