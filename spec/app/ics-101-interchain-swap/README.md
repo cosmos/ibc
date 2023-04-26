@@ -50,9 +50,11 @@ Users might also prefer single asset pools over dual assets pools as it removes 
 
 Unlike Other Swaps. Interchain swap have two copies of pool state, each pool state are mirrored to the other. it's not always same. it will keep dynamic consistent through various IBC transactions: such as deposit, swap, withdraw.
 
+Each pool is only used for assets on the chain where the liquidity pool is located
+
 To implement interchain swap, we introduce the `Swap Initiator` and `State Updater`. The `Swap Initiator` will pre-process the request and execute the swap (validate msgs, lock assets, etc), and then forward the transactions to the relayer. The `State Updater` just simply update the states sent from `Swap Initiator`(keep the pool state consistency).
 
-Each chain could be either `Swap Initiator` or `State Updater`, it's depend on where the swap is created.
+Each chain could be either `Swap Initiator` or `State Updater`, it depend on where the swap is created.
 
 This is an overview of how Interchain Swap works 
 
@@ -174,9 +176,9 @@ function generatePoolId(denoms: []string) {
 }
 ```
 
-#### IBC Market Maker
+#### Interchain Market Maker
 
-Market Maker is stateless, which is initialized with few parameters: such liquidity pool and fee rates. Note, For a trading pair, the `feeRate` on each chain could be different. which can be updated by governance.
+Interchain Market Maker is a core component for swap calculation, which is stateless and initialized with few parameters: such liquidity pool and fee rates. Note, For a trading pair, the `feeRate` on each chain could be different. which can be updated by governance.
 
 ```ts
 class InterchainMarketMaker {
@@ -321,6 +323,7 @@ class InterchainMarketMaker {
 
 Only one packet data type is required: `IBCSwapDataPacket`, which specifies the message type and data(protobuf marshalled). It is a wrapper for interchain swap messages.
 
+- Payloads in packet
 ```ts
 enum MessageType {
     RequestPoolCreation,
@@ -330,26 +333,24 @@ enum MessageType {
     LeftSwap,
     RightSwap,
 }
-```
 
-```ts
 interface StateChange {
     in: Coin[],
     out: Coin[],
     poolToken: Coin, // could be negtive
 }
-
+```
+- Packet structure
+```ts
 // IBCSwapDataPacket is used to wrap message for relayer.
 interface IBCSwapDataPacket {
     type: MessageType,
     data: []byte, // Bytes
     stateChange: StateChange
 }
-
-
-
 ```
 
+- Packet of Acknowledgement
 ```typescript
 type IBCSwapDataAcknowledgement = IBCSwapDataPacketSuccess | IBCSwapDataPacketError;
 
@@ -369,7 +370,7 @@ Traditional liquidity pools typically maintain its pool state in one location.
 
 A liquidity pool in the interchain swap protocol maintains its pool state on both its source chain and destination chain. The pool states mirror each other and are synced through IBC packet relays, which we elaborate on in the following sub-protocols.
 
-IBCSwap implements the following sub-protocols:
+Interchain Swap implements the following sub-protocols:
 
 ```protobuf
   rpc CreatePool(MsgCreatePoolRequest) returns (MsgCreatePoolResponse);
@@ -381,6 +382,8 @@ IBCSwap implements the following sub-protocols:
 ```
 
 #### Interfaces for sub-protocols
+
+- Create cross chain liquidity pool
 
 ```ts
 interface MsgCreatePoolRequest {
@@ -394,7 +397,7 @@ interface MsgCreatePoolRequest {
 
 interface MsgCreatePoolResponse {}
 ```
-
+- Single Side Deposit
 ```ts
 interface MsgDepositRequest {
   poolId: string;
@@ -406,6 +409,7 @@ interface MsgSingleDepositResponse {
 }
 ```
 
+- Two sides Deposit
 ```ts
 interface LocalDeposit {
   sender: string;
@@ -427,7 +431,7 @@ interface MsgDoubleDepositResponse {
   poolTokens: Coin[];
 }
 ```
-
+- Withdraw
 ```ts
 interface MsgWithdrawRequest {
     sender: string,
@@ -438,6 +442,7 @@ interface MsgWithdrawResponse {
    tokens: []Coin;
 }
 ```
+- Left Swap
 
 ```ts
 interface MsgLeftSwapRequest {
@@ -451,6 +456,7 @@ interface MsgSwapResponse {
   tokens: []Coin;
 }
 ```
+- Right Swap
 
 ```ts
 interface MsgRightSwapRequest {
