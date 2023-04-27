@@ -346,7 +346,7 @@ function openUpgradeHandshake(
 }
 ```
 
-`restoreChannel` will write an error receipt, set the original channel and delete upgrade information when the executing channel needs to abort the upgrade handshake and return to the original parameters.
+`restoreChannel` will write an error receipt, set the channel back to its original state and delete upgrade information when the executing channel needs to abort the upgrade handshake and return to the original parameters.
 
 ```typescript
 // restoreChannel signature may be modified to take a custom error
@@ -767,7 +767,7 @@ It is possible for the channel upgrade process to stall indefinitely on TRYUPGRA
 
 In this case, we do not want the initializing chain to be stuck indefinitely in the `INITUPGRADE` step. Thus, the `ChannelUpgradeInitMsg` message will contain a `TimeoutHeight` and `TimeoutTimestamp`. The counterparty chain is expected to reject `ChannelUpgradeTryMsg` message if the specified timeout has already elapsed.
 
-A relayer must then submit an `ChannelUpgradeTimeoutMsg` message to the initializing chain which proves that the counterparty is still in its original state. If the proof succeeds, then the initializing chain shall also restore its original channel and cancel the upgrade.
+A relayer must then submit an `ChannelUpgradeTimeoutMsg` message to the initializing chain which proves that the counterparty is still in its original state. If the proof succeeds, then the initializing chain shall also restore its original channel to `OPEN` and cancel the upgrade.
 
 ```typescript
 function timeoutChannelUpgrade(
