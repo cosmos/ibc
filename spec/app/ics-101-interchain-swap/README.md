@@ -349,7 +349,7 @@ enum SwapType {
 interface StateChange {
   in: Coin[];
   out: Coin[];
-  poolToken: Coin; // could be negtive
+  poolTokens: Coin[]; // could be negtive
 }
 ```
 
@@ -568,7 +568,7 @@ function singleDeposit(msg MsgSingleDepositRequest) {
     const packet = {
         type: MessageType.Deposit,
         data: protobuf.encode(msg), // encode the request message to protobuf bytes.
-        stateChange: { in: [msg.token], poolToken }
+        stateChange: { in: [msg.token], [poolToken] }
     }
     sendInterchainIBCSwapDataPacket(packet, msg.sourcePort, msg.sourceChannel, msg.timeoutHeight, msg.timeoutTimestamp)
 }
@@ -592,13 +592,14 @@ function doubleDeposit(msg MsgDoubleDepositRequest) {
     
     // TODO Marian: check the ratio of local amount and remote amount
 
+
     // deposit assets to the escrowed account
     const escrowAddr = escrowAddress(pool.encounterPartyPort, pool.encounterPartyChannel)
     bank.sendCoins(msg.sender, escrowAddr, msg.tokens)
 
     // calculation
     const amm = new InterchainMarketMaker(pool, params.getPoolFeeRate())
-    const poolToken = amm.depositSingleAsset(msg.token) // should replace with doubleDeposit() ?
+    const poolTokens = amm.doubleDeposit([msg.localDeposit.token, msg.remoteDeposit.token]) // should replace with doubleDeposit() ?
     
     // update local pool state,
     const assetIn = pool.findAssetByDenom(msg.localDeposit.token.denom)
@@ -612,7 +613,7 @@ function doubleDeposit(msg MsgDoubleDepositRequest) {
     const packet = {
         type: MessageType.DoubleDeposit,
         data: protobuf.encode(msg), // encode the request message to protobuf bytes.
-        stateChange: { in: [msg.localDeposit, msg.remoteDeposit], poolToken },
+        stateChange: { in: [msg.localDeposit, msg.remoteDeposit], poolTokens },
     }
     sendInterchainIBCSwapDataPacket(packet, msg.sourcePort, msg.sourceChannel, msg.timeoutHeight, msg.timeoutTimestamp)
 }
@@ -687,7 +688,7 @@ function leftSwap(msg MsgSwapRequest) {
     const packet = {
         type: MessageType.Swap,
         data: protobuf.encode(msg), // encode the request message to protobuf bytes.
-        stateChange: { in: [msg.tokenIn], out: [outToken] }
+        stateChange: { out: [outToken] }
     }
     sendInterchainIBCSwapDataPacket(packet, msg.sourcePort, msg.sourceChannel, msg.timeoutHeight, msg.timeoutTimestamp)
 
@@ -725,7 +726,7 @@ function rightSwap(msg MsgRightSwapRequest) {
     const packet = {
         type: MessageType.Rightswap,
         data: protobuf.encode(msg), // encode the request message to protobuf bytes.
-        stateChange: {in: [msg.TokenIn], out: [msg.TokenOut] }
+        stateChange: {out: [msg.TokenOut] }
     }
     sendInterchainIBCSwapDataPacket(packet, msg.sourcePort, msg.sourceChannel, msg.timeoutHeight, msg.timeoutTimestamp)
 
