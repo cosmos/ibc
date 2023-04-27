@@ -40,6 +40,10 @@ Features include an option to provide liquidity with a single asset instead of a
 
 `Pool state`: the entire state of a liquidity pool including its invariant value which is derived from its token balances and weights inside.
 
+`Source chain`: a chain that begins a IBC transaction.
+
+`Destination chain`: a chain that receives an IBC transaction from a source chain.
+
 ### Desired Properties
 
 -   `Permissionless`: no need to whitelist connections, modules, or denominations. Individual implementations may have their own permissioning scheme, however the protocol must not require permissioning from a trusted party to be secure.
@@ -52,7 +56,7 @@ Features include an option to provide liquidity with a single asset instead of a
 
 ### General Design
 
-An interchain liquidity pool comprises of two single-asset liquidity pools on separate chains, and maintains synced pool states on both chains. Pool state changes on one chain will update its corresponding pool state on the other chain through the IBC packet relay mechanism, which occurs during a deposit, withdrawal or swap.
+An interchain liquidity pool comprises of two single-asset liquidity pools on separate chains, and maintains synced pool states on both chains. Pool state changes on one chain will update its corresponding pool state on the other chain through IBC packet relays, which occurs during a deposit, withdrawal or swap.
 
 The pool states can become temporarily unsynced due to packet relay flight-time. To avoid unnecessary price abritrage, each chain can only execute sell orders of the token held by its single-asset liquidity pool.
 
@@ -190,7 +194,7 @@ function generatePoolId(denoms: []string) {
 
 #### Interchain Market Maker
 
-The `InterchainMarketMaker` is a core component for swap calculations, and is initialized with an `InterchainLiquidityPool` and `feeRate`. Since the `feeRate` for a trading pair can be updated through governance, it is possible to have a different rate on each chain.
+The `InterchainMarketMaker` is a core component for swap calculations, and is initialized with an `InterchainLiquidityPool` and `feeRate`. Since the `feeRate` for a trading pair can be updated through governance, it is possible to have different rates on each chain.
 
 ```ts
 class InterchainMarketMaker {
@@ -333,8 +337,6 @@ class InterchainMarketMaker {
 
 Only one packet data type is required: `IBCSwapDataPacket`, which specifies the message type and data(protobuf marshalled). It is a wrapper for interchain swap messages.
 
--   Payloads in packet
-
 ```ts
 enum MessageType {
   CreatePool,
@@ -356,8 +358,6 @@ interface StateChange {
 }
 ```
 
--   Packet structure
-
 ```ts
 // IBCSwapDataPacket is used to wrap message for relayer.
 interface IBCSwapDataPacket {
@@ -366,8 +366,6 @@ interface IBCSwapDataPacket {
     stateChange: StateChange
 }
 ```
-
--   Packet of Acknowledgement
 
 ```typescript
 type IBCSwapDataAcknowledgement =
@@ -386,10 +384,6 @@ interface IBCSwapDataPacketError {
 
 ### Sub-protocols
 
-Traditional liquidity pools typically maintain its pool state in one location.
-
-A liquidity pool in the interchain swap protocol maintains its pool state on both its source chain and destination chain. The pool states mirror each other and are synced through IBC packet relays, which we elaborate on in the following sub-protocols.
-
 Interchain Swap implements the following sub-protocols:
 
 ```protobuf
@@ -402,8 +396,6 @@ Interchain Swap implements the following sub-protocols:
 ```
 
 #### Interfaces for sub-protocols
-
--   Create cross chain liquidity pool
 
 ```ts
 interface MsgCreatePoolRequest {
@@ -418,8 +410,6 @@ interface MsgCreatePoolRequest {
 interface MsgCreatePoolResponse {}
 ```
 
--   Single Side Deposit
-
 ```ts
 interface MsgDepositRequest {
     poolId: string;
@@ -430,8 +420,6 @@ interface MsgSingleDepositResponse {
     poolToken: Coin;
 }
 ```
-
--   Two sides Deposit
 
 ```ts
 interface LocalDeposit {
@@ -455,8 +443,6 @@ interface MsgDoubleDepositResponse {
 }
 ```
 
--   Withdraw
-
 ```ts
 interface MsgWithdrawRequest {
     sender: string,
@@ -467,8 +453,6 @@ interface MsgWithdrawResponse {
    tokens: []Coin;
 }
 ```
-
--   Left Swap
 
 ```ts
 interface MsgSwapRequest {
@@ -483,8 +467,6 @@ interface MsgSwapResponse {
   tokens: []Coin;
 }
 ```
-
--   Right Swap
 
 ```ts
 interface MsgRightSwapRequest {
@@ -501,7 +483,7 @@ interface MsgSwapResponse {
 
 ### Control Flow And Life Scope
 
-These are methods of `Swap Initiator`, which execute main logic and output a state change, state change is need to be executed on both local and remote
+These are methods that output a state change on the source chain, which will be synced by the destination chain.
 
 ```ts
 function createPool(msg: MsgCreatePoolRequest) {
@@ -737,7 +719,7 @@ function rightSwap(msg MsgRightSwapRequest) {
 }
 ```
 
-The `State Updater` handle all packets relayed from the source chain, update pool states and sent tokens when received, and send the result as an acknowledgement. In this way, packets relayed on the source chain update pool states on the destination chain according to results in the acknowledgement.
+These are methods that handle packets relayed from a source chain, and includes pool state updates and token transfers. In this way, packets relayed on the source chain update pool states on the destination chain according to results in the acknowledgement.
 
 ```ts
 function onCreatePoolReceived(msg: MsgCreatePoolRequest, destPort: string, destChannel: string): MsgCreatePoolResponse {
@@ -1213,23 +1195,22 @@ function refundToken(packet: Packet) {
 
 ### Pool State Inconsistency
 
-To maintain pool state synchronization is extreme important for Interchain Swap, since we have two mirrored pool across the two chain.
-However, Pool state synchronization could be delayed due to the relayer halt or network issues. the delay could affect swap price.
+Pool state synchronization is extremely important for Interchain Swap, since there are two mirrored pool across the two chain.
+However, pool state synchronization could be delayed due to relayer halts or network issues. This can create swap price differences.
 
-Solutions:
+Solutions and mitigations:
 
--   Timeout: Swap order need to be confirmed on the counterparty chain. it would be canceled and refund if packets not arrival the counterparty on time.
--   Slippage Tolerance can be a way to protect loss caused by in-consistency.
--   Single side trade: Each Token can only be trade its native chain. in inconsistency state, the backlog swap would sell lower prices than consistency state. which could help to maintain consistency.
+-   Timeout: Packets timeout when packet acknowledgements are delayed for extended period of times. This limits the impact of inconsistent pool states on mispriced swap orders.
+-   Slippage Tolerance: Cancel orders if executed price difference to quoted price is outside of tolerance range.
+-   Single-sided trade: Each chain can only execute sell orders of the token held by its single-asset liquidity pool. This removes unnecessary arbitrage opportunities.
 
 ### Price Impact Of Single Asset Deposit
 
-Single side deposit is convenient for user to deposit asset.
-But single side deposit could break the balance of constant invariant. which means the current pool price would go higher or lower. which increase opportunity for arbitrageur
+Single-asset deposits are convenient for users and remove impermanence loss, but can have a significant impact on the swap prices.
 
-Solution:
+Solution and mitigations:
 
--   set upper limit for single side deposit. The ratio of profits taken away by arbitrageurs is directly proportional to the ratio of single-sided deposits and the quantity of that asset in the liquidity pool.
+-   Set an upper limit for single-asset deposits. This would be proportional to the amount deposited and the balance of the asset in the liquidity pool.
 
 ## Backwards Compatibility
 
