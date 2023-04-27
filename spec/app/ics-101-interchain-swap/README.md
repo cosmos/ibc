@@ -677,7 +677,7 @@ function rightSwap(msg MsgRightSwapRequest) {
 }
 ```
 
-The `State Updater` handle all transactions, update states and sent tokens when received, and send the result as an acknowledgement. In this way, packets relayed on the source chain update pool states on the destination chain according to results in the acknowledgement.
+The `State Updater` handle all packets relayed from the source chain, update pool states and sent tokens when received, and send the result as an acknowledgement. In this way, packets relayed on the source chain update pool states on the destination chain according to results in the acknowledgement.
 
 ```ts
 function onCreatePoolReceived(msg: MsgCreatePoolRequest, destPort: string, destChannel: string): MsgCreatePoolResponse {
