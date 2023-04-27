@@ -50,15 +50,15 @@ Features include an option to provide liquidity with a single asset instead of a
 
 ## Technical Specification
 
+### General Design
+
 An interchain liquidity pool comprises of two single-asset liquidity pools on separate chains, and maintains synced pool states on both chains. Pool state changes on one chain during a deposit, withdrawal or swap will update its corresponding pool state on the other chain through the transaction's packet relay.
 
-The pool states can become temporarily unsynced due to packet relay flight-time. To avoid unnecessary price abritrage, each single-asset liquidity pool can only execute sell orders of the token it holds.
+The pool states can become temporarily unsynced due to packet relay flight-time. To avoid unnecessary price abritrage, each chain can only execute sell orders of the token its single-asset liquidity pool holds.
 
-To implement interchain swap, we introduce the `Swap Initiator` and `State Updater`. The `Swap Initiator` will pre-process the request and execute the swap (validate msgs, lock assets, etc), and then forward the transactions to the relayer. The `State Updater` just simply update the states sent from `Swap Initiator`(keep the pool state consistency).
+Both chains can initiate a swap, and both chains can subsequently update its pool state.
 
-Each chain could be either `Swap Initiator` or `State Updater`, it depend on where the swap is created.
-
-This is an overview of how Interchain Swap works
+This is an overview of how Interchain Swap works:
 
 ![Interchain Swap Diagram](interchain-swap.svg)
 
@@ -89,7 +89,7 @@ $$SP_i^o = (B_i/W_i)/(B_o/W_o)$$
 
 #### Fees
 
-Traders pay swap fees when they trade with a pool. These fees can be customized with a minimum value of 0.01% and a maximum value of 10%. To avoid use decimal, we use basis point for `feeRate`, 1 = 0.01%, 100 = 1%
+Traders pay swap fees when they trade with a pool. These fees can be customized with a minimum value of 0.01% and a maximum value of 10%. Basis points for `feeRate` is used, where the integer 1 is 0.01% and integer 100 is 1.00%.
 
 The fees go to liquidity providers in exchange for depositing their tokens in the pool to facilitate trades. Trade fees are collected at the time of a swap, and goes directly into the pool, increasing the pool balance. For a trade with a given $inputToken$ and $outputToken$, the amount collected by the pool as a fee is
 
@@ -99,12 +99,13 @@ As the pool collects fees, liquidity providers automatically collect fees throug
 
 ### Pool Initialization
 
-In InterchainSwap, the liquidity pool has two possible states:
+An interchain liquidity pool has two possible states:
 
--   `INITIAL`: The pool is newly created and not yet ready for swaps. This means that all pool parameters have been registered in the state machine, but it doesn't possess the necessary assets for the swap pair.
+`POOL_STATUS_INITIAL`: The interchain liquidity pool is created yet not ready to execute swaps. Pool parameters have been registered but assets for the swap pair have not been deposited.
 
--   `READY`: The pool has acquired all required assets to facilitate swaps.
-    The pool's status can be updated through an initial deposit. If a user provides the full amount of assets that match the pool's initial parameters using either a `single deposit` or double deposit, the pool's status will automatically change to `READY`. With the initial deposit, the user receives sufficient pool tokens to withdraw their assets at any time.
+`POOL_STATUS_READY`: The interchain liquidity pool is ready to execute swaps. Required assets have been deposited.
+
+The pool can be fully funded through the initial deposit or through subsequent deposits. Deposits can be single-asset deposits or multi-asset deposits.
 
 ### Data Structures
 
@@ -149,8 +150,8 @@ interface InterchainLiquidityPool {
   // the issued amount of pool token in the pool. the denom is pool id
   supply: Coin;
   status: PoolStatus;
-  encounterPartyPort: string;
-  encounterPartyChannel: string;
+  counterpartyPort: string;
+  counterpartyChannel: string;
   constructor(denoms: []string, decimals: []number, weight: string, portId string, channelId string) {
 
     this.id = generatePoolId(denoms)
@@ -159,8 +160,8 @@ interface InterchainLiquidityPool {
        denom: this.id
     }
     this.status = PoolStatus.POOL_STATUS_INITIAL
-    this.encounterPartyPort = portId
-    this.encounterPartyChannel = channelId
+    this.counterpartyPort = portId
+    this.counterpartyChannel = channelId
 
     // construct assets
     const weights = weight.split(':').length
@@ -189,7 +190,7 @@ function generatePoolId(denoms: []string) {
 
 #### Interchain Market Maker
 
-Interchain Market Maker is a core component for swap calculation, which is stateless and initialized with few parameters: such liquidity pool and fee rates. Note, For a trading pair, the `feeRate` on each chain could be different. which can be updated by governance.
+The `InterchainMarketMaker` is a core component for swap calculations, and is initialized with an `InterchainLiquidityPool` and `feeRate`. Since the `feeRate` for a trading pair can be updated through governance, it is possible to have a different rate on each chain.
 
 ```ts
 class InterchainMarketMaker {
@@ -553,7 +554,7 @@ function singleDeposit(msg MsgSingleDepositRequest) {
     }
 
     // deposit assets to the escrowed account
-    const escrowAddr = escrowAddress(pool.encounterPartyPort, pool.encounterPartyChannel)
+    const escrowAddr = escrowAddress(pool.counterpartyPort, pool.counterpartyChannel)
     bank.sendCoins(msg.sender, escrowAddr, msg.tokens)
 
     // calculation
@@ -597,7 +598,7 @@ function doubleDeposit(msg MsgDoubleDepositRequest) {
     // TODO Marian: check the ratio of local amount and remote amount
 
     // deposit assets to the escrowed account
-    const escrowAddr = escrowAddress(pool.encounterPartyPort, pool.encounterPartyChannel)
+    const escrowAddr = escrowAddress(pool.counterpartyPort, pool.counterpartyChannel)
     bank.sendCoins(msg.sender, escrowAddr, msg.tokens)
 
     // calculation
@@ -635,7 +636,7 @@ function withdraw(msg MsgWithdrawRequest) {
     abortTransactionUnless(outToken.poolSide == PoolSide.Native)
 
     // lock pool token to the swap module
-    const escrowAddr = escrowAddress(pool.encounterPartyPort, pool.encounterPartyChannel)
+    const escrowAddr = escrowAddress(pool.counterpartyPort, pool.counterpartyChannel)
     bank.sendCoins(msg.sender, escrowAddr, msg.poolToken)
 
     const amm = new InterchainMarketMaker(pool, params.getPoolFeeRate())
@@ -673,7 +674,7 @@ function leftSwap(msg MsgSwapRequest) {
     abortTransactionUnless(pool.status == PoolStatus.POOL_STATUS_READY)
 
     // lock swap-in token to the swap module
-    const escrowAddr = escrowAddress(pool.encounterPartyPort, pool.encounterPartyChannel)
+    const escrowAddr = escrowAddress(pool.counterpartyPort, pool.counterpartyChannel)
     bank.sendCoins(msg.sender, escrowAddr, msg.tokenIn.denom)
 
     const amm = new InterchainMarketMaker(pool, params.getPoolFeeRate())
@@ -710,7 +711,7 @@ function rightSwap(msg MsgRightSwapRequest) {
     abortTransactionUnless(pool.status == PoolStatus.POOL_STATUS_READY)
 
     // lock swap-in token to the swap module
-    const escrowAddr = escrowAddress(pool.encounterPartyPort, pool.encounterPartyChannel)
+    const escrowAddr = escrowAddress(pool.counterpartyPort, pool.counterpartyChannel)
     bank.sendCoins(msg.sender, escrowAddr, msg.tokenIn)
 
     const amm = new InterchainMarketMaker(pool, params.getPoolFeeRate())
@@ -875,7 +876,7 @@ function onLeftSwapReceived(msg: MsgSwapRequest, state: StateChange) MsgSwapResp
     // tolerance check
     abortTransactionUnless(outToken.amount > expected * (1 - msg.slippage / 10000))
 
-    const escrowAddr = escrowAddress(pool.encounterPartyPort, pool.encounterPartyChannel)
+    const escrowAddr = escrowAddress(pool.counterpartyPort, pool.counterpartyChannel)
     bank.sendCoins(escrowAddr, msg.recipient, outToken)
 
     store.savePool(amm.pool) // update pool states
@@ -904,7 +905,7 @@ function onRightSwapReceived(msg MsgRightSwapRequest, state: StateChange) MsgSwa
     abortTransactionUnless(tokenIn.amount > minTokenIn.amount)
     abortTransactionUnless((tokenIn.amount - minTokenIn.amount)/minTokenIn.amount > msg.slippage / 10000))
 
-    const escrowAddr = escrowAddress(pool.encounterPartyPort, pool.encounterPartyChannel)
+    const escrowAddr = escrowAddress(pool.counterpartyPort, pool.counterpartyChannel)
     bank.sendCoins(escrowAddr, msg.recipient, msg.tokenOut)
 
     store.savePool(amm.pool) // update pool states
