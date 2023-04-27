@@ -52,9 +52,9 @@ Features include an option to provide liquidity with a single asset instead of a
 
 ### General Design
 
-An interchain liquidity pool comprises of two single-asset liquidity pools on separate chains, and maintains synced pool states on both chains. Pool state changes on one chain during a deposit, withdrawal or swap will update its corresponding pool state on the other chain through the transaction's packet relay.
+An interchain liquidity pool comprises of two single-asset liquidity pools on separate chains, and maintains synced pool states on both chains. Pool state changes on one chain will update its corresponding pool state on the other chain through the IBC packet relay mechanism, which occurs during a deposit, withdrawal or swap.
 
-The pool states can become temporarily unsynced due to packet relay flight-time. To avoid unnecessary price abritrage, each chain can only execute sell orders of the token its single-asset liquidity pool holds.
+The pool states can become temporarily unsynced due to packet relay flight-time. To avoid unnecessary price abritrage, each chain can only execute sell orders of the token held by its single-asset liquidity pool.
 
 Both chains can initiate a swap, and both chains can subsequently update its pool state.
 
