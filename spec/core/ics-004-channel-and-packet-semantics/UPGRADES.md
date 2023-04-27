@@ -339,6 +339,10 @@ function openUpgradeHandshake(
     currentchannel.state = OPEN
     currentChannel.flushStatus = NOTINFLUSH
     provableStore.set(channelPath(portIdentifier, channelIdentifier), currentChannel)
+
+    // delete auxilliary state
+    provableStore.delete(channelUpgradePath(portIdentifier, channelIdentifier))
+    privateStore.delete(channelCounterpartyLastPacketSequencePath(portIdentifier, channelIdentifier))
 }
 ```
 
@@ -357,8 +361,12 @@ function restoreChannel(
     }
     provableStore.set(channelUpgradeErrorPath(portIdentifier, channelIdentifier), errorReceipt)
     channel.state = OPEN
+    channel.flushStatus = NOTINFLUSH
     provableStore.set(channelPath(portIdentifier, channelIdentifier), channel)
+
+    // delete auxilliary state
     provableStore.delete(channelUpgradePath(portIdentifier, channelIdentifier))
+    privateStore.delete(channelCounterpartyLastPacketSequencePath(portIdentifier, channelIdentifier))
 }
 ```
 
@@ -733,14 +741,15 @@ function cancelChannelUpgrade(
     abortTransactionUnless(verifyChannelUpgradeError(connection, proofHeight, proofUpgradeError, currentChannel.counterpartyPortIdentifier, currentChannel.counterpartyChannelIdentifier, errorReceipt))
 
     // cancel upgrade
-    // and restore original conneciton
+    // and restore original channel
     // delete unnecessary state
-    originalChannel = privateStore.get(channelRestorePath(portIdentifier, channelIdentifier))
+    currentChannel.state = OPEN
+    currentChannel.flushStatus = NOTINFLUSH
     provableStore.set(channelPath(portIdentifier, channelIdentifier), originalChannel)
 
-    // delete auxilliary upgrade state
-    provableStore.delete(channelUpgradeTimeoutPath(portIdentifier, channelIdentifier))
-    privateStore.delete(channelRestorePath(portIdentifier, channelIdentifier))
+    // delete auxilliary state
+    provableStore.delete(channelUpgradePath(portIdentifier, channelIdentifier))
+    privateStore.delete(channelCounterpartyLastPacketSequencePath(portIdentifier, channelIdentifier))
 
     // call modules onChanUpgradeRestore callback
     module = lookupModule(portIdentifier)
@@ -803,12 +812,12 @@ function timeoutChannelUpgrade(
     }
 
     // we must restore the channel since the timeout verification has passed
-    originalChannel = privateStore.get(channelRestorePath(portIdentifier, channelIdentifier))
-    provableStore.set(channelPath(portIdentifier, channelIdentifier), originalChannel)
+    currentChannel.state = OPEN
+    provableStore.set(channelPath(portIdentifier, channelIdentifier), currentChannel)
 
-    // delete auxilliary upgrade state
-    provableStore.delete(channelUpgradeTimeoutPath(portIdentifier, channelIdentifier))
-    privateStore.delete(channelRestorePath(portIdentifier, channelIdentifier))
+    // delete auxilliary state
+    provableStore.delete(channelUpgradePath(portIdentifier, channelIdentifier))
+    privateStore.delete(channelCounterpartyLastPacketSequencePath(portIdentifier, channelIdentifier))
 
     // call modules onChanUpgradeRestore callback
     module = lookupModule(portIdentifier)
