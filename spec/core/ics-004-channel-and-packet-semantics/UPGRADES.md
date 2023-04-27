@@ -140,7 +140,7 @@ interface ErrorReceipt {
 
 #### Upgrade Channel Path
 
-The chain must store the proposed upgrade until the upgrade handshake successfully. This must be stored in the publice store. It may be deleted once the upgrade is successful.
+The chain must store the proposed upgrade upon initiating an upgrade. The proposed upgrade must be stored in the public store. It may be deleted once the upgrade is successful or has been aborted.
 
 ```typescript
 function channelUpgradePath(portIdentifier: Identifier, channelIdentifier: Identifier): Path {
@@ -148,7 +148,7 @@ function channelUpgradePath(portIdentifier: Identifier, channelIdentifier: Ident
  }
 ```
 
-The upgrade path has an associated verification membership added to the connection interface so that a counterparty may verify that chain has stored the provided counterparty upgrade.
+The upgrade path has an associated verification of membership method added to the connection interface so that a counterparty may verify that chain has stored the provided counterparty upgrade.
 
 ```typescript
 // Connection VerifyChannelUpgrade method
