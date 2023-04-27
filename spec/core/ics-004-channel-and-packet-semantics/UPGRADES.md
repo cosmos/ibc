@@ -221,7 +221,7 @@ function verifyChannelUpgradeErrorAbsence(
 
 ## Sub-Protocols
 
-The channel upgrade process consists of the following sub-protocols: `InitUpgradeHandshake`, `BlockUpgradeHandshake`, `OpenUpgradeHandshake`, `CancelChannelUpgrade`, and `TimeoutChannelUpgrade`. In the case where both chains approve of the proposed upgrade, the upgrade handshake protocol should complete successfully and the `ChannelEnd` should upgrade to the new parameters in OPEN state.
+The channel upgrade process consists of the following sub-protocols: `InitUpgradeHandshake`, `StartFlushUpgradeHandshake`, `OpenUpgradeHandshake`, `CancelChannelUpgrade`, and `TimeoutChannelUpgrade`. In the case where both chains approve of the proposed upgrade, the upgrade handshake protocol should complete successfully and the `ChannelEnd` should upgrade to the new parameters in OPEN state.
 
 ### Utility Functions
 
