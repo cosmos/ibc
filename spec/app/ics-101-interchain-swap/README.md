@@ -1206,7 +1206,7 @@ Solutions and mitigations:
 
 ### Price Impact Of Single Asset Deposit
 
-Single-asset deposits are convenient for users and remove impermanence loss, but can have a significant impact on the swap prices.
+Single-asset deposits are convenient for users and remove impermanent loss, but can have a significant impact on the swap prices.
 
 Solution and mitigations:
 
