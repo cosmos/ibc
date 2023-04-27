@@ -95,6 +95,15 @@ $$Amount_{fee} = Amount_{inputToken} * swapFee$$
 
 As the pool collects fees, liquidity providers automatically collect fees through their proportional ownership of the pool balance.
 
+### Pool Initialization
+
+In InterchainSwap, the liquidity pool has two possible states:
+
+- `INITIAL`: The pool is newly created and not yet ready for swaps. This means that all pool parameters have been registered in the state machine, but it doesn't possess the necessary assets for the swap pair.
+
+- `READY`: The pool has acquired all required assets to facilitate swaps.
+  The pool's status can be updated through an initial deposit. If a user provides the full amount of assets that match the pool's initial parameters using either a `single deposit` or double deposit, the pool's status will automatically change to `READY`. With the initial deposit, the user receives sufficient pool tokens to withdraw their assets at any time.
+
 ### Data Structures
 
 #### Pool Structure
@@ -534,6 +543,11 @@ function singleDeposit(msg MsgSingleDepositRequest) {
     // should have enough balance
     abortTransactionUnless(balance.amount >= msg.token.amount)
 
+    if(pool.status == POOL_STATUS_INITIAL) {
+        const asset = pool.findAssetByDenom(msg.token.denom)
+        abortTransactionUnless(balance.amount !== asset.amount)
+    }
+
     // deposit assets to the escrowed account
     const escrowAddr = escrowAddress(pool.encounterPartyPort, pool.encounterPartyChannel)
     bank.sendCoins(msg.sender, escrowAddr, msg.tokens)
@@ -757,10 +771,10 @@ function onSingleDepositReceived(msg: MsgSingleDepositRequest, state: StateChang
     const pool = store.findPoolById(msg.poolId)
     abortTransactionUnless(pool != null)
 
-    // add deposit asset
-    const assetIn = pool.findAssetByDenom(state.in.denom)
-    assetIn.balance.amount += state.in.amount
-
+    if (pool.Status == PoolStatus_POOL_STATUS_INIT) {
+        // switch pool status to 'READY'
+        pool.Status = PoolStatus_POOL_STATUS_READY
+    }
     // add pool token to keep consistency, no need to mint pool token since the deposit is executed on the source chain.
     pool.supply.amount += state.poolToken.amount
     store.savePool(pool)
@@ -799,6 +813,11 @@ function onDoubleDepositReceived(msg: MsgSingleDepositRequest, state: StateChang
     const pubKey = account.GetPubKey()
     const isValid = pubKey.VerifySignature(rawRemoteDepositTx, msg.remoteDeposit.signature)
     abortTransactionUnless(isValid != false)
+
+    if (pool.Status == PoolStatus_POOL_STATUS_INIT) {
+      // switch pool status to 'READY'
+        pool.Status = PoolStatus_POOL_STATUS_READY
+    }
 
     // deposit remote token
     const poolTokens = amm.doubleSingleAsset([msg.localDeposit.token, msg.remoteDeposit.token])
