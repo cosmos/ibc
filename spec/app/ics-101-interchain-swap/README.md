@@ -719,7 +719,7 @@ function rightSwap(msg MsgRightSwapRequest) {
 }
 ```
 
-These are methods that handle packets relayed from a source chain, and includes pool state updates and token transfers. In this way, packets relayed on the source chain update pool states on the destination chain according to results in the acknowledgement.
+These are methods that handle packets relayed from a source chain, and includes pool state updates and token transfers. In this way, packets relayed on the source chain update pool states on the destination chain.
 
 ```ts
 function onCreatePoolReceived(msg: MsgCreatePoolRequest, destPort: string, destChannel: string): MsgCreatePoolResponse {
