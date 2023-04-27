@@ -24,7 +24,7 @@ Features include an option to provide liquidity with a single asset instead of a
 
 `Interchain swap`: a IBC token swap protocol, built on top of an automated marketing making system, which leverages liquidity pools and incentives. Each chain that integrates this app becomes part of a decentralized exchange network.
 
-`Interchain liquidity pool`: a single-asset liquidity pool held in the asset's native chain, and has a corresponding single-asset liquidity pool on a separate chain. This comprises an interchain liquidity pool and can execute interchain swaps to exchange tokens.
+`Interchain liquidity pool`: a single-asset liquidity pool on a chain, with a corresponding single-asset liquidity pool on a separate chain. This comprises an interchain liquidity pool and can execute interchain swaps to exchange between the assets.
 
 `Automated market makers(AMM)`: are decentralized exchanges that pool liquidity and allow tokens to be traded in a permissionless and automatic way. Usually uses an invariant for token swapping calculation. In this interchain standard, the Balancer algorithm is implemented.
 
@@ -50,9 +50,9 @@ Features include an option to provide liquidity with a single asset instead of a
 
 ## Technical Specification
 
-Unlike Other Swaps. Interchain swap have two copies of pool state, each pool state are mirrored to the other. it's not always same. it will keep dynamic consistent through various IBC transactions: such as deposit, swap, withdraw.
+An interchain liquidity pool comprises of two single-asset liquidity pools on separate chains, and maintains synced pool states on both chains. Pool state changes on one chain during a deposit, withdrawal or swap will update its corresponding pool state on the other chain through the transaction's packet relay.
 
-Each pool is only used for assets on the chain where the liquidity pool is located
+The pool states can become temporarily unsynced due to packet relay flight-time. To avoid unnecessary price abritrage, each single-asset liquidity pool can only execute sell orders of the token it holds.
 
 To implement interchain swap, we introduce the `Swap Initiator` and `State Updater`. The `Swap Initiator` will pre-process the request and execute the swap (validate msgs, lock assets, etc), and then forward the transactions to the relayer. The `State Updater` just simply update the states sent from `Swap Initiator`(keep the pool state consistency).
 
