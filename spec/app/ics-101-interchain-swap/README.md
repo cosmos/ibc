@@ -483,7 +483,7 @@ interface MsgSwapResponse {
 
 ### Control Flow And Life Scope
 
-These are methods that output a state change on the source chain, which will be synced by the destination chain.
+These are methods that output a state change on the source chain, which will be subsequently synced to the destination chain.
 
 ```ts
 function createPool(msg: MsgCreatePoolRequest) {
