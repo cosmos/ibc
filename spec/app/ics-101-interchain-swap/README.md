@@ -525,27 +525,36 @@ function createPool(msg: MsgCreatePoolRequest) {
 function singleDeposit(msg MsgSingleDepositRequest) {
 
     abortTransactionUnless(msg.sender != null)
-    abortTransactionUnless(msg.tokens.length > 0)
+    abortTransactionUnless(msg.token.amount > 0)
 
     const pool = store.findPoolById(msg.poolId)
     abortTransactionUnless(pool != null)
 
     const balance = bank.queryBalance(msg.sender, msg.token.denom)
     // should have enough balance
-    abortTransactionUnless(balance.amount >= token.amount)
+    abortTransactionUnless(balance.amount >= msg.token.amount)
 
     // deposit assets to the escrowed account
     const escrowAddr = escrowAddress(pool.encounterPartyPort, pool.encounterPartyChannel)
     bank.sendCoins(msg.sender, escrowAddr, msg.tokens)
 
+    // calculation
     const amm = new InterchainMarketMaker(pool, params.getPoolFeeRate())
     const poolToken = amm.depositSingleAsset(msg.token)
+    
+    // update local pool state,
+    const assetIn = pool.findAssetByDenom(msg.tokenIn.denom)
+    assetIn.balance.amount += msg.token.amount
+    pool.supply.amount += poolToken.amount
+    store.savePool(pool)
+    
+    // pool token should be minted and sent onAcknowledgement.
 
     // constructs the IBC data packet
     const packet = {
         type: MessageType.Deposit,
         data: protobuf.encode(msg), // encode the request message to protobuf bytes.
-        stateChange: { poolToken }
+        stateChange: { in: [msg.token], poolToken }
     }
     sendInterchainIBCSwapDataPacket(packet, msg.sourcePort, msg.sourceChannel, msg.timeoutHeight, msg.timeoutTimestamp)
 }
@@ -560,26 +569,36 @@ function doubleDeposit(msg MsgDoubleDepositRequest) {
     abortTransactionUnless(msg.remoteDeposit.signature != null)
     abortTransactionUnless(msg.remoteDeposit.sequence != null)
 
-
     const pool = store.findPoolById(msg.poolId)
     abortTransactionUnless(pool != null)
 
     const balance = bank.queryBalance(sender, msg.localDeposit.token.denom)
     // should have enough balance
     abortTransactionUnless(balance.amount >= msg.localDeposit.token.amount)
+    
+    // TODO Marian: check the ratio of local amount and remote amount
 
     // deposit assets to the escrowed account
     const escrowAddr = escrowAddress(pool.encounterPartyPort, pool.encounterPartyChannel)
     bank.sendCoins(msg.sender, escrowAddr, msg.tokens)
 
+    // calculation
     const amm = new InterchainMarketMaker(pool, params.getPoolFeeRate())
-    const poolToken = amm.depositSingleAsset(msg.token)
+    const poolToken = amm.depositSingleAsset(msg.token) // should replace with doubleDeposit() ?
+    
+    // update local pool state,
+    const assetIn = pool.findAssetByDenom(msg.localDeposit.token.denom)
+    assetIn.balance.amount += msg.localDeposit.token.amount
+    const assetIn2 = pool.findAssetByDenom(msg.remoteDeposit.token.denom)
+    assetIn2.balance.amount += msg.remoteDeposit.token.amount
+    pool.supply.amount += poolToken.amount
+    store.savePool(pool)
 
     // constructs the IBC data packet
     const packet = {
         type: MessageType.DoubleDeposit,
         data: protobuf.encode(msg), // encode the request message to protobuf bytes.
-        stateChange: { poolToken },
+        stateChange: { in: [msg.localDeposit, msg.remoteDeposit], poolToken },
     }
     sendInterchainIBCSwapDataPacket(packet, msg.sourcePort, msg.sourceChannel, msg.timeoutHeight, msg.timeoutTimestamp)
 }
@@ -602,7 +621,13 @@ function withdraw(msg MsgWithdrawRequest) {
     bank.sendCoins(msg.sender, escrowAddr, msg.poolToken)
 
     const amm = new InterchainMarketMaker(pool, params.getPoolFeeRate())
-    const outAmount = amm.withdraw(msg.poolToken)
+    const outToken = amm.withdraw(msg.poolToken)  
+      
+    // update local pool state,
+    const assetOut = pool.findAssetByDenom(msg.denomOut)
+    assetOut.balance.amount -= outToken.amount
+    pool.supply.amount -= poolToken.amount
+    store.savePool(pool)    
 
     // constructs the IBC data packet
     const packet = {
@@ -610,7 +635,7 @@ function withdraw(msg MsgWithdrawRequest) {
         data: protobuf.encode(msg), // encode the request message to protobuf bytes.
         stateChange: {
             poolToken: msg.poolToken,
-            out: outAmount,
+            out: [outToken],
         }
     }
     sendInterchainIBCSwapDataPacket(packet, msg.sourcePort, msg.sourceChannel, msg.timeoutHeight, msg.timeoutTimestamp)
@@ -625,22 +650,30 @@ function leftSwap(msg MsgSwapRequest) {
     abortTransactionUnless(msg.slippage > 0)
     abortTransactionUnless(msg.recipient != null)
 
-    const pool = store.findPoolById([tokenIn.denom, denomOut])
+    const pool = store.findPoolById([msg.tokenIn.denom, msg.tokenOut.denom])
     abortTransactionUnless(pool != null)
     abortTransactionUnless(pool.status == PoolStatus.POOL_STATUS_READY)
 
 	// lock swap-in token to the swap module
 	const escrowAddr = escrowAddress(pool.encounterPartyPort, pool.encounterPartyChannel)
-	bank.sendCoins(msg.sender, escrowAddr, msg.tokenIn)
+	bank.sendCoins(msg.sender, escrowAddr, msg.tokenIn.denom)
 
 	const amm = new InterchainMarketMaker(pool, params.getPoolFeeRate())
-    const outAmount = amm.leftSwap(msg.tokenIn, denomOut)
+    const outToken = amm.leftSwap(msg.tokenIn, msg.tokenOut)
+    // TODO add slippage check here.
+    
+    // update local pool state,
+    const assetIn = pool.findAssetByDenom(msg.tokenIn.denom)
+    assetIn.balance.amount += msg.tokenIn.amount
+    const assetOut = pool.findAssetByDenom(msg.tokenOut.denom)
+    assetOut.balance.amount -= outToken.amount
+    store.savePool(pool)   
 
 	// contructs the IBC data packet
     const packet = {
         type: MessageType.Swap,
         data: protobuf.encode(msg), // encode the request message to protobuf bytes.
-        stateChange: { in: msg.tokenIn, out: outAmount }
+        stateChange: { in: [msg.tokenIn], out: [outToken] }
     }
     sendInterchainIBCSwapDataPacket(packet, msg.sourcePort, msg.sourceChannel, msg.timeoutHeight, msg.timeoutTimestamp)
 
@@ -665,12 +698,20 @@ function rightSwap(msg MsgRightSwapRequest) {
 	const amm = new InterchainMarketMaker(pool, params.getPoolFeeRate())
     const inAmount = amm.rightSwap(msg.tokenIn, msg.tokenOut)
     abortTransactionUnless(msg.tokenIn > inAmount)
+    // TODO add slippage check here.
+    
+    // update local pool state,
+    const assetIn = pool.findAssetByDenom(msg.tokenIn.denom)
+    assetIn.balance.amount += msg.tokenIn.amount
+    const assetOut = pool.findAssetByDenom(msg.denomOut)
+    assetOut.balance.amount -= outToken.amount
+    store.savePool(pool)   
 
     // contructs the IBC data packet
     const packet = {
         type: MessageType.Rightswap,
         data: protobuf.encode(msg), // encode the request message to protobuf bytes.
-        stateChange: {in: msg.TokenIn, out: msg.TokenOut }
+        stateChange: {in: [msg.TokenIn], out: [msg.TokenOut] }
     }
     sendInterchainIBCSwapDataPacket(packet, msg.sourcePort, msg.sourceChannel, msg.timeoutHeight, msg.timeoutTimestamp)
 
@@ -960,7 +1001,7 @@ function onChanOpenInit(
   version: string) => (version: string, err: Error) {
   // only ordered channels allowed
   abortTransactionUnless(order === ORDERED)
-  // assert that version is "ics20-1" or empty
+  // assert that version is "ics101-1" or empty
   // if empty, we return the default transfer version to core IBC
   // as the version for this channel
   abortTransactionUnless(version === "ics101-1" || version === "")
