@@ -236,7 +236,7 @@ class InterchainMarketMaker {
     }
 
     // P_issued = P_supply * (1 + At/Bt)
-    function depositDoubleAsset(tokens: Coin[]): Coin[] {
+    function depositMultiAsset(tokens: Coin[]): Coin[] {
         const lpTokens = [];
         for (const token in tokens) {
             const asset = this.pool.findAssetByDenom(token.denom)
@@ -354,7 +354,7 @@ enum SwapType {
 interface StateChange {
   in: Coin[];
   out: Coin[];
-  poolTokens: Coin[]; // could be negtive
+  poolTokens: Coin[];
 }
 ```
 
@@ -388,11 +388,10 @@ Interchain Swap implements the following sub-protocols:
 
 ```protobuf
   rpc CreatePool(MsgCreatePoolRequest) returns (MsgCreatePoolResponse);
-  rpc SingleDeposit(MsgSingleDepositRequest) returns (MsgSingleDepositResponse);
-  rpc DoubleDeposit(MsgDoubleDepositRequest) returns (MsgDoubleDepositResponse);
+  rpc SingleAssetDeposit(MsgSingleAssetDepositRequest) returns (MsgSingleAssetDepositResponse);
+  rpc MultiAssetDeposit(MsgMultiAssetDepositRequest) returns (MsgMultiAssetDepositResponse);
   rpc Withdraw(MsgWithdrawRequest) returns (MsgWithdrawResponse);
-  rpc LeftSwap(MsgLeftSwapRequest) returns (MsgSwapResponse);
-  rpc RightSwap(MsgRightSwapRequest) returns (MsgSwapResponse);
+  rpc Swap(MsgSwapRequest) returns (MsgSwapResponse);
 ```
 
 #### Interfaces for sub-protocols
@@ -411,12 +410,12 @@ interface MsgCreatePoolResponse {}
 ```
 
 ```ts
-interface MsgDepositRequest {
+interface MsgDepositAssetRequest {
     poolId: string;
     sender: string;
     token: Coin;
 }
-interface MsgSingleDepositResponse {
+interface MsgSingleAssetDepositResponse {
     poolToken: Coin;
 }
 ```
@@ -433,12 +432,12 @@ interface RemoteDeposit {
     signature: Uint8Array;
 }
 
-interface MsgDoubleDepositRequest {
+interface MsgMultiAssetDepositRequest {
     poolId: string;
     localDeposit: LocalDeposit;
     remoteDeposit: RemoteDeposit;
 }
-interface MsgDoubleDepositResponse {
+interface MsgMultiAssetDepositResponse {
     poolTokens: Coin[];
 }
 ```
@@ -465,19 +464,6 @@ interface MsgSwapRequest {
 }
 interface MsgSwapResponse {
   tokens: []Coin;
-}
-```
-
-```ts
-interface MsgRightSwapRequest {
-    sender: string;
-    tokenIn: Coin;
-    tokenOut: Coin;
-    slippage: number; // max tolerated slippage
-    recipient: string;
-}
-interface MsgSwapResponse {
-    tokens: Coin[];
 }
 ```
 
@@ -518,7 +504,7 @@ function createPool(msg: MsgCreatePoolRequest) {
 
 }
 
-function singleDeposit(msg MsgSingleDepositRequest) {
+function singleAssetDeposit(msg MsgSingleDepositRequest) {
 
     abortTransactionUnless(msg.sender != null)
     abortTransactionUnless(msg.token.amount > 0)
@@ -530,6 +516,7 @@ function singleDeposit(msg MsgSingleDepositRequest) {
     // should have enough balance
     abortTransactionUnless(balance.amount >= msg.token.amount)
 
+    // the first initial 
     if(pool.status == POOL_STATUS_INITIAL) {
         const asset = pool.findAssetByDenom(msg.token.denom)
         abortTransactionUnless(balance.amount !== asset.amount)
@@ -561,7 +548,7 @@ function singleDeposit(msg MsgSingleDepositRequest) {
 }
 
 
-function doubleDeposit(msg MsgDoubleDepositRequest) {
+function multiAssetDeposit(msg MsgMultiAssetDepositRequest) {
 
     abortTransactionUnless(msg.localDeposit.sender != null)
     abortTransactionUnless(msg.localDeposit.token != null)
@@ -586,7 +573,7 @@ function doubleDeposit(msg MsgDoubleDepositRequest) {
 
     // calculation
     const amm = new InterchainMarketMaker(pool, params.getPoolFeeRate())
-    const poolTokens = amm.doubleDeposit([msg.localDeposit.token, msg.remoteDeposit.token]) // should replace with doubleDeposit() ?
+    const poolTokens = amm.depositMultiAsset([msg.localDeposit.token, msg.remoteDeposit.token]) // should replace with doubleDeposit() ?
 
     // update local pool state,
     const assetIn = pool.findAssetByDenom(msg.localDeposit.token.denom)
@@ -754,7 +741,7 @@ function onCreatePoolReceived(msg: MsgCreatePoolRequest, destPort: string, destC
     }
 }
 
-function onSingleDepositReceived(msg: MsgSingleDepositRequest, state: StateChange): MsgSingleDepositResponse {
+function onSingleAssetDepositReceived(msg: MsgSingleAssetDepositRequest, state: StateChange): MsgSingleAssetDepositResponse {
 
     const pool = store.findPoolById(msg.poolId)
     abortTransactionUnless(pool != null)
@@ -763,15 +750,18 @@ function onSingleDepositReceived(msg: MsgSingleDepositRequest, state: StateChang
         // switch pool status to 'READY'
         pool.Status = PoolStatus_POOL_STATUS_READY
     }
+    
     // add pool token to keep consistency, no need to mint pool token since the deposit is executed on the source chain.
-    pool.supply.amount += state.poolToken.amount
+    const assetIn = pool.findAssetByDenom(state.in[0].denom)
+    assetIn.balance.amount += state.in[0].amount
+    pool.supply.amount += state.poolToken[0].amount
     store.savePool(pool)
 
     return { poolToken: state.poolToken }
 }
 
 
-function onDoubleDepositReceived(msg: MsgSingleDepositRequest, state: StateChange): MsgSingleDepositResponse {
+function onMultiAssetDepositReceived(msg: MsgMultiAssetDepositRequest, state: StateChange): MsgMultiAssetDepositResponse {
 
     abortTransactionUnless(msg.remoteDeposit.sender != null)
     abortTransactionUnless(msg.remoteDeposit.token != null)
@@ -779,12 +769,14 @@ function onDoubleDepositReceived(msg: MsgSingleDepositRequest, state: StateChang
     const pool = store.findPoolById(msg.poolId)
     abortTransactionUnless(pool != null)
 
+    // Remove it , since calulation move to source chain
     const amm = store.findAmmById(msg.poolId)
     if(amm !== null) {
         // fetch fee rate from the params module, maintained by goverance
         const feeRate = params.getPoolFeeRate()
         const amm = new InterchainMarketMaker(pool, feeRate)
     }
+    // */  
 
     // verify signature
     const sender = account.GetAccount(msg.remoteDeposit.sender)
@@ -807,13 +799,23 @@ function onDoubleDepositReceived(msg: MsgSingleDepositRequest, state: StateChang
         pool.Status = PoolStatus_POOL_STATUS_READY
     }
 
+    // TODO: remove it
     // deposit remote token
     const poolTokens = amm.doubleSingleAsset([msg.localDeposit.token, msg.remoteDeposit.token])
-
-    // mint voucher token
-    bank.mintCoin(MODULE_NAME, poolTokens[1])
-    bank.sendCoinsFromModuleToAccount(MODULE_NAME, msg.remoteDeposit.sender,  poolTokens[1])
+    
+    // update counterparty state
+    state.in.forEech(in => {
+        const assetIn = pool.findAssetByDenom(in.denom)
+        assetIn.balance.amount += in.amount
+    })
+    state.poolTokens.forEech(lp => {
+        pool.supply.amount += lp.amount
+    })
     store.savePool(amm.pool) // update pool states
+    
+    // mint voucher token
+    bank.mintCoin(MODULE_NAME, state.poolTokens[1])
+    bank.sendCoinsFromModuleToAccount(MODULE_NAME, msg.remoteDeposit.sender,  poolTokens[1])
 
     return { poolToken }
 }
@@ -826,11 +828,12 @@ function onWithdrawReceived(msg: MsgWithdrawRequest, state: StateChange) MsgWith
     const pool = store.findPoolById(msg.poolCoin.denom)
     abortTransactionUnless(pool != null)
 
-    // fetch fee rate from the params module, maintained by goverance
-    const feeRate = params.getPoolFeeRate()
-
-    const amm = new InterchainMarketMaker(pool, feeRate)
-    const outToken = amm.withdraw(msg.poolCoin, msg.denomOut)
+    // update counterparty state
+    state.out.forEech(out => {
+        const assetOut = pool.findAssetByDenom(out.denom)
+        assetOut.balance.amount += out.amount
+    })
+    pool.supply.amount -= state.poolToken[0].amount
     store.savePool(amm.pool) // update pool states
 
     // the outToken will sent to msg's sender in `onAcknowledgement()`
@@ -895,72 +898,35 @@ function onRightSwapReceived(msg MsgRightSwapRequest, state: StateChange) MsgSwa
 
     return { tokens: minTokenIn }
 }
+```
 
+Acknowledgement use for source chain to check if the transaction is succeeded or not.
+
+```ts
 function onCreatePoolAcknowledged(request: MsgCreatePoolRequest, response: MsgCreatePoolResponse) {
     // do nothing
 }
 
-function onSingleDepositAcknowledged(request: MsgSingleDepositRequest, response: MsgSingleDepositResponse) {
-    const pool = store.findPoolById(msg.poolId)
-    abortTransactionUnless(pool != null)
-    pool.supply.amount += response.tokens.amount
-    store.savePool(pool)
-
+function onSingleAssetDepositAcknowledged(request: MsgSingleAssetDepositRequest, response: MsgSingleAssetDepositResponse) {
     bank.mintCoin(MODULE_NAME,request.sender,response.token)
     bank.sendCoinsFromModuleToAccount(MODULE_NAME, msg.sender, response.tokens)
 }
 
-function onDoubleDepositAcknowledged(request: MsgDoubleDepositRequest, response: MsgDoubleDepositResponse) {
-    const pool = store.findPoolById(msg.poolId)
-    abortTransactionUnless(pool != null)
-
-    for(const poolToken in response.PoolTokens) {
-         pool.supply.amount += poolToken.amount
-    }
-
-    store.savePool(pool)
-
+function onMultiAssetDepositAcknowledged(request: MsgMultiAssetDepositRequest, response: MsgMultiAssetDepositResponse) {
     bank.mintCoin(MODULE_NAME,response.tokens[0])
     bank.sendCoinsFromModuleToAccount(MODULE_NAME, msg.localDeposit.sender, response.tokens[0])
 }
 
 function onWithdrawAcknowledged(request: MsgWithdrawRequest, response: MsgWithdrawResponse) {
-    const pool = store.findPoolById(msg.poolId)
-    abortTransactionUnless(pool != null)
-    abortTransactionUnless(pool.supply.amount >= response.tokens.amount)
-    pool.supply.amount -= response.tokens.amount
-    store.savePool(pool)
-
-    bank.sendCoinsFromAccountToModule(msg.sender, MODULE_NAME, response.tokens)
     bank.burnCoin(MODULE_NAME, response.token)
 }
 
 function onLeftSwapAcknowledged(request: MsgSwapRequest, response: MsgSwapResponse) {
-    const pool = store.findPoolById(generatePoolId[request.tokenIn.denom, request.tokenOut.denom]))
-    abortTransactionUnless(pool != null)
 
-    const assetOut = pool.findAssetByDenom(request.tokenOut.denom)
-    abortTransactionUnless(assetOut.balance.amount >= response.tokens.amount)
-    assetOut.balance.amount -= response.tokens.amount
-
-    const assetIn = pool.findAssetByDenom(request.tokenIn.denom)
-    assetIn.balance.amount += request.tokenIn.amount
-
-    store.savePool(pool)
 }
 
 function onRightSwapAcknowledged(request: MsgRightSwapRequest, response: MsgSwapResponse) {
-    const pool = store.findPoolById(generatePoolId([request.tokenIn.denom, request.tokenOut.denom]))
-    abortTransactionUnless(pool != null)
 
-    const assetOut = pool.findAssetByDenom(request.tokenOut.denom)
-    abortTransactionUnless(assetOut.balance.amount >= response.tokens.amount)
-    assetOut.balance.amount -= request.tokenOut.amount
-
-    const assetIn = pool.findAssetByDenom(request.tokenIn.denom)
-    assetIn.balance.amount += request.tokenIn.amount
-
-    store.savePool(pool)
 }
 ```
 
