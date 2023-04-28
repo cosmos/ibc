@@ -18,7 +18,7 @@ This standard document specifies the packet data structure, state machine handli
 
 ICS-101 Interchain Swaps enables chains their own token pricing mechanism and exchange protocol via IBC transactions. Each chain can thus play a role in a fully decentralised exchange network.
 
-Features include an option to provide liquidity with a single asset instead of a pair, which users might prefer as it removes the risk of impermanent loss.
+Features include an option to provide liquidity with a single asset instead of a pair, which users might prefer as it reduces the risk of impermanent loss.
 
 ### Definitions
 
@@ -1167,13 +1167,13 @@ However, pool state synchronization could be delayed due to relayer halts or net
 
 Solutions and mitigations:
 
--   Timeout: Packets timeout when packet acknowledgements are delayed for extended period of times. This limits the impact of inconsistent pool states on mispriced swap orders.
+-   Timeout: Packets timeout when receipt are delayed for an extended period of time. This limits the impact of inconsistent pool states on mispriced swap orders.
 -   Slippage Tolerance: Cancel orders if executed price difference to quoted price is outside of tolerance range.
 -   Single-sided trade: Each chain can only execute sell orders of the token held by its single-asset liquidity pool. This removes unnecessary arbitrage opportunities.
 
 ### Price Impact Of Single Asset Deposit
 
-Single-asset deposits are convenient for users and remove impermanent loss, but can have a significant impact on the swap prices.
+Single-asset deposits are convenient for users and reduces the risk of impermanent loss, but can have a significant impact on the swap prices.
 
 Solution and mitigations:
 
