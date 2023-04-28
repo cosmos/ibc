@@ -340,8 +340,8 @@ Only one packet data type is required: `IBCSwapDataPacket`, which specifies the 
 ```ts
 enum MessageType {
   CreatePool,
-  SingleDeposit,
-  DoubleDeposit,
+  SingleAssetDeposit,
+  MultiAssetDeposit,
   Withdraw,
   Swap
 }
@@ -499,25 +499,25 @@ function onRecvPacket(packet: Packet) {
 
     try{
         switch swapPacket.type {
-        case CREATE_POOL:
+        case CreatePool:
             var msg: MsgCreatePoolRequest = protobuf.decode(swapPacket.data)
             onCreatePoolReceived(msg, packet.destPortId, packet.destChannelId)
             break
-        case SINGLE_DEPOSIT:
+        case SingleAssetDeposit:
             var msg: MsgSingleDepositRequest = protobuf.decode(swapPacket.data)
             onSingleDepositReceived(msg)
             break
 
-        case Double_DEPOSIT:
+        case MultiAssetDeposit:
             var msg: MsgDoubleDepositRequest = protobuf.decode(swapPacket.data)
             onDoubleDepositReceived(msg)
             break
 
-        case WITHDRAW:
+        case Withdraw:
             var msg: MsgWithdrawRequest = protobuf.decode(swapPacket.data)
             onWithdrawReceived(msg)
             break
-        case SWAP:
+        case Swap:
             var msg: MsgSwapRequest = protobuf.decode(swapPacket.data)
             if(msg.SwapType === SwapType.Left) {
                 onLeftSwapReceived(msg)
@@ -551,26 +551,25 @@ function OnAcknowledgementPacket(
     } else {
         const swapPacket = protobuf.decode(packet.data)
         switch swapPacket.type {
-        case CREATE_POOL:
+        case CreatePool:
             onCreatePoolAcknowledged(msg)
             break;
-        case SINGLE_DEPOSIT:
-            onSingleDepositAcknowledged(msg)
+        case SingleAssetDeposit:
+            onSingleAssetDepositAcknowledged(msg)
             break;
-        case Double_DEPOSIT:
-            onDoubleDepositAcknowledged(msg)
+        case MultiAssetDeposit:
+            onMultiAssetDepositAcknowledged(msg)
             break;
-        case WITHDRAW:
+        case Withdraw:
             onWithdrawAcknowledged(msg)
             break;
-        case SWAP:
+        case Swap:
             var msg: MsgSwapRequest = protobuf.decode(swapPacket.data)
             if(msg.SwapType === SwapType.Left) {
                 onLeftSwapAcknowledged(msg)
             }else{
-                 onRightSwapAcknowledged(msg)
+                onRightSwapAcknowledged(msg)
             }
-            onLeftSwapAcknowledged(msg)
             break;
         }
     }
@@ -589,17 +588,17 @@ function onTimeoutPacket(packet: Packet) {
 ```
 
 ```ts
-
+// TODO: need to decode the subpacket from packet  
 function refundToken(packet: Packet) {
    let token
    switch packet.type {
     case Swap:
       token = packet.tokenIn
       break;
-    case Deposit:
+    case SingleAssetDeposit:
       token = packet.tokens
       break;
-    case DoubleDeposit:
+    case MultiAssetDeposit:
       token = packet.tokens
       break;
     case Withdraw:
