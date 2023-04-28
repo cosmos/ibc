@@ -12,25 +12,27 @@ requires: 24, 25
 
 ## Synopsis
 
-This standard document specifies the packet data structure, state machine handling logic, and encoding details for token exchange through single-sided liquidity pools over an IBC channel between separate chains.
+This standard document specifies the packet data structure, state machine handling logic, and encoding details for token exchange through single-asset liquidity pools over an IBC channel between separate chains.
 
 ### Motivation
 
 ICS-101 Interchain Swaps enables chains their own token pricing mechanism and exchange protocol via IBC transactions. Each chain can thus play a role in a fully decentralised exchange network.
 
-Users might also prefer single asset pools over dual assets pools as it removes the risk of impermanent loss.
+Features include an option to provide liquidity with a single asset instead of a pair, which users might prefer as it removes the risk of impermanent loss.
 
 ### Definitions
 
 `Interchain swap`: a IBC token swap protocol, built on top of an automated marketing making system, which leverages liquidity pools and incentives. Each chain that integrates this app becomes part of a decentralized exchange network.
 
+`Interchain liquidity pool`: a single-asset liquidity pool on a chain, with a corresponding single-asset liquidity pool on a separate chain. This comprises an interchain liquidity pool and can execute interchain swaps to exchange between the assets.
+
 `Automated market makers(AMM)`: are decentralized exchanges that pool liquidity and allow tokens to be traded in a permissionless and automatic way. Usually uses an invariant for token swapping calculation. In this interchain standard, the Balancer algorithm is implemented.
 
 `Weighted pools`: liquidity pools characterized by the percentage weight of each token denomination maintained within.
 
-`Single-sided liquidity pools`: a liquidity pool that does not require users to deposit both token denominations -- one is enough. But a single deposit will affect the price of the liquidity pool, increasing the opportunity for arbitrageurs
+`Single-asset deposit`: a deposit into a liquidity pool that does not require users to deposit both token denominations -- one is enough. While this deposit method will impact the exchange price of the pool, it also provide an opportunity for arbitrage.
 
-`Double-sided liquidity pools`: a liquidity pool that does require users to deposit both token denominations -- require token pair.
+`Multi-asset deposit`: a deposit into a liquidity pool that require users to deposit both token denominations. This deposit method will not impact the exchange price of the pool.
 
 `Left-side swap`: a token exchange that specifies the desired quantity to be sold.
 
@@ -38,25 +40,29 @@ Users might also prefer single asset pools over dual assets pools as it removes 
 
 `Pool state`: the entire state of a liquidity pool including its invariant value which is derived from its token balances and weights inside.
 
+`Source chain`: a chain that begins a IBC transaction.
+
+`Destination chain`: a chain that receives an IBC transaction from a source chain.
+
 ### Desired Properties
 
-- `Permissionless`: no need to whitelist connections, modules, or denominations. Individual implementations may have their own permissioning scheme, however the protocol must not require permissioning from a trusted party to be secure.
-- `Decentralization`: all parameters are managed on chain via governance. Does not require any central authority or entity to function. Also does not require a single blockchain, acting as a hub, to function.
-- `Gaurantee of Exchange`: no occurence of a user receiving tokens without the equivalent promised exchange.
-- `Liquidity Incentives`: supports the collection of fees which are distributed to liquidity providers and acts as incentive for liquidity participation.
-- `Weighted Math`: allows the configuration of pool weights so users can choose their levels of exposure between the tokens.
+-   `Permissionless`: no need to whitelist connections, modules, or denominations. Individual implementations may have their own permissioning scheme, however the protocol must not require permissioning from a trusted party to be secure.
+-   `Decentralized`: all parameters are managed on chain via governance. Does not require any central authority or entity to function. Also does not require a single blockchain, acting as a hub, to function.
+-   `Gaurantee of Exchange`: no occurence of a user receiving tokens without the equivalent promised exchange.
+-   `Liquidity Incentives`: supports the collection of fees which are distributed to liquidity providers and acts as incentive for liquidity participation.
+-   `Weighted Math`: allows the configuration of pool weights so users can choose their levels of exposure between the tokens.
 
 ## Technical Specification
 
-Unlike Other Swaps. Interchain swap have two copies of pool state, each pool state are mirrored to the other. it's not always same. it will keep dynamic consistent through various IBC transactions: such as deposit, swap, withdraw.
+### General Design
 
-Each pool is only used for assets on the chain where the liquidity pool is located
+An interchain liquidity pool comprises of two single-asset liquidity pools on separate chains, and maintains synced pool states on both chains. Pool state changes on one chain will update its corresponding pool state on the other chain through IBC packet relays, which occurs during a deposit, withdrawal or swap.
 
-To implement interchain swap, we introduce the `Swap Initiator` and `State Updater`. The `Swap Initiator` will pre-process the request and execute the swap (validate msgs, lock assets, etc), and then forward the transactions to the relayer. The `State Updater` just simply update the states sent from `Swap Initiator`(keep the pool state consistency).
+The pool states can become temporarily unsynced due to packet relay flight-time. To avoid unnecessary price abritrage, each chain can only execute sell orders of the token held by its single-asset liquidity pool.
 
-Each chain could be either `Swap Initiator` or `State Updater`, it depend on where the swap is created.
+Both chains can initiate a swap, and both chains can subsequently update its pool state.
 
-This is an overview of how Interchain Swap works
+This is an overview of how Interchain Swap works:
 
 ![Interchain Swap Diagram](interchain-swap.svg)
 
@@ -70,9 +76,9 @@ $$V = {&Pi;_tB_t^{W_t}}$$
 
 Where
 
-- $t$ ranges over the tokens in the pool
-- $B_t$ is the balance of the token in the pool
-- $W_t$ is the normalized weight of the tokens, such that the sum of all normalized weights is 1.
+-   $t$ ranges over the tokens in the pool
+-   $B_t$ is the balance of the token in the pool
+-   $W_t$ is the normalized weight of the tokens, such that the sum of all normalized weights is 1.
 
 #### Spot Price
 
@@ -80,14 +86,14 @@ Spot prices of tokens are defined entirely by the weights and balances of the to
 
 $$SP_i^o = (B_i/W_i)/(B_o/W_o)$$
 
-- $B_i$ is the balance of token $i$, the token being sold by the trader which is going into the pool
-- $B_o$ is the balance of token $o$, the token being bought by the trader which is going out of the pool
-- $W_i$ is the weight of token $i$
-- $W_o$ is the weight of token $o$
+-   $B_i$ is the balance of token $i$, the token being sold by the trader which is going into the pool
+-   $B_o$ is the balance of token $o$, the token being bought by the trader which is going out of the pool
+-   $W_i$ is the weight of token $i$
+-   $W_o$ is the weight of token $o$
 
 #### Fees
 
-Traders pay swap fees when they trade with a pool. These fees can be customized with a minimum value of 0.01% and a maximum value of 10%. To avoid use decimal, we use basis point for `feeRate`, 1 = 0.01%, 100 = 1%
+Traders pay swap fees when they trade with a pool. These fees can be customized with a minimum value of 0.01% and a maximum value of 10%. Basis points for `feeRate` is used, where the integer 1 is 0.01% and integer 100 is 1.00%.
 
 The fees go to liquidity providers in exchange for depositing their tokens in the pool to facilitate trades. Trade fees are collected at the time of a swap, and goes directly into the pool, increasing the pool balance. For a trade with a given $inputToken$ and $outputToken$, the amount collected by the pool as a fee is
 
@@ -97,12 +103,13 @@ As the pool collects fees, liquidity providers automatically collect fees throug
 
 ### Pool Initialization
 
-In InterchainSwap, the liquidity pool has two possible states:
+An interchain liquidity pool has two possible states:
 
-- `INITIAL`: The pool is newly created and not yet ready for swaps. This means that all pool parameters have been registered in the state machine, but it doesn't possess the necessary assets for the swap pair.
+`POOL_STATUS_INITIAL`: The interchain liquidity pool is created yet not ready to execute swaps. Pool parameters have been registered but assets for the swap pair have not been deposited.
 
-- `READY`: The pool has acquired all required assets to facilitate swaps.
-  The pool's status can be updated through an initial deposit. If a user provides the full amount of assets that match the pool's initial parameters using either a `single deposit` or double deposit, the pool's status will automatically change to `READY`. With the initial deposit, the user receives sufficient pool tokens to withdraw their assets at any time.
+`POOL_STATUS_READY`: The interchain liquidity pool is ready to execute swaps. Required assets have been deposited.
+
+The pool can be fully funded through the initial deposit or through subsequent deposits. Deposits can be single-asset deposits or multi-asset deposits.
 
 ### Data Structures
 
@@ -110,8 +117,8 @@ In InterchainSwap, the liquidity pool has two possible states:
 
 ```ts
 interface Coin {
-  amount: int64;
-  denom: string;
+    amount: int64;
+    denom: string;
 }
 ```
 
@@ -132,11 +139,11 @@ enum PoolStatus {
 
 ```ts
 interface PoolAsset {
-  side: PoolSide;
-  balance: Coin;
-  // percentage
-  weight: int32;
-  decimal: int32;
+    side: PoolSide;
+    balance: Coin;
+    // percentage
+    weight: int32;
+    decimal: int32;
 }
 ```
 
@@ -147,8 +154,8 @@ interface InterchainLiquidityPool {
   // the issued amount of pool token in the pool. the denom is pool id
   supply: Coin;
   status: PoolStatus;
-  encounterPartyPort: string;
-  encounterPartyChannel: string;
+  counterpartyPort: string;
+  counterpartyChannel: string;
   constructor(denoms: []string, decimals: []number, weight: string, portId string, channelId string) {
 
     this.id = generatePoolId(denoms)
@@ -157,8 +164,8 @@ interface InterchainLiquidityPool {
        denom: this.id
     }
     this.status = PoolStatus.POOL_STATUS_INITIAL
-    this.encounterPartyPort = portId
-    this.encounterPartyChannel = channelId
+    this.counterpartyPort = portId
+    this.counterpartyChannel = channelId
 
     // construct assets
     const weights = weight.split(':').length
@@ -187,7 +194,7 @@ function generatePoolId(denoms: []string) {
 
 #### Interchain Market Maker
 
-Interchain Market Maker is a core component for swap calculation, which is stateless and initialized with few parameters: such liquidity pool and fee rates. Note, For a trading pair, the `feeRate` on each chain could be different. which can be updated by governance.
+The `InterchainMarketMaker` is a core component for swap calculations, and is initialized with an `InterchainLiquidityPool` and `feeRate`. Since the `feeRate` for a trading pair can be updated through governance, it is possible to have different rates on each chain.
 
 ```ts
 class InterchainMarketMaker {
@@ -330,8 +337,6 @@ class InterchainMarketMaker {
 
 Only one packet data type is required: `IBCSwapDataPacket`, which specifies the message type and data(protobuf marshalled). It is a wrapper for interchain swap messages.
 
-- Payloads in packet
-
 ```ts
 enum MessageType {
   CreatePool,
@@ -353,8 +358,6 @@ interface StateChange {
 }
 ```
 
-- Packet structure
-
 ```ts
 // IBCSwapDataPacket is used to wrap message for relayer.
 interface IBCSwapDataPacket {
@@ -364,26 +367,22 @@ interface IBCSwapDataPacket {
 }
 ```
 
-- Packet of Acknowledgement
-
 ```typescript
-type IBCSwapDataAcknowledgement = IBCSwapDataPacketSuccess | IBCSwapDataPacketError;
+type IBCSwapDataAcknowledgement =
+    | IBCSwapDataPacketSuccess
+    | IBCSwapDataPacketError;
 
 interface IBCSwapDataPacketSuccess {
-  // This is binary 0x01 base64 encoded
-  result: "AQ==";
+    // This is binary 0x01 base64 encoded
+    result: "AQ==";
 }
 
 interface IBCSwapDataPacketError {
-  error: string;
+    error: string;
 }
 ```
 
 ### Sub-protocols
-
-Traditional liquidity pools typically maintain its pool state in one location.
-
-A liquidity pool in the interchain swap protocol maintains its pool state on both its source chain and destination chain. The pool states mirror each other and are synced through IBC packet relays, which we elaborate on in the following sub-protocols.
 
 Interchain Swap implements the following sub-protocols:
 
@@ -398,8 +397,6 @@ Interchain Swap implements the following sub-protocols:
 
 #### Interfaces for sub-protocols
 
-- Create cross chain liquidity pool
-
 ```ts
 interface MsgCreatePoolRequest {
     sourcePort: string,
@@ -413,44 +410,38 @@ interface MsgCreatePoolRequest {
 interface MsgCreatePoolResponse {}
 ```
 
-- Single Side Deposit
-
 ```ts
 interface MsgDepositRequest {
-  poolId: string;
-  sender: string;
-  token: Coin;
+    poolId: string;
+    sender: string;
+    token: Coin;
 }
 interface MsgSingleDepositResponse {
-  poolToken: Coin;
+    poolToken: Coin;
 }
 ```
-
-- Two sides Deposit
 
 ```ts
 interface LocalDeposit {
-  sender: string;
-  token: Coin;
+    sender: string;
+    token: Coin;
 }
 interface RemoteDeposit {
-  sender: string;
-  sequence: int; // account transaction sequence
-  token: Coin;
-  signature: Uint8Array;
+    sender: string;
+    sequence: int; // account transaction sequence
+    token: Coin;
+    signature: Uint8Array;
 }
 
 interface MsgDoubleDepositRequest {
-  poolId: string;
-  localDeposit: LocalDeposit;
-  remoteDeposit: RemoteDeposit;
+    poolId: string;
+    localDeposit: LocalDeposit;
+    remoteDeposit: RemoteDeposit;
 }
 interface MsgDoubleDepositResponse {
-  poolTokens: Coin[];
+    poolTokens: Coin[];
 }
 ```
-
-- Withdraw
 
 ```ts
 interface MsgWithdrawRequest {
@@ -462,8 +453,6 @@ interface MsgWithdrawResponse {
    tokens: []Coin;
 }
 ```
-
-- Left Swap
 
 ```ts
 interface MsgSwapRequest {
@@ -479,24 +468,22 @@ interface MsgSwapResponse {
 }
 ```
 
-- Right Swap
-
 ```ts
 interface MsgRightSwapRequest {
-  sender: string;
-  tokenIn: Coin;
-  tokenOut: Coin;
-  slippage: number; // max tolerated slippage
-  recipient: string;
+    sender: string;
+    tokenIn: Coin;
+    tokenOut: Coin;
+    slippage: number; // max tolerated slippage
+    recipient: string;
 }
 interface MsgSwapResponse {
-  tokens: Coin[];
+    tokens: Coin[];
 }
 ```
 
 ### Control Flow And Life Scope
 
-These are methods of `Swap Initiator`, which execute main logic and output a state change, state change is need to be executed on both local and remote
+These are methods that output a state change on the source chain, which will be subsequently synced to the destination chain.
 
 ```ts
 function createPool(msg: MsgCreatePoolRequest) {
@@ -549,19 +536,19 @@ function singleDeposit(msg MsgSingleDepositRequest) {
     }
 
     // deposit assets to the escrowed account
-    const escrowAddr = escrowAddress(pool.encounterPartyPort, pool.encounterPartyChannel)
+    const escrowAddr = escrowAddress(pool.counterpartyPort, pool.counterpartyChannel)
     bank.sendCoins(msg.sender, escrowAddr, msg.tokens)
 
     // calculation
     const amm = new InterchainMarketMaker(pool, params.getPoolFeeRate())
     const poolToken = amm.depositSingleAsset(msg.token)
-    
+
     // update local pool state,
     const assetIn = pool.findAssetByDenom(msg.tokenIn.denom)
     assetIn.balance.amount += msg.token.amount
     pool.supply.amount += poolToken.amount
     store.savePool(pool)
-    
+
     // pool token should be minted and sent onAcknowledgement.
 
     // constructs the IBC data packet
@@ -589,18 +576,18 @@ function doubleDeposit(msg MsgDoubleDepositRequest) {
     const balance = bank.queryBalance(sender, msg.localDeposit.token.denom)
     // should have enough balance
     abortTransactionUnless(balance.amount >= msg.localDeposit.token.amount)
-    
+
     // TODO Marian: check the ratio of local amount and remote amount
 
 
     // deposit assets to the escrowed account
-    const escrowAddr = escrowAddress(pool.encounterPartyPort, pool.encounterPartyChannel)
+    const escrowAddr = escrowAddress(pool.counterpartyPort, pool.counterpartyChannel)
     bank.sendCoins(msg.sender, escrowAddr, msg.tokens)
 
     // calculation
     const amm = new InterchainMarketMaker(pool, params.getPoolFeeRate())
     const poolTokens = amm.doubleDeposit([msg.localDeposit.token, msg.remoteDeposit.token]) // should replace with doubleDeposit() ?
-    
+
     // update local pool state,
     const assetIn = pool.findAssetByDenom(msg.localDeposit.token.denom)
     assetIn.balance.amount += msg.localDeposit.token.amount
@@ -632,17 +619,17 @@ function withdraw(msg MsgWithdrawRequest) {
     abortTransactionUnless(outToken.poolSide == PoolSide.Native)
 
     // lock pool token to the swap module
-    const escrowAddr = escrowAddress(pool.encounterPartyPort, pool.encounterPartyChannel)
+    const escrowAddr = escrowAddress(pool.counterpartyPort, pool.counterpartyChannel)
     bank.sendCoins(msg.sender, escrowAddr, msg.poolToken)
 
     const amm = new InterchainMarketMaker(pool, params.getPoolFeeRate())
-    const outToken = amm.withdraw(msg.poolToken)  
-      
+    const outToken = amm.withdraw(msg.poolToken)
+
     // update local pool state,
     const assetOut = pool.findAssetByDenom(msg.denomOut)
     assetOut.balance.amount -= outToken.amount
     pool.supply.amount -= poolToken.amount
-    store.savePool(pool)    
+    store.savePool(pool)
 
     // constructs the IBC data packet
     const packet = {
@@ -669,22 +656,22 @@ function leftSwap(msg MsgSwapRequest) {
     abortTransactionUnless(pool != null)
     abortTransactionUnless(pool.status == PoolStatus.POOL_STATUS_READY)
 
-	// lock swap-in token to the swap module
-	const escrowAddr = escrowAddress(pool.encounterPartyPort, pool.encounterPartyChannel)
-	bank.sendCoins(msg.sender, escrowAddr, msg.tokenIn.denom)
+    // lock swap-in token to the swap module
+    const escrowAddr = escrowAddress(pool.counterpartyPort, pool.counterpartyChannel)
+    bank.sendCoins(msg.sender, escrowAddr, msg.tokenIn.denom)
 
-	const amm = new InterchainMarketMaker(pool, params.getPoolFeeRate())
+    const amm = new InterchainMarketMaker(pool, params.getPoolFeeRate())
     const outToken = amm.leftSwap(msg.tokenIn, msg.tokenOut)
     // TODO add slippage check here.
-    
+
     // update local pool state,
     const assetIn = pool.findAssetByDenom(msg.tokenIn.denom)
     assetIn.balance.amount += msg.tokenIn.amount
     const assetOut = pool.findAssetByDenom(msg.tokenOut.denom)
     assetOut.balance.amount -= outToken.amount
-    store.savePool(pool)   
+    store.savePool(pool)
 
-	// contructs the IBC data packet
+    // contructs the IBC data packet
     const packet = {
         type: MessageType.Swap,
         data: protobuf.encode(msg), // encode the request message to protobuf bytes.
@@ -707,20 +694,20 @@ function rightSwap(msg MsgRightSwapRequest) {
     abortTransactionUnless(pool.status == PoolStatus.POOL_STATUS_READY)
 
     // lock swap-in token to the swap module
-    const escrowAddr = escrowAddress(pool.encounterPartyPort, pool.encounterPartyChannel)
+    const escrowAddr = escrowAddress(pool.counterpartyPort, pool.counterpartyChannel)
     bank.sendCoins(msg.sender, escrowAddr, msg.tokenIn)
 
-	const amm = new InterchainMarketMaker(pool, params.getPoolFeeRate())
+    const amm = new InterchainMarketMaker(pool, params.getPoolFeeRate())
     const inAmount = amm.rightSwap(msg.tokenIn, msg.tokenOut)
     abortTransactionUnless(msg.tokenIn > inAmount)
     // TODO add slippage check here.
-    
+
     // update local pool state,
     const assetIn = pool.findAssetByDenom(msg.tokenIn.denom)
     assetIn.balance.amount += msg.tokenIn.amount
     const assetOut = pool.findAssetByDenom(msg.denomOut)
     assetOut.balance.amount -= outToken.amount
-    store.savePool(pool)   
+    store.savePool(pool)
 
     // contructs the IBC data packet
     const packet = {
@@ -733,7 +720,7 @@ function rightSwap(msg MsgRightSwapRequest) {
 }
 ```
 
-The `State Updater` handle all packets relayed from the source chain, update pool states and sent tokens when received, and send the result as an acknowledgement. In this way, packets relayed on the source chain update pool states on the destination chain according to results in the acknowledgement.
+These are methods that handle packets relayed from a source chain, and includes pool state updates and token transfers. In this way, packets relayed on the source chain update pool states on the destination chain.
 
 ```ts
 function onCreatePoolReceived(msg: MsgCreatePoolRequest, destPort: string, destChannel: string): MsgCreatePoolResponse {
@@ -872,7 +859,7 @@ function onLeftSwapReceived(msg: MsgSwapRequest, state: StateChange) MsgSwapResp
     // tolerance check
     abortTransactionUnless(outToken.amount > expected * (1 - msg.slippage / 10000))
 
-    const escrowAddr = escrowAddress(pool.encounterPartyPort, pool.encounterPartyChannel)
+    const escrowAddr = escrowAddress(pool.counterpartyPort, pool.counterpartyChannel)
     bank.sendCoins(escrowAddr, msg.recipient, outToken)
 
     store.savePool(amm.pool) // update pool states
@@ -901,7 +888,7 @@ function onRightSwapReceived(msg MsgRightSwapRequest, state: StateChange) MsgSwa
     abortTransactionUnless(tokenIn.amount > minTokenIn.amount)
     abortTransactionUnless((tokenIn.amount - minTokenIn.amount)/minTokenIn.amount > msg.slippage / 10000))
 
-    const escrowAddr = escrowAddress(pool.encounterPartyPort, pool.encounterPartyChannel)
+    const escrowAddr = escrowAddress(pool.counterpartyPort, pool.counterpartyChannel)
     bank.sendCoins(escrowAddr, msg.recipient, msg.tokenOut)
 
     store.savePool(amm.pool) // update pool states
@@ -1007,8 +994,8 @@ Once the setup function has been called, channels can be created via the IBC rou
 
 An interchain swap module will accept new channels from any module on another machine, if and only if:
 
-- The channel being created is unordered.
-- The version string is `ics101-1`.
+-   The channel being created is unordered.
+-   The version string is `ics101-1`.
 
 ```typescript
 function onChanOpenInit(
@@ -1050,12 +1037,12 @@ function onChanOpenTry(
 
 ```typescript
 function onChanOpenAck(
-  portIdentifier: Identifier,
-  channelIdentifier: Identifier,
-  counterpartyChannelIdentifier: Identifier,
-  counterpartyVersion: string
+    portIdentifier: Identifier,
+    channelIdentifier: Identifier,
+    counterpartyChannelIdentifier: Identifier,
+    counterpartyVersion: string
 ) {
-  abortTransactionUnless(counterpartyVersion === "ics101-1");
+    abortTransactionUnless(counterpartyVersion === "ics101-1");
 }
 ```
 
@@ -1065,14 +1052,21 @@ function onChanOpenAck(
 
 ```ts
 function sendInterchainIBCSwapDataPacket(
-  swapPacket: IBCSwapPacketData,
-  sourcePort: string,
-  sourceChannel: string,
-  timeoutHeight: Height,
-  timeoutTimestamp: uint64
+    swapPacket: IBCSwapPacketData,
+    sourcePort: string,
+    sourceChannel: string,
+    timeoutHeight: Height,
+    timeoutTimestamp: uint64
 ) {
-  // send packet using the interface defined in ICS4
-  handler.sendPacket(getCapability("port"), sourcePort, sourceChannel, timeoutHeight, timeoutTimestamp, swapPacket);
+    // send packet using the interface defined in ICS4
+    handler.sendPacket(
+        getCapability("port"),
+        sourcePort,
+        sourceChannel,
+        timeoutHeight,
+        timeoutTimestamp,
+        swapPacket
+    );
 }
 ```
 
@@ -1129,8 +1123,8 @@ function onRecvPacket(packet: Packet) {
 
 // OnAcknowledgementPacket implements the IBCModule interface
 function OnAcknowledgementPacket(
-	packet: channeltypes.Packet,
-	ack channeltypes.Acknowledgement,
+    packet: channeltypes.Packet,
+    ack channeltypes.Acknowledgement,
 )  {
 
     var ack channeltypes.Acknowledgement
@@ -1171,8 +1165,8 @@ function OnAcknowledgementPacket(
 
 ```ts
 function onTimeoutPacket(packet: Packet) {
-  // the packet timed-out, so refund the tokens
-  refundTokens(packet);
+    // the packet timed-out, so refund the tokens
+    refundTokens(packet);
 }
 ```
 
@@ -1202,23 +1196,22 @@ function refundToken(packet: Packet) {
 
 ### Pool State Inconsistency
 
-To maintain pool state synchronization is extreme important for Interchain Swap, since we have two mirrored pool across the two chain.
-However, Pool state synchronization could be delayed due to the relayer halt or network issues. the delay could affect swap price.
+Pool state synchronization is extremely important for Interchain Swap, since there are two mirrored pool across the two chain.
+However, pool state synchronization could be delayed due to relayer halts or network issues. This can create swap price differences.
 
-Solutions:
+Solutions and mitigations:
 
-- Timeout: Swap order need to be confirmed on the counterparty chain. it would be canceled and refund if packets not arrival the counterparty on time.
-- Slippage Tolerance can be a way to protect loss caused by in-consistency.
-- Single side trade: Each Token can only be trade its native chain. in inconsistency state, the backlog swap would sell lower prices than consistency state. which could help to maintain consistency.
+-   Timeout: Packets timeout when packet acknowledgements are delayed for extended period of times. This limits the impact of inconsistent pool states on mispriced swap orders.
+-   Slippage Tolerance: Cancel orders if executed price difference to quoted price is outside of tolerance range.
+-   Single-sided trade: Each chain can only execute sell orders of the token held by its single-asset liquidity pool. This removes unnecessary arbitrage opportunities.
 
 ### Price Impact Of Single Asset Deposit
 
-Single side deposit is convenient for user to deposit asset.
-But single side deposit could break the balance of constant invariant. which means the current pool price would go higher or lower. which increase opportunity for arbitrageur
+Single-asset deposits are convenient for users and remove impermanent loss, but can have a significant impact on the swap prices.
 
-Solution:
+Solution and mitigations:
 
-- set upper limit for single side deposit. The ratio of profits taken away by arbitrageurs is directly proportional to the ratio of single-sided deposits and the quantity of that asset in the liquidity pool.
+-   Set an upper limit for single-asset deposits. This would be proportional to the amount deposited and the balance of the asset in the liquidity pool.
 
 ## Backwards Compatibility
 
