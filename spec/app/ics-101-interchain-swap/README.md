@@ -382,6 +382,234 @@ interface IBCSwapDataPacketError {
 }
 ```
 
+#### Port & channel setup
+
+The fungible token swap module on a chain must always bind to a port with the id `interchainswap`
+
+The `setup` function must be called exactly once when the module is created (perhaps when the blockchain itself is initialised) to bind to the appropriate port and create an escrow address (owned by the module).
+
+```typescript
+function setup() {
+  capability = routingModule.bindPort("interchainswap", ModuleCallbacks{
+    onChanOpenInit,
+    onChanOpenTry,
+    onChanOpenAck,
+    onChanOpenConfirm,
+    onChanCloseInit,
+    onChanCloseConfirm,
+    onRecvPacket,
+    onTimeoutPacket,
+    onAcknowledgePacket,
+    onTimeoutPacketClose
+  })
+  claimCapability("port", capability)
+}
+```
+
+Once the setup function has been called, channels can be created via the IBC routing module.
+
+#### Channel lifecycle management
+
+An interchain swap module will accept new channels from any module on another machine, if and only if:
+
+-   The channel being created is unordered.
+-   The version string is `ics101-1`.
+
+```typescript
+function onChanOpenInit(
+  order: ChannelOrder,
+  connectionHops: [Identifier],
+  portIdentifier: Identifier,
+  channelIdentifier: Identifier,
+  counterpartyPortIdentifier: Identifier,
+  counterpartyChannelIdentifier: Identifier,
+  version: string) => (version: string, err: Error) {
+  // only ordered channels allowed
+  abortTransactionUnless(order === ORDERED)
+  // assert that version is "ics101-1" or empty
+  // if empty, we return the default transfer version to core IBC
+  // as the version for this channel
+  abortTransactionUnless(version === "ics101-1" || version === "")
+  return "ics101-1", nil
+}
+```
+
+```typescript
+function onChanOpenTry(
+  order: ChannelOrder,
+  connectionHops: [Identifier],
+  portIdentifier: Identifier,
+  channelIdentifier: Identifier,
+  counterpartyPortIdentifier: Identifier,
+  counterpartyChannelIdentifier: Identifier,
+  counterpartyVersion: string) => (version: string, err: Error) {
+  // only ordered channels allowed
+  abortTransactionUnless(order === ORDERED)
+  // assert that version is "ics101-1"
+  abortTransactionUnless(counterpartyVersion === "ics101-1")
+  // return version that this chain will use given the
+  // counterparty version
+  return "ics101-1", nil
+}
+```
+
+```typescript
+function onChanOpenAck(
+    portIdentifier: Identifier,
+    channelIdentifier: Identifier,
+    counterpartyChannelIdentifier: Identifier,
+    counterpartyVersion: string
+) {
+    abortTransactionUnless(counterpartyVersion === "ics101-1");
+}
+```
+
+#### Packet relay
+
+`sendInterchainIBCSwapDataPacket` must be called by a transaction handler in the module which performs appropriate signature checks, specific to the account owner on the host state machine.
+
+```ts
+function sendInterchainIBCSwapDataPacket(
+    swapPacket: IBCSwapPacketData,
+    sourcePort: string,
+    sourceChannel: string,
+    timeoutHeight: Height,
+    timeoutTimestamp: uint64
+) {
+    // send packet using the interface defined in ICS4
+    handler.sendPacket(
+        getCapability("port"),
+        sourcePort,
+        sourceChannel,
+        timeoutHeight,
+        timeoutTimestamp,
+        swapPacket
+    );
+}
+```
+
+`onRecvPacket` is called by the routing module when a packet addressed to this module has been received.
+
+```ts
+function onRecvPacket(packet: Packet) {
+
+    IBCSwapPacketData swapPacket = packet.data
+    // construct default acknowledgement of success
+    const ack: IBCSwapDataAcknowledgement = new IBCSwapDataPacketSuccess()
+
+    try{
+        switch swapPacket.type {
+        case CREATE_POOL:
+            var msg: MsgCreatePoolRequest = protobuf.decode(swapPacket.data)
+            onCreatePoolReceived(msg, packet.destPortId, packet.destChannelId)
+            break
+        case SINGLE_DEPOSIT:
+            var msg: MsgSingleDepositRequest = protobuf.decode(swapPacket.data)
+            onSingleDepositReceived(msg)
+            break
+
+        case Double_DEPOSIT:
+            var msg: MsgDoubleDepositRequest = protobuf.decode(swapPacket.data)
+            onDoubleDepositReceived(msg)
+            break
+
+        case WITHDRAW:
+            var msg: MsgWithdrawRequest = protobuf.decode(swapPacket.data)
+            onWithdrawReceived(msg)
+            break
+        case SWAP:
+            var msg: MsgSwapRequest = protobuf.decode(swapPacket.data)
+            if(msg.SwapType === SwapType.Left) {
+                onLeftSwapReceived(msg)
+            }else{
+                 onRightSwapReceived(msg)
+            }
+            break
+        }
+    } catch {
+        ack = new IBCSwapDataPacketError()
+    }
+
+    // NOTE: acknowledgement will be written synchronously during IBC handler execution.
+    return ack
+}
+```
+
+`onAcknowledgePacket` is called by the routing module when a packet sent by this module has been acknowledged.
+
+```ts
+
+// OnAcknowledgementPacket implements the IBCModule interface
+function OnAcknowledgementPacket(
+    packet: channeltypes.Packet,
+    ack channeltypes.Acknowledgement,
+)  {
+
+    var ack channeltypes.Acknowledgement
+    if (!ack.success()) {
+        refund(packet)
+    } else {
+        const swapPacket = protobuf.decode(packet.data)
+        switch swapPacket.type {
+        case CREATE_POOL:
+            onCreatePoolAcknowledged(msg)
+            break;
+        case SINGLE_DEPOSIT:
+            onSingleDepositAcknowledged(msg)
+            break;
+        case Double_DEPOSIT:
+            onDoubleDepositAcknowledged(msg)
+            break;
+        case WITHDRAW:
+            onWithdrawAcknowledged(msg)
+            break;
+        case SWAP:
+            var msg: MsgSwapRequest = protobuf.decode(swapPacket.data)
+            if(msg.SwapType === SwapType.Left) {
+                onLeftSwapAcknowledged(msg)
+            }else{
+                 onRightSwapAcknowledged(msg)
+            }
+            onLeftSwapAcknowledged(msg)
+            break;
+        }
+    }
+
+    return nil
+}
+```
+
+`onTimeoutPacket` is called by the routing module when a packet sent by this module has timed-out (such that the tokens will be refunded). Tokens are also refunded on failure.
+
+```ts
+function onTimeoutPacket(packet: Packet) {
+    // the packet timed-out, so refund the tokens
+    refundTokens(packet);
+}
+```
+
+```ts
+
+function refundToken(packet: Packet) {
+   let token
+   switch packet.type {
+    case Swap:
+      token = packet.tokenIn
+      break;
+    case Deposit:
+      token = packet.tokens
+      break;
+    case DoubleDeposit:
+      token = packet.tokens
+      break;
+    case Withdraw:
+      token = packet.pool_token
+   }
+    escrowAccount = channelEscrowAddresses[packet.srcChannel]
+    bank.TransferCoins(escrowAccount, packet.sender, token.denom, token.amount)
+}
+```
+
 ### Sub-protocols
 
 Interchain Swap implements the following sub-protocols:
@@ -927,234 +1155,6 @@ function onLeftSwapAcknowledged(request: MsgSwapRequest, response: MsgSwapRespon
 
 function onRightSwapAcknowledged(request: MsgRightSwapRequest, response: MsgSwapResponse) {
 
-}
-```
-
-#### Port & channel setup
-
-The fungible token swap module on a chain must always bind to a port with the id `interchainswap`
-
-The `setup` function must be called exactly once when the module is created (perhaps when the blockchain itself is initialised) to bind to the appropriate port and create an escrow address (owned by the module).
-
-```typescript
-function setup() {
-  capability = routingModule.bindPort("interchainswap", ModuleCallbacks{
-    onChanOpenInit,
-    onChanOpenTry,
-    onChanOpenAck,
-    onChanOpenConfirm,
-    onChanCloseInit,
-    onChanCloseConfirm,
-    onRecvPacket,
-    onTimeoutPacket,
-    onAcknowledgePacket,
-    onTimeoutPacketClose
-  })
-  claimCapability("port", capability)
-}
-```
-
-Once the setup function has been called, channels can be created via the IBC routing module.
-
-#### Channel lifecycle management
-
-An interchain swap module will accept new channels from any module on another machine, if and only if:
-
--   The channel being created is unordered.
--   The version string is `ics101-1`.
-
-```typescript
-function onChanOpenInit(
-  order: ChannelOrder,
-  connectionHops: [Identifier],
-  portIdentifier: Identifier,
-  channelIdentifier: Identifier,
-  counterpartyPortIdentifier: Identifier,
-  counterpartyChannelIdentifier: Identifier,
-  version: string) => (version: string, err: Error) {
-  // only ordered channels allowed
-  abortTransactionUnless(order === ORDERED)
-  // assert that version is "ics101-1" or empty
-  // if empty, we return the default transfer version to core IBC
-  // as the version for this channel
-  abortTransactionUnless(version === "ics101-1" || version === "")
-  return "ics101-1", nil
-}
-```
-
-```typescript
-function onChanOpenTry(
-  order: ChannelOrder,
-  connectionHops: [Identifier],
-  portIdentifier: Identifier,
-  channelIdentifier: Identifier,
-  counterpartyPortIdentifier: Identifier,
-  counterpartyChannelIdentifier: Identifier,
-  counterpartyVersion: string) => (version: string, err: Error) {
-  // only ordered channels allowed
-  abortTransactionUnless(order === ORDERED)
-  // assert that version is "ics101-1"
-  abortTransactionUnless(counterpartyVersion === "ics101-1")
-  // return version that this chain will use given the
-  // counterparty version
-  return "ics101-1", nil
-}
-```
-
-```typescript
-function onChanOpenAck(
-    portIdentifier: Identifier,
-    channelIdentifier: Identifier,
-    counterpartyChannelIdentifier: Identifier,
-    counterpartyVersion: string
-) {
-    abortTransactionUnless(counterpartyVersion === "ics101-1");
-}
-```
-
-#### Packet relay
-
-`sendInterchainIBCSwapDataPacket` must be called by a transaction handler in the module which performs appropriate signature checks, specific to the account owner on the host state machine.
-
-```ts
-function sendInterchainIBCSwapDataPacket(
-    swapPacket: IBCSwapPacketData,
-    sourcePort: string,
-    sourceChannel: string,
-    timeoutHeight: Height,
-    timeoutTimestamp: uint64
-) {
-    // send packet using the interface defined in ICS4
-    handler.sendPacket(
-        getCapability("port"),
-        sourcePort,
-        sourceChannel,
-        timeoutHeight,
-        timeoutTimestamp,
-        swapPacket
-    );
-}
-```
-
-`onRecvPacket` is called by the routing module when a packet addressed to this module has been received.
-
-```ts
-function onRecvPacket(packet: Packet) {
-
-    IBCSwapPacketData swapPacket = packet.data
-    // construct default acknowledgement of success
-    const ack: IBCSwapDataAcknowledgement = new IBCSwapDataPacketSuccess()
-
-    try{
-        switch swapPacket.type {
-        case CREATE_POOL:
-            var msg: MsgCreatePoolRequest = protobuf.decode(swapPacket.data)
-            onCreatePoolReceived(msg, packet.destPortId, packet.destChannelId)
-            break
-        case SINGLE_DEPOSIT:
-            var msg: MsgSingleDepositRequest = protobuf.decode(swapPacket.data)
-            onSingleDepositReceived(msg)
-            break
-
-        case Double_DEPOSIT:
-            var msg: MsgDoubleDepositRequest = protobuf.decode(swapPacket.data)
-            onDoubleDepositReceived(msg)
-            break
-
-        case WITHDRAW:
-            var msg: MsgWithdrawRequest = protobuf.decode(swapPacket.data)
-            onWithdrawReceived(msg)
-            break
-        case SWAP:
-            var msg: MsgSwapRequest = protobuf.decode(swapPacket.data)
-            if(msg.SwapType === SwapType.Left) {
-                onLeftSwapReceived(msg)
-            }else{
-                 onRightSwapReceived(msg)
-            }
-            break
-        }
-    } catch {
-        ack = new IBCSwapDataPacketError()
-    }
-
-    // NOTE: acknowledgement will be written synchronously during IBC handler execution.
-    return ack
-}
-```
-
-`onAcknowledgePacket` is called by the routing module when a packet sent by this module has been acknowledged.
-
-```ts
-
-// OnAcknowledgementPacket implements the IBCModule interface
-function OnAcknowledgementPacket(
-    packet: channeltypes.Packet,
-    ack channeltypes.Acknowledgement,
-)  {
-
-    var ack channeltypes.Acknowledgement
-    if (!ack.success()) {
-        refund(packet)
-    } else {
-        const swapPacket = protobuf.decode(packet.data)
-        switch swapPacket.type {
-        case CREATE_POOL:
-            onCreatePoolAcknowledged(msg)
-            break;
-        case SINGLE_DEPOSIT:
-            onSingleDepositAcknowledged(msg)
-            break;
-        case Double_DEPOSIT:
-            onDoubleDepositAcknowledged(msg)
-            break;
-        case WITHDRAW:
-            onWithdrawAcknowledged(msg)
-            break;
-        case SWAP:
-            var msg: MsgSwapRequest = protobuf.decode(swapPacket.data)
-            if(msg.SwapType === SwapType.Left) {
-                onLeftSwapAcknowledged(msg)
-            }else{
-                 onRightSwapAcknowledged(msg)
-            }
-            onLeftSwapAcknowledged(msg)
-            break;
-        }
-    }
-
-    return nil
-}
-```
-
-`onTimeoutPacket` is called by the routing module when a packet sent by this module has timed-out (such that the tokens will be refunded). Tokens are also refunded on failure.
-
-```ts
-function onTimeoutPacket(packet: Packet) {
-    // the packet timed-out, so refund the tokens
-    refundTokens(packet);
-}
-```
-
-```ts
-
-function refundToken(packet: Packet) {
-   let token
-   switch packet.type {
-    case Swap:
-      token = packet.tokenIn
-      break;
-    case Deposit:
-      token = packet.tokens
-      break;
-    case DoubleDeposit:
-      token = packet.tokens
-      break;
-    case Withdraw:
-      token = packet.pool_token
-   }
-    escrowAccount = channelEscrowAddresses[packet.srcChannel]
-    bank.TransferCoins(escrowAccount, packet.sender, token.denom, token.amount)
 }
 ```
 
