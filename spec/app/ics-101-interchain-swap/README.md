@@ -46,11 +46,11 @@ Features include an option to provide liquidity with a single asset instead of a
 
 ### Desired Properties
 
--   `Permissionless`: no need to whitelist connections, modules, or denominations. Individual implementations may have their own permissioning scheme, however the protocol must not require permissioning from a trusted party to be secure.
--   `Decentralized`: all parameters are managed on chain via governance. Does not require any central authority or entity to function. Also does not require a single blockchain, acting as a hub, to function.
--   `Gaurantee of Exchange`: no occurence of a user receiving tokens without the equivalent promised exchange.
--   `Liquidity Incentives`: supports the collection of fees which are distributed to liquidity providers and acts as incentive for liquidity participation.
--   `Weighted Math`: allows the configuration of pool weights so users can choose their levels of exposure between the tokens.
+- `Permissionless`: no need to whitelist connections, modules, or denominations. Individual implementations may have their own permissioning scheme, however the protocol must not require permissioning from a trusted party to be secure.
+- `Decentralized`: all parameters are managed on chain via governance. Does not require any central authority or entity to function. Also does not require a single blockchain, acting as a hub, to function.
+- `Gaurantee of Exchange`: no occurence of a user receiving tokens without the equivalent promised exchange.
+- `Liquidity Incentives`: supports the collection of fees which are distributed to liquidity providers and acts as incentive for liquidity participation.
+- `Weighted Math`: allows the configuration of pool weights so users can choose their levels of exposure between the tokens.
 
 ## Technical Specification
 
@@ -76,9 +76,9 @@ $$V = {&Pi;_tB_t^{W_t}}$$
 
 Where
 
--   $t$ ranges over the tokens in the pool
--   $B_t$ is the balance of the token in the pool
--   $W_t$ is the normalized weight of the tokens, such that the sum of all normalized weights is 1.
+- $t$ ranges over the tokens in the pool
+- $B_t$ is the balance of the token in the pool
+- $W_t$ is the normalized weight of the tokens, such that the sum of all normalized weights is 1.
 
 #### Spot Price
 
@@ -86,10 +86,10 @@ Spot prices of tokens are defined entirely by the weights and balances of the to
 
 $$SP_i^o = (B_i/W_i)/(B_o/W_o)$$
 
--   $B_i$ is the balance of token $i$, the token being sold by the trader which is going into the pool
--   $B_o$ is the balance of token $o$, the token being bought by the trader which is going out of the pool
--   $W_i$ is the weight of token $i$
--   $W_o$ is the weight of token $o$
+- $B_i$ is the balance of token $i$, the token being sold by the trader which is going into the pool
+- $B_o$ is the balance of token $o$, the token being bought by the trader which is going out of the pool
+- $W_i$ is the weight of token $i$
+- $W_o$ is the weight of token $o$
 
 #### Fees
 
@@ -117,8 +117,8 @@ The pool can be fully funded through the initial deposit or through subsequent d
 
 ```ts
 interface Coin {
-    amount: int64;
-    denom: string;
+  amount: int64;
+  denom: string;
 }
 ```
 
@@ -139,11 +139,11 @@ enum PoolStatus {
 
 ```ts
 interface PoolAsset {
-    side: PoolSide;
-    balance: Coin;
-    // percentage
-    weight: int32;
-    decimal: int32;
+  side: PoolSide;
+  balance: Coin;
+  // percentage
+  weight: int32;
+  decimal: int32;
 }
 ```
 
@@ -342,7 +342,8 @@ enum MessageType {
   CreatePool,
   SingleAssetDeposit,
   MultiAssetDeposit,
-  Withdraw,
+  SingleAssetWithdraw,
+  MultiAssetWithdraw,
   Swap
 }
 
@@ -368,17 +369,15 @@ interface IBCSwapDataPacket {
 ```
 
 ```typescript
-type IBCSwapDataAcknowledgement =
-    | IBCSwapDataPacketSuccess
-    | IBCSwapDataPacketError;
+type IBCSwapDataAcknowledgement = IBCSwapDataPacketSuccess | IBCSwapDataPacketError;
 
 interface IBCSwapDataPacketSuccess {
-    // This is binary 0x01 base64 encoded
-    result: "AQ==";
+  // This is binary 0x01 base64 encoded
+  result: "AQ==";
 }
 
 interface IBCSwapDataPacketError {
-    error: string;
+  error: string;
 }
 ```
 
@@ -412,8 +411,8 @@ Once the setup function has been called, channels can be created via the IBC rou
 
 An interchain swap module will accept new channels from any module on another machine, if and only if:
 
--   The channel being created is unordered.
--   The version string is `ics101-1`.
+- The channel being created is unordered.
+- The version string is `ics101-1`.
 
 ```typescript
 function onChanOpenInit(
@@ -455,12 +454,12 @@ function onChanOpenTry(
 
 ```typescript
 function onChanOpenAck(
-    portIdentifier: Identifier,
-    channelIdentifier: Identifier,
-    counterpartyChannelIdentifier: Identifier,
-    counterpartyVersion: string
+  portIdentifier: Identifier,
+  channelIdentifier: Identifier,
+  counterpartyChannelIdentifier: Identifier,
+  counterpartyVersion: string
 ) {
-    abortTransactionUnless(counterpartyVersion === "ics101-1");
+  abortTransactionUnless(counterpartyVersion === "ics101-1");
 }
 ```
 
@@ -470,21 +469,14 @@ function onChanOpenAck(
 
 ```ts
 function sendInterchainIBCSwapDataPacket(
-    swapPacket: IBCSwapPacketData,
-    sourcePort: string,
-    sourceChannel: string,
-    timeoutHeight: Height,
-    timeoutTimestamp: uint64
+  swapPacket: IBCSwapPacketData,
+  sourcePort: string,
+  sourceChannel: string,
+  timeoutHeight: Height,
+  timeoutTimestamp: uint64
 ) {
-    // send packet using the interface defined in ICS4
-    handler.sendPacket(
-        getCapability("port"),
-        sourcePort,
-        sourceChannel,
-        timeoutHeight,
-        timeoutTimestamp,
-        swapPacket
-    );
+  // send packet using the interface defined in ICS4
+  handler.sendPacket(getCapability("port"), sourcePort, sourceChannel, timeoutHeight, timeoutTimestamp, swapPacket);
 }
 ```
 
@@ -513,9 +505,13 @@ function onRecvPacket(packet: Packet) {
             onDoubleDepositReceived(msg)
             break
 
-        case Withdraw:
-            var msg: MsgWithdrawRequest = protobuf.decode(swapPacket.data)
-            onWithdrawReceived(msg)
+        case SingleAssetWithdraw:
+            var msg: MsgSingleAssetWithdrawRequest = protobuf.decode(swapPacket.data)
+            onSingleAssetWithdrawReceived(msg)
+            break
+        case MultiAssetWithdraw:
+            var msg: MsgMultiAssetWithdrawRequest = protobuf.decode(swapPacket.data)
+            onMultiAssetWithdrawReceived(msg)
             break
         case Swap:
             var msg: MsgSwapRequest = protobuf.decode(swapPacket.data)
@@ -560,8 +556,11 @@ function OnAcknowledgementPacket(
         case MultiAssetDeposit:
             onMultiAssetDepositAcknowledged(msg)
             break;
-        case Withdraw:
-            onWithdrawAcknowledged(msg)
+        case SingleAssetWithdraw:
+            onSingleAssetWithdrawAcknowledged(msg)
+            break;
+        case MultiAssetWithdraw:
+            onMultiAssetWithdrawAcknowledged(msg)
             break;
         case Swap:
             var msg: MsgSwapRequest = protobuf.decode(swapPacket.data)
@@ -582,13 +581,13 @@ function OnAcknowledgementPacket(
 
 ```ts
 function onTimeoutPacket(packet: Packet) {
-    // the packet timed-out, so refund the tokens
-    refundTokens(packet);
+  // the packet timed-out, so refund the tokens
+  refundTokens(packet);
 }
 ```
 
 ```ts
-// TODO: need to decode the subpacket from packet  
+// TODO: need to decode the subpacket from packet
 function refundToken(packet: Packet) {
    let token
    switch packet.type {
@@ -601,8 +600,10 @@ function refundToken(packet: Packet) {
     case MultiAssetDeposit:
       token = packet.tokens
       break;
-    case Withdraw:
+    case SingleAssetWithdraw:
       token = packet.pool_token
+    case MultiAssetWithdraw:
+      token = packet.localWithdraw.pool_token
    }
     escrowAccount = channelEscrowAddresses[packet.srcChannel]
     bank.TransferCoins(escrowAccount, packet.sender, token.denom, token.amount)
@@ -617,7 +618,8 @@ Interchain Swap implements the following sub-protocols:
   rpc CreatePool(MsgCreatePoolRequest) returns (MsgCreatePoolResponse);
   rpc SingleAssetDeposit(MsgSingleAssetDepositRequest) returns (MsgSingleAssetDepositResponse);
   rpc MultiAssetDeposit(MsgMultiAssetDepositRequest) returns (MsgMultiAssetDepositResponse);
-  rpc Withdraw(MsgWithdrawRequest) returns (MsgWithdrawResponse);
+  rpc SingleAssetWithdraw(MsgSingleAssetWithdrawRequest) returns (MsgSingleAssetWithdrawResponse);
+  rpc MultiAssetWithdraw(MsgMultiAssetWithdrawRequest) returns (MsgMultiAssetWithdrawResponse);
   rpc Swap(MsgSwapRequest) returns (MsgSwapResponse);
 ```
 
@@ -638,44 +640,53 @@ interface MsgCreatePoolResponse {}
 
 ```ts
 interface MsgDepositAssetRequest {
-    poolId: string;
-    sender: string;
-    token: Coin;
+  poolId: string;
+  sender: string;
+  token: Coin;
 }
 interface MsgSingleAssetDepositResponse {
-    poolToken: Coin;
+  poolToken: Coin;
 }
 ```
 
 ```ts
 interface LocalDeposit {
-    sender: string;
-    token: Coin;
+  sender: string;
+  token: Coin;
 }
 interface RemoteDeposit {
-    sender: string;
-    sequence: int; // account transaction sequence
-    token: Coin;
-    signature: Uint8Array;
+  sender: string;
+  sequence: int; // account transaction sequence
+  token: Coin;
+  signature: Uint8Array;
 }
 
 interface MsgMultiAssetDepositRequest {
-    poolId: string;
-    localDeposit: LocalDeposit;
-    remoteDeposit: RemoteDeposit;
+  poolId: string;
+  localDeposit: LocalDeposit;
+  remoteDeposit: RemoteDeposit;
 }
 interface MsgMultiAssetDepositResponse {
-    poolTokens: Coin[];
+  poolTokens: Coin[];
 }
 ```
 
 ```ts
-interface MsgWithdrawRequest {
+interface MsgSingleAssetWithdrawRequest {
     sender: string,
     poolCoin: Coin,
     denomOut: string,
 }
-interface MsgWithdrawResponse {
+interface MsgSingleAssetWithdrawResponse {
+   token: Coin;
+}
+
+interface MsgMultiAssetWithdrawRequest {
+    localWithdraw: MsgSingleAssetWithdrawRequest
+    remoteWithdraw: MsgSingleAssetWithdrawRequest
+}
+
+interface MsgMultiAssetWithdrawResponse {
    tokens: []Coin;
 }
 ```
@@ -743,7 +754,7 @@ function singleAssetDeposit(msg MsgSingleDepositRequest) {
     // should have enough balance
     abortTransactionUnless(balance.amount >= msg.token.amount)
 
-    // the first initial 
+    // the first initial
     if(pool.status == POOL_STATUS_INITIAL) {
         const asset = pool.findAssetByDenom(msg.token.denom)
         abortTransactionUnless(balance.amount !== asset.amount)
@@ -819,7 +830,7 @@ function multiAssetDeposit(msg MsgMultiAssetDepositRequest) {
     sendInterchainIBCSwapDataPacket(packet, msg.sourcePort, msg.sourceChannel, msg.timeoutHeight, msg.timeoutTimestamp)
 }
 
-function withdraw(msg MsgWithdrawRequest) {
+function singleAssetWithdraw(msg MsgWithdrawRequest) {
 
     abortTransactionUnless(msg.sender != null)
     abortTransactionUnless(msg.token.length > 0)
@@ -852,6 +863,47 @@ function withdraw(msg MsgWithdrawRequest) {
         stateChange: {
             poolToken: msg.poolToken,
             out: [outToken],
+        }
+    }
+    sendInterchainIBCSwapDataPacket(packet, msg.sourcePort, msg.sourceChannel, msg.timeoutHeight, msg.timeoutTimestamp)
+
+}
+
+function multiAssetWithdraw(msg MsgMultiAssetWithdrawRequest) {
+
+    abortTransactionUnless(msg.localWithdraw.sender != null)
+    abortTransactionUnless(msg.remoteWithdraw.sender != null)
+    abortTransactionUnless(msg.localWithdraw.poolToken != null)
+    abortTransactionUnless(msg.remoteWithdraw.poolToken != null)
+
+    const pool = store.findPoolById(msg.localWithdraw.poolToken.denom)
+    abortTransactionUnless(pool != null)
+    abortTransactionUnless(pool.status == PoolStatus.POOL_STATUS_READY)
+
+    const outToken = this.pool.findAssetByDenom(msg.denomOut)
+    abortTransactionUnless(outToken != null)
+    abortTransactionUnless(outToken.poolSide == PoolSide.Native)
+
+    // lock pool token to the swap module
+    const escrowAddr = escrowAddress(pool.counterpartyPort, pool.counterpartyChannel)
+    bank.sendCoins(msg.sender, escrowAddr, msg.poolToken)
+
+    const amm = new InterchainMarketMaker(pool, params.getPoolFeeRate())
+    const outTokens = amm.multiAssetWithdraw([msg.localDeposit.poolToken, msg.remoteDeposit.poolToken])
+
+    // update local pool state,
+    const assetOut = pool.findAssetByDenom(msg.denomOut)
+    assetOut.balance.amount -= outToken.amount
+    pool.supply.amount -= poolToken.amount
+    store.savePool(pool)
+
+    // constructs the IBC data packet
+    const packet = {
+        type: MessageType.Withdraw,
+        data: protobuf.encode(msg), // encode the request message to protobuf bytes.
+        stateChange: {
+            poolTokens: [msg.localDeposit.poolToken, msg.remoteDeposit.poolToken] ,
+            out: outTokens,
         }
     }
     sendInterchainIBCSwapDataPacket(packet, msg.sourcePort, msg.sourceChannel, msg.timeoutHeight, msg.timeoutTimestamp)
@@ -977,7 +1029,7 @@ function onSingleAssetDepositReceived(msg: MsgSingleAssetDepositRequest, state: 
         // switch pool status to 'READY'
         pool.Status = PoolStatus_POOL_STATUS_READY
     }
-    
+
     // add pool token to keep consistency, no need to mint pool token since the deposit is executed on the source chain.
     const assetIn = pool.findAssetByDenom(state.in[0].denom)
     assetIn.balance.amount += state.in[0].amount
@@ -1003,7 +1055,7 @@ function onMultiAssetDepositReceived(msg: MsgMultiAssetDepositRequest, state: St
         const feeRate = params.getPoolFeeRate()
         const amm = new InterchainMarketMaker(pool, feeRate)
     }
-    // */  
+    // */
 
     // verify signature
     const sender = account.GetAccount(msg.remoteDeposit.sender)
@@ -1028,18 +1080,18 @@ function onMultiAssetDepositReceived(msg: MsgMultiAssetDepositRequest, state: St
 
     // TODO: remove it
     // deposit remote token
-    const poolTokens = amm.doubleSingleAsset([msg.localDeposit.token, msg.remoteDeposit.token])
-    
+    const poolTokens = amm.multiAssetDeposit([msg.localDeposit.token, msg.remoteDeposit.token])
+
     // update counterparty state
-    state.in.forEech(in => {
+    state.in.forEach(in => {
         const assetIn = pool.findAssetByDenom(in.denom)
         assetIn.balance.amount += in.amount
     })
-    state.poolTokens.forEech(lp => {
+    state.poolTokens.forEach(lp => {
         pool.supply.amount += lp.amount
     })
     store.savePool(amm.pool) // update pool states
-    
+
     // mint voucher token
     bank.mintCoin(MODULE_NAME, state.poolTokens[1])
     bank.sendCoinsFromModuleToAccount(MODULE_NAME, msg.remoteDeposit.sender,  poolTokens[1])
@@ -1131,30 +1183,29 @@ Acknowledgement use for source chain to check if the transaction is succeeded or
 
 ```ts
 function onCreatePoolAcknowledged(request: MsgCreatePoolRequest, response: MsgCreatePoolResponse) {
-    // do nothing
+  // do nothing
 }
 
-function onSingleAssetDepositAcknowledged(request: MsgSingleAssetDepositRequest, response: MsgSingleAssetDepositResponse) {
-    bank.mintCoin(MODULE_NAME,request.sender,response.token)
-    bank.sendCoinsFromModuleToAccount(MODULE_NAME, msg.sender, response.tokens)
+function onSingleAssetDepositAcknowledged(
+  request: MsgSingleAssetDepositRequest,
+  response: MsgSingleAssetDepositResponse
+) {
+  bank.mintCoin(MODULE_NAME, request.sender, response.token);
+  bank.sendCoinsFromModuleToAccount(MODULE_NAME, msg.sender, response.tokens);
 }
 
 function onMultiAssetDepositAcknowledged(request: MsgMultiAssetDepositRequest, response: MsgMultiAssetDepositResponse) {
-    bank.mintCoin(MODULE_NAME,response.tokens[0])
-    bank.sendCoinsFromModuleToAccount(MODULE_NAME, msg.localDeposit.sender, response.tokens[0])
+  bank.mintCoin(MODULE_NAME, response.tokens[0]);
+  bank.sendCoinsFromModuleToAccount(MODULE_NAME, msg.localDeposit.sender, response.tokens[0]);
 }
 
 function onWithdrawAcknowledged(request: MsgWithdrawRequest, response: MsgWithdrawResponse) {
-    bank.burnCoin(MODULE_NAME, response.token)
+  bank.burnCoin(MODULE_NAME, response.token);
 }
 
-function onLeftSwapAcknowledged(request: MsgSwapRequest, response: MsgSwapResponse) {
+function onLeftSwapAcknowledged(request: MsgSwapRequest, response: MsgSwapResponse) {}
 
-}
-
-function onRightSwapAcknowledged(request: MsgRightSwapRequest, response: MsgSwapResponse) {
-
-}
+function onRightSwapAcknowledged(request: MsgRightSwapRequest, response: MsgSwapResponse) {}
 ```
 
 ## RISKS
@@ -1166,9 +1217,9 @@ However, pool state synchronization could be delayed due to relayer halts or net
 
 Solutions and mitigations:
 
--   Timeout: Packets timeout when receipt are delayed for an extended period of time. This limits the impact of inconsistent pool states on mispriced swap orders.
--   Slippage Tolerance: Cancel orders if executed price difference to quoted price is outside of tolerance range.
--   Single-sided trade: Each chain can only execute sell orders of the token held by its single-asset liquidity pool. This removes unnecessary arbitrage opportunities.
+- Timeout: Packets timeout when receipt are delayed for an extended period of time. This limits the impact of inconsistent pool states on mispriced swap orders.
+- Slippage Tolerance: Cancel orders if executed price difference to quoted price is outside of tolerance range.
+- Single-sided trade: Each chain can only execute sell orders of the token held by its single-asset liquidity pool. This removes unnecessary arbitrage opportunities.
 
 ### Price Impact Of Single Asset Deposit
 
@@ -1176,7 +1227,7 @@ Single-asset deposits are convenient for users and reduces the risk of impermane
 
 Solution and mitigations:
 
--   Set an upper limit for single-asset deposits. This would be proportional to the amount deposited and the balance of the asset in the liquidity pool.
+- Set an upper limit for single-asset deposits. This would be proportional to the amount deposited and the balance of the asset in the liquidity pool.
 
 ## Backwards Compatibility
 
