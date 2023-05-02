@@ -56,7 +56,7 @@ To implement interchain swap, we introduce the `Swap Initiator` and `State Updat
 
 Each chain could be either `Swap Initiator` or `State Updater`, it depend on where the swap is created.
 
-This is an overview of how Interchain Swap works 
+This is an overview of how Interchain Swap works
 
 ![Interchain Swap Diagram](interchain-swap.svg)
 
@@ -322,23 +322,30 @@ class InterchainMarketMaker {
 Only one packet data type is required: `IBCSwapDataPacket`, which specifies the message type and data(protobuf marshalled). It is a wrapper for interchain swap messages.
 
 - Payloads in packet
+
 ```ts
 enum MessageType {
-    RequestPoolCreation,
-    ResponsePoolCreation,
-    Deposit,
-    Withdraw,
-    LeftSwap,
-    RightSwap,
+  CreatePool,
+  SingleDeposit,
+  DoubleDeposit,
+  Withdraw,
+  Swap
+}
+
+enum SwapType {
+  Right
+  Left
 }
 
 interface StateChange {
-    in: Coin[],
-    out: Coin[],
-    poolToken: Coin, // could be negtive
+  in: Coin[];
+  out: Coin[];
+  poolToken: Coin; // could be negtive
 }
 ```
+
 - Packet structure
+
 ```ts
 // IBCSwapDataPacket is used to wrap message for relayer.
 interface IBCSwapDataPacket {
@@ -349,6 +356,7 @@ interface IBCSwapDataPacket {
 ```
 
 - Packet of Acknowledgement
+
 ```typescript
 type IBCSwapDataAcknowledgement = IBCSwapDataPacketSuccess | IBCSwapDataPacketError;
 
@@ -395,7 +403,9 @@ interface MsgCreatePoolRequest {
 
 interface MsgCreatePoolResponse {}
 ```
+
 - Single Side Deposit
+
 ```ts
 interface MsgDepositRequest {
   poolId: string;
@@ -408,6 +418,7 @@ interface MsgSingleDepositResponse {
 ```
 
 - Two sides Deposit
+
 ```ts
 interface LocalDeposit {
   sender: string;
@@ -429,7 +440,9 @@ interface MsgDoubleDepositResponse {
   poolTokens: Coin[];
 }
 ```
+
 - Withdraw
+
 ```ts
 interface MsgWithdrawRequest {
     sender: string,
@@ -440,11 +453,13 @@ interface MsgWithdrawResponse {
    tokens: []Coin;
 }
 ```
+
 - Left Swap
 
 ```ts
-interface MsgLeftSwapRequest {
+interface MsgSwapRequest {
    sender: string,
+   swapType: SwapType,
    tokenIn: Coin,
    tokenOut: Coin,
    slippage: number; // max tolerated slippage
@@ -454,6 +469,7 @@ interface MsgSwapResponse {
   tokens: []Coin;
 }
 ```
+
 - Right Swap
 
 ```ts
@@ -471,7 +487,7 @@ interface MsgSwapResponse {
 
 ### Control Flow And Life Scope
 
-These are methods of `Swap Initiator`, which execute main logic and output a state change, state change is need to be executed on both local and remote 
+These are methods of `Swap Initiator`, which execute main logic and output a state change, state change is need to be executed on both local and remote
 
 ```ts
 function createPool(msg: MsgCreatePoolRequest) {
@@ -486,7 +502,7 @@ function createPool(msg: MsgCreatePoolRequest) {
     abortTransactionUnless(msg.weight.split(':').length != 2) // weight: "50:50"
     abortTransactionUnless( !store.hasPool(generatePoolId(msg.denoms)) )
 
-    cosnt pool = new InterchainLiquidityPool(msg.denoms, msg.decimals, msg.weight, msg.sourcePort, msg.sourceChannel)
+    const pool = new InterchainLiquidityPool(msg.denoms, msg.decimals, msg.weight, msg.sourcePort, msg.sourceChannel)
 
     const localAssetCount = 0
     for(var denom in msg.denoms) {
@@ -499,7 +515,7 @@ function createPool(msg: MsgCreatePoolRequest) {
 
     // constructs the IBC data packet
     const packet = {
-        type: MessageType.Create,
+        type: MessageType.CreatePool,
         data: protobuf.encode(msg), // encode the request message to protobuf bytes.
     }
     sendInterchainIBCSwapDataPacket(packet, msg.sourcePort, msg.sourceChannel, msg.timeoutHeight, msg.timeoutTimestamp)
@@ -522,9 +538,9 @@ function singleDeposit(msg MsgSingleDepositRequest) {
     const escrowAddr = escrowAddress(pool.encounterPartyPort, pool.encounterPartyChannel)
     bank.sendCoins(msg.sender, escrowAddr, msg.tokens)
 
-    cosnt amm = new InterchainMarketMaker(pool, params.getPoolFeeRate())
-    cosnt poolToken = amm.depositSingleAsset(msg.token)
-    
+    const amm = new InterchainMarketMaker(pool, params.getPoolFeeRate())
+    const poolToken = amm.depositSingleAsset(msg.token)
+
     // constructs the IBC data packet
     const packet = {
         type: MessageType.Deposit,
@@ -555,9 +571,9 @@ function doubleDeposit(msg MsgDoubleDepositRequest) {
     // deposit assets to the escrowed account
     const escrowAddr = escrowAddress(pool.encounterPartyPort, pool.encounterPartyChannel)
     bank.sendCoins(msg.sender, escrowAddr, msg.tokens)
-    
-    cosnt amm = new InterchainMarketMaker(pool, params.getPoolFeeRate())
-    cosnt poolToken = amm.depositSingleAsset(msg.token)
+
+    const amm = new InterchainMarketMaker(pool, params.getPoolFeeRate())
+    const poolToken = amm.depositSingleAsset(msg.token)
 
     // constructs the IBC data packet
     const packet = {
@@ -582,11 +598,11 @@ function withdraw(msg MsgWithdrawRequest) {
     abortTransactionUnless(outToken.poolSide == PoolSide.Native)
 
     // lock pool token to the swap module
-    const escrowAddr = escrowAddress(pool.encounterPartyPort, pool.encouterPartyChannel)
+    const escrowAddr = escrowAddress(pool.encounterPartyPort, pool.encounterPartyChannel)
     bank.sendCoins(msg.sender, escrowAddr, msg.poolToken)
-    
-    cosnt amm = new InterchainMarketMaker(pool, params.getPoolFeeRate())
-    cosnt outAmount = amm.withdraw(msg.poolToken)
+
+    const amm = new InterchainMarketMaker(pool, params.getPoolFeeRate())
+    const outAmount = amm.withdraw(msg.poolToken)
 
     // constructs the IBC data packet
     const packet = {
@@ -601,7 +617,7 @@ function withdraw(msg MsgWithdrawRequest) {
 
 }
 
-function leftSwap(msg MsgLeftSwapRequest) {
+function leftSwap(msg MsgSwapRequest) {
 
     abortTransactionUnless(msg.sender != null)
     abortTransactionUnless(msg.tokenIn != null && msg.tokenIn.amount > 0)
@@ -614,15 +630,15 @@ function leftSwap(msg MsgLeftSwapRequest) {
     abortTransactionUnless(pool.status == PoolStatus.POOL_STATUS_READY)
 
 	// lock swap-in token to the swap module
-	const escrowAddr = escrowAddress(pool.encounterPartyPort, pool.encouterPartyChannel)
+	const escrowAddr = escrowAddress(pool.encounterPartyPort, pool.encounterPartyChannel)
 	bank.sendCoins(msg.sender, escrowAddr, msg.tokenIn)
-	
-	cosnt amm = new InterchainMarketMaker(pool, params.getPoolFeeRate())
-    cosnt outAmount = amm.leftSwap(msg.tokenIn, denomOut)
+
+	const amm = new InterchainMarketMaker(pool, params.getPoolFeeRate())
+    const outAmount = amm.leftSwap(msg.tokenIn, denomOut)
 
 	// contructs the IBC data packet
     const packet = {
-        type: MessageType.Leftswap,
+        type: MessageType.Swap,
         data: protobuf.encode(msg), // encode the request message to protobuf bytes.
         stateChange: { in: msg.tokenIn, out: outAmount }
     }
@@ -638,16 +654,16 @@ function rightSwap(msg MsgRightSwapRequest) {
     abortTransactionUnless(msg.slippage > 0)
     abortTransactionUnless(msg.recipient != null)
 
-    const pool = store.findPoolById(generatePoolId[tokenIn.denom, tokenOut.denom]))
+    const pool = store.findPoolById(generatePoolId[tokenIn.denom, tokenOut.denom])
     abortTransactionUnless(pool != null)
     abortTransactionUnless(pool.status == PoolStatus.POOL_STATUS_READY)
 
     // lock swap-in token to the swap module
-    const escrowAddr = escrowAddress(pool.encounterPartyPort, pool.encouterPartyChannel)
+    const escrowAddr = escrowAddress(pool.encounterPartyPort, pool.encounterPartyChannel)
     bank.sendCoins(msg.sender, escrowAddr, msg.tokenIn)
-    
-	cosnt amm = new InterchainMarketMaker(pool, params.getPoolFeeRate())
-    cosnt inAmount = amm.rightSwap(msg.tokenIn, msg.tokenOut)
+
+	const amm = new InterchainMarketMaker(pool, params.getPoolFeeRate())
+    const inAmount = amm.rightSwap(msg.tokenIn, msg.tokenOut)
     abortTransactionUnless(msg.tokenIn > inAmount)
 
     // contructs the IBC data packet
@@ -673,11 +689,11 @@ function onCreatePoolReceived(msg: MsgCreatePoolRequest, destPort: string, destC
     abortTransactionUnless( !store.hasPool(generatePoolId(msg.denoms)) )
 
     // construct mirror pool on destination chain
-    cosnt pool = new InterchainLiquidityPool(msg.denoms, msg.decimals, msg.weight, destPort, destChannel)
+    const pool = new InterchainLiquidityPool(msg.denoms, msg.decimals, msg.weight, destPort, destChannel)
 
     // count native tokens
     const count = 0
-    for(var denom in msg.denoms {
+    for(var denom in msg.denoms) {
         if bank.hasSupply(ctx, denom) {
             count += 1
             pool.updateAssetPoolSide(denom, PoolSide.Native)
@@ -696,18 +712,18 @@ function onCreatePoolReceived(msg: MsgCreatePoolRequest, destPort: string, destC
 }
 
 function onSingleDepositReceived(msg: MsgSingleDepositRequest, state: StateChange): MsgSingleDepositResponse {
-    
+
     const pool = store.findPoolById(msg.poolId)
     abortTransactionUnless(pool != null)
-    
+
     // add deposit asset
     const assetIn = pool.findAssetByDenom(state.in.denom)
     assetIn.balance.amount += state.in.amount
-    
+
     // add pool token to keep consistency, no need to mint pool token since the deposit is executed on the source chain.
     pool.supply.amount += state.poolToken.amount
     store.savePool(pool)
-    
+
     return { poolToken: state.poolToken }
 }
 
@@ -774,7 +790,7 @@ function onWithdrawReceived(msg: MsgWithdrawRequest, state: StateChange) MsgWith
     return { tokens: outToken }
 }
 
-function onLeftSwapReceived(msg: MsgLeftSwapRequest, state: StateChange) MsgSwapResponse {
+function onLeftSwapReceived(msg: MsgSwapRequest, state: StateChange) MsgSwapResponse {
 
     abortTransactionUnless(msg.sender != null)
     abortTransactionUnless(msg.tokenIn != null && msg.tokenIn.amount > 0)
@@ -795,7 +811,7 @@ function onLeftSwapReceived(msg: MsgLeftSwapRequest, state: StateChange) MsgSwap
     // tolerance check
     abortTransactionUnless(outToken.amount > expected * (1 - msg.slippage / 10000))
 
-    const escrowAddr = escrowAddress(pool.encounterPartyPort, pool.encouterPartyChannel)
+    const escrowAddr = escrowAddress(pool.encounterPartyPort, pool.encounterPartyChannel)
     bank.sendCoins(escrowAddr, msg.recipient, outToken)
 
     store.savePool(amm.pool) // update pool states
@@ -824,7 +840,7 @@ function onRightSwapReceived(msg MsgRightSwapRequest, state: StateChange) MsgSwa
     abortTransactionUnless(tokenIn.amount > minTokenIn.amount)
     abortTransactionUnless((tokenIn.amount - minTokenIn.amount)/minTokenIn.amount > msg.slippage / 10000))
 
-    const escrowAddr = escrowAddress(pool.encounterPartyPort, pool.encouterPartyChannel)
+    const escrowAddr = escrowAddress(pool.encounterPartyPort, pool.encounterPartyChannel)
     bank.sendCoins(escrowAddr, msg.recipient, msg.tokenOut)
 
     store.savePool(amm.pool) // update pool states
@@ -842,7 +858,7 @@ function onSingleDepositAcknowledged(request: MsgSingleDepositRequest, response:
     pool.supply.amount += response.tokens.amount
     store.savePool(pool)
 
-    bank.mintCoin(MODULE_NAME,request.sender,reponse.token)
+    bank.mintCoin(MODULE_NAME,request.sender,response.token)
     bank.sendCoinsFromModuleToAccount(MODULE_NAME, msg.sender, response.tokens)
 }
 
@@ -856,7 +872,7 @@ function onDoubleDepositAcknowledged(request: MsgDoubleDepositRequest, response:
 
     store.savePool(pool)
 
-    bank.mintCoin(MODULE_NAME,reponse.tokens[0])
+    bank.mintCoin(MODULE_NAME,response.tokens[0])
     bank.sendCoinsFromModuleToAccount(MODULE_NAME, msg.localDeposit.sender, response.tokens[0])
 }
 
@@ -868,10 +884,10 @@ function onWithdrawAcknowledged(request: MsgWithdrawRequest, response: MsgWithdr
     store.savePool(pool)
 
     bank.sendCoinsFromAccountToModule(msg.sender, MODULE_NAME, response.tokens)
-    bank.burnCoin(MODULE_NAME, reponse.token)
+    bank.burnCoin(MODULE_NAME, response.token)
 }
 
-function onLeftSwapAcknowledged(request: MsgLeftSwapRequest, response: MsgSwapResponse) {
+function onLeftSwapAcknowledged(request: MsgSwapRequest, response: MsgSwapResponse) {
     const pool = store.findPoolById(generatePoolId[request.tokenIn.denom, request.tokenOut.denom]))
     abortTransactionUnless(pool != null)
 
@@ -1028,13 +1044,13 @@ function onRecvPacket(packet: Packet) {
             var msg: MsgWithdrawRequest = protobuf.decode(swapPacket.data)
             onWithdrawReceived(msg)
             break
-        case LEFT_SWAP:
-            var msg: MsgLeftSwapRequest = protobuf.decode(swapPacket.data)
-            onLeftswapReceived(msg)
-            break
-        case RIGHT_SWAP:
-            var msg: MsgRightSwapRequest = protobuf.decode(swapPacket.data)
-            onRightReceived(msg)
+        case SWAP:
+            var msg: MsgSwapRequest = protobuf.decode(swapPacket.data)
+            if(msg.SwapType === SwapType.Left) {
+                onLeftSwapReceived(msg)
+            }else{
+                 onRightSwapReceived(msg)
+            }
             break
         }
     } catch {
@@ -1074,11 +1090,15 @@ function OnAcknowledgementPacket(
         case WITHDRAW:
             onWithdrawAcknowledged(msg)
             break;
-        case LEFT_SWAP:
+        case SWAP:
+            var msg: MsgSwapRequest = protobuf.decode(swapPacket.data)
+            if(msg.SwapType === SwapType.Left) {
+                onLeftSwapAcknowledged(msg)
+            }else{
+                 onRightSwapAcknowledged(msg)
+            }
             onLeftSwapAcknowledged(msg)
             break;
-        case RIGHT_SWAP:
-            onRightSwapAcknowledged(msg)
         }
     }
 
@@ -1100,8 +1120,7 @@ function onTimeoutPacket(packet: Packet) {
 function refundToken(packet: Packet) {
    let token
    switch packet.type {
-    case LeftSwap:
-    case RightSwap:
+    case Swap:
       token = packet.tokenIn
       break;
     case Deposit:
@@ -1117,26 +1136,28 @@ function refundToken(packet: Packet) {
     bank.TransferCoins(escrowAccount, packet.sender, token.denom, token.amount)
 }
 ```
+
 ## RISKS
 
 ### Pool State Inconsistency
+
 To maintain pool state synchronization is extreme important for Interchain Swap, since we have two mirrored pool across the two chain.
 However, Pool state synchronization could be delayed due to the relayer halt or network issues. the delay could affect swap price.
 
-Solutions: 
- - Timeout: Swap order need to be confirmed on the counterparty chain. it would be canceled and refund if packets not arrival the counterparty on time. 
- - Slippage Tolerance can be a way to protect loss caused by in-consistency.
- - Single side trade: Each Token can only be trade its native chain. in inconsistency state, the backlog swap would sell lower prices than consistency state. which could help to maintain consistency.
+Solutions:
+
+- Timeout: Swap order need to be confirmed on the counterparty chain. it would be canceled and refund if packets not arrival the counterparty on time.
+- Slippage Tolerance can be a way to protect loss caused by in-consistency.
+- Single side trade: Each Token can only be trade its native chain. in inconsistency state, the backlog swap would sell lower prices than consistency state. which could help to maintain consistency.
 
 ### Price Impact Of Single Asset Deposit
 
-Single side deposit is convenient for user to deposit asset. 
-But single side deposit could break the balance of constant invariant. which means the current pool price would go higher or lower. which increase opportunity for arbitrageur 
+Single side deposit is convenient for user to deposit asset.
+But single side deposit could break the balance of constant invariant. which means the current pool price would go higher or lower. which increase opportunity for arbitrageur
 
 Solution:
- - set upper limit for single side deposit. The ratio of profits taken away by arbitrageurs is directly proportional to the ratio of single-sided deposits and the quantity of that asset in the liquidity pool.
 
-
+- set upper limit for single side deposit. The ratio of profits taken away by arbitrageurs is directly proportional to the ratio of single-sided deposits and the quantity of that asset in the liquidity pool.
 
 ## Backwards Compatibility
 
