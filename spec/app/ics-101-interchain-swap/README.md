@@ -46,11 +46,11 @@ Features include an option to provide liquidity with a single asset instead of a
 
 ### Desired Properties
 
--   `Permissionless`: no need to whitelist connections, modules, or denominations. Individual implementations may have their own permissioning scheme, however the protocol must not require permissioning from a trusted party to be secure.
--   `Decentralized`: all parameters are managed on chain via governance. Does not require any central authority or entity to function. Also does not require a single blockchain, acting as a hub, to function.
--   `Gaurantee of Exchange`: no occurrence of a user receiving tokens without the equivalent promised exchange.
--   `Liquidity Incentives`: supports the collection of fees which are distributed to liquidity providers and acts as incentive for liquidity participation.
--   `Weighted Math`: allows the configuration of pool weights so users can choose their levels of exposure between the tokens.
+-  `Permissionless`: no need to whitelist connections, modules, or denominations. Individual implementations may have their own permissioning scheme, however the protocol must not require permissioning from a trusted party to be secure.
+-  `Decentralized`: all parameters are managed on chain via governance. Does not require any central authority or entity to function. Also does not require a single blockchain, acting as a hub, to function.
+-  `Gaurantee of Exchange`: no occurrence of a user receiving tokens without the equivalent promised exchange.
+-  `Liquidity Incentives`: supports the collection of fees which are distributed to liquidity providers and acts as incentive for liquidity participation.
+-  `Weighted Math`: allows the configuration of pool weights so users can choose their levels of exposure between the tokens.
 
 ## Technical Specification
 
