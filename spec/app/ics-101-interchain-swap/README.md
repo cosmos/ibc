@@ -268,7 +268,7 @@ class InterchainMarketMaker {
         const supply = this.pool.supply.amount
         const weight = asset.weight / 100 // convert int to percent
 
-        const amountOut = balance * (1 - ( 1 - redeem.amount / supply) ** (1/weight))
+        const amountOut = balance * redeem.amount / supply
         return {
             amount: amountOut,
             denom: denomOut,
@@ -589,16 +589,23 @@ function onTimeoutPacket(packet: Packet) {
 ```ts
 // TODO: need to decode the subpacket from packet
 function refundToken(packet: Packet) {
+   const msg = packet.data.Data.toJSON()
    let token
+   let sender
    switch packet.type {
+    case Create:
+        token = msg.tokens[0]
     case Swap:
-      token = packet.tokenIn
+      token = msg.tokenIn
+      sender = msg.sender
       break;
     case SingleAssetDeposit:
-      token = packet.tokens
+      token = msg.token
+      sender = msg.sender
       break;
     case MultiAssetDeposit:
-      token = packet.tokens
+      token = msg.localDeposit.token
+      sender = msg.localDeposit.sender
       break;
     case SingleAssetWithdraw:
       token = packet.pool_token
@@ -606,7 +613,7 @@ function refundToken(packet: Packet) {
       token = packet.localWithdraw.pool_token
    }
     escrowAccount = channelEscrowAddresses[packet.srcChannel]
-    bank.TransferCoins(escrowAccount, packet.sender, token.denom, token.amount)
+    bank.TransferCoins(escrowAccount, sender, token.denom, token.amount)
 }
 ```
 
@@ -680,12 +687,10 @@ interface MsgSingleAssetWithdrawRequest {
 interface MsgSingleAssetWithdrawResponse {
    token: Coin;
 }
-
 interface MsgMultiAssetWithdrawRequest {
     localWithdraw: MsgSingleAssetWithdrawRequest
     remoteWithdraw: MsgSingleAssetWithdrawRequest
 }
-
 interface MsgMultiAssetWithdrawResponse {
    tokens: []Coin;
 }
@@ -802,8 +807,10 @@ function multiAssetDeposit(msg MsgMultiAssetDepositRequest) {
     // should have enough balance
     abortTransactionUnless(balance.amount >= msg.localDeposit.token.amount)
 
-    // TODO Marian: check the ratio of local amount and remote amount
-
+    // check the ratio of local amount and remote amount
+    const localAssetInPool := pool.findAssetByDenom(msg.localDeposit.token.denom)
+    const remoteAssetInPool := pool.findAssetByDenom(msg.remoteDeposit.token.denom)
+    abortTransactionUnless(msg.localDeposit.token.amount/msg.remoteDeposit.token.amount !== localAssetInPool.amount/remoteAssetInPool.amount)
 
     // deposit assets to the escrowed account
     const escrowAddr = escrowAddress(pool.counterpartyPort, pool.counterpartyChannel)
@@ -832,9 +839,6 @@ function multiAssetDeposit(msg MsgMultiAssetDepositRequest) {
 
 function singleAssetWithdraw(msg MsgWithdrawRequest) {
 
-    abortTransactionUnless(msg.sender != null)
-    abortTransactionUnless(msg.token.length > 0)
-
     const pool = store.findPoolById(msg.poolToken.denom)
     abortTransactionUnless(pool != null)
     abortTransactionUnless(pool.status == PoolStatus.POOL_STATUS_READY)
@@ -850,11 +854,6 @@ function singleAssetWithdraw(msg MsgWithdrawRequest) {
     const amm = new InterchainMarketMaker(pool, params.getPoolFeeRate())
     const outToken = amm.withdraw(msg.poolToken)
 
-    // update local pool state,
-    const assetOut = pool.findAssetByDenom(msg.denomOut)
-    assetOut.balance.amount -= outToken.amount
-    pool.supply.amount -= poolToken.amount
-    store.savePool(pool)
 
     // constructs the IBC data packet
     const packet = {
@@ -1078,7 +1077,6 @@ function onMultiAssetDepositReceived(msg: MsgMultiAssetDepositRequest, state: St
         pool.Status = PoolStatus_POOL_STATUS_READY
     }
 
-    // TODO: remove it
     // deposit remote token
     const poolTokens = amm.multiAssetDeposit([msg.localDeposit.token, msg.remoteDeposit.token])
 
