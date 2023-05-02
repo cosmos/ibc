@@ -342,7 +342,8 @@ enum MessageType {
   CreatePool,
   SingleAssetDeposit,
   MultiAssetDeposit,
-  Withdraw,
+  SingleAssetWithdraw,
+  MultiAssetWithdraw,
   Swap
 }
 
@@ -504,9 +505,13 @@ function onRecvPacket(packet: Packet) {
             onDoubleDepositReceived(msg)
             break
 
-        case Withdraw:
-            var msg: MsgWithdrawRequest = protobuf.decode(swapPacket.data)
-            onWithdrawReceived(msg)
+        case SingleAssetWithdraw:
+            var msg: MsgSingleAssetWithdrawRequest = protobuf.decode(swapPacket.data)
+            onSingleAssetWithdrawReceived(msg)
+            break
+        case MultiAssetWithdraw:
+            var msg: MsgMultiAssetWithdrawRequest = protobuf.decode(swapPacket.data)
+            onMultiAssetWithdrawReceived(msg)
             break
         case Swap:
             var msg: MsgSwapRequest = protobuf.decode(swapPacket.data)
@@ -551,8 +556,11 @@ function OnAcknowledgementPacket(
         case MultiAssetDeposit:
             onMultiAssetDepositAcknowledged(msg)
             break;
-        case Withdraw:
-            onWithdrawAcknowledged(msg)
+        case SingleAssetWithdraw:
+            onSingleAssetWithdrawAcknowledged(msg)
+            break;
+        case MultiAssetWithdraw:
+            onMultiAssetWithdrawAcknowledged(msg)
             break;
         case Swap:
             var msg: MsgSwapRequest = protobuf.decode(swapPacket.data)
@@ -574,7 +582,7 @@ function OnAcknowledgementPacket(
 ```ts
 function onTimeoutPacket(packet: Packet) {
   // the packet timed-out, so refund the tokens
-  refundTokens(packet, data);
+  refundTokens(packet);
 }
 ```
 
@@ -599,9 +607,10 @@ function refundToken(packet: Packet) {
       token = msg.localDeposit.token
       sender = msg.localDeposit.sender
       break;
-    case Withdraw:
-      token = msg.poolCoin
-      sender = msg.sender
+    case SingleAssetWithdraw:
+      token = packet.pool_token
+    case MultiAssetWithdraw:
+      token = packet.localWithdraw.pool_token
    }
     escrowAccount = channelEscrowAddresses[packet.srcChannel]
     bank.TransferCoins(escrowAccount, sender, token.denom, token.amount)
@@ -616,7 +625,8 @@ Interchain Swap implements the following sub-protocols:
   rpc CreatePool(MsgCreatePoolRequest) returns (MsgCreatePoolResponse);
   rpc SingleAssetDeposit(MsgSingleAssetDepositRequest) returns (MsgSingleAssetDepositResponse);
   rpc MultiAssetDeposit(MsgMultiAssetDepositRequest) returns (MsgMultiAssetDepositResponse);
-  rpc Withdraw(MsgMultiAssetWithdrawRequest) returns (MsgMultiAssetWithdrawResponse);
+  rpc SingleAssetWithdraw(MsgSingleAssetWithdrawRequest) returns (MsgSingleAssetWithdrawResponse);
+  rpc MultiAssetWithdraw(MsgMultiAssetWithdrawRequest) returns (MsgMultiAssetWithdrawResponse);
   rpc Swap(MsgSwapRequest) returns (MsgSwapResponse);
 ```
 
@@ -669,15 +679,17 @@ interface MsgMultiAssetDepositResponse {
 ```
 
 ```ts
-interface MsgMultiAssetWithdrawRequest {
-   localWithdraw: WithdrawRequest
-   remoteWithdraw: WithdrawRequest
+interface MsgSingleAssetWithdrawRequest {
+    sender: string,
+    poolCoin: Coin,
+    denomOut: string,
 }
-
-interface WithdrawRequest {
-    sender: string
-    denomOut: string
-    poolCoin: Coin
+interface MsgSingleAssetWithdrawResponse {
+   token: Coin;
+}
+interface MsgMultiAssetWithdrawRequest {
+    localWithdraw: MsgSingleAssetWithdrawRequest
+    remoteWithdraw: MsgSingleAssetWithdrawRequest
 }
 interface MsgMultiAssetWithdrawResponse {
    tokens: []Coin;
@@ -825,14 +837,7 @@ function multiAssetDeposit(msg MsgMultiAssetDepositRequest) {
     sendInterchainIBCSwapDataPacket(packet, msg.sourcePort, msg.sourceChannel, msg.timeoutHeight, msg.timeoutTimestamp)
 }
 
-function multiAssetWithdraw(msg MsgWithdrawRequest) {
-
-    abortTransactionUnless(msg.localDeposit.sender != null)
-    abortTransactionUnless(msg.remoteDeposit.sender != null)
-    abortTransactionUnless(msg.localDeposit.token != null)
-    abortTransactionUnless(msg.remoteDeposit.token != null)
-    abortTransactionUnless(!bank.hasSupply(msg.localDeposit.denomOut))
-
+function singleAssetWithdraw(msg MsgWithdrawRequest) {
 
     const pool = store.findPoolById(msg.poolToken.denom)
     abortTransactionUnless(pool != null)
@@ -857,6 +862,47 @@ function multiAssetWithdraw(msg MsgWithdrawRequest) {
         stateChange: {
             poolToken: msg.poolToken,
             out: [outToken],
+        }
+    }
+    sendInterchainIBCSwapDataPacket(packet, msg.sourcePort, msg.sourceChannel, msg.timeoutHeight, msg.timeoutTimestamp)
+
+}
+
+function multiAssetWithdraw(msg MsgMultiAssetWithdrawRequest) {
+
+    abortTransactionUnless(msg.localWithdraw.sender != null)
+    abortTransactionUnless(msg.remoteWithdraw.sender != null)
+    abortTransactionUnless(msg.localWithdraw.poolToken != null)
+    abortTransactionUnless(msg.remoteWithdraw.poolToken != null)
+
+    const pool = store.findPoolById(msg.localWithdraw.poolToken.denom)
+    abortTransactionUnless(pool != null)
+    abortTransactionUnless(pool.status == PoolStatus.POOL_STATUS_READY)
+
+    const outToken = this.pool.findAssetByDenom(msg.denomOut)
+    abortTransactionUnless(outToken != null)
+    abortTransactionUnless(outToken.poolSide == PoolSide.Native)
+
+    // lock pool token to the swap module
+    const escrowAddr = escrowAddress(pool.counterpartyPort, pool.counterpartyChannel)
+    bank.sendCoins(msg.sender, escrowAddr, msg.poolToken)
+
+    const amm = new InterchainMarketMaker(pool, params.getPoolFeeRate())
+    const outTokens = amm.multiAssetWithdraw([msg.localDeposit.poolToken, msg.remoteDeposit.poolToken])
+
+    // update local pool state,
+    const assetOut = pool.findAssetByDenom(msg.denomOut)
+    assetOut.balance.amount -= outToken.amount
+    pool.supply.amount -= poolToken.amount
+    store.savePool(pool)
+
+    // constructs the IBC data packet
+    const packet = {
+        type: MessageType.Withdraw,
+        data: protobuf.encode(msg), // encode the request message to protobuf bytes.
+        stateChange: {
+            poolTokens: [msg.localDeposit.poolToken, msg.remoteDeposit.poolToken] ,
+            out: outTokens,
         }
     }
     sendInterchainIBCSwapDataPacket(packet, msg.sourcePort, msg.sourceChannel, msg.timeoutHeight, msg.timeoutTimestamp)
@@ -1031,16 +1077,15 @@ function onMultiAssetDepositReceived(msg: MsgMultiAssetDepositRequest, state: St
         pool.Status = PoolStatus_POOL_STATUS_READY
     }
 
-    // TODO: remove it
     // deposit remote token
-    const poolTokens = amm.doubleSingleAsset([msg.localDeposit.token, msg.remoteDeposit.token])
+    const poolTokens = amm.multiAssetDeposit([msg.localDeposit.token, msg.remoteDeposit.token])
 
     // update counterparty state
-    state.in.forEech(in => {
+    state.in.forEach(in => {
         const assetIn = pool.findAssetByDenom(in.denom)
         assetIn.balance.amount += in.amount
     })
-    state.poolTokens.forEech(lp => {
+    state.poolTokens.forEach(lp => {
         pool.supply.amount += lp.amount
     })
     store.savePool(amm.pool) // update pool states
@@ -1150,12 +1195,6 @@ function onSingleAssetDepositAcknowledged(
 function onMultiAssetDepositAcknowledged(request: MsgMultiAssetDepositRequest, response: MsgMultiAssetDepositResponse) {
   bank.mintCoin(MODULE_NAME, response.tokens[0]);
   bank.sendCoinsFromModuleToAccount(MODULE_NAME, msg.localDeposit.sender, response.tokens[0]);
-
-  // update local pool state,
-  const assetOut = pool.findAssetByDenom(req.denomOut);
-  assetOut.balance.amount -= outToken.amount;
-  pool.supply.amount -= poolToken.amount;
-  store.savePool(pool);
 }
 
 function onWithdrawAcknowledged(request: MsgWithdrawRequest, response: MsgWithdrawResponse) {
