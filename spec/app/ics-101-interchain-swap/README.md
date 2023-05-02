@@ -227,7 +227,7 @@ class InterchainMarketMaker {
         const weight = asset.weight / 100
         const issueAmount = supply * (math.pow(1+amount/asset.balance, weight) - 1)
 
-        asset.balance.amount += token.amount // update balance of the asset
+        // asset.balance.amount += token.amount // update balance of the asset
 
         return {
             amount: issueAmount,
@@ -244,7 +244,7 @@ class InterchainMarketMaker {
             const supply = this.pool.supply.amount
             const weight = asset.weight / 100
             const issueAmount = supply * (1+amount/asset.balance)
-            asset.balance.amount += token.amount // update balance of the asset
+            // asset.balance.amount += token.amount // update balance of the asset
             lpTokens.push({
                 amount: issueAmount,
                 denom: this.pool.supply.denom
