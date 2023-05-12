@@ -37,10 +37,11 @@ This specification contains implementations for all of the functions defined by 
 
 ### Client state
 
-The `ClientState` of a solo machine is simply whether or not the client is frozen.
+The `ClientState` of a solo machine consists of the sequence number and a boolean indicating whether or not the client is frozen.
 
 ```typescript
 interface ClientState {
+  sequence: uint64
   frozen: boolean
   consensusState: ConsensusState
 }
@@ -48,13 +49,12 @@ interface ClientState {
 
 ### Consensus state
 
-The `ConsensusState` of a solo machine consists of the current public key, current diversifier, sequence number, and timestamp.
+The `ConsensusState` of a solo machine consists of the current public key, current diversifier, and timestamp.
 
 The diversifier is an arbitrary string, chosen when the client is created, designed to allow the same public key to be re-used across different solo machine clients (potentially on different chains) without being considered misbehaviour.
 
 ```typescript
 interface ConsensusState {
-  sequence: uint64
   publicKey: PublicKey
   diversifier: string
   timestamp: uint64
@@ -144,7 +144,7 @@ The solo machine client `latestClientHeight` function returns the latest sequenc
 
 ```typescript
 function latestClientHeight(clientState: ClientState): uint64 {
-  return clientState.consensusState.sequence
+  return clientState.sequence
 }
 ```
 
@@ -171,7 +171,7 @@ function verifyHeader(header: header) {
     newDiversifier: header.newDiversifier,
   }
   signBytes = SignBytes(
-    sequence: clientState.consensusState.sequence,
+    sequence: clientState.sequence,
     timestamp: header.timestamp,
     diversifier: clientState.consensusState.diversifier,
     path: []byte{"solomachine:header"},
@@ -233,7 +233,7 @@ function updateState(clientMessage: ClientMessage) {
   clientState.consensusState.publicKey = header.newPubKey
   clientState.consensusState.diversifier = header.newDiversifier
   clientState.consensusState.timestamp = header.timestamp
-  clientState.consensusState.sequence++
+  clientState.sequence++
   provableStore.set("clients/{clientMsg.identifier}/clientState", clientState)
 }
 ```
@@ -271,7 +271,7 @@ function verifyMembership(
   abortTransactionUnless(!clientState.frozen)
   abortTransactionUnless(proof.timestamp >= clientState.consensusState.timestamp)
   signBytes = SignBytes(
-    sequence: clientState.consensusState.sequence,
+    sequence: clientState.sequence,
     timestamp: proof.timestamp,
     diversifier: clientState.consensusState.diversifier,
     path: path.String(),
@@ -284,7 +284,7 @@ function verifyMembership(
 
   // increment sequence on each verification to provide
   // replay protection
-  clientState.consensusState.sequence++
+  clientState.sequence++
   clientState.consensusState.timestamp = proof.timestamp
   // unlike other clients, we must set the client state here because we
   // mutate the clientState (increment sequence and set timestamp)
@@ -309,7 +309,7 @@ function verifyNonMembership(
   abortTransactionUnless(!clientState.frozen)
   abortTransactionUnless(proof.timestamp >= clientState.consensusState.timestamp)
   signBytes = SignBytes(
-    sequence: clientState.consensusState.sequence,
+    sequence: clientState.sequence,
     timestamp: proof.timestamp,
     diversifier: clientState.consensusState.diversifier,
     path: path.String(),
@@ -322,7 +322,7 @@ function verifyNonMembership(
 
   // increment sequence on each verification to provide
   // replay protection
-  clientState.consensusState.sequence++
+  clientState.sequence++
   clientState.consensusState.timestamp = proof.timestamp
   // unlike other clients, we must set the client state here because we
   // mutate the clientState (increment sequence and set timestamp)
