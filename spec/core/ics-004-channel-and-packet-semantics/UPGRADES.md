@@ -6,7 +6,7 @@ This standard document specifies the interfaces and state machine logic that IBC
 
 ### Motivation
 
-As new features get added to IBC, chains may wish the take advantage of new channel features without abandoning the accumulated state and network effect(s) of an already existing channel. The upgrade protocol proposed would allow chains to renegotiate an existing channel to take advantage of new features without having to create a new channel, thus preserving all existing packet state processed on the channel.
+As new features get added to IBC, chains may wish to take advantage of new channel features without abandoning the accumulated state and network effect(s) of an already existing channel. The upgrade protocol proposed would allow chains to renegotiate an existing channel to take advantage of new features without having to create a new channel, thus preserving all existing packet state processed on the channel.
 
 ### Desired Properties
 
@@ -168,7 +168,7 @@ function verifyChannelUpgrade(
 
 #### CounterpartyLastPacketSequence Path
 
-The chain must store the counterparty's last packet sequence on `startFlushUpgradeHandshake`. This will be stored in the `counterpartyLastPacketSequence` path on the private store/
+The chain must store the counterparty's last packet sequence on `startFlushUpgradeHandshake`. This will be stored in the `counterpartyLastPacketSequence` path on the private store.
 
 ```typescript
 function channelCounterpartyLastPacketSequencePath(portIdentifier: Identifier, channelIdentifier: ChannelIdentifier): Path {
@@ -284,13 +284,17 @@ function startFlushUpgradeHandshake(
 ) {
     abortTransactionUnless(channelState == TRYUPGRADE || channelState == ACKUPGRADE)
 
+    // current channel must be OPEN
+    currentChannel = provableStore.get(channelPath(portIdentifier, channelIdentifier))
+    abortTransactionUnless(channel.state == OPEN)
+
     // get underlying connection for proof verification
     connection = getConnection(currentChannel.connectionIdentifier)
     counterpartyHops = getCounterpartyHops(connection)
 
     // verify proofs of counterparty state
     abortTransactionUnless(verifyChannelState(connection, proofHeight, proofChannel, currentChannel.counterpartyPortIdentifier, currentChannel.counterpartyChannelIdentifier, counterpartyChannel))
-    abortTransactionUnless(verifyChannelUpgrade(connection, proofHeight, proofUpgradeTimeout, currentChannel.counterpartyPortIdentifier, currentChannel.counterpartyChannelIdentifier, counterpartyUpgrade))
+    abortTransactionUnless(verifyChannelUpgrade(connection, proofHeight, proofUpgrade, currentChannel.counterpartyPortIdentifier, currentChannel.counterpartyChannelIdentifier, counterpartyUpgrade))
 
     // proposed ordering must be the same as the counterparty proposed ordering
     if proposedUpgradeFields.ordering != counterpartyUpgradeFields.ordering {
@@ -382,7 +386,7 @@ function pendingInflightPacketSequences(
 
 ### Upgrade Handshake
 
-The upgrade handshake defines four datagrams: *ChanUpgradeInit*, *ChanUpgradeTry*, *ChanUpgradeAck*, and *ChanUpgradeConfirm*
+The upgrade handshake defines four datagrams: *ChanUpgradeInit*, *ChanUpgradeTry*, *ChanUpgradeAck*, and *ChanUpgradeOpen*
 
 A successful protocol execution flows as follows (note that all calls are made through modules per [ICS 25](../ics-025-handler-interface)):
 
@@ -489,21 +493,6 @@ function chanUpgradeTry(
         abortTransactionUnless(existingUpgrade.fields == upgradeFields)
     }
 
-    // if the counterparty sequence is not equal to the current sequence, then either the counterparty chain is out-of-sync or
-    // the message is out-of-sync and we write an error receipt with our own sequence so that the counterparty can update
-    // their sequence as well. We must then increment our sequence so both sides start the next upgrade with a fresh sequence.
-    if counterpartyUpgradeSequence != channel.upgradeSequence {
-        // error on the higher sequence so that both chains move to a fresh sequence
-        maxSequence = max(counterpartySequence, channel.upgradeSequence)
-        errorReceipt = ErrorReceipt{
-            sequence: maxSequence,
-            errorMsg: ""
-        }
-        provableStore.set(channelUpgradeErrorPath(portIdentifier, channelIdentifier), errorReceipt)
-        provableStore.set(channelUpgradeSequencePath(portIdentifier, channelIdentifier), maxSequence)
-        return
-    }
-
     // get counterpartyHops for given connection
     connection = getConnection(currentChannel.connectionIdentifier)
     counterpartyHops = getCounterpartyHops(connection)
@@ -523,6 +512,21 @@ function chanUpgradeTry(
     // call startFlushUpgrade handshake to move channel from INITUPGRADE to TRYUPGRADE and start flushing
     // upgrade is blocked on this channelEnd from progressing until flush completes on both ends
     startFlushUpgradeHandshake(portIdentifier, channelIdentifier, upgradeFields, counterpartyChannel, counterpartyUpgrade, TRYUPGRADE, proofChannel, proofUpgrade, proofHeight)
+
+    // if the counterparty sequence is not equal to the current sequence, then either the counterparty chain is out-of-sync or
+    // the message is out-of-sync and we write an error receipt with our own sequence so that the counterparty can update
+    // their sequence as well. We must then increment our sequence so both sides start the next upgrade with a fresh sequence.
+    if counterpartyUpgradeSequence != channel.upgradeSequence {
+        // error on the higher sequence so that both chains move to a fresh sequence
+        maxSequence = max(counterpartyUpgradeSequence, channel.upgradeSequence)
+        errorReceipt = ErrorReceipt{
+            sequence: maxSequence,
+            errorMsg: ""
+        }
+        provableStore.set(channelUpgradeErrorPath(portIdentifier, channelIdentifier), errorReceipt)
+        provableStore.set(channelUpgradeSequencePath(portIdentifier, channelIdentifier), maxSequence)
+        return
+    }
 
     // refresh currentChannel to get latest state
     currentChannel = provableStore.get(channelPath(portIdentifier, channelIdentifier))
@@ -559,7 +563,8 @@ NOTE: It is up to individual implementations how they will provide access-contro
 function chanUpgradeAck(
     portIdentifier: Identifier,
     channelIdentifier: Identifier,
-    counterpartyFlushState: FlushStatus,
+    counterpartyUpgradeSequence: uint64,
+    counterpartyFlushStatus: FlushStatus,
     counterpartyUpgrade: Upgrade,
     proofChannel: CommitmentProof,
     proofUpgrade: CommitmentProof,
@@ -724,7 +729,7 @@ function cancelChannelUpgrade(
 ) {
     // current channel is in INITUPGRADE or TRYUPGRADE
     currentChannel = provableStore.get(channelPath(portIdentifier, channelIdentifier))
-    abortTransactionUnless(channel.state == INITUPGRADE || channel.state == TRYUPGRADE)
+    abortTransactionUnless(currentChannel.state == INITUPGRADE || currentChannel.state == TRYUPGRADE)
 
     abortTransactionUnless(!isEmpty(errorReceipt))
 
