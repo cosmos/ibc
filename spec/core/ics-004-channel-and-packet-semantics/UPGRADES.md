@@ -39,11 +39,11 @@ enum ChannelState {
 
 - The chain that is proposing the upgrade should set the channel state from `OPEN` to `INITUPGRADE`
 - The counterparty chain that accepts the upgrade should set the channel state from `OPEN` to `TRYUPGRADE`
-- Once the initiating chain verifies the counterparty is in `TRYUPGRADE`, it must move to `ACKUPGRADE` in the case where there still exist in-flight packets on its end or complete the upgrade and move to `OPEN`
-- The `TRYUPGRADE` chain must prove the counterparty is in `ACKUPGRADE` or completed the upgrade in `OPEN` AND have no in-flight packets before it can complete the upgrade and move to `OPEN`.
-- The `ACKUPGRADE` chain may OPEN as soon as the in-flight packets on its end have been flushed.
+- Once the initiating chain verifies the counterparty is in `TRYUPGRADE`, it must move to `ACKUPGRADE` in the case where there still exist in-flight packets on **both ends** or complete the upgrade and move to `OPEN`
+- The `TRYUPGRADE` chain must prove the counterparty is in `ACKUPGRADE` or completed the upgrade in `OPEN` AND have no in-flight packets on **both ends** before it can complete the upgrade and move to `OPEN`.
+- The `ACKUPGRADE` chain may OPEN once in-flight packets on **both ends** have been flushed.
 
-Both `TRYUPGRADE` and `ACKUPGRADE` are "blocking" states in that they will prevent the upgrade handshake from proceeding until the in-flight packets are flushed. The `TRYUPGRADE` state must additionally prove the counterparty state before proceeding to open, while the `ACKUPGRADE` state may move to `OPEN` unilaterally once packets are flushed on its end.
+Both `TRYUPGRADE` and `ACKUPGRADE` are "blocking" states in that they will prevent the upgrade handshake from proceeding until the in-flight packets on both channel ends are flushed. The `TRYUPGRADE` state must additionally prove the counterparty state before proceeding to open, while the `ACKUPGRADE` state may move to `OPEN` unilaterally once packets are flushed on both ends.
 
 #### `ChannelEnd`
 
