@@ -140,7 +140,7 @@ interface ErrorReceipt {
 
 #### Upgrade Channel Path
 
-The chain must store the proposed upgrade upon initiating an upgrade. The proposed upgrade must be stored in the public store. It may be deleted once the upgrade is successful or has been aborted.
+The chain must store the proposed upgrade upon initiating an upgrade. The proposed upgrade must be stored in the provable store. It may be deleted once the upgrade is successful or has been aborted.
 
 ```typescript
 function channelUpgradePath(portIdentifier: Identifier, channelIdentifier: Identifier): Path {
@@ -148,7 +148,7 @@ function channelUpgradePath(portIdentifier: Identifier, channelIdentifier: Ident
  }
 ```
 
-The upgrade path has an associated verification of membership method added to the connection interface so that a counterparty may verify that chain has stored the provided counterparty upgrade.
+The upgrade path has an associated membership verification method added to the connection interface so that a counterparty may verify that chain has stored and committed to a particular set of upgrade parameters.
 
 ```typescript
 // Connection VerifyChannelUpgrade method
@@ -225,7 +225,7 @@ The channel upgrade process consists of the following sub-protocols: `InitUpgrad
 
 ### Utility Functions
 
-`initUpgradeChannelHandshake` is a subprotocol that will initialize the channel end for the upgrade handshake. It will verify the upgrade parameters and set the channel state to INITUPGRADE and block sendpackets. During this time; `receivePacket`, `acknowledgePacket` and `timeoutPacket` will still be allowed and processed according to the original channel parameters. The new proposed upgrade will be stored in the public store for counterparty verification.
+`initUpgradeChannelHandshake` is a sub-protocol that will initialize the channel end for the upgrade handshake. It will validate the upgrade parameters and set the channel state to INITUPGRADE, blocking `sendPacket` from processing outbound packets on the channel end. During this time; `receivePacket`, `acknowledgePacket` and `timeoutPacket` will still be allowed and processed according to the original channel parameters. The new proposed upgrade will be stored in the provable store for counterparty verification.
 
 ```typescript
 function initUpgradeChannelHandshake(
@@ -251,7 +251,7 @@ function initUpgradeChannelHandshake(
 
     // get last packet sent on channel and set it in the upgrade struct
     // last packet sent is the nextSequenceSend on the channel minus 1
-    lastPacketSendSequence = publicStore.get(nextSequenceSendPath(portIdentifier, channelIdentifier)) - 1
+    lastPacketSendSequence = provableStore.get(nextSequenceSendPath(portIdentifier, channelIdentifier)) - 1
     upgrade = Upgrade{
         fields: proposedFields,
         timeout: timeout,
@@ -259,11 +259,11 @@ function initUpgradeChannelHandshake(
     }
 
     // store upgrade in public store for counterparty proof verification
-    publicStore.set(channelUpgradePath(portIdentifier, channelIdentifier), upgrade)
+    provableStore.set(channelUpgradePath(portIdentifier, channelIdentifier), upgrade)
 
     currentChannel.sequence = currentChannel.sequence + 1
     currentChannel.state = INITUPGRADE
-    publicStore.set(channelPath(portIdentifier, channelIdentifier), channel)
+    provableStore.set(channelPath(portIdentifier, channelIdentifier), channel)
     return currentChannel.sequence
 }
 ```
