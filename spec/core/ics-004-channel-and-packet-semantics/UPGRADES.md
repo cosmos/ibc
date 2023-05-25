@@ -39,7 +39,7 @@ enum ChannelState {
 
 - The chain that is proposing the upgrade should set the channel state from `OPEN` to `INITUPGRADE`
 - The counterparty chain that accepts the upgrade should set the channel state from `OPEN` to `TRYUPGRADE`
-- Once the initiating chain verifies the counterparty is in `TRYUPGRADE`, it must move to `ACKUPGRADE` in the case where there still exist in-flight packets on **both ends** or complete the upgrade and move to `OPEN`
+- Once the initiating chain verifies the counterparty is in `TRYUPGRADE`, it must move to `ACKUPGRADE` unless all in-flight packets are already flushed on both ends, in which case it must move directly to `OPEN`.
 - The `TRYUPGRADE` chain must prove the counterparty is in `ACKUPGRADE` or completed the upgrade in `OPEN` AND have no in-flight packets on **both ends** before it can complete the upgrade and move to `OPEN`.
 - The `ACKUPGRADE` chain may OPEN once in-flight packets on **both ends** have been flushed.
 
