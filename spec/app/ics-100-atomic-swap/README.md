@@ -523,7 +523,7 @@ function onAcknowledgePacket(
   packet: channeltypes.Packet
   acknowledgement: bytes) {
   // ack is failed
-  if (!ack.success) {
+  if (!acknowledgement.success) {
     refundTokens(packet) 
   } else {
     

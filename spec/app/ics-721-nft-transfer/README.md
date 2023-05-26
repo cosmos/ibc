@@ -379,7 +379,7 @@ function ProcessReceivedPacketData(data: NonFungibleTokenPacketData) {
 ```typescript
 function onAcknowledgePacket(packet: Packet, acknowledgement: bytes) {
   // if the transfer failed, refund the tokens
-  if (!ack.success) refundToken(packet)
+  if (!acknowledgement.success) refundToken(packet)
 }
 ```
 

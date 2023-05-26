@@ -289,7 +289,7 @@ function onAcknowledgePacket(
   packet: Packet,
   acknowledgement: bytes) {
   // if the transfer failed, refund the tokens
-  if (!ack.success)
+  if (!acknowledgement.success)
     refundTokens(packet)
 }
 ```
