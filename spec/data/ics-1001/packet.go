@@ -37,18 +37,21 @@ type NetworkConnectionId interface {
 
 }
 
-// natural unique packet identifier
-type PacketTrackingId struct {    
-	sequence uint64
-	src_port_id Identifier
-    src_channel_id Identifier
-    src_network_id NetworkConnectionId
-}
-
 // is used to track packet
 type PacketTrackingRecord struct {
-    id PacketTrackingId
-	packet_data []byte
+    // sequence is same on dst chain, so sequence with src/dst port and channel are unique across two  chains
+    src_sequence uint64
+	src_port_id Identifier
+    src_channel_id Identifier
+    // network id makes this globally unique
+    src_network_id NetworkConnectionId
+    dst_port_id Identifier
+    dst_channel_id Identifier
+    dst_network_id NetworkConnectionId
+    // will be known when received by destination chain
+    dst_sequence *uint64
+
+    packet_data []byte
 	// depends on implementation
 	packet_hash []byte
 
@@ -56,20 +59,10 @@ type PacketTrackingRecord struct {
     timeout_height Height
 	// on receiver chain (client updates are continuously posted to this chain)
     timeout_timestamp uint64
-
-    // sequence is same on dst chain, so sequence with dst port and channel are second natural id
-
-    // port+channel combination are unique per 
-	dst_port_id Identifier
-    dst_channel_id Identifier
-    dst_network_id NetworkConnectionId
-
     channel_ordering ChannelOrdering
 	// one of "init", "try_open", "ack", "timeout", "failed"
 	state string
 }
-
-
 
 type TransferPacketTrackingRecord struct {
 }
@@ -78,7 +71,8 @@ type TransferPacketTrackingRecord struct {
 type Identifier interface {
 }
 
-func to_send_packet(packet SendPacketEvent) PacketTrackingRecord {
+func to_send_packet(packet SendPacketEvent, src_network  NetworkConnectionId, dst_network  NetworkConnectionId) PacketTrackingRecord {
+    // set all other fields
 	panic("not implemented")
 }
 
@@ -87,11 +81,14 @@ func create_packet_tracing(packet PacketTrackingRecord) {
 	panic("store into database here")
 }
 
-func get_dst_connection_id()
+func get_networks(packet SendPacketEvent) (NetworkConnectionId, NetworkConnectionId) {
+    panic("return src and dst network ids as  tracked by registry")
+}
 
-func on_send_packet_event(packet SendPacketEvent) {
-
-	record := to_send_packet(packet)
+// 1. 
+func on_source_on_send_packet_event(packet SendPacketEvent) {
+    src_network, dst_network := get_networks(packet)
+	record := to_send_packet(packet, src_network, dst_network)
     create_packet_tracing(record)
 }
 
