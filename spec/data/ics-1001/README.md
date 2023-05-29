@@ -11,7 +11,7 @@ Consists of 2 phases.
 
 First is indexing low cardinality not so often updated network indexing "registry" as described in IBC specs about clients, connections and channels. After this there is ability to map any packet to relevant "networks" it was send from(source) and to(destination). We are interested here only in successful registrations of networks.
 
-Second is [tracking](../../index/ics-1001/main.go) packets for proposed tracking algorithm. It concerns with failure scenarios too.
+Second is [tracking](./packet.go) packets for proposed tracking algorithm. It concerns with failure scenarios too.
 
 As of now fees, assets and relayers and other kinds of middleware tracking is not scoped.
 
