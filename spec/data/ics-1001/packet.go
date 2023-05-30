@@ -36,6 +36,14 @@ type ChannelOrdering interface {
 
 }
 
+type ComposableMemo interface {
+
+}
+
+type OsmosisMemo interface {
+
+}
+
 // defines "network(consensus)"(along with client id), see relevant specs
 type ConnectionId interface {
 
@@ -58,7 +66,7 @@ type PacketTrackingRecord struct {
     src_sent_height Height
     // timestamp when it was sent
     src_sent_timestamp uint64
-    src_transaction_id []byte
+
     // sequence is same on dst chain, so sequence with src/dst port and channel are unique across two  chains
     src_sequence uint64
 	src_port_id Identifier
@@ -71,8 +79,6 @@ type PacketTrackingRecord struct {
     // will be known when received by destination chain
     dst_sequence *uint64
 
-    sender string
-
     packet_data []byte
 	// depends on implementation
 	packet_hash []byte
@@ -82,15 +88,25 @@ type PacketTrackingRecord struct {
 	// on receiver chain (client updates are continuously posted to this chain)
     timeout_timestamp uint64
     channel_ordering ChannelOrdering
-	// one of "sent", "try_open", "ack", "timeout", "failed"
-	src_state string
-	
+
     /// one of "timeout", "success"
-    dst_state *string
-    dst_acknowledgement *[]byte
-    dst_acknowledgement_hash *[]byte
+    dst_receipt_state *string
+    // acknowledgement
+    dst_ack *[]byte
     
-    src_acknowledgement *[]byte
+    // either none are set of one of two, can be set if and only `dst_ack` was set
+    dst_ack_one_of_result *[]byte
+    dst_ack_one_of_error *string
+
+    dst_ack_hash *[]byte
+    
+    src_ack_sequence_id *uint64
+    /// so as soon as packet committment deleted, set to true
+    src_commitment_deleted bool
+
+    /// this is calculated field, happens when IBC client update brings counter party height and timestamp, so it can be compared with sent packet chain
+    /// channel closure sets timeout too 
+    src_timeout bool
 
     // basically we are going to track multihop staff, may need some debug field
     index_create_at uint64
@@ -98,12 +114,14 @@ type PacketTrackingRecord struct {
 
 
     /// routing path
-    connection_0_relayer *string
+
+    // so we can lookup sender
+    src_tx_id []byte
+    // so we know that packet was delivered with some transaction and can lookup relayer if needed
+    connection_0_tx_id *[]byte
     connection_0 Identifier
-    connection_0_reached bool
-    connection_1_relayer *string
+    connection_1_tx_id *[]byte
     connection_1 Identifier
-    connection_1_reached bool
     // .... up to 8
 }
 
@@ -119,9 +137,12 @@ type TransferPacketTrackingRecord struct {
     // src denom, target denom based on `src_port/src_channel/denom` as per spec on target chain
     denom string
     
-    memo_json string
     // usually JSON string, but not required to be such
-    memo []byte    
+    memo []byte
+    memo_json *string
+    
+    memo_one_of_osmosis *OsmosisMemo
+    memo_one_of_composable *ComposableMemo
 }
 
 // usually just string
@@ -150,6 +171,7 @@ func get_dst_networks(packet ReceivePacketEvent) (NetworkConnectionId, NetworkCo
 
 
 
+// IbcEvent::SendPacket
 func on_src_on_send_packet_event(packet SendPacketEvent) {
     src_network, dst_network := get_src_networks(packet)
 	record := to_send_packet(packet, src_network, dst_network)
@@ -170,6 +192,27 @@ func on_dst_on_packet_receipt_path(packet ReceivePacketEvent) {
 }
 
 func main() {
+    // ICS-004 and ICS-20 events are correlated by order of events/logs 
+    
+    {
+        //on_src_on_send_packet_event
+        // ModuleEvent::from TransferEvent
+        // MessageEvent::Module("transfer").
+    }
+    {
 
-	fmt.Println("Hello, 世界")
+        // store_packet_receipt
+        // store_packet_acknowledgement
+        // IbcEvent::Message(MessageEvent::Channel)
+        // IbcEvent::ReceivePacket
+        // IbcEvent::Message(MessageEvent::Channel));
+        // IbcEvent::WriteAcknowledgement (sometimes it is Error or Sometimes it is )
+
+        // IbcEvent::Module(DenomTraceEvent if chain is source, TokenTransferRecvEvent)
+    }
+
+    {
+
+    }
+    
 }

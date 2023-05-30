@@ -10,6 +10,8 @@ It is based on event emissions from [Go](https://github.com/cosmos/ibc-go/blob/m
 
 You are have read or have some understanding of IBC whitepaper.
 
+Requires some level of read side expertise in storage used by consensus engine to be able to understand when to subscribe to relevant commitment prefixes. On [Substrate](https://www.shawntabrizi.com/substrate/substrate-storage-deep-dive/) or in Cosmos SDK.
+
 ## Algorithm 
 
 Consists of 2 phases. 
