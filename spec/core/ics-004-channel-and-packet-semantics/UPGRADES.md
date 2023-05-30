@@ -15,7 +15,7 @@ As new features get added to IBC, chains may wish to take advantage of new chann
 - The channel upgrade protocol is atomic, i.e., 
   - either it is unsuccessful and then the channel MUST fall-back to the original channel parameters; 
   - or it is successful and then both channel ends MUST adopt the new channel parameters and the applications must process packet data appropriately.
-- Packets sent under the previously negotiated parameters must be processed under the previously negotiated parameters, packets sent under the newly negotiated parameters must be processed under the newly negotiated parameters. Thus, in-flight packets sent before upgrade handshake is complete will be processed according to the original parameters.
+- Packets sent under the previously negotiated parameters must be processed under the previously negotiated parameters, packets sent under the newly negotiated parameters must be processed under the newly negotiated parameters. Thus, in-flight packets sent before the upgrade handshake is complete will be processed according to the original parameters.
 - The channel upgrade protocol MUST NOT modify the channel identifiers.
 
 ## Technical Specification
@@ -240,7 +240,7 @@ function initUpgradeHandshake(
 ): uint64 {
     // current channel must be OPEN
     currentChannel = provableStore.get(channelPath(portIdentifier, channelIdentifier))
-    abortTransactionUnless(channel.state == OPEN)
+    abortTransactionUnless(currentChannel.state == OPEN)
 
     // new channel version must be nonempty
     abortTransactionUnless(proposedUpgradeFields.Version != "")
@@ -301,7 +301,6 @@ function startFlushUpgradeHandshake(
 
     // get underlying connection for proof verification
     connection = getConnection(currentChannel.connectionIdentifier)
-    counterpartyHops = getCounterpartyHops(connection)
 
     // verify proofs of counterparty state
     abortTransactionUnless(verifyChannelState(connection, proofHeight, proofChannel, currentChannel.counterpartyPortIdentifier, currentChannel.counterpartyChannelIdentifier, counterpartyChannel))
@@ -349,7 +348,7 @@ function startFlushUpgradeHandshake(
         currentChannel.flushState = FLUSHCOMPLETE
     }
 
-    publicStore.set(channelPath(portIdentifier, channelIdentifier), channel)
+    publicStore.set(channelPath(portIdentifier, channelIdentifier), currentChannel)
 
     privateStore.set(channelCounterpartyLastPacketSequencePath(portIdentifier, channelIdentifier), counterpartyUpgrade.lastPacketSent)
 }
