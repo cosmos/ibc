@@ -87,7 +87,7 @@ check whether the packet commitment still exists on the source chain (it will be
 deleted once the acknowledgement is relayed), and if so relay the acknowledgement to
 the source chain.
 
-#### Relaying timeouts
+#### Relaying timeouts (ordinary case, no TIMEOUT receipt)
 
 Timeout relay is slightly more complex since there is no specific event emitted when
 a packet times-out - it is simply the case that the packet can no longer be relayed,
@@ -96,6 +96,15 @@ process must elect to track a set of packets (which can be constructed by scanni
 and as soon as the height or timestamp of the destination chain exceeds that of a tracked
 packet, check whether the packet commitment still exists on the source chain (it will
 be deleted once the timeout is relayed), and if so relay a timeout to the source chain.
+
+#### Relaying timeouts for channels that write TIMEOUT receipts
+
+Some channel types (e.g. ORDERED_ALLOW_TIMEOUT), can only timeout a packet if a timeout receipt
+is written on the destination chain. This requires a relayer to first attempt a receive on the destination chain
+even if the packet is already timed out, before they can relay a timeout to the sending chain. Thus on these channels,
+relayers must check if packet has already been received on the destination chain by querying the packet receipt path.
+If a value does not already exist, then attempt to receive the packet on the destination chain. If a timeout receipt
+is written, then relay the timeout with a proof of the timeout receipt back to the sender chain.
 
 ### Pending datagrams
 
