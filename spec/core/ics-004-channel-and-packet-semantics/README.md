@@ -708,7 +708,7 @@ function recvPacket(
           nextSequenceRecv = nextSequenceRecv + 1
           provableStore.set(nextSequenceRecvPath(packet.destPort, packet.destChannel), nextSequenceRecv)
           provableStore.set(
-          packetReceiptPath(packet.destPort, packet.destChannel, packet.sequence),
+            packetReceiptPath(packet.destPort, packet.destChannel, packet.sequence),
             TIMEOUT_RECEIPT
           )
         }
@@ -964,7 +964,7 @@ function timeoutPacket(
         // ordered channel: check that packet has not been received
         // only allow timeout on next sequence so all sequences before the timed out packet are processed (received/timed out)
         // before this packet times out
-        abortTransactionUnless(nextSequenceRecv == packet.sequence)
+        abortTransactionUnless(nextSequenceRecv <= packet.sequence)
         // ordered channel: check that the recv sequence is as claimed
         abortTransactionUnless(connection.verifyNextSequenceRecv(
           proofHeight,
@@ -989,10 +989,7 @@ function timeoutPacket(
       // NOTE: For ORDERED_ALLOW_TIMEOUT, the relayer must first attempt the receive on the destination chain
       // before the timeout receipt can be written and subsequently proven on the sender chain in timeoutPacket
       case ORDERED_ALLOW_TIMEOUT:
-        // ordered channel: check that packet has not been received
-        // only allow timeout on next sequence so all sequences before the timed out packet are processed (received/timed out)
-        // before this packet times out
-        abortTransactionUnless(nextSequenceRecv == packet.sequence)
+        abortTransactionUnless(nextSequenceRecv > packet.sequence)
         abortTransactionUnless(connection.verifyPacketReceipt(
           proofHeight,
           proof,
@@ -1073,26 +1070,49 @@ function timeoutOnClose(
       expected
     ))
 
-    if channel.order === ORDERED || channel.order == ORDERED_ALLOW_TIMEOUT {
-      // ordered channel: check that the recv sequence is as claimed
-      abortTransactionUnless(connection.verifyNextSequenceRecv(
-        proofHeight,
-        proof,
-        packet.destPort,
-        packet.destChannel,
-        nextSequenceRecv
-      ))
-      // ordered channel: check that packet has not been received
-      abortTransactionUnless(nextSequenceRecv <= packet.sequence)
-    } else
-      // unordered channel: verify absence of receipt at packet index
-      abortTransactionUnless(connection.verifyPacketReceiptAbsence(
-        proofHeight,
-        proof,
-        packet.destPort,
-        packet.destChannel,
-        packet.sequence
-      ))
+    switch channel.order {
+      case ORDERED:
+        // ordered channel: check that packet has not been received
+        abortTransactionUnless(nextSequenceRecv <= packet.sequence)
+        // ordered channel: check that the recv sequence is as claimed
+        abortTransactionUnless(connection.verifyNextSequenceRecv(
+          proofHeight,
+          proof,
+          packet.destPort,
+          packet.destChannel,
+          nextSequenceRecv
+        ))
+        break;
+
+      case UNORDERED:
+        // unordered channel: verify absence of receipt at packet index
+        abortTransactionUnless(connection.verifyPacketReceiptAbsence(
+          proofHeight,
+          proof,
+          packet.destPort,
+          packet.destChannel,
+          packet.sequence
+        ))
+        break;
+
+      // NOTE: For ORDERED_ALLOW_TIMEOUT, the relayer must first attempt the receive on the destination chain
+      // before the timeout receipt can be written and subsequently proven on the sender chain in timeoutPacket
+      case ORDERED_ALLOW_TIMEOUT:
+        abortTransactionUnless(nextSequenceRecv > packet.sequence)
+        abortTransactionUnless(connection.verifyPacketReceipt(
+          proofHeight,
+          proof,
+          packet.destPort,
+          packet.destChannel,
+          packet.sequence
+          TIMEOUT_RECEIPT,
+        ))
+        break;
+
+      default:
+        // unsupported channel type
+        abortTransactionUnless(true)
+    } 
 
     // all assertions passed, we can alter state
 
