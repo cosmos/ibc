@@ -418,11 +418,14 @@ The upgrade handshake defines four datagrams: *ChanUpgradeInit*, *ChanUpgradeTry
 
 A successful protocol execution flows as follows (note that all calls are made through modules per [ICS 25](../ics-025-handler-interface)):
 
-| Initiator | Datagram             | Chain acted upon | Prior state (A, B)            | Posterior state (A, B)    |
-| --------- | -------------------- | ---------------- | ----------------------------- | ------------------------- |
-| Actor     | `ChanUpgradeInit`    | A                | (OPEN, OPEN)                  | (INITUPGRADE, OPEN)       |
-| Actor     | `ChanUpgradeTry`     | B                | (INITUPGRADE, OPEN)           | (INITUPGRADE, TRYUPGRADE) |
-| Relayer   | `ChanUpgradeAck`     | A                | (INITUPGRADE, TRYUPGRADE)     | (ACKUPGRADE, TRYUPGRADE)  |
+| Initiator | Datagram             | Chain acted upon | Prior state (A, B)            | Posterior state (A, B)     |
+| --------- | -------------------- | ---------------- | ----------------------------- | -------------------------- |
+| Actor     | `ChanUpgradeInit`    | A                | (OPEN, OPEN)                  | (INITUPGRADE, OPEN)        |
+| Actor     | `ChanUpgradeInit`    | B                | (INITUPGRADE, OPEN)           | (INITUPGRADE, INITUPGRADE) |
+| Actor     | `ChanUpgradeTry`     | B                | (INITUPGRADE, OPEN)           | (INITUPGRADE, TRYUPGRADE)  |
+| Relayer   | `ChanUpgradeAck`     | A                | (INITUPGRADE, TRYUPGRADE)     | (ACKUPGRADE, TRYUPGRADE)   |
+
+Both sides must call INITUPGRADE through an access-control mechanism of their choice. Once both sides are in INITUPGRADE, the rest of the handshake can complete permissionlessly. The handshake will ensure that the upgrades on either side are mutually compatible and that all previously sent packets are flushed before moving to the newly agreed upon channel parameters.
 
 Once both states are in `ACKUPGRADE` and `TRYUPGRADE` respectively, both sides must move to `FLUSHINGCOMPLETE` respectively by clearing their in-flight packets. Once both sides have complete flushing, a relayer may submit a `ChanUpgradeOpen` message to both ends proving that the counterparty has also completed flushing in order to move the channelEnd to `OPEN`.
 
@@ -487,17 +490,9 @@ function chanUpgradeTry(
     proofUpgrade: CommitmentProof,
     proofHeight: Height
 ) {
-    // current channel must be OPEN or INITUPGRADE (crossing hellos)
+    // current channel INITUPGRADE (crossing hellos)
     currentChannel = provableStore.get(channelPath(portIdentifier, channelIdentifier))
-    abortTransactionUnless(currentChannel.state == OPEN || currentChannel.state == INITUPGRADE)
-
-    // create upgrade fields for this chain from counterparty upgrade and relayer-provided information
-    // version may be mutated by application callback
-    upgradeFields = Upgrade{
-        ordering: counterpartyUpgrade.fields.ordering,
-        connectionHops: proposedConnectionHops,
-        version: counterpartyUpgrade.fields.version,
-    }
+    abortTransactionUnless(currentChannel.state == INITUPGRADE)
 
     // either timeout height or timestamp must be non-zero
     // if the upgrade feature is implemented on the TRY chain, then a relayer may submit a TRY transaction after the timeout.
@@ -510,22 +505,14 @@ function chanUpgradeTry(
         (currentTimestamp() > timeout.timeoutTimestamp && timeout.timeoutTimestamp != 0)
     )
 
-    // if OPEN, then initialize handshake with upgradeFields
-    // otherwise, assert that the upgrade fields are the same for crossing-hellos case
-    if currentChannel.state == OPEN {
-        // if the counterparty sequence is greater than the current sequence, we fast forward to the counterparty sequence
-        // so that both channel ends are using the same sequence for the current upgrade
-        // initUpgradeChannelHandshake will increment the sequence so after that call
-        // both sides will have the same upgradeSequence
-        if counterpartyUpgradeSequence > currentChannel.upgradeSequence {
-            currentChannel.upgradeSequence = counterpartyUpgradeSequence - 1
-        }
+    // if the counterparty sequence is greater than the current sequence, we fast forward to the counterparty sequence
+    // so that both channel ends are using the same sequence for the current upgrade
+    // initUpgradeChannelHandshake will increment the sequence so after that call
+    // both sides will have the same upgradeSequence
+    abortTransactionUnless(counterpartyUpgradeSequence > currentChannel.upgradeSequence)
 
-        initUpgradeChannelHandshake(portIdentifier, channelIdentifier, upgradeFields, counterpartyUpgrade.timeout)
-    } else if currentChannel.state == INITUPGRADE {
-        existingUpgrade = publicStore.get(channelUpgradePath)
-        abortTransactionUnless(existingUpgrade.fields == upgradeFields)
-    }
+    upgrade = publicStore.get(channelUpgradePath)
+    abortTransactionUnless(upgrade.fields == counterpartyUpgrade.fields)
 
     // get counterpartyHops for given connection
     connection = getConnection(currentChannel.connectionIdentifier)
