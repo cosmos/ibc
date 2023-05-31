@@ -1,36 +1,5 @@
 package main
 
-
-import "fmt"
-
-// this how event looks in Go and Rust implementations
-type SendPacketEvent struct {
-    packet_data []byte
-    timeout_height Height
-    timeout_timestamp uint64
-    sequence uint64
-    src_port_id Identifier
-    src_channel_id Identifier
-    dst_port_id Identifier
-    dst_channel_id Identifier
-    channel_ordering ChannelOrdering
-    src_connection_id ConnectionId
-}
-
-
-type ReceivePacketEvent struct {
-    packet_data []byte
-    timeout_height Height
-    timeout_timestamp uint64
-    sequence uint64
-    src_port_id Identifier
-    src_channel_id Identifier
-    dst_port_id Identifier
-    dst_channel_id Identifier
-    channel_ordering ChannelOrdering
-    src_connection_id ConnectionId
-}
-
 // never changes (at least should not) for specified channel/port source and counterparty
 type ChannelOrdering interface {
 
@@ -40,9 +9,19 @@ type ComposableMemo interface {
 
 }
 
-type OsmosisMemo interface {
+type OsmosisSwapMemo interface {
 
 }
+
+
+type IbcCwHookMemo interface {
+
+}
+
+type PortForwardMemo interface {
+
+}
+
 
 // defines "network(consensus)"(along with client id), see relevant specs
 type ConnectionId interface {
@@ -112,7 +91,6 @@ type PacketTrackingRecord struct {
     index_create_at uint64
     index_updated_at uint64
 
-
     /// routing path
 
     // so we can lookup sender
@@ -125,8 +103,7 @@ type PacketTrackingRecord struct {
     // .... up to 8
 }
 
-
-
+// if by events/logs order or data parsing detected it is transfer event
 type TransferPacketTrackingRecord struct {
     // natural id
     src_sequence uint64
@@ -134,85 +111,33 @@ type TransferPacketTrackingRecord struct {
     src_channel_id Identifier
     src_network_id NetworkConnectionId
     
+    // whether the token originates from this chain
+    is_source bool
     // src denom, target denom based on `src_port/src_channel/denom` as per spec on target chain
     denom string
+    amount_u256 string
+
+    // address in very free form
+    sender string
+    receiver string
+    /// specific acknowledgement as defined by ICS-20 module
+    src_ack *string
+
+    success *bool
     
     // usually JSON string, but not required to be such
-    memo []byte
+    memo *[]byte
     memo_json *string
     
-    memo_one_of_osmosis *OsmosisMemo
-    memo_one_of_composable *ComposableMemo
+    memo_one_of_packet_forwarding *PortForwardMemo
+    memo_one_of_packet_swap *OsmosisSwapMemo
+    memo_one_of_packet_wasm *IbcCwHookMemo
+    memo_one_of_packet_forward_xcm *ComposableMemo
 }
 
 // usually just string
 type Identifier interface {
 }
 
-func to_send_packet(packet SendPacketEvent, src_network  NetworkConnectionId, dst_network  NetworkConnectionId) PacketTrackingRecord {
-    // set all other fields
-	panic("not implemented")
-}
-
-func create_packet_tracing(packet PacketTrackingRecord) {
-    packet.state = "init"
-	panic("store into database here")
-}
-
-/// operates in context of some chain subscription/RPC URL
-func get_src_networks(packet SendPacketEvent) (NetworkConnectionId, NetworkConnectionId) {
-    panic("return src and dst network ids as  tracked by registry")
-}
-
-/// operates in context of some chain subscription/RPC URL
-func get_dst_networks(packet ReceivePacketEvent) (NetworkConnectionId, NetworkConnectionId) {
-    panic("return src and dst network ids as  tracked by registry")
-}
-
-
-
-// IbcEvent::SendPacket
-func on_src_on_send_packet_event(packet SendPacketEvent) {
-    src_network, dst_network := get_src_networks(packet)
-	record := to_send_packet(packet, src_network, dst_network)
-    create_packet_tracing(record)
-    if_ics_20_packet(record)
-}
-
-func on_dst_on_receive_packet_event(packet ReceivePacketEvent) {
-    src_network, dst_network := get_dst_networks(packet)
-	update_packet_tracing_receive(packet)
-}
-
-func on_dst_on_packet_receipt_path(packet ReceivePacketEvent) {
-    src_network, dst_network := get_dst_networks(packet)
-	update_packet_tracing_receive(packet)
-    // update on timeout_receipt
-    SUCCESSFUL_RECEIPT
-}
-
 func main() {
-    // ICS-004 and ICS-20 events are correlated by order of events/logs 
-    
-    {
-        //on_src_on_send_packet_event
-        // ModuleEvent::from TransferEvent
-        // MessageEvent::Module("transfer").
-    }
-    {
-
-        // store_packet_receipt
-        // store_packet_acknowledgement
-        // IbcEvent::Message(MessageEvent::Channel)
-        // IbcEvent::ReceivePacket
-        // IbcEvent::Message(MessageEvent::Channel));
-        // IbcEvent::WriteAcknowledgement (sometimes it is Error or Sometimes it is )
-
-        // IbcEvent::Module(DenomTraceEvent if chain is source, TokenTransferRecvEvent)
-    }
-
-    {
-
-    }
-    
 }

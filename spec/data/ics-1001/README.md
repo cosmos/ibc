@@ -3,7 +3,7 @@
 This is draft packet correlation algorithm.
 
 It is based on event emissions from [Go](https://github.com/cosmos/ibc-go/blob/main/modules/core/04-channel/keeper/events.go) and [Rust](https://github.com/cosmos/ibc-rs/blob/main/crates/ibc/src/core/ics04_channel/events.rs) implementations of [IBC channels and packet semantics](https://github.com/dzmitry-lahoda-forks/ibc/blob/main/spec/core/ics-004-channel-and-packet-semantics/README.md) with extensions to [parse token transfers](https://github.com/dzmitry-lahoda-forks/ibc/tree/main/spec/app/ics-020-fungible-token-transfer) and [packet forwarding](https://github.com/strangelove-ventures/packet-forward-middleware
-).
+) and [Osmosis IBC hooks](https://github.com/osmosis-labs/osmosis/blob/main/x/ibc-hooks/README.md).
 
 
 ## Prerequisites
@@ -26,3 +26,53 @@ As of now fees, assets and [relayers](https://github.com/informalsystems/chainpu
 
 Can look into off chain network registry from Cosmos only perspective [here](https://github.com/cosmos/chain-registry/) 
 
+
+### The diagram
+
+Correlating IBC events and storage updates depends on exact order of things happen in ibc-go and ibc-rs (same order), and on module which data is parsed(transfer at hand, can be other later).
+
+```mermaid
+sequenceDiagram    
+
+    %% tx begin
+    Alice -->> Source : IBC transfer    
+    Source -> Source : Storage IncrementChannelSequenceNumber
+    Source -> Source : Event IBC SendPacket(channel, port, packet data, sequence, timeout)
+    Source -> Source : Storage WriteDownPacketCommitmentPath(prefix, channel, port, sequence, hash of packet)
+    Source -> Source : Event Module event transfer event (asset denomination, amount, sender, receiver)
+    %% tx end
+
+    Relayer -->> Source : Take ClientState (consensus commitment root, storage commitment root, height, timestamp, packet commitment, packet data) 
+
+
+    Relayer -->> Destination : Put ClientState
+    
+    %% tx begin
+    opt receipt response
+        Destination -> Destination: PacketReceipt Success or Timeout
+    end
+
+    Destination -> Destination: Storage : Packet Acknowledgement and well known path
+
+    Destination -> Destination: Event Message Channel
+    
+    Destination -> Destination: Event IBC Receive Packet (..packet data and metadata as from sender)
+    
+    Destination -> Destination: Event Module DenomTraceEvent and TokenTransferRecvEvent (amount, sender, receiver, ..)
+
+    %% tx end
+
+    %% relayer
+
+    alt is in time
+        Source->Source: Events IBC Message AcknowledgePacket
+        Source->Source: Events IBC AcknowledgePacket AcknowledgePacketData
+        Source->Source: Storage Increment next counter party sequence 
+        Source->Source: Events Module Transfer AckEvent and TokenTransferAcknowledgement  
+    else is timeout
+        Source->Source: Events IBC Timeout Event
+        Source->Source: Events Module Transfer Timeout Event
+    end
+
+    Source->Source: Storage Delete packet commitment
+```
