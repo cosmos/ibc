@@ -312,18 +312,11 @@ function startFlushUpgradeHandshake(
     if counterpartyUpgradeSequence != channel.upgradeSequence {
         // error on the higher sequence so that both chains move to a fresh sequence
         maxSequence = max(counterpartyUpgradeSequence, channel.upgradeSequence)
-        errorReceipt = ErrorReceipt{
-            sequence: maxSequence,
-            errorMsg: ""
-        }
-        provableStore.set(channelUpgradeErrorPath(portIdentifier, channelIdentifier), errorReceipt)
-        provableStore.set(channelUpgradeSequencePath(portIdentifier, channelIdentifier), maxSequence)
-        return
-    }
-
-    // timeouts on upgrade should be the same
-    if upgrade.timeout != counterpartyUpgrade.timeout {
+        currentChannel.UpgradeSequence = maxSequence
+        provableStore.set(channelPath(portIdentifier, channelIdentifier), currentChannel)
+        
         restoreChannel(portIdentifier, channelIdentifier)
+        return
     }
 
     // proposed ordering must be the same as the counterparty proposed ordering
@@ -462,15 +455,21 @@ function chanUpgradeInit(
     // call modules onChanUpgradeInit callback
     module = lookupModule(portIdentifier)
     version, err = module.onChanUpgradeInit(
-        proposedUpgrade.fields.ordering,
-        proposedUpgrade.fields.connectionHops,
         portIdentifier,
         channelIdentifier,
+        proposedUpgrade.fields.ordering,
+        proposedUpgrade.fields.connectionHops,
         upgradeSequence,
         proposedUpgrade.fields.version
     )
     // abort transaction if callback returned error
     abortTransactionUnless(err != nil)
+
+    // replace channel version with the version returned by application
+    // in case it was modified
+    currentChannel = provableStore.get(channelPath(portIdentifier, channelIdentifier))
+    currentChannel.version = version
+    provableStore.set(channelPath(portIdentifier, channelIdentifier), currentChannel)
 }
 ```
 
@@ -518,8 +517,8 @@ function chanUpgradeTry(
         // so that both channel ends are using the same sequence for the current upgrade
         // initUpgradeChannelHandshake will increment the sequence so after that call
         // both sides will have the same upgradeSequence
-        if counterpartyUpgradeSequence > channel.upgradeSequence {
-            channel.upgradeSequence = counterpartyUpgradeSequence - 1
+        if counterpartyUpgradeSequence > currentChannel.upgradeSequence {
+            currentChannel.upgradeSequence = counterpartyUpgradeSequence - 1
         }
 
         initUpgradeChannelHandshake(portIdentifier, channelIdentifier, upgradeFields, counterpartyUpgrade.timeout)
@@ -542,6 +541,7 @@ function chanUpgradeTry(
         connectionHops: counterpartyHops,
         version: currentChannel.version,
         sequence: counterpartyUpgradeSequence,
+        flushStatus: NOTINFLUSH,
     }
 
     // call startFlushUpgrade handshake to move channel from INITUPGRADE to TRYUPGRADE and start flushing
@@ -650,7 +650,7 @@ function chanUpgradeAck(
 
     // if both sides have already flushed then open the upgrade handshake immediately
     if  currentChannel.state == FLUSHCOMPLETE && counterpartyFlushStatus == FLUSHCOMPLETE {
-        openChannelHandshake(portIdentifier, channelIdentifier)
+        openUpgradelHandshake(portIdentifier, channelIdentifier)
         module.onChanUpgradeOpen(portIdentifier, channelIdentifier)
     }
 }
