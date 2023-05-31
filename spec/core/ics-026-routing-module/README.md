@@ -420,6 +420,7 @@ interface ChanOpenInit {
   portIdentifier: Identifier
   counterpartyPortIdentifier: Identifier
   counterpartyChannelIdentifier: Identifier
+  version: string
 }
 ```
 
