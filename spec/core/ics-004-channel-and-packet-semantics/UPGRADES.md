@@ -656,6 +656,8 @@ function chanUpgradeAck(
 }
 ```
 
+`chanUpgradeOpen` may only be called once both sides have moved to FLUSHCOMPLETE. If there exists unprocessed packets in the queue when the handshake goes into `FLUSHING` mode, then the packet handlers must move the channelEnd to `FLUSHCOMPLETE` once the last packet on the channelEnd has been processed.
+
 ```typescript
 function chanUpgradeOpen(
     portIdentifier: Identifier,
