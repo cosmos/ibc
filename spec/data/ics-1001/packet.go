@@ -40,7 +40,6 @@ type NetworkConnectionId interface {
 
 // is used to track packet
 type PacketTrackingRecord struct {
-
     // block height(usually number) when it was sent  
     src_sent_height Height
     // timestamp when it was sent
