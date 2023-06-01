@@ -424,16 +424,19 @@ A successful protocol execution flows as follows (note that all calls are made t
 | Actor     | `ChanUpgradeInit`    | B                | (INITUPGRADE, OPEN)           | (INITUPGRADE, INITUPGRADE) |
 | Actor     | `ChanUpgradeTry`     | B                | (INITUPGRADE, INITUPGRADE)    | (INITUPGRADE, TRYUPGRADE)  |
 | Relayer   | `ChanUpgradeAck`     | A                | (INITUPGRADE, TRYUPGRADE)     | (ACKUPGRADE, TRYUPGRADE)   |
+| --------- | -------------------- | ---------------- | ----------------------------- | -------------------------- |
+| Relayer   | `ChanUpgradeOpen`    | A                | (ACKUPGRADE, TRYUPGRADE)      | (OPEN, TRYUPGRADE)         |
+| Relayer   | `ChanUpgradeOpen`    | B                | (OPEN, TRYUPGRADE)            | (OPEN, OPEN)               |
 
 Both sides must call INITUPGRADE through an access-control mechanism of their choice. Once both sides are in INITUPGRADE, the rest of the handshake can complete permissionlessly. The handshake will ensure that the upgrades on either side are mutually compatible and that all previously sent packets are flushed before moving to the newly agreed upon channel parameters.
 
 Once both states are in `ACKUPGRADE` and `TRYUPGRADE` respectively, both sides must move to `FLUSHINGCOMPLETE` respectively by clearing their in-flight packets. Once both sides have complete flushing, a relayer may submit a `ChanUpgradeOpen` message to both ends proving that the counterparty has also completed flushing in order to move the channelEnd to `OPEN`.
 
-`ChanUpgradeOpen` is only necessary to call on chain A if the chain was not moved to `OPEN` on `ChanUpgradeAck` which may happen if all packets on both ends are already flushed.
+`ChanUpgradeOpen` can be called on both ends in either order once both sides have completed flushing. It may not be necessary on the ACK side if the ACK message automatically moves to `OPEN`.
 
 At the end of a successful upgrade handshake between two chains implementing the sub-protocol, the following properties hold:
 
-- Each chain is running their new upgraded channel end and is processing upgraded logic and state according to the upgraded parameters.
+- Each chain is running their new upgraded channel end is processing upgraded logic and state according to the upgraded parameters.
 - Each chain has knowledge of and has agreed to the counterparty's upgraded channel parameters.
 - All packets sent before the handshake have been completely flushed (acked or timed out) with the old parameters.
 - All packets sent after a channel end moves to OPEN will either timeout using new parameters on sending channelEnd or will be received by the counterparty using new parameters.
