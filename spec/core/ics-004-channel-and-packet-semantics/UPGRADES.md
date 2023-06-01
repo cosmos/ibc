@@ -422,7 +422,7 @@ A successful protocol execution flows as follows (note that all calls are made t
 | --------- | -------------------- | ---------------- | ----------------------------- | -------------------------- |
 | Actor     | `ChanUpgradeInit`    | A                | (OPEN, OPEN)                  | (INITUPGRADE, OPEN)        |
 | Actor     | `ChanUpgradeInit`    | B                | (INITUPGRADE, OPEN)           | (INITUPGRADE, INITUPGRADE) |
-| Actor     | `ChanUpgradeTry`     | B                | (INITUPGRADE, OPEN)           | (INITUPGRADE, TRYUPGRADE)  |
+| Actor     | `ChanUpgradeTry`     | B                | (INITUPGRADE, INITUPGRADE)    | (INITUPGRADE, TRYUPGRADE)  |
 | Relayer   | `ChanUpgradeAck`     | A                | (INITUPGRADE, TRYUPGRADE)     | (ACKUPGRADE, TRYUPGRADE)   |
 
 Both sides must call INITUPGRADE through an access-control mechanism of their choice. Once both sides are in INITUPGRADE, the rest of the handshake can complete permissionlessly. The handshake will ensure that the upgrades on either side are mutually compatible and that all previously sent packets are flushed before moving to the newly agreed upon channel parameters.
@@ -460,19 +460,19 @@ function chanUpgradeInit(
     version, err = module.onChanUpgradeInit(
         portIdentifier,
         channelIdentifier,
-        proposedUpgrade.fields.ordering,
-        proposedUpgrade.fields.connectionHops,
+        proposedUpgradeFields.ordering,
+        proposedUpgradeFields.connectionHops,
         upgradeSequence,
-        proposedUpgrade.fields.version
+        proposedUpgradeFields.version
     )
     // abort transaction if callback returned error
     abortTransactionUnless(err != nil)
 
-    // replace channel version with the version returned by application
+    // replace upgrade version with the version returned by application
     // in case it was modified
-    currentChannel = provableStore.get(channelPath(portIdentifier, channelIdentifier))
-    currentChannel.version = version
-    provableStore.set(channelPath(portIdentifier, channelIdentifier), currentChannel)
+    upgrade = provableStore.get(channelUpgradePath(portIdentifier, channelIdentifier))
+    upgrade.fields.version = version
+    provableStore.set(channelUpgradePath(portIdentifier, channelIdentifier), upgrade)
 }
 ```
 
@@ -511,8 +511,7 @@ function chanUpgradeTry(
     // both sides will have the same upgradeSequence
     abortTransactionUnless(counterpartyUpgradeSequence > currentChannel.upgradeSequence)
 
-    upgrade = publicStore.get(channelUpgradePath)
-    abortTransactionUnless(upgrade.fields == counterpartyUpgrade.fields)
+    upgrade = publicStore.get(channelUpgradePath(portIdentifier, channelIdentifier))
 
     // get counterpartyHops for given connection
     connection = getConnection(currentChannel.connectionIdentifier)
@@ -533,7 +532,7 @@ function chanUpgradeTry(
 
     // call startFlushUpgrade handshake to move channel from INITUPGRADE to TRYUPGRADE and start flushing
     // upgrade is blocked on this channelEnd from progressing until flush completes on both ends
-    startFlushUpgradeHandshake(portIdentifier, channelIdentifier, upgradeFields, counterpartyChannel, counterpartyUpgrade, TRYUPGRADE, proofChannel, proofUpgrade, proofHeight)
+    startFlushUpgradeHandshake(portIdentifier, channelIdentifier, upgrade.fields, counterpartyChannel, counterpartyUpgrade, TRYUPGRADE, proofChannel, proofUpgrade, proofHeight)
 
     // refresh currentChannel to get latest state
     currentChannel = provableStore.get(channelPath(portIdentifier, channelIdentifier))
@@ -541,14 +540,13 @@ function chanUpgradeTry(
     // call modules onChanUpgradeTry callback
     module = lookupModule(portIdentifier)
     version, err = module.onChanUpgradeTry(
-        proposedUpgradeChannel.ordering,
-        proposedUpgradeChannel.connectionHops,
         portIdentifier,
         channelIdentifer,
+        upgrade.fields.ordering,
+        upgrade.fields.connectionHops,
         currentChannel.sequence,
-        proposedUpgradeChannel.counterpartyPortIdentifer,
-        proposedUpgradeChannel.counterpartyChannelIdentifier,
-        proposedUpgradeChannel.version
+        upgrade.fields.version
+        counterpartyUpgrade.fields.version,
     )
     // restore channel if callback returned error
     if err != nil {
@@ -737,7 +735,7 @@ function cancelChannelUpgrade(
 ) {
     // current channel is in INITUPGRADE or TRYUPGRADE
     currentChannel = provableStore.get(channelPath(portIdentifier, channelIdentifier))
-    abortTransactionUnless(currentChannel.state == INITUPGRADE || currentChannel.state == TRYUPGRADE)
+    abortTransactionUnless(currentChannel.state != OPEN)
 
     abortTransactionUnless(!isEmpty(errorReceipt))
 
