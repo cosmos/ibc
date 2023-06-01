@@ -419,7 +419,6 @@ interface ChanOpenInit {
   connectionHops: [Identifier]
   portIdentifier: Identifier
   counterpartyPortIdentifier: Identifier
-  counterpartyChannelIdentifier: Identifier
   version: string
 }
 ```
@@ -431,8 +430,7 @@ function handleChanOpenInit(datagram: ChanOpenInit) {
     datagram.order,
     datagram.connectionHops,
     datagram.portIdentifier,
-    datagram.counterpartyPortIdentifier,
-    datagram.counterpartyChannelIdentifier
+    datagram.counterpartyPortIdentifier
   )
   version, err = module.onChanOpenInit(
     datagram.order,
@@ -440,7 +438,6 @@ function handleChanOpenInit(datagram: ChanOpenInit) {
     datagram.portIdentifier,
     channelIdentifier,
     datagram.counterpartyPortIdentifier,
-    datagram.counterpartyChannelIdentifier,
     datagram.version
   )
   abortTransactionUnless(err === nil)
