@@ -311,23 +311,25 @@ The `ConnOpenInit` datagram starts the connection handshake process with an IBC 
 
 ```typescript
 interface ConnOpenInit {
-  identifier: Identifier
-  desiredCounterpartyIdentifier: Identifier
+  counterpartyPrefix: CommitmentPrefix
   clientIdentifier: Identifier
   counterpartyClientIdentifier: Identifier
   version: string
+  delayPeriodTime: uint64
+  delayPeriodBlocks: uint64
 }
 ```
 
 ```typescript
 function handleConnOpenInit(datagram: ConnOpenInit) {
-    handler.connOpenInit(
-      datagram.identifier,
-      datagram.desiredCounterpartyIdentifier,
-      datagram.clientIdentifier,
-      datagram.counterpartyClientIdentifier,
-      datagram.version
-    )
+  handler.connOpenInit(
+    datagram.counterpartyPrefix,
+    datagram.clientIdentifier,
+    datagram.counterpartyClientIdentifier,
+    datagram.version,
+    datagram.delayPeriodTime,
+    datagram.delayPeriodBlocks
+  )
 }
 ```
 
@@ -335,13 +337,16 @@ The `ConnOpenTry` datagram accepts a handshake request from an IBC module on ano
 
 ```typescript
 interface ConnOpenTry {
-  desiredIdentifier: Identifier
   counterpartyConnectionIdentifier: Identifier
+  counterpartyPrefix: CommitmentPrefix
   counterpartyClientIdentifier: Identifier
   clientIdentifier: Identifier
-  version: string
-  counterpartyVersion: string
+  clientState: ClientState
+  counterpartyVersions: string[]
+  delayPeriodTime: uint64
+  delayPeriodBlocks: uint64
   proofInit: CommitmentProof
+  proofClient: CommitmentProof
   proofConsensus: CommitmentProof
   proofHeight: Height
   consensusHeight: Height
@@ -350,18 +355,21 @@ interface ConnOpenTry {
 
 ```typescript
 function handleConnOpenTry(datagram: ConnOpenTry) {
-    handler.connOpenTry(
-      datagram.desiredIdentifier,
-      datagram.counterpartyConnectionIdentifier,
-      datagram.counterpartyClientIdentifier,
-      datagram.clientIdentifier,
-      datagram.version,
-      datagram.counterpartyVersion,
-      datagram.proofInit,
-      datagram.proofConsensus,
-      datagram.proofHeight,
-      datagram.consensusHeight
-    )
+  handler.connOpenTry(
+    datagram.counterpartyConnectionIdentifier,
+    datagram.counterpartyPrefix,
+    datagram.counterpartyClientIdentifier,
+    datagram.clientIdentifier,
+    datagram.clientState,
+    datagram.counterpartyVersions,
+    datagram.delayPeriodTime,
+    datagram.delayPeriodBlocks,
+    datagram.proofInit,
+    datagram.proofClient,
+    datagram.proofConsensus,
+    datagram.proofHeight,
+    datagram.consensusHeight
+  )
 }
 ```
 
@@ -370,8 +378,11 @@ The `ConnOpenAck` datagram confirms a handshake acceptance by the IBC module on 
 ```typescript
 interface ConnOpenAck {
   identifier: Identifier
+  clientState: ClientState
   version: string
+  counterpartyIdentifier: Identifier
   proofTry: CommitmentProof
+  proofClient: CommitmentProof
   proofConsensus: CommitmentProof
   proofHeight: Height
   consensusHeight: Height
@@ -380,14 +391,17 @@ interface ConnOpenAck {
 
 ```typescript
 function handleConnOpenAck(datagram: ConnOpenAck) {
-    handler.connOpenAck(
-      datagram.identifier,
-      datagram.version,
-      datagram.proofTry,
-      datagram.proofConsensus,
-      datagram.proofHeight,
-      datagram.consensusHeight
-    )
+  handler.connOpenAck(
+    datagram.identifier,
+    datagram.clientState,
+    datagram.version,
+    datagram.counterpartyIdentifier,
+    datagram.proofTry,
+    datagram.proofClient,
+    datagram.proofConsensus,
+    datagram.proofHeight,
+    datagram.consensusHeight
+  )
 }
 ```
 
