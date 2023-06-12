@@ -75,6 +75,8 @@ interface ChannelEnd {
   counterpartyChannelIdentifier: Identifier
   connectionHops: [Identifier]
   version: string
+  sequence: uint64
+  flushState: FlushStatus
 }
 ```
 
@@ -87,6 +89,8 @@ interface ChannelEnd {
 - The `nextSequenceAck`, stored separately, tracks the sequence number for the next packet to be acknowledged.
 - The `connectionHops` stores the list of connection identifiers, in order, along which packets sent on this channel will travel. At the moment this list must be of length 1. In the future multi-hop channels may be supported.
 - The `version` string stores an opaque channel version, which is agreed upon during the handshake. This can determine module-level configuration such as which packet encoding is used for the channel. This version is not used by the core IBC protocol. If the version string contains structured metadata for the application to parse and interpret, then it is considered best practice to encode all metadata in a JSON struct and include the marshalled string in the version field.
+
+See the [upgrade spec][./UPGRADES.md] for details on `sequence` and `flushStatus`.
 
 Channel ends have a *state*:
 
@@ -589,7 +593,7 @@ function sendPacket(
 
     // check that the channel is not closed to send packets; 
     abortTransactionUnless(channel !== null)
-    abortTransactionUnless(channel.state !== CLOSED)
+    abortTransactionUnless(channel.state !== CLOSED && channel.flushStatus === NOTINFLUSH)
     connection = provableStore.get(connectionPath(channel.connectionHops[0]))
     abortTransactionUnless(connection !== null)
 
@@ -653,7 +657,7 @@ function recvPacket(
 
     channel = provableStore.get(channelPath(packet.destPort, packet.destChannel))
     abortTransactionUnless(channel !== null)
-    abortTransactionUnless(channel.state === OPEN)
+    abortTransactionUnless(channel.state === OPEN || channel.flushStatus === FLUSHING)
     abortTransactionUnless(authenticateCapability(channelCapabilityPath(packet.destPort, packet.destChannel), capability))
     abortTransactionUnless(packet.sourcePort === channel.counterpartyPortIdentifier)
     abortTransactionUnless(packet.sourceChannel === channel.counterpartyChannelIdentifier)
@@ -843,7 +847,7 @@ function acknowledgePacket(
     // abort transaction unless that channel is open, calling module owns the associated port, and the packet fields match
     channel = provableStore.get(channelPath(packet.sourcePort, packet.sourceChannel))
     abortTransactionUnless(channel !== null)
-    abortTransactionUnless(channel.state === OPEN)
+    abortTransactionUnless(channel.state === OPEN || channel.flushStatus === FLUSHING)
     abortTransactionUnless(authenticateCapability(channelCapabilityPath(packet.sourcePort, packet.sourceChannel), capability))
     abortTransactionUnless(packet.destPort === channel.counterpartyPortIdentifier)
     abortTransactionUnless(packet.destChannel === channel.counterpartyChannelIdentifier)
@@ -878,6 +882,11 @@ function acknowledgePacket(
 
     // delete our commitment so we can't "acknowledge" again
     provableStore.delete(packetCommitmentPath(packet.sourcePort, packet.sourceChannel, packet.sequence))
+
+    // if there are no in-flight packets on our end, we can automatically go to FLUSHCOMPLETE
+    if channel.flushStatus === FLUSHING && pendingInflightPackets(portIdentifier, channelIdentifier) == nil {
+        currentChannel.flushState = FLUSHCOMPLETE
+    }
 
     // return transparent packet
     return packet
@@ -1025,6 +1034,11 @@ function timeoutPacket(
       provableStore.set(nextSequenceAckPath(packet.srcPort, packet.srcChannel), nextSequenceAck)
     }
 
+    // if there are no in-flight packets on our end, we can automatically go to FLUSHCOMPLETE
+    if channel.flushStatus === FLUSHING && pendingInflightPackets(portIdentifier, channelIdentifier) == nil {
+        currentChannel.flushState = FLUSHCOMPLETE
+    }
+
     // return transparent packet
     return packet
 }
@@ -1098,6 +1112,11 @@ function timeoutOnClose(
 
     // delete our commitment
     provableStore.delete(packetCommitmentPath(packet.sourcePort, packet.sourceChannel, packet.sequence))
+
+    // if there are no in-flight packets on our end, we can automatically go to FLUSHCOMPLETE
+    if channel.flushStatus === FLUSHING && pendingInflightPackets(portIdentifier, channelIdentifier) == nil {
+        currentChannel.flushState = FLUSHCOMPLETE
+    }
 
     // return transparent packet
     return packet
