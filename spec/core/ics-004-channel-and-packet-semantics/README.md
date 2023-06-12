@@ -90,7 +90,7 @@ interface ChannelEnd {
 - The `connectionHops` stores the list of connection identifiers, in order, along which packets sent on this channel will travel. At the moment this list must be of length 1. In the future multi-hop channels may be supported.
 - The `version` string stores an opaque channel version, which is agreed upon during the handshake. This can determine module-level configuration such as which packet encoding is used for the channel. This version is not used by the core IBC protocol. If the version string contains structured metadata for the application to parse and interpret, then it is considered best practice to encode all metadata in a JSON struct and include the marshalled string in the version field.
 
-See the [upgrade spec][./UPGRADES.md] for details on `sequence` and `flushStatus`.
+See the [upgrade spec](./UPGRADES.md) for details on `sequence` and `flushStatus`.
 
 Channel ends have a *state*:
 
