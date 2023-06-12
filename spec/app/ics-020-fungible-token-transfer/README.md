@@ -23,6 +23,10 @@ Users of a set of chains connected over the IBC protocol might wish to utilise a
 
 The IBC handler interface & IBC routing module interface are as defined in [ICS 25](../../core/ics-025-handler-interface) and [ICS 26](../../core/ics-026-routing-module), respectively.
 
+`channelCapabilityPath` is as defined in [ICS 4](../../core/ics-004-channel-and-packet-semantics).
+
+`claimCapability` is as defined in [ICS 5](../../core/ics-005-port-allocation).
+
 ### Desired Properties
 
 - Preservation of fungibility (two-way peg).
@@ -122,6 +126,7 @@ Both machines `A` and `B` accept new channels from any module on another machine
 
 ```typescript
 function onChanOpenInit(
+  capability: CapabilityKey,
   order: ChannelOrder,
   connectionHops: [Identifier],
   portIdentifier: Identifier,
@@ -135,6 +140,8 @@ function onChanOpenInit(
   // if empty, we return the default transfer version to core IBC
   // as the version for this channel
   abortTransactionUnless(version === "ics20-1" || version === "")
+  // claim channel capability
+  claimCapability(channelCapabilityPath(portIdentifier, channelIdentifier), capability)
   // allocate an escrow address
   channelEscrowAddresses[channelIdentifier] = newAddress()
   return "ics20-1", nil
@@ -143,6 +150,7 @@ function onChanOpenInit(
 
 ```typescript
 function onChanOpenTry(
+  capability: CapabilityKey,
   order: ChannelOrder,
   connectionHops: [Identifier],
   portIdentifier: Identifier,
@@ -154,6 +162,8 @@ function onChanOpenTry(
   abortTransactionUnless(order === UNORDERED)
   // assert that version is "ics20-1"
   abortTransactionUnless(counterpartyVersion === "ics20-1")
+  // claim channel capability
+  claimCapability(channelCapabilityPath(portIdentifier, channelIdentifier), capability)
   // allocate an escrow address
   channelEscrowAddresses[channelIdentifier] = newAddress()
   // return version that this chain will use given the
