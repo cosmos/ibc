@@ -614,16 +614,16 @@ function chanUpgradeAck(
 
     upgrade = provableStore.get(channelUpgradePath(portIdentifier, channelIdentifier))
 
-    // in the crossing hellos case, the versions returned by both on TRY must be the same
+    // prove counterparty and move our own state to ACKUPGRADE and start flushing
+    // upgrade is blocked on this channelEnd from progressing until flush completes on both ends
+    startFlushUpgradeHandshake(portIdentifier, channelIdentifier, upgrade.fields, counterpartyChannel, counterpartyUpgrade, ACKUPGRADE, proofChannel, proofUpgrade, proofHeight)
+
+     // in the crossing hellos case, the versions returned by both on TRY must be the same
     if currentChannel.state == TRYUPGRADE {
         if upgrade.fields.version != counterpartyUpgrade.fields.version {
             restoreChannel(portIdentifier, channelIdentifier)
         }
     }
-
-    // prove counterparty and move our own state to ACKUPGRADE and start flushing
-    // upgrade is blocked on this channelEnd from progressing until flush completes on both ends
-    startFlushUpgradeHandshake(portIdentifier, channelIdentifier, upgrade.fields, counterpartyChannel, counterpartyUpgrade, ACKUPGRADE, proofChannel, proofUpgrade, proofHeight)
 
     // call modules onChanUpgradeAck callback
     // module can error on counterparty version
