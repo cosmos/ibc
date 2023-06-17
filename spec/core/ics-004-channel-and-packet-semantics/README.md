@@ -885,7 +885,7 @@ function acknowledgePacket(
 
     // if there are no in-flight packets on our end, we can automatically go to FLUSHCOMPLETE
     if channel.flushStatus === FLUSHING && pendingInflightPackets(portIdentifier, channelIdentifier) == nil {
-        currentChannel.flushState = FLUSHCOMPLETE
+        channel.flushState = FLUSHCOMPLETE
     }
 
     // return transparent packet
@@ -1036,7 +1036,7 @@ function timeoutPacket(
 
     // if there are no in-flight packets on our end, we can automatically go to FLUSHCOMPLETE
     if channel.flushStatus === FLUSHING && pendingInflightPackets(portIdentifier, channelIdentifier) == nil {
-        currentChannel.flushState = FLUSHCOMPLETE
+        channel.flushState = FLUSHCOMPLETE
     }
 
     // return transparent packet
@@ -1115,7 +1115,7 @@ function timeoutOnClose(
 
     // if there are no in-flight packets on our end, we can automatically go to FLUSHCOMPLETE
     if channel.flushStatus === FLUSHING && pendingInflightPackets(portIdentifier, channelIdentifier) == nil {
-        currentChannel.flushState = FLUSHCOMPLETE
+        channel.flushState = FLUSHCOMPLETE
     }
 
     // return transparent packet
