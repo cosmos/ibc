@@ -39,6 +39,8 @@ In order to provide the desired ordering, exactly-once delivery, and module perm
 
 `Identifier`, `get`, `set`, `delete`, `getCurrentHeight`, and module-system related primitives are as defined in [ICS 24](../ics-024-host-requirements).
 
+See [upgrades spec](./UPGRADES.md) for definition of `pendingInflightPackets`.
+
 A *channel* is a pipeline for exactly-once packet delivery between specific modules on separate blockchains, which has at least one end capable of sending packets and one end capable of receiving packets.
 
 A *bidirectional* channel is a channel where packets can flow in both directions: from `A` to `B` and from `B` to `A`.
@@ -657,7 +659,8 @@ function recvPacket(
 
     channel = provableStore.get(channelPath(packet.destPort, packet.destChannel))
     abortTransactionUnless(channel !== null)
-    abortTransactionUnless(channel.state === OPEN || channel.flushStatus === FLUSHING)
+    counterpartyLastPacketSent = privateStore.get(channelCounterpartyLastPacketSequencePath(packet.destPort, packet.destChannel)
+    abortTransactionUnless(channel.state === OPEN || (channel.flushStatus === FLUSHING && packet.sequence <= counterpartyLasPacketSent))
     abortTransactionUnless(authenticateCapability(channelCapabilityPath(packet.destPort, packet.destChannel), capability))
     abortTransactionUnless(packet.sourcePort === channel.counterpartyPortIdentifier)
     abortTransactionUnless(packet.sourceChannel === channel.counterpartyChannelIdentifier)
@@ -884,7 +887,7 @@ function acknowledgePacket(
     provableStore.delete(packetCommitmentPath(packet.sourcePort, packet.sourceChannel, packet.sequence))
 
     // if there are no in-flight packets on our end, we can automatically go to FLUSHCOMPLETE
-    if channel.flushStatus === FLUSHING && pendingInflightPackets(portIdentifier, channelIdentifier) == nil {
+    if channel.flushStatus === FLUSHING && pendingInflightPackets(packet.sourcePort, packet.sourceChannel) == nil {
         currentChannel.flushState = FLUSHCOMPLETE
     }
 
@@ -1035,7 +1038,7 @@ function timeoutPacket(
     }
 
     // if there are no in-flight packets on our end, we can automatically go to FLUSHCOMPLETE
-    if channel.flushStatus === FLUSHING && pendingInflightPackets(portIdentifier, channelIdentifier) == nil {
+    if channel.flushStatus === FLUSHING && pendingInflightPackets(packet.sourcePort, packet.sourceChannel) == nil {
         currentChannel.flushState = FLUSHCOMPLETE
     }
 
