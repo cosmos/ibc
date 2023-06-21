@@ -93,6 +93,16 @@ interface ModuleState {
 }
 ```
 
+### Store paths
+
+In order to support the token forwarding feature, implementations must store the incoming packet against the corresponding outgoing packet identifiers through the `packetForwardPath` store path in the private store.
+
+```typescript
+function packetForwardPath(portID: string, channelID: string, sequence: uint64): string {
+  return "packetForwardPath/{portID}/{channelID}/{sequence}"
+}
+```
+
 ### Utility Functions
 
 ### ics20Prefix
@@ -118,7 +128,7 @@ function ics20Prefix(denomination: string): (prefix: string) {
 
 #### getNextHop
 
-`getNextHop` returns the next port and channel identifier to send the tokens along from the specified forwardingPath and denomination. The function takes in the denomination since the forwardingPath may instruct first sending the tokens back to originating chain which will require reading the ICS20 trace encoded in the denomination.
+`getNextHop` returns the next port and channel identifier to send the tokens along from the specified forwardingPath and denomination. The function takes in the denomination since the forwardingPath may instruct first sending the tokens back to originating chain which will require reading the ICS20 trace encoded in the denomination. Note the denomination here should be the denomination in the incoming packet before the receive is complete.
 
 ```typescript
 function getNextHop(
@@ -132,8 +142,7 @@ function getNextHop(
       return elems[0], elems[1]
     }
     if hasPrefix(forwardPath, "chains:") {
-      // splice "chains:" off front of list to get at chains themselves
-      chainList = forwardPath[7:]
+      chainList = removePrefix(forwardPath, "chains:")
       chainsArr = split(chainList, "/")
       // chain registry is not in scope for this spec
       // implementations may use an on-chain registry to resolve
@@ -142,8 +151,7 @@ function getNextHop(
       // chainID-specified forwardingPaths.
       return registry.ResolveToPortAndChannel(chainsArr[0])
     } else if hasPrefix(forwardPath, "channels:") {
-      // splice "channels:" off front of list to get at chains themselves
-      channelList = forwardPath[9:]
+      channelList = removePrefix(forwardPath, "channels:")
       channelArr = split(channelList, "/")
       // return first (portID, channelID) pair
       return channelArr[0], channelArr[1]
@@ -391,6 +399,8 @@ function onRecvPacket(packet: Packet) {
   // if we are forwarding the tokens along, we will move the coins to the forwardEscrowAddress to the source chain
   // otherwise send directy to receiver defined by packet
   if forwardingPath != "" {
+    // pass in denomination before receive to getNextHop
+    // i.e. denomination in packet
     forwardPort, forwardChannel = getNextHop(forwardingPath, packet.denomination)
     receiver = forwardEscrowAddress[forwardChannel]
   } else {
@@ -418,6 +428,7 @@ function onRecvPacket(packet: Packet) {
     // pruneHop will prune the first hop from the path
     // if the forwardingPath only contains one hop this will return
     // an empty string
+    // pass in denomination after receive to pruneHop and the outgoing send
     forwardingPath = pruneHop(forwardingPath, denomination)
     forwardPacketSequence = sendFungibleTokens(
       denomination,
@@ -456,6 +467,9 @@ function onAcknowledgePacket(
     FungibleTokenPacketAcknowledgement ack = unmarshal(acknowledgement)
     // prefix with forwardingPath so we know which chain it errored on
     ack.error = prefix(ack.error, reversePacket.sourcePort + "/" + reversePacket.sourceChannel)
+    // remove stored forwarding info
+    store.delete(packetForwardPath(packet.sourcePort, packet.sourceChannel, packet.Sequence))
+    // propogate acknowledgement back to sender chain
     writeAcknowledgement(packet, acknowledgement)
   }
 }
@@ -474,6 +488,9 @@ function onTimeoutPacket(packet: Packet) {
     ack = FungibleTokenPacketAcknowledgement{false, "forwarding packet timed out"}
     // prefix with forwardingPath so we know which chain it timed out on
     ack.error = prefix(ack.error, reversePacket.sourcePort + "/" + reversePacket.sourceChannel)
+    // remove stored forwarding info
+    store.delete(packetForwardPath(packet.sourcePort, packet.sourceChannel, packet.Sequence))
+    // propogate timeout acknowledgement back to sender chain
     writeAcknowledgement(packet, ack)
   }
 }
