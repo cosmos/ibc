@@ -132,9 +132,9 @@ function ics20Prefix(denomination: string): (prefix: string) {
 
 ```typescript
 function getNextHop(
-  forwardPath: string,
+  forwardingPath: string,
   denomination: string): (forwardPort: string, forwardChannel: string) {
-    if hasPrefix(forwardPath, "channels:origin") || hasPrefix(forwardPath, "chains:origin") {
+    if hasPrefix(forwardingPath, "channels:origin") || hasPrefix(forwardingPath, "chains:origin") {
       // if we are still routing to origin, then the denomination
       // must have an ICS20 prefix
       abortTransactionUnless(ics20Prefix(denomination) != "")
@@ -143,8 +143,8 @@ function getNextHop(
       // as portID/channelID
       return elems[0], elems[1]
     }
-    if hasPrefix(forwardPath, "chains:") {
-      chainList = removePrefix(forwardPath, "chains:")
+    if hasPrefix(forwardingPath, "chains:") {
+      chainList = removePrefix(forwardingPath, "chains:")
       chainsArr = split(chainList, "/")
       // chain registry is not in scope for this spec
       // implementations may use an on-chain registry to resolve
@@ -152,8 +152,8 @@ function getNextHop(
       // if it is unsupported, implementation will error for 
       // chainID-specified forwardingPaths.
       return registry.ResolveToPortAndChannel(chainsArr[0])
-    } else if hasPrefix(forwardPath, "channels:") {
-      channelList = removePrefix(forwardPath, "channels:")
+    } else if hasPrefix(forwardingPath, "channels:") {
+      channelList = removePrefix(forwardingPath, "channels:")
       channelArr = split(channelList, "/")
       // return first (portID, channelID) pair
       return channelArr[0], channelArr[1]
@@ -170,37 +170,37 @@ function getNextHop(
 
 ```typescript
 function pruneHop(forwardingPath: string, denomination: string): (newForwardingPath: string) {
-  if hasPrefix(forwardPath, "channels:origin") || hasPrefix(forwardPath, "chains:origin") {
+  if hasPrefix(forwardingPath, "channels:origin") || hasPrefix(forwardingPath, "chains:origin") {
     // if there is no ICS20 prefix on the denomination after the receive,
     // then we are already at the origin chain and can remove it from the forwardingPath.
     if (ics20Prefix(denomination) == "") {
-      // this helper function will remove the origin keyword from the forwardPath
+      // this helper function will remove the origin keyword from the forwardingPath
       forwardingPath = removeStr(forwardingPath, "origin")
       if forwardingPath == "channels:" || forwardingPaths == "chains:" {
         return ""
       }
       return forwardingPath
     } else {
-      // still need to unwind to origin, so leave forwardPath as-is.
-      return forwardPath
+      // still need to unwind to origin, so leave forwardingPath as-is.
+      return forwardingPath
     }
   } else {
     if hasPrefix(forwardingPath, "chains:") {
-      chainList = removePrefix(forwardPath, "chains:")
-      chainArr = split(forwardPath, "/")
+      chainList = removePrefix(forwardingPath, "chains:")
+      chainArr = split(forwardingPath, "/")
       // if there's only one chain left, we've finished forwarding so we can return empty string
       if len(chainArr) == 1 {
         return ""
       }
       return "chains:" + join(chainArr[1:], "/")
     } else if hasPrefix(forwardingPath, "channels:") {
-        channelList = removePrefix(forwardPath, "channels:")
-        channelArr = split(forwardPath, "/")
+        channelList = removePrefix(forwardingPath, "channels:")
+        channelArr = split(forwardingPath, "/")
         // if there's only one (portID, channelID) pair left, we've finished forwarding so we can return empty string
         if len(channelArr) == 2 {
           return ""
         }
-        return "channels:" + join(forwardPath[2:], "/")
+        return "channels:" + join(forwardingPath[2:], "/")
     } else {
       abortTransactionUnless(false)
     }
