@@ -135,7 +135,9 @@ function getNextHop(
   forwardPath: string,
   denomination: string): (forwardPort: string, forwardChannel: string) {
     if hasPrefix(forwardPath, "channels:origin") || hasPrefix(forwardPath, "chains:origin") {
-      abortTransactionUnless(ics20Prefix(denomination) == "")
+      // if we are still routing to origin, then the denomination
+      // must have an ICS20 prefix
+      abortTransactionUnless(ics20Prefix(denomination) != "")
       elems = split(denomination, "/")
       // next hop towards origin is at the start of the denomination
       // as portID/channelID
@@ -173,7 +175,11 @@ function pruneHop(forwardingPath: string, denomination: string): (newForwardingP
     // then we are already at the origin chain and can remove it from the forwardingPath.
     if (ics20Prefix(denomination) == "") {
       // this helper function will remove the origin keyword from the forwardPath
-      removeStr(forwardingPath, "origin")
+      forwardingPath = removeStr(forwardingPath, "origin")
+      if forwardingPath == "channels:" || forwardingPaths == "chains:" {
+        return ""
+      }
+      return forwardingPath
     } else {
       // still need to unwind to origin, so leave forwardPath as-is.
       return forwardPath
