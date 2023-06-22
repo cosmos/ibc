@@ -57,11 +57,12 @@ A sending chain may be acting as a source or sink zone. When a chain is sending 
 
 The memo is not parsed by the ICS20 application and may be used for external users or higher-level middleware and smart contracts. If the memo is intended to be used within the state machine, it must be in JSON dictionary format with the relevant information keyed for the intended user.
 
-The forwardingPath of the packet data is the path to the final destination of the tokens after they reach the immediate destination chain specified by the packet's channel identifiers. The forwardingPath may be specified as a list of port/channel identifier tuples prefixed by `channels:` or a list of chainIDs that will be resolved with an on-chain registry prefixed by `chains:`. The chainID specification may be unsupported, in which case the implementation should return an error acknowledgement. A special keyword: `origin` may be prefixed to the forwardingInfo list to instruct the forwarding logic to first unwind the token path to the origin chain before continuing with forwarding. If the specified forwardingPath is supported, the implementation will forward the path along one hop forward and asynchronously write the acknowledgement once the forwarded packet has returned.
+The `forwardingPath` of the packet data is the path to the final destination of the tokens after they reach the immediate destination chain specified by the packet's channel identifiers. The `forwardingPath` may be specified as a list of port/channel identifier tuples prefixed by `channels:` or a list of chain IDs that will be resolved with an on-chain registry prefixed by `chains:`. The `chainID` specification may be unsupported, in which case the implementation should return an error acknowledgement. A special keyword `origin` may be prefixed to the `forwardingPath` list to instruct the forwarding logic to first unwind the token path to the origin chain before continuing with forwarding. If the specified `forwardingPath` is supported, the implementation will forward the path along one hop forward and asynchronously write the acknowledgement once the forwarded packet has returned.
 
-Example valid forwardingPaths:
-- `channels:transfer/channel-3/transfer/channel-2/transfer/channel-300`: On each receiving chain, the implementation will pop a (srcPortID, srcChannelID) from the front of the list, resolve to a channel, and then forward the tokens along. Once the forwardingPath is empty, it will send to specified receiver which must be a valid address at the final destination.
-- `channels:origin/transfer/channel-4`: This forwardingPath is similar to the above, but it will first unwind the tokens to their origin chain before executing the logic described above.
+Example valid `forwardingPath`s:
+
+- `channels:transfer/channel-3/transfer/channel-2/transfer/channel-300`: On each receiving chain, the implementation will pop a (srcPortID, srcChannelID) from the front of the list, resolve to a channel, and then forward the tokens along. Once the `forwardingPath` is empty, it will send to specified receiver which must be a valid address at the final destination.
+- `channels:origin/transfer/channel-4`: This `forwardingPath` is similar to the above, but it will first unwind the tokens to their origin chain before executing the logic described above.
 - `channels:origin`: This will simply unwind the tokens to their origin chain and send to the intended receiver.
 - `chains:cosmoshub/osmosis/juno`: On each receiving chain the implementation must first consult its local chain registry to resolve the chainID to a source port and source channel, then it will forward the tokens along that channel. Once the forwardingPath is empty, it will send to specified receiver which must be a valid address at the final destination.
 - `chains:origin/juno/osmosis`: Similar to the previous logic, it will first unwind to the origin before resolving the first chainID and forwarding along the returned channel to forward along the rest of the path.
@@ -128,7 +129,7 @@ function ics20Prefix(denomination: string): (prefix: string) {
 
 #### getNextHop
 
-`getNextHop` returns the next port and channel identifier to send the tokens along from the specified forwardingPath and denomination. The function takes in the denomination since the forwardingPath may instruct first sending the tokens back to originating chain which will require reading the ICS20 trace encoded in the denomination. Note the denomination here should be the denomination in the incoming packet before the receive is complete.
+`getNextHop` returns the next port and channel identifier to send the tokens along from the specified forwardingPath and denomination. The function takes in the denomination since the `forwardingPath` may instruct first sending the tokens back to originating chain which will require reading the ICS20 trace encoded in the denomination. Note the denomination here should be the denomination in the incoming packet before the receive is complete.
 
 ```typescript
 function getNextHop(
@@ -408,7 +409,7 @@ function onRecvPacket(packet: Packet) {
     // pass in denomination before receive to getNextHop
     // i.e. denomination in packet
     forwardPort, forwardChannel = getNextHop(forwardingPath, packet.denomination)
-    receiver = forwardEscrowAddress[forwardChannel]
+    receiver = forwardEscrowAddresses[forwardChannel]
   } else {
     receiver = data.receiver
   }
