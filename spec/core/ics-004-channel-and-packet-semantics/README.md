@@ -493,6 +493,7 @@ function chanCloseInit(
     abortTransactionUnless(connection !== null)
     abortTransactionUnless(connection.state === OPEN)
     channel.state = CLOSED
+    channel.flushStatus = NOTINFLUSH
     provableStore.set(channelPath(portIdentifier, channelIdentifier), channel)
 }
 ```
@@ -533,6 +534,7 @@ function chanCloseConfirm(
       expected
     ))
     channel.state = CLOSED
+    channel.flushStatus = NOTINFLUSH
     provableStore.set(channelPath(portIdentifier, channelIdentifier), channel)
 }
 ```
@@ -889,6 +891,7 @@ function acknowledgePacket(
     // if there are no in-flight packets on our end, we can automatically go to FLUSHCOMPLETE
     if channel.flushStatus === FLUSHING && pendingInflightPackets(packet.sourcePort, packet.sourceChannel) == nil {
         channel.flushState = FLUSHCOMPLETE
+        provableStore.set(channelPath(packet.sourcePort, packet.sourceChannel), channel)
     }
 
     // return transparent packet
@@ -1025,21 +1028,23 @@ function timeoutPacket(
     // delete our commitment
     provableStore.delete(packetCommitmentPath(packet.sourcePort, packet.sourceChannel, packet.sequence))
 
+    // if there are no in-flight packets on our end, we can automatically go to FLUSHCOMPLETE
+    if channel.flushStatus === FLUSHING && pendingInflightPackets(packet.sourcePort, packet.sourceChannel) == nil {
+        channel.flushState = FLUSHCOMPLETE
+        provableStore.set(channelPath(packet.sourcePort, packet.sourceChannel), channel)
+    }
+
     // only close on strictly ORDERED channels
     if channel.order === ORDERED {
-      // ordered channel: close the channel
+      // ordered channel: close the channel and reset flushStatus
       channel.state = CLOSED
+      channel.flushStatus = NOTINFLUSH
       provableStore.set(channelPath(packet.sourcePort, packet.sourceChannel), channel)
     }
     // on ORDERED_ALLOW_TIMEOUT, increment NextSequenceAck so that next packet can be acknowledged after this packet timed out.
     if channel.order === ORDERED_ALLOW_TIMEOUT {
       nextSequenceAck = nextSequenceAck + 1
       provableStore.set(nextSequenceAckPath(packet.srcPort, packet.srcChannel), nextSequenceAck)
-    }
-
-    // if there are no in-flight packets on our end, we can automatically go to FLUSHCOMPLETE
-    if channel.flushStatus === FLUSHING && pendingInflightPackets(packet.sourcePort, packet.sourceChannel) == nil {
-        channel.flushState = FLUSHCOMPLETE
     }
 
     // return transparent packet
@@ -1115,11 +1120,6 @@ function timeoutOnClose(
 
     // delete our commitment
     provableStore.delete(packetCommitmentPath(packet.sourcePort, packet.sourceChannel, packet.sequence))
-
-    // if there are no in-flight packets on our end, we can automatically go to FLUSHCOMPLETE
-    if channel.flushStatus === FLUSHING && pendingInflightPackets(portIdentifier, channelIdentifier) == nil {
-        channel.flushState = FLUSHCOMPLETE
-    }
 
     // return transparent packet
     return packet
