@@ -436,7 +436,7 @@ Once both states are in `ACKUPGRADE` and `TRYUPGRADE` respectively, both sides m
 
 At the end of a successful upgrade handshake between two chains implementing the sub-protocol, the following properties hold:
 
-- Each chain is running their new upgraded channel end is processing upgraded logic and state according to the upgraded parameters.
+- Each chain is running their new upgraded channel end, processing upgraded logic and state according to the upgraded parameters.
 - Each chain has knowledge of and has agreed to the counterparty's upgraded channel parameters.
 - All packets sent before the handshake have been completely flushed (acked or timed out) with the old parameters.
 - All packets sent after a channel end moves to OPEN will either timeout using new parameters on sending channelEnd or will be received by the counterparty using new parameters.
@@ -512,7 +512,9 @@ function chanUpgradeTry(
     // so that both channel ends are using the same sequence for the current upgrade
     // initUpgradeChannelHandshake will increment the sequence so after that call
     // both sides will have the same upgradeSequence
-    abortTransactionUnless(counterpartyUpgradeSequence > currentChannel.upgradeSequence)
+    abortTransactionUnless(counterpartyUpgradeSequence >= currentChannel.upgradeSequence)
+    currentChannel.upgradeSequence = counterpartyUpgradeSequence
+    provableStore.set(channelPath(portIdentifier, channelIdentifier), currentChannel)
 
     upgrade = publicStore.get(channelUpgradePath(portIdentifier, channelIdentifier))
 
@@ -738,7 +740,7 @@ function cancelChannelUpgrade(
 ) {
     // current channel is in INITUPGRADE or TRYUPGRADE
     currentChannel = provableStore.get(channelPath(portIdentifier, channelIdentifier))
-    abortTransactionUnless(currentChannel.state != OPEN)
+    abortTransactionUnless(currentChannel.state == INITUPGRADE || currentChannel.state == TRYUPGRADE)
 
     abortTransactionUnless(!isEmpty(errorReceipt))
 
