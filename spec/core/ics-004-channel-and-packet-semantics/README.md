@@ -616,7 +616,7 @@ proof of the frozen client state in the channel path starting from each channel 
 The multi-hop proof for each channel end will be different and consist of a proof formed starting from each channel
 end up to the frozen client.
 
-The multi-hop proof starts on the misbehaving chain and extends to a channel end. However, the frozen client exists
+The multi-hop proof starts with a chain with a frozen client for the misbehaving chain. However, the frozen client exists
 on the next blockchain in the channel path so the key/value proof is indexed to evaluate on the consensus state holding
 that client state. The client state path requires knowledge of the client id which can be determined from the
 connectionEnd on the misbehaving chain prior to the misbehavior submission.
@@ -628,42 +628,62 @@ the channel path has been resolved. However, this process is out-of-protocol.
 function chanCloseFrozen(
   portIdentifier: Identifier,
   channelIdentifier: Identifier,
-  proofFrozen: MultihopProof,
+  proofConnection: MultihopProof,
+  proofClientState: MultihopProof,
   proofHeight: Height) {
     abortTransactionUnless(authenticateCapability(channelCapabilityPath(portIdentifier, channelIdentifier), capability))
     channel = provableStore.get(channelPath(portIdentifier, channelIdentifier))
     abortTransactionUnless(channel !== null)
-    abortTransactionUnless(channel.connectionHops.length === 1)
+    hopsLength = channel.connectionHops.length
+    abortTransactionUnless(hopsLength === 1)
     abortTransactionUnless(channel.state !== CLOSED)
     connection = provableStore.get(connectionPath(channel.connectionHops[0]))
     abortTransactionUnless(connection !== null)
     abortTransactionUnless(connection.state === OPEN)
 
-    // connectionEnd on misbehaving chain representing the counterparty connection on the next chain
-    let counterpartyConnectionEnd = proofFrozen.ConnectionProofs[0].Value
+    // lookup connectionID for connectionEnd corresponding to misbehaving chain
+    let connectionIdx = proofConnection.ConsensusProofs.length + 1
+    abortTransactionUnless(connectionIdx < hopsLength)
+    let connectionID = channel.ConnectionHops[connectionIdx]
+    let connectionProofKey = host.ConnectionPath(connectionID)
+    let connectionProofValue = mProof.KeyProof.Value
+    let frozenConnectionEnd = abortTransactionUnless(Unmarshal(connectionProofValue))
 
-    // key path to frozen client state
-    let key = host.FullClientStatePath(counterpartyConnectionEnd.ClientId)
+    // the clientID in the connection end must match the clientID for the frozen client state
+    let clientID = frozenConnectionEnd.ClientId
 
-    // frozen client state
-    let frozenClientState = proofFrozen.KeyProof.Value
+    // truncated connectionHops. e.g. client D on chain C is frozen: A, B, C, D, E -> A, B, C
+    let connectionHops = channel.ConnectionHops[:len(mProof.ConnectionProofs)+1]
 
-    // truncated connectionHops. e.g. client B on chain C is frozen: A, B, C, D -> B, C, D
-    let connectionHops = channel.ConnectionHops[:len(mProof.ConnectionProofs)]
-
-    // ensure client state is frozen by checking FrozenHeight
-    abortTransactionUnless(frozenClientState.FrozenHeight !== Height(0,0)
-
+    // verify the connection proof
     abortTransactionUnless(connection.verifyMultihopMembership(
       connection,
       proofHeight,
-      proofFrozen,
+      proofConnection,
       connectionHops,
-      key
-      frozenClientState))
+      connectionProofKey,
+      connectionProofValue))
 
-  channel.state = FROZEN
-  provableStore.set(channelPath(portIdentifier, channelIdentifier), channel)
+
+    // key and value for the frozen client state
+    let clientStateKey = host.FullClientStatePath(clientID)
+    let clientStateValue = proofClientState.KeyProof.Value
+    let frozenClientState = abortTransactionUnless(Unmarshal(clientStateValue))
+
+    // ensure client state is frozen by checking FrozenHeight
+    abortTransactionUnless(frozenClientState.FrozenHeight.RevisionHeight !== 0)
+
+   // verify the frozen client state proof
+    abortTransactionUnless(connection.verifyMultihopMembership(
+      connection,
+      proofHeight,
+      proofConnection,
+      connectionHops,
+      clientStateKey,
+      clientStateValue))
+
+    channel.state = FROZEN
+    provableStore.set(channelPath(portIdentifier, channelIdentifier), channel)
 }
 ```
 
