@@ -69,22 +69,21 @@ Relayers are connection topology aware with configurations sourced from the [cha
 
 ### Proof Generation & Verification
 
-Graphical depiction of proof generation.
 
 ![proof_generation.png](proof_generation.png)
+Graphical depiction of proof generation.
 
-Relayer multi-hop proof queries.
+![relayer_calc_update_heights.png](relayer_calc_update_heights.png)
+During the first phase of querying a multi-hop proof the relayer searches for the minimum consensus height that can prove the previous chain state and is also provable by the next chain in the channel path.
 
-![proof_relaying.png](proof_relaying.png)
+![relayer_query_proof_and_submit.png](relayer_query_proof_and_submit.png)
+In the second phase of querying a multi-hop proof, the relayer queries proofs of the client and connection states as well as the key/value on the source chain at the heights determined in the first phase.
 
-Multi-hop proof query algorithm.
 ![proof_query_algorithm.png](proof_query_algorithm.png)
-
-Multi-hop proof verfication logic.
+Multi-hop proof query algorithm.
 
 ![proof_verification.png](proof_verification.png)
-
-Pseudocode proof generation for a channel between `N` chains `C[0] --> C[i] --> C[N]`
+Multi-hop proof verfication logic. Pseudocode proof generation for a channel between `N` chains `C[0] --> C[i] --> C[N]`
 
 ```go
 
@@ -143,7 +142,7 @@ func QueryMultihopProof(
 
     // calculate proof heights along channel path
     proofHeights := make([]*ProofHeights, len(chains)-1)
-    abortTransactionUnless(calcProofPath(chains, 1, keyHeight, proofHeights))
+    abortTransactionUnless(calcProofHeights(chains, 1, keyHeight, proofHeights))
 
     // the consensus state height of the proving chain's counterparty
     // this is where multi-hop proof verification begins
@@ -181,9 +180,9 @@ func QueryMultihopProof(
     return
 }
 
-// CalcProofPath calculates the optimal proof heights to generate a multi-hop proof
+// calcProofHeights calculates the optimal proof heights to generate a multi-hop proof
 // along the channel path and performs client updates as needed.
-func calcProofPath(
+func calcProofHeights(
     chains []*Chain,
     chainIdx int,
     consensusHeight exported.Height,
@@ -215,13 +214,13 @@ func calcProofPath(
     }
 
     // use the proofHeight as the next consensus height
-    abortTransactionUnless(calcProofPath(chains, chainIdx+1, height.proofHeight, proofHeights))
+    abortTransactionUnless(calcProofHeights(chains, chainIdx+1, height.proofHeight, proofHeights))
 
     proofHeights[chainIdx-1] = &height
     return
 }
 
-// QueryIntermediateProofs recursively queries intermediate chains in a multi-hop channel path for consensus state
+// queryIntermediateProofs recursively queries intermediate chains in a multi-hop channel path for consensus state
 // and connection proofs. It stops at the second to last path since the consensus and connection state on the
 // final hop is already known on the destination.
 func queryIntermediateProofs(
@@ -248,7 +247,7 @@ func queryIntermediateProofs(
     connectionProofs[len(p.Paths)-proofIdx-2] = proof
 
     // continue querying proofs on the next chain in the path
-    QueryIntermediateProofs(chains, proofIdx-1, proofHeights, consensusProofs, connectionProofs)
+    queryIntermediateProofs(chains, proofIdx-1, proofHeights, consensusProofs, connectionProofs)
 }
 
 // Query a proof for the counterparty consensus state at the specified height on the given chain.
@@ -409,7 +408,7 @@ func VerifyMultihopNonMembership(
     abortTransactionUnless(VerifyConnectionHops(proofs.ConnectionProofs, connectionHops))
 
     // verify intermediate consensus and connection states from receiver --> sender
-    abortTransactionUnless(VerifyConsensusAndConnectionStates(consensusState, proofs.ConsensusProofs, proofs.ConnectionProofs))
+    abortTransactionUnless(VerifyIntermediateStateProofs(consensusState, proofs.ConsensusProofs, proofs.ConnectionProofs))
 
     // verify a key/value proof on source chain's consensus state.
     abortTransactionUnless(VerifyKeyNonMembership(consensusState, proofs, prefix, key))
@@ -436,9 +435,9 @@ func VerifyConnectionHops(
     }
 }
 
-// VerifyConsensusAndConnectionStates verifies the state of each intermediate consensus and connection state
+// VerifyIntermediateStateProofs verifies the state of each intermediate consensus and connection state
 // starting from the receiving chain and finally proving the sending chain consensus and connection state.
-func VerifyConsensusAndConnectionStates(
+func VerifyIntermediateStateProofs(
     consensusState exported.ConsensusState,
     consensusProofs []*ProofData,
     connectionProofs []*ProofData,
