@@ -828,9 +828,8 @@ function cancelChannelUpgrade(
     // If counterparty sequence is less than the current sequence, abort 
     // transaction since this error receipt is from a previous upgrade
     // Otherwise, set the sequence to counterparty's error sequence
-    currentSequence = provableStore.get(channelUpgradeSequencePath(portIdentifier, channelIdentifier))
-    abortTransactionUnless(errorReceipt.sequence >= currentSequence)
-    provableStore.set(channelUpgradeSequencePath(portIdentifier, channelIdentifier), errorReceipt.sequence)
+    abortTransactionUnless(errorReceipt.sequence >= channel.upgradeSequence)
+    channel.upgradeSequence = errorReceipt.sequence
 
     // get underlying connection for proof verification
     connection = provableStore.get(connectionPath(channel.connectionHops[0]))
@@ -940,8 +939,7 @@ function timeoutChannelUpgrade(
         // timeout for this sequence can only succeed if the error 
         // receipt written into the error path on the counterparty 
         // was for a previous sequence by the timeout deadline.
-        sequence = provableStore.get(channelUpgradeSequencePath(portIdentifier, channelIdentifier))
-        abortTransactionUnless(sequence > prevErrorReceipt.sequence)
+        abortTransactionUnless(channel.upgradeSequence > prevErrorReceipt.sequence)
         abortTransactionUnless(
           verifyErrorReceipt(
             connection,
