@@ -77,8 +77,8 @@ interface ChannelEnd {
   counterpartyChannelIdentifier: Identifier
   connectionHops: [Identifier]
   version: string
-  sequence: uint64
-  flushState: FlushStatus
+  upgradeSequence: uint64
+  flushStatus: FlushStatus
 }
 ```
 
@@ -890,7 +890,7 @@ function acknowledgePacket(
 
     // if there are no in-flight packets on our end, we can automatically go to FLUSHCOMPLETE
     if channel.flushStatus === FLUSHING && pendingInflightPackets(packet.sourcePort, packet.sourceChannel) == nil {
-        channel.flushState = FLUSHCOMPLETE
+        channel.flushStatus = FLUSHCOMPLETE
         provableStore.set(channelPath(packet.sourcePort, packet.sourceChannel), channel)
     }
 
@@ -1030,7 +1030,7 @@ function timeoutPacket(
 
     // if there are no in-flight packets on our end, we can automatically go to FLUSHCOMPLETE
     if channel.flushStatus === FLUSHING && pendingInflightPackets(packet.sourcePort, packet.sourceChannel) == nil {
-        channel.flushState = FLUSHCOMPLETE
+        channel.flushStatus = FLUSHCOMPLETE
         provableStore.set(channelPath(packet.sourcePort, packet.sourceChannel), channel)
     }
 
