@@ -703,7 +703,7 @@ function chanUpgradeAck(
     }
 
     // if no error, agree on final version
-    upgrade.version = counterpartyUpgrade.version
+    upgrade.fields.version = counterpartyUpgrade.fields.version
     provableStore.set(channelUpgradePath(portIdentifier, channelIdentifier), upgrade)
 
     // refresh channel
@@ -711,7 +711,7 @@ function chanUpgradeAck(
 
     // if both sides have already flushed then open the upgrade handshake immediately
     if  channel.flushStatus == FLUSHCOMPLETE && counterpartyFlushStatus == FLUSHCOMPLETE {
-        openUpgradelHandshake(portIdentifier, channelIdentifier)
+        openUpgradeHandshake(portIdentifier, channelIdentifier)
         module.onChanUpgradeOpen(portIdentifier, channelIdentifier)
     }
 }
