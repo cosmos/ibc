@@ -757,9 +757,8 @@ function cancelChannelUpgrade(
     // get current sequence
     // If counterparty sequence is less than the current sequence, abort transaction since this error receipt is from a previous upgrade
     // Otherwise, set the sequence to counterparty's error sequence+1 so that both sides start with a fresh sequence
-    currentSequence = provableStore.get(channelUpgradeSequencePath(portIdentifier, channelIdentifier))
-    abortTransactionUnless(errorReceipt.Sequence >= currentSequence)
-    provableStore.set(channelUpgradeSequencePath(portIdentifier, channelIdentifier), errorReceipt.Sequence+1)
+    abortTransactionUnless(errorReceipt.sequence >= currentChannel.upgradeSequence)
+    currentChannel.upgradeSequence = errorReceipt.sequence
 
     // get underlying connection for proof verification
     connection = getConnection(currentChannel.connectionIdentifier)
@@ -809,7 +808,8 @@ function timeoutChannelUpgrade(
     currentChannel = provableStore.get(channelPath(portIdentifier, channelIdentifier))
     abortTransactionUnles(currentChannel.state == INITUPGRADE)
 
-    upgradeTimeout = provableStore.get(timeoutPath(portIdentifier, channelIdentifier))
+    upgrade = provableStore.get(channelUpgradePath(portIdentifier, channelIdentifier))
+    upgradeTimeout = upgrade.timeout
 
     // proof must be from a height after timeout has elapsed. Either timeoutHeight or timeoutTimestamp must be defined.
     // if timeoutHeight is defined and proof is from before timeout height
@@ -832,8 +832,7 @@ function timeoutChannelUpgrade(
     } else {
         // timeout for this sequence can only succeed if the error receipt written into the error path on the counterparty
         // was for a previous sequence by the timeout deadline.
-        sequence = provableStore.get(channelUpgradeSequencePath(portIdentifier, channelIdentifier))
-        abortTransactionUnless(sequence > prevErrorReceipt.sequence)
+        abortTransactionUnless(currentChannel.upgradeSequence > prevErrorReceipt.sequence)
         abortTransactionUnless(verifyErrorReceipt(connection, proofHeight, proofErrorReceipt, currentChannel.counterpartyPortIdentifier, currentChannel.counterpartyChannelIdentifier, prevErrorReceipt))
     }
 
