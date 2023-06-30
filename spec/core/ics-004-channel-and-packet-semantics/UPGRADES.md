@@ -161,7 +161,10 @@ function verifyChannelUpgrade(
     upgrade: Upgrade
 ) {
     clientState = queryClientState(connection.clientIdentifier)
-    path = applyPrefix(connection.counterpartyPrefix, channelUpgradePath(counterpartyPortIdentifier, counterpartyChannelIdentifier))
+    path = applyPrefix(
+      connection.counterpartyPrefix, 
+      channelUpgradePath(counterpartyPortIdentifier, counterpartyChannelIdentifier)
+    )
     return verifyMembership(clientState, height, 0, 0, proof, path, upgrade)
 }
 ```
@@ -199,7 +202,10 @@ function verifyChannelUpgradeError(
   upgradeErrorReceipt: ErrorReceipt
 ) {
     clientState = queryClientState(connection.clientIdentifier)
-    path = applyPrefix(connection.counterpartyPrefix, channelUpgradeErrorPath(counterpartyPortIdentifier, counterpartyChannelIdentifier))
+    path = applyPrefix(
+      connection.counterpartyPrefix, 
+      channelUpgradeErrorPath(counterpartyPortIdentifier, counterpartyChannelIdentifier)
+    )
     return verifyMembership(clientState, height, 0, 0, proof, path, upgradeErrorReceipt)
 }
 ```
@@ -214,7 +220,10 @@ function verifyChannelUpgradeErrorAbsence(
   counterpartyChannelIdentifier: Identifier,
 ) {
     clientState = queryClientState(connection.clientIdentifier)
-    path = applyPrefix(connection.counterpartyPrefix, channelUpgradeErrorPath(counterpartyPortIdentifier, counterpartyChannelIdentifier))
+    path = applyPrefix(
+      connection.counterpartyPrefix, 
+      channelUpgradeErrorPath(counterpartyPortIdentifier, counterpartyChannelIdentifier)
+    )
     return verifyNonMembership(clientState, height, 0, 0, proof, path)
 }
 ```
@@ -228,8 +237,10 @@ The channel upgrade process consists of the following sub-protocols: `initUpgrad
 `initUpgradeHandshake` is a sub-protocol that will initialize the channel end for the upgrade handshake. It will validate the upgrade parameters and set the channel state to INITUPGRADE, blocking `sendPacket` from processing outbound packets on the channel end. During this time; `receivePacket`, `acknowledgePacket` and `timeoutPacket` will still be allowed and processed according to the original channel parameters. The new proposed upgrade will be stored in the provable store for counterparty verification.
 
 ```typescript
-// initUpgradeHandshake will verify that the channel is in the correct precondition to call the initUpgradeHandshake protocol
-// it will verify the new upgrade field parameters, and make the relevant state changes for initializing a new upgrade:
+// initUpgradeHandshake will verify that the channel is in the 
+// correct precondition to call the initUpgradeHandshake protocol.
+// it will verify the new upgrade field parameters, and make the 
+// relevant state changes for initializing a new upgrade:
 // - moving channel state to INITUPGRADE
 // - incrementing upgrade sequence
 function initUpgradeHandshake(
