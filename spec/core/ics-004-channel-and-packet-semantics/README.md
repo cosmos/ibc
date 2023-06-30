@@ -951,7 +951,7 @@ function timeoutPacket(
     // check that timeout height or timeout timestamp has passed on the other end
     abortTransactionUnless(
       (packet.timeoutHeight > 0 && proofHeight >= packet.timeoutHeight) ||
-      (packet.timeoutTimestamp > 0 && connection.getTimestampAtHeight(proofHeight) >= packet.timeoutTimestamp))
+      (packet.timeoutTimestamp > 0 && getTimestampAtHeight(connection, proofHeight) >= packet.timeoutTimestamp))
 
     // verify we actually sent this packet, check the store
     abortTransactionUnless(provableStore.get(packetCommitmentPath(packet.sourcePort, packet.sourceChannel, packet.sequence))
