@@ -289,8 +289,8 @@ function initUpgradeHandshake(
 `startFlushUpgradeHandshake` will set the counterparty last packet send and continue blocking the upgrade from continuing until all in-flight packets have been flushed. When the channel is in blocked mode, any packet receive above the counterparty last packet send will be rejected. It will verify the upgrade parameters and set the channel state to one of the flushing states (`TRYUPGRADE` or `ACKUPGRADE`) passed in by caller, set the `FlushStatus` to `FLUSHING` and block sending of packets. During this time, `recvPacket`, `acknowledgePacket` and `timeoutPacket` will still be allowed and processed according to the original channel parameters. The new proposed upgrade will be stored in the provable store for counterparty verification.
 
 ```typescript
-// startFlushUpgradeSequence will verify that the channel is in a valid precondition for calling the startFlushUpgradeHandshake
-// and that the desiredChannelState is valid
+// startFlushUpgradeSequence will verify that the channel is in a valid precondition
+// for calling the startFlushUpgradeHandshake and that the desiredChannelState is valid
 // it will verify the proofs of the counterparty channel and upgrade
 // it will verify that the upgrades on both ends are mutually compatible
 // it will set the channel to desiredChannel state and move to flushing mode
