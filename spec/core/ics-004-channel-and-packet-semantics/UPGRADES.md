@@ -376,8 +376,10 @@ function startFlushUpgradeHandshake(
     }
 
     provableStore.set(channelPath(portIdentifier, channelIdentifier), channel)
-
-    privateStore.set(channelCounterpartyLastPacketSequencePath(portIdentifier, channelIdentifier), counterpartyUpgrade.lastPacketSent)
+    privateStore.set(
+      channelCounterpartyLastPacketSequencePath(portIdentifier, channelIdentifier), 
+      counterpartyUpgrade.lastPacketSent
+    )
 }
 ```
 
