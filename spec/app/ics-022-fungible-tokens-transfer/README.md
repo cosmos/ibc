@@ -12,6 +12,8 @@ Allow to transfer multiple token at same packet.
 
 ## Technical Specification
 
+All omitted details are exactly same as for ICS-20.
+
 ### Data Structures
 
 ```typescript
