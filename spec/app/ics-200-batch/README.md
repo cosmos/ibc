@@ -20,7 +20,7 @@ Any channel type is supported.
 
 ```typescript
 
-interface AtomicBatchPacketData {  
+interface BatchPacketData {  
   tracking: uint8 
   memo: string
 }
@@ -45,7 +45,7 @@ interface Packet {
 
 `App` packets are all received.
 
-On final packet, each of `App` packet is executed in one atomic transaction in order defined in `batch tracking` of packets.
+On final packet, each of `App` packet is executed in order defined in `batch tracking` of packets.
 
 `Batch` and `App` packets are `ACK` success.
 
@@ -61,7 +61,10 @@ In case of `App` received before `Batch` or `Batch` received not in single relay
 
 `Batch` received, but one of `App` packets timeout is less than `Batch` one. All `App` packets and `Batch` timeout.
 
-If any `App` packet error `ACK`, all packets are errored. That means that all `App` packets executed in one atomic transaction.
+If any `App` packet error `ACK` in rececingi trnsaction, all packets are errored next. 
+If `App` packet errors after some other packets dispatched, than part of packets will success nad part falue.
+
+So there is no atomic transactions.
 
 If some `App` does nor timeouts not `ACK`, `Batch` packet also not timeouts nor `ACK`.
 
@@ -69,7 +72,7 @@ If some `App` does nor timeouts not `ACK`, `Batch` packet also not timeouts nor 
 
 `Batch` aware `App` packet will fail until `Batch` transferred. Relayer will burn gas and have to be aware of batches.
 
-`Batch` packet holds off execution of ICS-100 until all packets arrived.  
+`Batch` packet holds off finalizaiton..  
 
 
 ## Alternatives 
@@ -86,10 +89,10 @@ so seems better relayer will cook batch bundle off chain.
 So it improves allowing to set same timeout and one memo for whole batch,
 it is incompatible with existing sequence increments, channel timeout logic, middleware and fees.
 
-### Async batches
+### Sync atomic batches
 
-Async batches are possible using existing ICS-004 spec.
-
+Could hold off execution of next packet in batch until previous packet ACK or error.
+But if all packets are well know to be executed in this block, really get sync batch as degenrative case.
 
 ## Referenes
 
