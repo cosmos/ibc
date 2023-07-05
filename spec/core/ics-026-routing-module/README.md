@@ -159,16 +159,16 @@ These are combined together in a `ModuleCallbacks` interface:
 
 ```typescript
 interface ModuleCallbacks {
-  onChanOpenInit: onChanOpenInit,
-  onChanOpenTry: onChanOpenTry,
-  onChanOpenAck: onChanOpenAck,
-  onChanOpenConfirm: onChanOpenConfirm,
-  onChanCloseInit: onChanCloseInit,
+  onChanOpenInit: onChanOpenInit
+  onChanOpenTry: onChanOpenTry
+  onChanOpenAck: onChanOpenAck
+  onChanOpenConfirm: onChanOpenConfirm
+  onChanCloseInit: onChanCloseInit
   onChanCloseConfirm: onChanCloseConfirm
   onRecvPacket: onRecvPacket
   onTimeoutPacket: onTimeoutPacket
-  onAcknowledgePacket: onAcknowledgePacket,
-  onTimeoutPacketClose: onTimeoutPacketClose,
+  onAcknowledgePacket: onAcknowledgePacket
+  onTimeoutPacketClose: onTimeoutPacketClose
 }
 ```
 
