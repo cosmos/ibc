@@ -163,11 +163,11 @@ interface ModuleCallbacks {
   onChanOpenTry: onChanOpenTry,
   onChanOpenAck: onChanOpenAck,
   onChanOpenConfirm: onChanOpenConfirm,
-  onChanCloseConfirm: onChanCloseConfirm
-  onRecvPacket: onRecvPacket
-  onTimeoutPacket: onTimeoutPacket
+  onChanCloseConfirm: onChanCloseConfirm,
+  onRecvPacket: onRecvPacket,
+  onTimeoutPacket: onTimeoutPacket,
   onAcknowledgePacket: onAcknowledgePacket,
-  onTimeoutPacketClose: onTimeoutPacketClose
+  onTimeoutPacketClose: onTimeoutPacketClose,
 }
 ```
 
