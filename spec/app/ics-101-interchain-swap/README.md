@@ -568,46 +568,70 @@ function onRecvPacket(packet: Packet) {
 `onAcknowledgePacket` is called by the routing module when a packet sent by this module has been acknowledged.
 
 ```ts
-
 // OnAcknowledgementPacket implements the IBCModule interface
-function OnAcknowledgementPacket(
-    packet: channeltypes.Packet,
-    ack channeltypes.Acknowledgement,
-)  {
 
-    var ack channeltypes.Acknowledgement
-    if (!ack.success()) {
-        refund(packet)
-    } else {
-        const swapPacket = protobuf.decode(packet.data)
-        switch swapPacket.type {
-        case CreatePool:
-            onCreatePoolAcknowledged(msg)
-            break;
-        case SingleAssetDeposit:
-            onSingleAssetDepositAcknowledged(msg)
-            break;
-        case MultiAssetDeposit:
-            onMultiAssetDepositAcknowledged(msg)
-            break;
-        case SingleAssetWithdraw:
-            onSingleAssetWithdrawAcknowledged(msg)
-            break;
-        case MultiAssetWithdraw:
-            onMultiAssetWithdrawAcknowledged(msg)
-            break;
-        case Swap:
-            var msg: MsgSwapRequest = protobuf.decode(swapPacket.data)
-            if(msg.SwapType === SwapType.Left) {
-                onLeftSwapAcknowledged(msg)
-            }else{
-                onRightSwapAcknowledged(msg)
-            }
-            break;
-        }
-    }
+// OnAcknowledgementPacket processes the packet acknowledgement and performs actions based on the acknowledgement type
+function OnAcknowledgementPacket(packet: Packet, data: IBCSwapPacketData, ack: Acknowledgement) {
+  switch (ack.response.type) {
+    case "Acknowledgement_Error":
+      return store.refundPacketToken(packet, data);
+    default:
+      switch (data.type) {
+        case "MAKE_POOL":
+          const msgMakePool: MsgMakePoolRequest = protobuf.decode(data.Data);
+          const errMakePool = store.OnMakePoolAcknowledged(msgMakePool, data.StateChange.PoolId);
+          abortTransactionUnless(errMakePool === undefined);
+          break;
 
-    return nil
+        case "TAKE_POOL":
+          const msgTakePool: MsgTakePoolRequest = protobuf.decode(data.Data);
+          const errTakePool = store.OnTakePoolAcknowledged(msgTakePool);
+          abortTransactionUnless(errTakePool === undefined);
+          break;
+
+        case "SINGLE_DEPOSIT":
+          const msgSingleDeposit: MsgSingleAssetDepositRequest = protobuf.decode(data.Data);
+          const resSingleDeposit: MsgSingleAssetDepositResponse = protobuf.decode(ack.GetResult());
+          const errSingleDeposit = store.OnSingleAssetDepositAcknowledged(msgSingleDeposit, resSingleDeposit);
+          abortTransactionUnless(errSingleDeposit === undefined);
+          break;
+
+        case "MAKE_MULTI_DEPOSIT":
+          const msgMakeMultiDeposit: MsgMakeMultiAssetDepositRequest = protobuf.decode(data.Data);
+          const resMakeMultiDeposit: MsgMultiAssetDepositResponse = protobuf.decode(ack.GetResult());
+          const errMakeMultiDeposit = store.OnMakeMultiAssetDepositAcknowledged(
+            msgMakeMultiDeposit,
+            resMakeMultiDeposit
+          );
+          abortTransactionUnless(errMakeMultiDeposit === undefined);
+          break;
+
+        case "TAKE_MULTI_DEPOSIT":
+          const msgTakeMultiDeposit: MsgTakeMultiAssetDepositRequest = protobuf.decode(data.Data);
+          const resTakeMultiDeposit: MsgTakePoolResponse = protobuf.decode(ack.GetResult());
+          const errTakeMultiDeposit = store.OnTakeMultiAssetDepositAcknowledged(msgTakeMultiDeposit, data.StateChange);
+          abortTransactionUnless(errTakeMultiDeposit === undefined);
+          break;
+
+        case "MULTI_WITHDRAW":
+          const msgMultiWithdraw: MsgMultiAssetWithdrawRequest = protobuf.decode(data.Data);
+          const resMultiWithdraw: MsgMultiAssetWithdrawResponse = protobuf.decode(ack.GetResult());
+          const errMultiWithdraw = store.OnMultiAssetWithdrawAcknowledged(msgMultiWithdraw, resMultiWithdraw);
+          abortTransactionUnless(errMultiWithdraw === undefined);
+          break;
+
+        case "LEFT_SWAP":
+        case "RIGHT_SWAP":
+          const msgSwap: MsgSwapRequest = protobuf.decode(data.Data);
+          const resSwap: MsgSwapResponse = protobuf.decode(ack.GetResult());
+          const errSwap = store.OnSwapAcknowledged(msgSwap, resSwap);
+          abortTransactionUnless(errSwap === undefined);
+          break;
+
+        default:
+          return;
+      }
+  }
 }
 ```
 
@@ -656,91 +680,121 @@ function refundToken(packet: Packet) {
 These sub-protocols handle packets relayed from a source chain, including pool state updates and token transfers:
 
 ```protobuf
-  rpc CreatePool(MsgCreatePoolRequest) returns (MsgCreatePoolResponse);
-  rpc SingleAssetDeposit(MsgSingleAssetDepositRequest) returns (MsgSingleAssetDepositResponse);
-  rpc MultiAssetDeposit(MsgMultiAssetDepositRequest) returns (MsgMultiAssetDepositResponse);
-  rpc SingleAssetWithdraw(MsgSingleAssetWithdrawRequest) returns (MsgSingleAssetWithdrawResponse);
-  rpc MultiAssetWithdraw(MsgMultiAssetWithdrawRequest) returns (MsgMultiAssetWithdrawResponse);
-  rpc Swap(MsgSwapRequest) returns (MsgSwapResponse);
+  rpc MakePool (MsgMakePoolRequest) returns (MsgMakePoolResponse);
+  rpc TakePool (MsgTakePoolRequest) returns (MsgTakePoolResponse);
+  rpc SingleAssetDeposit    (MsgSingleAssetDepositRequest   ) returns (MsgSingleAssetDepositResponse   );
+  rpc MakeMultiAssetDeposit    (MsgMakeMultiAssetDepositRequest   ) return (MsgMultiAssetDepositResponse   );
+  rpc TakeMultiAssetDeposit    (MsgTakeMultiAssetDepositRequest   ) returns (MsgMultiAssetDepositResponse   );
+  rpc MultiAssetWithdraw   (MsgMultiAssetWithdrawRequest  ) returns (MsgMultiAssetWithdrawResponse  );
+  rpc Swap       (MsgSwapRequest             ) returns (MsgSwapResponse      );
 ```
 
 #### Interfaces for sub-protocols
 
 ```ts
-interface MsgCreatePoolRequest {
-    sourcePort: string,
-    sourceChannel: string,
-    sender: string,
-    denoms: []string,
-    decimals: []int32,
-    weight: string,
+interface MsgMakePoolRequest {
+  sourcePort: string;
+  sourceChannel: string;
+  creator: string;
+  counterPartyCreator: string;
+  liquidity: PoolAsset[];
+  sender: string;
+  denoms: string[];
+  decimals: int32[];
+  swapFee: int32;
+  timeHeight: TimeHeight;
+  timeoutTimeStamp: uint64;
 }
 
-interface MsgCreatePoolResponse {}
+interface MsgMakePoolResponse {
+  poolId: string;
+}
 ```
 
 ```ts
-interface MsgDepositAssetRequest {
+interface MsgTakePoolRequest {
+  creator: string;
+  poolId: string;
+  timeHeight: TimeHeight;
+  timeoutTimeStamp: uint64;
+}
+
+interface MsgTakePoolResponse {
+  poolId: string;
+}
+```
+
+```ts
+interface MsgSingleAssetDepositRequest {
   poolId: string;
   sender: string;
-  token: Coin;
+  token: Coin; // only one element for now, might have two in the feature
+  timeHeight: TimeHeight;
+  timeoutTimeStamp: uint64;
 }
-interface MsgSingleAssetDepositResponse {
+interface MsgSingleDepositResponse {
   poolToken: Coin;
 }
 ```
 
 ```ts
-interface LocalDeposit {
+interface DepositAsset {
   sender: string;
-  token: Coin;
-}
-interface RemoteDeposit {
-  sender: string;
-  sequence: int; // account transaction sequence
-  token: Coin;
-  signature: Uint8Array;
+  balance: Coin;
 }
 
-interface MsgMultiAssetDepositRequest {
+interface MsgMakeMultiAssetDepositRequest {
   poolId: string;
-  localDeposit: LocalDeposit;
-  remoteDeposit: RemoteDeposit;
+  deposits: DepositAsset[];
+  token: Coin; // only one element for now, might have two in the feature
+  timeHeight: TimeHeight;
+  timeoutTimeStamp: uint64;
 }
+
+interface MsgTakeMultiAssetDepositRequest {
+  sender: string;
+  poolId: string;
+  orderId: uint64;
+  timeHeight: TimeHeight;
+  timeoutTimeStamp: uint64;
+}
+
 interface MsgMultiAssetDepositResponse {
-  poolTokens: Coin[];
+  poolToken: Coin;
 }
 ```
 
 ```ts
-interface MsgSingleAssetWithdrawRequest {
-    sender: string,
-    poolCoin: Coin,
-    denomOut: string,
-}
-interface MsgSingleAssetWithdrawResponse {
-   token: Coin;
-}
 interface MsgMultiAssetWithdrawRequest {
-    localWithdraw: MsgSingleAssetWithdrawRequest
-    remoteWithdraw: MsgSingleAssetWithdrawRequest
+  poolId: string;
+  receiver: string;
+  counterPartyReceiver: string;
+  poolToken: Coin;
+  timeHeight: TimeHeight;
+  timeoutTimeStamp: uint64;
 }
+
 interface MsgMultiAssetWithdrawResponse {
-   tokens: []Coin;
+  tokens: Coin[];
 }
 ```
 
 ```ts
 interface MsgSwapRequest {
-   sender: string,
-   swapType: SwapType,
-   tokenIn: Coin,
-   tokenOut: Coin,
-   slippage: number; // max tolerated slippage
-   recipient: string,
+  swap_type: SwapMsgType;
+  sender: string;
+  poolId: string;
+  tokenIn: Coin;
+  tokenOut: Coin;
+  slippage: uint64;
+  recipient: string;
+  timeHeight: TimeHeight;
+  timeoutTimeStamp: uint64;
 }
+
 interface MsgSwapResponse {
-  tokens: []Coin;
+  swap_type: SwapMsgType;
+  tokens: Coin[];
 }
 ```
 
@@ -749,495 +803,674 @@ interface MsgSwapResponse {
 These are methods that output a state change on the source chain, which will be subsequently synced to the destination chain.
 
 ```ts
-function createPool(msg: MsgCreatePoolRequest) {
+  function makePool(msg: MsgMakePoolRequest): Promise<MsgMakePoolResponse> {
 
-    // ICS 24 host check if both port and channel are validate
-    abortTransactionUnless(host.portIdentifierValidator(msg.sourcePort))
-    abortTransactionUnless(host.channelIdentifierValidator(msg.sourceChannel));
+    const { counterPartyChainId, connected } = await store.GetCounterPartyChainID(msg.sourcePort, msg.sourceChannel);
 
-    // Only two assets in a pool
-    abortTransactionUnless(msg.denoms.length != 2)
-    abortTransactionUnless(msg.decimals.length != 2)
-    abortTransactionUnless(msg.weight.split(':').length != 2) // weight: "50:50"
-    abortTransactionUnless( !store.hasPool(generatePoolId(msg.denoms)) )
+    abortTransactionUnless(connected)
 
-    const pool = new InterchainLiquidityPool(msg.denoms, msg.decimals, msg.weight, msg.sourcePort, msg.sourceChannel)
-
-    const localAssetCount = 0
-    for(var denom in msg.denoms) {
-       if (bank.hasSupply(denom)) {
-          localAssetCount += 1
-       }
+    const denoms: string[] = [];
+    for (const liquidity of msg.liquidity) {
+      denoms.push(liquidity.balance.denom);
     }
-    // should have 1 native asset on the chain
-    abortTransactionUnless(localAssetCount >= 1)
 
-    // constructs the IBC data packet
-    const packet = {
-        type: MessageType.CreatePool,
-        data: protobuf.encode(msg), // encode the request message to protobuf bytes.
-    }
-    sendInterchainIBCSwapDataPacket(packet, msg.sourcePort, msg.sourceChannel, msg.timeoutHeight, msg.timeoutTimestamp)
+    const poolId = getPoolId(store.chainID(), counterPartyChainId, denoms);
 
+    const found = await k.getInterchainLiquidityPool(poolId);
+
+    abortTransactionUnless(found)
+
+    // Validate message
+    const portValidationErr = host.PortIdentifierValidator(msg.SourcePort);
+
+    abortTransactionUnless(portValidationErr === undefined)
+
+    const channelValidationErr = host.ChannelIdentifierValidator(msg.SourceChannel);
+
+    abortTransactionUnless(channelValidationErr === undefined)
+
+    const validationErr = msg.ValidateBasic();
+
+    abortTransactionUnless(validationErr === undefined)
+
+    abortTransactionUnless(store.hasSupply(msg.liquidity[0].balance.denom))
+
+
+    const sourceLiquidity = store.GetBalance(msg.creator, msg.liquidity[0].balance.denom);
+
+    abortTransactionUnless(sourceLiquidity.amount > msg.liquidity[0].balance.amount)
+
+
+    const lockErr = store.lockTokens(msg.sourcePort, msg.sourceChannel, senderAddress, msg.liquidity[0].balance);
+
+    abortTransactionUnless(lockErr === undefined)
+
+    const packet: IBCSwapPacketData = {
+      type: "MAKE_POOL",
+      data: protobuf.encode(msg),
+      stateChange: {
+        poolId: poolId,
+        sourceChainId: store.ChainID(),
+      },
+    };
+
+    const sendPacketErr = await store.sendIBCSwapPacket(msg.sourcePort, msg.sourceChannel, timeoutHeight, timeoutStamp, packet);
+
+    abortTransactionUnless(sendPacketErr === undefined)
+    return {
+      poolId
+    };
+  }
+
+  function takePool(msg: MsgTakePoolRequest): MsgTakePoolResponse {
+
+    const { pool, found } = await store.getInterchainLiquidityPool(msg.PoolId);
+    abortTransactionUnless(found)
+
+    abortTransactionUnless(pool.SourceChainId !== store.ChainID())
+    abortTransactionUnless(pool.DestinationCreator === msg.Creator)
+
+    const creatorAddr = sdk.MustAccAddressFromBech32(msg.Creator);
+
+    const asset = pool.FindAssetBySide("SOURCE");
+    abortTransactionUnless(asset)
+
+    const liquidity = store.GetBalance(creatorAddr, asset.denom);
+    abortTransactionUnless(liquidity.amount > 0)
+
+
+    const lockErr = store.LockTokens(pool.counterPartyPort, pool.counterPartyChannel, creatorAddr, asset);
+    abortTransactionUnless(lockErr === undefined)
+
+    const packet: IBCSwapPacketData = {
+      type: "TAKE_POOL",
+      data: protobuf.encode(msg),
+    };
+
+
+    const sendPacketErr = await store.SendIBCSwapPacket(pool.counterPartyPort, pool.counterPartyChannel, timeoutHeight, timeoutStamp, packet);
+    abortTransactionUnless(sendPacketErr === undefined)
+
+    return {
+      poolId: msg.PoolId,
+    };
+  }
+
+  function makeMultiAssetDeposit(msg: MsgMakeMultiAssetDepositRequest): MsgMultiAssetDepositResponse {
+
+    const { pool, found } = await store.getInterchainLiquidityPool(msg.poolId);
+
+    abortTransactionUnless(found)
+
+    // Check initial deposit condition
+    abortTransactionUnless(pool.status === "ACTIVE")
+
+    // Check input ratio of tokens
+    const sourceAsset = pool.findAssetBySide("SOURCE");
+    abortTransactionUnless(sourceAsset)
+
+    const destinationAsset = pool.findAssetBySide("DESTINATION");
+    abortTransactionUnless(destinationAsset)
+
+    const currentRatio = sourceAsset.amount.Mul(sdk.NewInt(1e18)).Quo(destinationAsset.amount);
+    const inputRatio = msg.deposits[0].balance.amount.Mul(sdk.NewInt(1e18)).Quo(msg.deposits[1].balance.amount);
+
+    const slippageErr = checkSlippage(currentRatio, inputRatio, 10);
+    abortTransactionUnless(slippageErr)
+
+    // Create escrow module account here
+    const lockErr = store.lockTokens(pool.counterPartyPort, pool.counterPartyChannel, sdk.msg.deposits[0].sender, msg.deposits[0].balance);
+    abortTransactionUnless(lockErr)
+
+    const amm = new InterchainMarketMaker(pool);
+
+    const poolTokens = await amm.depositMultiAsset([
+      msg.deposits[0].balance,
+      msg.deposits[1].balance,
+    ]);
+
+    // create order
+    const order: MultiAssetDepositOrder = {
+      poolId: msg.poolId;
+      chainId: store.chainID(),
+      sourceMaker: msg.deposits[0].sender,
+      destinationTaker: msg.deposits[1].sender,
+      deposits: getCoinsFromDepositAssets(msg.deposits),
+      status: "PENDING";
+      createdAt: store.blockHeight(),
+    };
+
+    // save order in source chain
+    store.appendMultiDepositOrder(pool.Id, order);
+
+    const packet: IBCSwapPacketData = {
+      type: "MAKE_MULTI_DEPOSIT",
+      data: protobuf.encode(msg),
+      stateChange: { poolTokens: poolTokens },
+    };
+
+    const sendPacketErr = await store.sendIBCSwapPacket(pool.counterPartyPort, pool.counterPartyChannel, timeoutHeight, timeoutStamp, packet);
+    abortTransactionUnless(sendPacketErr === undefined)
+
+    return { poolTokens };
+  }
+
+
+  function takeMultiAssetDeposit(msg: MsgTakeMultiAssetDepositRequest): MsgMultiAssetDepositResponse {
+
+  // check pool exist or not
+  const { pool, found } = store.getInterchainLiquidityPool(msg.poolId);
+  abortTransactionUnless(found)
+
+  // check order exist or not
+  const { order, found } = store.getMultiDepositOrder(msg.poolId, msg.orderId);
+  abortTransactionUnless(found)
+
+  abortTransactionUnless(order.chainId !== store.chainID())
+  abortTransactionUnless(msg.sender === order.destinationTaker)
+  abortTransactionUnless(order.status !== "COMPLETE")
+
+
+  // estimate pool token
+  const amm = new InterchainMarketMaker(pool);
+  const poolTokens = await amm.depositMultiAsset(order.deposits);
+
+  // check asset owned status
+  const asset = order.deposits[1];
+  const balance = store.getBalance(msg.sender, asset.denom);
+  abortTransactionUnless(balance.amount < asset.amount)
+
+
+  // Create escrow module account here
+  const lockErr = store.lockTokens(pool.counterPartyPort, pool.counterPartyChannel,msg.sender, asset);
+  abortTransactionUnless(lockErr === undefined)
+
+  const packet: IBCSwapPacketData = {
+    type: "TAKE_MULTI_DEPOSIT",
+    data: protobuf.encode(msg),
+    stateChange: { poolTokens },
+  };
+
+
+  const sendPacketErr = await store.sendIBCSwapPacket(pool.counterPartyPort, pool.counterPartyChannel, timeoutHeight, timeoutStamp, packet);
+  abortTransactionUnless(sendPacketErr === undefined)
+
+  return {};
 }
 
-function singleAssetDeposit(msg MsgSingleDepositRequest) {
+function singleAssetDeposit(msg: MsgSingleAssetDepositRequest): MsgSingleAssetDepositResponse {
+  // Validate message
+  const validationErr = msg.validateBasic();
+  abortTransactionUnless(validationErr === undefined);
 
-    abortTransactionUnless(msg.sender != null)
-    abortTransactionUnless(msg.token.amount > 0)
+  // Check if pool exists
+  const { pool, found } = store.getInterchainLiquidityPool(msg.poolId);
+  abortTransactionUnless(found);
 
-    const pool = store.findPoolById(msg.poolId)
-    abortTransactionUnless(pool != null)
+  // Deposit token to escrow account
+  const balance = store.getBalance(msg.sender, msg.token.denom);
+  abortTransactionUnless(balance.amount.gt(sdk.NewInt(0)));
 
-    const balance = bank.queryBalance(msg.sender, msg.token.denom)
-    // should have enough balance
-    abortTransactionUnless(balance.amount >= msg.token.amount)
+  // Check pool status
+  abortTransactionUnless(pool.status === "ACTIVE");
 
-    // the first initial
-    if(pool.status == POOL_STATUS_INITIAL) {
-        const asset = pool.findAssetByDenom(msg.token.denom)
-        abortTransactionUnless(balance.amount !== asset.amount)
-    }
+  // Lock tokens in escrow account
+  const lockErr = store.lockTokens(pool.counterPartyPort, pool.counterPartyChannel, msg.sender, sdk.NewCoins(msg.token));
+  abortTransactionUnless(lockErr === undefined);
 
-    // deposit assets to the escrowed account
-    const escrowAddr = escrowAddress(pool.counterpartyPort, pool.counterpartyChannel)
-    bank.sendCoins(msg.sender, escrowAddr, msg.tokens)
+  const amm = new InterchainMarketMaker(pool);
 
-    // calculation
-    const amm = new InterchainMarketMaker(pool, params.getPoolFeeRate())
-    const poolToken = amm.depositSingleAsset(msg.token)
+  const poolToken = await amm.depositSingleAsset(msg.token);
+  if (poolToken === undefined) {
+    throw new Error("Failed to deposit single asset.");
+  }
 
-    // update local pool state,
-    const assetIn = pool.findAssetByDenom(msg.tokenIn.denom)
-    assetIn.balance.amount += msg.token.amount
-    pool.supply.amount += poolToken.amount
-    store.savePool(pool)
+  const packet: IBCSwapPacketData = {
+    type: "SINGLE_DEPOSIT",
+    data: protobuf.encode(msg);,
+    stateChange: { poolTokens: [poolToken] },
+  };
 
-    // pool token should be minted and sent onAcknowledgement.
+  const sendPacketErr = await store.sendIBCSwapPacket(pool.counterPartyPort, pool.counterPartyChannel, timeoutHeight, timeoutStamp, packet);
+  abortTransactionUnless(sendPacketErr === undefined);
 
-    // constructs the IBC data packet
-    const packet = {
-        type: MessageType.Deposit,
-        data: protobuf.encode(msg), // encode the request message to protobuf bytes.
-        stateChange: { in: [msg.token], [poolToken] }
-    }
-    sendInterchainIBCSwapDataPacket(packet, msg.sourcePort, msg.sourceChannel, msg.timeoutHeight, msg.timeoutTimestamp)
+  return { poolToken: pool.supply };
 }
 
 
-function multiAssetDeposit(msg MsgMultiAssetDepositRequest) {
+function multiAssetWithdraw(msg: MsgMultiAssetWithdrawRequest): MsgMultiAssetWithdrawResponse {
+  // Validate message
+  const validationErr = msg.validateBasic();
+  abortTransactionUnless(validationErr === undefined);
 
-    abortTransactionUnless(msg.localDeposit.sender != null)
-    abortTransactionUnless(msg.localDeposit.token != null)
-    abortTransactionUnless(msg.remoteDeposit.sender != null)
-    abortTransactionUnless(msg.remoteDeposit.token != null)
-    abortTransactionUnless(msg.remoteDeposit.signature != null)
-    abortTransactionUnless(msg.remoteDeposit.sequence != null)
+  // Check if pool token denom exists
+  const poolTokenDenom = msg.poolToken.denom;
+  abortTransactionUnless(store.bankKeeper.hasSupply(poolTokenDenom));
 
-    const pool = store.findPoolById(msg.poolId)
-    abortTransactionUnless(pool != null)
+  // Get the liquidity pool
+  const { pool, found } = k.getInterchainLiquidityPool(ctx, poolTokenDenom);
+  abortTransactionUnless(found);
 
-    const balance = bank.queryBalance(sender, msg.localDeposit.token.denom)
-    // should have enough balance
-    abortTransactionUnless(balance.amount >= msg.localDeposit.token.amount)
+  const amm = new InterchainMarketMaker(pool);
 
-    // check the ratio of local amount and remote amount
-    const localAssetInPool := pool.findAssetByDenom(msg.localDeposit.token.denom)
-    const remoteAssetInPool := pool.findAssetByDenom(msg.remoteDeposit.token.denom)
-    abortTransactionUnless(msg.localDeposit.token.amount/msg.remoteDeposit.token.amount !== localAssetInPool.amount/remoteAssetInPool.amount)
+  const outs = await amm.multiAssetWithdraw(msg.poolToken);
+  abortTransactionUnless(outs === undefined);
 
-    // deposit assets to the escrowed account
-    const escrowAddr = escrowAddress(pool.counterpartyPort, pool.counterpartyChannel)
-    bank.sendCoins(msg.sender, escrowAddr, msg.tokens)
+  const packet: IBCSwapPacketData = {
+    type: "MULTI_WITHDRAW",
+    data: protobuf.encode(msg),
+    stateChange: {
+      out: outs,
+      poolTokens: [msg.poolToken],
+    },
+  };
 
-    // calculation
-    const amm = new InterchainMarketMaker(pool, params.getPoolFeeRate())
-    const poolTokens = amm.depositMultiAsset([msg.localDeposit.token, msg.remoteDeposit.token]) // should replace with doubleDeposit() ?
+  const sendPacketErr = await k.sendIBCSwapPacket(ctx, pool.counterPartyPort, pool.counterPartyChannel, timeoutHeight, timeoutStamp, packet);
+  abortTransactionUnless(sendPacketErr === undefined);
 
-    // update local pool state,
-    const assetIn = pool.findAssetByDenom(msg.localDeposit.token.denom)
-    assetIn.balance.amount += msg.localDeposit.token.amount
-    const assetIn2 = pool.findAssetByDenom(msg.remoteDeposit.token.denom)
-    assetIn2.balance.amount += msg.remoteDeposit.token.amount
-    pool.supply.amount += poolToken.amount
-    store.savePool(pool)
-
-    // constructs the IBC data packet
-    const packet = {
-        type: MessageType.DoubleDeposit,
-        data: protobuf.encode(msg), // encode the request message to protobuf bytes.
-        stateChange: { in: [msg.localDeposit, msg.remoteDeposit], poolTokens },
-    }
-    sendInterchainIBCSwapDataPacket(packet, msg.sourcePort, msg.sourceChannel, msg.timeoutHeight, msg.timeoutTimestamp)
+  return {};
 }
 
-function singleAssetWithdraw(msg MsgWithdrawRequest) {
 
-    const pool = store.findPoolById(msg.poolToken.denom)
-    abortTransactionUnless(pool != null)
-    abortTransactionUnless(pool.status == PoolStatus.POOL_STATUS_READY)
+function swap(msg: MsgSwapRequest): MsgSwapResponse {
+  const { pool, found } = store.getInterchainLiquidityPool(msg.poolId);
+  abortTransactionUnless(found);
 
-    const outToken = this.pool.findAssetByDenom(msg.denomOut)
-    abortTransactionUnless(outToken != null)
-    abortTransactionUnless(outToken.poolSide == PoolSide.Native)
+  abortTransactionUnless(pool.status === "ACTIVE");
 
-    // lock pool token to the swap module
-    const escrowAddr = escrowAddress(pool.counterpartyPort, pool.counterpartyChannel)
-    bank.sendCoins(msg.sender, escrowAddr, msg.poolToken)
+  const lockErr = store.lockTokens(pool.counterPartyPort, pool.counterPartyChannel, msg.sender, msg.tokenIn);
+  abortTransactionUnless(lockErr === undefined);
 
-    const amm = new InterchainMarketMaker(pool, params.getPoolFeeRate())
-    const outToken = amm.withdraw(msg.poolToken)
+  const amm = new InterchainMarketMaker(pool);
+
+  let tokenOut: sdk.Coin | undefined;
+  let msgType: SwapMessageType;
+
+  switch (msg.swapType) {
+    case "LEFT":
+      msgType = "LEFT_SWAP";
+      tokenOut = amm.leftSwap(msg.tokenIn, msg.tokenOut.denom);
+      break;
+    case "RIGHT":
+      msgType = "RIGHT_SWAP";
+      tokenOut = amm.rightSwap(msg.tokenIn, msg.tokenOut);
+      break;
+    default:
+       abortTransactionUnless(false);
+  }
 
 
-    // constructs the IBC data packet
-    const packet = {
-        type: MessageType.Withdraw,
-        data: protobuf.encode(msg), // encode the request message to protobuf bytes.
-        stateChange: {
-            poolToken: msg.poolToken,
-            out: [outToken],
-        }
-    }
-    sendInterchainIBCSwapDataPacket(packet, msg.sourcePort, msg.sourceChannel, msg.timeoutHeight, msg.timeoutTimestamp)
+  abortTransactionUnless(tokenOut?.amount? <= 0);
 
-}
+  const factor = MaximumSlippage - msg.slippage;
+  const expected = msg.tokenOut.amount
+    .mul(sdk.NewIntFromUint64(factor))
+    .quo(sdk.NewIntFromUint64(MaximumSlippage));
 
-function multiAssetWithdraw(msg MsgMultiAssetWithdrawRequest) {
+  abortTransactionUnless(tokenOut?.amount?.gte(expected));
 
-    abortTransactionUnless(msg.localWithdraw.sender != null)
-    abortTransactionUnless(msg.remoteWithdraw.sender != null)
-    abortTransactionUnless(msg.localWithdraw.poolToken != null)
-    abortTransactionUnless(msg.remoteWithdraw.poolToken != null)
+  const packet: IBCSwapPacketData = {
+    type: msgType,
+    data: protobuf.encode(msg),
+    stateChange: { out: [tokenOut] },
+  };
 
-    const pool = store.findPoolById(msg.localWithdraw.poolToken.denom)
-    abortTransactionUnless(pool != null)
-    abortTransactionUnless(pool.status == PoolStatus.POOL_STATUS_READY)
+  const sendPacketErr = store.sendIBCSwapPacket(
+    pool.counterPartyPort,
+    pool.counterPartyChannel,
+    timeoutHeight,
+    timeoutTimestamp,
+    packet
+  );
+  abortTransactionUnless(sendPacketErr === undefined);
 
-    const outToken = this.pool.findAssetByDenom(msg.denomOut)
-    abortTransactionUnless(outToken != null)
-    abortTransactionUnless(outToken.poolSide == PoolSide.Native)
-
-    // lock pool token to the swap module
-    const escrowAddr = escrowAddress(pool.counterpartyPort, pool.counterpartyChannel)
-    bank.sendCoins(msg.sender, escrowAddr, msg.poolToken)
-
-    const amm = new InterchainMarketMaker(pool, params.getPoolFeeRate())
-    const outTokens = amm.multiAssetWithdraw([msg.localDeposit.poolToken, msg.remoteDeposit.poolToken])
-
-    // update local pool state,
-    const assetOut = pool.findAssetByDenom(msg.denomOut)
-    assetOut.balance.amount -= outToken.amount
-    pool.supply.amount -= poolToken.amount
-    store.savePool(pool)
-
-    // constructs the IBC data packet
-    const packet = {
-        type: MessageType.Withdraw,
-        data: protobuf.encode(msg), // encode the request message to protobuf bytes.
-        stateChange: {
-            poolTokens: [msg.localDeposit.poolToken, msg.remoteDeposit.poolToken] ,
-            out: outTokens,
-        }
-    }
-    sendInterchainIBCSwapDataPacket(packet, msg.sourcePort, msg.sourceChannel, msg.timeoutHeight, msg.timeoutTimestamp)
-
-}
-
-function leftSwap(msg MsgSwapRequest) {
-
-    abortTransactionUnless(msg.sender != null)
-    abortTransactionUnless(msg.tokenIn != null && msg.tokenIn.amount > 0)
-    abortTransactionUnless(msg.tokenOut != null && msg.tokenOut.amount > 0)
-    abortTransactionUnless(msg.slippage > 0)
-    abortTransactionUnless(msg.recipient != null)
-
-    const pool = store.findPoolById([msg.tokenIn.denom, msg.tokenOut.denom])
-    abortTransactionUnless(pool != null)
-    abortTransactionUnless(pool.status == PoolStatus.POOL_STATUS_READY)
-
-    // lock swap-in token to the swap module
-    const escrowAddr = escrowAddress(pool.counterpartyPort, pool.counterpartyChannel)
-    bank.sendCoins(msg.sender, escrowAddr, msg.tokenIn.denom)
-
-    const amm = new InterchainMarketMaker(pool, params.getPoolFeeRate())
-    const outToken = amm.leftSwap(msg.tokenIn, msg.tokenOut)
-    // TODO add slippage check here.
-
-    // update local pool state,
-    const assetIn = pool.findAssetByDenom(msg.tokenIn.denom)
-    assetIn.balance.amount += msg.tokenIn.amount
-    const assetOut = pool.findAssetByDenom(msg.tokenOut.denom)
-    assetOut.balance.amount -= outToken.amount
-    store.savePool(pool)
-
-    // contructs the IBC data packet
-    const packet = {
-        type: MessageType.Swap,
-        data: protobuf.encode(msg), // encode the request message to protobuf bytes.
-        stateChange: { out: [outToken] }
-    }
-    sendInterchainIBCSwapDataPacket(packet, msg.sourcePort, msg.sourceChannel, msg.timeoutHeight, msg.timeoutTimestamp)
-
-}
-
-function rightSwap(msg MsgRightSwapRequest) {
-
-    abortTransactionUnless(msg.sender != null)
-    abortTransactionUnless(msg.tokenIn != null && msg.tokenIn.amount > 0)
-    abortTransactionUnless(msg.tokenOut != null && msg.tokenOut.amount > 0)
-    abortTransactionUnless(msg.slippage > 0)
-    abortTransactionUnless(msg.recipient != null)
-
-    const pool = store.findPoolById(generatePoolId[tokenIn.denom, tokenOut.denom])
-    abortTransactionUnless(pool != null)
-    abortTransactionUnless(pool.status == PoolStatus.POOL_STATUS_READY)
-
-    // lock swap-in token to the swap module
-    const escrowAddr = escrowAddress(pool.counterpartyPort, pool.counterpartyChannel)
-    bank.sendCoins(msg.sender, escrowAddr, msg.tokenIn)
-
-    const amm = new InterchainMarketMaker(pool, params.getPoolFeeRate())
-    const inAmount = amm.rightSwap(msg.tokenIn, msg.tokenOut)
-    abortTransactionUnless(msg.tokenIn > inAmount)
-    // TODO add slippage check here.
-
-    // update local pool state,
-    const assetIn = pool.findAssetByDenom(msg.tokenIn.denom)
-    assetIn.balance.amount += msg.tokenIn.amount
-    const assetOut = pool.findAssetByDenom(msg.denomOut)
-    assetOut.balance.amount -= outToken.amount
-    store.savePool(pool)
-
-    // contructs the IBC data packet
-    const packet = {
-        type: MessageType.Rightswap,
-        data: protobuf.encode(msg), // encode the request message to protobuf bytes.
-        stateChange: {out: [msg.TokenOut] }
-    }
-    sendInterchainIBCSwapDataPacket(packet, msg.sourcePort, msg.sourceChannel, msg.timeoutHeight, msg.timeoutTimestamp)
-
+  return {
+    swapType: msg.swapType,
+    tokens: [msg.tokenIn, msg.tokenOut],
+  };
 }
 ```
 
 These are methods that handle packets relayed from a source chain, and includes pool state updates and token transfers. In this way, packets relayed on the source chain update pool states on the destination chain.
 
 ```ts
-function onCreatePoolReceived(msg: MsgCreatePoolRequest, destPort: string, destChannel: string): MsgCreatePoolResponse {
+function onMakePoolReceived(msg: MsgMakePoolRequest, poolID: string, sourceChainId: string): string {
+  abortTransactionUnless(msg.validateBasic() === undefined);
+  const { pool, found } = store.getInterchainLiquidityPool(poolID);
+  abortTransactionUnless(msg.validateBasic() === undefined);
 
-    // Only two assets in a pool
-    abortTransactionUnless(msg.denoms.length != 2)
-    abortTransactionUnless(msg.decimals.length != 2)
-    abortTransactionUnless(msg.weight.split(':').length != 2) // weight format: "50:50"
-    abortTransactionUnless( !store.hasPool(generatePoolId(msg.denoms)) )
+  const liquidityBalance = msg.liquidity[1].balance;
+  if (!store.bankKeeper.hasSupply(liquidityBalance.denom)) {
+    throw new Error(`Invalid decimal pair: ${types.ErrFailedOnDepositReceived}`);
+  }
 
-    // construct mirror pool on destination chain
-    const pool = new InterchainLiquidityPool(msg.denoms, msg.decimals, msg.weight, destPort, destChannel)
+  const interchainLiquidityPool = new InterchainLiquidityPool(
+    poolID,
+    msg.creator,
+    msg.counterPartyCreator,
+    store.bankKeeper,
+    msg.liquidity,
+    msg.swapFee,
+    msg.sourcePort,
+    msg.sourceChannel
+  );
+  interchainLiquidityPool.sourceChainId = sourceChainId;
 
-    // count native tokens
-    const count = 0
-    for(var denom in msg.denoms) {
-        if bank.hasSupply(ctx, denom) {
-            count += 1
-            pool.updateAssetPoolSide(denom, PoolSide.Native)
-        } else {
-            pool.updateAssetPoolSide(denom, PoolSide.Remote)
-        }
-    }
-    // only one token (could be either native or IBC token) is validate
-    abortTransactionUnless(count == 1)
+  const interchainMarketMaker = new InterchainMarketMaker(interchainLiquidityPool);
+  interchainLiquidityPool.poolPrice = interchainMarketMaker.lpPrice();
 
-    store.savePool(pool)
-
-    return {
-        poolId: pool.id,
-    }
+  store.setInterchainLiquidityPool(interchainLiquidityPool);
+  return poolID;
 }
 
-function onSingleAssetDepositReceived(msg: MsgSingleAssetDepositRequest, state: StateChange): MsgSingleAssetDepositResponse {
+function onTakePoolReceived(msg: MsgTakePoolRequest): string {
+  abortTransactionUnless(msg.validateBasic() === undefined);
+  const { pool, found } = store.getInterchainLiquidityPool(msg.poolId);
+  abortTransactionUnless(found);
 
-    const pool = store.findPoolById(msg.poolId)
-    abortTransactionUnless(pool != null)
+  pool.status = "ACTIVE";
+  const asset = pool.findPoolAssetBySide("DESTINATION");
+  abortTransactionUnless(asset === undefined);
 
-    if (pool.Status == PoolStatus_POOL_STATUS_INIT) {
-        // switch pool status to 'READY'
-        pool.Status = PoolStatus_POOL_STATUS_READY
-    }
+  const totalAmount = pool.sumOfPoolAssets();
+  const mintAmount = totalAmount.mul(sdk.NewInt(asset.weight)).quo(sdk.NewInt(100));
 
-    // add pool token to keep consistency, no need to mint pool token since the deposit is executed on the source chain.
-    const assetIn = pool.findAssetByDenom(state.in[0].denom)
-    assetIn.balance.amount += state.in[0].amount
-    pool.supply.amount += state.poolToken[0].amount
-    store.savePool(pool)
-
-    return { poolToken: state.poolToken }
+  store.mintTokens(pool.sourceCreator, new sdk.Coin(pool.supply.denom, mintAmount));
+  store.setInterchainLiquidityPool(pool);
+  return pool.id;
 }
 
+function onSingleAssetDepositReceived(
+  msg: MsgSingleAssetDepositRequest,
+  stateChange: StateChange
+): MsgSingleAssetDepositResponse {
+  abortTransactionUnless(msg.validateBasic() === undefined);
+  const { pool, found } = store.getInterchainLiquidityPool(msg.poolId);
+  abortTransactionUnless(found);
 
-function onMultiAssetDepositReceived(msg: MsgMultiAssetDepositRequest, state: StateChange): MsgMultiAssetDepositResponse {
+  pool.addPoolSupply(stateChange.poolTokens[0]);
+  pool.addAsset(msg.token);
 
-    abortTransactionUnless(msg.remoteDeposit.sender != null)
-    abortTransactionUnless(msg.remoteDeposit.token != null)
+  store.setInterchainLiquidityPool(pool);
 
-    const pool = store.findPoolById(msg.poolId)
-    abortTransactionUnless(pool != null)
-
-    // Remove it , since calulation move to source chain
-    const amm = store.findAmmById(msg.poolId)
-    if(amm !== null) {
-        // fetch fee rate from the params module, maintained by goverance
-        const feeRate = params.getPoolFeeRate()
-        const amm = new InterchainMarketMaker(pool, feeRate)
-    }
-    // */
-
-    // verify signature
-    const sender = account.GetAccount(msg.remoteDeposit.sender)
-    abortTransactionUnless(sender != null)
-    abortTransactionUnless(msg.remoteDeposit.sequence != senderGetSequence())
-
-    const remoteDeposit = {
-        sender: sender.GetAddress();
-        sequence: sender.GetSequence();
-        token: msg.remoteDeposit.Token;
-    }
-    const encoder = new TextEncoder();
-    const rawRemoteDepositTx = encoder.encode(JSON.stringify(remoteDeposit));
-    const pubKey = account.GetPubKey()
-    const isValid = pubKey.VerifySignature(rawRemoteDepositTx, msg.remoteDeposit.signature)
-    abortTransactionUnless(isValid != false)
-
-    if (pool.Status == PoolStatus_POOL_STATUS_INIT) {
-      // switch pool status to 'READY'
-        pool.Status = PoolStatus_POOL_STATUS_READY
-    }
-
-    // deposit remote token
-    const poolTokens = amm.multiAssetDeposit([msg.localDeposit.token, msg.remoteDeposit.token])
-
-    // update counterparty state
-    state.in.forEach(in => {
-        const assetIn = pool.findAssetByDenom(in.denom)
-        assetIn.balance.amount += in.amount
-    })
-    state.poolTokens.forEach(lp => {
-        pool.supply.amount += lp.amount
-    })
-    store.savePool(amm.pool) // update pool states
-
-    // mint voucher token
-    bank.mintCoin(MODULE_NAME, state.poolTokens[1])
-    bank.sendCoinsFromModuleToAccount(MODULE_NAME, msg.remoteDeposit.sender,  poolTokens[1])
-
-    return { poolToken }
+  return {
+    poolToken: stateChange.poolTokens[0],
+  };
 }
 
-function onWithdrawReceived(msg: MsgWithdrawRequest, state: StateChange) MsgWithdrawResponse {
-    abortTransactionUnless(msg.sender != null)
-    abortTransactionUnless(msg.denomOut != null)
-    abortTransactionUnless(msg.poolCoin.amount > 0)
+function onMakeMultiAssetDepositReceived(
+  msg: MsgMakeMultiAssetDepositRequest,
+  stateChange: StateChange
+): MsgMultiAssetDepositResponse {
+  abortTransactionUnless(msg.validateBasic() === undefined);
+  const [senderPrefix, , err] = bech32.decode(msg.deposits[1].sender);
+  abortTransactionUnless(store.getConfig().getBech32AccountAddrPrefix() !== senderPrefix);
 
-    const pool = store.findPoolById(msg.poolCoin.denom)
-    abortTransactionUnless(pool != null)
+  const { pool, found } = store.getInterchainLiquidityPool(msg.poolId);
+  abortTransactionUnless(found);
 
-    // update counterparty state
-    state.out.forEech(out => {
-        const assetOut = pool.findAssetByDenom(out.denom)
-        assetOut.balance.amount += out.amount
-    })
-    pool.supply.amount -= state.poolToken[0].amount
-    store.savePool(amm.pool) // update pool states
+  const order: MultiAssetDepositOrder = {
+    poolId: msg.poolId,
+    chainId: pool.sourceChainId,
+    sourceMaker: msg.deposits[0].sender,
+    destinationTaker: msg.deposits[1].sender,
+    deposits: getCoinsFromDepositAssets(msg.deposits),
+    status: "PENDING",
+    createdAt: store.blockHeight(),
+  };
 
-    // the outToken will sent to msg's sender in `onAcknowledgement()`
+  store.appendMultiDepositOrder(msg.poolId, order);
 
-    return { tokens: outToken }
+  return {
+    poolTokens: stateChange.poolTokens,
+  };
 }
 
-function onLeftSwapReceived(msg: MsgSwapRequest, state: StateChange) MsgSwapResponse {
+function onTakeMultiAssetDepositReceived(
+  msg: MsgTakeMultiAssetDepositRequest,
+  stateChange: StateChange
+): MsgMultiAssetDepositResponse {
+  abortTransactionUnless(msg.validateBasic() === undefined);
 
-    abortTransactionUnless(msg.sender != null)
-    abortTransactionUnless(msg.tokenIn != null && msg.tokenIn.amount > 0)
-    abortTransactionUnless(msg.tokenOut != null && msg.tokenOut.amount > 0)
-    abortTransactionUnless(msg.slippage > 0)
-    abortTransactionUnless(msg.recipient != null)
+  const { pool, found } = store.getInterchainLiquidityPool(msg.poolId);
+  abortTransactionUnless(found);
 
-    const pool = store.findPoolById(generatePoolId([tokenIn.denom, denomOut]))
-    abortTransactionUnless(pool != null)
-    // fetch fee rate from the params module, maintained by goverance
-    const feeRate = params.getPoolFeeRate()
+  const { order, found: orderFound } = store.getMultiDepositOrder(msg.poolId, msg.orderId);
+  abortTransactionUnless(orderFound);
+  order.status = "COMPLETE";
 
-    const amm = new InterchainMarketMaker(pool, feeRate)
-    const outToken = amm.leftSwap(msg.tokenIn, msg.tokenOut.denom)
+  for (const supply of stateChange.poolTokens) {
+    pool.addPoolSupply(supply);
+  }
 
-    const expected = msg.tokenOut.amount
+  for (const asset of order.deposits) {
+    pool.addAsset(asset);
+  }
 
-    // tolerance check
-    abortTransactionUnless(outToken.amount > expected * (1 - msg.slippage / 10000))
+  const totalPoolToken = sdk.NewCoin(msg.poolId, sdk.NewInt(0));
+  for (const poolToken of stateChange.poolTokens) {
+    totalPoolToken.amount = totalPoolToken.amount.add(poolToken.amount);
+  }
 
-    const escrowAddr = escrowAddress(pool.counterpartyPort, pool.counterpartyChannel)
-    bank.sendCoins(escrowAddr, msg.recipient, outToken)
+  store.mintTokens(order.sourceMaker, totalPoolToken);
 
-    store.savePool(amm.pool) // update pool states
+  store.setInterchainLiquidityPool(pool);
+  store.setMultiDepositOrder(pool.id, order);
 
-    return { tokens: outToken }
+  return {};
 }
 
-function onRightSwapReceived(msg MsgRightSwapRequest, state: StateChange) MsgSwapResponse {
+function onMultiAssetWithdrawReceived(
+  msg: MsgMultiAssetWithdrawRequest,
+  stateChange: StateChange
+): MsgMultiAssetWithdrawResponse {
+  abortTransactionUnless(msg.validateBasic() === undefined);
+  const { pool, found } = store.getInterchainLiquidityPool(msg.poolToken.denom);
+  abortTransactionUnless(found);
 
-    abortTransactionUnless(msg.sender != null)
-    abortTransactionUnless(msg.tokenIn != null && msg.tokenIn.amount > 0)
-    abortTransactionUnless(msg.tokenOut != null && msg.tokenOut.amount > 0)
-    abortTransactionUnless(msg.slippage > 0)
-    abortTransactionUnless(msg.recipient != null)
+  for (const poolAsset of stateChange.out) {
+    pool.subtractAsset(poolAsset);
+  }
 
-    const pool = store.findPoolById(generatePoolId[tokenIn.denom, tokenOut.denom]))
-    abortTransactionUnless(pool != null)
-    abortTransactionUnless(pool.status == PoolStatus.POOL_STATUS_READY)
-    // fetch fee rate from the params module, maintained by goverance
-    const feeRate = params.getPoolFeeRate()
+  for (const poolToken of stateChange.poolTokens) {
+    pool.subtractPoolSupply(poolToken);
+  }
 
-    const amm = new InterchainMarketMaker(pool, feeRate)
-    const minTokenIn = amm.rightSwap(msg.tokenIn, msg.tokenOut)
+  store.unlockTokens(
+    pool.counterPartyPort,
+    pool.counterPartyChannel,
+    msg.counterPartyReceiver,
+    sdk.NewCoins(stateChange.out[1])
+  );
 
-    // tolerance check
-    abortTransactionUnless(tokenIn.amount > minTokenIn.amount)
-    abortTransactionUnless((tokenIn.amount - minTokenIn.amount)/minTokenIn.amount > msg.slippage / 10000))
+  if (pool.supply.amount.isZero()) {
+    store.removeInterchainLiquidityPool(pool.id);
+  } else {
+    store.setInterchainLiquidityPool(pool);
+  }
 
-    const escrowAddr = escrowAddress(pool.counterpartyPort, pool.counterpartyChannel)
-    bank.sendCoins(escrowAddr, msg.recipient, msg.tokenOut)
-
-    store.savePool(amm.pool) // update pool states
-
-    return { tokens: minTokenIn }
-}
-```
-
-Acknowledgement is used by the source chain to check if the transaction has succeeded or not.
-
-```ts
-function onCreatePoolAcknowledged(request: MsgCreatePoolRequest, response: MsgCreatePoolResponse) {
-  // do nothing
+  return { tokens: stateChange.out };
 }
 
-function onSingleAssetDepositAcknowledged(
-  request: MsgSingleAssetDepositRequest,
-  response: MsgSingleAssetDepositResponse
-) {
-  bank.mintCoin(MODULE_NAME, request.sender, response.token);
-  bank.sendCoinsFromModuleToAccount(MODULE_NAME, msg.sender, response.tokens);
+function onSwapReceived(msg: MsgSwapRequest, stateChange: StateChange): MsgSwapResponse {
+  abortTransactionUnless(msg.validateBasic() === undefined);
+
+  const { pool, found } = store.getInterchainLiquidityPool(msg.poolId);
+  abortTransactionUnless(found);
+  store.unlockTokens(pool.counterPartyPort, pool.counterPartyChannel, msg.recipient, sdk.NewCoins(stateChange.out[0]));
+
+  pool.subtractAsset(stateChange.out[0]);
+  pool.addAsset(msg.tokenIn);
+
+  store.setInterchainLiquidityPool(pool);
+
+  return { tokens: stateChange.out };
 }
 
-function onMultiAssetDepositAcknowledged(request: MsgMultiAssetDepositRequest, response: MsgMultiAssetDepositResponse) {
-  bank.mintCoin(MODULE_NAME, response.tokens[0]);
-  bank.sendCoinsFromModuleToAccount(MODULE_NAME, msg.localDeposit.sender, response.tokens[0]);
+function onMakePoolAcknowledged(msg: MsgMakePoolRequest, poolId: string): void {
+  const pool = new InterchainLiquidityPool(
+    ctx,
+    msg.creator,
+    msg.counterPartyCreator,
+    k.bankKeeper,
+    poolId,
+    msg.liquidity,
+    msg.swapFee,
+    msg.sourcePort,
+    msg.sourceChannel
+  );
+
+  pool.sourceChainId = store.chainID();
+
+  const totalAmount = sdk.NewInt(0);
+  for (const asset of msg.liquidity) {
+    totalAmount = totalAmount.add(asset.balance.amount);
+  }
+
+  store.mintTokens(msg.creator, {
+    denom: pool.supply.denom,
+    amount: totalAmount.mul(msg.liquidity[0].weight).quo(100),
+  });
+
+  const amm = new InterchainMarketMaker(pool);
+  pool.poolPrice = amm.lpPrice();
+
+  store.setInterchainLiquidityPool(pool);
 }
 
-function onWithdrawAcknowledged(request: MsgWithdrawRequest, response: MsgWithdrawResponse) {
-  bank.burnCoin(MODULE_NAME, response.token);
+function onTakePoolAcknowledged(msg: MsgTakePoolRequest): void {
+  const { pool, found } = store.getInterchainLiquidityPool(msg.poolId);
+  abortTransactionUnless(found);
+
+  const amm = new InterchainMarketMaker(pool);
+  pool.poolPrice = amm.lpPrice();
+  pool.status = "ACTIVE";
+
+  store.setInterchainLiquidityPool(pool);
 }
 
-function onLeftSwapAcknowledged(request: MsgSwapRequest, response: MsgSwapResponse) {}
+function onSingleAssetDepositAcknowledged(req: MsgSingleAssetDepositRequest, res: MsgSingleAssetDepositResponse): void {
+  const { pool, found } = store.getInterchainLiquidityPool(req.poolId);
+  abortTransactionUnless(found);
 
-function onRightSwapAcknowledged(request: MsgRightSwapRequest, response: MsgSwapResponse) {}
+  store.mintTokens(req.sender, res.poolToken);
+
+  pool.addAsset(req.token);
+  pool.addPoolSupply(res.poolToken);
+
+  store.setInterchainLiquidityPool(pool);
+}
+
+function onMakeMultiAssetDepositAcknowledged(
+  req: MsgMakeMultiAssetDepositRequest,
+  res: MsgMultiAssetDepositResponse
+): void {
+  const { pool, found } = k.getInterchainLiquidityPool(ctx, req.poolId);
+  abortTransactionUnless(found);
+  store.setInterchainLiquidityPool(pool);
+}
+
+function onTakeMultiAssetDepositAcknowledged(req: MsgTakeMultiAssetDepositRequest, stateChange: StateChange): void {
+  const { pool, found } = store.getInterchainLiquidityPool(req.poolId);
+  abortTransactionUnless(found);
+
+  const order = store.getMultiDepositOrder(req.poolId, req.orderId);
+  abortTransactionUnless(order.found);
+
+  for (const poolToken of stateChange.poolTokens) {
+    pool.addPoolSupply(poolToken);
+  }
+
+  for (const deposit of order.deposits) {
+    pool.addAsset(deposit);
+  }
+
+  order.status = "COMPLETE";
+
+  store.setInterchainLiquidityPool(pool);
+  store.setMultiDepositOrder(pool.id, order);
+}
+
+function onMakePoolAcknowledged(msg: MsgMakePoolRequest, poolId: string): void {
+  const pool = new InterchainLiquidityPool(
+    ctx,
+    msg.creator,
+    msg.counterPartyCreator,
+    k.bankKeeper,
+    poolId,
+    msg.liquidity,
+    msg.swapFee,
+    msg.sourcePort,
+    msg.sourceChannel
+  );
+
+  pool.sourceChainId = store.chainID();
+
+  const totalAmount = sdk.NewInt(0);
+  for (const asset of msg.liquidity) {
+    totalAmount = totalAmount.add(asset.balance.amount);
+  }
+
+  store.mintTokens(ctx, msg.creator, {
+    denom: pool.supply.denom,
+    amount: totalAmount.mul(sdk.NewInt(Number(msg.liquidity[0].weight))).quo(sdk.NewInt(100)),
+  });
+
+  const amm = new InterchainMarketMaker(pool);
+  pool.poolPrice = amm.lpPrice();
+
+  store.setInterchainLiquidityPool(pool);
+}
+
+function onTakePoolAcknowledged(msg: MsgTakePoolRequest): void {
+  const { pool, found } = store.getInterchainLiquidityPool(msg.poolId);
+  abortTransactionUnless(found);
+  const amm = new InterchainMarketMaker(pool);
+  pool.poolPrice = amm.lpPrice();
+  pool.status = "ACTIVE";
+  store.setInterchainLiquidityPool(pool);
+}
+
+function onSingleAssetDepositAcknowledged(req: MsgSingleAssetDepositRequest, res: MsgSingleAssetDepositResponse): void {
+  const { pool, found } = store.getInterchainLiquidityPool(req.poolId);
+  abortTransactionUnless(found);
+
+  store.mintTokens(req.sender, res.poolToken);
+
+  pool.addAsset(req.token);
+  pool.addPoolSupply(res.poolToken);
+
+  store.setInterchainLiquidityPool(pool);
+}
+
+function onMakeMultiAssetDepositAcknowledged(
+  req: MsgMakeMultiAssetDepositRequest,
+  res: MsgMultiAssetDepositResponse
+): void {
+  const { pool, found } = store.getInterchainLiquidityPool(req.poolId);
+  abortTransactionUnless(found);
+  store.setInterchainLiquidityPool(pool);
+}
+
+function onTakeMultiAssetDepositAcknowledged(req: MsgTakeMultiAssetDepositRequest, stateChange: StateChange): void {
+  const { pool, found } = store.getInterchainLiquidityPool(req.poolId);
+  abortTransactionUnless(found);
+  const order,
+    found = store.getMultiDepositOrder(req.poolId, req.orderId);
+  abortTransactionUnless(found);
+  for (const poolToken of stateChange.poolTokens) {
+    pool.addPoolSupply(poolToken);
+  }
+
+  for (const deposit of order.deposits) {
+    pool.addAsset(deposit);
+  }
+
+  order.status = "COMPLETE";
+
+  store.setInterchainLiquidityPool(pool);
+  store.setMultiDepositOrder(pool.id, order);
+}
 ```
 
 ## RISKS
