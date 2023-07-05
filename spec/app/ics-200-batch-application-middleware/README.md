@@ -15,22 +15,108 @@ Extended use case are other multichannel packets, like governance and swap exten
 
 All `Batch` packet packets must be in same relayer message.
 
-
 Any channel type is supported.
+
+
 
 ### Data structures
 
+
+Updates ICS-004 packet in backward compatible way by adding new field: 
+
 ```typescript
-
-interface BatchPacketData {  
-  tracking: uint8 
-  memo: string
-}
-
 interface Packet {
+  // ... existing packet ...
   batch: BatchReference?
 }
+```
 
+In case of no `batch` presented, packet behaves as before.  
+
+
+```typescript
+interface BatchReference {
+   /// reference to batch packet reference number parent packet is part of
+   batchSequence : uint64
+   batchChannel: string,
+   /// order of 
+   order : uint64
+}
+
+interface BatchPacketData {  
+  tracking: uint8
+  memo: string
+}
+```
+
+So on the wire IBC module should receive from Relayer this ordered set of packets
+
+We could put batch into memo, so this whay for not to use memo for anything else and force to use memo in batch in the end.
+
+```json
+batch = {tracking = 5} packet = {sequence = 42, channel = 7}
+packet_a = {order = 1, batchSequence = 42, channel = 7}
+packet_a = {order = 2, batchSequence = 42, channel = 7}
+packet_a = {order = 3, batchSequence = 42, channel = 7}
+packet_a = {order = 4, batchSequence = 42, channel = 7}
+packet_a = {order = 5, batchSequence = 42, channel = 7}
+```
+
+### Technocal Details
+
+```typescript
+function onRecvPacket(packet: Packet, relayer: string): bytes {
+    /// if case of packet is part of batch it will error:
+    /// - but batch not found
+    /// - previous packet as per order in batch was not onRecvPacket
+    /// - timeout of packet is longer than timeout of batch
+    if (packet.batch != null) {
+      err = ensureBatch(packet)
+      if (err != null) {
+        return marshalErrAck(err)
+      }
+    }
+
+    app_acknowledgement = app.onRecvPacket(packet, relayer)
+
+    markRecvInBatch(packet, app_acknowledgement)
+       
+    return marshal(ack)
+}
+
+function onAcknowledgePacket(packet: Packet, acknowledgement: bytes, relayer: string) {
+    app_ack = getAppAcknowledgement(acknowledgement)
+
+    app.onAcknowledgePacket(packet, app_ack, relayer)
+
+    if (packet.batch != null) {
+      // acknowledge packet can be in any order
+      markAckInBatch(packet)
+    }
+
+    /// in case all packets in batch handled ACK packet
+    if (isDone(packet.batch)) {
+       batch.onAcknowledgePacket(packet.batch, app_ack, packet)
+    }
+}
+
+function onTimeoutPacket(packet: Packet, relayer: string) {
+    app.onTimeoutPacket(packet, relayer)
+
+    if (packet.batch != null) {
+      // acknowledge packet can be in any order
+      markTimeoutInBatch(packet)
+    }
+
+    /// so any packet in batch timeout passed
+    if (isBatch(packet)) {
+      batch.onTimeoutPacket(packet.batch)
+    }
+    /// one of subpackjets ended
+    else if (isDone(packet.batch)) {
+       batch.onAcknowledgePacket(packet.batch)
+    }
+}
 ```
 
 ### Good
@@ -93,11 +179,12 @@ so seems better relayer will cook batch bundle off chain.
 So it improves allowing to set same timeout and one memo for whole batch,
 it is incompatible with existing sequence increments, channel timeout logic, middleware and fees.
 
-### Sync atomic batches
+### Async packets seqeunce
 
-Could hold off execution of next packet in batch until previous packet ACK or error.
-But if all packets are well know to be executed in this block, really get sync batch as degenrative case.
+Could hold off execution of next packet in batch until previous packet ACK forcefully.
+But given that implementers if packets and chain are free to choose stragey, sequence may or not be here,
+so up to implementer of interpreter to on target chain t dice.s
 
 ## Referenes
 
-[Near Transaction](https://docs.near.org/concepts/basics/transactions/overview) is similar to this specification. Packet is action. Receipt is batch.
+[Near Transaction](https://docs.near.org/concepts/basics/transactions/overview) is similar to this specification. App packet is action. Receipt is batch packet.
