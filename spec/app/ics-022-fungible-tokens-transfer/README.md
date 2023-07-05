@@ -87,7 +87,7 @@ function onRecvPacket(packet: Packet) {
 ```
 
 ```typescript
-function refundTokens(packet: Packet) {s
+function refundTokens(packet: Packet) {
   FungibleTokensPacketData data = packet.data
   prefix = "{packet.sourcePort}/{packet.sourceChannel}/"
   // same as ICS-20 on per token basis
