@@ -1,13 +1,15 @@
 ## Synopsis
 
 This standard document specifies batched execution of packets,
-with purpose to allow execute packets in one transaction, callbacks when all packets from batch succeed and/or after each packet from batch until final packet.
+with purpose to allow execute packets in batch, 
+have callbacks after each packet from batch handled,
+and when all packets from batch handled.
 
 ### Motivation
 
-Basic use case execute some transaction after multiple ICS-20 and ICS-721 packets succeed.
+Basic use case execute some transaction after multiple ICS-22 and ICS-721 packets succeed.
 
-Extended use case are other packets, like governance and swap extensions. 
+Extended use case are other multichannel packets, like governance and swap extensions. 
 
 ## Technical Specification
 
@@ -54,6 +56,8 @@ On final packet, each of `App` packet is executed in order defined in `batch tra
 Receives all results for each `App` packet.
 
 After all results for `App` packets received, `Batch` packet callbacks configured functions.
+
+Middleware tacke all
 
 #### Bad
 
