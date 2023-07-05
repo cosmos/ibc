@@ -353,13 +353,6 @@ function startFlushUpgradeHandshake(
 
     // store upgrade in public store for counterparty proof verification
     provableStore.set(channelUpgradePath(portIdentifier, channelIdentifier), upgrade)
-
-    // if there are no in-flight packets on our end, we can automatically go to FLUSHCOMPLETE
-    if pendingInflightPackets(portIdentifier, channelIdentifier) == nil {
-        currentChannel.flushState = FLUSHCOMPLETE
-    }
-
-    publicStore.set(channelPath(portIdentifier, channelIdentifier), currentChannel)
 }
 ```
 
@@ -621,16 +614,11 @@ function chanUpgradeAck(
     timeout = counterpartyUpgrade.timeout
     abortTransactionUnless(timeout.timeoutHeight != 0 || timeout.timeoutTimestamp != 0)
 
-    // if we have already moved to FLUSHCOMPLETE, then counterparty timeout is irrelevant
-    // otherwise, we must abort the transaction if the timeout has already been reached
-    // so the otherside can timeout properly.
-    if currentChannel.flushStatus != FLUSHCOMPLETE {
-        // counterparty-specified timeout must not have exceeded
-        abortTransactionUnless(
-            (currentHeight() > timeout.timeoutHeight && timeout.timeoutHeight != 0) ||
-            (currentTimestamp() > timeout.timeoutTimestamp && timeout.timeoutTimestamp != 0)
-        )
-    }
+    // counterparty-specified timeout must not have exceeded
+    abortTransactionUnless(
+        (currentHeight() > timeout.timeoutHeight && timeout.timeoutHeight != 0) ||
+        (currentTimestamp() > timeout.timeoutTimestamp && timeout.timeoutTimestamp != 0)
+    )
 
     connection = getConnection(currentChannel.connectionIdentifier)
     counterpartyHops = getCounterpartyHops(connection)
@@ -661,6 +649,13 @@ function chanUpgradeAck(
         }
     }
 
+    // if there are no in-flight packets on our end, we can automatically go to FLUSHCOMPLETE
+    if pendingInflightPackets(portIdentifier, channelIdentifier) == nil {
+        currentChannel.flushState = FLUSHCOMPLETE
+    }
+
+    publicStore.set(channelPath(portIdentifier, channelIdentifier), currentChannel)
+
     // call modules onChanUpgradeAck callback
     // module can error on counterparty version
     // ACK should not change state to the new parameters yet
@@ -680,12 +675,61 @@ function chanUpgradeAck(
     // if no error, agree on final version
     upgrade.version = counterpartyUpgrade.version
     provableStore.set(channelUpgradePath(portIdentifier, channelIdentifier), upgrade)
+}
+```
 
-    // refresh channel
+`chanUpgradeConfirm` is called on the chain which is on `TRYUPGRADE` **after** `chanUpgradeAck` is called on the counterparty. This will inform the TRY chain of the timeout set on ACK by the counterparty. If the timeout has already exceeded, we will write an error receipt and restore. If packets on both sides have already been flushed and timeout is not exceeded, then we can open the channel. Otherwise, we set the counterparty timeout in the private store and wait for packet flushing to complete.
+
+```typescript
+function chanUpgradeConfirm(
+    portIdentifier: Identifier,
+    channelIdentifier: Identifier,
+    counterpartyFlushStatus: FlushStatus,
+    counterpartyUpgrade: Upgrade,
+    proofChannel: CommitmentProof,
+    proofUpgrade: CommitmentProof,
+    proofHeight: Height,
+) {
+    // current channel is in TRYUPGRADE
     currentChannel = provableStore.get(channelPath(portIdentifier, channelIdentifier))
+    abortTransactionUnless(currentChannel.state == TRYUPGRADE)
 
-    // if both sides have already flushed then open the upgrade handshake immediately
-    if  currentChannel.state == FLUSHCOMPLETE && counterpartyFlushStatus == FLUSHCOMPLETE {
+    connection = getConnection(currentChannel.connectionIdentifier)
+    counterpartyHops = getCounterpartyHops(connection)
+
+    counterpartyChannel = ChannelEnd{
+        state: ACKUPGRADE,
+        ordering: currentChannel.ordering,
+        counterpartyPortIdentifier: portIdentifier,
+        counterpartyChannelIdentifier: channelIdentifier,
+        connectionHops: counterpartyHops,
+        version: currentChannel.version,
+        sequence: channel.sequence,
+        flushStatus: counterpartyFlushStatus,
+    }
+
+    // verify proofs of counterparty state
+    abortTransactionUnless(verifyChannelState(connection, proofHeight, proofChannel, currentChannel.counterpartyPortIdentifier, currentChannel.counterpartyChannelIdentifier, counterpartyChannel))
+    abortTransactionUnless(verifyChannelUpgrade(connection, proofHeight, proofUpgrade, currentChannel.counterpartyPortIdentifier, currentChannel.counterpartyChannelIdentifier, counterpartyUpgrade))
+
+    timeout = counterpartyUpgrade.timeout
+    
+    // counterparty-specified timeout must not have exceeded
+    // if it has, then restore the channel and abort upgrade handshake
+    if (currentHeight() > timeout.timeoutHeight && timeout.timeoutHeight != 0) ||
+        (currentTimestamp() > timeout.timeoutTimestamp && timeout.timeoutTimestamp != 0) {
+            restoreChannel(portIdentifier, channelIdentifier)
+    }
+
+    // if there are no in-flight packets on our end, we can automatically go to FLUSHCOMPLETE
+    if pendingInflightPackets(portIdentifier, channelIdentifier) == nil {
+        currentChannel.flushState = FLUSHCOMPLETE
+    } else {
+        privateStore.set(counterpartyUpgradeTimeout(portIdentifier, channelIdentifier), timeout)
+    }
+
+    // if both chains are already in flushcomplete we can move to OPEN
+    if currentChannel.flushStatus == FLUSHCOMPLETE && counterpartyFlushStatus == FLUSHCOMPLETE {
         openUpgradelHandshake(portIdentifier, channelIdentifier)
         module.onChanUpgradeOpen(portIdentifier, channelIdentifier)
     }
@@ -699,17 +743,12 @@ function chanUpgradeOpen(
     portIdentifier: Identifier,
     channelIdentifier: Identifier,
     counterpartyChannelState: ChannelState,
-    counterpartyUpgrade: Upgrade,
     proofChannel: CommitmentProof,
-    proofUpgrade: Upgrade,
     proofHeight: Height,
 ) {
-    // if packet commitments are not empty then abort the transaction
-    abortTransactionUnless(pendingInflightPackets(portIdentifier, channelIdentifier))
-
-    // currentChannel must be in TRYUPGRADE or ACKUPGRADE and have completed flushing
+    // currentChannel must be in ACKUPGRADE and have completed flushing
     currentChannel = provableStore.get(channelPath(portIdentifier, channelIdentifier))
-    abortTransactionUnless(currentChannel.state == TRYUPGRADE || currentChannel.state == ACKUPGRADE)
+    abortTransactionUnless(currentChannel.state == ACKUPGRADE)
     abortTransactionUnless(currentChannel.flushStatus == FLUSHCOMPLETE)
 
     // counterparty upgrade must not have passed on our chain
@@ -731,28 +770,6 @@ function chanUpgradeOpen(
             sequence: currentChannel.sequence,
             flushStatus: NOTINFLUSH
         }
-    } else if counterpartyChannelState == TRYUPGRADE {
-        // MsgUpgradeAck must already have been executed before we can OPEN
-        // so abort if currentState is not ACKUPGRADE
-        abortTransactionUnless(currentChannel.state == ACKUPGRADE)
-        counterpartyChannel = ChannelEnd{
-            state: TRYUPGRADE,
-            ordering: currentChannel.ordering,
-            counterpartyPortIdentifier: portIdentifier,
-            counterpartyChannelIdentifier: channelIdentifier,
-            connectionHops: counterpartyHops,
-            version: currentChannel.version,
-            sequence: currentChannel.sequence,
-            flushStatus: FLUSHCOMPLETE
-        }
-        // verify that counterparty upgrade timeout has not passed on our side
-        // if it has then restore the channel to original parameters to ensure consistency
-        timeout = counterpartyUpgrade.UpgradeTimeout
-        if (timeout.timeoutHeight != 0 && currentHeight() >= timeout.timeoutHeight) ||
-            (timeout.timeoutTimestamp != 0 && currentTimestamp() >= timeout.timeoutTimestamp) {
-                restoreChannel(portIdentifier, channelIdentifier)
-        }
-        
     } else if counterpartyChannelState == ACKUPGRADE {
         counterpartyChannel = ChannelEnd{
             state: ACKUPGRADE,
