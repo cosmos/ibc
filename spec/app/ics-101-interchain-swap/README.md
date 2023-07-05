@@ -517,51 +517,62 @@ function sendInterchainIBCSwapDataPacket(
 `onRecvPacket` is called by the routing module when a packet addressed to this module has been received.
 
 ```ts
-function onRecvPacket(packet: Packet) {
+function OnRecvPacket(packet: Packet, data: IBCSwapPacketData): Uint8Array | undefined {
+  switch (data.type) {
+    case "MAKE_POOL":
+      const makePoolMsg: MsgMakePoolRequest = protobuf.decode(MsgMakePoolRequest, data.Data);
+      abortTransactionUnless(data.stateChange.poolId === "");
+      const poolId = store.OnMakePoolReceived(makePoolMsg, data.stateChange.poolId, data.stateChange.sourceChainId);
+      const makePoolRes = protobuf.encode({ poolId });
+      return makePoolRes;
 
-    IBCSwapPacketData swapPacket = packet.data
-    // construct default acknowledgement of success
-    const ack: IBCSwapDataAcknowledgement = new IBCSwapDataPacketSuccess()
+    case "TAKE_POOL":
+      const takePoolMsg: MsgTakePoolRequest = protobuf.decode(MsgTakePoolRequest, data.Data);
+      const takePoolRes = store.OnTakePoolReceived(takePoolMsg);
+      const takePoolResEncoded = protobuf.encode({ poolId: takePoolRes });
+      return takePoolResEncoded;
 
-    try{
-        switch swapPacket.type {
-        case CreatePool:
-            var msg: MsgCreatePoolRequest = protobuf.decode(swapPacket.data)
-            onCreatePoolReceived(msg, packet.destPortId, packet.destChannelId)
-            break
-        case SingleAssetDeposit:
-            var msg: MsgSingleDepositRequest = protobuf.decode(swapPacket.data)
-            onSingleDepositReceived(msg)
-            break
+    case "SINGLE_DEPOSIT":
+      const singleDepositMsg: MsgSingleAssetDepositRequest = protobuf.decode(MsgSingleAssetDepositRequest, data.Data);
+      abortTransactionUnless(data.stateChange.poolId === "");
+      const singleDepositRes = store.OnSingleAssetDepositReceived(singleDepositMsg, data.stateChange);
+      const singleDepositResEncoded = protobuf.encode(singleDepositRes);
+      return singleDepositResEncoded;
 
-        case MultiAssetDeposit:
-            var msg: MsgDoubleDepositRequest = protobuf.decode(swapPacket.data)
-            onDoubleDepositReceived(msg)
-            break
+    case "MAKE_MULTI_DEPOSIT":
+      const makeMultiDepositMsg: MsgMakeMultiAssetDepositRequest = protobuf.decode(
+        MsgMakeMultiAssetDepositRequest,
+        data.Data
+      );
+      const makeMultiDepositRes = k.OnMakeMultiAssetDepositReceived(makeMultiDepositMsg, data.stateChange);
+      const makeMultiDepositResEncoded = protobuf.encode(makeMultiDepositRes);
+      return makeMultiDepositResEncoded;
 
-        case SingleAssetWithdraw:
-            var msg: MsgSingleAssetWithdrawRequest = protobuf.decode(swapPacket.data)
-            onSingleAssetWithdrawReceived(msg)
-            break
-        case MultiAssetWithdraw:
-            var msg: MsgMultiAssetWithdrawRequest = protobuf.decode(swapPacket.data)
-            onMultiAssetWithdrawReceived(msg)
-            break
-        case Swap:
-            var msg: MsgSwapRequest = protobuf.decode(swapPacket.data)
-            if(msg.SwapType === SwapType.Left) {
-                onLeftSwapReceived(msg)
-            }else{
-                 onRightSwapReceived(msg)
-            }
-            break
-        }
-    } catch {
-        ack = new IBCSwapDataPacketError()
-    }
+    case "TAKE_MULTI_DEPOSIT":
+      const takeMultiDepositMsg: MsgTakeMultiAssetDepositRequest = protobuf.decode(
+        MsgTakeMultiAssetDepositRequest,
+        data.Data
+      );
+      const takeMultiDepositRes = k.OnTakeMultiAssetDepositReceived(takeMultiDepositMsg, data.stateChange);
+      const takeMultiDepositResEncoded = protobuf.encode(takeMultiDepositRes);
+      return takeMultiDepositResEncoded;
 
-    // NOTE: acknowledgement will be written synchronously during IBC handler execution.
-    return ack
+    case "MULTI_WITHDRAW":
+      const multiWithdrawMsg: MsgMultiAssetWithdrawRequest = protobuf.decode(MsgMultiAssetWithdrawRequest, data.Data);
+      const multiWithdrawRes = k.OnMultiAssetWithdrawReceived(multiWithdrawMsg, data.stateChange);
+      const multiWithdrawResEncoded = protobuf.encode(multiWithdrawRes);
+      return multiWithdrawResEncoded;
+
+    case "LEFT_SWAP":
+    case "RIGHT_SWAP":
+      const swapMsg: MsgSwapRequest = protobuf.decode(MsgSwapRequest, data.Data);
+      const swapRes = k.OnSwapReceived(swapMsg, data.stateChange);
+      const swapResEncoded = protobuf.encode(swapRes);
+      return swapResEncoded;
+
+    default:
+      return;
+  }
 }
 ```
 
