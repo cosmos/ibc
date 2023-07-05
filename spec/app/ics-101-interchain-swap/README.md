@@ -656,33 +656,62 @@ function onTimeoutPacket(packet: Packet) {
 ```
 
 ```ts
-// TODO: need to decode the subpacket from packet
-function refundToken(packet: Packet) {
-   const msg = packet.data.Data.toJSON()
-   let token
-   let sender
-   switch packet.type {
-    case Create:
-        token = msg.tokens[0]
-    case Swap:
-      token = msg.tokenIn
-      sender = msg.sender
+function refundPacketToken(packet: Packet, data: IBCSwapPacketData): Error | undefined {
+  let token: Coin | undefined;
+  let sender: string | undefined;
+
+  switch (data.type) {
+    case "MAKE_POOL":
+      const makePoolMsg: MsgMakePoolRequest = protobuf.decode(MsgMakePoolRequest, data.Data);
+      // Refund initial liquidity
+      sender = makePoolMsg.creator;
+      token = makePoolMsg.liquidity[0].balance;
       break;
-    case SingleAssetDeposit:
-      token = msg.token
-      sender = msg.sender
+
+    case "SINGLE_DEPOSIT":
+      const singleDepositMsg: MsgSingleAssetDepositRequest = protobuf.decode(MsgSingleAssetDepositRequest, data.Data);
+      token = singleDepositMsg.token;
+      sender = singleDepositMsg.sender;
       break;
-    case MultiAssetDeposit:
-      token = msg.localDeposit.token
-      sender = msg.localDeposit.sender
+
+    case "MAKE_MULTI_DEPOSIT":
+      const makeMultiDepositMsg: MsgMakeMultiAssetDepositRequest = protobuf.decode(
+        MsgMakeMultiAssetDepositRequest,
+        data.Data
+      );
+      token = makeMultiDepositMsg.deposits[0].balance;
+      sender = makeMultiDepositMsg.deposits[0].sender;
       break;
-    case SingleAssetWithdraw:
-      token = packet.pool_token
-    case MultiAssetWithdraw:
-      token = packet.localWithdraw.pool_token
-   }
-    escrowAccount = channelEscrowAddresses[packet.srcChannel]
-    bank.TransferCoins(escrowAccount, sender, token.denom, token.amount)
+
+    case "TAKE_MULTI_DEPOSIT":
+      const takeMultiDepositMsg: MsgTakeMultiAssetDepositRequest = protobuf.decode(
+        MsgTakeMultiAssetDepositRequest,
+        data.Data
+      );
+      const { order, found } = store.getMultiDepositOrder(takeMultiDepositMsg.poolId, takeMultiDepositMsg.orderId);
+      abortTransactionUnless(found);
+      token = order.Deposits[1];
+      sender = msg.Sender;
+      break;
+    case "MULTI_WITHDRAW":
+      const multiWithdrawMsg: MsgMultiAssetWithdrawRequest = protobuf.decode(MsgMultiAssetWithdrawRequest, data.Data);
+      token = multiWithdrawMsg.poolToken;
+      sender = multiWithdrawMsg.receiver;
+      break;
+
+    case "RIGHT_SWAP":
+      const swapMsg: MsgSwapRequest = protobuf.decode(MsgSwapRequest, data.Data);
+      token = swapMsg.tokenIn;
+      sender = swapMsg.sender;
+      break;
+
+    default:
+      return;
+  }
+
+  const escrowAccount = getEscrowAddress(packet.sourcePort, packet.sourceChannel);
+  const err = store.sendCoins(escrowAccount, sender, token);
+  return err;
 }
 ```
 
