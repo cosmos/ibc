@@ -12,7 +12,7 @@ Extended use case are other packets, like governance and swap extensions.
 
 ## Technical Specification
 
- all in batch packet packets must be in same relayer message
+ all in batch packet packets must be in same relayer message (no accumulating of packets happens on receiver storage)
 
 ### Data structures
 

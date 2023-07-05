@@ -55,3 +55,6 @@ In case of `App` fail or timeout, `Batch` collects results and decided how to ha
 `App` packet with `batch` sequence was received before `Batch`, than this packet gets `ACK` error. `Batch` will set unknown result for this packet.
 
 `Batch` received, but one of `App` packets timeout is less than `Batch` one. All `App` packets and `Batch` timeout.
+
+## Details
+Like near receopts

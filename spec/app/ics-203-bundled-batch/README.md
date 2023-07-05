@@ -1,4 +1,5 @@
  all in batch packet packets must be in same relayer message
+ (no accumulating of packets happens on receiver storage)
  
 - bundle the different ICS-20 and ICS-721 into one packet
 - receiving chain de-composes this packet onto multiple instructions
