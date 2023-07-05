@@ -20,7 +20,7 @@ interface Coin {
   amount: uint256
 }
 
-interface FungibleTokenPacketData {
+interface FungibleTokensPacketData {
   sender: string
   // denom ordered set of assets
   funds: Coin[]
@@ -31,40 +31,25 @@ interface FungibleTokenPacketData {
 
 ### Protocol
 
-Same as of ICS-20, but in plural form
+Same as of ICS-20, but in plural form.
 
 In case of failure of any assets, for example in case of invalid denomination,
- 
-
-`sendFungibleTokens` must be called by a transaction handler in the module which performs appropriate signature checks, specific to the account owner on the host state machine.
+all success assets transfers done during packet handling are rolled back.
 
 ```typescript
 function sendFungibleTokens(
-  denomination: string,
-  amount: uint256,
+  localFunds: Coin[],
   sender: string,
   receiver: string,
   sourcePort: string,
   sourceChannel: string,
   timeoutHeight: Height,
   timeoutTimestamp: uint64): uint64 {
-    prefix = "{sourcePort}/{sourceChannel}/"
-    // we are the source if the denomination is not prefixed
-    source = denomination.slice(0, len(prefix)) !== prefix
-    if source {
-      // determine escrow account
-      escrowAccount = channelEscrowAddresses[sourceChannel]
-      // escrow source tokens (assumed to fail if balance insufficient)
-      bank.TransferCoins(sender, escrowAccount, denomination, amount)
-    } else {
-      // receiver is source chain, burn vouchers
-      bank.BurnCoins(sender, denomination, amount)
-    }
 
-    // create FungibleTokenPacket data
-    data = FungibleTokenPacketData{denomination, amount, sender, receiver}
-
-    // send packet using the interface defined in ICS4
+    // does same operation regarding prefixing/transfer/burn as ICS-20 in per token level
+    funds = toIbcPrefixedCoins(sourcePort,sourceChannel, funds)
+    
+    datas = FungibleTokensPacketData{funds, sender, receiver}
     sequence = handler.sendPacket(
       getCapability("port"),
       sourcePort,
@@ -82,75 +67,29 @@ function sendFungibleTokens(
 
 ```typescript
 function onRecvPacket(packet: Packet) {
-  FungibleTokenPacketData data = packet.data
+  FungibleTokensPacketData data = packet.data
   // construct default acknowledgement of success
   FungibleTokenPacketAcknowledgement ack = FungibleTokenPacketAcknowledgement{true, null}
-  prefix = "{packet.sourcePort}/{packet.sourceChannel}/"
-  // we are the source if the packets were prefixed by the sending chain
-  source = data.denom.slice(0, len(prefix)) === prefix
-  if source {
-    // receiver is source chain: unescrow tokens
-    // determine escrow account
-    escrowAccount = channelEscrowAddresses[packet.destChannel]
-    // unescrow tokens to receiver (assumed to fail if balance insufficient)
-    err = bank.TransferCoins(escrowAccount, data.receiver, data.denom.slice(len(prefix)), data.amount)
-    if (err !== nil)
-      ack = FungibleTokenPacketAcknowledgement{false, "transfer coins failed"}
-  } else {
-    prefix = "{packet.destPort}/{packet.destChannel}/"
-    prefixedDenomination = prefix + data.denom
-    // sender was source, mint vouchers to receiver (assumed to fail if balance insufficient)
-    err = bank.MintCoins(data.receiver, prefixedDenomination, data.amount)
-    if (err !== nil)
-      ack = FungibleTokenPacketAcknowledgement{false, "mint coins failed"}
+
+  transactionBegin()
+  for (let coin of data.funds) {    
+    err = onRecvIcs20Packet(packet, coin);
+    if (err != nil) {
+      transactionRollback()
+      ack = FungibleTokenPacketAcknowledgement{false, err}
+    }
   }
+  transactionCommit()
+  
   return ack
-}
 ```
 
-`onAcknowledgePacket` is called by the routing module when a packet sent by this module has been acknowledged.
-
 ```typescript
-function onAcknowledgePacket(
-  packet: Packet,
-  acknowledgement: bytes) {
-  // if the transfer failed, refund the tokens
-  if (!acknowledgement.success)
-    refundTokens(packet)
-}
-```
-
-`onTimeoutPacket` is called by the routing module when a packet sent by this module has timed-out (such that it will not be received on the destination chain).
-
-```typescript
-function onTimeoutPacket(packet: Packet) {
-  // the packet timed-out, so refund the tokens
-  refundTokens(packet)
-}
-```
-
-`refundTokens` is called by both `onAcknowledgePacket`, on failure, and `onTimeoutPacket`, to refund escrowed tokens to the original sender.
-
-```typescript
-function refundTokens(packet: Packet) {
-  FungibleTokenPacketData data = packet.data
+function refundTokens(packet: Packet) {s
+  FungibleTokensPacketData data = packet.data
   prefix = "{packet.sourcePort}/{packet.sourceChannel}/"
-  // we are the source if the denomination is not prefixed
-  source = data.denom.slice(0, len(prefix)) !== prefix
-  if source {
-    // sender was source chain, unescrow tokens back to sender
-    escrowAccount = channelEscrowAddresses[packet.srcChannel]
-    bank.TransferCoins(escrowAccount, data.sender, data.denom, data.amount)
-  } else {
-    // receiver was source chain, mint vouchers back to sender
-    bank.MintCoins(data.sender, data.denom, data.amount)
-  }
-}
-```
-
-```typescript
-function onTimeoutPacketClose(packet: Packet) {
-  // can't happen, only unordered channels allowed
+  // same as ICS-20 on per token basis
+  refundTokensDoesNotFail(data.funds, packet.sourcePort, packet.sourceChannel)
 }
 ```
 
