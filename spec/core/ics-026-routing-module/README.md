@@ -163,9 +163,10 @@ interface ModuleCallbacks {
   onChanOpenTry: onChanOpenTry,
   onChanOpenAck: onChanOpenAck,
   onChanOpenConfirm: onChanOpenConfirm,
-  onChanCloseConfirm: onChanCloseConfirm,
-  onRecvPacket: onRecvPacket,
-  onTimeoutPacket: onTimeoutPacket,
+  onChanCloseInit: onChanCloseInit,
+  onChanCloseConfirm: onChanCloseConfirm
+  onRecvPacket: onRecvPacket
+  onTimeoutPacket: onTimeoutPacket
   onAcknowledgePacket: onAcknowledgePacket,
   onTimeoutPacketClose: onTimeoutPacketClose,
 }
