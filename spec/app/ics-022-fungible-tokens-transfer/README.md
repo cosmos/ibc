@@ -73,15 +73,28 @@ function onRecvPacket(packet: Packet) {
   // construct default acknowledgement of success
   FungibleTokenPacketAcknowledgement ack = FungibleTokenPacketAcknowledgement{true, null}
 
-  transactionBegin()
-  for (let coin of data.funds) {    
-    err = onRecvIcs20Packet(packet, coin);
-    if (err != nil) {
-      transactionRollback()
-      ack = FungibleTokenPacketAcknowledgement{false, err}
+  if (transactionalScope) {
+    transactionBegin()
+    for (let coin of data.funds) {    
+      err = onRecvIcs20Packet(packet, coin);
+      if (err != nil) {
+        transactionRollback()
+        ack = FungibleTokenPacketAcknowledgement{false, err}
+      }
+    }
+    transactionCommit()    
+  } else {
+    for (let coin of data.funds) {    
+      err = ensureReceivable(packet, coin);
+      if (err != nil) {
+        ack = FungibleTokenPacketAcknowledgement{false, err}
+        return ack
+      }
+    }    
+    for (let coin of data.funds) {
+      onRecvIcs20PacketInfallible(packet, coin);
     }
   }
-  transactionCommit()
   
   return ack
 ```
