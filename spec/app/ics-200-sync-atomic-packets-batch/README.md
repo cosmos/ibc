@@ -1,31 +1,34 @@
 ## Synopsis
 
 This standard document specifies batched execution of packets,
-with purpose to allow execute callbacks when all packets from batch succeed and/or after each packet from batch until final packet.
+with purpose to allow execute packets in one transaction, callbacks when all packets from batch succeed and/or after each packet from batch until final packet.
 
 ### Motivation
 
 Basic use case execute some transaction after multiple ICS-20 and ICS-721 packets succeed.
 
-Extended use case are other packets, like governance and swap extensions.
-
+Extended use case are other packets, like governance and swap extensions. 
 
 ## Technical Specification
 
- all in batch packet packets must be in same relayer message (no accumulating of packets happens on receiver storage)
+All `Batch` packet packets must be in same relayer message.
+
+
+Any channel type is supported.
 
 ### Data structures
 
 ```typescript
-interface Packet {
-  sourceChannel: string
-  sourceSequence: uint64
-}
 
 interface AtomicBatchPacketData {  
-  tracking: Packet[] 
+  tracking: uint8 
   memo: string
 }
+
+interface Packet {
+  batch: BatchReference?
+}
+
 ```
 
 ### Good
@@ -67,3 +70,27 @@ If some `App` does nor timeouts not `ACK`, `Batch` packet also not timeouts nor 
 `Batch` aware `App` packet will fail until `Batch` transferred. Relayer will burn gas and have to be aware of batches.
 
 `Batch` packet holds off execution of ICS-100 until all packets arrived.  
+
+
+## Alternatives 
+
+
+### Accumulating batch in storage.
+
+Possible to accumulate bundle on chain, 
+so seems better relayer will cook batch bundle off chain.
+
+
+### Bundle all packets into one batch packet
+
+So it improves allowing to set same timeout and one memo for whole batch,
+it is incompatible with existing sequence increments, channel timeout logic, middleware and fees.
+
+### Async batches
+
+Async batches are possible using existing ICS-004 spec.
+
+
+## Referenes
+
+[Near Transaction](https://docs.near.org/concepts/basics/transactions/overview) is similar to this specification. Packet is action. Receipt is batch.
