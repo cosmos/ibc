@@ -12,6 +12,8 @@ Extended use case are other packets, like governance and swap extensions.
 
 ## Technical Specification
 
+ all in batch packet packets must be in same relayer message
+
 ### Data structures
 
 ```typescript
