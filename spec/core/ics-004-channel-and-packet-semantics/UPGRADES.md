@@ -611,15 +611,6 @@ function chanUpgradeAck(
     // counterparty flush status must be FLUSHING or FLUSHINGCOMPLETE
     abortTransactionUnless(counterpartyFlushStatus == FLUSHING || counterpartyFlushStatus == FLUSHCOMPLETE)
 
-    timeout = counterpartyUpgrade.timeout
-    abortTransactionUnless(timeout.timeoutHeight != 0 || timeout.timeoutTimestamp != 0)
-
-    // counterparty-specified timeout must not have exceeded
-    abortTransactionUnless(
-        (currentHeight() > timeout.timeoutHeight && timeout.timeoutHeight != 0) ||
-        (currentTimestamp() > timeout.timeoutTimestamp && timeout.timeoutTimestamp != 0)
-    )
-
     connection = getConnection(currentChannel.connectionIdentifier)
     counterpartyHops = getCounterpartyHops(connection)
 
@@ -641,6 +632,15 @@ function chanUpgradeAck(
     // prove counterparty and move our own state to ACKUPGRADE and start flushing
     // upgrade is blocked on this channelEnd from progressing until flush completes on both ends
     startFlushUpgradeHandshake(portIdentifier, channelIdentifier, upgrade.fields, counterpartyChannel, counterpartyUpgrade, ACKUPGRADE, proofChannel, proofUpgrade, proofHeight)
+
+    timeout = counterpartyUpgrade.timeout
+    
+    // counterparty-specified timeout must not have exceeded
+    // if it has, then restore the channel and abort upgrade handshake
+    if (currentHeight() > timeout.timeoutHeight && timeout.timeoutHeight != 0) ||
+        (currentTimestamp() > timeout.timeoutTimestamp && timeout.timeoutTimestamp != 0) {
+            restoreChannel(portIdentifier, channelIdentifier)
+    }
 
      // in the crossing hellos case, the versions returned by both on TRY must be the same
     if currentChannel.state == TRYUPGRADE {
