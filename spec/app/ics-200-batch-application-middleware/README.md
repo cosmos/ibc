@@ -88,7 +88,7 @@ function onAcknowledgePacket(packet: Packet, acknowledgement: bytes, relayer: st
     app_ack = getAppAcknowledgement(acknowledgement)
 
     app.onAcknowledgePacket(packet, app_ack, relayer)
-
+    // TODO: handle async packets here
     if (packet.batch != null) {
       // acknowledge packet can be in any order
       markAckInBatch(packet)
@@ -102,7 +102,7 @@ function onAcknowledgePacket(packet: Packet, acknowledgement: bytes, relayer: st
 
 function onTimeoutPacket(packet: Packet, relayer: string) {
     app.onTimeoutPacket(packet, relayer)
-
+    // TODO: handle async packets here
     if (packet.batch != null) {
       // acknowledge packet can be in any order
       markTimeoutInBatch(packet)
