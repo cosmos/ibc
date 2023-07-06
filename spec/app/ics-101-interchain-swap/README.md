@@ -117,9 +117,14 @@ The pool can be fully funded through the initial deposit or through subsequent d
 
 ```ts
 interface Coin {
-  amount: int32;
+  amount: int64;
   denom: string;
 }
+```
+
+```ts
+const Multiplier = 1e18;
+const MaximumSlippage = 10000;
 ```
 
 ```ts
@@ -159,9 +164,9 @@ interface InterchainLiquidityPool {
   status: PoolStatus;
   encounterPartyPort: string;
   encounterPartyChannel: string;
-  constructor(denoms: []string, decimals: []number, weights: []number,swapFee: number, portId string, channelId string) {
+  constructor(id:string, denoms: []string, decimals: []number, weights: []number,swapFee: number, portId string, channelId string) {
 
-    this.id = generatePoolId(denoms)
+    this.id = id
     this.supply = {
        amount: 0,
        denom: this.id
@@ -185,14 +190,80 @@ interface InterchainLiquidityPool {
         }
     }
   }
+
+  function findDenomBySide(side: PoolAssetSide): string | undefined {
+    for (const asset of this.pool.assets) {
+        if (asset.side === side) {
+            return asset.balance.denom;
+        }
+    }
+    return;
+}
+
+function findAssetBySide(side: PoolAssetSide): Coin | undefined {
+    for (const asset of this.pool.assets) {
+        if (asset.side === side) {
+            return asset.balance;
+        }
+    }
+    throw undefined;
+}
+
+function findPoolAssetBySide(side: PoolAssetSide): PoolAsset | undefined {
+    for (const asset of this.pool.assets) {
+        if (asset.side === side) {
+            return asset;
+        }
+    }
+    return;
+}
+
+function updateAssetPoolSide(denom: string, side: PoolAssetSide): PoolAsset | undefined {
+    for (const asset of this.pool.assets) {
+        if (asset.balance.denom === denom) {
+            asset.side = side;
+            return asset;
+        }
+    }
+    return undefined;
+}
+
+function addAsset(token: Coin): void {
+    for (const asset of this.pool.assets) {
+        if (asset.balance.denom === token.denom) {
+            asset.balance.amount += token.amount;
+            return;
+        }
+    }
+}
+
+function subtractAsset(token: Coin): Coin | undefined {
+    for (const asset of this.pool.assets) {
+        if (asset.balance.denom === token.denom) {
+            asset.balance.amount -=token.amount;
+            return asset.balance;
+        }
+    }
+    return
+}
+
+function addPoolSupply(token: Coin): void {
+    if (token.denom !== this.pool.id) {
+        return
+    }
+    this.supply.amount += token.amount;
+}
+
+function subtractPoolSupply(token: Coin): void {
+    if (token.denom !== this.pool.id) {
+        return
+    }
+    ilp.supply.amount -= token.amount;
+}
 }
 ```
 
 ```ts
-function generatePoolId(denoms: string[]) {
-  return "pool" + sha256(denoms.sort().join(""));
-}
-
 function generatePoolId(sourceChainId: string, destinationChainId: string, denoms: string[]): string {
   const connectionId: string = getConnectID([sourceChainId, destinationChainId]);
   denoms.sort();
@@ -265,23 +336,19 @@ class InterchainMarketMaker {
       let issueAmount: Int;
 
       if (imm.Pool.Status === PoolStatus_INITIALIZED) {
-        let totalAssetAmount = new Int(0);
+        let totalAssetAmount = 0;
         for (const asset of imm.Pool.Assets) {
-          totalAssetAmount = totalAssetAmount.Add(asset.Balance.Amount);
+          totalAssetAmount = totalAssetAmount+asset.balance.amount;
         }
-        issueAmount = totalAssetAmount.Mul(new Int(asset.Weight)).Quo(new Int(100));
+        issueAmount = totalAssetAmount*asset.Weight/100;
       } else {
-        const decToken = new DecCoinFromCoin(token);
-        const decAsset = new DecCoinFromCoin(asset.Balance);
-        const decSupply = new DecCoinFromCoin(imm.Pool.Supply);
-
-        const ratio = decToken.Amount.Quo(decAsset.Amount).Mul(new Dec(Multiplier));
-        issueAmount = decSupply.Amount.Mul(new Dec(asset.Weight)).Mul(ratio).Quo(new Dec(100)).Quo(new Dec(Multiplier)).RoundInt();
+        const ratio = token.amount/asset.balance/Multiplier;
+        issueAmount = supply.amount*asset.weight*ratio/100/Multiplier;
       }
 
       const outputToken: Coin = {
         Amount: issueAmount,
-        Denom: imm.Pool.Supply.Denom,
+        Denom: imm.pool.supply.denom,
       };
       outTokens.push(outputToken);
     }
@@ -294,12 +361,12 @@ class InterchainMarketMaker {
     multiAssetWithdraw(redeem: Coin): Coin[] {
     const outs: Coin[] = [];
 
-    if (redeem.Amount.GT(imm.Pool.Supply.Amount)) {
+    if (redeem.amount>imm.pool.supply.amount) {
       throw new Error("Overflow amount");
     }
 
-    for (const asset of imm.Pool.Assets) {
-      const out = asset.Balance.Amount.Mul(redeem.Amount).Quo(imm.Pool.Supply.Amount);
+    for (const asset of imm.pool.assets) {
+      const out = asset.balance.amount*redeem.amount/imm.pool.supply.amount;
       const outputCoin: Coin = {
         Denom: asset.Balance.Denom,
         Amount: out,
@@ -316,10 +383,10 @@ class InterchainMarketMaker {
     function leftSwap(amountIn: Coin, denomOut: string): Coin {
 
         const assetIn = this.pool.findAssetByDenom(amountIn.denom)
-        abortTransactionUnless(assetIn != null)
+        abortTransactionUnless(assetIn !== undefined)
 
         const assetOut = this.pool.findAssetByDenom(denomOut)
-        abortTransactionUnless(assetOut != null)
+        abortTransactionUnless(assetOut !== undefined)
 
         // redeem.weight is percentage
         const balanceOut = assetOut.balance.amount
@@ -351,7 +418,7 @@ class InterchainMarketMaker {
         const weightIn = assetIn.weight / 100
         const weightOut = assetOut.weight / 100
 
-        const amount = balanceIn * ((balanceOut/(balanceOut - amountOut.amount) ** (weightOut/weightIn) - 1)
+        const amount = balanceIn * ((balanceOut/(balanceOut - amountOut.amount) ** (weightOut/weightIn) - 1))
 
         abortTransactionUnless(amountIn.amount > amount)
 
@@ -362,9 +429,42 @@ class InterchainMarketMaker {
     }
 
     // amount - amount * feeRate / 10000
-    function minusFees(amount sdk.Int) sdk.Int {
+    function minusFees(amount:number):number {
         return amount * (1 - this.pool.feeRate / 10000))
     }
+
+    function invariant(): number {
+      let v = 1.0;
+      for (const asset of imm.pool.assets) {
+          const decimal = Math.pow(10,asset.decimal);
+          const balance = asset.balance.amount/decimal;
+          const w = asset.weight / 100.0;
+          v *= Math.pow(balance, w);
+      }
+      return v;
+    }
+
+    function invariantWithInput(tokenIn: Coin): number {
+      let v = 1.0;
+      for (const asset of imm.pool.assets) {
+          const decimal = Math.pow(10,asset.decimal);
+          let balance: number;
+          if (tokenIn.denom !== asset.balance.denom) {
+              balance = asset.balance.amount/decimal;
+          } else {
+              balance = (asset.balance.amount + tokenIn.amount)/decimal;
+          }
+
+          const w = asset.weight / 100.0;
+          v *= Math.pow(balance, w);
+      }
+      return v;
+    }
+
+  function lpPrice(): number {
+    const lpPrice = this.invariant() / imm.pool.supply.amount;
+    return lpPrice;
+  }
 }
 ```
 
@@ -385,7 +485,7 @@ enum MessageType {
 
 interface StateChange {
   in: Coin[];
-  out: Out[];
+  out: Coin[];
   poolTokens: Coin[];
   poolId: string;
   multiDepositOrderId: string;
@@ -952,8 +1052,8 @@ These are methods that output a state change on the source chain, which will be 
     const destinationAsset = pool.findAssetBySide("DESTINATION");
     abortTransactionUnless(destinationAsset)
 
-    const currentRatio = sourceAsset.amount.Mul(sdk.NewInt(1e18)).Quo(destinationAsset.amount);
-    const inputRatio = msg.deposits[0].balance.amount.Mul(sdk.NewInt(1e18)).Quo(msg.deposits[1].balance.amount);
+    const currentRatio = sourceAsset.amount*Multiplier/destinationAsset.amount;
+    const inputRatio = msg.deposits[0].balance.amount*.Multiplier/msg.deposits[1].balance.amount;
 
     const slippageErr = checkSlippage(currentRatio, inputRatio, 10);
     abortTransactionUnless(slippageErr)
@@ -977,7 +1077,7 @@ These are methods that output a state change on the source chain, which will be 
       destinationTaker: msg.deposits[1].sender,
       deposits: getCoinsFromDepositAssets(msg.deposits),
       status: "PENDING";
-      createdAt: store.blockHeight(),
+      createdAt: store.blockTime(),
     };
 
     // save order in source chain
@@ -1143,9 +1243,7 @@ function swap(msg: MsgSwapRequest): MsgSwapResponse {
   abortTransactionUnless(tokenOut?.amount? <= 0);
 
   const factor = MaximumSlippage - msg.slippage;
-  const expected = msg.tokenOut.amount
-    .mul(sdk.NewIntFromUint64(factor))
-    .quo(sdk.NewIntFromUint64(MaximumSlippage));
+  const expected = msg.tokenOut.amount*factor/MaximumSlippage;
 
   abortTransactionUnless(tokenOut?.amount?.gte(expected));
 
@@ -1213,7 +1311,7 @@ function onTakePoolReceived(msg: MsgTakePoolRequest): string {
   abortTransactionUnless(asset === undefined);
 
   const totalAmount = pool.sumOfPoolAssets();
-  const mintAmount = totalAmount.mul(sdk.NewInt(asset.weight)).quo(sdk.NewInt(100));
+  const mintAmount = (totalAmount * asset.weight) / 100;
 
   store.mintTokens(pool.sourceCreator, new sdk.Coin(pool.supply.denom, mintAmount));
   store.setInterchainLiquidityPool(pool);
@@ -1323,7 +1421,7 @@ function onMultiAssetWithdrawReceived(
     sdk.NewCoins(stateChange.out[1])
   );
 
-  if (pool.supply.amount.isZero()) {
+  if (pool.supply.amount == 0) {
     store.removeInterchainLiquidityPool(pool.id);
   } else {
     store.setInterchainLiquidityPool(pool);
@@ -1369,7 +1467,7 @@ function onMakePoolAcknowledged(msg: MsgMakePoolRequest, poolId: string): void {
 
   store.mintTokens(msg.creator, {
     denom: pool.supply.denom,
-    amount: totalAmount.mul(msg.liquidity[0].weight).quo(100),
+    amount: (totalAmount * msg.liquidity[0].weight) / 100,
   });
 
   const amm = new InterchainMarketMaker(pool);
@@ -1453,7 +1551,7 @@ function onMakePoolAcknowledged(msg: MsgMakePoolRequest, poolId: string): void {
 
   store.mintTokens(ctx, msg.creator, {
     denom: pool.supply.denom,
-    amount: totalAmount.mul(sdk.NewInt(Number(msg.liquidity[0].weight))).quo(sdk.NewInt(100)),
+    amount: (totalAmount * msg.liquidity[0].weight) / 100,
   });
 
   const amm = new InterchainMarketMaker(pool);
