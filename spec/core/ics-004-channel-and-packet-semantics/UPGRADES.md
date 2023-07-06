@@ -236,7 +236,8 @@ function initUpgradeHandshake(
     portIdentifier: Identifier,
     channelIdentifier: Identifier,
     proposedUpgradeFields: UpgradeFields,
-    timeout: UpgradeTimeout
+    timeout: UpgradeTimeout,
+    channelState: ChannelState
 ): uint64 {
     // current channel must be OPEN
     currentChannel = provableStore.get(channelPath(portIdentifier, channelIdentifier))
@@ -269,7 +270,7 @@ function initUpgradeHandshake(
     provableStore.set(channelUpgradePath(portIdentifier, channelIdentifier), upgrade)
 
     currentChannel.sequence = currentChannel.sequence + 1
-    currentChannel.state = INITUPGRADE
+    currentChannel.state = channelState
     provableStore.set(channelPath(portIdentifier, channelIdentifier), channel)
     return currentChannel.sequence
 }
@@ -450,7 +451,7 @@ function chanUpgradeInit(
     proposedUpgradeFields: Upgrade,
     timeout: UpgradeTimeout,
 ) {
-    upgradeSequence = initUpgradeChannel(portIdentifier, channelIdentifier, proposedUpgradeFields, timeout)
+    upgradeSequence = initUpgradeChannel(portIdentifier, channelIdentifier, proposedUpgradeFields, timeout, INITUPGRADE)
 
     // call modules onChanUpgradeInit callback
     module = lookupModule(portIdentifier)
@@ -521,7 +522,7 @@ function chanUpgradeTry(
             currentChannel.upgradeSequence = counterpartyUpgradeSequence - 1
         }
 
-        initUpgradeChannelHandshake(portIdentifier, channelIdentifier, upgradeFields, counterpartyUpgrade.timeout)
+        initUpgradeChannelHandshake(portIdentifier, channelIdentifier, upgradeFields, counterpartyUpgrade.timeout, TRYUPGRADE)
     } else if currentChannel.state == INITUPGRADE {
         existingUpgrade = publicStore.get(channelUpgradePath)
         abortTransactionUnless(existingUpgrade.fields == upgradeFields)
