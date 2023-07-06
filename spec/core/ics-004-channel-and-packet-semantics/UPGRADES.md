@@ -650,8 +650,11 @@ function chanUpgradeAck(
     }
 
     // if there are no in-flight packets on our end, we can automatically go to FLUSHCOMPLETE
+    // otherwise store counterparty timeout so packet handlers can check before going to FLUSHCOMPLETE
     if pendingInflightPackets(portIdentifier, channelIdentifier) == nil {
         currentChannel.flushState = FLUSHCOMPLETE
+    } else {
+        privateStore.set(counterpartyUpgradeTimeout(portIdentifier, channelIdentifier), timeout)
     }
 
     publicStore.set(channelPath(portIdentifier, channelIdentifier), currentChannel)
