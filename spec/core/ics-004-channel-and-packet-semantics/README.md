@@ -886,10 +886,18 @@ function acknowledgePacket(
     // delete our commitment so we can't "acknowledge" again
     provableStore.delete(packetCommitmentPath(packet.sourcePort, packet.sourceChannel, packet.sequence))
 
-    // if there are no in-flight packets on our end, we can automatically go to FLUSHCOMPLETE
-    if channel.flushStatus === FLUSHING && pendingInflightPackets(packet.sourcePort, packet.sourceChannel) == nil {
+    // if channel is flushing then we check if the counterparty timeout has passed
+    // if it has then restore the channel, otherwise check if we have completed flushing
+    // if flushing is complete then we can set flushStatus to FLUSHCOMPLETE
+    if channel.flushStatus === FLUSHING {
+      timeout = privateStore.get(counterpartyUpgradeTimeout(packet.sourcePort, packet.SourceChannel))
+      if (currentHeight() > timeout.timeoutHeight && timeout.timeoutHeight != 0) ||
+        (currentTimestamp() > timeout.timeoutTimestamp && timeout.timeoutTimestamp != 0) {
+            restoreChannel(portIdentifier, channelIdentifier)
+      } else if pendingInflightPackets(portIdentifier, channelIdentifier) == nil {
         channel.flushStatus = FLUSHCOMPLETE
         provableStore.set(channelPath(packet.sourcePort, packet.sourceChannel), channel)
+      }
     }
 
     // return transparent packet
@@ -1026,10 +1034,18 @@ function timeoutPacket(
     // delete our commitment
     provableStore.delete(packetCommitmentPath(packet.sourcePort, packet.sourceChannel, packet.sequence))
 
-    // if there are no in-flight packets on our end, we can automatically go to FLUSHCOMPLETE
-    if channel.flushStatus === FLUSHING && pendingInflightPackets(packet.sourcePort, packet.sourceChannel) == nil {
+    // if channel is flushing then we check if the counterparty timeout has passed
+    // if it has then restore the channel, otherwise check if we have completed flushing
+    // if flushing is complete then we can set flushStatus to FLUSHCOMPLETE
+    if channel.flushStatus === FLUSHING {
+      timeout = privateStore.get(counterpartyUpgradeTimeout(packet.sourcePort, packet.SourceChannel))
+      if (currentHeight() > timeout.timeoutHeight && timeout.timeoutHeight != 0) ||
+        (currentTimestamp() > timeout.timeoutTimestamp && timeout.timeoutTimestamp != 0) {
+            restoreChannel(portIdentifier, channelIdentifier)
+      } else if pendingInflightPackets(portIdentifier, channelIdentifier) == nil {
         channel.flushStatus = FLUSHCOMPLETE
         provableStore.set(channelPath(packet.sourcePort, packet.sourceChannel), channel)
+      }
     }
 
     // only close on strictly ORDERED channels
