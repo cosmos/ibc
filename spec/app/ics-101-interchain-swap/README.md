@@ -123,11 +123,6 @@ interface Coin {
 ```
 
 ```ts
-const Multiplier = 1e18;
-const MaximumSlippage = 10000;
-```
-
-```ts
 enum PoolAssetSide {
   Source = 1;
   Destination = 2;
@@ -164,8 +159,8 @@ interface InterchainLiquidityPool {
   status: PoolStatus;
   encounterPartyPort: string;
   encounterPartyChannel: string;
+  
   constructor(id:string, denoms: []string, decimals: []number, weights: []number,swapFee: number, portId string, channelId string) {
-
     this.id = id
     this.supply = {
        amount: 0,
@@ -265,21 +260,10 @@ function subtractPoolSupply(token: Coin): void {
 
 ```ts
 function generatePoolId(sourceChainId: string, destinationChainId: string, denoms: string[]): string {
-  const connectionId: string = getConnectID([sourceChainId, destinationChainId]);
-  denoms.sort();
-
-  const poolIdHash = createHash("sha256");
-  denoms.push(connectionId);
-  poolIdHash.update(denoms.join(""));
-
-  const poolId = "pool" + poolIdHash.digest("hex");
+  const chainPrefix = [sourceChainId, destinationChainId].sort().join(',')
+  const id = chainPrefx.concat(denoms.sort().join(','))
+  const poolId = "pool" + sha256.hash(id);
   return poolId;
-}
-
-function getConnectID(chainIds: string[]): string {
-  // Generate poolId
-  chainIds.sort();
-  return chainIds.join("/");
 }
 ```
 
@@ -342,8 +326,8 @@ class InterchainMarketMaker {
         }
         issueAmount = totalAssetAmount*asset.Weight/100;
       } else {
-        const ratio = token.amount/asset.balance/Multiplier;
-        issueAmount = supply.amount*asset.weight*ratio/100/Multiplier;
+        const ratio = token.amount/asset.balance;
+        issueAmount = supply.amount*asset.weight*ratio/100;
       }
 
       const outputToken: Coin = {
@@ -433,6 +417,7 @@ class InterchainMarketMaker {
         return amount * (1 - this.pool.feeRate / 10000))
     }
 
+    /// Can we remove these 3 functions? don't calculate price on backend side.
     function invariant(): number {
       let v = 1.0;
       for (const asset of imm.pool.assets) {
@@ -622,6 +607,7 @@ function OnRecvPacket(packet: Packet, data: IBCSwapPacketData): Uint8Array | und
     case "MAKE_POOL":
       const makePoolMsg: MsgMakePoolRequest = protobuf.decode(MsgMakePoolRequest, data.Data);
       abortTransactionUnless(data.stateChange.poolId === "");
+      abortTransactionUnless(store.has(data.stateChange.poolId)) // existed already.
       const poolId = store.OnMakePoolReceived(makePoolMsg, data.stateChange.poolId, data.stateChange.sourceChainId);
       const makePoolRes = protobuf.encode({ poolId });
       return makePoolRes;
@@ -943,9 +929,9 @@ interface MsgSwapResponse {
 These are methods that output a state change on the source chain, which will be subsequently synced to the destination chain.
 
 ```ts
-  function makePool(msg: MsgMakePoolRequest): Promise<MsgMakePoolResponse> {
+  function makePool(msg: MsgMakePoolRequest): MsgMakePoolResponse {
 
-    const { counterPartyChainId, connected } = await store.GetCounterPartyChainID(msg.sourcePort, msg.sourceChannel);
+    const { counterPartyChainId, connected } = store.GetCounterPartyChainID(msg.sourcePort, msg.sourceChannel);
 
     abortTransactionUnless(connected)
 
@@ -1052,8 +1038,8 @@ These are methods that output a state change on the source chain, which will be 
     const destinationAsset = pool.findAssetBySide("DESTINATION");
     abortTransactionUnless(destinationAsset)
 
-    const currentRatio = sourceAsset.amount*Multiplier/destinationAsset.amount;
-    const inputRatio = msg.deposits[0].balance.amount*.Multiplier/msg.deposits[1].balance.amount;
+    const currentRatio = sourceAsset.amount/destinationAsset.amount;
+    const inputRatio = msg.deposits[0].balance.amount/msg.deposits[1].balance.amount;
 
     const slippageErr = checkSlippage(currentRatio, inputRatio, 10);
     abortTransactionUnless(slippageErr)
@@ -1242,8 +1228,7 @@ function swap(msg: MsgSwapRequest): MsgSwapResponse {
 
   abortTransactionUnless(tokenOut?.amount? <= 0);
 
-  const factor = MaximumSlippage - msg.slippage;
-  const expected = msg.tokenOut.amount*factor/MaximumSlippage;
+  const expected = msg.tokenOut.amount * (1 - msg.slippage);
 
   abortTransactionUnless(tokenOut?.amount?.gte(expected));
 
@@ -1295,7 +1280,8 @@ function onMakePoolReceived(msg: MsgMakePoolRequest, poolID: string, sourceChain
   interchainLiquidityPool.sourceChainId = sourceChainId;
 
   const interchainMarketMaker = new InterchainMarketMaker(interchainLiquidityPool);
-  interchainLiquidityPool.poolPrice = interchainMarketMaker.lpPrice();
+  // remove it?
+  // interchainLiquidityPool.poolPrice = interchainMarketMaker.lpPrice();
 
   store.setInterchainLiquidityPool(interchainLiquidityPool);
   return poolID;
