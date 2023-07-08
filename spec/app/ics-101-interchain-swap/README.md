@@ -416,40 +416,6 @@ class InterchainMarketMaker {
     function minusFees(amount:number):number {
         return amount * (1 - this.pool.feeRate / 10000))
     }
-
-    /// Can we remove these 3 functions? don't calculate price on backend side.
-    function invariant(): number {
-      let v = 1.0;
-      for (const asset of imm.pool.assets) {
-          const decimal = Math.pow(10,asset.decimal);
-          const balance = asset.balance.amount/decimal;
-          const w = asset.weight / 100.0;
-          v *= Math.pow(balance, w);
-      }
-      return v;
-    }
-
-    function invariantWithInput(tokenIn: Coin): number {
-      let v = 1.0;
-      for (const asset of imm.pool.assets) {
-          const decimal = Math.pow(10,asset.decimal);
-          let balance: number;
-          if (tokenIn.denom !== asset.balance.denom) {
-              balance = asset.balance.amount/decimal;
-          } else {
-              balance = (asset.balance.amount + tokenIn.amount)/decimal;
-          }
-
-          const w = asset.weight / 100.0;
-          v *= Math.pow(balance, w);
-      }
-      return v;
-    }
-
-  function lpPrice(): number {
-    const lpPrice = this.invariant() / imm.pool.supply.amount;
-    return lpPrice;
-  }
 }
 ```
 
@@ -1278,11 +1244,6 @@ function onMakePoolReceived(msg: MsgMakePoolRequest, poolID: string, sourceChain
     msg.sourceChannel
   );
   interchainLiquidityPool.sourceChainId = sourceChainId;
-
-  const interchainMarketMaker = new InterchainMarketMaker(interchainLiquidityPool);
-  // remove it?
-  // interchainLiquidityPool.poolPrice = interchainMarketMaker.lpPrice();
-
   store.setInterchainLiquidityPool(interchainLiquidityPool);
   return poolID;
 }
@@ -1456,9 +1417,6 @@ function onMakePoolAcknowledged(msg: MsgMakePoolRequest, poolId: string): void {
     amount: (totalAmount * msg.liquidity[0].weight) / 100,
   });
 
-  const amm = new InterchainMarketMaker(pool);
-  pool.poolPrice = amm.lpPrice();
-
   store.setInterchainLiquidityPool(pool);
 }
 
@@ -1466,8 +1424,6 @@ function onTakePoolAcknowledged(msg: MsgTakePoolRequest): void {
   const { pool, found } = store.getInterchainLiquidityPool(msg.poolId);
   abortTransactionUnless(found);
 
-  const amm = new InterchainMarketMaker(pool);
-  pool.poolPrice = amm.lpPrice();
   pool.status = "ACTIVE";
 
   store.setInterchainLiquidityPool(pool);
@@ -1540,17 +1496,13 @@ function onMakePoolAcknowledged(msg: MsgMakePoolRequest, poolId: string): void {
     amount: (totalAmount * msg.liquidity[0].weight) / 100,
   });
 
-  const amm = new InterchainMarketMaker(pool);
-  pool.poolPrice = amm.lpPrice();
-
   store.setInterchainLiquidityPool(pool);
 }
 
 function onTakePoolAcknowledged(msg: MsgTakePoolRequest): void {
   const { pool, found } = store.getInterchainLiquidityPool(msg.poolId);
   abortTransactionUnless(found);
-  const amm = new InterchainMarketMaker(pool);
-  pool.poolPrice = amm.lpPrice();
+  
   pool.status = "ACTIVE";
   store.setInterchainLiquidityPool(pool);
 }
