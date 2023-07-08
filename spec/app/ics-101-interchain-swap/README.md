@@ -159,7 +159,7 @@ interface InterchainLiquidityPool {
   status: PoolStatus;
   encounterPartyPort: string;
   encounterPartyChannel: string;
-  
+
   constructor(id:string, denoms: []string, decimals: []number, weights: []number,swapFee: number, portId string, channelId string) {
     this.id = id
     this.supply = {
@@ -260,8 +260,8 @@ function subtractPoolSupply(token: Coin): void {
 
 ```ts
 function generatePoolId(sourceChainId: string, destinationChainId: string, denoms: string[]): string {
-  const chainPrefix = [sourceChainId, destinationChainId].sort().join(',')
-  const id = chainPrefx.concat(denoms.sort().join(','))
+  const chainPrefix = [sourceChainId, destinationChainId].sort().join(",");
+  const id = chainPrefx.concat(denoms.sort().join(","));
   const poolId = "pool" + sha256.hash(id);
   return poolId;
 }
@@ -573,7 +573,7 @@ function OnRecvPacket(packet: Packet, data: IBCSwapPacketData): Uint8Array | und
     case "MAKE_POOL":
       const makePoolMsg: MsgMakePoolRequest = protobuf.decode(MsgMakePoolRequest, data.Data);
       abortTransactionUnless(data.stateChange.poolId === "");
-      abortTransactionUnless(store.has(data.stateChange.poolId)) // existed already.
+      abortTransactionUnless(store.has(data.stateChange.poolId)); // existed already.
       const poolId = store.OnMakePoolReceived(makePoolMsg, data.stateChange.poolId, data.stateChange.sourceChainId);
       const makePoolRes = protobuf.encode({ poolId });
       return makePoolRes;
@@ -807,6 +807,8 @@ interface MsgMakePoolResponse {
 interface MsgTakePoolRequest {
   creator: string;
   poolId: string;
+  port: string;
+  channel: string;
   timeHeight: TimeHeight;
   timeoutTimeStamp: uint64;
 }
@@ -821,6 +823,8 @@ interface MsgSingleAssetDepositRequest {
   poolId: string;
   sender: string;
   token: Coin; // only one element for now, might have two in the feature
+  port: string;
+  channel: string;
   timeHeight: TimeHeight;
   timeoutTimeStamp: uint64;
 }
@@ -839,6 +843,8 @@ interface MsgMakeMultiAssetDepositRequest {
   poolId: string;
   deposits: DepositAsset[];
   token: Coin; // only one element for now, might have two in the feature
+  port: string;
+  channel: string;
   timeHeight: TimeHeight;
   timeoutTimeStamp: uint64;
 }
@@ -847,6 +853,8 @@ interface MsgTakeMultiAssetDepositRequest {
   sender: string;
   poolId: string;
   orderId: uint64;
+  port: string;
+  channel: string;
   timeHeight: TimeHeight;
   timeoutTimeStamp: uint64;
 }
@@ -862,6 +870,8 @@ interface MsgMultiAssetWithdrawRequest {
   receiver: string;
   counterPartyReceiver: string;
   poolToken: Coin;
+  port: string;
+  channel: string;
   timeHeight: TimeHeight;
   timeoutTimeStamp: uint64;
 }
@@ -880,6 +890,8 @@ interface MsgSwapRequest {
   tokenOut: Coin;
   slippage: uint64;
   recipient: string;
+  port: string;
+  channel: string;
   timeHeight: TimeHeight;
   timeoutTimeStamp: uint64;
 }
@@ -971,7 +983,7 @@ These are methods that output a state change on the source chain, which will be 
     abortTransactionUnless(liquidity.amount > 0)
 
 
-    const lockErr = store.LockTokens(pool.counterPartyPort, pool.counterPartyChannel, creatorAddr, asset);
+    const lockErr = store.LockTokens(msg.port, pool.channel, creatorAddr, asset);
     abortTransactionUnless(lockErr === undefined)
 
     const packet: IBCSwapPacketData = {
@@ -1011,7 +1023,7 @@ These are methods that output a state change on the source chain, which will be 
     abortTransactionUnless(slippageErr)
 
     // Create escrow module account here
-    const lockErr = store.lockTokens(pool.counterPartyPort, pool.counterPartyChannel, sdk.msg.deposits[0].sender, msg.deposits[0].balance);
+    const lockErr = store.lockTokens(msg.port, msg.channel, sdk.msg.deposits[0].sender, msg.deposits[0].balance);
     abortTransactionUnless(lockErr)
 
     const amm = new InterchainMarketMaker(pool);
@@ -1084,7 +1096,7 @@ These are methods that output a state change on the source chain, which will be 
   };
 
 
-  const sendPacketErr = await store.sendIBCSwapPacket(pool.counterPartyPort, pool.counterPartyChannel, timeoutHeight, timeoutStamp, packet);
+  const sendPacketErr = await store.sendIBCSwapPacket(msg.port, msg.channel, timeoutHeight, timeoutStamp, packet);
   abortTransactionUnless(sendPacketErr === undefined)
 
   return {};
@@ -1123,7 +1135,7 @@ function singleAssetDeposit(msg: MsgSingleAssetDepositRequest): MsgSingleAssetDe
     stateChange: { poolTokens: [poolToken] },
   };
 
-  const sendPacketErr = await store.sendIBCSwapPacket(pool.counterPartyPort, pool.counterPartyChannel, timeoutHeight, timeoutStamp, packet);
+  const sendPacketErr = await store.sendIBCSwapPacket(msg.port, msg.channel, timeoutHeight, timeoutStamp, packet);
   abortTransactionUnless(sendPacketErr === undefined);
 
   return { poolToken: pool.supply };
@@ -1157,7 +1169,7 @@ function multiAssetWithdraw(msg: MsgMultiAssetWithdrawRequest): MsgMultiAssetWit
     },
   };
 
-  const sendPacketErr = await k.sendIBCSwapPacket(ctx, pool.counterPartyPort, pool.counterPartyChannel, timeoutHeight, timeoutStamp, packet);
+  const sendPacketErr = await k.sendIBCSwapPacket(ctx, msg.port, msg.channel, timeoutHeight, timeoutStamp, packet);
   abortTransactionUnless(sendPacketErr === undefined);
 
   return {};
@@ -1205,8 +1217,8 @@ function swap(msg: MsgSwapRequest): MsgSwapResponse {
   };
 
   const sendPacketErr = store.sendIBCSwapPacket(
-    pool.counterPartyPort,
-    pool.counterPartyChannel,
+    msg.port,
+    msg.channel,
     timeoutHeight,
     timeoutTimestamp,
     packet
@@ -1301,7 +1313,7 @@ function onMakeMultiAssetDepositReceived(
     destinationTaker: msg.deposits[1].sender,
     deposits: getCoinsFromDepositAssets(msg.deposits),
     status: "PENDING",
-    createdAt: store.blockHeight(),
+    createdAt: store.blockTime(),
   };
 
   store.appendMultiDepositOrder(msg.poolId, order);
@@ -1502,7 +1514,7 @@ function onMakePoolAcknowledged(msg: MsgMakePoolRequest, poolId: string): void {
 function onTakePoolAcknowledged(msg: MsgTakePoolRequest): void {
   const { pool, found } = store.getInterchainLiquidityPool(msg.poolId);
   abortTransactionUnless(found);
-  
+
   pool.status = "ACTIVE";
   store.setInterchainLiquidityPool(pool);
 }
