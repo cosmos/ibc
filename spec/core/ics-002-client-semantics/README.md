@@ -119,7 +119,7 @@ types may require additional properties.
 * `ClientState` is the state of a client. It MUST expose an interface to higher-level protocol abstractions, 
   e.g., functions to verify proofs of the existence of particular values at particular paths at particular `Height`s.
 
-* `MisbehaviourPredicate` is a that checks whether the rules of `Consensus` were broken, 
+* `MisbehaviourPredicate` is a function that checks whether the rules of `Consensus` were broken, 
   in which case the client MUST be *frozen*, i.e., no subsequent `ConsensusState`s can be generated.
 
 * `Misbehaviour` is the proof needed by the `MisbehaviourPredicate` to determine whether 
