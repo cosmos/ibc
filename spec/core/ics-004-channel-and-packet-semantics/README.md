@@ -5,6 +5,7 @@ stage: draft
 category: IBC/TAO
 kind: instantiation
 requires: 2, 3, 5, 24
+version compatibility: ibc-go v7.0.0
 author: Christopher Goes <cwgoes@tendermint.com>
 created: 2019-03-07
 modified: 2019-08-25
@@ -37,6 +38,8 @@ In order to provide the desired ordering, exactly-once delivery, and module perm
 `hash` is a generic collision-resistant hash function, the specifics of which must be agreed on by the modules utilising the channel. `hash` can be defined differently by different chains.
 
 `Identifier`, `get`, `set`, `delete`, `getCurrentHeight`, and module-system related primitives are as defined in [ICS 24](../ics-024-host-requirements).
+
+See [upgrades spec](./UPGRADES.md) for definition of `pendingInflightPackets`.
 
 A *channel* is a pipeline for exactly-once packet delivery between specific modules on separate blockchains, which has at least one end capable of sending packets and one end capable of receiving packets.
 
@@ -74,6 +77,8 @@ interface ChannelEnd {
   counterpartyChannelIdentifier: Identifier
   connectionHops: [Identifier]
   version: string
+  upgradeSequence: uint64
+  flushStatus: FlushStatus
 }
 ```
 
@@ -86,6 +91,8 @@ interface ChannelEnd {
 - The `nextSequenceAck`, stored separately, tracks the sequence number for the next packet to be acknowledged.
 - The `connectionHops` stores the list of connection identifiers, in order, along which packets sent on this channel will travel. At the moment this list must be of length 1. In the future multi-hop channels may be supported.
 - The `version` string stores an opaque channel version, which is agreed upon during the handshake. This can determine module-level configuration such as which packet encoding is used for the channel. This version is not used by the core IBC protocol. If the version string contains structured metadata for the application to parse and interpret, then it is considered best practice to encode all metadata in a JSON struct and include the marshalled string in the version field.
+
+See the [upgrade spec](./UPGRADES.md) for details on `sequence` and `flushStatus`.
 
 Channel ends have a *state*:
 
@@ -281,7 +288,28 @@ If not provided, the default `validateChannelIdentifier` function will always re
 
 ##### Opening handshake
 
-The `chanOpenInit` function is called by a module to initiate a channel opening handshake with a module on another chain.
+The `chanOpenInit` function is called by a module to initiate a channel opening handshake with a module on another chain. Functions `chanOpenInit` and `chanOpenTry` do no set the new channel end in state because the channel version might be modified by the application callback. A function `writeChannel` should be used to write the channel end in state after executing the application callback:
+
+```typescript
+function writeChannel(
+  portIdentifier: Identifier,
+  channelIdentifier: Identifier,
+  state: ChannelState,
+  order: ChannelOrder,
+  counterpartyPortIdentifier: Identifier,
+  counterpartyChannelIdentifier: Identifier,
+  connectionHops: [Identifier],
+  version: string) {
+    channel = ChannelEnd{
+      state, order, 
+      counterpartyPortIdentifier, counterpartyChannelIdentifier,
+      connectionHops, version
+    }
+    provableStore.set(channelPath(portIdentifier, channelIdentifier), channel)
+}
+```
+
+See handler functions `handleChanOpenInit` and `handleChanOpenTry` in [Channel lifecycle management](../ics-026-routing-module/README.md#channel-lifecycle-management) for more details.
 
 The opening channel must provide the identifiers of the local channel identifier, local port, remote port, and remote channel identifier.
 
@@ -300,8 +328,7 @@ function chanOpenInit(
   order: ChannelOrder,
   connectionHops: [Identifier],
   portIdentifier: Identifier,
-  counterpartyPortIdentifier: Identifier,
-  version: string): CapabilityKey {
+  counterpartyPortIdentifier: Identifier): (channelIdentifier: Identifier, channelCapability: CapabilityKey) {
     channelIdentifier = generateIdentifier()
     abortTransactionUnless(validateChannelIdentifier(portIdentifier, channelIdentifier))
 
@@ -313,14 +340,13 @@ function chanOpenInit(
     // optimistic channel handshakes are allowed
     abortTransactionUnless(connection !== null)
     abortTransactionUnless(authenticateCapability(portPath(portIdentifier), portCapability))
-    channel = ChannelEnd{INIT, order, counterpartyPortIdentifier,
-                         "", connectionHops, version}
-    provableStore.set(channelPath(portIdentifier, channelIdentifier), channel)
+
     channelCapability = newCapability(channelCapabilityPath(portIdentifier, channelIdentifier))
     provableStore.set(nextSequenceSendPath(portIdentifier, channelIdentifier), 1)
     provableStore.set(nextSequenceRecvPath(portIdentifier, channelIdentifier), 1)
     provableStore.set(nextSequenceAckPath(portIdentifier, channelIdentifier), 1)
-    return channelCapability
+
+    return channelIdentifier, channelCapability
 }
 ```
 
@@ -331,23 +357,26 @@ function chanOpenTry(
   order: ChannelOrder,
   connectionHops: [Identifier],
   portIdentifier: Identifier,
-  counterpartyChosenChannelIdentifer: Identifier,
   counterpartyPortIdentifier: Identifier,
   counterpartyChannelIdentifier: Identifier,
-  version: string, // deprecated
   counterpartyVersion: string,
   proofInit: CommitmentProof,
-  proofHeight: Height): CapabilityKey {
+  proofHeight: Height): (channelIdentifier: Identifier, channelCapability: CapabilityKey) {
     channelIdentifier = generateIdentifier()
 
     abortTransactionUnless(validateChannelIdentifier(portIdentifier, channelIdentifier))
     abortTransactionUnless(connectionHops.length === 1) // for v1 of the IBC protocol
     abortTransactionUnless(authenticateCapability(portPath(portIdentifier), portCapability))
+    
     connection = provableStore.get(connectionPath(connectionHops[0]))
     abortTransactionUnless(connection !== null)
     abortTransactionUnless(connection.state === OPEN)
-    expected = ChannelEnd{INIT, order, portIdentifier,
-                          "", [connection.counterpartyConnectionIdentifier], counterpartyVersion}
+
+    expected = ChannelEnd{
+      INIT, order, portIdentifier,
+      "", [connection.counterpartyConnectionIdentifier], 
+      counterpartyVersion
+    }
     abortTransactionUnless(connection.verifyChannelState(
       proofHeight,
       proofInit,
@@ -355,9 +384,7 @@ function chanOpenTry(
       counterpartyChannelIdentifier,
       expected
     ))
-    channel = ChannelEnd{TRYOPEN, order, counterpartyPortIdentifier,
-                         counterpartyChannelIdentifier, connectionHops, version}
-    provableStore.set(channelPath(portIdentifier, channelIdentifier), channel)
+
     channelCapability = newCapability(channelCapabilityPath(portIdentifier, channelIdentifier))
 
     // initialize channel sequences
@@ -365,7 +392,7 @@ function chanOpenTry(
     provableStore.set(nextSequenceRecvPath(portIdentifier, channelIdentifier), 1)
     provableStore.set(nextSequenceAckPath(portIdentifier, channelIdentifier), 1)
 
-    return channelCapability
+    return channelIdentifier, channelCapability
 }
 ```
 
@@ -383,11 +410,16 @@ function chanOpenAck(
     channel = provableStore.get(channelPath(portIdentifier, channelIdentifier))
     abortTransactionUnless(channel.state === INIT)
     abortTransactionUnless(authenticateCapability(channelCapabilityPath(portIdentifier, channelIdentifier), capability))
+    
     connection = provableStore.get(connectionPath(channel.connectionHops[0]))
     abortTransactionUnless(connection !== null)
     abortTransactionUnless(connection.state === OPEN)
-    expected = ChannelEnd{TRYOPEN, channel.order, portIdentifier,
-                          channelIdentifier, [connection.counterpartyConnectionIdentifier], counterpartyVersion}
+    
+    expected = ChannelEnd{
+      TRYOPEN, channel.order, portIdentifier,
+      channelIdentifier, [connection.counterpartyConnectionIdentifier], 
+      counterpartyVersion
+    }
     abortTransactionUnless(connection.verifyChannelState(
       proofHeight,
       proofTry,
@@ -395,6 +427,7 @@ function chanOpenAck(
       counterpartyChannelIdentifier,
       expected
     ))
+    
     channel.state = OPEN
     channel.version = counterpartyVersion
     channel.counterpartyChannelIdentifier = counterpartyChannelIdentifier
@@ -415,11 +448,16 @@ function chanOpenConfirm(
     abortTransactionUnless(channel !== null)
     abortTransactionUnless(channel.state === TRYOPEN)
     abortTransactionUnless(authenticateCapability(channelCapabilityPath(portIdentifier, channelIdentifier), capability))
+    
     connection = provableStore.get(connectionPath(channel.connectionHops[0]))
     abortTransactionUnless(connection !== null)
     abortTransactionUnless(connection.state === OPEN)
-    expected = ChannelEnd{OPEN, channel.order, portIdentifier,
-                          channelIdentifier, [connection.counterpartyConnectionIdentifier], channel.version}
+    
+    expected = ChannelEnd{
+      OPEN, channel.order, portIdentifier,
+      channelIdentifier, [connection.counterpartyConnectionIdentifier],
+      channel.version
+    }
     abortTransactionUnless(connection.verifyChannelState(
       proofHeight,
       proofAck,
@@ -427,6 +465,7 @@ function chanOpenConfirm(
       channel.counterpartyChannelIdentifier,
       expected
     ))
+    
     channel.state = OPEN
     provableStore.set(channelPath(portIdentifier, channelIdentifier), channel)
 }
@@ -452,6 +491,7 @@ function chanCloseInit(
     abortTransactionUnless(connection !== null)
     abortTransactionUnless(connection.state === OPEN)
     channel.state = CLOSED
+    channel.flushStatus = NOTINFLUSH
     provableStore.set(channelPath(portIdentifier, channelIdentifier), channel)
 }
 ```
@@ -492,6 +532,7 @@ function chanCloseConfirm(
       expected
     ))
     channel.state = CLOSED
+    channel.flushStatus = NOTINFLUSH
     provableStore.set(channelPath(portIdentifier, channelIdentifier), channel)
 }
 ```
@@ -533,11 +574,12 @@ Calling modules MUST execute application logic atomically in conjunction with ca
 
 The IBC handler performs the following steps in order:
 
-- Checks that the channel & connection are open to send packets
+- Checks that the channel is not closed to send packets
 - Checks that the calling module owns the sending port (see [ICS 5](../ics-005-port-allocation))
 - Checks that the timeout height specified has not already passed on the destination chain
 - Increments the send sequence counter associated with the channel
 - Stores a constant-size commitment to the packet data & packet timeout
+- Returns the sequence number of the sent packet
 
 Note that the full packet is not stored in the state of the chain - merely a short hash-commitment to the data & timeout value. The packet data can be calculated from the transaction execution and possibly returned as log output which relayers can index.
 
@@ -548,13 +590,12 @@ function sendPacket(
   sourceChannel: Identifier,
   timeoutHeight: Height,
   timeoutTimestamp: uint64,
-  data: bytes) {
+  data: bytes): uint64 {
     channel = provableStore.get(channelPath(sourcePort, sourceChannel))
 
-    // check that the channel & connection are open to send packets; 
-    // note: optimistic sends are permitted once the handshake has started
+    // check that the channel is not closed to send packets; 
     abortTransactionUnless(channel !== null)
-    abortTransactionUnless(channel.state !== CLOSED)
+    abortTransactionUnless(channel.state !== CLOSED && channel.flushStatus === NOTINFLUSH)
     connection = provableStore.get(connectionPath(channel.connectionHops[0]))
     abortTransactionUnless(connection !== null)
 
@@ -562,24 +603,31 @@ function sendPacket(
     abortTransactionUnless(authenticateCapability(channelCapabilityPath(sourcePort, sourceChannel), capability))
 
     // disallow packets with a zero timeoutHeight and timeoutTimestamp
-    abortTransactionUnless(packet.timeoutHeight !== 0 || packet.timeoutTimestamp !== 0)
+    abortTransactionUnless(timeoutHeight !== 0 || timeoutTimestamp !== 0)
     
     // check that the timeout height hasn't already passed in the local client tracking the receiving chain
     latestClientHeight = provableStore.get(clientPath(connection.clientIdentifier)).latestClientHeight()
-    abortTransactionUnless(packet.timeoutHeight === 0 || latestClientHeight < packet.timeoutHeight)
+    abortTransactionUnless(timeoutHeight === 0 || latestClientHeight < timeoutHeight)
 
     // increment the send sequence counter
-    sequence = provableStore.get(nextSequenceSendPath(packet.sourcePort, packet.sourceChannel))
-    provableStore.set(nextSequenceSendPath(packet.sourcePort, packet.sourceChannel), sequence+1)
+    sequence = provableStore.get(nextSequenceSendPath(sourcePort, sourceChannel))
+    provableStore.set(nextSequenceSendPath(sourcePort, sourceChannel), sequence+1)
 
     // store commitment to the packet data & packet timeout
     provableStore.set(
       packetCommitmentPath(sourcePort, sourceChannel, sequence),
-      hash(data, timeoutHeight, timeoutTimestamp)
+      hash(hash(data), timeoutHeight, timeoutTimestamp)
     )
 
     // log that a packet can be safely sent
-    emitLogEntry("sendPacket", {sequence: sequence, data: data, timeoutHeight: timeoutHeight, timeoutTimestamp: timeoutTimestamp})
+    emitLogEntry("sendPacket", {
+      sequence: sequence, 
+      data: data, 
+      timeoutHeight: timeoutHeight, 
+      timeoutTimestamp: timeoutTimestamp
+    })
+
+    return sequence
 }
 ```
 
@@ -611,11 +659,13 @@ function recvPacket(
 
     channel = provableStore.get(channelPath(packet.destPort, packet.destChannel))
     abortTransactionUnless(channel !== null)
-    abortTransactionUnless(channel.state === OPEN)
+    counterpartyLastPacketSent = privateStore.get(channelCounterpartyLastPacketSequencePath(packet.destPort, packet.destChannel)
+    abortTransactionUnless(channel.state === OPEN || (channel.flushStatus === FLUSHING && packet.sequence <= counterpartyLasPacketSent))
     abortTransactionUnless(authenticateCapability(channelCapabilityPath(packet.destPort, packet.destChannel), capability))
     abortTransactionUnless(packet.sourcePort === channel.counterpartyPortIdentifier)
     abortTransactionUnless(packet.sourceChannel === channel.counterpartyChannelIdentifier)
 
+    connection = provableStore.get(connectionPath(channel.connectionHops[0]))
     abortTransactionUnless(connection !== null)
     abortTransactionUnless(connection.state === OPEN)
 
@@ -625,12 +675,28 @@ function recvPacket(
       packet.sourcePort,
       packet.sourceChannel,
       packet.sequence,
-      concat(packet.data, packet.timeoutHeight, packet.timeoutTimestamp)
+      hash(packet.data, packet.timeoutHeight, packet.timeoutTimestamp)
     ))
 
     // do sequence check before any state changes
     if channel.order == ORDERED || channel.order == ORDERED_ALLOW_TIMEOUT {
         nextSequenceRecv = provableStore.get(nextSequenceRecvPath(packet.destPort, packet.destChannel))
+        if (packet.sequence < nextSequenceRecv) {
+          // event is emitted even if transaction is aborted
+          emitLogEntry("recvPacket", {
+            data: packet.data 
+            timeoutHeight: packet.timeoutHeight, 
+            timeoutTimestamp: packet.timeoutTimestamp,
+            sequence: packet.sequence,
+            sourcePort: packet.sourcePort, 
+            sourceChannel: packet.sourceChannel,
+            destPort: packet.destPort, 
+            destChannel: packet.destChannel,
+            order: channel.order,
+            connection: channel.connectionHops[0]
+          })
+        }
+
         abortTransactionUnless(packet.sequence === nextSequenceRecv)
     }
 
@@ -673,17 +739,43 @@ function recvPacket(
         // for unordered channels we must set the receipt so it can be verified on the other side
         // this receipt does not contain any data, since the packet has not yet been processed
         // it's the sentinel success receipt: []byte{0x01}
-        abortTransactionUnless(provableStore.get(packetReceiptPath(packet.destPort, packet.destChannel, packet.sequence) === null))
+        packetReceipt = provableStore.get(packetReceiptPath(packet.destPort, packet.destChannel, packet.sequence))
+        if (packetReceipt != null) {
+          emitLogEntry("recvPacket", {
+            data: packet.data 
+            timeoutHeight: packet.timeoutHeight, 
+            timeoutTimestamp: packet.timeoutTimestamp,
+            sequence: packet.sequence,
+            sourcePort: packet.sourcePort, 
+            sourceChannel: packet.sourceChannel,
+            destPort: packet.destPort, 
+            destChannel: packet.destChannel,
+            order: channel.order,
+            connection: channel.connectionHops[0]
+          })
+        }
+
+        abortTransactionUnless(packetReceipt === null))
         provableStore.set(
           packetReceiptPath(packet.destPort, packet.destChannel, packet.sequence),
-          SUCCESFUL_RECEIPT
+          SUCCESSFUL_RECEIPT
         )
       break;
     }
     
     // log that a packet has been received
-    emitLogEntry("recvPacket", {sequence: packet.sequence, timeoutHeight: packet.timeoutHeight, port: packet.destPort, channel: packet.destChannel,
-                                timeoutTimestamp: packet.timeoutTimestamp, data: packet.data})
+    emitLogEntry("recvPacket", {
+      data: packet.data 
+      timeoutHeight: packet.timeoutHeight, 
+      timeoutTimestamp: packet.timeoutTimestamp,
+      sequence: packet.sequence,
+      sourcePort: packet.sourcePort, 
+      sourceChannel: packet.sourceChannel,
+      destPort: packet.destPort, 
+      destChannel: packet.destChannel,
+      order: channel.order,
+      connection: channel.connectionHops[0]
+    })
 
     // return transparent packet
     return packet
@@ -712,6 +804,8 @@ The IBC handler performs the following steps in order:
 function writeAcknowledgement(
   packet: Packet,
   acknowledgement: bytes) {
+    // acknowledgement must not be empty
+    abortTransactionUnless(len(acknowledgement) !== 0)
 
     // cannot already have written the acknowledgement
     abortTransactionUnless(provableStore.get(packetAcknowledgementPath(packet.destPort, packet.destChannel, packet.sequence) === null))
@@ -723,8 +817,15 @@ function writeAcknowledgement(
     )
 
     // log that a packet has been acknowledged
-    emitLogEntry("writeAcknowledgement", {sequence: packet.sequence, timeoutHeight: packet.timeoutHeight, port: packet.destPort, channel: packet.destChannel,
-                                timeoutTimestamp: packet.timeoutTimestamp, data: packet.data, acknowledgement})
+    emitLogEntry("writeAcknowledgement", {
+      sequence: packet.sequence,
+      timeoutHeight: packet.timeoutHeight, 
+      port: packet.destPort, 
+      channel: packet.destChannel,
+      timeoutTimestamp: packet.timeoutTimestamp, 
+      data: packet.data, 
+      acknowledgement
+    })
 }
 ```
 
@@ -749,7 +850,7 @@ function acknowledgePacket(
     // abort transaction unless that channel is open, calling module owns the associated port, and the packet fields match
     channel = provableStore.get(channelPath(packet.sourcePort, packet.sourceChannel))
     abortTransactionUnless(channel !== null)
-    abortTransactionUnless(channel.state === OPEN)
+    abortTransactionUnless(channel.state === OPEN || channel.flushStatus === FLUSHING)
     abortTransactionUnless(authenticateCapability(channelCapabilityPath(packet.sourcePort, packet.sourceChannel), capability))
     abortTransactionUnless(packet.destPort === channel.counterpartyPortIdentifier)
     abortTransactionUnless(packet.destChannel === channel.counterpartyChannelIdentifier)
@@ -784,6 +885,12 @@ function acknowledgePacket(
 
     // delete our commitment so we can't "acknowledge" again
     provableStore.delete(packetCommitmentPath(packet.sourcePort, packet.sourceChannel, packet.sequence))
+
+    // if there are no in-flight packets on our end, we can automatically go to FLUSHCOMPLETE
+    if channel.flushStatus === FLUSHING && pendingInflightPackets(packet.sourcePort, packet.sourceChannel) == nil {
+        channel.flushStatus = FLUSHCOMPLETE
+        provableStore.set(channelPath(packet.sourcePort, packet.sourceChannel), channel)
+    }
 
     // return transparent packet
     return packet
@@ -919,10 +1026,17 @@ function timeoutPacket(
     // delete our commitment
     provableStore.delete(packetCommitmentPath(packet.sourcePort, packet.sourceChannel, packet.sequence))
 
+    // if there are no in-flight packets on our end, we can automatically go to FLUSHCOMPLETE
+    if channel.flushStatus === FLUSHING && pendingInflightPackets(packet.sourcePort, packet.sourceChannel) == nil {
+        channel.flushStatus = FLUSHCOMPLETE
+        provableStore.set(channelPath(packet.sourcePort, packet.sourceChannel), channel)
+    }
+
     // only close on strictly ORDERED channels
     if channel.order === ORDERED {
-      // ordered channel: close the channel
+      // ordered channel: close the channel and reset flushStatus
       channel.state = CLOSED
+      channel.flushStatus = NOTINFLUSH
       provableStore.set(channelPath(packet.sourcePort, packet.sourceChannel), channel)
     }
     // on ORDERED_ALLOW_TIMEOUT, increment NextSequenceAck so that next packet can be acknowledged after this packet timed out.
@@ -1060,13 +1174,10 @@ Not applicable.
 
 Data structures & encoding can be versioned at the connection or channel level. Channel logic is completely agnostic to packet data formats, which can be changed by the modules any way they like at any time.
 
-## Example Implementation
+## Example Implementations
 
-Coming soon.
-
-## Other Implementations
-
-Coming soon.
+- Implementation of ICS 04 in Go can be found in [ibc-go repository](https://github.com/cosmos/ibc-go).
+- Implementation of ICS 04 in Rust can be found in [ibc-rs repository](https://github.com/cosmos/ibc-rs).
 
 ## History
 
@@ -1083,6 +1194,8 @@ Aug 13, 2019 - Various edits
 Aug 25, 2019 - Cleanup
 
 Jan 10, 2022 - Add ORDERED_ALLOW_TIMEOUT channel type and appropriate logic
+
+Mar 28, 2023 - Add `writeChannel` function to write channel end after executing application callback
 
 ## Copyright
 

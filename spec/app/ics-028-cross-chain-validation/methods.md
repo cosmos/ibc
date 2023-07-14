@@ -9,7 +9,6 @@
 - [General Methods](#general-methods)
   - [BeginBlock and EndBlock](#beginblock-and-endblock)
   - [Packet Relay](#packet-relay)
-  - [Utility Methods](#utility-methods)
 - [Sub-protocols](#sub-protocols)
   - [Initialization](#initialization)
   - [Consumer Chain Removal](#consumer-chain-removal)
@@ -56,6 +55,7 @@ function BeginBlock() {
 // implements the AppModule interface
 function EndBlock(): [ValidatorUpdate] {
   EndBlockCIS()
+  EndBlockCCR()
   EndBlockVSU()
 
   // do not return anything to the consensus engine
@@ -70,6 +70,7 @@ function EndBlock(): [ValidatorUpdate] {
   - True. 
 - **Postcondition**
   - `EndBlockCIS()` is invoked (see [[CCV-PCF-EBLOCK-CIS.1]](#ccv-pcf-eblock-cis1), i.e., it contains the `EndBlock()` logic needed for the Consumer Initiated Slashing sub-protocol).
+  - `EndBlockCCR()` is invoked (see [[CCV-PCF-EBLOCK-CCR.1]](#ccv-pcf-eblock-ccr1), i.e., it contains the `EndBlock()` logic needed for the Consumer Chain Removal sub-protocol).
   - `EndBlockVSU()` is invoked (see [[CCV-PCF-EBLOCK-VSU.1]](#ccv-pcf-eblock-vsu1), i.e., it contains the `EndBlock()` logic needed for the Validator Set Update sub-protocol).
 - **Error Condition**
   - None.
@@ -85,6 +86,7 @@ function EndBlock(): [ValidatorUpdate] {
 // CCF: Consumer Chain Function
 // implements the AppModule interface
 function BeginBlock() {
+    BeginBlockInit()
     BeginBlockCCR()
     BeginBlockCIS()
 }
@@ -96,6 +98,7 @@ function BeginBlock() {
 - **Precondition**
   - True. 
 - **Postcondition**
+  - `BeginBlockInit()` is invoked (see [[CCV-CCF-BBLOCK-INIT.1]](#ccv-ccf-bblock-init1), i.e., it contains the `BeginBlock()` logic needed for the Channel Initialization sub-protocol).
   - `BeginBlockCCR()` is invoked (see [[CCV-CCF-BBLOCK-CCR.1]](#ccv-ccf-bblock-ccr1), i.e., it contains the `BeginBlock()` logic needed for the Consumer Chain Removal sub-protocol).
   - `BeginBlockCIS()` is invoked (see [[CCV-CCF-BBLOCK-CIS.1]](#ccv-ccf-bblock-cis1), i.e., it contains the `BeginBlock()` logic needed for the Consumer Initiated Slashing sub-protocol).
 - **Error Condition**
@@ -305,35 +308,6 @@ function onTimeoutPacket(packet Packet) {
 - **Error Condition**
   - None.
 
-### Utility Methods
-[&uparrow; Back to Outline](#outline)
-
-<!-- omit in toc -->
-#### **[CCV-UTIL-CCUBPER.1]**
-```typescript
-// computes the unbonding period on the consumer
-// from the unbonding period on the provider 
-function ComputeConsumerUnbondingPeriod(delta: Duration): Duration {
-  if delta > 7*24*Hour {
-    return delta - 24*Hour // one day less
-  }
-  else if delta >= 24*Hour {
- 		return delta - Hour // one hour less
- 	}
-  return delta
-}
-```
-- **Caller**
-  - Either `CreateConsumerClient` (see [[CCV-PCF-CRCLIENT.1]](#ccv-pcf-crclient1)) or `InitGenesis` (see [[CCV-CCF-INITG.1]](#ccv-ccf-initg1))
-- **Trigger Event**
-  - A new consumer chain is created.
-- **Precondition**
-  - None. 
-- **Postcondition**
-  - None.
-- **Error Condition**
-  - None.
-
 ## Sub-protocols
 
 ### Initialization
@@ -376,100 +350,37 @@ function InitGenesis(state: ProviderGenesisState): [ValidatorUpdate] {
   - For any consumer state in the `ProviderGenesisState`, the channel ID is not valid (cf. the validation function defined in [ICS 4](../../core/ics-004-channel-and-packet-semantics)).
 
 <!-- omit in toc -->
-#### **[CCV-PCF-SPCCPROP.1]**
+#### **[CCV-PCF-HCAPROP.1]**
 ```typescript
 // PCF: Provider Chain Function
 // implements governance proposal Handler 
-function SpawnConsumerChainProposalHandler(p: SpawnConsumerChainProposal) {
-  if currentTimestamp() > p.spawnTime {
-    CreateConsumerClient(p)
-  }
-  else {
-    // store the proposal as a pending spawn proposal
-    pendingSpawnProposals.Append(p)
-  }
+function HandleConsumerAdditionProposal(p: ConsumerAdditionProposal) {
+    // store the proposal as a pending addition proposal
+    pendingConsumerAdditionProposals.Append(p)
 }
 ```
 - **Caller**
   - `EndBlock()` method of Governance module.
 - **Trigger Event**
-  - A governance proposal `SpawnConsumerChainProposal` has passed (i.e., it got the necessary votes).
+  - A governance proposal `ConsumerAdditionProposal` has passed (i.e., it got the necessary votes).
 - **Precondition** 
   - True. 
 - **Postcondition** 
-  - If the spawn time has already passed, `CreateConsumerClient(p)` is invoked, with `p` the `SpawnConsumerChainProposal`. 
-  - Otherwise, the proposal is appended to the list of pending spawn proposals, i.e., `pendingSpawnProposals`.
+  - The proposal is appended to the list of pending addition proposals, i.e., `pendingConsumerAdditionProposals`.
 - **Error Condition**
   - None.
-
-<!-- omit in toc -->
-#### **[CCV-PCF-CRCLIENT.1]**
-```typescript
-// PCF: Provider Chain Function
-// Utility method
-function CreateConsumerClient(p: SpawnConsumerChainProposal) {
-  // check that a client for this chain does not exist
-  if p.chainId IN chainToClient.Keys() {
-    return
-  }
-
-  // create client state
-  clientState = ClientState{
-    chainId: p.chainId,
-    // use the unbonding period on the provider to compute 
-    // the unbonding period on the consumer
-    unbondingPeriod: ComputeConsumerUnbondingPeriod(stakingKeeper.UnbondingTime()),
-    latestHeight: p.initialHeight, // the height when the client was last updated
-  }
-
-  // create consensus state;
-  // the validator set is the same as the validator set 
-  // from own consensus state at current height
-  ownConsensusState = getConsensusState(getCurrentHeight())
-  consensusState = ConsensusState{
-    validatorSet: ownConsensusState.validatorSet,
-  }
-
-  // create consumer chain client and store it
-  clientId = clientKeeper.CreateClient(clientState, consensusState)
-  chainToClient[p.chainId] = clientId
-
-  // store lockUnbondingOnTimeout flag
-  lockUnbondingOnTimeout[p.chainId] = p.lockUnbondingOnTimeout
-}
-```
-- **Caller**
-  - Either `SpawnConsumerChainProposalHandler` (see [CCV-PCF-SPCCPROP.1](#ccv-pcf-spccprop1)) or `BeginBlockInit()` (see [CCV-PCF-BBLOCK-INIT.1](#ccv-pcf-bblock-init1)).
-- **Trigger Event**
-  - A governance proposal `SpawnConsumerChainProposal` `p` has passed (i.e., it got the necessary votes).
-- **Precondition** 
-  - `currentTimestamp() > p.spawnTime`.
-- **Postcondition** 
-  - If a client for `p.chainId` already exists, the state is not changed.
-  - Otherwise, 
-    - a client state is created with `chainId = p.chainId` and `unbondingPeriod` set to `ComputeConsumerUnbondingPeriod(stakingKeeper.UnbondingTime())`;
-    - a consensus state is created with `validatorSet` set to the validator set the provider chain own consensus state at current height;
-    - a client of the consumer chain is created and the client ID is added to `chainToClient`;
-    - `lockUnbondingOnTimeout[p.chainId]` is set to `p.lockUnbondingOnTimeout`.
-- **Error Condition**
-  - None.
-
-> **Note:** Creating a client of a remote chain requires a `ClientState` and a `ConsensusState` (for an example, take a look at [ICS 7](../../client/ics-007-tendermint-client)).
-> `ConsensusState` requires setting a validator set of the remote chain. 
-> The provider chain uses the fact that the validator set of the consumer chain is the same as its own validator set. 
-> The rest of information to create a `ClientState` it receives through the governance proposal.
 
 <!-- omit in toc -->
 #### **[CCV-PCF-BBLOCK-INIT.1]**
 ```typescript
 // PCF: Provider Chain Function
 function BeginBlockInit() {
-  // iterate over the pending spawn proposals and create 
+  // iterate over the pending addition proposals and create 
   // the consumer client if the spawn time has passed
-  foreach p IN pendingSpawnProposals {
+  foreach p IN pendingConsumerAdditionProposals {
     if currentTimestamp() > p.spawnTime {
       CreateConsumerClient(p)
-      pendingSpawnProposals.Remove(p)
+      pendingConsumerAdditionProposals.Remove(p)
     }
   }
 }
@@ -481,12 +392,144 @@ function BeginBlockInit() {
 - **Precondition**
   - True. 
 - **Postcondition**
-  - For each `SpawnConsumerChainProposal` `p` in the list of pending spawn proposals `pendingSpawnProposals`, if `currentTimestamp() > p.spawnTime`, then
+  - For each `ConsumerAdditionProposal` `p` in the list of pending addition proposals `pendingConsumerAdditionProposals`, if `currentTimestamp() > p.spawnTime`, then
     - `CreateConsumerClient(p)` is invoked;
-    - `p` is removed from `pendingSpawnProposals`.
+    - `p` is removed from `pendingConsumerAdditionProposals`.
 - **Error Condition**
   - None.
-  
+
+<!-- omit in toc -->
+#### **[CCV-PCF-CRCLIENT.1]**
+```typescript
+// PCF: Provider Chain Function
+// Utility method
+function CreateConsumerClient(p: ConsumerAdditionProposal) {
+  // check that no other consumer chain with the same chain ID exists
+  if p.chainId IN chainToClient.Keys() {
+    // ignore governance proposal
+    return
+  }
+
+  // set consumer chain initial validator set, i.e.,
+  // the validator set is the same as the validator set 
+  // from own consensus state at current height
+  // 
+  // TODO: ownConsensusState.validatorSet VS consensusState.nextValidatorsHash
+  //       specify which validator set is used as the initial val set
+  ownConsensusState = getConsensusState(getCurrentHeight())
+  initialValSet = ownConsensusState.validatorSet
+
+  if p.connId != "" { // connection ID provided
+    // check validity
+    connectionEnd = provableStore.get("connections/{p.connId}")
+    if connectionEnd == nil {
+      // invalid proposal: cannot find connection
+      return
+    }
+    clientState = provableStore.get("clients/{connectionEnd.clientIdentifier}/clientState")
+    if clientState.chainID != p.chainId {
+      // invalid proposal: connection not to expected chain ID
+      return
+    }
+
+    // store client ID
+    chainToClient[p.chainId] = connectionEnd.clientIdentifier
+    // store connection ID
+    chainToConnection[p.chainId] = connId
+
+    // create and store ConsumerGenesisState
+    consumerGenesisState[p.chainId] = ConsumerGenesisState {
+      // consumer chain MUST start in pre-CCV state, i.e.,
+      // the consumer CCV module MUST NOT pass validator updates
+      // to the underlying consensus engine
+      preCCV: true,
+      unbondingPeriod: p.unbondingPeriod,
+      connId: connectionEnd.counterpartyConnectionIdentifier,
+      providerClientState: nil,
+      providerConsensusState: nil,
+      counterpartyClientId: "",
+      initialValSet: initialValSet,
+      transferChannelId: p.transferChannelId,
+    }
+  } 
+  else {
+    // create client state
+    clientState = ClientState{
+      chainId: p.chainId,
+      unbondingPeriod: p.unbondingPeriod,
+      // the height when the client was last updated is set to the first possible height; 
+      // for example, in the case of a Tendermint Client, this is Height{0, 1} (see ICS-7)
+      latestHeight: 0, 
+    }
+    // create consensus state
+    consensusState = ConsensusState{
+      validatorSet: initialValSet,
+    }
+    // create consumer chain client and store it
+    clientId = clientKeeper.CreateClient(clientState, consensusState)
+    chainToClient[p.chainId] = clientId
+    
+    // create and store ConsumerGenesisState
+    consumerGenesisState[p.chainId] = ConsumerGenesisState {
+      // consumer chain MUST NOT start in pre-CCV state, i.e.,
+      // the consumer CCV module MUST pass validator updates
+      // to the underlying consensus engine
+      preCCV: false,
+      unbondingPeriod: p.unbondingPeriod,
+      connId: "",
+      providerClientState: getHostClientState(getCurrentHeight()),
+      providerConsensusState: ownConsensusState,
+      counterpartyClientId: clientId,
+      initialValSet: initialValSet,
+      transferChannelId: p.transferChannelId,
+    }
+  }
+
+  // store lockUnbondingOnTimeout flag
+  lockUnbondingOnTimeout[p.chainId] = p.lockUnbondingOnTimeout
+
+  // add init timeout timestamp for this consumer chain
+  initTimeoutTimestamps[p.chainId] = currentTimestamp().Add(initTimeout)
+}
+```
+- **Caller**
+  - Either `HandleConsumerAdditionProposal` (see [CCV-PCF-HCAPROP.1](#ccv-pcf-hcaprop1)) or `BeginBlockInit()` (see [CCV-PCF-BBLOCK-INIT.1](#ccv-pcf-bblock-init1)).
+- **Trigger Event**
+  - A governance proposal `ConsumerAdditionProposal` `p` has passed (i.e., it got the necessary votes).
+- **Precondition** 
+  - `currentTimestamp() > p.spawnTime`.
+- **Postcondition** 
+  - If a client for `p.chainId` already exists, the state is not changed.
+  - Otherwise, 
+    - the validator set of the provider chain own consensus state at current height is set as the initial validator set of the consumer chain;
+    - if `p.connId` is set, then
+      - if a connection end with ID `p.connId` cannot be found, the state is not changed;
+      - otherwise, 
+        - if the connection with ID `p.connId` is not to the chain with ID `p.chainId`, the state is not changed;
+        - otherwise, 
+          - both the client ID and connection ID are stored;
+          - a `ConsumerGenesisState` is created and stored;
+    - otherwise,
+      - otherwise, 
+        - a client state is created with `chainId = p.chainId` and `unbondingPeriod = p.unbondingPeriod`;
+        - a consensus state is created with `validatorSet` set to the initial validator set of the consumer chain;
+        - a client of the consumer chain is created and the client ID is stored;
+        - a `ConsumerGenesisState` is created and stored;
+    - `lockUnbondingOnTimeout[p.chainId]` is set to `p.lockUnbondingOnTimeout`.
+    - The init timeout timestamp is computed and stored in `initTimeoutTimestamps[p.chainId]`.
+- **Error Condition**
+  - None.
+
+> **Note:** For the case when the `clientId` field of the `ConsumerAdditionProposal` is not set, creating a client of a remote chain requires a `ClientState` and a `ConsensusState` (for an example, take a look at [ICS 7](../../client/ics-007-tendermint-client)).
+> `ConsensusState` requires setting a validator set of the remote chain. 
+> The provider chain uses the fact that the validator set of the consumer chain is the same as its own validator set. 
+
+> **Note:** Bootstrapping the consumer CCV module requires a `ConsumerGenesisState` (see the [CCV Data Structures](./data_structures.md#ccv-data-structures) section). The provider CCV module creates such a `ConsumerGenesisState` when handling a governance proposal `ConsumerAdditionProposal`.
+
+> **Note:** If the channel initialization for a consumer chain exceeds the `initTimeout` period, then the provider chain removes that consumer. 
+> As a result, all further attempts on the consumer side to established the CCV channel will fail. 
+> This means that the consumer chain requires some sort of social consensus to either restart the process of becoming a consumer chain or transitioning back to a sovereign chain. 
+ 
 <!-- omit in toc -->
 #### **[CCV-PCF-COINIT.1]**
 ```typescript
@@ -541,14 +584,21 @@ function onChanOpenTry(
     // assert that the counterpartyVersion matches the expected version
     abortTransactionUnless(counterpartyVersion == ccvVersion)
     
-    // get the client state associated with this client ID in order 
-    // to get access to the consumer chain ID
-    clientId = getClient(channelIdentifier)
-    clientState = clientKeeper.GetClientState(clientId)
+    // get the client state associated with the underlying client
+    channelEnd = provableStore.get("channelEnds/ports/{portIdentifier}/channels/{channelIdentifier}")
+    abortTransactionUnless(channelEnd != nil AND len(channelEnd.connectionHops) == 1)
+    connId = channelEnd.connectionHops[0]
+    connectionEnd = provableStore.get("connections/{connId}")
+    clientState = provableStore.get("clients/{connectionEnd.clientIdentifier}/clientState")
+
+    if clientState.chainId IN chainToConnection.Keys() {
+      // if a connection is stored for this consumer chain, 
+      // verify that the underlying connection is the expected one
+      abortTransactionUnless(chainToConnection[clientState.chainId] == connId)
+    }
     
-    // require the CCV channel to be built on top 
-    // of the expected client of the consumer chain
-    abortTransactionUnless(chainToClient[clientState.chainId] == clientId)
+    // verify that the underlying client is the expected client of the consumer chain
+    abortTransactionUnless(chainToClient[clientState.chainId] == connectionEnd.clientIdentifier)
 
     // require that no other CCV channel exists for this consumer chain
     abortTransactionUnless(clientState.chainId NOTIN chainToChannel.Keys())
@@ -571,6 +621,9 @@ function onChanOpenTry(
     - `portIdentifier != ProviderPortId`;
     - `counterpartyPortIdentifier != ConsumerPortId`;
     - `counterpartyVersion != ccvVersion`;
+    - no channel with `portIdentifier` and `channelIdentifier` exists;
+    - the channel has more than one connection hop;
+    - a connection is stored for this consumer chain and doesn't match the underlying connection of this channel;
     - the channel is not built on top of the client created for this consumer chain;
     - another CCV channel for this consumer chain already exists.
   - A `CCVHandshakeMetadata` is returned, with `providerDistributionAccount` set to the the address of the distribution module account on the provider chain and `version` set to `ccvVersion`.
@@ -610,23 +663,26 @@ function onChanOpenAck(
 function onChanOpenConfirm(
   portIdentifier: Identifier,
   channelIdentifier: Identifier) {
-    // get the client state associated with this client ID in order 
-    // to get access to the consumer chain ID
-    clientId = getClient(channelIdentifier)
-    clientState = clientKeeper.GetClientState(clientId)
+    // get the client state associated with the underlying client
+    channelEnd = provableStore.get("channelEnds/ports/{portIdentifier}/channels/{channelIdentifier}")
+    abortTransactionUnless(channelEnd != nil AND len(channelEnd.connectionHops) == 1)
+    connId = channelEnd.connectionHops[0]
+    connectionEnd = provableStore.get("connections/{connId}")
+    clientState = provableStore.get("clients/{connectionEnd.clientIdentifier}/clientState")
 
-    // Verify that there isn't already a CCV channel for the consumer chain
-    // If there is, then close the channel.
-    if clientState.chainId IN chainToChannel {
-      channelKeeper.ChanCloseInit(channelIdentifier)
-      abortTransactionUnless(FALSE)
-    }
+    // require that no other CCV channel exists for this consumer chain;
+    // note: this is a sanity check; this check should always pass by construction
+    abortTransactionUnless(clientState.chainId NOTIN chainToChannel.Keys())
 
     // set channel mappings
+    chainToConnection[clientState.chainId] = connId
     chainToChannel[clientState.chainId] = channelIdentifier
     channelToChain[channelIdentifier] = clientState.chainId
     // set initialHeights for this consumer chain
     initialHeights[chainId] = getCurrentHeight()
+   
+   // remove init timeout timestamp
+   initTimeoutTimestamps.Remove(clientState.chainId)
 }
 ```
 - **Caller**
@@ -636,12 +692,14 @@ function onChanOpenConfirm(
 - **Precondition** 
   - True.
 - **Postcondition**
-  - If a CCV channel for this consumer chain already exists, then 
-    - the channel closing handshake is initiated for the underlying channel;
-    - the transaction is aborted.
-  - Otherwise, 
-    - the channel mappings are set, i.e., `chainToChannel` and `channelToChain`;
-    - `initialHeights[chainId]` is set to the current height.
+  - The transaction is aborted if any of the following conditions are true:
+    - no channel with `portIdentifier` and `channelIdentifier` exists;
+    - the channel has more than one connection hop;
+    - another CCV channel for this consumer chain already exists.
+  - The connection mapping is set, i.e., `chainToConnection`.
+  - The channel mappings are set, i.e., `chainToChannel` and `channelToChain`.
+  - `initialHeights[chainId]` is set to the current height.
+  - The init timeout timestamp for the consumer chain with ID `clientState.chainId` is removed.
 - **Error Condition**
   - None.
 
@@ -654,40 +712,95 @@ function onChanOpenConfirm(
 // implements the AppModule interface
 function InitGenesis(gs: ConsumerGenesisState): [ValidatorUpdate] {
   // ValidateGenesis
-  // - contains a valid providerClientState  
-  abortSystemUnless(gs.providerClientState != nil AND gs.providerClientState.Valid())
-  // - contains a valid providerConsensusState
-  abortSystemUnless(gs.providerConsensusState != nil AND gs.providerConsensusState.Valid())
   // - contains a non-empty initial validator set
   abortSystemUnless(gs.initialValSet NOT empty)
-  // - contains an initial validator set that matches 
-  //   the validator set in the providerConsensusState (e.g., ICS 7)
-  abortSystemUnless(gs.initialValSet == gs.providerConsensusState.validatorSet)
+  if gs.preCCV {
+    // - contains a valid connId
+    connectionEnd = provableStore.get("connections/{gs.connId}")
+    abortSystemUnless(connectionEnd != nil)
+  }
+  else {
+    // - contains a valid providerClientState  
+    abortSystemUnless(gs.providerClientState != nil AND gs.providerClientState.Valid())
+    // - contains a valid providerConsensusState
+    abortSystemUnless(gs.providerConsensusState != nil AND gs.providerConsensusState.Valid())
+    // - contains an initial validator set that matches 
+    //   the validator set in the providerConsensusState (e.g., ICS 7)
+    abortSystemUnless(gs.initialValSet == gs.providerConsensusState.validatorSet)
+  }
+  if gs.transferChannelId != "" {
+      // - if transferChannelId is provided, it must the ID
+      //   of a channel connected to the "transfer" port
+      channelEnd = provableStore.get("channelEnds/ports/transfer/channels/{gs.transferChannelId}")
+      abortSystemUnless(channelEnd != nil)
+  }
 
   // bind to ConsumerPortId port 
   err = portKeeper.bindPort(ConsumerPortId)
   // check whether the capability for the port can be claimed
   abortSystemUnless(err == nil)
 
-  // create client of the provider chain 
-  clientId = clientKeeper.CreateClient(gs.providerClientState, gs.providerConsensusState)
+  // set pre-CCV state
+  preCCV = gs.preCCV
 
-  // store the ID of the client of the provider chain
-  providerClient = clientId
+  if preCCV {
+    // start consumer chain in pre-CCV state;
+    // store the ID of the client of the provider chain
+    providerClientId = connectionEnd.clientIdentifier
+  }
+  else {
+    // start consumer chain in normal CCV state;
+    // create client of the provider chain and store the ID
+    providerClientId = clientKeeper.CreateClient(gs.providerClientState, gs.providerConsensusState)
+  }
 
-  // compute (and store) the consumer unbonding period from the provider unbonding period
-  consumerUnbondingPeriod = ComputeConsumerUnbondingPeriod(gs.providerClientState.unbondingTime)
+  // set the consumer unbonding period
+  ConsumerUnbondingPeriod = gs.unbondingTime
 
   // set default value for HtoVSC
   HtoVSC[getCurrentHeight()] = 0
 
   // set the initial validator set for the consumer chain
   foreach val IN gs.initialValSet {
-    ccVal := CrossChainValidator{
-      address: hash(val.pubKey),
-      power: val.power
+    ccvValidatorSet[hash(val.pubKey)] = val
+  }
+
+  // set distribution channel ID
+  distributionChannelId = gs.transferChannelId
+
+  // initiate handshake 
+  if preCCV {
+    // initiate CCV channel opening handshake
+    // i.e., use handleChanOpenInit as defined in ICS-26
+    datagram = ChanOpenInit{
+      order: ORDERED,
+      connectionHops: [gs.connId],
+      portIdentifier: ConsumerPortId,
+      counterpartyPortIdentifier: ProviderPortId,
+      version: ccvVersion,
     }
-    validatorSet[ccVal.address] = ccVal
+    handleChanOpenInit(datagram)
+  }
+  else {
+    // initiate connection opening handshake
+    // i.e., use handleConnOpenInit as defined in ICS-26
+    datagram = ConnOpenInit{
+      clientIdentifier: providerClientId,
+      counterpartyClientIdentifier: gs.counterpartyClientId,
+      version: "ccv"
+    }
+    connId = handleConnOpenInit(datagram)
+
+    // initiate CCV channel opening handshake
+    // i.e., use handleChanOpenInit as defined in ICS-26
+    datagram = ChanOpenInit{
+      order: ORDERED,
+      connectionHops: [connId],
+      portIdentifier: ConsumerPortId,
+      counterpartyPortIdentifier: ProviderPortId,
+      version: ccvVersion,
+    }
+    handleChanOpenInit(datagram)
   }
 
   return gs.initialValSet
@@ -701,16 +814,24 @@ function InitGenesis(gs: ConsumerGenesisState): [ValidatorUpdate] {
   - The consumer CCV module is in the initial state.  
 - **Postcondition**
   - The capability for the port `ConsumerPortId` is claimed.
-  - A client of the provider chain is created and the client ID is stored into `providerClient`.
-  - `consumerUnbondingPeriod` is set to `ComputeConsumerUnbondingPeriod(gs.providerClientState.unbondingTime)`.
+  - `preCCV` is set to `gs.preCCV`.
+  - If `preCCV == true`, the ID of the client on which the connection with `gs.connId` is built is stored into `providerClientId`.
+  - Otherwise, a client of the provider chain is created and the client ID is stored into `providerClientId`.
+  - `ConsumerUnbondingPeriod` is set to `gs.unbondingPeriod`.
   - `HtoVSC` for the current block is set to `0`.
-  - The `validatorSet` mapping is populated with the initial validator set.
+  - The `ccvValidatorSet` mapping is populated with the initial validator set.
+  - The ID of the distribution token transfer channel is set to `gs.transferChannelId`.
+  - If `preCCV == true`, the CCV channel opening handshake is initialized.
+  - Otherwise, the connection opening handshake is initialized.
   - The initial validator set is returned to the consensus engine.
 - **Error Condition**
-  - The genesis state contains no valid provider client state, where the validity is defined in the corresponding client specification (e.g., [ICS 7](../../client/ics-007-tendermint-client)).
-  - The genesis state contains no valid provider consensus state, where the validity is defined in the corresponding client specification (e.g., [ICS 7](../../client/ics-007-tendermint-client))..
   - The genesis state contains an empty initial validator set.
-  - The genesis state contains an initial validator set that does not match the validator set in the provider consensus state.
+  - If the genesis state `preCCV` field is set to `true`, then the genesis state contains no valid connection ID.
+  - Otherwise,  
+    - the genesis state contains no valid provider client state, where the validity is defined in the corresponding client specification (e.g., [ICS 7](../../client/ics-007-tendermint-client);
+    - the genesis state contains no valid provider consensus state, where the validity is defined in the corresponding client specification (e.g., [ICS 7](../../client/ics-007-tendermint-client));
+    - the genesis state contains an initial validator set that does not match the validator set in the provider consensus state;
+  - The genesis state contains an invalid distribution channel ID.
   - The capability for the port `ConsumerPortId` cannot be claimed.
 
 > **Note**: CCV assumes that all the correct validators in the initial validator set of the consumer chain receive the _same_ consumer chain binary and consumer chain genesis state. 
@@ -746,8 +867,11 @@ function onChanOpenInit(
    
     // require that the client ID of the client associated 
     // with this channel matches the expected provider client id
-    clientId = getClient(channelIdentifier)   
-    abortTransactionUnless(providerClient != clientId)
+    channelEnd = provableStore.get("channelEnds/ports/{portIdentifier}/channels/{channelIdentifier}")
+    abortTransactionUnless(channelEnd != nil AND len(channelEnd.connectionHops) == 1)
+    connId = channelEnd.connectionHops[0]
+    connectionEnd = provableStore.get("connections/{connId}")
+    abortTransactionUnless(providerClientId != connectionEnd.clientIdentifier)
 
     return ccvVersion
 }
@@ -819,16 +943,33 @@ function onChanOpenAck(
     // set the address of the distribution module account on the provider chain
     providerDistributionAccount = md.providerDistributionAccount
 
-    // initiate opening handshake for the distribution token transfer channel
-    // over the same connection as the CCV channel
-    // i.e., ChanOpenInit (as required by ICS20)
-    distributionChannelId = channelKeeper.ChanOpenInit(
-      UNORDERED, // order
-      channelKeeper.GetConnectionHops(channelIdentifier), // connectionHops: same as the CCV channel
-      "transfer", // portIdentifier
-      "transfer", // counterpartyPortIdentifier
-      "ics20-1" // version
-    )
+    if distributionChannelId == "" {
+      // initiate opening handshake for the distribution token transfer channel
+      // over the same connection as the CCV channel
+      // i.e., use handleChanOpenInit as defined in ICS-26
+      datagram = ChanOpenInit{
+          order: UNORDERED,
+          connectionHops: channelKeeper.GetConnectionHops(channelIdentifier), // same as the CCV channel
+          portIdentifier: "transfer",
+          counterpartyPortIdentifier: "transfer",
+          version: "ics20-1",
+      }
+      distributionChannelId = handleChanOpenInit(datagram)
+    }
+
+    // set the channel as the provider channel
+    providerChannel = channelIdentifier
+
+    // send pending slash requests;
+    // note: this can happen only if preCCV == false, as the ABCI application 
+    // can invoke SendSlashRequest only once the chain is upgraded to 
+    // a consumer chain, see BeginBlockInit below
+    SendPendingSlashRequests()
+
+    if preCCV {
+      // replace valset with initial valset
+      stakingKeeper.ReplaceValset(ccvValidatorSet.Values()) 
+    }
 }
 ```
 - **Caller**
@@ -843,11 +984,13 @@ function onChanOpenAck(
     - `providerChannel` is already set;
     - `md.version != ccvVersion`.
   - The address of the distribution module account on the provider chain is set to `md.providerDistributionAccount`.
-  - The distribution token transfer channel opening handshake is initiated and `distributionChannelId` is set to the resulting channel ID.
+  - If `distributionChannelId` is not set, the distribution token transfer channel opening handshake is initiated and `distributionChannelId` is set to the resulting channel ID.
+  - The CCV channel is marked as established, i.e., `providerChannel` is set to this channel.
+  - The pending slash requests are sent to the provider chain (see [[CCV-CCF-SNDPESLASH.1]](#ccv-ccf-sndpeslash1)).
+    Note that this can happen only if `preCCV == false`, as the ABCI application can invoke `SendSlashRequest` only once the chain is upgraded to a consumer chain (see [[CCV-CCF-BBLOCK-INIT.1]](#ccv-ccf-bblock-init1)).
+  - If `preCCV == true`, the valset in the staking module is replaced with the `ccvValidatorSet`, i.e., the initial validator set.
 - **Error Condition**
   - None.
-
-> **Note:** The initialization sub-protocol on the consumer chain finalizes on receiving the first `VSCPacket` and setting `providerChannel` to the ID of the channel on which it receives the packet (see `onRecvVSCPacket` method).
 
 <!-- omit in toc -->
 #### **[CCV-CCF-COCONFIRM.1]**
@@ -872,34 +1015,88 @@ function onChanOpenConfirm(
 - **Error Condition**
   - None.
 
+<!-- omit in toc -->
+#### **[CCV-CCF-BBLOCK-INIT.1]**
+```typescript
+// CCF: Consumer Chain Function
+function BeginBlockInit() {
+  if preCCV {  
+    ownConsensusState = getConsensusState(getCurrentHeight())
+    if ownConsensusState.validatorSet == ccvValidatorSet.Values() {
+      // pre-CCV state is over; upgrade chain to consumer chain
+      //  - set preCCV to false
+      //  - the existing staking module no longer provides 
+      //    validator updates to the underlying consensus engine
+      //  - the CCV module starts providing validator updates 
+      //    to the underlying consensus engine
+      //  - for safety, the existing staking module must be kept 
+      //    for at least the unbonding period
+    }
+  }
+}
+```
+- **Caller**
+  - The `BeginBlock()` method.
+- **Trigger Event**
+  - A `BeginBlock` message is received from the consensus engine; `BeginBlock` messages are sent once per block.
+- **Precondition**
+  - True. 
+- **Postcondition**
+  - If `preCCV == true` and the current validator set matches the `ccvValidatorSet` (i.e., the initial validator set), then the chain MUST be upgraded to a full consumer chain.
+  The upgrade mechanism is outside the scope of this specification. 
+- **Error Condition**
+  - None.
+
 ### Consumer Chain Removal
 [&uparrow; Back to Outline](#outline)
 
 <!-- omit in toc -->
-#### **[CCV-PCF-STCCPROP.1]**
+#### **[CCV-PCF-HCRPROP.1]**
 ```typescript
 // PCF: Provider Chain Function
 // implements governance proposal Handler 
-function StopConsumerChainProposalHandler(p: StopConsumerChainProposal) {
-  if currentTimestamp() >= p.stopTime {
-    // stop the consumer chain and do not lock the unbonding
-    StopConsumerChain(p.chainId, false)
-  }
-  else {
-    // store the proposal as a pending stop proposal
-    pendingStopProposals.Append(p)
-  }
+function HandleConsumerRemovalProposal(p: ConsumerRemovalProposal) {
+    // store the proposal as a pending removal proposal
+    pendingConsumerRemovalProposals.Append(p)
 }
 ```
 - **Caller**
   - `EndBlock()` method of Governance module.
 - **Trigger Event**
-  - A governance proposal `StopConsumerChainProposal` has passed (i.e., it got the necessary votes).
+  - A governance proposal `ConsumerRemovalProposal` has passed (i.e., it got the necessary votes).
 - **Precondition** 
   - True. 
 - **Postcondition** 
-  - If the spawn time has already passed, `StopConsumerChain(p.chainId, false)` is invoked, with `p` the `StopConsumerChainProposal`. 
-  - Otherwise, the proposal is appended to the list of pending stop proposals, i.e., `pendingStopProposals`.
+  - The proposal is appended to the list of pending removal proposals, i.e., `pendingConsumerRemovalProposals`.
+- **Error Condition**
+  - None.
+
+<!-- omit in toc -->
+#### **[CCV-PCF-BBLOCK-CCR.1]**
+```typescript
+// PCF: Provider Chain Function
+function BeginBlockCCR() {
+  // iterate over the pending removal proposals 
+  // and stop the consumer chain
+  foreach p IN pendingConsumerRemovalProposals {
+    if currentTimestamp() > p.stopTime {
+      // stop the consumer chain and do not lock the unbonding
+      StopConsumerChain(p.chainId, false)
+      pendingConsumerRemovalProposals.Remove(p)
+    }
+  }
+}
+```
+- **Caller**
+  - The `BeginBlock()` method.
+- **Trigger Event**
+  - A `BeginBlock` message is received from the consensus engine; `BeginBlock` messages are sent once per block.
+- **Precondition**
+  - True. 
+- **Postcondition**
+  - For each `ConsumerRemovalProposal` `p` in the list of pending removal proposals `pendingConsumerRemovalProposals`, if `currentTimestamp() > p.stopTime`, then
+    - `StopConsumerChain(p.chainId, false)` is invoked;
+    - `p` is removed from `pendingConsumerRemovalProposals`.
 - **Error Condition**
   - None.
 
@@ -925,6 +1122,8 @@ function StopConsumerChain(chainId: string, lockUnbonding: Bool) {
   pendingVSCPackets.Remove(chainId)
   initialHeights.Remove(chainId)
   downtimeSlashRequests.Remove(chainId)
+  initTimeoutTimestamps.Remove(chainId)
+  vscSendTimestamps.Remove((chainId, *))
 
   if !lockUnbonding {
     // remove chainId form all outstanding unbonding operations
@@ -932,8 +1131,8 @@ function StopConsumerChain(chainId: string, lockUnbonding: Bool) {
       unbondingOps[id].unbondingChainIds.Remove(chainId)
       // if the unbonding operation has unbonded on all consumer chains
       if unbondingOps[id].unbondingChainIds.IsEmpty() {
-        // notify the Staking module that the unbonding can complete
-        stakingKeeper.UnbondingCanComplete(id)
+        // append the id of the unbonding to maturedUnbondingOps
+        maturedUnbondingOps.Append(id)
         // remove unbonding operation
         unbondingOps.Remove(id)
       }
@@ -944,11 +1143,15 @@ function StopConsumerChain(chainId: string, lockUnbonding: Bool) {
 }
 ```
 - **Caller**
-  - `StopConsumerChainProposalHandler` (see [CCV-PCF-STCCPROP.1](#ccv-pcf-stccprop1)) 
+  - `HandleConsumerRemovalProposal` (see [CCV-PCF-HCRPROP.1](#ccv-pcf-hcrprop1)) 
     or `BeginBlockCCR()` (see [CCV-PCF-BBLOCK-CCR.1](#ccv-pcf-bblock-ccr1)) 
-    or `onTimeoutVSCPacket()` (see [CCV-PCF-TOVSC.1](#ccv-pcf-tovsc1)).
+    or `onTimeoutVSCPacket()` (see [CCV-PCF-TOVSC.1](#ccv-pcf-tovsc1))
+    or `EndBlockCCR()` (see [CCV-PCF-EBLOCK-CCR.1](#ccv-pcf-eblock-ccr1)).
 - **Trigger Event**
-  - Either a governance proposal to stop the consumer chain with `chainId` has passed (i.e., it got the necessary votes) or a packet sent on the CCV channel to the consumer chain with `chainId` has timed out.
+  - One of the following events:
+    - a governance proposal to stop the consumer chain with `chainId` has passed (i.e., it got the necessary votes);
+    - a `VSCPacket` sent on the CCV channel to the consumer chain with `chainId` has timed out;
+    - the channel initialization has timed out. 
 - **Precondition**
   - True.
 - **Postcondition**
@@ -966,13 +1169,13 @@ function StopConsumerChain(chainId: string, lockUnbonding: Bool) {
     - if `lockUnbonding == false`, then 
       - `chainId` is removed from all outstanding unbonding operations;
       -  if an outstanding unbonding operation has matured on all consumer chains, 
-        - the `UnbondingCanComplete()` method of the Staking module is invoked;
-        - the unbonding operation is removed from `unbondingOps`;
+        - the matured unbonding operation is added to `maturedUnbondingOps`;
+        - the matured unbonding operation is removed from `unbondingOps`;
       - all the entries with `chainId` are removed from the `vscToUnbondingOps` mapping.
 - **Error Condition**
   - None
 
-> **Note**: Invoking `StopConsumerChain(chainId, lockUnbonding)` with `lockUnbonding == FALSE` entails that all outstanding unbonding operations can complete before `consumerUnbondingPeriod` elapses on the consumer chain with `chainId`. 
+> **Note**: Invoking `StopConsumerChain(chainId, lockUnbonding)` with `lockUnbonding == FALSE` entails that all outstanding unbonding operations can complete before `ConsumerUnbondingPeriod` elapses on the consumer chain with `chainId`. 
 > Thus, invoking `StopConsumerChain(chainId, false)` for any `chainId` MAY violate the *Bond-Based Consumer Voting Power* and *Slashable Consumer Misbehavior* properties (see the [System Properties](./system_model_and_properties.md#system-properties) section). 
 > 
 > `StopConsumerChain(chainId, false)` is invoked in two scenarios (see Trigger Event above).
@@ -982,34 +1185,50 @@ function StopConsumerChain(chainId: string, lockUnbonding: Bool) {
 > - The second scenario (i.e., a timeout) is only possible if the *Correct Relayer* assumption is violated (see the [Assumptions](./system_model_and_properties.md#assumptions) section), 
 > which is necessary to guarantee both the *Bond-Based Consumer Voting Power* and *Slashable Consumer Misbehavior* properties (see the [Assumptions](./system_model_and_properties.md#correctness-reasoning) section).
 
+
 <!-- omit in toc -->
-#### **[CCV-PCF-BBLOCK-CCR.1]**
+#### **[CCV-PCF-EBLOCK-CCR.1]**
 ```typescript
 // PCF: Provider Chain Function
-function BeginBlockCCR() {
-  // iterate over the pending stop proposals 
-  // and stop the consumer chain
-  foreach p IN pendingStopProposals {
-    if currentTimestamp() > p.stopTime {
-      // stop the consumer chain and do not lock the unbonding
-      StopConsumerChain(p.chainId, false)
-      pendingStopProposals.Remove(p)
+function EndBlockCCR() {
+  // iterate over vscSendTimestamps
+  for (chainId, vscId) IN vscSendTimestamps.Keys() {
+    // check get first timestamp, i.e., the smallest
+    if currentTimestamp() > vscSendTimestamps[(chainId, vscId)] + vscTimeout {
+      // vscTimeout expired: 
+      // stop the consumer chain and use lockUnbondingOnTimeout 
+      // to decide whether to lock the unbonding
+      StopConsumerChain(chainId, lockUnbondingOnTimeout[chainId])
+    }
+  }
+
+  // iterate over initTimeoutTimestamps
+  for chainId IN initTimeoutTimestamps.Keys() {
+    if currentTimestamp() > initTimeoutTimestamps[chainId] {
+      // initTimeout expired:
+      // stop the consumer chain and unlock the unbonding 
+      StopConsumerChain(chainId, false)
     }
   }
 }
 ```
 - **Caller**
-  - The `BeginBlock()` method.
+  - The `EndBlock()` method.
 - **Trigger Event**
-  - A `BeginBlock` message is received from the consensus engine; `BeginBlock` messages are sent once per block.
+  - An `EndBlock` message is received from the consensus engine; `EndBlock` messages are sent once per block.
 - **Precondition**
   - True. 
 - **Postcondition**
-  - For each `StopConsumerChainProposal` `p` in the list of pending spawn proposals `pendingStopProposals`, if `currentTimestamp() > p.stopTime`, then
-    - `StopConsumerChain(p.chainId, false)` is invoked;
-    - `p` is removed from `pendingStopProposals`.
+  - For each consumer chain ID `chainId` in `vscSendTimestamps.Keys()`,
+    - if `vscSendTimestamps[(chainId, vscId)] + vscTimeout` is smaller than the current timestamp, then the consumer chain with ID `chainId` is stopped.
+  - For each consumer chain ID `chainId` in `initTimeoutTimestamps.Keys()`,
+    - if the timestamp in `initTimeoutTimestamps[chainId]` is smaller than the current timestamp, then the consumer chain with ID `chainId` is stopped.
 - **Error Condition**
   - None.
+
+> **Note**: To avoid false positives where a consumer chain is unnecessarily removed, 
+> `vscTimeout` MUST be larger than `consumerUnbondingPeriod` and 
+> SHOULD account for the time needed to relay the `VSCPacket` to the consumer and the corresponding `VSCMaturedPacket` back to the provider.
 
 <!-- omit in toc -->
 #### **[CCV-PCF-CCINIT.1]**
@@ -1064,16 +1283,15 @@ function onChanCloseConfirm(
 // CCF: Consumer Chain Function
 function BeginBlockCCR() {
   if providerChannel != "" AND channelKeeper.GetChannelState(providerChannel) == CLOSED {
-      // the CCV channel was established, but it was then closed; 
-      // the consumer chain is no longer safe
+    // the CCV channel was established, but it was then closed; 
+    // the consumer chain is no longer safe
 
-      // cleanup state, e.g., 
-      // providerChannel = ""
+    // cleanup state, e.g., 
+    // providerChannel = ""
 
-      // shut down consumer chain
-      abortSystemUnless(FALSE)
-    } 
-  }
+    // shut down consumer chain
+    abortSystemUnless(FALSE)
+  } 
 }
 ```
 - **Caller**
@@ -1154,11 +1372,17 @@ The *validator set update* sub-protocol enables the provider chain
 ```typescript
 // PCF: Provider Chain Function
 function EndBlockVSU() {
+  // notify the Staking module to complete all matured unbondings
+  for id IN maturedUnbondingOps {
+    stakingKeeper.UnbondingCanComplete(id)
+  }
+  maturedUnbondingOps.RemoveAll()
+
   // get list of validator updates from the provider Staking module
   valUpdates = stakingKeeper.GetValidatorUpdates()
 
   // iterate over all consumer chains registered with this provider chain
-  foreach chainId in chainToClient.Keys() {
+  foreach chainId IN chainToClient.Keys() {
     // check whether there are changes in the validator set;
     // note that this also entails unbonding operations 
     // w/o changes in the voting power of the validators in the validator set
@@ -1190,6 +1414,8 @@ function EndBlockVSU() {
           ccvTimeoutTimestamp,
           data
         )
+        // add VSC send timestamp to vscSendTimestamps
+        vscSendTimestamps[(vscId, chainId)] = currentTimestamp()
       }
 
       // remove pending VSCPackets
@@ -1207,6 +1433,8 @@ function EndBlockVSU() {
 - **Precondition**
   - True. 
 - **Postcondition**
+  - For every matured unbonding operation in `maturedUnbondingOps`, the Staking module is notified that the unbonding can complete.
+  - All unbonding operation in `maturedUnbondingOps` are removed.
   - A list of validator updates `valUpdates` is obtained from the provider Staking module.
   - For every consumer chain with `chainId`
     - If either `valUpdates` is not empty or there were unbonding operations initiated during this block, then 
@@ -1216,6 +1444,7 @@ function EndBlockVSU() {
     - If there is an established CCV channel for the the consumer chain with `chainId`, then
       - for each `VSCPacketData` in the list of pending VSCPackets associated to `chainId`
         - a packet with the `VSCPacketData` is sent on the channel associated with the consumer chain with `chainId`;
+        - `vscSendTimestamps[(vscId, chainId)]` is set to the current timestamp;
       - all the pending VSCPackets associated to `chainId` are removed.
   - `vscId` is incremented.
 - **Error Condition**
@@ -1289,14 +1518,17 @@ function onRecvVSCMaturedPacket(packet: Packet): bytes {
     op.unbondingChainIds.Remove(chainId)
     // if the unbonding operation has unbonded on all consumer chains
     if op.unbondingChainIds.IsEmpty() {
-      // notify the Staking module that the unbonding can complete
-      stakingKeeper.UnbondingCanComplete(op.id)
+      // append the id of the unbonding to maturedUnbondingOps
+      maturedUnbondingOps.Append(op.id)
       // remove unbonding operation
       unbondingOps.Remove(op.id)
     }
   }
   // clean up vscToUnbondingOps mapping
   vscToUnbondingOps.Remove((chainId, vscId))
+
+  // clean up vscSendTimestamps mapping
+  vscSendTimestamps.Remove((chainId, vscId))
 
   return VSCMaturedPacketSuccess
 }
@@ -1313,9 +1545,10 @@ function onRecvVSCMaturedPacket(packet: Packet): bytes {
   - For each unbonding operation `op` returned by `GetUnbondingsFromVSC(chainId, packet.data.id)`
     - `chainId` is removed from `op.unbondingChainIds`;
     - if `op.unbondingChainIds` is empty,
-      - the `UnbondingCanComplete()` method of the Staking module is invoked;
-      - the entry `op` is removed from `unbondingOps`.
+      - `op.id` is added to `maturedUnbondingOps`;
+      - `op.id` is removed from `unbondingOps`.
   - `(chainId, vscId)` is removed from `vscToUnbondingOps`.
+  - `(chainId, vscId)` is removed from `vscSendTimestamps`.
   - A successful acknowledgment is returned.
 - **Error Condition**
   - None.
@@ -1356,7 +1589,8 @@ function GetUnbondingsFromVSC(
 // PCF: Provider Chain Function
 // implements a Staking module hook
 function AfterUnbondingInitiated(opId: uint64) {
-  // get the IDs of all consumer chains registered with this provider chain
+  // get the IDs of all consumer chains registered with this provider chain;
+  // note: this includes also consumer chains in the pre-CCV state
   chainIds = chainToClient.Keys()
   if len(chainIds) > 0 {
     // create and store a new unbonding operation
@@ -1400,33 +1634,15 @@ function onRecvVSCPacket(packet: Packet): bytes {
   // check whether the packet was sent on the CCV channel
   if providerChannel != "" && providerChannel != packet.getDestinationChannel() {
     // packet sent on a channel other than the established provider channel;
-    // close channel and return error acknowledgement
-    channelKeeper.ChanCloseInit(packet.getDestinationChannel())
+    // return error acknowledgement
     return VSCPacketError
   }
 
   // set HtoVSC mapping
   HtoVSC[getCurrentHeight() + 1] = packet.data.id
-  
-  // check whether the CCV channel is established
-  if providerChannel == "" {
-    // set the channel as the provider channel
-    providerChannel = packet.getDestinationChannel()
-    // send pending slash requests
-    SendPendingSlashRequests()
-  }
 
-  // store the list of updates from the packet
-  pendingChanges.Append(packet.data.updates)
-
-  // calculate and store the maturity timestamp for the VSC
-  maturityTimestamp = currentTimestamp().Add(consumerUnbondingPeriod)
-  maturingVSCs.Add(packet.data.id, maturityTimestamp)
-
-  // reset outstandingDowntime for validators in packet.data.downtimeSlashAcks
-  foreach valAddr IN packet.data.downtimeSlashAcks {
-    outstandingDowntime[valAddr] = FALSE
-  }
+  // store the packet data
+  receivedVSCs.Append(packet.data)
 
   return VSCPacketSuccess
 }
@@ -1438,17 +1654,10 @@ function onRecvVSCPacket(packet: Packet): bytes {
 - **Precondition**
   - True.
 - **Postcondition**
-  - If `providerChannel` is set and does not match the channel (with ID `packet.getDestinationChannel()`) on which the packet was received, then 
-    - the closing handshake for the channel with ID `packet.getDestinationChannel()` is initiated;
-    - an error acknowledgement is returned.
+  - If `providerChannel` is set and does not match the channel (with ID `packet.getDestinationChannel()`) on which the packet was received, then an error acknowledgement is returned.
   - Otherwise,
     - the height of the subsequent block is mapped to `packet.data.id` (i.e., the `HtoVSC` mapping) ;  
-    - if `providerChannel` is not set, then 
-      - the CCV channel is marked as established, i.e., `providerChannel = packet.getDestinationChannel()`;
-      - the pending slash requests are sent to the provider chain (see [CCV-CCF-SNDPESLASH.1](#ccv-ccf-sndpeslash1));
-    - `packet.data.updates` are appended to `pendingChanges`;
-    - `(packet.data.id, maturityTimestamp)` is added to `maturingVSCs`, where `maturityTimestamp = currentTimestamp() + consumerUnbondingPeriod`;
-    - for each `valAddr` in the slash acknowledgments received from the provider chain, `outstandingDowntime[valAddr]` is set to false;
+    - `packet.data` is appended to `receivedVSCs`.
     - a successful acknowledgement is returned.
 - **Error Condition**
   - None.
@@ -1505,23 +1714,20 @@ function EndBlockVSU(): [ValidatorUpdate] {
     UnbondMaturePackets()
   }
 
-  if pendingChanges.IsEmpty() {
+  if preCCV {
     // do nothing
     return []
   }
-  // aggregate the pending changes
-  changes = pendingChanges.Aggregate()
-  // Note: in the implementation, the aggregation is done directly 
-  // when receiving a VSCPacket via the AccumulateChanges method.
+  else {
+    // handle received VSCs
+    changes = HandleReceivedVSCs()
 
-  // remove all pending changes
-  pendingChanges.RemoveAll()
+    // update ccvValidatorSet
+    UpdateValidatorSet(changes)
 
-  // update validatorSet
-  UpdateValidatorSet(changes)
-
-  // return the validator set updates
-  return changes
+    // return the validator set updates
+    return changes
+  }
 }
 ```
 - **Caller**
@@ -1532,14 +1738,59 @@ function EndBlockVSU(): [ValidatorUpdate] {
   - True. 
 - **Postcondition**
   - If `providerChannel != ""`, `UnbondMaturePackets()` is invoked;
-  - If `pendingChanges` is empty, the state is not changed.
+  - If `preCCV == true`, the state is not changed.
   - Otherwise,
-    - the pending changes are aggregated and stored in `changes`;
-    - `pendingChanges` is emptied;
+    - the data items in `receivedVSCs` are handled (see [[CCV-CCF-HAREVSC.1]](#ccv-ccf-harevsc1)), which results in a list `changes` of validator updates;
     - `UpdateValidatorSet(changes)` is invoked;
     - `changes` is returned.
 - **Error Condition**
   - None.
+
+<!-- omit in toc -->
+#### **[CCV-CCF-HAREVSC.1]**
+```typescript
+// CCF: Consumer Chain Function
+function HandleReceivedVSCs(): [ValidatorUpdate] {
+  changes = []
+  foreach data IN receivedVSCs {
+    // store the list of updates
+    changes.Append(data.updates)
+
+    // calculate and store the maturity timestamp for the VSC
+    maturityTimestamp = currentTimestamp().Add(ConsumerUnbondingPeriod)
+    maturingVSCs.Add(data.id, maturityTimestamp)
+
+    // reset outstandingDowntime for validators in data.downtimeSlashAcks
+    foreach valAddr IN data.downtimeSlashAcks {
+      outstandingDowntime[valAddr] = FALSE
+    }
+  }
+  // remove all entries
+  receivedVSCs = []
+
+  // aggregate the updates, 
+  // i.e., keep only the latest update per validator;
+  // note: in the implementation, the aggregation is done directly 
+  // when receiving a VSCPacket via the AccumulateChanges method
+  return changes.Aggregate()
+}
+```
+- **Caller**
+  - The `EndBlock()` method.
+- **Trigger Event**
+  - An `EndBlock` message is received from the consensus engine.
+- **Precondition**
+  - `preCCV == false`.
+- **Postcondition**
+  - For each `data` item in the list `receivedVSCs`,
+    - `data.updates` are appended to `changes`, where `changes` is initialy an empty list of validator updates;
+    - `(data.id, maturityTimestamp)` is added to `maturingVSCs`, where `maturityTimestamp = currentTimestamp() + ConsumerUnbondingPeriod`;
+    - for each `valAddr` in the slash acknowledgments received from the provider chain, `outstandingDowntime[valAddr]` is set to false.
+  - `receivedVSCs` is emptied.
+  - The updates in `changes` are aggregated, i.e., only the latest update per validator is kept, and returned.
+- **Error Condition**
+  - None.
+
 
 <!-- omit in toc -->
 #### **[CCV-CCF-UPVALS.1]**
@@ -1548,31 +1799,27 @@ function EndBlockVSU(): [ValidatorUpdate] {
 function UpdateValidatorSet(changes: [ValidatorUpdate]) {
   foreach update IN changes {
     addr := hash(update.pubKey)
-    if addr NOT IN validatorSet.Keys() {
+    if addr NOT IN ccvValidatorSet.Keys() {
       // new validator bonded;
-      // note that due pendingChanges.Aggregate(), 
+      // note that due changes.Aggregate(), 
       // a validator can be added to the valset and 
       // then removed in the subsequent block, 
       // resulting in update.power == 0 
       if update.power > 0 {
-        // add new CrossChainValidator to validator set
-        val := CrossChainValidator{
-          address: addr,
-          power: update.power
-        }
-        validatorSet[addr] = val
+        // add new validator to validator set
+        ccvValidatorSet[addr] = update
         // call AfterCCValidatorBonded hook
         AfterCCValidatorBonded(addr)
       }
     }
     else if update.power == 0 {
       // existing validator begins unbonding
-      validatorSet.Remove(addr)
+      ccvValidatorSet.Remove(addr)
       // call AfterCCValidatorBeginUnbonding hook
       AfterCCValidatorBeginUnbonding(addr)
     }
     else {
-      validatorSet[addr].power = update.power
+      ccvValidatorSet[addr].power = update.power
     }
   }
 }
@@ -1582,14 +1829,14 @@ function UpdateValidatorSet(changes: [ValidatorUpdate]) {
 - **Trigger Event**
   - An `EndBlock` message is received from the consensus engine.
 - **Precondition**
-  - `changes` contains the aggregated validator updates from `pendingChanges` before it was emptied. 
+  - - `preCCV == false`.
 - **Postcondition**
   - For each validator `update` in `changes`,
     - if the validator is not in the validator set and `update.power > 0`, then 
-      - a new `CrossChainValidator` is added to `validatorSet`;
+      - a new validator is added to `ccvValidatorSet`;
       - the `AfterCCValidatorBonded` hook is called;
     - otherwise, if the validator's new power is `0`, then,
-      - the validator is removed from `validatorSet`;
+      - the validator is removed from `ccvValidatorSet`;
       - the `AfterCCValidatorBeginUnbonding` hook is called;
     - otherwise, the validator's power is updated.
 - **Error Condition**
@@ -1668,7 +1915,6 @@ function onRecvSlashPacket(packet: Packet): bytes {
   // check whether the packet was received on an established CCV channel
   if packet.getDestinationChannel() NOT IN channelToChain.Keys() {
     // packet received on a non-established channel; incorrect behavior
-    channelKeeper.ChanCloseInit(packet.getDestinationChannel())
     return SlashPacketError
   }
 
@@ -1711,9 +1957,7 @@ function onRecvSlashPacket(packet: Packet): bytes {
 - **Precondition**
   - True.
 - **Postcondition**
-  - If the channel the packet was received on is not an established CCV channel, then
-    - the channel closing handshake is initiated;
-    - an error acknowledgment is returned.
+  - If the channel the packet was received on is not an established CCV channel, then an error acknowledgment is returned.
   - Otherwise,
     - if `packet.data.vscId == 0`, `infractionHeight` is set to `initialHeights[chainId]`, with `chainId = channelToChain[packet.getDestinationChannel()]`, i.e., the height when the CCV channel to this consumer chain is established;
     - otherwise, `infractionHeight` is set to `VSCtoH[packet.data.vscId]`, i.e., the height at which the voting power was last updated by the validator updates in the VSC with ID `packet.data.vscId`;

@@ -6,6 +6,7 @@ category: IBC/TAO
 kind: instantiation
 requires: 2, 24
 required-by: 4, 25
+version compatibility: ibc-go v7.0.0
 author: Christopher Goes <cwgoes@tendermint.com>, Juwoon Yun <joon@tendermint.com>
 created: 2019-03-07
 modified: 2019-08-25
@@ -22,6 +23,8 @@ The core IBC protocol provides *authorisation* and *ordering* semantics for pack
 ### Definitions
 
 Client-related types & functions are as defined in [ICS 2](../ics-002-client-semantics).
+
+Channel and packet-related functions are as defined in [ICS 4](../ics-004-channel-and-packet-semantics).
 
 Commitment proof related types & functions are defined in [ICS 23](../ics-023-vector-commitments)
 
@@ -105,7 +108,7 @@ Connection paths are stored under a unique identifier.
 
 ```typescript
 function connectionPath(id: Identifier): Path {
-    return "connections/{id}"
+  return "connections/{id}"
 }
 ```
 
@@ -113,7 +116,7 @@ A reverse mapping from clients to a set of connections (utilised to look up all 
 
 ```typescript
 function clientConnectionsPath(clientIdentifier: Identifier): Path {
-    return "clients/{clientIdentifier}/connections"
+  return "clients/{clientIdentifier}/connections"
 }
 ```
 
@@ -142,9 +145,11 @@ function verifyClientConsensusState(
   proof: CommitmentProof,
   clientIdentifier: Identifier,
   consensusStateHeight: Height,
-  consensusState: ConsensusState) {
-    client = queryClient(connection.clientIdentifier)
-    return client.verifyClientConsensusState(connection, height, connection.counterpartyPrefix, proof, clientIdentifier, consensusStateHeight, consensusState)
+  consensusState: ConsensusState
+) {
+  clientState = queryClientState(connection.clientIdentifier)
+  path = applyPrefix(connection.counterpartyPrefix, consensusStatePath(clientIdentifier, consensusStateHeight))
+  return verifyMembership(clientState, height, 0, 0, proof, path, consensusState)
 }
 
 function verifyClientState(
@@ -153,8 +158,9 @@ function verifyClientState(
   proof: CommitmentProof,
   clientState: ClientState
 ) {
-    client = queryClient(connection.clientIdentifier)
-    return client.verifyClientState(height, connection.counterpartyPrefix, proof, connection.clientIdentifier, clientState)
+  clientState = queryClientState(connection.clientIdentifier)
+  path = applyPrefix(connection.counterpartyPrefix, clientStatePath(clientIdentifier)
+  return verifyMembership(clientState, height, 0, 0, proof, path, clientState)
 }
 
 function verifyConnectionState(
@@ -162,9 +168,11 @@ function verifyConnectionState(
   height: Height,
   proof: CommitmentProof,
   connectionIdentifier: Identifier,
-  connectionEnd: ConnectionEnd) {
-    client = queryClient(connection.clientIdentifier)
-    return client.verifyConnectionState(connection, height, connection.counterpartyPrefix, proof, connectionIdentifier, connectionEnd)
+  connectionEnd: ConnectionEnd
+) {
+  clientState = queryClientState(connection.clientIdentifier)
+  path = applyPrefix(connection.counterpartyPrefix, connectionPath(connectionIdentifier))
+  return verifyMembership(clientState, height, 0, 0, proof, path, connectionEnd)
 }
 
 function verifyChannelState(
@@ -173,21 +181,25 @@ function verifyChannelState(
   proof: CommitmentProof,
   portIdentifier: Identifier,
   channelIdentifier: Identifier,
-  channelEnd: ChannelEnd) {
-    client = queryClient(connection.clientIdentifier)
-    return client.verifyChannelState(connection, height, connection.counterpartyPrefix, proof, portIdentifier, channelIdentifier, channelEnd)
+  channelEnd: ChannelEnd
+) {
+  clientState = queryClientState(connection.clientIdentifier)
+  path = applyPrefix(connection.counterpartyPrefix, channelPath(portIdentifier, channelIdentifier))
+  return verifyMembership(clientState, height, 0, 0, proof, path, channelEnd)
 }
 
-function verifyPacketData(
+function verifyPacketCommitment(
   connection: ConnectionEnd,
   height: Height,
   proof: CommitmentProof,
   portIdentifier: Identifier,
   channelIdentifier: Identifier,
   sequence: uint64,
-  data: bytes) {
-    client = queryClient(connection.clientIdentifier)
-    return client.verifyPacketData(connection, height, connection.delayPeriodTime, connection.delayPeriodBlocks, connection.counterpartyPrefix, proof, portIdentifier, channelIdentifier, sequence, data)
+  commitmentBytes: bytes
+) {
+  clientState = queryClientState(connection.clientIdentifier)
+  path = applyPrefix(connection.counterpartyPrefix, packetCommitmentPath(portIdentifier, channelIdentifier, sequence))
+  return verifyMembership(clientState, height, connection.delayPeriodTime, connection.delayPeriodBlocks, proof, path, commitmentBytes)
 }
 
 function verifyPacketAcknowledgement(
@@ -197,9 +209,11 @@ function verifyPacketAcknowledgement(
   portIdentifier: Identifier,
   channelIdentifier: Identifier,
   sequence: uint64,
-  acknowledgement: bytes) {
-    client = queryClient(connection.clientIdentifier)
-    return client.verifyPacketAcknowledgement(connection, height, connection.delayPeriodTime, connection.delayPeriodBlocks, connection.counterpartyPrefix, proof, portIdentifier, channelIdentifier, sequence, acknowledgement)
+  acknowledgement: bytes
+) {
+  clientState = queryClientState(connection.clientIdentifier)
+  path = applyPrefix(connection.counterpartyPrefix, packetAcknowledgementPath(portIdentifier, channelIdentifier, sequence))
+  return verifyMembership(clientState, height, connection.delayPeriodTime, connection.delayPeriodBlocks, proof, path, acknowledgement)
 }
 
 function verifyPacketReceiptAbsence(
@@ -208,9 +222,11 @@ function verifyPacketReceiptAbsence(
   proof: CommitmentProof,
   portIdentifier: Identifier,
   channelIdentifier: Identifier,
-  sequence: uint64) {
-    client = queryClient(connection.clientIdentifier)
-    return client.verifyPacketReceiptAbsence(connection, height, connection.delayPeriodTime, connection.delayPeriodBlocks, connection.counterpartyPrefix, proof, portIdentifier, channelIdentifier, sequence)
+  sequence: uint64
+) {
+  clientState = queryClientState(connection.clientIdentifier)
+  path = applyPrefix(connection.counterpartyPrefix, packetReceiptPath(portIdentifier, channelIdentifier, sequence))
+  return verifyNonMembership(clientState, height, connection.delayPeriodTime, connection.delayPeriodBlocks, proof, path)
 }
 
 // OPTIONAL: verifyPacketReceipt is only required to support new channel types beyond ORDERED and UNORDERED.
@@ -221,9 +237,11 @@ function verifyPacketReceipt(
   portIdentifier: Identifier,
   channelIdentifier: Identifier,
   sequence: uint64,
-  receipt: bytes) {
-    client = queryClient(connection.clientIdentifier)
-    return client.verifyPacketReceipt(connection, height, connection.delayPeriodTime, connection.delayPeriodBlocks, connection.counterpartyPrefix, proof, portIdentifier, channelIdentifier, sequence, receipt)
+  receipt: bytes
+) {
+  clientState = queryClientState(connection.clientIdentifier)
+  path = applyPrefix(connection.counterpartyPrefix, packetReceiptPath(portIdentifier, channelIdentifier, sequence))
+  return verifyMembership(clientState, height, connection.delayPeriodTime, connection.delayPeriodBlocks, connection.counterpartyPrefix, proof, portIdentifier, channelIdentifier, sequence, receipt)
 }
 
 function verifyNextSequenceRecv(
@@ -233,16 +251,17 @@ function verifyNextSequenceRecv(
   portIdentifier: Identifier,
   channelIdentifier: Identifier,
   sequence: uint64,
-  nextSequenceRecv: uint64) {
-    client = queryClient(connection.clientIdentifier)
-    return client.verifyNextSequenceRecv(connection, height, connection.delayPeriodTime, connection.delayPeriodBlocks, connection.counterpartyPrefix, proof, portIdentifier, channelIdentifier, sequence, nextSequenceRecv)
+  nextSequenceRecv: uint64
+) {
+  clientState = queryClientState(connection.clientIdentifier)
+  path = applyPrefix(connection.counterpartyPrefix, nextSequenceRecvPath(portIdentifier, channelIdentifier, sequence))
+  return verifyMembership(clientState, height, connection.delayPeriodTime, connection.delayPeriodBlocks, proof, path, nextSequenceRecv)
 }
 
 function getTimestampAtHeight(
   connection: ConnectionEnd,
   height: Height) {
-    client = queryClient(connection.clientIdentifier)
-    return client.queryConsensusState(height).getTimestamp()
+    return queryConsensusState(connection.clientIdentifier, height).getTimestamp()
 }
 ```
 
@@ -267,24 +286,40 @@ If not provided, the default `validateConnectionIdentifier` function will always
 
 #### Versioning
 
-During the handshake process, two ends of a connection come to agreement on a version bytestring associated
-with that connection. At the moment, the contents of this version bytestring are opaque to the IBC core protocol.
-In the future, it might be used to indicate what kinds of channels can utilise the connection in question, or
-what encoding formats channel-related datagrams will use. At present, host state machine MAY utilise the version data
-to negotiate encodings, priorities, or connection-specific metadata related to custom logic on top of IBC.
+During the handshake process, two ends of a connection come to agreement on a
+version associated with that connection. This `Version` datatype is defined as:
 
-Host state machines MAY also safely ignore the version data or specify an empty string. It is assumed that the two chains running the opening handshake have at least one compatible version in common (i.e., the compatible versions of the two chains must have a non-empty intersection). If the two chains do not have any mutually acceptable versions, the handshake will fail.
+```typescript
+interface Version {
+  identifier: string
+  features: [string]
+}
+```
+
+The `identifier` field specifies a unique version identifier. A value of `"1"`
+specifies IBC 1.0.0.
+
+The `features` field specifies a list of features compatible with the specified
+identifier. The values `"ORDER_UNORDERED"` and `"ORDER_ORDERED"` specify
+unordered and ordered channels, respectively. 
+
+Host state machine MUST utilise the version data to negotiate encodings,
+priorities, or connection-specific metadata related to custom logic on top of
+IBC. It is assumed that the two chains running the opening handshake have at
+least one compatible version in common (i.e., the compatible versions of the two
+chains must have a non-empty intersection). If the two chains do not have any
+mutually acceptable versions, the handshake will fail.
 
 An implementation MUST define a function `getCompatibleVersions` which returns the list of versions it supports, ranked by descending preference order.
 
 ```typescript
-type getCompatibleVersions = () => []string
+type getCompatibleVersions = () => [Version]
 ```
 
-An implementation MUST define a function `pickVersion` to choose a version from a list of versions. Note that if the two chains performing the handshake implement different `pickVersion` functions, a (possibly misbehaving) relayer may be able to stall the handshake by executing `INIT` and `OPENTRY` on both chains, at which point they will pick different versions and be unable to continue.
+An implementation MUST define a function `pickVersion` to choose a version from a list of versions.
 
 ```typescript
-type pickVersion = ([]string) => string
+type pickVersion = ([Version]) => Version
 ```
 
 #### Opening Handshake
@@ -327,8 +362,12 @@ function connOpenInit(
   version: string,
   delayPeriodTime: uint64,
   delayPeriodBlocks: uint64) {
+    // generate a new identifier
     identifier = generateIdentifier()
+
+    abortTransactionUnless(queryClientState(clientIdentifier) !== null)
     abortTransactionUnless(provableStore.get(connectionPath(identifier)) == null)
+    
     state = INIT
     if version != "" {
       // manually selected version must be one we can support
@@ -360,21 +399,25 @@ function connOpenTry(
   proofClient: CommitmentProof,
   proofConsensus: CommitmentProof,
   proofHeight: Height,
-  consensusHeight: Height) {
+  consensusHeight: Height,
+  hostConsensusStateProof?: bytes,
+) {
     // generate a new identifier
     identifier = generateIdentifier()
     
+    abortTransactionUnless(queryClientState(clientIdentifier) !== null)
     abortTransactionUnless(validateSelfClient(clientState))
     abortTransactionUnless(consensusHeight < getCurrentHeight())
-    expectedConsensusState = getConsensusState(consensusHeight)
+    expectedConsensusState = getConsensusState(consensusHeight, hostConsensusStateProof)
+    abortTransactionUnless(expectedConsensusState !== null)
     expectedConnectionEnd = ConnectionEnd{INIT, "", getCommitmentPrefix(), counterpartyClientIdentifier,
                              clientIdentifier, counterpartyVersions, delayPeriodTime, delayPeriodBlocks}
 
     versionsIntersection = intersection(counterpartyVersions, getCompatibleVersions())
-    version = pickVersion(versionsIntersection) // throws if there is no intersection
+    version = pickVersion(versionsIntersection) // aborts transaction if there is no intersection
 
     connection = ConnectionEnd{TRYOPEN, counterpartyConnectionIdentifier, counterpartyPrefix,
-                               clientIdentifier, counterpartyClientIdentifier, version, delayPeriodTime, delayPeriodBlocks}
+                               clientIdentifier, counterpartyClientIdentifier, [version], delayPeriodTime, delayPeriodBlocks}
     abortTransactionUnless(connection.verifyConnectionState(proofHeight, proofInit, counterpartyConnectionIdentifier, expectedConnectionEnd))
     abortTransactionUnless(connection.verifyClientState(proofHeight, proofClient, clientState))
     abortTransactionUnless(connection.verifyClientConsensusState(
@@ -397,21 +440,25 @@ function connOpenAck(
   proofClient: CommitmentProof,
   proofConsensus: CommitmentProof,
   proofHeight: Height,
-  consensusHeight: Height) {
+  consensusHeight: Height,
+  hostConsensusStateProof?: bytes,
+) {
     abortTransactionUnless(consensusHeight < getCurrentHeight())
     abortTransactionUnless(validateSelfClient(clientState))
     connection = provableStore.get(connectionPath(identifier))
-    abortTransactionUnless((connection.state === INIT && connection.version.indexOf(version) !== -1)
-    expectedConsensusState = getConsensusState(consensusHeight)
+    abortTransactionUnless(connection !== null)
+    abortTransactionUnless((connection.state === INIT && connection.versions.indexOf(version) !== -1)
+    expectedConsensusState = getConsensusState(consensusHeight, hostConsensusStateProof)
+    abortTransactionUnless(expectedConsensusState !== null)
     expectedConnectionEnd = ConnectionEnd{TRYOPEN, identifier, getCommitmentPrefix(),
                              connection.counterpartyClientIdentifier, connection.clientIdentifier,
-                             version, connection.delayPeriodTime, connection.delayPeriodBlocks}
+                             [version], connection.delayPeriodTime, connection.delayPeriodBlocks}
     abortTransactionUnless(connection.verifyConnectionState(proofHeight, proofTry, counterpartyIdentifier, expectedConnectionEnd))
     abortTransactionUnless(connection.verifyClientState(proofHeight, proofClient, clientState))
     abortTransactionUnless(connection.verifyClientConsensusState(
       proofHeight, proofConsensus, connection.counterpartyClientIdentifier, consensusHeight, expectedConsensusState))
     connection.state = OPEN
-    connection.version = version
+    connection.versions = [version]
     connection.counterpartyConnectionIdentifier = counterpartyIdentifier
     provableStore.set(connectionPath(identifier), connection)
 }
@@ -425,9 +472,10 @@ function connOpenConfirm(
   proofAck: CommitmentProof,
   proofHeight: Height) {
     connection = provableStore.get(connectionPath(identifier))
+    abortTransactionUnless(connection !== null)
     abortTransactionUnless(connection.state === TRYOPEN)
     expected = ConnectionEnd{OPEN, identifier, getCommitmentPrefix(), connection.counterpartyClientIdentifier,
-                             connection.clientIdentifier, connection.version, connection.delayPeriodTime, connection.delayPeriodBlocks}
+                             connection.clientIdentifier, connection.versions, connection.delayPeriodTime, connection.delayPeriodBlocks}
     abortTransactionUnless(connection.verifyConnectionState(proofHeight, proofAck, connection.counterpartyConnectionIdentifier, expected))
     connection.state = OPEN
     provableStore.set(connectionPath(identifier), connection)
@@ -467,13 +515,10 @@ A future version of this ICS will include version negotiation in the opening han
 
 The consensus state can only be updated as allowed by the `updateConsensusState` function defined by the consensus protocol chosen when the connection is established.
 
-## Example Implementation
+## Example Implementations
 
-Coming soon.
-
-## Other Implementations
-
-Coming soon.
+- Implementation of ICS 03 in Go can be found in [ibc-go repository](https://github.com/cosmos/ibc-go).
+- Implementation of ICS 03 in Rust can be found in [ibc-rs repository](https://github.com/cosmos/ibc-rs).
 
 ## History
 

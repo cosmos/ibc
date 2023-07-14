@@ -397,13 +397,9 @@ Not applicable.
 
 As long as `Wasm Client Code` keeps interface consistent with `ICS 02` it should be forward compatible
 
-## Example Implementation
+## Example Implementations
 
 None yet.
-
-## Other Implementations
-
-None at present.
 
 ## History
 

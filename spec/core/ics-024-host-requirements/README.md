@@ -6,9 +6,10 @@ category: IBC/TAO
 kind: interface
 requires: 23
 required-by: 2, 3, 4, 5, 18
+version compatibility: ibc-go v7.0.0
 author: Christopher Goes <cwgoes@tendermint.com>
 created: 2019-04-16
-modified: 2022-07-05
+modified: 2022-09-14
 ---
 
 ## Synopsis
@@ -118,7 +119,6 @@ Note that the client-related paths listed below reflect the Tendermint client as
 
 | Store          | Path format                                                                    | Value type        | Defined in |
 | -------------- | ------------------------------------------------------------------------------ | ----------------- | ---------------------- |
-| provableStore  | "clients/{identifier}/clientType"                                              | ClientType        | [ICS 2](../ics-002-client-semantics) |
 | provableStore  | "clients/{identifier}/clientState"                                             | ClientState       | [ICS 2](../ics-002-client-semantics) |
 | provableStore  | "clients/{identifier}/consensusStates/{height}"                                | ConsensusState    | [ICS 7](../../client/ics-007-tendermint-client) |
 | privateStore   | "clients/{identifier}/connections                                              | []Identifier      | [ICS 3](../ics-003-connection-semantics) |
@@ -170,10 +170,14 @@ Host state machines MUST define a unique `ConsensusState` type fulfilling the re
 Host state machines MUST provide the ability to introspect their own consensus state, with `getConsensusState`:
 
 ```typescript
-type getConsensusState = (height: Height) => ConsensusState
+type getConsensusState = (height: Height, proof?: bytes) => ConsensusState
 ```
 
 `getConsensusState` MUST return the consensus state for at least some number `n` of contiguous recent heights, where `n` is constant for the host state machine. Heights older than `n` MAY be safely pruned (causing future calls to fail for those heights).
+
+We provide an optional proof data which comes from the `MsgConnectionOpenAck` or `MsgConnectionOpenTry` for host state machines which are unable to introspect their own `ConsensusState` and must rely on off-chain data.
+<br />
+In this case host state machines MUST maintain a map of `n` block numbers to header hashes where the proof would contain full header which can be hashed and compared with the on-chain record.
 
 Host state machines MUST provide the ability to introspect this stored recent consensus state count `n`, with `getStoredRecentConsensusStateCount`:
 
@@ -219,7 +223,7 @@ function validateSelfClient(counterpartyClientState: ClientState) {
   }
 
   // assert that the counterparty client has a height less than the host height
-  if counterpartyClientState.latestHeight >== hostClientState.latestHeight {
+  if counterpartyClientState.latestHeight >= hostClientState.latestHeight {
     return false
   }
 
@@ -377,13 +381,10 @@ Key/value store functionality and consensus state type are unlikely to change du
 
 `submitDatagram` can change over time as relayers should be able to update their processes.
 
-## Example Implementation
+## Example Implementations
 
-Coming soon.
-
-## Other Implementations
-
-Coming soon.
+- Implementation of ICS 24 in Go can be found in [ibc-go repository](https://github.com/cosmos/ibc-go).
+- Implementation of ICS 24 in Rust can be found in [ibc-rs repository](https://github.com/cosmos/ibc-rs).
 
 ## History
 

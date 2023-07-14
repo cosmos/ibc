@@ -5,6 +5,7 @@ stage: Draft
 category: IBC/APP
 requires: 25, 26
 kind: instantiation
+version compatibility: ibc-go v7.0.0
 author: Tony Yun <tony@chainapsis.com>, Dogemos <josh@tendermint.com>, Sean King <sean@interchain.io>
 created: 2019-08-01
 modified: 2020-07-14
@@ -77,7 +78,7 @@ function SendTx(
   connectionId: Identifier,
   portId: Identifier, 
   icaPacketData: InterchainAccountPacketData, 
-  timeoutTimestamp uint64) {
+  timeoutTimestamp uint64): uint64 {
     // check if there is a currently active channel for
     // this portId and connectionId, which also implies an 
     // interchain account has been registered using 
@@ -93,7 +94,7 @@ function SendTx(
     abortTransactionUnless(icaPacketData.data != nil)
 
     // send icaPacketData to the host chain on the active channel
-    handler.sendPacket(
+    sequence = handler.sendPacket(
       capability,
       portId, // source port ID
       activeChannelID, // source channel ID 
@@ -101,6 +102,8 @@ function SendTx(
       timeoutTimestamp,
       icaPacketData
     )
+
+    return sequence
 }
 ```
 
@@ -431,9 +434,6 @@ function onChanOpenTry(
   abortTransactionUnless(order === ORDERED)
   // validate port ID
   abortTransactionUnless(portIdentifier === "icahost")
-  // only allow channels to be created on host chain if the counteparty port ID
-  // is in the expected controller portID format.
-  abortTransactionUnless(validateControllerPortParams(counterpartyPortIdentifier))
   // create the interchain account with the counterpartyPortIdentifier
   // and the underlying connectionID on the host chain.
   address = RegisterInterchainAccount(counterpartyPortIdentifier, connectionID)
@@ -588,15 +588,17 @@ function onRecvPacket(packet Packet) {
 
 ### Identifier formats
 
-These are the formats that the port identifiers on each side of an interchain accounts channel must follow to be accepted by a correct interchain accounts module.
+These are the default formats that the port identifiers on each side of an interchain accounts channel. The controller portID **must** include the owner address so that when a message is sent to the controller module, the sender of the message can be verified against the portID before sending the ICA packet. The controller chain is responsible for proper access control to ensure that the sender of the ICA message has successfully authenticated before the message reaches the controller module.
 
-Controller Port Identifier: `icacontroller-{owner-account-address}`
+Controller Port Identifier: optional prefix `icacontroller-` + mandatory `{owner-account-address}`
 
 Host Port Identifier: `icahost`
 
-## Example Implementation
+The `icacontroller-` prefix on the controller port identifier is optional and host chains **must** not enforce that the counterparty port identifier includes it. Controller chains may decide to include it and validate that it is present in their own port identifier.
 
-Repository for Cosmos-SDK implementation of ICS-27: https://github.com/cosmos/ibc-go
+## Example Implementations
+
+- Implementation of ICS 27 in Go can be found in [ibc-go repository](https://github.com/cosmos/ibc-go).
 
 ## Future Improvements
 

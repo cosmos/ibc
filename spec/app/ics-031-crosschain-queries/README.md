@@ -100,7 +100,7 @@ The Cross-chain Queries module stores query requests when it processes them.
 A CrossChainQuery is a particular interface to represent query requests. A request is retrieved when its result is submitted.
 
 ```typescript
-interface CrossChainQuery struct {
+interface CrossChainQuery {
     id: Identifier
     path: CommitmentPath
     localTimeoutHeight: Height
@@ -133,10 +133,10 @@ enum QueryResult {
 - A query that is executed but does not return a value is marked as `FAILURE`. This means that the query has been executed at the queried chain, but there was no value associated to the queried path at the requested height.
 - A query that timed out before a result is committed at the querying chain is marked as `TIMEOUT`.
 
-A CrossChainQueryResult is a particular interface used to represent query results.
+A `CrossChainQueryResult` is a particular interface used to represent query results.
 
 ```typescript
-interface CrossChainQueryResult struct {
+interface CrossChainQueryResult {
     id: Identifier
     result: QueryResult
     data: []byte
@@ -163,17 +163,17 @@ function queryPath(id: Identifier): Path {
 The result query path is a private path that stores the result of completed queries.
 
 ```typescript
-function resultQueryPath(id: Identifier): Path {
-    return "queriesresult/{id}"
+function queryResultPath(id: Identifier): Path {
+    return "result/queries/{id}"
 }
 ```
 
 ### Helper functions
 
-The querying chain MUST implement a function `generateQueryIdentifier`, which generates a unique query identifier:
+The querying chain MUST implement a function `generateIdentifier`, which generates a unique query identifier:
 
 ```typescript
-function generateQueryIdentifier = () -> Identifier
+function generateIdentifier = () -> Identifier
 ```
 
 ### Sub-protocols
@@ -258,7 +258,7 @@ function CrossChainQueryResponse(
     abortTransactionUnless(query !== null)
 
     // Retrieve client state of the queried chain.
-    client = queryClientState(query.clientId)
+    clientState = queryClientState(query.clientId)
     abortTransactionUnless(client !== null)
 
     // Check that the relier executed the query at the requested height at the queried chain.
@@ -271,10 +271,10 @@ function CrossChainQueryResponse(
 
 
     // Verify query result using the local light client of the queried chain.
-    // If the reponse carries data, then verify that the data is indeed the value associated with query.path at query.queryHeight at the queried chain.
+    // If the response carries data, then verify that the data is indeed the value associated with query.path at query.queryHeight at the queried chain.
     if (data !== null) {    
-        abortTransactionUnless(client.verifyMemership(
-            client,
+        abortTransactionUnless(verifyMembership(
+            clientState,
             proofHeight,
             delayPeriodTime,
             delayPeriodBlocks,
@@ -285,8 +285,8 @@ function CrossChainQueryResponse(
         result = SUCCESS
     // If there response does not carry any data, verify that query.path does not exist at query.queryHeight at the queried chain.
     } else {
-        abortTransactionUnless(client.verifyNonMemership(
-            client,
+        abortTransactionUnless(verifyNonMembership(
+            clientState,
             proofHeight,
             delayPeriodTime,
             delayPeriodBlocks,
@@ -305,7 +305,7 @@ function CrossChainQueryResponse(
                                    data} 
 
     // Store the result in the local, private store.
-    privateStore.set(resultQueryPath(queryIdentifier), resultRecord)
+    privateStore.set(queryResultPath(queryIdentifier), resultRecord)
 
 }
 ```
@@ -325,14 +325,14 @@ function PruneCrossChainQueryResult(
   ) {
 
     // Retrieve the query result from the private store using the query's identifier.
-    resultRecord = privateStore.get(resultQueryPath(queryIdentifier))
+    resultRecord = privateStore.get(queryResultPath(queryIdentifier))
     abortTransactionUnless(resultRecord !== null)
 
     // Abort the transaction unless the caller has the right to clean the query result
     abortTransactionUnless(authenticateCapability(queryId, queryCapability))
 
     // Delete the query result from the the local, private store.
-    privateStore.delete(resultQueryPath(queryId))
+    privateStore.delete(queryResultPath(queryId))
 }
 ```
 - **Precondition**

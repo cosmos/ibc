@@ -5,6 +5,7 @@ stage: draft
 required-by: 2, 24
 category: IBC/TAO
 kind: interface
+version compatibility: ibc-go v7.0.0
 author: Christopher Goes <cwgoes@tendermint.com>
 created: 2019-04-16
 modified: 2019-08-25
@@ -38,7 +39,7 @@ This document only defines desired properties, not a concrete implementation —
 
 ## Technical Specification
 
-Below we define a behaviour and an overview of datatypes. For data type definition look at [confio/ics23](https://github.com/confio/ics23/blob/master/proofs.proto) repository.
+Below we define a behaviour and an overview of datatypes. For data type definition look at [cosmos/ics23](https://github.com/cosmos/ics23/blob/master/proto/cosmos/ics23/v1/proofs.proto) repository.
 
 
 ### Datatypes
@@ -89,6 +90,12 @@ The `CommitmentPath` returned by `applyPrefix` does not need to be serialisable 
 
 ```typescript
 type applyPrefix = (prefix: CommitmentPrefix, path: Path) => CommitmentPath
+```
+
+The function `removePrefix` is the inverse operation of `applyPrefix`, i.e. it returns the bytestring key without the store prefix.
+
+```typescript
+type removePrefix = (prefix: CommitmentPrefix, path: CommitmentPath) => Path
 ```
 
 #### Proof
@@ -272,13 +279,9 @@ Not applicable.
 
 Commitment algorithms are expected to be fixed. New algorithms can be introduced by versioning connections and channels.
 
-## Example Implementation
+## Example Implementations
 
-Coming soon.
-
-## Other Implementations
-
-Coming soon.
+- Implementations of ICS 23 in Go and Rust can be found in [cosmos/ics23 repository](https://github.com/cosmos/ics23).
 
 ## History
 

@@ -5,6 +5,7 @@ stage: draft
 category: IBC/APP
 requires: 4, 25, 26, 30
 kind: instantiation
+version compatibility: ibc-go v7.0.0
 author: Aditya Sripal <aditya@interchain.berlin>, Ethan Frey <ethan@confio.tech>
 created: 2021-06-01
 modified: 2022-07-06
@@ -509,7 +510,7 @@ function sendPacket(
   sourceChannel: Identifier,
   timeoutHeight: Height,
   timeoutTimestamp: uint64,
-  data: bytes) {
+  data: bytes): uint64 {
     // ics4Wrapper may be core IBC or higher-level middleware
     return ics4Wrapper.sendPacket(
       capability,
@@ -579,13 +580,9 @@ With the forward relayer correctly embedded in the acknowledgement, and the reve
 
 Not applicable.
 
-## Example Implementation
+## Example Implementations
 
-Coming soon.
-
-## Other Implementations
-
-Coming soon.
+- Implementation of ICS 29 in Go can be found in [ibc-go repository](https://github.com/cosmos/ibc-go).
 
 ## History
 

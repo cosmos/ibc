@@ -5,6 +5,7 @@ stage: draft
 category: IBC/APP
 requires: 4, 25, 26
 kind: instantiation
+version compatibility: ibc-go v7.0.0
 author: Aditya Sripal <aditya@interchain.berlin>, Ethan Frey <ethan@confio.tech>
 created: 2021-06-01
 modified: 2022-07-06
@@ -89,7 +90,7 @@ interface ICS4Wrapper {
       sourceChannel: Identifier,
       timeoutHeight: Height,
       timeoutTimestamp: uint64,
-      data: bytes)
+      data: bytes): uint64
     writeAcknowledgement(packet: Packet, ack: Acknowledgement)
 }
 ```
@@ -320,7 +321,7 @@ function sendPacket(
   sourceChannel: Identifier,
   timeoutHeight: Height,
   timeoutTimestamp: uint64,
-  app_data: bytes) {
+  app_data: bytes): uint64 {
     // middleware may modify packet
     data = doCustomLogic(app_data)
 
@@ -350,13 +351,9 @@ The Middleware approach is a design pattern already enabled by current IBC. This
 
 Not applicable.
 
-## Example Implementation
+## Example Implementations
 
-Coming soon.
-
-## Other Implementations
-
-Coming soon.
+- Implementation of ICS 29 in Go following ICS 30 design pattern can be found in [ibc-go repository](https://github.com/cosmos/ibc-go).
 
 ## History
 

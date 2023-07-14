@@ -6,6 +6,7 @@ category: IBC/TAO
 kind: interface
 requires: 23, 24
 required-by: 3
+version compatibility: ibc-go v7.0.0
 author: Juwoon Yun <joon@tendermint.com>, Christopher Goes <cwgoes@tendermint.com>, Aditya Sripal <aditya@interchain.io>
 created: 2019-02-25
 modified: 2022-08-04
@@ -118,7 +119,7 @@ types may require additional properties.
 * `ClientState` is the state of a client. It MUST expose an interface to higher-level protocol abstractions, 
   e.g., functions to verify proofs of the existence of particular values at particular paths at particular `Height`s.
 
-* `MisbehaviourPredicate` is a that checks whether the rules of `Consensus` were broken, 
+* `MisbehaviourPredicate` is a function that checks whether the rules of `Consensus` were broken, 
   in which case the client MUST be *frozen*, i.e., no subsequent `ConsensusState`s can be generated.
 
 * `Misbehaviour` is the proof needed by the `MisbehaviourPredicate` to determine whether 
@@ -156,7 +157,7 @@ State machines implementing the IBC protocol are expected to respect these clien
 
 ### Data Structures
 
-#### Height
+#### `Height`
 
 `Height` is an opaque data structure defined by a client type.
 It must form a partially ordered set & provide operations for comparison.
@@ -181,7 +182,7 @@ A height is either `LT` (less than), `EQ` (equal to), or `GT` (greater than) ano
 
 There must also be a zero-element for a height type, referred to as `0`, which is less than all non-zero heights.
 
-#### ConsensusState
+#### `ConsensusState`
 
 `ConsensusState` is an opaque data structure defined by a client type, used by the validity predicate to
 verify new commits & state roots. Likely the structure will contain the last commit produced by
@@ -209,7 +210,7 @@ The `ConsensusState` MUST define a `getTimestamp()` method which returns the tim
 type getTimestamp = ConsensusState => uint64
 ```
 
-#### ClientState
+#### `ClientState`
 
 `ClientState` is an opaque data structure defined by a client type.
 It may keep arbitrary internal state to track verified roots and past misbehaviours.
@@ -221,10 +222,10 @@ but they must expose this common set of query functions to the IBC handler.
 type ClientState = bytes
 ```
 
-Client types MUST define a method to initialise a client state with a provided consensus state, writing to internal state as appropriate.
+Client types MUST define a method to initialise a client state with the provided client identifier, client state and consensus state, writing to internal state as appropriate.
 
 ```typescript
-type initialise = (consensusState: ConsensusState) => ClientState
+type initialise = (identifier: Identifier, clientState: ClientState, consensusState: ConsensusState) => Void
 ```
 
 Client types MUST define a method to fetch the current height (height of the most recent validated state update).
@@ -244,13 +245,31 @@ type getTimestampAtHeight = (
 ) => uint64
 ```
 
-#### ClientMessage
+#### `ClientMessage`
 
 A `ClientMessage` is an opaque data structure defined by a client type which provides information to update the client.
-`ClientMessages` can be submitted to an associated client to add new `ConsensusState(s)` and/or update the `ClientState`. They likely contain a height, a proof, a commitment root, and possibly updates to the validity predicate.
+`ClientMessage`s can be submitted to an associated client to add new `ConsensusState`(s) and/or update the `ClientState`. They likely contain a height, a proof, a commitment root, and possibly updates to the validity predicate.
 
 ```typescript
 type ClientMessage = bytes
+```
+
+### Store paths
+
+Client state paths are stored under a unique client identifier.
+
+```typescript
+function clientStatePath(id: Identifier): Path {
+  return "clients/{id}/clientState"
+}
+```
+
+Consensus state paths are stored under a unique combination of client identifier and height:
+
+```typescript
+function consensusStatePath(id: Identifier, height: Height): Path {
+  return "clients/{id}/consensusStates/{height}"
+}
 ```
 
 #### Validity predicate
@@ -262,10 +281,10 @@ for the given parent `ClientMessage` and the list of network messages.
 The validity predicate is defined as:
 
 ```typescript
-type VerifyClientMessage = (ClientMessage) => Void
+type verifyClientMessage = (ClientMessage) => Void
 ```
 
-`VerifyClientMessage` MUST throw an exception if the provided ClientMessage was not valid.
+`verifyClientMessage` MUST throw an exception if the provided ClientMessage was not valid.
 
 #### Misbehaviour predicate
 
@@ -282,12 +301,12 @@ type checkForMisbehaviour = (ClientMessage) => bool
 
 `checkForMisbehaviour` MUST throw an exception if the provided proof of misbehaviour was not valid.
 
-#### UpdateState
+#### Update state
 
-UpdateState will update the client given a verified `ClientMessage`. Note that this function is intended for **non-misbehaviour** `ClientMessages`.
+Function `updateState` is an opaque function defined by a client type that will update the client given a verified `ClientMessage`. Note that this function is intended for **non-misbehaviour** `ClientMessage`s.
 
 ```typescript
-type UpdateState = (ClientMessage) => Void
+type updateState = (ClientMessage) => Void
 ```
 
 `verifyClientMessage` must be called before this function, and `checkForMisbehaviour` must return false before this function is called.
@@ -301,12 +320,12 @@ Clients MAY have time-sensitive validity predicates, such that if no ClientMessa
 In this case, a permissioned entity such as a chain governance system or trusted multi-signature MAY be allowed
 to intervene to unfreeze a frozen client & provide a new correct ClientMessage.
 
-#### UpdateStateOnMisbehaviour
+#### Update state on misbehaviour
 
-UpdateStateOnMisbehaviour will update the client upon receiving a verified `ClientMessage` that is valid misbehaviour.
+Function `updateStateOnMisbehaviour` is an opaque function defined by a client type that will update the client upon receiving a verified `ClientMessage` that is valid misbehaviour.
 
 ```typescript
-type UpdateStateOnMisbehaviour = (ClientMessage) => Void
+type updateStateOnMisbehaviour = (ClientMessage) => Void
 ```
 
 `verifyClientMessage` must be called before this function, and `checkForMisbehaviour` must return `true` before this function is called.
@@ -318,7 +337,7 @@ Once misbehaviour is detected, clients SHOULD be frozen so that no future update
 A permissioned entity such as a chain governance system or trusted multi-signature MAY be allowed
 to intervene to unfreeze a frozen client & provide a new correct ClientMessage which updates the client to a valid state.
 
-#### CommitmentProof
+#### `CommitmentProof`
 
 `CommitmentProof` is an opaque data structure defined by a client type in accordance with [ICS 23](../ics-023-vector-commitments).
 It is utilised to verify presence or absence of a particular key/value pair in state
@@ -332,7 +351,7 @@ Internal implementation details may differ (for example, a loopback client could
 - The `delayPeriodTime` is passed to the verification functions for packet-related proofs in order to allow packets to specify a period of time which must pass after a consensus state is added before it can be used for packet-related verification.
 - The `delayPeriodBlocks` is passed to the verification functions for packet-related proofs in order to allow packets to specify a period of blocks which must pass after a consensus state is added before it can be used for packet-related verification.
 
-`verifyMembership` is a generic proof verification method which verifies a proof of the existence of a value at a given `CommitmentPath` at the specified height.
+`verifyMembership` is a generic proof verification method which verifies a proof of the existence of a value at a given `CommitmentPath` at the specified height. It MUST return an error is the verification is not successful. 
 The caller is expected to construct the full `CommitmentPath` from a `CommitmentPrefix` and a standardized path (as defined in [ICS 24](../ics-024-host-requirements/README.md#path-space)). If the caller desires a particular delay period to be enforced,
 then it can pass in a non-zero `delayPeriodTime` or `delayPeriodBlocks`. If a delay period is not necessary, the caller must pass in 0 for `delayPeriodTime` and `delayPeriodBlocks`,
 and the client will not enforce any delay period for verification.
@@ -346,10 +365,10 @@ type verifyMembership = (
   proof: CommitmentProof,
   path: CommitmentPath,
   value: bytes)
-  => boolean
+  => Error
 ```
 
-`verifyNonMembership` is a generic proof verification method which verifies a proof of absence of a given `CommitmentPath` at the specified height.
+`verifyNonMembership` is a generic proof verification method which verifies a proof of absence of a given `CommitmentPath` at the specified height. It MUST return an error is the verification is not successful. 
 The caller is expected to construct the full `CommitmentPath` from a `CommitmentPrefix` and a standardized path (as defined in [ICS 24](../ics-024-host-requirements/README.md#path-space)). If the caller desires a particular delay period to be enforced,
 then it can pass in a non-zero `delayPeriodTime` or `delayPeriodBlocks`. If a delay period is not necessary, the caller must pass in 0 for `delayPeriodTime` and `delayPeriodBlocks`,
 and the client will not enforce any delay period for verification.
@@ -364,7 +383,7 @@ type verifyNonMembership = (
   delayPeriodBlocks: uint64,
   proof: CommitmentProof,
   path: CommitmentPath)
-  => boolean
+  => Error
 ```
 
 ### Query interface
@@ -531,18 +550,14 @@ logical correctness.
 
 #### Create
 
-Calling `createClient` with the specified identifier & initial consensus state creates a new client.
+Calling `createClient` with the client state and initial consensus state creates a new client.
 
 ```typescript
-function createClient(
-  id: Identifier,
-  clientType: ClientType,
-  consensusState: ConsensusState) {
-    abortTransactionUnless(validateClientIdentifier(id))
-    abortTransactionUnless(provableStore.get(clientStatePath(id)) === null)
-    abortSystemUnless(provableStore.get(clientTypePath(id)) === null)
-    clientType.initialise(consensusState)
-    provableStore.set(clientTypePath(id), clientType)
+function createClient(clientState: clientState, consensusState: ConsensusState) {
+  // implementations may define a identifier generation function
+  identifier = generateClientIdentifier()
+  abortTransactionUnless(provableStore.get(clientStatePath(identifier)) === null)
+  initialise(identifier, clientState, consensusState)
 }
 ```
 
@@ -576,16 +591,16 @@ function updateClient(
     clientState = provableStore.get(clientStatePath(id))
     abortTransactionUnless(clientState !== null)
 
-    clientState.VerifyClientMessage(clientMessage)
+    verifyClientMessage(clientMessage)
     
     foundMisbehaviour := clientState.CheckForMisbehaviour(clientMessage)
     if foundMisbehaviour {
-        clientState.UpdateStateOnMisbehaviour(clientMessage)
-        // emit misbehaviour event
+      updateStateOnMisbehaviour(clientMessage)
+      // emit misbehaviour event
     }
     else {    
-        clientState.UpdateState(clientMessage) // expects no-op on duplicate clientMessage
-        // emit update event
+      updateState(clientMessage) // expects no-op on duplicate clientMessage
+      // emit update event
     }
 }
 ```
@@ -602,11 +617,11 @@ function submitMisbehaviourToClient(
     clientState = provableStore.get(clientStatePath(id))
     abortTransactionUnless(clientState !== null)
     // authenticate client message
-    clientState.verifyClientMessage(clientMessage)
+    verifyClientMessage(clientMessage)
     // check that client message is valid instance of misbehaviour
     abortTransactionUnless(clientState.checkForMisbehaviour(clientMessage))
     // update state based on misbehaviour
-    clientState.UpdateStateOnMisbehaviour(misbehaviour)
+    updateStateOnMisbehaviour(misbehaviour)
 }
 ```
 
@@ -622,13 +637,9 @@ Not applicable.
 
 New client types can be added by IBC implementations at-will as long as they conform to this interface.
 
-## Example Implementation
+## Example Implementations
 
-Please see the ibc-go implementations of light clients for examples of how to implement your own: https://github.com/cosmos/ibc-go/blob/main/modules/light-clients
-
-## Other Implementations
-
-Coming soon.
+Please see the ibc-go implementations of light clients for examples of how to implement your own: https://github.com/cosmos/ibc-go/blob/main/modules/light-clients.
 
 ## History
 

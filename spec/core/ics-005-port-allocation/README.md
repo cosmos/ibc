@@ -6,6 +6,7 @@ requires: 24
 required-by: 4
 category: IBC/TAO
 kind: interface
+version compatibility: ibc-go v7.0.0
 author: Christopher Goes <cwgoes@tendermint.com>
 created: 2019-06-20
 modified: 2019-08-25
@@ -214,7 +215,7 @@ The IBC handler MUST implement the `releasePort` function, which allows a module
 > Warning: releasing a port will allow other modules to bind to that port and possibly intercept incoming channel opening handshakes. Modules should release ports only when doing so is safe.
 
 ```typescript
-function releasePort(capability: CapabilityKey) {
+function releasePort(id: Identifier, capability: CapabilityKey) {
     abortTransactionUnless(authenticateCapability(portPath(id), capability))
     releaseCapability(capability)
 }
@@ -232,13 +233,10 @@ Not applicable.
 
 Port binding is not a wire protocol, so interfaces can change independently on separate chains as long as the ownership semantics are unaffected.
 
-## Example Implementation
+## Example Implementations
 
-Coming soon.
-
-## Other Implementations
-
-Coming soon.
+- Implementation of ICS 05 in Go can be found in [ibc-go repository](https://github.com/cosmos/ibc-go).
+- Implementation of ICS 05 in Rust can be found in [ibc-rs repository](https://github.com/cosmos/ibc-rs).
 
 ## History
 

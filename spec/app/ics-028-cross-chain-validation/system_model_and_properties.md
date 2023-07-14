@@ -38,11 +38,12 @@ furthermore, the *Correct Relayer* assumption relies on both *Safe Blockchain* a
 - ***Live Blockchain***: Both the provider and the consumer chains are *live*. This means that, for every chain, the underlying consensus engine satisfies liveness (i.e., new blocks are eventually added to the chain).
   > **Note**: Both *Safe Blockchain* and *Live Blockchain* assumptions require the consensus engine's assumptions to hold, e.g., less than a third of the voting power is Byzantine. For an example, take a look at the [Tendermint Paper](https://arxiv.org/pdf/1807.04938.pdf).
 
-- ***Correct Relayer***: There is at least one *correct*, *live* relayer between the provider and consumer chains. This assumption has two implications.
-  - First, every packet sent on the CCV channel is relayed to the receiving end before the packet timeout elapses.
-  - Second, a correct relayer will eventually relay packets on the token transfer channel.   
+- ***Correct Relayer***: There is at least one *correct*, *live* relayer between the provider and consumer chains. This assumption has the following implications.
+  - The opening handshake messages on the CCV channel are relayed before the Channel Initialization subprotocol times out (see `initTimeout`).
+  - Every packet sent on the CCV channel is relayed to the receiving end before the packet timeout elapses (see both `vscTimeout` and `ccvTimeoutTimestamp`).
+  - A correct relayer will eventually relay packets on the token transfer channel.   
   
-  Clearly, the CCV protocol is responsible of setting the timeouts (i.e., `timeoutHeight` and `timeoutTimestamp`), for the packets sent on the CCV channel, such that the *Correct Relayer* assumption is feasible.
+  Clearly, the CCV protocol is responsible of setting the timeouts (see `ccvTimeoutTimestamp`, `vscTimeout`, `initTimeout` in the [CCV State](data_structures.md#ccv-state)), such that the *Correct Relayer* assumption is feasible.
   > **Discussion**: IBC relies on timeouts to signal that a sent packet is not going to be received on the other end. 
   > Once an ordered IBC channel timeouts, the channel is closed (see [ICS 4](../../core/ics-004-channel-and-packet-semantics)). 
   > The *Correct Relayer* assumption is necessary to ensure that the CCV channel **cannot** ever timeout and, as a result, cannot transit to the closed state. 
@@ -138,6 +139,10 @@ CCV provides the following system properties.
   > This means that if the validators misbehave on the consumer chains, their tokens bonded on the provider chain can be slashed during the unbonding period.
   > For example, if one unit of voting power requires `1.000.000` bonded tokens (i.e., `VP(1.000.000)=1`), 
   > then a validator that gets one unit of voting power on a consumer chain must have at least `1.000.000` tokens bonded on the provider chain until the unbonding period elapses on the consumer chain.
+
+  > **Note**: When an existing chain becomes a consumer chain (see [Channel Initialization: Existing Chains](overview_and_basic_concepts.md#channel-initialization-existing-chains)), the existing validator set is replaced by the provider validator set. 
+  > For safety, the stake bonded by the existing validator set must remain bonded until the unbonding period elapses. 
+  > Thus, the existing Staking module must be kept for at least the unbonding period. 
 
 - ***Slashable Consumer Misbehavior***: If a validator `val` commits an infraction, with a slashing fraction of `sf`, on a consumer chain `cc` at a block height `hi`, 
   then any evidence of misbehavior that is received by `cc` at height `he`, such that `ts(he) < ts(hi) + UnbondingPeriod`, 
@@ -240,10 +245,12 @@ The following properties define the guarantees of CCV on *registering* on the pr
   Therefore, consumer chains *SHOULD NOT allow user transactions before the CCV channel is established*. 
   Note that once the CCV channel is established (i.e., a VSC is received from the provider CCV module), CCV enables the slashing of the initial validator set for infractions committed during channel initialization.
 
-- ***Provider Slashing Warranty***: If the provider CCV module receives at height `hs` from a consumer chain `cc` a `SlashPacket` containing a validator `val` and a VSC ID `vscId`, 
-  then it MUST make at height `hs` *exactly one* request to the provider Slashing module to slash `val` for misbehaving at height `h`, such that
+- ***Provider Slashing Warranty***: If the provider CCV module receives from a consumer chain `cc` a `SlashPacket` containing a validator `val` and a VSC ID `vscId`, 
+  then it MUST make *exactly one* request to the provider Slashing module to slash `val` for misbehaving at height `h`, such that
   - if `vscId = 0`, `h` is the height of the block when the provider chain established a CCV channel to `cc`;
   - otherwise, `h` is the height of the block immediately subsequent to the block when the provider chain provided to `cc` the VSC with ID `vscId`.
+  
+  Furthermore, the provider CCV module MUST make this slash request before registering any maturity notifications received from `cc` after the `SlashPacket`.
 
 - ***VSC Maturity and Slashing Order***: If a consumer chain sends to the provider chain a `SlashPacket` before a maturity notification of a VSC, then the provider chain MUST NOT receive the maturity notification before the `SlashPacket`.
   > **Note**: *VSC Maturity and Slashing Order* requires the VSC maturity notifications to be sent through their own IBC packets (i.e., `VSCMaturedPacket`s) instead of e.g., through acknowledgements of `VSCPacket`s. 
@@ -259,8 +266,12 @@ The following properties define the guarantees of CCV on *registering* on the pr
 In this section we argue the correctness of the CCV protocol described in the [Technical Specification](./technical_specification.md), 
 i.e., we informally prove the properties described in the [previous section](#desired-properties).
 
-- ***Channel Uniqueness***: The provider chain side of the CCV channel is established when the provider CCV module receives the first `ChanOpenConfirm` message; all subsequent `ChanOpenConfirm` messages result in the underlying channel being closed (cf. *Safe Blockchain*). 
-  Similarly, the consumer chain side of the CCV channel is established when the consumer CCV module receives the first `VSCPacket` and ignores any packets received on different channels (cf. *Safe Blockchain*). 
+- ***Channel Uniqueness***: The consumer chain side of the CCV channel is established when the consumer CCV module receives the _first_ `ChanOpenAck` message that is successfully executed; all subsequent `ChanOpenAck` messages will fail (cf. *Safe Blockchain*).
+  Let `ccvChannel` denote this channel. Then, `ccvChannel` is the only `OPEN` channel that can be connected to a port owned by the consumer CCV module.
+  The provider chain side of the CCV channel is established when the provider CCV module receives the _first_ `ChanOpenConfirm` message that is successfully executed; all subsequent `ChanOpenConfirm` messages will fail (cf. *Safe Blockchain*). 
+  The `ccvChannel` is the only channel for which `ChanOpenConfirm` can be successfully executed (cf. *Safe Blockchain*, i.e., IBC channel opening handshake guarantee). 
+  As a result, `ccvChannel` is unique. 
+  Moreover, ts existence is guaranteed by the *Correct Relayer* assumption.
 
 - ***Channel Validity***: Follows directly from the *Safe Blockchain* assumption.
 
@@ -384,8 +395,8 @@ i.e., we informally prove the properties described in the [previous section](#de
   - The CCV module of `cc` receives at height `he` the evidence that `val` misbehaved on `cc` at height `hi` (cf. *Evidence Provision*, *Safe Blockchain*, *Life Blockchain*).
   - Let `hv` be the height when the CCV module of `cc` receives the first VSC from the provider CCV module. 
   Then, the CCV module of `cc` sends at height `h = max(he, hv)` to the provider chain a `SlashPacket` `P`, such that `P.val = val` and `P.id = HtoVSC[hi]` (cf. *Consumer Slashing Warranty*).
-  - The provider CCV module eventually receives `P` in a block `B` (cf. *Channel Liveness*). 
-  - The provider CCV module requests (in the same block `B`) the provider Slashing module to slash `val` for misbehaving at height `hp = VSCtoH[P.id]` (cf. *Provider Slashing Warranty*).
+  - The provider CCV module eventually receives `P` (cf. *Channel Liveness*). 
+  - The provider CCV module requests the provider Slashing module to slash `val` for misbehaving at height `hp = VSCtoH[P.id]` before handling any further maturity notifications received from the CCV module of `cc` (cf. *Provider Slashing Warranty*).
   - The provider Slashing module slashes the amount of tokens `val` had bonded at height `hp` except the amount that has already completely unbonded (cf. *Slashing Warranty*).
   
   Thus, it remains to be proven that `Token(Power(cc,hi,val)) = pBonded(hp,val)`, with `hp = VSCtoH[HtoVSC[hi]]`. We distinguish two cases:
