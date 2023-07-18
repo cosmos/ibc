@@ -389,8 +389,6 @@ function onChanOpenInit(
   abortTransactionUnless(validateControllerPortParams(portIdentifier))
   // only allow channels to be created on the "icahost" port on the counterparty chain
   abortTransactionUnless(counterpartyPortIdentifier === "icahost")
-  // only open the channel if there is no active channel already set (with status OPEN)
-  abortTransactionUnless(activeChannel === nil)
 
   if version != "" {
     // validate metadata
@@ -416,6 +414,21 @@ function onChanOpenInit(
     }
     version = marshalJSON(metadata)
   }
+
+  // only open the channel if:
+  // - there is no active channel already set (with status OPEN)
+  // OR
+  // - there is already an active channel (with status CLOSED) and
+  // the metadata matches exactly the existing metadata in the 
+  // version string of the active channel.
+  activeChannelId, activeChannelFound = GetActiveChannelID(portId, connectionId)
+  if activeChannelFound {
+    activeChannel = provableStore.get(channelPath(portId, activeChannelId))
+    abortTransactionUnless(activeChannel.state === CLOSED)
+    previousMetadata = UnmarshalJSON(activeChannel.version)
+    abortTransactionUnless(previousMetadata === metadata)
+  }
+
   return version, nil
 }
 ```
