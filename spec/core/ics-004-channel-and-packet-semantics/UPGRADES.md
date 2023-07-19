@@ -714,6 +714,7 @@ function chanUpgradeConfirm(
     // if there are no in-flight packets on our end, we can automatically go to FLUSHCOMPLETE
     if pendingInflightPackets(portIdentifier, channelIdentifier) == nil {
         currentChannel.state = FLUSHCOMPLETE
+        publicStore.set(channelPath(portIdentifier, channelIdentifier), currentChannel)
     } else {
         privateStore.set(counterpartyUpgradeTimeout(portIdentifier, channelIdentifier), timeout)
     }
