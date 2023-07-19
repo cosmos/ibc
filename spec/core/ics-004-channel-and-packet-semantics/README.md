@@ -877,6 +877,20 @@ function acknowledgePacket(
     // delete our commitment so we can't "acknowledge" again
     provableStore.delete(packetCommitmentPath(packet.sourcePort, packet.sourceChannel, packet.sequence))
 
+    if channel.state == FLUSHING {
+      upgradeTimeout = privateStore.get(counterpartyUpgradeTimeout(portIdentifier, channelIdentifier))
+        // counterparty-specified timeout must not have exceeded
+      // if it has, then restore the channel and abort upgrade handshake
+      if (currentHeight() > timeout.timeoutHeight && timeout.timeoutHeight != 0) ||
+          (currentTimestamp() > timeout.timeoutTimestamp && timeout.timeoutTimestamp != 0) {
+              restoreChannel(portIdentifier, channelIdentifier)
+      } else if pendingInflightPackets(portIdentifier, channelIdentifier) == nil {
+        // if this was the last in-flight packet, then move channel state to FLUSHCOMPLETE
+        channel.state = FLUSHCOMPLETE
+        publicStore.set(channelPath(portIdentifier, channelIdentifier), currentChannel)
+      }
+    }
+
     // return transparent packet
     return packet
 }
@@ -1010,6 +1024,20 @@ function timeoutPacket(
 
     // delete our commitment
     provableStore.delete(packetCommitmentPath(packet.sourcePort, packet.sourceChannel, packet.sequence))
+
+    if channel.state == FLUSHING {
+      upgradeTimeout = privateStore.get(counterpartyUpgradeTimeout(portIdentifier, channelIdentifier))
+        // counterparty-specified timeout must not have exceeded
+      // if it has, then restore the channel and abort upgrade handshake
+      if (currentHeight() > timeout.timeoutHeight && timeout.timeoutHeight != 0) ||
+          (currentTimestamp() > timeout.timeoutTimestamp && timeout.timeoutTimestamp != 0) {
+              restoreChannel(portIdentifier, channelIdentifier)
+      } else if pendingInflightPackets(portIdentifier, channelIdentifier) == nil {
+        // if this was the last in-flight packet, then move channel state to FLUSHCOMPLETE
+        channel.state = FLUSHCOMPLETE
+        publicStore.set(channelPath(portIdentifier, channelIdentifier), currentChannel)
+      }
+    }
 
     // only close on strictly ORDERED channels
     if channel.order === ORDERED {
