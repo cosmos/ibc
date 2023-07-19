@@ -33,9 +33,6 @@ enum ChannelState {
   OPEN,
   FLUSHING,
   FLUSHCOMPLETE,
-  INITUPGRADE,
-  TRYUPGRADE,
-  ACKUPGRADE,
 }
 ```
 
