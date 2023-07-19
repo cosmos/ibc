@@ -39,6 +39,8 @@ In order to provide the desired ordering, exactly-once delivery, and module perm
 
 `Identifier`, `get`, `set`, `delete`, `getCurrentHeight`, and module-system related primitives are as defined in [ICS 24](../ics-024-host-requirements).
 
+See [upgrades spec](./UPGRADES.md) for definition of `pendingInflightPackets`.
+
 A *channel* is a pipeline for exactly-once packet delivery between specific modules on separate blockchains, which has at least one end capable of sending packets and one end capable of receiving packets.
 
 A *bidirectional* channel is a channel where packets can flow in both directions: from `A` to `B` and from `B` to `A`.
@@ -75,6 +77,7 @@ interface ChannelEnd {
   counterpartyChannelIdentifier: Identifier
   connectionHops: [Identifier]
   version: string
+  upgradeSequence: uint64
 }
 ```
 
@@ -88,6 +91,8 @@ interface ChannelEnd {
 - The `connectionHops` stores the list of connection identifiers, in order, along which packets sent on this channel will travel. At the moment this list must be of length 1. In the future multi-hop channels may be supported.
 - The `version` string stores an opaque channel version, which is agreed upon during the handshake. This can determine module-level configuration such as which packet encoding is used for the channel. This version is not used by the core IBC protocol. If the version string contains structured metadata for the application to parse and interpret, then it is considered best practice to encode all metadata in a JSON struct and include the marshalled string in the version field.
 
+See the [upgrade spec](./UPGRADES.md) for details on `upgradeSequence`.
+
 Channel ends have a *state*:
 
 ```typescript
@@ -96,6 +101,8 @@ enum ChannelState {
   TRYOPEN,
   OPEN,
   CLOSED,
+  FLUSHING,
+  FLUSHINGCOMPLETE,
 }
 ```
 
@@ -103,6 +110,9 @@ enum ChannelState {
 - A channel end in `TRYOPEN` state has acknowledged the handshake step on the counterparty chain.
 - A channel end in `OPEN` state has completed the handshake and is ready to send and receive packets.
 - A channel end in `CLOSED` state has been closed and can no longer be used to send or receive packets.
+
+See the [upgrade spec](./UPGRADES.md) for details on `FLUSHING` and `FLUSHCOMPLETE`.
+
 
 A `Packet`, in the interblockchain communication protocol, is a particular interface defined as follows:
 
@@ -585,9 +595,9 @@ function sendPacket(
   data: bytes): uint64 {
     channel = provableStore.get(channelPath(sourcePort, sourceChannel))
 
-    // check that the channel is not closed to send packets; 
+    // check that the channel must be OPEN to send packets; 
     abortTransactionUnless(channel !== null)
-    abortTransactionUnless(channel.state !== CLOSED)
+    abortTransactionUnless(channel.state === OPEN)
     connection = provableStore.get(connectionPath(channel.connectionHops[0]))
     abortTransactionUnless(connection !== null)
 
@@ -651,7 +661,8 @@ function recvPacket(
 
     channel = provableStore.get(channelPath(packet.destPort, packet.destChannel))
     abortTransactionUnless(channel !== null)
-    abortTransactionUnless(channel.state === OPEN)
+    counterpartyLastPacketSent = privateStore.get(channelCounterpartyLastPacketSequencePath(packet.destPort, packet.destChannel)
+    abortTransactionUnless(channel.state === OPEN || (channel.state === FLUSHING && packet.sequence <= counterpartyLastPacketSent))
     abortTransactionUnless(authenticateCapability(channelCapabilityPath(packet.destPort, packet.destChannel), capability))
     abortTransactionUnless(packet.sourcePort === channel.counterpartyPortIdentifier)
     abortTransactionUnless(packet.sourceChannel === channel.counterpartyChannelIdentifier)
@@ -841,7 +852,7 @@ function acknowledgePacket(
     // abort transaction unless that channel is open, calling module owns the associated port, and the packet fields match
     channel = provableStore.get(channelPath(packet.sourcePort, packet.sourceChannel))
     abortTransactionUnless(channel !== null)
-    abortTransactionUnless(channel.state === OPEN)
+    abortTransactionUnless(channel.state === OPEN || channel.state === FLUSHING)
     abortTransactionUnless(authenticateCapability(channelCapabilityPath(packet.sourcePort, packet.sourceChannel), capability))
     abortTransactionUnless(packet.destPort === channel.counterpartyPortIdentifier)
     abortTransactionUnless(packet.destChannel === channel.counterpartyChannelIdentifier)
