@@ -447,10 +447,11 @@ A successful protocol execution flows as follows (note that all calls are made t
 | Actor     | `ChanUpgradeInit`    | A                | (OPEN, OPEN)                  | (INITUPGRADE, OPEN)       |
 | Relayer   | `ChanUpgradeTry`     | B                | (INITUPGRADE, OPEN)           | (INITUPGRADE, TRYUPGRADE) |
 | Relayer   | `ChanUpgradeAck`     | A                | (INITUPGRADE, TRYUPGRADE)     | (ACKUPGRADE, TRYUPGRADE)  |
+| Relayer   | `ChanUpgradeConfirm` | B                | (ACKUPGRADE, TRYUPGRADE)      | (ACKUPGRADE, ACKUPGRADE)  |
 
-Once both states are in `ACKUPGRADE` and `TRYUPGRADE` respectively, both sides must move to `FLUSHINGCOMPLETE` respectively by clearing their in-flight packets. Once both sides have complete flushing, a relayer may submit a `ChanUpgradeOpen` message to both ends proving that the counterparty has also completed flushing in order to move the channelEnd to `OPEN`.
+Once both states are in `ACKUPGRADE`, both sides must move to `FLUSHINGCOMPLETE` respectively by clearing their in-flight packets. Once both sides have complete flushing, a relayer may submit a `ChanUpgradeOpen` message to both ends proving that the counterparty has also completed flushing in order to move the channelEnd to `OPEN`.
 
-`ChanUpgradeOpen` is only necessary to call on chain A if the chain was not moved to `OPEN` on `ChanUpgradeAck` which may happen if all packets on both ends are already flushed.
+`ChanUpgradeOpen` is only necessary to call on chain B if the chain was not moved to `OPEN` on `ChanUpgradeConfirm` which may happen if all packets on both ends are already flushed.
 
 At the end of a successful upgrade handshake between two chains implementing the sub-protocol, the following properties hold:
 
