@@ -421,9 +421,17 @@ function pendingInflightPacketSequences(
 function isAuthorizedUpgrader(address: string): boolean
 ```
 
+`getUpgradeTimeout` will return the upgrade timeout specified for the given channel. This may be a chain-wide parameter, or it can be a parameter chosen per channel. This is an implementation-level detail, so only the function signature is specified here. Note this should retrieve some stored timeout delta for the channel and add it to the current height and time to get the absolute timeout values.
+
+```typescript
+// getUpgradeTimeout
+function getUpgradeTimeout(portIdentifier: string, channelIdentifier: string) UpgradeTimeout {
+}
+```
+
 ### Upgrade Handshake
 
-The upgrade handshake defines seven datagrams: *ChanUpgradeInit*, *ChanUpgradeTry*, *ChanUpgradeAck*, *ChanUpgradeConfirm*  and *ChanUpgradeOpen*
+The upgrade handshake defines seven datagrams: *ChanUpgradeInit*, *ChanUpgradeTry*, *ChanUpgradeAck*, *ChanUpgradeConfirm*, *ChanUpgradeOpen*, *ChanUpgradeTimeout*, and *ChanUpgradeCancel*
 
 A successful protocol execution flows as follows (note that all calls are made through modules per [ICS 25](../ics-025-handler-interface)):
 
