@@ -485,7 +485,7 @@ If an upgrade message arrives after the specified timeout, then the message MUST
 function chanUpgradeInit(
     portIdentifier: Identifier,
     channelIdentifier: Identifier,
-    proposedUpgradeFields: Upgrade,
+    proposedUpgradeFields: UpgradeFields,
     timeout: UpgradeTimeout,
 ) {
     upgradeSequence = initUpgradeHandshake(portIdentifier, channelIdentifier, proposedUpgradeFields, timeout)
