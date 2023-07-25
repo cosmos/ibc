@@ -883,6 +883,10 @@ function timeoutChannelUpgrade(
 
 Both parties must not complete the upgrade handshake if the counterparty upgrade timeout has already passed. Even if both sides could have successfully moved to FLUSHCOMPLETE. This will prevent the channel ends from reaching incompatible states.
 
+### Considerations
+
+Note that a channel upgrade handshake may never complete successfully if the in-flight packets cannot successfully be cleared. This can happen if the timeout value of a packet is too large, or an acknowledgement never arrives, or if there is a bug that makes acknowledging or timing out a packet impossible. In these cases, some out-of-protocol mechanism (e.g. governance) must step in to clear the packets "manually" perhaps by forcefully clearing the packet commitments before restarting the upgrade handshake.
+
 ### Migrations
 
 A chain may have to update its internal state to be consistent with the new upgraded channel. In this case, a migration handler should be a part of the chain binary before the upgrade process so that the chain can properly migrate its state once the upgrade is successful. If a migration handler is necessary for a given upgrade but is not available, then the executing chain must reject the upgrade so as not to enter into an invalid state. This state migration will not be verified by the counterparty since it will just assume that if the channel is upgraded to a particular channel version, then the auxilliary state on the counterparty will also be updated to match the specification for the given channel version. The migration must only run once the upgrade has successfully completed and the new channel is `OPEN` (ie. on `ChanUpgradeConfirm` or `ChanUpgradeOpen`).
