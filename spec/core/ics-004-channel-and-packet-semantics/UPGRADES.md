@@ -22,7 +22,7 @@ As new features get added to IBC, chains may wish to take advantage of new chann
 
 ### Data Structures
 
-The `ChannelState` and `ChannelEnd` are defined in [ICS-4](./README.md), they are reproduced here for the reader's convenience. `INITUPGRADE`, `TRYUPGRADE`, `ACKUPGRADE` are additional states added to enable the upgrade feature.
+The `ChannelState` and `ChannelEnd` are defined in [ICS-4](./README.md), they are reproduced here for the reader's convenience. `FLUSHING` and `FLUSHCOMPLETE` are additional states added to enable the upgrade feature.
 
 #### `ChannelState`
 
@@ -36,13 +36,12 @@ enum ChannelState {
 }
 ```
 
-- The chain that is proposing the upgrade should set the channel state from `OPEN` to `INITUPGRADE`
-- The counterparty chain that accepts the upgrade should set the channel state from `OPEN` to `TRYUPGRADE`
-- Once the initiating chain verifies the counterparty is in `TRYUPGRADE`, it must move to `ACKUPGRADE` unless all in-flight packets are already flushed on both ends, in which case it must move directly to `OPEN`.
-- The `TRYUPGRADE` chain must prove the counterparty is in `ACKUPGRADE` or completed the upgrade in `OPEN` AND have no in-flight packets on **both ends** before it can complete the upgrade and move to `OPEN`.
-- The `ACKUPGRADE` chain may OPEN once in-flight packets on **both ends** have been flushed.
+- In ChanUpgradeInit, the initializing chain that is proposing the upgrade should store the channel upgrade
+- The counterparty chain executing `ChanUpgradeTry` that accepts the upgrade should store the channel upgrade, set the channel state from `OPEN` to `FLUSHING`, and start the flushing timer by storing an upgrade timeout.
+- Once the initiating chain verifies the counterparty is in `FLUSHING`, it must also move to `FLUSHING` unless all in-flight packets are already flushed on both ends, in which case it must move directly to `FLUSHINGCOMPLETE`. The initator will also store the counterparty timeout to ensure it does not move to `FLUSHCOMPLETE` after the counterparty timeout has passed.
+- The counterparty chain must prove that the initiator is  also in `FLUSHING` or completed flushing in `FLUSHCOMPLETE`. The counterparty will store the initiator timeout to ensure it does not move to `FLUSHCOMPLETE` after the initiator timeout has passed.
 
-Both `TRYUPGRADE` and `ACKUPGRADE` are "blocking" states in that they will prevent the upgrade handshake from proceeding until the in-flight packets on both channel ends are flushed. The `TRYUPGRADE` state must additionally prove the counterparty state before proceeding to open, while the `ACKUPGRADE` state may move to `OPEN` unilaterally once packets are flushed on both ends.
+`FLUSHING` is a "blocking" states in that they will prevent the upgrade handshake from proceeding until the in-flight packets on both channel ends are flushed. Once both sides have moved to `FLUSHCOMPLETE`, a relayer can prove this on both ends with `ChanUpgradeOpen` to open the channel on both sides with the new parameters.
 
 #### `ChannelEnd`
 
@@ -58,7 +57,7 @@ interface ChannelEnd {
 }
 ```
 
-- `state`: The state is specified by the handshake steps of the upgrade protocol and will be mutated in place during the handshake. It will be in `FLUSHING` mode when the channel end is flushing in-flight packets. The FlushStatus will change to `FLUSHCOMPLETE` once there are no in-flight packets left and the channelEnd is ready to move to OPEN.
+- `state`: The state is specified by the handshake steps of the upgrade protocol and will be mutated in place during the handshake. It will be in `FLUSHING` mode when the channel end is flushing in-flight packets. The state will change to `FLUSHCOMPLETE` once there are no in-flight packets left and the channelEnd is ready to move to OPEN.
 - `upgradeSequence`: The upgrade sequence will be incremented and agreed upon during the upgrade handshake and will be mutated in place.
 
 All other parameters will remain the same during the upgrade handshake until the upgrade handshake completes. When the channel is reset to `OPEN` on a successful upgrade handshake, the fields on the channel end will be switched over to the `UpgradeFields` specified in the upgrade.
@@ -223,19 +222,19 @@ The channel upgrade process consists of the following sub-protocols: `initUpgrad
 
 ### Utility Functions
 
-`initUpgradeHandshake` is a sub-protocol that will initialize the channel end for the upgrade handshake. It will validate the upgrade parameters and set the channel state to INITUPGRADE. All packet processing will continue according to the original channel parameters, as this is a signalling mechanism that can remain indefinitely. The new proposed upgrade will be stored in the provable store for counterparty verification. If it is called again before the handshake starts, then the current proposed upgrade will be replaced with the new one and the channel sequence will be incremented.
+`initUpgradeHandshake` is a sub-protocol that will initialize the channel end for the upgrade handshake. It will validate the upgrade parameters and store the channel upgrade. All packet processing will continue according to the original channel parameters, as this is a signalling mechanism that can remain indefinitely. The new proposed upgrade will be stored in the provable store for counterparty verification. If it is called again before the handshake starts, then the current proposed upgrade will be replaced with the new one and the channel sequence will be incremented.
 
 ```typescript
 // initUpgradeHandshake will verify that the channel is in the correct precondition to call the initUpgradeHandshake protocol
 // it will verify the new upgrade field parameters, and make the relevant state changes for initializing a new upgrade:
-// - moving channel upgrade state to INITUPGRADE
+// - store channel upgrade
 // - incrementing upgrade sequence
 function initUpgradeHandshake(
     portIdentifier: Identifier,
     channelIdentifier: Identifier,
     proposedUpgradeFields: UpgradeFields,
 ): uint64 {
-    // current channel must be OPEN or INITUPGRADE
+    // current channel must be OPEN
     // If channel already has an upgrade but isn't in FLUSHING, then this will override the previous upgrade attempt
     currentChannel = provableStore.get(channelPath(portIdentifier, channelIdentifier))
     abortTransactionUnless(currentChannel.state == OPEN)
@@ -265,7 +264,7 @@ function initUpgradeHandshake(
 }
 ```
 
-`startFlushUpgradeHandshake` will set the counterparty last packet send and continue blocking the upgrade from continuing until all in-flight packets have been flushed. When the channel is in blocked mode, any packet receive above the counterparty last packet send will be rejected. It will verify the upgrade parameters and set the channel state to one of the flushing states (`TRYUPGRADE` or `ACKUPGRADE`) passed in by caller, set the `FlushStatus` to `FLUSHING` and block `sendPackets`. During this time; `receivePacket`, `acknowledgePacket` and `timeoutPacket` will still be allowed and processed according to the original channel parameters. The state machine will set a timer for how long the other side can take before it completes flushing and moves to `FLUSHCOMPLETE`. The new proposed upgrade will be stored in the public store for counterparty verification.
+`startFlushUpgradeHandshake` will set the counterparty last packet send and continue blocking the upgrade from continuing until all in-flight packets have been flushed. When the channel is in blocked mode, any packet receive above the counterparty last packet send will be rejected. It will verify the upgrade parameters and set the channel state to `FLUSHING` and block `sendPackets`. During this time; `receivePacket`, `acknowledgePacket` and `timeoutPacket` will still be allowed and processed according to the original channel parameters. The state machine will set a timer for how long the other side can take before it completes flushing and moves to `FLUSHCOMPLETE`. The new proposed upgrade will be stored in the public store for counterparty verification.
 
 ```typescript
 // startFlushUpgradeSequence will verify that the channel is in a valid precondition for calling the startFlushUpgradeHandshake
@@ -373,7 +372,7 @@ function openUpgradeHandshake(
 `restoreChannel` will write an error receipt, set the channel back to its original state and delete upgrade information when the executing channel needs to abort the upgrade handshake and return to the original parameters.
 
 ```typescript
-// restoreChannel will restore the channel state and flush status to their pre-upgrade state so that upgrade is aborted
+// restoreChannel will restore the channel state to its pre-upgrade state and delete upgrade auxilliary state so that upgrade is aborted
 // it write an error receipt to state so counterparty can restore as well.
 // NOTE: this function signature may be modified by implementors to take a custom error
 function restoreChannel(
@@ -586,7 +585,7 @@ function chanUpgradeTry(
 }
 ```
 
-NOTE: Implementations that want to explicitly permission upgrades should enforce crossing hellos. i.e. Both parties must have called INITUPGRADE with mutually compatible parameters in order for a TRYUPGRADE to succeed. Implementations that want to be permissive towards counterparty-initiated upgrades may allow moving from OPEN to TRYUPGRADE.
+NOTE: Implementations that want to explicitly permission upgrades should enforce crossing hellos. i.e. Both parties must have called ChanUpgradeInit with mutually compatible parameters in order for ChanUpgradeTry to succeed. Implementations that want to be permissive towards counterparty-initiated upgrades may allow moving from OPEN to FLUSHING without having an upgrade previously stored on the executing chain.
 
 ```typescript
 function chanUpgradeAck(
@@ -671,7 +670,7 @@ function chanUpgradeAck(
 }
 ```
 
-`chanUpgradeConfirm` is called on the chain which is on `TRYUPGRADE` **after** `chanUpgradeAck` is called on the counterparty. This will inform the TRY chain of the timeout set on ACK by the counterparty. If the timeout has already exceeded, we will write an error receipt and restore. If packets on both sides have already been flushed and timeout is not exceeded, then we can open the channel. Otherwise, we set the counterparty timeout in the private store and wait for packet flushing to complete.
+`chanUpgradeConfirm` is called on the chain which is on `FLUSHING` **after** `chanUpgradeAck` is called on the counterparty. This will inform the TRY chain of the timeout set on ACK by the counterparty. If the timeout has already exceeded, we will write an error receipt and restore. If packets on both sides have already been flushed and timeout is not exceeded, then we can open the channel. Otherwise, we set the counterparty timeout in the private store and wait for packet flushing to complete.
 
 ```typescript
 function chanUpgradeConfirm(
