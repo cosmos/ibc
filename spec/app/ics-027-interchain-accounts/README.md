@@ -563,8 +563,7 @@ function onChanUpgradeInit(
     abortTransactionUnless(IsSupportedTxType(metadata.TxType))
 
     // the interchain account address on the host chain
-    // must match the address stored in the (controller
-    // chain port identifier -> interchain account) address mapping.
+    // must remain the same after the upgrade.
     abortTransactionUnless(currentMetadata.Address === metadata.Address)
 
     // at the moment it is not supported to perform upgrades that
