@@ -545,8 +545,16 @@ function onChanUpgradeInit(
   connectionHops: [Identifier],
   upgradeSequence: uin64
   version: string) => (version: string, err: Error) {
+    // new version proposed in the upgrade
     abortTransactionUnless(version !== "")
     metadata = UnmarshalJSON(version)
+
+    // retrieve the existing channel version.
+    // In ibc-go, for example, this is done using the GetAppVersion 
+    // function of the ICS4Wrapper interface.
+    // See https://github.com/cosmos/ibc-go/blob/ac6300bd857cd2bd6915ae51e67c92848cbfb086/modules/core/05-port/types/module.go#L128-L132
+    currentVersion = getAppVersion(portIdentifier, channelIdentifier)
+    currentMetadata = UnmarshalJSON(currentVersion)
 
     // validate metadata
     abortTransactionUnless(metadata.Version === "ics27-1")
@@ -557,16 +565,16 @@ function onChanUpgradeInit(
     // the interchain account address on the host chain
     // must match the address stored in the (controller
     // chain port identifier -> interchain account) address mapping.
-    interchainAccountAddress := GetInterchainAccountAddress(portIdentifier)
-    abortTransactionUnless(interchainAccountAddress === nil)
-    abortTransactionUnless(metadata.Address !== interchainAccountAddress)
+    abortTransactionUnless(currentMetadata.Address === metadata.Address)
 
-    // controller connection ID must match the proposed connection hop
-    abortTransactionUnless(metadata.ControllerConnectionId === connectionHops[0])
-    // host connection ID must not be empty, and will be validated 
-    // in onChanUpgradeTry on the host chain.
-    abortTransactionUnless(metadata.HostConnectionId !== "")
-
+    // at the moment it is not supported to perform upgrades that
+    // change the connection ID of the controller or host chains.
+    // therefore these connection IDs much remain the same as before.
+    abortTransactionUnless(currentMetadata.ControllerConnectionId === metadata.ControllerConnectionId)
+    abortTransactionUnless(currentMetadata.HostConnectionId === metadata.HostConnectionId)
+    // the proposed connection hop must not change
+    abortTransactionUnless(currentMetadata.ControllerConnectionId === connectionHops[0])
+    
     version = marshalJSON(metadata)
     return version, nil
 }
@@ -588,26 +596,31 @@ function onChanUpgradeTry(
 
     // upgrade version proposed by counterparty
     abortTransactionUnless(counterpartyVersion !== "")
-    metadata = UnmarshalJSON(counterpartyVersion)
-    
+
+    // retrieve the existing channel version.
+    // In ibc-go, for example, this is done using the GetAppVersion 
+    // function of the ICS4Wrapper interface.
+    // See https://github.com/cosmos/ibc-go/blob/ac6300bd857cd2bd6915ae51e67c92848cbfb086/modules/core/05-port/types/module.go#L128-L132
+    currentVersion = getAppVersion(portIdentifier, channelIdentifier)
+    currentMetadata = UnmarshalJSON(currentVersion)
+
     // validate metadata
     abortTransactionUnless(metadata.Version === "ics27-1")
     // all elements in encoding list and tx type list must be supported
     abortTransactionUnless(IsSupportedEncoding(metadata.Encoding))
     abortTransactionUnless(IsSupportedTxType(metadata.TxType))
-    
-    // the interchain account address on the host chain
-    // must match the address stored in the (controller
-    // chain port identifier -> interchain account) address mapping.
-    interchainAccountAddress := GetInterchainAccountAddress(counterpartyPortIdentifier)
-    abortTransactionUnless(interchainAccountAddress === nil)
-    abortTransactionUnless(metadata.Address !== interchainAccountAddress)
 
-    // controller connection ID must match proposed counterparty connection identifier
-    connection = provableStore.get(connectionPath(connectionHops[0]))
-    abortTransactionUnless(metadata.ControllerConnectionId === connection.counterpartyConnectionIdentifier)
-    // host connection ID must match the proposed connection hop
-    abortTransactionUnless(metadata.HostConnectionId === connectionHops[0])
+    // the interchain account address on the host chain
+    // must remain the same after the upgrade.
+    abortTransactionUnless(currentMetadata.Address === metadata.Address)
+
+    // at the moment it is not supported to perform upgrades that
+    // change the connection ID of the controller or host chains.
+    // therefore these connection IDs much remain the same as before.
+    abortTransactionUnless(currentMetadata.ControllerConnectionId === metadata.ControllerConnectionId)
+    abortTransactionUnless(currentMetadata.HostConnectionId === metadata.HostConnectionId)
+    // the proposed connection hop must not change
+    abortTransactionUnless(currentMetadata.HostConnectionId === connectionHops[0])
 
     return counterpartyVersion, nil
 }
@@ -619,27 +632,32 @@ function onChanUpgradeAck(
   portIdentifier: Identifier,
   channelIdentifier: Identifier,
   counterpartyVersion: string) => Error {
-    // upgrade version proposed by counterparty
+    // final upgrade version proposed by counterparty
     abortTransactionUnless(counterpartyVersion !== "")
     metadata = UnmarshalJSON(counterpartyVersion)
-    
+
+    // retrieve the existing channel version.
+    // In ibc-go, for example, this is done using the GetAppVersion 
+    // function of the ICS4Wrapper interface.
+    // See https://github.com/cosmos/ibc-go/blob/ac6300bd857cd2bd6915ae51e67c92848cbfb086/modules/core/05-port/types/module.go#L128-L132
+    currentVersion = getAppVersion(portIdentifier, channelIdentifier)
+    currentMetadata = UnmarshalJSON(currentVersion)
+
     // validate metadata
     abortTransactionUnless(metadata.Version === "ics27-1")
     // all elements in encoding list and tx type list must be supported
     abortTransactionUnless(IsSupportedEncoding(metadata.Encoding))
     abortTransactionUnless(IsSupportedTxType(metadata.TxType))
-    
-    // the interchain account address on the controller chain
-    // must match the address stored in the (controller
-    // chain port identifier -> interchain account) address mapping.
-    interchainAccountAddress := GetInterchainAccountAddress(portIdentifier)
-    abortTransactionUnless(interchainAccountAddress === nil)
-    abortTransactionUnless(metadata.Address !== interchainAccountAddress)
 
-    // controller connection ID must match proposed counterparty connection identifier
-    // TODO: check controller connection ID and host connection ID, which should be proposed IDs.
+    // the interchain account address on the host chain
+    // must remain the same after the upgrade.
+    abortTransactionUnless(currentMetadata.Address === metadata.Address)
 
-
+    // at the moment it is not supported to perform upgrades that
+    // change the connection ID of the controller or host chains.
+    // therefore these connection IDs much remain the same as before.
+    abortTransactionUnless(currentMetadata.ControllerConnectionId === metadata.ControllerConnectionId)
+    abortTransactionUnless(currentMetadata.HostConnectionId === metadata.HostConnectionId)
 
     return nil
 }
@@ -650,18 +668,7 @@ function onChanUpgradeAck(
 function onChanUpgradeOpen(
   portIdentifier: Identifier,
   channelIdentifier: Identifier) {
-    // TODO: in ibc-go we will need to change the (controller chain port identifier, connection ID -> interchain account) address mapping
-    // to use the new connection ID, in case that was changed in the upgrade.
-    // In controller chain:
-    // - retrieve channel using port ID and channel ID
-    // - use port ID
-    // - use channel.connectionHops[0]
-    // In host chain:
-    // - retrieve channel using port ID and channel ID
-    // - use channel.counterpartyPortIdentifier
-    // - use channel.connectionHops[0]
-
-    // But we need to get the interchain account address from the previous mapping?
+    // no-op
 } 
 ```
 
