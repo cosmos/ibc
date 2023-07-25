@@ -383,14 +383,10 @@ function onChanOpenInit(
   counterpartyPortIdentifier: Identifier,
   counterpartyChannelIdentifier: Identifier,
   version: string) => (version: string, err: Error) {
-  // only ordered channels allowed
-  abortTransactionUnless(order === ORDERED)
   // validate port format
   abortTransactionUnless(validateControllerPortParams(portIdentifier))
   // only allow channels to be created on the "icahost" port on the counterparty chain
   abortTransactionUnless(counterpartyPortIdentifier === "icahost")
-  // only open the channel if there is no active channel already set (with status OPEN)
-  abortTransactionUnless(activeChannel === nil)
 
   if version != "" {
     // validate metadata
@@ -416,6 +412,24 @@ function onChanOpenInit(
     }
     version = marshalJSON(metadata)
   }
+
+  // only open the channel if:
+  // - there is no active channel already set (with status OPEN)
+  // OR
+  // - there is already an active channel (with status CLOSED) AND
+  // the metadata matches exactly the existing metadata in the 
+  // version string of the active channel AND the ordering of the 
+  // new channel matches the ordering of the active channel.
+  activeChannelId, activeChannelFound = GetActiveChannelID(portId, connectionId)
+  if activeChannelFound {
+    activeChannel = provableStore.get(channelPath(portId, activeChannelId))
+    abortTransactionUnless(activeChannel.state === CLOSED)
+    previousOrder = activeChannel.order
+    abortTransactionUnless(previousOrder === order)
+    previousMetadata = UnmarshalJSON(activeChannel.version)
+    abortTransactionUnless(previousMetadata === metadata)
+  }
+
   return version, nil
 }
 ```
@@ -430,8 +444,6 @@ function onChanOpenTry(
   counterpartyPortIdentifier: Identifier,
   counterpartyChannelIdentifier: Identifier,
   counterpartyVersion: string) (version: string, err: Error) {
-  // only ordered channels allowed
-  abortTransactionUnless(order === ORDERED)
   // validate port ID
   abortTransactionUnless(portIdentifier === "icahost")
   // create the interchain account with the counterpartyPortIdentifier
@@ -477,7 +489,6 @@ function onChanOpenAck(
   abortTransactionUnless(IsSupportedTxType(metadata.TxType))
   abortTransactionUnless(metadata.ControllerConnectionId === connectionId)
   abortTransactionUnless(metadata.HostConnectionId === counterpartyConnectionId)
-
   
   // state change to keep track of successfully registered interchain account
   SetInterchainAccountAddress(portID, metadata.Address)
@@ -520,6 +531,146 @@ function onChanCloseInit(
 function onChanCloseConfirm(
   portIdentifier: Identifier,
   channelIdentifier: Identifier) {
+}
+```
+
+### Upgrade handshake
+
+```typescript
+// Called on Controller Chain by Authority
+function onChanUpgradeInit(
+  portIdentifier: Identifier,
+  channelIdentifier: Identifier,
+  order: ChannelOrder,
+  connectionHops: [Identifier],
+  upgradeSequence: uin64
+  version: string) => (version: string, err: Error) {
+    abortTransactionUnless(version !== "")
+    metadata = UnmarshalJSON(version)
+
+    // validate metadata
+    abortTransactionUnless(metadata.Version === "ics27-1")
+    // all elements in encoding list and tx type list must be supported
+    abortTransactionUnless(IsSupportedEncoding(metadata.Encoding))
+    abortTransactionUnless(IsSupportedTxType(metadata.TxType))
+
+    // the interchain account address on the host chain
+    // must match the address stored in the (controller
+    // chain port identifier -> interchain account) address mapping.
+    interchainAccountAddress := GetInterchainAccountAddress(portIdentifier)
+    abortTransactionUnless(interchainAccountAddress === nil)
+    abortTransactionUnless(metadata.Address !== interchainAccountAddress)
+
+    // controller connection ID must match the proposed connection hop
+    abortTransactionUnless(metadata.ControllerConnectionId === connectionHops[0])
+    // host connection ID must not be empty, and will be validated 
+    // in onChanUpgradeTry on the host chain.
+    abortTransactionUnless(metadata.HostConnectionId !== "")
+
+    version = marshalJSON(metadata)
+    return version, nil
+}
+```
+
+```typescript
+// Called on Host Chain by Relayer
+function onChanUpgradeTry(
+  portIdentifier: Identifier,
+  channelIdentifier: Identifier,
+  order: ChannelOrder,
+  connectionHops: [Identifier],
+  upgradeSequence: uint64,
+  counterpartyPortIdentifier: Identifier,
+  counterpartyChannelIdentifier: Identifier,
+  counterpartyVersion: string) => (version: string, err: Error) {
+    // validate port ID
+    abortTransactionUnless(portIdentifier === "icahost")
+
+    // upgrade version proposed by counterparty
+    abortTransactionUnless(counterpartyVersion !== "")
+    metadata = UnmarshalJSON(counterpartyVersion)
+    
+    // validate metadata
+    abortTransactionUnless(metadata.Version === "ics27-1")
+    // all elements in encoding list and tx type list must be supported
+    abortTransactionUnless(IsSupportedEncoding(metadata.Encoding))
+    abortTransactionUnless(IsSupportedTxType(metadata.TxType))
+    
+    // the interchain account address on the host chain
+    // must match the address stored in the (controller
+    // chain port identifier -> interchain account) address mapping.
+    interchainAccountAddress := GetInterchainAccountAddress(counterpartyPortIdentifier)
+    abortTransactionUnless(interchainAccountAddress === nil)
+    abortTransactionUnless(metadata.Address !== interchainAccountAddress)
+
+    // controller connection ID must match proposed counterparty connection identifier
+    connection = provableStore.get(connectionPath(connectionHops[0]))
+    abortTransactionUnless(metadata.ControllerConnectionId === connection.counterpartyConnectionIdentifier)
+    // host connection ID must match the proposed connection hop
+    abortTransactionUnless(metadata.HostConnectionId === connectionHops[0])
+
+    return counterpartyVersion, nil
+}
+```
+
+```typescript
+// Called on Controller Chain by Relayer
+function onChanUpgradeAck(
+  portIdentifier: Identifier,
+  channelIdentifier: Identifier,
+  counterpartyVersion: string) => Error {
+    // upgrade version proposed by counterparty
+    abortTransactionUnless(counterpartyVersion !== "")
+    metadata = UnmarshalJSON(counterpartyVersion)
+    
+    // validate metadata
+    abortTransactionUnless(metadata.Version === "ics27-1")
+    // all elements in encoding list and tx type list must be supported
+    abortTransactionUnless(IsSupportedEncoding(metadata.Encoding))
+    abortTransactionUnless(IsSupportedTxType(metadata.TxType))
+    
+    // the interchain account address on the controller chain
+    // must match the address stored in the (controller
+    // chain port identifier -> interchain account) address mapping.
+    interchainAccountAddress := GetInterchainAccountAddress(portIdentifier)
+    abortTransactionUnless(interchainAccountAddress === nil)
+    abortTransactionUnless(metadata.Address !== interchainAccountAddress)
+
+    // controller connection ID must match proposed counterparty connection identifier
+    // TODO: check controller connection ID and host connection ID, which should be proposed IDs.
+
+
+
+    return nil
+}
+```
+
+```typescript
+// Called on Controller and Host Chains by Relayer
+function onChanUpgradeOpen(
+  portIdentifier: Identifier,
+  channelIdentifier: Identifier) {
+    // TODO: in ibc-go we will need to change the (controller chain port identifier, connection ID -> interchain account) address mapping
+    // to use the new connection ID, in case that was changed in the upgrade.
+    // In controller chain:
+    // - retrieve channel using port ID and channel ID
+    // - use port ID
+    // - use channel.connectionHops[0]
+    // In host chain:
+    // - retrieve channel using port ID and channel ID
+    // - use channel.counterpartyPortIdentifier
+    // - use channel.connectionHops[0]
+
+    // But we need to get the interchain account address from the previous mapping?
+} 
+```
+
+```typescript
+// Called on Controller and/or Host Chain by Relayer
+function onChanUpgradeRestore(
+  portIdentifier: Identifier,
+  channelIdentifier: Identifier) {
+    // no-op
 }
 ```
 
