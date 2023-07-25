@@ -532,8 +532,6 @@ function chanUpgradeTry(
         }
 
         initUpgradeChannelHandshake(portIdentifier, channelIdentifier, upgradeFields)
-    } else {
-        abortTransactionUnless(existingUpgrade.fields == upgradeFields)
     }
 
     // get counterpartyHops for given connection
@@ -571,10 +569,17 @@ function chanUpgradeTry(
         proposedUpgradeChannel.counterpartyChannelIdentifier,
         proposedUpgradeChannel.version
     )
-    // restore channel if callback returned error
-    if err != nil {
+    // abort the transaction if the callback returns an error and
+    // there was no existing upgrade. This will allow the counterparty upgrade
+    // to continue existing while this chain may add support for it in the future
+    if err != nil && existingUpgrade == nil {
+        abortTransactionUnless(false)
+    }
+    // if the callback returns an error while an existing upgrade is in place
+    // or if the existing upgrade is not compatible with the counterparty upgrade
+    // we must restore the channel so that a new upgrade attempt can be made
+    if err != nil || existingUpgrade.fields != upgradeFields {
         restoreChannel(portIdentifier, channelIdentifier)
-        return
     }
 
     // replace channel version with the version returned by application
