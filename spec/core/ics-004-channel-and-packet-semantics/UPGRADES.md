@@ -698,7 +698,7 @@ function chanUpgradeConfirm(
     counterpartyHops = getCounterpartyHops(connection)
 
     counterpartyChannel = ChannelEnd{
-        state: counterpartyFlushState,
+        state: counterpartyChannelState,
         ordering: currentChannel.ordering,
         counterpartyPortIdentifier: portIdentifier,
         counterpartyChannelIdentifier: channelIdentifier,
@@ -750,14 +750,13 @@ function chanUpgradeOpen(
     currentChannel = provableStore.get(channelPath(portIdentifier, channelIdentifier))
     abortTransactionUnless(currentChannel.state == FLUSHCOMPLETE)
 
-    // counterparty upgrade must not have passed on our chain
     connection = getConnection(currentChannel.connectionIdentifier)
-    counterpartyHops = getCounterpartyHops(connection)
 
     // counterparty must be in OPEN or FLUSHCOMPLETE state
     if counterpartyChannelState == OPEN {
         // get upgrade since counterparty should have upgraded to these parameters
         upgrade = provableStore.get(channelUpgradePath(portIdentifier, channelIdentifier))
+        counterpartyHops = getCounterpartyHops(upgrade.fields.connectionHops)
 
         counterpartyChannel = ChannelEnd{
             state: OPEN,
@@ -769,6 +768,7 @@ function chanUpgradeOpen(
             sequence: currentChannel.sequence,
         }
     } else if counterpartyChannelState == FLUSHCOMPLETE {
+        counterpartyHops = getCounterpartyHops(connection)
         counterpartyChannel = ChannelEnd{
             state: FLUSHCOMPLETE,
             ordering: currentChannel.ordering,
@@ -867,7 +867,24 @@ function timeoutChannelUpgrade(
     connection = getConnection(currentChannel.connectionIdentifier)
 
     // counterparty channel must be proved to not have completed flushing after timeout has passed
-    abortTransactionUnless(counterpartyChannel.state !== OPEN || counterpartyChannel.state == FLUSHCOMPLETE)
+    abortTransactionUnless(counterpartyChannel.state !== OPEN && counterpartyChannel.state !== FLUSHCOMPLETE)
+    // if counterparty channel state is OPEN, we should abort only if the counterparty has successfully completed upgrade
+    if counterpartyChannel.state === OPEN {
+         // get upgrade since counterparty should have upgraded to these parameters
+        upgrade = provableStore.get(channelUpgradePath(portIdentifier, channelIdentifier))
+        counterpartyHops = getCounterpartyHops(upgrade.fields.connectionHops)
+
+        upgradedChannel = ChannelEnd{
+            state: OPEN,
+            ordering: upgrade.fields.ordering,
+            counterpartyPortIdentifier: portIdentifier,
+            counterpartyChannelIdentifier: channelIdentifier,
+            connectionHops: upgrade.fields.connectionHops,
+            version: upgrade.fields.version,
+            sequence: currentChannel.sequence,
+        }
+        abortTransactionUnless(counterpartyChannel != upgradedChannel)
+    }
     abortTransactionUnless(counterpartyChannel.sequence === currentChannel.sequence)
     abortTransactionUnless(verifyChannelState(connection, proofHeight, proofChannel, currentChannel.counterpartyPortIdentifier, currentChannel.counterpartyChannelIdentifier, counterpartyChannel))
 
