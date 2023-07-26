@@ -890,18 +890,17 @@ function acknowledgePacket(
 
     if channel.state == FLUSHING {
       upgradeTimeout = privateStore.get(counterpartyUpgradeTimeout(portIdentifier, channelIdentifier))
-      if upgradeTimeout == nil {
-        break
-      }
+      if upgradeTimeout != nil {
         // counterparty-specified timeout must not have exceeded
-      // if it has, then restore the channel and abort upgrade handshake
-      if (upgradeTimeout.timeoutHeight != 0 && currentHeight() >= upgradeTimeout.timeoutHeight) ||
-          (upgradeTimeout.timeoutTimestamp != 0 && currentTimestamp() >= upgradeTimeout.timeoutTimestamp ) {
-              restoreChannel(portIdentifier, channelIdentifier)
-      } else if pendingInflightPackets(portIdentifier, channelIdentifier) == nil {
-        // if this was the last in-flight packet, then move channel state to FLUSHCOMPLETE
-        channel.state = FLUSHCOMPLETE
-        publicStore.set(channelPath(portIdentifier, channelIdentifier), channel)
+        // if it has, then restore the channel and abort upgrade handshake
+        if (upgradeTimeout.timeoutHeight != 0 && currentHeight() >= upgradeTimeout.timeoutHeight) ||
+            (upgradeTimeout.timeoutTimestamp != 0 && currentTimestamp() >= upgradeTimeout.timeoutTimestamp ) {
+                restoreChannel(portIdentifier, channelIdentifier)
+        } else if pendingInflightPackets(portIdentifier, channelIdentifier) == nil {
+          // if this was the last in-flight packet, then move channel state to FLUSHCOMPLETE
+          channel.state = FLUSHCOMPLETE
+          publicStore.set(channelPath(portIdentifier, channelIdentifier), channel)
+        }
       }
     }
 
@@ -1041,18 +1040,17 @@ function timeoutPacket(
 
     if channel.state == FLUSHING {
       upgradeTimeout = privateStore.get(counterpartyUpgradeTimeout(portIdentifier, channelIdentifier))
-      if upgradeTimeout == nil {
-        break
-      }
-      // counterparty-specified timeout must not have exceeded
-      // if it has, then restore the channel and abort upgrade handshake
-      if (upgradeTimeout.timeoutHeight != 0 && currentHeight() >= upgradeTimeout.timeoutHeight) ||
-          (upgradeTimeout.timeoutTimestamp != 0 && currentTimestamp() >= upgradeTimeout.timeoutTimestamp ) {
-              restoreChannel(portIdentifier, channelIdentifier)
-      } else if pendingInflightPackets(portIdentifier, channelIdentifier) == nil {
-        // if this was the last in-flight packet, then move channel state to FLUSHCOMPLETE
-        channel.state = FLUSHCOMPLETE
-        publicStore.set(channelPath(portIdentifier, channelIdentifier), channel)
+      if upgradeTimeout != nil {
+        // counterparty-specified timeout must not have exceeded
+        // if it has, then restore the channel and abort upgrade handshake
+        if (upgradeTimeout.timeoutHeight != 0 && currentHeight() >= upgradeTimeout.timeoutHeight) ||
+            (upgradeTimeout.timeoutTimestamp != 0 && currentTimestamp() >= upgradeTimeout.timeoutTimestamp ) {
+                restoreChannel(portIdentifier, channelIdentifier)
+        } else if pendingInflightPackets(portIdentifier, channelIdentifier) == nil {
+          // if this was the last in-flight packet, then move channel state to FLUSHCOMPLETE
+          channel.state = FLUSHCOMPLETE
+          publicStore.set(channelPath(portIdentifier, channelIdentifier), channel)
+        }
       }
     }
 

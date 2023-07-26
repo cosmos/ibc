@@ -38,7 +38,7 @@ enum ChannelState {
 
 - In ChanUpgradeInit, the initializing chain that is proposing the upgrade should store the channel upgrade
 - The counterparty chain executing `ChanUpgradeTry` that accepts the upgrade should store the channel upgrade, set the channel state from `OPEN` to `FLUSHING`, and start the flushing timer by storing an upgrade timeout.
-- Once the initiating chain verifies the counterparty is in `FLUSHING`, it must also move to `FLUSHING` unless all in-flight packets are already flushed on both ends, in which case it must move directly to `FLUSHINGCOMPLETE`. The initator will also store the counterparty timeout to ensure it does not move to `FLUSHCOMPLETE` after the counterparty timeout has passed.
+- Once the initiating chain verifies the counterparty is in `FLUSHING`, it must also move to `FLUSHING` unless all in-flight packets are already flushed on both ends, in which case it must move directly to `FLUSHCOMPLETE`. The initator will also store the counterparty timeout to ensure it does not move to `FLUSHCOMPLETE` after the counterparty timeout has passed.
 - The counterparty chain must prove that the initiator is  also in `FLUSHING` or completed flushing in `FLUSHCOMPLETE`. The counterparty will store the initiator timeout to ensure it does not move to `FLUSHCOMPLETE` after the initiator timeout has passed.
 
 `FLUSHING` is a "blocking" states in that they will prevent the upgrade handshake from proceeding until the in-flight packets on both channel ends are flushed. Once both sides have moved to `FLUSHCOMPLETE`, a relayer can prove this on both ends with `ChanUpgradeOpen` to open the channel on both sides with the new parameters.
@@ -448,7 +448,7 @@ A successful protocol execution flows as follows (note that all calls are made t
 | Relayer   | `ChanUpgradeAck`     | A                | (OPEN, FLUSHING)                   | (FLUSHING/FLUSHCOMPLETE, FLUSHING)                    |
 | Relayer   | `ChanUpgradeConfirm` | B                | (FLUSHING/FLUSHCOMPLETE, FLUSHING) | (FLUSHING/FLUSHCOMPLETE, FLUSHING/FLUSHCOMPLETE/OPEN) |
 
-Once both states are in `FLUSHING` and both sides have stored each others upgrade timeouts, both sides can move to `FLUSHINGCOMPLETE` by clearing their in-flight packets. Once both sides have complete flushing, a relayer may submit a `ChanUpgradeOpen` message to both ends proving that the counterparty has also completed flushing in order to move the channelEnd to `OPEN`.
+Once both states are in `FLUSHING` and both sides have stored each others upgrade timeouts, both sides can move to `FLUSHCOMPLETE` by clearing their in-flight packets. Once both sides have complete flushing, a relayer may submit a `ChanUpgradeOpen` message to both ends proving that the counterparty has also completed flushing in order to move the channelEnd to `OPEN`.
 
 `ChanUpgradeOpen` is only necessary to call on chain B if the chain was not moved to `OPEN` on `ChanUpgradeConfirm` which may happen if all packets on both ends are already flushed.
 
