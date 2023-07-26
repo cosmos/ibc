@@ -264,86 +264,65 @@ function initUpgradeHandshake(
 }
 ```
 
-`startFlushUpgradeHandshake` will set the counterparty last packet send and continue blocking the upgrade from continuing until all in-flight packets have been flushed. When the channel is in blocked mode, any packet receive above the counterparty last packet send will be rejected. It will verify the upgrade parameters and set the channel state to `FLUSHING` and block `sendPackets`. During this time; `receivePacket`, `acknowledgePacket` and `timeoutPacket` will still be allowed and processed according to the original channel parameters. The state machine will set a timer for how long the other side can take before it completes flushing and moves to `FLUSHCOMPLETE`. The new proposed upgrade will be stored in the public store for counterparty verification.
+`isCompatibleUpgradeFields` will return true if two upgrade field structs are mutually compatible as counterparties, and false otherwise. The first field must be the upgrade fields on the executing chain, the second field must be the counterparty upgrade fields. This function will also check that the proposed connection hops exists, is OPEN, and is mutually compatible with the counterparty connection hops.
 
 ```typescript
-// startFlushUpgradeSequence will verify that the channel is in a valid precondition for calling the startFlushUpgradeHandshake
-// it will verify the proofs of the counterparty channel and upgrade
-// it will verify that the upgrades on both ends are mutually compatible
-// it will set the channel to desiredChannel state and move to flushing mode if we are not already in flushing mode
-function startFlushUpgradeHandshake(
-    portIdentifier: Identifier,
-    channelIdentifier: Identifier,
+function isCompatibleUpgradeFields(
     proposedUpgradeFields: UpgradeFields,
-    counterpartyChannel: ChannelEnd,
-    counterpartyUpgrade: Upgrade,
-    proofChannel: CommitmentProof,
-    proofUpgrade: CommitmentProof,
-    proofHeight: Height
-) {
-    currentChannel = provableStore.get(channelPath(portIdentifier, channelIdentifier))
-    abortTransactionUnless(currentChannel.state == OPEN || currentChannel.state == FLUSHING)
-
-    // get underlying connection for proof verification
-    connection = getConnection(currentChannel.connectionIdentifier)
-
-    // verify proofs of counterparty state
-    abortTransactionUnless(verifyChannelState(connection, proofHeight, proofChannel, currentChannel.counterpartyPortIdentifier, currentChannel.counterpartyChannelIdentifier, counterpartyChannel))
-    abortTransactionUnless(verifyChannelUpgrade(connection, proofHeight, proofUpgrade, currentChannel.counterpartyPortIdentifier, currentChannel.counterpartyChannelIdentifier, counterpartyUpgrade))
-
-    // if the counterparty sequence is not equal to the current sequence, then either the counterparty chain is out-of-sync or
-    // the message is out-of-sync and we write an error receipt with our own sequence so that the counterparty can update
-    // their sequence as well. We must then increment our sequence so both sides start the next upgrade with a fresh sequence.
-    if counterpartyUpgradeSequence != channel.upgradeSequence {
-        // error on the higher sequence so that both chains move to a fresh sequence
-        maxSequence = max(counterpartyUpgradeSequence, channel.upgradeSequence)
-        currentChannel.UpgradeSequence = maxSequence
-        provableStore.set(channelPath(portIdentifier, channelIdentifier), currentChannel)
-        
-        restoreChannel(portIdentifier, channelIdentifier)
-        return
-    }
-
-    // proposed ordering must be the same as the counterparty proposed ordering
+    counterpartyUpgradeFields: UpgradeFields,
+): boolean {
     if proposedUpgradeFields.ordering != counterpartyUpgradeFields.ordering {
-        restoreChannel(portIdentifier, channelIdentifier)
+        return false
     }
-
-    // proposed version must be the same. Note in the non-crossing hellos case, this is true by construction
-    // in the crossing hellos case, the existing upgrade version must be the same as the counterparty proposed version on INIT
-    // though the try callback may mutate the version later.
     if proposedUpgradeFields.version != counterpartyUpgradeFields.version {
-        restoreChannel(portIdentifier, channelIdentifier)
+        return false
     }
 
     // connectionHops can change in a channelUpgrade, however both sides must still be each other's counterparty.
     // since connection hops may be provided by relayer, we will abort to avoid changing state based on relayer-provided value
     // Note: If the proposed connection came from an existing upgrade, then the off-chain authority is responsible
     // for replacing one side's upgrade fields to be compatible so that the upgrade handshake can proceed
-    proposedConnection = provableStore.get(connectionPath(proposedUpgradeFields.connectionHops[0])
-    abortTransactionUnless(proposedConnection != null && proposedConnection.state == OPEN)
-    abortTransactionUnless(counterpartyUpgrade.fields.connectionHops[0] == proposedConnection.counterpartyConnectionIdentifier)
-
-    // only execute flushing state changes if it has not already occurred
-    if currentChannel.state == OPEN {
-        currentChannel.state = FLUSHING
-
-        upgradeTimeout = getUpgradeTimeout(currentChannel.portIdentifier, currentChannel.channelIdentifier)
-        // either timeout height or timestamp must be non-zero
-        abortTransactionUnless(upgradeTimeout.timeoutHeight != 0 || upgradeTimeout.timeoutTimestamp != 0)
-
-        lastPacketSendSequence = provableStore.get(nextSequenceSendPath(portIdentifier, channelIdentifier)) - 1
-
-        upgrade = Upgrade{
-            fields: proposedUpgradeFields,
-            upgradeTimeout: upgradeTimeout,
-            lastPacketSent: lastPacketSendSequence, 
-        }
-
-        // store upgrade in public store for counterparty proof verification
-        publicStore.set(channelPath(portIdentifier, channelIdentifier), currentChannel)
-        provableStore.set(channelUpgradePath(portIdentifier, channelIdentifier), upgrade)
+    proposedConnection = provableStore.get(connectionPath(proposedUpgradeFields.connectionHops[0]))
+    if (proposedConnection == null || proposedConnection.state != OPEN) {
+        return false
     }
+    if (counterpartyUpgrade.fields.connectionHops[0] != proposedConnection.counterpartyConnectionIdentifier) {
+        return false
+    }
+    return true
+}
+```
+
+`startFlushUpgradeHandshake` will set the counterparty last packet send and continue blocking the upgrade from continuing until all in-flight packets have been flushed. When the channel is in blocked mode, any packet receive above the counterparty last packet send will be rejected. It will set the channel state to `FLUSHING` and block `sendPackets`. During this time; `receivePacket`, `acknowledgePacket` and `timeoutPacket` will still be allowed and processed according to the original channel parameters. The state machine will set a timer for how long the other side can take before it completes flushing and moves to `FLUSHCOMPLETE`. The new proposed upgrade will be stored in the public store for counterparty verification.
+
+```typescript
+// startFlushUpgradeSequence will verify that the channel is in a valid precondition for calling the startFlushUpgradeHandshake
+// it will set the channel to desiredChannel state and move to flushing mode if we are not already in flushing mode
+// it will store the upgrade timeout in hte upgrade state
+function startFlushUpgradeHandshake(
+    portIdentifier: Identifier,
+    channelIdentifier: Identifier,
+) {
+    currentChannel = provableStore.get(channelPath(portIdentifier, channelIdentifier))
+    abortTransactionUnless(currentChannel.state == OPEN)
+
+    upgrade = provableStore.get(channelUpgradePath(portIdentifier, channelIdentifier))
+    abortTransactionUnless(upgrade != nil)
+
+    currentChannel.state = FLUSHING
+
+    upgradeTimeout = getUpgradeTimeout(currentChannel.portIdentifier, currentChannel.channelIdentifier)
+    // either timeout height or timestamp must be non-zero
+    abortTransactionUnless(upgradeTimeout.timeoutHeight != 0 || upgradeTimeout.timeoutTimestamp != 0)
+
+    lastPacketSendSequence = provableStore.get(nextSequenceSendPath(portIdentifier, channelIdentifier)) - 1
+
+    upgrade.upgradeTimeout = upgradeTimeout
+    upgrade.lastPacketSendSequence = lastPacketSendSequence
+    
+    // store upgrade in public store for counterparty proof verification
+    publicStore.set(channelPath(portIdentifier, channelIdentifier), currentChannel)
+    provableStore.set(channelUpgradePath(portIdentifier, channelIdentifier), upgrade)
 }
 ```
 
@@ -544,6 +523,8 @@ function chanUpgradeTry(
         upgradeFields = existingUpgrade.fields
     }
 
+    abortTransactionUnless(isCompatible(upgradeFields, counterpartyUpgradeFields))
+
     // get counterpartyHops for given connection
     connection = getConnection(currentChannel.connectionIdentifier)
     counterpartyHops = getCounterpartyHops(connection)
@@ -560,9 +541,25 @@ function chanUpgradeTry(
         sequence: counterpartyUpgradeSequence,
     }
 
+    // verify proofs of counterparty state
+    abortTransactionUnless(verifyChannelState(connection, proofHeight, proofChannel, currentChannel.counterpartyPortIdentifier, currentChannel.counterpartyChannelIdentifier, counterpartyChannel))
+    abortTransactionUnless(verifyChannelUpgrade(connection, proofHeight, proofUpgrade, currentChannel.counterpartyPortIdentifier, currentChannel.counterpartyChannelIdentifier, counterpartyUpgrade))
+
+    // if the counterparty sequence is less than the current sequence, then either the counterparty chain is out-of-sync or
+    // the message is out-of-sync and we write an error receipt with our sequence - 1 so that the counterparty can update
+    // their sequence as well.
+    if counterpartyUpgradeSequence < channel.sequence {     
+        errorReceipt = ErrorReceipt{
+        channel.sequence - 1,
+        "sequence out of sync", // constant string changable by implementation
+        }
+        provableStore.set(channelUpgradeErrorPath(portIdentifier, channelIdentifier), errorReceipt)
+        return
+    }
+
     // call startFlushUpgrade handshake to move channel to FLUSHING, which will block
     // upgrade from progressing to OPEN until flush completes on both ends
-    startFlushUpgradeHandshake(portIdentifier, channelIdentifier, upgradeFields, counterpartyChannel, counterpartyUpgrade, proofChannel, proofUpgrade, proofHeight)
+    startFlushUpgradeHandshake(portIdentifier, channelIdentifier)
 
     // refresh currentChannel to get latest state
     currentChannel = provableStore.get(channelPath(portIdentifier, channelIdentifier))
@@ -604,7 +601,6 @@ function chanUpgradeAck(
     // current channel is OPEN or FLUSHING (crossing hellos)
     currentChannel = provableStore.get(channelPath(portIdentifier, channelIdentifier))
     abortTransactionUnless(currentChannel.state == OPEN || currentChannel.state == FLUSHING)
-    priorState = currentChannel.state
 
     connection = getConnection(currentChannel.connectionIdentifier)
     counterpartyHops = getCounterpartyHops(connection)
@@ -620,12 +616,29 @@ function chanUpgradeAck(
         sequence: channel.sequence,
     }
 
+    // verify proofs of counterparty state
+    abortTransactionUnless(verifyChannelState(connection, proofHeight, proofChannel, currentChannel.counterpartyPortIdentifier, currentChannel.counterpartyChannelIdentifier, counterpartyChannel))
+    abortTransactionUnless(verifyChannelUpgrade(connection, proofHeight, proofUpgrade, currentChannel.counterpartyPortIdentifier, currentChannel.counterpartyChannelIdentifier, counterpartyUpgrade))
+
     upgrade = provableStore.get(channelUpgradePath(portIdentifier, channelIdentifier))
 
-    // prove counterparty and move our own state to flushing
-    // if we are already at flushing, then no state changes occur
-    // upgrade is blocked on this channelEnd from progressing until flush completes on both ends
-    startFlushUpgradeHandshake(portIdentifier, channelIdentifier, upgrade.fields, counterpartyChannel, counterpartyUpgrade, proofChannel, proofUpgrade, proofHeight)
+    // optimistically accept version that TRY chain proposes and pass this to callback for confirmation
+    // in the crossing hello case, we do not modify version that our TRY call returned and instead enforce
+    // that both TRY calls returned the same version
+    if currentChannel.state == OPEN {
+        upgrade.fields.version == counterpartyUpgrade.fields.version
+    }
+    // if upgrades are not compatible by ACK step, then we restore the channel
+    if !isCompatible(upgrade.fields, counterpartyUpgrade.fields) {
+        restoreChannel(portIdentifier, channelIdentifier)
+    }
+
+    if currentChannel.state == OPEN {
+        // prove counterparty and move our own state to flushing
+        // if we are already at flushing, then no state changes occur
+        // upgrade is blocked on this channelEnd from progressing until flush completes on both ends
+        startFlushUpgradeHandshake(portIdentifier, channelIdentifier)
+    }
 
     timeout = counterpartyUpgrade.timeout
     
@@ -634,13 +647,6 @@ function chanUpgradeAck(
     if (timeout.timeoutHeight != 0 && currentHeight() >= timeout.timeoutHeight) ||
           (timeout.timeoutTimestamp != 0 && currentTimestamp() >= timeout.timeoutTimestamp ) {
             restoreChannel(portIdentifier, channelIdentifier)
-    }
-
-     // in the crossing hellos case, the versions returned by both on TRY must be the same
-    if priorState == FLUSHING {
-        if upgrade.fields.version != counterpartyUpgrade.fields.version {
-            restoreChannel(portIdentifier, channelIdentifier)
-        }
     }
 
     // if there are no in-flight packets on our end, we can automatically go to FLUSHCOMPLETE
@@ -661,7 +667,7 @@ function chanUpgradeAck(
     err = module.onChanUpgradeAck(
         portIdentifier,
         channelIdentifier,
-        counterpartyUpgrade.version
+        counterpartyUpgrade.fields.version
     )
     // restore channel if callback returned error
     if err != nil {
@@ -670,7 +676,6 @@ function chanUpgradeAck(
     }
 
     // if no error, agree on final version
-    upgrade.version = counterpartyUpgrade.version
     provableStore.set(channelUpgradePath(portIdentifier, channelIdentifier), upgrade)
 }
 ```
