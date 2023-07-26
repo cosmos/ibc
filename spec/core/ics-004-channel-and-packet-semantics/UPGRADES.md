@@ -309,14 +309,20 @@ function startFlushUpgradeHandshake(
         restoreChannel(portIdentifier, channelIdentifier)
     }
 
+    // proposed version must be the same. Note in the non-crossing hellos case, this is true by construction
+    // in the crossing hellos case, the existing upgrade version must be the same as the counterparty proposed version on INIT
+    // though the try callback may mutate the version later.
+    if proposedUpgradeFields.version != counterpartyUpgradeFields.version {
+        restoreChannel(portIdentifier, channelIdentifier)
+    }
+
     // connectionHops can change in a channelUpgrade, however both sides must still be each other's counterparty.
+    // since connection hops may be provided by relayer, we will abort to avoid changing state based on relayer-provided value
+    // Note: If the proposed connection came from an existing upgrade, then the off-chain authority is responsible
+    // for replacing one side's upgrade fields to be compatible so that the upgrade handshake can proceed
     proposedConnection = provableStore.get(connectionPath(proposedUpgradeFields.connectionHops[0])
-    if (proposedConnection == null || proposedConnection.state != OPEN) {
-        restoreChannel(portIdentifier, channelIdentifier)
-    }
-    if (counterpartyUpgrade.fields.connectionHops[0] != proposedConnection.counterpartyConnectionIdentifier) {
-        restoreChannel(portIdentifier, channelIdentifier)
-    }
+    abortTransactionUnless(proposedConnection != null && proposedConnection.state == OPEN)
+    abortTransactionUnless(counterpartyUpgrade.fields.connectionHops[0] == proposedConnection.counterpartyConnectionIdentifier)
 
     // only execute flushing state changes if it has not already occurred
     if currentChannel.state == OPEN {
@@ -335,6 +341,7 @@ function startFlushUpgradeHandshake(
         }
 
         // store upgrade in public store for counterparty proof verification
+        publicStore.set(channelPath(portIdentifier, channelIdentifier), currentChannel)
         provableStore.set(channelUpgradePath(portIdentifier, channelIdentifier), upgrade)
     }
 }
@@ -532,6 +539,9 @@ function chanUpgradeTry(
         }
 
         initUpgradeChannelHandshake(portIdentifier, channelIdentifier, upgradeFields)
+    } else {
+        // we must use the existing upgrade fields
+        upgradeFields = existingUpgrade.fields
     }
 
     // get counterpartyHops for given connection
@@ -562,25 +572,15 @@ function chanUpgradeTry(
     version, err = module.onChanUpgradeTry(
         portIdentifier,
         channelIdentifer,
-        proposedUpgradeChannel.ordering,
-        proposedUpgradeChannel.connectionHops,
         currentChannel.sequence,
-        proposedUpgradeChannel.counterpartyPortIdentifer,
-        proposedUpgradeChannel.counterpartyChannelIdentifier,
-        proposedUpgradeChannel.version
+        upgradeFields.ordering,
+        upgradeFields.connectionHops,
+        upgradeFields.version
     )
     // abort the transaction if the callback returns an error and
     // there was no existing upgrade. This will allow the counterparty upgrade
     // to continue existing while this chain may add support for it in the future
-    if err != nil && existingUpgrade == nil {
-        abortTransactionUnless(false)
-    }
-    // if the callback returns an error while an existing upgrade is in place
-    // or if the existing upgrade is not compatible with the counterparty upgrade
-    // we must restore the channel so that a new upgrade attempt can be made
-    if err != nil || existingUpgrade.fields != upgradeFields {
-        restoreChannel(portIdentifier, channelIdentifier)
-    }
+    abortTransactionUnless(err == nil)
 
     // replace channel version with the version returned by application
     // in case it was modified
@@ -692,7 +692,7 @@ function chanUpgradeConfirm(
     abortTransactionUnless(currentChannel.state == FLUSHING)
 
     // counterparty channel is either FLUSHING or FLUSHCOMPLETE
-    abortTransactionUnles(counterpartyChannelState == FLUSHING || counterpartyChannelState == FLUSHCOMPLETE)
+    abortTransactionUnless(counterpartyChannelState == FLUSHING || counterpartyChannelState == FLUSHCOMPLETE)
 
     connection = getConnection(currentChannel.connectionIdentifier)
     counterpartyHops = getCounterpartyHops(connection)

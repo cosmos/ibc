@@ -901,7 +901,7 @@ function acknowledgePacket(
       } else if pendingInflightPackets(portIdentifier, channelIdentifier) == nil {
         // if this was the last in-flight packet, then move channel state to FLUSHCOMPLETE
         channel.state = FLUSHCOMPLETE
-        publicStore.set(channelPath(portIdentifier, channelIdentifier), currentChannel)
+        publicStore.set(channelPath(portIdentifier, channelIdentifier), channel)
       }
     }
 
@@ -1052,7 +1052,7 @@ function timeoutPacket(
       } else if pendingInflightPackets(portIdentifier, channelIdentifier) == nil {
         // if this was the last in-flight packet, then move channel state to FLUSHCOMPLETE
         channel.state = FLUSHCOMPLETE
-        publicStore.set(channelPath(portIdentifier, channelIdentifier), currentChannel)
+        publicStore.set(channelPath(portIdentifier, channelIdentifier), channel)
       }
     }
 
