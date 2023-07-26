@@ -890,6 +890,9 @@ function acknowledgePacket(
 
     if channel.state == FLUSHING {
       upgradeTimeout = privateStore.get(counterpartyUpgradeTimeout(portIdentifier, channelIdentifier))
+      if upgradeTimeout == nil {
+        break
+      }
         // counterparty-specified timeout must not have exceeded
       // if it has, then restore the channel and abort upgrade handshake
       if (currentHeight() > timeout.timeoutHeight && timeout.timeoutHeight != 0) ||
@@ -1038,7 +1041,10 @@ function timeoutPacket(
 
     if channel.state == FLUSHING {
       upgradeTimeout = privateStore.get(counterpartyUpgradeTimeout(portIdentifier, channelIdentifier))
-        // counterparty-specified timeout must not have exceeded
+      if upgradeTimeout == nil {
+        break
+      }
+      // counterparty-specified timeout must not have exceeded
       // if it has, then restore the channel and abort upgrade handshake
       if (currentHeight() > timeout.timeoutHeight && timeout.timeoutHeight != 0) ||
           (currentTimestamp() > timeout.timeoutTimestamp && timeout.timeoutTimestamp != 0) {
