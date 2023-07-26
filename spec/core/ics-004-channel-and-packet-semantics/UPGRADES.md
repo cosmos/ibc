@@ -631,8 +631,8 @@ function chanUpgradeAck(
     
     // counterparty-specified timeout must not have exceeded
     // if it has, then restore the channel and abort upgrade handshake
-    if (currentHeight() > timeout.timeoutHeight && timeout.timeoutHeight != 0) ||
-        (currentTimestamp() > timeout.timeoutTimestamp && timeout.timeoutTimestamp != 0) {
+    if (timeout.timeoutHeight != 0 && currentHeight() >= timeout.timeoutHeight) ||
+          (timeout.timeoutTimestamp != 0 && currentTimestamp() >= timeout.timeoutTimestamp ) {
             restoreChannel(portIdentifier, channelIdentifier)
     }
 
@@ -715,8 +715,8 @@ function chanUpgradeConfirm(
     
     // counterparty-specified timeout must not have exceeded
     // if it has, then restore the channel and abort upgrade handshake
-    if (currentHeight() > timeout.timeoutHeight && timeout.timeoutHeight != 0) ||
-        (currentTimestamp() > timeout.timeoutTimestamp && timeout.timeoutTimestamp != 0) {
+    if (timeout.timeoutHeight != 0 && currentHeight() >= timeout.timeoutHeight) ||
+          (timeout.timeoutTimestamp != 0 && currentTimestamp() >= timeout.timeoutTimestamp ) {
             restoreChannel(portIdentifier, channelIdentifier)
     }
 

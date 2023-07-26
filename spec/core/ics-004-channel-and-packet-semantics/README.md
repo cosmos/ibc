@@ -895,8 +895,8 @@ function acknowledgePacket(
       }
         // counterparty-specified timeout must not have exceeded
       // if it has, then restore the channel and abort upgrade handshake
-      if (currentHeight() > timeout.timeoutHeight && timeout.timeoutHeight != 0) ||
-          (currentTimestamp() > timeout.timeoutTimestamp && timeout.timeoutTimestamp != 0) {
+      if (upgradeTimeout.timeoutHeight != 0 && currentHeight() >= upgradeTimeout.timeoutHeight) ||
+          (upgradeTimeout.timeoutTimestamp != 0 && currentTimestamp() >= upgradeTimeout.timeoutTimestamp ) {
               restoreChannel(portIdentifier, channelIdentifier)
       } else if pendingInflightPackets(portIdentifier, channelIdentifier) == nil {
         // if this was the last in-flight packet, then move channel state to FLUSHCOMPLETE
@@ -1046,8 +1046,8 @@ function timeoutPacket(
       }
       // counterparty-specified timeout must not have exceeded
       // if it has, then restore the channel and abort upgrade handshake
-      if (currentHeight() > timeout.timeoutHeight && timeout.timeoutHeight != 0) ||
-          (currentTimestamp() > timeout.timeoutTimestamp && timeout.timeoutTimestamp != 0) {
+      if (upgradeTimeout.timeoutHeight != 0 && currentHeight() >= upgradeTimeout.timeoutHeight) ||
+          (upgradeTimeout.timeoutTimestamp != 0 && currentTimestamp() >= upgradeTimeout.timeoutTimestamp ) {
               restoreChannel(portIdentifier, channelIdentifier)
       } else if pendingInflightPackets(portIdentifier, channelIdentifier) == nil {
         // if this was the last in-flight packet, then move channel state to FLUSHCOMPLETE
