@@ -879,16 +879,13 @@ function timeoutChannelUpgrade(
         upgrade = provableStore.get(channelUpgradePath(portIdentifier, channelIdentifier))
         counterpartyHops = getCounterpartyHops(upgrade.fields.connectionHops)
 
-        upgradedChannel = ChannelEnd{
-            state: OPEN,
-            ordering: upgrade.fields.ordering,
-            counterpartyPortIdentifier: portIdentifier,
-            counterpartyChannelIdentifier: channelIdentifier,
-            connectionHops: counterpartyHops,
-            version: upgrade.fields.version,
-            sequence: currentChannel.sequence,
+        // check that the channel did not upgrade successfully
+        if upgrade.fields.version == counterpartyChannel.version &&
+            upgrade.fields.order == counterpartyChannel.order &&
+            counterpartyHops == counterpartyChannel.connectionHops {
+                // counterparty has already succesfully upgraded so we cannot timeout
+                abortTransactionUnless(false)
         }
-        abortTransactionUnless(counterpartyChannel != upgradedChannel)
     }
     abortTransactionUnless(counterpartyChannel.sequence >== currentChannel.sequence)
     abortTransactionUnless(verifyChannelState(connection, proofHeight, proofChannel, currentChannel.counterpartyPortIdentifier, currentChannel.counterpartyChannelIdentifier, counterpartyChannel))
