@@ -884,7 +884,7 @@ function timeoutChannelUpgrade(
             ordering: upgrade.fields.ordering,
             counterpartyPortIdentifier: portIdentifier,
             counterpartyChannelIdentifier: channelIdentifier,
-            connectionHops: upgrade.fields.connectionHops,
+            connectionHops: counterpartyHops,
             version: upgrade.fields.version,
             sequence: currentChannel.sequence,
         }
