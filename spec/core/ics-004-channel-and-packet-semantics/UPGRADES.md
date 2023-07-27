@@ -872,7 +872,7 @@ function timeoutChannelUpgrade(
     connection = getConnection(currentChannel.connectionIdentifier)
 
     // counterparty channel must be proved to not have completed flushing after timeout has passed
-    abortTransactionUnless(counterpartyChannel.state !== OPEN && counterpartyChannel.state !== FLUSHCOMPLETE)
+    abortTransactionUnless(counterpartyChannel.state !== FLUSHCOMPLETE)
     // if counterparty channel state is OPEN, we should abort only if the counterparty has successfully completed upgrade
     if counterpartyChannel.state === OPEN {
          // get upgrade since counterparty should have upgraded to these parameters
@@ -890,7 +890,7 @@ function timeoutChannelUpgrade(
         }
         abortTransactionUnless(counterpartyChannel != upgradedChannel)
     }
-    abortTransactionUnless(counterpartyChannel.sequence === currentChannel.sequence)
+    abortTransactionUnless(counterpartyChannel.sequence >== currentChannel.sequence)
     abortTransactionUnless(verifyChannelState(connection, proofHeight, proofChannel, currentChannel.counterpartyPortIdentifier, currentChannel.counterpartyChannelIdentifier, counterpartyChannel))
 
     // we must restore the channel since the timeout verification has passed
