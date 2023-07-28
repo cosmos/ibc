@@ -22,7 +22,7 @@ As new features get added to IBC, chains may wish to take advantage of new chann
 
 ### Data Structures
 
-The `ChannelState` and `ChannelEnd` are defined in [ICS-4](./README.md), they are reproduced here for the reader's convenience. `INITUPGRADE`, `TRYUPGRADE`, `ACKUPGRADE` are additional states added to enable the upgrade feature.
+The `ChannelState` and `ChannelEnd` are defined in [ICS-4](./README.md), they are reproduced here for the reader's convenience. `FLUSHING` and `FLUSHCOMPLETE` are additional states added to enable the upgrade feature.
 
 #### `ChannelState`
 
@@ -31,19 +31,17 @@ enum ChannelState {
   INIT,
   TRYOPEN,
   OPEN,
-  INITUPGRADE,
-  TRYUPGRADE,
-  ACKUPGRADE,
+  FLUSHING,
+  FLUSHCOMPLETE,
 }
 ```
 
-- The chain that is proposing the upgrade should set the channel state from `OPEN` to `INITUPGRADE`.
-- The counterparty chain that accepts the upgrade should set the channel state from `OPEN` to `TRYUPGRADE`.
-- Once the initiating chain verifies the counterparty is in `TRYUPGRADE`, it must move to `ACKUPGRADE` unless all in-flight packets are already flushed on both ends, in which case it must move directly to `OPEN`.
-- The `TRYUPGRADE` chain must prove the counterparty is in `ACKUPGRADE` or completed the upgrade in `OPEN` AND have no in-flight packets on **both ends** before it can complete the upgrade and move to `OPEN`.
-- The `ACKUPGRADE` chain may OPEN once in-flight packets on **both ends** have been flushed.
+- In `ChanUpgradeInit`, the initializing chain that is proposing the upgrade should store the channel upgrade.
+- The counterparty chain executing `ChanUpgradeTry` that accepts the upgrade should store the channel upgrade, set the channel state from `OPEN` to `FLUSHING`, and start the flushing timer by storing an upgrade timeout.
+- Once the initiating chain verifies the counterparty is in `FLUSHING`, it must also move to `FLUSHING` unless all in-flight packets are already flushed on both ends, in which case it must move directly to `FLUSHCOMPLETE`. The initator will also store the counterparty timeout to ensure it does not move to `FLUSHCOMPLETE` after the counterparty timeout has passed.
+- The counterparty chain must prove that the initiator is  also in `FLUSHING` or completed flushing in `FLUSHCOMPLETE`. The counterparty will store the initiator timeout to ensure it does not move to `FLUSHCOMPLETE` after the initiator timeout has passed.
 
-Both `TRYUPGRADE` and `ACKUPGRADE` are "blocking" states in that they will prevent the upgrade handshake from proceeding until the in-flight packets on both channel ends are flushed. The `TRYUPGRADE` state must additionally prove the counterparty state before proceeding to open, while the `ACKUPGRADE` state may move to `OPEN` unilaterally once packets are flushed on both ends.
+`FLUSHING` is a "blocking" states in that they will prevent the upgrade handshake from proceeding until the in-flight packets on both channel ends are flushed. Once both sides have moved to `FLUSHCOMPLETE`, a relayer can prove this on both ends with `ChanUpgradeOpen` to open the channel on both sides with the new parameters.
 
 #### `ChannelEnd`
 
@@ -56,22 +54,11 @@ interface ChannelEnd {
   connectionHops: [Identifier]
   version: string
   upgradeSequence: uint64
-  flushStatus: FlushStatus
 }
 ```
 
-- `state`: The state is specified by the handshake steps of the upgrade protocol and will be mutated in place during the handshake.
+- `state`: The state is specified by the handshake steps of the upgrade protocol and will be mutated in place during the handshake. It will be in `FLUSHING` mode when the channel end is flushing in-flight packets. The state will change to `FLUSHCOMPLETE` once there are no in-flight packets left and the channelEnd is ready to move to OPEN.
 - `upgradeSequence`: The upgrade sequence will be incremented and agreed upon during the upgrade handshake and will be mutated in place.
-
-```typescript
-enum FlushStatus {
-    NOTINFLUSH
-    FLUSHING
-    FLUSHCOMPLETE
-}
-```
-
-`flushStatus` will be in `NOTINFLUSH` state when the channel is not in an upgrade handshake. It will be in `FLUSHING` mode when the channel end is flushing in-flight packets. The flush status will change to `FLUSHCOMPLETE` once there are no in-flight packets left and the channel end is ready to move to OPEN.
 
 All other parameters will remain the same during the upgrade handshake until the upgrade handshake completes. When the channel is reset to `OPEN` on a successful upgrade handshake, the fields on the channel end will be switched over to the `UpgradeFields` specified in the upgrade.
 
@@ -174,8 +161,18 @@ function verifyChannelUpgrade(
 The chain must store the counterparty's last packet sequence on `startFlushUpgradeHandshake`. This will be stored in the `counterpartyLastPacketSequence` path on the private store.
 
 ```typescript
-function channelCounterpartyLastPacketSequencePath(portIdentifier: Identifier, channelIdentifier: Identifier): Path {
+function counterpartyLastPacketSequencePath(portIdentifier: Identifier, channelIdentifier: Identifier): Path {
     return "channelUpgrades/counterpartyLastPacketSequence/ports/{portIdentifier}/channels/{channelIdentifier}"
+}
+```
+
+#### CounterpartyUpgradeTimeout Path
+
+The chain must store the counterparty's upgradeTimeout. This will be stored in the `counterpartyUpgradeTimeout` path on the private store
+
+```typescript
+function counterpartyUpgradeTimeout(portIdentifier: Identifier, channelIdentifier: Identifier): Path {
+    return "channelUpgrades/counterpartyUpgradeTimeout/ports/{portIdentifier}/channels/{channelIdentifier}"
 }
 ```
 
@@ -234,24 +231,25 @@ The channel upgrade process consists of the following sub-protocols: `initUpgrad
 
 ### Utility Functions
 
-`initUpgradeHandshake` is a sub-protocol that will initialize the channel end for the upgrade handshake. It will validate the upgrade parameters and set the channel state to INITUPGRADE, blocking `sendPacket` from processing outbound packets on the channel end. During this time; `receivePacket`, `acknowledgePacket` and `timeoutPacket` will still be allowed and processed according to the original channel parameters. The new proposed upgrade will be stored in the provable store for counterparty verification.
+`initUpgradeHandshake` is a sub-protocol that will initialize the channel end for the upgrade handshake. It will validate the upgrade parameters and store the channel upgrade. All packet processing will continue according to the original channel parameters, as this is a signalling mechanism that can remain indefinitely. The new proposed upgrade will be stored in the provable store for counterparty verification. If it is called again before the handshake starts, then the current proposed upgrade will be replaced with the new one and the channel sequence will be incremented.
 
 ```typescript
-// initUpgradeHandshake will verify that the channel is in the 
+// initUpgradeHandshake will verify that the channel is in the
 // correct precondition to call the initUpgradeHandshake protocol.
-// it will verify the new upgrade field parameters, and make the 
+// it will verify the new upgrade field parameters, and make the
 // relevant state changes for initializing a new upgrade:
-// - moving channel state to INITUPGRADE
+// - store channel upgrade
 // - incrementing upgrade sequence
 function initUpgradeHandshake(
     portIdentifier: Identifier,
     channelIdentifier: Identifier,
     proposedUpgradeFields: UpgradeFields,
-    timeout: UpgradeTimeout
 ): uint64 {
     // current channel must be OPEN
+    // If channel already has an upgrade but isn't in FLUSHING,
+    // then this will override the previous upgrade attempt
     channel = provableStore.get(channelPath(portIdentifier, channelIdentifier))
-    abortTransactionUnless(channel.state === OPEN)
+    abortTransactionUnless(channel.state == OPEN)
 
     // new channel version must be nonempty
     abortTransactionUnless(proposedUpgradeFields.Version !== "")
@@ -264,132 +262,89 @@ function initUpgradeHandshake(
     // new order must be supported by the new connection
     abortTransactionUnless(isSupported(proposedConnection, proposedUpgradeFields.ordering))
 
-    // either timeout height or timestamp must be non-zero
-    abortTransactionUnless(timeout.timeoutHeight !== 0 || timeout.timeoutTimestamp !== 0)
-
-    // get last packet sent on channel and set it in the upgrade struct
-    // last packet sent is the nextSequenceSend on the channel minus 1
-    lastPacketSendSequence = provableStore.get(nextSequenceSendPath(portIdentifier, channelIdentifier)) - 1
+    // lastPacketSent and timeout will be filled when we move to FLUSHING
     upgrade = Upgrade{
         fields: proposedUpgradeFields,
-        timeout: timeout,
-        lastPacketSent: lastPacketSendSequence,
     }
 
     // store upgrade in provable store for counterparty proof verification
     provableStore.set(channelUpgradePath(portIdentifier, channelIdentifier), upgrade)
 
     channel.upgradeSequence = channel.upgradeSequence + 1
-    channel.state = INITUPGRADE
     provableStore.set(channelPath(portIdentifier, channelIdentifier), channel)
     return channel.upgradeSequence
 }
 ```
 
-`startFlushUpgradeHandshake` will set the counterparty last packet send and continue blocking the upgrade from continuing until all in-flight packets have been flushed. When the channel is in blocked mode, any packet receive above the counterparty last packet send will be rejected. It will verify the upgrade parameters and set the channel state to one of the flushing states (`TRYUPGRADE` or `ACKUPGRADE`) passed in by caller, set the `FlushStatus` to `FLUSHING` and block sending of packets. During this time, `recvPacket`, `acknowledgePacket` and `timeoutPacket` will still be allowed and processed according to the original channel parameters. The new proposed upgrade will be stored in the provable store for counterparty verification.
+`isCompatibleUpgradeFields` will return true if two upgrade field structs are mutually compatible as counterparties, and false otherwise. The first field must be the upgrade fields on the executing chain, the second field must be the counterparty upgrade fields. This function will also check that the proposed connection hops exists, is OPEN, and is mutually compatible with the counterparty connection hops.
 
 ```typescript
-// startFlushUpgradeSequence will verify that the channel is in a valid precondition
-// for calling the startFlushUpgradeHandshake and that the desiredChannelState is valid
-// it will verify the proofs of the counterparty channel and upgrade
-// it will verify that the upgrades on both ends are mutually compatible
-// it will set the channel to desiredChannel state and move to flushing mode
-// if flush is already complete, it will automatically set flushStatus to FLUSHCOMPLETE
-function startFlushUpgradeHandshake(
-    portIdentifier: Identifier,
-    channelIdentifier: Identifier,
+function isCompatibleUpgradeFields(
     proposedUpgradeFields: UpgradeFields,
-    counterpartyChannel: ChannelEnd,
-    counterpartyUpgrade: Upgrade,
-    desiredChannelState: ChannelState,
-    proofChannel: CommitmentProof,
-    proofUpgrade: CommitmentProof,
-    proofHeight: Height
-) {
-    abortTransactionUnless(desiredChannelState === TRYUPGRADE || desiredChannelState === ACKUPGRADE)
-
-    channel = provableStore.get(channelPath(portIdentifier, channelIdentifier))
-
-    // get underlying connection for proof verification
-    connection = provableStore.get(connectionPath(channel.connectionHops[0]))
-
-    // verify proofs of counterparty state
-    abortTransactionUnless(
-      verifyChannelState(
-        connection, 
-        proofHeight, 
-        proofChannel, 
-        channel.counterpartyPortIdentifier, 
-        channel.counterpartyChannelIdentifier, 
-        counterpartyChannel
-      )
-    )
-    abortTransactionUnless(
-      verifyChannelUpgrade(
-        connection, 
-        proofHeight, 
-        proofUpgrade, 
-        channel.counterpartyPortIdentifier, 
-        channel.counterpartyChannelIdentifier, 
-        counterpartyUpgrade
-      )
-    )
-
-    // if the counterparty sequence is not equal to the current sequence, then 
-    // either the counterparty chain is out-of-sync or the message is out-of-sync 
-    // and we write an error receipt with our own sequence so that the counterparty
-    // can update their sequence as well. We must then increment our sequence so
-    // both sides start the next upgrade with a fresh sequence.
-    if counterpartyUpgradeSequence != channel.upgradeSequence {
-        // error on the higher sequence so that both chains move to a fresh sequence
-        maxSequence = max(counterpartyUpgradeSequence, channel.upgradeSequence)
-        channel.UpgradeSequence = maxSequence
-        provableStore.set(channelPath(portIdentifier, channelIdentifier), channel)
-        
-        restoreChannel(portIdentifier, channelIdentifier)
-        return
-    }
-
-    // proposed ordering must be the same as the counterparty proposed ordering
+    counterpartyUpgradeFields: UpgradeFields,
+): boolean {
     if proposedUpgradeFields.ordering != counterpartyUpgradeFields.ordering {
-        restoreChannel(portIdentifier, channelIdentifier)
-        return
+        return false
+    }
+    if proposedUpgradeFields.version != counterpartyUpgradeFields.version {
+        return false
     }
 
     // connectionHops can change in a channelUpgrade, however both sides must still be each other's counterparty.
-    proposedConnection = provableStore.get(connectionPath(proposedUpgradeFields.connectionHops[0])
+    // since connection hops may be provided by relayer, we will abort to avoid changing state based on relayer-provided value
+    // Note: If the proposed connection came from an existing upgrade, then the off-chain authority is responsible
+    // for replacing one side's upgrade fields to be compatible so that the upgrade handshake can proceed
+    proposedConnection = provableStore.get(connectionPath(proposedUpgradeFields.connectionHops[0]))
     if (proposedConnection == null || proposedConnection.state != OPEN) {
-        restoreChannel(portIdentifier, channelIdentifier)
-        return
+        return false
     }
     if (counterpartyUpgrade.fields.connectionHops[0] != proposedConnection.counterpartyConnectionIdentifier) {
-        restoreChannel(portIdentifier, channelIdentifier)
-        return
+        return false
     }
+    return true
+}
+```
 
-    channel.state = desiredChannelState
-    channel.flushStatus = FLUSHING
+`startFlushUpgradeHandshake` will set the counterparty last packet send and continue blocking the upgrade from continuing until all in-flight packets have been flushed. When the channel is in blocked mode, any packet receive above the counterparty last packet send will be rejected. It will set the channel state to `FLUSHING` and block `sendPackets`. During this time; `receivePacket`, `acknowledgePacket` and `timeoutPacket` will still be allowed and processed according to the original channel parameters. The state machine will set a timer for how long the other side can take before it completes flushing and moves to `FLUSHCOMPLETE`. The new proposed upgrade will be stored in the public store for counterparty verification.
 
-    // if there are no in-flight packets on our end, we can automatically go to FLUSHCOMPLETE
-    if pendingInflightPackets(portIdentifier, channelIdentifier) == nil {
-        channel.flushStatus = FLUSHCOMPLETE
-    }
+```typescript
+// startFlushUpgradeSequence will verify that the channel is in a valid precondition for calling the startFlushUpgradeHandshake
+// it will set the channel to desiredChannel state and move to flushing mode if we are not already in flushing mode
+// it will store the upgrade timeout in hte upgrade state
+function startFlushUpgradeHandshake(
+    portIdentifier: Identifier,
+    channelIdentifier: Identifier,
+) {
+    channel = provableStore.get(channelPath(portIdentifier, channelIdentifier))
+    abortTransactionUnless(channel.state == OPEN)
 
-    provableStore.set(channelPath(portIdentifier, channelIdentifier), channel)
-    privateStore.set(
-      channelCounterpartyLastPacketSequencePath(portIdentifier, channelIdentifier), 
-      counterpartyUpgrade.lastPacketSent
-    )
+    upgrade = provableStore.get(channelUpgradePath(portIdentifier, channelIdentifier))
+    abortTransactionUnless(upgrade != nil)
+
+    channel.state = FLUSHING
+
+    upgradeTimeout = getUpgradeTimeout(channel.portIdentifier, channel.channelIdentifier)
+    // either timeout height or timestamp must be non-zero
+    abortTransactionUnless(upgradeTimeout.timeoutHeight != 0 || upgradeTimeout.timeoutTimestamp != 0)
+
+    lastPacketSendSequence = provableStore.get(nextSequenceSendPath(portIdentifier, channelIdentifier)) - 1
+
+    upgrade.upgradeTimeout = upgradeTimeout
+    upgrade.lastPacketSendSequence = lastPacketSendSequence
+    
+    // store upgrade in public store for counterparty proof verification
+    publicStore.set(channelPath(portIdentifier, channelIdentifier), channel)
+    provableStore.set(channelUpgradePath(portIdentifier, channelIdentifier), upgrade)
 }
 ```
 
 `openUpgradeHandshake` will open the channel and switch the existing channel parameters to the newly agreed-upon uprade channel fields.
 
 ```typescript
-// openUpgradeHandshake will switch the channel fields over to the agreed upon upgrade fields.
-// it will reset the channel state and flushStatus to their pre-upgrade state.
-// it will delete auxilliary upgrade state.
-// caller must do all relevant checks before calling this function.
+// openUpgradeHandshake will switch the channel fields over to the agreed upon upgrade fields
+// it will reset the channel state to OPEN
+// it will delete auxilliary upgrade state
+// caller must do all relevant checks before calling this function
 function openUpgradeHandshake(
     portIdentifier: Identifier,
     channelIdentifier: Identifier,
@@ -403,21 +358,21 @@ function openUpgradeHandshake(
     channel.version = upgrade.fields.version
     channel.connectionHops = upgrade.fields.connectionHops
     channel.state = OPEN
-    channel.flushStatus = NOTINFLUSH
     provableStore.set(channelPath(portIdentifier, channelIdentifier), channel)
 
     // delete auxilliary state
     provableStore.delete(channelUpgradePath(portIdentifier, channelIdentifier))
     privateStore.delete(channelCounterpartyLastPacketSequencePath(portIdentifier, channelIdentifier))
+    privateStore.delete(channelCounterpartyUpgradeTimeout(portIdentifier, channelIdentifier))
 }
 ```
 
 `restoreChannel` will write an error receipt, set the channel back to its original state and delete upgrade information when the executing channel needs to abort the upgrade handshake and return to the original parameters.
 
 ```typescript
-// restoreChannel will restore the channel state and flush status to their 
-// pre-upgrade state so that upgrade is aborted it write an error receipt to 
-// state so counterparty can restore as well.
+// restoreChannel will restore the channel state to its pre-upgrade state
+// and delete upgrade auxilliary state so that upgrade is aborted.
+// it writes an error receipt to state so counterparty can restore as well.
 // NOTE: this function signature may be modified by implementors to take a custom error
 function restoreChannel(
     portIdentifier: Identifier,
@@ -430,12 +385,20 @@ function restoreChannel(
     }
     provableStore.set(channelUpgradeErrorPath(portIdentifier, channelIdentifier), errorReceipt)
     channel.state = OPEN
-    channel.flushStatus = NOTINFLUSH
     provableStore.set(channelPath(portIdentifier, channelIdentifier), channel)
 
     // delete auxilliary state
     provableStore.delete(channelUpgradePath(portIdentifier, channelIdentifier))
     privateStore.delete(channelCounterpartyLastPacketSequencePath(portIdentifier, channelIdentifier))
+    privateStore.delete(channelCounterpartyUpgradeTimeout(portIdentifier, channelIdentifier))
+
+    // call modules onChanUpgradeRestore callback
+    module = lookupModule(portIdentifier)
+    // restore callback must not return error since counterparty successfully restored previous channelEnd
+    module.onChanUpgradeRestore(
+        portIdentifer,
+        channelIdentifier
+    )
 }
 ```
 
@@ -447,24 +410,40 @@ function restoreChannel(
 function pendingInflightPacketSequences(
     portIdentifier: Identifier,
     channelIdentifier: Identifier,
-) [uint64]
+): [uint64]
+```
+
+`isAuthorizedUpgrader` will return true if the provided address is authorized to initialize, modify, and cancel upgrades. Chains may permission a set of addresses that can signal which upgrade a channel is willing to upgrade to.
+
+```typescript
+// isAuthorizedUpgrader
+function isAuthorizedUpgrader(address: string): boolean
+```
+
+`getUpgradeTimeout` will return the upgrade timeout specified for the given channel. This may be a chain-wide parameter, or it can be a parameter chosen per channel. This is an implementation-level detail, so only the function signature is specified here. Note this should retrieve some stored timeout delta for the channel and add it to the current height and time to get the absolute timeout values.
+
+```typescript
+// getUpgradeTimeout
+function getUpgradeTimeout(portIdentifier: string, channelIdentifier: string) UpgradeTimeout {
+}
 ```
 
 ### Upgrade Handshake
 
-The upgrade handshake defines four datagrams: *ChanUpgradeInit*, *ChanUpgradeTry*, *ChanUpgradeAck*, and *ChanUpgradeOpen*
+The upgrade handshake defines seven datagrams: *ChanUpgradeInit*, *ChanUpgradeTry*, *ChanUpgradeAck*, *ChanUpgradeConfirm*, *ChanUpgradeOpen*, *ChanUpgradeTimeout*, and *ChanUpgradeCancel*
 
 A successful protocol execution flows as follows (note that all calls are made through modules per [ICS 25](../ics-025-handler-interface)):
 
-| Initiator | Datagram             | Chain acted upon | Prior state (A, B)            | Posterior state (A, B)    |
-| --------- | -------------------- | ---------------- | ----------------------------- | ------------------------- |
-| Actor     | `ChanUpgradeInit`    | A                | (OPEN, OPEN)                  | (INITUPGRADE, OPEN)       |
-| Actor     | `ChanUpgradeTry`     | B                | (INITUPGRADE, OPEN)           | (INITUPGRADE, TRYUPGRADE) |
-| Relayer   | `ChanUpgradeAck`     | A                | (INITUPGRADE, TRYUPGRADE)     | (ACKUPGRADE, TRYUPGRADE)  |
+| Initiator | Datagram             | Chain acted upon | Prior state (A, B)                 | Posterior state (A, B)                                |
+| --------- | -------------------- | ---------------- | ---------------------------------- | ----------------------------------------------------- |
+| Actor     | `ChanUpgradeInit`    | A                | (OPEN, OPEN)                       | (OPEN, OPEN)                                          |
+| Relayer   | `ChanUpgradeTry`     | B                | (OPEN, OPEN)                       | (OPEN, FLUSHING)                                      |
+| Relayer   | `ChanUpgradeAck`     | A                | (OPEN, FLUSHING)                   | (FLUSHING/FLUSHCOMPLETE, FLUSHING)                    |
+| Relayer   | `ChanUpgradeConfirm` | B                | (FLUSHING/FLUSHCOMPLETE, FLUSHING) | (FLUSHING/FLUSHCOMPLETE, FLUSHING/FLUSHCOMPLETE/OPEN) |
 
-Once both states are in `ACKUPGRADE` and `TRYUPGRADE` respectively, both sides must move to `FLUSHINGCOMPLETE` respectively by clearing their in-flight packets. Once both sides have complete flushing, a relayer may submit a `ChanUpgradeOpen` message to both ends proving that the counterparty has also completed flushing in order to move the channelEnd to `OPEN`.
+Once both states are in `FLUSHING` and both sides have stored each others upgrade timeouts, both sides can move to `FLUSHCOMPLETE` by clearing their in-flight packets. Once both sides have complete flushing, a relayer may submit a `ChanUpgradeOpen` datagram to both ends proving that the counterparty has also completed flushing in order to move the channelEnd to `OPEN`.
 
-`ChanUpgradeOpen` is only necessary to call on chain A if the chain was not moved to `OPEN` on `ChanUpgradeAck` which may happen if all packets on both ends are already flushed.
+`ChanUpgradeOpen` is only necessary to call on chain B if the chain was not moved to `OPEN` on `ChanUpgradeConfirm` which may happen if all packets on both ends are already flushed.
 
 At the end of a successful upgrade handshake between two chains implementing the sub-protocol, the following properties hold:
 
@@ -479,16 +458,19 @@ If a chain does not agree to the proposed counterparty upgraded `ChannelEnd`, it
 
 A relayer may then submit a `ChanUpgradeCancel` datagram to the counterparty. Upon receiving this message a chain must verify that the counterparty wrote an `ErrorReceipt` into its `channelUpgradeErrorPath` with a sequence greater than or equal to its own `ChannelEnd`'s upgrade sequence. If successful, it will restore its original channel as well, thus cancelling the upgrade.
 
-If an upgrade message arrives after the specified timeout, then the message MUST NOT execute successfully. Again a relayer may submit a proof of this in a `ChanUpgradeTimeout` datagram so that counterparty cancels the upgrade and restores its original channel as well.
+If a chain does not reach `FLUSHCOMPLETE` within the counterparty specified timeout, then it MUST NOT move to `FLUSHCOMPLETE` and should instead abort the upgrade. A relayer may submit a proof of this to the counterparty chain in a `ChanUpgradeTimeout` datagram so that counterparty cancels the upgrade and restores its original channel as well.
 
 ```typescript
 function chanUpgradeInit(
     portIdentifier: Identifier,
     channelIdentifier: Identifier,
     proposedUpgradeFields: UpgradeFields,
-    timeout: UpgradeTimeout,
+    msgSender: string,
 ) {
-    upgradeSequence = initUpgradeHandshake(portIdentifier, channelIdentifier, proposedUpgradeFields, timeout)
+    // chanUpgradeInit may only be called by addresses authorized by executing chain
+    abortTransactionUnless(isAuthorizedUpgrader(msgSender))
+
+    upgradeSequence = initUpgradeChannel(portIdentifier, channelIdentifier, proposedUpgradeFields)
 
     // call modules onChanUpgradeInit callback
     module = lookupModule(portIdentifier)
@@ -503,15 +485,15 @@ function chanUpgradeInit(
     // abort transaction if callback returned error
     abortTransactionUnless(err === nil)
 
-    // replace channel version with the version returned by application
+    // replace channel upgrade version with the version returned by application
     // in case it was modified
-    channel = provableStore.get(channelPath(portIdentifier, channelIdentifier))
-    channel.version = version
-    provableStore.set(channelPath(portIdentifier, channelIdentifier), channel)
+    upgrade = provableStore.get(channelUpgradePath(portIdentifier, channelIdentifier))
+    upgrade.fields.version = version
+    provableStore.set(channelUpgradePath(portIdentifier, channelIdentifier), upgrade)
 }
 ```
 
-NOTE: It is up to individual implementations how they will provide access-control to the `ChanUpgradeInit` function. E.g. chain governance, permissioned actor, DAO, etc. Access control on counterparty should inform choice of timeout values, i.e. timeout value should be large if counterparty's `ChanUpgradeTry` is gated by chain governance.
+NOTE: It is up to individual implementations how they will provide access-control to the `chanUpgradeInit` function. E.g. chain governance, permissioned actor, DAO, etc.
 
 ```typescript
 function chanUpgradeTry(
@@ -524,9 +506,9 @@ function chanUpgradeTry(
     proofUpgrade: CommitmentProof,
     proofHeight: Height
 ) {
-    // current channel must be OPEN or INITUPGRADE (crossing hellos)
+    // current channel must be OPEN (i.e. not in FLUSHING)
     channel = provableStore.get(channelPath(portIdentifier, channelIdentifier))
-    abortTransactionUnless(channel.state === OPEN || channel.state === INITUPGRADE)
+    abortTransactionUnless(channel.state == OPEN)
 
     // create upgrade fields for this chain from counterparty upgrade and 
     // relayer-provided information version may be mutated by application callback
@@ -536,24 +518,12 @@ function chanUpgradeTry(
         version: counterpartyUpgrade.fields.version,
     }
 
-    // either timeout height or timestamp must be non-zero
-    // if the upgrade feature is implemented on the TRY chain, then a relayer may
-    // submit a TRY transaction after the timeout.
-    // this will restore the channel on the executing chain and allow counterparty
-    // to use the ChanUpgradeCancel datagram to restore their channel.
-    timeout = counterpartyUpgrade.timeout
-    abortTransactionUnless(timeout.timeoutHeight !== 0 || timeout.timeoutTimestamp !== 0)
-    // counterparty-specified timeout must not have exceeded
-    abortTransactionUnless(
-        (currentHeight() > timeout.timeoutHeight && timeout.timeoutHeight !== 0) ||
-        (currentTimestamp() > timeout.timeoutTimestamp && timeout.timeoutTimestamp !== 0)
-    )
+    existingUpgrade = provableStore.get(channelUpgradePath(portIdentifier, channelIdentifier))
 
-    // if OPEN, then initialize handshake with upgradeFields
-    // otherwise, assert that the upgrade fields are the same for crossing-hellos case
-    if channel.state == OPEN {
-        // if the counterparty sequence is greater than the current sequence, 
-        // we fast forward to the counterparty sequence
+    // current upgrade either doesn't exist (non-crossing hello case), we initialize the upgrade with constructed upgradeFields
+    // if it does exist, we are in crossing hellos and must assert that the upgrade fields are the same for crossing-hellos case
+    if existingUpgrade == nil {
+        // if the counterparty sequence is greater than the current sequence, we fast forward to the counterparty sequence
         // so that both channel ends are using the same sequence for the current upgrade
         // initUpgradeHandshake will increment the sequence so after that call
         // both sides will have the same upgradeSequence
@@ -561,11 +531,13 @@ function chanUpgradeTry(
             channel.upgradeSequence = counterpartyUpgradeSequence - 1
         }
 
-        initUpgradeHandshake(portIdentifier, channelIdentifier, upgradeFields, counterpartyUpgrade.timeout)
-    } else if channel.state == INITUPGRADE {
-        existingUpgrade = privateStore.get(channelUpgradePath)
-        abortTransactionUnless(existingUpgrade.fields === upgradeFields)
+        initUpgradeChannelHandshake(portIdentifier, channelIdentifier, upgradeFields)
+    } else {
+        // we must use the existing upgrade fields
+        upgradeFields = existingUpgrade.fields
     }
+
+    abortTransactionUnless(isCompatible(upgradeFields, counterpartyUpgradeFields))
 
     // get counterpartyHops for given connection
     connection = provableStore.get(connectionPath(channel.connectionHops[0]))
@@ -574,29 +546,52 @@ function chanUpgradeTry(
     // construct counterpartyChannel from existing information and provided
     // counterpartyUpgradeSequence
     counterpartyChannel = ChannelEnd{
-        state: INITUPGRADE,
+        state: OPEN,
         ordering: channel.ordering,
         counterpartyPortIdentifier: portIdentifier,
         counterpartyChannelIdentifier: channelIdentifier,
         connectionHops: counterpartyHops,
         version: channel.version,
-        upgradeSequence: counterpartyUpgradeSequence,
-        flushStatus: NOTINFLUSH,
+        sequence: counterpartyUpgradeSequence,
     }
 
-    // call startFlushUpgradeHandshake to move channel from INITUPGRADE to TRYUPGRADE and start flushing
-    // upgrade is blocked on this channelEnd from progressing until flush completes on both ends
-    startFlushUpgradeHandshake(
-      portIdentifier, 
-      channelIdentifier, 
-      upgradeFields, 
-      counterpartyChannel, 
-      counterpartyUpgrade, 
-      TRYUPGRADE, 
-      proofChannel, 
-      proofUpgrade, 
-      proofHeight
+    // verify proofs of counterparty state
+    abortTransactionUnless(
+        verifyChannelState(
+            connection,
+            proofHeight,
+            proofChannel,
+            channel.counterpartyPortIdentifier,
+            channel.counterpartyChannelIdentifier,
+            counterpartyChannel
+        )
     )
+    abortTransactionUnless(
+        verifyChannelUpgrade(
+            connection,
+            proofHeight,
+            proofUpgrade,
+            channel.counterpartyPortIdentifier,
+            channel.counterpartyChannelIdentifier,
+            counterpartyUpgrade
+        )
+    )
+
+    // if the counterparty sequence is less than the current sequence, then either the counterparty chain is out-of-sync or
+    // the message is out-of-sync and we write an error receipt with our sequence - 1 so that the counterparty can update
+    // their sequence as well.
+    if counterpartyUpgradeSequence < channel.upgradeSequence {     
+        errorReceipt = ErrorReceipt{
+        channel.upgradeSequence - 1,
+        "sequence out of sync", // constant string changable by implementation
+        }
+        provableStore.set(channelUpgradeErrorPath(portIdentifier, channelIdentifier), errorReceipt)
+        return
+    }
+
+    // call startFlushUpgrade handshake to move channel to FLUSHING, which will block
+    // upgrade from progressing to OPEN until flush completes on both ends
+    startFlushUpgradeHandshake(portIdentifier, channelIdentifier)
 
     // refresh channel to get latest state
     channel = provableStore.get(channelPath(portIdentifier, channelIdentifier))
@@ -604,20 +599,17 @@ function chanUpgradeTry(
     // call modules onChanUpgradeTry callback
     module = lookupModule(portIdentifier)
     version, err = module.onChanUpgradeTry(
-        proposedUpgradeChannel.ordering,
-        proposedUpgradeChannel.connectionHops,
         portIdentifier,
         channelIdentifer,
         channel.upgradeSequence,
-        proposedUpgradeChannel.counterpartyPortIdentifer,
-        proposedUpgradeChannel.counterpartyChannelIdentifier,
-        proposedUpgradeChannel.version
+        upgradeFields.ordering,
+        upgradeFields.connectionHops,
+        upgradeFields.version
     )
-    // restore channel if callback returned error
-    if err != nil {
-        restoreChannel(portIdentifier, channelIdentifier)
-        return
-    }
+    // abort the transaction if the callback returns an error and
+    // there was no existing upgrade. This will allow the counterparty upgrade
+    // to continue existing while this chain may add support for it in the future
+    abortTransactionUnless(err == nil)
 
     // replace channel version with the version returned by application
     // in case it was modified
@@ -627,64 +619,95 @@ function chanUpgradeTry(
 }
 ```
 
-NOTE: It is up to individual implementations how they will provide access-control to the `ChanUpgradeTry` function. E.g. chain governance, permissioned actor, DAO, etc. A chain may decide to have permissioned **or** permissionless `ChanUpgradeTry`. In the permissioned case, both chains must explicitly consent to the upgrade; in the permissionless case, one chain initiates the upgrade and the other chain agrees to the upgrade by default. In the permissionless case, a relayer may submit the `ChanUpgradeTry` datagram.
+NOTE: Implementations that want to explicitly permission upgrades should enforce crossing hellos. i.e. Both parties must have called ChanUpgradeInit with mutually compatible parameters in order for ChanUpgradeTry to succeed. Implementations that want to be permissive towards counterparty-initiated upgrades may allow moving from OPEN to FLUSHING without having an upgrade previously stored on the executing chain.
 
 ```typescript
 function chanUpgradeAck(
     portIdentifier: Identifier,
     channelIdentifier: Identifier,
-    counterpartyFlushStatus: FlushStatus,
     counterpartyUpgrade: Upgrade,
     proofChannel: CommitmentProof,
     proofUpgrade: CommitmentProof,
     proofHeight: Height
 ) {
-    // current channel is in INITUPGRADE or TRYUPGRADE (crossing hellos)
+    // current channel is OPEN or FLUSHING (crossing hellos)
     channel = provableStore.get(channelPath(portIdentifier, channelIdentifier))
-    abortTransactionUnless(channel.state === INITUPGRADE || channel.state === TRYUPGRADE)
-
-    // counterparty flush status must be FLUSHING or FLUSHINGCOMPLETE
-    abortTransactionUnless(counterpartyFlushStatus === FLUSHING || counterpartyFlushStatus === FLUSHCOMPLETE)
+    abortTransactionUnless(channel.state == OPEN || channel.state == FLUSHING)
 
     connection = provableStore.get(connectionPath(channel.connectionHops[0]))
     counterpartyHops = [connection.counterpartyConnectionIdentifier]
 
-    // construct counterpartyChannel from existing information and provided
-    // flushStatus
+    // construct counterpartyChannel from existing information
     counterpartyChannel = ChannelEnd{
-        state: TRYUPGRADE,
+        state: FLUSHING,
         ordering: channel.ordering,
         counterpartyPortIdentifier: portIdentifier,
         counterpartyChannelIdentifier: channelIdentifier,
         connectionHops: counterpartyHops,
         version: channel.version,
-        upgradeSequence: channel.upgradeSequence,
-        flushStatus: counterpartyFlushStatus,
+        sequence: channel.upgradeSequence,
     }
+
+    // verify proofs of counterparty state
+    abortTransactionUnless(
+        verifyChannelState(
+            connection,
+            proofHeight,
+            proofChannel,
+            channel.counterpartyPortIdentifier,
+            channel.counterpartyChannelIdentifier,
+            counterpartyChannel
+        )
+    )
+    abortTransactionUnless(
+        verifyChannelUpgrade(
+            connection,
+            proofHeight,
+            proofUpgrade,
+            channel.counterpartyPortIdentifier,
+            channel.counterpartyChannelIdentifier,
+            counterpartyUpgrade
+        )
+    )
 
     upgrade = provableStore.get(channelUpgradePath(portIdentifier, channelIdentifier))
 
-    // prove counterparty and move our own state to ACKUPGRADE and start flushing
-    // upgrade is blocked on this channelEnd from progressing until flush completes on both ends
-    startFlushUpgradeHandshake(
-      portIdentifier, 
-      channelIdentifier, 
-      upgrade.fields, 
-      counterpartyChannel, 
-      counterpartyUpgrade, 
-      ACKUPGRADE, 
-      proofChannel, 
-      proofUpgrade, 
-      proofHeight
-    )
-
-     // in the crossing hellos case, the versions returned by both on TRY must be the same
-    if channel.state == TRYUPGRADE {
-        if upgrade.fields.version != counterpartyUpgrade.fields.version {
-            restoreChannel(portIdentifier, channelIdentifier)
-            return
-        }
+    // optimistically accept version that TRY chain proposes and pass this to callback for confirmation
+    // in the crossing hello case, we do not modify version that our TRY call returned and instead enforce
+    // that both TRY calls returned the same version
+    if channel.state == OPEN {
+        upgrade.fields.version == counterpartyUpgrade.fields.version
     }
+    // if upgrades are not compatible by ACK step, then we restore the channel
+    if !isCompatible(upgrade.fields, counterpartyUpgrade.fields) {
+        restoreChannel(portIdentifier, channelIdentifier)
+    }
+
+    if channel.state == OPEN {
+        // prove counterparty and move our own state to flushing
+        // if we are already at flushing, then no state changes occur
+        // upgrade is blocked on this channelEnd from progressing until flush completes on both ends
+        startFlushUpgradeHandshake(portIdentifier, channelIdentifier)
+    }
+
+    timeout = counterpartyUpgrade.timeout
+    
+    // counterparty-specified timeout must not have exceeded
+    // if it has, then restore the channel and abort upgrade handshake
+    if (timeout.timeoutHeight != 0 && currentHeight() >= timeout.timeoutHeight) ||
+        (timeout.timeoutTimestamp != 0 && currentTimestamp() >= timeout.timeoutTimestamp ) {
+          restoreChannel(portIdentifier, channelIdentifier)
+    }
+
+    // if there are no in-flight packets on our end, we can automatically go to FLUSHCOMPLETE
+    // otherwise store counterparty timeout so packet handlers can check before going to FLUSHCOMPLETE
+    if pendingInflightPackets(portIdentifier, channelIdentifier) == nil {
+        channel.state = FLUSHCOMPLETE
+    } else {
+        privateStore.set(counterpartyUpgradeTimeout(portIdentifier, channelIdentifier), timeout)
+    }
+
+    provableStore.set(channelPath(portIdentifier, channelIdentifier), channel)
 
     // call modules onChanUpgradeAck callback
     // module can error on counterparty version
@@ -694,7 +717,7 @@ function chanUpgradeAck(
     err = module.onChanUpgradeAck(
         portIdentifier,
         channelIdentifier,
-        counterpartyUpgrade.version
+        counterpartyUpgrade.fields.version
     )
     // restore channel if callback returned error
     if err != nil {
@@ -703,15 +726,84 @@ function chanUpgradeAck(
     }
 
     // if no error, agree on final version
-    upgrade.fields.version = counterpartyUpgrade.fields.version
     provableStore.set(channelUpgradePath(portIdentifier, channelIdentifier), upgrade)
+}
+```
 
-    // refresh channel
+`chanUpgradeConfirm` is called on the chain which is on `FLUSHING` **after** `chanUpgradeAck` is called on the counterparty. This will inform the TRY chain of the timeout set on ACK by the counterparty. If the timeout has already exceeded, we will write an error receipt and restore. If packets on both sides have already been flushed and timeout is not exceeded, then we can open the channel. Otherwise, we set the counterparty timeout in the private store and wait for packet flushing to complete.
+
+```typescript
+function chanUpgradeConfirm(
+    portIdentifier: Identifier,
+    channelIdentifier: Identifier,
+    counterpartyChannelState: state,
+    counterpartyUpgrade: Upgrade,
+    proofChannel: CommitmentProof,
+    proofUpgrade: CommitmentProof,
+    proofHeight: Height,
+) {
+    // current channel is in FLUSHING
     channel = provableStore.get(channelPath(portIdentifier, channelIdentifier))
+    abortTransactionUnless(channel.state == FLUSHING)
 
-    // if both sides have already flushed then open the upgrade handshake immediately
-    if  channel.flushStatus == FLUSHCOMPLETE && counterpartyFlushStatus == FLUSHCOMPLETE {
-        openUpgradeHandshake(portIdentifier, channelIdentifier)
+    // counterparty channel is either FLUSHING or FLUSHCOMPLETE
+    abortTransactionUnless(counterpartyChannelState == FLUSHING || counterpartyChannelState == FLUSHCOMPLETE)
+
+    connection = getConnection(channel.connectionIdentifier)
+    counterpartyHops = getCounterpartyHops(connection)
+
+    counterpartyChannel = ChannelEnd{
+        state: counterpartyChannelState,
+        ordering: channel.ordering,
+        counterpartyPortIdentifier: portIdentifier,
+        counterpartyChannelIdentifier: channelIdentifier,
+        connectionHops: counterpartyHops,
+        version: channel.version,
+        sequence: channel.upgradeSequence,
+    }
+
+    // verify proofs of counterparty state
+    abortTransactionUnless(
+        verifyChannelState(
+            connection,
+            proofHeight,
+            proofChannel,
+            channel.counterpartyPortIdentifier,
+            channel.counterpartyChannelIdentifier,
+            counterpartyChannel
+        )
+    )
+    abortTransactionUnless(
+        verifyChannelUpgrade(
+            connection,
+            proofHeight,
+            proofUpgrade, 
+            channel.counterpartyPortIdentifier,
+            channel.counterpartyChannelIdentifier,
+            counterpartyUpgrade
+        )
+    )
+
+    timeout = counterpartyUpgrade.timeout
+    
+    // counterparty-specified timeout must not have exceeded
+    // if it has, then restore the channel and abort upgrade handshake
+    if (timeout.timeoutHeight != 0 && currentHeight() >= timeout.timeoutHeight) ||
+        (timeout.timeoutTimestamp != 0 && currentTimestamp() >= timeout.timeoutTimestamp ) {
+          restoreChannel(portIdentifier, channelIdentifier)
+    }
+
+    // if there are no in-flight packets on our end, we can automatically go to FLUSHCOMPLETE
+    if pendingInflightPackets(portIdentifier, channelIdentifier) == nil {
+        channel.state = FLUSHCOMPLETE
+        publicStore.set(channelPath(portIdentifier, channelIdentifier), channel)
+    } else {
+        privateStore.set(counterpartyUpgradeTimeout(portIdentifier, channelIdentifier), timeout)
+    }
+
+    // if both chains are already in flushcomplete we can move to OPEN
+    if channel.state == FLUSHCOMPLETE && counterpartyChannelState == FLUSHCOMPLETE {
+        openUpgradelHandshake(portIdentifier, channelIdentifier)
         module.onChanUpgradeOpen(portIdentifier, channelIdentifier)
     }
 }
@@ -727,18 +819,14 @@ function chanUpgradeOpen(
     proofChannel: CommitmentProof,
     proofHeight: Height,
 ) {
-    // if packet commitments are not empty then abort the transaction
-    abortTransactionUnless(pendingInflightPackets(portIdentifier, channelIdentifier))
-
-    // channel must be in TRYUPGRADE or ACKUPGRADE and have completed flushing
+    // channel must have completed flushing
     channel = provableStore.get(channelPath(portIdentifier, channelIdentifier))
-    abortTransactionUnless(channel.state === TRYUPGRADE || channel.state === ACKUPGRADE)
-    abortTransactionUnless(channel.flushStatus === FLUSHCOMPLETE)
+    abortTransactionUnless(channel.state == FLUSHCOMPLETE)
 
     connection = provableStore.get(connectionPath(channel.connectionHops[0]))
     counterpartyHops = [connection.counterpartyConnectionIdentifier]
 
-    // counterparty must be in OPEN, TRYUPGRADE, ACKUPGRADE state
+    // counterparty must be in OPEN or FLUSHCOMPLETE state
     if counterpartyChannelState == OPEN {
         // get upgrade since counterparty should have upgraded to these parameters
         upgrade = provableStore.get(channelUpgradePath(portIdentifier, channelIdentifier))
@@ -750,33 +838,18 @@ function chanUpgradeOpen(
             counterpartyChannelIdentifier: channelIdentifier,
             connectionHops: upgrade.fields.connectionHops,
             version: upgrade.fields.version,
-            upgradeSequence: channel.upgradeSequence,
-            flushStatus: NOTINFLUSH
+            sequence: channel.upgradeSequence,
         }
-    } else if counterpartyChannelState == TRYUPGRADE {
-        // MsgUpgradeAck must already have been executed before we can OPEN
-        // so abort if currentState is not ACKUPGRADE
-        abortTransactionUnless(channel.state === ACKUPGRADE)
+    } else if counterpartyChannelState == FLUSHCOMPLETE {
+        counterpartyHops = getCounterpartyHops(connection)
         counterpartyChannel = ChannelEnd{
-            state: TRYUPGRADE,
+            state: FLUSHCOMPLETE,
             ordering: channel.ordering,
             counterpartyPortIdentifier: portIdentifier,
             counterpartyChannelIdentifier: channelIdentifier,
             connectionHops: counterpartyHops,
             version: channel.version,
-            upgradeSequence: channel.upgradeSequence,
-            flushStatus: FLUSHCOMPLETE
-        }
-    } else if counterpartyChannelState == ACKUPGRADE {
-        counterpartyChannel = ChannelEnd{
-            state: ACKUPGRADE,
-            ordering: channel.ordering,
-            counterpartyPortIdentifier: portIdentifier,
-            counterpartyChannelIdentifier: channelIdentifier,
-            connectionHops: counterpartyHops,
-            version: channel.version,
-            upgradeSequence: channel.upgradeSequence,
-            flushStatus: FLUSHCOMPLETE
+            sequence: channel.upgradeSequence,
         }
     } else {
         abortTransactionUnless(false)
@@ -817,80 +890,54 @@ function cancelChannelUpgrade(
     errorReceipt: ErrorReceipt,
     proofUpgradeError: CommitmentProof,
     proofHeight: Height,
+    msgSender: string,
 ) {
-    // current channel is in INITUPGRADE or TRYUPGRADE
+    // current channel has an upgrade stored
+    upgrade = provableStore.get(channelUpgradePath(portIdentifier, channelIdentifier))
+    abortTransactionUnless(upgrade != nil)
+
     channel = provableStore.get(channelPath(portIdentifier, channelIdentifier))
-    abortTransactionUnless(channel.state === INITUPGRADE || channel.state === TRYUPGRADE)
+    // if the msgSender is authorized to make and cancel upgrades AND 
+    // the current channel has not already reached FLUSHCOMPLETE,
+    // then we can restore immediately without any additional checks
+    // otherwise, we can only cancel if the counterparty wrote an
+    // error receipt during the upgrade handshake
+    if !(isAuthorizedUpgrader(msgSender) && channel.state != FLUSHCOMPLETE) {
+        abortTransactionUnless(!isEmpty(errorReceipt))
 
-    abortTransactionUnless(!isEmpty(errorReceipt))
+        // If counterparty sequence is less than the current sequence,
+        // abort transaction since this error receipt is from a previous upgrade
+        abortTransactionUnless(errorReceipt.sequence >= channel.upgradeSequence)
 
-    // get current sequence
-    // If counterparty sequence is less than the current sequence, abort 
-    // transaction since this error receipt is from a previous upgrade
-    // Otherwise, set the sequence to counterparty's error sequence
-    abortTransactionUnless(errorReceipt.sequence >= channel.upgradeSequence)
-    channel.upgradeSequence = errorReceipt.sequence
+        // get underlying connection for proof verification
+        connection = getConnection(channel.connectionIdentifier)
+        // verify that the provided error receipt is written to the upgradeError path with the counterparty sequence
+        abortTransactionUnless(verifyChannelUpgradeError(connection, proofHeight, proofUpgradeError, channel.counterpartyPortIdentifier, channel.counterpartyChannelIdentifier, errorReceipt))
+    }
 
-    // get underlying connection for proof verification
-    connection = provableStore.get(connectionPath(channel.connectionHops[0]))
-    // verify that the provided error receipt is written to the 
-    // upgradeError path with the counterparty sequence
-    abortTransactionUnless(
-      verifyChannelUpgradeError(
-        connection, 
-        proofHeight, 
-        proofUpgradeError, 
-        channel.counterpartyPortIdentifier, 
-        channel.counterpartyChannelIdentifier, 
-        errorReceipt
-      )
-    )
-
-    // cancel upgrade
-    // and restore original channel
-    // delete unnecessary state
-    channel.state = OPEN
-    channel.flushStatus = NOTINFLUSH
-    provableStore.set(channelPath(portIdentifier, channelIdentifier), channel)
-
-    // delete auxilliary state
-    provableStore.delete(channelUpgradePath(portIdentifier, channelIdentifier))
-    privateStore.delete(channelCounterpartyLastPacketSequencePath(portIdentifier, channelIdentifier))
-
-    // call modules onChanUpgradeRestore callback
-    module = lookupModule(portIdentifier)
-    // restore callback must not return error since counterparty 
-    // successfully restored previous channelEnd
-    module.onChanUpgradeRestore(
-        portIdentifer,
-        channelIdentifier
-    )
+    // cancel upgrade and write error receipt
+    restoreChannel(portIdentifier, channelIdentifier)
 }
 ```
 
 ### Timeout Upgrade Process
 
-It is possible for the channel upgrade process to stall indefinitely on `TRYUPGRADE` if the `TRYUPGRADE` transaction simply cannot pass on the counterparty; for example, the upgrade feature may not be enabled on the counterparty chain.
-
-In this case, we do not want the initializing chain to be stuck indefinitely in the `INITUPGRADE` step. Thus, the `ChanUpgradeInit` datagram will contain a `timeoutHeight` and `timeoutTimestamp`. The counterparty chain is expected to reject `ChanUpgradeTry` datagram if the specified timeout has already elapsed.
-
-A relayer must then submit a `ChanUpgradeTimeout` datagram to the initializing chain which proves that the counterparty is still in its original state. If the proof succeeds, then the initializing chain shall also restore its original channel to `OPEN` and cancel the upgrade.
+It is possible for the channel upgrade process to stall indefinitely while trying to flush the existing packets. To protect against this, each chain sets a timeout when it moves into `FLUSHING`. If the counterparty has not completed flushing within the expected time window, then the relayer can submit a timeout message to restore the channel to `OPEN` with the original parameters. It will also write an error receipt so that the counterparty which has not moved to `FLUSHCOMPLETE` can also restore channel to OPEN with the original parameters.
 
 ```typescript
 function timeoutChannelUpgrade(
     portIdentifier: Identifier,
     channelIdentifier: Identifier,
     counterpartyChannel: ChannelEnd,
-    prevErrorReceipt: ErrorReceipt, // optional
     proofChannel: CommitmentProof,
-    proofErrorReceipt: CommitmentProof,
     proofHeight: Height,
 ) {
-    // current channel must be in INITUPGRADE
-    channel = provableStore.get(channelPath(portIdentifier, channelIdentifier))
-    abortTransactionUnles(channel.state === INITUPGRADE)
-
+    // current channel must have an upgrade that is FLUSHING or FLUSHCOMPLETE
     upgrade = provableStore.get(channelUpgradePath(portIdentifier, channelIdentifier))
+    abortTransactionUnless(upgrade != nil)
+    channel = provableStore.get(channelPath(portIdentifier, channelIdentifier))
+    abortTransactionUnless(channel.state == FLUSHING || channel.state == FLUSHCOMPLETE)
+
     upgradeTimeout = upgrade.timeout
 
     // proof must be from a height after timeout has elapsed. 
@@ -909,56 +956,41 @@ function timeoutChannelUpgrade(
       getTimestampAtHeight(connection, proofHeight) >= upgradeTimeout.timestamp
     )
 
-    // counterparty channel must be proved to still be 
-    // in OPEN state or INITUPGRADE state (crossing hellos)
-    abortTransactionUnless(counterpartyChannel.State === OPEN || counterpartyChannel.State == INITUPGRADE)
-    abortTransactionUnless(
-      verifyChannelState(
-        connection, 
-        proofHeight,
-        proofChannel,
-        channel.counterpartyPortIdentifier,
-        channel.counterpartyChannelIdentifier,
-        counterpartyChannel
-      )
-    )
+    // get underlying connection for proof verification
+    connection = provableStore.get(connectionPath(channel.connectionHops[0]))
 
-    // Error receipt passed in is either nil or it is a stale 
-    // error receipt from a previous upgrade
-    if prevErrorReceipt == nil {
-        abortTransactionUnless(
-          verifyErrorReceiptAbsence(
-            connection, 
-            proofHeight, 
-            proofErrorReceipt, 
-            channel.counterpartyPortIdentifier, 
-            channel.counterpartyChannelIdentifier
-          )
-        )
-    } else {
-        // timeout for this sequence can only succeed if the error 
-        // receipt written into the error path on the counterparty 
-        // was for a previous sequence by the timeout deadline.
-        abortTransactionUnless(channel.upgradeSequence > prevErrorReceipt.sequence)
-        abortTransactionUnless(
-          verifyErrorReceipt(
+    // counterparty channel must be proved to not have completed flushing after timeout has passed
+    abortTransactionUnless(counterpartyChannel.state !== FLUSHCOMPLETE)
+    // if counterparty channel state is OPEN, we should abort 
+    // only if the counterparty has successfully completed upgrade
+    if counterpartyChannel.state === OPEN {
+         // get upgrade since counterparty should have upgraded to these parameters
+        upgrade = provableStore.get(channelUpgradePath(portIdentifier, channelIdentifier))
+        counterpartyHops = getCounterpartyHops(upgrade.fields.connectionHops)
+
+        // check that the channel did not upgrade successfully
+        if upgrade.fields.version == counterpartyChannel.version &&
+            upgrade.fields.order == counterpartyChannel.order &&
+            counterpartyHops == counterpartyChannel.connectionHops {
+                // counterparty has already succesfully upgraded so we cannot timeout
+                abortTransactionUnless(false)
+        }
+    }
+    abortTransactionUnless(counterpartyChannel.upgradeSequence >== channel.upgradeSequence)
+    abortTransactionUnless(
+        verifyChannelState(
             connection,
             proofHeight,
-            proofErrorReceipt,
+            proofChannel,
             channel.counterpartyPortIdentifier,
             channel.counterpartyChannelIdentifier,
-            prevErrorReceipt
-          )
+            counterpartyChannel
         )
-    }
+    )
 
     // we must restore the channel since the timeout verification has passed
-    channel.state = OPEN
-    provableStore.set(channelPath(portIdentifier, channelIdentifier), channel)
-
-    // delete auxilliary state
-    provableStore.delete(channelUpgradePath(portIdentifier, channelIdentifier))
-    privateStore.delete(channelCounterpartyLastPacketSequencePath(portIdentifier, channelIdentifier))
+    // error receipt is written for this sequence, counterparty can call cancelUpgradeHandshake
+    restoreChannel(portIdentifier, channelIdentifier)
 
     // call modules onChanUpgradeRestore callback
     module = lookupModule(portIdentifier)
@@ -971,12 +1003,12 @@ function timeoutChannelUpgrade(
 }
 ```
 
-Note that the timeout logic only applies to the INIT step. This is to protect an upgrading chain from being stuck in a non-OPEN state if the counterparty cannot execute the TRY successfully. Once the TRY step succeeds, then both sides are guaranteed to have the upgrade feature enabled. Liveness is no longer an issue, because we can wait until liveness is restored to execute the ACK step which will move the channel definitely into an OPEN state (either a successful upgrade or a rollback).
+Both parties must not complete the upgrade handshake if the counterparty upgrade timeout has already passed. Even if both sides could have successfully moved to FLUSHCOMPLETE. This will prevent the channel ends from reaching incompatible states.
 
-The error receipt on the counterparty may be empty (either because an upgrade error did not occur in the past, or a previous attempt was pruned), or it may have an outdated sequence (in this case the counterparty errored, our side executed a `ChanUpgradeCancel`, and then subsequently executed `INIT`). In the case where the error receipt is empty, the relayer is expected to submit an absence proof in the timeout message. In the case where the error receipt is for an outdated sequence, the relayer is expected to submit an existence proof in the timeout message. In this case, the handler will assert that the counterparty sequence is outdated **and** the upgrade timeout has passed on the counterparty by the proof height; thus proving that the counterparty did not receive a timeout message within the valid window.
+### Considerations
 
-The TRY chain will receive the timeout parameters chosen by the counterparty on INIT, so that it can reject any TRY message that is received after the specified timeout. This prevents the handshake from entering into an invalid state, in which the INIT chain processes a timeout successfully and restores its channel to `OPEN` while the TRY chain at a later point successfully writes a `TRY` state.
+Note that a channel upgrade handshake may never complete successfully if the in-flight packets cannot successfully be cleared. This can happen if the timeout value of a packet is too large, or an acknowledgement never arrives, or if there is a bug that makes acknowledging or timing out a packet impossible. In these cases, some out-of-protocol mechanism (e.g. governance) must step in to clear the packets "manually" perhaps by forcefully clearing the packet commitments before restarting the upgrade handshake.
 
 ### Migrations
 
-A chain may have to update its internal state to be consistent with the new upgraded channel. In this case, a migration handler should be a part of the chain binary before the upgrade process so that the chain can properly migrate its state once the upgrade is successful. If a migration handler is necessary for a given upgrade but is not available, then the executing chain must reject the upgrade so as not to enter into an invalid state. This state migration will not be verified by the counterparty since it will just assume that if the channel is upgraded to a particular channel version, then the auxilliary state on the counterparty will also be updated to match the specification for the given channel version. The migration must only run once the upgrade has successfully completed and the new channel is `OPEN` (ie. on `ACK` and `OPEN`).
+A chain may have to update its internal state to be consistent with the new upgraded channel. In this case, a migration handler should be a part of the chain binary before the upgrade process so that the chain can properly migrate its state once the upgrade is successful. If a migration handler is necessary for a given upgrade but is not available, then the executing chain must reject the upgrade so as not to enter into an invalid state. This state migration will not be verified by the counterparty since it will just assume that if the channel is upgraded to a particular channel version, then the auxilliary state on the counterparty will also be updated to match the specification for the given channel version. The migration must only run once the upgrade has successfully completed and the new channel is `OPEN` (ie. on `ChanUpgradeConfirm` or `ChanUpgradeOpen`).

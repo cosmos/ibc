@@ -16,8 +16,6 @@
   - [Consumer Initiated Slashing](#consumer-initiated-slashing)
   - [Reward Distribution](#reward-distribution)
 
-
-
 ## Security Model
 [&uparrow; Back to Outline](#outline)
 
@@ -59,7 +57,7 @@ Moreover, CCV enables *hub minimalism*. In a nutshell, hub minimalism entails ke
 > This standard document specifies the V1 release, which will require the validator set of a consumer chain to be entirely provided by the provider chain. 
 > In other words, once a provider chain agrees to provide security to a consumer chain, the entire validator set of the provider chain MUST validate also on the consumer chain.
 > 
-> For more details on the planned releases, take a look at the [Interchain Security light paper](https://github.com/cosmos/gaia/blob/main/docs/interchain-security.md#the-interchain-security-stack).
+> For more details on the planned releases, take a look at the [Interchain Security light paper](https://cosmos.github.io/interchain-security/introduction/overview).
 
 ## Definition
 [&uparrow; Back to Outline](#outline)

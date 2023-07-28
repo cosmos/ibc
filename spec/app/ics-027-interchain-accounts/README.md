@@ -512,7 +512,7 @@ function onChanCloseInit(
   portIdentifier: Identifier,
   channelIdentifier: Identifier) {
  	// disallow user-initiated channel closing for interchain account channels
-  return err
+  abortTransactionUnless(FALSE)
 }
 ```
 
