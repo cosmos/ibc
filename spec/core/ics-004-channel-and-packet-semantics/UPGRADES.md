@@ -522,7 +522,7 @@ function chanUpgradeTry(
     }
 
     initUpgradeHandshake(portIdentifier, channelIdentifier, upgradeFields)
-} else {
+  } else {
     // we must use the existing upgrade fields
     upgradeFields = existingUpgrade.fields
   }
