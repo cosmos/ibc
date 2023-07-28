@@ -318,7 +318,7 @@ function startFlushUpgradeHandshake(
   upgrade.lastPacketSendSequence = lastPacketSendSequence
   
   // store upgrade in public store for counterparty proof verification
-  publicStore.set(channelPath(portIdentifier, channelIdentifier), channel)
+  provableStore.set(channelPath(portIdentifier, channelIdentifier), channel)
   provableStore.set(channelUpgradePath(portIdentifier, channelIdentifier), upgrade)
 }
 ```
