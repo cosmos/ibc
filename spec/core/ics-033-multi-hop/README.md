@@ -12,7 +12,7 @@ modified: 2022-12-16
 
 ## Synopsis
 
-This document describes a standard for multi-hop IBC channels. Multi-hop channels specifies a way to route messages across a path of IBC enabled blockchains utilizing multiple pre-existing IBC connections.
+This document describes a standard for multi-hop IBC channels. Multi-hop channels specify a way to route messages across a path of IBC enabled blockchains utilizing multiple pre-existing IBC connections.
 
 ### Motivation
 
@@ -33,22 +33,27 @@ Associated definitions are as defined in referenced prior standards (where the f
 ### Desired Properties
 
 - IBC channel handshake and message packets should be able to be utilize pre-existing connections to form a logical proof chain to relay messages between unconnected chains.
-- Relaying for a multi connection IBC channel should NOT require additional writes to intermediate hops.
+- Relaying for a multi-hop IBC channel should NOT require writing additional channel, packet, or timeout state to intermediate hops.
+- The design should strive to minimize the number of required client updates to generate and query multi-hop proofs.
 - Minimal additional required state and changes to core and app IBC specs.
 - Retain desired properties of connection, channel and packet definitions.
 - Retain backwards compatibility for messaging over a single connection hop.
 
 ## Technical Specification
 
-The bulk of the spec will be around proof generation and verification. IBC connections remain unchanged. Additionally, channel handshake and packet message types as well as general round trip messaging semantics and flow will remain the same. There is additional work on the verifier side on the receiving chain as well as the relayers who need to query for proofs.
+The bulk of the spec describes multi-hop proof generation and verification. IBC connections remain unchanged. Additionally, channel handshake and packet message types as well as general round trip messaging semantics and flow will remain the same. There is additional work on the verifier side on the receiving chain as well as the relayers who need to query for proofs.
 
-Messages passed over multiple hops require proof of the connection path from source chain to receiving chain as well as the packet commitment on the source chain. The connection path is proven by verifying the connection state and consensus state of each connection in the path to the receiving chain. On a high level, this can be thought of as a channel path proof chain where the receiving chain can prove a key/value on the source chain by iteratively proving each connection and consensus state in the channel path starting with the consensus state associated with the final client on the receiving chain. Each subsequent consensus state and connection is proven until the source chain's consensus state is proven which can then be used to prove the desired key/value on the source chain.
+Messages passed over multiple hops require proof of the connection path from source chain to receiving chain as well as the packet commitment on the source chain. The connection path is proven by verifying the connection state and consensus state of each connection in the path to the receiving chain. On a high level, this can be thought of as a chained proof over a channel path which enables the receiving chain to prove a key/value on the source chain by iteratively proving each connection and consensus state in the channel path starting with the consensus state associated with the final client on the receiving chain. Each subsequent consensus state and connection is proven until the source chain's consensus state is proven which can then be used to prove the desired key/value on the source chain.
+
+## Assumptions
+
+This multi-hop spec assumes that all proof specs for membership verification for each chain are equal.
 
 ### Channel Handshake and Packet Messages
 
-For both channel handshake and packet messages, additional connection hops are defined in the pre-existing `connectionHops` field. The connection IDs along the channel path must be pre-existing and in the `OPEN` state to guarantee delivery to the correct recipient. See `Path Forgery Protection` for more info.
+For both channel handshake and packet messages, additional connection hops are defined in the pre-existing `connectionHops` field. The connections along the channel path must exist in the `OPEN` state to guarantee delivery to the correct recipient. See `Path Forgery Protection` for more information.
 
-The spec for channel handshakes and packets remains the same. See [ICS 4](https://github.com/cosmos/ibc/tree/main/spec/core/ics-004-channel-and-packet-semantics).
+See [ICS 4](https://github.com/cosmos/ibc/tree/main/spec/core/ics-004-channel-and-packet-semantics) for multi-hop related spec changes. Multi-hop does not change existing spec behavior for channel handshakes, packet delivery, and timeout handling. However, multi-hop channels require special handling for frozen clients (see `chanCloseFrozen`).
 
 In terms of connection topology, a user would be able to determine a viable channel path from sender -> receiver using information from the [chain registry](https://github.com/cosmos/chain-registry). They can also independently verify this information via network queries.
 
@@ -62,7 +67,7 @@ For each multi-hop channel (detailed proof logic below):
 2. Read the connectionHops field in from the scanned message to determine the channel path.
 3. Lookup connection endpoints via chain registry configuration and update the clients associated with the connections in the channel path to reflect the latest consensus state on the sending chain including the key/value to be proven.
 4. Query for proof of connection, and consensus state for each intermediate connection in the channel path.
-5. Query proof of packet commitment or handshake message commitment on source chain.
+5. Query proof of packet or handshake message commitments on source chain.
 6. Submit proofs and data to RPC endpoint on receiving chain.
 
 Relayers are connection topology aware with configurations sourced from the [chain registry](https://github.com/cosmos/chain-registry).

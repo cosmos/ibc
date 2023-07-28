@@ -289,6 +289,7 @@ If not provided, the default `validateChannelIdentifier` function will always re
 | --------- | ---------------- | ---------------- | ------------------ | ---------------------- |
 | Actor     | ChanCloseInit    | A                | (OPEN, OPEN)       | (CLOSED, OPEN)         |
 | Relayer   | ChanCloseConfirm | B                | (CLOSED, OPEN)     | (CLOSED, CLOSED)       |
+| Actor     | ChanCloseFrozen  | A or B           | (OPEN, OPEN)       | (CLOSED, CLOSED)       |
 
 ##### Opening handshake
 
@@ -373,13 +374,8 @@ function chanOpenTry(
     abortTransactionUnless(connection !== null)
     abortTransactionUnless(connection.state === OPEN)
 
-    let counterpartyHops: []string = []
-    if (connectionHops.length > 1) {
-      counterpartyHops = getCounterPartyHops(proofInit, connection)
-    } else {
-      counterpartyHops = [connection.counterpartyConnectionIdentifier]
-    }
-
+    // return hops from counterparty's view
+    counterpartyHops = getCounterPartyHops(proofInit, connection)
 
     expected = ChannelEnd{
       INIT, order, portIdentifier,
@@ -388,7 +384,7 @@ function chanOpenTry(
     }
 
     if (connectionHops.length > 1) {
-      key = host.ChannelPath(counterparty.PortId, counterparty.ChannelId)
+      key = channelPath(counterparty.PortId, counterparty.ChannelId)
       abortTransactionUnless(connection.verifyMultihopMembership(
         connection,
         proofHeight,
@@ -436,18 +432,14 @@ function chanOpenAck(
     abortTransactionUnless(connection !== null)
     abortTransactionUnless(connection.state === OPEN)
 
-    let counterpartyHops: []string = []
-    if (channel.connectionHops.length > 1) {
-      counterpartyHops = getCounterPartyHops(proofTry, connection)
-    } else {
-      counterpartyHops = [connection.counterpartyConnectionIdentifier]
-    }
+    // return hops from counterparty's view
+    counterpartyHops = getCounterPartyHops(proofTry, connection)
 
     expected = ChannelEnd{TRYOPEN, channel.order, portIdentifier,
         channelIdentifier, counterpartyHops, counterpartyVersion}
 
     if (channel.connectionHops.length > 1) {
-      key = host.ChannelPath(counterparty.PortId, counterparty.ChannelId)
+      key = channelPath(counterparty.PortId, counterparty.ChannelId)
       abortTransactionUnless(connection.verifyMultihopMembership(
         connection,
         proofHeight,
@@ -490,18 +482,14 @@ function chanOpenConfirm(
     abortTransactionUnless(connection !== null)
     abortTransactionUnless(connection.state === OPEN)
 
-    let counterpartyHops: []string = []
-    if (connectionHops.length > 1) {
-      counterpartyHops = getCounterPartyHops(proofAck, connection)
-    } else {
-      counterpartyHops = [connection.counterpartyConnectionIdentifier]
-    }
+    // return hops from counterparty's view
+    counterpartyHops = getCounterPartyHops(proofAck, connection)
 
     expected = ChannelEnd{OPEN, channel.order, portIdentifier,
       channelIdentifier, counterpartyHops, channel.version}
 
     if (connectionHops.length > 1) {
-      key = host.ChannelPath(counterparty.PortId, counterparty.ChannelId)
+      key = channelPath(counterparty.PortId, counterparty.ChannelId)
       abortTransactionUnless(connection.verifyMultihopMembership(
         connection,
         proofHeight,
@@ -565,7 +553,7 @@ maximum height/time were mandated & tracked, and future specification versions m
 function chanCloseConfirm(
   portIdentifier: Identifier,
   channelIdentifier: Identifier,
-  proofInit: CommitmentProof,
+  proofInit: CommitmentProof | MultihopProof,
   proofHeight: Height) {
     abortTransactionUnless(authenticateCapability(channelCapabilityPath(portIdentifier, channelIdentifier), capability))
     channel = provableStore.get(channelPath(portIdentifier, channelIdentifier))
@@ -575,19 +563,14 @@ function chanCloseConfirm(
     abortTransactionUnless(connection !== null)
     abortTransactionUnless(connection.state === OPEN)
 
-    let counterpartyHops: []string = []
-    if (connectionHops.length > 1) {
-      counterpartyHops = getCounterPartyHops(proofInit, connection)
-    } else {
-      counterpartyHops = [connection.counterpartyConnectionIdentifier]
-    }
+    // return hops from counterparty's view
+    counterpartyHops = getCounterPartyHops(proofInit, connection)
 
     expected = ChannelEnd{CLOSED, channel.order, portIdentifier,
                           channelIdentifier, counterpartyHops, channel.version}
 
     if (connectionHops.length > 1) {
-      key = host.ChannelPath(counterparty.PortId, counterparty.ChannelId)
-
+      key = channelPath(counterparty.PortId, counterparty.ChannelId)
       abortTransactionUnless(connection.verifyMultihopMembership(
         connection,
         proofHeight,
@@ -645,7 +628,7 @@ function chanCloseFrozen(
     let connectionIdx = proofConnection.ConsensusProofs.length + 1
     abortTransactionUnless(connectionIdx < hopsLength)
     let connectionID = channel.ConnectionHops[connectionIdx]
-    let connectionProofKey = host.ConnectionPath(connectionID)
+    let connectionProofKey = connectionPath(connectionID)
     let connectionProofValue = mProof.KeyProof.Value
     let frozenConnectionEnd = abortTransactionUnless(Unmarshal(connectionProofValue))
 
@@ -666,7 +649,7 @@ function chanCloseFrozen(
 
 
     // key and value for the frozen client state
-    let clientStateKey = host.FullClientStatePath(clientID)
+    let clientStateKey = clientStatePath(clientID)
     let clientStateValue = proofClientState.KeyProof.Value
     let frozenClientState = abortTransactionUnless(Unmarshal(clientStateValue))
 
@@ -691,18 +674,18 @@ function chanCloseFrozen(
 
 ```typescript
 // Return the counterparty connectionHops
-function getCounterPartyHops(proof: MultihopProof, lastConnection: ConnectionEnd) string[] {
-  let counterpartyHops: string[] = []
-  for connData in proofs.ConnectionProofs {
-    connectionEnd = abortTransactionUnless(Unmarshal(connData.Value))
-    counterpartyHops.push(connectionEnd.GetCounterparty().GetConnectionID())
-   }
+function getCounterPartyHops(proof: CommitmentProof | MultihopProof, lastConnection: ConnectionEnd) string[] {
 
-  // reverse the hops so they are ordered from sender --> receiver
-  counterpartyHops = counterpartyHops.reverse()
+  let counterpartyHops: string[] = [lastConnection.counterpartyConnectionIdentifier]
+  if typeof(proof) === 'MultihopProof' {
+    for connData in proofs.ConnectionProofs {
+      connectionEnd = abortTransactionUnless(Unmarshal(connData.Value))
+      counterpartyHops.push(connectionEnd.GetCounterparty().GetConnectionID())
+    }
 
-  // add the counterparty of the connection on the receiving chain
-  counterpartyHops.push(lastConnection.GetCounterparty().GetConnectionID())
+    // reverse the hops so they are ordered from sender --> receiver
+    counterpartyHops = counterpartyHops.reverse()
+  }
 
   return counterpartyHops
 }
@@ -841,7 +824,7 @@ function recvPacket(
     abortTransactionUnless(connection.state === OPEN)
 
     if (len(channel.connectionHops) > 1) {
-      key = host.PacketCommitmentPath(packet.GetSourcePort(), packet.GetSourceChannel(), packet.GetSequence())
+      key = packetCommitmentPath(packet.GetSourcePort(), packet.GetSourceChannel(), packet.GetSequence())
       abortTransactionUnless(connection.verifyMultihopMembership(
         connection,
         proofHeight,
@@ -1048,7 +1031,7 @@ function acknowledgePacket(
 
     // abort transaction unless correct acknowledgement on counterparty chain
     if (len(channel.connectionHops) > 1) {
-      key = host.PacketAcknowledgementPath(packet.GetDestPort(), packet.GetDestChannel(), packet.GetSequence())
+      key = packetAcknowledgementPath(packet.GetDestPort(), packet.GetDestChannel(), packet.GetSequence())
       abortTransactionUnless(connection.verifyMultihopMembership(
         connection,
         proofHeight,
@@ -1153,7 +1136,7 @@ We pass the `relayer` address just as in [Receiving packets](#receiving-packets)
 ```typescript
 function timeoutPacket(
   packet: OpaquePacket,
-  proof: CommitmentProof | MultihopProof, // TODO: update with multihop proof logic
+  proof: CommitmentProof | MultihopProof,
   proofHeight: Height,
   nextSequenceRecv: Maybe<uint64>,
   relayer: string): Packet {
@@ -1165,13 +1148,24 @@ function timeoutPacket(
     abortTransactionUnless(packet.destChannel === channel.counterpartyChannelIdentifier)
 
     connection = provableStore.get(connectionPath(channel.connectionHops[0]))
+    abortTransactionUnless(connection !== null)
+
     // note: the connection may have been closed
     abortTransactionUnless(packet.destPort === channel.counterpartyPortIdentifier)
+
+    // get the timestamp from the final consensus state in the channel path
+    var proofTimestamp
+    if (channel.connectionHops.length > 1) {
+      consensusState = abortTransactionUnless(Unmarshal(proof.ConsensusProofs[proof.ConsensusProofs.length-1].Value))
+      proofTimestamp = consensusState.GetTimestamp()
+    } else {
+      proofTimestamp, err = connection.getTimestampAtHeight(connection, proofHeight)
+    }
 
     // check that timeout height or timeout timestamp has passed on the other end
     abortTransactionUnless(
       (packet.timeoutHeight > 0 && proofHeight >= packet.timeoutHeight) ||
-      (packet.timeoutTimestamp > 0 && getTimestampAtHeight(connection, proofHeight) >= packet.timeoutTimestamp))
+      (packet.timeoutTimestamp > 0 && proofTimestamp >= packet.timeoutTimestamp))
 
     // verify we actually sent this packet, check the store
     abortTransactionUnless(provableStore.get(packetCommitmentPath(packet.sourcePort, packet.sourceChannel, packet.sequence))
@@ -1183,25 +1177,49 @@ function timeoutPacket(
         // only allow timeout on next sequence so all sequences before the timed out packet are processed (received/timed out)
         // before this packet times out
         abortTransactionUnless(nextSequenceRecv == packet.sequence)
+
         // ordered channel: check that the recv sequence is as claimed
-        abortTransactionUnless(connection.verifyNextSequenceRecv(
-          proofHeight,
-          proof,
-          packet.destPort,
-          packet.destChannel,
-          nextSequenceRecv
-        ))
+        if (channel.connectionHops.length > 1) {
+          key = nextSequenceRecvPath(packet.srcPort, packet.srcChannel)
+          abortTransactionUnless(connection.verifyMultihopMembership(
+              connection,
+              proofHeight,
+              proof,
+              channel.ConnectionHops,
+              key,
+              nextSequenceRecv
+          ))
+        } else {
+            abortTransactionUnless(connection.verifyNextSequenceRecv(
+              proofHeight,
+              proof,
+              packet.destPort,
+              packet.destChannel,
+              nextSequenceRecv
+          ))
+        }
         break;
 
       case UNORDERED:
-        // unordered channel: verify absence of receipt at packet index
-        abortTransactionUnless(connection.verifyPacketReceiptAbsence(
-          proofHeight,
-          proof,
-          packet.destPort,
-          packet.destChannel,
-          packet.sequence
-        ))
+        if (channel.connectionHops.length > 1) {
+          key = packetReceiptPath(packet.srcPort, packet.srcChannel, packet.sequence)
+          abortTransactionUnless(connection.verifyMultihopNonMembership(
+            connection,
+            proofHeight,
+            proof,
+            channel.ConnectionHops,
+            key
+          ))
+        } else {
+          // unordered channel: verify absence of receipt at packet index
+          abortTransactionUnless(connection.verifyPacketReceiptAbsence(
+            proofHeight,
+            proof,
+            packet.destPort,
+            packet.destChannel,
+            packet.sequence
+          ))
+        }
         break;
 
       // NOTE: For ORDERED_ALLOW_TIMEOUT, the relayer must first attempt the receive on the destination chain
@@ -1211,14 +1229,26 @@ function timeoutPacket(
         // only allow timeout on next sequence so all sequences before the timed out packet are processed (received/timed out)
         // before this packet times out
         abortTransactionUnless(nextSequenceRecv == packet.sequence)
-        abortTransactionUnless(connection.verifyPacketReceipt(
-          proofHeight,
-          proof,
-          packet.destPort,
-          packet.destChannel,
-          packet.sequence
-          TIMEOUT_RECEIPT,
-        ))
+
+         if (channel.connectionHops.length > 1) {
+          abortTransactionUnless(connection.verifyMultihopMembership(
+              connection,
+              proofHeight,
+              proof,
+              channel.ConnectionHops,
+              packetReceiptPath(packet.destPort, packet.destChannel, packet.sequence),
+              TIMEOUT_RECEIPT
+          ))
+        } else {
+          abortTransactionUnless(connection.verifyPacketReceipt(
+            proofHeight,
+            proof,
+            packet.destPort,
+            packet.destChannel,
+            packet.sequence
+            TIMEOUT_RECEIPT,
+          ))
+        }
         break;
 
       default:
@@ -1277,8 +1307,8 @@ We pass the `relayer` address just as in [Receiving packets](#receiving-packets)
 ```typescript
 function timeoutOnClose(
   packet: Packet,
-  proof: CommitmentProof | MultihopProof, // TODO: update with multihop proof logic
-  proofClosed: CommitmentProof | MultihopProof, // TODO: update with multihop proof logic
+  proof: CommitmentProof | MultihopProof,
+  proofClosed: CommitmentProof | MultihopProof,
   proofHeight: Height,
   nextSequenceRecv: Maybe<uint64>,
   relayer: string): Packet {
@@ -1296,37 +1326,78 @@ function timeoutOnClose(
     abortTransactionUnless(provableStore.get(packetCommitmentPath(packet.sourcePort, packet.sourceChannel, packet.sequence))
            === hash(packet.data, packet.timeoutHeight, packet.timeoutTimestamp))
 
+    // return hops from counterparty's view
+    counterpartyHops = getCounterpartyHops(proof, connection)
+
     // check that the opposing channel end has closed
     expected = ChannelEnd{CLOSED, channel.order, channel.portIdentifier,
-                          channel.channelIdentifier, channel.connectionHops.reverse(), channel.version}
-    abortTransactionUnless(connection.verifyChannelState(
-      proofHeight,
-      proofClosed,
-      channel.counterpartyPortIdentifier,
-      channel.counterpartyChannelIdentifier,
-      expected
-    ))
+                          channel.channelIdentifier, counterpartyHops, channel.version}
+
+    // verify channel is closed
+    if (channel.connectionHops.length > 1) {
+      key = channelPath(counterparty.PortId, counterparty.ChannelId)
+      abortTransactionUnless(connection.VerifyMultihopMembership(
+        connection,
+        proofHeight,
+        proofClosed,
+        channel.ConnectionHops,
+        key,
+        expected
+      ))
+    } else {
+      abortTransactionUnless(connection.verifyChannelState(
+        proofHeight,
+        proofClosed,
+        channel.counterpartyPortIdentifier,
+        channel.counterpartyChannelIdentifier,
+        expected
+      ))
+    }
 
     if channel.order === ORDERED || channel.order == ORDERED_ALLOW_TIMEOUT {
-      // ordered channel: check that the recv sequence is as claimed
-      abortTransactionUnless(connection.verifyNextSequenceRecv(
-        proofHeight,
-        proof,
-        packet.destPort,
-        packet.destChannel,
-        nextSequenceRecv
-      ))
+
       // ordered channel: check that packet has not been received
       abortTransactionUnless(nextSequenceRecv <= packet.sequence)
+
+      // ordered channel: check that the recv sequence is as claimed
+      if (channel.connectionHops.length > 1) {
+        key = nextSequenceRecvPath(packet.destPort, packet.destChannel)
+        abortTransactionUnless(connection.verifyMultihopMembership(
+          connection,
+          proofHeight,
+          proof,
+          channel.ConnectionHops,
+          key,
+          nextSequenceRecv
+        ))
+      } else {
+        abortTransactionUnless(connection.verifyNextSequenceRecv(
+          proofHeight,
+          proof,
+          packet.destPort,
+          packet.destChannel,
+          nextSequenceRecv
+        ))
+      }
     } else
       // unordered channel: verify absence of receipt at packet index
-      abortTransactionUnless(connection.verifyPacketReceiptAbsence(
-        proofHeight,
-        proof,
-        packet.destPort,
-        packet.destChannel,
-        packet.sequence
-      ))
+      if (channel.connectionHops.length > 1) {
+        abortTransactionUnless(connection.verifyMultihopNonMembership(
+          connection,
+          proofHeight,
+          proof,
+          channel.ConnectionHops,
+          key
+        ))
+      } else {
+        abortTransactionUnless(connection.verifyPacketReceiptAbsence(
+          proofHeight,
+          proof,
+          packet.destPort,
+          packet.destChannel,
+          packet.sequence
+        ))
+      }
 
     // all assertions passed, we can alter state
 
