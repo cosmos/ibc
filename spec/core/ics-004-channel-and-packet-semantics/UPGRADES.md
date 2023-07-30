@@ -825,12 +825,16 @@ function chanUpgradeOpen(
     // get upgrade since counterparty should have upgraded to these parameters
     upgrade = provableStore.get(channelUpgradePath(portIdentifier, channelIdentifier))
 
+    // get the counterparty's connection hops for the proposed upgrade connection
+    proposedConnection = provableStore.get(connectionPath(upgrade.fields.connectionHops))
+    counterpartyHops = [proposedConnection.counterpartyConnectionIdentifier]
+
     counterpartyChannel = ChannelEnd{
       state: OPEN,
       ordering: upgrade.fields.ordering,
       counterpartyPortIdentifier: portIdentifier,
       counterpartyChannelIdentifier: channelIdentifier,
-      connectionHops: upgrade.fields.connectionHops,
+      connectionHops: counterpartyHops,
       version: upgrade.fields.version,
       sequence: channel.upgradeSequence,
     }
