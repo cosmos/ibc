@@ -965,7 +965,7 @@ function timeoutChannelUpgrade(
 
   // counterparty channel must be proved to not have completed flushing after timeout has passed
   abortTransactionUnless(counterpartyChannel.state !== FLUSHCOMPLETE)
-  // if counterparty channel state is OPEN, we should abort 
+  // if counterparty channel state is OPEN, we should abort the tx
   // only if the counterparty has successfully completed upgrade
   if counterpartyChannel.state === OPEN {
     // get upgrade since counterparty should have upgraded to these parameters
