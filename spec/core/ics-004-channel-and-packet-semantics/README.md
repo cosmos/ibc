@@ -607,6 +607,20 @@ connectionEnd on the misbehaving chain prior to the misbehavior submission.
 Once frozen, it is possible for a channel to be unfrozen (reactivated) via governance processes once the misbehavior in
 the channel path has been resolved. However, this process is out-of-protocol.
 
+Example:
+
+Given a multi-hop channel path over connections from chain `A` to chain `E` and misbehaving chain `C`
+
+`A <--> B <--x C x--> D <--> E`
+
+Assume any relayer submits evidence of misbehavior to chain `B` and chain `D` to freeze their respective clients for chain `C`.
+
+A relayer may then provide a multi-hop proof of the frozen client on chain `B` to chain `A` to close the channel on chain `A`, and another relayer (or the same one) may also relay a multi-hop proof of the frozen client on chain `D` to chain `E` to close the channel end on chain `E`.
+
+However, it must also be proven that the frozen client state corresponds to a specific hop in the channel path.
+
+Therefore, a proof of the connection end on chain `B` with counterparty connection end on chain `C` must also be provided along with the client state proof to prove that the `clientID` for the client state matches the `clientID` in the connection end. Furthermore, the `connectionID` for the connection end MUST match the expected ID from the channel's `connectionHops` field.
+
 ```typescript
 function chanCloseFrozen(
   portIdentifier: Identifier,
@@ -625,11 +639,11 @@ function chanCloseFrozen(
     abortTransactionUnless(connection.state === OPEN)
 
     // lookup connectionID for connectionEnd corresponding to misbehaving chain
-    let connectionIdx = proofConnection.ConsensusProofs.length + 1
+    let connectionIdx = proofConnection.ConnectionProofs.length + 1
     abortTransactionUnless(connectionIdx < hopsLength)
     let connectionID = channel.ConnectionHops[connectionIdx]
     let connectionProofKey = connectionPath(connectionID)
-    let connectionProofValue = mProof.KeyProof.Value
+    let connectionProofValue = proofConnection.KeyProof.Value
     let frozenConnectionEnd = abortTransactionUnless(Unmarshal(connectionProofValue))
 
     // the clientID in the connection end must match the clientID for the frozen client state

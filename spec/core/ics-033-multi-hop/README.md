@@ -59,15 +59,15 @@ In terms of connection topology, a user would be able to determine a viable chan
 
 ### Multihop Relaying
 
-Relayers would deliver channel handshake and IBC packets as they currently do except that they are required to provide proof of the channel path. Relayers would scan packet events for the connectionHops field and determine if the packet is multi-hop by checking the number of hops in the field. If the number of hops is greater than one then the packet is a multi-hop packet and will need extra proof data.
+Relayers deliver channel handshake and IBC packets as they currently do except that they are required to provide proof of the channel path. Relayers scan packet events for the connectionHops field and determine if the packet is multi-hop by checking the number of hops in the field. If the number of hops is greater than one then the packet is a multi-hop packet and will need extra proof data.
 
 For each multi-hop channel (detailed proof logic below):
 
 1. Scan source chain for IBC messages to relay.
 2. Read the connectionHops field in from the scanned message to determine the channel path.
-3. Lookup connection endpoints via chain registry configuration and update the clients associated with the connections in the channel path to reflect the latest consensus state on the sending chain including the key/value to be proven.
-4. Query for proof of connection, and consensus state for each intermediate connection in the channel path.
-5. Query proof of packet or handshake message commitments on source chain.
+3. Using connection endpoints via chain registry configuration, query for required multi-hop proof heights and update client states along the channel path as necessary (see pseudocode implementation).
+4. Query proof of packet or handshake message commitments on source chain at the proof height used in step 3.
+5. Query for proof of connection, and consensus state for each intermediate connection in the channel path using proof heights determined in step 3.
 6. Submit proofs and data to RPC endpoint on receiving chain.
 
 Relayers are connection topology aware with configurations sourced from the [chain registry](https://github.com/cosmos/chain-registry).
@@ -88,7 +88,9 @@ In the second phase of querying a multi-hop proof, the relayer queries proofs of
 Multi-hop proof query algorithm.
 
 ![proof_verification.png](proof_verification.png)
-Multi-hop proof verfication logic. Pseudocode proof generation for a channel between `N` chains `C[0] --> C[i] --> C[N]`
+Multi-hop proof verfication logic.
+
+Proof generation pseudocode proof generation for a channel path with `N` chains: `C[0] --> C[i] --> C[N]`
 
 ```go
 
