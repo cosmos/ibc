@@ -383,14 +383,10 @@ function onChanOpenInit(
   counterpartyPortIdentifier: Identifier,
   counterpartyChannelIdentifier: Identifier,
   version: string) => (version: string, err: Error) {
-  // only ordered channels allowed
-  abortTransactionUnless(order === ORDERED)
   // validate port format
   abortTransactionUnless(validateControllerPortParams(portIdentifier))
   // only allow channels to be created on the "icahost" port on the counterparty chain
   abortTransactionUnless(counterpartyPortIdentifier === "icahost")
-  // only open the channel if there is no active channel already set (with status OPEN)
-  abortTransactionUnless(activeChannel === nil)
 
   if version != "" {
     // validate metadata
@@ -416,6 +412,24 @@ function onChanOpenInit(
     }
     version = marshalJSON(metadata)
   }
+
+  // only open the channel if:
+  // - there is no active channel already set (with status OPEN)
+  // OR
+  // - there is already an active channel (with status CLOSED) AND
+  // the metadata matches exactly the existing metadata in the 
+  // version string of the active channel AND the ordering of the 
+  // new channel matches the ordering of the active channel.
+  activeChannelId, activeChannelFound = GetActiveChannelID(portId, connectionId)
+  if activeChannelFound {
+    activeChannel = provableStore.get(channelPath(portId, activeChannelId))
+    abortTransactionUnless(activeChannel.state === CLOSED)
+    previousOrder = activeChannel.order
+    abortTransactionUnless(previousOrder === order)
+    previousMetadata = UnmarshalJSON(activeChannel.version)
+    abortTransactionUnless(previousMetadata === metadata)
+  }
+
   return version, nil
 }
 ```
@@ -430,8 +444,6 @@ function onChanOpenTry(
   counterpartyPortIdentifier: Identifier,
   counterpartyChannelIdentifier: Identifier,
   counterpartyVersion: string) (version: string, err: Error) {
-  // only ordered channels allowed
-  abortTransactionUnless(order === ORDERED)
   // validate port ID
   abortTransactionUnless(portIdentifier === "icahost")
   // create the interchain account with the counterpartyPortIdentifier
@@ -477,7 +489,6 @@ function onChanOpenAck(
   abortTransactionUnless(IsSupportedTxType(metadata.TxType))
   abortTransactionUnless(metadata.ControllerConnectionId === connectionId)
   abortTransactionUnless(metadata.HostConnectionId === counterpartyConnectionId)
-
   
   // state change to keep track of successfully registered interchain account
   SetInterchainAccountAddress(portID, metadata.Address)
@@ -520,6 +531,152 @@ function onChanCloseInit(
 function onChanCloseConfirm(
   portIdentifier: Identifier,
   channelIdentifier: Identifier) {
+}
+```
+
+### Upgrade handshake
+
+```typescript
+// Called on Controller Chain by Authority
+function onChanUpgradeInit(
+  portIdentifier: Identifier,
+  channelIdentifier: Identifier,
+  order: ChannelOrder,
+  connectionHops: [Identifier],
+  upgradeSequence: uin64
+  version: string) => (version: string, err: Error) {
+    // new version proposed in the upgrade
+    abortTransactionUnless(version !== "")
+    metadata = UnmarshalJSON(version)
+
+    // retrieve the existing channel version.
+    // In ibc-go, for example, this is done using the GetAppVersion 
+    // function of the ICS4Wrapper interface.
+    // See https://github.com/cosmos/ibc-go/blob/ac6300bd857cd2bd6915ae51e67c92848cbfb086/modules/core/05-port/types/module.go#L128-L132
+    channel = provableStore.get(channelPath(portIdentifier, channelIdentifier))
+    currentMetadata = UnmarshalJSON(channel.version)
+
+    // validate metadata
+    abortTransactionUnless(metadata.Version === "ics27-1")
+    // all elements in encoding list and tx type list must be supported
+    abortTransactionUnless(IsSupportedEncoding(metadata.Encoding))
+    abortTransactionUnless(IsSupportedTxType(metadata.TxType))
+
+    // the interchain account address on the host chain
+    // must remain the same after the upgrade.
+    abortTransactionUnless(currentMetadata.Address === metadata.Address)
+
+    // at the moment it is not supported to perform upgrades that
+    // change the connection ID of the controller or host chains.
+    // therefore these connection IDs much remain the same as before.
+    abortTransactionUnless(currentMetadata.ControllerConnectionId === metadata.ControllerConnectionId)
+    abortTransactionUnless(currentMetadata.HostConnectionId === metadata.HostConnectionId)
+    // the proposed connection hop must not change
+    abortTransactionUnless(currentMetadata.ControllerConnectionId === connectionHops[0])
+    
+    version = marshalJSON(metadata)
+    return version, nil
+}
+```
+
+```typescript
+// Called on Host Chain by Relayer
+function onChanUpgradeTry(
+  portIdentifier: Identifier,
+  channelIdentifier: Identifier,
+  order: ChannelOrder,
+  connectionHops: [Identifier],
+  upgradeSequence: uint64,
+  counterpartyPortIdentifier: Identifier,
+  counterpartyChannelIdentifier: Identifier,
+  counterpartyVersion: string) => (version: string, err: Error) {
+    // validate port ID
+    abortTransactionUnless(portIdentifier === "icahost")
+
+    // upgrade version proposed by counterparty
+    abortTransactionUnless(counterpartyVersion !== "")
+
+    // retrieve the existing channel version.
+    // In ibc-go, for example, this is done using the GetAppVersion 
+    // function of the ICS4Wrapper interface.
+    // See https://github.com/cosmos/ibc-go/blob/ac6300bd857cd2bd6915ae51e67c92848cbfb086/modules/core/05-port/types/module.go#L128-L132
+    channel = provableStore.get(channelPath(portIdentifier, channelIdentifier))
+    currentMetadata = UnmarshalJSON(channel.version)
+
+    // validate metadata
+    abortTransactionUnless(metadata.Version === "ics27-1")
+    // all elements in encoding list and tx type list must be supported
+    abortTransactionUnless(IsSupportedEncoding(metadata.Encoding))
+    abortTransactionUnless(IsSupportedTxType(metadata.TxType))
+
+    // the interchain account address on the host chain
+    // must remain the same after the upgrade.
+    abortTransactionUnless(currentMetadata.Address === metadata.Address)
+
+    // at the moment it is not supported to perform upgrades that
+    // change the connection ID of the controller or host chains.
+    // therefore these connection IDs much remain the same as before.
+    abortTransactionUnless(currentMetadata.ControllerConnectionId === metadata.ControllerConnectionId)
+    abortTransactionUnless(currentMetadata.HostConnectionId === metadata.HostConnectionId)
+    // the proposed connection hop must not change
+    abortTransactionUnless(currentMetadata.HostConnectionId === connectionHops[0])
+
+    return counterpartyVersion, nil
+}
+```
+
+```typescript
+// Called on Controller Chain by Relayer
+function onChanUpgradeAck(
+  portIdentifier: Identifier,
+  channelIdentifier: Identifier,
+  counterpartyVersion: string) => Error {
+    // final upgrade version proposed by counterparty
+    abortTransactionUnless(counterpartyVersion !== "")
+    metadata = UnmarshalJSON(counterpartyVersion)
+
+    // retrieve the existing channel version.
+    // In ibc-go, for example, this is done using the GetAppVersion 
+    // function of the ICS4Wrapper interface.
+    // See https://github.com/cosmos/ibc-go/blob/ac6300bd857cd2bd6915ae51e67c92848cbfb086/modules/core/05-port/types/module.go#L128-L132
+    channel = provableStore.get(channelPath(portIdentifier, channelIdentifier))
+    currentMetadata = UnmarshalJSON(channel.version)
+
+    // validate metadata
+    abortTransactionUnless(metadata.Version === "ics27-1")
+    // all elements in encoding list and tx type list must be supported
+    abortTransactionUnless(IsSupportedEncoding(metadata.Encoding))
+    abortTransactionUnless(IsSupportedTxType(metadata.TxType))
+
+    // the interchain account address on the host chain
+    // must remain the same after the upgrade.
+    abortTransactionUnless(currentMetadata.Address === metadata.Address)
+
+    // at the moment it is not supported to perform upgrades that
+    // change the connection ID of the controller or host chains.
+    // therefore these connection IDs much remain the same as before.
+    abortTransactionUnless(currentMetadata.ControllerConnectionId === metadata.ControllerConnectionId)
+    abortTransactionUnless(currentMetadata.HostConnectionId === metadata.HostConnectionId)
+
+    return nil
+}
+```
+
+```typescript
+// Called on Controller and Host Chains by Relayer
+function onChanUpgradeOpen(
+  portIdentifier: Identifier,
+  channelIdentifier: Identifier) {
+    // no-op
+} 
+```
+
+```typescript
+// Called on Controller and/or Host Chain by Relayer
+function onChanUpgradeRestore(
+  portIdentifier: Identifier,
+  channelIdentifier: Identifier) {
+    // no-op
 }
 ```
 
