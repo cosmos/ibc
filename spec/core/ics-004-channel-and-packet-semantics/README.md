@@ -227,7 +227,7 @@ Constant-size commitments to packet data fields are stored under the packet sequ
 
 ```typescript
 function packetCommitmentPath(portIdentifier: Identifier, channelIdentifier: Identifier, sequence: uint64): Path {
-    return "commitments/ports/{portIdentifier}/channels/{channelIdentifier}/packets/{sequence}"
+    return "commitments/ports/{portIdentifier}/channels/{channelIdentifier}/sequences/{sequence}"
 }
 ```
 
@@ -238,7 +238,7 @@ Some channel types MAY write a sentinel timeout value `TIMEOUT_RECEIPT` if the p
 
 ```typescript
 function packetReceiptPath(portIdentifier: Identifier, channelIdentifier: Identifier, sequence: uint64): Path {
-    return "receipts/ports/{portIdentifier}/channels/{channelIdentifier}/receipts/{sequence}"
+    return "receipts/ports/{portIdentifier}/channels/{channelIdentifier}/sequences/{sequence}"
 }
 ```
 
