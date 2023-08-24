@@ -314,7 +314,7 @@ function startFlushUpgradeHandshake(
 
   lastPacketSendSequence = provableStore.get(nextSequenceSendPath(portIdentifier, channelIdentifier)) - 1
 
-  upgrade.upgradeTimeout = upgradeTimeout
+  upgrade.timeout = upgradeTimeout
   upgrade.lastPacketSendSequence = lastPacketSendSequence
   
   // store upgrade in public store for counterparty proof verification
