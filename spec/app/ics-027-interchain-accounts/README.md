@@ -101,7 +101,7 @@ function SendTx(
     activeChannelID, // source channel ID 
     0,
     timeoutTimestamp,
-    icaPacketData
+    protobuf.marshal(icaPacketData) protobuf-marshalled bytes of packet data
   )
 
   return sequence
