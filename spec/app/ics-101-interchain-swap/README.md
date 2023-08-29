@@ -124,16 +124,16 @@ interface Coin {
 
 ```ts
 enum PoolAssetSide {
-  Source = 1;
-  Destination = 2;
+  Source = 0;
+  Destination = 1;
 }
 ```
 
 ```ts
 // PoolStatus defines if the pool is ready for trading
 enum PoolStatus {
-  INITIALIZED = 0;
-  ACTIVE = 1;
+  POOL_STATUS_INITIAL = 0;
+  POOL_STATUS_READY = 1;
 }
 ```
 
@@ -160,8 +160,17 @@ interface InterchainLiquidityPool {
   encounterPartyPort: string;
   encounterPartyChannel: string;
 
-  constructor(id:string, denoms: []string, decimals: []number, weights: []number,swapFee: number, portId string, channelId string) {
-    this.id = id
+  constructor(
+    poolId:string,
+    creator:string,
+    counterPartyCreator:string,
+    store,
+    sourceLiquidity:[]PoolAsset,
+    destinationLiquidity:[]PoolAsset,
+    swapFee: number,
+    sourcePort: string,
+    sourceChannel: string) {
+    this.id = poolId
     this.supply = {
        amount: 0,
        denom: this.id
@@ -171,19 +180,7 @@ interface InterchainLiquidityPool {
     this.encounterPartyChannel = channelId
     this.swapFee = swapFee
     // construct assets
-    if(denoms.length === decimals.lenght && denoms.length === weight.length) {
-        for(let i=0; i < denoms.lenght; i++) {
-            this.assets.push({
-               side: store.hasSupply(denom[i]) ? PoolAssetSide.Source: PoolAssetSide.Destination,
-               balance: {
-                 amount: 0,
-                 denom: denom[i],
-               },
-               weight: weights[i],
-               decimal: decimals[i],
-            })
-        }
-    }
+    this.assets = [...sourceLiquidity,...destinationLiquidity]
   }
 
   function findDenomBySide(side: PoolAssetSide): string | undefined {
@@ -208,6 +205,15 @@ function findPoolAssetBySide(side: PoolAssetSide): PoolAsset | undefined {
     for (const asset of this.pool.assets) {
         if (asset.side === side) {
             return asset;
+        }
+    }
+    return;
+}
+
+ function findDenomByDenom(denom: string): Coin | undefined {
+    for (const asset of this.pool.assets) {
+        if (asset.amount.denom === denom) {
+            return asset.amount;
         }
     }
     return;
@@ -450,18 +456,19 @@ interface IBCSwapDataPacket {
     type: MessageType,
     data: []byte, // Bytes
     stateChange: StateChange
+    memo: string,
 }
 ```
 
 ```typescript
-type IBCSwapDataAcknowledgement = IBCSwapDataPacketSuccess | IBCSwapDataPacketError;
+type IInterchainSwapPacketAcknowledgement = InterchainSwapPacketSuccess | InterchainSwapPacketError;
 
-interface IBCSwapDataPacketSuccess {
+interface InterchainSwapPacketSuccess {
   // This is binary 0x01 base64 encoded
   result: "AQ==";
 }
 
-interface IBCSwapDataPacketError {
+interface InterchainSwapPacketError {
   error: string;
 }
 ```
@@ -568,7 +575,8 @@ function sendInterchainIBCSwapDataPacket(
 `onRecvPacket` is called by the routing module when a packet addressed to this module has been received.
 
 ```ts
-function OnRecvPacket(packet: Packet, data: IBCSwapPacketData): Uint8Array | undefined {
+function OnRecvPacket(packet: Packet): Uint8Array | undefined {
+  const data: IBCSwapPacketData = packet.data;
   switch (data.type) {
     case "MAKE_POOL":
       const makePoolMsg: MsgMakePoolRequest = protobuf.decode(MsgMakePoolRequest, data.Data);
@@ -789,12 +797,12 @@ interface MsgMakePoolRequest {
   sourceChannel: string;
   creator: string;
   counterPartyCreator: string;
-  liquidity: PoolAsset[];
+  sourceLiquidity: PoolAsset[];
+  destinationLiquidity: PoolAsset[];
   sender: string;
-  denoms: string[];
   decimals: int32[];
   swapFee: int32;
-  timeHeight: TimeHeight;
+  timeHeight: Height;
   timeoutTimeStamp: uint64;
 }
 
@@ -809,7 +817,7 @@ interface MsgTakePoolRequest {
   poolId: string;
   port: string;
   channel: string;
-  timeHeight: TimeHeight;
+  timeHeight: Height;
   timeoutTimeStamp: uint64;
 }
 
@@ -825,7 +833,7 @@ interface MsgSingleAssetDepositRequest {
   token: Coin; // only one element for now, might have two in the feature
   port: string;
   channel: string;
-  timeHeight: TimeHeight;
+  timeHeight: Height;
   timeoutTimeStamp: uint64;
 }
 interface MsgSingleDepositResponse {
@@ -845,7 +853,7 @@ interface MsgMakeMultiAssetDepositRequest {
   token: Coin; // only one element for now, might have two in the feature
   port: string;
   channel: string;
-  timeHeight: TimeHeight;
+  timeHeight: Height;
   timeoutTimeStamp: uint64;
 }
 
@@ -855,7 +863,7 @@ interface MsgTakeMultiAssetDepositRequest {
   orderId: uint64;
   port: string;
   channel: string;
-  timeHeight: TimeHeight;
+  timeHeight: Height;
   timeoutTimeStamp: uint64;
 }
 
@@ -872,7 +880,7 @@ interface MsgMultiAssetWithdrawRequest {
   poolToken: Coin;
   port: string;
   channel: string;
-  timeHeight: TimeHeight;
+  timeHeight: Height;
   timeoutTimeStamp: uint64;
 }
 
@@ -892,7 +900,7 @@ interface MsgSwapRequest {
   recipient: string;
   port: string;
   channel: string;
-  timeHeight: TimeHeight;
+  timeHeight: Height;
   timeoutTimeStamp: uint64;
 }
 
@@ -918,9 +926,9 @@ These are methods that output a state change on the source chain, which will be 
       denoms.push(liquidity.balance.denom);
     }
 
-    const poolId = getPoolId(store.chainID(), counterPartyChainId, denoms);
+    const poolId = generatePoolId(store.chainID(), counterPartyChainId, denoms);
 
-    const found = await k.getInterchainLiquidityPool(poolId);
+    const found = await store.getInterchainLiquidityPool(poolId);
 
     abortTransactionUnless(found)
 
@@ -1125,9 +1133,7 @@ function singleAssetDeposit(msg: MsgSingleAssetDepositRequest): MsgSingleAssetDe
   const amm = new InterchainMarketMaker(pool);
 
   const poolToken = await amm.depositSingleAsset(msg.token);
-  if (poolToken === undefined) {
-    throw new Error("Failed to deposit single asset.");
-  }
+  abortTransactionUnless(poolToken === undefined);
 
   const packet: IBCSwapPacketData = {
     type: "SINGLE_DEPOSIT",
@@ -1240,7 +1246,7 @@ function onMakePoolReceived(msg: MsgMakePoolRequest, poolID: string, sourceChain
   const { pool, found } = store.getInterchainLiquidityPool(poolID);
   abortTransactionUnless(msg.validateBasic() === undefined);
 
-  const liquidityBalance = msg.liquidity[1].balance;
+  const liquidityBalance = msg.sourceLiquidity[0].balance;
   if (!store.bankKeeper.hasSupply(liquidityBalance.denom)) {
     throw new Error(`Invalid decimal pair: ${types.ErrFailedOnDepositReceived}`);
   }
@@ -1249,12 +1255,14 @@ function onMakePoolReceived(msg: MsgMakePoolRequest, poolID: string, sourceChain
     poolID,
     msg.creator,
     msg.counterPartyCreator,
-    store.bankKeeper,
-    msg.liquidity,
+    store,
+    msg.sourceLiquidity,
+    msg.destinationLiquidity,
     msg.swapFee,
     msg.sourcePort,
     msg.sourceChannel
   );
+
   interchainLiquidityPool.sourceChainId = sourceChainId;
   store.setInterchainLiquidityPool(interchainLiquidityPool);
   return poolID;
@@ -1406,11 +1414,10 @@ function onSwapReceived(msg: MsgSwapRequest, stateChange: StateChange): MsgSwapR
 
 function onMakePoolAcknowledged(msg: MsgMakePoolRequest, poolId: string): void {
   const pool = new InterchainLiquidityPool(
-    ctx,
+    poolId,
     msg.creator,
     msg.counterPartyCreator,
-    k.bankKeeper,
-    poolId,
+    store,
     msg.liquidity,
     msg.swapFee,
     msg.sourcePort,
@@ -1483,34 +1490,6 @@ function onTakeMultiAssetDepositAcknowledged(req: MsgTakeMultiAssetDepositReques
   store.setMultiDepositOrder(pool.id, order);
 }
 
-function onMakePoolAcknowledged(msg: MsgMakePoolRequest, poolId: string): void {
-  const pool = new InterchainLiquidityPool(
-    ctx,
-    msg.creator,
-    msg.counterPartyCreator,
-    k.bankKeeper,
-    poolId,
-    msg.liquidity,
-    msg.swapFee,
-    msg.sourcePort,
-    msg.sourceChannel
-  );
-
-  pool.sourceChainId = store.chainID();
-
-  const totalAmount = sdk.NewInt(0);
-  for (const asset of msg.liquidity) {
-    totalAmount = totalAmount.add(asset.balance.amount);
-  }
-
-  store.mintTokens(ctx, msg.creator, {
-    denom: pool.supply.denom,
-    amount: (totalAmount * msg.liquidity[0].weight) / 100,
-  });
-
-  store.setInterchainLiquidityPool(pool);
-}
-
 function onTakePoolAcknowledged(msg: MsgTakePoolRequest): void {
   const { pool, found } = store.getInterchainLiquidityPool(msg.poolId);
   abortTransactionUnless(found);
@@ -1558,6 +1537,42 @@ function onTakeMultiAssetDepositAcknowledged(req: MsgTakeMultiAssetDepositReques
 
   store.setInterchainLiquidityPool(pool);
   store.setMultiDepositOrder(pool.id, order);
+}
+
+function onMultiAssetWithdrawAcknowledged(req: MsgTakeMultiAssetDepositRequest, stateChange: StateChange): void {
+  const { pool, found } = store.getInterchainLiquidityPool(req.poolId);
+  abortTransactionUnless(found);
+
+  // update pool status
+  for (const out of stateChange.Out) {
+    pool.subtractAsset(out);
+  }
+  pool.subtractPoolSupply(req.poolToken);
+
+  const { nativeToken, found } = pool.FindDenomBySide("PoolAssetSide_SOURCE");
+  abortTransactionUnless(found);
+
+  const { out, found } = stateChange.FindOutByDenom(nativeToken);
+  abortTransactionUnless(found);
+
+  // unlock token
+  store.UnlockTokens(pool.counterPartyPort, pool.counterPartyChannel, req.Receiver, out);
+
+  if ((pool.supply.amount = 0)) {
+    store.removeInterchainLiquidityPool(req.PoolId);
+  } else {
+    // Save pool
+    store.setInterchainLiquidityPool(pool);
+  }
+}
+
+function OnSwapAcknowledged(req: MsgSwapRequest, res: MsgSwapResponse): void {
+  const { pool, found } = store.getInterchainLiquidityPool(req.poolId);
+  abortTransactionUnless(found);
+  // pool status update
+  pool.addAsset(req.tokenIn);
+  pool.subtractAsset(req.tokenOut);
+  store.setInterchainLiquidityPool(pool);
 }
 ```
 
