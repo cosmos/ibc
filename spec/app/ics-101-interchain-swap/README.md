@@ -30,7 +30,7 @@ Features include an option to provide liquidity with a single asset instead of a
 
 `Weighted pools`: liquidity pools characterized by the percentage weight of each token denomination maintained within.
 
-`Single-asset deposit`: a deposit into a liquidity pool that does not require users to deposit both token denominations -- one is enough. While this deposit method will impact the exchange price of the pool, it also provide an opportunity for arbitrage.
+`Single-asset deposit`: a deposit into a liquidity pool that does not require users to deposit both token denominations -- one is enough. While this deposit method will impact the exchange price of the pool, it also provides an opportunity for arbitrage.
 
 `Multi-asset deposit`: a deposit into a liquidity pool that require users to deposit both token denominations. This deposit method will not impact the exchange price of the pool.
 
