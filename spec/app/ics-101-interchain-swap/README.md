@@ -22,7 +22,7 @@ Features include an option to provide liquidity with a single asset instead of a
 
 ### Definitions
 
-`Interchain swap`: a IBC token swap protocol, built on top of an automated market making model, which leverages liquidity pools and incentives. Each chain that integrates this app becomes part of a decentralized exchange network.
+`Interchain swap`: an IBC token swap protocol, built on top of an automated market making model, which leverages liquidity pools and incentives. Each chain that integrates this app becomes part of a decentralized exchange network.
 
 `Interchain liquidity pool`: a single-asset liquidity pool on a chain, with a corresponding single-asset liquidity pool on a separate chain. This comprises an interchain liquidity pool and can execute interchain swaps to exchange between the assets.
 
