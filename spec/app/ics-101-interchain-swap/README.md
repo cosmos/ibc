@@ -568,7 +568,14 @@ function sendInterchainIBCSwapDataPacket(
   timeoutTimestamp: uint64
 ) {
   // send packet using the interface defined in ICS4
-  handler.sendPacket(getCapability("port"), sourcePort, sourceChannel, timeoutHeight, timeoutTimestamp, swapPacket);
+  handler.sendPacket(
+    getCapability("port"),
+    sourcePort,
+    sourceChannel,
+    timeoutHeight,
+    timeoutTimestamp,
+    protobuf.encode(swapPacket)
+  );
 }
 ```
 
@@ -1175,7 +1182,7 @@ function multiAssetWithdraw(msg: MsgMultiAssetWithdrawRequest): MsgMultiAssetWit
     },
   };
 
-  const sendPacketErr = await k.sendIBCSwapPacket(ctx, msg.port, msg.channel, timeoutHeight, timeoutStamp, packet);
+  const sendPacketErr = await store.sendIBCSwapPacket(ctx, msg.port, msg.channel, timeoutHeight, timeoutStamp, packet);
   abortTransactionUnless(sendPacketErr === undefined);
 
   return {};
