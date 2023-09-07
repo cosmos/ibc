@@ -7,13 +7,12 @@ kind: instantiation
 implements: 2
 author: Parth Desai <parth@chorus.one>, Mateusz Kaczanowski <mateusz@chorus.one>, Blas Rodriguez Irizar <blas@composable.finance>, Steve Miskovetz <steve@strange.love>
 created: 2020-10-13
-modified: 2023-03-28
+modified: 2023-07-07
 ---
 
 ## Synopsis
 
-This specification document describes an interface to a light client stored as a WASM bytecode for a blockchain.
-Changes to `ClientState` interface and associated handler to align with changes in [02-client-refactor ADR](https://github.com/cosmos/ibc-go/pull/1871).
+This specification document describes an interface to a light client stored as a Wasm bytecode for a blockchain.
 
 ### Motivation
 
@@ -27,7 +26,7 @@ Requiring all counterparties to add statically new client implementations to the
 
 Once the IBC network broadly adopts dynamically upgradable clients, a chain may upgrade its consensus algorithm whenever it wishes, and relayers may upgrade the client code of all counterparty chains without requiring the counterparty chains to perform an upgrade themselves. This prevents a dependency on counterparty chains when considering upgrading one's consensus algorithm.
 
-Another reason why this interface is beneficial is that it removes the dependency between Light clients and the Go programming language. Using WASM as a compilation target, light clients can be written in any programming language whose toolchain includes WASM as a compilation target. Examples of these are Go, Rust, C, and C++.
+Another reason why this interface is beneficial is that it removes the dependency between Light clients and the Go programming language. Using Wasm as a compilation target, light clients can be written in any programming language whose toolchain includes Wasm as a compilation target. Examples of these are Go, Rust, C, and C++.
 
 ### Definitions
 
@@ -35,11 +34,13 @@ Functions & terms are as defined in [ICS 2](../../core/ics-002-client-semantics)
 
 `currentTimestamp` is as defined in [ICS 24](../../core/ics-024-host-requirements).
 
-`Wasm Contract` refers to Wasm bytecode stored in the `08-wasm` store, which provides a target blockchain specific implementation of [ICS 2](../../core/ics-002-client-semantics).
+`Wasm VM` refers to a virtual machine capable of executing valid Wasm bytecode.
+
+`Wasm Contract` refers to Wasm bytecode stored in the Wasm VM, which provides a target blockchain specific implementation of [ICS 2](../../core/ics-002-client-semantics).
+
+`Wasm Client Proxy` refers to an implementation of ICS 8 that acts as a pass-through to the Wasm client.
 
 `Wasm Client` refers to a particular instance of `Wasm Contract` defined as a tuple `(Wasm Contract, ClientID)`.
-
-`Wasm VM` refers to a virtual machine capable of executing valid Wasm bytecode.
 
 ### Desired properties
 
@@ -51,23 +52,21 @@ This specification depends on the correct instantiation of the Wasm client and i
 
 ### Storage management
 
-Light client operations defined in the `02-client` can be stateful; they may modify the
-state kept in storage. For that, there is a need to allow the underlying light client implementation
+Light client operations defined in [ICS 2](../../core/ics-002-client-semantics) can be stateful; they may modify the
+state kept in storage. For that, there is a need to allow the underlying Wasm light client implementation
 to access client and consensus data structures and, after performing certain computations, to
 update the storage with the new versions of them.
 
-The current implementation chooses to share the Wasm client store between the `02-client` module (for reading), `08-wasm` module (for instantiation), and Wasm contract.
-Other than instantiation, the Wasm contract is responsible for updating state.
+For this reason, the implementation in ibc-go chooses to share the Wasm client store between the `02-client` module (for reading), `08-wasm` module (for instantiation), and Wasm contract. Other than instantiation, the Wasm contract is responsible for updating state.
 
 ### Wasm VM
 
 The purpose of this module is to delegate light client logic to a module written in Wasm. For that,
-the `08-wasm` module needs a reference (or a handler) to a Wasm VM and can directly call the [wasmvm](https://github.com/CosmWasm/wasmvm)
-to interact with the VM with less overhead, fewer dependencies, and finer grain control over the Wasm client store than if using `wasmd` instead.
+the Wasm client proxy needs a reference (or a handler) to a Wasm VM. The Wasm client proxy can then directly call the [`wasmvm`](https://github.com/CosmWasm/wasmvm) to interact with the VM with less overhead, fewer dependencies, and finer grain control over the Wasm client store than if using an intermediary module such as [`x/wasm`](https://github.com/CosmWasm/wasmd/tree/v0.41.0/x/wasm).
 
 ### Gas costs
 
-`wasmd` has thoroughly benchmarked gas adjustments for CosmWasm with which the same values are being used in `08-wasm`'s Wasm VM.
+[]`wasmd`](https://github.com/CosmWasm/wasmd) has thoroughly benchmarked [gas adjustments for CosmWasm](https://github.com/CosmWasm/wasmd/blob/v0.41.0/x/wasm/keeper/gas_register.go#L13-L56) and the same values are being applied in the Wasm VM used in ibc-go's implementation of ICS 8.
 
 ```typescript
 const (
@@ -81,24 +80,23 @@ const (
 
 ### Client state
 
-The Wasm client state tracks the location of the Wasm bytecode via `codeId`. Binary data represented by the `data` field is opaque and only interpreted by the Wasm contract.
+The Wasm client state tracks the location of the Wasm bytecode via `codeHash`. Binary data represented by the `data` field is opaque and only interpreted by the Wasm contract.
 
 ```typescript
 interface ClientState {
   data: []byte
-  codeId: []byte
+  codeHash: []byte
   latestHeight: Height
 }
 ```
 
 ### Consensus state
 
-The Wasm consensus state tracks the timestamp (block time). Binary data represented by the `data` field is opaque and only interpreted by the Wasm contract.
+The Wasm consensus state tracks the consensus state of the Wasm client. Binary data represented by the `data` field is opaque and only interpreted by the Wasm contract.
 
 ```typescript
 interface ConsensusState {
   data: []byte
-  timestamp: uint64
 }
 ```
 
@@ -115,22 +113,10 @@ interface Height {
 
 ### Headers
 
-Contents of Wasm client headers depend upon Wasm contract. Binary data represented by the `data` field is opaque and only interpreted by the Wasm contract.
+Contents of Wasm client headers depend upon Wasm contract. Binary data represented by the `data` field is opaque and only interpreted by the Wasm contract, and will consist either of a valid header or of two conflicting headers, both of which the Wasm contract would have considered valid. In the latter case, the contract will update the consensus state with the valid header; in the former case, the light client may detect misbehaviour and freeze the client (thus preventing further packet flow).
 
 ```typescript
 interface Header {
-  data: []byte
-  height: Height
-}
-```
-
-### Misbehaviour
-
-If applicable, the `Misbehaviour` type is used for detecting misbehaviour and freezing the client - to prevent further packet flow. 
-Binary data represented by the `data` field is opaque and only interpreted by the Wasm contract, but will consist of two conflicting headers, both of which the Wasm contract would have considered valid.
-
-```typescript
-interface Misbehaviour {
   data: []byte
 }
 ```
@@ -140,27 +126,56 @@ interface Misbehaviour {
 Wasm client initialization requires a (subjectively chosen) latest consensus state and corresponding client state, interpretable by the Wasm contract. 
 
 ```typescript
+interface InstantiateMessage {  
+  consensusState: ConsensusState
+}
+```
+
+```typescript
 function initialize(
   identifier: Identifier,
   data: []byte,
-  codeId: []byte,
+  codeHash: []byte,
   consensusState: ConsensusState,
   height: Height
 ): ClientState {
-  provableStore.set("clients/{identifier}/consensusStates/{height}", consensusState)
+  payload = InstantiateMessage{consensusState}
 
   // retrieve client identifier-prefixed store
   clientStore = provableStore.prefixStore("clients/{identifier}")
 
-  // initialize wasm contract for a previously stored contract identified by codeId
-  initContract(codeId, clientStore)
+  // initialize wasm contract for a previously stored contract identified by codeHash
+  initContract(codeHash, clientStore, marshalJSON(payload))
 
-  return ClientState {
+  return ClientState{
     data,
-    codeId,
+    codeHash,
     latestHeight: height
   }
 }
+```
+
+### Contract payload messages
+
+The Wasm client proxy performs calls to the Wasm client via the Wasm VM. The calls require as input payload messages that are categorized on two discriminated union types: one for payload messages used in calls that perform only reads, and one for payload messages used in calls that perform state-changing writes.
+
+```typescript
+type QueryMsg =
+  | Status 
+  | ExportMetadata
+  | TimestampAtHeight
+  | VerifyClientMessage
+  | VerifyMembership
+  | VerifyNonMembership
+  | CheckForMisbehaviour;
+```
+
+``` typescript
+type SudoMsg =
+  | UpdateState
+  | UpdateStateOnMisbehaviour
+  | VerifyUpgradeAndUpdateState
+  | CheckSubstituteAndUpdateState
 ```
 
 ### Validity predicate
@@ -168,26 +183,21 @@ function initialize(
 Wasm client validity checking uses underlying Wasm contract. If the provided client message is valid, the client state will proceed to checking for misbehaviour (call to `checkForMisbehaviour`) and updating state (call to either `updateStateOnMisbehaviour` or `updateState` depending on whether misbehaviour was detected in the client message). 
 
 ```typescript
-function verifyClientMessage(clientMsg: ClientMessage) {
-  innerPayload = Map<string, any>()
-  switch typeof(clientMsg) {
-    case Header:
-      innerPayload["header"] = clientMsg
-    case Misbehaviour:
-      innerPayload["misbehavior"] = clientMsg
-  }
+interface VerifyClientMessageMsg {
+  clientMessage: ClientMessage
+}
+```
 
-  payload = Map<string, any>()
-  payload["verify_client_message"] = Map<string, any>([
-    ["client_message", innerPayload]
-  ])
+```typescript
+function verifyClientMessage(clientMsg: ClientMessage) {
+  payload = verifyClientMessageMsg{clientMsg}
 
   clientState = provableStore.get("clients/{clientMsg.identifier}/clientState")
   // retrieve client identifier-prefixed store
   clientStore = provableStore.prefixStore("clients/{clientMsg.identifier}")
 
   // use underlying wasm contract to verify client message
-  assert(callContract(marshalJSON(payload), clientState, clientStore))
+  assert(callContract(clientStore, clientState, marshalJSON(payload)))
 }
 ```
 
@@ -195,27 +205,23 @@ function verifyClientMessage(clientMsg: ClientMessage) {
 
 Function `checkForMisbehaviour` will check if an update contains evidence of misbehaviour. Wasm client misbehaviour checking determines whether or not two conflicting headers at the same height would have convinced the light client.
 
-```typescript
-function checkForMisbehaviour(clientMsg: ClientMessage): boolean	{
-  innerPayload = Map<string, any>()
-  switch typeof(clientMsg) {
-    case Header:
-      innerPayload["header"] = clientMsg
-    case Misbehaviour:
-      innerPayload["misbehavior"] = clientMsg
-  }
 
-  payload = Map<string, any>()
-  payload["check_for_misbehaviour"] = Map<string, any>([
-    ["client_message", innerPayload]
-  ])
+```typescript
+interface CheckForMisbehaviourMsg {
+  clientMessage: ClientMessage
+}
+```
+
+```typescript
+function checkForMisbehaviour(clientMsg: ClientMessage): boolean {
+  payload = checkForMisbehaviourMsg{clientMsg}
 
   clientState = provableStore.get("clients/{clientMsg.identifier}/clientState")
   // retrieve client identifier-prefixed store
   clientStore = provableStore.prefixStore("clients/{clientMsg.identifier}")
 
   // use underlying wasm contract to check for misbehaviour
-  result = callContract(marshalJSON(payload), clientState, clientStore)
+  result = callContract(clientStore, clientState, marshalJSON(payload))
   return result.foundMisbehaviour
 }
 ```
@@ -225,22 +231,21 @@ function checkForMisbehaviour(clientMsg: ClientMessage): boolean	{
 Function `updateState` will perform a regular update for the Wasm client. It will add a consensus state to the client store. If the header is higher than the lastest height on the `clientState`, then the `clientState` will be updated.
 
 ```typescript
-function updateState(clientMsg: ClientMessage) {
-  innerPayload = Map<string, any>()([
-    ["header", clientMsg]
-  ])
+interface UpdateStateMsg {
+  clientMessage: ClientMessage
+}
+```
 
-  payload = Map<string, any>()
-  payload["update_state"] = Map<string, any>([
-    ["client_message", innerPayload]
-  ])
+```typescript
+function updateState(clientMsg: ClientMessage) {
+  payload = UpdateStateMsg{clientMsg}
 
   clientState = provableStore.get("clients/{clientMsg.identifier}/clientState")
   // retrieve client identifier-prefixed store
   clientStore = provableStore.prefixStore("clients/{clientMsg.identifier}")
 
   // use underlying wasm contract to update client state and store new consensus state
-  callContract(marshalJSON(payload), clientState, clientStore)
+  callContract(clientStore, clientState, marshalJSON(payload))
 }
 ```
 
@@ -249,26 +254,21 @@ function updateState(clientMsg: ClientMessage) {
 Function `updateStateOnMisbehaviour` will set the frozen height to a non-zero height to freeze the entire client.
 
 ```typescript
-function updateStateOnMisbehaviour(clientMsg: clientMessage) {
-  innerPayload = Map<string, any>()
-  switch typeof(clientMsg) {
-    case Header:
-      innerPayload["header"] = clientMsg
-    case Misbehaviour:
-      innerPayload["misbehavior"] = clientMsg
-  }
+interface UpdateStateOnMisbehaviourMsg {
+  clientMessage: ClientMessage
+}
+```
 
-  payload = Map<string, any>()
-  payload["update_state_on_misbehaviour"] = Map<string, any>([
-    ["client_message", innerPayload]
-  ])
+```typescript
+function updateStateOnMisbehaviour(clientMsg: clientMessage) {
+  payload = UpdateStateOnMisbehaviourMsg{clientMsg}
 
   clientState = provableStore.get("clients/{clientMsg.identifier}/clientState")
   // retrieve client identifier-prefixed store
   clientStore = provableStore.prefixStore("clients/{clientMsg.identifier}")
 
   // use underlying wasm contract to update client state
-  callContract(marshalJSON(payload), clientState, clientStore)
+  callContract(clientStore, clientState, marshalJSON(payload))
 }
 ```
 
@@ -294,10 +294,12 @@ function upgradeClientState(
 
 ### Proposals
 
-Specific Wasm client params such as latest height, frozen height, trusting period (if applicable), and chain ID can be updated via a governance proposal and executed after approval.
+If a Wasm light client becomes frozen, a governance proposal can be submitted to update the state of the frozen light client (the subject) with the state of an active light client (the substitute). The substitute client MUST be of the same type as the subject client. Depending on the exact type of the underlying light client type, all or a subset of parameters of the subject and substitute client states MUST match.
 
 ```typescript
 function checkSubstituteAndUpdateState(
+  subjectClientState: ClientState, 
+  substituteClientState: ClientState
   subjectClientState: ClientState, 
   substituteClientState: ClientState
 ) {
@@ -313,6 +315,25 @@ function checkSubstituteAndUpdateState(
 Wasm client state verification functions check a proof against a previously validated commitment root.
 
 ```typescript
+interface verifyMembershipMsg {
+  height: Height
+  delayTimePeriod: uint64
+  delayBlockPeriod: uint64
+  proof: CommitmentProof
+  path: CommitmentPath
+  value: []byte
+}
+
+interface verifyNonMembershipMsg {
+  height: Height
+  DelayTimePeriod: uint64
+  DelayBlockPeriod: uint64
+  Proof: CommitmentProof
+  Path: CommitmentPath
+}
+```
+
+```typescript
 function verifyMembership(
   clientState: ClientState,
   height: Height,
@@ -324,24 +345,21 @@ function verifyMembership(
 ): Error {
   // check that the client is at a sufficient height
   assert(clientState.latestHeight >= height)
-  // assert that enough time has elapsed
-  assert(currentTimestamp() >= processedTime + delayPeriodTime)
-  // assert that enough blocks have elapsed
-  assert(currentHeight() >= processedHeight + delayPeriodBlocks)
 
-  payload = Map<string, any>()
-  payload["verify_membership"] = Map<string, any>([
-    ["height", height],
-    ["proof", proof],
-    ["path", path],
-    ["value", value]
-  ])
+  payload = VerifyMembershipMsg{
+    height,
+    delayTimePeriod,
+    delayBlockPeriod,
+    proof,
+    path,
+    value
+  }
 
   // retrieve client identifier-prefixed store
 	clientStore = provableStore.prefixStore("clients/{clientIdentifier}")
 
   // use underlying wasm contract to verify that <path, value> has been stored
-  result = callContract(marshalJSON(payload), clientState, clientStore)
+  result = callContract(clientStore, clientState, marshalJSON(payload))
   return result.error
 }
 
@@ -355,31 +373,28 @@ function verifyNonMembership(
 ): Error {
   // check that the client is at a sufficient height
   assert(clientState.latestHeight >= height)
-  // assert that enough time has elapsed
-  assert(currentTimestamp() >= processedTime + delayPeriodTime)
-  // assert that enough blocks have elapsed
-  assert(currentHeight() >= processedHeight + delayPeriodBlocks)
 
-  payload = Map<string, any>()
-  payload["verify_non_membership"] = Map<string, any>([
-    ["height", height],
-    ["proof", proof],
-    ["path", path]
-  ])
+  payload = verifyNonMembershipMsg{
+    height,
+    delayTimePeriod,
+    delayBlockPeriod,
+    proof,
+    path
+  }
 
   // retrieve client identifier-prefixed store
 	clientStore = provableStore.prefixStore("clients/{clientIdentifier}")
 
   // use underlying wasm contract to verify that nothing has been stored at path
-  result = callContract(marshalJSON(payload), clientState, clientStore)
+  result = callContract(clientStore, clientState, marshalJSON(payload))
   return result.error
 }
 ```
 ### Wasm Contract Interface
 
-#### Interaction between Go and WASM
+#### Interaction between Go and Wasm
 
-When an instruction needs to be executed in WASM code, functions are executed using a `wasmvm`.
+When an instruction needs to be executed in Wasm code, functions are executed using a `wasmvm`.
 The process requires packaging all the arguments to be executed by a specific function (including
 pointers to `KVStore`s if needed), pointing to a code hash, and a `sdk.GasMeter` to properly account
 for gas usage during the execution of the function.
@@ -396,34 +411,24 @@ Every Wasm contract must to support these query messages:
 
 ```rust
 #[cw_serde]
+pub struct TimestampAtHeightMsg {
+  pub height: Height,
+}
+
+#[cw_serde]
+pub struct GetLatestHeightsMsg {}
+
+#[cw_serde]
 pub struct StatusMsg {}
 
 #[cw_serde]
 pub struct ExportMetadataMsg {}
-```
-
-The response for queries is as follows:
-
-```rust
-#[cw_serde]
-pub struct QueryResponse {
-  pub status: String, // Status query response
-  #[serde(skip_serializing_if = "Option::is_none")]
-  pub genesis_metadata: Option<Vec<GenesisMetadata>>, // metadata KV pairs
-}
 
 #[cw_serde]
-pub struct GenesisMetadata {
-  pub key: Vec<u8>,
-  pub value: Vec<u8>,
+pub struct MerklePath {
+  pub key_path: Vec<String>,
 }
-```
 
-#### Contract execute
-
-Every Wasm contract must support these execute messages:
-
-```rust
 #[cw_serde]
 pub struct VerifyMembershipMsg {
   #[schemars(with = "String")]
@@ -444,27 +449,42 @@ pub struct VerifyNonMembershipMsg {
   #[serde(with = "Base64", default)]
   pub proof: Bytes,
   pub path: MerklePath,
-  pub height: HeightRaw,
+  pub height: Height,
   pub delay_block_period: u64,
   pub delay_time_period: u64,
 }
+```
 
+The response for queries is as follows:
+
+```rust
 #[cw_serde]
-pub struct VerifyClientMessage {
-  pub client_message: ClientMessage,
+pub struct QueryResponse {
+  pub is_valid: bool,
+  #[serde(skip_serializing_if = "Option::is_none")]
+  pub status: Option<String>,
+  #[serde(skip_serializing_if = "Option::is_none")]
+  pub genesis_metadata: Option<Vec<GenesisMetadata>>, // metadata KV pairs 
+  #[serde(skip_serializing_if = "Option::is_none")]
+  // boolean set by contract's implementation of checkForMisbehaviour
+  pub found_misbehaviour: Option<bool>, 
+  #[serde(skip_serializing_if = "Option::is_none")]
+  // timestamp set by contracts implementation of getTimestampAtHeight
+  pub timestamp: Option<u64>,
 }
 
 #[cw_serde]
-pub enum ClientMessage {
-  Header(WasmHeader),
-  Misbehaviour(WasmMisbehaviour),
+pub struct GenesisMetadata {
+  pub key: Vec<u8>,
+  pub value: Vec<u8>,
 }
+```
 
-#[cw_serde]
-pub struct CheckForMisbehaviourMsg {
-  pub client_message: ClientMessage,
-}
+#### Contract execute
 
+Every Wasm contract must support these execute messages:
+
+```rust
 #[cw_serde]
 pub struct UpdateStateOnMisbehaviourMsg {
   pub client_message: ClientMessage,
@@ -481,9 +501,9 @@ pub struct CheckSubstituteAndUpdateStateMsg {
 }
 
 #[cw_serde]
-pub struct VerifyUpgradeAndUpdateStateMsg {
-  pub upgrade_client_state: WasmClientState,
-  pub upgrade_consensus_state: WasmConsensusState,
+pub struct VerifyUpgradeAndUpdateStateMsgRaw {
+  pub upgrade_client_state: WasmClientState<FakeInner, FakeInner, FakeInner>,
+  pub upgrade_consensus_state: WasmConsensusState<FakeInner>,
   #[schemars(with = "String")]
   #[serde(with = "Base64", default)]
   pub proof_upgrade_client: Vec<u8>,
@@ -502,7 +522,16 @@ pub struct ContractResult {
   pub error_msg: String, // Error message
   #[serde(skip_serializing_if = "Option::is_none")]
   pub data: Option<Vec<u8>>, // Optional data
-  pub found_misbehaviour: bool, // Misbehaviour was found
+  pub found_misbehaviour: bool, 
+}
+
+pub struct ContractResult {
+	pub is_valid: bool,
+	pub error_msg: String,
+	#[serde(skip_serializing_if = "Option::is_none")]
+	pub data: Option<Vec<u8>>, // Optional data
+	#[serde(skip_serializing_if = "Option::is_none")]
+	pub heights: Option<Vec<Height>>,
 }
 ```
 
@@ -531,6 +560,8 @@ None at present.
 Oct 8, 2021 - Final first draft
 
 Mar 15th, 2022 - Update for 02-client refactor 
+
+Sep 7th, 2023 - Update for changes during implementation
 
 ## Copyright
 
