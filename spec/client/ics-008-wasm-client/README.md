@@ -57,7 +57,7 @@ state kept in storage. For that, there is a need to allow the underlying Wasm li
 to access client and consensus data structures and, after performing certain computations, to
 update the storage with the new versions of them.
 
-The implementation in ibc-go chooses to share the Wasm client store between the `02-client` module (for reading), `08-wasm` module (for instantiation), and Wasm contract. Other than instantiation, the Wasm contract is responsible for updating state.
+For this reason, the implementation in ibc-go chooses to share the Wasm client store between the `02-client` module (for reading), `08-wasm` module (for instantiation), and Wasm contract. Other than instantiation, the Wasm contract is responsible for updating state.
 
 ### Wasm VM
 
