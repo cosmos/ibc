@@ -395,6 +395,7 @@ function verifyNonMembership(
 #### Interaction between Go and Wasm
 
 When an instruction needs to be executed in Wasm code, functions are executed using a `wasmvm`.
+This VM is sandboxed, hence isolated from other operations.
 The process requires packaging all the arguments to be executed by a specific function (including
 pointers to `KVStore`s if needed), pointing to a code hash, and a `sdk.GasMeter` to properly account
 for gas usage during the execution of the function.
@@ -525,14 +526,6 @@ pub struct ContractResult {
   pub found_misbehaviour: bool, 
 }
 
-pub struct ContractResult {
-	pub is_valid: bool,
-	pub error_msg: String,
-	#[serde(skip_serializing_if = "Option::is_none")]
-	pub data: Option<Vec<u8>>, // Optional data
-	#[serde(skip_serializing_if = "Option::is_none")]
-	pub heights: Option<Vec<Height>>,
-}
 ```
 
 ### Properties & Invariants
