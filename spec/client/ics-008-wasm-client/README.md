@@ -407,7 +407,7 @@ need such as processed height and/or processed time.
 
 #### Contract query
 
-Every Wasm contract must to support these query messages:
+Every Wasm contract must support these query messages:
 
 ```rust
 #[cw_serde]
