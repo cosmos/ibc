@@ -39,20 +39,24 @@ Only one packet data type is required: `FungibleTokenPacketData`, which specifie
 
 ```typescript
 interface FungibleTokenPacketData {
-  denom: string
-  amount: uint256
+  tokens: []Token
   sender: string
   receiver: string
   memo: string
 }
+
+interface Token {
+  denomination: string
+  trace: string
+  amount: uint64
+}
 ```
 
+As tokens are sent across chains using the ICS 20 protocol, they begin to accrue a record of channels for which they have been transferred across. This information is encoded into the `trace` field in the denomination. 
 
-As tokens are sent across chains using the ICS 20 protocol, they begin to accrue a record of channels for which they have been transferred across. This information is encoded into the `denom` field. 
+The ICS 20 token traces are represented by the form `{ics20Port}/{ics20Channel}`, where `ics20Port` and `ics20Channel` are an ICS 20 port and channel on the current chain for which the funds exist. The port and channel pair indicate which channel the funds were previously sent through. Implementations are responsible for correctly parsing the IBC trace information and encoding it into the final on-chain denomination so that the same base denominations sent through different path are not treated as being fungible.
 
-The ICS 20 token denominations are represented by the form `{ics20Port}/{ics20Channel}/{denom}`, where `ics20Port` and `ics20Channel` are an ICS 20 port and channel on the current chain for which the funds exist. The prefixed port and channel pair indicate which channel the funds were previously sent through. Implementations are responsible for correctly parsing the IBC trace information from the base denomination. The way the reference ICS 20 implementation in ibc-go handles this is by taking advantage of the fact that it automatically generates channel identifiers with the format `channel-{n}`, where `n` is a integer greater or equal than 0. It can then correctly parse out the IBC trace information from the base denom which may have slashes, but will not have a substring of the form `{transfer-port-name}/channel-{n}`. If this assumption is broken, the trace information will be parsed incorrectly (i.e. part of the base denom will be misinterpreted as trace information). Thus chains must make sure that base denominations do not have the ability to create arbitrary prefixes that can mock the ICS 20 logic.
-
-A sending chain may be acting as a source or sink zone. When a chain is sending tokens across a port and channel which are not equal to the last prefixed port and channel pair, it is acting as a source zone. When tokens are sent from a source zone, the destination port and channel will be prefixed onto the denomination (once the tokens are received) adding another hop to a tokens record. When a chain is sending tokens across a port and channel which are equal to the last prefixed port and channel pair, it is acting as a sink zone. When tokens are sent from a sink zone, the last prefixed port and channel pair on the denomination is removed (once the tokens are received), undoing the last hop in the tokens record. A more complete explanation is [present in the ibc-go implementation](https://github.com/cosmos/ibc-go/blob/457095517b7832c42ecf13571fee1e550fec02d0/modules/apps/transfer/keeper/relay.go#L18-L49).
+A sending chain may be acting as a source or sink zone. When a chain is sending tokens across a port and channel which are not equal to the last prefixed port and channel pair, it is acting as a source zone. When tokens are sent from a source zone, the destination port and channel will be prefixed onto the trace (once the tokens are received) adding another hop to a tokens record. When a chain is sending tokens across a port and channel which are equal to the last prefixed port and channel pair, it is acting as a sink zone. When tokens are sent from a sink zone, the last prefixed port and channel pair on the trace is removed (once the tokens are received), undoing the last hop in the tokens record. A more complete explanation is [present in the ibc-go implementation](https://github.com/cosmos/ibc-go/blob/457095517b7832c42ecf13571fee1e550fec02d0/modules/apps/transfer/keeper/relay.go#L18-L49).
 
 The acknowledgement data type describes whether the transfer succeeded or failed, and the reason for failure (if any).
 
@@ -214,29 +218,32 @@ In plain English, between chains `A` and `B`:
 
 ```typescript
 function sendFungibleTokens(
-  denomination: string,
-  amount: uint256,
+  tokens: []Token,
   sender: string,
   receiver: string,
+  memo: string,
   sourcePort: string,
   sourceChannel: string,
   timeoutHeight: Height,
   timeoutTimestamp: uint64): uint64 {
-    prefix = "{sourcePort}/{sourceChannel}/"
-    // we are the source if the denomination is not prefixed
-    source = denomination.slice(0, len(prefix)) !== prefix
-    if source {
-      // determine escrow account
-      escrowAccount = channelEscrowAddresses[sourceChannel]
-      // escrow source tokens (assumed to fail if balance insufficient)
-      bank.TransferCoins(sender, escrowAccount, denomination, amount)
-    } else {
-      // receiver is source chain, burn vouchers
-      bank.BurnCoins(sender, denomination, amount)
+    for token in tokens {
+      prefix = "{sourcePort}/{sourceChannel}/"
+      // we are the source if the denomination is not prefixed
+      source = token.trace.slice(0, len(prefix)) !== prefix
+      onChainDenom = constructOnChainDenom(token.trace, token.denominations)
+      if source {
+        // determine escrow account
+        escrowAccount = channelEscrowAddresses[sourceChannel]
+        // escrow source tokens (assumed to fail if balance insufficient)
+        bank.TransferCoins(sender, escrowAccount, onChainDenom, token.amount)
+      } else {
+        // receiver is source chain, burn vouchers
+        bank.BurnCoins(sender, onChainDenom, tokenamount)
+      }
     }
 
     // create FungibleTokenPacket data
-    data = FungibleTokenPacketData{denomination, amount, sender, receiver}
+    data = FungibleTokenPacketData{tokens, sender, receiver, memo}
 
     // send packet using the interface defined in ICS4
     sequence = handler.sendPacket(
@@ -260,23 +267,33 @@ function onRecvPacket(packet: Packet) {
   // construct default acknowledgement of success
   FungibleTokenPacketAcknowledgement ack = FungibleTokenPacketAcknowledgement{true, null}
   prefix = "{packet.sourcePort}/{packet.sourceChannel}/"
-  // we are the source if the packets were prefixed by the sending chain
-  source = data.denom.slice(0, len(prefix)) === prefix
-  if source {
-    // receiver is source chain: unescrow tokens
-    // determine escrow account
-    escrowAccount = channelEscrowAddresses[packet.destChannel]
-    // unescrow tokens to receiver (assumed to fail if balance insufficient)
-    err = bank.TransferCoins(escrowAccount, data.receiver, data.denom.slice(len(prefix)), data.amount)
-    if (err !== nil)
-      ack = FungibleTokenPacketAcknowledgement{false, "transfer coins failed"}
-  } else {
-    prefix = "{packet.destPort}/{packet.destChannel}/"
-    prefixedDenomination = prefix + data.denom
-    // sender was source, mint vouchers to receiver (assumed to fail if balance insufficient)
-    err = bank.MintCoins(data.receiver, prefixedDenomination, data.amount)
-    if (err !== nil)
-      ack = FungibleTokenPacketAcknowledgement{false, "mint coins failed"}
+  for token in packet.tokens {
+    // we are the source if the packets were prefixed by the sending chain
+    source = token.trace.slice(0, len(prefix)) === prefix
+    if source {
+      onChainTrace = token.trace.slice(len(prefix))
+      onChainDenom = constructOnChainDenom(onChainTrace, token.denomination)
+      // receiver is source chain: unescrow tokens
+      // determine escrow account
+      escrowAccount = channelEscrowAddresses[packet.destChannel]
+      // unescrow tokens to receiver (assumed to fail if balance insufficient)
+      err = bank.TransferCoins(escrowAccount, data.receiver, onChainDenom, token.amount)
+      if (err !== nil) {
+        ack = FungibleTokenPacketAcknowledgement{false, "transfer coins failed"}
+        // break out of for loop on first error
+        break
+      }
+    } else {
+      prefix = "{packet.destPort}/{packet.destChannel}/"
+      newTrace = prefix + token.trace
+      onChainDenom = constructOnChainDenom(newTrace, token.denomination)
+      // sender was source, mint vouchers to receiver (assumed to fail if balance insufficient)
+      err = bank.MintCoins(data.receiver, onChainDenom, token.amount)
+      if (err !== nil)
+        ack = FungibleTokenPacketAcknowledgement{false, "mint coins failed"}
+        // break out of for loop on first error
+        break
+    }
   }
   return ack
 }
@@ -309,15 +326,18 @@ function onTimeoutPacket(packet: Packet) {
 function refundTokens(packet: Packet) {
   FungibleTokenPacketData data = packet.data
   prefix = "{packet.sourcePort}/{packet.sourceChannel}/"
-  // we are the source if the denomination is not prefixed
-  source = data.denom.slice(0, len(prefix)) !== prefix
-  if source {
-    // sender was source chain, unescrow tokens back to sender
-    escrowAccount = channelEscrowAddresses[packet.srcChannel]
-    bank.TransferCoins(escrowAccount, data.sender, data.denom, data.amount)
-  } else {
-    // receiver was source chain, mint vouchers back to sender
-    bank.MintCoins(data.sender, data.denom, data.amount)
+  for token in packet.tokens {
+    // we are the source if the denomination is not prefixed
+    source = token.trace.slice(0, len(prefix)) !== prefix
+    onChainDenom = constructOnChainDenom(token.trace, token.denomination)
+    if source {
+      // sender was source chain, unescrow tokens back to sender
+      escrowAccount = channelEscrowAddresses[packet.srcChannel]
+      bank.TransferCoins(escrowAccount, data.sender, onChainDenom, token.amount)
+    } else {
+      // receiver was source chain, mint vouchers back to sender
+      bank.MintCoins(data.sender, onChainDenom, token.amount)
+    }
   }
 }
 ```
