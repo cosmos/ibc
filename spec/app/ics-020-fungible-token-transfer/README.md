@@ -35,10 +35,18 @@ The IBC handler interface & IBC routing module interface are as defined in [ICS 
 
 ### Data Structures
 
-Only one packet data type is required: `FungibleTokenPacketData`, which specifies the denomination, amount, sending account, and receiving account.
+Only one packet data type is required: `FungibleTokenPacketData`, which specifies the denomination, amount, sending account, and receiving account or `FungibleTokenPacketData` which specifies multiple tokens being sent between sender and receiver. A v2 supporting chain can optionally convert a v1 packet for channels that are still on version 1.
 
 ```typescript
 interface FungibleTokenPacketData {
+  denom: string
+  amount: uint256
+  sender: string
+  receiver: string
+  memo: string
+}
+
+interface FungibleTokenPacketDataV2 {
   tokens: []Token
   sender: string
   receiver: string
@@ -138,10 +146,14 @@ function onChanOpenInit(
   // assert that version is "ics20-1" or empty
   // if empty, we return the default transfer version to core IBC
   // as the version for this channel
-  abortTransactionUnless(version === "ics20-1" || version === "")
+  abortTransactionUnless(version === "ics20-2" || version === "ics20-1" || version === "")
   // allocate an escrow address
   channelEscrowAddresses[channelIdentifier] = newAddress()
-  return "ics20-1", nil
+  if version === "ics20-1" {
+    return "ics20-1", nil
+  }
+  // default to latest supported version
+  return "ics20-2", nil
 }
 ```
 
@@ -157,12 +169,11 @@ function onChanOpenTry(
   // only unordered channels allowed
   abortTransactionUnless(order === UNORDERED)
   // assert that version is "ics20-1"
-  abortTransactionUnless(counterpartyVersion === "ics20-1")
+  abortTransactionUnless(counterpartyVersion === "ics20-1" || counterpartyVersion === "ics20-2")
   // allocate an escrow address
   channelEscrowAddresses[channelIdentifier] = newAddress()
-  // return version that this chain will use given the
-  // counterparty version
-  return "ics20-1", nil
+  // return the same version as counterparty version so long as we support it
+  return "ics20-2", nil
 }
 ```
 
@@ -173,8 +184,9 @@ function onChanOpenAck(
   counterpartyChannelIdentifier: Identifier,
   counterpartyVersion: string) {
   // port has already been validated
-  // assert that counterparty selected version is "ics20-1"
-  abortTransactionUnless(counterpartyVersion === "ics20-1")
+  // assert that counterparty selected version is the same as our version
+  channel = provableStore.get(channelPath(portIdentifier, channelIdentifier))
+  abortTransactionUnless(counterpartyVersion === channel.version)
 }
 ```
 
