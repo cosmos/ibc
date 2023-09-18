@@ -42,7 +42,7 @@ We expect on-chain applications to depend on reads from other chains, e.g., a pa
 
 ### Assumptions
 
-- **Safe chains:** Both the queryin and queried chains are safe. This means that, for every chain, the underlying consensus engine satisfies safety (e.g., the chain does not fork) and the execution of the state machine follows the described protocol.
+- **Safe chains:** Both the querying and queried chains are safe. This means that, for every chain, the underlying consensus engine satisfies safety (e.g., the chain does not fork) and the execution of the state machine follows the described protocol.
 
 - **Live chains:** Both the querying and queried chains MUST be live, i.e., new blocks are eventually added to the chain.
 
@@ -87,7 +87,7 @@ A bounty is paid to incentivize relayers for participating in cross-chain querie
 
 The querying chain must implement the Cross-chain Queries module, which allows the querying chain to query state at the queried chain. 
 
-Cross-chain queries relies on relayers operating between both chains. When a query request is received by the querying chain, the Cross-chain Queries module emits a `sendQuery` event. Relayers operating between the querying and queried chains must monitor the querying chain for `sendQuery` events. Eventually, a relayer will retrieve the query request and execute it, i.e., fetch the data and generate the corresponding proofs, at the queried chain. The relayer then submits the result in a transaction to the querying chain. The result is finally registered at the querying chain by the Cross-chain Queries module. 
+Cross-chain queries rely on relayers operating between both chains. When a query request is received by the querying chain, the Cross-chain Queries module emits a `sendQuery` event. Relayers operating between the querying and queried chains must monitor the querying chain for `sendQuery` events. Eventually, a relayer will retrieve the query request and execute it, i.e., fetch the data and generate the corresponding proofs, at the queried chain. The relayer then submits the result in a transaction to the querying chain. The result is finally registered at the querying chain by the Cross-chain Queries module. 
 
 A query request includes the height of the queried chain at which the query must be executed. The reason is that the keys being queried can have different values at different heights. Thus, a malicious relayer could choose to query a height that has a value that benefits it somehow. By letting the querying chain decide the height at which the query is executed, we can prevent relayers from affecting the result data.
 
@@ -283,7 +283,7 @@ function CrossChainQueryResponse(
             data
         ))
         result = SUCCESS
-    // If there response does not carry any data, verify that query.path does not exist at query.queryHeight at the queried chain.
+    // If the response does not carry any data, verify that query.path does not exist at query.queryHeight at the queried chain.
     } else {
         abortTransactionUnless(verifyNonMembership(
             clientState,
@@ -331,7 +331,7 @@ function PruneCrossChainQueryResult(
     // Abort the transaction unless the caller has the right to clean the query result
     abortTransactionUnless(authenticateCapability(queryId, queryCapability))
 
-    // Delete the query result from the the local, private store.
+    // Delete the query result from the local, private store.
     privateStore.delete(queryResultPath(queryId))
 }
 ```
