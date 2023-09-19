@@ -226,6 +226,8 @@ In plain English, between chains `A` and `B`:
   an acknowledgement of failure is preferable to aborting the transaction since it more easily enables the sending chain
   to take appropriate action based on the nature of the failure.
 
+Note: `constructOnChainDenom` is a helper function that will construct the local on-chain denomination for the bridged token. It **must** encode the trace and base denomination to ensure that tokens coming over different paths are not treated as fungible. The original trace and denomination must be retrievable by the state machine so that they can be passed in their original forms when constructing a new IBC path for the bridged token. The ibc-go implementation handles this by creating a local denomination: `hash(trace+base_denom)`.
+
 `sendFungibleTokens` must be called by a transaction handler in the module which performs appropriate signature checks, specific to the account owner on the host state machine.
 
 ```typescript
@@ -349,9 +351,22 @@ function onTimeoutPacket(packet: Packet) {
 
 ```typescript
 function refundTokens(packet: Packet) {
-  FungibleTokenPacketData data = packet.data
+  channel = provableStore.get(channelPath(portIdentifier, channelIdentifier))
+  if channel.version === "ics20-1" {
+      FungibleTokenPacketData data = packet.data
+      trace, denom = parseICS20V1Denom(data.denom)
+      token = Token{
+        denomination: denom
+        trace: trace
+        amount: packet.amount
+      }
+      tokens = []Token{token}
+  } else if channel.version === "ics20-2" {
+    FungibleTokenPacketDataV2 data = packet.data
+    tokens = data.tokens
+  }  
   prefix = "{packet.sourcePort}/{packet.sourceChannel}/"
-  for token in packet.tokens {
+  for token in tokens {
     // we are the source if the denomination is not prefixed
     source = token.trace.slice(0, len(prefix)) !== prefix
     onChainDenom = constructOnChainDenom(token.trace, token.denomination)
