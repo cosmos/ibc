@@ -68,7 +68,7 @@ interface ConsensusState {
 ### Headers
 
 The GRANDPA client headers include the height, the commitment root, a justification of block and authority set.
-(In fact, here is a proof of authority set rather than the authority set itself, but we can using a fixed key to verify
+(In fact, here is a proof of authority set rather than the authority set itself, but we can use a fixed key to verify
 the proof and extract the real set, the details are ignored here)
 
 ```typescript
@@ -83,7 +83,7 @@ interface Header {
 ### Justification
 
 A GRANDPA justification for block finality, it includes a commit message and an ancestry proof including all headers routing all precommit target blocks to the commit target block.
-For example, the latest blocks are A - B - C - D - E - F, where A is the last finalised block, F is the point where a majority for vote (they may on B, C, D, E, F) can be collected. Then the proof need to include all headers from F back to A.
+For example, the latest blocks are A - B - C - D - E - F, where A is the last finalised block, F is the point where a majority for vote (they may on B, C, D, E, F) can be collected. Then the proof needs to include all headers from F back to A.
 
 ```typescript
 interface Justification {
@@ -146,7 +146,7 @@ function latestClientHeight(clientState: ClientState): uint64 {
 
 ### Validity predicate
 
-GRANDPA client validity checking verifies a header is signed by the current authority set and verifies the authority set proof to determine if there is a expected change to the authority set. If the provided header is valid, the client state is updated & the newly verified commitment written to the store.
+GRANDPA client validity checking verifies a header is signed by the current authority set and verifies the authority set proof to determine if there is an expected change to the authority set. If the provided header is valid, the client state is updated & the newly verified commitment written to the store.
 
 ```typescript
 function checkValidityAndUpdateState(

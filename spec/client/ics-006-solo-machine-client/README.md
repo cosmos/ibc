@@ -161,7 +161,7 @@ function verifyClientMessage(clientMsg: ClientMessage) {
   switch typeof(ClientMessage) {
     case Header:
       verifyHeader(clientMessage)
-    // misbehaviour only suppported for current public key and diversifier on solomachine
+    // misbehaviour only supported for current public key and diversifier on solomachine
     case Misbehaviour:
       verifyMisbehaviour(clientMessage)
   }
@@ -242,7 +242,7 @@ function updateState(clientMessage: ClientMessage) {
 }
 ```
 
-Function `updateStateOnMisbehaviour` updates the function after receving valid misbehaviour:
+Function `updateStateOnMisbehaviour` updates the function after receiving valid misbehaviour:
 
 ```typescript
 function updateStateOnMisbehaviour(clientMessage: ClientMessage) {
