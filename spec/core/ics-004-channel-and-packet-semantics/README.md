@@ -456,11 +456,7 @@ function chanOpenAck(
         expected
       ))
     }
-
-    channel.state = OPEN
-    channel.version = counterpartyVersion
-    channel.counterpartyChannelIdentifier = counterpartyChannelIdentifier
-    provableStore.set(channelPath(portIdentifier, channelIdentifier), channel)
+    // write will happen in the handler defined in the ICS26 spec
 }
 ```
 
@@ -507,8 +503,7 @@ function chanOpenConfirm(
       ))
     }
 
-    channel.state = OPEN
-    provableStore.set(channelPath(portIdentifier, channelIdentifier), channel)
+    // write will happen in the handler defined in the ICS26 spec
 }
 ```
 
@@ -588,8 +583,7 @@ function chanCloseConfirm(
       ))
     }
 
-    channel.state = CLOSED
-    provableStore.set(channelPath(portIdentifier, channelIdentifier), channel)
+    // write will happen in the handler defined in the ICS26 spec
 }
 ```
 
