@@ -25,7 +25,9 @@ Functions & terms are as defined in [ICS 2](../../core/ics-002-client-semantics)
 
 `ConnectionEnd` and `generateIdentifier` are as defined in [ICS 3](../../core/ics-003-connection-semantics)
 
-`getCommitmentPrefix` and `removePrefix` are as defined in [ICS 24](../../core/ics-024-host-requirements).
+`getCommitmentPrefix` is as defined in [ICS 24](../../core/ics-024-host-requirements).
+
+`removePrefix` is as defined in [ICS 23](../../core/ics-023-vector-commitments).
 
 ### Desired Properties
 

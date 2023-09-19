@@ -217,7 +217,7 @@ function extractSourcePortForTakerMsg(path: string) : string{
 
 #### Cancelling a swap
 
-1.  A maker cancels a previously created order.  Expired orders can also be cancelled.
+1.  A maker cancels a previously created order. Expired orders can also be cancelled.
 2.  An `AtomicSwapPacketData` is relayed to the taker chain where in `onRecvPacket` the order is cancelled on the taker chain. If the order is in the process of being taken (a packet with `TakeSwapMsg` is being relayed from the taker chain to the maker chain), the cancellation will be rejected.
 3.  A packet is relayed back where upon acknowledgement the order on the maker chain is also cancelled.  The refund only occurs if the taker chain confirmed the cancellation request.
 
@@ -348,7 +348,7 @@ function onChanOpenInit(
   channelIdentifier: Identifier,
   counterpartyPortIdentifier: Identifier,
   counterpartyChannelIdentifier: Identifier,
-  version: string) => (version: string, err: Error) {
+  version: string): (version: string, err: Error) {
   // only unordered channels allowed
   abortTransactionUnless(order === UNORDERED)
   // assert that version is "ics100-1" or empty
@@ -371,7 +371,7 @@ function onChanOpenTry(
   channelIdentifier: Identifier,
   counterpartyPortIdentifier: Identifier,
   counterpartyChannelIdentifier: Identifier,
-  counterpartyVersion: string) => (version: string, err: Error) {
+  counterpartyVersion: string): (version: string, err: Error) {
   // only unordered channels allowed
   abortTransactionUnless(order === UNORDERED)
   // assert that version is "ics100-1"
@@ -393,7 +393,7 @@ function onChanOpenAck(
 ) {
   // port has already been validated
   // assert that counterparty selected version is "ics100-1"
-  abortTransactionUnless(counterpartyVersion === "ics100-1");
+  abortTransactionUnless(counterpartyVersion === "ics100-1")
 }
 ```
 
@@ -406,7 +406,7 @@ function onChanOpenConfirm(portIdentifier: Identifier, channelIdentifier: Identi
 ```typescript
 function onChanCloseInit(portIdentifier: Identifier, channelIdentifier: Identifier) {
   // always abort transaction
-  abortTransactionUnless(FALSE);
+  abortTransactionUnless(FALSE)
 }
 ```
 
@@ -435,7 +435,7 @@ function sendAtomicSwapPacket(
     sourceChannel,
     timeoutHeight,
     timeoutTimestamp,
-    swapPacket.getBytes() // Should be proto marshalled bytes.
+    protobuf.marshal(swapPacket) // protobuf-marshalled bytes of packet data
   )
 }
 ```
