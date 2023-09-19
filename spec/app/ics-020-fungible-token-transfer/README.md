@@ -275,11 +275,24 @@ function sendFungibleTokens(
 
 ```typescript
 function onRecvPacket(packet: Packet) {
-  FungibleTokenPacketData data = packet.data
+  channel = provableStore.get(channelPath(portIdentifier, channelIdentifier))
+  if channel.version === "ics20-1" {
+      FungibleTokenPacketData data = packet.data
+      trace, denom = parseICS20V1Denom(data.denom)
+      token = Token{
+        denomination: denom
+        trace: trace
+        amount: packet.amount
+      }
+      tokens = []Token{token}
+  } else if channel.version === "ics20-2" {
+    FungibleTokenPacketDataV2 data = packet.data
+    tokens = data.tokens
+  }
   // construct default acknowledgement of success
   FungibleTokenPacketAcknowledgement ack = FungibleTokenPacketAcknowledgement{true, null}
   prefix = "{packet.sourcePort}/{packet.sourceChannel}/"
-  for token in packet.tokens {
+  for token in tokens {
     // we are the source if the packets were prefixed by the sending chain
     source = token.trace.slice(0, len(prefix)) === prefix
     if source {
