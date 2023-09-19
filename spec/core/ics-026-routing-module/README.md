@@ -447,6 +447,12 @@ function handleChanOpenInit(datagram: ChanOpenInit) {
     datagram.portIdentifier,
     datagram.counterpartyPortIdentifier
   )
+  // SYNCHRONOUS: the following calls happen syncrhonously with the call above
+  // ASYNCHRONOUS: the module callback will be called at a time later than the channel handler
+  // in this case, the channel identifier will be stored with a sentinel value so it is not taken
+  // by a new channel handshake and the capability is reserved for the application module.
+  // When the module eventually executes its callback it must call writeChannel so that the channel
+  // can be written into an INIT state with the right version and the handshake can proceed on the counterparty.
   version, err = module.onChanOpenInit(
     datagram.order,
     datagram.connectionHops,
@@ -497,6 +503,12 @@ function handleChanOpenTry(datagram: ChanOpenTry) {
     datagram.proofInit,
     datagram.proofHeight
   )
+  // SYNCHRONOUS: the following calls happen syncrhonously with the call above
+  // ASYNCHRONOUS: the module callback will be called at a time later than the channel handler
+  // in this case, the channel identifier will be stored with a sentinel value so it is not taken
+  // by a new channel handshake and the capability is reserved for the application module.
+  // When the module eventually executes its callback it must call writeChannel so that the channel
+  // can be written into a TRY state with the right version and the handshake can proceed on the counterparty.
   version, err = module.onChanOpenTry(
     datagram.order,
     datagram.connectionHops,
@@ -542,6 +554,10 @@ function handleChanOpenAck(datagram: ChanOpenAck) {
     datagram.proofTry,
     datagram.proofHeight
   )
+  // SYNCHRONOUS: the following calls happen syncrhonously with the call above
+  // ASYNCHRONOUS: the module callback will be called at a time later than the channel handler
+  // When the module eventually executes its callback it must call writeChannel so that the channel
+  // can be written into an OPEN state and the handshake can proceed on the counterparty.
   err = module.onChanOpenAck(
     datagram.portIdentifier,
     datagram.channelIdentifier,
@@ -549,6 +565,17 @@ function handleChanOpenAck(datagram: ChanOpenAck) {
     datagram.counterpartyVersion
   )
   abortTransactionUnless(err === nil)
+  channel = provableStore.get(channelPath(datagram.portIdentifier, datagram.channelIdentifier))
+  writeChannel(
+    datagram.portIdentifier,
+    datagram.channelIdentifier,
+    OPEN,
+    channel.order,
+    channel.counterparty.portIdentifier,
+    datagram.counterpartyChannelIdentifier,
+    channel.connectionHops,
+    datagram.counterpartyVersion
+  )
 }
 ```
 
@@ -570,11 +597,26 @@ function handleChanOpenConfirm(datagram: ChanOpenConfirm) {
     datagram.proofAck,
     datagram.proofHeight
   )
+  // SYNCHRONOUS: the following calls happen syncrhonously with the call above
+  // ASYNCHRONOUS: the module callback will be called at a time later than the channel handler
+  // When the module eventually executes its callback it must call writeChannel so that the channel
+  // can be written into an OPEN state and the handshake can proceed on the counterparty.
   err = module.onChanOpenConfirm(
     datagram.portIdentifier,
     datagram.channelIdentifier
   )
   abortTransactionUnless(err === nil)
+  channel = provableStore.get(channelPath(datagram.portIdentifier, datagram.channelIdentifier))
+  writeChannel(
+    datagram.portIdentifier,
+    datagram.channelIdentifier,
+    OPEN,
+    channel.order,
+    channel.counterparty.portIdentifier,
+    channel.counterparty.channelIdentifier,
+    channel.connectionHops,
+    channel.version
+  )
 }
 ```
 
@@ -610,19 +652,30 @@ interface ChanCloseConfirm {
 ```
 
 ```typescript
-function handleChanCloseConfirm(datagram: ChanCloseConfirm) {
-    module = lookupModule(datagram.portIdentifier)
-    err = module.onChanCloseConfirm(
-      datagram.portIdentifier,
-      datagram.channelIdentifier
-    )
-    abortTransactionUnless(err === nil)
+function handleChanCloseConfirm(datagram: ChanCloseConfirm) {  
     handler.chanCloseConfirm(
       datagram.portIdentifier,
       datagram.channelIdentifier,
       datagram.proofInit,
       datagram.proofHeight
     )
+    // SYNCHRONOUS: the following calls happen syncrhonously with the call above
+    // ASYNCHRONOUS: the module callback will be called at a time later than the channel handler
+    // in this case, the channel identifier will be stored with a sentinel value so it is not taken
+    // by a new channel handshake and the capability is reserved for the application module.
+    // When the module eventually executes its callback it must call writeChannel so that the channel
+    // can be written into an OPEN state and the handshake can proceed on the counterparty.
+    module = lookupModule(datagram.portIdentifier)
+    err = module.onChanCloseConfirm(
+      datagram.portIdentifier,
+      datagram.channelIdentifier
+    )
+    abortTransactionUnless(err === nil)
+      writeChannel(
+    datagram.portIdentifier,
+    datagram.channelIdentifier,
+    CLOSED,
+  )
 }
 ```
 
