@@ -1146,7 +1146,7 @@ function multiAssetWithdraw(msg: MsgMultiAssetWithdrawRequest): MsgMultiAssetWit
   abortTransactionUnless(store.bankKeeper.hasSupply(poolTokenDenom));
 
   // Get the liquidity pool
-  const { pool, found } = k.getInterchainLiquidityPool(ctx, poolTokenDenom);
+  const { pool, found } = store.getInterchainLiquidityPool(msg.poolId);
   abortTransactionUnless(found);
 
   const amm = new InterchainMarketMaker(pool);
@@ -1268,7 +1268,8 @@ function onTakePoolReceived(msg: MsgTakePoolRequest): string {
   const totalAmount = pool.sumOfPoolAssets();
   const mintAmount = (totalAmount * asset.weight) / 100;
 
-  store.mintTokens(pool.sourceCreator, new sdk.Coin(pool.supply.denom, mintAmount));
+  // TODO remove it or add a options for depositor to choose where LP is minted.
+  // store.mintTokens(pool.sourceCreator, new sdk.Coin(pool.supply.denom, mintAmount));
   store.setInterchainLiquidityPool(pool);
   return pool.id;
 }
