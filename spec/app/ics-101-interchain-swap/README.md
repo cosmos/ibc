@@ -1,6 +1,6 @@
 ---
 ics: 101
-title: Interchain Swap
+title: Interchain Liquidity
 stage: draft
 category: IBC/APP
 kind: instantiation
@@ -16,7 +16,7 @@ This standard document specifies the packet data structure, state machine handli
 
 ### Motivation
 
-ICS-101 Interchain Swaps enables chains to have their own token pricing mechanism and exchange protocol via IBC transactions. By enabling their own token pricing mechanism and exchange protocol, each chain can play a role in a fully decentralised exchange network.
+ICS-101 Interchain Liquidity enables chains to have their own token pricing mechanism and exchange protocol via IBC transactions. By enabling their own token pricing mechanism and exchange protocol, each chain can play a role in a fully decentralised exchange network.
 
 Features include an option to provide liquidity with a single asset instead of a pair, which users might prefer as it reduces the risk of impermanent loss.
 
