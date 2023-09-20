@@ -586,7 +586,7 @@ function OnRecvPacket(packet: Packet): Uint8Array | undefined {
   const data: IBCSwapPacketData = packet.data;
   switch (data.type) {
     case "MAKE_POOL":
-      const makePoolMsg: MsgMakePoolRequest = protobuf.decode(MsgMakePoolRequest, data.Data);
+      const makePoolMsg: MsgMakePoolRequest = unmarshalJSON(data.Data);
       abortTransactionUnless(data.stateChange.poolId !== "");
       abortTransactionUnless(store.has(data.stateChange.poolId)); // existed already.
       const poolId = store.OnMakePoolReceived(makePoolMsg, data.stateChange.poolId, data.stateChange.sourceChainId);
@@ -594,45 +594,39 @@ function OnRecvPacket(packet: Packet): Uint8Array | undefined {
       return makePoolRes;
 
     case "TAKE_POOL":
-      const takePoolMsg: MsgTakePoolRequest = protobuf.decode(MsgTakePoolRequest, data.Data);
+      const takePoolMsg: MsgTakePoolRequest = unmarshalJSON(data.Data);
       const takePoolRes = store.OnTakePoolReceived(takePoolMsg);
       const takePoolResEncoded = protobuf.encode({ poolId: takePoolRes });
       return takePoolResEncoded;
 
     case "SINGLE_DEPOSIT":
-      const singleDepositMsg: MsgSingleAssetDepositRequest = protobuf.decode(MsgSingleAssetDepositRequest, data.Data);
+      const singleDepositMsg: MsgSingleAssetDepositRequest = unmarshalJSON(data.Data);
       abortTransactionUnless(data.stateChange.poolId === "");
       const singleDepositRes = store.OnSingleAssetDepositReceived(singleDepositMsg, data.stateChange);
       const singleDepositResEncoded = protobuf.encode(singleDepositRes);
       return singleDepositResEncoded;
 
     case "MAKE_MULTI_DEPOSIT":
-      const makeMultiDepositMsg: MsgMakeMultiAssetDepositRequest = protobuf.decode(
-        MsgMakeMultiAssetDepositRequest,
-        data.Data
-      );
+      const makeMultiDepositMsg: MsgMakeMultiAssetDepositRequest = unmarshalJSON(data.Data);
       const makeMultiDepositRes = k.OnMakeMultiAssetDepositReceived(makeMultiDepositMsg, data.stateChange);
       const makeMultiDepositResEncoded = protobuf.encode(makeMultiDepositRes);
       return makeMultiDepositResEncoded;
 
     case "TAKE_MULTI_DEPOSIT":
-      const takeMultiDepositMsg: MsgTakeMultiAssetDepositRequest = protobuf.decode(
-        MsgTakeMultiAssetDepositRequest,
-        data.Data
-      );
+      const takeMultiDepositMsg: MsgTakeMultiAssetDepositRequest = unmarshalJSON(data.Data);
       const takeMultiDepositRes = k.OnTakeMultiAssetDepositReceived(takeMultiDepositMsg, data.stateChange);
       const takeMultiDepositResEncoded = protobuf.encode(takeMultiDepositRes);
       return takeMultiDepositResEncoded;
 
     case "MULTI_WITHDRAW":
-      const multiWithdrawMsg: MsgMultiAssetWithdrawRequest = protobuf.decode(MsgMultiAssetWithdrawRequest, data.Data);
+      const multiWithdrawMsg: MsgMultiAssetWithdrawRequest = unmarshalJSON(data.Data);
       const multiWithdrawRes = k.OnMultiAssetWithdrawReceived(multiWithdrawMsg, data.stateChange);
       const multiWithdrawResEncoded = protobuf.encode(multiWithdrawRes);
       return multiWithdrawResEncoded;
 
     case "LEFT_SWAP":
     case "RIGHT_SWAP":
-      const swapMsg: MsgSwapRequest = protobuf.decode(MsgSwapRequest, data.Data);
+      const swapMsg: MsgSwapRequest = unmarshalJSON(data.Data);
       const swapRes = k.OnSwapReceived(swapMsg, data.stateChange);
       const swapResEncoded = protobuf.encode(swapRes);
       return swapResEncoded;
@@ -656,26 +650,26 @@ function OnAcknowledgementPacket(packet: Packet, data: IBCSwapPacketData, ack: A
     default:
       switch (data.type) {
         case "MAKE_POOL":
-          const msgMakePool: MsgMakePoolRequest = protobuf.decode(data.Data);
+          const msgMakePool: MsgMakePoolRequest = unmarshalJSON(data.Data);
           const errMakePool = store.OnMakePoolAcknowledged(msgMakePool, data.StateChange.PoolId);
           abortTransactionUnless(errMakePool === undefined);
           break;
 
         case "TAKE_POOL":
-          const msgTakePool: MsgTakePoolRequest = protobuf.decode(data.Data);
+          const msgTakePool: MsgTakePoolRequest = unmarshalJSON(data.Data);
           const errTakePool = store.OnTakePoolAcknowledged(msgTakePool);
           abortTransactionUnless(errTakePool === undefined);
           break;
 
         case "SINGLE_DEPOSIT":
-          const msgSingleDeposit: MsgSingleAssetDepositRequest = protobuf.decode(data.Data);
+          const msgSingleDeposit: MsgSingleAssetDepositRequest = punmarshalJSON(data.Data);
           const resSingleDeposit: MsgSingleAssetDepositResponse = protobuf.decode(ack.GetResult());
           const errSingleDeposit = store.OnSingleAssetDepositAcknowledged(msgSingleDeposit, resSingleDeposit);
           abortTransactionUnless(errSingleDeposit === undefined);
           break;
 
         case "MAKE_MULTI_DEPOSIT":
-          const msgMakeMultiDeposit: MsgMakeMultiAssetDepositRequest = protobuf.decode(data.Data);
+          const msgMakeMultiDeposit: MsgMakeMultiAssetDepositRequest = unmarshalJSON(data.Data);
           const resMakeMultiDeposit: MsgMultiAssetDepositResponse = protobuf.decode(ack.GetResult());
           const errMakeMultiDeposit = store.OnMakeMultiAssetDepositAcknowledged(
             msgMakeMultiDeposit,
@@ -685,14 +679,14 @@ function OnAcknowledgementPacket(packet: Packet, data: IBCSwapPacketData, ack: A
           break;
 
         case "TAKE_MULTI_DEPOSIT":
-          const msgTakeMultiDeposit: MsgTakeMultiAssetDepositRequest = protobuf.decode(data.Data);
+          const msgTakeMultiDeposit: MsgTakeMultiAssetDepositRequest = unmarshalJSON(data.Data);
           const resTakeMultiDeposit: MsgTakePoolResponse = protobuf.decode(ack.GetResult());
           const errTakeMultiDeposit = store.OnTakeMultiAssetDepositAcknowledged(msgTakeMultiDeposit, data.StateChange);
           abortTransactionUnless(errTakeMultiDeposit === undefined);
           break;
 
         case "MULTI_WITHDRAW":
-          const msgMultiWithdraw: MsgMultiAssetWithdrawRequest = protobuf.decode(data.Data);
+          const msgMultiWithdraw: MsgMultiAssetWithdrawRequest = unmarshalJSON(data.Data);
           const resMultiWithdraw: MsgMultiAssetWithdrawResponse = protobuf.decode(ack.GetResult());
           const errMultiWithdraw = store.OnMultiAssetWithdrawAcknowledged(msgMultiWithdraw, resMultiWithdraw);
           abortTransactionUnless(errMultiWithdraw === undefined);
@@ -700,7 +694,7 @@ function OnAcknowledgementPacket(packet: Packet, data: IBCSwapPacketData, ack: A
 
         case "LEFT_SWAP":
         case "RIGHT_SWAP":
-          const msgSwap: MsgSwapRequest = protobuf.decode(data.Data);
+          const msgSwap: MsgSwapRequest = unmarshalJSON(data.Data);
           const resSwap: MsgSwapResponse = protobuf.decode(ack.GetResult());
           const errSwap = store.OnSwapAcknowledged(msgSwap, resSwap);
           abortTransactionUnless(errSwap === undefined);
@@ -729,45 +723,39 @@ function refundPacketToken(packet: Packet, data: IBCSwapPacketData): Error | und
 
   switch (data.type) {
     case "MAKE_POOL":
-      const makePoolMsg: MsgMakePoolRequest = protobuf.decode(MsgMakePoolRequest, data.Data);
+      const makePoolMsg: MsgMakePoolRequest = unmarshalJSON(data.Data);
       // Refund initial liquidity
       sender = makePoolMsg.creator;
       token = makePoolMsg.liquidity[0].balance;
       break;
 
     case "SINGLE_DEPOSIT":
-      const singleDepositMsg: MsgSingleAssetDepositRequest = protobuf.decode(MsgSingleAssetDepositRequest, data.Data);
+      const singleDepositMsg: MsgSingleAssetDepositRequest = unmarshalJSON(data.Data);
       token = singleDepositMsg.token;
       sender = singleDepositMsg.sender;
       break;
 
     case "MAKE_MULTI_DEPOSIT":
-      const makeMultiDepositMsg: MsgMakeMultiAssetDepositRequest = protobuf.decode(
-        MsgMakeMultiAssetDepositRequest,
-        data.Data
-      );
+      const makeMultiDepositMsg: MsgMakeMultiAssetDepositRequest = unmarshalJSON(data.Data);
       token = makeMultiDepositMsg.deposits[0].balance;
       sender = makeMultiDepositMsg.deposits[0].sender;
       break;
 
     case "TAKE_MULTI_DEPOSIT":
-      const takeMultiDepositMsg: MsgTakeMultiAssetDepositRequest = protobuf.decode(
-        MsgTakeMultiAssetDepositRequest,
-        data.Data
-      );
+      const takeMultiDepositMsg: MsgTakeMultiAssetDepositRequest = unmarshalJSON(data.Data);
       const { order, found } = store.getMultiDepositOrder(takeMultiDepositMsg.poolId, takeMultiDepositMsg.orderId);
       abortTransactionUnless(found);
       token = order.Deposits[1];
       sender = msg.Sender;
       break;
     case "MULTI_WITHDRAW":
-      const multiWithdrawMsg: MsgMultiAssetWithdrawRequest = protobuf.decode(MsgMultiAssetWithdrawRequest, data.Data);
+      const multiWithdrawMsg: MsgMultiAssetWithdrawRequest = unmarshalJSON(data.Data);
       token = multiWithdrawMsg.poolToken;
       sender = multiWithdrawMsg.receiver;
       break;
 
     case "RIGHT_SWAP":
-      const swapMsg: MsgSwapRequest = protobuf.decode(MsgSwapRequest, data.Data);
+      const swapMsg: MsgSwapRequest = unmarshalJSON(data.Data);
       token = swapMsg.tokenIn;
       sender = swapMsg.sender;
       break;
@@ -921,6 +909,17 @@ interface MsgSwapResponse {
 These are methods that output a state change on the source chain, which will be subsequently synced to the destination chain.
 
 ```ts
+  // Custom helper to support compatability with cosmwasm: Same function MarshalJSON/unmarshalJSON in Golang
+  function marshalJSON(data:any): Uint8Array {
+    const jsonData = JSON.stringify(any);
+    return Base64.encode(json).toBytes();
+  }
+
+  function unmarshalJSON<T>(data:any): T {
+    const jsonData = Base64.decode(data);
+    return json.parse(jsonData) as T
+  }
+
   function makePool(msg: MsgMakePoolRequest): MsgMakePoolResponse {
 
     const { counterPartyChainId, connected } = store.GetCounterPartyChainID(msg.sourcePort, msg.sourceChannel);
@@ -949,7 +948,7 @@ These are methods that output a state change on the source chain, which will be 
 
     const packet: IBCSwapPacketData = {
       type: "MAKE_POOL",
-      data: protobuf.encode(msg),
+      data: marshalJSON(msg),
       stateChange: {
         poolId: poolId,
         sourceChainId: store.ChainID(),
@@ -1045,7 +1044,7 @@ These are methods that output a state change on the source chain, which will be 
 
     const packet: IBCSwapPacketData = {
       type: "MAKE_MULTI_DEPOSIT",
-      data: protobuf.encode(msg),
+      data: marshalJSON(msg),
       stateChange: { poolTokens: poolTokens },
     };
 
@@ -1087,7 +1086,7 @@ These are methods that output a state change on the source chain, which will be 
 
   const packet: IBCSwapPacketData = {
     type: "TAKE_MULTI_DEPOSIT",
-    data: protobuf.encode(msg),
+    data: marshalJSON(msg),
     stateChange: { poolTokens },
   };
 
@@ -1125,7 +1124,7 @@ function singleAssetDeposit(msg: MsgSingleAssetDepositRequest): MsgSingleAssetDe
 
   const packet: IBCSwapPacketData = {
     type: "SINGLE_DEPOSIT",
-    data: protobuf.encode(msg);,
+    data: marshalJSON(msg);,
     stateChange: { poolTokens: [poolToken] },
   };
 
@@ -1156,7 +1155,7 @@ function multiAssetWithdraw(msg: MsgMultiAssetWithdrawRequest): MsgMultiAssetWit
 
   const packet: IBCSwapPacketData = {
     type: "MULTI_WITHDRAW",
-    data: protobuf.encode(msg),
+    data: marshalJSON(msg),
     stateChange: {
       out: outs,
       poolTokens: [msg.poolToken],
@@ -1206,7 +1205,7 @@ function swap(msg: MsgSwapRequest): MsgSwapResponse {
 
   const packet: IBCSwapPacketData = {
     type: msgType,
-    data: protobuf.encode(msg),
+    data: marshalJSON(msg),
     stateChange: { out: [tokenOut] },
   };
 
