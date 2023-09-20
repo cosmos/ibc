@@ -587,7 +587,7 @@ function OnRecvPacket(packet: Packet): Uint8Array | undefined {
   switch (data.type) {
     case "MAKE_POOL":
       const makePoolMsg: MsgMakePoolRequest = protobuf.decode(MsgMakePoolRequest, data.Data);
-      abortTransactionUnless(data.stateChange.poolId === "");
+      abortTransactionUnless(data.stateChange.poolId !== "");
       abortTransactionUnless(store.has(data.stateChange.poolId)); // existed already.
       const poolId = store.OnMakePoolReceived(makePoolMsg, data.stateChange.poolId, data.stateChange.sourceChainId);
       const makePoolRes = protobuf.encode({ poolId });
@@ -802,7 +802,6 @@ These sub-protocols handle packets relayed from a source chain, including pool s
 interface MsgMakePoolRequest {
   sourcePort: string;
   sourceChannel: string;
-  creator: string;
   counterPartyCreator: string;
   sourceLiquidity: PoolAsset[];
   destinationLiquidity: PoolAsset[];
@@ -820,7 +819,7 @@ interface MsgMakePoolResponse {
 
 ```ts
 interface MsgTakePoolRequest {
-  creator: string;
+  sender: string;
   poolId: string;
   port: string;
   channel: string;
@@ -934,34 +933,18 @@ These are methods that output a state change on the source chain, which will be 
     }
 
     const poolId = generatePoolId(store.chainID(), counterPartyChainId, denoms);
-
     const found = await store.getInterchainLiquidityPool(poolId);
-
     abortTransactionUnless(found)
-
     // Validate message
     const portValidationErr = host.PortIdentifierValidator(msg.SourcePort);
-
     abortTransactionUnless(portValidationErr === undefined)
-
     const channelValidationErr = host.ChannelIdentifierValidator(msg.SourceChannel);
-
     abortTransactionUnless(channelValidationErr === undefined)
-
     const validationErr = msg.ValidateBasic();
-
     abortTransactionUnless(validationErr === undefined)
-
-    abortTransactionUnless(store.hasSupply(msg.liquidity[0].balance.denom))
-
-
-    const sourceLiquidity = store.GetBalance(msg.creator, msg.liquidity[0].balance.denom);
-
-    abortTransactionUnless(sourceLiquidity.amount > msg.liquidity[0].balance.amount)
-
-
-    const lockErr = store.lockTokens(msg.sourcePort, msg.sourceChannel, senderAddress, msg.liquidity[0].balance);
-
+    const sourceLiquidity = store.GetBalance(msg.creator, msg.sourceLiquidity[0].balance.denom);
+    abortTransactionUnless(sourceLiquidity.amount > msg.sourceLiquidity[0].balance.amount)
+    const lockErr = store.lockTokens(msg.sourcePort, msg.sourceChannel, senderAddress, msg.sourceLiquidity[0].balance);
     abortTransactionUnless(lockErr === undefined)
 
     const packet: IBCSwapPacketData = {
@@ -997,7 +980,6 @@ These are methods that output a state change on the source chain, which will be 
     const liquidity = store.GetBalance(creatorAddr, asset.denom);
     abortTransactionUnless(liquidity.amount > 0)
 
-
     const lockErr = store.LockTokens(msg.port, pool.channel, creatorAddr, asset);
     abortTransactionUnless(lockErr === undefined)
 
@@ -1005,7 +987,6 @@ These are methods that output a state change on the source chain, which will be 
       type: "TAKE_POOL",
       data: protobuf.encode(msg),
     };
-
 
     const sendPacketErr = await store.SendIBCSwapPacket(pool.counterPartyPort, pool.counterPartyChannel, timeoutHeight, timeoutStamp, packet);
     abortTransactionUnless(sendPacketErr === undefined)
@@ -1101,7 +1082,7 @@ These are methods that output a state change on the source chain, which will be 
 
 
   // Create escrow module account here
-  const lockErr = store.lockTokens(pool.counterPartyPort, pool.counterPartyChannel,msg.sender, asset);
+  const lockErr = store.lockTokens(pool.counterPartyPort, pool.counterPartyChannel, msg.sender, asset);
   abortTransactionUnless(lockErr === undefined)
 
   const packet: IBCSwapPacketData = {
@@ -1251,7 +1232,7 @@ These are methods that handle packets relayed from a source chain, and includes 
 function onMakePoolReceived(msg: MsgMakePoolRequest, poolID: string, sourceChainId: string): string {
   abortTransactionUnless(msg.validateBasic() === undefined);
   const { pool, found } = store.getInterchainLiquidityPool(poolID);
-  abortTransactionUnless(msg.validateBasic() === undefined);
+  abortTransactionUnless(found === false);
 
   const liquidityBalance = msg.sourceLiquidity[0].balance;
   if (!store.bankKeeper.hasSupply(liquidityBalance.denom)) {
@@ -1425,7 +1406,8 @@ function onMakePoolAcknowledged(msg: MsgMakePoolRequest, poolId: string): void {
     msg.creator,
     msg.counterPartyCreator,
     store,
-    msg.liquidity,
+    msg.sourceLiquidity,
+    msg.destinationLiquidity,
     msg.swapFee,
     msg.sourcePort,
     msg.sourceChannel
@@ -1440,7 +1422,7 @@ function onMakePoolAcknowledged(msg: MsgMakePoolRequest, poolId: string): void {
 
   store.mintTokens(msg.creator, {
     denom: pool.supply.denom,
-    amount: (totalAmount * msg.liquidity[0].weight) / 100,
+    amount: (totalAmount * msg.sourceliquidity[0].weight) / 100,
   });
 
   store.setInterchainLiquidityPool(pool);
