@@ -396,27 +396,28 @@ class InterchainMarketMaker {
     // RightSwap implements InGivenOut
     // Input how many coins you want to buy, output an amount you need to pay
     // Ai = Bi * ((Bo/(Bo - Ao)) ** Wo/Wi -1)
-    function rightSwap(amountIn: Coin, amountOut: Coin) Coin {
+  function rightSwap(amountOut: Coin) Coin {
 
-        const assetIn = this.pool.findAssetByDenom(amountIn.denom)
-        abortTransactionUnless(assetIn != null)
-        const AssetOut = this.pool.findAssetByDenom(amountOut.denom)
-        abortTransactionUnless(assetOut != null)
+    const AssetOut = this.pool.findAssetByDenom(amountOut.denom)
+    abortTransactionUnless(assetOut != null)
 
-        const balanceIn = assetIn.balance.amount
-        const balanceOut = assetOut.balance.amount
-        const weightIn = assetIn.weight / 100
-        const weightOut = assetOut.weight / 100
+    // Assuming that the pool has a default input asset (say ETH or similar).
+    // If this is not the case, you might want to specify which asset you're using as input.
+    const assetIn = this.pool.defaultAsset
+    abortTransactionUnless(assetIn != null)
 
-        const amount = balanceIn * ((balanceOut/(balanceOut - amountOut.amount) ** (weightOut/weightIn) - 1))
+    const balanceIn = assetIn.balance.amount
+    const balanceOut = assetOut.balance.amount
+    const weightIn = assetIn.weight / 100
+    const weightOut = assetOut.weight / 100
 
-        abortTransactionUnless(amountIn.amount > amount)
+    const amount = balanceIn * ((balanceOut / (balanceOut - amountOut.amount)) ** (weightOut/weightIn) - 1)
 
-        return {
-            amount,
-            denom: amountIn.denom
-        }
+    return {
+        amount,
+        denom: assetIn.denom
     }
+}
 
     // amount - amount * feeRate / 10000
     function minusFees(amount:number):number {
@@ -842,15 +843,15 @@ interface DepositAsset {
 }
 
 enum LPAllocation {
-  MAKER_CHAIN,  // All LP tokens are minted on maker chain
-  TAKER_CHAIN,  // All LP tokens are minted on taker chain
-  SPLIT,    // LP tokens are minted on both chains and divided based on the pool ratio.
+  MAKER_CHAIN, // All LP tokens are minted on maker chain
+  TAKER_CHAIN, // All LP tokens are minted on taker chain
+  SPLIT, // LP tokens are minted on both chains and divided based on the pool ratio.
 }
 
 interface MsgMakeMultiAssetDepositRequest {
   poolId: string;
   deposits: DepositAsset[];
-  lpAllocation: LPAllocation.MAKER_CHAIN,
+  lpAllocation: LPAllocation.MAKER_CHAIN;
   token: Coin; // only one element for now, might have two in the feature
   port: string;
   channel: string;
@@ -1044,6 +1045,7 @@ These are methods that output a state change on the source chain, which will be 
       deposits: getCoinsFromDepositAssets(msg.deposits),
       status: "PENDING";
       createdAt: store.blockTime(),
+      lpAllocation: msg.lpAllocation,
     };
 
     // save order in source chain
@@ -1352,7 +1354,14 @@ function onTakeMultiAssetDepositReceived(
     totalPoolToken.amount = totalPoolToken.amount.add(poolToken.amount);
   }
 
-  store.mintTokens(order.sourceMaker, totalPoolToken);
+  switch (order.lpAllocation) {
+    case LPAllocation.MAKER_CHAIN:
+      store.mintTokens(order.destinationTaker, totalPoolToken);
+    case LPAllocation.SPLIT:
+      store.mintTokens(order.sourceMaker, totalPoolToken[0]);
+      store.mintTokens(order.destinationTaker, totalPoolToken[1]);
+    default:
+  }
 
   store.setInterchainLiquidityPool(pool);
   store.setMultiDepositOrder(pool.id, order);
@@ -1472,8 +1481,21 @@ function onTakeMultiAssetDepositAcknowledged(req: MsgTakeMultiAssetDepositReques
   const order = store.getMultiDepositOrder(req.poolId, req.orderId);
   abortTransactionUnless(order.found);
 
+  const totalMintAmount := 0
   for (const poolToken of stateChange.poolTokens) {
-    pool.addPoolSupply(poolToken);
+     totalMintAmount += poolToken
+  }
+  if totalMintAmount > 0 {
+      pool.addPoolSupply(poolToken);
+
+      switch (order.lpAllocation) {
+        case LPAllocation.TAKER_CHAIN:
+          store.mintTokens(order.destinationTaker, totalPoolToken);
+        case LPAllocation.SPLIT:
+          store.mintTokens(order.sourceMaker, totalPoolToken[0]);
+          store.mintTokens(order.destinationTaker, totalPoolToken[1]);
+        default:
+      }
   }
 
   for (const deposit of order.deposits) {
