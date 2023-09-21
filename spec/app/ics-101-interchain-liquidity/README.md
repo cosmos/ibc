@@ -662,7 +662,7 @@ function OnAcknowledgementPacket(packet: Packet, data: IBCSwapPacketData, ack: A
           break;
 
         case "SINGLE_DEPOSIT":
-          const msgSingleDeposit: MsgSingleAssetDepositRequest = punmarshalJSON(data.Data);
+          const msgSingleDeposit: MsgSingleAssetDepositRequest = unmarshalJSON(data.Data);
           const resSingleDeposit: MsgSingleAssetDepositResponse = protobuf.decode(ack.GetResult());
           const errSingleDeposit = store.OnSingleAssetDepositAcknowledged(msgSingleDeposit, resSingleDeposit);
           abortTransactionUnless(errSingleDeposit === undefined);
