@@ -841,9 +841,16 @@ interface DepositAsset {
   balance: Coin;
 }
 
+enum LPAllocation {
+  MAKER_CHAIN,  // All LP tokens are minted on maker chain
+  TAKER_CHAIN,  // All LP tokens are minted on taker chain
+  SPLIT,    // LP tokens are minted on both chains and divided based on the pool ratio.
+}
+
 interface MsgMakeMultiAssetDepositRequest {
   poolId: string;
   deposits: DepositAsset[];
+  lpAllocation: LPAllocation.MAKER_CHAIN,
   token: Coin; // only one element for now, might have two in the feature
   port: string;
   channel: string;
