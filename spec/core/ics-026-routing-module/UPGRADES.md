@@ -26,11 +26,11 @@ In order to support channel upgrades, the application must implement the followi
 
 ```typescript
 interface ModuleUpgradeCallbacks {
-    onChanUpgradeInit: onChanUpgradeInit,
-    onChanUpgradeTry: onChanUpgradeTry,
-    onChanUpgradeAck: onChanUpgradeAck,
-    onChanUpgradeConfirm: onChanUpgradeConfirm,
-    onChanUpgradeRestore: onChanUpgradeRestore
+  onChanUpgradeInit: onChanUpgradeInit,
+  onChanUpgradeTry: onChanUpgradeTry,
+  onChanUpgradeAck: onChanUpgradeAck,
+  onChanUpgradeConfirm: onChanUpgradeConfirm,
+  onChanUpgradeRestore: onChanUpgradeRestore
 }
 ```
 
@@ -48,14 +48,12 @@ If an error is returned, then core IBC will revert any changes made by `onChanUp
 
 ```typescript
 function onChanUpgradeInit(
-  order: ChannelOrder,
-  connectionHops: [Identifier],
   portIdentifier: Identifier,
   channelIdentifier: Identifier,
-  counterpartyPortIdentifier: Identifier,
-  counterpartyChannelIdentifier: Identifier,
-  version: string,
-  previousVersion: string) => (version: string, err: Error) {
+  upgradeSequence: uint64,
+  proposedOrdering: ChannelOrder,
+  proposedConnectionHops: [Identifier],
+  proposedVersion: string) => (version: string, err: Error) {
     // defined by the module
 }
 ```
@@ -77,14 +75,12 @@ If an error is returned, then core IBC will revert any changes made by `onChanUp
 
 ```typescript
 function onChanUpgradeTry(
-  order: ChannelOrder,
-  connectionHops: [Identifier],
   portIdentifier: Identifier,
   channelIdentifier: Identifier,
-  counterpartyPortIdentifier: Identifier,
-  counterpartyChannelIdentifier: Identifier,
-  previousVersion: string,
-  counterpartyVersion: string) => (version: string, err: Error) {
+  upgradeSequence: uint64,
+  proposedOrdering: ChannelOrder,
+  proposedConnectionHops: [Identifier],
+  proposedVersion: string) => (version: string, err: Error) {
     // defined by the module
 }
 ```
@@ -105,23 +101,22 @@ If the callback returns successfully, the application MUST have its state fully 
 function onChanUpgradeAck(
   portIdentifier: Identifier,
   channelIdentifier: Identifier,
-  counterpartyChannelIdentifier: Identifier, 
-  counterpartyVersion: string) {
+  counterpartyVersion: string) => Error {
     // defined by the module
-} => Error
+}
 ```
 
-#### **OnChanUpgradeConfirm**
+#### **OnChanUpgradeOpen**
 
-`onChanUpgradeConfirm` will perform custom CONFIRM logic. It MUST NOT error since the counterparty has already approved the handshake, and transitioned to using the new upgrade parameters.
+`onChanUpgradeOpen` will perform custom OPEN logic. It MUST NOT error since the counterparty has already approved the handshake, and transitioned to using the new upgrade parameters.
 
-After `onChanUpgradeConfirm` returns, the application upgrade is complete so any 
+After `onChanUpgradeOpen` returns, the application upgrade is complete so any 
 auxilliary data stored for the purposes of recovery is no longer needed and may be deleted.
 
 The application MUST have its state fully migrated to start processing packet data according to the new application parameters by the time the callback returns.
 
 ```typescript
-function onChanUpgradeConfirm(
+function onChanUpgradeOpen(
   portIdentifier: Identifier,
   channelIdentifier: Identifier) {
     // defined by the module

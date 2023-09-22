@@ -464,9 +464,9 @@ function chanUpgradeInit(
   version, err = module.onChanUpgradeInit(
     portIdentifier,
     channelIdentifier,
+    upgradeSequence,
     proposedUpgradeFields.ordering,
     proposedUpgradeFields.connectionHops,
-    upgradeSequence,
     proposedUpgradeFields.version
   )
   // abort transaction if callback returned error
