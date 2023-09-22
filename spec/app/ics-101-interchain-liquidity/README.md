@@ -406,7 +406,8 @@ class InterchainMarketMaker {
       const balanceOut = assetOut.balance.amount
       const weightIn = assetIn.weight / 100
       const weightOut = assetOut.weight / 100
-      const amount = balanceIn * ((balanceOut/(balanceOut - amountOut.amount) ** (weightOut/weightIn) - 1))
+
+      const amount = balanceIn * ((balanceOut/(balanceOut -this.minusFees(amountOut.amount)) ** (weightOut/weightIn) - 1))
 
      abortTransactionUnless(amountIn.amount > amount)
 
@@ -1183,7 +1184,7 @@ function swap(msg: MsgSwapRequest): MsgSwapResponse {
 
   const amm = new InterchainMarketMaker(pool);
 
-  let tokenOut: sdk.Coin | undefined;
+  let swappedToken: sdk.Coin | undefined;
   let tokenIn: sdk.Coin | undefined;
   let msgType: SwapMessageType;
   let expected:number
@@ -1191,12 +1192,12 @@ function swap(msg: MsgSwapRequest): MsgSwapResponse {
   switch (msg.swapType) {
     case "LEFT":
       msgType = "LEFT_SWAP";
-      tokenOut = amm.leftSwap(msg.tokenIn, msg.tokenOut.denom);
-      expected = msg.tokenOut.amount * (1 - msg.slippage);
+      swappedToken = amm.leftSwap(msg.tokenIn, msg.tokenOut.denom);
+
       break;
     case "RIGHT":
       msgType = "RIGHT_SWAP";
-      tokenOut = amm.rightSwap(msg.tokenIn, msg.tokenOut);
+      swappedToken = amm.rightSwap(msg.tokenIn, msg.tokenOut);
       expected = msg.tokenIn.amount * (1 - msg.slippage);
       break;
     default:
@@ -1204,8 +1205,8 @@ function swap(msg: MsgSwapRequest): MsgSwapResponse {
   }
 
 
-  abortTransactionUnless(tokenOut?.amount? <= 0);
-  abortTransactionUnless(tokenOut?.amount?.gte(expected));
+  abortTransactionUnless(swappedToken?.amount? <= 0);
+  abortTransactionUnless(swappedToken?.amount?.gte(expected));
 
   const lockErr = store.lockTokens(pool.counterPartyPort, pool.counterPartyChannel, msg.sender, msg.tokenIn);
   abortTransactionUnless(lockErr === undefined);
@@ -1213,7 +1214,7 @@ function swap(msg: MsgSwapRequest): MsgSwapResponse {
   const packet: IBCSwapPacketData = {
     type: msgType,
     data: marshalJSON(msg),
-    stateChange: { out: [tokenOut] },
+    stateChange: { out: [swappedToken] },
   };
 
   const sendPacketErr = store.sendIBCSwapPacket(
