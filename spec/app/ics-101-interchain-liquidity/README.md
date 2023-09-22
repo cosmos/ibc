@@ -396,27 +396,24 @@ class InterchainMarketMaker {
     // RightSwap implements InGivenOut
     // Input how many coins you want to buy, output an amount you need to pay
     // Ai = Bi * ((Bo/(Bo - Ao)) ** Wo/Wi -1)
-  function rightSwap(amountOut: Coin) Coin {
+  function rightSwap(amountIn: Coin,amountOut: Coin) Coin {
 
-    const AssetOut = this.pool.findAssetByDenom(amountOut.denom)
-    abortTransactionUnless(assetOut != null)
+     const assetIn = this.pool.findAssetByDenom(amountIn.denom)
+      abortTransactionUnless(assetIn != null)
+      const AssetOut = this.pool.findAssetByDenom(amountOut.denom)
+      abortTransactionUnless(assetOut != null)
+      const balanceIn = assetIn.balance.amount
+      const balanceOut = assetOut.balance.amount
+      const weightIn = assetIn.weight / 100
+      const weightOut = assetOut.weight / 100
+      const amount = balanceIn * ((balanceOut/(balanceOut - amountOut.amount) ** (weightOut/weightIn) - 1))
 
-    // Assuming that the pool has a default input asset (say ETH or similar).
-    // If this is not the case, you might want to specify which asset you're using as input.
-    const assetIn = this.pool.defaultAsset
-    abortTransactionUnless(assetIn != null)
+     abortTransactionUnless(amountIn.amount > amount)
 
-    const balanceIn = assetIn.balance.amount
-    const balanceOut = assetOut.balance.amount
-    const weightIn = assetIn.weight / 100
-    const weightOut = assetOut.weight / 100
-
-    const amount = balanceIn * ((balanceOut / (balanceOut - amountOut.amount)) ** (weightOut/weightIn) - 1)
-
-    return {
-        amount,
-        denom: assetIn.denom
-    }
+     return {
+         amount,
+         denom: amountIn.denom
+     }
 }
 
     // amount - amount * feeRate / 10000
@@ -1359,7 +1356,6 @@ function onTakeMultiAssetDepositReceived(
       store.mintTokens(order.destinationTaker, totalPoolToken);
     case LPAllocation.SPLIT:
       store.mintTokens(order.sourceMaker, totalPoolToken[0]);
-      store.mintTokens(order.destinationTaker, totalPoolToken[1]);
     default:
   }
 
@@ -1492,7 +1488,6 @@ function onTakeMultiAssetDepositAcknowledged(req: MsgTakeMultiAssetDepositReques
         case LPAllocation.TAKER_CHAIN:
           store.mintTokens(order.destinationTaker, totalPoolToken);
         case LPAllocation.SPLIT:
-          store.mintTokens(order.sourceMaker, totalPoolToken[0]);
           store.mintTokens(order.destinationTaker, totalPoolToken[1]);
         default:
       }
