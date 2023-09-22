@@ -173,7 +173,7 @@ function onChanOpenTry(
   // allocate an escrow address
   channelEscrowAddresses[channelIdentifier] = newAddress()
   // return the same version as counterparty version so long as we support it
-  return "ics20-2", nil
+  return counterpartyVersion, nil
 }
 ```
 
@@ -252,7 +252,7 @@ function sendFungibleTokens(
         bank.TransferCoins(sender, escrowAccount, onChainDenom, token.amount)
       } else {
         // receiver is source chain, burn vouchers
-        bank.BurnCoins(sender, onChainDenom, tokenamount)
+        bank.BurnCoins(sender, onChainDenom, token.amount)
       }
     }
 
@@ -298,6 +298,7 @@ function onRecvPacket(packet: Packet) {
     // we are the source if the packets were prefixed by the sending chain
     source = token.trace.slice(0, len(prefix)) === prefix
     if source {
+      // since we are receiving back to source we remove the prefix from the trace
       onChainTrace = token.trace.slice(len(prefix))
       onChainDenom = constructOnChainDenom(onChainTrace, token.denomination)
       // receiver is source chain: unescrow tokens
@@ -311,6 +312,7 @@ function onRecvPacket(packet: Packet) {
         break
       }
     } else {
+      // since we are receiving to a new sink zone we append the prefix to the trace
       prefix = "{packet.destPort}/{packet.destChannel}/"
       newTrace = prefix + token.trace
       onChainDenom = constructOnChainDenom(newTrace, token.denomination)
@@ -465,6 +467,8 @@ Feb 24, 2020 - Revisions to infer source field, inclusion of version string
 July 27, 2020 - Re-addition of source field
 
 Nov 11, 2022 - Addition of a memo field
+
+Sep 22, 2023 - Support for multi-token packets
 
 ## Copyright
 
