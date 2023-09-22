@@ -1184,16 +1184,20 @@ function swap(msg: MsgSwapRequest): MsgSwapResponse {
   const amm = new InterchainMarketMaker(pool);
 
   let tokenOut: sdk.Coin | undefined;
+  let tokenIn: sdk.Coin | undefined;
   let msgType: SwapMessageType;
+  let expected:number
 
   switch (msg.swapType) {
     case "LEFT":
       msgType = "LEFT_SWAP";
       tokenOut = amm.leftSwap(msg.tokenIn, msg.tokenOut.denom);
+      expected = msg.tokenOut.amount * (1 - msg.slippage);
       break;
     case "RIGHT":
       msgType = "RIGHT_SWAP";
       tokenOut = amm.rightSwap(msg.tokenIn, msg.tokenOut);
+      expected = msg.tokenIn.amount * (1 - msg.slippage);
       break;
     default:
        abortTransactionUnless(false);
@@ -1201,9 +1205,6 @@ function swap(msg: MsgSwapRequest): MsgSwapResponse {
 
 
   abortTransactionUnless(tokenOut?.amount? <= 0);
-
-  const expected = msg.tokenOut.amount * (1 - msg.slippage);
-
   abortTransactionUnless(tokenOut?.amount?.gte(expected));
 
   const lockErr = store.lockTokens(pool.counterPartyPort, pool.counterPartyChannel, msg.sender, msg.tokenIn);
