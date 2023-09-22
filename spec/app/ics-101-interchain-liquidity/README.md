@@ -1181,9 +1181,6 @@ function swap(msg: MsgSwapRequest): MsgSwapResponse {
 
   abortTransactionUnless(pool.status === "ACTIVE");
 
-  const lockErr = store.lockTokens(pool.counterPartyPort, pool.counterPartyChannel, msg.sender, msg.tokenIn);
-  abortTransactionUnless(lockErr === undefined);
-
   const amm = new InterchainMarketMaker(pool);
 
   let tokenOut: sdk.Coin | undefined;
@@ -1208,6 +1205,9 @@ function swap(msg: MsgSwapRequest): MsgSwapResponse {
   const expected = msg.tokenOut.amount * (1 - msg.slippage);
 
   abortTransactionUnless(tokenOut?.amount?.gte(expected));
+
+  const lockErr = store.lockTokens(pool.counterPartyPort, pool.counterPartyChannel, msg.sender, msg.tokenIn);
+  abortTransactionUnless(lockErr === undefined);
 
   const packet: IBCSwapPacketData = {
     type: msgType,
