@@ -271,7 +271,16 @@ function sendFungibleTokens(
       prefix = "{sourcePort}/{sourceChannel}/"
       // we are the source if the denomination is not prefixed
       source = token.trace[0] !== prefix
-      onChainDenom = constructOnChainDenom(token.trace, token.denominations)
+      onChainDenom = constructOnChainDenom(token.trace, token.denomination)
+      // check if we've already sent metadata for this token on this channel
+      isMetadataSent = getSentMetadataFlag(sourcePort, sourceChannel, onChainDenom)
+      // if it hasn't been sent, then we will set the token metadata in the token
+      // so receiver can store it
+      // otherwise we leave metadata field blank to reduce redundancy
+      if !isMetadataSent {
+        metadata = getMetadata(onChainDenom)
+        token.metadata = metadata
+      }
       if source {
         // determine escrow account
         escrowAccount = channelEscrowAddresses[sourceChannel]
@@ -350,6 +359,10 @@ function onRecvPacket(packet: Packet) {
         // break out of for loop on first error
         break
     }
+    // set metadata for the onchain denomination if token metadata was sent in the packet
+    if !isEmpty(token.metadata) {
+      setMetadata(onChainDenom, token.metadata)
+    }
   }
   return ack
 }
@@ -362,8 +375,20 @@ function onAcknowledgePacket(
   packet: Packet,
   acknowledgement: bytes) {
   // if the transfer failed, refund the tokens
-  if (!acknowledgement.success)
+  if !(acknowledgement.success) {
     refundTokens(packet)
+  } else {
+    // set metadata flag for any metadata we sent in the packet
+    // so we don't need to resend metadata for that token on this channel
+    // in the next sendPacket
+    FungibleTokenPacketDataV2 data = packet.data
+    for token in data.tokens {
+      if !isEmpty(token.metadata) {
+        onChainDenom = constructOnChainDenom(token.trace, token.denomination)
+        setMetadataFlag(packet.sourcePort, packet.sourceChannel, onChainDenom)
+      }
+    }
+  }
 }
 ```
 
