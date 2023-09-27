@@ -360,7 +360,9 @@ function onRecvPacket(packet: Packet) {
         break
     }
     // set metadata for the onchain denomination if token metadata was sent in the packet
-    if !isEmpty(token.metadata) {
+    // it is recommended that metadata is only set for tokens that come in with no trace
+    // i.e. directly from the source chain of the token
+    if !isEmpty(token.metadata) && isEmpty(token.trace) {
       setMetadata(onChainDenom, token.metadata)
     }
   }
@@ -466,6 +468,13 @@ Example:
 ```
 
 Here, the "wasm", "callback", and "router" fields are all intended for separate middlewares that will exclusively read those fields respectively in order to execute their logic. This allows multiple modules to read from the memo. Middleware should take care to reserve a unique key so that they do not accidentally read data intended for a different module. This issue can be avoided by some off-chain registry of keys already in-use in the JSON object.
+
+#### Populating Token Metadata
+
+Chains that maintain metadata about how to display the token denomination may send along `denomunits` with the token in the packet so that receiver chains can store information about the token for display and UX purposes. Receiver chains may store this metadata themselves against their own on-chain denomination for the token. They should replace stale metadata with new metadata coming from the sender chain, and ensure they use the on-chain denomination to avoid different denominations writing over each other's metadata. Receiver chains are recommended to only store metadata coming from source chains, i.e. if the token trace is empty. This ensures that metadata is only stored when the chain of trust for that metadata is as small as possible.
+
+As mentioned above, user interfaces that display the denomination without any trace information then they **must** make a decision to trust a canonical path for that denomination. Otherwise, user interfaces must still somehow display the trace information to the end user. This is because the metadata contains human-readable information that is not directly verified by the state machine. Thus, a malicious sender chain can fool user interfaces if they choose to send metadata that is the same as some well-known token issued by a different chain. However, given that a certain chain and denomination is trusted; the metadata can make it easier for displays to represent the token without relying on out-of-chain information.
+
 
 #### Reasoning
 
