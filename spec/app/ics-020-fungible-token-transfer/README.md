@@ -55,16 +55,43 @@ interface FungibleTokenPacketDataV2 {
 
 interface Token {
   denomination: string
-  trace: string
+  trace: []string
   amount: uint64
+  metadata: Metadata
+}
+
+interface Metadata {
+  denomUnits: []DenomUnit
+}
+
+interface DenomUnit {
+  denom: string
+  exponent: uint256
 }
 ```
 
 As tokens are sent across chains using the ICS 20 protocol, they begin to accrue a record of channels for which they have been transferred across. This information is encoded into the `trace` field in the denomination. 
 
-The ICS 20 token traces are represented by the form `{ics20Port}/{ics20Channel}`, where `ics20Port` and `ics20Channel` are an ICS 20 port and channel on the current chain for which the funds exist. The port and channel pair indicate which channel the funds were previously sent through. Implementations are responsible for correctly parsing the IBC trace information and encoding it into the final on-chain denomination so that the same base denominations sent through different path are not treated as being fungible.
+The ICS 20 token traces are represented by a list of the form `{ics20Port}/{ics20Channel}`, where `ics20Port` and `ics20Channel` are an ICS 20 port and channel on the current chain for which the funds exist. The port and channel pair indicate which channel the funds were previously sent through. Implementations are responsible for correctly parsing the IBC trace information and encoding it into the final on-chain denomination so that the same base denominations sent through different path are not treated as being fungible.
 
-A sending chain may be acting as a source or sink zone. When a chain is sending tokens across a port and channel which are not equal to the last prefixed port and channel pair, it is acting as a source zone. When tokens are sent from a source zone, the destination port and channel will be prefixed onto the trace (once the tokens are received) adding another hop to a tokens record. When a chain is sending tokens across a port and channel which are equal to the last prefixed port and channel pair, it is acting as a sink zone. When tokens are sent from a sink zone, the last prefixed port and channel pair on the trace is removed (once the tokens are received), undoing the last hop in the tokens record. A more complete explanation is [present in the ibc-go implementation](https://github.com/cosmos/ibc-go/blob/457095517b7832c42ecf13571fee1e550fec02d0/modules/apps/transfer/keeper/relay.go#L18-L49).
+A sending chain may be acting as a source or sink zone. When a chain is sending tokens across a port and channel which are not equal to the last prefixed port and channel pair, it is acting as a source zone. When tokens are sent from a source zone, the destination port and channel will be prepended to the trace (once the tokens are received) adding another hop to a tokens record. When a chain is sending tokens across a port and channel which are equal to the last prefixed port and channel pair, it is acting as a sink zone. When tokens are sent from a sink zone, the first element of the trace, which was the last port and channel pair added to the trace is removed (once the tokens are received), undoing the last hop in the tokens record. A more complete explanation is [present in the ibc-go implementation](https://github.com/cosmos/ibc-go/blob/457095517b7832c42ecf13571fee1e550fec02d0/modules/apps/transfer/keeper/relay.go#L18-L49).
+
+Implementations may optionally send along metadata with each token describing the denom units for user interfaces. Each Denom unit defines a human readable string along with the exponent by which the amount should be displayed. Thus for example atom on the Cosmos Hub may send along the following denom units:
+
+```json
+{
+  {
+    "denom": "uatom",
+    "exponent": 0,
+  },
+  {
+    "denom": "atom",
+    "exponent": 6,
+  }
+}
+```
+
+Thus, a receiver chain may display `1000000uatom` tokens bridged from the Cosmos Hub as either `1000000uatom` or `1atom`. Note, this still requires trust of the sender side information. If user interfaces display the denomination without any trace information then they **must** make a decision to trust a canonical path for that denomination. Otherwise, user interfaces must still somehow display the trace information to the end user.
 
 The acknowledgement data type describes whether the transfer succeeded or failed, and the reason for failure (if any).
 
@@ -243,7 +270,7 @@ function sendFungibleTokens(
     for token in tokens {
       prefix = "{sourcePort}/{sourceChannel}/"
       // we are the source if the denomination is not prefixed
-      source = token.trace.slice(0, len(prefix)) !== prefix
+      source = token.trace[0] !== prefix
       onChainDenom = constructOnChainDenom(token.trace, token.denominations)
       if source {
         // determine escrow account
@@ -296,10 +323,10 @@ function onRecvPacket(packet: Packet) {
   prefix = "{packet.sourcePort}/{packet.sourceChannel}/"
   for token in tokens {
     // we are the source if the packets were prefixed by the sending chain
-    source = token.trace.slice(0, len(prefix)) === prefix
+    source = token.trace[0] === prefix
     if source {
       // since we are receiving back to source we remove the prefix from the trace
-      onChainTrace = token.trace.slice(len(prefix))
+      onChainTrace = token.trace[1:]
       onChainDenom = constructOnChainDenom(onChainTrace, token.denomination)
       // receiver is source chain: unescrow tokens
       // determine escrow account
@@ -314,7 +341,7 @@ function onRecvPacket(packet: Packet) {
     } else {
       // since we are receiving to a new sink zone we append the prefix to the trace
       prefix = "{packet.destPort}/{packet.destChannel}/"
-      newTrace = prefix + token.trace
+      newTrace = append([]string{prefix}, token.trace...)
       onChainDenom = constructOnChainDenom(newTrace, token.denomination)
       // sender was source, mint vouchers to receiver (assumed to fail if balance insufficient)
       err = bank.MintCoins(data.receiver, onChainDenom, token.amount)
@@ -370,7 +397,7 @@ function refundTokens(packet: Packet) {
   prefix = "{packet.sourcePort}/{packet.sourceChannel}/"
   for token in tokens {
     // we are the source if the denomination is not prefixed
-    source = token.trace.slice(0, len(prefix)) !== prefix
+    source = token.trace[0] !== prefix
     onChainDenom = constructOnChainDenom(token.trace, token.denomination)
     if source {
       // sender was source chain, unescrow tokens back to sender
