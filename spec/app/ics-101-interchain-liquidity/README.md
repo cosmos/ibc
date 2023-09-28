@@ -1184,29 +1184,24 @@ function swap(msg: MsgSwapRequest): MsgSwapResponse {
 
   const amm = new InterchainMarketMaker(pool);
 
-  let swappedToken: sdk.Coin | undefined;
-  let tokenIn: sdk.Coin | undefined;
   let msgType: SwapMessageType;
-  let expected:number
 
   switch (msg.swapType) {
     case "LEFT":
       msgType = "LEFT_SWAP";
-      swappedToken = amm.leftSwap(msg.tokenIn, msg.tokenOut.denom);
-
+      let actualOut: Coin = amm.leftSwap(msg.tokenIn, msg.tokenOut.denom);
+      abortTransactionUnless(actualOut.amount >= 0);
+      abortTransactionUnless(actualOut?.amount? >= msg.tokenOut.amount * (1 - msg.slippage)); // Note: slippage is base point, need convert to percentage.
       break;
     case "RIGHT":
       msgType = "RIGHT_SWAP";
-      swappedToken = amm.rightSwap(msg.tokenIn, msg.tokenOut);
-      expected = msg.tokenIn.amount * (1 - msg.slippage);
+      let requiredTokenIn = amm.rightSwap(msg.tokenIn, msg.tokenOut);
+      abortTransactionUnless(requiredTokenIn?.amount >= 0);
+      abortTransactionUnless(msg.tokenIn.amount * (1 - msg.slippage) > requiredTokenIn?.amount);
       break;
     default:
        abortTransactionUnless(false);
   }
-
-
-  abortTransactionUnless(swappedToken?.amount? <= 0);
-  abortTransactionUnless(swappedToken?.amount?.gte(expected));
 
   const lockErr = store.lockTokens(pool.counterPartyPort, pool.counterPartyChannel, msg.sender, msg.tokenIn);
   abortTransactionUnless(lockErr === undefined);
