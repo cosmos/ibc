@@ -76,7 +76,7 @@ The ICS 20 token traces are represented by a list of the form `{ics20Port}/{ics2
 
 A sending chain may be acting as a source or sink zone. When a chain is sending tokens across a port and channel which are not equal to the last prefixed port and channel pair, it is acting as a source zone. When tokens are sent from a source zone, the destination port and channel will be prepended to the trace (once the tokens are received) adding another hop to a tokens record. When a chain is sending tokens across a port and channel which are equal to the last prefixed port and channel pair, it is acting as a sink zone. When tokens are sent from a sink zone, the first element of the trace, which was the last port and channel pair added to the trace is removed (once the tokens are received), undoing the last hop in the tokens record. A more complete explanation is [present in the ibc-go implementation](https://github.com/cosmos/ibc-go/blob/457095517b7832c42ecf13571fee1e550fec02d0/modules/apps/transfer/keeper/relay.go#L18-L49).
 
-Implementations may optionally send along metadata with each token describing the denom units for user interfaces. Each Denom unit defines a human readable string along with the exponent by which the amount should be displayed. Thus for example atom on the Cosmos Hub may send along the following denom units:
+Implementations may optionally send along metadata with each token describing the denom units for user interfaces. Each denom unit defines a human readable string along with the exponent by which the amount should be displayed. Thus, for example ATOM on the Cosmos Hub may send along the following denom units:
 
 ```json
 {
@@ -359,7 +359,7 @@ function onRecvPacket(packet: Packet) {
         // break out of for loop on first error
         break
     }
-    // set metadata for the onchain denomination if token metadata was sent in the packet
+    // set metadata for the on-chain denomination if token metadata was sent in the packet
     // it is recommended that metadata is only set for tokens that come in with no trace
     // i.e. directly from the source chain of the token
     if !isEmpty(token.metadata) && isEmpty(token.trace) {
@@ -428,7 +428,7 @@ function refundTokens(packet: Packet) {
     onChainDenom = constructOnChainDenom(token.trace, token.denomination)
     if source {
       // sender was source chain, unescrow tokens back to sender
-      escrowAccount = channelEscrowAddresses[packet.srcChannel]
+      escrowAccount = channelEscrowAddresses[packet.sourceChannel]
       bank.TransferCoins(escrowAccount, data.sender, onChainDenom, token.amount)
     } else {
       // receiver was source chain, mint vouchers back to sender
@@ -474,7 +474,6 @@ Here, the "wasm", "callback", and "router" fields are all intended for separate 
 Chains that maintain metadata about how to display the token denomination may send along `denomunits` with the token in the packet so that receiver chains can store information about the token for display and UX purposes. Receiver chains may store this metadata themselves against their own on-chain denomination for the token. They should replace stale metadata with new metadata coming from the sender chain, and ensure they use the on-chain denomination to avoid different denominations writing over each other's metadata. Receiver chains are recommended to only store metadata coming from source chains, i.e. if the token trace is empty. This ensures that metadata is only stored when the chain of trust for that metadata is as small as possible.
 
 As mentioned above, user interfaces that display the denomination without any trace information then they **must** make a decision to trust a canonical path for that denomination. Otherwise, user interfaces must still somehow display the trace information to the end user. This is because the metadata contains human-readable information that is not directly verified by the state machine. Thus, a malicious sender chain can fool user interfaces if they choose to send metadata that is the same as some well-known token issued by a different chain. However, given that a certain chain and denomination is trusted; the metadata can make it easier for displays to represent the token without relying on out-of-chain information.
-
 
 #### Reasoning
 
