@@ -964,7 +964,7 @@ function timeoutPacket(
         // ordered channel: check that packet has not been received
         // only allow timeout on next sequence so all sequences before the timed out packet are processed (received/timed out)
         // before this packet times out
-        abortTransactionUnless(nextSequenceRecv <= packet.sequence)
+        abortTransactionUnless(packet.sequence >= nextSequenceRecv)
         // ordered channel: check that the recv sequence is as claimed
         abortTransactionUnless(connection.verifyNextSequenceRecv(
           proofHeight,
@@ -1073,7 +1073,7 @@ function timeoutOnClose(
     switch channel.order {
       case ORDERED:
         // ordered channel: check that packet has not been received
-        abortTransactionUnless(nextSequenceRecv <= packet.sequence)
+        abortTransactionUnless(packet.sequence >= nextSequenceRecv)
         // ordered channel: check that the recv sequence is as claimed
         abortTransactionUnless(connection.verifyNextSequenceRecv(
           proofHeight,
@@ -1095,18 +1095,23 @@ function timeoutOnClose(
         ))
         break;
 
-      // NOTE: For ORDERED_ALLOW_TIMEOUT, the relayer must first attempt the receive on the destination chain
-      // before the timeout receipt can be written and subsequently proven on the sender chain in timeoutPacket
       case ORDERED_ALLOW_TIMEOUT:
-        abortTransactionUnless(nextSequenceRecv > packet.sequence)
-        abortTransactionUnless(connection.verifyPacketReceipt(
-          proofHeight,
-          proof,
-          packet.destPort,
-          packet.destChannel,
-          packet.sequence
-          TIMEOUT_RECEIPT,
-        ))
+        // if packet.sequence >= nextSequenceRecv, then the relayer has not attempted
+        // to receive the packet on the destination chain (e.g. because the channel is already closed).
+        // In this situation it is not needed to verify the presence of a timeout receipt.
+        // Otherwise, if packet.sequence < nextSequenceRecv, then the relayer has attempted
+        // to receive the packet on the destination chain, and nextSequenceRecv has been incremented.
+        // In this situation, verify the presence of timeout receipt. 
+        if packet.sequence < nextSequenceRecv {
+          abortTransactionUnless(connection.verifyPacketReceipt(
+            proofHeight,
+            proof,
+            packet.destPort,
+            packet.destChannel,
+            packet.sequence
+            TIMEOUT_RECEIPT,
+          ))
+        }
         break;
 
       default:
