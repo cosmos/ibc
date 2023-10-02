@@ -70,12 +70,12 @@ This section defines the new terms and concepts introduced by CCV.
 
 > **Note**: In this specification, the validator set of the consumer chain is entirely provided by the provider chain.
 
-Both the provider and the consumer chains are [application-specific blockchains](https://docs.cosmos.network/v0.45/intro/why-app-specific.html), 
+Both the provider and the consumer chains are [application-specific blockchains](https://docs.cosmos.network/main/learn/intro/why-app-specific), 
 i.e., each blockchain's state machine is typically connected to the underlying consensus engine via a *blockchain interface*, such as [ABCI](https://github.com/tendermint/spec/tree/v0.7.1/spec/abci). 
 The blockchain interface MUST enable the state machine to provide to the underlying consensus engine a set of validator updates, i.e., changes in the voting power granted to validators.
 Although this specification is not dependent on ABCI, for ease of presentation, we refer to the state machines as ABCI applications.
 Also, this specification considers a modular paradigm, 
-i.e., the functionality of each ABCI application is separated into multiple modules, like the approach adopted by [Cosmos SDK](https://docs.cosmos.network/v0.45/basics/app-anatomy.html#modules).
+i.e., the functionality of each ABCI application is separated into multiple modules, like the approach adopted by [Cosmos SDK](https://docs.cosmos.network/main/learn/beginner/app-anatomy#modules).
 
 
 - **CCV Module**: The module that implements the CCV protocol. Both the provider and the consumer chains have each their own CCV module. 
@@ -92,7 +92,7 @@ Every VSC consists of a batch of validator updates provided to the consensus eng
 
 > **Background**: In the context of single-chain validation, the changes of the validator set are triggered by the *Staking module*, 
 > i.e., a module of the ABCI application that implements the proof of stake mechanism needed by the [security model](#security-model). 
-> For an example, take a look at the [Staking module documentation](https://docs.cosmos.network/v0.45/modules/staking/) of Cosmos SDK.
+> For an example, take a look at the [Staking module documentation](https://docs.cosmos.network/main/build/modules/staking) of Cosmos SDK.
 
 Some of the validator updates can decrease the voting power granted to validators. 
 These decreases may be a consequence of unbonding operations (e.g., unbonding delegations) on the provider chain.
@@ -109,7 +109,7 @@ Thus, a *VSC reaching maturity* on a consumer chain means that all the unbonding
 > - The *initiation*, e.g., a delegator requests their delegated tokens to be unbonded. The initiation of an operation of unbonding an amount of the tokens a validator bonded results in a change in the voting power of that validator.
 > - The *completion*, e.g., the tokens are actually unbonded and transferred back to the delegator. To complete, unbonding operations must reach *maturity*, i.e., `UnbondingPeriod` must elapse since the operations were initiated. 
 > 
-> For more details, take a look at the [Cosmos SDK documentation](https://docs.cosmos.network/v0.45/modules/staking/).
+> For more details, take a look at the [Cosmos SDK documentation](https://docs.cosmos.network/main/build/modules/staking).
 
 > **Note**: Time periods are measured in terms of the block time, i.e., `currentTimestamp()` (as defined in [ICS 24](../../core/ics-024-host-requirements)). 
 > As a result, a consumer chain MAY start the unbonding period for every VSC that it applies in a block at any point during that block.
@@ -118,7 +118,7 @@ Thus, a *VSC reaching maturity* on a consumer chain means that all the unbonding
 
 > **Background**: In the context of single-chain validation, slashing and jailing misbehaving validators is handled by the *Slashing module*, 
 > i.e., a module of the ABCI application that enables the application to discourage misbehaving validators.
-> For an example, take a look at the [Slashing module documentation](https://docs.cosmos.network/v0.45/modules/slashing/) of Cosmos SDK.
+> For an example, take a look at the [Slashing module documentation](https://docs.cosmos.network/main/build/modules/slashing) of Cosmos SDK.
 
 ## Overview
 [&uparrow; Back to Outline](#outline)
@@ -135,7 +135,7 @@ CCV must handle the following types of operations:
 [&uparrow; Back to Outline](#outline)
 
 The CCV Channel initialization differentiates between chains that start directly as consumer chains and existing chains that transition to consumer chains.
-In both cases, consumer chains are created through governance proposals. For an example of how governance proposals work, take a look at the [Governance module documentation](https://docs.cosmos.network/v0.45/modules/gov/) of Cosmos SDK.
+In both cases, consumer chains are created through governance proposals. For an example of how governance proposals work, take a look at the [Governance module documentation](https://docs.cosmos.network/main/build/modules/gov) of Cosmos SDK.
 
 #### Channel Initialization: New Chains
 
@@ -316,7 +316,7 @@ For a more detailed description of Consumer Initiated Slashing, take a look at t
 
 In the context of single-chain validation, the *Distribution module*, i.e., a module of the ABCI application, handles the distribution of rewards (i.e., block production rewards and transaction fees) to every validator account based on their total voting power; 
 these rewards are then further distributed to the delegators. 
-For an example, take a look at the [Distribution module documentation](https://docs.cosmos.network/v0.45/modules/distribution/) of Cosmos SDK.
+For an example, take a look at the [Distribution module documentation](https://docs.cosmos.network/main/build/modules/distribution) of Cosmos SDK.
 
 At the beginning of every block, the rewards for the previous block are pooled into a distribution module account. 
 The Reward Distribution operation of CCV enables every consumer chain to transfer a fraction of these rewards to the provider chain. 
