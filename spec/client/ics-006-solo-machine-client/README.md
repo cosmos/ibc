@@ -5,7 +5,7 @@ stage: draft
 category: IBC/TAO
 kind: instantiation
 implements: 2
-version compatibility: ibc-go v7.0.0
+version compatibility: ibc-go v7.3.0
 author: Christopher Goes <cwgoes@tendermint.com>
 created: 2019-12-09
 modified: 2019-12-09
@@ -25,6 +25,10 @@ Solo machine clients are roughly analogous to "implicit accounts" and can be use
 
 Functions & terms are as defined in [ICS 2](../../core/ics-002-client-semantics).
 
+`getCommitmentPrefix` is as defined in [ICS 24](../../core/ics-024-host-requirements).
+
+`removePrefix` is as defined in [ICS 23](../../core/ics-023-vector-commitments).
+
 ### Desired properties
 
 This specification must satisfy the client interface defined in [ICS 2](../../core/ics-002-client-semantics).
@@ -37,10 +41,11 @@ This specification contains implementations for all of the functions defined by 
 
 ### Client state
 
-The `ClientState` of a solo machine is simply whether or not the client is frozen.
+The `ClientState` of a solo machine consists of the sequence number and a boolean indicating whether or not the client is frozen.
 
 ```typescript
 interface ClientState {
+  sequence: uint64
   frozen: boolean
   consensusState: ConsensusState
 }
@@ -48,13 +53,12 @@ interface ClientState {
 
 ### Consensus state
 
-The `ConsensusState` of a solo machine consists of the current public key, current diversifier, sequence number, and timestamp.
+The `ConsensusState` of a solo machine consists of the current public key, current diversifier, and timestamp.
 
 The diversifier is an arbitrary string, chosen when the client is created, designed to allow the same public key to be re-used across different solo machine clients (potentially on different chains) without being considered misbehaviour.
 
 ```typescript
 interface ConsensusState {
-  sequence: uint64
   publicKey: PublicKey
   diversifier: string
   timestamp: uint64
@@ -144,7 +148,7 @@ The solo machine client `latestClientHeight` function returns the latest sequenc
 
 ```typescript
 function latestClientHeight(clientState: ClientState): uint64 {
-  return clientState.consensusState.sequence
+  return clientState.sequence
 }
 ```
 
@@ -157,7 +161,7 @@ function verifyClientMessage(clientMsg: ClientMessage) {
   switch typeof(ClientMessage) {
     case Header:
       verifyHeader(clientMessage)
-    // misbehaviour only suppported for current public key and diversifier on solomachine
+    // misbehaviour only supported for current public key and diversifier on solomachine
     case Misbehaviour:
       verifyMisbehaviour(clientMessage)
   }
@@ -171,7 +175,7 @@ function verifyHeader(header: header) {
     newDiversifier: header.newDiversifier,
   }
   signBytes = SignBytes(
-    sequence: clientState.consensusState.sequence,
+    sequence: clientState.sequence,
     timestamp: header.timestamp,
     diversifier: clientState.consensusState.diversifier,
     path: []byte{"solomachine:header"},
@@ -186,7 +190,6 @@ function verifyMisbehaviour(misbehaviour: Misbehaviour) {
   s2 = misbehaviour.signatureTwo
   pubkey = clientState.consensusState.publicKey
   diversifier = clientState.consensusState.diversifier
-  timestamp = clientState.consensusState.timestamp
   // assert that the signatures validate and that they are different
   sigBytes1 = SignBytes(
     sequence: misbehaviour.sequence,
@@ -233,12 +236,12 @@ function updateState(clientMessage: ClientMessage) {
   clientState.consensusState.publicKey = header.newPubKey
   clientState.consensusState.diversifier = header.newDiversifier
   clientState.consensusState.timestamp = header.timestamp
-  clientState.consensusState.sequence++
+  clientState.sequence++
   provableStore.set("clients/{clientMsg.identifier}/clientState", clientState)
 }
 ```
 
-Function `updateStateOnMisbehaviour` updates the function after receving valid misbehaviour:
+Function `updateStateOnMisbehaviour` updates the function after receiving valid misbehaviour:
 
 ```typescript
 function updateStateOnMisbehaviour(clientMessage: ClientMessage) {
@@ -270,11 +273,18 @@ function verifyMembership(
   // the expected sequence used in the signature
   abortTransactionUnless(!clientState.frozen)
   abortTransactionUnless(proof.timestamp >= clientState.consensusState.timestamp)
+
+  // path is prefixed with the store prefix of the commitment proof
+  // e.g. in ibc-go implementation this is "ibc"
+  // since solomachines do not use multi-stores, the prefix needs 
+  // to be removed from the path to retrieve the correct key in the
+  // solomachine store
+  unprefixedPath = removePrefix(getCommitmentPrefix(), path)
   signBytes = SignBytes(
-    sequence: clientState.consensusState.sequence,
+    sequence: clientState.sequence,
     timestamp: proof.timestamp,
     diversifier: clientState.consensusState.diversifier,
-    path: path.String(),
+    path: unprefixedPath,
     data: value,
   )
   proven = checkSignature(clientState.consensusState.publicKey, signBytes, proof.sig)
@@ -284,7 +294,7 @@ function verifyMembership(
 
   // increment sequence on each verification to provide
   // replay protection
-  clientState.consensusState.sequence++
+  clientState.sequence++
   clientState.consensusState.timestamp = proof.timestamp
   // unlike other clients, we must set the client state here because we
   // mutate the clientState (increment sequence and set timestamp)
@@ -308,11 +318,18 @@ function verifyNonMembership(
 ): Error {
   abortTransactionUnless(!clientState.frozen)
   abortTransactionUnless(proof.timestamp >= clientState.consensusState.timestamp)
+
+  // path is prefixed with the store prefix of the commitment proof
+  // e.g. in ibc-go implementation this is "ibc"
+  // since solomachines do not use multi-stores, the prefix needs 
+  // to be removed from the path to retrieve the correct key in the
+  // solomachine store
+  unprefixedPath = removePrefix(getCommitmentPrefix(), path)
   signBytes = SignBytes(
-    sequence: clientState.consensusState.sequence,
+    sequence: clientState.sequence,
     timestamp: proof.timestamp,
     diversifier: clientState.consensusState.diversifier,
-    path: path.String(),
+    path: unprefixedPath,
     data: nil,
   )
   proven = checkSignature(clientState.consensusState.publicKey, signBytes, proof.sig)
@@ -322,7 +339,7 @@ function verifyNonMembership(
 
   // increment sequence on each verification to provide
   // replay protection
-  clientState.consensusState.sequence++
+  clientState.sequence++
   clientState.consensusState.timestamp = proof.timestamp
   // unlike other clients, we must set the client state here because we
   // mutate the clientState (increment sequence and set timestamp)
@@ -354,6 +371,7 @@ Not applicable. Alterations to the client verification algorithm will require a 
 December 9th, 2019 - Initial version
 December 17th, 2019 - Final first draft
 August 15th, 2022 - Changes to align with 02-client-refactor in [\#813](https://github.com/cosmos/ibc/pull/813)
+September 14th, 2022 - Changes to align with changes in [\#4429](https://github.com/cosmos/ibc-go/pull/4429)
 
 ## Copyright
 

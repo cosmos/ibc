@@ -228,7 +228,7 @@ function onChanOpenInit(
   channelIdentifier: Identifier,
   counterpartyPortIdentifier: Identifier,
   counterpartyChannelIdentifier: Identifier,
-  version: string) (version: string, err: Error) {
+  version: string): (version: string, err: Error) {
   // only unordered channels allowed
   abortTransactionUnless(order === UNORDERED)
   // assert that version is "ics721-1"
@@ -246,7 +246,7 @@ function onChanOpenTry(
   channelIdentifier: Identifier,
   counterpartyPortIdentifier: Identifier,
   counterpartyChannelIdentifier: Identifier,
-  counterpartyVersion: string) (version: string, err: Error) {
+  counterpartyVersion: string): (version: string, err: Error) {
   // only unordered channels allowed
   abortTransactionUnless(order === UNORDERED)
   // assert that version is "ics721-1"
@@ -338,8 +338,24 @@ function createOutgoingPacket(
     tokenUris.push(token.GetUri())
     tokenData.push(token.GetData())
   }
-  NonFungibleTokenPacketData data = NonFungibleTokenPacketData{classId, nft.GetClass(classId).GetUri(), nft.GetClass(classId).GetData(), tokenIds, tokenUris, tokenData, sender, receiver}
-  sequence = ics4Handler.sendPacket(Packet{timeoutHeight, timeoutTimestamp, destPort, destChannel, sourcePort, sourceChannel, data}, getCapability("port"))
+  NonFungibleTokenPacketData data = NonFungibleTokenPacketData{
+    classId,
+    nft.GetClass(classId).GetUri(),
+    nft.GetClass(classId).GetData(),
+    tokenIds,
+    tokenUris,
+    tokenData,
+    sender,
+    receive
+  }
+  sequence = Handler.sendPacket(
+    getCapability("port"),
+    sourcePort,
+    sourceChannel,
+    timeoutHeight,
+    timeoutTimestamp,
+    protobuf.marshal(data) // protobuf-marshalled bytes of packet data
+  )
   return sequence
 }
 ```
