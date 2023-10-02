@@ -631,7 +631,7 @@ function onChanOpenTry(
     - a connection is stored for this consumer chain and doesn't match the underlying connection of this channel;
     - the channel is not built on top of the client created for this consumer chain;
     - another CCV channel for this consumer chain already exists.
-  - A `CCVHandshakeMetadata` is returned, with `providerDistributionAccount` set to the the address of the distribution module account on the provider chain and `version` set to `ccvVersion`.
+  - A `CCVHandshakeMetadata` is returned, with `providerDistributionAccount` set to the address of the distribution module account on the provider chain and `version` set to `ccvVersion`.
   - The state is not changed.
 - **Error Condition**
   - None.
@@ -1451,7 +1451,7 @@ function EndBlockVSU() {
       - a `VSCPacket` data `data` is created such that `data.id = vscId`, `data.updates = valUpdates`, and `data.downtimeSlashAcks = downtimeSlashRequests[chainId]`;
       - `downtimeSlashRequests[chainId]` is emptied;
       - `packetData` is appended to the list of pending `VSCPacket`s associated to `chainId`, i.e., `pendingVSCPackets[chainId]`.
-    - If there is an established CCV channel for the the consumer chain with `chainId`, then
+    - If there is an established CCV channel for the consumer chain with `chainId`, then
       - for each `VSCPacketData` in the list of pending VSCPackets associated to `chainId`
         - a packet with the `VSCPacketData` is sent on the channel associated with the consumer chain with `chainId`;
         - `vscSendTimestamps[(vscId, chainId)]` is set to the current timestamp;

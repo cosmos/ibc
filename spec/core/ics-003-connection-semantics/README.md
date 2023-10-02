@@ -258,10 +258,82 @@ function verifyNextSequenceRecv(
   return verifyMembership(clientState, height, connection.delayPeriodTime, connection.delayPeriodBlocks, proof, path, nextSequenceRecv)
 }
 
+function verifyMultihopMembership(
+  connection: ConnectionEnd, // the connection end corresponding to the receiving chain.
+  height: Height,
+  proof: MultihopProof,
+  connectionHops: Identifier[],
+  key: CommitmentPath,
+  value: bytes) {
+
+    // the connectionEnd corresponding to the end of the multi-hop channel path (sending/counterparty chain).
+    multihopConnectionEnd = abortTransactionUnless(getMultihopConnectionEnd(proof))
+    prefix = multihopConnectionEnd.GetCounterparty().GetPrefix()
+    client = queryClient(connection.clientIdentifier)
+    consensusState = queryConsensusState(connection.clientIdentifier, height)
+
+    abortTransactionUnless(client.Status() === "active")
+    abortTransactionUnless(client.GetLatestHeight() >= height)
+
+    // verify maximum delay period has passed
+    expectedTimePerBlock = queryMaxExpectedTimePerBlock()
+    delayPeriodTime = abortTransactionUnless(getMaximumDelayPeriod(proof, connection))
+    delayPeriodBlocks = getBlockDelay(delayPeriodTime, expectedTimePerBlock)
+    abortTransactionUnless(tendermint.VerifyDelayPeriodPassed(height, delayPeriodTime, delayPeriodBlocks))
+
+    return multihop.VerifyMultihopMembership(consensusState, connectionHops, proof, prefix, key, value) // see ics-033
+}
+
+function verifyMultihopNonMembership(
+  connection: ConnectionEnd, // the connection end corresponding to the receiving chain.
+  height: Height,
+  proof: MultihopProof,
+  connectionHops: Identifier[],
+  key: CommitmentPath) {
+
+    // the connectionEnd corresponding to the end of the multi-hop channel path (sending/counterparty chain).
+    multihopConnectionEnd = abortTransactionUnless(getMultihopConnectionEnd(proof))
+    prefix = multihopConnectionEnd.GetCounterparty().GetPrefix()
+    client = queryClient(connection.clientIdentifier)
+    consensusState = queryConsensusState(connection.clientIdentifier, height)
+
+    abortTransactionUnless(client.Status() === "active")
+    abortTransactionUnless(client.GetLatestHeight() >= height)
+
+    // verify maximum delay period has passed
+    expectedTimePerBlock = queryMaxExpectedTimePerBlock()
+    delayPeriodTime = abortTransactionUnless(getMaximumDelayPeriod(proof, connection))
+    delayPeriodBlocks = getBlockDelay(delayPeriodTime, expectedTimePerBlock)
+    abortTransactionUnless(tendermint.VerifyDelayPeriodPassed(height, delayPeriodTime, delayPeriodBlocks))
+
+    return multihop.VerifyMultihopNonMembership(consensusState, connectionHops, proof, prefix, key) // see ics-033
+}
+
+// Return the maximum expected time per block from the paramstore.
+// See 03-connection - GetMaxExpectedTimePerBlock.
+function queryMaxExpectedTimePerBlock(): uint64
+
 function getTimestampAtHeight(
   connection: ConnectionEnd,
   height: Height) {
     return queryConsensusState(connection.clientIdentifier, height).getTimestamp()
+}
+
+// Return the connectionEnd corresponding to the source chain.
+function getMultihopConnectionEnd(proof: MultihopProof): ConnectionEnd {
+  return abortTransactionUnless(Unmarshal(proof.ConnectionProofs[proof.ConnectionProofs.length - 1].Value))
+}
+
+// Return the maximum delay period in seconds across all connections in the channel path.
+function getMaximumDelayPeriod(proof: MultihopProof, lastConnection: ConnectionEnd): number {
+  delayPeriodTime = lastConnection.GetDelayPeriod()
+  for connData in range proofs.ConnectionProofs {
+    connectionEnd = abortTransactionUnless(Unmarshal(connData.Value))
+    if (connectionEnd.DelayPeriod > delayPeriodTime) {
+      delayPeriodTime = connectionEnd.DelayPeriod
+    }
+  }
+  return delayPeriodTime
 }
 ```
 
@@ -282,7 +354,7 @@ The validation function `validateConnectionIdentifier` MAY be provided.
 type validateConnectionIdentifier = (id: Identifier) => boolean
 ```
 
-If not provided, the default `validateConnectionIdentifier` function will always return `true`. 
+If not provided, the default `validateConnectionIdentifier` function will always return `true`.
 
 #### Versioning
 
@@ -301,7 +373,7 @@ specifies IBC 1.0.0.
 
 The `features` field specifies a list of features compatible with the specified
 identifier. The values `"ORDER_UNORDERED"` and `"ORDER_ORDERED"` specify
-unordered and ordered channels, respectively. 
+unordered and ordered channels, respectively.
 
 Host state machine MUST utilise the version data to negotiate encodings,
 priorities, or connection-specific metadata related to custom logic on top of
@@ -367,7 +439,7 @@ function connOpenInit(
 
     abortTransactionUnless(queryClientState(clientIdentifier) !== null)
     abortTransactionUnless(provableStore.get(connectionPath(identifier)) == null)
-    
+
     state = INIT
     if version != "" {
       // manually selected version must be one we can support
@@ -404,7 +476,7 @@ function connOpenTry(
 ) {
     // generate a new identifier
     identifier = generateIdentifier()
-    
+
     abortTransactionUnless(queryClientState(clientIdentifier) !== null)
     abortTransactionUnless(validateSelfClient(clientState))
     abortTransactionUnless(consensusHeight < getCurrentHeight())

@@ -1,6 +1,7 @@
 Drafting an IBC paper. See [draft](./build/paper.pdf).
 
 Submission options:
+<!-- markdown-link-check-disable-next-line -->
 - [CES CfP (May 2020)](https://cryptoeconomicsystems.pubpub.org/spring20-journalcfp)
   - Up to 15,000 words
   - A4 style, submitted as PDF

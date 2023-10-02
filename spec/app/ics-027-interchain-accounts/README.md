@@ -5,7 +5,7 @@ stage: Draft
 category: IBC/APP
 requires: 25, 26
 kind: instantiation
-version compatibility: ibc-go v7.0.0
+version compatibility:
 author: Tony Yun <tony@chainapsis.com>, Dogemos <josh@tendermint.com>, Sean King <sean@interchain.io>
 created: 2019-08-01
 modified: 2020-07-14
@@ -82,32 +82,33 @@ function SendTx(
   connectionId: Identifier,
   portId: Identifier, 
   icaPacketData: InterchainAccountPacketData, 
-  timeoutTimestamp uint64): uint64 {
-    // check if there is a currently active channel for
-    // this portId and connectionId, which also implies an 
-    // interchain account has been registered using 
-    // this portId and connectionId
-    activeChannelID, found = GetActiveChannelID(portId, connectionId)
-    abortTransactionUnless(found)
+  timeoutTimestamp uint64
+): uint64 {
+  // check if there is a currently active channel for
+  // this portId and connectionId, which also implies an 
+  // interchain account has been registered using 
+  // this portId and connectionId
+  activeChannelID, found = GetActiveChannelID(portId, connectionId)
+  abortTransactionUnless(found)
 
-    // validate timeoutTimestamp
-    abortTransactionUnless(timeoutTimestamp <= currentTimestamp())
+  // validate timeoutTimestamp
+  abortTransactionUnless(timeoutTimestamp <= currentTimestamp())
 
-    // validate icaPacketData
-    abortTransactionUnless(icaPacketData.type == EXECUTE_TX)
-    abortTransactionUnless(icaPacketData.data != nil)
+  // validate icaPacketData
+  abortTransactionUnless(icaPacketData.type == EXECUTE_TX)
+  abortTransactionUnless(icaPacketData.data != nil)
 
-    // send icaPacketData to the host chain on the active channel
-    sequence = handler.sendPacket(
-      capability,
-      portId, // source port ID
-      activeChannelID, // source channel ID 
-      0,
-      timeoutTimestamp,
-      icaPacketData
-    )
+  // send icaPacketData to the host chain on the active channel
+  sequence = handler.sendPacket(
+    capability,
+    portId, // source port ID
+    activeChannelID, // source channel ID 
+    0,
+    timeoutTimestamp,
+    protobuf.marshal(icaPacketData) protobuf-marshalled bytes of packet data
+  )
 
-    return sequence
+  return sequence
 }
 ```
 
@@ -119,9 +120,9 @@ function SendTx(
 
 ```typescript
 function RegisterInterchainAccount(counterpartyPortId: Identifier, connectionID: Identifier) returns (nil) {
-   // checks to make sure the account has not already been registered
-   // creates a new address on chain deterministically given counterpartyPortId and underlying connectionID
-   // calls SetInterchainAccountAddress()
+  // checks to make sure the account has not already been registered
+  // creates a new address on chain deterministically given counterpartyPortId and underlying connectionID
+  // calls SetInterchainAccountAddress()
 }
 ```
 
@@ -132,8 +133,8 @@ function RegisterInterchainAccount(counterpartyPortId: Identifier, connectionID:
 
 ```typescript
 function AuthenticateTx(msgs []Any, connectionId string, portId string) returns (error) {
-    // GetInterchainAccountAddress(portId, connectionId)
-    // if interchainAccountAddress != msgSigner return error
+  // GetInterchainAccountAddress(portId, connectionId)
+  // if interchainAccountAddress != msgSigner return error
 }
 ```
 
@@ -195,12 +196,12 @@ An example of an active channel on the controller chain can look like this:
 
 ```typescript
 {
- // Controller Chain
- SourcePortId: `icacontroller-<owner-account-address>`,
- SourceChannelId: `<channel-id>`,
- // Host Chain
- CounterpartyPortId: `icahost`,
- CounterpartyChannelId: `<channel-id>`,
+  // Controller Chain
+  SourcePortId: `icacontroller-<owner-account-address>`,
+  SourceChannelId: `<channel-id>`,
+  // Host Chain
+  CounterpartyPortId: `icahost`,
+  CounterpartyChannelId: `<channel-id>`,
 }
 ```
 
@@ -300,9 +301,9 @@ Cosmos SDK pseudo-code example:
 interchainAccountAddress := GetInterchainAccountAddress(portId)
 msg := &banktypes.MsgSend{FromAddress: interchainAccountAddress, ToAddress: ToAddress, Amount: amount}
 icaPacketData = InterchainAccountPacketData{
-   Type: types.EXECUTE_TX,
-   Data: serialize(msg),
-   Memo: "memo",
+  Type: types.EXECUTE_TX,
+  Data: serialize(msg),
+  Memo: "memo",
 }
 
 // Sends the message to the host chain, where it will eventually be executed 
@@ -320,9 +321,9 @@ Messages are authenticated on the host chain by taking the controller side port 
 
 ```proto
 message InterchainAccountPacketData  {
-    enum type
-    bytes data = 1;
-    string memo = 2;
+  enum type
+  bytes data = 1;
+  string memo = 2;
 }
 ```
 
@@ -353,18 +354,24 @@ The example below assumes a module is implementing the entire `InterchainAccount
 ```typescript
 function setup() {
   capability = routingModule.bindPort("icahost", ModuleCallbacks{
-      onChanOpenInit,
-      onChanOpenTry,
-      onChanOpenAck,
-      onChanOpenConfirm,
-      onChanCloseInit,
-      onChanCloseConfirm,
-      onRecvPacket,
-      onTimeoutPacket,
-      onAcknowledgePacket,
-      onTimeoutPacketClose
-    })
-    claimCapability("port", capability)
+    onChanOpenInit,
+    onChanOpenTry,
+    onChanOpenAck,
+    onChanOpenConfirm,
+    onChanCloseInit,
+    onChanCloseConfirm,
+    onChanUpgradeInit,
+    onChanUpgradeTry,
+    onChanUpgradeAck,
+    onChanUpgradeConfirm,
+    onChanUpgradeOpen,
+    onChanUpgradeRestore,
+    onRecvPacket,
+    onTimeoutPacket,
+    onAcknowledgePacket,
+    onTimeoutPacketClose
+  })
+  claimCapability("port", capability)
 }
 ```
 
@@ -387,15 +394,12 @@ function onChanOpenInit(
   channelIdentifier: Identifier,
   counterpartyPortIdentifier: Identifier,
   counterpartyChannelIdentifier: Identifier,
-  version: string) => (version: string, err: Error) {
-  // only ordered channels allowed
-  abortTransactionUnless(order === ORDERED)
+  version: string
+): (version: string, err: Error) {
   // validate port format
   abortTransactionUnless(validateControllerPortParams(portIdentifier))
   // only allow channels to be created on the "icahost" port on the counterparty chain
   abortTransactionUnless(counterpartyPortIdentifier === "icahost")
-  // only open the channel if there is no active channel already set (with status OPEN)
-  abortTransactionUnless(activeChannel === nil)
 
   if version != "" {
     // validate metadata
@@ -421,9 +425,27 @@ function onChanOpenInit(
     }
     version = marshalJSON(metadata)
   }
-
-  // claim channel capability
-  claimCapability(channelCapabilityPath(portIdentifier, channelIdentifier), capability)
+  
+  // only open the channel if:
+  // - there is no active channel already set (with status OPEN)
+  // OR
+  // - there is already an active channel (with status CLOSED) AND
+  // the metadata matches exactly the existing metadata in the 
+  // version string of the active channel AND the ordering of the 
+  // new channel matches the ordering of the active channel.
+  activeChannelId, activeChannelFound = GetActiveChannelID(portId, connectionId)
+  if activeChannelFound {
+    activeChannel = provableStore.get(channelPath(portId, activeChannelId))
+    abortTransactionUnless(channel !== null)
+    abortTransactionUnless(activeChannel.state === CLOSED)
+    previousOrder = activeChannel.order
+    abortTransactionUnless(previousOrder === order)
+    previousMetadata = UnmarshalJSON(activeChannel.version)
+    abortTransactionUnless(previousMetadata === metadata)
+  } else {
+    // claim channel capability
+    claimCapability(channelCapabilityPath(portIdentifier, channelIdentifier), capability)
+  }
 
   return version, nil
 }
@@ -439,9 +461,8 @@ function onChanOpenTry(
   channelIdentifier: Identifier,
   counterpartyPortIdentifier: Identifier,
   counterpartyChannelIdentifier: Identifier,
-  counterpartyVersion: string) (version: string, err: Error) {
-  // only ordered channels allowed
-  abortTransactionUnless(order === ORDERED)
+  counterpartyVersion: string
+): (version: string, err: Error) {
   // validate port ID
   abortTransactionUnless(portIdentifier === "icahost")
   // create the interchain account with the counterpartyPortIdentifier
@@ -478,8 +499,8 @@ function onChanOpenAck(
   portIdentifier: Identifier,
   channelIdentifier: Identifier,
   counterpartyChannelIdentifier,
-  counterpartyVersion: string) {
-
+  counterpartyVersion: string
+) {
   // validate counterparty metadata decided by host chain
   metadata = UnmarshalJSON(version)
   abortTransactionUnless(metadata.Version === "ics27-1")
@@ -487,12 +508,11 @@ function onChanOpenAck(
   abortTransactionUnless(IsSupportedTxType(metadata.TxType))
   abortTransactionUnless(metadata.ControllerConnectionId === connectionId)
   abortTransactionUnless(metadata.HostConnectionId === counterpartyConnectionId)
-
   
   // state change to keep track of successfully registered interchain account
   SetInterchainAccountAddress(portID, metadata.Address)
   // set the active channel for this owner/interchain account pair
-  setActiveChannel(SourcePortId)
+  SetActiveChannelID(portIdentifier, metadata.ControllerConnectionId, channelIdentifier)
 }
 ```
 
@@ -500,9 +520,13 @@ function onChanOpenAck(
 // Called on Host Chain by Relayer
 function onChanOpenConfirm(
   portIdentifier: Identifier,
-  channelIdentifier: Identifier) {
+  channelIdentifier: Identifier
+) {
+  channel = provableStore.get(channelPath(portIdentifier, channelIdentifier))
+  abortTransactionUnless(channel !== null)
+
   // set the active channel for this owner/interchain account pair
-  setActiveChannel(portIdentifier)
+  SetActiveChannelID(channel.counterpartyPortIdentifier, channel.connectionHops[0], channelIdentifier)
 }
 ```
 
@@ -522,7 +546,7 @@ function onChanCloseInit(
   portIdentifier: Identifier,
   channelIdentifier: Identifier) {
  	// disallow user-initiated channel closing for interchain account channels
-  return err
+  abortTransactionUnless(FALSE)
 }
 ```
 
@@ -530,6 +554,158 @@ function onChanCloseInit(
 function onChanCloseConfirm(
   portIdentifier: Identifier,
   channelIdentifier: Identifier) {
+}
+```
+
+### Upgrade handshake
+
+```typescript
+// Called on Controller Chain by Authority
+function onChanUpgradeInit(
+  portIdentifier: Identifier,
+  channelIdentifier: Identifier,
+  order: ChannelOrder,
+  connectionHops: [Identifier],
+  upgradeSequence: uint64,
+  version: string
+): (version: string, err: Error) {
+  // new version proposed in the upgrade
+  abortTransactionUnless(version !== "")
+  metadata = UnmarshalJSON(version)
+
+  // retrieve the existing channel version.
+  // In ibc-go, for example, this is done using the GetAppVersion 
+  // function of the ICS4Wrapper interface.
+  // See https://github.com/cosmos/ibc-go/blob/ac6300bd857cd2bd6915ae51e67c92848cbfb086/modules/core/05-port/types/module.go#L128-L132
+  channel = provableStore.get(channelPath(portIdentifier, channelIdentifier))
+  abortTransactionUnless(channel !== null)
+  currentMetadata = UnmarshalJSON(channel.version)
+
+  // validate metadata
+  abortTransactionUnless(metadata.Version === "ics27-1")
+  // all elements in encoding list and tx type list must be supported
+  abortTransactionUnless(IsSupportedEncoding(metadata.Encoding))
+  abortTransactionUnless(IsSupportedTxType(metadata.TxType))
+
+  // the interchain account address on the host chain
+  // must remain the same after the upgrade.
+  abortTransactionUnless(currentMetadata.Address === metadata.Address)
+
+  // at the moment it is not supported to perform upgrades that
+  // change the connection ID of the controller or host chains.
+  // therefore these connection IDs much remain the same as before.
+  abortTransactionUnless(currentMetadata.ControllerConnectionId === metadata.ControllerConnectionId)
+  abortTransactionUnless(currentMetadata.HostConnectionId === metadata.HostConnectionId)
+  // the proposed connection hop must not change
+  abortTransactionUnless(currentMetadata.ControllerConnectionId === connectionHops[0])
+  
+  version = marshalJSON(metadata)
+  return version, nil
+}
+```
+
+```typescript
+// Called on Host Chain by Relayer
+function onChanUpgradeTry(
+  portIdentifier: Identifier,
+  channelIdentifier: Identifier,
+  order: ChannelOrder,
+  connectionHops: [Identifier],
+  upgradeSequence: uint64,
+  counterpartyPortIdentifier: Identifier,
+  counterpartyChannelIdentifier: Identifier,
+  counterpartyVersion: string
+): (version: string, err: Error) {
+  // validate port ID
+  abortTransactionUnless(portIdentifier === "icahost")
+
+  // upgrade version proposed by counterparty
+  abortTransactionUnless(counterpartyVersion !== "")
+
+  // retrieve the existing channel version.
+  // In ibc-go, for example, this is done using the GetAppVersion 
+  // function of the ICS4Wrapper interface.
+  // See https://github.com/cosmos/ibc-go/blob/ac6300bd857cd2bd6915ae51e67c92848cbfb086/modules/core/05-port/types/module.go#L128-L132
+  channel = provableStore.get(channelPath(portIdentifier, channelIdentifier))
+  abortTransactionUnless(channel !== null)
+  currentMetadata = UnmarshalJSON(channel.version)
+
+  // validate metadata
+  abortTransactionUnless(metadata.Version === "ics27-1")
+  // all elements in encoding list and tx type list must be supported
+  abortTransactionUnless(IsSupportedEncoding(metadata.Encoding))
+  abortTransactionUnless(IsSupportedTxType(metadata.TxType))
+
+  // the interchain account address on the host chain
+  // must remain the same after the upgrade.
+  abortTransactionUnless(currentMetadata.Address === metadata.Address)
+
+  // at the moment it is not supported to perform upgrades that
+  // change the connection ID of the controller or host chains.
+  // therefore these connection IDs much remain the same as before.
+  abortTransactionUnless(currentMetadata.ControllerConnectionId === metadata.ControllerConnectionId)
+  abortTransactionUnless(currentMetadata.HostConnectionId === metadata.HostConnectionId)
+  // the proposed connection hop must not change
+  abortTransactionUnless(currentMetadata.HostConnectionId === connectionHops[0])
+
+  return counterpartyVersion, nil
+}
+```
+
+```typescript
+// Called on Controller Chain by Relayer
+function onChanUpgradeAck(
+  portIdentifier: Identifier,
+  channelIdentifier: Identifier,
+  counterpartyVersion: string
+): Error {
+  // final upgrade version proposed by counterparty
+  abortTransactionUnless(counterpartyVersion !== "")
+  metadata = UnmarshalJSON(counterpartyVersion)
+
+  // retrieve the existing channel version.
+  // In ibc-go, for example, this is done using the GetAppVersion 
+  // function of the ICS4Wrapper interface.
+  // See https://github.com/cosmos/ibc-go/blob/ac6300bd857cd2bd6915ae51e67c92848cbfb086/modules/core/05-port/types/module.go#L128-L132
+  channel = provableStore.get(channelPath(portIdentifier, channelIdentifier))
+  abortTransactionUnless(channel !== null)
+  currentMetadata = UnmarshalJSON(channel.version)
+
+  // validate metadata
+  abortTransactionUnless(metadata.Version === "ics27-1")
+  // all elements in encoding list and tx type list must be supported
+  abortTransactionUnless(IsSupportedEncoding(metadata.Encoding))
+  abortTransactionUnless(IsSupportedTxType(metadata.TxType))
+
+  // the interchain account address on the host chain
+  // must remain the same after the upgrade.
+  abortTransactionUnless(currentMetadata.Address === metadata.Address)
+
+  // at the moment it is not supported to perform upgrades that
+  // change the connection ID of the controller or host chains.
+  // therefore these connection IDs much remain the same as before.
+  abortTransactionUnless(currentMetadata.ControllerConnectionId === metadata.ControllerConnectionId)
+  abortTransactionUnless(currentMetadata.HostConnectionId === metadata.HostConnectionId)
+
+  return nil
+}
+```
+
+```typescript
+// Called on Controller and Host Chains by Relayer
+function onChanUpgradeOpen(
+  portIdentifier: Identifier,
+  channelIdentifier: Identifier) {
+    // no-op
+} 
+```
+
+```typescript
+// Called on Controller and/or Host Chain by Relayer
+function onChanUpgradeRestore(
+  portIdentifier: Identifier,
+  channelIdentifier: Identifier) {
+    // no-op
 }
 ```
 
@@ -573,17 +749,18 @@ function onRecvPacket(packet Packet) {
 // Called on Controller Chain by Relayer
 function onAcknowledgePacket(
   packet: Packet,
-  acknowledgement: bytes) {
-    // call underlying app's OnAcknowledgementPacket callback 
-    // see ICS-30 middleware for more information
+  acknowledgement: bytes
+) {
+  // call underlying app's OnAcknowledgementPacket callback 
+  // see ICS-30 middleware for more information
 }
 ```
 
 ```typescript
 // Called on Controller Chain by Relayer
 function onTimeoutPacket(packet: Packet) {
-    // call underlying app's OnTimeoutPacket callback 
-    // see ICS-30 middleware for more information
+  // call underlying app's OnTimeoutPacket callback 
+  // see ICS-30 middleware for more information
 }
 ```
 
@@ -633,6 +810,8 @@ April 27, 2021 - Redesign of ics27 specification
 November 11, 2021 - Update with latest changes from implementation
 
 December 14, 2021 - Revisions to spec based on audits and maintainer reviews
+
+August 1, 2023 - Implemented channel upgrades callbacks
     
 ## Copyright
 

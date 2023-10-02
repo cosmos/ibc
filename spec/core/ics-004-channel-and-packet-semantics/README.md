@@ -21,7 +21,7 @@ Channels are payload-agnostic. The modules which send and receive IBC packets de
 
 The interblockchain communication protocol uses a cross-chain message passing model. IBC *packets* are relayed from one blockchain to the other by external relayer processes. Chain `A` and chain `B` confirm new blocks independently, and packets from one chain to the other may be delayed, censored, or re-ordered arbitrarily. Packets are visible to relayers and can be read from a blockchain by any relayer process and submitted to any other blockchain.
 
-The IBC protocol must provide ordering (for ordered channels) and exactly-once delivery guarantees to allow applications to reason about the combined state of connected modules on two chains. 
+The IBC protocol must provide ordering (for ordered channels) and exactly-once delivery guarantees to allow applications to reason about the combined state of connected modules on two chains.
 
 > **Example**: An application may wish to allow a single tokenized asset to be transferred between and held on multiple blockchains while preserving fungibility and conservation of supply. The application can mint asset vouchers on chain `B` when a particular IBC packet is committed to chain `B`, and require outgoing sends of that packet on chain `A` to escrow an equal amount of the asset on chain `A` until the vouchers are later redeemed back to chain `A` with an IBC packet in the reverse direction. This ordering guarantee along with correct application logic can ensure that total supply is preserved across both chains and that any vouchers minted on chain `B` can later be redeemed back to chain `A`.
 
@@ -38,6 +38,8 @@ In order to provide the desired ordering, exactly-once delivery, and module perm
 `hash` is a generic collision-resistant hash function, the specifics of which must be agreed on by the modules utilising the channel. `hash` can be defined differently by different chains.
 
 `Identifier`, `get`, `set`, `delete`, `getCurrentHeight`, and module-system related primitives are as defined in [ICS 24](../ics-024-host-requirements).
+
+See [upgrades spec](./UPGRADES.md) for definition of `pendingInflightPackets`.
 
 A *channel* is a pipeline for exactly-once packet delivery between specific modules on separate blockchains, which has at least one end capable of sending packets and one end capable of receiving packets.
 
@@ -75,6 +77,7 @@ interface ChannelEnd {
   counterpartyChannelIdentifier: Identifier
   connectionHops: [Identifier]
   version: string
+  upgradeSequence: uint64
 }
 ```
 
@@ -85,8 +88,10 @@ interface ChannelEnd {
 - The `nextSequenceSend`, stored separately, tracks the sequence number for the next packet to be sent.
 - The `nextSequenceRecv`, stored separately, tracks the sequence number for the next packet to be received.
 - The `nextSequenceAck`, stored separately, tracks the sequence number for the next packet to be acknowledged.
-- The `connectionHops` stores the list of connection identifiers, in order, along which packets sent on this channel will travel. At the moment this list must be of length 1. In the future multi-hop channels may be supported.
+- The `connectionHops` stores the list of connection identifiers ordered starting from the receiving end towards the sender. `connectionHops[0]` is the connection end on the receiving chain. More than one connection hop indicates a multi-hop channel.
 - The `version` string stores an opaque channel version, which is agreed upon during the handshake. This can determine module-level configuration such as which packet encoding is used for the channel. This version is not used by the core IBC protocol. If the version string contains structured metadata for the application to parse and interpret, then it is considered best practice to encode all metadata in a JSON struct and include the marshalled string in the version field.
+
+See the [upgrade spec](./UPGRADES.md) for details on `upgradeSequence`.
 
 Channel ends have a *state*:
 
@@ -96,6 +101,8 @@ enum ChannelState {
   TRYOPEN,
   OPEN,
   CLOSED,
+  FLUSHING,
+  FLUSHINGCOMPLETE,
 }
 ```
 
@@ -103,6 +110,9 @@ enum ChannelState {
 - A channel end in `TRYOPEN` state has acknowledged the handshake step on the counterparty chain.
 - A channel end in `OPEN` state has completed the handshake and is ready to send and receive packets.
 - A channel end in `CLOSED` state has been closed and can no longer be used to send or receive packets.
+
+See the [upgrade spec](./UPGRADES.md) for details on `FLUSHING` and `FLUSHCOMPLETE`.
+
 
 A `Packet`, in the interblockchain communication protocol, is a particular interface defined as follows:
 
@@ -179,7 +189,7 @@ The architecture of clients, connections, channels and packets:
 
 ### Preliminaries
 
-#### Store paths 
+#### Store paths
 
 Channel structures are stored under a store path prefix unique to a combination of a port identifier and channel identifier:
 
@@ -217,7 +227,7 @@ Constant-size commitments to packet data fields are stored under the packet sequ
 
 ```typescript
 function packetCommitmentPath(portIdentifier: Identifier, channelIdentifier: Identifier, sequence: uint64): Path {
-    return "commitments/ports/{portIdentifier}/channels/{channelIdentifier}/packets/{sequence}"
+    return "commitments/ports/{portIdentifier}/channels/{channelIdentifier}/sequences/{sequence}"
 }
 ```
 
@@ -228,7 +238,7 @@ Some channel types MAY write a sentinel timeout value `TIMEOUT_RECEIPT` if the p
 
 ```typescript
 function packetReceiptPath(portIdentifier: Identifier, channelIdentifier: Identifier, sequence: uint64): Path {
-    return "receipts/ports/{portIdentifier}/channels/{channelIdentifier}/receipts/{sequence}"
+    return "receipts/ports/{portIdentifier}/channels/{channelIdentifier}/sequences/{sequence}"
 }
 ```
 
@@ -260,7 +270,7 @@ The validation function `validatePortIdentifier` MAY be provided.
 type validateChannelIdentifier = (portIdentifier: Identifier, channelIdentifier: Identifier) => boolean
 ```
 
-If not provided, the default `validateChannelIdentifier` function will always return `true`. 
+If not provided, the default `validateChannelIdentifier` function will always return `true`.
 
 #### Channel lifecycle management
 
@@ -277,6 +287,7 @@ If not provided, the default `validateChannelIdentifier` function will always re
 | --------- | ---------------- | ---------------- | ------------------ | ---------------------- |
 | Actor     | ChanCloseInit    | A                | (OPEN, OPEN)       | (CLOSED, OPEN)         |
 | Relayer   | ChanCloseConfirm | B                | (CLOSED, OPEN)     | (CLOSED, CLOSED)       |
+| Actor     | ChanCloseFrozen  | A or B           | (OPEN, OPEN)       | (CLOSED, CLOSED)       |
 
 ##### Opening handshake
 
@@ -293,7 +304,7 @@ function writeChannel(
   connectionHops: [Identifier],
   version: string) {
     channel = ChannelEnd{
-      state, order, 
+      state, order,
       counterpartyPortIdentifier, counterpartyChannelIdentifier,
       connectionHops, version
     }
@@ -320,12 +331,9 @@ function chanOpenInit(
   order: ChannelOrder,
   connectionHops: [Identifier],
   portIdentifier: Identifier,
-  counterpartyPortIdentifier: Identifier,
-  version: string): (channelIdentifier: Identifier, channelCapability: CapabilityKey) {
+  counterpartyPortIdentifier: Identifier): (channelIdentifier: Identifier, channelCapability: CapabilityKey) {
     channelIdentifier = generateIdentifier()
     abortTransactionUnless(validateChannelIdentifier(portIdentifier, channelIdentifier))
-
-    abortTransactionUnless(connectionHops.length === 1) // for v1 of the IBC protocol
 
     abortTransactionUnless(provableStore.get(channelPath(portIdentifier, channelIdentifier)) === null)
     connection = provableStore.get(connectionPath(connectionHops[0]))
@@ -351,31 +359,44 @@ function chanOpenTry(
   portIdentifier: Identifier,
   counterpartyPortIdentifier: Identifier,
   counterpartyChannelIdentifier: Identifier,
-  version: string,
   counterpartyVersion: string,
-  proofInit: CommitmentProof,
+  proofInit: CommitmentProof | MultihopProof,
   proofHeight: Height): (channelIdentifier: Identifier, channelCapability: CapabilityKey) {
     channelIdentifier = generateIdentifier()
 
     abortTransactionUnless(validateChannelIdentifier(portIdentifier, channelIdentifier))
-    abortTransactionUnless(connectionHops.length === 1) // for v1 of the IBC protocol
-    
+
     connection = provableStore.get(connectionPath(connectionHops[0]))
     abortTransactionUnless(connection !== null)
     abortTransactionUnless(connection.state === OPEN)
 
+    // return hops from counterparty's view
+    counterpartyHops = getCounterPartyHops(proofInit, connection)
+
     expected = ChannelEnd{
       INIT, order, portIdentifier,
-      "", [connection.counterpartyConnectionIdentifier], 
+      "", counterpartyHops,
       counterpartyVersion
     }
-    abortTransactionUnless(connection.verifyChannelState(
-      proofHeight,
-      proofInit,
-      counterpartyPortIdentifier,
-      counterpartyChannelIdentifier,
-      expected
-    ))
+
+    if (connectionHops.length > 1) {
+      key = channelPath(counterparty.PortId, counterparty.ChannelId)
+      abortTransactionUnless(connection.verifyMultihopMembership(
+        connection,
+        proofHeight,
+        proofInit,
+        connectionHops,
+        key
+        expected))
+    } else {
+      abortTransactionUnless(connection.verifyChannelState(
+        proofHeight,
+        proofInit,
+        counterpartyPortIdentifier,
+        counterpartyChannelIdentifier,
+        expected
+      ))
+    }
 
     channelCapability = newCapability(channelCapabilityPath(portIdentifier, channelIdentifier))
 
@@ -397,28 +418,40 @@ function chanOpenAck(
   channelIdentifier: Identifier,
   counterpartyChannelIdentifier: Identifier,
   counterpartyVersion: string,
-  proofTry: CommitmentProof,
+  proofTry: CommitmentProof | MultihopProof,
   proofHeight: Height) {
     channel = provableStore.get(channelPath(portIdentifier, channelIdentifier))
     abortTransactionUnless(channel.state === INIT)
-    
+
     connection = provableStore.get(connectionPath(channel.connectionHops[0]))
     abortTransactionUnless(connection !== null)
     abortTransactionUnless(connection.state === OPEN)
-    
-    expected = ChannelEnd{
-      TRYOPEN, channel.order, portIdentifier,
-      channelIdentifier, [connection.counterpartyConnectionIdentifier], 
-      counterpartyVersion
+
+    // return hops from counterparty's view
+    counterpartyHops = getCounterPartyHops(proofTry, connection)
+
+    expected = ChannelEnd{TRYOPEN, channel.order, portIdentifier,
+        channelIdentifier, counterpartyHops, counterpartyVersion}
+
+    if (channel.connectionHops.length > 1) {
+      key = channelPath(counterparty.PortId, counterparty.ChannelId)
+      abortTransactionUnless(connection.verifyMultihopMembership(
+        connection,
+        proofHeight,
+        proofTry,
+        channel.connectionHops,
+        key,
+        expected))
+    } else {
+      abortTransactionUnless(connection.verifyChannelState(
+        proofHeight,
+        proofTry,
+        channel.counterpartyPortIdentifier,
+        counterpartyChannelIdentifier,
+        expected
+      ))
     }
-    abortTransactionUnless(connection.verifyChannelState(
-      proofHeight,
-      proofTry,
-      channel.counterpartyPortIdentifier,
-      counterpartyChannelIdentifier,
-      expected
-    ))
-    
+
     channel.state = OPEN
     channel.version = counterpartyVersion
     channel.counterpartyChannelIdentifier = counterpartyChannelIdentifier
@@ -433,29 +466,41 @@ of the handshake-originating module on the other chain and finish the channel op
 function chanOpenConfirm(
   portIdentifier: Identifier,
   channelIdentifier: Identifier,
-  proofAck: CommitmentProof,
+  proofAck: CommitmentProof | MultihopProof,
   proofHeight: Height) {
     channel = provableStore.get(channelPath(portIdentifier, channelIdentifier))
     abortTransactionUnless(channel !== null)
     abortTransactionUnless(channel.state === TRYOPEN)
-    
+
     connection = provableStore.get(connectionPath(channel.connectionHops[0]))
     abortTransactionUnless(connection !== null)
     abortTransactionUnless(connection.state === OPEN)
-    
-    expected = ChannelEnd{
-      OPEN, channel.order, portIdentifier,
-      channelIdentifier, [connection.counterpartyConnectionIdentifier],
-      channel.version
+
+    // return hops from counterparty's view
+    counterpartyHops = getCounterPartyHops(proofAck, connection)
+
+    expected = ChannelEnd{OPEN, channel.order, portIdentifier,
+      channelIdentifier, counterpartyHops, channel.version}
+
+    if (connectionHops.length > 1) {
+      key = channelPath(counterparty.PortId, counterparty.ChannelId)
+      abortTransactionUnless(connection.verifyMultihopMembership(
+        connection,
+        proofHeight,
+        proofAck,
+        channel.connectionHops,
+        key
+        expected))
+    } else {
+      abortTransactionUnless(connection.verifyChannelState(
+        proofHeight,
+        proofAck,
+        channel.counterpartyPortIdentifier,
+        channel.counterpartyChannelIdentifier,
+        expected
+      ))
     }
-    abortTransactionUnless(connection.verifyChannelState(
-      proofHeight,
-      proofAck,
-      channel.counterpartyPortIdentifier,
-      channel.counterpartyChannelIdentifier,
-      expected
-    ))
-    
+
     channel.state = OPEN
     provableStore.set(channelPath(portIdentifier, channelIdentifier), channel)
 }
@@ -501,7 +546,7 @@ maximum height/time were mandated & tracked, and future specification versions m
 function chanCloseConfirm(
   portIdentifier: Identifier,
   channelIdentifier: Identifier,
-  proofInit: CommitmentProof,
+  proofInit: CommitmentProof | MultihopProof,
   proofHeight: Height) {
     channel = provableStore.get(channelPath(portIdentifier, channelIdentifier))
     abortTransactionUnless(channel !== null)
@@ -509,17 +554,146 @@ function chanCloseConfirm(
     connection = provableStore.get(connectionPath(channel.connectionHops[0]))
     abortTransactionUnless(connection !== null)
     abortTransactionUnless(connection.state === OPEN)
+
+    // return hops from counterparty's view
+    counterpartyHops = getCounterPartyHops(proofInit, connection)
+
     expected = ChannelEnd{CLOSED, channel.order, portIdentifier,
-                          channelIdentifier, [connection.counterpartyConnectionIdentifier], channel.version}
-    abortTransactionUnless(connection.verifyChannelState(
-      proofHeight,
-      proofInit,
-      channel.counterpartyPortIdentifier,
-      channel.counterpartyChannelIdentifier,
-      expected
-    ))
+                          channelIdentifier, counterpartyHops, channel.version}
+
+    if (connectionHops.length > 1) {
+      key = channelPath(counterparty.PortId, counterparty.ChannelId)
+      abortTransactionUnless(connection.verifyMultihopMembership(
+        connection,
+        proofHeight,
+        proofInit,
+        channel.connectionHops,
+        key
+        expected))
+    } else {
+      abortTransactionUnless(connection.verifyChannelState(
+        proofHeight,
+        proofInit,
+        channel.counterpartyPortIdentifier,
+        channel.counterpartyChannelIdentifier,
+        expected
+      ))
+    }
+
     channel.state = CLOSED
     provableStore.set(channelPath(portIdentifier, channelIdentifier), channel)
+}
+```
+
+The `chanCloseFrozen` function is called by a relayer to force close a multi-hop channel if any client state in the
+channel path is frozen. A relayer should send proof of the frozen client state to each end of the channel with a
+proof of the frozen client state in the channel path starting from each channel end up until the first frozen client.
+The multi-hop proof for each channel end will be different and consist of a proof formed starting from each channel
+end up to the frozen client.
+
+The multi-hop proof starts with a chain with a frozen client for the misbehaving chain. However, the frozen client exists
+on the next blockchain in the channel path so the key/value proof is indexed to evaluate on the consensus state holding
+that client state. The client state path requires knowledge of the client id which can be determined from the
+connectionEnd on the misbehaving chain prior to the misbehavior submission.
+
+Once frozen, it is possible for a channel to be unfrozen (reactivated) via governance processes once the misbehavior in
+the channel path has been resolved. However, this process is out-of-protocol.
+
+Example:
+
+Given a multi-hop channel path over connections from chain `A` to chain `E` and misbehaving chain `C`
+
+`A <--> B <--x C x--> D <--> E`
+
+Assume any relayer submits evidence of misbehavior to chain `B` and chain `D` to freeze their respective clients for chain `C`.
+
+A relayer may then provide a multi-hop proof of the frozen client on chain `B` to chain `A` to close the channel on chain `A`, and another relayer (or the same one) may also relay a multi-hop proof of the frozen client on chain `D` to chain `E` to close the channel end on chain `E`.
+
+However, it must also be proven that the frozen client state corresponds to a specific hop in the channel path.
+
+Therefore, a proof of the connection end on chain `B` with counterparty connection end on chain `C` must also be provided along with the client state proof to prove that the `clientID` for the client state matches the `clientID` in the connection end. Furthermore, the `connectionID` for the connection end MUST match the expected ID from the channel's `connectionHops` field.
+
+```typescript
+function chanCloseFrozen(
+  portIdentifier: Identifier,
+  channelIdentifier: Identifier,
+  proofConnection: MultihopProof,
+  proofClientState: MultihopProof,
+  proofHeight: Height) {
+    abortTransactionUnless(authenticateCapability(channelCapabilityPath(portIdentifier, channelIdentifier), capability))
+    channel = provableStore.get(channelPath(portIdentifier, channelIdentifier))
+    abortTransactionUnless(channel !== null)
+    hopsLength = channel.connectionHops.length
+    abortTransactionUnless(hopsLength === 1)
+    abortTransactionUnless(channel.state !== CLOSED)
+    connection = provableStore.get(connectionPath(channel.connectionHops[0]))
+    abortTransactionUnless(connection !== null)
+    abortTransactionUnless(connection.state === OPEN)
+
+    // lookup connectionID for connectionEnd corresponding to misbehaving chain
+    let connectionIdx = proofConnection.ConnectionProofs.length + 1
+    abortTransactionUnless(connectionIdx < hopsLength)
+    let connectionID = channel.ConnectionHops[connectionIdx]
+    let connectionProofKey = connectionPath(connectionID)
+    let connectionProofValue = proofConnection.KeyProof.Value
+    let frozenConnectionEnd = abortTransactionUnless(Unmarshal(connectionProofValue))
+
+    // the clientID in the connection end must match the clientID for the frozen client state
+    let clientID = frozenConnectionEnd.ClientId
+
+    // truncated connectionHops. e.g. client D on chain C is frozen: A, B, C, D, E -> A, B, C
+    let connectionHops = channel.ConnectionHops[:len(mProof.ConnectionProofs)+1]
+
+    // verify the connection proof
+    abortTransactionUnless(connection.verifyMultihopMembership(
+      connection,
+      proofHeight,
+      proofConnection,
+      connectionHops,
+      connectionProofKey,
+      connectionProofValue))
+
+
+    // key and value for the frozen client state
+    let clientStateKey = clientStatePath(clientID)
+    let clientStateValue = proofClientState.KeyProof.Value
+    let frozenClientState = abortTransactionUnless(Unmarshal(clientStateValue))
+
+    // ensure client state is frozen by checking FrozenHeight
+    abortTransactionUnless(frozenClientState.FrozenHeight.RevisionHeight !== 0)
+
+   // verify the frozen client state proof
+    abortTransactionUnless(connection.verifyMultihopMembership(
+      connection,
+      proofHeight,
+      proofConnection,
+      connectionHops,
+      clientStateKey,
+      clientStateValue))
+
+    channel.state = FROZEN
+    provableStore.set(channelPath(portIdentifier, channelIdentifier), channel)
+}
+```
+
+##### Multihop utility functions
+
+```typescript
+// Return the counterparty connectionHops
+function getCounterPartyHops(proof: CommitmentProof | MultihopProof, lastConnection: ConnectionEnd) string[] {
+
+  let counterpartyHops: string[] = [lastConnection.counterpartyConnectionIdentifier]
+  if typeof(proof) === 'MultihopProof' {
+    for connData in proofs.ConnectionProofs {
+      connectionEnd = abortTransactionUnless(Unmarshal(connData.Value))
+      counterpartyHops.push(connectionEnd.GetCounterparty().GetConnectionID())
+    }
+
+    // reverse the hops so they are ordered from sender --> receiver
+    counterpartyHops = counterpartyHops.reverse()
+  }
+
+  return counterpartyHops
 }
 ```
 
@@ -544,7 +718,7 @@ The module can interface with the IBC handler through [ICS 25](../ics-025-handle
     1. Packet sent over the newly created channel from *1* to *2* (this ICS)
 1. Successful completion of handshakes (if either handshake fails, the connection/channel can be closed & the packet timed-out)
     1. Connection opening handshake completes successfully (see [ICS 3](../ics-003-connection-semantics)) (this will require participation of a relayer process)
-    1. Channel opening handshake completes successfully (this ICS) (this will require participation of a relayer process) 
+    1. Channel opening handshake completes successfully (this ICS) (this will require participation of a relayer process)
 1. Packet confirmation on machine *B*, module *2* (or packet timeout if the timeout height has passed) (this will require participation of a relayer process)
 1. Acknowledgement (possibly) relayed back from module *2* on machine *B* to module *1* on machine *A*
 
@@ -579,9 +753,9 @@ function sendPacket(
   data: bytes): uint64 {
     channel = provableStore.get(channelPath(sourcePort, sourceChannel))
 
-    // check that the channel is not closed to send packets; 
+    // check that the channel must be OPEN to send packets;
     abortTransactionUnless(channel !== null)
-    abortTransactionUnless(channel.state !== CLOSED)
+    abortTransactionUnless(channel.state === OPEN)
     connection = provableStore.get(connectionPath(channel.connectionHops[0]))
     abortTransactionUnless(connection !== null)
 
@@ -590,7 +764,7 @@ function sendPacket(
 
     // disallow packets with a zero timeoutHeight and timeoutTimestamp
     abortTransactionUnless(timeoutHeight !== 0 || timeoutTimestamp !== 0)
-    
+
     // check that the timeout height hasn't already passed in the local client tracking the receiving chain
     latestClientHeight = provableStore.get(clientPath(connection.clientIdentifier)).latestClientHeight()
     abortTransactionUnless(timeoutHeight === 0 || latestClientHeight < timeoutHeight)
@@ -607,9 +781,9 @@ function sendPacket(
 
     // log that a packet can be safely sent
     emitLogEntry("sendPacket", {
-      sequence: sequence, 
-      data: data, 
-      timeoutHeight: timeoutHeight, 
+      sequence: sequence,
+      data: data,
+      timeoutHeight: timeoutHeight,
       timeoutTimestamp: timeoutTimestamp
     })
 
@@ -639,13 +813,14 @@ We pass the address of the `relayer` that signed and submitted the packet to ena
 ```typescript
 function recvPacket(
   packet: OpaquePacket,
-  proof: CommitmentProof,
+  proof: CommitmentProof | MultihopProof,
   proofHeight: Height,
   relayer: string): Packet {
 
     channel = provableStore.get(channelPath(packet.destPort, packet.destChannel))
     abortTransactionUnless(channel !== null)
-    abortTransactionUnless(channel.state === OPEN)
+    counterpartyLastPacketSent = privateStore.get(channelCounterpartyLastPacketSequencePath(packet.destPort, packet.destChannel)
+    abortTransactionUnless(channel.state === OPEN || (channel.state === FLUSHING && packet.sequence <= counterpartyLastPacketSent))
     abortTransactionUnless(packet.sourcePort === channel.counterpartyPortIdentifier)
     abortTransactionUnless(packet.sourceChannel === channel.counterpartyChannelIdentifier)
 
@@ -653,14 +828,26 @@ function recvPacket(
     abortTransactionUnless(connection !== null)
     abortTransactionUnless(connection.state === OPEN)
 
-    abortTransactionUnless(connection.verifyPacketData(
-      proofHeight,
-      proof,
-      packet.sourcePort,
-      packet.sourceChannel,
-      packet.sequence,
-      hash(packet.data, packet.timeoutHeight, packet.timeoutTimestamp)
-    ))
+    if (len(channel.connectionHops) > 1) {
+      key = packetCommitmentPath(packet.GetSourcePort(), packet.GetSourceChannel(), packet.GetSequence())
+      abortTransactionUnless(connection.verifyMultihopMembership(
+        connection,
+        proofHeight,
+        proof,
+        channel.ConnectionHops,
+        key,
+        hash(packet.data, packet.timeoutHeight, packet.timeoutTimestamp)
+      ))
+    } else {
+      abortTransactionUnless(connection.verifyPacketData(
+        proofHeight,
+        proof,
+        packet.sourcePort,
+        packet.sourceChannel,
+        packet.sequence,
+        hash(packet.data, packet.timeoutHeight, packet.timeoutTimestamp)
+      ))
+    }
 
     // do sequence check before any state changes
     if channel.order == ORDERED || channel.order == ORDERED_ALLOW_TIMEOUT {
@@ -668,13 +855,13 @@ function recvPacket(
         if (packet.sequence < nextSequenceRecv) {
           // event is emitted even if transaction is aborted
           emitLogEntry("recvPacket", {
-            data: packet.data 
-            timeoutHeight: packet.timeoutHeight, 
+            data: packet.data
+            timeoutHeight: packet.timeoutHeight,
             timeoutTimestamp: packet.timeoutTimestamp,
             sequence: packet.sequence,
-            sourcePort: packet.sourcePort, 
+            sourcePort: packet.sourcePort,
             sourceChannel: packet.sourceChannel,
-            destPort: packet.destPort, 
+            destPort: packet.destPort,
             destChannel: packet.destChannel,
             order: channel.order,
             connection: channel.connectionHops[0]
@@ -726,13 +913,13 @@ function recvPacket(
         packetReceipt = provableStore.get(packetReceiptPath(packet.destPort, packet.destChannel, packet.sequence))
         if (packetReceipt != null) {
           emitLogEntry("recvPacket", {
-            data: packet.data 
-            timeoutHeight: packet.timeoutHeight, 
+            data: packet.data
+            timeoutHeight: packet.timeoutHeight,
             timeoutTimestamp: packet.timeoutTimestamp,
             sequence: packet.sequence,
-            sourcePort: packet.sourcePort, 
+            sourcePort: packet.sourcePort,
             sourceChannel: packet.sourceChannel,
-            destPort: packet.destPort, 
+            destPort: packet.destPort,
             destChannel: packet.destChannel,
             order: channel.order,
             connection: channel.connectionHops[0]
@@ -746,16 +933,16 @@ function recvPacket(
         )
       break;
     }
-    
+
     // log that a packet has been received
     emitLogEntry("recvPacket", {
-      data: packet.data 
-      timeoutHeight: packet.timeoutHeight, 
+      data: packet.data
+      timeoutHeight: packet.timeoutHeight,
       timeoutTimestamp: packet.timeoutTimestamp,
       sequence: packet.sequence,
-      sourcePort: packet.sourcePort, 
+      sourcePort: packet.sourcePort,
       sourceChannel: packet.sourceChannel,
-      destPort: packet.destPort, 
+      destPort: packet.destPort,
       destChannel: packet.destChannel,
       order: channel.order,
       connection: channel.connectionHops[0]
@@ -803,11 +990,11 @@ function writeAcknowledgement(
     // log that a packet has been acknowledged
     emitLogEntry("writeAcknowledgement", {
       sequence: packet.sequence,
-      timeoutHeight: packet.timeoutHeight, 
-      port: packet.destPort, 
+      timeoutHeight: packet.timeoutHeight,
+      port: packet.destPort,
       channel: packet.destChannel,
-      timeoutTimestamp: packet.timeoutTimestamp, 
-      data: packet.data, 
+      timeoutTimestamp: packet.timeoutTimestamp,
+      data: packet.data,
       acknowledgement
     })
 }
@@ -827,14 +1014,14 @@ We pass the `relayer` address just as in [Receiving packets](#receiving-packets)
 function acknowledgePacket(
   packet: OpaquePacket,
   acknowledgement: bytes,
-  proof: CommitmentProof,
+  proof: CommitmentProof | MultihopProof,
   proofHeight: Height,
   relayer: string): Packet {
 
     // abort transaction unless that channel is open, calling module owns the associated port, and the packet fields match
     channel = provableStore.get(channelPath(packet.sourcePort, packet.sourceChannel))
     abortTransactionUnless(channel !== null)
-    abortTransactionUnless(channel.state === OPEN)
+    abortTransactionUnless(channel.state === OPEN || channel.state === FLUSHING)
     abortTransactionUnless(packet.destPort === channel.counterpartyPortIdentifier)
     abortTransactionUnless(packet.destChannel === channel.counterpartyChannelIdentifier)
 
@@ -847,14 +1034,26 @@ function acknowledgePacket(
            === hash(packet.data, packet.timeoutHeight, packet.timeoutTimestamp))
 
     // abort transaction unless correct acknowledgement on counterparty chain
-    abortTransactionUnless(connection.verifyPacketAcknowledgement(
-      proofHeight,
-      proof,
-      packet.destPort,
-      packet.destChannel,
-      packet.sequence,
-      acknowledgement
-    ))
+    if (len(channel.connectionHops) > 1) {
+      key = packetAcknowledgementPath(packet.GetDestPort(), packet.GetDestChannel(), packet.GetSequence())
+      abortTransactionUnless(connection.verifyMultihopMembership(
+        connection,
+        proofHeight,
+        proof,
+        channel.ConnectionHops,
+        key,
+        acknowledgement
+      ))
+    } else {
+      abortTransactionUnless(connection.verifyPacketAcknowledgement(
+        proofHeight,
+        proof,
+        packet.destPort,
+        packet.destChannel,
+        packet.sequence,
+        acknowledgement
+      ))
+    }
 
     // abort transaction unless acknowledgement is processed in order
     if (channel.order === ORDERED || channel.order == ORDERED_ALLOW_TIMEOUT) {
@@ -869,6 +1068,22 @@ function acknowledgePacket(
     // delete our commitment so we can't "acknowledge" again
     provableStore.delete(packetCommitmentPath(packet.sourcePort, packet.sourceChannel, packet.sequence))
 
+    if channel.state == FLUSHING {
+      upgradeTimeout = privateStore.get(counterpartyUpgradeTimeout(portIdentifier, channelIdentifier))
+      if upgradeTimeout != nil {
+        // counterparty-specified timeout must not have exceeded
+        // if it has, then restore the channel and abort upgrade handshake
+        if (upgradeTimeout.timeoutHeight != 0 && currentHeight() >= upgradeTimeout.timeoutHeight) ||
+            (upgradeTimeout.timeoutTimestamp != 0 && currentTimestamp() >= upgradeTimeout.timeoutTimestamp ) {
+                restoreChannel(portIdentifier, channelIdentifier)
+        } else if pendingInflightPackets(portIdentifier, channelIdentifier) == nil {
+          // if this was the last in-flight packet, then move channel state to FLUSHCOMPLETE
+          channel.state = FLUSHCOMPLETE
+          publicStore.set(channelPath(portIdentifier, channelIdentifier), channel)
+        }
+      }
+    }
+
     // return transparent packet
     return packet
 }
@@ -880,7 +1095,7 @@ The acknowledgement returned from the remote chain is defined as arbitrary bytes
 may either encode a successful execution or a failure (anything besides a timeout). There is no generic way to
 distinguish the two cases, which requires that any client-side packet visualiser understands every app-specific protocol
 in order to distinguish the case of successful or failed relay. In order to reduce this issue, we offer an additional
-specification for acknowledgement formats, which [SHOULD](https://www.ietf.org/rfc/rfc2119.txt) be used by the 
+specification for acknowledgement formats, which [SHOULD](https://www.ietf.org/rfc/rfc2119.txt) be used by the
 app-specific protocols.
 
 ```proto
@@ -895,7 +1110,7 @@ message Acknowledgement {
 If an application uses a different format for acknowledgement bytes, it MUST not deserialise to a valid protobuf message
 of this format. Note that all packets contain exactly one non-empty field, and it must be result or error.  The field
 numbers 21 and 22 were explicitly chosen to avoid accidental conflicts with other protobuf message formats used
-for acknowledgements. The first byte of any message with this format will be the non-ASCII values `0xaa` (result) 
+for acknowledgements. The first byte of any message with this format will be the non-ASCII values `0xaa` (result)
 or `0xb2` (error).
 
 #### Timeouts
@@ -925,7 +1140,7 @@ We pass the `relayer` address just as in [Receiving packets](#receiving-packets)
 ```typescript
 function timeoutPacket(
   packet: OpaquePacket,
-  proof: CommitmentProof,
+  proof: CommitmentProof | MultihopProof,
   proofHeight: Height,
   nextSequenceRecv: Maybe<uint64>,
   relayer: string): Packet {
@@ -935,13 +1150,24 @@ function timeoutPacket(
     abortTransactionUnless(packet.destChannel === channel.counterpartyChannelIdentifier)
 
     connection = provableStore.get(connectionPath(channel.connectionHops[0]))
+    abortTransactionUnless(connection !== null)
+
     // note: the connection may have been closed
     abortTransactionUnless(packet.destPort === channel.counterpartyPortIdentifier)
+
+    // get the timestamp from the final consensus state in the channel path
+    var proofTimestamp
+    if (channel.connectionHops.length > 1) {
+      consensusState = abortTransactionUnless(Unmarshal(proof.ConsensusProofs[proof.ConsensusProofs.length-1].Value))
+      proofTimestamp = consensusState.GetTimestamp()
+    } else {
+      proofTimestamp, err = connection.getTimestampAtHeight(connection, proofHeight)
+    }
 
     // check that timeout height or timeout timestamp has passed on the other end
     abortTransactionUnless(
       (packet.timeoutHeight > 0 && proofHeight >= packet.timeoutHeight) ||
-      (packet.timeoutTimestamp > 0 && connection.getTimestampAtHeight(proofHeight) >= packet.timeoutTimestamp))
+      (packet.timeoutTimestamp > 0 && proofTimestamp >= packet.timeoutTimestamp))
 
     // verify we actually sent this packet, check the store
     abortTransactionUnless(provableStore.get(packetCommitmentPath(packet.sourcePort, packet.sourceChannel, packet.sequence))
@@ -953,25 +1179,49 @@ function timeoutPacket(
         // only allow timeout on next sequence so all sequences before the timed out packet are processed (received/timed out)
         // before this packet times out
         abortTransactionUnless(nextSequenceRecv == packet.sequence)
+
         // ordered channel: check that the recv sequence is as claimed
-        abortTransactionUnless(connection.verifyNextSequenceRecv(
-          proofHeight,
-          proof,
-          packet.destPort,
-          packet.destChannel,
-          nextSequenceRecv
-        ))
+        if (channel.connectionHops.length > 1) {
+          key = nextSequenceRecvPath(packet.srcPort, packet.srcChannel)
+          abortTransactionUnless(connection.verifyMultihopMembership(
+              connection,
+              proofHeight,
+              proof,
+              channel.ConnectionHops,
+              key,
+              nextSequenceRecv
+          ))
+        } else {
+            abortTransactionUnless(connection.verifyNextSequenceRecv(
+              proofHeight,
+              proof,
+              packet.destPort,
+              packet.destChannel,
+              nextSequenceRecv
+          ))
+        }
         break;
 
       case UNORDERED:
-        // unordered channel: verify absence of receipt at packet index
-        abortTransactionUnless(connection.verifyPacketReceiptAbsence(
-          proofHeight,
-          proof,
-          packet.destPort,
-          packet.destChannel,
-          packet.sequence
-        ))
+        if (channel.connectionHops.length > 1) {
+          key = packetReceiptPath(packet.srcPort, packet.srcChannel, packet.sequence)
+          abortTransactionUnless(connection.verifyMultihopNonMembership(
+            connection,
+            proofHeight,
+            proof,
+            channel.ConnectionHops,
+            key
+          ))
+        } else {
+          // unordered channel: verify absence of receipt at packet index
+          abortTransactionUnless(connection.verifyPacketReceiptAbsence(
+            proofHeight,
+            proof,
+            packet.destPort,
+            packet.destChannel,
+            packet.sequence
+          ))
+        }
         break;
 
       // NOTE: For ORDERED_ALLOW_TIMEOUT, the relayer must first attempt the receive on the destination chain
@@ -981,25 +1231,53 @@ function timeoutPacket(
         // only allow timeout on next sequence so all sequences before the timed out packet are processed (received/timed out)
         // before this packet times out
         abortTransactionUnless(nextSequenceRecv == packet.sequence)
-        abortTransactionUnless(connection.verifyPacketReceipt(
-          proofHeight,
-          proof,
-          packet.destPort,
-          packet.destChannel,
-          packet.sequence
-          TIMEOUT_RECEIPT,
-        ))
+
+         if (channel.connectionHops.length > 1) {
+          abortTransactionUnless(connection.verifyMultihopMembership(
+              connection,
+              proofHeight,
+              proof,
+              channel.ConnectionHops,
+              packetReceiptPath(packet.destPort, packet.destChannel, packet.sequence),
+              TIMEOUT_RECEIPT
+          ))
+        } else {
+          abortTransactionUnless(connection.verifyPacketReceipt(
+            proofHeight,
+            proof,
+            packet.destPort,
+            packet.destChannel,
+            packet.sequence
+            TIMEOUT_RECEIPT,
+          ))
+        }
         break;
 
       default:
         // unsupported channel type
         abortTransactionUnless(true)
-    } 
+    }
 
     // all assertions passed, we can alter state
 
     // delete our commitment
     provableStore.delete(packetCommitmentPath(packet.sourcePort, packet.sourceChannel, packet.sequence))
+
+    if channel.state == FLUSHING {
+      upgradeTimeout = privateStore.get(counterpartyUpgradeTimeout(portIdentifier, channelIdentifier))
+      if upgradeTimeout != nil {
+        // counterparty-specified timeout must not have exceeded
+        // if it has, then restore the channel and abort upgrade handshake
+        if (upgradeTimeout.timeoutHeight != 0 && currentHeight() >= upgradeTimeout.timeoutHeight) ||
+            (upgradeTimeout.timeoutTimestamp != 0 && currentTimestamp() >= upgradeTimeout.timeoutTimestamp ) {
+                restoreChannel(portIdentifier, channelIdentifier)
+        } else if pendingInflightPackets(portIdentifier, channelIdentifier) == nil {
+          // if this was the last in-flight packet, then move channel state to FLUSHCOMPLETE
+          channel.state = FLUSHCOMPLETE
+          publicStore.set(channelPath(portIdentifier, channelIdentifier), channel)
+        }
+      }
+    }
 
     // only close on strictly ORDERED channels
     if channel.order === ORDERED {
@@ -1031,8 +1309,8 @@ We pass the `relayer` address just as in [Receiving packets](#receiving-packets)
 ```typescript
 function timeoutOnClose(
   packet: Packet,
-  proof: CommitmentProof,
-  proofClosed: CommitmentProof,
+  proof: CommitmentProof | MultihopProof,
+  proofClosed: CommitmentProof | MultihopProof,
   proofHeight: Height,
   nextSequenceRecv: Maybe<uint64>,
   relayer: string): Packet {
@@ -1049,37 +1327,78 @@ function timeoutOnClose(
     abortTransactionUnless(provableStore.get(packetCommitmentPath(packet.sourcePort, packet.sourceChannel, packet.sequence))
            === hash(packet.data, packet.timeoutHeight, packet.timeoutTimestamp))
 
+    // return hops from counterparty's view
+    counterpartyHops = getCounterpartyHops(proof, connection)
+
     // check that the opposing channel end has closed
     expected = ChannelEnd{CLOSED, channel.order, channel.portIdentifier,
-                          channel.channelIdentifier, channel.connectionHops.reverse(), channel.version}
-    abortTransactionUnless(connection.verifyChannelState(
-      proofHeight,
-      proofClosed,
-      channel.counterpartyPortIdentifier,
-      channel.counterpartyChannelIdentifier,
-      expected
-    ))
+                          channel.channelIdentifier, counterpartyHops, channel.version}
+
+    // verify channel is closed
+    if (channel.connectionHops.length > 1) {
+      key = channelPath(counterparty.PortId, counterparty.ChannelId)
+      abortTransactionUnless(connection.VerifyMultihopMembership(
+        connection,
+        proofHeight,
+        proofClosed,
+        channel.ConnectionHops,
+        key,
+        expected
+      ))
+    } else {
+      abortTransactionUnless(connection.verifyChannelState(
+        proofHeight,
+        proofClosed,
+        channel.counterpartyPortIdentifier,
+        channel.counterpartyChannelIdentifier,
+        expected
+      ))
+    }
 
     if channel.order === ORDERED || channel.order == ORDERED_ALLOW_TIMEOUT {
-      // ordered channel: check that the recv sequence is as claimed
-      abortTransactionUnless(connection.verifyNextSequenceRecv(
-        proofHeight,
-        proof,
-        packet.destPort,
-        packet.destChannel,
-        nextSequenceRecv
-      ))
+
       // ordered channel: check that packet has not been received
       abortTransactionUnless(nextSequenceRecv <= packet.sequence)
+
+      // ordered channel: check that the recv sequence is as claimed
+      if (channel.connectionHops.length > 1) {
+        key = nextSequenceRecvPath(packet.destPort, packet.destChannel)
+        abortTransactionUnless(connection.verifyMultihopMembership(
+          connection,
+          proofHeight,
+          proof,
+          channel.ConnectionHops,
+          key,
+          nextSequenceRecv
+        ))
+      } else {
+        abortTransactionUnless(connection.verifyNextSequenceRecv(
+          proofHeight,
+          proof,
+          packet.destPort,
+          packet.destChannel,
+          nextSequenceRecv
+        ))
+      }
     } else
       // unordered channel: verify absence of receipt at packet index
-      abortTransactionUnless(connection.verifyPacketReceiptAbsence(
-        proofHeight,
-        proof,
-        packet.destPort,
-        packet.destChannel,
-        packet.sequence
-      ))
+      if (channel.connectionHops.length > 1) {
+        abortTransactionUnless(connection.verifyMultihopNonMembership(
+          connection,
+          proofHeight,
+          proof,
+          channel.ConnectionHops,
+          key
+        ))
+      } else {
+        abortTransactionUnless(connection.verifyPacketReceiptAbsence(
+          proofHeight,
+          proof,
+          packet.destPort,
+          packet.destChannel,
+          packet.sequence
+        ))
+      }
 
     // all assertions passed, we can alter state
 

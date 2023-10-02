@@ -119,7 +119,7 @@ types may require additional properties.
 * `ClientState` is the state of a client. It MUST expose an interface to higher-level protocol abstractions, 
   e.g., functions to verify proofs of the existence of particular values at particular paths at particular `Height`s.
 
-* `MisbehaviourPredicate` is a that checks whether the rules of `Consensus` were broken, 
+* `MisbehaviourPredicate` is a function that checks whether the rules of `Consensus` were broken, 
   in which case the client MUST be *frozen*, i.e., no subsequent `ConsensusState`s can be generated.
 
 * `Misbehaviour` is the proof needed by the `MisbehaviourPredicate` to determine whether 
@@ -351,7 +351,7 @@ Internal implementation details may differ (for example, a loopback client could
 - The `delayPeriodTime` is passed to the verification functions for packet-related proofs in order to allow packets to specify a period of time which must pass after a consensus state is added before it can be used for packet-related verification.
 - The `delayPeriodBlocks` is passed to the verification functions for packet-related proofs in order to allow packets to specify a period of blocks which must pass after a consensus state is added before it can be used for packet-related verification.
 
-`verifyMembership` is a generic proof verification method which verifies a proof of the existence of a value at a given `CommitmentPath` at the specified height. It MUST return an error is the verification is not successful. 
+`verifyMembership` is a generic proof verification method which verifies a proof of the existence of a value at a given `CommitmentPath` at the specified height. It MUST return an error if the verification is not successful. 
 The caller is expected to construct the full `CommitmentPath` from a `CommitmentPrefix` and a standardized path (as defined in [ICS 24](../ics-024-host-requirements/README.md#path-space)). If the caller desires a particular delay period to be enforced,
 then it can pass in a non-zero `delayPeriodTime` or `delayPeriodBlocks`. If a delay period is not necessary, the caller must pass in 0 for `delayPeriodTime` and `delayPeriodBlocks`,
 and the client will not enforce any delay period for verification.
@@ -368,7 +368,7 @@ type verifyMembership = (
   => Error
 ```
 
-`verifyNonMembership` is a generic proof verification method which verifies a proof of absence of a given `CommitmentPath` at the specified height. It MUST return an error is the verification is not successful. 
+`verifyNonMembership` is a generic proof verification method which verifies a proof of absence of a given `CommitmentPath` at the specified height. It MUST return an error if the verification is not successful. 
 The caller is expected to construct the full `CommitmentPath` from a `CommitmentPrefix` and a standardized path (as defined in [ICS 24](../ics-024-host-requirements/README.md#path-space)). If the caller desires a particular delay period to be enforced,
 then it can pass in a non-zero `delayPeriodTime` or `delayPeriodBlocks`. If a delay period is not necessary, the caller must pass in 0 for `delayPeriodTime` and `delayPeriodBlocks`,
 and the client will not enforce any delay period for verification.

@@ -159,14 +159,15 @@ These are combined together in a `ModuleCallbacks` interface:
 
 ```typescript
 interface ModuleCallbacks {
-  onChanOpenInit: onChanOpenInit,
-  onChanOpenTry: onChanOpenTry,
-  onChanOpenAck: onChanOpenAck,
-  onChanOpenConfirm: onChanOpenConfirm,
+  onChanOpenInit: onChanOpenInit
+  onChanOpenTry: onChanOpenTry
+  onChanOpenAck: onChanOpenAck
+  onChanOpenConfirm: onChanOpenConfirm
+  onChanCloseInit: onChanCloseInit
   onChanCloseConfirm: onChanCloseConfirm
   onRecvPacket: onRecvPacket
   onTimeoutPacket: onTimeoutPacket
-  onAcknowledgePacket: onAcknowledgePacket,
+  onAcknowledgePacket: onAcknowledgePacket
   onTimeoutPacketClose: onTimeoutPacketClose
 }
 ```
@@ -432,9 +433,7 @@ interface ChanOpenInit {
   order: ChannelOrder
   connectionHops: [Identifier]
   portIdentifier: Identifier
-  channelIdentifier: Identifier
   counterpartyPortIdentifier: Identifier
-  counterpartyChannelIdentifier: Identifier
   version: string
 }
 ```
@@ -446,19 +445,15 @@ function handleChanOpenInit(datagram: ChanOpenInit) {
     datagram.order,
     datagram.connectionHops,
     datagram.portIdentifier,
-    datagram.channelIdentifier,
-    datagram.counterpartyPortIdentifier,
-    datagram.counterpartyChannelIdentifier,
-    version // pass in version returned from callback
+    datagram.counterpartyPortIdentifier
   )
   version, err = module.onChanOpenInit(
     channelCapability, // pass in channel capability so that module can claim it (if needed)
     datagram.order,
     datagram.connectionHops,
     datagram.portIdentifier,
-    datagram.channelIdentifier,
+    channelIdentifier,
     datagram.counterpartyPortIdentifier,
-    datagram.counterpartyChannelIdentifier,
     datagram.version
   )
   abortTransactionUnless(err === nil)
@@ -483,7 +478,6 @@ interface ChanOpenTry {
   channelIdentifier: Identifier
   counterpartyPortIdentifier: Identifier
   counterpartyChannelIdentifier: Identifier
-  version: string
   counterpartyVersion: string
   proofInit: CommitmentProof
   proofHeight: Height
@@ -500,7 +494,6 @@ function handleChanOpenTry(datagram: ChanOpenTry) {
     datagram.channelIdentifier,
     datagram.counterpartyPortIdentifier,
     datagram.counterpartyChannelIdentifier,
-    version, // pass in version returned by callback
     datagram.counterpartyVersion,
     datagram.proofInit,
     datagram.proofHeight
@@ -510,7 +503,7 @@ function handleChanOpenTry(datagram: ChanOpenTry) {
     datagram.order,
     datagram.connectionHops,
     datagram.portIdentifier,
-    datagram.channelIdentifier,
+    channelIdentifier,
     datagram.counterpartyPortIdentifier,
     datagram.counterpartyChannelIdentifier,
     datagram.counterpartyVersion

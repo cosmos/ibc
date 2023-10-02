@@ -47,7 +47,7 @@ Consider a topology of three chains - `A`, `B`, and `C`, and two clients for cha
 
 *Without* "would-have-been-fooled", it will be possible to freeze client `A_2` (since there are two valid blocks at height `h_0 + k` which are newer than the latest header `A_2` knows), but it will *not*  be possible to freeze `A_1`, since `A_1` has already progressed beyond `h_0 + k`.
 
-Arguably, this is disadvantageous, since `A_1` was just "lucky" in having been updated when `A_2` was not, and clearly some Byzantine fault has happened that should probably be deal with by human or governance system intervention. The idea of "would-have-been-fooled" is to allow this to be detected by having `A_1` start from a configurable past header to detect misbehaviour (so in this case, `A_1` would be able to start from `h_0` and would also be frozen).
+Arguably, this is disadvantageous, since `A_1` was just "lucky" in having been updated when `A_2` was not, and clearly some Byzantine fault has happened that should probably be dealt with by human or governance system intervention. The idea of "would-have-been-fooled" is to allow this to be detected by having `A_1` start from a configurable past header to detect misbehaviour (so in this case, `A_1` would be able to start from `h_0` and would also be frozen).
 
 There is a free parameter here - namely, how far back is `A_1` willing to go (how big can `n` be where `A_1` will still be willing to look up `h_0`, having been updated to `h_0 + n`)? There is also a countervailing concern, in and of that double-signing is presumed to be costless after the unbonding period has passed, and we don't want to open up a denial-of-service vector for IBC clients.
 
