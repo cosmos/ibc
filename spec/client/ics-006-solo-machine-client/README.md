@@ -190,7 +190,6 @@ function verifyMisbehaviour(misbehaviour: Misbehaviour) {
   s2 = misbehaviour.signatureTwo
   pubkey = clientState.consensusState.publicKey
   diversifier = clientState.consensusState.diversifier
-  timestamp = clientState.consensusState.timestamp
   // assert that the signatures validate and that they are different
   sigBytes1 = SignBytes(
     sequence: misbehaviour.sequence,
