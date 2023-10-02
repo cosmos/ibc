@@ -989,7 +989,7 @@ function timeoutPacket(
       // NOTE: For ORDERED_ALLOW_TIMEOUT, the relayer must first attempt the receive on the destination chain
       // before the timeout receipt can be written and subsequently proven on the sender chain in timeoutPacket
       case ORDERED_ALLOW_TIMEOUT:
-        abortTransactionUnless(nextSequenceRecv > packet.sequence)
+        abortTransactionUnless(packet.sequence < nextSequenceRecv)
         abortTransactionUnless(connection.verifyPacketReceipt(
           proofHeight,
           proof,
