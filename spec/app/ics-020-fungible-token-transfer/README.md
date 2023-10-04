@@ -54,7 +54,7 @@ interface FungibleTokenPacketDataV2 {
 }
 
 interface Token {
-  denomination: string
+  denom: string
   trace: []string
   amount: uint64
   metadata: Metadata
@@ -271,16 +271,8 @@ function sendFungibleTokens(
       prefix = "{sourcePort}/{sourceChannel}/"
       // we are the source if the denomination is not prefixed
       source = token.trace[0] !== prefix
-      onChainDenom = constructOnChainDenom(token.trace, token.denomination)
-      // check if we've already sent metadata for this token on this channel
-      isMetadataSent = getSentMetadataFlag(sourcePort, sourceChannel, onChainDenom)
-      // if it hasn't been sent, then we will set the token metadata in the token
-      // so receiver can store it
-      // otherwise we leave metadata field blank to reduce redundancy
-      if !isMetadataSent {
-        metadata = getMetadata(onChainDenom)
-        token.metadata = metadata
-      }
+      onChainDenom = constructOnChainDenom(token.trace, token.denom)
+      
       if source {
         // determine escrow account
         escrowAccount = channelEscrowAddresses[sourceChannel]
@@ -292,8 +284,23 @@ function sendFungibleTokens(
       }
     }
 
-    // create FungibleTokenPacket data
-    data = FungibleTokenPacketData{tokens, sender, receiver, memo}
+    channel = provableStore.get(channelPath(sourcePort, sourceChannel))
+    if channel.version === "ics20-1" {
+      abortTransactionUnless(len(tokens) == 1)
+      data = FungibleTokenPacketData{tokens[0].denom, tokens[0].amount, sender, receiver, memo}
+    } else if channel.version === "ics20-2" {
+      // check if we've already sent metadata for this token on this channel
+      isMetadataSent = getSentMetadataFlag(sourcePort, sourceChannel, onChainDenom)
+      // if it hasn't been sent, then we will set the token metadata in the token
+      // so receiver can store it
+      // otherwise we leave metadata field blank to reduce redundancy
+      if !isMetadataSent {
+        metadata = getMetadata(onChainDenom)
+        token.metadata = metadata
+      }
+      // create FungibleTokenPacket data
+      data = FungibleTokenPacketData{tokens, sender, receiver, memo}
+    }
 
     // send packet using the interface defined in ICS4
     sequence = handler.sendPacket(
@@ -318,7 +325,7 @@ function onRecvPacket(packet: Packet) {
       FungibleTokenPacketData data = packet.data
       trace, denom = parseICS20V1Denom(data.denom)
       token = Token{
-        denomination: denom
+        denom: denom
         trace: trace
         amount: packet.amount
       }
@@ -336,7 +343,7 @@ function onRecvPacket(packet: Packet) {
     if source {
       // since we are receiving back to source we remove the prefix from the trace
       onChainTrace = token.trace[1:]
-      onChainDenom = constructOnChainDenom(onChainTrace, token.denomination)
+      onChainDenom = constructOnChainDenom(onChainTrace, token.denom)
       // receiver is source chain: unescrow tokens
       // determine escrow account
       escrowAccount = channelEscrowAddresses[packet.destChannel]
@@ -351,7 +358,7 @@ function onRecvPacket(packet: Packet) {
       // since we are receiving to a new sink zone we append the prefix to the trace
       prefix = "{packet.destPort}/{packet.destChannel}/"
       newTrace = append([]string{prefix}, token.trace...)
-      onChainDenom = constructOnChainDenom(newTrace, token.denomination)
+      onChainDenom = constructOnChainDenom(newTrace, token.denom)
       // sender was source, mint vouchers to receiver (assumed to fail if balance insufficient)
       err = bank.MintCoins(data.receiver, onChainDenom, token.amount)
       if (err !== nil)
@@ -380,14 +387,17 @@ function onAcknowledgePacket(
   if !(acknowledgement.success) {
     refundTokens(packet)
   } else {
-    // set metadata flag for any metadata we sent in the packet
-    // so we don't need to resend metadata for that token on this channel
-    // in the next sendPacket
-    FungibleTokenPacketDataV2 data = packet.data
-    for token in data.tokens {
-      if !isEmpty(token.metadata) {
-        onChainDenom = constructOnChainDenom(token.trace, token.denomination)
-        setMetadataFlag(packet.sourcePort, packet.sourceChannel, onChainDenom)
+    channel = provableStore.get(channelPath(sourcePort, sourceChannel))
+    if channel.version === "ics20-2" {
+      // set metadata flag for any metadata we sent in the packet
+      // so we don't need to resend metadata for that token on this channel
+      // in the next sendPacket
+      FungibleTokenPacketDataV2 data = packet.data
+      for token in data.tokens {
+        if !isEmpty(token.metadata) {
+          onChainDenom = constructOnChainDenom(token.trace, token.denom)
+          setMetadataFlag(packet.sourcePort, packet.sourceChannel, onChainDenom)
+        }
       }
     }
   }
@@ -412,7 +422,7 @@ function refundTokens(packet: Packet) {
       FungibleTokenPacketData data = packet.data
       trace, denom = parseICS20V1Denom(data.denom)
       token = Token{
-        denomination: denom
+        denom: denom
         trace: trace
         amount: packet.amount
       }
@@ -425,7 +435,7 @@ function refundTokens(packet: Packet) {
   for token in tokens {
     // we are the source if the denomination is not prefixed
     source = token.trace[0] !== prefix
-    onChainDenom = constructOnChainDenom(token.trace, token.denomination)
+    onChainDenom = constructOnChainDenom(token.trace, token.denom)
     if source {
       // sender was source chain, unescrow tokens back to sender
       escrowAccount = channelEscrowAddresses[packet.srcChannel]
@@ -475,6 +485,7 @@ Chains that maintain metadata about how to display the token denomination may se
 
 As mentioned above, user interfaces that display the denomination without any trace information then they **must** make a decision to trust a canonical path for that denomination. Otherwise, user interfaces must still somehow display the trace information to the end user. This is because the metadata contains human-readable information that is not directly verified by the state machine. Thus, a malicious sender chain can fool user interfaces if they choose to send metadata that is the same as some well-known token issued by a different chain. However, given that a certain chain and denomination is trusted; the metadata can make it easier for displays to represent the token without relying on out-of-chain information.
 
+`getMetadata` and `getSentMetadataFlag` are helper functions on the sender chain for version 2 of the transfer protocol. `getMetadata` is an optional function returns the metadata stored on the sender chain for a given denomination. `getSentMetadataFlag` will set a boolean flag when it is confirmed that the metadata for a given token has been received on the receiver chain. This should only be set on a successful acknowledgement so that it doesn't get set when the receiver state machine logic gets reverted. It is used to ensure that metadata is not sent redundantly as packets with the same denomination get sent after the first sent packet.
 
 #### Reasoning
 
