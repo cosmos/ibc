@@ -1370,27 +1370,27 @@ function timeoutOnClose(
         abortTransactionUnless(packet.sequence >= nextSequenceRecv)
         // ordered channel: check that the recv sequence is as claimed
 
-      // ordered channel: check that the recv sequence is as claimed
-      if (channel.connectionHops.length > 1) {
-        key = nextSequenceRecvPath(packet.destPort, packet.destChannel)
-        abortTransactionUnless(connection.verifyMultihopMembership(
-          connection,
-          proofHeight,
-          proof,
-          channel.ConnectionHops,
-          key,
-          nextSequenceRecv
-        ))
-      } else {
-        abortTransactionUnless(connection.verifyNextSequenceRecv(
-          proofHeight,
-          proof,
-          packet.destPort,
-          packet.destChannel,
-          nextSequenceRecv
-        ))
-      }
-      break;
+        // ordered channel: check that the recv sequence is as claimed
+        if (channel.connectionHops.length > 1) {
+          key = nextSequenceRecvPath(packet.destPort, packet.destChannel)
+          abortTransactionUnless(connection.verifyMultihopMembership(
+            connection,
+            proofHeight,
+            proof,
+            channel.ConnectionHops,
+            key,
+            nextSequenceRecv
+          ))
+        } else {
+          abortTransactionUnless(connection.verifyNextSequenceRecv(
+            proofHeight,
+            proof,
+            packet.destPort,
+            packet.destChannel,
+            nextSequenceRecv
+          ))
+        }
+        break;
 
       case UNORDERED:
         // unordered channel: verify absence of receipt at packet index
