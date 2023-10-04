@@ -35,7 +35,7 @@ The IBC handler interface & IBC routing module interface are as defined in [ICS 
 
 ### Data Structures
 
-Only one packet data type is required: `FungibleTokenPacketData`, which specifies the denomination, amount, sending account, and receiving account or `FungibleTokenPacketData` which specifies multiple tokens being sent between sender and receiver. A v2 supporting chain can optionally convert a v1 packet for channels that are still on version 1.
+Only one packet data type is required: `FungibleTokenPacketData`, which specifies the denomination, amount, sending account, and receiving account or `FungibleTokenPacketDataV2` which specifies multiple tokens being sent between sender and receiver. A v2 supporting chain can optionally convert a v1 packet for channels that are still on version 1.
 
 ```typescript
 interface FungibleTokenPacketData {
@@ -293,7 +293,7 @@ function sendFungibleTokens(
     }
 
     // create FungibleTokenPacket data
-    data = FungibleTokenPacketData{tokens, sender, receiver, memo}
+    data = FungibleTokenPacketDataV2{tokens, sender, receiver, memo}
 
     // send packet using the interface defined in ICS4
     sequence = handler.sendPacket(
@@ -473,7 +473,7 @@ Here, the "wasm", "callback", and "router" fields are all intended for separate 
 
 Chains that maintain metadata about how to display the token denomination may send along `denomunits` with the token in the packet so that receiver chains can store information about the token for display and UX purposes. Receiver chains may store this metadata themselves against their own on-chain denomination for the token. They should replace stale metadata with new metadata coming from the sender chain, and ensure they use the on-chain denomination to avoid different denominations writing over each other's metadata. Receiver chains are recommended to only store metadata coming from source chains, i.e. if the token trace is empty. This ensures that metadata is only stored when the chain of trust for that metadata is as small as possible.
 
-As mentioned above, user interfaces that display the denomination without any trace information then they **must** make a decision to trust a canonical path for that denomination. Otherwise, user interfaces must still somehow display the trace information to the end user. This is because the metadata contains human-readable information that is not directly verified by the state machine. Thus, a malicious sender chain can fool user interfaces if they choose to send metadata that is the same as some well-known token issued by a different chain. However, given that a certain chain and denomination is trusted; the metadata can make it easier for displays to represent the token without relying on out-of-chain information.
+As mentioned above, user interfaces that display the denomination without any trace information **must** make a decision to trust a canonical path for that denomination. Otherwise, user interfaces must still somehow display the trace information to the end user. This is because the metadata contains human-readable information that is not directly verified by the state machine. Thus, a malicious sender chain can fool user interfaces if they choose to send metadata that is the same as some well-known token issued by a different chain. However, given that a certain chain and denomination is trusted; the metadata can make it easier for displays to represent the token without relying on out-of-chain information.
 
 #### Reasoning
 
