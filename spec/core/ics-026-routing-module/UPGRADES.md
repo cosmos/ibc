@@ -93,7 +93,7 @@ is invalid. If an error is returned by the callback, core IBC will revert any ch
 The `onChanUpgradeAck` callback may also perform custom ACK logic.
 
 After `onChanUpgradeAck` returns successfully, the application upgrade is complete on this end so any 
-auxilliary data stored for the purposes of recovery is no longer needed and may be deleted.
+auxiliary data stored for the purposes of recovery is no longer needed and may be deleted.
 
 If the callback returns successfully, the application MUST have its state fully migrated to start processing packet data according to the new application parameters.
 
@@ -111,7 +111,7 @@ function onChanUpgradeAck(
 `onChanUpgradeOpen` will perform custom OPEN logic. It MUST NOT error since the counterparty has already approved the handshake, and transitioned to using the new upgrade parameters.
 
 After `onChanUpgradeOpen` returns, the application upgrade is complete so any 
-auxilliary data stored for the purposes of recovery is no longer needed and may be deleted.
+auxiliary data stored for the purposes of recovery is no longer needed and may be deleted.
 
 The application MUST have its state fully migrated to start processing packet data according to the new application parameters by the time the callback returns.
 

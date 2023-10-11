@@ -329,7 +329,7 @@ function startFlushUpgradeHandshake(
 // openUpgradeHandshake will switch the channel fields 
 // over to the agreed upon upgrade fields.
 // it will reset the channel state to OPEN.
-// it will delete auxilliary upgrade state.
+// it will delete auxiliary upgrade state.
 // caller must do all relevant checks before calling this function.
 function openUpgradeHandshake(
   portIdentifier: Identifier,
@@ -346,7 +346,7 @@ function openUpgradeHandshake(
   channel.state = OPEN
   provableStore.set(channelPath(portIdentifier, channelIdentifier), channel)
 
-  // delete auxilliary state
+  // delete auxiliary state
   provableStore.delete(channelUpgradePath(portIdentifier, channelIdentifier))
   privateStore.delete(channelCounterpartyLastPacketSequencePath(portIdentifier, channelIdentifier))
   privateStore.delete(channelCounterpartyUpgradeTimeout(portIdentifier, channelIdentifier))
@@ -357,7 +357,7 @@ function openUpgradeHandshake(
 
 ```typescript
 // restoreChannel will restore the channel state to its pre-upgrade state
-// and delete upgrade auxilliary state so that upgrade is aborted.
+// and delete upgrade auxiliary state so that upgrade is aborted.
 // it writes an error receipt to state so counterparty can restore as well.
 // NOTE: this function signature may be modified by implementors to take a custom error
 function restoreChannel(
@@ -373,7 +373,7 @@ function restoreChannel(
   channel.state = OPEN
   provableStore.set(channelPath(portIdentifier, channelIdentifier), channel)
 
-  // delete auxilliary state
+  // delete auxiliary state
   provableStore.delete(channelUpgradePath(portIdentifier, channelIdentifier))
   privateStore.delete(channelCounterpartyLastPacketSequencePath(portIdentifier, channelIdentifier))
   privateStore.delete(channelCounterpartyUpgradeTimeout(portIdentifier, channelIdentifier))
@@ -979,7 +979,7 @@ function timeoutChannelUpgrade(
     if upgrade.fields.version == counterpartyChannel.version &&
         upgrade.fields.order == counterpartyChannel.order &&
         counterpartyHops == counterpartyChannel.connectionHops {
-          // counterparty has already succesfully upgraded so we cannot timeout
+          // counterparty has already successfully upgraded so we cannot timeout
           abortTransactionUnless(false)
     }
   }
@@ -1018,4 +1018,4 @@ Note that a channel upgrade handshake may never complete successfully if the in-
 
 ### Migrations
 
-A chain may have to update its internal state to be consistent with the new upgraded channel. In this case, a migration handler should be a part of the chain binary before the upgrade process so that the chain can properly migrate its state once the upgrade is successful. If a migration handler is necessary for a given upgrade but is not available, then the executing chain must reject the upgrade so as not to enter into an invalid state. This state migration will not be verified by the counterparty since it will just assume that if the channel is upgraded to a particular channel version, then the auxilliary state on the counterparty will also be updated to match the specification for the given channel version. The migration must only run once the upgrade has successfully completed and the new channel is `OPEN` (ie. on `ChanUpgradeConfirm` or `ChanUpgradeOpen`).
+A chain may have to update its internal state to be consistent with the new upgraded channel. In this case, a migration handler should be a part of the chain binary before the upgrade process so that the chain can properly migrate its state once the upgrade is successful. If a migration handler is necessary for a given upgrade but is not available, then the executing chain must reject the upgrade so as not to enter into an invalid state. This state migration will not be verified by the counterparty since it will just assume that if the channel is upgraded to a particular channel version, then the auxiliary state on the counterparty will also be updated to match the specification for the given channel version. The migration must only run once the upgrade has successfully completed and the new channel is `OPEN` (ie. on `ChanUpgradeConfirm` or `ChanUpgradeOpen`).
