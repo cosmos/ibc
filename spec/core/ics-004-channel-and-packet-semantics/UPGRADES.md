@@ -289,7 +289,7 @@ function isCompatibleUpgradeFields(
 }
 ```
 
-`startFlushUpgradeHandshake` will set the counterparty last packet send and continue blocking the upgrade from continuing until all in-flight packets have been flushed. When the channel is in blocked mode, any packet receive above the counterparty last packet send will be rejected. It will set the channel state to `FLUSHING` and block `sendPacket`. During this time; `receivePacket`, `acknowledgePacket` and `timeoutPacket` will still be allowed and processed according to the original channel parameters. The state machine will set a timer for how long the other side can take before it completes flushing and moves to `FLUSHCOMPLETE`. The new proposed upgrade will be stored in the public store for counterparty verification.
+`startFlushUpgradeHandshake` will set the counterparty last packet send and continue blocking the upgrade from continuing until all in-flight packets have been flushed. When the channel is in blocked mode, any packet receive above the counterparty last packet send will be rejected. It will set the channel state to `FLUSHING` and block `sendPacket`. During this time; `receivePacket`, `acknowledgePacket` and `timeoutPacket` will still be allowed and processed according to the original channel parameters. The state machine will set a timer for how long the other side can take before it completes flushing and moves to `FLUSHCOMPLETE`. The new proposed upgrade will be stored in the provable store for counterparty verification.
 
 ```typescript
 // startFlushUpgradeHandshake will verify that the channel
@@ -315,9 +315,9 @@ function startFlushUpgradeHandshake(
   lastPacketSendSequence = provableStore.get(nextSequenceSendPath(portIdentifier, channelIdentifier)) - 1
 
   upgrade.timeout = upgradeTimeout
-  upgrade.lastPacketSendSequence = lastPacketSendSequence
+  upgrade.lastPacketSent = lastPacketSendSequence
   
-  // store upgrade in public store for counterparty proof verification
+  // store upgrade in provable store for counterparty proof verification
   provableStore.set(channelPath(portIdentifier, channelIdentifier), channel)
   provableStore.set(channelUpgradePath(portIdentifier, channelIdentifier), upgrade)
 }
@@ -692,6 +692,12 @@ function chanUpgradeAck(
         return
   }
 
+  // store counterparty's sequence number of last packet sent
+  privateStore.set(
+    channelCounterpartyLastPacketSequencePath(portIdentifier, channelIdentifier), 
+    counterpartyUpgrade.lastPacketSent
+  )
+
   // if there are no in-flight packets on our end, we can automatically go to FLUSHCOMPLETE
   // otherwise store counterparty timeout so packet handlers can check before going to FLUSHCOMPLETE
   if pendingInflightPackets(portIdentifier, channelIdentifier) == nil {
@@ -787,6 +793,12 @@ function chanUpgradeConfirm(
         return
   }
 
+  // store counterparty's sequence number of last packet sent
+  privateStore.set(
+    channelCounterpartyLastPacketSequencePath(portIdentifier, channelIdentifier), 
+    counterpartyUpgrade.lastPacketSent
+  )
+  
   // if there are no in-flight packets on our end, we can automatically go to FLUSHCOMPLETE
   if pendingInflightPackets(portIdentifier, channelIdentifier) == nil {
     channel.state = FLUSHCOMPLETE
@@ -797,7 +809,8 @@ function chanUpgradeConfirm(
 
   // if both chains are already in flushcomplete we can move to OPEN
   if channel.state == FLUSHCOMPLETE && counterpartyChannelState == FLUSHCOMPLETE {
-    openUpgradelHandshake(portIdentifier, channelIdentifier)
+    openUpgradeHandshake(portIdentifier, channelIdentifier)
+    module = lookupModule(portIdentifier)
     module.onChanUpgradeOpen(portIdentifier, channelIdentifier)
   }
 }
