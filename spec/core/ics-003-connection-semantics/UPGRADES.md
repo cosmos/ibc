@@ -456,12 +456,12 @@ function cancelConnectionUpgrade(
     abortTransactionUnless(verifyConnectionUpgradeError(currentConnection, proofHeight, proofUpgradeError, errorReceipt))
 
     // cancel upgrade
-    // and restore original conneciton
+    // and restore original connection
     // delete unnecessary state
     originalConnection = privateStore.get(restorePath(identifier))
     provableStore.set(connectionPath(identifier), originalConnection)
 
-    // delete auxilliary upgrade state
+    // delete auxiliary upgrade state
     provableStore.delete(timeoutPath(identifier))
     privateStore.delete(restorePath(identifier))
 }
@@ -503,7 +503,7 @@ function timeoutConnectionUpgrade(
     originalConnection = privateStore.get(restorePath(identifier))
     provableStore.set(connectionPath(identifier), originalConnection)
 
-    // delete auxilliary upgrade state
+    // delete auxiliary upgrade state
     provableStore.delete(timeoutPath(identifier))
     privateStore.delete(restorePath(identifier))
 }
@@ -515,4 +515,4 @@ The TRY chain will receive the timeout parameters chosen by the counterparty on 
 
 ### Migrations
 
-A chain may have to update its internal state to be consistent with the new upgraded connection. In this case, a migration handler should be a part of the chain binary before the upgrade process so that the chain can properly migrate its state once the upgrade is successful. If a migration handler is necessary for a given upgrade but is not available, then th executing chain must reject the upgrade so as not to enter into an invalid state. This state migration will not be verified by the counterparty since it will just assume that if the connection is upgraded to a particular connection version, then the auxilliary state on the counterparty will also be updated to match the specification for the given connection version. The migration must only run once the upgrade has successfully completed and the new connection is `OPEN` (ie. on `ACK` and `CONFIRM`).
+A chain may have to update its internal state to be consistent with the new upgraded connection. In this case, a migration handler should be a part of the chain binary before the upgrade process so that the chain can properly migrate its state once the upgrade is successful. If a migration handler is necessary for a given upgrade but is not available, then th executing chain must reject the upgrade so as not to enter into an invalid state. This state migration will not be verified by the counterparty since it will just assume that if the connection is upgraded to a particular connection version, then the auxiliary state on the counterparty will also be updated to match the specification for the given connection version. The migration must only run once the upgrade has successfully completed and the new connection is `OPEN` (ie. on `ACK` and `CONFIRM`).
