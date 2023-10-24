@@ -2,8 +2,8 @@
 
 This document is an attempt to abstract the [channel upgradability specs](https://github.com/cosmos/ibc/blob/main/spec/core/ics-004-channel-and-packet-semantics/UPGRADES.md) into finite state machines (FMS). 
 
-# Upgrade Handshake 
-According to the [specs](https://github.com/cosmos/ibc/blob/main/spec/core/ics-004-channel-and-packet-semantics/UPGRADES.md#upgrade-handshake), we can model the upgrade handshake with 2 main flow namely, `UpgradeOk` and `UpgradeNotOk`. `UpgradeNotOk` can be further expanded in 3 subflows namely, `UpgradeCanceled`,`UpgradeExpired`, `UpgradeStaled`.  
+# Channel Upgradability Protocol 
+According to the [specs](https://github.com/cosmos/ibc/blob/main/spec/core/ics-004-channel-and-packet-semantics/UPGRADES.md#upgrade-handshake), we can model the channel upgradability protocol with 2 main flow namely, `UpgradeOk` and `UpgradeNotOk`. `UpgradeNotOk` can be further expanded in 3 subflows namely, `UpgradeCanceled`,`UpgradeExpired`, `UpgradeStaled`.  
 
 - `UpgradeOk`
 - `UpgradeNotOk`
