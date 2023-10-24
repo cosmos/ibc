@@ -105,11 +105,10 @@ The upgrade type will represent a particular upgrade attempt on a channel end.
 interface Upgrade {
   fields: UpgradeFields
   timeout: UpgradeTimeout
-  lastPacketSent: uint64
 }
 ```
 
-The upgrade contains the proposed upgrade for the channel end on the executing chain, the timeout for the upgrade attempt, and the last packet send sequence for the channel. The `lastPacketSent` allows the counterparty to know which packets need to be flushed before the channel can reopen with the newly negotiated parameters. Any packet sent to the channel end with a packet sequence above the `lastPacketSent` will be rejected until the upgrade is complete.
+The upgrade contains the proposed upgrade for the channel end on the executing chain and the timeout for the upgrade attempt.
 
 #### `ErrorReceipt`
 
@@ -153,16 +152,6 @@ function verifyChannelUpgrade(
     channelUpgradePath(counterpartyPortIdentifier, counterpartyChannelIdentifier)
   )
   return verifyMembership(clientState, height, 0, 0, proof, path, upgrade)
-}
-```
-
-#### CounterpartyLastPacketSequence Path
-
-The chain must store the counterparty's last packet sequence on `startFlushUpgradeHandshake`. This will be stored in the `counterpartyLastPacketSequence` path on the private store.
-
-```typescript
-function counterpartyLastPacketSequencePath(portIdentifier: Identifier, channelIdentifier: Identifier): Path {
-    return "channelUpgrades/counterpartyLastPacketSequence/ports/{portIdentifier}/channels/{channelIdentifier}"
 }
 ```
 
@@ -244,7 +233,7 @@ function initUpgradeHandshake(
   // new order must be supported by the new connection
   abortTransactionUnless(isSupported(proposedConnection, proposedUpgradeFields.ordering))
 
-  // lastPacketSent and timeout will be filled when we move to FLUSHING
+  // timeout will be filled when we move to FLUSHING
   upgrade = Upgrade{
     fields: proposedUpgradeFields,
   }
@@ -289,7 +278,7 @@ function isCompatibleUpgradeFields(
 }
 ```
 
-`startFlushUpgradeHandshake` will set the counterparty last packet send and continue blocking the upgrade from continuing until all in-flight packets have been flushed. When the channel is in blocked mode, any packet receive above the counterparty last packet send will be rejected. It will set the channel state to `FLUSHING` and block `sendPacket`. During this time; `receivePacket`, `acknowledgePacket` and `timeoutPacket` will still be allowed and processed according to the original channel parameters. The state machine will set a timer for how long the other side can take before it completes flushing and moves to `FLUSHCOMPLETE`. The new proposed upgrade will be stored in the public store for counterparty verification.
+`startFlushUpgradeHandshake` will block the upgrade from continuing until all in-flight packets have been flushed. It will set the channel state to `FLUSHING` and block `sendPacket`. During this time; `receivePacket`, `acknowledgePacket` and `timeoutPacket` will still be allowed and processed according to the original channel parameters. The state machine will set a timer for how long the other side can take before it completes flushing and moves to `FLUSHCOMPLETE`. The new proposed upgrade will be stored in the public store for counterparty verification.
 
 ```typescript
 // startFlushUpgradeHandshake will verify that the channel
@@ -312,10 +301,7 @@ function startFlushUpgradeHandshake(
   // either timeout height or timestamp must be non-zero
   abortTransactionUnless(upgradeTimeout.timeoutHeight != 0 || upgradeTimeout.timeoutTimestamp != 0)
 
-  lastPacketSendSequence = provableStore.get(nextSequenceSendPath(portIdentifier, channelIdentifier)) - 1
-
   upgrade.timeout = upgradeTimeout
-  upgrade.lastPacketSendSequence = lastPacketSendSequence
   
   // store upgrade in public store for counterparty proof verification
   provableStore.set(channelPath(portIdentifier, channelIdentifier), channel)
@@ -348,7 +334,6 @@ function openUpgradeHandshake(
 
   // delete auxiliary state
   provableStore.delete(channelUpgradePath(portIdentifier, channelIdentifier))
-  privateStore.delete(channelCounterpartyLastPacketSequencePath(portIdentifier, channelIdentifier))
   privateStore.delete(channelCounterpartyUpgradeTimeout(portIdentifier, channelIdentifier))
 }
 ```
@@ -375,7 +360,6 @@ function restoreChannel(
 
   // delete auxiliary state
   provableStore.delete(channelUpgradePath(portIdentifier, channelIdentifier))
-  privateStore.delete(channelCounterpartyLastPacketSequencePath(portIdentifier, channelIdentifier))
   privateStore.delete(channelCounterpartyUpgradeTimeout(portIdentifier, channelIdentifier))
 
   // call modules onChanUpgradeRestore callback

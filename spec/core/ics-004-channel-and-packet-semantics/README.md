@@ -828,7 +828,7 @@ function recvPacket(
     channel = provableStore.get(channelPath(packet.destPort, packet.destChannel))
     abortTransactionUnless(channel !== null)
     counterpartyLastPacketSent = privateStore.get(channelCounterpartyLastPacketSequencePath(packet.destPort, packet.destChannel)
-    abortTransactionUnless(channel.state === OPEN || (channel.state === FLUSHING && packet.sequence <= counterpartyLastPacketSent))
+    abortTransactionUnless(channel.state === OPEN || (channel.state === FLUSHING))
     abortTransactionUnless(authenticateCapability(channelCapabilityPath(packet.destPort, packet.destChannel), capability))
     abortTransactionUnless(packet.sourcePort === channel.counterpartyPortIdentifier)
     abortTransactionUnless(packet.sourceChannel === channel.counterpartyChannelIdentifier)
