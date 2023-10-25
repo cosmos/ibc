@@ -1,6 +1,6 @@
 # Channel Upgradability Finite State Machines 
 
-This document is an attempt to abstract the [channel upgradability specs](https://github.com/cosmos/ibc/blob/main/spec/core/ics-004-channel-and-packet-semantics/UPGRADES.md) into finite state machines (FMS). 
+This document is an attempt to abstract the [channel upgradability specs](https://github.com/cosmos/ibc/blob/main/spec/core/ics-004-channel-and-packet-semantics/UPGRADES.md) into finite state machines (FSMs). 
 
 # Channel Upgradability Protocol 
 According to the [specs](https://github.com/cosmos/ibc/blob/main/spec/core/ics-004-channel-and-packet-semantics/UPGRADES.md#upgrade-handshake), we can model the channel upgradability protocol with 2 main flow namely, `UpgradeOk` and `UpgradeNotOk`. `UpgradeOk` can be expanded in 2 subflows namely `UpgradeOkCrossingHello` and `UpgradeOkNotCrossingHello`. `UpgradeNotOk` can be further expanded in 3 subflows namely `UpgradeCanceled`,`UpgradeExpired`, `UpgradeStaled`.  
@@ -28,6 +28,40 @@ In this section we describe the happy path of the channel upgradability protocol
 
 The content of this section may be completely modified. I'm trying to understand how to better defines all the conditions and invariants needed for every state transition. 
 
+### Admitted Flow
+Here we list all the possible flows. 
+
+1. `S0 -> S1 -> S2 -> S3_1 -> S4 -> S5_1 ->S6`  
+2. `S0 -> S1 -> S2 -> S3_2 -> S5_1 ->S6`
+3. `S0 -> S1 -> S2 -> S3_2 -> S5_2 ->S6`
+
+### States Description
+
+**State Table**
+
+| StateID| Description                                                  |
+|--------|--------------------------------------------------------------|
+| S0    | A:OPEN; B:OPEN :: The channel is ready to be upgraded        |
+| S1    | A:OPEN; B:OPEN :: Chain A has started the process            |
+| S2    | A:OPEN; B:FLUSHING            |
+| S3_1  | A:FLUSHING; B:FLUSHING        |
+| S3_2  | A:FLUSHING_COMPLETE; B:FLUSHING |
+| S4    | A:FLUSHING; B:FLUSHING_COMPLETE |
+| S5_1  | A:FLUSHING_COMPLETE; B:FLUSHING_COMPLETE                  |
+| S5_2  | A:FLUSHING_COMPLETE; B:OPEN                  |
+| S6    | A:OPEN; B:OPEN                  |
+
+**F:Admitted State Transition**:
+- S0->S1 
+- S1->S2
+- S2->S3_1 
+- S2->S3_2
+- S3_1->S4
+- S3_2->S5_1
+- S3_2->S5_2
+- S5_1->S6
+- S5_2->S6
+
 ### Definition Description
 We have a working channel `Chan`. The channel works on top of an established connection between ChainA and ChainB and has two ends. We will call `ChanA` and `ChanB` the ends of the channel of the connected chains. 
 
@@ -35,45 +69,19 @@ For both chains we have a provable store `PS`. We define `PSa` and `PSb` as the 
 
 For the upgradability protocol the [`Upgrade`](https://github.com/cosmos/ibc/blob/main/spec/core/ics-004-channel-and-packet-semantics/UPGRADES.md#upgrade) type, that represent a particular upgrade attempt on a channel hand, has been introduced. We will call `Upg` the upgrade parameters store in `Chan` and `UpgA` and `UpgB` the upgrade parameters at both `ChanA` and `ChanB` ends
 
-For every of the defined structure we will have `UpgA.t0`,`UpgB.t0` the upgrade parameters at t0 (e.g. starting of the upgrade) and `UpgA.t1`,`UpgB.t1` the upgrade parameters at t1 (e.g proposed upgrade) and `UpgA.t2`,`UpgB.t2` the upgrade parameters at t2 (e.g finalized upgrade). This is valid for Chan too. 
-
 We call infligh packets `InP` the packets that have been sent before an upgrade starts. `InP` needs to be cleared out for the succesfull execution of the channel upgrade protocol.  
-
-**UpgradeOkNotCrossingHello Table** : describes what is used within the scope of the UpgradeOk flow. 
-
-| Category             | Item                         | Used in UpgradeOk |
-|----------------------|------------------------------|:-----------------:|
-| **Datagrams**        | *ChanUpgradeInit*            |         1         |
-|                      | *ChanUpgradeTry*             |         1         |
-|                      | *ChanUpgradeAck*             |         1         |
-|                      | *ChanUpgradeConfirm*         |         1         |
-|                      | *ChanUpgradeOpen*            |         1         |
-|                      | *ChanUpgradeTimeout*         |                   |
-|                      | *ChanUpgradeCancel*          |                   |
-| **Utility Functions**| `initUpgradeHandshake`       |         1         |
-|                      | `isCompatibleUpgradeFields`  |         1         |
-|                      | `startFlushUpgradeHandshake` |         1         |
-|                      | `openUpgradeHandshake`       |         1         |
-|                      | `restoreChannel`             |                   |
-|                      | `pendingInflightPackets`     |         1         |
-|                      | `isAuthorizedUpgrader`       |         1         |
-|                      | `getUpgradeTimeout`          |                   |
-| **Functions**        | ChanlUpgradeInit             |         1         |
-|                      | ChanlUpgradeTry              |         1         |
-|                      | ChanlUpgradeAck              |         1         |
-|                      | ChanlUpgradeConfirm          |         1         |
-|                      | ChanlUpgradeOpen             |         1         |
-|                      | CancelChannelUpgrade         |                   |
-|                      | TimeoutChannelUpgrade        |                   |
 
 
 **Actors**: 
-- Chain A: Ca  
-- Chain B: Cb
+- Chain A: A  
+- Chain B: B
 - Relayer : R
+- Relayer for A: R:A
+- Relayer for B: R:B
 
 **Definition**: 
-- Chan: :: Chan.State ∈ (OPEN, FLUSHING, FLUSHING_COMPLETE), Chan.UpgradeFields, Chan.ChannelID, Chan.UpgradeSequence. 
+- Chan: Channel :: Chan.State, Chan.UpgradeFields, Chan.ChannelID, Chan.UpgradeSequence. 
+- Chan.State ∈ (OPEN, FLUSHING, FLUSHING_COMPLETE)
 - ChanA: Cannel State on Chain A.  
 - ChanB: Cannel State on Chain B.  
 - Upg: Upgrade type :: Upg.UpgradeFields, Upg.UpgradeTimeout, Upg.lastPacketSent. 
@@ -82,6 +90,86 @@ We call infligh packets `InP` the packets that have been sent before an upgrade 
 - PS: ProvableStore.
 - PSa : ProvableStore on ChainA.
 - PSb : ProvableStore on ChainB. 
+
+### Conditions
+
+Notes: 
+- For now conditions may be duplicated. This needs other pass to be cleared out
+- Need to review all conditions to ensure nothing is missing 
+- Need to understand if there is a better way to express conditions 
+
+**C:Conditions**: 
+- C0 = Chan.State === ChanA.State === OPEN === ChanB.State
+- C1 = Chan.ChannelID === CONSTANT 
+- C2 = isAuthorizedUpgrader() === True
+- C3 = ChanA.UpgradeSequence.isIncremented() === True
+- C4 = UpgA.UpgradeFields.areSet() === True
+- C5 = (ProposedConnection.State===OPEN) && (ProposedConnection !== null)
+- C6 = isSupported(UpgA.UpgradeFields.ordering) === True
+- C7 = UpgA.isStored(PSa) === True
+- C8 = ChanA.UpgradeSequence.isStored(PSa) === True
+- C9 = UpgB.isStored(PSb) !== True 
+- C10 = ChanB.UpgradeSequence === ChanA.UpgradeSequence
+- C11 = VerifyChanA.State() === True 
+- C12 = VerifyChanA.Upgrade === True 
+- C13 = (Chan.UpgradeTimeout != 0) || (Chan.UpgradeTimestamp != 0) 
+- C13 = UpgA.lastPacketSequence.isSet() === True
+- C14 = UpgA.isStored(PSa) === True 
+- C15 = ChanB.State.isSet(FLUSHING) === True 
+- C16 = ChanB.isStored(PSb) === True 
+- C17 = (ChanB.State === FLUSHING) && (ChanA.State === OPEN) 
+- C18 = VerifyChanB.State() === True 
+- C19 = VerifyChanB.Upgrade === True 
+- C20 = UpgB.UpgradeFields === UpgA.UpgradeFields 
+- C21 = UpgB.Timeout.isExpired() !== True
+- C22 = InP.exist()===True
+- C23 = InP.exist()!==True 
+- C24 = ChanA.State.isSet(FLUSHING) === True 
+- C25 = ChanA.isStored(PSa) === True 
+- C26 = ChanA.State.isSet(FLUSHING_COMPLETE) === True 
+- C27 = UpgA.Timeout.isExpired() !== True
+- C28 = (ChanB.State === FLUSHING) && (ChanA.State === FLUSHING)
+- C29 = ChanB.State.isSet(FLUSHING_COMPLETE) === True 
+- C30 = ChanB.isStored(PSb) === True 
+- C31 = (ChanA.State === FLUSHING_COMPLETE) && (ChanB.State === FLUSHING)
+- C32 = ChanB.State.isSet(OPEN) === True 
+- C33 = (ChanA.State === FLUSHING_COMPLETE) && (ChanB.State === FLUSHING_COMPLETE)
+- C34 = (ChanA.State === FLUSHING_COMPLETE) && (ChanB.State === OPEN)
+
+
+|Initiator| Q | Q'   | C (Conditions)                      | Σ (Input Symbols)  | 
+|---------|---|------|-------------------------------------|--------------------|
+|A        | S0| S1   | C0;C1;C2;C3;C4;C5;C6;C7;C8          | ChanUpgradeInit    |
+|R:B      | S1| S2   | C0;C1;C9;C10;C11;C12;C13;C14;C15;C16| ChanUpgradeTry     | 
+|R:A      | S2| S3_1 | C1;C17;C18;C19;C20;C21;C22;C24;C25  | ChanUpgradeAck     |
+|R:A      | S2| S3_2 | C1;C17;C18;C19;C20;C21;C23;C25;C26  | ChanUpgradeAck     |
+|R:B      | S3_1|S4  | C27;C28;C11;C12;C23;C29;C30         | ChanUpgradeConfirm |
+|A        | S4|S5_1  | C21;C23;C26;C25                     | ?                  |
+|R:B      | S3_2|S5_1| C27;C31;C23;C11;C29;C30             | ChanUpgradeConfirm |
+|R:B      | S3_2|S5_2| C27;C31;C23;C11;C32;C30             | ChanUpgradeConfirm |
+|R:A:B    | S5_1|S6  | C21;C27;C33                         | ChanUpgradeOpen    |
+|R:A      | S5_2|S6  | C21;C27;C34                         | ChanUpgradeOpen    |
+
+DRAW FSM INCLUDING CONDITIONS 
+
+
+## Upgrade Handshake - UpgradeNotOk
+
+### Upgrade Handshake - UpgradeCanceled
+
+### Upgrade Handshake - UpgradeExpired
+
+### Upgrade Handshake - UpgradeStaled
+
+
+
+# Personal Notes 
+
+<details>
+  <summary>Click to expand!</summary>
+
+The content below is not to be considered.
+
 
 ## Finite State Machine Modeling 
 
@@ -150,35 +238,113 @@ Where
 **δ**: 
 We define δ : C * Σ * Q = Q'  
 
-| C (Conditions) | Σ (Input Symbols) | Q  |  Q' | PostCondition      |
-|----------------|-------------------|--- |---- |--------------------|
-|C0;C1;C7;C10;C14| ChannelUpgradeInit| S0 | S1  | C8    |
-|    C0;C1;C7;C12| ChannelUpgradeTry | S1 | S2  | C5;C6;C7;C8;C9;C10 |
-|    C0;            | ChannelUpgradeTry| S1 | S2  |                    |
-| ...            | ...               | ...               | ...                  |
+
+```typescript
+// initUpgradeHandshake will verify that the channel is in the
+// correct precondition to call the initUpgradeHandshake protocol.
+// it will verify the new upgrade field parameters, and make the
+// relevant state changes for initializing a new upgrade:
+// - store channel upgrade
+// - incrementing upgrade sequence
+function initUpgradeHandshake(
+  portIdentifier: Identifier,
+  channelIdentifier: Identifier,
+  proposedUpgradeFields: UpgradeFields,
+): uint64 {
+  // current channel must be OPEN
+  // If channel already has an upgrade but isn't in FLUSHING,
+  // then this will override the previous upgrade attempt
+  channel = provableStore.get(channelPath(portIdentifier, channelIdentifier))
+  abortTransactionUnless(channel.state == OPEN)
+
+  // new channel version must be nonempty
+  abortTransactionUnless(proposedUpgradeFields.Version !== "")
+
+  // proposedConnection must exist and be in OPEN state for 
+  // channel upgrade to be accepted
+  proposedConnection = provableStore.get(connectionPath(proposedUpgradeFields.connectionHops[0])
+  abortTransactionUnless(proposedConnection !== null && proposedConnection.state === OPEN)
+
+  // new order must be supported by the new connection
+  abortTransactionUnless(isSupported(proposedConnection, proposedUpgradeFields.ordering))
+
+  // lastPacketSent and timeout will be filled when we move to FLUSHING
+  upgrade = Upgrade{
+    fields: proposedUpgradeFields,
+  }
+
+  // store upgrade in provable store for counterparty proof verification
+  provableStore.set(channelUpgradePath(portIdentifier, channelIdentifier), upgrade)
+
+  channel.upgradeSequence = channel.upgradeSequence + 1
+  provableStore.set(channelPath(portIdentifier, channelIdentifier), channel)
+  return channel.upgradeSequence
+}
+```
+```typescript
+function chanUpgradeInit(
+  portIdentifier: Identifier,
+  channelIdentifier: Identifier,
+  proposedUpgradeFields: UpgradeFields,
+  msgSender: string,
+) {
+  // chanUpgradeInit may only be called by addresses authorized by executing chain
+  abortTransactionUnless(isAuthorizedUpgrader(msgSender))
+
+  upgradeSequence = initUpgradeHandshake(portIdentifier, channelIdentifier, proposedUpgradeFields)
+
+  // call modules onChanUpgradeInit callback
+  module = lookupModule(portIdentifier)
+  version, err = module.onChanUpgradeInit(
+    portIdentifier,
+    channelIdentifier,
+    upgradeSequence,
+    proposedUpgradeFields.ordering,
+    proposedUpgradeFields.connectionHops,
+    proposedUpgradeFields.version
+  )
+  // abort transaction if callback returned error
+  abortTransactionUnless(err === nil)
+
+  // replace channel upgrade version with the version returned by application
+  // in case it was modified
+  upgrade = provableStore.get(channelUpgradePath(portIdentifier, channelIdentifier))
+  upgrade.fields.version = version
+  provableStore.set(channelUpgradePath(portIdentifier, channelIdentifier), upgrade)
+}
+```
+
+For every of the defined structure we will have `UpgA.t0`,`UpgB.t0` the upgrade parameters at t0 (e.g. starting of the upgrade) and `UpgA.t1`,`UpgB.t1` the upgrade parameters at t1 (e.g proposed upgrade) and `UpgA.t2`,`UpgB.t2` the upgrade parameters at t2 (e.g finalized upgrade). This is valid for Chan too. 
 
 
 
+**UpgradeOkNotCrossingHello Table** : describes what is used within the scope of the UpgradeOk flow. 
 
+| Category             | Item                         | Used in UpgradeOk |
+|----------------------|------------------------------|:-----------------:|
+| **Datagrams**        | *ChanUpgradeInit*            |         1         |
+|                      | *ChanUpgradeTry*             |         1         |
+|                      | *ChanUpgradeAck*             |         1         |
+|                      | *ChanUpgradeConfirm*         |         1         |
+|                      | *ChanUpgradeOpen*            |         1         |
+|                      | *ChanUpgradeTimeout*         |                   |
+|                      | *ChanUpgradeCancel*          |                   |
+| **Utility Functions**| `initUpgradeHandshake`       |         1         |
+|                      | `isCompatibleUpgradeFields`  |         1         |
+|                      | `startFlushUpgradeHandshake` |         1         |
+|                      | `openUpgradeHandshake`       |         1         |
+|                      | `restoreChannel`             |                   |
+|                      | `pendingInflightPackets`     |         1         |
+|                      | `isAuthorizedUpgrader`       |         1         |
+|                      | `getUpgradeTimeout`          |                   |
+| **Functions**        | ChanlUpgradeInit             |         1         |
+|                      | ChanlUpgradeTry              |         1         |
+|                      | ChanlUpgradeAck              |         1         |
+|                      | ChanlUpgradeConfirm          |         1         |
+|                      | ChanlUpgradeOpen             |         1         |
+|                      | CancelChannelUpgrade         |                   |
+|                      | TimeoutChannelUpgrade        |                   |
 
-UpgradeOkNotCrossingHello
-
-## Upgrade Handshake - UpgradeNotOk
-
-### Upgrade Handshake - UpgradeCanceled
-
-### Upgrade Handshake - UpgradeExpired
-
-### Upgrade Handshake - UpgradeStaled
-
-
-
-# Personal Notes 
-
-<details>
-  <summary>Click to expand!</summary>
-
-The content below is not to be considered.
 
 **Sets**
 - Q=
