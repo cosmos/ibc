@@ -3,9 +3,11 @@
 This document is an attempt to abstract the [channel upgradability specs](https://github.com/cosmos/ibc/blob/main/spec/core/ics-004-channel-and-packet-semantics/UPGRADES.md) into finite state machines (FMS). 
 
 # Channel Upgradability Protocol 
-According to the [specs](https://github.com/cosmos/ibc/blob/main/spec/core/ics-004-channel-and-packet-semantics/UPGRADES.md#upgrade-handshake), we can model the channel upgradability protocol with 2 main flow namely, `UpgradeOk` and `UpgradeNotOk`. `UpgradeNotOk` can be further expanded in 3 subflows namely, `UpgradeCanceled`,`UpgradeExpired`, `UpgradeStaled`.  
+According to the [specs](https://github.com/cosmos/ibc/blob/main/spec/core/ics-004-channel-and-packet-semantics/UPGRADES.md#upgrade-handshake), we can model the channel upgradability protocol with 2 main flow namely, `UpgradeOk` and `UpgradeNotOk`. `UpgradeOk` can be expanded in 2 subflows namely `UpgradeOkCrossingHello` and `UpgradeOkNotCrossingHello`. `UpgradeNotOk` can be further expanded in 3 subflows namely `UpgradeCanceled`,`UpgradeExpired`, `UpgradeStaled`.  
 
 - `UpgradeOk`
+    - `UpgradeOkNotCrossingHello`
+    - `UpgradeOkCrossingHello`
 - `UpgradeNotOk`
     - `UpgradeCanceled`
     - `UpgradeExpired` 
@@ -13,35 +15,31 @@ According to the [specs](https://github.com/cosmos/ibc/blob/main/spec/core/ics-0
 
 We now procede with the abstraction process of every flow identified. 
 
-## UpgradeOk 
-In this section we describe the happy path of the channel upgradability protocol, the `UpgradeOk`. 
+## UpgradeOkNotCrossingHello
+In this section we describe the happy path of the channel upgradability protocol, the `UpgradeOkNotCrossingHello`.   
+
+### FSM High Level Representation
+
+[UpgradeOkNotCrossingHello High Level Representation](https://excalidraw.com/#json=dU82X90B_i7qlEAdFY00R,T_dyyFxOX32glPaWvch-cg)
+
+![Picture](img_fsm/UpgradeOkNotCrossingHello_HighLevel.png){width=100%}
+
+## Formalization of the specs - WIP 
+
+The content of this section may be completely modified. I'm trying to understand how to better defines all the conditions and invariants needed for every state transition. 
 
 ### Definition Description
 We have a working channel `Chan`. The channel works on top of an established connection between ChainA and ChainB and has two ends. We will call `ChanA` and `ChanB` the ends of the channel of the connected chains. 
 
 For both chains we have a provable store `PS`. We define `PSa` and `PSb` as the ChainA and ChainB provable store.  
 
-For the upgradability protocol the [`Upgrade`](https://github.com/cosmos/ibc/blob/main/spec/core/ics-004-channel-and-packet-semantics/UPGRADES.md#upgrade) type, that represent a particular upgrade attempt on a channel hand, has been introduced. We will call `UpgA` and `UpgB` the upgrade parameters at both `ChanA` and `ChanB` ends
+For the upgradability protocol the [`Upgrade`](https://github.com/cosmos/ibc/blob/main/spec/core/ics-004-channel-and-packet-semantics/UPGRADES.md#upgrade) type, that represent a particular upgrade attempt on a channel hand, has been introduced. We will call `Upg` the upgrade parameters store in `Chan` and `UpgA` and `UpgB` the upgrade parameters at both `ChanA` and `ChanB` ends
 
 For every of the defined structure we will have `UpgA.t0`,`UpgB.t0` the upgrade parameters at t0 (e.g. starting of the upgrade) and `UpgA.t1`,`UpgB.t1` the upgrade parameters at t1 (e.g proposed upgrade) and `UpgA.t2`,`UpgB.t2` the upgrade parameters at t2 (e.g finalized upgrade). This is valid for Chan too. 
 
 We call infligh packets `InP` the packets that have been sent before an upgrade starts. `InP` needs to be cleared out for the succesfull execution of the channel upgrade protocol.  
 
-
-## Formalization of the specs
-
-**Definition**: 
-- Chan: :: Chan.State ∈ (OPEN, FLUSHING, FLUSHING_COMPLETE), Chan.UpgradeFields, Chan.ChannelID, UpgradeSequence. 
-- ChanA: Cannel State on Chain A.  
-- ChanB: Cannel State on Chain B.  
-- Upg: Upgrade type :: Upg.UpgradeFields, Upg.UpgradeTimeout, Upg.lastPacketSent. 
-- UpgA: Upgrade type on ChainA.
-- UpgB: Upgrade type on ChainB.
-- PS: ProvableStore.
-- PSa : ProvableStore on ChainA.
-- PSb : ProvableStore on ChainB. 
-
-**UpgradeOk Table** : describes what is used within the scope of the UpgradeOk flow. 
+**UpgradeOkNotCrossingHello Table** : describes what is used within the scope of the UpgradeOk flow. 
 
 | Category             | Item                         | Used in UpgradeOk |
 |----------------------|------------------------------|:-----------------:|
@@ -74,6 +72,17 @@ We call infligh packets `InP` the packets that have been sent before an upgrade 
 - Chain B: Cb
 - Relayer : R
 
+**Definition**: 
+- Chan: :: Chan.State ∈ (OPEN, FLUSHING, FLUSHING_COMPLETE), Chan.UpgradeFields, Chan.ChannelID, Chan.UpgradeSequence. 
+- ChanA: Cannel State on Chain A.  
+- ChanB: Cannel State on Chain B.  
+- Upg: Upgrade type :: Upg.UpgradeFields, Upg.UpgradeTimeout, Upg.lastPacketSent. 
+- UpgA: Upgrade type on ChainA.
+- UpgB: Upgrade type on ChainB.
+- PS: ProvableStore.
+- PSa : ProvableStore on ChainA.
+- PSb : ProvableStore on ChainB. 
+
 ## Finite State Machine Modeling 
 
 We consider a deterministic finite state machine as a 5-tuple (Q; C; Σ; δ; F) consisting of: 
@@ -96,20 +105,13 @@ Where
 | S4    |        t1     | Chain A and Chain B are in FLUSHING COMPLETE |
 | S5    |        t2     | Channel Updated |
 
-
-**C**: 
-- C0 = ChanA.t0.State === OPEN === ChanB.t0.State
-- C1 = ChanA.t0.ChannelID === ChanA.t1.ChannelID === ChanA.t2.ChannelID
-- C2 = Chan.t2.UpgradeFields === (UpgA.t2.UpgradeFields === UpgB.t2.UpgradeFields) ||  Chan.t0.UpgradeFields
-- C3 = InP.processed(Chan.t0.UpgradeFields)
-- C4 = UpgA.t2.UpgradeTimeout.notExpired === UpgB.t2.UpgradeTimeout.notExpired
-
 **Σ**:
-- ChanlUpgradeInit
+- ChanlUpgradeInit --> isAuthorizedUpgrader; initUpgradeHandshake :: Modify Upg.UpgradeFields 
 - ChanlUpgradeTry
 - ChanlUpgradeAck
 - ChanlUpgradeConfirm
 - ChanlUpgradeOpen
+
 - initUpgradeHandshake
 - isCompatibleUpgradeFields
 - startFlushUpgradeHandshake
@@ -120,22 +122,46 @@ Where
 **F**:
 - S0->S1 
 - S1->S2
+- S1->S1
 - S2->S3_1 
 - S2->S3_2
 - S3_1->S4
 - S3_2->S4
 - S4->S5
 
+**C**: 
+- C0 = Chan.State === ChanA.t0.State === OPEN === ChanB.t0.State
+- C1 = ChanA.t0.ChannelID === ChanA.t1.ChannelID === ChanA.t2.ChannelID === ChanB.t0.ChannelID === ChanB.t1.ChannelID === ChanB.t2.ChannelID
+- C2 = Chan.t2.UpgradeFields === (UpgA.t2.UpgradeFields === UpgB.t2.UpgradeFields) ||  Chan.t0.UpgradeFields
+- C3 = InP.processed(Chan.t0.UpgradeFields)
+- C4 = UpgA.t2.UpgradeTimeout.notExpired === UpgB.t2.UpgradeTimeout.notExpired
+- C5 = (Upg.UpgradeTimeout.timeoutHeight || Upg.UpgradeTimeout.timeoutTimestamp) != 0
+- C6 = UpgA.t1.isStored(PSa) 
+- C7 = isAuthorizedUpgrader === True 
+- C8 = Chan.t1.UpgradeSequence === Chan.t0.UpgradeSequence+1 
+- C9 = Chan.t1.UpgradeFields.UpgradeVersion != Null
+- C10 = Chan.t1.UpgradeFields.ProposedConnection != Null && Chan.t1.UpgradeFields.ProposedConnection === OPEN 
+- C11 = initUpgradeHandshake has been executed. 
+- C12 = Upg.isNotSet 
+- C13 = Upg.isSet 
+- C14 = Upg.Ordering.isSupported
+- C15 = Chan.isStored(PS)
+
 **δ**: 
 We define δ : C * Σ * Q = Q'  
 
-| C (Conditions) | Σ (Input Symbols) | Q (Current State) | δ (Next State in Q') |
-|----------------|-------------------|-------------------|----------------------|
-|    C0;C1       | ChannelUpgradeInit; initUpgradeHandshake; isAuthorizedUpgrader|         S0        |           S1           |
-|                |                   |                   |                      |
+| C (Conditions) | Σ (Input Symbols) | Q  |  Q' | PostCondition      |
+|----------------|-------------------|--- |---- |--------------------|
+|C0;C1;C7;C10;C14| ChannelUpgradeInit| S0 | S1  | C8    |
+|    C0;C1;C7;C12| ChannelUpgradeTry | S1 | S2  | C5;C6;C7;C8;C9;C10 |
+|    C0;            | ChannelUpgradeTry| S1 | S2  |                    |
 | ...            | ...               | ...               | ...                  |
 
 
+
+
+
+UpgradeOkNotCrossingHello
 
 ## Upgrade Handshake - UpgradeNotOk
 
