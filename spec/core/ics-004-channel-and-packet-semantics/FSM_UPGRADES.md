@@ -62,15 +62,51 @@ Here we list all the possible flows.
 - S5_1->S6
 - S5_2->S6
 
-### Definition Description
-We have a working channel `Chan`. The channel works on top of an established connection between ChainA and ChainB and has two ends. We will call `ChanA` and `ChanB` the ends of the channel of the connected chains. 
+**Storage** 
 
-For both chains we have a provable store `PS`. We define `PSa` and `PSb` as the ChainA and ChainB provable store.  
+In the provable store we have 7 paths for each channel end that we need to consider for this protocol: 
+- ConnectionPath:
+    - ConnectionPath on A: Pr.ConnA
+    - ConnectionPath on B: Pr.ConnB
+- ChannelPath:
+    - ChannelPath on A: Pr.ChanA
+    - ChannelPath on B: Pr.ChanB
+- ChannelUpgradePath:
+    - ChannelUpgradePath on A: Pr.UpgA
+    - ChannelUpgradePath on B: Pr.UpgB
+- CounterPartyLastPacketSequencePath:
+    - CounterPartyLastPacketSequencePath on A: Pr.LastSeqA
+    - CounterPartyLastPacketSequencePath on B: Pr.LastSeqB
+- NextSequenceSendPath:
+    - NextSequenceSendPath on A: Pr.NextSeqSendA
+    - NextSequenceSendPath on B: Pr.NextSeqSendB
+- CounterPartyUpgradeTimeoutPath:
+    - CounterPartyUpgradeTimeoutPath on A: Pr.TimeoutA
+    - CounterPartyUpgradeTimeoutPath on B: Pr.TimeoutB
+- UpgradeErrorPath:
+    - UpgradeErrorPath on A : Pr.UpgErrA
+    - UpgradeErrorPath on B : Pr.UpgErrB
 
-For the upgradability protocol the [`Upgrade`](https://github.com/cosmos/ibc/blob/main/spec/core/ics-004-channel-and-packet-semantics/UPGRADES.md#upgrade) type, that represent a particular upgrade attempt on a channel hand, has been introduced. We will call `Upg` the upgrade parameters store in `Chan` and `UpgA` and `UpgB` the upgrade parameters at both `ChanA` and `ChanB` ends
+The private store is meant for an end (e.g. ChainA or ChainB) to store transient data (e.g data that are necessary to take decision but that don't get stored in chains). We will call:
+- PrivateStore:
+    - PrivateStore on A: PrivA
+    - PrivateStore on B: PrivA
 
-We call infligh packets `InP` the packets that have been sent before an upgrade starts. `InP` needs to be cleared out for the succesfull execution of the channel upgrade protocol.  
 
+Note that for the not crossing hello on S2 the ChanUpgradeTry the getUpgrade(UpgB) Must return null and no error should be stored. 
+
+| State | Function               | Pr.A                      | Pr.B | PrivA                | PrivB |
+|-------|------------------------|--------------------------|-----|----------------------|-------|
+| S0    |                        |                          |     |                      |       |
+| S1    |  ChanUpgradeInit       | getUpgrade(UpgA);setUpgradeVersion(UpgA)    |     |      |       |
+| S1    |  InitUpgradeHandshake  | getChan(ChanA); getConn(ConnA); setUpgradeOrdering(UpgA); setUpgradeConnHops(UpgA); setUpgradeSequence(ChanA)                         |     |    |       |
+| S2    |  ChanUpgradeTry        | getChan(ChanA)|getUpgrade(UpgB);setError(UpgErrB);getUpgrade(UpgB); setUpgradeVersion(UpgB)     |                      |       |
+| S2    |  InitUpgradeHandshake        | |getChan(ChanB); getUpgrade(UpgB); getConn(ConnB); setUpgradeOrdering(UpgB); setUpgradeConnHops(UpgB); setUpgradeSequence(ChanB)     |                      |       |
+| S2    |  IsCompatibleFields        | |getConn(ConnB)   |                      |       |
+| S2    |  StartFlushingUpgradeHandshake        | getUpgradeTimeout(TimeoutA); getNextSeqSend(NextSeqSendA) |getChan(ChanB);getUpgrade(UpgB);setUpgradeTimeout(UpgB);setLastPacSeq(UpgB)    |                      |       |
+
+Questions: 
+If timeout get stored the first time with StartFlushingUpgradeHandshake, isn't the getUpgradeTimeout always getting a null value and thus the transaction get aborted? 
 
 **Actors**: 
 - Chain A: A  
@@ -78,18 +114,11 @@ We call infligh packets `InP` the packets that have been sent before an upgrade 
 - Relayer : R
 - Relayer for A: R:A
 - Relayer for B: R:B
+- Packet Handler : PH
+- Packet Handler for A : PH:A
+- Packet Handler for B : PH:B
 
-**Definition**: 
-- Chan: Channel :: Chan.State, Chan.UpgradeFields, Chan.ChannelID, Chan.UpgradeSequence. 
-- Chan.State ∈ (OPEN, FLUSHING, FLUSHING_COMPLETE)
-- ChanA: Cannel State on Chain A.  
-- ChanB: Cannel State on Chain B.  
-- Upg: Upgrade type :: Upg.UpgradeFields, Upg.UpgradeTimeout, Upg.lastPacketSent. 
-- UpgA: Upgrade type on ChainA.
-- UpgB: Upgrade type on ChainB.
-- PS: ProvableStore.
-- PSa : ProvableStore on ChainA.
-- PSb : ProvableStore on ChainB. 
+
 
 ### Conditions
 
@@ -144,7 +173,7 @@ Notes:
 |R:A      | S2| S3_1 | C1;C17;C18;C19;C20;C21;C22;C24;C25  | ChanUpgradeAck     |
 |R:A      | S2| S3_2 | C1;C17;C18;C19;C20;C21;C23;C25;C26  | ChanUpgradeAck     |
 |R:B      | S3_1|S4  | C27;C28;C11;C12;C23;C29;C30         | ChanUpgradeConfirm |
-|A        | S4|S5_1  | C21;C23;C26;C25                     | ?                  |
+|PH:A     | S4|S5_1  | C21;C23;C26;C25                     | PH:A Message       |
 |R:B      | S3_2|S5_1| C27;C31;C23;C11;C29;C30             | ChanUpgradeConfirm |
 |R:B      | S3_2|S5_2| C27;C31;C23;C11;C32;C30             | ChanUpgradeConfirm |
 |R:A:B    | S5_1|S6  | C21;C27;C33                         | ChanUpgradeOpen    |
@@ -152,6 +181,28 @@ Notes:
 
 DRAW FSM INCLUDING CONDITIONS 
 
+Outdate
+### Definition Description
+We have a working channel `Chan`. The channel works on top of an established connection between ChainA and ChainB and has two ends. We will call `ChanA` and `ChanB` the ends of the channel of the connected chains. 
+
+For both chains we have a provable store `PS`. We define `PSa` and `PSb` as the ChainA and ChainB provable store.  
+
+For the upgradability protocol the [`Upgrade`](https://github.com/cosmos/ibc/blob/main/spec/core/ics-004-channel-and-packet-semantics/UPGRADES.md#upgrade) type, that represent a particular upgrade attempt on a channel hand, has been introduced. We will call `Upg` the upgrade parameters store in `Chan` and `UpgA` and `UpgB` the upgrade parameters at both `ChanA` and `ChanB` ends
+
+We call infligh packets `InP` the packets that have been sent before an upgrade starts. `InP` needs to be cleared out for the succesfull execution of the channel upgrade protocol.  
+
+
+**Definition**: 
+- Chan: Channel :: Chan.State, Chan.UpgradeFields, Chan.ChannelID, Chan.UpgradeSequence. 
+- Chan.State ∈ (OPEN, FLUSHING, FLUSHING_COMPLETE)
+- ChanA: Cannel State on Chain A.  
+- ChanB: Cannel State on Chain B.  
+- Upg: Upgrade type :: Upg.UpgradeFields, Upg.UpgradeTimeout, Upg.lastPacketSent. 
+- UpgA: Upgrade type on ChainA.
+- UpgB: Upgrade type on ChainB.
+- PS: ProvableStore.
+- PSa : ProvableStore on ChainA.
+- PSb : ProvableStore on ChainB. 
 
 ## Upgrade Handshake - UpgradeNotOk
 
@@ -346,13 +397,7 @@ For every of the defined structure we will have `UpgA.t0`,`UpgB.t0` the upgrade 
 |                      | TimeoutChannelUpgrade        |                   |
 
 
-**Sets**
-- Q=
-- C= {C0=(Ca && Cb on CUPo || Ca && Cb on CUPn); C1=(CI before == CI after); C2=Ca/Cb has stored Cx/Cy change in PSa/PSb; C3=InP; C4= !InP; C5= Ca/Cb has stored Timeout in PSa/PSb; C6 = Ca/Cb has stored ErrorMessage in PSa/PSb}
-- δ = {`initUpgradeHandshake`, `StartFlushingUpgradeHandshake`, `openUpgradeHandshake`, `cancelUpgradeHandshake` , `timeoutChannelUpgrade`. 
-}
 
-- Σ = {Set Cx/Cy; Set Cx/Cy/CPU in PSa/PSb; Set Timeout in PSa/PSb; Ca/Cb set ErrorMessage in PSa/PSb; Ca/Cb send `ChannelUpgradeInit` datagram; }
 
 **Final States Description**
 | State | Description | PostConditions| 
@@ -376,45 +421,6 @@ For every of the defined structure we will have `UpgA.t0`,`UpgB.t0` the upgrade 
 |C9|Ca/Cb has stored ErrorMessage in PSa/PSb|
 
 
-Given the 
-- List of State Transition Pairs `STp`={`1->2`; `2->3`; `2->4`; `3->5.a(1)`; `3->5.a(2)`; `3->4`; `4->5.b`; `4->5.c`}
-
-**State Transition Table**
-| State Transition Pair | Condition To Hold | State Transition Function | Inputs | Codebase Location | 
-|-------|-------------|----------|---------|---|
-|S0->S1|PC0;C0;C1|Ca:`initUpgradeHandshake`|Ca sets CPUn in PSa| [codebase_location](TBD)|
-|S1->S2|PC0;C1;CaC2;CbC2;CbC3|Cb:`startFlushingUpgradeHandshake`|Cb sets Cy change (OPEN -> FLUSHING) in PSb; Cb sets Timeout in PSb; Cb sets CUPn in PSb|[codebase_location](TBD)|
-|S2->S3_1`|C1;CbC3;C4;C8|Ca:`startFlushingUpgradeHandshake`|Ca sets Cx change (OPEN -> FLUSHING) in PSa; Ca sets Timeout in PSa|[codebase_location](TBD)|
-|S2->S3_1|C1;CbC3;C5;C8|Ca: ChanUpgradAck|Ca sets Cx change (OPEN -> FLUSHING_COMPLETE) in PSa|
-
-
-|`3->5.a(1)`|ID3;ID4;ID6;ID7;ID8;ID9|UserCall:`execute_issue`|`pallets/issue/src/lib.rs`,line `265`|
-|`3->5.a(2)`|ID3;ID4;ID6;ID7;ID9|VaultCall:`execute_issue`|`pallets/issue/src/lib.rs`,line `265`|
-|`4->5.b`|ID3;ID5;ID6|VaultCall`cancel_issue`|`pallets/issue/src/lib.rs`,line `293`|
-|`4->5.c`|ID3;ID5;ID6;ID10|VaultCall`cancel_issue`|`pallets/issue/src/lib.rs`,line `293`|
-
-
-**Flows State Machine**
-To modify the draw, visit this website [drawio](https://app.diagrams.net/), select file-->Open_From --> [Issue-State-Machine](imgs/Simplified_Issue-State-Machine.drawio)
-
-Consider that this scenario only includes the flows where: 
-- User send request_issue(X).
-- User send on Stellar (X+y) with y ∈ R.
-- y=0.
-
-![State Machine Chart](imgs/Issue_y=0.jpg)
-
-**Possible Flows** 
-1. `1 -> 2 -> 3 -> 5.a(1)`  
-2. `1 -> 2 -> 3 -> 5.a(2)`  
-3. `1 -> 2 -> 3 -> 4 -> 5.b`
-4. `1 -> 2 -> 4 -> 5.c`
-
-**Possible Flows with condition and state transitions functions** 
-1. 1 (ID1;ID2):`request_issue`-> 2 (ID3):`User send Tx on Stellar with Memo=IssueID` -> 3 (ID3;ID4;ID6;ID7;ID8;ID9):`User call execute_issue` -> 5.a  
-2. 1 (ID1;ID2):`request_issue`-> 2 (ID3):`User send Tx on Stellar with Memo=IssueID` -> 3 (ID3;ID4;ID6;ID7;ID9):`Vault call execute_issue` -> 5.a  
-3. 1 (ID1;ID2):`request_issue`-> 2 (ID3):`User send Tx on Stellar with Memo=IssueID` -> 3 (ID3;ID5):`HG Expires` -> 4 (ID3;ID5;ID6): `Vault Call cancel_issue` -> 5.b
-4. 1 (ID1;ID2):`request_issue`-> 2 (ID3,ID5):`HG Expires` -> 4 (ID3;ID5;ID6;ID10):`Vault Call cancel_issue` -> 5.c
 
 
 The Upgrade Handshake protocol starts when either ChainA or ChainB send trought R a `ChannelUpgradeInit` datagram. We will assume that ChainA is the starting chain and that C0 Holds. Thus we can model the start of the protocol as follow:
