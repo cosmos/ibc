@@ -95,15 +95,20 @@ The private store is meant for an end (e.g. ChainA or ChainB) to store transient
 
 Note that for the not crossing hello on S2 the ChanUpgradeTry the getUpgrade(UpgB) Must return null and no error should be stored. 
 
-| State | Function               | Pr.A                      | Pr.B | PrivA                | PrivB |
-|-------|------------------------|--------------------------|-----|----------------------|-------|
-| S0    |                        |                          |     |                      |       |
-| S1    |  ChanUpgradeInit       | getUpgrade(UpgA);setUpgradeVersion(UpgA)    |     |      |       |
-| S1    |  InitUpgradeHandshake  | getChan(ChanA); getConn(ConnA); setUpgradeOrdering(UpgA); setUpgradeConnHops(UpgA); setUpgradeSequence(ChanA)                         |     |    |       |
-| S2    |  ChanUpgradeTry        | getChan(ChanA)|getUpgrade(UpgB);setError(UpgErrB);getUpgrade(UpgB); setUpgradeVersion(UpgB)     |                      |       |
-| S2    |  InitUpgradeHandshake        | |getChan(ChanB); getUpgrade(UpgB); getConn(ConnB); setUpgradeOrdering(UpgB); setUpgradeConnHops(UpgB); setUpgradeSequence(ChanB)     |                      |       |
-| S2    |  IsCompatibleFields        | |getConn(ConnB)   |                      |       |
-| S2    |  StartFlushingUpgradeHandshake        | getUpgradeTimeout(TimeoutA); getNextSeqSend(NextSeqSendA) |getChan(ChanB);getUpgrade(UpgB);setUpgradeTimeout(UpgB);setLastPacSeq(UpgB)    |                      |       |
+| State Transition | Function               | Pr.A                      | Pr.B | PrivA                | PrivB |
+|---------|------------------------|--------------------------|-----|----------------------|-------|
+| S0 ->S1 |  ChanUpgradeInit       | getUpgrade(UpgA);setUpgradeVersion(UpgA)    |     |      |       |
+| S0 ->S1 |  InitUpgradeHandshake  | getChan(ChanA); getConn(ConnA); setUpgradeOrdering(UpgA); setUpgradeConnHops(UpgA); setUpgradeSequence(ChanA)                         |     |    |       |
+| S1 ->S2 |  ChanUpgradeTry        | getChan(ChanA)|getUpgrade(UpgB);setError(UpgErrB);getUpgrade(UpgB); setUpgradeVersion(UpgB)     |                      |       |
+| S1 ->S2 |  InitUpgradeHandshake        | |getChan(ChanB); getConn(ConnB); setUpgradeOrdering(UpgB); setUpgradeConnHops(UpgB); setUpgradeSequence(ChanB)     |                      |       |
+| S1 ->S2 |  IsCompatibleFields        | |getConn(ConnB)   |                      |       |
+| S1 ->S2 |  StartFlushingUpgradeHandshake        | getUpgradeTimeout(TimeoutA); getNextSeqSend(NextSeqSendA) |getChan(ChanB);getUpgrade(UpgB);setUpgradeTimeout(UpgB);setLastPacSeq(LastSeqB);setChannel(ChanB)    |                      |       |
+| S2 ->S3_1   |  ChanUpgradeAck        | getChan(ChanA); getConn(ConnA); getUpgrade(UpgA); setChannel(ChanA) |setUpgradeTimeout(TimeoutA);setLastPacSeq(LastSeqA);   |                      |       |
+| S2 ->S3_1 |  IsCompatibleFields        |getConn(ConnA) |   |                      |       |
+| S2 ->S3_1 |  StartFlushingUpgradeHandshake        | getChan(ChanA);getUpgrade(UpgA);setUpgradeTimeout(UpgA);setUpgrade(UpgA);setChannel(ChanA) | getUpgradeTimeout(TimeoutB); getNextSeqSend(NextSeqSendB);     |                      |       |
+| S2 ->S3_2   |  ChanUpgradeAck        | getChan(ChanA); getConn(ConnA); getUpgrade(UpgA); setChannel(ChanA) |setLastPacSeq(LastSeqA);   |                      |       |
+| S2 ->S3_2 |  IsCompatibleFields        |getConn(ConnA) |   |                      |       |
+| S2 ->S3_2 |  StartFlushingUpgradeHandshake        | getChan(ChanA);getUpgrade(UpgA);setUpgradeTimeout(UpgA);setUpgrade(UpgA);setChannel(ChanA) | getUpgradeTimeout(TimeoutB); getNextSeqSend(NextSeqSendB);     |                      |       |
 
 Questions: 
 If timeout get stored the first time with StartFlushingUpgradeHandshake, isn't the getUpgradeTimeout always getting a null value and thus the transaction get aborted? 
