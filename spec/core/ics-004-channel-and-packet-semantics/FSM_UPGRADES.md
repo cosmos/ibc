@@ -63,7 +63,7 @@ Here we list all the possible flows.
 
 ### Storage Definition 
 
-In the provable store we have 7 paths for each channel end that we need to consider for this protocol: 
+In the provable store we have 7 paths for each end that we need to consider for this protocol: 
 - ConnectionPath:
     - ConnectionPath on A: ConnA
     - ConnectionPath on B: ConnB
@@ -180,15 +180,17 @@ ChanUpgradeConfirm--> getChan(ChanB):: VerifyChanBis(FLUSHING)
 ```
 
 ```typescript
-S4 --> S5_1: (FLUSHING,FLUSHING_COMPLETE) --> (FLUSHING_COMPLETE,FLUSHING_COPMLETE) :: PH:A
-PacketHandlerChainA_Function-->	VerifyInflightsPackets(NotExist) 
+S4 --> S5_1: (FLUSHING,FLUSHING_COMPLETE) --> (FLUSHING_COMPLETE,FLUSHING_COMPLETE) :: PH:A
+PacketHandlerChainA_Function-->	VerifyInflightsPackets(NotExist)
+    VerifyTimeoutNotExpired()
     setChanA(FLUSHING_COMPLETE) 
     setChannel(ChanA)
 ```
 
 ```typescript
-S3_2 --> S5_1: (FLUSHING_COMPLETE,FLUSHING) --> (FLUSHING_COMPLETE,FLUSHING_COPMLETE) :: PH:B
+S3_2 --> S5_1: (FLUSHING_COMPLETE,FLUSHING) --> (FLUSHING_COMPLETE,FLUSHING_COMPLETE) :: PH:B
 PacketHandlerChainB_Function-->	VerifyInflightsPackets(NotExist) 
+    VerifyTimeoutNotExpired()
     setChanB(FLUSHING_COMPLETE) 
     setChannel(ChanB)
 ```
@@ -204,6 +206,8 @@ ChanUpgradeConfirm--> getChan(ChanB):: VerifyChanBis(FLUSHING)
     openUpgradeHandshake--> getChan(ChanB) 
         getUpgrade(UpgB)
         setChanUpgradeParameter(ChanB)
+        setChanB(OPEN)
+        setChannel(ChanB)
         delUpgrade(UpgB)
         delTimeout(TimeoutB)
         delLastPacSeq(LastSeqB)
@@ -218,6 +222,8 @@ ChanUpgradeOpen--> getChan(Chan):: VerifyChanIs(FLUSHING_COMPLETE)
     openUpgradeHandshake--> getChan(); 
         getUpgrade(UpgA)
         setChanUpgradeParameter(Chan)
+        setChan(OPEN)
+        setChannel(Chan)
         delUpgrade(Upg)
         delTimeout(Timeout)
         delLastPacSeq(LastSeq)
@@ -233,6 +239,8 @@ ChanUpgradeOpen -->	getChan(ChanA):: VerifyChanAis(FLUSHING_COMPLETE)
     openUpgradeHandshake--> getChan(ChanA) 
         getUpgrade(UpgA)
         setChanUpgradeParameter(ChanA)
+        setChanA(OPEN)
+        setChannel(ChanA)
         delUpgrade(UpgA)
         delTimeout(TimeoutA)
         delLastPacSeq(LastSeqA)
@@ -241,16 +249,91 @@ ChanUpgradeOpen -->	getChan(ChanA):: VerifyChanAis(FLUSHING_COMPLETE)
 ### Conditions
 
 Notes: 
-- For now conditions may be duplicated. This needs other pass to be cleared out
-- Need to review all conditions to ensure nothing is missing 
-- Need to understand if there is a better way to express conditions 
+- Need to understand if there is a better way to express conditions in a more compress format.  
 
 **C:Conditions**: 
+- C0 = Chan.ChannelID === CONSTANT 
+- C1 = isAuthorizedUpgrader() === True
+- C2 = Chan.State === ChanA.State === OPEN === ChanB.State
+- C3 = ChanA.State === OPEN
+- C4 = UpgradeVersionNotEmpty() === True
+- C5 = (ProposedConnection.State===OPEN) && (ProposedConnection !== null)
+- C6 = UpgA.UpgradeFields[Ordering ConnHops].areSet() === True
+- C7 = ChanA.UpgradeSequence.isIncremented() === True
+- C8 = UpgA.UpgradeFields[ Version ].isSet() === True
+- C9 = ChanB.State === OPEN 
+- C10 = UpgB.UpgradeFields[Ordering ConnHops Version].areSet() === True
+- C11 = ChanB.UpgradeSequence.isIncremented() === True
+- C12 = UpgA === UpgB
+- C13 = VerifyChannelState === True
+- C14 = VerifyChannelUpgrade === True
+- C15 = VerifyUpgrade(!==nil) === True
+- C16 = ChanB.State === FLUSHING 
+- C17 = VerifyTimeoutCounterPartyNonExpired === True 
+- C18 = UpgB.UpgradeFields[Timeout LastPacketSequence].areSet() === True
+- C19 = UpgB.UpgradeFields[ Version ].isSet() === True
+- C20 = ChanA.State === (OPEN || FLUSHING)
+- C21 = ChanA.State === FLUSHING 
+- C22 = UpgA.UpgradeFields[Timeout LastPacketSequence].areSet() === True
+- C23 = VerifyInflightPacketExist === True
+- C24 = VerifyInflightPacketNotExist === True
+- C25 = ChanA.State === FLUSHING_COMPLETE
+- C26 = ChanB.State === FLUSHING_COMPLETE
+- C27 = ChanB.UpgradeParameters.areSet() === True
+- C28 = ChanA.UpgradeParameters.areSet() === True
+- C29 = Chan.State === FLUSHING_COMPLETE
+- C30 = Chan.State === FLUSHING_COMPLETE || OPEN
+- C31 = Chan.UpgradeParameters.areSet() === True
+- C32 = Chan.State === OPEN
+
+|Initiator| Q | Q'   | C (Conditions)                      | Σ (Input Function)  | 
+|---------|---|------|-------------------------------------|--------------------|
+|A:R:A    | S0| S1   | C0;C1;C2;C3;C4;C5;C6;C7;C8          | ChanUpgradeInit    |
+|R:B      | S1| S2   | C0;C2;C9;C4;C5;C10;C11;C12;C13;C14;C15;C16;C17;C18;C19| ChanUpgradeTry     | 
+|R:A      | S2| S3_1 | C0;C20;C13;C14;C12;C3;C15;C21;C17;C22;C23  | ChanUpgradeAck     |
+|R:A      | S2| S3_2 | C0;C20;C13;C14;C12;C3;C15;C21;C17;C22;C24;C25  | ChanUpgradeAck     |
+|R:B      | S3_1|S4  | C0;C16;C13;C14;C17;C24;C26          | ChanUpgradeConfirm |
+|PH:A     | S4|S5_1  | C0;C24;C17;C26                      | PH:A Function      |
+|PH:B     | S3_2|S5_1| C0;C24;C17;C25                      | PH:B Function      |
+|R:B      | S3_2|S5_2| C0;C16;C13;C14;C17;C24;C26;C27;C9   | ChanUpgradeConfirm |
+|R:A:B    | S5_1|S6  | C0;C29;C30;C13;C31;C32              | ChanUpgradeOpen    |
+|R:A      | S5_2|S6  | C0;C25;C9;C13;C28;C3                | ChanUpgradeOpen    |
+
+
+[UpgradeOkNotCrossingHello with Conditions](https://excalidraw.com/#json=ozuqjEQkt2sBcvK_4JhJI,sF60RbRxrrYa88-TjzdkeA)
+
+![Picture](img_fsm/UpgradeOkNotCrossingHello_Conditions.png)
+
+### Upgrade Handshake - UpgradeOkCrossingHello
+
+
+## Upgrade Handshake - UpgradeNotOk
+
+### Upgrade Handshake - UpgradeCanceled
+
+### Upgrade Handshake - UpgradeExpired
+
+### Upgrade Handshake - UpgradeStaled
+
+
+
+# Personal Notes 
+
+<details>
+  <summary>Click to expand!</summary>
+
+The content below is not to be considered.
+
+# IntermediateWork: 
+
+Outdated
+
+## Conditions 
 - C0 = Chan.State === ChanA.State === OPEN === ChanB.State
 - C1 = Chan.ChannelID === CONSTANT 
 - C2 = isAuthorizedUpgrader() === True
 - C3 = ChanA.UpgradeSequence.isIncremented() === True
-- C4 = UpgA.UpgradeFields.areSet() === True
+- C4 = UpgA.UpgradeFields[Ordering ConnHops].areSet() === True
 - C5 = (ProposedConnection.State===OPEN) && (ProposedConnection !== null)
 - C6 = isSupported(UpgA.UpgradeFields.ordering) === True
 - C7 = UpgA.isStored(PSa) === True
@@ -297,29 +380,7 @@ Notes:
 |R:A:B    | S5_1|S6  | C21;C27;C33                         | ChanUpgradeOpen    |
 |R:A      | S5_2|S6  | C21;C27;C34                         | ChanUpgradeOpen    |
 
-DRAW FSM INCLUDING CONDITIONS 
 
-
-## Upgrade Handshake - UpgradeNotOk
-
-### Upgrade Handshake - UpgradeCanceled
-
-### Upgrade Handshake - UpgradeExpired
-
-### Upgrade Handshake - UpgradeStaled
-
-
-
-# Personal Notes 
-
-<details>
-  <summary>Click to expand!</summary>
-
-The content below is not to be considered.
-
-# IntermediateWork: 
-
-Outdated
 ### Definition Description
 We have a working channel `Chan`. The channel works on top of an established connection between ChainA and ChainB and has two ends. We will call `ChanA` and `ChanB` the ends of the channel of the connected chains. 
 
