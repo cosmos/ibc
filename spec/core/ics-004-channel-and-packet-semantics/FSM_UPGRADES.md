@@ -100,8 +100,8 @@ The private store is meant for an end (e.g. ChainA or ChainB) to store transient
 - Packet Handler for B : PH:B
 
 ### Functions Calls For State Transition
-
-- S0->S1: (OPEN,OPEN) --> (OPEN,OPEN) :: A and R:A
+```typescript
+S0-->S1: (OPEN,OPEN) --> (OPEN,OPEN) :: A and R:A
 **ChanUpgradeInit** --> IsAuthorizedUpgrader()
     **InitUpgradeHandshake** --> getChan(ChanA) :: VerifyChanAis(OPEN); VerifyUpgradeVersion !== "" 
         getConn(ConnA):: Verify (ProposedConnection !== null && ProposedConnection.stateIs(OPEN)); VerifyOrderingSupported()
@@ -109,8 +109,10 @@ The private store is meant for an end (e.g. ChainA or ChainB) to store transient
         setUpgradeSequence(ChanA)
 **ChanUpgradeInit** --> getUpgrade(UpgA); 
 setUpgrade(UpgA) [Version] 
+```
 
-- S1 ->S2: (OPEN,OPEN) --> (OPEN,FLUSHING) :: R:B
+```typescript
+S1 -->S2: (OPEN,OPEN) --> (OPEN,FLUSHING) :: R:B
 **ChanUpgradeTry** -->	getChan(ChanB) :: VerifyChanBis(OPEN)
     getUpgrade(UpgB) 
     **InitUpgradeHandshake** --> getChan(ChanB) :: VerifyChanBis(OPEN) ; VerifyUpgradeVersion !== ""
@@ -129,8 +131,10 @@ getConn(ConnA) :: ConstructCounterPartyChannelEnd(); VerifyChannelState; VerifyC
 getChan(ChanB)
 getUpgrade(UpgB)
 setUpgrade(UpgB) [Version]
+```
 
-- S2 --> S3_1: (OPEN,FLUSHING) --> (FLUSHING,FLUSHING) :: R:A
+```typescript
+S2 --> S3_1: (OPEN,FLUSHING) --> (FLUSHING,FLUSHING) :: R:A
 **ChanUpgradeAck** -->	getChan(ChanA); VerifyChanAis(OPEN || FLUSHING) 
 getConn(ConnB) :: ConstructCounterPartyChannelEnd(); VerifyChannelState; VerifyChannelUpgrade;
 getUpgrade(UpgA) :: VerifyIsCompatibleUpgFields()		
@@ -145,9 +149,10 @@ VerifyInflightsPacket(Exist)
 setCounterPartyTimeout(PrivA)
 setChannel(ChanA)	
 setUpgrade(UpgA)
+```
 
-
-- S2 --> S3_2: (OPEN,FLUSHING) --> (FLUSHING_COMPLETE,FLUSHING) :: R:A
+```typescript
+S2 --> S3_2: (OPEN,FLUSHING) --> (FLUSHING_COMPLETE,FLUSHING) :: R:A
 **ChanUpgradeAck**	getChan(ChanA); VerifyChanAis(OPEN || FLUSHING) 
 getConn(ConnB) :: ConstructCounterPartyChannelEnd(); VerifyChannelState; VerifyChannelUpgrade
 getUpgrade(UpgA) :: VerifyIsCompatibleUpgFields() 	
@@ -162,8 +167,9 @@ VerifyInflightsPackets(NotExist)
 setChanA(FLUSHING_COMPLETE) 
 setChannel(ChanA)
 setUpgrade(UpgA)
+```
 
-
+```typescript
 S3_1 --> S4: (FLUSHING,FLUSHING) --> (FLUSHING,FLUSHING_COMPLETE) :: R:B
 **ChanUpgradeConfirm**	getChan(B) :: VerifyChanBis(FLUSHING) 
 getConn(ConnA) :: ConstructCounterPartyChannelEnd(); VerifyChannelState; VerifyChannelUpgrade
@@ -171,18 +177,23 @@ VerifyTimeoutNotExpired()
 VerifyInflightsPackets(NotExist) 
 setChanB(FLUSHING_COMPLETE) 
 setChannel(ChanB)
+```
 
+```typescript
 S4 --> S5_1: (FLUSHING,FLUSHING_COMPLETE) --> (FLUSHING_COMPLETE,FLUSHING_COPMLETE) :: PH:A
 **PacketHandlerChainA**		VerifyInflightsPackets(NotExist) 
 setChanA(FLUSHING_COMPLETE) 
 setChannel(ChanA)
+```
 
+```typescript
 S3_2 --> S5_1: (FLUSHING_COMPLETE,FLUSHING) --> (FLUSHING_COMPLETE,FLUSHING_COPMLETE) :: PH:B
 **PacketHandlerChainB**		VerifyInflightsPackets(NotExist) 
 setChanB(FLUSHING_COMPLETE) 
 setChannel(ChanB)
+```
 
-
+```typescript
 S3_2 --> S5_2: (FLUSHING_COMPLETE,FLUSHING) --> (FLUSHING_COMPLETE,OPEN) :: R:B
 **ChanUpgradeConfirm**		getChan(B); VerifyChanBis(FLUSHING)
 getConn(ConnA) :: ConstructCounterPartyChannelEnd(); VerifyChannelState; VerifyChannelUpgrade
@@ -196,8 +207,9 @@ setChannel(ChanB)
     delUpgrade(UpgB)
     delTimeout(TimeoutB))
     delLastPacSeq(LastSeqB)
+```
 
-
+```typescript
 S5_1 --> S6: (FLUSHING_COMPLETE,FLUSHING_COMPLETE) --> (OPEN,OPEN)	:: R:B and R:A
 **ChanUpgradeOpen**	getChan(Chan); VerifyChanIs(FLUSHING_COMPLETE)
 getConn(Conn);	
@@ -209,8 +221,9 @@ ConstructCounterPartyChannelEnd(); VerifyChannelState
     delUpgrade(Upg)
     delTimeout(Timeout)
     delLastPacSeq(LastSeq)
+```
 
-
+```typescript
 S5_2 --> S6: (FLUSHING_COMPLETE,OPEN) --> (OPEN,OPEN)	
 **ChanUpgradeOpen**	getChan(ChanA); VerifyChanAis(FLUSHING_COMPLETE)
 getConn(ConnB)  
@@ -223,7 +236,7 @@ ConstructCounterPartyChannelEnd(); VerifyChannelState
     delUpgrade(UpgA)
     delTimeout(TimeoutA)
     delLastPacSeq(LastSeqA)
-
+```
 
 ### Conditions
 
