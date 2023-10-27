@@ -107,8 +107,8 @@ ChanUpgradeInit --> IsAuthorizedUpgrader()
         getConn(ConnA):: Verify (ProposedConnection !== null && ProposedConnection.stateIs(OPEN)) VerifyOrderingSupported()
         setUpgrade(UpgA) [Ordering and ConnHops] 
         setUpgradeSequence(ChanA)
-ChanUpgradeInit --> getUpgrade(UpgA)
-setUpgrade(UpgA) [Version] 
+    getUpgrade(UpgA)
+    setUpgrade(UpgA) [Version] 
 ```
 
 ```typescript
@@ -119,123 +119,123 @@ ChanUpgradeTry -->	getChan(ChanB) :: VerifyChanBis(OPEN)
         getConn(ConnB):: Verify (ProposedConnection !== null && ProposedConnection.stateIs(OPEN)) VerifyOrderingSupported() 
         setUpgrade(UpgB) [Ordering, ConnHops, Version]; 
         setUpgradeSequence(ChanB)
-VerifyIsCompatibleUpgFields()		
-getConn(ConnA) :: ConstructCounterPartyChannelEnd(); VerifyChannelState(); VerifyChannelUpgrade()
+    VerifyIsCompatibleUpgFields()		
+    getConn(ConnA) :: ConstructCounterPartyChannelEnd(); VerifyChannelState(); VerifyChannelUpgrade()
     StartFlushingUpgradeHandshake --> getChan(ChanB):: VerifyChanBis(OPEN)
-    getUpgrade(UpgB):: VerifyUpgrade(!==nil)	
-    setChanB(FLUSHING)
-    getUpgradeTimeout(TimeoutA):: VerifyTimeoutNotExpired() 
-    getNextSeqSend(NextSeqSendA)	
-    setChannel(ChanB);
-    setUpgrade(UpgB) [Timeout, LastPacketSequence]
-getChan(ChanB)
-getUpgrade(UpgB)
-setUpgrade(UpgB) [Version]
+        getUpgrade(UpgB):: VerifyUpgrade(!==nil)	
+        setChanB(FLUSHING)
+        getUpgradeTimeout(TimeoutA):: VerifyTimeoutNotExpired() 
+        getNextSeqSend(NextSeqSendA)	
+        setChannel(ChanB);
+        setUpgrade(UpgB) [Timeout, LastPacketSequence]
+    getChan(ChanB)
+    getUpgrade(UpgB)
+    setUpgrade(UpgB) [Version]
 ```
 
 ```typescript
 S2 --> S3_1: (OPEN,FLUSHING) --> (FLUSHING,FLUSHING) :: R:A
 ChanUpgradeAck -->	getChan(ChanA); VerifyChanAis(OPEN || FLUSHING) 
-getConn(ConnB) :: ConstructCounterPartyChannelEnd(); VerifyChannelState(); VerifyChannelUpgrade()
-getUpgrade(UpgA) :: VerifyIsCompatibleUpgFields()		
+    getConn(ConnB) :: ConstructCounterPartyChannelEnd(); VerifyChannelState(); VerifyChannelUpgrade()
+    getUpgrade(UpgA) :: VerifyIsCompatibleUpgFields()		
     StartFlushingUpgradeHandshake --> getChan(ChanA) :: VerifyChanAis(OPEN)
-    getUpgrade(UpgA):: VerifyUpgrade(!==nil)	
-    setChanA(FLUSHING)
-    getUpgradeTimeout(TimeoutB):: VerifyTimeoutNotExpired()
-    getNextSeqSend(NextSeqSendB)
+        getUpgrade(UpgA):: VerifyUpgrade(!==nil)	
+        setChanA(FLUSHING)
+        getUpgradeTimeout(TimeoutB):: VerifyTimeoutNotExpired()
+        getNextSeqSend(NextSeqSendB)
+        setChannel(ChanA)	
+        setUpgrade(UpgA) [Timeout, LastPacketSequence]
+    VerifyInflightsPacket(Exist)
+    setCounterPartyTimeout(PrivA)
     setChannel(ChanA)	
-    setUpgrade(UpgA) [Timeout, LastPacketSequence]
-VerifyInflightsPacket(Exist)
-setCounterPartyTimeout(PrivA)
-setChannel(ChanA)	
-setUpgrade(UpgA)
+    setUpgrade(UpgA)
 ```
 
 ```typescript
 S2 --> S3_2: (OPEN,FLUSHING) --> (FLUSHING_COMPLETE,FLUSHING) :: R:A
 ChanUpgradeAck-->	getChan(ChanA); VerifyChanAis(OPEN || FLUSHING) 
-getConn(ConnB) :: ConstructCounterPartyChannelEnd(); VerifyChannelState(); VerifyChannelUpgrade()
-getUpgrade(UpgA) :: VerifyIsCompatibleUpgFields() 	
+    getConn(ConnB) :: ConstructCounterPartyChannelEnd(); VerifyChannelState(); VerifyChannelUpgrade()
+    getUpgrade(UpgA) :: VerifyIsCompatibleUpgFields() 	
     StartFlushingUpgradeHandshake -->	getChan(ChanA); VerifyChanIs(OPEN)
-    getUpgrade(UpgA) ::  VerifyUpgrade(!==nil)
-    setChanA(FLUSHING)
-    getUpgradeTimeout(TimeoutB):: VerifyTimeoutNotExpired()
-    getNextSeqSend(NextSeqSendB)
-    setChannel(ChanA)	
-    setUpgrade(UpgA) [Timeout, LastPacketSequence]
-VerifyInflightsPackets(NotExist) 
-setChanA(FLUSHING_COMPLETE) 
-setChannel(ChanA)
-setUpgrade(UpgA)
+        getUpgrade(UpgA) ::  VerifyUpgrade(!==nil)
+        setChanA(FLUSHING)
+        getUpgradeTimeout(TimeoutB):: VerifyTimeoutNotExpired()
+        getNextSeqSend(NextSeqSendB)
+        setChannel(ChanA)	
+        setUpgrade(UpgA) [Timeout, LastPacketSequence]
+    VerifyInflightsPackets(NotExist) 
+    setChanA(FLUSHING_COMPLETE) 
+    setChannel(ChanA)
+    setUpgrade(UpgA)
 ```
 
 ```typescript
 S3_1 --> S4: (FLUSHING,FLUSHING) --> (FLUSHING,FLUSHING_COMPLETE) :: R:B
 ChanUpgradeConfirm-->	getChan(B) :: VerifyChanBis(FLUSHING) 
-getConn(ConnA) :: ConstructCounterPartyChannelEnd(); VerifyChannelState(); VerifyChannelUpgrade()
-VerifyTimeoutNotExpired()
-VerifyInflightsPackets(NotExist) 
-setChanB(FLUSHING_COMPLETE) 
-setChannel(ChanB)
+    getConn(ConnA) :: ConstructCounterPartyChannelEnd(); VerifyChannelState(); VerifyChannelUpgrade()
+    VerifyTimeoutNotExpired()
+    VerifyInflightsPackets(NotExist) 
+    setChanB(FLUSHING_COMPLETE) 
+    setChannel(ChanB)
 ```
 
 ```typescript
 S4 --> S5_1: (FLUSHING,FLUSHING_COMPLETE) --> (FLUSHING_COMPLETE,FLUSHING_COPMLETE) :: PH:A
 PacketHandlerChainA_Function-->		VerifyInflightsPackets(NotExist) 
-setChanA(FLUSHING_COMPLETE) 
-setChannel(ChanA)
+    setChanA(FLUSHING_COMPLETE) 
+    setChannel(ChanA)
 ```
 
 ```typescript
 S3_2 --> S5_1: (FLUSHING_COMPLETE,FLUSHING) --> (FLUSHING_COMPLETE,FLUSHING_COPMLETE) :: PH:B
 PacketHandlerChainB_Function-->	VerifyInflightsPackets(NotExist) 
-setChanB(FLUSHING_COMPLETE) 
-setChannel(ChanB)
+    setChanB(FLUSHING_COMPLETE) 
+    setChannel(ChanB)
 ```
 
 ```typescript
 S3_2 --> S5_2: (FLUSHING_COMPLETE,FLUSHING) --> (FLUSHING_COMPLETE,OPEN) :: R:B
 ChanUpgradeConfirm-->		getChan(B); VerifyChanBis(FLUSHING)
-getConn(ConnA) :: ConstructCounterPartyChannelEnd(); VerifyChannelState(); VerifyChannelUpgrade()
-VerifyTimeoutNotExpired()
-VerifyInflightsPackets(NotExist) 
-setChanB(FLUSHING_COMPLETE) 
-setChannel(ChanB)
+    getConn(ConnA) :: ConstructCounterPartyChannelEnd(); VerifyChannelState(); VerifyChannelUpgrade()
+    VerifyTimeoutNotExpired()
+    VerifyInflightsPackets(NotExist) 
+    setChanB(FLUSHING_COMPLETE) 
+    setChannel(ChanB)
     openUpgradeHandshake--> getChan(B) 
-    getUpgrade(UpgB)
-    setChanUpgradeParameter(ChanB)
-    delUpgrade(UpgB)
-    delTimeout(TimeoutB))
-    delLastPacSeq(LastSeqB)
+        getUpgrade(UpgB)
+        setChanUpgradeParameter(ChanB)
+        delUpgrade(UpgB)
+        delTimeout(TimeoutB))
+        delLastPacSeq(LastSeqB)
 ```
 
 ```typescript
 S5_1 --> S6: (FLUSHING_COMPLETE,FLUSHING_COMPLETE) --> (OPEN,OPEN)	:: R:B and R:A
 ChanUpgradeOpen--> getChan(Chan); VerifyChanIs(FLUSHING_COMPLETE)
-getConn(Conn);	
-VerifyChanIs(OPEN || FLUSHING_COMPLETE)
-ConstructCounterPartyChannelEnd(); VerifyChannelState()
+    getConn(Conn);	
+    VerifyChanIs(OPEN || FLUSHING_COMPLETE)
+    ConstructCounterPartyChannelEnd(); VerifyChannelState()
     openUpgradeHandshake--> getChan(); 
-    getUpgrade(UpgA)
-    setChanUpgradeParameter(Chan)
-    delUpgrade(Upg)
-    delTimeout(Timeout)
-    delLastPacSeq(LastSeq)
+        getUpgrade(UpgA)
+        setChanUpgradeParameter(Chan)
+        delUpgrade(Upg)
+        delTimeout(Timeout)
+        delLastPacSeq(LastSeq)
 ```
 
 ```typescript
 S5_2 --> S6: (FLUSHING_COMPLETE,OPEN) --> (OPEN,OPEN)	
 ChanUpgradeOpen -->	getChan(ChanA); VerifyChanAis(FLUSHING_COMPLETE)
-getConn(ConnB)  
-VerifyChanBis(OPEN)
-getUpgrade(UpgA)
-ConstructCounterPartyChannelEnd(); VerifyChannelState()
-    openUpgradeHandshake--> getChan(A) 
+    getConn(ConnB)  
+    VerifyChanBis(OPEN)
     getUpgrade(UpgA)
-    setChanUpgradeParameter(ChanA)
-    delUpgrade(UpgA)
-    delTimeout(TimeoutA)
-    delLastPacSeq(LastSeqA)
+    ConstructCounterPartyChannelEnd(); VerifyChannelState()
+        openUpgradeHandshake--> getChan(A) 
+        getUpgrade(UpgA)
+        setChanUpgradeParameter(ChanA)
+        delUpgrade(UpgA)
+        delTimeout(TimeoutA)
+        delLastPacSeq(LastSeqA)
 ```
 
 ### Conditions
