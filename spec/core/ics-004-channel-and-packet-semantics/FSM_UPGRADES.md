@@ -95,20 +95,30 @@ The private store is meant for an end (e.g. ChainA or ChainB) to store transient
 
 Note that for the not crossing hello on S2 the ChanUpgradeTry the getUpgrade(UpgB) Must return null and no error should be stored. 
 
-| State Transition | Function               | Pr.A                      | Pr.B | PrivA                | PrivB |
-|---------|------------------------|--------------------------|-----|----------------------|-------|
-| S0 ->S1 |  ChanUpgradeInit       | getUpgrade(UpgA);setUpgradeVersion(UpgA)    |     |      |       |
-| S0 ->S1 |  InitUpgradeHandshake  | getChan(ChanA); getConn(ConnA); setUpgradeOrdering(UpgA); setUpgradeConnHops(UpgA); setUpgradeSequence(ChanA)                         |     |    |       |
-| S1 ->S2 |  ChanUpgradeTry        | getChan(ChanA)|getUpgrade(UpgB);setError(UpgErrB);getUpgrade(UpgB); setUpgradeVersion(UpgB)     |                      |       |
-| S1 ->S2 |  InitUpgradeHandshake        | |getChan(ChanB); getConn(ConnB); setUpgradeOrdering(UpgB); setUpgradeConnHops(UpgB); setUpgradeSequence(ChanB)     |                      |       |
-| S1 ->S2 |  IsCompatibleFields        | |getConn(ConnB)   |                      |       |
-| S1 ->S2 |  StartFlushingUpgradeHandshake        | getUpgradeTimeout(TimeoutA); getNextSeqSend(NextSeqSendA) |getChan(ChanB);getUpgrade(UpgB);setUpgradeTimeout(UpgB);setLastPacSeq(LastSeqB);setChannel(ChanB)    |                      |       |
-| S2 ->S3_1   |  ChanUpgradeAck        | getChan(ChanA); getConn(ConnA); getUpgrade(UpgA); setChannel(ChanA) |setUpgradeTimeout(TimeoutA);setLastPacSeq(LastSeqA);   |                      |       |
-| S2 ->S3_1 |  IsCompatibleFields        |getConn(ConnA) |   |                      |       |
-| S2 ->S3_1 |  StartFlushingUpgradeHandshake        | getChan(ChanA);getUpgrade(UpgA);setUpgradeTimeout(UpgA);setUpgrade(UpgA);setChannel(ChanA) | getUpgradeTimeout(TimeoutB); getNextSeqSend(NextSeqSendB);     |                      |       |
-| S2 ->S3_2   |  ChanUpgradeAck        | getChan(ChanA); getConn(ConnA); getUpgrade(UpgA); setChannel(ChanA) |setLastPacSeq(LastSeqA);   |                      |       |
-| S2 ->S3_2 |  IsCompatibleFields        |getConn(ConnA) |   |                      |       |
-| S2 ->S3_2 |  StartFlushingUpgradeHandshake        | getChan(ChanA);getUpgrade(UpgA);setUpgradeTimeout(UpgA);setUpgrade(UpgA);setChannel(ChanA) | getUpgradeTimeout(TimeoutB); getNextSeqSend(NextSeqSendB);     |                      |       |
+| State Transition | Function                         | Pr.A                                                                       | Pr.B                                                                                                          |
+|------------------|----------------------------------|----------------------------------------------------------------------------|----------------------------------------------------------------------------------------------------------------|
+| S0 -> S1         | ChanUpgradeInit                  | getUpgrade(UpgA);setUpgradeVersion(UpgA)                                   |                                                                                                                |
+| S0 -> S1         | InitUpgradeHandshake             | getChan(ChanA); getConn(ConnA); setUpgradeOrdering(UpgA); setUpgradeConnHops(UpgA); setUpgradeSequence(ChanA) |                                                                                                                |
+| S1 -> S2         | ChanUpgradeTry                   | getChan(ChanA)                                                             | getUpgrade(UpgB);setError(UpgErrB);getUpgrade(UpgB); setUpgradeVersion(UpgB)                                  |
+| S1 -> S2         | InitUpgradeHandshake             |                                                                            | getChan(ChanB); getConn(ConnB); setUpgradeOrdering(UpgB); setUpgradeConnHops(UpgB); setUpgradeSequence(ChanB) |
+| S1 -> S2         | IsCompatibleFields               |                                                                            | getConn(ConnB)                                                                                                 |
+| S1 -> S2         | StartFlushingUpgradeHandshake    | getUpgradeTimeout(TimeoutA); getNextSeqSend(NextSeqSendA)                   | getChan(ChanB);getUpgrade(UpgB);setUpgradeTimeout(UpgB);setLastPacSeq(LastSeqB);setChannel(ChanB)             |
+| S2 -> S3_1       | ChanUpgradeAck                   | getChan(ChanA); getConn(ConnA); getUpgrade(UpgA); setChannel(ChanA)        | setUpgradeTimeout(TimeoutA);setLastPacSeq(LastSeqA);                                                            |
+| S2 -> S3_1       | IsCompatibleFields               | getConn(ConnA)                                                             |                                                                                                                |
+| S2 -> S3_1       | StartFlushingUpgradeHandshake    | getChan(ChanA);getUpgrade(UpgA);setUpgradeTimeout(UpgA);setUpgrade(UpgA);setChannel(ChanA)                   | getUpgradeTimeout(TimeoutB); getNextSeqSend(NextSeqSendB)                                                      |
+| S2 -> S3_2       | ChanUpgradeAck                   | getChan(ChanA); getConn(ConnA); getUpgrade(UpgA); setChannel(ChanA); setLastPacSeq(LastSeqA); |                                                                                                                |
+| S2 -> S3_2       | IsCompatibleFields               | getConn(ConnA)                                                             |                                                                                                                |
+| S2 -> S3_2       | StartFlushingUpgradeHandshake    | getChan(ChanA);getUpgrade(UpgA);setUpgradeTimeout(UpgA);setUpgrade(UpgA);setChannel(ChanA)                   | getUpgradeTimeout(TimeoutB); getNextSeqSend(NextSeqSendB)                                                      |
+| S3_1 -> S4       | ChanUpgradeConfirm               | TDB:                                                                       | getChan(B); getConn(ConnB);setChan(B)                                                                          |
+| S4 -> S5_1       | ?                                | TDB:                                                                       |                                                                                                                |
+| S3_2 -> S5_1     | ChanUpgradeConfirm               | TDB:                                                                       | getChan(B); getConn(ConnB);SetChan(ChanB)                                                                      |
+| S3_2 -> S5_2     | ChanUpgradeConfirm               | TDB:                                                                       | getChan(B); getConn(ConnB);SetChan(ChanB)                                                                      |
+| S3_2 -> S5_2     | openUpgradeHandshake             | TDB:                                                                       | getChan(B); getUpgrade(UpgB);SetChan(ChanB); delUpgrade(UpgB);delTimeout(TimeoutB));delLastPacSeq(LastSeqB)     |
+| S5_1 -> S6       | ChanUpgradeOpen                  | getChan(ChanA);getConn(ConnA);                                             |                                                                                                                |
+| S5_1 -> S6       | openUpgradeHandshake             | getChan(A); getUpgrade(UpgA);SetChan(ChanA); delUpgrade(UpgA);delTimeout(TimeoutA));delLastPacSeq(LastSeqA)   |                                                                                                                |
+| S5_2 -> S6       | ChanUpgradeOpen                  | getChan(ChanA);getConn(ConnA);getUpgrade(UpgA);                            | getConn(ConnB)                                                                                                 |
+| S5_2 -> S6       | openUpgradeHandshake             | getChan(A); getUpgrade(UpgA);SetChan(ChanA); delUpgrade(UpgA);delTimeout(TimeoutA));delLastPacSeq(LastSeqA)   |                                                                                                                |
+
 
 Questions: 
 If timeout get stored the first time with StartFlushingUpgradeHandshake, isn't the getUpgradeTimeout always getting a null value and thus the transaction get aborted? 
