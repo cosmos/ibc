@@ -1190,7 +1190,7 @@ function timeoutPacket(
         // ordered channel: check that packet has not been received
         // only allow timeout on next sequence so all sequences before the timed out packet are processed (received/timed out)
         // before this packet times out
-        abortTransactionUnless(packet.sequence >= nextSequenceRecv)
+        abortTransactionUnless(packet.sequence == nextSequenceRecv)
         // ordered channel: check that the recv sequence is as claimed
         if (channel.connectionHops.length > 1) {
           key = nextSequenceRecvPath(packet.srcPort, packet.srcChannel)
@@ -1368,7 +1368,6 @@ function timeoutOnClose(
       case ORDERED:
         // ordered channel: check that packet has not been received
         abortTransactionUnless(packet.sequence >= nextSequenceRecv)
-        // ordered channel: check that the recv sequence is as claimed
 
         // ordered channel: check that the recv sequence is as claimed
         if (channel.connectionHops.length > 1) {
