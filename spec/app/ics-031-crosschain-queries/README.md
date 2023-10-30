@@ -129,6 +129,7 @@ enum QueryResult {
   TIMEOUT
 }
 ```
+
 - A query that returns a value is marked as `SUCCESS`. This means that the query has been executed at the queried chain and there was a value associated to the queried path at the requested height.
 - A query that is executed but does not return a value is marked as `FAILURE`. This means that the query has been executed at the queried chain, but there was no value associated to the queried path at the requested height.
 - A query that timed out before a result is committed at the querying chain is marked as `TIMEOUT`.
@@ -158,6 +159,7 @@ function queryPath(id: Identifier): Path {
     return "queries/{id}"
 }
 ```
+
 #### Result query path
 
 The result query path is a private path that stores the result of completed queries.
@@ -184,7 +186,9 @@ function generateIdentifier = () -> Identifier
 2) A correct relayer listening to `sendQuery` events from the querying chain will eventually pick the query request up and execute it at the queried chain. The result is then submitted in a transaction to the querying chain.
 3) When the query result is committed at the querying chain, this calls the `CrossChainQueryResponse` function of the Cross-chain Queries module.
 4) The `CrossChainQueryResponse` first retrieves the query from the `privateStore` using the query's unique identifier. It then proceeds to verify the result using its local client. If it passes the verification, the function removes the query from the `privateStore` and stores the result in the private store.
+
 > The querying chain may execute additional state machine logic when a query result is received. To account for this additional state machine logic and charge a fee to the query caller, an implementation of this specification could use the already existing `bounty` field of the `CrossChainQuery` interface or extend the interface with an additional field.
+
 5) The query caller can then asynchronously retrieve the query result. The function `PruneCrossChainQueryResult` allows a query caller to prune the result from the store once it retrieves it.
 
 #### Normal path methods
@@ -233,6 +237,7 @@ function CrossChainQueryRequest(
     return [queryIdentifier, queryCapability]
 }
 ```
+
 - **Precondition**
   - There exists a client with `clientId` identifier.
 - **Postcondition**
@@ -309,6 +314,7 @@ function CrossChainQueryResponse(
 
 }
 ```
+
 - **Precondition**
   - There exists a client with `clientId` identifier.
   - There is a query request stored in the `privateStore` identified by `queryId`.
@@ -335,6 +341,7 @@ function PruneCrossChainQueryResult(
     privateStore.delete(queryResultPath(queryId))
 }
 ```
+
 - **Precondition**
   - There is a query result stored in the `privateStore` identified by `queryId`.
   - The caller has the right to clean the query result
@@ -380,6 +387,7 @@ function checkQueryTimeout(
     privateStore.set(resultQueryPath(queryIdentifier), resultRecord)
 }
 ```
+
 - **Precondition**
   - There is a query request stored in the `privateStore` identified by `queryId`.
 - **Postcondition**

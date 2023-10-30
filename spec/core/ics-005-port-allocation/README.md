@@ -186,7 +186,6 @@ type validatePortIdentifier = (id: Identifier) => boolean
 
 If not provided, the default `validatePortIdentifier` function will always return `true`. 
 
-
 #### Binding to a port
 
 The IBC handler MUST implement `bindPort`. `bindPort` binds to an unallocated port, failing if the port has already been allocated.

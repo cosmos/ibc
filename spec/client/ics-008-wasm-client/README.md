@@ -38,7 +38,6 @@ Functions & terms are as defined in [ICS 2](../../core/ics-002-client-semantics)
 
 `Wasm VM` refers to a virtual machine capable of executing valid Wasm bytecode.
 
-
 ### Desired Properties
 
 This specification must satisfy the client interface defined in ICS 2.
@@ -299,6 +298,7 @@ function verifyNextSequenceRecv(
 ### Wasm Client Code Interface
 
 #### What is code handle?
+
 Code handle is an object that facilitates interaction between Wasm code and go code. For example, consider the method `isValidClientState` which could be implemented like this:
 
 ```go
@@ -310,6 +310,7 @@ func (c *CodeHandle) isValidClientState(clientState ClientState, height u64) {
 ```
 
 #### Wasm Client interface
+
 Every Wasm client code need to support ingestion of below messages in order to be used as light client.
 
 ```rust
@@ -402,7 +403,6 @@ As long as `Wasm Client Code` keeps interface consistent with `ICS 02` it should
 None yet.
 
 ## History
-
 
 ## Copyright
 

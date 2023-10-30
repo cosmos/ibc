@@ -49,6 +49,7 @@ An ICS header contains metadata relevant to the ICS.
 See [README.md](../../README.md) for a description of the ICS acceptance stages.
 
 `category` - ICS category, one of the following:
+
 - `meta` - A standard about the ICS process
 - `IBC/TAO` - A standard about an inter-blockchain communication system core transport, authentication, and ordering layer protocol.
 - `IBC/APP` - A standard about an inter-blockchain communication system application layer protocol.

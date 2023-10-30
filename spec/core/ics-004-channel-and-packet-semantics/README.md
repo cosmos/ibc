@@ -113,7 +113,6 @@ enum ChannelState {
 
 See the [upgrade spec](./UPGRADES.md) for details on `FLUSHING` and `FLUSHCOMPLETE`.
 
-
 A `Packet`, in the interblockchain communication protocol, is a particular interface defined as follows:
 
 ```typescript

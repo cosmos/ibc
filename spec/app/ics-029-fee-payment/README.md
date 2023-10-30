@@ -107,10 +107,10 @@ The sender chain will escrow 0.003 channel-7/ATOM and 0.002 IRIS from the fee pa
 
 The logic involved in collecting fees from users and then paying it out to the relevant relayers is encapsulated by a separate fee module and may vary between implementations. However, all fee modules must implement a uniform interface such that the ICS-4 handlers can correctly pay out fees to the right relayers, and so that relayers themselves can easily determine the fees they can expect for relaying a packet.
 
-
 ### Data Structures
 
 The incentivized acknowledgment written on the destination chain includes:
+
 - raw bytes of the acknowledgement from the underlying application,
 - the source address of the forward relayer,
 - and a boolean indicative of receive operation success on the underlying application.
@@ -230,11 +230,13 @@ In this way, custom fee-handling logic can be hooked up to the IBC packet flow l
 The fee middleware will negotiate its fee protocol version with the counterparty module by including its own version next to the application version. The channel version will be a string of a JSON struct containing the fee middleware version and the application version. The application version may as well be a JSON-encoded string, possibly including further middleware and app versions, if the application stack consists of multiple milddlewares wrapping a base application.
 
 Channel Version: 
+
 ```json
 {"fee_version":"<fee_protocol_version>","app_version":"<application_version>"}
 ```
 
 Ex: 
+
 ```json
 {"fee_version":"ics29-1","app_version":"ics20-1"}
 ```
