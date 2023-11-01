@@ -895,7 +895,7 @@ function recvPacket(
           nextSequenceRecv = nextSequenceRecv + 1
           provableStore.set(nextSequenceRecvPath(packet.destPort, packet.destChannel), nextSequenceRecv)
           provableStore.set(
-          packetReceiptPath(packet.destPort, packet.destChannel, packet.sequence),
+            packetReceiptPath(packet.destPort, packet.destChannel, packet.sequence),
             TIMEOUT_RECEIPT
           )
         }
@@ -1190,8 +1190,7 @@ function timeoutPacket(
         // ordered channel: check that packet has not been received
         // only allow timeout on next sequence so all sequences before the timed out packet are processed (received/timed out)
         // before this packet times out
-        abortTransactionUnless(nextSequenceRecv == packet.sequence)
-
+        abortTransactionUnless(packet.sequence == nextSequenceRecv)
         // ordered channel: check that the recv sequence is as claimed
         if (channel.connectionHops.length > 1) {
           key = nextSequenceRecvPath(packet.srcPort, packet.srcChannel)
@@ -1239,12 +1238,9 @@ function timeoutPacket(
       // NOTE: For ORDERED_ALLOW_TIMEOUT, the relayer must first attempt the receive on the destination chain
       // before the timeout receipt can be written and subsequently proven on the sender chain in timeoutPacket
       case ORDERED_ALLOW_TIMEOUT:
-        // ordered channel: check that packet has not been received
-        // only allow timeout on next sequence so all sequences before the timed out packet are processed (received/timed out)
-        // before this packet times out
-        abortTransactionUnless(nextSequenceRecv == packet.sequence)
+        abortTransactionUnless(packet.sequence == nextSequenceRecv - 1)
 
-         if (channel.connectionHops.length > 1) {
+        if (channel.connectionHops.length > 1) {
           abortTransactionUnless(connection.verifyMultihopMembership(
               connection,
               proofHeight,
@@ -1368,50 +1364,77 @@ function timeoutOnClose(
       ))
     }
 
-    if channel.order === ORDERED || channel.order == ORDERED_ALLOW_TIMEOUT {
+    switch channel.order {
+      case ORDERED:
+        // ordered channel: check that packet has not been received
+        abortTransactionUnless(packet.sequence >= nextSequenceRecv)
 
-      // ordered channel: check that packet has not been received
-      abortTransactionUnless(nextSequenceRecv <= packet.sequence)
+        // ordered channel: check that the recv sequence is as claimed
+        if (channel.connectionHops.length > 1) {
+          key = nextSequenceRecvPath(packet.destPort, packet.destChannel)
+          abortTransactionUnless(connection.verifyMultihopMembership(
+            connection,
+            proofHeight,
+            proof,
+            channel.ConnectionHops,
+            key,
+            nextSequenceRecv
+          ))
+        } else {
+          abortTransactionUnless(connection.verifyNextSequenceRecv(
+            proofHeight,
+            proof,
+            packet.destPort,
+            packet.destChannel,
+            nextSequenceRecv
+          ))
+        }
+        break;
 
-      // ordered channel: check that the recv sequence is as claimed
-      if (channel.connectionHops.length > 1) {
-        key = nextSequenceRecvPath(packet.destPort, packet.destChannel)
-        abortTransactionUnless(connection.verifyMultihopMembership(
-          connection,
-          proofHeight,
-          proof,
-          channel.ConnectionHops,
-          key,
-          nextSequenceRecv
-        ))
-      } else {
-        abortTransactionUnless(connection.verifyNextSequenceRecv(
-          proofHeight,
-          proof,
-          packet.destPort,
-          packet.destChannel,
-          nextSequenceRecv
-        ))
-      }
-    } else
-      // unordered channel: verify absence of receipt at packet index
-      if (channel.connectionHops.length > 1) {
-        abortTransactionUnless(connection.verifyMultihopNonMembership(
-          connection,
-          proofHeight,
-          proof,
-          channel.ConnectionHops,
-          key
-        ))
-      } else {
-        abortTransactionUnless(connection.verifyPacketReceiptAbsence(
-          proofHeight,
-          proof,
-          packet.destPort,
-          packet.destChannel,
-          packet.sequence
-        ))
-      }
+      case UNORDERED:
+        // unordered channel: verify absence of receipt at packet index
+        if (channel.connectionHops.length > 1) {
+          abortTransactionUnless(connection.verifyMultihopNonMembership(
+            connection,
+            proofHeight,
+            proof,
+            channel.ConnectionHops,
+            key
+          ))
+        } else {
+          abortTransactionUnless(connection.verifyPacketReceiptAbsence(
+            proofHeight,
+            proof,
+            packet.destPort,
+            packet.destChannel,
+            packet.sequence
+          ))
+        }
+        break;
+
+      case ORDERED_ALLOW_TIMEOUT:
+        // if packet.sequence >= nextSequenceRecv, then the relayer has not attempted
+        // to receive the packet on the destination chain (e.g. because the channel is already closed).
+        // In this situation it is not needed to verify the presence of a timeout receipt.
+        // Otherwise, if packet.sequence < nextSequenceRecv, then the relayer has attempted
+        // to receive the packet on the destination chain, and nextSequenceRecv has been incremented.
+        // In this situation, verify the presence of timeout receipt. 
+        if packet.sequence < nextSequenceRecv {
+          abortTransactionUnless(connection.verifyPacketReceipt(
+            proofHeight,
+            proof,
+            packet.destPort,
+            packet.destChannel,
+            packet.sequence
+            TIMEOUT_RECEIPT,
+          ))
+        }
+        break;
+
+      default:
+        // unsupported channel type
+        abortTransactionUnless(true)
+    }
 
     // all assertions passed, we can alter state
 
