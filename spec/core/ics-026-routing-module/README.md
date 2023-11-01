@@ -153,6 +153,24 @@ function onTimeoutPacketClose(packet: Packet, relayer: string) {
 }
 ```
 
+#### **OnClientUpdate**
+
+`onClientUpdate` propagates information on client updates up to the application layer
+including the relayer responsible for posting the update. This allows relayer incentivization
+for client updates to be built at the application layer. This method is only called upon a 
+successful client update.
+
+```typescript
+function onClientUpdate(
+  clientID: Identifier,
+  clientUpdate: ClientMsg,
+  updateHeights: []Height,
+  relayer: string) => (err: Error) {
+    // defined by the module
+}
+```
+
+
 Exceptions MUST be thrown to indicate failure and reject the handshake, incoming packet, etc.
 
 These are combined together in a `ModuleCallbacks` interface:
