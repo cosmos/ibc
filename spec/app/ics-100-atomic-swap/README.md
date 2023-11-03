@@ -80,6 +80,7 @@ interface AtomicSwapPacketData {
   memo: string
 }
 ```
+
 ```typescript
 type AtomicSwapPacketAcknowledgement = AtomicSwapPacketSuccess | AtomicSwapPacketError
 interface AtomicSwapPacketSuccess {
@@ -217,9 +218,9 @@ function extractSourcePortForTakerMsg(path: string) : string{
 
 #### Cancelling a swap
 
-1.  A maker cancels a previously created order. Expired orders can also be cancelled.
-2.  An `AtomicSwapPacketData` is relayed to the taker chain where in `onRecvPacket` the order is cancelled on the taker chain. If the order is in the process of being taken (a packet with `TakeSwapMsg` is being relayed from the taker chain to the maker chain), the cancellation will be rejected.
-3.  A packet is relayed back where upon acknowledgement the order on the maker chain is also cancelled.  The refund only occurs if the taker chain confirmed the cancellation request.
+1. A maker cancels a previously created order. Expired orders can also be cancelled.
+2. An `AtomicSwapPacketData` is relayed to the taker chain where in `onRecvPacket` the order is cancelled on the taker chain. If the order is in the process of being taken (a packet with `TakeSwapMsg` is being relayed from the taker chain to the maker chain), the cancellation will be rejected.
+3. A packet is relayed back where upon acknowledgement the order on the maker chain is also cancelled.  The refund only occurs if the taker chain confirmed the cancellation request.
 
 ### Sub-protocols
 

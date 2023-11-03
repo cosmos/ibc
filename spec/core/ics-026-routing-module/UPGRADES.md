@@ -8,7 +8,6 @@ This standard document specifies the interfaces and state machine logic that IBC
 
 As new features get added to IBC applications, chains may wish the take advantage of new application features without abandoning the accumulated state and network effect(s) of an already existing channel. The upgrade protocol proposed would allow applications to renegotiate an existing channel to take advantage of new features without having to create a new channel, thus preserving all existing application state while upgradng to new application logic.
 
-
 ### Desired Properties
 
 - Both applications MUST agree to the renegotiated application parameters.
@@ -34,7 +33,7 @@ interface ModuleUpgradeCallbacks {
 }
 ```
 
-#### **OnChanUpgradeInit**
+### **OnChanUpgradeInit**
 
 `onChanUpgradeInit` will verify that the upgrade parameters 
 are valid and perform any custom `UpgradeInit` logic.
@@ -58,7 +57,7 @@ function onChanUpgradeInit(
 }
 ```
 
-#### **OnChanUpgradeTry**
+### **OnChanUpgradeTry**
 
 `onChanUpgradeTry` will verify the upgrade-chosen parameters and perform custom `TRY` logic. 
 If the upgrade-chosen parameters are invalid, the callback must return an error to abort the handshake. 
@@ -85,7 +84,7 @@ function onChanUpgradeTry(
 }
 ```
 
-#### **OnChanUpgradeAck**
+### **OnChanUpgradeAck**
 
 `onChanUpgradeAck` will error if the counterparty selected version string
 is invalid. If an error is returned by the callback, core IBC will revert any changes made by `onChanUpgradeAck` and abort the handshake.
@@ -106,7 +105,7 @@ function onChanUpgradeAck(
 }
 ```
 
-#### **OnChanUpgradeOpen**
+### **OnChanUpgradeOpen**
 
 `onChanUpgradeOpen` will perform custom OPEN logic. It MUST NOT error since the counterparty has already approved the handshake, and transitioned to using the new upgrade parameters.
 
@@ -123,7 +122,7 @@ function onChanUpgradeOpen(
 }
 ```
 
-#### **OnChanUpgradeRestore**
+### **OnChanUpgradeRestore**
 
 `onChanUpgradeRestore` will be called on `cancelChannelUpgrade` and `timeoutChannelUpgrade` to restore the application to its pre-upgrade state.
 

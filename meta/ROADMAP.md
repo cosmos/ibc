@@ -1,6 +1,6 @@
 # Roadmap IBC specs
 
-_Lastest update: April 6th, 2022_
+*Lastest update: April 6th, 2022*
 
 This document endeavours to inform the wider IBC community about plans and priorities for the specification work of IBC. This roadmap should be read as a high-level guide, rather than a commitment to schedules and deliverables. The degree of specificity is inversely proportional to the timeline. We will update this document periodically to reflect the status and plans.
  

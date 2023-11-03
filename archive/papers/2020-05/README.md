@@ -9,6 +9,6 @@ Submission options:
   - Remove author names from paper
   - Pre-prints OK
   - Prior work:
-    - https://assets.pubpub.org/asuzx3df/11581974880753.pdf
-    - https://assets.pubpub.org/a7tcrzro/31581340169699.pdf
-    - https://assets.pubpub.org/g84cchsz/11581340329396.pdf
+    - <https://assets.pubpub.org/asuzx3df/11581974880753.pdf>
+    - <https://assets.pubpub.org/a7tcrzro/31581340169699.pdf>
+    - <https://assets.pubpub.org/g84cchsz/11581340329396.pdf>

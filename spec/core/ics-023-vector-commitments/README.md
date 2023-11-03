@@ -41,7 +41,6 @@ This document only defines desired properties, not a concrete implementation —
 
 Below we define a behaviour and an overview of datatypes. For data type definition look at [cosmos/ics23](https://github.com/cosmos/ics23/blob/master/proto/cosmos/ics23/v1/proofs.proto) repository.
 
-
 ### Datatypes
 
 A commitment construction MUST specify the following datatypes, which are otherwise opaque (need not be introspected) but MUST be serialisable:
@@ -219,7 +218,7 @@ root = getRoot(acc)
 proof = createMembershipProof(acc, applyPrefix(prefix, path), value)
 ```
 
-```
+```typescript
 Probability(verifyMembership(root, proof, applyPrefix(prefix, path), value) === false) negligible in k
 ```
 
@@ -230,7 +229,7 @@ root = getRoot(acc)
 proof = createNonMembershipProof(acc, applyPrefix(prefix, path))
 ```
 
-```
+```typescript
 Probability(verifyNonMembership(root, proof, applyPrefix(prefix, path)) === false) negligible in k
 ```
 
@@ -240,13 +239,13 @@ Commitment proofs MUST be *sound*: path => value mappings which have not been ad
 
 For any prefix `prefix` and any path `path` last set to a value `value` in the commitment `acc`, for all values of `proof`,
 
-```
+```typescript
 Probability(verifyNonMembership(root, proof, applyPrefix(prefix, path)) === true) negligible in k
 ```
 
 For any prefix `prefix` and any path `path` not set in the commitment `acc`, for all values of `proof` and all values of `value`,
 
-```
+```typescript
 Probability(verifyMembership(root, proof, applyPrefix(prefix, path), value) === true) negligible in k
 ```
 
@@ -261,13 +260,13 @@ root = getRoot(acc)
 proof = createMembershipProof(acc, applyPrefix(prefix, path), value)
 ```
 
-```
+```typescript
 Probability(verifyMembership(root, proof, applyPrefix(prefix, path), value) === false) negligible in k
 ```
 
 For all other values `otherValue` where `value !== otherValue`, for all values of `proof`,
 
-```
+```typescript
 Probability(verifyMembership(root, proof, applyPrefix(prefix, path), otherValue) === true) negligible in k
 ```
 
@@ -286,6 +285,7 @@ Commitment algorithms are expected to be fixed. New algorithms can be introduced
 ## History
 
 Security definitions are mostly sourced from these papers (and simplified somewhat):
+
 - [Vector Commitments and their Applications](https://eprint.iacr.org/2011/495.pdf)
 - [Commitments with Applications to Anonymity-Preserving Revocation](https://eprint.iacr.org/2017/043.pdf)
 - [Batching Techniques for Commitments with Applications to IOPs and Stateless Blockchains](https://eprint.iacr.org/2018/1188.pdf)

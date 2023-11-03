@@ -35,6 +35,7 @@ If fixing an issue requires changes to multiple standards, create multiple PRs a
 All PRs require an approval from at least two members of the [standardisation committee](./STANDARDS_COMMITTEE.md) before merge. 
 The PRs submitted by one of the members of the standardisation committee require an approval from only one other member before merge. 
 When reviewing PRs please use the following review explanations:
+
 - `Approval` through the GH UI means that you understand all the changes proposed in the PR. In addition:
   - You must also think through anything which ought to be included but is not.
   - You must think through any potential security issues or incentive-compatibility flaws introduced by the changes.
@@ -58,4 +59,3 @@ Ensure that you base and target your PR on the `master` branch.
 
 - Ensure all github requirements pass.
 - Squash and merge pull request.
-

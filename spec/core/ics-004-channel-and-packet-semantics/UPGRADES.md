@@ -1,14 +1,14 @@
 # Upgrading Channels
 
-### Synopsis
+## Synopsis
 
 This standard document specifies the interfaces and state machine logic that IBC implementations must implement in order to enable existing channels to upgrade after the initial channel handshake.
 
-### Motivation
+## Motivation
 
 As new features get added to IBC, chains may wish to take advantage of new channel features without abandoning the accumulated state and network effect(s) of an already existing channel. The upgrade protocol proposed would allow chains to renegotiate an existing channel to take advantage of new features without having to create a new channel, thus preserving all existing packet state processed on the channel.
 
-### Desired Properties
+## Desired Properties
 
 - Both chains MUST agree to the renegotiated channel parameters.
 - Channel state and logic on both chains SHOULD either be using the old parameters or the new parameters, but MUST NOT be in an in-between state, e.g., it MUST NOT be possible for an application to run v2 logic, while its counterparty is still running v1 logic.
@@ -73,11 +73,13 @@ interface UpgradeFields {
 ```
 
 MAY BE MODIFIED:
+
 - `version`: The version MAY be modified by the upgrade protocol. The same version negotiation that happens in the initial channel handshake can be employed for the upgrade handshake.
 - `ordering`: The ordering MAY be modified by the upgrade protocol so long as the new ordering is supported by underlying connection.
 - `connectionHops`: The connectionHops MAY be modified by the upgrade protocol.
 
 MUST NOT BE MODIFIED:
+
 - `counterpartyChannelIdentifier`: The counterparty channel identifier MUST NOT be modified by the upgrade protocol.
 - `counterpartyPortIdentifier`: The counterparty port identifier MUST NOT be modified by the upgrade protocol
 
