@@ -63,7 +63,7 @@ All standards at or past the "Draft" stage are listed here in order of their ICS
 | -------------------------------------------------------- | ----------------------- | ----- | --------------- | ------------- |
 | [20](spec/app/ics-020-fungible-token-transfer/README.md) | Fungible Token Transfer | Candidate | [ibc-go](https://github.com/cosmos/ibc-go/tree/main/modules/apps/transfer) | Protocol team |
 | [27](spec/app/ics-027-interchain-accounts/README.md)     | Interchain Accounts     | Candidate | [ibc-go](https://github.com/cosmos/ibc-go/tree/main/modules/apps/27-interchain-accounts) | Protocol team | 
-| [28](spec/app/ics-028-cross-chain-validation/README.md)  | Cross-Chain Validation  | Candidate | [interchain-security](https://github.com/cosmos/interchain-security/tree/main/x/ccv) | Cosmos Hub team |
+| [28](spec/app/ics-028-cross-chain-validation/README.md)  | Cross-Chain Validation  | Candidate | [interchain-security](https://github.com/cosmos/interchain-security/tree/main) | Cosmos Hub team |
 | [29](spec/app/ics-029-fee-payment) | General Relayer Incentivization Mechanism | Candidate | [ibc-go](https://github.com/cosmos/ibc-go/tree/main/modules/apps/29-fee) | Protocol team |
 | [30](spec/app/ics-030-middleware) | IBC Application Middleware | N/A | N/A | Protocol team |
 | [31](spec/app/ics-031-crosschain-queries) | Cross-Chain Queries | Draft | N/A | Protocol team |
