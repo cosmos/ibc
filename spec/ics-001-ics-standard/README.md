@@ -49,6 +49,7 @@ An ICS header contains metadata relevant to the ICS.
 See [README.md](../../README.md) for a description of the ICS acceptance stages.
 
 `category` - ICS category, one of the following:
+
 - `meta` - A standard about the ICS process
 - `IBC/TAO` - A standard about an inter-blockchain communication system core transport, authentication, and ordering layer protocol.
 - `IBC/APP` - A standard about an inter-blockchain communication system application layer protocol.
@@ -71,6 +72,8 @@ See [README.md](../../README.md) for a description of the ICS acceptance stages.
 
 `replaced-by` - Another ICS standard which replaces or supplants this standard, if applicable.
 
+`version compatibility` - List of versions of implementations compatible with the ICS standard.
+
 ### Synopsis
 
 Following the header, an ICS should include a brief (~200 word) synopsis providing a high-level
@@ -92,7 +95,7 @@ The specification may have any or all of the following sub-components, as approp
     The technical specification should be detailed enough such that separate correct implementations of the specification without knowledge of each other are compatible.
 - *Backwards Compatibility* - A discussion of compatibility (or lack thereof) with previous feature or protocol versions.
 - *Forwards Compatibility* - A discussion of compatibility (or lack thereof) with future possible or expected features or protocol versions.
-- *Example Implementation* - A concrete example implementation or description of an expected implementation to serve as the primary reference for implementers.
+- *Example Implementations* - Concrete example implementations or descriptions of expected implementations to serve as the primary reference for implementers.
 - *Other Implementations* - A list of candidate or finalised implementations (external references, not inline).
 
 ### History

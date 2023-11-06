@@ -10,6 +10,7 @@ modified: (modification date)
 requires: (optional list of ics numbers)
 required-by: (optional list of ics numbers)
 implements: (optional list of ics numbers)
+version compatibility: (optional list of compatible implementations' releases)
 ---
 
 ## Synopsis
@@ -54,13 +55,9 @@ implements: (optional list of ics numbers)
 
 (discussion of compatibility or lack thereof with expected future standards)
 
-## Example Implementation
+## Example Implementations
 
-(link to or description of concrete example implementation)
-
-## Other Implementations
-
-(links to or descriptions of other implementations)
+(links to or descriptions of concrete example implementations)
 
 ## History
 

@@ -20,7 +20,7 @@ Contributing to this repo can mean many things such as participating in discussi
 - If you would like to propose a new standard for inclusion in the IBC standards, please take a look at [PROCESS.md](./PROCESS.md) for a detailed description of the standardisation process.
   - To start a new standardisation document, copy the [template](../spec/ics-template.md) and open a PR.
 
-If you have any questions, you can usually find some IBC team members on the [Cosmos Discord](https://discord.gg/rPFPxVJmUZ).
+If you have any questions, you can usually find some IBC team members on the [Cosmos Discord](https://discord.gg/cosmosnetwork).
 
 ## Pull Requests
 
@@ -35,6 +35,7 @@ If fixing an issue requires changes to multiple standards, create multiple PRs a
 All PRs require an approval from at least two members of the [standardisation committee](./STANDARDS_COMMITTEE.md) before merge. 
 The PRs submitted by one of the members of the standardisation committee require an approval from only one other member before merge. 
 When reviewing PRs please use the following review explanations:
+
 - `Approval` through the GH UI means that you understand all the changes proposed in the PR. In addition:
   - You must also think through anything which ought to be included but is not.
   - You must think through any potential security issues or incentive-compatibility flaws introduced by the changes.
@@ -58,4 +59,3 @@ Ensure that you base and target your PR on the `master` branch.
 
 - Ensure all github requirements pass.
 - Squash and merge pull request.
-

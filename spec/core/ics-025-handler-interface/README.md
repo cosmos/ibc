@@ -5,6 +5,7 @@ stage: draft
 category: IBC/TAO
 kind: instantiation
 requires: 2, 3, 4, 23, 24
+version compatibility: ibc-go v7.0.0
 author: Christopher Goes <cwgoes@tendermint.com>
 created: 2019-04-23
 modified: 2019-08-25
@@ -36,7 +37,7 @@ Associated definitions are as defined in referenced prior standards (where the f
 
 By default, clients are unowned: any module may create a new client, query any existing client, update any existing client, and delete any existing client not in use.
 
-The handler interface exposes `createClient`, `updateClient`, `queryClientConsensusState`, `queryClient`, and `submitMisbehaviourToClient` as defined in [ICS 2](../ics-002-client-semantics).
+The handler interface exposes `createClient`, `updateClient`, `queryConsensusState`, `queryClientState`, and `submitMisbehaviourToClient` as defined in [ICS 2](../ics-002-client-semantics).
 
 ### Connection lifecycle management
 
@@ -72,11 +73,7 @@ Not applicable.
 
 This interface MAY change when implemented on new chains (or upgrades to an existing chain) as long as the semantics remain the same.
 
-## Example Implementation
-
-Coming soon.
-
-## Other Implementations
+## Example Implementations
 
 Coming soon.
 

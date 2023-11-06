@@ -6,6 +6,7 @@ requires: 24
 required-by: 4
 category: IBC/TAO
 kind: interface
+version compatibility: ibc-go v7.0.0
 author: Christopher Goes <cwgoes@tendermint.com>
 created: 2019-06-20
 modified: 2019-08-25
@@ -185,7 +186,6 @@ type validatePortIdentifier = (id: Identifier) => boolean
 
 If not provided, the default `validatePortIdentifier` function will always return `true`. 
 
-
 #### Binding to a port
 
 The IBC handler MUST implement `bindPort`. `bindPort` binds to an unallocated port, failing if the port has already been allocated.
@@ -232,13 +232,10 @@ Not applicable.
 
 Port binding is not a wire protocol, so interfaces can change independently on separate chains as long as the ownership semantics are unaffected.
 
-## Example Implementation
+## Example Implementations
 
-Coming soon.
-
-## Other Implementations
-
-Coming soon.
+- Implementation of ICS 05 in Go can be found in [ibc-go repository](https://github.com/cosmos/ibc-go).
+- Implementation of ICS 05 in Rust can be found in [ibc-rs repository](https://github.com/cosmos/ibc-rs).
 
 ## History
 

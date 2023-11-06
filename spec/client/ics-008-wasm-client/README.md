@@ -409,6 +409,9 @@ need such as processed height and/or processed time.
 #### Contract query
 
 Every Wasm contract must support these query messages:
+#### Wasm Client interface
+
+Every Wasm client code need to support ingestion of below messages in order to be used as light client.
 
 ```rust
 #[cw_serde]
@@ -540,13 +543,9 @@ Not applicable.
 
 As long as Wasm contract keeps its interface consistent with `ICS 02` it should be forward compatible
 
-## Example Implementation
+## Example Implementations
 
 Implementation of ICS 08 in Go can be found in [ibc-go PR](https://github.com/cosmos/ibc-go/pull/3355).
-
-## Other Implementations
-
-None at present.
 
 ## History
 

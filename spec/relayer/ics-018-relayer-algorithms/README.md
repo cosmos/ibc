@@ -73,7 +73,7 @@ should check that the destination chain has not yet received the packet by check
 
 Packets in an unordered channel can be relayed in an event-based fashion.
 The relayer should watch the source chain for events emitted whenever packets
-are send, then compose the packet using the data in the event log. Subsequently,
+are sent, then compose the packet using the data in the event log. Subsequently,
 the relayer should check whether the destination chain has received the packet
 already by querying for the presence of an acknowledgement at the packet's sequence
 number, and if one is not yet present the relayer should relay the packet.
@@ -87,7 +87,7 @@ check whether the packet commitment still exists on the source chain (it will be
 deleted once the acknowledgement is relayed), and if so relay the acknowledgement to
 the source chain.
 
-#### Relaying timeouts
+#### Relaying timeouts (ordinary case, no TIMEOUT receipt)
 
 Timeout relay is slightly more complex since there is no specific event emitted when
 a packet times-out - it is simply the case that the packet can no longer be relayed,
@@ -96,6 +96,15 @@ process must elect to track a set of packets (which can be constructed by scanni
 and as soon as the height or timestamp of the destination chain exceeds that of a tracked
 packet, check whether the packet commitment still exists on the source chain (it will
 be deleted once the timeout is relayed), and if so relay a timeout to the source chain.
+
+#### Relaying timeouts for channels that write TIMEOUT receipts
+
+Some channel types (e.g. ORDERED_ALLOW_TIMEOUT), can only timeout a packet if a timeout receipt
+is written on the destination chain. This requires a relayer to first attempt a receive on the destination chain
+even if the packet is already timed out, before they can relay a timeout to the sending chain. Thus on these channels,
+relayers must check if packet has already been received on the destination chain by querying the packet receipt path.
+If a value does not already exist, then attempt to receive the packet on the destination chain. If a timeout receipt
+is written, then relay the timeout with a proof of the timeout receipt back to the sender chain.
 
 ### Pending datagrams
 
@@ -129,8 +138,7 @@ function pendingDatagrams(chain: Chain, counterparty: Chain): List<Set<Datagram>
   connections = chain.getConnectionsUsingClient(counterparty)
   for (const localEnd of connections) {
     remoteEnd = counterparty.getConnection(localEnd.counterpartyIdentifier)
-    if (localEnd.state === INIT &&
-          (remoteEnd === null || remoteEnd.state === INIT))
+    if (localEnd.state === INIT && remoteEnd === null)
       // Handshake has started locally (1 step done), relay `connOpenTry` to the remote end
       counterpartyDatagrams.push(ConnOpenTry{
         desiredIdentifier: localEnd.counterpartyConnectionIdentifier,
@@ -140,7 +148,7 @@ function pendingDatagrams(chain: Chain, counterparty: Chain): List<Set<Datagram>
         clientIdentifier: localEnd.counterpartyClientIdentifier,
         version: localEnd.version,
         counterpartyVersion: localEnd.version,
-        proofInit: localEnd.proof(),
+        proofInit: localEnd.proof(height),
         proofConsensus: localEnd.client.consensusState.proof(),
         proofHeight: height,
         consensusHeight: localEnd.client.height,
@@ -150,16 +158,16 @@ function pendingDatagrams(chain: Chain, counterparty: Chain): List<Set<Datagram>
       localDatagrams.push(ConnOpenAck{
         identifier: localEnd.identifier,
         version: remoteEnd.version,
-        proofTry: remoteEnd.proof(),
+        proofTry: remoteEnd.proof(counterpartyHeight),
         proofConsensus: remoteEnd.client.consensusState.proof(),
-        proofHeight: remoteEnd.client.height,
+        proofHeight: counterpartyHeight,
         consensusHeight: remoteEnd.client.height,
       })
     else if (localEnd.state === OPEN && remoteEnd.state === TRYOPEN)
       // Handshake has confirmed locally (3 steps done), relay `connOpenConfirm` to the remote end
       counterpartyDatagrams.push(ConnOpenConfirm{
         identifier: remoteEnd.identifier,
-        proofAck: localEnd.proof(),
+        proofAck: localEnd.proof(height),
         proofHeight: height,
       })
   }
@@ -171,8 +179,7 @@ function pendingDatagrams(chain: Chain, counterparty: Chain): List<Set<Datagram>
   for (const localEnd of channels) {
     remoteEnd = counterparty.getConnection(localEnd.counterpartyIdentifier)
     // Deal with handshakes in progress
-    if (localEnd.state === INIT &&
-          (remoteEnd === null || remoteEnd.state === INIT))
+    if (localEnd.state === INIT && remoteEnd === null)
       // Handshake has started locally (1 step done), relay `chanOpenTry` to the remote end
       counterpartyDatagrams.push(ChanOpenTry{
         order: localEnd.order,
@@ -183,7 +190,7 @@ function pendingDatagrams(chain: Chain, counterparty: Chain): List<Set<Datagram>
         counterpartyChannelIdentifier: localEnd.channelIdentifier,
         version: localEnd.version,
         counterpartyVersion: localEnd.version,
-        proofInit: localEnd.proof(),
+        proofInit: localEnd.proof(height),
         proofHeight: height,
       })
     else if (localEnd.state === INIT && remoteEnd.state === TRYOPEN)
@@ -192,15 +199,15 @@ function pendingDatagrams(chain: Chain, counterparty: Chain): List<Set<Datagram>
         portIdentifier: localEnd.portIdentifier,
         channelIdentifier: localEnd.channelIdentifier,
         version: remoteEnd.version,
-        proofTry: remoteEnd.proof(),
-        proofHeight: localEnd.client.height,
+        proofTry: remoteEnd.proof(counterpartyHeight),
+        proofHeight: counterpartyHeight,
       })
     else if (localEnd.state === OPEN && remoteEnd.state === TRYOPEN)
       // Handshake has confirmed locally (3 steps done), relay `chanOpenConfirm` to the remote end
       counterpartyDatagrams.push(ChanOpenConfirm{
         portIdentifier: remoteEnd.portIdentifier,
         channelIdentifier: remoteEnd.channelIdentifier,
-        proofAck: localEnd.proof(),
+        proofAck: localEnd.proof(height),
         proofHeight: height
       })
 
@@ -267,13 +274,10 @@ Not applicable. The relayer process is off-chain and can be upgraded or downgrad
 
 Not applicable. The relayer process is off-chain and can be upgraded or downgraded as necessary.
 
-## Example Implementation
+## Example Implementations
 
-Coming soon.
-
-## Other Implementations
-
-Coming soon.
+- Implementation of ICS 18 in Go can be found in [cosmos/relayer repository](https://github.com/cosmos/relayer).
+- Implementation of ICS 18 in Rust can be found in [informalsystems/hermes repository](https://github.com/informalsystems/hermes).
 
 ## History
 

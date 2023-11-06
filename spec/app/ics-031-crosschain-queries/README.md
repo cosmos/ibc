@@ -42,7 +42,7 @@ We expect on-chain applications to depend on reads from other chains, e.g., a pa
 
 ### Assumptions
 
-- **Safe chains:** Both the queryin and queried chains are safe. This means that, for every chain, the underlying consensus engine satisfies safety (e.g., the chain does not fork) and the execution of the state machine follows the described protocol.
+- **Safe chains:** Both the querying and queried chains are safe. This means that, for every chain, the underlying consensus engine satisfies safety (e.g., the chain does not fork) and the execution of the state machine follows the described protocol.
 
 - **Live chains:** Both the querying and queried chains MUST be live, i.e., new blocks are eventually added to the chain.
 
@@ -87,7 +87,7 @@ A bounty is paid to incentivize relayers for participating in cross-chain querie
 
 The querying chain must implement the Cross-chain Queries module, which allows the querying chain to query state at the queried chain. 
 
-Cross-chain queries relies on relayers operating between both chains. When a query request is received by the querying chain, the Cross-chain Queries module emits a `sendQuery` event. Relayers operating between the querying and queried chains must monitor the querying chain for `sendQuery` events. Eventually, a relayer will retrieve the query request and execute it, i.e., fetch the data and generate the corresponding proofs, at the queried chain. The relayer then submits the result in a transaction to the querying chain. The result is finally registered at the querying chain by the Cross-chain Queries module. 
+Cross-chain queries rely on relayers operating between both chains. When a query request is received by the querying chain, the Cross-chain Queries module emits a `sendQuery` event. Relayers operating between the querying and queried chains must monitor the querying chain for `sendQuery` events. Eventually, a relayer will retrieve the query request and execute it, i.e., fetch the data and generate the corresponding proofs, at the queried chain. The relayer then submits the result in a transaction to the querying chain. The result is finally registered at the querying chain by the Cross-chain Queries module. 
 
 A query request includes the height of the queried chain at which the query must be executed. The reason is that the keys being queried can have different values at different heights. Thus, a malicious relayer could choose to query a height that has a value that benefits it somehow. By letting the querying chain decide the height at which the query is executed, we can prevent relayers from affecting the result data.
 
@@ -100,7 +100,7 @@ The Cross-chain Queries module stores query requests when it processes them.
 A CrossChainQuery is a particular interface to represent query requests. A request is retrieved when its result is submitted.
 
 ```typescript
-interface CrossChainQuery struct {
+interface CrossChainQuery {
     id: Identifier
     path: CommitmentPath
     localTimeoutHeight: Height
@@ -129,14 +129,15 @@ enum QueryResult {
   TIMEOUT
 }
 ```
+
 - A query that returns a value is marked as `SUCCESS`. This means that the query has been executed at the queried chain and there was a value associated to the queried path at the requested height.
 - A query that is executed but does not return a value is marked as `FAILURE`. This means that the query has been executed at the queried chain, but there was no value associated to the queried path at the requested height.
 - A query that timed out before a result is committed at the querying chain is marked as `TIMEOUT`.
 
-A CrossChainQueryResult is a particular interface used to represent query results.
+A `CrossChainQueryResult` is a particular interface used to represent query results.
 
 ```typescript
-interface CrossChainQueryResult struct {
+interface CrossChainQueryResult {
     id: Identifier
     result: QueryResult
     data: []byte
@@ -158,22 +159,23 @@ function queryPath(id: Identifier): Path {
     return "queries/{id}"
 }
 ```
+
 #### Result query path
 
 The result query path is a private path that stores the result of completed queries.
 
 ```typescript
-function resultQueryPath(id: Identifier): Path {
-    return "queriesresult/{id}"
+function queryResultPath(id: Identifier): Path {
+    return "result/queries/{id}"
 }
 ```
 
 ### Helper functions
 
-The querying chain MUST implement a function `generateQueryIdentifier`, which generates a unique query identifier:
+The querying chain MUST implement a function `generateIdentifier`, which generates a unique query identifier:
 
 ```typescript
-function generateQueryIdentifier = () -> Identifier
+function generateIdentifier = () -> Identifier
 ```
 
 ### Sub-protocols
@@ -184,7 +186,9 @@ function generateQueryIdentifier = () -> Identifier
 2) A correct relayer listening to `sendQuery` events from the querying chain will eventually pick the query request up and execute it at the queried chain. The result is then submitted in a transaction to the querying chain.
 3) When the query result is committed at the querying chain, this calls the `CrossChainQueryResponse` function of the Cross-chain Queries module.
 4) The `CrossChainQueryResponse` first retrieves the query from the `privateStore` using the query's unique identifier. It then proceeds to verify the result using its local client. If it passes the verification, the function removes the query from the `privateStore` and stores the result in the private store.
+
 > The querying chain may execute additional state machine logic when a query result is received. To account for this additional state machine logic and charge a fee to the query caller, an implementation of this specification could use the already existing `bounty` field of the `CrossChainQuery` interface or extend the interface with an additional field.
+
 5) The query caller can then asynchronously retrieve the query result. The function `PruneCrossChainQueryResult` allows a query caller to prune the result from the store once it retrieves it.
 
 #### Normal path methods
@@ -233,6 +237,7 @@ function CrossChainQueryRequest(
     return [queryIdentifier, queryCapability]
 }
 ```
+
 - **Precondition**
   - There exists a client with `clientId` identifier.
 - **Postcondition**
@@ -258,7 +263,7 @@ function CrossChainQueryResponse(
     abortTransactionUnless(query !== null)
 
     // Retrieve client state of the queried chain.
-    client = queryClientState(query.clientId)
+    clientState = queryClientState(query.clientId)
     abortTransactionUnless(client !== null)
 
     // Check that the relier executed the query at the requested height at the queried chain.
@@ -271,10 +276,10 @@ function CrossChainQueryResponse(
 
 
     // Verify query result using the local light client of the queried chain.
-    // If the reponse carries data, then verify that the data is indeed the value associated with query.path at query.queryHeight at the queried chain.
+    // If the response carries data, then verify that the data is indeed the value associated with query.path at query.queryHeight at the queried chain.
     if (data !== null) {    
-        abortTransactionUnless(client.verifyMemership(
-            client,
+        abortTransactionUnless(verifyMembership(
+            clientState,
             proofHeight,
             delayPeriodTime,
             delayPeriodBlocks,
@@ -283,10 +288,10 @@ function CrossChainQueryResponse(
             data
         ))
         result = SUCCESS
-    // If there response does not carry any data, verify that query.path does not exist at query.queryHeight at the queried chain.
+    // If the response does not carry any data, verify that query.path does not exist at query.queryHeight at the queried chain.
     } else {
-        abortTransactionUnless(client.verifyNonMemership(
-            client,
+        abortTransactionUnless(verifyNonMembership(
+            clientState,
             proofHeight,
             delayPeriodTime,
             delayPeriodBlocks,
@@ -305,10 +310,11 @@ function CrossChainQueryResponse(
                                    data} 
 
     // Store the result in the local, private store.
-    privateStore.set(resultQueryPath(queryIdentifier), resultRecord)
+    privateStore.set(queryResultPath(queryIdentifier), resultRecord)
 
 }
 ```
+
 - **Precondition**
   - There exists a client with `clientId` identifier.
   - There is a query request stored in the `privateStore` identified by `queryId`.
@@ -325,16 +331,17 @@ function PruneCrossChainQueryResult(
   ) {
 
     // Retrieve the query result from the private store using the query's identifier.
-    resultRecord = privateStore.get(resultQueryPath(queryIdentifier))
+    resultRecord = privateStore.get(queryResultPath(queryIdentifier))
     abortTransactionUnless(resultRecord !== null)
 
     // Abort the transaction unless the caller has the right to clean the query result
     abortTransactionUnless(authenticateCapability(queryId, queryCapability))
 
-    // Delete the query result from the the local, private store.
-    privateStore.delete(resultQueryPath(queryId))
+    // Delete the query result from the local, private store.
+    privateStore.delete(queryResultPath(queryId))
 }
 ```
+
 - **Precondition**
   - There is a query result stored in the `privateStore` identified by `queryId`.
   - The caller has the right to clean the query result
@@ -380,6 +387,7 @@ function checkQueryTimeout(
     privateStore.set(resultQueryPath(queryIdentifier), resultRecord)
 }
 ```
+
 - **Precondition**
   - There is a query request stored in the `privateStore` identified by `queryId`.
 - **Postcondition**

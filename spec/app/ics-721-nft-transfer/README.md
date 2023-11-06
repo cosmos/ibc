@@ -7,14 +7,14 @@ requires: 25, 26
 kind: instantiation
 author: Haifeng Xi <haifeng@bianjie.ai>
 created: 2021-11-10
-modified: 2022-11-08
+modified: 2022-12-15
 ---
 
 > This standard document follows the same design principles of [ICS 20](../ics-020-fungible-token-transfer) and inherits most of its content therefrom, while replacing `bank` module based asset tracking logic with that of the `nft` module.
 
 ## Synopsis
 
-This standard document specifies packet data structure, state machine handling logic, and encoding details for the transfer of non-fungible tokens over an IBC channel between two modules on separate chains. The state machine logic presented allows for safe multi-chain `classId` handling with permissionless channel opening. This logic constitutes a _non-fungible token transfer bridge module_, interfacing between the IBC routing module and an existing asset tracking module on the host state machine, which could be either a Cosmos-style native module or a smart contract running in a virtual machine.
+This standard document specifies packet data structure, state machine handling logic, and encoding details for the transfer of non-fungible tokens over an IBC channel between two modules on separate chains. In this document, `class`, `collection` and `contract` are used interchangeably. The state machine logic presented allows for safe multi-chain `classId` handling with permissionless channel opening. This logic constitutes a *non-fungible token transfer bridge module*, interfacing between the IBC routing module and an existing asset tracking module on the host state machine, which could be either a Cosmos-style native module or a smart contract running in a virtual machine.
 
 ### Motivation
 
@@ -26,7 +26,7 @@ The IBC handler interface & IBC routing module interface are as defined in [ICS 
 
 ### Desired Properties
 
-- Preservation of non-fungibility (i.e., only one instance of any token is _live_ across all the IBC-connected blockchains).
+- Preservation of non-fungibility (i.e., only one instance of any token is *live* across all the IBC-connected blockchains).
 - Permissionless token transfers, no need to whitelist connections, modules, or `classId`s.
 - Symmetric (all chains implement the same logic, no in-protocol differentiation of hubs & zones).
 - Fault containment: prevents Byzantine-creation of tokens originating on chain `A`, as a result of chain `B`'s Byzantine behavior.
@@ -35,29 +35,59 @@ The IBC handler interface & IBC routing module interface are as defined in [ICS 
 
 ### Data Structures
 
-Only one packet data type is required: `NonFungibleTokenPacketData`, which specifies the class id, class uri, token id's, token uri's, sender address, and receiver address.
+Only one packet data type is required: `NonFungibleTokenPacketData`, which specifies the class id, class uri, class data, token id array, token uri array, token data array, sending address, and receiving address.
 
 ```typescript
 interface NonFungibleTokenPacketData {
   classId: string
   classUri: string
+  classData: string
   tokenIds: string[]
   tokenUris: string[]
-  tokenData: byte[][]
+  tokenData: string[]
   sender: string
   receiver: string
+  memo: string
 }
 ```
 
-`classId` uniquely identifies the class/collection which the tokens being transferred belong to in the sending chain. In the case of an ERC-1155 compliant smart contract, for example, this could be a string representation of the top 128 bits of the token ID.
+`classId` is a required field that MUST never be empty, it uniquely identifies the class/collection/contract which the tokens being transferred belong to in the sending chain. In the case of an ERC-1155 compliant smart contract, for example, this could be a string representation of the top 128 bits of the token ID.
 
-`classUri` is optional, but will be extremely beneficial for cross-chain interoperability with NFT marketplaces like OpenSea, where [class/collection metadata](https://docs.opensea.io/docs/contract-level-metadata) can be added for better user experience.
+`classUri` is an optional field which, if present, MUST be non-empty and refer to an off-chain resource that is typically a JSON file containing the [class metadata](https://docs.opensea.io/docs/contract-level-metadata); this could be extremely beneficial for cross-chain interoperability with NFT marketplaces like OpenSea.
 
-`tokenIds` uniquely identifies some tokens of the given class that are being transferred. In the case of an ERC-1155 compliant smart contract, for example, a `tokenId` could be a string representation of the bottom 128 bits of the token ID.
+`classData` is an optional field which, if present, MUST be non-empty and contain on-chain class metadata such as royalty related parameters.
 
-Each `tokenId` has a corresponding entry in `tokenUris` which, if present, refers to an off-chain resource that is typically an immutable JSON file containing the token's metadata.
+`tokenIds` array is a required field that MUST have a size greater than zero and hold non-empty entries that uniquely identify tokens (of the given class) that are being transferred. In the case of an ERC-1155 compliant smart contract, for example, a `tokenId` could be a string representation of the bottom 128 bits of the token ID.
 
-Each `tokenId` has another corresponding entry in `tokenData` which, if present, contains some opaque application data associated with the token (e.g., royalty parameters).
+`tokenUris` array is an optional field which, if present, MUST have the same size as `tokenIds` and hold non-empty entries each of which refers to an off-chain resource that is typically an immutable JSON file containing metadata associated with the token identified by the corresponding `tokenIds` entry.
+
+`tokenData` array is an optional field which, if present, MUST have the same size as `tokenIds` and hold non-empty entries each of which contains on-chain application data associated with the token identified by the corresponding `tokenIds` entry.
+
+Both `tokenData` entries and `classData` MUST be Base64 encoded strings which SHOULD have the following JSON structure:
+
+```json
+{
+  "key1" : { "value":"...", "mime":"..." },
+  "key2" : { "value":"...", "mime":"..." },
+  ...
+}
+```
+
+`mime` is an optional property that specifies the media type of the corresponding key-value. If a key-value is of the default type of string, then `mime` can be omitted. Otherwise, `mime` MUST be non-empty and have a value that comes from this [list](https://www.iana.org/assignments/media-types/media-types.xhtml).
+
+Chain applications are advised to namespace the keys; to achieve maximum interoperability across applications, standardization of these namespaces is desired but out of the scope.
+
+An example of `classData` content (raw JSON before being Base64 encoded) is shown below:
+
+```json
+{
+  "opensea:name" : { "value":"Crypto Creatures" },
+  "opensea:image" : { "value":"...(Base64 encoded media binary)", "mime":"image/png" },
+  "opensea:seller_fee_basis_points" : { "value":"100" }
+}
+```
+
+The optional `memo` field is not used within the transfer, however, it may be used either for external off-chain users (i.e. exchanges) or for middleware wrapping transfer that can parse and execute custom logic on the basis of the passed-in memo. If the memo is intended to be parsed and interpreted by higher-level middleware, then these middlewares are advised to namespace their additions to the memo string so that they do not overwrite each other. Chains should ensure that there is some length limit on the entire packet data to ensure that the packet does not become a DOS vector. However, these do not need to be protocol-defined limits. If the receiver cannot accept a packet because of length limitations, this will lead to a timeout on the sender side.
 
 As tokens are sent across chains using the ICS-721 protocol, they begin to accrue a record of channels across which they have been transferred. This record information is encoded into the `classId` field.
 
@@ -110,40 +140,30 @@ The sub-protocols described herein should be implemented in a "non-fungible toke
 The NFT asset tracking module should implement the following functions:
 
 ```typescript
-function SaveClass(classId: string, classUri: string) {
+function CreateOrUpdateClass(classId: string, classUri: string, classData: string) {
   // creates a new NFT Class identified by classId
+  // if classId already exists, app logic may choose to update class metadata accordingly
 }
 ```
 
 ```typescript
-function Mint(
-  classId: string,
-  tokenId: string,
-  tokenUri: string,
-  tokenData: byte[],
-  receiver: string
-) {
+function Mint(classId: string, tokenId: string, tokenUri: string, tokenData: string, receiver: string) {
   // creates a new NFT identified by <classId,tokenId>
   // receiver becomes owner of the newly minted NFT
 }
 ```
 
 ```typescript
-function Transfer(classId: string, tokenId: string, receiver: string) {
+function Transfer(classId: string, tokenId: string, receiver: string, tokenData: string) {
   // transfers the NFT identified by <classId,tokenId> to receiver
   // receiver becomes new owner of the NFT
+  // if tokenData is not empty, app logic may choose to update token data accordingly
 }
 ```
 
 ```typescript
 function Burn(classId: string, tokenId: string) {
   // destroys the NFT identified by <classId,tokenId>
-}
-```
-
-```typescript
-function Update(token: nft.NFT) {
-  // updates the NFT identified by <token.classId,token.tokenId>
 }
 ```
 
@@ -156,13 +176,6 @@ function GetOwner(classId: string, tokenId: string) {
 ```typescript
 function GetNFT(classId: string, tokenId: string) {
   // returns NFT identified by <classId,tokenId>
-}
-```
-
-```typescript
-function HasClass(classId: string) {
-  // returns true if NFT Class identified by classId already exists;
-  // returns false otherwise
 }
 ```
 
@@ -215,7 +228,7 @@ function onChanOpenInit(
   channelIdentifier: Identifier,
   counterpartyPortIdentifier: Identifier,
   counterpartyChannelIdentifier: Identifier,
-  version: string) (version: string, err: Error) {
+  version: string): (version: string, err: Error) {
   // only unordered channels allowed
   abortTransactionUnless(order === UNORDERED)
   // assert that version is "ics721-1"
@@ -233,7 +246,7 @@ function onChanOpenTry(
   channelIdentifier: Identifier,
   counterpartyPortIdentifier: Identifier,
   counterpartyChannelIdentifier: Identifier,
-  counterpartyVersion: string) (version: string, err: Error) {
+  counterpartyVersion: string): (version: string, err: Error) {
   // only unordered channels allowed
   abortTransactionUnless(order === UNORDERED)
   // assert that version is "ics721-1"
@@ -302,13 +315,12 @@ function createOutgoingPacket(
   tokenIds: string[],
   sender: string,
   receiver: string,
-  source: boolean,
   destPort: string,
   destChannel: string,
   sourcePort: string,
   sourceChannel: string,
   timeoutHeight: Height,
-  timeoutTimestamp: uint64) {
+  timeoutTimestamp: uint64): uint64 {
   prefix = sourcePort + '/' + sourceChannel
   // we are source chain if classId is not prefixed with sourcePort and sourceChannel
   source = classId.slice(0, len(prefix)) !== prefix
@@ -318,7 +330,7 @@ function createOutgoingPacket(
     // ensure that sender is token owner
     abortTransactionUnless(sender === nft.GetOwner(classId, tokenId))
     if source { // we are source chain, escrow token
-      nft.Transfer(classId, tokenId, channelEscrowAddresses[sourceChannel])
+      nft.Transfer(classId, tokenId, channelEscrowAddresses[sourceChannel], null)
     } else { // we are sink chain, burn voucher
       nft.Burn(classId, tokenId)
     }
@@ -326,8 +338,25 @@ function createOutgoingPacket(
     tokenUris.push(token.GetUri())
     tokenData.push(token.GetData())
   }
-  NonFungibleTokenPacketData data = NonFungibleTokenPacketData{classId, nft.GetClass(classId).GetUri(), tokenIds, tokenUris, tokenData, sender, receiver}
-  ics4Handler.sendPacket(Packet{timeoutHeight, timeoutTimestamp, destPort, destChannel, sourcePort, sourceChannel, data}, getCapability("port"))
+  NonFungibleTokenPacketData data = NonFungibleTokenPacketData{
+    classId,
+    nft.GetClass(classId).GetUri(),
+    nft.GetClass(classId).GetData(),
+    tokenIds,
+    tokenUris,
+    tokenData,
+    sender,
+    receive
+  }
+  sequence = Handler.sendPacket(
+    getCapability("port"),
+    sourcePort,
+    sourceChannel,
+    timeoutHeight,
+    timeoutTimestamp,
+    protobuf.marshal(data) // protobuf-marshalled bytes of packet data
+  )
+  return sequence
 }
 ```
 
@@ -351,18 +380,10 @@ function ProcessReceivedPacketData(data: NonFungibleTokenPacketData) {
   source = data.classId.slice(0, len(prefix)) === prefix
   for (var i in data.tokenIds) {
     if source { // we are source chain, un-escrow token to receiver
-      if (data.tokenData[i] !== nil) { // update token data
-        token = nft.GetNFT(data.classId.slice(len(prefix)), data.tokenIds[i])
-        token.SetData(data.tokenData[i])
-        nft.Update(token)
-      }
-      nft.Transfer(data.classId.slice(len(prefix)), data.tokenIds[i], data.receiver)
+      nft.Transfer(data.classId.slice(len(prefix)), data.tokenIds[i], data.receiver, data.tokenData[i])
     } else { // we are sink chain, mint voucher to receiver
       prefixedClassId = data.destPort + '/' + data.destChannel + '/' + data.classId
-      // create NFT class if it doesn't exist already
-      if (nft.HasClass(prefixedClassId) === false) {
-        nft.SaveClass(data.classId, data.classUri)
-      }
+      nft.CreateOrUpdateClass(prefixedClassId, data.classUri, data.classData)
       nft.Mint(prefixedClassId, data.tokenIds[i], data.tokenUris[i], data.tokenData[i], data.receiver)
     }
   }
@@ -374,7 +395,7 @@ function ProcessReceivedPacketData(data: NonFungibleTokenPacketData) {
 ```typescript
 function onAcknowledgePacket(packet: Packet, acknowledgement: bytes) {
   // if the transfer failed, refund the tokens
-  if (!ack.success) refundToken(packet)
+  if (!acknowledgement.success) refundToken(packet)
 }
 ```
 
@@ -397,7 +418,7 @@ function refundToken(packet: Packet) {
   source = data.classId.slice(0, len(prefix)) !== prefix
   for (var i in data.tokenIds) {
     if source { // we are source chain, un-escrow token back to sender
-      nft.Transfer(data.classId, data.tokenIds[i], data.sender)
+      nft.Transfer(data.classId, data.tokenIds[i], data.sender, null)
     } else { // we are sink chain, mint voucher back to sender
       nft.Mint(data.classId, data.tokenIds[i], data.tokenUris[i], data.tokenData[i], data.sender)
     }
@@ -417,7 +438,7 @@ function onTimeoutPacketClose(packet: Packet) {
 
 This implementation preserves token non-fungibility and redeemability.
 
-- Non-fungibility: Only one instance of any token is _live_ across all the IBC-connected blockchains.
+- Non-fungibility: Only one instance of any token is *live* across all the IBC-connected blockchains.
 - Redeemability: If tokens have been sent to the counterparty chain, they can be redeemed back in the same `classId` & `tokenId` on the source chain.
 
 #### Optional addenda
@@ -441,13 +462,9 @@ This initial standard uses version "ics721-1" in the channel handshake.
 
 A future version of this standard could use a different version in the channel handshake, and safely alter the packet data format & packet handler semantics.
 
-## Example Implementation
+## Example Implementations
 
-Coming soon.
-
-## Other Implementations
-
-Coming soon.
+- Implementation of ICS 721 in Go can be found in [bianjieai/nft-transfer repository](https://github.com/bianjieai/nft-transfer).
 
 ## History
 
@@ -463,6 +480,8 @@ Coming soon.
 | Mar 30, 2022 | Added NFT module definition and fixed pseudo-code errors |
 | May 18, 2022 | Added paragraph about NFT metadata mutability            |
 | Nov 08, 2022 | Added `tokenData` to PacketData                          |
+| Dec 14, 2022 | Added `classData` and `memo` to PacketData               |
+| Dec 15, 2022 | Tightened spec on `classData` and `tokenData`            |
 
 ## Copyright
 

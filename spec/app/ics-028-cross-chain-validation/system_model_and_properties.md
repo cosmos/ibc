@@ -1,9 +1,11 @@
 <!-- omit in toc -->
 # CCV: System Model and Properties
+
 [&uparrow; Back to main document](./README.md)
 
 <!-- omit in toc -->
 ## Outline
+
 - [Assumptions](#assumptions)
 - [Desired Properties](#desired-properties)
   - [System Properties](#system-properties)
@@ -16,6 +18,7 @@
 - [Correctness Reasoning](#correctness-reasoning)
 
 ## Assumptions
+
 [&uparrow; Back to Outline](#outline)
 
 As part of a modular ABCI application, CCV interacts with both the consensus engine (via ABCI) and other application modules (e.g, the Staking module). 
@@ -91,9 +94,11 @@ Between the provider chain and each consumer chain, a separate (unique) CCV chan
 > Nonetheless, the *Correct Relayer* assumption is necessary to guarantee the systems properties (except for *Validator Set Replication*) -- *Bond-Based Consumer Voting Power*, *Slashable Consumer Misbehavior*, and *Consumer Rewards Distribution*. 
 
 ### System Properties
+
 [&uparrow; Back to Outline](#outline)
 
 We use the following notations:
+
 - `ts(h)` is the timestamp of a block with height `h`, i.e., `ts(h) = B.currentTimestamp()`, where `B` is the block at height `h`;
 - `pBonded(h,val)` is the number of tokens bonded by validator `val` on the provider chain at block height `h`; 
 - `pUnbonding(h,val)` is the number of tokens a validator `val` starts unbonding on the provider at at block height `h`;
@@ -114,6 +119,7 @@ i.e., if a chain `A` sends at height `ha` a packet to a chain `B` and `B` receiv
 > **Note**: The block on the proposer chain that handles a governance proposal to spawn a new consumer chain `cc` *happens before* all the blocks of `cc`.
 
 CCV provides the following system properties.
+
 - ***Validator Set Replication***: Every validator set on any consumer chain MUST either be or have been a validator set on the provider chain.
 
 - ***Bond-Based Consumer Voting Power***: Let `val` be a validator, `cc` be a consumer chain, both `hc` and `hc'` be heights on `cc`, and both `hp` and `hp'` be heights on the provider chain, such that
@@ -125,21 +131,22 @@ CCV provides the following system properties.
   - `sumSlash(hp, h, val)` is the sum of the slashes of `val` at all heights `hs` for infractions committed at `hp`, such that `hp < hs <= h`.
   
   Then for all heights `h` on the provider chain, 
-   ```
+
+  ```typescript
   hp <= h < hp': 
   Power(cc,hc,val) <= VP( pBonded(h,val) + sumUnbonding(hp, h, val) + sumSlash(hp, h, val) )
   ```
 
   > **Note**: The reason for `+ sumUnbonding(hp, h, val)` in the above inequality is that tokens that `val` start unbonding after `hp` have contributed to the power granted to `val` at height `hc` on `cc` (i.e., `Power(cc,hc,val)`). 
   > As a result, these tokens should be available for slashing until `hp'`.
-
+  >
   > **Note**: The reason for `+ sumSlash(hp, h, val)` in the above inequality is that slashing `val` reduces its locked tokens (i.e., `pBonded(h,val)` and `sumUnbonding(hp, h, val)`), however it does not reduce the power already granted to it at height `hc` on `cc` (i.e., `Power(cc,hc,val)`).
-
+  >
   > **Intuition**: The *Bond-Based Consumer Voting Power* property ensures that validators that validate on the consumer chains have enough tokens bonded on the provider chain for a sufficient amount of time such that the security model holds. 
   > This means that if the validators misbehave on the consumer chains, their tokens bonded on the provider chain can be slashed during the unbonding period.
   > For example, if one unit of voting power requires `1.000.000` bonded tokens (i.e., `VP(1.000.000)=1`), 
   > then a validator that gets one unit of voting power on a consumer chain must have at least `1.000.000` tokens bonded on the provider chain until the unbonding period elapses on the consumer chain.
-
+  >
   > **Note**: When an existing chain becomes a consumer chain (see [Channel Initialization: Existing Chains](overview_and_basic_concepts.md#channel-initialization-existing-chains)), the existing validator set is replaced by the provider validator set. 
   > For safety, the stake bonded by the existing validator set must remain bonded until the unbonding period elapses. 
   > Thus, the existing Staking module must be kept for at least the unbonding period. 
@@ -158,6 +165,7 @@ CCV provides the following system properties.
   - the total supply of tokens MUST be preserved, i.e., the `T` (original) tokens are escrowed on the consumer chain.
 
 ### CCV Channel
+
 [&uparrow; Back to Outline](#outline)
 
 - ***Channel Uniqueness***: The channel between the provider chain and a consumer chain MUST be unique.
@@ -166,6 +174,7 @@ CCV provides the following system properties.
 - ***Channel Liveness***: Every packet sent over a CCV channel MUST eventually be received by the other end of the channel. 
 
 ### Validator Sets, Validator Updates and VSCs
+
 [&uparrow; Back to Outline](#outline)
 
 In this section, we provide a short discussion on how the validator set, the validator updates, and the VSCs relates in the context of multiple chains. 
@@ -176,6 +185,7 @@ Thus, the sequence of blocks produces a sequence of validator updates and a sequ
 Furthermore, the sequence of validator updates on the provider chain results in a sequence of VSCs to all consumer chains. 
 Ideally, this sequence of VSCs is applied by every consumer chain, resulting in a sequence of validator sets identical to the one on the provider chain. 
 However, in general this need not be the case. The reason is twofold: 
+
 - first, given any two chains `A` and `B`, we cannot assume that `A`'s rate of adding new block is the same as `B`'s rate 
   (i.e., we consider the sequences of blocks of any two chains to be completely asynchronous); 
 - and second, due to relaying delays, we cannot assume that the rate of sending VSCs matches the rate of receiving VSCs.
@@ -194,6 +204,7 @@ i.e., `U = c_1+c_2+...+c_i`, such that `c_i` is the last relative change that oc
 Note that relative changes are integer values. 
 
 As a consequence, CCV can rely on the following property:
+
 - ***Validator Update Inclusion***: Let `U1` and `U2` be two validator updates targeting the same validator `val`. 
   If `U1` occurs before `U2`, then `U2` sums up all the changes of the voting power of `val` that are summed up by `U1`, i.e., 
   - `U1 = c_1+c_2+...+c_i` and
@@ -204,17 +215,21 @@ It is sufficient for the consumer chains to apply only the last update per valid
 Since the last update of a validator *includes* all the previous updates of that validator, once it is applied, all the previous updates are also applied.
 
 ### Staking Module Interface
+
 [&uparrow; Back to Outline](#outline)
 
 The following properties define the guarantees of CCV on *providing* VSCs to the consumer chains as a consequence of validator updates on the provider chain. 
+
 - ***Validator Update To VSC Validity***: Every VSC provided to a consumer chain MUST contain only validator updates that were applied to the validator set of the provider chain (i.e., resulted from a change in the amount of bonded tokens on the provider chain).
 - ***Validator Update To VSC Order***: Let `U1` and `U2` be two validator updates on the provider chain. If `U1` occurs before `U2`, then `U2` MUST NOT be included in a provided VSC before `U1`. Note that the order within a single VSC is not relevant.
 - ***Validator Update To VSC Liveness***: Every update of a validator in the validator set of the provider chain MUST eventually be included in a VSC provided to all consumer chains. 
 
 Note that as a consequence of the *Validator Update To VSC Liveness* property, CCV guarantees the following property:
+
 - **Provide VSC uniformity**: If the provider chain provides a VSC to a consumer chain, then it MUST eventually provide that VSC to all consumer chains. 
 
 ### Validator Set Update
+
 [&uparrow; Back to Outline](#outline)
 
 The provider chain providing VSCs to the consumer chains has two desired outcomes: the consumer chains apply the VSCs; and the provider chain registers VSC maturity notifications from every consumer chain. 
@@ -222,51 +237,58 @@ Thus, for clarity, we split the properties of VSCs in two: properties of applyin
 For simplicity, we focus on a single consumer chain.
 
 The following properties define the guarantees of CCV on *applying* on the consumer chain VSCs *provided* by the provider chain.  
+
 - ***Apply VSC Validity***: Every VSC applied by the consumer chain MUST be provided by the provider chain.
 - ***Apply VSC Order***: If a VSC `vsc1` is provided by the provider chain before a VSC `vsc2`, then the consumer chain MUST NOT apply the validator updates included in `vsc2` before the validator updates included in `vsc1`.
 - ***Apply VSC Liveness***: If the provider chain provides a VSC `vsc`, then the consumer chain MUST eventually apply all validator updates included in `vsc`.
 
 The following properties define the guarantees of CCV on *registering* on the provider chain maturity notifications (from the consumer chain) of VSCs *provided* by the provider chain to the consumer chain.
+
 - ***Register Maturity Validity***: If the provider chain registers a maturity notification of a VSC from the consumer chain, then the provider chain MUST have provided that VSC to the consumer chain. 
 - ***Register Maturity Timeliness***: The provider chain MUST NOT register a maturity notification of a VSC `vsc` before `UnbondingPeriod` has elapsed on the consumer chain since the consumer chain applied `vsc`.
 - ***Register Maturity Order***: If a VSC `vsc1` was provided by the provider chain before another VSC `vsc2`, then the provider chain MUST NOT register the maturity notification of `vsc2` before the maturity notification of `vsc1`.
 - ***Register Maturity Liveness***: If the provider chain provides a VSC `vsc` to the consumer chain, then the provider chain MUST eventually register a maturity notification of `vsc` from the consumer chain.
 
 ### Consumer Initiated Slashing
+
 [&uparrow; Back to Outline](#outline)
 
 - ***Consumer Slashing Warranty***: Let `cc` be a consumer chain, such that its CCV module receives at height `he` evidence that a validator `val` misbehaved on `cc` at height `hi`. 
   Let `hv` be the height when the CCV module of `cc` receives the first VSC from the provider CCV module, i.e., the height when the CCV channel is established.
   Then, the CCV module of `cc` MUST send (to the provider CCV module) *exactly one* `SlashPacket` `P`, such that
-    - `P` is sent at height `h = max(he, hv)`;
-    - `P.val = val` and `P.id = HtoVSC[hi]`,
+  - `P` is sent at height `h = max(he, hv)`;
+  - `P.val = val` and `P.id = HtoVSC[hi]`,
     i.e., the ID of the latest VSC that updated the validator set on `cc` at height `hi` or `0` if such a VSC does not exist (if `hi < hv`).
   > **Note**: A consequence of the *Consumer Slashing Warranty* property is that the initial validator set on a consumer chain cannot be slashed during the initialization of the CCV channel. 
   Therefore, consumer chains *SHOULD NOT allow user transactions before the CCV channel is established*. 
   Note that once the CCV channel is established (i.e., a VSC is received from the provider CCV module), CCV enables the slashing of the initial validator set for infractions committed during channel initialization.
 
-- ***Provider Slashing Warranty***: If the provider CCV module receives at height `hs` from a consumer chain `cc` a `SlashPacket` containing a validator `val` and a VSC ID `vscId`, 
-  then it MUST make at height `hs` *exactly one* request to the provider Slashing module to slash `val` for misbehaving at height `h`, such that
+- ***Provider Slashing Warranty***: If the provider CCV module receives from a consumer chain `cc` a `SlashPacket` containing a validator `val` and a VSC ID `vscId`, 
+  then it MUST make *exactly one* request to the provider Slashing module to slash `val` for misbehaving at height `h`, such that
   - if `vscId = 0`, `h` is the height of the block when the provider chain established a CCV channel to `cc`;
   - otherwise, `h` is the height of the block immediately subsequent to the block when the provider chain provided to `cc` the VSC with ID `vscId`.
+  
+  Furthermore, the provider CCV module MUST make this slash request before registering any maturity notifications received from `cc` after the `SlashPacket`.
 
 - ***VSC Maturity and Slashing Order***: If a consumer chain sends to the provider chain a `SlashPacket` before a maturity notification of a VSC, then the provider chain MUST NOT receive the maturity notification before the `SlashPacket`.
   > **Note**: *VSC Maturity and Slashing Order* requires the VSC maturity notifications to be sent through their own IBC packets (i.e., `VSCMaturedPacket`s) instead of e.g., through acknowledgements of `VSCPacket`s. 
 
 ### Reward Distribution
+
 [&uparrow; Back to Outline](#outline)
 
 - ***Distribution Liveness***: If the CCV module on a consumer chain sends to the distribution module account on the provider chain an amount `T` of tokens as reward for providing security, then `T` (equivalent) tokens are eventually minted in the distribution module account on the provider chain.
 
 ## Correctness Reasoning
+
 [&uparrow; Back to Outline](#outline)
 
 In this section we argue the correctness of the CCV protocol described in the [Technical Specification](./technical_specification.md), 
 i.e., we informally prove the properties described in the [previous section](#desired-properties).
 
-- ***Channel Uniqueness***: The consumer chain side of the CCV channel is established when the consumer CCV module receives the _first_ `ChanOpenAck` message that is successfully executed; all subsequent `ChanOpenAck` messages will fail (cf. *Safe Blockchain*).
+- ***Channel Uniqueness***: The consumer chain side of the CCV channel is established when the consumer CCV module receives the *first* `ChanOpenAck` message that is successfully executed; all subsequent `ChanOpenAck` messages will fail (cf. *Safe Blockchain*).
   Let `ccvChannel` denote this channel. Then, `ccvChannel` is the only `OPEN` channel that can be connected to a port owned by the consumer CCV module.
-  The provider chain side of the CCV channel is established when the provider CCV module receives the _first_ `ChanOpenConfirm` message that is successfully executed; all subsequent `ChanOpenConfirm` messages will fail (cf. *Safe Blockchain*). 
+  The provider chain side of the CCV channel is established when the provider CCV module receives the *first* `ChanOpenConfirm` message that is successfully executed; all subsequent `ChanOpenConfirm` messages will fail (cf. *Safe Blockchain*). 
   The `ccvChannel` is the only channel for which `ChanOpenConfirm` can be successfully executed (cf. *Safe Blockchain*, i.e., IBC channel opening handshake guarantee). 
   As a result, `ccvChannel` is unique. 
   Moreover, ts existence is guaranteed by the *Correct Relayer* assumption.
@@ -393,8 +415,8 @@ i.e., we informally prove the properties described in the [previous section](#de
   - The CCV module of `cc` receives at height `he` the evidence that `val` misbehaved on `cc` at height `hi` (cf. *Evidence Provision*, *Safe Blockchain*, *Life Blockchain*).
   - Let `hv` be the height when the CCV module of `cc` receives the first VSC from the provider CCV module. 
   Then, the CCV module of `cc` sends at height `h = max(he, hv)` to the provider chain a `SlashPacket` `P`, such that `P.val = val` and `P.id = HtoVSC[hi]` (cf. *Consumer Slashing Warranty*).
-  - The provider CCV module eventually receives `P` in a block `B` (cf. *Channel Liveness*). 
-  - The provider CCV module requests (in the same block `B`) the provider Slashing module to slash `val` for misbehaving at height `hp = VSCtoH[P.id]` (cf. *Provider Slashing Warranty*).
+  - The provider CCV module eventually receives `P` (cf. *Channel Liveness*). 
+  - The provider CCV module requests the provider Slashing module to slash `val` for misbehaving at height `hp = VSCtoH[P.id]` before handling any further maturity notifications received from the CCV module of `cc` (cf. *Provider Slashing Warranty*).
   - The provider Slashing module slashes the amount of tokens `val` had bonded at height `hp` except the amount that has already completely unbonded (cf. *Slashing Warranty*).
   
   Thus, it remains to be proven that `Token(Power(cc,hi,val)) = pBonded(hp,val)`, with `hp = VSCtoH[HtoVSC[hi]]`. We distinguish two cases:

@@ -5,6 +5,7 @@ stage: draft
 required-by: 2, 24
 category: IBC/TAO
 kind: interface
+version compatibility: ibc-go v7.0.0
 author: Christopher Goes <cwgoes@tendermint.com>
 created: 2019-04-16
 modified: 2019-08-25
@@ -39,7 +40,6 @@ This document only defines desired properties, not a concrete implementation —
 ## Technical Specification
 
 Below we define a behaviour and an overview of datatypes. For data type definition look at [cosmos/ics23](https://github.com/cosmos/ics23/blob/master/proto/cosmos/ics23/v1/proofs.proto) repository.
-
 
 ### Datatypes
 
@@ -89,6 +89,12 @@ The `CommitmentPath` returned by `applyPrefix` does not need to be serialisable 
 
 ```typescript
 type applyPrefix = (prefix: CommitmentPrefix, path: Path) => CommitmentPath
+```
+
+The function `removePrefix` is the inverse operation of `applyPrefix`, i.e. it returns the bytestring key without the store prefix.
+
+```typescript
+type removePrefix = (prefix: CommitmentPrefix, path: CommitmentPath) => Path
 ```
 
 #### Proof
@@ -212,7 +218,7 @@ root = getRoot(acc)
 proof = createMembershipProof(acc, applyPrefix(prefix, path), value)
 ```
 
-```
+```typescript
 Probability(verifyMembership(root, proof, applyPrefix(prefix, path), value) === false) negligible in k
 ```
 
@@ -223,7 +229,7 @@ root = getRoot(acc)
 proof = createNonMembershipProof(acc, applyPrefix(prefix, path))
 ```
 
-```
+```typescript
 Probability(verifyNonMembership(root, proof, applyPrefix(prefix, path)) === false) negligible in k
 ```
 
@@ -233,13 +239,13 @@ Commitment proofs MUST be *sound*: path => value mappings which have not been ad
 
 For any prefix `prefix` and any path `path` last set to a value `value` in the commitment `acc`, for all values of `proof`,
 
-```
+```typescript
 Probability(verifyNonMembership(root, proof, applyPrefix(prefix, path)) === true) negligible in k
 ```
 
 For any prefix `prefix` and any path `path` not set in the commitment `acc`, for all values of `proof` and all values of `value`,
 
-```
+```typescript
 Probability(verifyMembership(root, proof, applyPrefix(prefix, path), value) === true) negligible in k
 ```
 
@@ -254,13 +260,13 @@ root = getRoot(acc)
 proof = createMembershipProof(acc, applyPrefix(prefix, path), value)
 ```
 
-```
+```typescript
 Probability(verifyMembership(root, proof, applyPrefix(prefix, path), value) === false) negligible in k
 ```
 
 For all other values `otherValue` where `value !== otherValue`, for all values of `proof`,
 
-```
+```typescript
 Probability(verifyMembership(root, proof, applyPrefix(prefix, path), otherValue) === true) negligible in k
 ```
 
@@ -272,17 +278,14 @@ Not applicable.
 
 Commitment algorithms are expected to be fixed. New algorithms can be introduced by versioning connections and channels.
 
-## Example Implementation
+## Example Implementations
 
-Coming soon.
-
-## Other Implementations
-
-Coming soon.
+- Implementations of ICS 23 in Go and Rust can be found in [cosmos/ics23 repository](https://github.com/cosmos/ics23).
 
 ## History
 
 Security definitions are mostly sourced from these papers (and simplified somewhat):
+
 - [Vector Commitments and their Applications](https://eprint.iacr.org/2011/495.pdf)
 - [Commitments with Applications to Anonymity-Preserving Revocation](https://eprint.iacr.org/2017/043.pdf)
 - [Batching Techniques for Commitments with Applications to IOPs and Stateless Blockchains](https://eprint.iacr.org/2018/1188.pdf)

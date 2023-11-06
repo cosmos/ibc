@@ -4,6 +4,7 @@ title: Routing Module
 stage: Draft
 category: IBC/TAO
 kind: instantiation
+version compatibility: ibc-go v7.0.0
 author: Christopher Goes <cwgoes@tendermint.com>
 created: 2019-06-09
 modified: 2019-08-25
@@ -26,6 +27,8 @@ logic to determine when modules are allowed to bind to ports and what those port
 All functions provided by the IBC handler interface are defined as in [ICS 25](../ics-025-handler-interface).
 
 The functions `newCapability` & `authenticateCapability` are defined as in [ICS 5](../ics-005-port-allocation).
+
+The functions `writeChannel` and `writeAcknowledgement` are defined as in [ICS 4](../ics-004-channel-and-packet-semantics)
 
 ### Desired Properties
 
@@ -156,14 +159,15 @@ These are combined together in a `ModuleCallbacks` interface:
 
 ```typescript
 interface ModuleCallbacks {
-  onChanOpenInit: onChanOpenInit,
-  onChanOpenTry: onChanOpenTry,
-  onChanOpenAck: onChanOpenAck,
-  onChanOpenConfirm: onChanOpenConfirm,
+  onChanOpenInit: onChanOpenInit
+  onChanOpenTry: onChanOpenTry
+  onChanOpenAck: onChanOpenAck
+  onChanOpenConfirm: onChanOpenConfirm
+  onChanCloseInit: onChanCloseInit
   onChanCloseConfirm: onChanCloseConfirm
   onRecvPacket: onRecvPacket
   onTimeoutPacket: onTimeoutPacket
-  onAcknowledgePacket: onAcknowledgePacket,
+  onAcknowledgePacket: onAcknowledgePacket
   onTimeoutPacketClose: onTimeoutPacketClose
 }
 ```
@@ -261,14 +265,14 @@ No message signatures or data validity checks are assumed beyond those which are
 ```typescript
 interface ClientCreate {
   identifier: Identifier
-  type: ClientType
+  clientState: ClientState
   consensusState: ConsensusState
 }
 ```
 
 ```typescript
 function handleClientCreate(datagram: ClientCreate) {
-    handler.createClient(datagram.identifier, datagram.type, datagram.consensusState)
+    handler.createClient(datagram.clientState, datagram.consensusState)
 }
 ```
 
@@ -308,23 +312,25 @@ The `ConnOpenInit` datagram starts the connection handshake process with an IBC 
 
 ```typescript
 interface ConnOpenInit {
-  identifier: Identifier
-  desiredCounterpartyIdentifier: Identifier
+  counterpartyPrefix: CommitmentPrefix
   clientIdentifier: Identifier
   counterpartyClientIdentifier: Identifier
   version: string
+  delayPeriodTime: uint64
+  delayPeriodBlocks: uint64
 }
 ```
 
 ```typescript
 function handleConnOpenInit(datagram: ConnOpenInit) {
-    handler.connOpenInit(
-      datagram.identifier,
-      datagram.desiredCounterpartyIdentifier,
-      datagram.clientIdentifier,
-      datagram.counterpartyClientIdentifier,
-      datagram.version
-    )
+  handler.connOpenInit(
+    datagram.counterpartyPrefix,
+    datagram.clientIdentifier,
+    datagram.counterpartyClientIdentifier,
+    datagram.version,
+    datagram.delayPeriodTime,
+    datagram.delayPeriodBlocks
+  )
 }
 ```
 
@@ -332,13 +338,16 @@ The `ConnOpenTry` datagram accepts a handshake request from an IBC module on ano
 
 ```typescript
 interface ConnOpenTry {
-  desiredIdentifier: Identifier
   counterpartyConnectionIdentifier: Identifier
+  counterpartyPrefix: CommitmentPrefix
   counterpartyClientIdentifier: Identifier
   clientIdentifier: Identifier
-  version: string
-  counterpartyVersion: string
+  clientState: ClientState
+  counterpartyVersions: string[]
+  delayPeriodTime: uint64
+  delayPeriodBlocks: uint64
   proofInit: CommitmentProof
+  proofClient: CommitmentProof
   proofConsensus: CommitmentProof
   proofHeight: Height
   consensusHeight: Height
@@ -347,18 +356,21 @@ interface ConnOpenTry {
 
 ```typescript
 function handleConnOpenTry(datagram: ConnOpenTry) {
-    handler.connOpenTry(
-      datagram.desiredIdentifier,
-      datagram.counterpartyConnectionIdentifier,
-      datagram.counterpartyClientIdentifier,
-      datagram.clientIdentifier,
-      datagram.version,
-      datagram.counterpartyVersion,
-      datagram.proofInit,
-      datagram.proofConsensus,
-      datagram.proofHeight,
-      datagram.consensusHeight
-    )
+  handler.connOpenTry(
+    datagram.counterpartyConnectionIdentifier,
+    datagram.counterpartyPrefix,
+    datagram.counterpartyClientIdentifier,
+    datagram.clientIdentifier,
+    datagram.clientState,
+    datagram.counterpartyVersions,
+    datagram.delayPeriodTime,
+    datagram.delayPeriodBlocks,
+    datagram.proofInit,
+    datagram.proofClient,
+    datagram.proofConsensus,
+    datagram.proofHeight,
+    datagram.consensusHeight
+  )
 }
 ```
 
@@ -367,8 +379,11 @@ The `ConnOpenAck` datagram confirms a handshake acceptance by the IBC module on 
 ```typescript
 interface ConnOpenAck {
   identifier: Identifier
+  clientState: ClientState
   version: string
+  counterpartyIdentifier: Identifier
   proofTry: CommitmentProof
+  proofClient: CommitmentProof
   proofConsensus: CommitmentProof
   proofHeight: Height
   consensusHeight: Height
@@ -377,14 +392,17 @@ interface ConnOpenAck {
 
 ```typescript
 function handleConnOpenAck(datagram: ConnOpenAck) {
-    handler.connOpenAck(
-      datagram.identifier,
-      datagram.version,
-      datagram.proofTry,
-      datagram.proofConsensus,
-      datagram.proofHeight,
-      datagram.consensusHeight
-    )
+  handler.connOpenAck(
+    datagram.identifier,
+    datagram.clientState,
+    datagram.version,
+    datagram.counterpartyIdentifier,
+    datagram.proofTry,
+    datagram.proofClient,
+    datagram.proofConsensus,
+    datagram.proofHeight,
+    datagram.consensusHeight
+  )
 }
 ```
 
@@ -415,35 +433,39 @@ interface ChanOpenInit {
   order: ChannelOrder
   connectionHops: [Identifier]
   portIdentifier: Identifier
-  channelIdentifier: Identifier
   counterpartyPortIdentifier: Identifier
-  counterpartyChannelIdentifier: Identifier
   version: string
 }
 ```
 
 ```typescript
 function handleChanOpenInit(datagram: ChanOpenInit) {
-    module = lookupModule(datagram.portIdentifier)
-    version, err = module.onChanOpenInit(
-      datagram.order,
-      datagram.connectionHops,
-      datagram.portIdentifier,
-      datagram.channelIdentifier,
-      datagram.counterpartyPortIdentifier,
-      datagram.counterpartyChannelIdentifier,
-      datagram.version
-    )
-    abortTransactionUnless(err === nil)
-    handler.chanOpenInit(
-      datagram.order,
-      datagram.connectionHops,
-      datagram.portIdentifier,
-      datagram.channelIdentifier,
-      datagram.counterpartyPortIdentifier,
-      datagram.counterpartyChannelIdentifier,
-      version // pass in version returned from callback
-    )
+  module = lookupModule(datagram.portIdentifier)
+  channelIdentifier, channelCapability = handler.chanOpenInit(
+    datagram.order,
+    datagram.connectionHops,
+    datagram.portIdentifier,
+    datagram.counterpartyPortIdentifier
+  )
+  version, err = module.onChanOpenInit(
+    datagram.order,
+    datagram.connectionHops,
+    datagram.portIdentifier,
+    channelIdentifier,
+    datagram.counterpartyPortIdentifier,
+    datagram.version
+  )
+  abortTransactionUnless(err === nil)
+  writeChannel(
+    datagram.portIdentifier,
+    channelIdentifier,
+    INIT,
+    datagram.order,
+    datagram.counterpartyPortIdentifier,
+    datagram.counterpartyChannelIdentifier,
+    datagram.connectionHops,
+    version
+  )
 }
 ```
 
@@ -455,7 +477,6 @@ interface ChanOpenTry {
   channelIdentifier: Identifier
   counterpartyPortIdentifier: Identifier
   counterpartyChannelIdentifier: Identifier
-  version: string
   counterpartyVersion: string
   proofInit: CommitmentProof
   proofHeight: Height
@@ -464,29 +485,38 @@ interface ChanOpenTry {
 
 ```typescript
 function handleChanOpenTry(datagram: ChanOpenTry) {
-    module = lookupModule(datagram.portIdentifier)
-    version, err = module.onChanOpenTry(
-      datagram.order,
-      datagram.connectionHops,
-      datagram.portIdentifier,
-      datagram.channelIdentifier,
-      datagram.counterpartyPortIdentifier,
-      datagram.counterpartyChannelIdentifier,
-      datagram.counterpartyVersion
-    )
-    abortTransactionUnless(err === nil)
-    handler.chanOpenTry(
-      datagram.order,
-      datagram.connectionHops,
-      datagram.portIdentifier,
-      datagram.channelIdentifier,
-      datagram.counterpartyPortIdentifier,
-      datagram.counterpartyChannelIdentifier,
-      version, // pass in version returned by callback
-      datagram.counterpartyVersion,
-      datagram.proofInit,
-      datagram.proofHeight
-    )
+  module = lookupModule(datagram.portIdentifier)
+  channelIdentifier, channelCapability = handler.chanOpenTry(
+    datagram.order,
+    datagram.connectionHops,
+    datagram.portIdentifier,
+    datagram.channelIdentifier,
+    datagram.counterpartyPortIdentifier,
+    datagram.counterpartyChannelIdentifier,
+    datagram.counterpartyVersion,
+    datagram.proofInit,
+    datagram.proofHeight
+  )
+  version, err = module.onChanOpenTry(
+    datagram.order,
+    datagram.connectionHops,
+    datagram.portIdentifier,
+    channelIdentifier,
+    datagram.counterpartyPortIdentifier,
+    datagram.counterpartyChannelIdentifier,
+    datagram.counterpartyVersion
+  )
+  abortTransactionUnless(err === nil)
+  writeChannel(
+    datagram.portIdentifier,
+    channelIdentifier,
+    TRYOPEN,
+    datagram.order,
+    datagram.counterpartyPortIdentifier,
+    datagram.counterpartyChannelIdentifier,
+    datagram.connectionHops,
+    version
+  )
 }
 ```
 
@@ -503,22 +533,22 @@ interface ChanOpenAck {
 
 ```typescript
 function handleChanOpenAck(datagram: ChanOpenAck) {
-    module = lookupModule(datagram.portIdentifier)
-    err = module.onChanOpenAck(
-      datagram.portIdentifier,
-      datagram.channelIdentifier,
-      datagram.counterpartyChannelIdentifier,
-      datagram.counterpartyVersion
-    )
-    abortTransactionUnless(err === nil)
-    handler.chanOpenAck(
-      datagram.portIdentifier,
-      datagram.channelIdentifier,
-      datagram.counterpartyChannelIdentifier,
-      datagram.counterpartyVersion,
-      datagram.proofTry,
-      datagram.proofHeight
-    )
+  module = lookupModule(datagram.portIdentifier)
+  handler.chanOpenAck(
+    datagram.portIdentifier,
+    datagram.channelIdentifier,
+    datagram.counterpartyChannelIdentifier,
+    datagram.counterpartyVersion,
+    datagram.proofTry,
+    datagram.proofHeight
+  )
+  err = module.onChanOpenAck(
+    datagram.portIdentifier,
+    datagram.channelIdentifier,
+    datagram.counterpartyChannelIdentifier,
+    datagram.counterpartyVersion
+  )
+  abortTransactionUnless(err === nil)
 }
 ```
 
@@ -533,18 +563,18 @@ interface ChanOpenConfirm {
 
 ```typescript
 function handleChanOpenConfirm(datagram: ChanOpenConfirm) {
-    module = lookupModule(datagram.portIdentifier)
-    err = module.onChanOpenConfirm(
-      datagram.portIdentifier,
-      datagram.channelIdentifier
-    )
-    abortTransactionUnless(err === nil)
-    handler.chanOpenConfirm(
-      datagram.portIdentifier,
-      datagram.channelIdentifier,
-      datagram.proofAck,
-      datagram.proofHeight
-    )
+  module = lookupModule(datagram.portIdentifier)
+  handler.chanOpenConfirm(
+    datagram.portIdentifier,
+    datagram.channelIdentifier,
+    datagram.proofAck,
+    datagram.proofHeight
+  )
+  err = module.onChanOpenConfirm(
+    datagram.portIdentifier,
+    datagram.channelIdentifier
+  )
+  abortTransactionUnless(err === nil)
 }
 ```
 
@@ -610,14 +640,15 @@ interface PacketRecv {
 
 ```typescript
 function handlePacketRecv(datagram: PacketRecv) {
-    module = lookupModule(datagram.packet.destPort)
-    acknowledgement = module.onRecvPacket(datagram.packet)
-    handler.recvPacket(
-      datagram.packet,
-      datagram.proof,
-      datagram.proofHeight,
-      acknowledgement
-    )
+  module = lookupModule(datagram.packet.destPort)
+  handler.recvPacket(
+    datagram.packet,
+    datagram.proof,
+    datagram.proofHeight,
+    acknowledgement
+  )
+  acknowledgement = module.onRecvPacket(datagram.packet)
+  writeAcknowledgement(datagram.packet, acknowledgement)
 }
 ```
 
@@ -632,17 +663,17 @@ interface PacketAcknowledgement {
 
 ```typescript
 function handlePacketAcknowledgement(datagram: PacketAcknowledgement) {
-    module = lookupModule(datagram.packet.sourcePort)
-    module.onAcknowledgePacket(
-      datagram.packet,
-      datagram.acknowledgement
-    )
-    handler.acknowledgePacket(
-      datagram.packet,
-      datagram.acknowledgement,
-      datagram.proof,
-      datagram.proofHeight
-    )
+  module = lookupModule(datagram.packet.sourcePort)
+  handler.acknowledgePacket(
+    datagram.packet,
+    datagram.acknowledgement,
+    datagram.proof,
+    datagram.proofHeight
+  )
+  module.onAcknowledgePacket(
+    datagram.packet,
+    datagram.acknowledgement
+  )   
 }
 ```
 
@@ -659,14 +690,14 @@ interface PacketTimeout {
 
 ```typescript
 function handlePacketTimeout(datagram: PacketTimeout) {
-    module = lookupModule(datagram.packet.sourcePort)
-    module.onTimeoutPacket(datagram.packet)
-    handler.timeoutPacket(
-      datagram.packet,
-      datagram.proof,
-      datagram.proofHeight,
-      datagram.nextSequenceRecv
-    )
+  module = lookupModule(datagram.packet.sourcePort)
+  handler.timeoutPacket(
+    datagram.packet,
+    datagram.proof,
+    datagram.proofHeight,
+    datagram.nextSequenceRecv
+  )
+  module.onTimeoutPacket(datagram.packet)
 }
 ```
 
@@ -680,13 +711,13 @@ interface PacketTimeoutOnClose {
 
 ```typescript
 function handlePacketTimeoutOnClose(datagram: PacketTimeoutOnClose) {
-    module = lookupModule(datagram.packet.sourcePort)
-    module.onTimeoutPacket(datagram.packet)
-    handler.timeoutOnClose(
-      datagram.packet,
-      datagram.proof,
-      datagram.proofHeight
-    )
+  module = lookupModule(datagram.packet.sourcePort)
+  handler.timeoutOnClose(
+    datagram.packet,
+    datagram.proof,
+    datagram.proofHeight
+  )
+  module.onTimeoutPacket(datagram.packet)
 }
 ```
 
@@ -721,13 +752,10 @@ Not applicable.
 
 routing modules are closely tied to the IBC handler interface.
 
-## Example Implementation
+## Example Implementations
 
-Coming soon.
-
-## Other Implementations
-
-Coming soon.
+- Implementation of ICS 26 in Go can be found in [ibc-go repository](https://github.com/cosmos/ibc-go).
+- Implementation of ICS 26 in Rust can be found in [ibc-rs repository](https://github.com/cosmos/ibc-rs).
 
 ## History
 
@@ -736,6 +764,8 @@ Jun 9, 2019 - Draft submitted
 Jul 28, 2019 - Major revisions
 
 Aug 25, 2019 - Major revisions
+
+Mar 28, 2023 - Fix order of executing module handlee and application callback
 
 ## Copyright
 

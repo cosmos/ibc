@@ -21,6 +21,7 @@ The communication between the provider and the consumer chains is done through t
 > Throughout this document, we will use the terms chain and blockchain interchangeably.
 
 ## Contents
+
 - [Overview and Basic Concepts](./overview_and_basic_concepts.md)
 - [System Model and Properties](./system_model_and_properties.md)
 - [Technical Specification: Data Structures and Methods](./technical_specification.md)
@@ -32,15 +33,13 @@ The communication between the provider and the consumer chains is done through t
 
 (discussion of compatibility or lack thereof with previous standards)
 
-
 ## Forwards Compatibility
 
 -->
 
-## Example Implementation
+## Example Implementations
 
-Interchain Security [Go implementation](https://github.com/cosmos/interchain-security).
-
+- Interchain Security [Go implementation](https://github.com/cosmos/interchain-security).
 
 <!--
 ## Other Implementations

@@ -1,15 +1,18 @@
 <!-- omit in toc -->
 # CCV: Technical Specification
+
 [&uparrow; Back to main document](./README.md)
 
 <!-- omit in toc -->
 ## Outline
+
 - [Placing CCV within an ABCI Application](#placing-ccv-within-an-abci-application)
   - [Implemented Interfaces](#implemented-interfaces)
   - [Interfacing Other Modules](#interfacing-other-modules)
 - [Data Structures and Methods](#data-structures-and-methods)
 
 ## Placing CCV within an ABCI Application
+
 [&uparrow; Back to Outline](#outline)
 
 Before describing the data structures and sub-protocols of the CCV protocol, we provide a short overview of the interfaces the CCV module implements and the interactions with the other ABCI application modules.
@@ -47,15 +50,16 @@ Before describing the data structures and sub-protocols of the CCV protocol, we 
 
 - The consumer CCV module interacts with the IBC Token Transfer module ([ICS 20](../ics-020-fungible-token-transfer/README.md)) via `transferKeeper`.
 
-- For the [Initialization sub-protocol](#initialization), the provider CCV module interacts with a Governance module by handling governance proposals to add new consumer chains. 
+- For the [Initialization sub-protocol](./methods.md#initialization), the provider CCV module interacts with a Governance module by handling governance proposals to add new consumer chains. 
   If such proposals pass, then all validators on the provider chain MUST validate the consumer chain at spawn time; 
   otherwise they get slashed. 
-  For an example of how governance proposals work, take a look at the [Governance module documentation](https://docs.cosmos.network/v0.45/modules/gov/) of Cosmos SDK.
+  For an example of how governance proposals work, take a look at the [Governance module documentation](https://docs.cosmos.network/main/build/modules/gov) of Cosmos SDK.
 
 - The consumer pre-CCV module (i.e., the CCV module with `preCCV == true`) interacts with a Staking module on the consumer chain. 
   Note that once `preCCV` is set to `false`, the Staking module MUST no longer provide validator updates to the underlying consensus engine. 
-  For an example of how staking works, take a look at the [Staking module documentation](https://docs.cosmos.network/v0.45/modules/staking/) of Cosmos SDK. 
+  For an example of how staking works, take a look at the [Staking module documentation](https://docs.cosmos.network/main/build/modules/staking) of Cosmos SDK. 
   The interaction is defined by the following interface:
+
   ```typescript 
   interface StakingKeeper {
     // replace the validator set with valset
@@ -64,8 +68,9 @@ Before describing the data structures and sub-protocols of the CCV protocol, we 
   ```
 
 - The provider CCV module interacts with a Staking module on the provider chain. 
-  For an example of how staking works, take a look at the [Staking module documentation](https://docs.cosmos.network/v0.45/modules/staking/) of Cosmos SDK. 
+  For an example of how staking works, take a look at the [Staking module documentation](https://docs.cosmos.network/main/build/modules/staking) of Cosmos SDK. 
   The interaction is defined by the following interface:
+
   ```typescript 
   interface StakingKeeper {
     // get UnbondingPeriod from the provider Staking module 
@@ -85,8 +90,9 @@ Before describing the data structures and sub-protocols of the CCV protocol, we 
   ```
 
 - The provider CCV module interacts with a Slashing module on the provider chain. 
-  For an example of how slashing works, take a look at the [Slashing module documentation](https://docs.cosmos.network/v0.45/modules/slashing/) of Cosmos SDK. 
+  For an example of how slashing works, take a look at the [Slashing module documentation](https://docs.cosmos.network/main/build/modules/slashing) of Cosmos SDK. 
   The interaction is defined by the following interface:
+
   ```typescript 
   interface SlashingKeeper {
     // query the Slashing module for the slashing factor, 
@@ -109,6 +115,7 @@ Before describing the data structures and sub-protocols of the CCV protocol, we 
   ``` 
 
 - The following hook enables the provider CCV module to register operations to be execute when certain events occur within the provider Staking module:
+
   ```typescript
   // invoked by the Staking module after 
   // initiating an unbonding operation
@@ -116,6 +123,7 @@ Before describing the data structures and sub-protocols of the CCV protocol, we 
   ```
 
 - The consumer CCV module defines the following hooks that enable other modules to register operations to execute when certain events have occurred within CCV:
+
   ```typescript
   // invoked after a new validator is added to the validator set
   function AfterCCValidatorBonded(valAddress: string);
@@ -125,7 +133,7 @@ Before describing the data structures and sub-protocols of the CCV protocol, we 
   ```
 
 ## Data Structures and Methods
+
 [&uparrow; Back to Outline](#outline)
 
 The remainder of this technical specification is split into [Data Structures](./data_structures.md) and [Methods](./methods.md).
-

@@ -1,6 +1,7 @@
 ## Standards Committee
 
 Currently, the core standardisation committee consists of:
+
 - Aditya Sripal (@adityasripal)
 - Christopher Goes (@cwgoes)
 - Marius Poke (@mpoke)
