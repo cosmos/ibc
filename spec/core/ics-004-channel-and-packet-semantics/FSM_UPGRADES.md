@@ -9,9 +9,10 @@ According to the specs the channel upgradiblity handshake protocol defines 5 sub
 
 Every defined datagram and subprotocol has an associated function. A datagram-function call may activate a subprotocol-function, based on the current state, conditions, input and flow.
 
-## Finite state machine modeling
- 
+## Finite state machine modeling
+
 We consider a deterministic finite state machine as a 4-tuple (Q; C; Σ; δ) consisting of: 
+
 - a finite set of States Q
 - a finite set of Conditions C
 - a finite set of Accepted Inputs Σ
