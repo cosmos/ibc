@@ -19,14 +19,14 @@ We consider a deterministic finite state machine as a 4-tuple (Q; C; Σ; δ) con
 - a finite set of Accepted States Transition δ
 
 ### Q: States 
-We start defining each state. 
+We start defining each state. For every state we list the status of Chain and Chain B: ChannelState,ProvableStore,PrivateStore. 
 
 | State | ChannelState A      | ChannelState B      | ProvableStore A                                                | ProvableStore B                                                | Private Store A                        | Private Store B                        |
 |-------|---------------------|---------------------|----------------------------------------------------------------|----------------------------------------------------------------|----------------------------------------|----------------------------------------|
 | q0    | OPEN                | OPEN                |                                                                |                                                                |                                        |                                        |
 | q1.1  | OPEN                | OPEN                | Chan.UpgradeSequenceSet; Upg.UpgradeSet; Upg.VersionSet;      |                                                                |                                        |                                        |
 | q1.2  | OPEN                | OPEN                |                                                                | Chan.UpgradeSequenceSet; Upg.UpgradeSet; Upg.VersionSet;      |                                        |                                        |
-| q2    | OPEN                | OPEN                | Chan.UpgradeSequenceSet; Upg.UpgradeSet; Upg.VersionSet 0..1; | Chan.UpgradeSequenceSet; Upg.UpgradeSet; Upg.VersionSet 0..1; |                                        |                                        |
+| q2    | OPEN                | OPEN                | Chan.UpgradeSequenceSet; Upg.UpgradeSet; Upg.VersionSet; | Chan.UpgradeSequenceSet; Upg.UpgradeSet; Upg.VersionSet; |                                        |                                        |
 | q3.1  | FLUSHING            | OPEN                | Chan.UpgradeSequenceSet; Upg.UpgradeSet; Upg.TimeoutSet; Upg.VersionSet; | Chan.UpgradeSequenceSet; Upg.UpgradeSet; Upg.VersionSet;      |                                        |                                        |
 | q3.2  | OPEN                | FLUSHING            | Chan.UpgradeSequenceSet; Upg.UpgradeSet; Upg.VersionSet;      | Chan.UpgradeSequenceSet; Upg.UpgradeSet; Upg.TimeoutSet; Upg.VersionSet; |                                        |                                        |
 | q4    | FLUSHING            | FLUSHING            | Chan.UpgradeSequenceSet; Upg.UpgradeSet; Upg.TimeoutSet; Upg.VersionSet; | Chan.UpgradeSequenceSet; Upg.UpgradeSet; Upg.TimeoutSet; Upg.VersionSet; | Priv.Upg.CounterParty TimeoutSet 0..1; | Priv.Upg.CounterParty TimeoutSet 0..1; |
@@ -36,12 +36,13 @@ We start defining each state.
 | q7.1  | OPEN                | FLUSHING_COMPLETE   | Chan.UpgradeSequenceSet; Chan.VersionSet; Chan.ConnectionHopsSet; Chan.OrderingSet; | Chan.UpgradeSequenceSet; Upg.UpgradeSet; Upg.TimeoutSet; Upg.VersionSet; |                                        | Priv.Upg.CounterParty TimeoutSet;       |
 | q7.2  | FLUSHING_COMPLETE   | OPEN                | Chan.UpgradeSequenceSet; Upg.UpgradeSet; Upg.TimeoutSet; Upg.VersionSet; | Chan.UpgradeSequenceSet; Chan.VersionSet; Chan.ConnectionHopsSet; Chan.OrderingSet; | Priv.Upg.CounterParty TimeoutSet;       |                                        |
 | q8    | OPEN                | OPEN                | Chan.UpgradeSequenceSet; Chan.VersionSet; Chan.ConnectionHopsSet; Chan.OrderingSet; | Chan.UpgradeSequenceSet; Chan.VersionSet; Chan.ConnectionHopsSet; Chan.OrderingSet; |                                        |                                        |
+| q9    | OPEN or FLUSHING                | OPEN or FLUSHING                | Chan.UpgradeErrorSet 0..1 | Chan.UpgradeErrorSet 0..1 |                                        |                                        |
 
 Every time a state transition occurs, we should verify that in qX ChannelStateX, ProvableStateX and PrivateStoreX reflect what is written in this table.  
 
 ### C: Conditions 
 
-Below we list all the conditions that are verified during the protocol execution. In order for a state transition to occur, cX must evaluate to True. We assume that the protocol is only executed if pc0 evaluates to True. 
+Below we list all the conditions that are verified during the protocol execution. In order for a state transition to occur, cX must evaluate to True. We assume that the protocol is only started if pc0 evaluates to True. 
 
 - pc0: BothChannelEnds === OPEN  
 
@@ -60,7 +61,9 @@ Below we list all the conditions that are verified during the protocol execution
 - c12: PendingInflightsPacket !== True
 - c13: PendingInflightsPacket === True
 - c14: Priv.Upg.CounterPartyTimeoutSet === True
-
+- c15: CounterPartyUpgradeSequence < Chan.upgradeSequence === True
+- c16: CounterPartyUpgradeSequence > Chan.upgradeSequence === True
+- c17: Upg.TimeoutExpired === True
 
 ### Σ: Accepted Inputs
 We now identify all the possible inputs. 
@@ -78,21 +81,26 @@ Thus we can summarize the inputs as:
 - i3: [Party, Condition, ]: ChanUpgradeTry --> startFlushUpgradeHandshake
 - i4: [Party, Condition, ]: ChanUpgradeAck --> startFlushtUpgradeHandshake
 - i5: [Party, Condition, ]: ChanUpgradeConfirm
-- i6: [Party, , PreviousInput]: PacketHandler -- onlyIf occurs
+- i6: [Party, , PreviousInput]: PacketHandler 
 - i7: [Party, Condition, PreviousInput]: ChanUpgradeConfirm --> OpenUpgradeHandshake -- atomic
 - i8: [Party, , ]: ChanUpgradeOpen --> OpenUpgradeHandshake
+- i9: [Party,Conditions , ]: ChanUpgradeCancel --> restoreChannel
+- i10: [Party,Conditions , ]: ChanUpgradeTimeout --> restoreChannel
+
 
 Below, we list the expanded representation of the protocol inputs. 
 Note that the column previous state, "ix" indicates a previous input. When we express this as i5(c13) we assume that this is the input i5 having the same Party of the new input that is enforcing the c13 condition. 
 
 
-- i0: [A,(c0; c1; c2 ; c3), ]: ChanUpgradeInit --> initUpgradeHandshake
-- i0: [B,(c0; c1; c2 ; c3), ]: ChanUpgradeInit --> initUpgradeHandshake
+- i0: [A, (c0; c1; c2 ; c3), ]: ChanUpgradeInit --> initUpgradeHandshake
+- i0: [B, (c0; c1; c2 ; c3), ]: ChanUpgradeInit --> initUpgradeHandshake
 - i0: [A & B, (c0; c1  c2; c3), ]: ChanUpgradeInit --> initUpgradeHandshake
-- i0: [A,(c0; c1; c2; c3 incrementUpgradeSeq), ]: ChanUpgradeInit --> initUpgradeHandshake
-- i0: [B,(c0; c1; c2; c3 incrementUpgradeSeq), ]: ChanUpgradeInit --> initUpgradeHandshake
-- i1: [B, (c0; c1; c2; c3; c4) , ]: ChanUpgradeTry --> initUpgradeHandshake
-- i1: [A,(c0; c1; c2; c3; c4) , ]: ChanUpgradeTry --> initUpgradeHandshake
+- i0: [A, (c0; c1; c2; c3 incrementUpgradeSeq), ]: ChanUpgradeInit --> initUpgradeHandshake
+- i0: [B, (c0; c1; c2; c3 incrementUpgradeSeq), ]: ChanUpgradeInit --> initUpgradeHandshake
+- i1: [B, (c1; c2; c3; c4) , ]: ChanUpgradeTry --> initUpgradeHandshake
+- i1: [A, (c1; c2; c3; c4) , ]: ChanUpgradeTry --> initUpgradeHandshake
+- i1: [A, (c1; c2; c3; c4; c16) , ]: ChanUpgradeTry --> initUpgradeHandshake -- SwitchToCounterPartyUpgSeq
+- i1: [B, (c1; c2; c3; c4; c16) , ]: ChanUpgradeTry --> initUpgradeHandshake -- SwitchToCounterPartyUpgSeq
 - i2: [A, (c4; c6; c7; c8; c9; c10), i1]: ChanUpgradeTry --> startFlushUpgradeHandshake -- atomic
 - i2: [B, (c4; c6; c7; c8; c9; c10), i1]: ChanUpgradeTry --> startFlushUpgradeHandshake -- atomic
 - i3: [A, (c5; c6; c7; c8; c9; c10), ]: ChanUpgradeTry --> startFlushUpgradeHandshake
@@ -105,12 +113,16 @@ Note that the column previous state, "ix" indicates a previous input. When we ex
 - i5: [B, (c7; c8; c11; c12), ]: ChanUpgradeConfirm
 - i5: [B, (c7; c8; c11; c13; c14), ]: ChanUpgradeConfirm
 - i5: [A, (c7; c8; c11; c13; c14), ]: ChanUpgradeConfirm
-- i6: [A, (c11; c12; c14) ,i5(c13)]: PacketHandler -- onlyIf occurs
-- i6: [B, (c11; c12; c14) ,i5(c13)]: PacketHandler -- onlyIf occurs
+- i6: [A, (c11; c12; c14) ,i5(c13)]: PacketHandler 
+- i6: [B, (c11; c12; c14) ,i5(c13)]: PacketHandler 
 - i7: [A, , i5(c12)]: ChanUpgradeConfirm --> OpenUpgradeHandshake -- atomic
 - i7: [B, , i5(c12)]: ChanUpgradeConfirm --> OpenUpgradeHandshake -- atomic
 - i8: [A, c7 , ]: ChanUpgradeOpen --> OpenUpgradeHandshake
 - i8: [B, c7 , ]: ChanUpgradeOpen --> OpenUpgradeHandshake
+- i9: [A or B, c15, ]: ChanUpgradeCancel --> restoreChannel
+- i10: [A or B, (c5; c17; c11)] : ChanUpgradeTimeout --> restoreChannel
+- i10: [A, (c5; c17; c11)] : ChanUpgradeTimeout --> restoreChannel
+- i10: [B, (c5; c17; c11)] : ChanUpgradeTimeout --> restoreChannel
 
 ### Accepted States Transition δ
 We model the accepted state transition as: 
@@ -125,13 +137,14 @@ We model the accepted state transition as:
 - [q0] x [i0: [A & B, (c0; c1  c2; c3), ]] -> [q2]
 
 - [q1.1] x [i0: [A,(c0; c1; c2; c3; incrementUpgradeSeq), ]] -> [q1.1] 
-- [q1.1] x [i1: [B, (c0; c1; c2; c3; c4) , ]] -> [q2] x [i2: [B, (c4; c6; c7; c8; c9; c10), i1]] -> [q3.2] 
+- [q1.1] x [i1: [B, (c1; c2; c3; c4) , ]] -> [q2] x [i2: [B, (c4; c6; c7; c8; c9; c10), i1]] -> [q3.2] 
 
 - [q1.2] x [i0: [B,(c0; c1; c2; c3; incrementUpgradeSeq), ]] -> q1.2
-- [q1.2] x [i1: [A, (c0; c1; c2; c3; c4) , ]] -> [q2] x [i2: [A, (c4; c6; c7; c8; c9; c10), i1]] -> [q3.1]
+- [q1.2] x [i1: [A, (c1; c2; c3; c4) , ]] -> [q2] x [i2: [A, (c4; c6; c7; c8; c9; c10), i1]] -> [q3.1]
 
 - [q2] x [i3: [A, (c5; c6; c7; c8; c9; c10), ]] -> [q3.1]
 - [q2] x [i3: [B, (c5; c6; c7; c8; c9; c10), ]] -> [q3.2]
+- [q2] x [i9 [A or B, c15, ]] -> [q9]
 
 - [q3.1] x [i4: [A, (c7; c8; c6; c10; c11; c13), ]] -> [q4]
 - [q3.1] x [i4: [A, (c7; c8; c6; c10; c11; c12), ]] -> [q5.2]
@@ -145,14 +158,18 @@ We model the accepted state transition as:
 - [q4] x [i6: [A, (c11; c12; c14) ,i5(c13)]] -> [q5.1]
 - [q4] x [i5: [B, (c7; c8; c11; c12), ]] -> [q5.2]
 - [q4] x [i6: [B, (c11; c12; c14) ,i5(c13)]] -> [q5.2]
+- [q4] x [i10: [A or B, (c5; c17; c11), ]] -> [q9]
+
 
 - [q5.1] x [i5: [B, (c7; c8; c11; c13; c14), ]] -> [q5.1]
 - [q5.1] x [i6: [B, (c11; c12), i5(c13)]] -> [q6]
 - [q5.1] x [i5: [B, (c7; c8; c11; c12), ]] -> [q6] x [i7: [B, , i5(c12)]] -> [q7.2] 
+- [q5.1] x [i10: [A, (c5; c17; c11), ]] -> [q9]
 
 - [q5.2] x [i5: [A, (c7; c8; c11; c13; c14), ]] -> [q5.2]
 - [q5.2] x [i6: [A, (c11; c12), i5(c13)]] -> [q6]
 - [q5.2] x [i5: [A, (c7; c8; c11; c12), ]] -> [q6] x [i7: [A, , i5(c12)]] -> [q7.1]
+- [q5.2] x [i10: [B, (c5; c17; c11), ]] -> [q9]
 
 - [q6] x [i8: [A, c7 ,]] -> [q7.1]
 - [q6] x [i8: [B, c7 ,]] -> [q7.2]
@@ -160,12 +177,13 @@ We model the accepted state transition as:
 - [q7.1] x [i8: [B, c7 ,]] -> [q8]
 - [q7.2] x [i8: [A, c7 ,]] -> [q8]
 
+- [q9] x [i9: [A or B, c15, ]] ->[q0]
 
 ### Finite State Machine Diagram
 
 Here we give a graphical representation of the finite state machine. 
 
-[FSM](https://excalidraw.com/#json=X23Uz0dzH2J72bvehiM10,FzUVoJVaEYBEUwV1dZ7eLA)
+[FSM](https://excalidraw.com/#json=B36vSsO7NiXmsRpVrWNYw,T--rvN-vQ-Ys9S5ZWAevPg)
 ![Picture](img_fsm/FSM_Upgrades.png)
 
 
@@ -179,59 +197,60 @@ To describe the different flows we will write the state transition matrix. The s
 
 #### Flow 0:  A & B start the process (Crossing Hello)
 
-| States    | q0 | q1.1 | q1.2 | q2 | q3.1 | q3.2 | q4 | q5.1 | q5.2 | q6 | q7.1 | q7.2 | q8 |
-|-----------|----|------|------|----|------|------|----|------|------|----|------|------|----|
-| **q0**    |    | 1    | 1    | 1  |      |      |    |      |      |    |      |      |    |
-| **q1.1**  |    | 1    |      | 1  |      |      |    |      |      |    |      |      |    |
-| **q1.2**  |    |      | 1    | 1  |      |      |    |      |      |    |      |      |    |
-| **q2**    |    |      |      |    | 1    | 1    |    |      |      |    |      |      |    |
-| **q3.1**  |    |      |      |    |      |      | 1  |      | 1    |    |      |      |    |
-| **q3.2**  |    |      |      |    |      |      | 1  | 1    |      |    |      |      |    |
-| **q4**    |    |      |      |    |      |      |    | 1    | 1    |    |      |      |    |
-| **q5.1**  |    |      |      |    |      |      |    | 1    |      | 1  |      |      |    |
-| **q5.2**  |    |      |      |    |      |      |    |      |  1   | 1  |      |      |    |
-| **q6**    |    |      |      |    |      |      |    |      |      |    | 1    |  1   |    |
-| **q7.1**  |    |      |      |    |      |      |    |      |      |    |      |      | 1  |
-| **q7.2**  |    |      |      |    |      |      |    |      |      |    |      |      | 1  |
-| **q8**    |    |      |      |    |      |      |    |      |      |    |      |      |    |
-
+| States    | q0 | q1.1 | q1.2 | q2 | q3.1 | q3.2 | q4 | q5.1 | q5.2 | q6 | q7.1 | q7.2 | q8 | q9 |
+|-----------|----|------|------|----|------|------|----|------|------|----|------|------|----|----|
+| **q0**    |    | 1    | 1    | 1  |      |      |    |      |      |    |      |      |    |    |
+| **q1.1**  |    | 1    |      | 1  |      |      |    |      |      |    |      |      |    |    |
+| **q1.2**  |    |      | 1    | 1  |      |      |    |      |      |    |      |      |    |    |
+| **q2**    |    |      |      |    | 1    | 1    |    |      |      |    |      |      |    |1   |
+| **q3.1**  |    |      |      |    |      |      | 1  |      | 1    |    |      |      |    |    |
+| **q3.2**  |    |      |      |    |      |      | 1  | 1    |      |    |      |      |    |    |
+| **q4**    |    |      |      |    |      |      |    | 1    | 1    |    |      |      |    |1   |
+| **q5.1**  |    |      |      |    |      |      |    | 1    |      | 1  |      |      |    |1   |
+| **q5.2**  |    |      |      |    |      |      |    |      |  1   | 1  |      |      |    |1   |
+| **q6**    |    |      |      |    |      |      |    |      |      |    | 1    |  1   |    |    |
+| **q7.1**  |    |      |      |    |      |      |    |      |      |    |      |      | 1  |    |
+| **q7.2**  |    |      |      |    |      |      |    |      |      |    |      |      | 1  |    |
+| **q8**    |    |      |      |    |      |      |    |      |      |    |      |      |    |    |
+| **q9**    | 1  |      |      |    |      |      |    |      |      |    |      |      |    |    |
 
 #### Flow 1: A starts the process and B follows.
 
-| States    | q0 | q1.1 | q1.2 | q2 | q3.1 | q3.2 | q4 | q5.1 | q5.2 | q6 | q7.1 | q7.2 | q8 |
-|-----------|----|------|------|----|------|------|----|------|------|----|------|------|----|
-| **q0**    |    | 1    |      |    |      |      |    |      |      |    |      |      |    |
-| **q1.1**  |    | 1    |      | 1  |      |      |    |      |      |    |      |      |    |
-| **q1.2**  |    |      |      |    |      |      |    |      |      |    |      |      |    |
-| **q2**    |    |      |      |    |      | 1    |    |      |      |    |      |      |    |
-| **q3.1**  |    |      |      |    |      |      |    |      |      |    |      |      |    |
-| **q3.2**  |    |      |      |    |      |      | 1  | 1    |      |    |      |      |    |
-| **q4**    |    |      |      |    |      |      | 1  | 1    | 1    |    |      |      |    |
-| **q5.1**  |    |      |      |    |      |      |    | 1    |      | 1  |      |      |    |
-| **q5.2**  |    |      |      |    |      |      |    |      | 1    | 1  |      |      |    |
-| **q6**    |    |      |      |    |      |      |    |      |      |    | 1    | 1    |    |
-| **q7.1**  |    |      |      |    |      |      |    |      |      |    |      |      | 1  |
-| **q7.2**  |    |      |      |    |      |      |    |      |      |    |      |      | 1  |
-| **q8**    |    |      |      |    |      |      |    |      |      |    |      |      |    |
+| States    | q0 | q1.1 | q1.2 | q2 | q3.1 | q3.2 | q4 | q5.1 | q5.2 | q6 | q7.1 | q7.2 | q8 | q9 |
+|-----------|----|------|------|----|------|------|----|------|------|----|------|------|----|----|
+| **q0**    |    | 1    |      |    |      |      |    |      |      |    |      |      |    |    |
+| **q1.1**  |    | 1    |      | 1  |      |      |    |      |      |    |      |      |    |    |
+| **q1.2**  |    |      |      |    |      |      |    |      |      |    |      |      |    |    |
+| **q2**    |    |      |      |    |      | 1    |    |      |      |    |      |      |    |1   |
+| **q3.1**  |    |      |      |    |      |      |    |      |      |    |      |      |    |    |
+| **q3.2**  |    |      |      |    |      |      | 1  | 1    |      |    |      |      |    |    |
+| **q4**    |    |      |      |    |      |      | 1  | 1    | 1    |    |      |      |    |1   |
+| **q5.1**  |    |      |      |    |      |      |    | 1    |      | 1  |      |      |    |1   |
+| **q5.2**  |    |      |      |    |      |      |    |      | 1    | 1  |      |      |    |1   |
+| **q6**    |    |      |      |    |      |      |    |      |      |    | 1    | 1    |    |    |
+| **q7.1**  |    |      |      |    |      |      |    |      |      |    |      |      | 1  |    |
+| **q7.2**  |    |      |      |    |      |      |    |      |      |    |      |      | 1  |    |
+| **q8**    |    |      |      |    |      |      |    |      |      |    |      |      |    |    |
+| **q9**    | 1  |      |      |    |      |      |    |      |      |    |      |      |    |    |
 
 #### Flow 2: B starts the process and A follows.
 
-| States    | q0 | q1.1 | q1.2 | q2 | q3.1 | q3.2 | q4 | q5.1 | q5.2 | q6 | q7.1 | q7.2 | q8 |
-|-----------|----|------|------|----|------|------|----|------|------|----|------|------|----|
-| **q0**    |    |      |  1   |    |      |      |    |      |      |    |      |      |    |
-| **q1.1**  |    |      |      |    |      |      |    |      |      |    |      |      |    |
-| **q1.2**  |    |  1   |      |  1 |      |      |    |      |      |    |      |      |    |
-| **q2**    |    |      |      |    |   1  |      |    |      |      |    |      |      |    |
-| **q3.1**  |    |      |      |    |      |      |  1 |      | 1    |    |      |      |    |
-| **q3.2**  |    |      |      |    |      |      |    |      |      |    |      |      |    |
-| **q4**    |    |      |      |    |      |      | 1  | 1    | 1    |    |      |      |    |
-| **q5.1**  |    |      |      |    |      |      |    | 1    |      | 1  |      |      |    |
-| **q5.2**  |    |      |      |    |      |      |    |      | 1    | 1  |      |      |    |
-| **q6**    |    |      |      |    |      |      |    |      |      |    | 1    | 1    |    |
-| **q7.1**  |    |      |      |    |      |      |    |      |      |    |      |      | 1  |
-| **q7.2**  |    |      |      |    |      |      |    |      |      |    |      |      | 1  |
-| **q8**    |    |      |      |    |      |      |    |      |      |    |      |      |    |
-
+| States    | q0 | q1.1 | q1.2 | q2 | q3.1 | q3.2 | q4 | q5.1 | q5.2 | q6 | q7.1 | q7.2 | q8 | q9 |
+|-----------|----|------|------|----|------|------|----|------|------|----|------|------|----|----|
+| **q0**    |    |      |  1   |    |      |      |    |      |      |    |      |      |    |    |
+| **q1.1**  |    |      |      |    |      |      |    |      |      |    |      |      |    |    |
+| **q1.2**  |    |  1   |      |  1 |      |      |    |      |      |    |      |      |    |    |
+| **q2**    |    |      |      |    |   1  |      |    |      |      |    |      |      |    |1   |
+| **q3.1**  |    |      |      |    |      |      |  1 |      | 1    |    |      |      |    |    |
+| **q3.2**  |    |      |      |    |      |      |    |      |      |    |      |      |    |    |
+| **q4**    |    |      |      |    |      |      | 1  | 1    | 1    |    |      |      |    |1   |
+| **q5.1**  |    |      |      |    |      |      |    | 1    |      | 1  |      |      |    |1   |
+| **q5.2**  |    |      |      |    |      |      |    |      | 1    | 1  |      |      |    |1   |
+| **q6**    |    |      |      |    |      |      |    |      |      |    | 1    | 1    |    |    |
+| **q7.1**  |    |      |      |    |      |      |    |      |      |    |      |      | 1  |    |
+| **q7.2**  |    |      |      |    |      |      |    |      |      |    |      |      | 1  |    |
+| **q8**    |    |      |      |    |      |      |    |      |      |    |      |      |    |    |
+| **q9**    | 1  |      |      |    |      |      |    |      |      |    |      |      |    |    |
 
 ### Cancel and Timeout
 `RestoreChannel` can be called at any point of the process and will reset the state machine execution to s0.
