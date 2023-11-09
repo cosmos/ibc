@@ -2,13 +2,18 @@
 
 This document is an attempt to abstract the [channel upgradability specs](https://github.com/cosmos/ibc/blob/main/spec/core/ics-004-channel-and-packet-semantics/UPGRADES.md) into finite state machines (FSMs). For the synopsis and motivation we refer the reader to the specs document. 
 
-## Flows
-The protocol defines 3 Main possible flows: 
-- A starts the process and B follows.
-- B starts the process and A follows.
-- A & B start the process (Crossing Hello). 
+According to the specs the channel upgradiblity handshake protocol defines 5 subprotocols and 7 datagrams that are reproduced here for the reader's convenience. 
+
+#### Subprotocols  
+The channel upgradiblity handshake protocol defines the following sub-protocols: `initUpgradeHandshake`, `startFlushUpgradeHandshake`, `openUpgradeHandshake`, `cancelChannelUpgrade`, and `timeoutChannelUpgrade`. 
+#### Datagrams
+The datagrams exchanged between the parties during the upgrading process are __ChanUpgradeInit__, __ChanUpgradeTry__, __ChanUpgradeAck__, __ChanUpgradeConfirm__, __ChanUpgradeOpen__, __ChanUpgradeTimeout__, and __ChanUpgradeCancel__. 
+
+Every datagram may activate a subprotocol, based on the current state, conditions , input and flow.
 
 ## States 
+
+We start defining each state. 
 
 | State | ChannelState A      | ChannelState B      | ProvableStore A                                                | ProvableStore B                                                | Private Store A                        | Private Store B                        |
 |---------|---------------------|---------------------|----------------------------------------------------------------|----------------------------------------------------------------|----------------------------------------|----------------------------------------|
@@ -27,22 +32,11 @@ The protocol defines 3 Main possible flows:
 | S8      | OPEN                | OPEN                | Chan.UpgradeSequenceSet; Chan.VersionSet; Chan.ConnectionHopsSet; Chan.OrderingSet; | Chan.UpgradeSequenceSet; Chan.VersionSet; Chan.ConnectionHopsSet; Chan.OrderingSet; |                                        |                                        |
 
 
-According to the specs the channel upgradiblity handshake protocol defines 5 subprotocols and 7 datagrams that are reproduced here for the reader's convenience. 
-#### Subprotocols  
-The channel upgradiblity handshake protocol defines the following sub-protocols: `initUpgradeHandshake`, `startFlushUpgradeHandshake`, `openUpgradeHandshake`, `cancelChannelUpgrade`, and `timeoutChannelUpgrade`. 
-#### Datagrams
-The datagrams exchanged between the parties during the upgrading process are __ChanUpgradeInit__, __ChanUpgradeTry__, __ChanUpgradeAck__, __ChanUpgradeConfirm__, __ChanUpgradeOpen__, __ChanUpgradeTimeout__, and __ChanUpgradeCancel__. 
-
-Every datagram may activate a subprotocol, based on the current state, the on-going flow and input.
-
-`RestoreChannel` can be called at any point of the process and will reset the state machine execution to s0. 
-
-## Preconditions 
-- pc0: BothChannelEnds === OPEN
-
 ## Conditions 
-Below we list all the conditions that are verified during the protocol execution. In order for a state transition to occur, cX must evaluate to True.  
-We assume that the protocol is only executed if pc0 evaluates to True. 
+
+Below we list all the conditions that are verified during the protocol execution. In order for a state transition to occur, cX must evaluate to True. We assume that the protocol is only executed if pc0 evaluates to True. 
+
+- pc0: BothChannelEnds === OPEN  
 
 - c0: isAuthorizedUpgrader === True
 - c1: proposedUpgradeFields.Version !==""
@@ -63,7 +57,9 @@ We assume that the protocol is only executed if pc0 evaluates to True.
 
 ## Inputs
 
-#### Enumeration
+We now identify all the possible inputs. 
+
+### Enumeration
 This is the list of inputs for enumeration:
 - i0: A: ChanUpgradeInit --> initUpgradeHandshake
 - i1: B: ChanUpgradeInit --> initUpgradeHandshake
@@ -99,7 +95,7 @@ This is the list of inputs for enumeration:
 - i31: B: ChanUpgradeOpen --> OpenUpgradeHandshake 
 - i32: A: ChanUpgradeOpen --> OpenUpgradeHandshake 
 
-#### Inputs Parametrization
+### Inputs Parametrization
 
 Given: 
 
@@ -147,11 +143,12 @@ Below, we list the expanded representation of the protocol inputs.
 - i8: [A, , ]: ChanUpgradeOpen --> OpenUpgradeHandshake
 - i8: [B, , ]: ChanUpgradeOpen --> OpenUpgradeHandshake
 
+## Finite State Machine Diagram
 
 [FSM](https://excalidraw.com/#json=Ts6yP_VuCZ6m7EIBA9lnl,nPWuiHw3msB4xtL7H5X5Vw)
 ![Picture](img_fsm/FSM_Upgrades.png)
 
-### Admitted State Transitions WIP  
+## Admitted State Transitions WIP  
 Admitted state transitions are expressed as state x input x condition --> state. 
 
 
@@ -174,6 +171,14 @@ Admitted state transitions are expressed as state x input x condition --> state.
 
 s0 -> s1.1 -> s2:s3.2 -> s4 -> s5.1
 s0 -> s1.1 -> s2:s3.2 -> s5.1
+
+`RestoreChannel` can be called at any point of the process and will reset the state machine execution to s0. 
+
+## Flows
+The protocol defines 3 Main possible flows: 
+- A starts the process and B follows.
+- B starts the process and A follows.
+- A & B start the process (Crossing Hello). 
 
 #### Flow 0 : A starts the process and B follows.
 
