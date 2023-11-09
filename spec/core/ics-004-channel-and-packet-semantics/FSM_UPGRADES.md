@@ -2,37 +2,42 @@
 
 This document is an attempt to abstract the [channel upgradability specs](https://github.com/cosmos/ibc/blob/main/spec/core/ics-004-channel-and-packet-semantics/UPGRADES.md) into finite state machines (FSMs). For the synopsis and motivation we refer the reader to the specs document. 
 
-According to the specs the channel upgradiblity handshake protocol defines 5 subprotocols and 7 datagrams that are reproduced here for the reader's convenience. 
+According to the specs the channel upgradiblity handshake protocol defines 5 subprotocols and 7 datagrams, exchanged between the parties during the upgrading process, that are reproduced here for the reader's convenience. 
+ 
+- Sub-protocols: `initUpgradeHandshake`, `startFlushUpgradeHandshake`, `openUpgradeHandshake`, `cancelChannelUpgrade`, and `timeoutChannelUpgrade`. 
+- Datagrams:  `ChanUpgradeInit`,`ChanUpgradeTry`, `ChanUpgradeAck`, `ChanUpgradeConfirm`, `ChanUpgradeOpen`, `ChanUpgradeTimeout`, and `ChanUpgradeCancel`. 
 
-#### Subprotocols  
-The channel upgradiblity handshake protocol defines the following sub-protocols: `initUpgradeHandshake`, `startFlushUpgradeHandshake`, `openUpgradeHandshake`, `cancelChannelUpgrade`, and `timeoutChannelUpgrade`. 
-#### Datagrams
-The datagrams exchanged between the parties during the upgrading process are __ChanUpgradeInit__, __ChanUpgradeTry__, __ChanUpgradeAck__, __ChanUpgradeConfirm__, __ChanUpgradeOpen__, __ChanUpgradeTimeout__, and __ChanUpgradeCancel__. 
+Every defined datagram and subprotocol has an associated function. A datagram-function call may activate a subprotocol-function, based on the current state, conditions, input and flow.
 
-Every datagram may activate a subprotocol, based on the current state, conditions , input and flow.
+## Finite state machine modeling 
+We consider a deterministic finite state machine as a 4-tuple (Q; C; Σ; δ) consisting of: 
+- a finite set of States Q
+- a finite set of Conditions C
+- a finite set of Accepted Inputs Σ
+- a finite set of Accepted States Transition δ
 
-## States 
-
+### Q: States 
 We start defining each state. 
 
 | State | ChannelState A      | ChannelState B      | ProvableStore A                                                | ProvableStore B                                                | Private Store A                        | Private Store B                        |
-|---------|---------------------|---------------------|----------------------------------------------------------------|----------------------------------------------------------------|----------------------------------------|----------------------------------------|
-| S0      | OPEN                | OPEN                |                                                                |                                                                |                                        |                                        |
-| S1.1    | OPEN                | OPEN                | Chan.UpgradeSequenceSet; Upg.UpgradeSet; Upg.VersionSet;      |                                                                |                                        |                                        |
-| S1.2    | OPEN                | OPEN                |                                                                | Chan.UpgradeSequenceSet; Upg.UpgradeSet; Upg.VersionSet;      |                                        |                                        |
-| S2      | OPEN                | OPEN                | Chan.UpgradeSequenceSet; Upg.UpgradeSet; Upg.VersionSet 0..1; | Chan.UpgradeSequenceSet; Upg.UpgradeSet; Upg.VersionSet 0..1; |                                        |                                        |
-| S3.1    | FLUSHING            | OPEN                | Chan.UpgradeSequenceSet; Upg.UpgradeSet; Upg.TimeoutSet; Upg.VersionSet; | Chan.UpgradeSequenceSet; Upg.UpgradeSet; Upg.VersionSet;      |                                        |                                        |
-| S3.2    | OPEN                | FLUSHING            | Chan.UpgradeSequenceSet; Upg.UpgradeSet; Upg.VersionSet;      | Chan.UpgradeSequenceSet; Upg.UpgradeSet; Upg.TimeoutSet; Upg.VersionSet; |                                        |                                        |
-| S4      | FLUSHING            | FLUSHING            | Chan.UpgradeSequenceSet; Upg.UpgradeSet; Upg.TimeoutSet; Upg.VersionSet; | Chan.UpgradeSequenceSet; Upg.UpgradeSet; Upg.TimeoutSet; Upg.VersionSet; | Priv.Upg.CounterParty TimeoutSet 0..1; | Priv.Upg.CounterParty TimeoutSet 0..1; |
-| S5.1    | FLUSHING_COMPLETE   | FLUSHING            | Upg.UpgradeSet; Chan.UpgradeSequenceSet; Upg.TimeoutSet; Upg.VersionSet; | Upg.UpgradeSet; Chan.UpgradeSequenceSet; Upg.TimeoutSet; Upg.VersionSet; |                                        | Priv.Upg.CounterParty TimeoutSet;       |
-| S5.2    | FLUSHING            | FLUSHING_COMPLETE   | Upg.UpgradeSet; Chan.UpgradeSequenceSet; Upg.TimeoutSet; Upg.VersionSet; | Upg.UpgradeSet; Chan.UpgradeSequenceSet; Upg.TimeoutSet; Upg.VersionSet; | Priv.Upg.CounterParty TimeoutSet;       |                                        |
-| S6      | FLUSHING_COMPLETE   | FLUSHING_COMPLETE   | Chan.UpgradeSequenceSet; Upg.UpgradeSet; Upg.TimeoutSet; Upg.VersionSet; | Chan.UpgradeSequenceSet; Upg.UpgradeSet; Upg.TimeoutSet; Upg.VersionSet; |                                        |                                        |
-| S7.1    | OPEN                | FLUSHING_COMPLETE   | Chan.UpgradeSequenceSet; Chan.VersionSet; Chan.ConnectionHopsSet; Chan.OrderingSet; | Chan.UpgradeSequenceSet; Upg.UpgradeSet; Upg.TimeoutSet; Upg.VersionSet; |                                        | Priv.Upg.CounterParty TimeoutSet;       |
-| S7.2    | FLUSHING_COMPLETE   | OPEN                | Chan.UpgradeSequenceSet; Upg.UpgradeSet; Upg.TimeoutSet; Upg.VersionSet; | Chan.UpgradeSequenceSet; Chan.VersionSet; Chan.ConnectionHopsSet; Chan.OrderingSet; | Priv.Upg.CounterParty TimeoutSet;       |                                        |
-| S8      | OPEN                | OPEN                | Chan.UpgradeSequenceSet; Chan.VersionSet; Chan.ConnectionHopsSet; Chan.OrderingSet; | Chan.UpgradeSequenceSet; Chan.VersionSet; Chan.ConnectionHopsSet; Chan.OrderingSet; |                                        |                                        |
+|-------|---------------------|---------------------|----------------------------------------------------------------|----------------------------------------------------------------|----------------------------------------|----------------------------------------|
+| q0    | OPEN                | OPEN                |                                                                |                                                                |                                        |                                        |
+| q1.1  | OPEN                | OPEN                | Chan.UpgradeSequenceSet; Upg.UpgradeSet; Upg.VersionSet;      |                                                                |                                        |                                        |
+| q1.2  | OPEN                | OPEN                |                                                                | Chan.UpgradeSequenceSet; Upg.UpgradeSet; Upg.VersionSet;      |                                        |                                        |
+| q2    | OPEN                | OPEN                | Chan.UpgradeSequenceSet; Upg.UpgradeSet; Upg.VersionSet 0..1; | Chan.UpgradeSequenceSet; Upg.UpgradeSet; Upg.VersionSet 0..1; |                                        |                                        |
+| q3.1  | FLUSHING            | OPEN                | Chan.UpgradeSequenceSet; Upg.UpgradeSet; Upg.TimeoutSet; Upg.VersionSet; | Chan.UpgradeSequenceSet; Upg.UpgradeSet; Upg.VersionSet;      |                                        |                                        |
+| q3.2  | OPEN                | FLUSHING            | Chan.UpgradeSequenceSet; Upg.UpgradeSet; Upg.VersionSet;      | Chan.UpgradeSequenceSet; Upg.UpgradeSet; Upg.TimeoutSet; Upg.VersionSet; |                                        |                                        |
+| q4    | FLUSHING            | FLUSHING            | Chan.UpgradeSequenceSet; Upg.UpgradeSet; Upg.TimeoutSet; Upg.VersionSet; | Chan.UpgradeSequenceSet; Upg.UpgradeSet; Upg.TimeoutSet; Upg.VersionSet; | Priv.Upg.CounterParty TimeoutSet 0..1; | Priv.Upg.CounterParty TimeoutSet 0..1; |
+| q5.1  | FLUSHING_COMPLETE   | FLUSHING            | Upg.UpgradeSet; Chan.UpgradeSequenceSet; Upg.TimeoutSet; Upg.VersionSet; | Upg.UpgradeSet; Chan.UpgradeSequenceSet; Upg.TimeoutSet; Upg.VersionSet; |                                        | Priv.Upg.CounterParty TimeoutSet;       |
+| q5.2  | FLUSHING            | FLUSHING_COMPLETE   | Upg.UpgradeSet; Chan.UpgradeSequenceSet; Upg.TimeoutSet; Upg.VersionSet; | Upg.UpgradeSet; Chan.UpgradeSequenceSet; Upg.TimeoutSet; Upg.VersionSet; | Priv.Upg.CounterParty TimeoutSet;       |                                        |
+| q6    | FLUSHING_COMPLETE   | FLUSHING_COMPLETE   | Chan.UpgradeSequenceSet; Upg.UpgradeSet; Upg.TimeoutSet; Upg.VersionSet; | Chan.UpgradeSequenceSet; Upg.UpgradeSet; Upg.TimeoutSet; Upg.VersionSet; |                                        |                                        |
+| q7.1  | OPEN                | FLUSHING_COMPLETE   | Chan.UpgradeSequenceSet; Chan.VersionSet; Chan.ConnectionHopsSet; Chan.OrderingSet; | Chan.UpgradeSequenceSet; Upg.UpgradeSet; Upg.TimeoutSet; Upg.VersionSet; |                                        | Priv.Upg.CounterParty TimeoutSet;       |
+| q7.2  | FLUSHING_COMPLETE   | OPEN                | Chan.UpgradeSequenceSet; Upg.UpgradeSet; Upg.TimeoutSet; Upg.VersionSet; | Chan.UpgradeSequenceSet; Chan.VersionSet; Chan.ConnectionHopsSet; Chan.OrderingSet; | Priv.Upg.CounterParty TimeoutSet;       |                                        |
+| q8    | OPEN                | OPEN                | Chan.UpgradeSequenceSet; Chan.VersionSet; Chan.ConnectionHopsSet; Chan.OrderingSet; | Chan.UpgradeSequenceSet; Chan.VersionSet; Chan.ConnectionHopsSet; Chan.OrderingSet; |                                        |                                        |
 
+Every time a state transition occurs, we should verify that in qX ChannelStateX, ProvableStateX and PrivateStoreX reflect what is written in this table.  
 
-## Conditions 
+### C: Conditions 
 
 Below we list all the conditions that are verified during the protocol execution. In order for a state transition to occur, cX must evaluate to True. We assume that the protocol is only executed if pc0 evaluates to True. 
 
@@ -55,8 +60,7 @@ Below we list all the conditions that are verified during the protocol execution
 - c14: Priv.Upg.CounterPartyTimeoutSet === True
 
 
-## Inputs
-
+### Σ: Accepted Inputs
 We now identify all the possible inputs. 
 
 Given: 
@@ -64,7 +68,7 @@ Given:
 
 Each input identifier ix corresponds to a specific action, and the placeholders [Party, Condition, PreviousInput] capture who is involved in the action, any conditions that must be satisfied, and any previous input that must have occurred, respectively. 
 
-Thus we can resume the inputs as: 
+Thus we can summarize the inputs as: 
 
 - i0: [Party, , ]: ChanUpgradeInit --> initUpgradeHandshake
 - i1: [Party, , ]: ChanUpgradeTry --> initUpgradeHandshake
@@ -106,78 +110,129 @@ Note that the column previous state, "ix" indicates a previous input. When we ex
 - i8: [A, c7 , ]: ChanUpgradeOpen --> OpenUpgradeHandshake
 - i8: [B, c7 , ]: ChanUpgradeOpen --> OpenUpgradeHandshake
 
+### Accepted States Transition δ
+We model the accepted state transition as: 
 
-## Finite State Machine Diagram
+1. [initial_state] x [input[Party,Conditions,PreviousCall]] -> [final_state]. 
+2. [initial_state] x [input[Party,Conditions,PreviousCall]] -> [intermediate_state] x [input[Party,Conditions,PreviousCall]] -> [final_state]. 
 
-[FSM](https://excalidraw.com/#json=QBEFR3Vf93jd1ubTnjTuq,elELP6G2dJOVHNFC2QUjxw)
+---
+
+- [q0] x [i0: [A,(c0; c1; c2 ; c3),]] -> [q1.1] 
+- [q0] x [i0: [B,(c0; c1; c2 ; c3), ]] -> [q1.2]
+- [q0] x [i0: [A & B, (c0; c1  c2; c3), ]] -> [q2]
+
+- [q1.1] x [i0: [A,(c0; c1; c2; c3; incrementUpgradeSeq), ]] -> [q1.1] 
+- [q1.1] x [i1: [B, (c0; c1; c2; c3; c4) , ]] -> [q2] x [i2: [B, (c4; c6; c7; c8; c9; c10), i1]] -> [q3.2] 
+
+- [q1.2] x [i0: [B,(c0; c1; c2; c3; incrementUpgradeSeq), ]] -> q1.2
+- [q1.2] x [i1: [A, (c0; c1; c2; c3; c4) , ]] -> [q2] x [i2: [A, (c4; c6; c7; c8; c9; c10), i1]] -> [q3.1]
+
+- [q2] x [i3: [A, (c5; c6; c7; c8; c9; c10), ]] -> [q3.1]
+- [q2] x [i3: [B, (c5; c6; c7; c8; c9; c10), ]] -> [q3.2]
+
+- [q3.1] x [i4: [A, (c7; c8; c6; c10; c11; c13), ]] -> [q4]
+- [q3.1] x [i4: [A, (c7; c8; c6; c10; c11; c12), ]] -> [q5.2]
+
+- [q3.2] x [i4: [B, (c7; c8; c6; c10; c11; c12), ]] -> [q4]
+- [q3.2] x [i4: [B, (c7; c8; c6; c10; c11; c13), ]] -> [q5.1]
+
+- [q4] x [i5: [A, (c7; c8; c11; c13; c14), ]] -> [q4]
+- [q4] x [i5: [B, (c7; c8; c11; c13; c14), ]] -> [q4]
+- [q4] x [i5: [A, (c7; c8; c11; c12), ]] -> [q5.1]
+- [q4] x [i6: [A, (c11; c12; c14) ,i5(c13)]] -> [q5.1]
+- [q4] x [i5: [B, (c7; c8; c11; c12), ]] -> [q5.2]
+- [q4] x [i6: [B, (c11; c12; c14) ,i5(c13)]] -> [q5.2]
+
+- [q5.1] x [i5: [B, (c7; c8; c11; c13; c14), ]] -> [q5.1]
+- [q5.1] x [i6: [B, (c11; c12), i5(c13)]] -> [q6]
+- [q5.1] x [i5: [B, (c7; c8; c11; c12), ]] -> [q6] x [i7: [B, , i5(c12)]] -> [q7.2] 
+
+- [q5.2] x [i5: [A, (c7; c8; c11; c13; c14), ]] -> [q5.2]
+- [q5.2] x [i6: [A, (c11; c12), i5(c13)]] -> [q6]
+- [q5.2] x [i5: [A, (c7; c8; c11; c12), ]] -> [q6] x [i7: [A, , i5(c12)]] -> [q7.1]
+
+- [q6] x [i8: [A, c7 ,]] -> [q7.1]
+- [q6] x [i8: [B, c7 ,]] -> [q7.2]
+
+- [q7.1] x [i8: [B, c7 ,]] -> [q8]
+- [q7.2] x [i8: [A, c7 ,]] -> [q8]
+
+
+### Finite State Machine Diagram
+
+Here we give a graphical representation of the finite state machine. 
+
+[FSM](https://excalidraw.com/#json=X23Uz0dzH2J72bvehiM10,FzUVoJVaEYBEUwV1dZ7eLA)
 ![Picture](img_fsm/FSM_Upgrades.png)
 
-## Admitted State Transitions WIP  
-Admitted state transitions are expressed as 
 
-- [initial_state] x [input[Party,Conditions,PreviousCall]] -> [final_state]. 
-or 
-- [initial_state] x [input[Party,Conditions,PreviousCall]] -> [intermediate_state] x [input[Party,Conditions,PreviousCall]] -> [final_state]. 
-
-- [s0] x [i0: [A,(c0; c1; c2 ; c3),]] -> [s1.1] 
-- [s0] x [i0: [B,(c0; c1; c2 ; c3), ]] -> [s1.2]
-- [s0] x i0: [A & B, (c0; c1  c2; c3), ]] -> [s2]
-
-- [s1.1] x [i0: [A,(c0; c1; c2; c3; incrementUpgradeSeq), ]] -> [s1.1] 
-- [s1.1] x [i1: [B, (c0; c1; c2; c3; c4) , ]] -> [s2] x [i2: [B, (c4; c6; c7; c8; c9; c10), i1]] -> [s3.2] 
-
-- [s1.2] x [i0: [B,(c0; c1; c2; c3; incrementUpgradeSeq), ]] -> s1.2
-- [s1.2] x [i1: [A, (c0; c1; c2; c3; c4) , ]] -> [s2] x [i2: [A, (c4; c6; c7; c8; c9; c10), i1]] -> [s3.1]
-
-- [s2] x [i3: [A, (c5; c6; c7; c8; c9; c10), ]] -> [s3.1]
-- [s2] x [i3: [B, (c5; c6; c7; c8; c9; c10), ]] -> [s3.2]
-
-- [s3.1] x [i4: [A, (c7; c8; c6; c10; c11; c13), ]] -> [s4]
-- [s3.1] x [i4: [A, (c7; c8; c6; c10; c11; c12), ]] -> [s5.2]
-
-- [s3.2] x [i4: [B, (c7; c8; c6; c10; c11; c12), ]] -> [s4]
-- [s3.2] x [i4: [B, (c7; c8; c6; c10; c11; c13), ]] -> [s5.1]
-
-- [s4] x [i5: [A, (c7; c8; c11; c13; c14), ]] -> [s4]
-- [s4] x [i5: [B, (c7; c8; c11; c13; c14), ]] -> [s4]
-- [s4] x [i5: [A, (c7; c8; c11; c12), ]] -> [s5.1]
-- [s4] x [i6: [A, (c11; c12; c14) ,i5(c13)]] -> [s5.1]
-- [s4] x [i5: [B, (c7; c8; c11; c12), ]] -> [s5.2]
-- [s4] x [i6: [B, (c11; c12; c14) ,i5(c13)]] -> [s5.2]
-
-- [s5.1] x [i5: [B, (c7; c8; c11; c13; c14), ]] -> [s5.1]
-- [s5.1] x [i6: [B, (c11; c12), i5(c13)]] -> [s6]
-- [s5.1] x [i5: [B, (c7; c8; c11; c12), ]] -> [s6] x [i7: [B, , i5(c12)]] -> [s7.2] 
-
-- [s5.2] x [i5: [A, (c7; c8; c11; c13; c14), ]] -> [s5.2]
-- [s5.2] x [i6: [A, (c11; c12), i5(c13)]] -> [s6]
-- [s5.2] x [i5: [A, (c7; c8; c11; c12), ]] -> [s6] x [i7: [A, , i5(c12)]] -> [s7.1]
-
-- [s6] x [i8: [A, c7 ,]] -> [s7.1]
-- [s6] x [i8: [B, c7 ,]] -> [s7.2]
-
-- [s7.1] x [i8: [B, c7 ,]] -> [s8]
-- [s7.2] x [i8: [A, c7 ,]] -> [s8]
- 
-
-## Flows
+### Flows
 The protocol defines 3 Main possible flows: 
 - A starts the process and B follows.
 - B starts the process and A follows.
 - A & B start the process (Crossing Hello). 
 
-### State Transition table for flow 
+To describe the different flows we will write the state transition matrix. The state transition matrix has '1' indicating a possible transition and empty cells where no transition occurs. Empty cells indicate no direct transition is possible between those states.
 
-#### Flow 0 : A starts the process and B follows.
+#### Flow 0:  A & B start the process (Crossing Hello)
 
-#### Flow 1 : B starts the process and A follows.
+| States    | q0 | q1.1 | q1.2 | q2 | q3.1 | q3.2 | q4 | q5.1 | q5.2 | q6 | q7.1 | q7.2 | q8 |
+|-----------|----|------|------|----|------|------|----|------|------|----|------|------|----|
+| **q0**    |    | 1    | 1    | 1  |      |      |    |      |      |    |      |      |    |
+| **q1.1**  |    | 1    |      | 1  |      |      |    |      |      |    |      |      |    |
+| **q1.2**  |    |      | 1    | 1  |      |      |    |      |      |    |      |      |    |
+| **q2**    |    |      |      |    | 1    | 1    |    |      |      |    |      |      |    |
+| **q3.1**  |    |      |      |    |      |      | 1  |      | 1    |    |      |      |    |
+| **q3.2**  |    |      |      |    |      |      | 1  | 1    |      |    |      |      |    |
+| **q4**    |    |      |      |    |      |      |    | 1    | 1    |    |      |      |    |
+| **q5.1**  |    |      |      |    |      |      |    | 1    |      | 1  |      |      |    |
+| **q5.2**  |    |      |      |    |      |      |    |      |  1   | 1  |      |      |    |
+| **q6**    |    |      |      |    |      |      |    |      |      |    | 1    |  1   |    |
+| **q7.1**  |    |      |      |    |      |      |    |      |      |    |      |      | 1  |
+| **q7.2**  |    |      |      |    |      |      |    |      |      |    |      |      | 1  |
+| **q8**    |    |      |      |    |      |      |    |      |      |    |      |      |    |
 
-#### Flow 2 : A & B start the process (Crossing Hello).
 
-## Cancel and Timeout
+#### Flow 1: A starts the process and B follows.
 
+| States    | q0 | q1.1 | q1.2 | q2 | q3.1 | q3.2 | q4 | q5.1 | q5.2 | q6 | q7.1 | q7.2 | q8 |
+|-----------|----|------|------|----|------|------|----|------|------|----|------|------|----|
+| **q0**    |    | 1    |      |    |      |      |    |      |      |    |      |      |    |
+| **q1.1**  |    | 1    |      | 1  |      |      |    |      |      |    |      |      |    |
+| **q1.2**  |    |      |      |    |      |      |    |      |      |    |      |      |    |
+| **q2**    |    |      |      |    |      | 1    |    |      |      |    |      |      |    |
+| **q3.1**  |    |      |      |    |      |      |    |      |      |    |      |      |    |
+| **q3.2**  |    |      |      |    |      |      | 1  | 1    |      |    |      |      |    |
+| **q4**    |    |      |      |    |      |      | 1  | 1    | 1    |    |      |      |    |
+| **q5.1**  |    |      |      |    |      |      |    | 1    |      | 1  |      |      |    |
+| **q5.2**  |    |      |      |    |      |      |    |      | 1    | 1  |      |      |    |
+| **q6**    |    |      |      |    |      |      |    |      |      |    | 1    | 1    |    |
+| **q7.1**  |    |      |      |    |      |      |    |      |      |    |      |      | 1  |
+| **q7.2**  |    |      |      |    |      |      |    |      |      |    |      |      | 1  |
+| **q8**    |    |      |      |    |      |      |    |      |      |    |      |      |    |
+
+#### Flow 2: B starts the process and A follows.
+
+| States    | q0 | q1.1 | q1.2 | q2 | q3.1 | q3.2 | q4 | q5.1 | q5.2 | q6 | q7.1 | q7.2 | q8 |
+|-----------|----|------|------|----|------|------|----|------|------|----|------|------|----|
+| **q0**    |    |      |  1   |    |      |      |    |      |      |    |      |      |    |
+| **q1.1**  |    |      |      |    |      |      |    |      |      |    |      |      |    |
+| **q1.2**  |    |  1   |      |  1 |      |      |    |      |      |    |      |      |    |
+| **q2**    |    |      |      |    |   1  |      |    |      |      |    |      |      |    |
+| **q3.1**  |    |      |      |    |      |      |  1 |      | 1    |    |      |      |    |
+| **q3.2**  |    |      |      |    |      |      |    |      |      |    |      |      |    |
+| **q4**    |    |      |      |    |      |      | 1  | 1    | 1    |    |      |      |    |
+| **q5.1**  |    |      |      |    |      |      |    | 1    |      | 1  |      |      |    |
+| **q5.2**  |    |      |      |    |      |      |    |      | 1    | 1  |      |      |    |
+| **q6**    |    |      |      |    |      |      |    |      |      |    | 1    | 1    |    |
+| **q7.1**  |    |      |      |    |      |      |    |      |      |    |      |      | 1  |
+| **q7.2**  |    |      |      |    |      |      |    |      |      |    |      |      | 1  |
+| **q8**    |    |      |      |    |      |      |    |      |      |    |      |      |    |
+
+
+### Cancel and Timeout
 `RestoreChannel` can be called at any point of the process and will reset the state machine execution to s0.
-
 
 
 # Notes 
