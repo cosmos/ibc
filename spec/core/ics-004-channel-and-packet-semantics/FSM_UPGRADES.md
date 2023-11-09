@@ -59,46 +59,7 @@ Below we list all the conditions that are verified during the protocol execution
 
 We now identify all the possible inputs. 
 
-### Enumeration
-This is the list of inputs for enumeration:
-- i0: A: ChanUpgradeInit --> initUpgradeHandshake
-- i1: B: ChanUpgradeInit --> initUpgradeHandshake
-- i2: A & B: ChanUpgradeInit --> initUpgradeHandshake
-- i3: A: ChanUpgradeInit --> initUpgradeHandshake (incrementUpgradeSeq)
-- i4: B: ChanUpgradeInit --> initUpgradeHandshake (incrementUpgradeSeq)
-- i5: B: ChanUpgradeTry --> initUpgradeHandshake
-- i6: A: ChanUpgradeTry --> initUpgradeHandshake
-- i7: A: ChanUpgradeTry --> startFlushUpgradeHandshake -- i6,i7 atomic (c4)
-- i8: B: ChanUpgradeTry --> startFlushUpgradeHandshake -- i5,i8 atomic (c4)
-- i9: A: ChanUpgradeTry --> startFlushUpgradeHandshake (c5)
-- i10: B: ChanUpgradeTry --> startFlushUpgradeHandshake (c5)
-- i11: B: ChanUpgradeAck --> startFlushtUpgradeHandshake (c13)
-- i12: A: ChanUpgradeAck --> startFlushtUpgradeHandshake (c13)
-- i13: A: ChanUpgradeAck --> startFlushtUpgradeHandshake (c12)
-- i14: B: ChanUpgradeAck --> startFlushtUpgradeHandshake (c12)
-- i15: A: ChanUpgradeConfirm (c12)
-- i16: B: ChanUpgradeConfirm (c12)
-- i17: A: ChanUpgradeConfirm (c13)
-- i18: B: ChanUpgradeConfirm (c13)
-- i19: A: PacketHandler -- onlyIf i17 occurs
-- i20: B: PacketHandler -- onlyIf i18 occurs 
-- i21: B: ChanUpgradeConfirm (c12)
-- i22: A: ChanUpgradeConfirm (c12)
-- i23: B: ChanUpgradeConfirm (c13)
-- i24: A: ChanUpgradeConfirm (c13)
-- i25: B: PacketHandler -- onlyIf i23 occurs
-- i26: A: PacketHandler -- onlyIf i24 occurs
-- i27: A: ChanUpgradeConfirm --> OpenUpgradeHandshake -- i22,i27 atomic
-- i28: B: ChanUpgradeConfirm --> OpenUpgradeHandshake -- i21,i28 atomic
-- i29: A: ChanUpgradeOpen --> OpenUpgradeHandshake 
-- i30: B: ChanUpgradeOpen --> OpenUpgradeHandshake 
-- i31: B: ChanUpgradeOpen --> OpenUpgradeHandshake 
-- i32: A: ChanUpgradeOpen --> OpenUpgradeHandshake 
-
-### Inputs Parametrization
-
 Given: 
-
 - ix: [Party, Condition, PreviosInput]: Datagram --> subprotocolActivation -- extraDetails 
 
 Each input identifier ix corresponds to a specific action, and the placeholders [Party, Condition, PreviousInput] capture who is involved in the action, any conditions that must be satisfied, and any previous input that must have occurred, respectively. 
@@ -116,63 +77,88 @@ Thus we can resume the inputs as:
 - i8: [Party, , ]: ChanUpgradeOpen --> OpenUpgradeHandshake
 
 Below, we list the expanded representation of the protocol inputs. 
+Note that the column previous state, "ix" indicates a previous input. When we express this as i5(c13) we assume that this is the input i5 having the same Party of the new input that is enforcing the c13 condition. 
 
-- i0: [A, , ]: ChanUpgradeInit --> initUpgradeHandshake
-- i0: [B, , ]: ChanUpgradeInit --> initUpgradeHandshake
-- i0: [A & B, , ]: ChanUpgradeInit --> initUpgradeHandshake
-- i0: [A, incrementUpgradeSeq, ]: ChanUpgradeInit --> initUpgradeHandshake
-- i0: [B, incrementUpgradeSeq, ]: ChanUpgradeInit --> initUpgradeHandshake
-- i1: [A, , ]: ChanUpgradeTry --> initUpgradeHandshake
-- i1: [B, , ]: ChanUpgradeTry --> initUpgradeHandshake
-- i2: [A, c4, i1]: ChanUpgradeTry --> startFlushUpgradeHandshake -- atomic
-- i2: [B, c4, i1]: ChanUpgradeTry --> startFlushUpgradeHandshake -- atomic
-- i3: [A, c5, ]: ChanUpgradeTry --> startFlushUpgradeHandshake
-- i3: [B, c5, ]: ChanUpgradeTry --> startFlushUpgradeHandshake
-- i4: [A, c12, ]: ChanUpgradeAck --> startFlushtUpgradeHandshake
-- i4: [B, c12, ]: ChanUpgradeAck --> startFlushtUpgradeHandshake
-- i4: [A, c13, ]: ChanUpgradeAck --> startFlushtUpgradeHandshake
-- i4: [B, c13, ]: ChanUpgradeAck --> startFlushtUpgradeHandshake
-- i5: [A, c12, ]: ChanUpgradeConfirm
-- i5: [B, c12, ]: ChanUpgradeConfirm
-- i5: [A, c13, ]: ChanUpgradeConfirm
-- i5: [B, c13, ]: ChanUpgradeConfirm
-- i6: [A, ,i5(c13)]: PacketHandler -- onlyIf occurs
-- i6: [B, ,i5(c13)]: PacketHandler -- onlyIf occurs
-- i7: [A, c12, i5]: ChanUpgradeConfirm --> OpenUpgradeHandshake -- atomic
-- i7: [B, c12, i5]: ChanUpgradeConfirm --> OpenUpgradeHandshake -- atomic
-- i8: [A, , ]: ChanUpgradeOpen --> OpenUpgradeHandshake
-- i8: [B, , ]: ChanUpgradeOpen --> OpenUpgradeHandshake
+
+- i0: [A,(c0; c1; c2 ; c3), ]: ChanUpgradeInit --> initUpgradeHandshake
+- i0: [B,(c0; c1; c2 ; c3), ]: ChanUpgradeInit --> initUpgradeHandshake
+- i0: [A & B, (c0; c1  c2; c3), ]: ChanUpgradeInit --> initUpgradeHandshake
+- i0: [A,(c0; c1; c2; c3 incrementUpgradeSeq), ]: ChanUpgradeInit --> initUpgradeHandshake
+- i0: [B,(c0; c1; c2; c3 incrementUpgradeSeq), ]: ChanUpgradeInit --> initUpgradeHandshake
+- i1: [B, (c0; c1; c2; c3; c4) , ]: ChanUpgradeTry --> initUpgradeHandshake
+- i1: [A,(c0; c1; c2; c3; c4) , ]: ChanUpgradeTry --> initUpgradeHandshake
+- i2: [A, (c4; c6; c7; c8; c9; c10), i1]: ChanUpgradeTry --> startFlushUpgradeHandshake -- atomic
+- i2: [B, (c4; c6; c7; c8; c9; c10), i1]: ChanUpgradeTry --> startFlushUpgradeHandshake -- atomic
+- i3: [A, (c5; c6; c7; c8; c9; c10), ]: ChanUpgradeTry --> startFlushUpgradeHandshake
+- i3: [B, (c5; c6; c7; c8; c9; c10), ]: ChanUpgradeTry --> startFlushUpgradeHandshake
+- i4: [A, (c7; c8; c6; c10; c11; c12), ]: ChanUpgradeAck --> startFlushtUpgradeHandshake
+- i4: [B, (c7; c8; c6; c10; c11; c13), ]: ChanUpgradeAck --> startFlushtUpgradeHandshake
+- i4: [B, (c7; c8; c6; c10; c11; c12), ]: ChanUpgradeAck --> startFlushtUpgradeHandshake
+- i4: [A, (c7; c8; c6; c10; c11; c13), ]: ChanUpgradeAck --> startFlushtUpgradeHandshake
+- i5: [A, (c7; c8; c11; c12), ]: ChanUpgradeConfirm
+- i5: [B, (c7; c8; c11; c12), ]: ChanUpgradeConfirm
+- i5: [B, (c7; c8; c11; c13; c14), ]: ChanUpgradeConfirm
+- i5: [A, (c7; c8; c11; c13; c14), ]: ChanUpgradeConfirm
+- i6: [A, (c11; c12; c14) ,i5(c13)]: PacketHandler -- onlyIf occurs
+- i6: [B, (c11; c12; c14) ,i5(c13)]: PacketHandler -- onlyIf occurs
+- i7: [A, , i5(c12)]: ChanUpgradeConfirm --> OpenUpgradeHandshake -- atomic
+- i7: [B, , i5(c12)]: ChanUpgradeConfirm --> OpenUpgradeHandshake -- atomic
+- i8: [A, c7 , ]: ChanUpgradeOpen --> OpenUpgradeHandshake
+- i8: [B, c7 , ]: ChanUpgradeOpen --> OpenUpgradeHandshake
+
 
 ## Finite State Machine Diagram
 
-[FSM](https://excalidraw.com/#json=Ts6yP_VuCZ6m7EIBA9lnl,nPWuiHw3msB4xtL7H5X5Vw)
+[FSM](https://excalidraw.com/#json=QBEFR3Vf93jd1ubTnjTuq,elELP6G2dJOVHNFC2QUjxw)
 ![Picture](img_fsm/FSM_Upgrades.png)
 
 ## Admitted State Transitions WIP  
-Admitted state transitions are expressed as state x input x condition --> state. 
+Admitted state transitions are expressed as 
 
+- [initial_state] x [input[Party,Conditions,PreviousCall]] -> [final_state]. 
+or 
+- [initial_state] x [input[Party,Conditions,PreviousCall]] -> [intermediate_state] x [input[Party,Conditions,PreviousCall]] -> [final_state]. 
 
-- [s0] x [i0] x [c0,c1,c2,c3] -> s1.1 
-- [s0] x [i1] x [c0,c1,c2,c3] -> s1.2
-- [s0] x [i2] x [c0,c1,c2,c3] -> s2
+- [s0] x [i0: [A,(c0; c1; c2 ; c3),]] -> [s1.1] 
+- [s0] x [i0: [B,(c0; c1; c2 ; c3), ]] -> [s1.2]
+- [s0] x i0: [A & B, (c0; c1  c2; c3), ]] -> [s2]
 
-- [s1.1] x [i3] x [c0,c1,c2,c3] -> s1.1 
-- [s1.1] x [i5] x [c0,c1,c2,c3,c4] -> [s2] x [i8] x [c4,c6,c7,c8,c9,c10] -> s3.2 
+- [s1.1] x [i0: [A,(c0; c1; c2; c3; incrementUpgradeSeq), ]] -> [s1.1] 
+- [s1.1] x [i1: [B, (c0; c1; c2; c3; c4) , ]] -> [s2] x [i2: [B, (c4; c6; c7; c8; c9; c10), i1]] -> [s3.2] 
 
-- [s1.2] x [i4] x [c0,c1,c2,c3] -> s1.2
-- [s1.2] x [i6] x [c0,c1,c2,c3,c4] -> [s2] x [i7] x [c4,c6,c7,c8,c9,c10] -> s3.1
+- [s1.2] x [i0: [B,(c0; c1; c2; c3; incrementUpgradeSeq), ]] -> s1.2
+- [s1.2] x [i1: [A, (c0; c1; c2; c3; c4) , ]] -> [s2] x [i2: [A, (c4; c6; c7; c8; c9; c10), i1]] -> [s3.1]
 
-- [s2] x [i9] x [c5,c6,c7,c8,c9,c10c4] -> s3.1
-- [s2] x [i10] x [c5,c6,c7,c8,c9,c10c4] -> s3.2
+- [s2] x [i3: [A, (c5; c6; c7; c8; c9; c10), ]] -> [s3.1]
+- [s2] x [i3: [B, (c5; c6; c7; c8; c9; c10), ]] -> [s3.2]
 
+- [s3.1] x [i4: [A, (c7; c8; c6; c10; c11; c13), ]] -> [s4]
+- [s3.1] x [i4: [A, (c7; c8; c6; c10; c11; c12), ]] -> [s5.2]
 
+- [s3.2] x [i4: [B, (c7; c8; c6; c10; c11; c12), ]] -> [s4]
+- [s3.2] x [i4: [B, (c7; c8; c6; c10; c11; c13), ]] -> [s5.1]
 
-:s3.2 -> s4 -> s4 -> s5.1
+- [s4] x [i5: [A, (c7; c8; c11; c13; c14), ]] -> [s4]
+- [s4] x [i5: [B, (c7; c8; c11; c13; c14), ]] -> [s4]
+- [s4] x [i5: [A, (c7; c8; c11; c12), ]] -> [s5.1]
+- [s4] x [i6: [A, (c11; c12; c14) ,i5(c13)]] -> [s5.1]
+- [s4] x [i5: [B, (c7; c8; c11; c12), ]] -> [s5.2]
+- [s4] x [i6: [B, (c11; c12; c14) ,i5(c13)]] -> [s5.2]
 
-s0 -> s1.1 -> s2:s3.2 -> s4 -> s5.1
-s0 -> s1.1 -> s2:s3.2 -> s5.1
+- [s5.1] x [i5: [B, (c7; c8; c11; c13; c14), ]] -> [s5.1]
+- [s5.1] x [i6: [B, (c11; c12), i5(c13)]] -> [s6]
+- [s5.1] x [i5: [B, (c7; c8; c11; c12), ]] -> [s6] x [i7: [B, , i5(c12)]] -> [s7.2] 
 
-`RestoreChannel` can be called at any point of the process and will reset the state machine execution to s0. 
+- [s5.2] x [i5: [A, (c7; c8; c11; c13; c14), ]] -> [s5.2]
+- [s5.2] x [i6: [A, (c11; c12), i5(c13)]] -> [s6]
+- [s5.2] x [i5: [A, (c7; c8; c11; c12), ]] -> [s6] x [i7: [A, , i5(c12)]] -> [s7.1]
+
+- [s6] x [i8: [A, c7 ,]] -> [s7.1]
+- [s6] x [i8: [B, c7 ,]] -> [s7.2]
+
+- [s7.1] x [i8: [B, c7 ,]] -> [s8]
+- [s7.2] x [i8: [A, c7 ,]] -> [s8]
+ 
 
 ## Flows
 The protocol defines 3 Main possible flows: 
@@ -180,12 +166,17 @@ The protocol defines 3 Main possible flows:
 - B starts the process and A follows.
 - A & B start the process (Crossing Hello). 
 
+### State Transition table for flow 
+
 #### Flow 0 : A starts the process and B follows.
 
 #### Flow 1 : B starts the process and A follows.
 
 #### Flow 2 : A & B start the process (Crossing Hello).
 
+## Cancel and Timeout
+
+`RestoreChannel` can be called at any point of the process and will reset the state machine execution to s0.
 
 
 
