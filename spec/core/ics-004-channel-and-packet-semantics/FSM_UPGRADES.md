@@ -235,7 +235,7 @@ To describe the different flows we will write the state transition matrix. The s
 | **q8**    |    |      |      |    |      |      |    |      |      |    |      |      |    |    |
 | **q9**    | 1  |      |      |    |      |      |    |      |      |    |      |      |    |    |
 
-#### Flow 1: A starts the process and B follows.
+#### Flow 1: A starts the process and B follows
 
 | States    | q0 | q1.1 | q1.2 | q2 | q3.1 | q3.2 | q4 | q5.1 | q5.2 | q6 | q7.1 | q7.2 | q8 | q9 |
 |-----------|----|------|------|----|------|------|----|------|------|----|------|------|----|----|
@@ -254,7 +254,7 @@ To describe the different flows we will write the state transition matrix. The s
 | **q8**    |    |      |      |    |      |      |    |      |      |    |      |      |    |    |
 | **q9**    | 1  |      |      |    |      |      |    |      |      |    |      |      |    |    |
 
-#### Flow 2: B starts the process and A follows.
+#### Flow 2: B starts the process and A follows
 
 | States    | q0 | q1.1 | q1.2 | q2 | q3.1 | q3.2 | q4 | q5.1 | q5.2 | q6 | q7.1 | q7.2 | q8 | q9 |
 |-----------|----|------|------|----|------|------|----|------|------|----|------|------|----|----|
@@ -278,6 +278,7 @@ To describe the different flows we will write the state transition matrix. The s
 Any main flow can be further divided into multiple flows. As example: 
 
 A starts B follows: 
+
 1. q0 q1.1 q2 q3.2 q4 (q4) q5.2 q6 q7.1 q8    
 2. q0 q1.1 q2 q3.2 q5.1 q.5.1 q6 q7.1 q8       
 3. q0 q1.1 q2 q3.2 q5.1 q6 q7.2 q8 
@@ -297,6 +298,7 @@ Note that in some cases this state may be a transient state. E.g. In case we are
 - State q6 is always reached. This can be even a transient state.  
 
 ## What Could We Do Next? 
+
 Each state can be identified by its ChannelEnd(s),ProvableStore(s). We know all the inputs associated with each state. We know all admitted state transitions.
 
 We could use these info to test the protocol in different ways: 
@@ -328,7 +330,6 @@ if counterpartyUpgradeSequence < channel.upgradeSequence {
 
 However, here we don't directly restore the channel. Let's say is Chain A the one going through ChanUpgradeTry. When Chain A stores the error message an event is triggered. The relayer process the event and submit a ChanUpgradeCancel to ChainB which trigger the restoreChannel. In restoreChannel Chain B will write an error message too. Thus at this point the relayer will process the event an submit a ChanUpgradeCancel and call restoreChannel. 
 Another event will triggered, thus the relayers should be able to understand that he already sent ChanUpgradeCancel to both chains. Is that the case? Otherwise how and when do we restore Chain A channelEnd? 
-
 
 2. Q: In case the Priv.Upg.CountePartyTimeout is not written, the ChanUpgradeOpen will anyway try to delete the Priv.Upg.CountePartyTimeout variable. What happens if this variable has not been set? Is this memory location accessible?  
 
