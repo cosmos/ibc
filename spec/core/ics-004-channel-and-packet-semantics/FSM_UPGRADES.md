@@ -7,7 +7,6 @@ According to the specs the channel upgradiblity handshake protocol defines 5 sub
 - Sub-protocols: `initUpgradeHandshake`, `startFlushUpgradeHandshake`, `openUpgradeHandshake`, `cancelChannelUpgrade`, and `timeoutChannelUpgrade`. 
 - Datagrams:  `ChanUpgradeInit`,`ChanUpgradeTry`, `ChanUpgradeAck`, `ChanUpgradeConfirm`, `ChanUpgradeOpen`, `ChanUpgradeTimeout`, and `ChanUpgradeCancel`. 
 
-
 Every defined datagram and subprotocol has an associated function. Once a datagram is received it will activate a datagram-function call which in turn may activate a subprotocol-function, based on the current state, conditions, input and flow. Additionally, we have some utility functions that can be activated by a datagram-function or subprotocol-function call. We will model utility functions as conditions.   
 
 ## Finite state machine modeling
@@ -20,6 +19,7 @@ We consider a deterministic finite state machine as a 4-tuple (Q; C; Σ; δ) con
 - a finite set of Accepted States Transition δ
 
 ### Q: States 
+
 We start defining each state. For every state we list the status of Chain A and Chain B: ChannelState,ProvableStore,PrivateStore. 
 
 | State | ChannelState A      | ChannelState B      | ProvableStore A                                                | ProvableStore B                                                | Private Store A                        | Private Store B                        |
@@ -71,9 +71,10 @@ Below we list all the conditions that are verified during the protocol execution
 - c21: CounterPartyTimeoutExpired === True
 
 ### Σ: Accepted Inputs
-We now identify all the possible inputs. 
 
+We now identify all the possible inputs. 
 Given: 
+
 - ix: [Party, Condition, PreviosInput]: Datagram --> subprotocolActivation -- extraDetails 
 
 Each input identifier ix corresponds to a specific action, and the placeholders [Party, Condition, PreviousInput] capture who is involved in the action, any conditions that must be satisfied, and any previous input that must have occurred, respectively. 
@@ -92,10 +93,8 @@ Thus we can summarize the inputs as:
 - i9: [Party,Conditions , ]: ChanUpgradeCancel --> restoreChannel
 - i10: [Party,Conditions , ]: ChanUpgradeTimeout --> restoreChannel
 
-
 Below, we list the expanded representation of the protocol inputs. 
 Note that the column previous state, "ix" indicates a previous input. When we express this as i5(c13) we assume that this is the input i5 having the same Party of the new input that is enforcing the c13 condition. 
-
 
 - i0: [A, (c0; c1; c2 ; c3), ]: ChanUpgradeInit --> initUpgradeHandshake
 - i0: [B, (c0; c1; c2 ; c3), ]: ChanUpgradeInit --> initUpgradeHandshake
@@ -130,11 +129,13 @@ Note that the column previous state, "ix" indicates a previous input. When we ex
 - i10: [B, (c5; c17 )] : ChanUpgradeTimeout --> restoreChannel
 
 Note that the current model do not represent the following cases:
+
 - ChanUpgradeAck --> restoreChannel - c20 : UpgradeFields are not compatible
 - ChanUpgradeAck --> restoreChannel - c21: TimeoutCounterParty exceeded 
 - ChanUpgradeConfirm --> restoreChannel - c21: TimeoutCounterParty exceeded
 
 ### δ: Accepted States Transition
+
 We model the accepted state transition as: 
 
 1. [initial_state] x [input[Party,Conditions,PreviousCall]] -> [final_state]. 
@@ -198,6 +199,7 @@ Here we give a graphical representation of the finite state machine.
 ![Picture](img_fsm/FSM_Upgrades.png)
 
 We remember that the FSM do not represent the following cases:
+
 - ChanUpgradeAck --> restoreChannel - c20 : UpgradeFields are not compatible
 - ChanUpgradeAck --> restoreChannel - c21: TimeoutCounterParty exceeded 
 - ChanUpgradeConfirm --> restoreChannel - c21: TimeoutCounterParty exceeded
@@ -205,7 +207,9 @@ We remember that the FSM do not represent the following cases:
 All of these procedure will bring back the channel to its original parameters. 
 
 ### Flows
+
 The protocol defines 3 Main possible flows: 
+
 - A & B start the process (Crossing Hello). 
 - A starts the process and B follows.
 - B starts the process and A follows.
