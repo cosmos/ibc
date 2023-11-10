@@ -285,7 +285,6 @@ A starts B follows:
 
 But we may have more. TBC if we want to. 
 
-
 ## Invariant 
 
 // To be improved. 
@@ -302,6 +301,7 @@ Note that in some cases this state may be a transient state. E.g. In case we are
 Each state can be identified by its ChannelEnd(s),ProvableStore(s). We know all the inputs associated with each state. We know all admitted state transitions.
 
 We could use these info to test the protocol in different ways: 
+
 1. Identify Invariant states and ensure they are always reached. 
 2. Reproduce ideal behavior and verify the protocol go trhough only expected states. 
 3. Fuzzing the input and ensure the protocol don't go out of the expected states. 
