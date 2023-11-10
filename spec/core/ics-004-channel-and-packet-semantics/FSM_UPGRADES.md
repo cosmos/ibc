@@ -333,5 +333,4 @@ Another event will triggered, thus the relayers should be able to understand tha
 
 2. Q: In case the Priv.Upg.CountePartyTimeout is not written, the ChanUpgradeOpen will anyway try to delete the Priv.Upg.CountePartyTimeout variable. What happens if this variable has not been set? Is this memory location accessible?  
 
-A: The keeper instatiate all the potential necessary memory when is initialized. Thus it will try to del an area of memory that has been allocation on the keepr initialization. No problem here.    
-
+A: The keeper instatiate all the potential necessary memory when is initialized. Thus it will try to del an area of memory that has been allocation on the keepr initialization. No problem here.
