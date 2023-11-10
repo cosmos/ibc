@@ -148,9 +148,11 @@ We model the accepted state transition as:
 
 - [q3.1] x [i4: [A, (c7; c8; c6; c10; c11; c13), ]] -> [q4]
 - [q3.1] x [i4: [A, (c7; c8; c6; c10; c11; c12), ]] -> [q5.2]
+- [q3.1] x [i10: [A, (c5; c17; c11), ]] -> [q9]
 
 - [q3.2] x [i4: [B, (c7; c8; c6; c10; c11; c12), ]] -> [q4]
 - [q3.2] x [i4: [B, (c7; c8; c6; c10; c11; c13), ]] -> [q5.1]
+- [q3.2] x [i10: [B, (c5; c17; c11), ]] -> [q9]
 
 - [q4] x [i5: [A, (c7; c8; c11; c13; c14), ]] -> [q4]
 - [q4] x [i5: [B, (c7; c8; c11; c13; c14), ]] -> [q4]
@@ -183,7 +185,7 @@ We model the accepted state transition as:
 
 Here we give a graphical representation of the finite state machine. 
 
-[FSM](https://excalidraw.com/#json=B36vSsO7NiXmsRpVrWNYw,T--rvN-vQ-Ys9S5ZWAevPg)
+[FSM](https://excalidraw.com/#json=SfFzJJ6gq2xXJw-9ujyND,CGandhxpauP1CmgEe3qJpQ)
 ![Picture](img_fsm/FSM_Upgrades.png)
 
 
@@ -203,8 +205,8 @@ To describe the different flows we will write the state transition matrix. The s
 | **q1.1**  |    | 1    |      | 1  |      |      |    |      |      |    |      |      |    |    |
 | **q1.2**  |    |      | 1    | 1  |      |      |    |      |      |    |      |      |    |    |
 | **q2**    |    |      |      |    | 1    | 1    |    |      |      |    |      |      |    |1   |
-| **q3.1**  |    |      |      |    |      |      | 1  |      | 1    |    |      |      |    |    |
-| **q3.2**  |    |      |      |    |      |      | 1  | 1    |      |    |      |      |    |    |
+| **q3.1**  |    |      |      |    |      |      | 1  |      | 1    |    |      |      |    |1   |
+| **q3.2**  |    |      |      |    |      |      | 1  | 1    |      |    |      |      |    |1   |
 | **q4**    |    |      |      |    |      |      |    | 1    | 1    |    |      |      |    |1   |
 | **q5.1**  |    |      |      |    |      |      |    | 1    |      | 1  |      |      |    |1   |
 | **q5.2**  |    |      |      |    |      |      |    |      |  1   | 1  |      |      |    |1   |
@@ -223,7 +225,7 @@ To describe the different flows we will write the state transition matrix. The s
 | **q1.2**  |    |      |      |    |      |      |    |      |      |    |      |      |    |    |
 | **q2**    |    |      |      |    |      | 1    |    |      |      |    |      |      |    |1   |
 | **q3.1**  |    |      |      |    |      |      |    |      |      |    |      |      |    |    |
-| **q3.2**  |    |      |      |    |      |      | 1  | 1    |      |    |      |      |    |    |
+| **q3.2**  |    |      |      |    |      |      | 1  | 1    |      |    |      |      |    |1   |
 | **q4**    |    |      |      |    |      |      | 1  | 1    | 1    |    |      |      |    |1   |
 | **q5.1**  |    |      |      |    |      |      |    | 1    |      | 1  |      |      |    |1   |
 | **q5.2**  |    |      |      |    |      |      |    |      | 1    | 1  |      |      |    |1   |
@@ -241,7 +243,7 @@ To describe the different flows we will write the state transition matrix. The s
 | **q1.1**  |    |      |      |    |      |      |    |      |      |    |      |      |    |    |
 | **q1.2**  |    |  1   |      |  1 |      |      |    |      |      |    |      |      |    |    |
 | **q2**    |    |      |      |    |   1  |      |    |      |      |    |      |      |    |1   |
-| **q3.1**  |    |      |      |    |      |      |  1 |      | 1    |    |      |      |    |    |
+| **q3.1**  |    |      |      |    |      |      |  1 |      | 1    |    |      |      |    |1   |
 | **q3.2**  |    |      |      |    |      |      |    |      |      |    |      |      |    |    |
 | **q4**    |    |      |      |    |      |      | 1  | 1    | 1    |    |      |      |    |1   |
 | **q5.1**  |    |      |      |    |      |      |    | 1    |      | 1  |      |      |    |1   |
