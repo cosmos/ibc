@@ -284,7 +284,7 @@ function isCompatibleUpgradeFields(
 // startFlushUpgradeHandshake will verify that the channel
 // is in a valid precondition for calling the startFlushUpgradeHandshake.
 // it will set the channel to flushing state.
-// it will store the upgrade timeout and the las packet sent in the upgrade state.
+// it will store the upgrade timeout in the upgrade state.
 function startFlushUpgradeHandshake(
   portIdentifier: Identifier,
   channelIdentifier: Identifier,
@@ -309,7 +309,7 @@ function startFlushUpgradeHandshake(
 }
 ```
 
-`openUpgradeHandshake` will open the channel and switch the existing channel parameters to the newly agreed-upon uprade channel fields.
+`openUpgradeHandshake` will open the channel and switch the existing channel parameters to the newly agreed-upon upgraded channel fields.
 
 ```typescript
 // openUpgradeHandshake will switch the channel fields 
