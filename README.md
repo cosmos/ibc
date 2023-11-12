@@ -1,6 +1,6 @@
 # IBC
 
-![banner](./assets/interchain-standards-image.jpg)
+![banner](./assets/interchain-standards.png)
 
 ## Synopsis
 
