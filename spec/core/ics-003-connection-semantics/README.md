@@ -268,7 +268,7 @@ function verifyMultihopMembership(
 ) {
   // the connectionEnd corresponding to the end of the multi-hop channel path (sending/counterparty chain).
   multihopConnectionEnd = abortTransactionUnless(getMultihopConnectionEnd(proof))
-  prefix = multihopConnectionEnd.GetCounterparty().GetPrefix()
+  prefix = multihopConnectionEnd.counterpartyPrefix
   client = queryClient(connection.clientIdentifier)
   consensusState = queryConsensusState(connection.clientIdentifier, height)
 
@@ -293,7 +293,7 @@ function verifyMultihopNonMembership(
 ) {
   // the connectionEnd corresponding to the end of the multi-hop channel path (sending/counterparty chain).
   multihopConnectionEnd = abortTransactionUnless(getMultihopConnectionEnd(proof))
-  prefix = multihopConnectionEnd.GetCounterparty().GetPrefix()
+  prefix = multihopConnectionEnd.counterpartyPrefix
   client = queryClient(connection.clientIdentifier)
   consensusState = queryConsensusState(connection.clientIdentifier, height)
 
