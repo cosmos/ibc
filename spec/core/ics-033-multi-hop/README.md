@@ -338,7 +338,7 @@ The following outlines the general proof verification steps specific to a multi-
    - i++
 8. Finally, prove the expected channel or packet commitment in `ConsensusState[N-2]` (sending chain consensus state) on `Chain[1]`
 
-For more details see [ICS4](https://github.com/cosmos/ibc/tree/main/spec/core/ics-004-channel-and-packet-semantics).
+For more details see [ICS4](../ics-004-channel-and-packet-semantics).
 
 ### Multi-hop Proof Verification Pseudo Code
 
