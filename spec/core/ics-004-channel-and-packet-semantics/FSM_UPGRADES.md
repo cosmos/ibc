@@ -98,7 +98,6 @@ Note that the column previous state, "ix" indicates a previous input. When we ex
 
 - i0: [A, (c0; c1; c2 ; c3), ]: ChanUpgradeInit --> initUpgradeHandshake
 - i0: [B, (c0; c1; c2 ; c3), ]: ChanUpgradeInit --> initUpgradeHandshake
-- i0: [A & B, (c0; c1  c2; c3), ]: ChanUpgradeInit --> initUpgradeHandshake
 - i0: [A, (c0; c1; c2; c3 incrementUpgradeSeq), ]: ChanUpgradeInit --> initUpgradeHandshake
 - i0: [B, (c0; c1; c2; c3 incrementUpgradeSeq), ]: ChanUpgradeInit --> initUpgradeHandshake
 - i1: [B, (c1; c2; c3; c4) , ]: ChanUpgradeTry --> initUpgradeHandshake
@@ -148,11 +147,13 @@ We model the accepted state transition as:
 - [`q0`] x [i0: [A & B, (c0; c1; c2; c3), ]] -> [`q2`]
   
 - [`q1.1`] x [i0: [A,(c0; c1; c2; c3; incrementUpgradeSeq), ]] -> [`q1.1`]
+- [`q1.1`] x [i0: [B,(c0; c1; c2 ; c3), ]]  -> [`q2`]
 - [`q1.1`] x [i1: [B, (c0; c1; c2; c3; c4), ]] -> [`q2`] x [i2: [B, (c4; c6; c7; c8; c9; c10), i1]] -> [`q3.2`]
   
 - [`q1.2`] x [i0: [B,(c0; c1; c2; c3; incrementUpgradeSeq), ]] -> [`q1.2`]
+- [`q1.2`] x [i0: [A,(c0; c1; c2 ; c3), ]]  -> [`q2`]  
 - [`q1.2`] x [i1: [A, (c0; c1; c2; c3; c4), ]] -> [`q2`] x [i2: [A, (c4; c6; c7; c8; c9; c10), i1]] -> [`q3.1`]
-  
+
 - [`q2`] x [i3: [A, (c5; c6; c7; c8; c9; c10), ]] -> [`q3.1`]
 - [`q2`] x [i3: [B, (c5; c6; c7; c8; c9; c10), ]] -> [`q3.2`]
 - [`q2`] x [i9: [A or B, c15, ]] -> [`q9`]
@@ -195,7 +196,7 @@ We model the accepted state transition as:
 
 Here we give a graphical representation of the finite state machine. 
 
-[FSM](https://excalidraw.com/#json=1KZM_2-MAfy7B0kELqjY9,fqGksHyqY8lww2B7SSpEcg)
+[FSM](https://excalidraw.com/#json=lu47JtW77qCM34vPPWmLR,TxBNmLkQXYuvSfvk_TDQeQ)
 ![Picture](img_fsm/FSM_Upgrades.png)
 
 We remember that the FSM do not represent the following cases:
