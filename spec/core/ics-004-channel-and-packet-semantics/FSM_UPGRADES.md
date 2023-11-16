@@ -1,26 +1,33 @@
-# Channel Upgradability Finite State Machines - WIP 
+# Channel Upgradability Finite State Machines - WIP
 
-This document is an attempt to abstract the [channel upgradability specs](https://github.com/cosmos/ibc/blob/main/spec/core/ics-004-channel-and-packet-semantics/UPGRADES.md) into finite state machines (FSMs). 
+This document is an attempt to abstract the [channel upgradability specs](https://github.com/cosmos/ibc/blob/main/spec/core/ics-004-channel-and-packet-semantics/UPGRADES.md) into finite state machines (FSMs).
 
-According to the specs the channel upgradiblity handshake protocol defines 5 subprotocols and 7 datagrams, exchanged between the parties during the upgrading process, that are reproduced here for the reader's convenience. 
- 
-- Sub-protocols: `initUpgradeHandshake`, `startFlushUpgradeHandshake`, `openUpgradeHandshake`, `cancelChannelUpgrade`, and `timeoutChannelUpgrade`. 
-- Datagrams:  `ChanUpgradeInit`,`ChanUpgradeTry`, `ChanUpgradeAck`, `ChanUpgradeConfirm`, `ChanUpgradeOpen`, `ChanUpgradeTimeout`, and `ChanUpgradeCancel`. 
+According to the specs the channel upgradiblity handshake protocol defines 7 datagrams, exchanged between the parties during the upgrade process, and 5 subprotocols that are reproduced here for the reader's convenience.
 
-Every defined datagram and subprotocol has an associated function. Once a datagram is received it will activate a datagram-function call which in turn may activate a subprotocol-function, based on the current state, conditions, input and flow. Additionally, we have some utility functions that can be activated by a datagram-function or subprotocol-function call. We will model utility functions as conditions.   
+- Datagrams:  `ChanUpgradeInit`, `ChanUpgradeTry`, `ChanUpgradeAck`, `ChanUpgradeConfirm`, `ChanUpgradeOpen`, `ChanUpgradeTimeout`, and `ChanUpgradeCancel`.
+- Sub-protocols: `initUpgradeHandshake`, `startFlushUpgradeHandshake`, `openUpgradeHandshake`, `cancelChannelUpgrade`, and `timeoutChannelUpgrade`.
+
+Each datagram and subprotocol in our system is linked to a specific function. When a datagram is received, it triggers the corresponding datagram function. This function, depending on the existing state, conditions, input, and flow, may then initiate a subprotocol function. In addition to these, there are utility functions that can be invoked either directly by a datagram function or through a subprotocol function. In our modeling, these utility functions will be represented as conditional elements, streamlining the process flow.
+
+To further streamline the complexity of the protocol, we will conduct two distinct analyses. The first will focus on the 'happy paths', covering scenarios where operations proceed as expected. The second analysis will be dedicated exclusively to errors and timeouts.
 
 ## Finite state machine modeling
 
-We consider a deterministic finite state machine as a 4-tuple (Q; C; Σ; δ) consisting of: 
+To directly jump to the diagrams click one of the following:
+
+- [HappyPathFSM](#Happy Path Finite State Machine Diagram)
+- [ErrorTimeoutFSM](#Error and Timeout Finite State Machine Diagram)
+
+We consider a deterministic finite state machine as a 4-tuple (Q; C; Σ; δ) consisting of:
 
 - a finite set of States Q
 - a finite set of Conditions C
 - a finite set of Accepted Inputs Σ
 - a finite set of Accepted States Transition δ
 
-### Q: States 
+### Q: States
 
-We start defining each state. For every state we list the status of Chain A and Chain B: ChannelState,ProvableStore,PrivateStore. 
+We begin by defining each state, ensuring that these states are consistent across all models. For every state, we will detail the status of both Chain A and Chain B, specifically focusing on three key aspects: ChannelState, ProvableStore, and PrivateStore.
 
 | State | ChannelState A      | ChannelState B      | ProvableStore A                                                | ProvableStore B                                                | Private Store A                        | Private Store B                        |
 |-------|---------------------|---------------------|----------------------------------------------------------------|----------------------------------------------------------------|----------------------------------------|----------------------------------------|
@@ -37,258 +44,423 @@ We start defining each state. For every state we list the status of Chain A and 
 | q7.1  | OPEN                | FLUSHING_COMPLETE   | Chan.UpgradeSequenceSet; Chan.VersionSet; Chan.ConnectionHopsSet; Chan.OrderingSet; | Chan.UpgradeSequenceSet; Upg.UpgradeSet; Upg.TimeoutSet; Upg.VersionSet; |                                        | Priv.Upg.CounterParty TimeoutSet 0..1       |
 | q7.2  | FLUSHING_COMPLETE   | OPEN                | Chan.UpgradeSequenceSet; Upg.UpgradeSet; Upg.TimeoutSet; Upg.VersionSet; | Chan.UpgradeSequenceSet; Chan.VersionSet; Chan.ConnectionHopsSet; Chan.OrderingSet; | Priv.Upg.CounterParty TimeoutSet 0..1    |                                        |
 | q8    | OPEN                | OPEN                | Chan.UpgradeSequenceSet; Chan.VersionSet; Chan.ConnectionHopsSet; Chan.OrderingSet; | Chan.UpgradeSequenceSet; Chan.VersionSet; Chan.ConnectionHopsSet; Chan.OrderingSet; |                                        |                                        |
-| q9    | OPEN or FLUSHING                | OPEN or FLUSHING                | Chan.UpgradeErrorSet 0..1 | Chan.UpgradeErrorSet 0..1 |                                        |                                        |
+| q9.1    | OPEN or FLUSHING                | OPEN or FLUSHING                | Chan.UpgradeErrorSet 0..1 | Chan.UpgradeErrorSet 0..1 |                                        |                                        |
+| q9.2    | FLUSHING or FLUSHING_COMPLETE             | FLUSHING or FLUSHING_COMPLETE       | Chan.UpgradeErrorSet 0..1 | Chan.UpgradeErrorSet 0..1 |                                        |                                        |
 
 Every time a state transition occurs, we should verify that in qX ChannelStateX, ProvableStateX and PrivateStoreX reflect what is written in this table.  
 
-### C: Conditions 
+### Happy Paths
 
-Below we list all the conditions that are verified during the protocol execution. In order for a state transition to occur, cX must evaluate to True. We assume that the protocol is only started if pc0 evaluates to True. 
+#### C: Conditions
 
+Below we list all the conditions that are verified during the protocol execution. For a state transition to occur, cX must evaluate to True.
+
+```typescript
 - pc0: BothChannelEnds === OPEN  
+```
 
+We assume that the protocol is only started if pc0 evaluates to True.
+
+```typescript
 - c0: isAuthorizedUpgrader === True
 - c1: proposedUpgradeFields.Version !==""
 - c2: proposedConnection !== null && proposedConnection.state === OPEN
 - c3: proposedConnection.supports(prposedUpgradeFields.ordering) === True
 - c4: Upg.UpgradeSet === False
 - c5: Upg.UpgradeSet === True
-- c6: isCompatibleUpgradeFields === True 
+- c6: isCompatibleUpgradeFields === True
 - c7: VerifyChannelState === True
 - c8: VerifyChannelUpgrade === True
 - c9: CounterPartyUpgradeSequence >= Chan.upgradeSequence === True
-- c10: Upg.TimeoutHeight !== 0 || Upg.TimeoutTimestamp !== 0 
+- c10: Upg.TimeoutHeight !== 0 || Upg.TimeoutTimestamp !== 0
 - c11: CounterPartyTimeoutNotExpired === True
 - c12: PendingInflightsPacket !== True
 - c13: PendingInflightsPacket === True
 - c14: Priv.Upg.CounterPartyTimeoutSet === True
-- c15: CounterPartyUpgradeSequence < Chan.upgradeSequence === True
 - c16: CounterPartyUpgradeSequence > Chan.upgradeSequence === True
+```
+
+#### Σ: Accepted Inputs
+
+We proceed to identify all potential inputs in our system. For example, consider the format:
+
+- ix.y: [Party, Condition, PreviousInput]: Datagram → subprotocolActivation -- extraDetails
+
+In this context, 'ix.y' represents the input identifier. Here, 'x' corresponds to the specific associated function, and 'y' denotes one of the potential paths that this function can take.
+
+The elements within the brackets — [Party, Condition, PreviousInput] — serve to define the scope of each input. 'Party' specifies the participants involved in the action, 'Condition' refers to any prerequisites that need to be met, and 'PreviousInput' indicates any prior inputs that are required for the current action.
+
+Therefore, we can encapsulate the inputs in our system as follows:
+
+```typescript
+- i0.1: [Party, Condition, ]: ChanUpgradeInit --> initUpgradeHandshake
+
+- i1.1: [Party, Condition, ]: ChanUpgradeTry --> initUpgradeHandshake
+- i1.2: [Party, Condition, PreviousInput]: ChanUpgradeTry --> startFlushUpgradeHandshake -- atomic
+- i1.3: [Party, Condition, ]: ChanUpgradeTry --> startFlushUpgradeHandshake
+
+- i2.1: [Party, Condition, ]: ChanUpgradeAck --> startFlushtUpgradeHandshake
+
+- i3.1: [Party, Condition, ]: ChanUpgradeConfirm
+- i3.2: [Party, Condition, PreviousInput]: ChanUpgradeConfirm --> OpenUpgradeHandshake -- atomic
+
+- i4.1: [Party, Condition, ]: ChanUpgradeOpen --> OpenUpgradeHandshake
+
+- i5.1: [Party, Condition, PreviousInput]: PacketHandler
+```
+
+Below, we list the expanded representation of the protocol inputs. 
+
+```typescript
+- i0.1: [A, (c0; c1; c2 ; c3), ]: ChanUpgradeInit --> initUpgradeHandshake
+- i0.1: [B, (c0; c1; c2 ; c3), ]: ChanUpgradeInit --> initUpgradeHandshake
+- i0.1: [A, (c0; c1; c2; c3; incrementUpgradeSeq), ]: ChanUpgradeInit --> initUpgradeHandshake
+- i0.1: [B, (c0; c1; c2; c3; incrementUpgradeSeq), ]: ChanUpgradeInit --> initUpgradeHandshake
+
+- i1.1: [B, (c1; c2; c3; c4) , ]: ChanUpgradeTry --> initUpgradeHandshake
+- i1.1: [A, (c1; c2; c3; c4) , ]: ChanUpgradeTry --> initUpgradeHandshake
+- i1.1: [A, (c1; c2; c3; c4; c16) , ]: ChanUpgradeTry --> initUpgradeHandshake -- SwitchToCounterPartyUpgSeq
+- i1.1: [B, (c1; c2; c3; c4; c16) , ]: ChanUpgradeTry --> initUpgradeHandshake -- SwitchToCounterPartyUpgSeq
+- i1.2: [A, (c5; c6; c7; c8; c9; c10), i1.1]: ChanUpgradeTry --> startFlushUpgradeHandshake -- atomic
+- i1.2: [B, (c5; c6; c7; c8; c9; c10), i1.1]: ChanUpgradeTry --> startFlushUpgradeHandshake -- atomic
+- i1.3: [A, (c5; c6; c7; c8; c9; c10), ]: ChanUpgradeTry --> startFlushUpgradeHandshake
+- i1.3: [B, (c5; c6; c7; c8; c9; c10), ]: ChanUpgradeTry --> startFlushUpgradeHandshake
+
+- i2.1: [A, (c7; c8; c6; c10; c11; c12), ]: ChanUpgradeAck --> startFlushtUpgradeHandshake
+- i2.1: [B, (c7; c8; c6; c10; c11; c13), ]: ChanUpgradeAck --> startFlushtUpgradeHandshake
+- i2.1: [B, (c7; c8; c6; c10; c11; c12), ]: ChanUpgradeAck --> startFlushtUpgradeHandshake
+- i2.1: [A, (c7; c8; c6; c10; c11; c13), ]: ChanUpgradeAck --> startFlushtUpgradeHandshake
+
+- i3.1: [A, (c7; c8; c11; c12), ]: ChanUpgradeConfirm
+- i3.1: [B, (c7; c8; c11; c12), ]: ChanUpgradeConfirm
+- i3.1: [B, (c7; c8; c11; c13; c14), ]: ChanUpgradeConfirm
+- i3.1: [A, (c7; c8; c11; c13; c14), ]: ChanUpgradeConfirm
+- i3.2: [A, , i3.1 ]: ChanUpgradeConfirm --> OpenUpgradeHandshake -- atomic
+- i3.2: [B, , i3.1 ]: ChanUpgradeConfirm --> OpenUpgradeHandshake -- atomic
+
+- i4.1: [A, c7 , ]: ChanUpgradeOpen --> OpenUpgradeHandshake
+- i4.1: [B, c7 , ]: ChanUpgradeOpen --> OpenUpgradeHandshake
+
+- i5.1: [A, (c11; c12; c14), ]: PacketHandler 
+- i5.1: [B, (c11; c12; c14), ]: PacketHandler 
+```
+
+#### δ: Accepted State Transitions
+
+In this section, we outline the state transitions within our protocol. These transitions describe how the protocol moves from one state to another based on various inputs. Each transition is formatted as follows:
+
+```typescript
+[initial_state] x [input[Party,Conditions,PreviousCall]] --> [final_state].
+// or 
+[initial_state] x [input[Party,Conditions,PreviousCall]] --> [intermediate_state] x [input[Party,Conditions,PreviousCall]] --> [final_state].
+```
+
+In these formats:
+
+- `[initial_state]` and `[final_state]` denote the starting and ending states.
+- `[intermediate_state]` is used when there's a step between the initial and final state.
+- `[input[Party, Conditions, PreviousCall]]` specifies the input details triggering the transition.
+
+The following are the defined state transitions for our protocol:
+
+```typescript
+- [`q0`] x [i0.1: [A,(c0; c1; c2 ; c3),]] -> [`q1.1`]
+- [`q0`] x [i0.1: [B,(c0; c1; c2 ; c3), ]] -> [`q1.2`]
+
+- [`q1.1`] x [i0.1: [A,(c0; c1; c2; c3; incrementUpgradeSeq), ]] -> [`q1.1`]
+- [`q1.1`] x [i0.1: [B,(c0; c1; c2 ; c3), ]]  -> [`q2`]
+- [`q1.1`] x [i1.1: [B, (c0; c1; c2; c3; c4), ]] -> [`q2`] x [i1.2: [B, (c4; c6; c7; c8; c9; c10), i1.1]] -> [`q3.2`]
+- [`q1.1`] x [i1.1: [B, (c0; c1; c2; c3; c4; c16), ]] -> [`q2`] x [i1.2: [B, (c4; c6; c7; c8; c9; c10), i1.1]] -> [`q3.2`]
+
+- [`q1.2`] x [i0.1: [B,(c0; c1; c2; c3; incrementUpgradeSeq), ]] -> [`q1.2`]
+- [`q1.2`] x [i0.1: [A,(c0; c1; c2 ; c3), ]]  -> [`q2`]  
+- [`q1.2`] x [i1.1: [A, (c0; c1; c2; c3; c4), ]] -> [`q2`] x [i1.2: [A, (c4; c6; c7; c8; c9; c10), i1.1]] -> [`q3.1`]
+- [`q1.2`] x [i1.1: [A, (c0; c1; c2; c3; c4; c16), ]] -> [`q2`] x [i1.2: [A, (c4; c6; c7; c8; c9; c10), i1.1]] -> [`q3.1`]
+
+- [`q2`] x [i1.3: [A, (c5; c6; c7; c8; c9; c10), ]] -> [`q3.1`]
+- [`q2`] x [i1.3: [B, (c5; c6; c7; c8; c9; c10), ]] -> [`q3.2`]
+
+- [`q3.1`] x [i2.1: [B, (c7; c8; c6; c10; c11; c13), ]] -> [`q4`]
+- [`q3.1`] x [i2.1: [B, (c7; c8; c6; c10; c11; c12), ]] -> [`q5.2`]
+
+- [`q3.2`] x [i2.1: [A, (c7; c8; c6; c10; c11; c12), ]] -> [`q4`]
+- [`q3.2`] x [i2.1: [A, (c7; c8; c6; c10; c11; c13), ]] -> [`q5.1`]
+
+- [`q4`] x [i3.1: [A, (c7; c8; c11; c13; c14), ]] -> [`q4`]
+- [`q4`] x [i3.1: [B, (c7; c8; c11; c13; c14), ]] -> [`q4`]
+- [`q4`] x [i3.1: [A, (c7; c8; c11; c12), ]] -> [`q5.1`]
+- [`q4`] x [i5.1: [A, (c11; c12; c14), ]] -> [`q5.1`]
+- [`q4`] x [i3.1: [B, (c7; c8; c11; c12), ]] -> [`q5.2`]
+- [`q4`] x [i5.1: [B, (c11; c12; c14), ]] -> [`q5.2`]
+
+- [`q5.1`] x [i3.1: [B, (c7; c8; c11; c13; c14), ]] -> [`q5.1`] x [i5.1: [B, (c11; c12; c14), ]] -> [`q6`]
+- [`q5.1`] x [i3.1: [B, (c7; c8; c11; c12), ]] -> [`q6`] x [i3.2: [B, , i3.1 ]] -> [`q7.2`]
+
+- [`q5.2`] x [i3.1: [A, (c7; c8; c11; c13; c14), ]] -> [`q5.2`] x [i5.1: [A, (c11; c12; c14), ]] -> [`q6`]
+- [`q5.2`] x [i3.1: [A, (c7; c8; c11; c12), ]] -> [`q6`] x [i3.2: [A, , i3.1 ]] -> [`q7.1`]
+
+- [`q6`] x [i4.1: [A, c7 ,]] -> [`q7.1`]
+- [`q6`] x [i4.1: [B, c7 ,]] -> [`q7.2`]
+
+- [`q7.1`] x [i4.1: [B, c7 ,]] -> [`q8`]
+- [`q7.2`] x [i4.1: [A, c7 ,]] -> [`q8`]
+```
+
+This list details how our protocol responds to different inputs, transitioning between its various states.
+
+#### Happy Path Transition Matrixs
+
+The protocol encompasses three main flows:
+
+1. A & B start the process (Crossing Hello).
+2. A starts the process and B follows.
+3. B starts the process and A follows.
+
+To illustrate these flows, we use a state transition matrix. This matrix helps in visualizing the transitions between different states in each flow. The transitions are represented as follows:
+
+- '1' indicates a direct, final transition.
+- '(1)' denotes a transient state, which leads to another subsequent state.
+- '1,(1)' signifies that both a final and a transient transition are possible from the current state.
+- '1(qx)' indicates an inderect, final transition happening via state qx.
+
+In the matrix:
+
+- A cell marked with '1' shows a possible transition between states.
+- Empty cells signify that no direct transition is possible between the respective states.
+
+This matrix structure provides a clear overview of how each state can evolve into another, depending on the specific flow being followed.
+
+##### Flow 0:  A & B start the process (Crossing Hello)
+
+| States    | q0 | q1.1 | q1.2 | q2    | q3.1 | q3.2 | q4 | q5.1 | q5.2 | q6   | q7.1 | q7.2 | q8 |
+|-----------|----|------|------|-------|------|------|----|------|------|------|------|------|----|
+| **q0**    |    | 1    | 1    |       |      |      |    |      |      |      |      |      |    |
+| **q1.1**  |    | 1    |      | 1,(1) |      |1(q2) |    |      |      |      |      |      |    |
+| **q1.2**  |    |      | 1    | 1,(1) |1(q2) |      |    |      |      |      |      |      |    |
+| **q2**    |    |      |      |       | 1    | 1    |    |      |      |      |      |      |    |
+| **q3.1**  |    |      |      |       |      |      |  1 |      | 1    |      |      |      |    |
+| **q3.2**  |    |      |      |       |      |      |  1 |  1   |      |      |      |      |    |
+| **q4**    |    |      |      |       |      |      |  1 | 1    | 1    |      |      |      |    |
+| **q5.1**  |    |      |      |       |      |      |    | 1    |      | 1,(1)|      |1(q6) |    |
+| **q5.2**  |    |      |      |       |      |      |    |      |  1   | 1,(1)|1(q6) |      |    |
+| **q6**    |    |      |      |       |      |      |    |      |      |      | 1    | 1    |    |
+| **q7.1**  |    |      |      |       |      |      |    |      |      |      |      |      | 1  |
+| **q7.2**  |    |      |      |       |      |      |    |      |      |      |      |      | 1  |
+
+##### Flow 1: A starts the process and B follows
+
+This flow describes the scenario where Party A initiates the process, followed by Party B's actions. The state transition matrix for this flow is:
+
+| States    | q0 | q1.1 | q1.2 | q2    | q3.1 | q3.2 | q4 | q5.1 | q5.2 | q6   | q7.1| q7.2 | q8 |
+|-----------|----|------|------|-------|------|------|----|------|------|------|-----|------|----|
+| **q0**    |    | 1    |      |       |      |      |    |      |      |      |     |      |    |
+| **q1.1**  |    | 1    |      |   (1) |      |1(q2) |    |      |      |      |     |      |    |
+| **q1.2**  |    |      |      |       |      |      |    |      |      |      |     |      |    |
+| **q2**    |    |      |      |       |      | 1    |    |      |      |      |     |      |    |
+| **q3.1**  |    |      |      |       |      |      |    |      |      |      |     |      |    |
+| **q3.2**  |    |      |      |       |      |      | 1  | 1    |      |      |     |      |    |
+| **q4**    |    |      |      |       |      |      | 1  | 1    | 1    |      |     |      |    |
+| **q5.1**  |    |      |      |       |      |      |    | 1    |      | 1,(1)|     |1(q6) |    |
+| **q5.2**  |    |      |      |       |      |      |    |      |      | 1    |     |      |    |
+| **q6**    |    |      |      |       |      |      |    |      |      |      | 1   |1     |    |
+| **q7.1**  |    |      |      |       |      |      |    |      |      |      |     |      | 1  |
+| **q7.2**  |    |      |      |       |      |      |    |      |      |      |     |      | 1  |
+
+#### Flow 2: B starts the process and A follows
+
+This flow represents the situation where Party B initiates the process, with Party A following suit. The state transition matrix for this flow is:
+
+| States    | q0 | q1.1 | q1.2 | q2    | q3.1 | q3.2 | q4 | q5.1 | q5.2 | q6   | q7.1| q7.2 | q8 |
+|-----------|----|------|------|-------|------|------|----|------|------|------|-----|------|----|
+| **q0**    |    |      |  1   |       |      |      |    |      |      |      |     |      |    |
+| **q1.1**  |    |      |      |       |      |      |    |      |      |      |     |      |    |
+| **q1.2**  |    |      | 1    |  (1)  | 1(q2)|      |    |      |      |      |     |      |    |
+| **q2**    |    |      |      |       |   1  |      |    |      |      |      |     |      |    |
+| **q3.1**  |    |      |      |       |      |      |  1 |      | 1    |      |     |      |    |
+| **q3.2**  |    |      |      |       |      |      |    |      |      |      |     |      |    |
+| **q4**    |    |      |      |       |      |      | 1  | 1    | 1    |      |     |      |    |
+| **q5.1**  |    |      |      |       |      |      |    |      |      | 1    |     |      |    |
+| **q5.2**  |    |      |      |       |      |      |    |      | 1    | 1,(1)|     |1(q6) |    |
+| **q6**    |    |      |      |       |      |      |    |      |      |      | 1   |1     |    |
+| **q7.1**  |    |      |      |       |      |      |    |      |      |      |     |      | 1  |
+| **q7.2**  |    |      |      |       |      |      |    |      |      |      |     |      | 1  |
+
+#### Happy Path Finite State Machine Diagram
+
+//Todo Description
+Here we give a graphical representation of the "happy paths" finite state machine.
+
+[FSM](https://excalidraw.com/#json=A4nB3_iZeT5jdhsXRSz3x,aBm-OM6FI6Q545CCkwaCmg)
+![Picture](img_fsm/FSM_Upgrades.png)
+
+### Errors and Timeout Model
+
+To simplify our approach, we are modeling protocol errors and timeouts separately. In this model, we introduce two new states: q9.1, which represents the timeout state, and q9.2, which signifies the error state. Both states, q9.1 and q9.2, are reached when Chain A or Chain B records an error receipt. This error receipt is generated in response to either an error or a timeout occurrence. Once in either q9.x state, the counterpart chain is able to reset its channelEnd back to the q0 parameters, while maintaining the Chan.UpgradeSequence number at its most recent, albeit unsuccessful, upgrade value. The key distinction between q9.1 and q9.2 lies in their triggers: q9.1 can be reached through a distinct datagram-associated function other than ChanUpgradeTimeout, whereas reaching q9.2 is exclusively triggered by a ChanUpgradeTimeout.
+
+#### C: Errors and Timeout Conditions
+
+We list here all the conditions involved in the state transitions related to timeout and errors.
+
+```typescript
+// Errors and timeout Conditions:
+- c0: isAuthorizedUpgrader === True
+- c5: Upg.UpgradeSet === True
+- c7: VerifyChannelState === True
+- c15: CounterPartyUpgradeSequence < Chan.upgradeSequence === True
 - c17: Upg.TimeoutExpired === True
 - c18: VerifyChannelUpgradeError === True
 - c19: errorReceipt.sequence >= Chan.UpgradeSequence === True
 - c20: isCompatibleUpgradeFields === False
 - c21: CounterPartyTimeoutExpired === True
+```
 
-### Σ: Accepted Inputs
+#### Σ: Error and Timeout Accepted Inputs
 
-We now identify all the possible inputs. 
-Given: 
+We can summarize the inputs as:
 
-- ix: [Party, Condition, PreviosInput]: Datagram --> subprotocolActivation -- extraDetails 
+```typescript
+- i0.1: [Party, , ]: ChanUpgradeInit --> initUpgradeHandshake
 
-Each input identifier ix corresponds to a specific action, and the placeholders [Party, Condition, PreviousInput] capture who is involved in the action, any conditions that must be satisfied, and any previous input that must have occurred, respectively. 
+- i1.1: [Party, , ]: ChanUpgradeTry --> initUpgradeHandshake
+- i1.2: [Party, Condition, PreviousInput]: ChanUpgradeTry --> startFlushUpgradeHandshake -- atomic
+- i1.3: [Party, Condition, ]: ChanUpgradeTry --> startFlushUpgradeHandshake
+- i1.4: [Party, Condition, ]: ChanUpgradeTry --> initUpgradeHandshake --> writeError
+- i1.5: [Party, Condition, ]: ChanUpgradeTry --> writeError
 
-Thus we can summarize the inputs as: 
+- i2.1: [Party, Condition, ]: ChanUpgradeAck --> startFlushtUpgradeHandshake
+- i2.2: [Party, Condition, ]: ChanUpgradeAck --> restoreChannel
+- i2.3: [Party, Condition, ]: ChanUpgradeAck --> startFlushtUpgradeHandshake --> restoreChannel
+- i2.4: [Party, Condition, ]: ChanUpgradeAck --> startFlushtUpgradeHandshake --> CallBackError
 
-- i0: [Party, , ]: ChanUpgradeInit --> initUpgradeHandshake
-- i1: [Party, , ]: ChanUpgradeTry --> initUpgradeHandshake
-- i2: [Party, Condition, PreviousInput]: ChanUpgradeTry --> startFlushUpgradeHandshake -- atomic
-- i3: [Party, Condition, ]: ChanUpgradeTry --> startFlushUpgradeHandshake
-- i4: [Party, Condition, ]: ChanUpgradeAck --> startFlushtUpgradeHandshake
-- i5: [Party, Condition, ]: ChanUpgradeConfirm
-- i6: [Party, , PreviousInput]: PacketHandler 
-- i7: [Party, Condition, PreviousInput]: ChanUpgradeConfirm --> OpenUpgradeHandshake -- atomic
-- i8: [Party, , ]: ChanUpgradeOpen --> OpenUpgradeHandshake
-- i9: [Party,Conditions , ]: ChanUpgradeCancel --> restoreChannel
-- i10: [Party,Conditions , ]: ChanUpgradeTimeout --> restoreChannel
+- i3.1: [Party, Condition, ]: ChanUpgradeConfirm
+- i3.2: [Party, Condition, PreviousInput]: ChanUpgradeConfirm --> OpenUpgradeHandshake -- atomic
+- i3.3: [Party, Condition, ]: ChanUpgradeConfirm --> restoreChannel
 
-Below, we list the expanded representation of the protocol inputs. 
-Note that the column previous state, "ix" indicates a previous input. When we express this as i5(c13) we assume that this is the input i5 having the same Party of the new input that is enforcing the c13 condition. 
+- i4.1: [Party, , ]: ChanUpgradeOpen --> OpenUpgradeHandshake
 
-- i0: [A, (c0; c1; c2 ; c3), ]: ChanUpgradeInit --> initUpgradeHandshake
-- i0: [B, (c0; c1; c2 ; c3), ]: ChanUpgradeInit --> initUpgradeHandshake
-- i0: [A, (c0; c1; c2; c3 incrementUpgradeSeq), ]: ChanUpgradeInit --> initUpgradeHandshake
-- i0: [B, (c0; c1; c2; c3 incrementUpgradeSeq), ]: ChanUpgradeInit --> initUpgradeHandshake
-- i1: [B, (c1; c2; c3; c4) , ]: ChanUpgradeTry --> initUpgradeHandshake
-- i1: [A, (c1; c2; c3; c4) , ]: ChanUpgradeTry --> initUpgradeHandshake
-- i1: [A, (c1; c2; c3; c4; c16) , ]: ChanUpgradeTry --> initUpgradeHandshake -- SwitchToCounterPartyUpgSeq
-- i1: [B, (c1; c2; c3; c4; c16) , ]: ChanUpgradeTry --> initUpgradeHandshake -- SwitchToCounterPartyUpgSeq
-- i2: [A, (c5; c6; c7; c8; c9; c10), i1]: ChanUpgradeTry --> startFlushUpgradeHandshake -- atomic
-- i2: [B, (c5; c6; c7; c8; c9; c10), i1]: ChanUpgradeTry --> startFlushUpgradeHandshake -- atomic
-- i3: [A, (c5; c6; c7; c8; c9; c10), ]: ChanUpgradeTry --> startFlushUpgradeHandshake
-- i3: [B, (c5; c6; c7; c8; c9; c10), ]: ChanUpgradeTry --> startFlushUpgradeHandshake
-- i4: [A, (c7; c8; c6; c10; c11; c12), ]: ChanUpgradeAck --> startFlushtUpgradeHandshake
-- i4: [B, (c7; c8; c6; c10; c11; c13), ]: ChanUpgradeAck --> startFlushtUpgradeHandshake
-- i4: [B, (c7; c8; c6; c10; c11; c12), ]: ChanUpgradeAck --> startFlushtUpgradeHandshake
-- i4: [A, (c7; c8; c6; c10; c11; c13), ]: ChanUpgradeAck --> startFlushtUpgradeHandshake
-- i5: [A, (c7; c8; c11; c12), ]: ChanUpgradeConfirm
-- i5: [B, (c7; c8; c11; c12), ]: ChanUpgradeConfirm
-- i5: [B, (c7; c8; c11; c13; c14), ]: ChanUpgradeConfirm
-- i5: [A, (c7; c8; c11; c13; c14), ]: ChanUpgradeConfirm
-- i6: [A, (c11; c12; c14), ]: PacketHandler 
-- i6: [B, (c11; c12; c14), ]: PacketHandler 
-- i7: [A, , i5(c12)]: ChanUpgradeConfirm --> OpenUpgradeHandshake -- atomic
-- i7: [B, , i5(c12)]: ChanUpgradeConfirm --> OpenUpgradeHandshake -- atomic
-- i8: [A, c7 , ]: ChanUpgradeOpen --> OpenUpgradeHandshake
-- i8: [B, c7 , ]: ChanUpgradeOpen --> OpenUpgradeHandshake
-- i9: [A or B, c15, ]: WriteError   ChanUpgradeCancel --> restoreChannel
-- i10: [A or B, (c5; c17 )] : ChanUpgradeTimeout --> restoreChannel
-- i10: [A, (c5; c17 )] : ChanUpgradeTimeout --> restoreChannel
-- i10: [B, (c5; c17 )] : ChanUpgradeTimeout --> restoreChannel
+- i5.1: [Party, , PreviousInput]: PacketHandler
 
-Note that the current model do not represent the following cases:
+- i6.1: [Party, Condition, ] : ChanUpgradeCancel --> restoreChannel
 
-- ChanUpgradeAck --> restoreChannel - c20 : UpgradeFields are not compatible
-- ChanUpgradeAck --> restoreChannel - c21: TimeoutCounterParty exceeded 
-- ChanUpgradeConfirm --> restoreChannel - c21: TimeoutCounterParty exceeded
+- i7.1: [Party, Condition, ] : ChanUpgradeTimeout --> restoreChannel
+```
 
-### δ: Accepted States Transition
+Below, we list the expanded representation of the protocol inputs.
 
-We model the accepted state transition as: 
+```typescript
+- i1.4: [A or B, c15, ]: ChanUpgradeTry --> initUpgradeHandshake --> WriteError -- CounterPartySequenceOutOfSynch
+- i1.5: [A or B, c15, ]: ChanUpgradeTry --> WriteError -- CounterPartySequenceOutOfSynch
 
-1. [initial_state] x [input[Party,Conditions,PreviousCall]] -> [final_state]. 
-2. [initial_state] x [input[Party,Conditions,PreviousCall]] -> [intermediate_state] x [input[Party,Conditions,PreviousCall]] -> [final_state]. 
+- i2.2: [A, c20 , ]: ChanUpgradeAck --> restoreChannel -- NotCompatibleUpgradeFields 
+- i2.2: [B, c20 , ]: ChanUpgradeAck --> restoreChannel -- NotCompatibleUpgradeFields 
+- i2.3: [A or B, c21 , ]: ChanUpgradeAck --> restoreChannel -- CounterPartyTimeoutExceeded
+- i2.4: [A or B, ,]: ChanUpgradeAck --> restoreChannel -- callBackError
+- i2.4: [A, ,]: ChanUpgradeAck --> restoreChannel -- callBackError
+- i2.4: [B, ,]: ChanUpgradeAck --> restoreChannel -- callBackError
 
----
+- i3.3: [A or B, c21 , ]: ChanUpgradeConfirm --> restoreChannel -- CounterPartyTimeoutExceeded 
+- i3.3: [A, c21 , ]: ChanUpgradeConfirm --> restoreChannel -- CounterPartyTimeoutExceeded 
+- i3.3: [B, c21 , ]: ChanUpgradeConfirm --> restoreChannel -- CounterPartyTimeoutExceeded 
 
-- [`q0`] x [i0: [A,(c0; c1; c2 ; c3),]] -> [`q1.1`]
-- [`q0`] x [i0: [B,(c0; c1; c2 ; c3), ]] -> [`q1.2`]
-- [`q0`] x [i0: [A & B, (c0; c1; c2; c3), ]] -> [`q2`]
-  
-- [`q1.1`] x [i0: [A,(c0; c1; c2; c3; incrementUpgradeSeq), ]] -> [`q1.1`]
-- [`q1.1`] x [i0: [B,(c0; c1; c2 ; c3), ]]  -> [`q2`]
-- [`q1.1`] x [i1: [B, (c0; c1; c2; c3; c4), ]] -> [`q2`] x [i2: [B, (c4; c6; c7; c8; c9; c10), i1]] -> [`q3.2`]
-  
-- [`q1.2`] x [i0: [B,(c0; c1; c2; c3; incrementUpgradeSeq), ]] -> [`q1.2`]
-- [`q1.2`] x [i0: [A,(c0; c1; c2 ; c3), ]]  -> [`q2`]  
-- [`q1.2`] x [i1: [A, (c0; c1; c2; c3; c4), ]] -> [`q2`] x [i2: [A, (c4; c6; c7; c8; c9; c10), i1]] -> [`q3.1`]
+- i6.1: [A or B, (c0; c5; c18; c19), ] : ChanUpgradeCancel --> restoreChannel
 
-- [`q2`] x [i3: [A, (c5; c6; c7; c8; c9; c10), ]] -> [`q3.1`]
-- [`q2`] x [i3: [B, (c5; c6; c7; c8; c9; c10), ]] -> [`q3.2`]
-- [`q2`] x [i9: [A or B, c15, ]] -> [`q9`]
-  
-- [`q3.1`] x [i4: [A, (c7; c8; c6; c10; c11; c13), ]] -> [`q4`]
-- [`q3.1`] x [i4: [A, (c7; c8; c6; c10; c11; c12), ]] -> [`q5.2`]
-- [`q3.1`] x [i10: [A, (c5; c17; c11), ]] -> [`q9`]
-  
-- [`q3.2`] x [i4: [B, (c7; c8; c6; c10; c11; c12), ]] -> [`q4`]
-- [`q3.2`] x [i4: [B, (c7; c8; c6; c10; c11; c13), ]] -> [`q5.1`]
-- [`q3.2`] x [i10: [B, (c5; c17; c11), ]] -> [`q9`]
-  
-- [`q4`] x [i5: [A, (c7; c8; c11; c13; c14), ]] -> [`q4`]
-- [`q4`] x [i5: [B, (c7; c8; c11; c13; c14), ]] -> [`q4`]
-- [`q4`] x [i5: [A, (c7; c8; c11; c12), ]] -> [`q5.1`]
-- [`q4`] x [i6: [A, (c11; c12; c14), ]] -> [`q5.1`]
-- [`q4`] x [i5: [B, (c7; c8; c11; c12), ]] -> [`q5.2`]
-- [`q4`] x [i6: [B, (c11; c12; c14), ]] -> [`q5.2`]
-- [`q4`] x [i10: [A or B, (c5; c17; c11), ]] -> [`q9`]
-  
-- [`q5.1`] x [i5: [B, (c7; c8; c11; c13; c14), ]] -> [`q5.1`]
-- [`q5.1`] x [i6: [B, (c11; c12), i5(c13)]] -> [`q6`]
-- [`q5.1`] x [i5: [B, (c7; c8; c11; c12), ]] -> [`q6`] x [i7: [B, , i5(c12)]] -> [`q7.2`]
-- [`q5.1`] x [i10: [A, (c5; c17; c11), ]] -> [`q9`]
-  
-- [`q5.2`] x [i5: [A, (c7; c8; c11; c13; c14), ]] -> [`q5.2`]
-- [`q5.2`] x [i6: [A, (c11; c12), i5(c13)]] -> [`q6`]
-- [`q5.2`] x [i5: [A, (c7; c8; c11; c12), ]] -> [`q6`] x [i7: [A, , i5(c12)]] -> [`q7.1`]
-- [`q5.2`] x [i10: [B, (c5; c17; c11), ]] -> [`q9`]
-  
-- [`q6`] x [i8: [A, c7 ,]] -> [`q7.1`]
-- [`q6`] x [i8: [B, c7 ,]] -> [`q7.2`]
-  
-- [`q7.1`] x [i8: [B, c7 ,]] -> [`q8`]
-- [`q7.2`] x [i8: [A, c7 ,]] -> [`q8`]
-  
-- [`q9`] x [i9: [A or B, c15, ]] -> [`q0`]
+- i7.1: [A or B, (c5; c7; c17), ] : ChanUpgradeTimeout --> restoreChannel
+- i7.1: [A, (c5; c7; c17), ] : ChanUpgradeTimeout --> restoreChannel
+- i7.1: [B, (c5; c7; c17), ] : ChanUpgradeTimeout --> restoreChannel
+```
 
-### Finite State Machine Diagram
+#### δ: Error and Timeout Accepted States Transition
 
-Here we give a graphical representation of the finite state machine. 
+```typescript
+// Errors
+- [`q1.1`] -> [`q2`] -> x[i1.4: [A or B, c15, ]] -> [`q9.1`]
+- [`q1.2`] -> [`q2`] -> x[i1.4: [A or B, c15, ]] -> [`q9.1`]
 
-[FSM](https://excalidraw.com/#json=lu47JtW77qCM34vPPWmLR,TxBNmLkQXYuvSfvk_TDQeQ)
-![Picture](img_fsm/FSM_Upgrades.png)
+- [`q2`] -> x[i1.5: [A or B, c15, ]] -> [`q9.1`]
 
-We remember that the FSM do not represent the following cases:
+- [`q3.1`] -> x[i2.2: [B, c20, ]] -> [`q9.1`]
+- [`q3.1`] -> [`q4`] -> x[i2.3: [A or B, c21, ]] -> [`q9.1`]
+- [`q3.1`] ->[`q4`] -> x[i2.4: [A or B, , ]] -> [`q9.1`]
+- [`q3.1`] -> [`q5.2`] -> x[i2.4: [B, , ]] -> [`q9.1`]
 
-- ChanUpgradeAck --> restoreChannel - c20 : UpgradeFields are not compatible
-- ChanUpgradeAck --> restoreChannel - c21: TimeoutCounterParty exceeded 
-- ChanUpgradeConfirm --> restoreChannel - c21: TimeoutCounterParty exceeded
+- [`q3.2`] -> x[i2.2: [A, c20, ]] -> [`q9.1`]
+- [`q3.2`] ->[`q4`] -> x[i2.3: [A or B, c21, ]] -> [`q9.1`]
+- [`q3.2`] ->[`q4`] -> x[i2.4: [A or B, , ]] -> [`q9.1`]
+- [`q3.2`] -> [`q5.1`] -> x[i2.4: [A, , ]] -> [`q9.1`]
 
-All of these procedure will bring back the channel to its original parameters. 
+- [`q4`] -> x[i3.3: [A or B, c21, ]] -> [`q9.1`]
 
-### Flows
+- [`q5.1`] -> x[i3.3: [B, c21, ]] -> [`q9.1`]
 
-The protocol defines 3 Main possible flows: 
+- [`q5.2`] -> x[i3.3: [A, c21, ]] -> [`q9.1`]
 
-- A & B start the process (Crossing Hello). 
-- A starts the process and B follows.
-- B starts the process and A follows.
+// Timeout
+- [`q3.1`] x [i7.1: [A, (c5; c17; c11), ]] -> [`q9.2`]
 
-To describe the different flows we will write the state transition matrix. The state transition matrix has '1' indicating a possible transition and empty cells where no transition occurs. Empty cells indicate no direct transition is possible between those states.
+- [`q3.2`] x [i7.1: [B, (c5; c17; c11), ]] -> [`q9.2`]
 
-#### Flow 0:  A & B start the process (Crossing Hello)
+- [`q4`] x [i7.1: [A or B, (c5; c17; c11), ]] -> [`q9.2`]
 
-| States    | q0 | q1.1 | q1.2 | q2 | q3.1 | q3.2 | q4 | q5.1 | q5.2 | q6 | q7.1 | q7.2 | q8 | q9 |
-|-----------|----|------|------|----|------|------|----|------|------|----|------|------|----|----|
-| **q0**    |    | 1    | 1    | 1  |      |      |    |      |      |    |      |      |    |    |
-| **q1.1**  |    | 1    |      | 1  |      |      |    |      |      |    |      |      |    |    |
-| **q1.2**  |    |      | 1    | 1  |      |      |    |      |      |    |      |      |    |    |
-| **q2**    |    |      |      |    | 1    | 1    |    |      |      |    |      |      |    |1   |
-| **q3.1**  |    |      |      |    |      |      | 1  |      | 1    |    |      |      |    |1   |
-| **q3.2**  |    |      |      |    |      |      | 1  | 1    |      |    |      |      |    |1   |
-| **q4**    |    |      |      |    |      |      |    | 1    | 1    |    |      |      |    |1   |
-| **q5.1**  |    |      |      |    |      |      |    | 1    |      | 1  |      |      |    |1   |
-| **q5.2**  |    |      |      |    |      |      |    |      |  1   | 1  |      |      |    |1   |
-| **q6**    |    |      |      |    |      |      |    |      |      |    | 1    |  1   |    |    |
-| **q7.1**  |    |      |      |    |      |      |    |      |      |    |      |      | 1  |    |
-| **q7.2**  |    |      |      |    |      |      |    |      |      |    |      |      | 1  |    |
-| **q8**    |    |      |      |    |      |      |    |      |      |    |      |      |    |    |
-| **q9**    | 1  |      |      |    |      |      |    |      |      |    |      |      |    |    |
+- [`q5.1`] x [i7.1: [A or B, (c5; c17; c11), ]] -> [`q9.2`]
 
-#### Flow 1: A starts the process and B follows
+- [`q5.2`] x [i7.1: [A or B, (c5; c17; c11), ]] -> [`q9.2`]
 
-| States    | q0 | q1.1 | q1.2 | q2 | q3.1 | q3.2 | q4 | q5.1 | q5.2 | q6 | q7.1 | q7.2 | q8 | q9 |
-|-----------|----|------|------|----|------|------|----|------|------|----|------|------|----|----|
-| **q0**    |    | 1    |      |    |      |      |    |      |      |    |      |      |    |    |
-| **q1.1**  |    | 1    |      | 1  |      |      |    |      |      |    |      |      |    |    |
-| **q1.2**  |    |      |      |    |      |      |    |      |      |    |      |      |    |    |
-| **q2**    |    |      |      |    |      | 1    |    |      |      |    |      |      |    |1   |
-| **q3.1**  |    |      |      |    |      |      |    |      |      |    |      |      |    |    |
-| **q3.2**  |    |      |      |    |      |      | 1  | 1    |      |    |      |      |    |1   |
-| **q4**    |    |      |      |    |      |      | 1  | 1    | 1    |    |      |      |    |1   |
-| **q5.1**  |    |      |      |    |      |      |    | 1    |      | 1  |      |      |    |1   |
-| **q5.2**  |    |      |      |    |      |      |    |      | 1    | 1  |      |      |    |1   |
-| **q6**    |    |      |      |    |      |      |    |      |      |    | 1    | 1    |    |    |
-| **q7.1**  |    |      |      |    |      |      |    |      |      |    |      |      | 1  |    |
-| **q7.2**  |    |      |      |    |      |      |    |      |      |    |      |      | 1  |    |
-| **q8**    |    |      |      |    |      |      |    |      |      |    |      |      |    |    |
-| **q9**    | 1  |      |      |    |      |      |    |      |      |    |      |      |    |    |
+- [`q6`] x [i7.1: [A or B, (c5; c17; c11), ]] -> [`q9.2`]
 
-#### Flow 2: B starts the process and A follows
+- [`q9.2`] x [i6.1: [A or B, c15, ]] -> [`q0`]
+```
 
-| States    | q0 | q1.1 | q1.2 | q2 | q3.1 | q3.2 | q4 | q5.1 | q5.2 | q6 | q7.1 | q7.2 | q8 | q9 |
-|-----------|----|------|------|----|------|------|----|------|------|----|------|------|----|----|
-| **q0**    |    |      |  1   |    |      |      |    |      |      |    |      |      |    |    |
-| **q1.1**  |    |      |      |    |      |      |    |      |      |    |      |      |    |    |
-| **q1.2**  |    |  1   |      |  1 |      |      |    |      |      |    |      |      |    |    |
-| **q2**    |    |      |      |    |   1  |      |    |      |      |    |      |      |    |1   |
-| **q3.1**  |    |      |      |    |      |      |  1 |      | 1    |    |      |      |    |1   |
-| **q3.2**  |    |      |      |    |      |      |    |      |      |    |      |      |    |    |
-| **q4**    |    |      |      |    |      |      | 1  | 1    | 1    |    |      |      |    |1   |
-| **q5.1**  |    |      |      |    |      |      |    | 1    |      | 1  |      |      |    |1   |
-| **q5.2**  |    |      |      |    |      |      |    |      | 1    | 1  |      |      |    |1   |
-| **q6**    |    |      |      |    |      |      |    |      |      |    | 1    | 1    |    |    |
-| **q7.1**  |    |      |      |    |      |      |    |      |      |    |      |      | 1  |    |
-| **q7.2**  |    |      |      |    |      |      |    |      |      |    |      |      | 1  |    |
-| **q8**    |    |      |      |    |      |      |    |      |      |    |      |      |    |    |
-| **q9**    | 1  |      |      |    |      |      |    |      |      |    |      |      |    |    |
+#### Error and Timeout Finite State Machine Diagram
 
-#### SubFlows 
+//Todo Description
 
-Any main flow can be further divided into multiple flows. As example: 
+[Errors_and_Timeout_FSM](https://excalidraw.com/#json=jWWRYhcEYftExsUtfAG66,p_218xOMeWB6lVOV4UNIhw)
+![Picture2](img_fsm/FSM_Upgrades_Error_Timeout.png)
 
-A starts B follows: 
+#### Error and Timeout Matrix Table
 
-1. q0 q1.1 q2 q3.2 q4 (q4) q5.2 q6 q7.1 q8    
-2. q0 q1.1 q2 q3.2 q5.1 q.5.1 q6 q7.1 q8       
-3. q0 q1.1 q2 q3.2 q5.1 q6 q7.2 q8 
+| States    | q9.1 | q9.2 |
+|-----------|------|------|
+| **q0**    |      |      |
+| **q1.1**  |      |      |
+| **q1.2**  |      |      |
+| **q2**    | 1    |      |
+| **q3.1**  | 1    |  1   |
+| **q3.2**  | 1    |  1   |
+| **q4**    | 1    |  1   |
+| **q5.1**  | 1    |  1   |
+| **q5.2**  | 1    |  1   |
+| **q6**    |      |  1   |
+| **q7.1**  |      |      |
+| **q7.2**  |      |      |
+| **q8**    |      |      |
+| **q9.1**  |      |      |
 
-But we may have more. TBC if we want to. 
+#### Flow 0 Including Error and Timeout
 
-## Invariant 
+//Todo
 
-// To be improved. 
+| States    | q0 | q1.1 | q1.2 | q2    | q3.1 | q3.2 | q4 | q5.1 | q5.2 | q6   | q7.1 | q7.2 | q8 | q9.1 | q9.2 |
+|-----------|----|------|------|-------|------|------|----|------|------|------|------|------|----|------|------|
+| **q0**    |    | 1    | 1    |       |      |      |    |      |      |      |      |      |    |      |      |
+| **q1.1**  |    | 1    |      | 1,(1) |      |1(q2) |    |      |      |      |      |      |    |1(q2) |      |
+| **q1.2**  |    |      | 1    | 1,(1) |1(q2) |      |    |      |      |      |      |      |    |1(q2) |      |
+| **q2**    |    |      |      |       | 1    | 1    |    |      |      |      |      |      |    | 1    |      |
+| **q3.1**  |    |      |      |       |      |      | 1  |      | 1    |      |      |      |    |1(q4) | 1    |
+| **q3.2**  |    |      |      |       |      |      | 1  | 1    |      |      |      |      |    |1(q4) | 1    |
+| **q4**    |    |      |      |       |      |      |    | 1    | 1    |      |      |      |    | 1    | 1    |
+| **q5.1**  |    |      |      |       |      |      |    | 1    |      | 1,(1)|      |1(q6) |    | 1    | 1    |
+| **q5.2**  |    |      |      |       |      |      |    |      | 1    | 1,(1)|1(q6) |      |    | 1    | 1    |
+| **q6**    |    |      |      |       |      |      |    |      |      |      | 1    | 1    |    |      | 1    |
+| **q7.1**  |    |      |      |       |      |      |    |      |      |      |      |      | 1  |      |      |
+| **q7.2**  |    |      |      |       |      |      |    |      |      |      |      |      | 1  |      |      |
+| **q8**    |    |      |      |       |      |      |    |      |      |      |      |      |    |      |      |
+| **q9.1**  | 1  |      |      |       |      |      |    |      |      |      |      |      |    |      |      |
+| **q9.2**  | 1  |      |      |       |      |      |    |      |      |      |      |      |    |      |      |
+
+## Invariant
+
+// Todo.
 
 - Upg.Version and Chan.UpgradeSequence MUST BE SET ON BOTH ENDS in q2. 
 Note that in some cases this state may be a transient state. E.g. In case we are in q1.1 and B call ChanUpgradeTry the ChanUpgradeTry will first execute an initUpgradeHandshake, write the ProvableStore and then execute a startFlushUpgradeHandshake. This means that we are going to store in chain directly FLUSHING and the finalProvableStore modified by the startFlushUpgradeHandshake.
@@ -297,41 +469,13 @@ Note that in some cases this state may be a transient state. E.g. In case we are
 
 - State q6 is always reached. This can be even a transient state.  
 
-## What Could We Do Next? 
+## What Could We Do Next?
 
 Each state can be identified by its ChannelEnd(s),ProvableStore(s). We know all the inputs associated with each state. We know all admitted state transitions.
 
-We could use these info to test the protocol in different ways: 
+We could use these info to test the protocol in different ways:
 
-1. Identify Invariant states and ensure they are always reached. 
-2. Reproduce ideal behavior and verify the protocol go trhough only expected states. 
-3. Fuzzing the input and ensure the protocol don't go out of the expected states. 
-4. Quint Spec. How? TBD
-
-## Questions 
-
-1. By specs: "If a chain does not agree to the proposed counterparty upgraded ChannelEnd, it may abort the upgrade handshake by writing an ErrorReceipt into the channelUpgradeErrorPath and restoring the original channel. The ErrorReceipt must contain the current upgrade sequence on the erroring chain's channel end.
-
-channelUpgradeErrorPath(portID, channelID) => ErrorReceipt(sequence, msg)
-
-A relayer may then submit a ChanUpgradeCancel datagram to the counterparty. Upon receiving this message a chain must verify that the counterparty wrote an ErrorReceipt into its channelUpgradeErrorPath with a sequence greater than or equal to its own ChannelEnd's upgrade sequence. If successful, it will restore its original channel as well, thus cancelling the upgrade."
-
-However in the `chanUpgradeTry` is when this can happen and we have that:
-
-```typescript
-if counterpartyUpgradeSequence < channel.upgradeSequence {     
-    errorReceipt = ErrorReceipt{
-      channel.upgradeSequence - 1,
-      "sequence out of sync", // constant string changable by implementation
-    }
-    provableStore.set(channelUpgradeErrorPath(portIdentifier, channelIdentifier), errorReceipt)
-    return
-  }
-```
-
-However, here we don't directly restore the channel. Let's say is Chain A the one going through ChanUpgradeTry. When Chain A stores the error message an event is triggered. The relayer process the event and submit a ChanUpgradeCancel to ChainB which trigger the restoreChannel. In restoreChannel Chain B will write an error message too. Thus at this point the relayer will process the event an submit a ChanUpgradeCancel and call restoreChannel. 
-Another event will triggered, thus the relayers should be able to understand that he already sent ChanUpgradeCancel to both chains. Is that the case? Otherwise how and when do we restore Chain A channelEnd? 
-
-2. Q: In case the Priv.Upg.CountePartyTimeout is not written, the ChanUpgradeOpen will anyway try to delete the Priv.Upg.CountePartyTimeout variable. What happens if this variable has not been set? Is this memory location accessible?  
-
-A: The keeper instatiate all the potential necessary memory when is initialized. Thus it will try to del an area of memory that has been allocation on the keepr initialization. No problem here.
+1. Identify Invariant states and ensure they are always reached.
+2. Reproduce ideal behavior and verify the protocol go trhough only expected states.
+3. Fuzzing the input and ensure the protocol don't go out of the expected states.
+4. Quint Spec. How? TBD.
