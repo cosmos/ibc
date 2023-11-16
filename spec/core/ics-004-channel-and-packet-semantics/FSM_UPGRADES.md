@@ -15,8 +15,8 @@ To further streamline the complexity of the protocol, we will conduct two distin
 
 To directly jump to the diagrams click one of the following:
 
-- [HappyPathFSM](#Happy Path Finite State Machine Diagram)
-- [ErrorTimeoutFSM](#Error and Timeout Finite State Machine Diagram)
+- [HappyPathFSM](#happy-path-finite-state-machine-diagram)
+- [ErrorTimeoutFSM](#error-and-timeout-finite-state-machine-diagram)
 
 We consider a deterministic finite state machine as a 4-tuple (Q; C; Σ; δ) consisting of:
 
