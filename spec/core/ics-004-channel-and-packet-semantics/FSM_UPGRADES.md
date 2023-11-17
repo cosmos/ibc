@@ -11,12 +11,12 @@ Each datagram and subprotocol in our system is linked to a specific function. Wh
 
 To further streamline the complexity of the protocol, we will conduct two distinct analyses. The first will focus on the 'happy paths', covering scenarios where operations proceed as expected. The second analysis will be dedicated exclusively to errors and timeouts.
 
-## Finite state machine modeling
-
 To directly jump to the diagrams click one of the following:
 
 - [HappyPathFSM](#happy-paths-finite-state-machine-diagram)
 - [ErrorTimeoutFSM](#error-and-timeout-finite-state-machine-diagram)
+
+## Finite state machine modeling
 
 We consider a deterministic finite state machine as a 4-tuple (Q; C; Σ; δ) consisting of:
 
