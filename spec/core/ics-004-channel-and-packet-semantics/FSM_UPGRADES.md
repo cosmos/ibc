@@ -280,7 +280,7 @@ This flow represents the situation where Party B initiates the process, with Par
 | **q3.2**  |    |      |      |       |      |      |    |      |      |      |     |      |    |
 | **q4**    |    |      |      |       |      |      | 1  | 1    | 1    |      |     |      |    |
 | **q5.1**  |    |      |      |       |      |      |    |      |      | 1    |     |      |    |
-| **q5.2**  |    |      |      |       |      |      |    |      | 1    | 1,(1)|     |1(q6) |    |
+| **q5.2**  |    |      |      |       |      |      |    |      | 1    | 1,(1)|1(q6)|      |    |
 | **q6**    |    |      |      |       |      |      |    |      |      |      | 1   |1     |    |
 | **q7.1**  |    |      |      |       |      |      |    |      |      |      |     |      | 1  |
 | **q7.2**  |    |      |      |       |      |      |    |      |      |      |     |      | 1  |
@@ -312,6 +312,7 @@ We list here all the conditions involved in the state transitions related to tim
 - c19: errorReceipt.sequence >= Chan.UpgradeSequence === True
 - c20: isCompatibleUpgradeFields === False
 - c21: CounterPartyTimeoutExpired === True
+- c22: Chan.State !== FLUSHING_COMPLETE 
 ```
 
 #### Σ: Error and Timeout Accepted Inputs
@@ -362,7 +363,8 @@ Below, we list the expanded representation of the protocol inputs.
 - i3.3: [A, c21 , ]: ChanUpgradeConfirm --> restoreChannel -- CounterPartyTimeoutExceeded 
 - i3.3: [B, c21 , ]: ChanUpgradeConfirm --> restoreChannel -- CounterPartyTimeoutExceeded 
 
-- i6.1: [A or B, (c0; c5; c18; c19), ] : ChanUpgradeCancel --> restoreChannel
+- i6.1: [A or B, (c0; c5; c22 ), ] : ChanUpgradeCancel --> restoreChannel --restoreWihtoutVerifyingError
+- i6.1: [A or B, (c5; c18; c19), ] : ChanUpgradeCancel --> restoreChannel --restoreVerifyingError
 
 - i7.1: [A or B, (c5; c7; c17), ] : ChanUpgradeTimeout --> restoreChannel
 - i7.1: [A, (c5; c7; c17), ] : ChanUpgradeTimeout --> restoreChannel
@@ -394,6 +396,10 @@ Below, we list the expanded representation of the protocol inputs.
 
 - [`q5.2`] -> x[i3.3: [A, c21, ]] -> [`q9.1`]
 
+- [`q9.1`] x [i6.1: [A or B, (c0; c5; c22), ]] -> [`q0`]
+- [`q9.1`] x [i6.1: [A or B, (c5; c18; c19), ]] -> [`q0`]
+
+
 // Timeout
 - [`q3.1`] x [i7.1: [A, (c5; c17; c11), ]] -> [`q9.2`]
 
@@ -401,20 +407,21 @@ Below, we list the expanded representation of the protocol inputs.
 
 - [`q4`] x [i7.1: [A or B, (c5; c17; c11), ]] -> [`q9.2`]
 
-- [`q5.1`] x [i7.1: [A or B, (c5; c17; c11), ]] -> [`q9.2`]
+- [`q5.1`] x [i7.1: [B, (c5; c17; c11), ]] -> [`q9.2`]
 
-- [`q5.2`] x [i7.1: [A or B, (c5; c17; c11), ]] -> [`q9.2`]
+- [`q5.2`] x [i7.1: [A, (c5; c17; c11), ]] -> [`q9.2`]
 
-- [`q6`] x [i7.1: [A or B, (c5; c17; c11), ]] -> [`q9.2`]
+- [`q9.2`] x [i6.1: [A or B, (c0; c5; c22), ]] -> [`q0`]
+- [`q9.2`] x [i6.1: [A or B, (c5; c18; c19), ]] -> [`q0`]
 
-- [`q9.2`] x [i6.1: [A or B, c15, ]] -> [`q0`]
+
 ```
 
 #### Error and Timeout Finite State Machine Diagram
 
 //Todo Description
 
-[Errors_and_Timeout_FSM](https://excalidraw.com/#json=jWWRYhcEYftExsUtfAG66,p_218xOMeWB6lVOV4UNIhw)
+[Errors_and_Timeout_FSM](https://excalidraw.com/#json=QuXnHZqsVbAHw44DMu1F4,ZbsDB4zjdPvSc90E-fYQxQ)
 ![Picture2](img_fsm/FSM_Upgrades_Error_Timeout.png)
 
 #### Error and Timeout Matrix Table
@@ -430,7 +437,7 @@ Below, we list the expanded representation of the protocol inputs.
 | **q4**    | 1    |  1   |
 | **q5.1**  | 1    |  1   |
 | **q5.2**  | 1    |  1   |
-| **q6**    |      |  1   |
+| **q6**    |      |      |
 | **q7.1**  |      |      |
 | **q7.2**  |      |      |
 | **q8**    |      |      |
