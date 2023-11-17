@@ -109,7 +109,7 @@ Therefore, we can encapsulate the inputs in our system as follows:
 - i5.1: [Party, Condition, PreviousInput]: PacketHandler
 ```
 
-Below, we list the expanded representation of the protocol inputs. 
+Below, we list the expanded representation of the protocol inputs.
 
 ```typescript
 - i0.1: [A, (c0; c1; c2 ; c3), ]: ChanUpgradeInit --> initUpgradeHandshake
@@ -208,7 +208,7 @@ The following are the defined state transitions for our protocol:
 
 This list details how our protocol responds to different inputs, transitioning between its various states.
 
-#### Happy Path Transition Matrixs
+#### Happy Paths Transition Matrix
 
 The protocol encompasses three main flows:
 
@@ -266,7 +266,7 @@ This flow describes the scenario where Party A initiates the process, followed b
 | **q7.1**  |    |      |      |       |      |      |    |      |      |      |     |      | 1  |
 | **q7.2**  |    |      |      |       |      |      |    |      |      |      |     |      | 1  |
 
-#### Flow 2: B starts the process and A follows
+##### Flow 2: B starts the process and A follows
 
 This flow represents the situation where Party B initiates the process, with Party A following suit. The state transition matrix for this flow is:
 
@@ -285,10 +285,18 @@ This flow represents the situation where Party B initiates the process, with Par
 | **q7.1**  |    |      |      |       |      |      |    |      |      |      |     |      | 1  |
 | **q7.2**  |    |      |      |       |      |      |    |      |      |      |     |      | 1  |
 
-#### Happy Path Finite State Machine Diagram
+#### Happy Paths Finite State Machine Diagram
 
-//Todo Description
-Here we give a graphical representation of the "happy paths" finite state machine.
+Here we give a graphical representation of the "happy paths" finite state machine. When interpreting the diagram, consider the following elements:
+
+- **Colors**: Each arrow color signifies a specific type of transition:
+  - **Green Arrows**: These illustrate transitions happening in the flow1: A starts, B follow.
+  - **Blue Arrows**: These illustrate transitions happening in the flow2: B starts, A follow.
+  - **Black Arrows**: These represent transitions that can take place or in Flow0 (CrossingHello) or in any other flow.
+
+- **Line Thickness**:
+  - **Thick Lines**: A transition with a thicker line suggests a move to states, which follows another standard transition. (E.g. An intermediate state exisist) 
+  - **Thin Lines**: A thinner line indicates a direct move to the new state. 
 
 [FSM](https://excalidraw.com/#json=A4nB3_iZeT5jdhsXRSz3x,aBm-OM6FI6Q545CCkwaCmg)
 ![Picture](img_fsm/FSM_Upgrades.png)
@@ -413,18 +421,9 @@ Below, we list the expanded representation of the protocol inputs.
 
 - [`q9.2`] x [i6.1: [A or B, (c0; c5; c22), ]] -> [`q0`]
 - [`q9.2`] x [i6.1: [A or B, (c5; c18; c19), ]] -> [`q0`]
-
-
 ```
 
-#### Error and Timeout Finite State Machine Diagram
-
-//Todo Description
-
-[Errors_and_Timeout_FSM](https://excalidraw.com/#json=QuXnHZqsVbAHw44DMu1F4,ZbsDB4zjdPvSc90E-fYQxQ)
-![Picture2](img_fsm/FSM_Upgrades_Error_Timeout.png)
-
-#### Error and Timeout Matrix Table
+#### Error and Timeout Transition Matrix
 
 | States    | q9.1 | q9.2 |
 |-----------|------|------|
@@ -443,9 +442,7 @@ Below, we list the expanded representation of the protocol inputs.
 | **q8**    |      |      |
 | **q9.1**  |      |      |
 
-#### Flow 0 Including Error and Timeout
-
-//Todo
+##### Flow 0 Including Error and Timeout
 
 | States    | q0 | q1.1 | q1.2 | q2    | q3.1 | q3.2 | q4 | q5.1 | q5.2 | q6   | q7.1 | q7.2 | q8 | q9.1 | q9.2 |
 |-----------|----|------|------|-------|------|------|----|------|------|------|------|------|----|------|------|
@@ -509,16 +506,33 @@ This flow describes the scenario where Party A initiates the process, followed b
 | **q9.1**  | 1  |      |      |       |      |      |    |      |      |      |     |      |    |      |      |
 | **q9.2**  | 1  |      |      |       |      |      |    |      |      |      |     |      |    |      |      |
 
+#### Error and Timeout Finite State Machine Diagram
+
+Here we give a graphical representation of the "error and timeout" finite state machine. When interpreting the diagram, consider the following elements:
+
+- **Colors**: Each arrow color signifies a specific type of transition:
+  - **Orange Arrows**: These illustrate transitions caused by `ChanUpgradeTimeout`.
+  - **Red Arrows**: These denote transitions due to errors. This includes errors arising from conditions other than `ChanUpgradeTimeout`.
+  - **Yellow Arrows**: These are associated with error callbacks, signifying processes that handle errors after they occur.
+  - **Black Arrows**: These represent standard transitions that take place without any errors.
+
+- **Line Thickness**:
+  - **Thick Lines**: A transition with a thicker line suggests a move to states `q9.1` or `q9.2`, which follows a standard transition indicated by a black arrow.
+  - **Thin Lines**: A thinner line indicates a direct move to states `q9.1` or `q9.2` without preceding transitions.
+
+[Errors_and_Timeout_FSM](https://excalidraw.com/#json=QuXnHZqsVbAHw44DMu1F4,ZbsDB4zjdPvSc90E-fYQxQ)
+![Picture2](img_fsm/FSM_Upgrades_Error_Timeout.png)
+
 ## Invariants
 
 // Todo.
 
-- Upg.Version and Chan.UpgradeSequence MUST BE SET ON BOTH ENDS in q2. 
+- Upg.Version and Chan.UpgradeSequence MUST BE SET ON BOTH ENDS in q2.
 Note that in some cases this state may be a transient state. E.g. In case we are in q1.1 and B call ChanUpgradeTry the ChanUpgradeTry will first execute an initUpgradeHandshake, write the ProvableStore and then execute a startFlushUpgradeHandshake. This means that we are going to store in chain directly FLUSHING and the finalProvableStore modified by the startFlushUpgradeHandshake.
 
-- Upg.Timeout MUST BE SET ON BOTH ENDS in q4 or q5.1 or q5.2. The q4 state can be eventually skipped. 
+- Upg.Timeout MUST BE SET ON BOTH ENDS in q4 or q5.1 or q5.2. The q4 state can be eventually skipped.
 
-- State q6 is always reached. This can be even a transient state.  
+- State q6 is always reached even if only as a transient state.  
 
 ## What Could We Do Next?
 
