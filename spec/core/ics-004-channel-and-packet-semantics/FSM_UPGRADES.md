@@ -212,9 +212,9 @@ This list details how our protocol responds to different inputs, transitioning b
 
 The protocol encompasses three main flows:
 
-1. A & B start the process (Crossing Hello).
-2. A starts the process and B follows.
-3. B starts the process and A follows.
+0. A & B start the process (Crossing Hello).
+1. A starts the process and B follows.
+2. B starts the process and A follows.
 
 To illustrate these flows, we use a state transition matrix. This matrix helps in visualizing the transitions between different states in each flow. The transitions are represented as follows:
 
