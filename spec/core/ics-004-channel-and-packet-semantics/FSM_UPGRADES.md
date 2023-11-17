@@ -295,8 +295,8 @@ Here we give a graphical representation of the "happy paths" finite state machin
   - **Black Arrows**: These represent transitions that can take place or in Flow0 (CrossingHello) or in any other flow.
 
 - **Line Thickness**:
-  - **Thick Lines**: A transition with a thicker line suggests a move to states, which follows another standard transition. (E.g. An intermediate state exisist) 
-  - **Thin Lines**: A thinner line indicates a direct move to the new state. 
+  - **Thick Lines**: A transition with a thicker line suggests or a move into a transient state, or a move from a transient state.
+  - **Thin Lines**: A thinner line indicates a direct move to the final state.
 
 [FSM](https://excalidraw.com/#json=A4nB3_iZeT5jdhsXRSz3x,aBm-OM6FI6Q545CCkwaCmg)
 ![Picture](img_fsm/FSM_Upgrades.png)
