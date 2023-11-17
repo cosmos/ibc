@@ -221,7 +221,7 @@ To illustrate these flows, we use a state transition matrix. This matrix helps i
 - '1' indicates a direct, final transition.
 - '(1)' denotes a transient state, which leads to another subsequent state.
 - '1,(1)' signifies that both a final and a transient transition are possible from the current state.
-- '1(qx)' indicates an inderect, final transition happening via state qx.
+- '1(qx)' indicates an indirect, final transition happening via state qx.
 
 In the matrix:
 
@@ -290,12 +290,12 @@ This flow represents the situation where Party B initiates the process, with Par
 Here we give a graphical representation of the "happy paths" finite state machine. When interpreting the diagram, consider the following elements:
 
 - **Colors**: Each arrow color signifies a specific type of transition:
-  - **Green Arrows**: These illustrate transitions happening in the flow1: A starts, B follow.
-  - **Blue Arrows**: These illustrate transitions happening in the flow2: B starts, A follow.
-  - **Black Arrows**: These represent transitions that can take place or in Flow0 (CrossingHello) or in any other flow.
+  - **Green Arrows**: These illustrate transitions happening in the flow1: A starts, B follows.
+  - **Blue Arrows**: These illustrate transitions happening in the flow2: B starts, A follows.
+  - **Black Arrows**: These represent transitions that can take place in Flow0 (CrossingHello) or any other flow.
 
 - **Line Thickness**:
-  - **Thick Lines**: A transition with a thicker line suggests or a move into a transient state, or a move from a transient state.
+  - **Thick Lines**: A transition with a thicker line suggests a move into a transient state or a move from a transient state.
   - **Thin Lines**: A thinner line indicates a direct move to the final state.
 
 [FSM](https://excalidraw.com/#json=A4nB3_iZeT5jdhsXRSz3x,aBm-OM6FI6Q545CCkwaCmg)
@@ -528,9 +528,9 @@ Here we give a graphical representation of the "error and timeout" finite state 
 // Todo.
 
 - Upg.Version and Chan.UpgradeSequence MUST BE SET ON BOTH ENDS in q2.
-Note that in some cases this state may be a transient state. E.g. In case we are in q1.1 and B call ChanUpgradeTry the ChanUpgradeTry will first execute an initUpgradeHandshake, write the ProvableStore and then execute a startFlushUpgradeHandshake. This means that we are going to store in chain directly FLUSHING and the finalProvableStore modified by the startFlushUpgradeHandshake.
+Note that in some cases this state may be a transient state. E.g. In case we are in q1.1 and B call ChanUpgradeTry the ChanUpgradeTry will first execute an initUpgradeHandshake, write the ProvableStore and then execute a startFlushUpgradeHandshake. This means that we are going to store in the chain directly FLUSHING and the finalProvableStore modified by the startFlushUpgradeHandshake.
 
-- Upg.Timeout MUST BE SET ON BOTH ENDS in q4 or q5.1 or q5.2. The q4 state can be eventually skipped.
+- Upg.Timeout MUST BE SET ON BOTH ENDS in q4 q5.1 or q5.2. The q4 state can be eventually skipped.
 
 - State q6 is always reached even if only as a transient state.  
 
@@ -538,9 +538,9 @@ Note that in some cases this state may be a transient state. E.g. In case we are
 
 Each state can be identified by its ChannelEnd(s),ProvableStore(s). We know all the inputs associated with each state. We know all admitted state transitions.
 
-We could use these info to test the protocol in different ways:
+We could use this info to test the protocol in different ways:
 
 1. Identify Invariant states and ensure they are always reached.
-2. Reproduce ideal behavior and verify the protocol go trhough only expected states.
-3. Fuzzing the input and ensure the protocol don't go out of the expected states.
+2. Reproduce ideal behavior and verify the protocol goes through only expected states.
+3. Fuzzing the input and ensuring the protocol doesn't go out of the expected states.
 4. Quint Spec. How? TBD.
