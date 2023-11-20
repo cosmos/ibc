@@ -1000,7 +1000,7 @@ Both parties must not complete the upgrade handshake and move to `FLUSHCOMPLETE`
 
 ### Considerations
 
-Note that a channel upgrade handshake may never complete successfully if the in-flight packets cannot successfully be cleared. This can happen if the timeout value of a packet is too large, or an acknowledgment never arrives, or if there is a bug that makes acknowledging or timing out a packet impossible. In these cases, some out-of-protocol mechanism (e.g. governance) must step in to clear the packets "manually" perhaps by forcefully clearing the packet commitments before restarting the upgrade handshake.
+Note that a channel upgrade handshake may never complete successfully if the in-flight packets cannot successfully be cleared. This can happen if the timeout value of a packet is too large, or an acknowledgement never arrives, or if there is a bug that makes acknowledging or timing out a packet impossible. In these cases, some out-of-protocol mechanism (e.g. governance) must step in to clear the packets "manually" perhaps by forcefully clearing the packet commitments before restarting the upgrade handshake.
 
 ### Migrations
 
