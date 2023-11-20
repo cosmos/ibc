@@ -782,7 +782,7 @@ function chanUpgradeConfirm(
   }
 
   // if both chains are already in flushcomplete we can move to OPEN
-  if (channel.state === FLUSHCOMPLETE && counterpartyChannelState === FLUSHCOMPLETE) {
+  if (channel.state == FLUSHCOMPLETE && counterpartyChannelState == FLUSHCOMPLETE) {
     openUpgradelHandshake(portIdentifier, channelIdentifier)
     module.onChanUpgradeOpen(portIdentifier, channelIdentifier)
   }
@@ -927,7 +927,7 @@ function timeoutChannelUpgrade(
 ) {
   // current channel must have an upgrade that is FLUSHING or FLUSHCOMPLETE
   upgrade = provableStore.get(channelUpgradePath(portIdentifier, channelIdentifier))
-  abortTransactionUnless(upgrade != null)
+  abortTransactionUnless(upgrade !== null)
   channel = provableStore.get(channelPath(portIdentifier, channelIdentifier))
   abortTransactionUnless(channel.state === FLUSHING || channel.state === FLUSHCOMPLETE)
 
