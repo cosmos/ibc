@@ -664,7 +664,7 @@ function chanUpgradeAck(
   if (channel.state == OPEN) {
     // prove counterparty and move our own state to flushing
     // if we are already at flushing, then no state changes occur
-    // upgrade is blocked on this channelEnd from progressing until flush completes on both ends
+    // upgrade is blocked on this channelEnd from progressing until flush completes on its end
     startFlushUpgradeHandshake(portIdentifier, channelIdentifier)
     // startFlushUpgradeHandshake sets the timeout for the upgrade
     // so retrieve upgrade again here and use that timeout value
