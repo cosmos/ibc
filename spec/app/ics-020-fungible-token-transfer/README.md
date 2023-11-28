@@ -244,7 +244,7 @@ function sendFungibleTokens(
       sourceChannel,
       timeoutHeight,
       timeoutTimestamp,
-      protobuf.marshal(data) // protobuf-marshalled bytes of packet data
+      json.marshal(data) // json-marshalled bytes of packet data
     )
 
     return sequence
