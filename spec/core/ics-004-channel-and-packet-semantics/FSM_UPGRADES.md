@@ -116,6 +116,7 @@ Below, we list the expanded representation of the protocol inputs.
 - i0.1: [B, (c0; c1; c2 ; c3), ]: ChanUpgradeInit --> initUpgradeHandshake
 - i0.1: [A, (c0; c1; c2; c3; incrementUpgradeSeq), ]: ChanUpgradeInit --> initUpgradeHandshake
 - i0.1: [B, (c0; c1; c2; c3; incrementUpgradeSeq), ]: ChanUpgradeInit --> initUpgradeHandshake
+- i0.1: [A & B, (c0; c1; c2 ; c3), ]: ChanUpgradeInit --> initUpgradeHandshake
 
 - i1.1: [B, (c1; c2; c3; c4) , ]: ChanUpgradeTry --> initUpgradeHandshake
 - i1.1: [A, (c1; c2; c3; c4) , ]: ChanUpgradeTry --> initUpgradeHandshake
@@ -125,11 +126,13 @@ Below, we list the expanded representation of the protocol inputs.
 - i1.2: [B, (c5; c6; c7; c8; c9; c10), i1.1]: ChanUpgradeTry --> startFlushUpgradeHandshake -- atomic
 - i1.3: [A, (c5; c6; c7; c8; c9; c10), ]: ChanUpgradeTry --> startFlushUpgradeHandshake
 - i1.3: [B, (c5; c6; c7; c8; c9; c10), ]: ChanUpgradeTry --> startFlushUpgradeHandshake
+- i1.3: [A & B, (c5; c6; c7; c8; c9; c10), ]: ChanUpgradeTry --> startFlushUpgradeHandshake
 
 - i2.1: [A, (c7; c8; c6; c10; c11; c12), ]: ChanUpgradeAck --> startFlushtUpgradeHandshake
 - i2.1: [B, (c7; c8; c6; c10; c11; c13), ]: ChanUpgradeAck --> startFlushtUpgradeHandshake
 - i2.1: [B, (c7; c8; c6; c10; c11; c12), ]: ChanUpgradeAck --> startFlushtUpgradeHandshake
 - i2.1: [A, (c7; c8; c6; c10; c11; c13), ]: ChanUpgradeAck --> startFlushtUpgradeHandshake
+- i2.1: [A & B, (c7; c8; c6; c10; c11; c12), ]: ChanUpgradeAck --> startFlushtUpgradeHandshake
 
 - i3.1: [A, (c7; c8; c11; c12), ]: ChanUpgradeConfirm
 - i3.1: [B, (c7; c8; c11; c12), ]: ChanUpgradeConfirm
@@ -137,6 +140,7 @@ Below, we list the expanded representation of the protocol inputs.
 - i3.1: [A, (c7; c8; c11; c13; c14), ]: ChanUpgradeConfirm
 - i3.2: [A, , i3.1 ]: ChanUpgradeConfirm --> OpenUpgradeHandshake -- atomic
 - i3.2: [B, , i3.1 ]: ChanUpgradeConfirm --> OpenUpgradeHandshake -- atomic
+- i3.3: [A & B, , ]: ChanUpgradeConfirm
 
 - i4.1: [A, c7 , ]: ChanUpgradeOpen --> OpenUpgradeHandshake
 - i4.1: [B, c7 , ]: ChanUpgradeOpen --> OpenUpgradeHandshake
@@ -166,6 +170,7 @@ The following are the defined state transitions for our protocol:
 ```typescript
 - [`q0`] x [i0.1: [A,(c0; c1; c2 ; c3),]] -> [`q1.1`]
 - [`q0`] x [i0.1: [B,(c0; c1; c2 ; c3), ]] -> [`q1.2`]
+- [`q0`] x [i0.1: [A & B,(c0; c1; c2 ; c3), ]] -> [`q2`]
 
 - [`q1.1`] x [i0.1: [A,(c0; c1; c2; c3; incrementUpgradeSeq), ]] -> [`q1.1`]
 - [`q1.1`] x [i0.1: [B,(c0; c1; c2 ; c3), ]]  -> [`q2`]
@@ -179,6 +184,7 @@ The following are the defined state transitions for our protocol:
 
 - [`q2`] x [i1.3: [A, (c5; c6; c7; c8; c9; c10), ]] -> [`q3.1`]
 - [`q2`] x [i1.3: [B, (c5; c6; c7; c8; c9; c10), ]] -> [`q3.2`]
+- [`q2`] x [i1.3: [A & B, (c5; c6; c7; c8; c9; c10), ]] -> [`q4`]
 
 - [`q3.1`] x [i2.1: [B, (c7; c8; c6; c10; c11; c13), ]] -> [`q4`]
 - [`q3.1`] x [i2.1: [B, (c7; c8; c6; c10; c11; c12), ]] -> [`q5.2`]
@@ -192,6 +198,7 @@ The following are the defined state transitions for our protocol:
 - [`q4`] x [i5.1: [A, (c11; c12; c14), ]] -> [`q5.1`]
 - [`q4`] x [i3.1: [B, (c7; c8; c11; c12), ]] -> [`q5.2`]
 - [`q4`] x [i5.1: [B, (c11; c12; c14), ]] -> [`q5.2`]
+- [`q4`] x [i2.1: [A & B, (c7; c8; c11; c12), ]] -> [`q6`]
 
 - [`q5.1`] x [i3.1: [B, (c7; c8; c11; c13; c14), ]] -> [`q5.1`] x [i5.1: [B, (c11; c12; c14), ]] -> [`q6`]
 - [`q5.1`] x [i3.1: [B, (c7; c8; c11; c12), ]] -> [`q6`] x [i3.2: [B, , i3.1 ]] -> [`q7.2`]
@@ -201,6 +208,7 @@ The following are the defined state transitions for our protocol:
 
 - [`q6`] x [i4.1: [A, c7 ,]] -> [`q7.1`]
 - [`q6`] x [i4.1: [B, c7 ,]] -> [`q7.2`]
+- [`q6`] x [i3.3: [A & B, ,]] -> [`q8`]
 
 - [`q7.1`] x [i4.1: [B, c7 ,]] -> [`q8`]
 - [`q7.2`] x [i4.1: [A, c7 ,]] -> [`q8`]
@@ -237,13 +245,13 @@ This matrix structure provides a clear overview of how each state can evolve int
 | **q0**    |    | 1    | 1    |       |      |      |    |      |      |      |      |      |    |
 | **q1.1**  |    | 1    |      | 1,(1) |      |1(q2) |    |      |      |      |      |      |    |
 | **q1.2**  |    |      | 1    | 1,(1) |1(q2) |      |    |      |      |      |      |      |    |
-| **q2**    |    |      |      |       | 1    | 1    |    |      |      |      |      |      |    |
+| **q2**    |    |      |      |       | 1    | 1    |  1 |      |      |      |      |      |    |
 | **q3.1**  |    |      |      |       |      |      |  1 |      | 1    |      |      |      |    |
 | **q3.2**  |    |      |      |       |      |      |  1 |  1   |      |      |      |      |    |
-| **q4**    |    |      |      |       |      |      |  1 | 1    | 1    |      |      |      |    |
+| **q4**    |    |      |      |       |      |      |  1 | 1    | 1    |  1   |      |      |    |
 | **q5.1**  |    |      |      |       |      |      |    | 1    |      | 1,(1)|      |1(q6) |    |
 | **q5.2**  |    |      |      |       |      |      |    |      |  1   | 1,(1)|1(q6) |      |    |
-| **q6**    |    |      |      |       |      |      |    |      |      |      | 1    | 1    |    |
+| **q6**    |    |      |      |       |      |      |    |      |      |      | 1    | 1    | 1  |
 | **q7.1**  |    |      |      |       |      |      |    |      |      |      |      |      | 1  |
 | **q7.2**  |    |      |      |       |      |      |    |      |      |      |      |      | 1  |
 
@@ -298,7 +306,7 @@ Here we give a graphical representation of the "happy paths" finite state machin
   - **Thick Lines**: A transition with a thicker line suggests a move into a transient state or a move from a transient state.
   - **Thin Lines**: A thinner line indicates a direct move to the final state.
 
-[FSM](https://excalidraw.com/#json=A4nB3_iZeT5jdhsXRSz3x,aBm-OM6FI6Q545CCkwaCmg)
+[FSM](https://excalidraw.com/#json=xgTT0vrdqjwkb9tJ0_TAd,x8aww6qitYfKSC7SHJfECw)
 ![Picture](img_fsm/FSM_Upgrades.png)
 
 ### Errors and Timeout Model
@@ -531,6 +539,7 @@ Here we give a graphical representation of the "error and timeout" finite state 
 Note that in some cases this state may be a transient state. E.g. In case we are in q1.1 and B call ChanUpgradeTry the ChanUpgradeTry will first execute an initUpgradeHandshake, write the ProvableStore and then execute a startFlushUpgradeHandshake. This means that we are going to store in the chain directly FLUSHING and the finalProvableStore modified by the startFlushUpgradeHandshake.
 
 - Upg.Timeout MUST BE SET ON BOTH ENDS in q4 q5.1 or q5.2. The q4 state can be eventually skipped.
+- In state q4 q5.1 or q5.2 the final version is agreed.
 
 - State q6 is always reached even if only as a transient state.  
 
