@@ -354,7 +354,7 @@ function restoreChannel(
   channel = provableStore.get(channelPath(portIdentifier, channelIdentifier))
   errorReceipt = ErrorReceipt{
     channel.upgradeSequence,
-    "upgrade handshake is aborted", // constant string changable by implementation
+    "upgrade handshake is aborted", // constant string changeable by implementation
   }
   provableStore.set(channelUpgradeErrorPath(portIdentifier, channelIdentifier), errorReceipt)
   channel.state = OPEN
@@ -560,7 +560,7 @@ function chanUpgradeTry(
   if counterpartyUpgradeSequence < channel.upgradeSequence {     
     errorReceipt = ErrorReceipt{
       channel.upgradeSequence - 1,
-      "sequence out of sync", // constant string changable by implementation
+      "sequence out of sync", // constant string changeable by implementation
     }
     provableStore.set(channelUpgradeErrorPath(portIdentifier, channelIdentifier), errorReceipt)
     return
@@ -647,16 +647,16 @@ function chanUpgradeAck(
     )
   )
 
-  upgrade = provableStore.get(channelUpgradePath(portIdentifier, channelIdentifier))
+  existingUpgrade = provableStore.get(channelUpgradePath(portIdentifier, channelIdentifier))
 
   // optimistically accept version that TRY chain proposes and pass this to callback for confirmation.
   // in the crossing hello case, we do not modify version that our TRY call returned and instead 
   // enforce that both TRY calls returned the same version
   if (channel.state == OPEN) {
-    upgrade.fields.version == counterpartyUpgrade.fields.version
+    existingUpgrade.fields.version == counterpartyUpgrade.fields.version
   }
   // if upgrades are not compatible by ACK step, then we restore the channel
-  if (!isCompatibleUpgradeFields(upgrade.fields, counterpartyUpgrade.fields)) {
+  if (!isCompatibleUpgradeFields(existingUpgrade.fields, counterpartyUpgrade.fields)) {
     restoreChannel(portIdentifier, channelIdentifier)
     return
   }
@@ -664,8 +664,12 @@ function chanUpgradeAck(
   if (channel.state == OPEN) {
     // prove counterparty and move our own state to flushing
     // if we are already at flushing, then no state changes occur
-    // upgrade is blocked on this channelEnd from progressing until flush completes on both ends
+    // upgrade is blocked on this channelEnd from progressing until flush completes on its end
     startFlushUpgradeHandshake(portIdentifier, channelIdentifier)
+    // startFlushUpgradeHandshake sets the timeout for the upgrade
+    // so retrieve upgrade again here and use that timeout value
+    upgrade = provableStore.get(channelUpgradePath(portIdentifier, channelIdentifier))
+    existingUpgrade.timeout = upgrade.timeout
   }
 
   timeout = counterpartyUpgrade.timeout
@@ -705,7 +709,7 @@ function chanUpgradeAck(
   }
 
   // if no error, agree on final version
-  provableStore.set(channelUpgradePath(portIdentifier, channelIdentifier), upgrade)
+  provableStore.set(channelUpgradePath(portIdentifier, channelIdentifier), existingUpgrade)
 }
 ```
 
