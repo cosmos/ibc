@@ -256,7 +256,7 @@ function sendFungibleTokens(
 ```typescript
 function onRecvPacket(packet: Packet) {
   FungibleTokenPacketData data = packet.data
-  assert(data.denom)
+  assert(data.denom !== "")
   assert(data.amount > 0)
   assert(data.sender !== "")
   assert(data.receiver !== "")
