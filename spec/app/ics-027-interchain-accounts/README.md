@@ -606,7 +606,6 @@ function onChanUpgradeInit(
   // the proposed connection hop must not change
   abortTransactionUnless(currentMetadata.ControllerConnectionId === connectionHops[0])
   
-  version = marshalJSON(metadata)
   return version, nil
 }
 ```
