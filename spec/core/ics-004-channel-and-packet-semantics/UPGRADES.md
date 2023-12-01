@@ -914,7 +914,9 @@ function cancelChannelUpgrade(
     )
   }
 
-  // cancel upgrade and write error receipt
+  // cancel upgrade and write error receipt 
+  // fastforward channel sequence to higher sequence so that we can start
+  // new handshake on a fresh sequence
   restoreChannel(portIdentifier, channelIdentifier, errorReceipt.Sequence)
 }
 ```
