@@ -350,6 +350,7 @@ function openUpgradeHandshake(
 function restoreChannel(
   portIdentifier: Identifier,
   channelIdentifier: Identifier,
+  upgradeSequence: uint64, 
 ) {
   channel = provableStore.get(channelPath(portIdentifier, channelIdentifier))
   errorReceipt = ErrorReceipt{
@@ -358,6 +359,7 @@ function restoreChannel(
   }
   provableStore.set(channelUpgradeErrorPath(portIdentifier, channelIdentifier), errorReceipt)
   channel.state = OPEN
+  channel.UpgradeSequence = upgradeSequence
   provableStore.set(channelPath(portIdentifier, channelIdentifier), channel)
 
   // delete auxiliary state
@@ -657,7 +659,7 @@ function chanUpgradeAck(
   }
   // if upgrades are not compatible by ACK step, then we restore the channel
   if (!isCompatibleUpgradeFields(existingUpgrade.fields, counterpartyUpgrade.fields)) {
-    restoreChannel(portIdentifier, channelIdentifier)
+    restoreChannel(portIdentifier, channelIdentifier, channel.UpgradeSequence)
     return
   }
 
@@ -678,7 +680,7 @@ function chanUpgradeAck(
   // if it has, then restore the channel and abort upgrade handshake
   if ((timeout.timeoutHeight != 0 && currentHeight() >= timeout.timeoutHeight) ||
       (timeout.timeoutTimestamp != 0 && currentTimestamp() >= timeout.timeoutTimestamp )) {
-        restoreChannel(portIdentifier, channelIdentifier)
+        restoreChannel(portIdentifier, channelIdentifier, channel.UpgradeSequence)
         return
   }
 
@@ -704,7 +706,7 @@ function chanUpgradeAck(
   )
   // restore channel if callback returned error
   if (err != null) {
-    restoreChannel(portIdentifier, channelIdentifier)
+    restoreChannel(portIdentifier, channelIdentifier, channel.UpgradeSequence)
     return
   }
 
@@ -773,7 +775,7 @@ function chanUpgradeConfirm(
   // if it has, then restore the channel and abort upgrade handshake
   if ((timeout.timeoutHeight != 0 && currentHeight() >= timeout.timeoutHeight) ||
       (timeout.timeoutTimestamp != 0 && currentTimestamp() >= timeout.timeoutTimestamp)) {
-        restoreChannel(portIdentifier, channelIdentifier)
+        restoreChannel(portIdentifier, channelIdentifier, channel.UpgradeSequence)
         return
   }
 
@@ -913,7 +915,7 @@ function cancelChannelUpgrade(
   }
 
   // cancel upgrade and write error receipt
-  restoreChannel(portIdentifier, channelIdentifier)
+  restoreChannel(portIdentifier, channelIdentifier, errorReceipt.Sequence)
 }
 ```
 
@@ -987,7 +989,7 @@ function timeoutChannelUpgrade(
 
   // we must restore the channel since the timeout verification has passed
   // error receipt is written for this sequence, counterparty can call cancelUpgradeHandshake
-  restoreChannel(portIdentifier, channelIdentifier)
+  restoreChannel(portIdentifier, channelIdentifier, channel.UpgradeSequence)
 
   // call modules onChanUpgradeRestore callback
   module = lookupModule(portIdentifier)
