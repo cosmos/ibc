@@ -557,6 +557,9 @@ function chanUpgradeTry(
   // then either the counterparty chain is out-of-sync or the message
   // is out-of-sync and we write an error receipt with our sequence - 1
   // so that the counterparty can update their sequence as well.
+  // This will cause the outdated counterparty to upgrade the sequence
+  // and abort their out-of-sync upgrade without aborting our own since
+  // the error receipt sequence is lower than ours and higher than the counterparty.
   if counterpartyUpgradeSequence < channel.upgradeSequence {     
     errorReceipt = ErrorReceipt{
       channel.upgradeSequence - 1,
@@ -896,6 +899,10 @@ function cancelChannelUpgrade(
     // If counterparty sequence is less than the current sequence,
     // abort transaction since this error receipt is from a previous upgrade
     abortTransactionUnless(errorReceipt.sequence >= channel.upgradeSequence)
+    // fastforward channel sequence to higher sequence so that we can start
+    // new handshake on a fresh sequence
+    channel.upgradeSequence = errorReceipt.sequence
+    provableStore.set(channelPath(portIdentifier, channelIdentifier), channel)
 
     // get underlying connection for proof verification
     connection = provableStore.get(connectionPath(channel.connectionHops[0]))
