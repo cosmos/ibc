@@ -627,6 +627,7 @@ function onChanUpgradeTry(
 
   // upgrade version proposed by counterparty
   abortTransactionUnless(counterpartyVersion !== "")
+  metadata = UnmarshalJSON(counterpartyVersion)
 
   // retrieve the existing channel version.
   // In ibc-go, for example, this is done using the GetAppVersion 
