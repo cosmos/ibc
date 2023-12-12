@@ -143,18 +143,6 @@ interface CCVHandshakeMetadata {
 
 This specification assumes that the provider CCV module has access to the address of the distribution module account through the `GetDistributionAccountAddress()` method. For an example, take a look at the [auth module](https://docs.cosmos.network/main/build/modules/auth) of Cosmos SDK. 
 
-During the CCV channel opening handshake, the provider chain adds the address of its distribution module account to the channel version as metadata (as described in [ICS 4](../../core/ics-004-channel-and-packet-semantics/README.md#definitions)). 
-The metadata structure is described by the following interface:
-
-```typescript
-interface CCVHandshakeMetadata {
-  providerDistributionAccount: string // the account's address
-  version: string
-}
-```
-
-This specification assumes that the provider CCV module has access to the address of the distribution module account through the `GetDistributionAccountAddress()` method. For an example, take a look at the [auth module](https://docs.cosmos.network/main/build/modules/auth) of Cosmos SDK. 
-
 ## CCV Packets
 
 [&uparrow; Back to Outline](#outline)
