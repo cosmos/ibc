@@ -708,13 +708,13 @@ function getCounterPartyHops(proof: CommitmentProof | MultihopProof, lastConnect
 
 ```typescript
 // Returns the status of a client given its store.
-function Status (client) {
+function Status (client: clientState) {
 
   if (client.FrozenHeight !==0) {
 		return Frozen
 	}
-	// Get latest consensus state from clientStore to check for expiry
-	consState, err := getConsensusState(client.GetLatestHeight())
+  // Get latest consensus state from clientStore to check for expiry
+	consState, err := client.latestClientHeight()
 	if err (!== nil) {
 		return Unknown
 	}
@@ -792,7 +792,7 @@ function sendPacket(
     connection = provableStore.get(connectionPath(channel.connectionHops[0]))
     abortTransactionUnless(connection !== null)
     
-    client = provableStore.get(clientPath(connection.clientIdenfier))
+    client = provableStore.get(clientStatePath(connection.clientIdenfier))
     abortTransactionUnless(client !== null)
     // Checks that client is Active, abort otherwise. 
     abortTransactionUnless(Status(client) === Active)
