@@ -704,6 +704,30 @@ function getCounterPartyHops(proof: CommitmentProof | MultihopProof, lastConnect
 }
 ```
 
+##### Helper functions
+
+```typescript
+// Returns the status of a client given its store.
+function Status (client) {
+
+  if (client.FrozenHeight !==0) {
+		return Frozen
+	}
+	// Get latest consensus state from clientStore to check for expiry
+	consState, err := getConsensusState(client.GetLatestHeight())
+	if err (!== nil) {
+		return Unknown
+	}
+  // Check if Expired
+	let expirationTime := consState.Timestamp + client.TrustingPeriod
+	if (expirationTime <==now){
+    return Expired 
+  }
+  
+  return Active
+} 
+```
+
 #### Packet flow & handling
 
 ![Packet State Machine](packet-state-machine.png)
@@ -743,6 +767,7 @@ The IBC handler performs the following steps in order:
 
 - Checks that the channel is not closed to send packets
 - Checks that the calling module owns the sending port (see [ICS 5](../ics-005-port-allocation))
+- Checks that the client is not frozen or expired
 - Checks that the timeout height specified has not already passed on the destination chain
 - Increments the send sequence counter associated with the channel
 - Stores a constant-size commitment to the packet data & packet timeout
@@ -763,8 +788,14 @@ function sendPacket(
     // check that the channel must be OPEN to send packets;
     abortTransactionUnless(channel !== null)
     abortTransactionUnless(channel.state === OPEN)
+
     connection = provableStore.get(connectionPath(channel.connectionHops[0]))
     abortTransactionUnless(connection !== null)
+    
+    client = provableStore.get(clientPath(connection.clientIdenfier))
+    abortTransactionUnless(client !== null)
+    // Checks that client is Active, abort otherwise. 
+    abortTransactionUnless(Status(client) === Active)
 
     // check if the calling module owns the sending port
     abortTransactionUnless(authenticateCapability(channelCapabilityPath(sourcePort, sourceChannel), capability))
