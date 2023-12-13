@@ -710,7 +710,7 @@ function getCounterPartyHops(proof: CommitmentProof | MultihopProof, lastConnect
 // Returns the status of a client given its store.
 function Status (client: clientState) {
 
-  if (client.FrozenHeight !==0) {
+  if (client.FrozenHeight !== 0) {
 		return Frozen
 	}
   // Get latest consensus state from clientStore to check for expiry
@@ -720,7 +720,7 @@ function Status (client: clientState) {
 	}
   // Check if Expired
 	let expirationTime := consState.Timestamp + client.TrustingPeriod
-	if (expirationTime <==now){
+	if (expirationTime <== now){
     return Expired 
   }
   
