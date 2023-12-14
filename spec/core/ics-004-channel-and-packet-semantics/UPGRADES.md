@@ -483,44 +483,6 @@ function chanUpgradeTry(
   channel = provableStore.get(channelPath(portIdentifier, channelIdentifier))
   abortTransactionUnless(channel.state === OPEN)
 
-  // create upgrade fields for this chain from counterparty upgrade and 
-  // relayer-provided information version may be mutated by application callback
-  upgradeFields = Upgrade{
-    ordering: counterpartyUpgrade.fields.ordering,
-    connectionHops: proposedConnectionHops,
-    version: counterpartyUpgrade.fields.version,
-  }
-
-  existingUpgrade = provableStore.get(channelUpgradePath(portIdentifier, channelIdentifier))
-
-  // current upgrade either doesn't exist (non-crossing hello case),
-  // we initialize the upgrade with constructed upgradeFields
-  // if it does exist, we are in crossing hellos and must assert
-  // that the upgrade fields are the same for crossing-hellos case
-  if (existingUpgrade == null) {
-
-    initUpgradeHandshake(portIdentifier, channelIdentifier, upgradeFields)
-  } else {
-    // we must use the existing upgrade fields
-    upgradeFields = existingUpgrade.fields
-  }
-
-  abortTransactionUnless(isCompatibleUpgradeFields(upgradeFields, counterpartyUpgradeFields))
-
-  // if the counterparty sequence is greater than the current sequence,
-  // we fast forward to the counterparty sequence so that both channel 
-  // ends are using the same sequence for the current upgrade.
-  // initUpgradeHandshake will increment the sequence so after that call
-  // both sides will have the same upgradeSequence
-  if (counterpartyUpgradeSequence > channel.upgradeSequence) {
-    channel.upgradeSequence = counterpartyUpgradeSequence
-  }
-  provableStore.set(channelPath(portIdentifier, channelIdentifier), channel)
-
-  // get counterpartyHops for given connection
-  connection = provableStore.get(connectionPath(channel.connectionHops[0]))
-  counterpartyHops = [connection.counterpartyConnectionIdentifier]
-
   // construct counterpartyChannel from existing information and provided
   // counterpartyUpgradeSequence
   counterpartyChannel = ChannelEnd{
@@ -567,15 +529,46 @@ function chanUpgradeTry(
       channel.upgradeSequence - 1,
       "sequence out of sync", // constant string changeable by implementation
     }
-    // IMPORTANT: If execution enters this code path, then all prior execution must revert and
-    // the only write after the handler returns is the write of the error receipt.
-    // This can be accomplished by having the handler call a subfunction to do the core logic.
-    // If the core logic function then returns the error receipt, we discard changes from the core function writes
-    // and write the error receipt before returning
-    revertPriorState()
     provableStore.set(channelUpgradeErrorPath(portIdentifier, channelIdentifier), errorReceipt)
     return
   }
+  
+  // create upgrade fields for this chain from counterparty upgrade and 
+  // relayer-provided information version may be mutated by application callback
+  upgradeFields = Upgrade{
+    ordering: counterpartyUpgrade.fields.ordering,
+    connectionHops: proposedConnectionHops,
+    version: counterpartyUpgrade.fields.version,
+  }
+
+  existingUpgrade = provableStore.get(channelUpgradePath(portIdentifier, channelIdentifier))
+
+  // current upgrade either doesn't exist (non-crossing hello case),
+  // we initialize the upgrade with constructed upgradeFields
+  // if it does exist, we are in crossing hellos and must assert
+  // that the upgrade fields are the same for crossing-hellos case
+  if (existingUpgrade == null) {
+    initUpgradeHandshake(portIdentifier, channelIdentifier, upgradeFields)
+  } else {
+    // we must use the existing upgrade fields
+    upgradeFields = existingUpgrade.fields
+  }
+
+  abortTransactionUnless(isCompatibleUpgradeFields(upgradeFields, counterpartyUpgradeFields))
+
+  // if the counterparty sequence is greater than the current sequence,
+  // we fast forward to the counterparty sequence so that both channel 
+  // ends are using the same sequence for the current upgrade.
+  // initUpgradeHandshake will increment the sequence so after that call
+  // both sides will have the same upgradeSequence
+  if (counterpartyUpgradeSequence > channel.upgradeSequence) {
+    channel.upgradeSequence = counterpartyUpgradeSequence
+  }
+  provableStore.set(channelPath(portIdentifier, channelIdentifier), channel)
+
+  // get counterpartyHops for given connection
+  connection = provableStore.get(connectionPath(channel.connectionHops[0]))
+  counterpartyHops = [connection.counterpartyConnectionIdentifier]
 
   // call startFlushUpgradeHandshake to move channel to FLUSHING, which will block
   // upgrade from progressing to OPEN until flush completes on both ends
