@@ -369,7 +369,7 @@ function restoreChannel(
   // restore callback must not return error since counterpart
   // successfully restored previous channelEnd
   module.onChanUpgradeRestore(
-    portIdentifer,
+    portIdentifier,
     channelIdentifier
   )
 }
@@ -864,7 +864,7 @@ function chanUpgradeOpen(
   module = lookupModule(portIdentifier)
   // open callback must not return error since counterparty successfully upgraded
   module.onChanUpgradeOpen(
-    portIdentifer,
+    portIdentifier,
     channelIdentifier
   )
 }
@@ -1001,7 +1001,7 @@ function timeoutChannelUpgrade(
   // restore callback must not return error since counterparty 
   // successfully restored previous channelEnd
   module.onChanUpgradeRestore(
-    portIdentifer,
+    portIdentifier,
     channelIdentifier
   )
 }
