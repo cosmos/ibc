@@ -567,6 +567,12 @@ function chanUpgradeTry(
       channel.upgradeSequence - 1,
       "sequence out of sync", // constant string changeable by implementation
     }
+    // IMPORTANT: If execution enters this code path, then all prior execution must revert and
+    // the only write after the handler returns is the write of the error receipt.
+    // This can be accomplished by having the handler call a subfunction to do the core logic.
+    // If the core logic function then returns the error receipt, we discard changes from the core function writes
+    // and write the error receipt before returning
+    revertPriorState()
     provableStore.set(channelUpgradeErrorPath(portIdentifier, channelIdentifier), errorReceipt)
     return
   }
