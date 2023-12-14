@@ -580,7 +580,7 @@ function chanUpgradeTry(
   module = lookupModule(portIdentifier)
   version, err = module.onChanUpgradeTry(
     portIdentifier,
-    channelIdentifer,
+    channelIdentifier,
     channel.upgradeSequence,
     upgradeFields.ordering,
     upgradeFields.connectionHops,
