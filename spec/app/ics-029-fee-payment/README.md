@@ -185,7 +185,7 @@ function PayFee(packet: Packet, forward_relayer: string, reverse_relayer: string
     // NOTE: if forward relayer address is empty, then refund the forward fee to original fee payer(s).
 }
 
-// PayFee is a callback implemented by fee module called by the ICS-4 TimeoutPacket handler.
+// PayTimeoutFee is a callback implemented by fee module called by the ICS-4 TimeoutPacket handler.
 function PayTimeoutFee(packet: Packet, timeout_relayer: string) {
     // pay the timeout fee to the timeout relayer address
     // refund extra tokens to original fee payer(s)
