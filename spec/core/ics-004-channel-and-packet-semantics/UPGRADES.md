@@ -517,6 +517,16 @@ function chanUpgradeTry(
     )
   )
 
+  existingUpgrade = provableStore.get(channelUpgradePath(portIdentifier, channelIdentifier))
+
+  // NON CROSSING HELLO CASE:
+  // if the counterparty sequence is less than the current sequence,
+  // then either the counterparty chain is out-of-sync or the message
+  // is out-of-sync and we write an error receipt with our sequence
+  // so that the counterparty can abort their attempt and resync with our sequence.
+  // When the next upgrade attempt is initiated, both sides will move to a fresh
+  // never-before-seen sequence number
+  // CROSSING HELLO CASE:
   // if the counterparty sequence is less than the current sequence,
   // then either the counterparty chain is out-of-sync or the message
   // is out-of-sync and we write an error receipt with our sequence - 1
@@ -524,9 +534,15 @@ function chanUpgradeTry(
   // This will cause the outdated counterparty to upgrade the sequence
   // and abort their out-of-sync upgrade without aborting our own since
   // the error receipt sequence is lower than ours and higher than the counterparty.
-  if counterpartyUpgradeSequence < channel.upgradeSequence {     
+  if counterpartyUpgradeSequence < channel.upgradeSequence {
+    var errorUpgradeSequence: uint64
+    if existingUpgrade == null {
+      errorUpgradeSequence = channel.upgradeSequence
+    } else {
+      errorUpgraeSequence = channel.upgradeSequence - 1
+    }
     errorReceipt = ErrorReceipt{
-      channel.upgradeSequence - 1,
+      errorUpgradeSequence,
       "sequence out of sync", // constant string changeable by implementation
     }
     provableStore.set(channelUpgradeErrorPath(portIdentifier, channelIdentifier), errorReceipt)
@@ -541,7 +557,6 @@ function chanUpgradeTry(
     version: counterpartyUpgrade.fields.version,
   }
 
-  existingUpgrade = provableStore.get(channelUpgradePath(portIdentifier, channelIdentifier))
 
   // current upgrade either doesn't exist (non-crossing hello case),
   // we initialize the upgrade with constructed upgradeFields
