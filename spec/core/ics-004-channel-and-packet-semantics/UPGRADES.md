@@ -498,14 +498,6 @@ function chanUpgradeTry(
   // if it does exist, we are in crossing hellos and must assert
   // that the upgrade fields are the same for crossing-hellos case
   if (existingUpgrade == null) {
-    // if the counterparty sequence is greater than the current sequence,
-    // we fast forward to the counterparty sequence so that both channel 
-    // ends are using the same sequence for the current upgrade.
-    // initUpgradeHandshake will increment the sequence so after that call
-    // both sides will have the same upgradeSequence
-    if (counterpartyUpgradeSequence > channel.upgradeSequence) {
-      channel.upgradeSequence = counterpartyUpgradeSequence - 1
-    }
 
     initUpgradeHandshake(portIdentifier, channelIdentifier, upgradeFields)
   } else {
@@ -514,6 +506,16 @@ function chanUpgradeTry(
   }
 
   abortTransactionUnless(isCompatibleUpgradeFields(upgradeFields, counterpartyUpgradeFields))
+
+  // if the counterparty sequence is greater than the current sequence,
+  // we fast forward to the counterparty sequence so that both channel 
+  // ends are using the same sequence for the current upgrade.
+  // initUpgradeHandshake will increment the sequence so after that call
+  // both sides will have the same upgradeSequence
+  if (counterpartyUpgradeSequence > channel.upgradeSequence) {
+    channel.upgradeSequence = counterpartyUpgradeSequence
+  }
+  provableStore.set(channelPath(portIdentifier, channelIdentifier), channel)
 
   // get counterpartyHops for given connection
   connection = provableStore.get(connectionPath(channel.connectionHops[0]))
