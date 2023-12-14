@@ -220,7 +220,8 @@ function sendFungibleTokens(
   sourcePort: string,
   sourceChannel: string,
   timeoutHeight: Height,
-  timeoutTimestamp: uint64): uint64 {
+  timeoutTimestamp: uint64, // in unix nanoseconds
+): uint64 {
     prefix = "{sourcePort}/{sourceChannel}/"
     // we are the source if the denomination is not prefixed
     source = denomination.slice(0, len(prefix)) !== prefix
