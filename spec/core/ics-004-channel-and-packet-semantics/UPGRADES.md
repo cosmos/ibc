@@ -401,7 +401,7 @@ function restoreChannel(
 
   // delete auxiliary state
   provableStore.delete(channelUpgradePath(portIdentifier, channelIdentifier))
-  privateStore.delete(channelCounterpartyUpgradeTimeout(portIdentifier, channelIdentifier))
+  privateStore.delete(counterpartyUpgradeTimeout(portIdentifier, channelIdentifier))
   privateStore.delete(counterpartyNextPacketSendSequencePath(portIdentifier, channelIdentifier))
 
   // call modules onChanUpgradeRestore callback
