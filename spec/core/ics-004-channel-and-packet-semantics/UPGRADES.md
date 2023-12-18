@@ -107,10 +107,11 @@ The upgrade type will represent a particular upgrade attempt on a channel end.
 interface Upgrade {
   fields: UpgradeFields
   timeout: UpgradeTimeout
+  nextPacketSend: uint64
 }
 ```
 
-The upgrade contains the proposed upgrade for the channel end on the executing chain and the timeout for the upgrade attempt.
+The upgrade contains the proposed upgrade for the channel end on the executing chain, the timeout for the upgrade attempt, and the next packet send sequence for the channel. The `nextPacketSend` allows the counterparty to know which packets need to be flushed before the channel can reopen with the newly negotiated parameters. Any packet sent to the channel end with a packet sequence greater than or equal to the `nextPacketSend` will be rejected until the upgrade is complete. The `nextPacketSend` will also be used to set the new sequences for the counterparty when it opens for a new upgrade.
 
 #### `ErrorReceipt`
 
@@ -154,6 +155,16 @@ function verifyChannelUpgrade(
     channelUpgradePath(counterpartyPortIdentifier, counterpartyChannelIdentifier)
   )
   return verifyMembership(clientState, height, 0, 0, proof, path, upgrade)
+}
+```
+
+#### CounterpartyNextPacketSendSequence Path
+
+The chain must store the counterparty's last packet sequence on `startFlushUpgradeHandshake`. This will be stored in the `counterpartyNextPacketSendSequence` path on the private store.
+
+```typescript
+function counterpartyNextPacketSendSequencePath(portIdentifier: Identifier, channelIdentifier: Identifier): Path {
+    return "channelUpgrades/counterpartyNextPacketSendSequence/ports/{portIdentifier}/channels/{channelIdentifier}"
 }
 ```
 
@@ -235,7 +246,7 @@ function initUpgradeHandshake(
   // new order must be supported by the new connection
   abortTransactionUnless(isSupported(proposedConnection, proposedUpgradeFields.ordering))
 
-  // timeout will be filled when we move to FLUSHING
+  // nextPacketSendSequence and timeout will be filled when we move to FLUSHING
   upgrade = Upgrade{
     fields: proposedUpgradeFields,
   }
@@ -286,7 +297,7 @@ function isCompatibleUpgradeFields(
 // startFlushUpgradeHandshake will verify that the channel
 // is in a valid precondition for calling the startFlushUpgradeHandshake.
 // it will set the channel to flushing state.
-// it will store the upgrade timeout in the upgrade state.
+// it will store the counterparty's nextPacketSendSequence and upgrade timeout in the upgrade state.
 function startFlushUpgradeHandshake(
   portIdentifier: Identifier,
   channelIdentifier: Identifier,
@@ -303,7 +314,10 @@ function startFlushUpgradeHandshake(
   // either timeout height or timestamp must be non-zero
   abortTransactionUnless(upgradeTimeout.timeoutHeight != 0 || upgradeTimeout.timeoutTimestamp != 0)
 
+  nextPacketSendSequence = provableStore.get(nextSequenceSendPath(portIdentifier, channelIdentifier))
+
   upgrade.timeout = upgradeTimeout
+  upgrade.nextPacketSend = nextPacketSendSequence
   
   // store upgrade in public store for counterparty proof verification
   provableStore.set(channelPath(portIdentifier, channelIdentifier), channel)
@@ -336,7 +350,8 @@ function openUpgradeHandshake(
 
   // delete auxiliary state
   provableStore.delete(channelUpgradePath(portIdentifier, channelIdentifier))
-  privateStore.delete(channelCounterpartyUpgradeTimeout(portIdentifier, channelIdentifier))
+  privateStore.delete(counterpartyUpgradeTimeout(portIdentifier, channelIdentifier))
+  privateStore.delete(counterpartyNextPacketSendSequencePath(portIdentifier, channelIdentifier))
 }
 ```
 
@@ -363,6 +378,7 @@ function restoreChannel(
   // delete auxiliary state
   provableStore.delete(channelUpgradePath(portIdentifier, channelIdentifier))
   privateStore.delete(channelCounterpartyUpgradeTimeout(portIdentifier, channelIdentifier))
+  privateStore.delete(counterpartyNextPacketSendSequencePath(portIdentifier, channelIdentifier))
 
   // call modules onChanUpgradeRestore callback
   module = lookupModule(portIdentifier)
@@ -539,7 +555,7 @@ function chanUpgradeTry(
     if existingUpgrade == null {
       errorUpgradeSequence = channel.upgradeSequence
     } else {
-      errorUpgraeSequence = channel.upgradeSequence - 1
+      errorUpgradeSequence = channel.upgradeSequence - 1
     }
     errorReceipt = ErrorReceipt{
       errorUpgradeSequence,
