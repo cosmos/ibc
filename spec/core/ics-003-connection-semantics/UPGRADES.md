@@ -6,7 +6,7 @@ This standard document specifies the interfaces and state machine logic that IBC
 
 ## Motivation
 
-As new features get added to IBC, chains may wish the take advantage of new connection features without abandoning the accumulated state and network effect(s) of an already existing connection. The upgrade protocol proposed would allow chains to renegotiate an existing connection to take advantage of new features without having to create a new connection, thus preserving all existing channels that built on top of the connection.
+As new features get added to IBC, chains may wish to take advantage of new connection features without abandoning the accumulated state and network effect(s) of an already existing connection. The upgrade protocol proposed would allow chains to renegotiate an existing connection to take advantage of new features without having to create a new connection, thus preserving all existing channels that built on top of the connection.
 
 ## Desired Properties
 
