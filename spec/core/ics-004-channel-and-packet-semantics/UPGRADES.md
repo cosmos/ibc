@@ -364,6 +364,14 @@ function openUpgradeHandshake(
   channel.state = OPEN
   provableStore.set(channelPath(portIdentifier, channelIdentifier), channel)
 
+  // IMPLEMENTATION DETAIL: Implementations may choose to prune stale acknowledgements and receipts at this stage
+  // Since flushing has completed, any acknowledgement or receipt written before the chain went into flushing has
+  // already been processed by the counterparty can be removed.
+  // Implementatins may do this pruning work over multiple blocks for gas reasons. In this case, they should be sure
+  // to only prune stale acknowledgements/receipts and not new ones that have been written after the channel has reopened.
+  // Implementations may use the counterparty NextSequenceSend as a way to determine which acknowledgement/receipts
+  // were already processed by counterparty when flushing completed
+
   // delete auxiliary state
   provableStore.delete(channelUpgradePath(portIdentifier, channelIdentifier))
   privateStore.delete(counterpartyUpgradeTimeout(portIdentifier, channelIdentifier))
