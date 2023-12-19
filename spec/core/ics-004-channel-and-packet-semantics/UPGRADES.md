@@ -297,7 +297,7 @@ function isCompatibleUpgradeFields(
 // startFlushUpgradeHandshake will verify that the channel
 // is in a valid precondition for calling the startFlushUpgradeHandshake.
 // it will set the channel to flushing state.
-// it will store the nextPacketSendSequence and upgrade timeout in the upgrade state.
+// it will store the nextSequenceSend and upgrade timeout in the upgrade state.
 function startFlushUpgradeHandshake(
   portIdentifier: Identifier,
   channelIdentifier: Identifier,
@@ -314,10 +314,10 @@ function startFlushUpgradeHandshake(
   // either timeout height or timestamp must be non-zero
   abortTransactionUnless(upgradeTimeout.timeoutHeight != 0 || upgradeTimeout.timeoutTimestamp != 0)
 
-  nextPacketSendSequence = provableStore.get(nextSequenceSendPath(portIdentifier, channelIdentifier))
+  nextSequenceSend = provableStore.get(nextSequenceSendPath(portIdentifier, channelIdentifier))
 
   upgrade.timeout = upgradeTimeout
-  upgrade.nextPacketSend = nextPacketSendSequence
+  upgrade.nextPacketSend = nextSequenceSend
   
   // store upgrade in public store for counterparty proof verification
   provableStore.set(channelPath(portIdentifier, channelIdentifier), channel)
@@ -344,7 +344,7 @@ function openUpgradeHandshake(
   // the recv and ack sequences appropriately
   if channel.order == "UNORDERED" && upgrade.fields.ordering == "ORDERED" {
     selfNextSequenceSend = provableStore.get(nextSequenceSendPath(portIdentifier, channelIdentifier))
-    counterpartyNextSequenceSend = privateStore.get(counterpartyNextPacketSendSequencePath(portIdentifier, channelIdentifier))
+    counterpartyNextSequenceSend = privateStore.get(counterpartyNextSequenceSendPath(portIdentifier, channelIdentifier))
 
     // set nextSequenceRecv to the counterpartyNextSequenceSend since all packets were flushed
     provableStore.set(nextSequenceRecvPath(portIdentifier, channelIdentifier), counterpartyNextSequenceSendSeq)
@@ -375,7 +375,7 @@ function openUpgradeHandshake(
   // delete auxiliary state
   provableStore.delete(channelUpgradePath(portIdentifier, channelIdentifier))
   privateStore.delete(counterpartyUpgradeTimeout(portIdentifier, channelIdentifier))
-  privateStore.delete(counterpartyNextPacketSendSequencePath(portIdentifier, channelIdentifier))
+  privateStore.delete(counterpartyNextSequenceSendPath(portIdentifier, channelIdentifier))
 }
 ```
 
@@ -402,7 +402,7 @@ function restoreChannel(
   // delete auxiliary state
   provableStore.delete(channelUpgradePath(portIdentifier, channelIdentifier))
   privateStore.delete(counterpartyUpgradeTimeout(portIdentifier, channelIdentifier))
-  privateStore.delete(counterpartyNextPacketSendSequencePath(portIdentifier, channelIdentifier))
+  privateStore.delete(counterpartyNextSequenceSendPath(portIdentifier, channelIdentifier))
 
   // call modules onChanUpgradeRestore callback
   module = lookupModule(portIdentifier)
