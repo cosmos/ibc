@@ -160,7 +160,7 @@ function verifyChannelUpgrade(
 
 #### CounterpartyUpgrade Path
 
-The chain must store the counterpartyUpgrade on `chanUpgradeAck` and `chanUpgradeConfirm`. This will be stored in the `counterpartyUpgrade` path on the private store.
+The chain must store the counterparty upgrade on `chanUpgradeAck` and `chanUpgradeConfirm`. This will be stored in the `counterpartyUpgrade` path on the private store.
 
 ```typescript
 function counterpartyUpgradePath(portIdentifier: Identifier, channelIdentifier: Identifier): Path {
