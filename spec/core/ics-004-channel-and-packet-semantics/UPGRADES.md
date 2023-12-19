@@ -158,13 +158,13 @@ function verifyChannelUpgrade(
 }
 ```
 
-#### CounterpartyNextPacketSendSequence Path
+#### CounterpartyNextSequenceSend Path
 
-The chain must store the counterparty's last packet sequence on `startFlushUpgradeHandshake`. This will be stored in the `counterpartyNextPacketSendSequence` path on the private store.
+The chain must store the counterparty's next sequence send on `startFlushUpgradeHandshake`. This will be stored in the `counterpartyNextSequenceSend` path on the private store.
 
 ```typescript
-function counterpartyNextPacketSendSequencePath(portIdentifier: Identifier, channelIdentifier: Identifier): Path {
-    return "channelUpgrades/counterpartyNextPacketSendSequence/ports/{portIdentifier}/channels/{channelIdentifier}"
+function counterpartyNextSequenceSendPath(portIdentifier: Identifier, channelIdentifier: Identifier): Path {
+    return "channelUpgrades/counterpartyNextSequenceSend/ports/{portIdentifier}/channels/{channelIdentifier}"
 }
 ```
 
@@ -246,7 +246,7 @@ function initUpgradeHandshake(
   // new order must be supported by the new connection
   abortTransactionUnless(isSupported(proposedConnection, proposedUpgradeFields.ordering))
 
-  // nextPacketSendSequence and timeout will be filled when we move to FLUSHING
+  // nextPacketSend and timeout will be filled when we move to FLUSHING
   upgrade = Upgrade{
     fields: proposedUpgradeFields,
   }
@@ -343,8 +343,8 @@ function openUpgradeHandshake(
   // if channel order changed, we need to set
   // the recv and ack sequences appropriately
   if channel.order == "UNORDERED" && upgrade.fields.ordering == "ORDERED" {
-    selfNextSequenceSendSeq = provableStore.get(nextSequenceSendPath(portIdentifier, channelIdentifier))
-    counterpartyNextSequenceSendSeq = privateStore.get(counterpartyNextPacketSendSequencePath(portIdentifier, channelIdentifier))
+    selfNextSequenceSend = provableStore.get(nextSequenceSendPath(portIdentifier, channelIdentifier))
+    counterpartyNextSequenceSend = privateStore.get(counterpartyNextPacketSendSequencePath(portIdentifier, channelIdentifier))
 
     // set nextSequenceRecv to the counterpartyNextSequenceSend since all packets were flushed
     provableStore.set(nextSequenceRecvPath(portIdentifier, channelIdentifier), counterpartyNextSequenceSendSeq)
@@ -366,8 +366,8 @@ function openUpgradeHandshake(
 
   // IMPLEMENTATION DETAIL: Implementations may choose to prune stale acknowledgements and receipts at this stage
   // Since flushing has completed, any acknowledgement or receipt written before the chain went into flushing has
-  // already been processed by the counterparty can be removed.
-  // Implementatins may do this pruning work over multiple blocks for gas reasons. In this case, they should be sure
+  // already been processed by the counterparty and can be removed.
+  // Implementations may do this pruning work over multiple blocks for gas reasons. In this case, they should be sure
   // to only prune stale acknowledgements/receipts and not new ones that have been written after the channel has reopened.
   // Implementations may use the counterparty NextSequenceSend as a way to determine which acknowledgement/receipts
   // were already processed by counterparty when flushing completed
