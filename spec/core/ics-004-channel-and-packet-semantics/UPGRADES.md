@@ -337,9 +337,9 @@ function openUpgradeHandshake(
     counterpartyUpgrade = privateStore.get(counterpartyUpgradePath(portIdentifier, channelIdentifier))
 
     // set nextSequenceRecv to the counterpartyNextSequenceSend since all packets were flushed
-    provableStore.set(nextSequenceRecvPath(portIdentifier, channelIdentifier), counterpartyUpgrade.nextSequenceSendSeq)
+    provableStore.set(nextSequenceRecvPath(portIdentifier, channelIdentifier), counterpartyUpgrade.nextSequenceSend)
     // set nextSequenceAck to our own nextSequenceSend since all packets were flushed
-    provableStore.set(nextSequenceAckPath(portIdentifier, channelIdentifier), selfNextSequenceSendSeq)
+    provableStore.set(nextSequenceAckPath(portIdentifier, channelIdentifier), selfNextSequenceSend)
   } else if channel.order == "ORDERED" && upgrade.fields.ordering == "UNORDERED" {
     // reset recv and ack sequences to 1 for UNORDERED channel
     provableStore.set(nextSequenceRecvPath(portIdentifier, channelIdentifier), 1)
