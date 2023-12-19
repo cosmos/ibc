@@ -336,7 +336,7 @@ function openUpgradeHandshake(
     selfNextSequenceSend = provableStore.get(nextSequenceSendPath(portIdentifier, channelIdentifier))
     counterpartyUpgrade = privateStore.get(counterpartyUpgradePath(portIdentifier, channelIdentifier))
 
-    // set nextSequenceRecv to the counterpartyNextSequenceSend since all packets were flushed
+    // set nextSequenceRecv to the counterparty nextSequenceSend since all packets were flushed
     provableStore.set(nextSequenceRecvPath(portIdentifier, channelIdentifier), counterpartyUpgrade.nextSequenceSend)
     // set nextSequenceAck to our own nextSequenceSend since all packets were flushed
     provableStore.set(nextSequenceAckPath(portIdentifier, channelIdentifier), selfNextSequenceSend)
