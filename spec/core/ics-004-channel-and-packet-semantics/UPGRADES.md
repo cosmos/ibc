@@ -297,7 +297,7 @@ function isCompatibleUpgradeFields(
 // startFlushUpgradeHandshake will verify that the channel
 // is in a valid precondition for calling the startFlushUpgradeHandshake.
 // it will set the channel to flushing state.
-// it will store the counterparty's nextPacketSendSequence and upgrade timeout in the upgrade state.
+// it will store the nextPacketSendSequence and upgrade timeout in the upgrade state.
 function startFlushUpgradeHandshake(
   portIdentifier: Identifier,
   channelIdentifier: Identifier,
