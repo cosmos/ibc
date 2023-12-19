@@ -158,23 +158,13 @@ function verifyChannelUpgrade(
 }
 ```
 
-#### CounterpartyNextSequenceSend Path
+#### CounterpartyUpgrade Path
 
-The chain must store the counterparty's next sequence send on `chanUpgradeAck` and chanUpgradeConfirm. This will be stored in the `counterpartyNextSequenceSend` path on the private store.
-
-```typescript
-function counterpartyNextSequenceSendPath(portIdentifier: Identifier, channelIdentifier: Identifier): Path {
-    return "channelUpgrades/counterpartyNextSequenceSend/ports/{portIdentifier}/channels/{channelIdentifier}"
-}
-```
-
-#### CounterpartyUpgradeTimeout Path
-
-The chain must store the counterparty's `upgradeTimeout`. This will be stored in the `counterpartyUpgradeTimeout` path on the private store.
+The chain must store the counterpartyUpgrade on `chanUpgradeAck` and `chanUpgradeConfirm`. This will be stored in the `counterpartyUpgrade` path on the private store.
 
 ```typescript
-function counterpartyUpgradeTimeout(portIdentifier: Identifier, channelIdentifier: Identifier): Path {
-    return "channelUpgrades/counterpartyUpgradeTimeout/ports/{portIdentifier}/channels/{channelIdentifier}"
+function counterpartyUpgradePath(portIdentifier: Identifier, channelIdentifier: Identifier): Path {
+    return "channelUpgrades/counterpartyUpgrade/ports/{portIdentifier}/channels/{channelIdentifier}"
 }
 ```
 
@@ -344,10 +334,10 @@ function openUpgradeHandshake(
   // the recv and ack sequences appropriately
   if channel.order == "UNORDERED" && upgrade.fields.ordering == "ORDERED" {
     selfNextSequenceSend = provableStore.get(nextSequenceSendPath(portIdentifier, channelIdentifier))
-    counterpartyNextSequenceSend = privateStore.get(counterpartyNextSequenceSendPath(portIdentifier, channelIdentifier))
+    counterpartyUpgrade = privateStore.get(counterpartyUpgradePath(portIdentifier, channelIdentifier))
 
     // set nextSequenceRecv to the counterpartyNextSequenceSend since all packets were flushed
-    provableStore.set(nextSequenceRecvPath(portIdentifier, channelIdentifier), counterpartyNextSequenceSendSeq)
+    provableStore.set(nextSequenceRecvPath(portIdentifier, channelIdentifier), counterpartyUpgrade.nextSequenceSendSeq)
     // set nextSequenceAck to our own nextSequenceSend since all packets were flushed
     provableStore.set(nextSequenceAckPath(portIdentifier, channelIdentifier), selfNextSequenceSendSeq)
   } else if channel.order == "ORDERED" && upgrade.fields.ordering == "UNORDERED" {
@@ -374,8 +364,7 @@ function openUpgradeHandshake(
 
   // delete auxiliary state
   provableStore.delete(channelUpgradePath(portIdentifier, channelIdentifier))
-  privateStore.delete(counterpartyUpgradeTimeout(portIdentifier, channelIdentifier))
-  privateStore.delete(counterpartyNextSequenceSendPath(portIdentifier, channelIdentifier))
+  privateStore.delete(counterpartyUpgradePath(portIdentifier, channelIdentifier))
 }
 ```
 
@@ -401,8 +390,7 @@ function restoreChannel(
 
   // delete auxiliary state
   provableStore.delete(channelUpgradePath(portIdentifier, channelIdentifier))
-  privateStore.delete(counterpartyUpgradeTimeout(portIdentifier, channelIdentifier))
-  privateStore.delete(counterpartyNextSequenceSendPath(portIdentifier, channelIdentifier))
+  privateStore.delete(counterpartyUpgradePath(portIdentifier, channelIdentifier))
 
   // call modules onChanUpgradeRestore callback
   module = lookupModule(portIdentifier)
@@ -742,13 +730,11 @@ function chanUpgradeAck(
   }
 
   // if there are no in-flight packets on our end, we can automatically go to FLUSHCOMPLETE
-  // otherwise store counterparty timeout so packet handlers can check before going to FLUSHCOMPLETE
   if (pendingInflightPackets(portIdentifier, channelIdentifier) == null) {
     channel.state = FLUSHCOMPLETE
-  } else {
-    privateStore.set(counterpartyUpgradeTimeout(portIdentifier, channelIdentifier), timeout)
   }
-  privateStore.set(counterpartyNextSequenceSend(portIdentifier, channelIdentifier), counterpartyUpgrade.nextSequenceSend)
+  // set counterparty upgrade
+  privateStore.set(counterpartyUpgradePath(portIdentifier, channelIdentifier), counterpartyUpgrade)
 
   provableStore.set(channelPath(portIdentifier, channelIdentifier), channel)
 
@@ -841,10 +827,9 @@ function chanUpgradeConfirm(
   if (pendingInflightPackets(portIdentifier, channelIdentifier) == null) {
     channel.state = FLUSHCOMPLETE
     provableStore.set(channelPath(portIdentifier, channelIdentifier), channel)
-  } else {
-    privateStore.set(counterpartyUpgradeTimeout(portIdentifier, channelIdentifier), timeout)
   }
-  privateStore.set(counterpartyNextSequenceSend(portIdentifier, channelIdentifier), counterpartyUpgrade.nextSequenceSend)
+  // set counterparty upgrade
+  privateStore.set(counterpartyUpgradePath(portIdentifier, channelIdentifier), counterpartyUpgrade)
 
   // if both chains are already in flushcomplete we can move to OPEN
   if (channel.state == FLUSHCOMPLETE && counterpartyChannelState == FLUSHCOMPLETE) {
