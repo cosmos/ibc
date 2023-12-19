@@ -160,7 +160,7 @@ function verifyChannelUpgrade(
 
 #### CounterpartyNextSequenceSend Path
 
-The chain must store the counterparty's next sequence send on `startFlushUpgradeHandshake`. This will be stored in the `counterpartyNextSequenceSend` path on the private store.
+The chain must store the counterparty's next sequence send on `chanUpgradeAck` and chanUpgradeConfirm. This will be stored in the `counterpartyNextSequenceSend` path on the private store.
 
 ```typescript
 function counterpartyNextSequenceSendPath(portIdentifier: Identifier, channelIdentifier: Identifier): Path {
@@ -748,6 +748,7 @@ function chanUpgradeAck(
   } else {
     privateStore.set(counterpartyUpgradeTimeout(portIdentifier, channelIdentifier), timeout)
   }
+  privateStore.set(counterpartyNextSequenceSend(portIdentifier, channelIdentifier), counterpartyUpgrade.nextPacketSend)
 
   provableStore.set(channelPath(portIdentifier, channelIdentifier), channel)
 
@@ -843,6 +844,7 @@ function chanUpgradeConfirm(
   } else {
     privateStore.set(counterpartyUpgradeTimeout(portIdentifier, channelIdentifier), timeout)
   }
+  privateStore.set(counterpartyNextSequenceSend(portIdentifier, channelIdentifier), counterpartyUpgrade.nextPacketSend)
 
   // if both chains are already in flushcomplete we can move to OPEN
   if (channel.state == FLUSHCOMPLETE && counterpartyChannelState == FLUSHCOMPLETE) {
