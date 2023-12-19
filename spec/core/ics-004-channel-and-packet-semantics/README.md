@@ -827,10 +827,10 @@ function recvPacket(
     channel = provableStore.get(channelPath(packet.destPort, packet.destChannel))
     abortTransactionUnless(channel !== null)
     abortTransactionUnless(channel.state === OPEN || (channel.state === FLUSHING))
-    counterpartyNextPacketSend = privateStore.get(counterpartyNextPacketSendSequence(packet.destPort, packet.destChannel))
+    counterpartyNextSequenceSend = privateStore.get(counterpartyNextSequenceSendSequence(packet.destPort, packet.destChannel))
     // defensive check that ensures chain does not process a packet higher than the last packet sent before
     // counterparty went into FLUSHING mode. If the counterparty is implemented correctly, this should never abort
-    abortTransactionUnless(counterpartyNextPacketSend == 0 || packet.sequence < counterpartyNextPacketSend)
+    abortTransactionUnless(counterpartyNextSequenceSend == 0 || packet.sequence < counterpartyNextSequenceSend)
     abortTransactionUnless(authenticateCapability(channelCapabilityPath(packet.destPort, packet.destChannel), capability))
     abortTransactionUnless(packet.sourcePort === channel.counterpartyPortIdentifier)
     abortTransactionUnless(packet.sourceChannel === channel.counterpartyChannelIdentifier)
