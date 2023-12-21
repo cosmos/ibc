@@ -85,10 +85,10 @@ MUST NOT BE MODIFIED:
 
 NOTE: If the upgrade adds any fields to the `ChannelEnd` these are by default modifiable, and can be arbitrarily chosen by an Actor (e.g. chain governance) which has permission to initiate the upgrade.
 
-#### `UpgradeTimeout`
+#### `Timeout`
 
 ```typescript
-interface UpgradeTimeout {
+interface Timeout {
   timeoutHeight: Height
   timeoutTimestamp: uint64
 }
@@ -106,7 +106,7 @@ The upgrade type will represent a particular upgrade attempt on a channel end.
 ```typescript
 interface Upgrade {
   fields: UpgradeFields
-  timeout: UpgradeTimeout
+  timeout: Timeout
   nextSequenceSend: uint64
 }
 ```
@@ -300,13 +300,13 @@ function startFlushUpgradeHandshake(
 
   channel.state = FLUSHING
 
-  upgradeTimeout = getUpgradeTimeout(channel.portIdentifier, channel.channelIdentifier)
+  timeout = getTimeout(channel.portIdentifier, channel.channelIdentifier)
   // either timeout height or timestamp must be non-zero
-  abortTransactionUnless(upgradeTimeout.timeoutHeight != 0 || upgradeTimeout.timeoutTimestamp != 0)
+  abortTransactionUnless(timeout.timeoutHeight != 0 || timeout.timeoutTimestamp != 0)
 
   nextSequenceSend = provableStore.get(nextSequenceSendPath(portIdentifier, channelIdentifier))
 
-  upgrade.timeout = upgradeTimeout
+  upgrade.timeout = timeout
   upgrade.nextSequenceSend = nextSequenceSend
   
   // store upgrade in public store for counterparty proof verification
@@ -421,17 +421,17 @@ function pendingInflightPacketSequences(
 function isAuthorizedUpgrader(address: string): boolean
 ```
 
-`getUpgradeTimeout` will return the upgrade timeout specified for the given channel. This may be a chain-wide parameter, or it can be a parameter chosen per channel. This is an implementation-level detail, so only the function signature is specified here. Note this should retrieve some stored timeout delta for the channel and add it to the current height and time to get the absolute timeout values.
+`getTimeout` will return the upgrade timeout specified for the given channel. This may be a chain-wide parameter, or it can be a parameter chosen per channel. This is an implementation-level detail, so only the function signature is specified here. Note this should retrieve some stored timeout delta for the channel and add it to the current height and time to get the absolute timeout values.
 
 ```typescript
-// getUpgradeTimeout
-function getUpgradeTimeout(portIdentifier: string, channelIdentifier: string) UpgradeTimeout {
+// getTimeout
+function getTimeout(portIdentifier: string, channelIdentifier: string) Timeout {
 }
 ```
 
 ### Upgrade Handshake
 
-The upgrade handshake defines seven datagrams: *ChanUpgradeInit*, *ChanUpgradeTry*, *ChanUpgradeAck*, *ChanUpgradeConfirm*, *ChanUpgradeOpen*, *ChanUpgradeTimeout*, and *ChanUpgradeCancel*
+The upgrade handshake defines seven datagrams: *ChanUpgradeInit*, *ChanUpgradeTry*, *ChanUpgradeAck*, *ChanUpgradeConfirm*, *ChanUpgradeOpen*, *ChanTimeout*, and *ChanUpgradeCancel*
 
 A successful protocol execution flows as follows (note that all calls are made through modules per [ICS 25](../ics-025-handler-interface)):
 
@@ -459,7 +459,7 @@ If a chain does not agree to the proposed counterparty upgraded `ChannelEnd`, it
 
 A relayer may then submit a `ChanUpgradeCancel` datagram to the counterparty. Upon receiving this message a chain must verify that the counterparty wrote an `ErrorReceipt` into its `channelUpgradeErrorPath` with a sequence greater than or equal to its own `ChannelEnd`'s upgrade sequence. If successful, it will restore its original channel as well, thus cancelling the upgrade.
 
-If a chain does not reach `FLUSHCOMPLETE` within the counterparty specified timeout, then it MUST NOT move to `FLUSHCOMPLETE` and should instead abort the upgrade. A relayer may submit a proof of this to the counterparty chain in a `ChanUpgradeTimeout` datagram so that counterparty cancels the upgrade and restores its original channel as well.
+If a chain does not reach `FLUSHCOMPLETE` within the counterparty specified timeout, then it MUST NOT move to `FLUSHCOMPLETE` and should instead abort the upgrade. A relayer may submit a proof of this to the counterparty chain in a `ChanTimeout` datagram so that counterparty cancels the upgrade and restores its original channel as well.
 
 ```typescript
 function chanUpgradeInit(
@@ -985,22 +985,22 @@ function timeoutChannelUpgrade(
   channel = provableStore.get(channelPath(portIdentifier, channelIdentifier))
   abortTransactionUnless(channel.state === FLUSHING || channel.state === FLUSHCOMPLETE)
 
-  upgradeTimeout = upgrade.timeout
+  timeout = upgrade.timeout
 
   // proof must be from a height after timeout has elapsed. 
   // Either timeoutHeight or timeoutTimestamp must be defined.
   // if timeoutHeight is defined and proof is from before 
   // timeout height then abort transaction
   abortTransactionUnless(
-    upgradeTimeout.timeoutHeight.IsZero() || 
-    proofHeight >= upgradeTimeout.timeoutHeight
+    timeout.timeoutHeight.IsZero() || 
+    proofHeight >= timeout.timeoutHeight
   )
   // if timeoutTimestamp is defined then the consensus time 
   // from proof height must be greater than timeout timestamp
   connection = provableStore.get(connectionPath(channel.connectionHops[0]))
   abortTransactionUnless(
-    upgradeTimeout.timeoutTimestamp.IsZero() || 
-    getTimestampAtHeight(connection, proofHeight) >= upgradeTimeout.timestamp
+    timeout.timeoutTimestamp.IsZero() || 
+    getTimestampAtHeight(connection, proofHeight) >= timeout.timestamp
   )
 
   // counterparty channel must be proved to not have completed flushing after timeout has passed
