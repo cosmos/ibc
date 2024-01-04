@@ -85,10 +85,10 @@ MUST NOT BE MODIFIED:
 
 NOTE: If the upgrade adds any fields to the `ChannelEnd` these are by default modifiable, and can be arbitrarily chosen by an Actor (e.g. chain governance) which has permission to initiate the upgrade.
 
-#### `UpgradeTimeout`
+#### `Timeout`
 
 ```typescript
-interface UpgradeTimeout {
+interface Timeout {
   timeoutHeight: Height
   timeoutTimestamp: uint64
 }
@@ -106,7 +106,7 @@ The upgrade type will represent a particular upgrade attempt on a channel end.
 ```typescript
 interface Upgrade {
   fields: UpgradeFields
-  timeout: UpgradeTimeout
+  timeout: Timeout
   nextSequenceSend: uint64
 }
 ```
@@ -425,7 +425,7 @@ function isAuthorizedUpgrader(address: string): boolean
 
 ```typescript
 // getUpgradeTimeout
-function getUpgradeTimeout(portIdentifier: string, channelIdentifier: string) UpgradeTimeout {
+function getUpgradeTimeout(portIdentifier: string, channelIdentifier: string) Timeout {
 }
 ```
 
