@@ -709,21 +709,20 @@ function getCounterPartyHops(proof: CommitmentProof | MultihopProof, lastConnect
 ```typescript
 // Returns the status of a client given its store.
 function Status (client: clientState) {
-
   if (client.FrozenHeight !== 0) {
-		return Frozen
-	}
+    return Frozen
+  }
   // Get latest consensus state from clientStore to check for expiry
-	consState, err := client.latestClientHeight()
-	if err (!== nil) {
-		return Unknown
-	}
+  consState, err := client.latestClientHeight()
+  if err (!== nil) {
+    return Unknown
+  }
   // Check if Expired
-	let expirationTime := consState.Timestamp + client.TrustingPeriod
-	if (expirationTime <== now){
+  let expirationTime := consState.Timestamp + client.TrustingPeriod
+  if (expirationTime <== now){
     return Expired 
   }
-  
+
   return Active
 } 
 ```
