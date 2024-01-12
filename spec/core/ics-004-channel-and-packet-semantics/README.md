@@ -704,29 +704,6 @@ function getCounterPartyHops(proof: CommitmentProof | MultihopProof, lastConnect
 }
 ```
 
-##### Helper functions
-
-```typescript
-// Returns the status of a client given its store.
-function Status (client: clientState) {
-  if (client.FrozenHeight !== 0) {
-    return Frozen
-  }
-  // Get latest consensus state from clientStore to check for expiry
-  consState, err := client.latestClientHeight()
-  if err (!== nil) {
-    return Unknown
-  }
-  // Check if Expired
-  let expirationTime := consState.Timestamp + client.TrustingPeriod
-  if (expirationTime <== now){
-    return Expired 
-  }
-
-  return Active
-} 
-```
-
 #### Packet flow & handling
 
 ![Packet State Machine](packet-state-machine.png)
@@ -791,10 +768,10 @@ function sendPacket(
     connection = provableStore.get(connectionPath(channel.connectionHops[0]))
     abortTransactionUnless(connection !== null)
     
-    client = provableStore.get(clientStatePath(connection.clientIdenfier))
-    abortTransactionUnless(client !== null)
+    clientState = queryClientState(connection.clientIdenfier)
+    abortTransactionUnless(clientState !== null)
     // Checks that client is Active, abort otherwise. 
-    abortTransactionUnless(Status(client) === Active)
+    abortTransactionUnless(Status(clientState) === Active)
 
     // check if the calling module owns the sending port
     abortTransactionUnless(authenticateCapability(channelCapabilityPath(sourcePort, sourceChannel), capability))
