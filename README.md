@@ -10,8 +10,6 @@ It shall be used to consolidate design rationale, protocol semantics, and encodi
 
 Contributions are welcome. See [CONTRIBUTING.md](meta/CONTRIBUTING.md) for contribution guidelines.
 
-See [ROADMAP.md](meta/ROADMAP.md) for a public up-to-date version of our roadmap.
-
 ## What is IBC?
 
 <!-- markdown-link-check-disable-next-line -->
