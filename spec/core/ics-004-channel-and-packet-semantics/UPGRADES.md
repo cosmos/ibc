@@ -38,10 +38,10 @@ enum ChannelState {
 
 - In `ChanUpgradeInit`, the initializing chain that is proposing the upgrade should store the channel upgrade.
 - The counterparty chain executing `ChanUpgradeTry` that accepts the upgrade should store the channel upgrade, set the channel state from `OPEN` to `FLUSHING`, and start the flushing timer by storing an upgrade timeout.
-- Once the initiating chain verifies the counterparty is in `FLUSHING`, it must also move to `FLUSHING` unless all in-flight packets are already flushed on both ends, in which case it must move directly to `FLUSHCOMPLETE`. The initiator will also store the counterparty timeout to ensure it does not move to `FLUSHCOMPLETE` after the counterparty timeout has passed.
-- The counterparty chain must prove that the initiator is  also in `FLUSHING` or completed flushing in `FLUSHCOMPLETE`. The counterparty will store the initiator timeout to ensure it does not move to `FLUSHCOMPLETE` after the initiator timeout has passed.
+- Once the initiating chain verifies the counterparty is in `FLUSHING`, it must also move to `FLUSHING` unless all in-flight packets are already flushed on its end, in which case it must move directly to `FLUSHCOMPLETE`. The initiator will also store the counterparty timeout to ensure it does not move to `FLUSHCOMPLETE` after the counterparty timeout has passed.
+- The counterparty chain must prove that the initiator is also in `FLUSHING` or completed flushing in `FLUSHCOMPLETE`. The counterparty will store the initiator timeout to ensure it does not move to `FLUSHCOMPLETE` after the initiator timeout has passed.
 
-`FLUSHING` is a "blocking" state in that they will prevent the upgrade handshake from proceeding until the in-flight packets on both channel ends are flushed. Once both sides have moved to `FLUSHCOMPLETE`, a relayer can prove this on both ends with `ChanUpgradeOpen` to open the channel on both sides with the new parameters.
+`FLUSHING` is a "blocking" state that prevents a channel end from advancing to `FLUSHCOMPLETE` unless the in-flight packets on its channel end are flushed and both channel ends have already moved to `FLUSHING`. Once both sides have moved to `FLUSHCOMPLETE`, a relayer can prove this on both ends with `ChanUpgradeOpen` to open the channel on both sides with the new parameters.
 
 #### `ChannelEnd`
 
@@ -1050,7 +1050,7 @@ function timeoutChannelUpgrade(
 }
 ```
 
-Both parties must not complete the upgrade handshake if the counterparty upgrade timeout has already passed. Even if both sides could have successfully moved to `FLUSHCOMPLETE`. This will prevent the channel ends from reaching incompatible states.
+Both parties must not complete the upgrade handshake and move to `FLUSHCOMPLETE` if the counterparty upgrade timeout has already passed. This will prevent the channel ends from reaching incompatible states.
 
 ### Considerations
 
