@@ -25,7 +25,7 @@ All standards at or past the "Draft" stage are listed here in order of their ICS
 | ---------------------------------------- | -------------------------- | ----- | ------------- |
 | [1](spec/ics-001-ics-standard/README.md) | ICS Specification Standard | N/A   | Protocol team |
 
-### Transport/Core
+### Core Transport 
 
 | Interchain Standard Number                                    | Standard Title             | Stage     | Implementations | Maintainer    |
 | ------------------------------------------------------------- | -------------------------- | --------- | --------------- | ------------- |
@@ -39,7 +39,7 @@ All standards at or past the "Draft" stage are listed here in order of their ICS
 | [26](spec/core/ics-026-routing-module/README.md)              | Routing Module             | Candidate | [ibc-go](https://github.com/cosmos/ibc-go), [ibc-rs](https://github.com/cosmos/ibc-rs) | Protocol team |
 | [33](spec/core/ics-033-multi-hop/README.md)                   | Multi-hop Messaging        | Candidate | [ibc-go](https://github.com/cosmos/ibc-go) | Protocol team |
 
-### Client
+### Light Clients
 
 | Interchain Standard Number                                      | Standard Title             | Stage | Implementations | Maintainer    |
 | --------------------------------------------------------------- | -------------------------- | ----- | --------------- | ------------- |
