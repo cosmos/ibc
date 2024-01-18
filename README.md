@@ -25,7 +25,7 @@ All standards at or past the "Draft" stage are listed here in order of their ICS
 | ---------------------------------------- | -------------------------- | ----- | ------------- |
 | [1](spec/ics-001-ics-standard/README.md) | ICS Specification Standard | N/A   | Protocol team |
 
-### Core
+### Transport/Core
 
 | Interchain Standard Number                                    | Standard Title             | Stage     | Implementations | Maintainer    |
 | ------------------------------------------------------------- | -------------------------- | --------- | --------------- | ------------- |
