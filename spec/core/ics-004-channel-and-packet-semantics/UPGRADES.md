@@ -1038,15 +1038,6 @@ function timeoutChannelUpgrade(
   // we must restore the channel since the timeout verification has passed
   // error receipt is written for this sequence, counterparty can call cancelUpgradeHandshake
   restoreChannel(portIdentifier, channelIdentifier)
-
-  // call modules onChanUpgradeRestore callback
-  module = lookupModule(portIdentifier)
-  // restore callback must not return error since counterparty 
-  // successfully restored previous channelEnd
-  module.onChanUpgradeRestore(
-    portIdentifier,
-    channelIdentifier
-  )
 }
 ```
 
