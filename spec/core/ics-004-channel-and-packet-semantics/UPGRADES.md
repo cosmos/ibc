@@ -442,6 +442,8 @@ A successful protocol execution flows as follows (note that all calls are made t
 | Relayer   | `ChanUpgradeAck`     | A                | (OPEN, FLUSHING)                   | (FLUSHING/FLUSHCOMPLETE, FLUSHING)                    |
 | Relayer   | `ChanUpgradeConfirm` | B                | (FLUSHING/FLUSHCOMPLETE, FLUSHING) | (FLUSHING/FLUSHCOMPLETE, FLUSHING/FLUSHCOMPLETE/OPEN) |
 
+![Channel Upgrade Flow](channel-upgrade-flow.png)
+
 Once both states are in `FLUSHING` and both sides have stored each others upgrade timeouts, both sides can move to `FLUSHCOMPLETE` by clearing their in-flight packets. Once both sides have complete flushing, a relayer may submit a `ChanUpgradeOpen` datagram to both ends proving that the counterparty has also completed flushing in order to move the channelEnd to `OPEN`.
 
 `ChanUpgradeOpen` is only necessary to call on chain B if the chain was not moved to `OPEN` on `ChanUpgradeConfirm` which may happen if all packets on both ends are already flushed.
