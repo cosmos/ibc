@@ -442,7 +442,7 @@ A successful protocol execution flows as follows (note that all calls are made t
 | Relayer   | `ChanUpgradeAck`     | A                | (OPEN, FLUSHING)                   | (FLUSHING/FLUSHCOMPLETE, FLUSHING)                    |
 | Relayer   | `ChanUpgradeConfirm` | B                | (FLUSHING/FLUSHCOMPLETE, FLUSHING) | (FLUSHING/FLUSHCOMPLETE, FLUSHING/FLUSHCOMPLETE/OPEN) |
 
-**IMPORTANT:** Note it is important that the prior state before the channel upgrade process starts is that **both** channel Ends are `OPEN`. Authorized upgradors are at risk of having the channel halt during the upgrade process if the prior state before channel upgrades on one of the ends is not `OPEN`.
+**IMPORTANT:** Note it is important that the prior state before the channel upgrade process starts is that **both** channel ends are `OPEN`. Authorized upgraders are at risk of having the channel halt during the upgrade process if the prior state before channel upgrades on one of the ends is not `OPEN`.
 
 Once both states are in `FLUSHING` and both sides have stored each others upgrade timeouts, both sides can move to `FLUSHCOMPLETE` by clearing their in-flight packets. Once both sides have complete flushing, a relayer may submit a `ChanUpgradeOpen` datagram to both ends proving that the counterparty has also completed flushing in order to move the channelEnd to `OPEN`.
 
@@ -465,7 +465,7 @@ If a chain does not reach `FLUSHCOMPLETE` within the counterparty specified time
 
 ```typescript
 // Channel Ends on both sides **must** be OPEN before this function is called
-// It is the responsibility of the authorized Upgrador to ensure this is the case
+// It is the responsibility of the authorized upgrader to ensure this is the case
 function chanUpgradeInit(
   portIdentifier: Identifier,
   channelIdentifier: Identifier,
