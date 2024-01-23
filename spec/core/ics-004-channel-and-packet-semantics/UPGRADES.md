@@ -846,6 +846,7 @@ function chanUpgradeOpen(
   portIdentifier: Identifier,
   channelIdentifier: Identifier,
   counterpartyChannelState: ChannelState,
+  counterpartyUpgradeSequence: uint64,
   proofChannel: CommitmentProof,
   proofHeight: Height,
 ) {
@@ -865,6 +866,12 @@ function chanUpgradeOpen(
     proposedConnection = provableStore.get(connectionPath(upgrade.fields.connectionHops))
     counterpartyHops = [proposedConnection.counterpartyConnectionIdentifier]
 
+    // The counterparty upgrade sequence must be greater than or equal to
+    // the channel upgrade sequence. It should normally be equivalent, but
+    // in the unlikely case that a new upgrade is initiated after it reopens,
+    // then the upgrade sequence will be greater than our upgrade sequence.
+    abortTransactionUnless(counterpartyUpgradeSequence >= channel.upgradeSequence)
+
     counterpartyChannel = ChannelEnd{
       state: OPEN,
       ordering: upgrade.fields.ordering,
@@ -872,7 +879,7 @@ function chanUpgradeOpen(
       counterpartyChannelIdentifier: channelIdentifier,
       connectionHops: counterpartyHops,
       version: upgrade.fields.version,
-      sequence: channel.upgradeSequence,
+      sequence: counterpartyUpgradeSequence,
     }
   } else if (counterpartyChannelState == FLUSHCOMPLETE) {
     counterpartyHops = [connection.counterpartyConnectionIdentifier]
