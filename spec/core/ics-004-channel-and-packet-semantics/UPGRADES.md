@@ -444,7 +444,7 @@ A successful protocol execution flows as follows (note that all calls are made t
 
 Refer to the diagram below for a possible channel upgrade flow. Multiple channel states are shown on steps 5 and 7 where the channel end can move to either one of those possible states upon executing the handshake. Note that in this example, the channel end on chain B moves to `OPEN` with the new parameters on `ChanUpgradeConfirm` (step 7).
 
-![Channel Upgrade Flow](channel-upgrade-flow.png)
+![Channel Upgrade Flow](channel-upgrade.png)
 
 Once both states are in `FLUSHING` and both sides have stored each others upgrade timeouts, both sides can move to `FLUSHCOMPLETE` by clearing their in-flight packets. Once both sides have complete flushing, a relayer may submit a `ChanUpgradeOpen` datagram to both ends proving that the counterparty has also completed flushing in order to move the channelEnd to `OPEN`.
 
