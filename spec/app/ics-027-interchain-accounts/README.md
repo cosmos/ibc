@@ -359,12 +359,10 @@ function setup() {
     onChanOpenConfirm,
     onChanCloseInit,
     onChanCloseConfirm,
-    onChanUpgradeInit,
-    onChanUpgradeTry,
-    onChanUpgradeAck,
-    onChanUpgradeConfirm,
+    onChanUpgradeInit, // read-only
+    onChanUpgradeTry, // read-only
+    onChanUpgradeAck, // read-only
     onChanUpgradeOpen,
-    onChanUpgradeRestore,
     onRecvPacket,
     onTimeoutPacket,
     onAcknowledgePacket,
@@ -692,15 +690,6 @@ function onChanUpgradeOpen(
   channelIdentifier: Identifier) {
     // no-op
 } 
-```
-
-```typescript
-// Called on Controller and/or Host Chain by Relayer
-function onChanUpgradeRestore(
-  portIdentifier: Identifier,
-  channelIdentifier: Identifier) {
-    // no-op
-}
 ```
 
 ### Packet relay

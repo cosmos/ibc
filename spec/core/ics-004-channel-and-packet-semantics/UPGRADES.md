@@ -391,15 +391,6 @@ function restoreChannel(
   // delete auxiliary state
   provableStore.delete(channelUpgradePath(portIdentifier, channelIdentifier))
   privateStore.delete(counterpartyUpgradePath(portIdentifier, channelIdentifier))
-
-  // call modules onChanUpgradeRestore callback
-  module = lookupModule(portIdentifier)
-  // restore callback must not return error since counterpart
-  // successfully restored previous channelEnd
-  module.onChanUpgradeRestore(
-    portIdentifier,
-    channelIdentifier
-  )
 }
 ```
 
@@ -474,6 +465,10 @@ function chanUpgradeInit(
   upgradeSequence = initUpgradeHandshake(portIdentifier, channelIdentifier, proposedUpgradeFields)
 
   // call modules onChanUpgradeInit callback
+  // onChanUpgradeInit may return a new proposed version
+  // if an error is returned the upgrade is not written
+  // the callback MUST NOT write state, as all state transitions will occur once
+  // the channel upgrade is complete.
   module = lookupModule(portIdentifier)
   version, err = module.onChanUpgradeInit(
     portIdentifier,
@@ -621,6 +616,10 @@ function chanUpgradeTry(
   channel = provableStore.get(channelPath(portIdentifier, channelIdentifier))
 
   // call modules onChanUpgradeTry callback
+  // onChanUpgradeTry may return a new proposed version
+  // if an error is returned the upgrade is not written
+  // the callback MUST NOT write state, as all state transitions will occur once
+  // the channel upgrade is complete.
   module = lookupModule(portIdentifier)
   version, err = module.onChanUpgradeTry(
     portIdentifier,
@@ -833,7 +832,8 @@ function chanUpgradeConfirm(
 
   // if both chains are already in flushcomplete we can move to OPEN
   if (channel.state == FLUSHCOMPLETE && counterpartyChannelState == FLUSHCOMPLETE) {
-    openUpgradelHandshake(portIdentifier, channelIdentifier)
+    openUpgradeHandshake(portIdentifier, channelIdentifier)
+    // make application state changes based on new channel parameters
     module.onChanUpgradeOpen(portIdentifier, channelIdentifier)
   }
 }
@@ -913,6 +913,7 @@ function chanUpgradeOpen(
   // call modules onChanUpgradeOpen callback
   module = lookupModule(portIdentifier)
   // open callback must not return error since counterparty successfully upgraded
+  // make application state changes based on new channel parameters
   module.onChanUpgradeOpen(
     portIdentifier,
     channelIdentifier
