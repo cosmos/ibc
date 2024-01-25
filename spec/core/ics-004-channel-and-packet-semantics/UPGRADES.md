@@ -433,6 +433,8 @@ A successful protocol execution flows as follows (note that all calls are made t
 | Relayer   | `ChanUpgradeAck`     | A                | (OPEN, FLUSHING)                   | (FLUSHING/FLUSHCOMPLETE, FLUSHING)                    |
 | Relayer   | `ChanUpgradeConfirm` | B                | (FLUSHING/FLUSHCOMPLETE, FLUSHING) | (FLUSHING/FLUSHCOMPLETE, FLUSHING/FLUSHCOMPLETE/OPEN) |
 
+**IMPORTANT:** Note it is important that the prior state before the channel upgrade process starts is that **both** channel ends are `OPEN`. Authorized upgraders are at risk of having the channel halt during the upgrade process if the prior state before channel upgrades on one of the ends is not `OPEN`.
+
 Refer to the diagram below for a possible channel upgrade flow. Multiple channel states are shown on steps 5 and 7 where the channel end can move to either one of those possible states upon executing the handshake. Note that in this example, the channel end on chain B moves to `OPEN` with the new parameters on `ChanUpgradeConfirm` (step 7).
 
 ![Channel Upgrade Flow](channel-upgrade-flow.png)
@@ -457,6 +459,8 @@ A relayer may then submit a `ChanUpgradeCancel` datagram to the counterparty. Up
 If a chain does not reach `FLUSHCOMPLETE` within the counterparty specified timeout, then it MUST NOT move to `FLUSHCOMPLETE` and should instead abort the upgrade. A relayer may submit a proof of this to the counterparty chain in a `ChanUpgradeTimeout` datagram so that counterparty cancels the upgrade and restores its original channel as well.
 
 ```typescript
+// Channel Ends on both sides **must** be OPEN before this function is called
+// It is the responsibility of the authorized upgrader to ensure this is the case
 function chanUpgradeInit(
   portIdentifier: Identifier,
   channelIdentifier: Identifier,
@@ -951,9 +955,17 @@ function cancelChannelUpgrade(
   if (!(isAuthorizedUpgrader(msgSender) && channel.state != FLUSHCOMPLETE)) {
     abortTransactionUnless(!isEmpty(errorReceipt))
 
-    // If counterparty sequence is less than the current sequence,
-    // abort transaction since this error receipt is from a previous upgrade
-    abortTransactionUnless(errorReceipt.sequence >= channel.upgradeSequence)
+    if channel.state == FLUSHCOMPLETE {
+      // if the channel state is in FLUSHCOMPLETE, it can **only** be aborted if there
+      // is an error receipt with the exact same sequence. This ensures that the counterparty
+      // did not successfully upgrade and then cancel at a new upgrade to abort our own end,
+      // leading to both channel ends being OPEN with different parameters
+      abortTransactionUnless(errorReceipt.sequence == channel.upgradeSequence)
+    } else {
+      // If counterparty sequence is less than the current sequence,
+      // abort transaction since this error receipt is from a previous upgrade
+      abortTransactionUnless(errorReceipt.sequence >= channel.upgradeSequence)
+    }
     // fastforward channel sequence to higher sequence so that we can start
     // new handshake on a fresh sequence
     channel.upgradeSequence = errorReceipt.sequence
