@@ -462,6 +462,17 @@ function chanUpgradeInit(
   // chanUpgradeInit may only be called by addresses authorized by executing chain
   abortTransactionUnless(isAuthorizedUpgrader(msgSender))
 
+  // write error receipt for previous upgrade attempt if it exists, so counterparty can abort it and
+  // move to next upgrade
+  existingUpgrade = provableStore.get(channelUpgradePath(portIdentifier, channelIdentifier))
+  if existingUpgrade != null {
+    errorReceipt = ErrorReceipt{
+      channel.upgradeSequence,
+      "abort the previous upgrade attempt so counterparty can accept the new one", // constant string changeable by implementation
+    }
+    provableStore.set(channelUpgradeErrorPath(portIdentifier, channelIdentifier), errorReceipt)
+  }
+
   upgradeSequence = initUpgradeHandshake(portIdentifier, channelIdentifier, proposedUpgradeFields)
 
   // call modules onChanUpgradeInit callback
