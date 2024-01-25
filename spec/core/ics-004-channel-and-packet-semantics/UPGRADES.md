@@ -433,7 +433,6 @@ A successful protocol execution flows as follows (note that all calls are made t
 | Relayer   | `ChanUpgradeAck`     | A                | (OPEN, FLUSHING)                   | (FLUSHING/FLUSHCOMPLETE, FLUSHING)                    |
 | Relayer   | `ChanUpgradeConfirm` | B                | (FLUSHING/FLUSHCOMPLETE, FLUSHING) | (FLUSHING/FLUSHCOMPLETE, FLUSHING/FLUSHCOMPLETE/OPEN) |
 
-
 **IMPORTANT:** Note it is important that the prior state before the channel upgrade process starts is that **both** channel ends are `OPEN`. Authorized upgraders are at risk of having the channel halt during the upgrade process if the prior state before channel upgrades on one of the ends is not `OPEN`.
 
 Refer to the diagram below for a possible channel upgrade flow. Multiple channel states are shown on steps 5 and 7 where the channel end can move to either one of those possible states upon executing the handshake. Note that in this example, the channel end on chain B moves to `OPEN` with the new parameters on `ChanUpgradeConfirm` (step 7).
