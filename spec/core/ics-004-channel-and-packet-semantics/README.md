@@ -812,6 +812,7 @@ The IBC handler performs the following steps in order:
 - Checks that the packet sequence is the next sequence the channel end expects to receive (for ordered and ordered_allow_timeout channels)
 - Checks that the timeout height and timestamp have not yet passed
 - Checks the inclusion proof of packet data commitment in the outgoing chain's state
+- Optionally (in case channel upgrades and deletion of acknowledgements and packet receipts are implemented): reject any packet with a sequence already used before a successful channel upgrade
 - Sets a store path to indicate that the packet has been received (unordered channels only)
 - Increments the packet receive sequence associated with the channel end (ordered and ordered_allow_timeout channels only)
 
@@ -826,7 +827,7 @@ function recvPacket(
 
     channel = provableStore.get(channelPath(packet.destPort, packet.destChannel))
     abortTransactionUnless(channel !== null)
-    abortTransactionUnless(channel.state === OPEN || (channel.state === FLUSHING))
+    abortTransactionUnless(channel.state === OPEN || (channel.state === FLUSHING) || (channel.state === FLUSHCOMPLETE))
     counterpartyUpgrade = privateStore.get(counterpartyUpgradePath(packet.destPort, packet.destChannel))
     // defensive check that ensures chain does not process a packet higher than the last packet sent before
     // counterparty went into FLUSHING mode. If the counterparty is implemented correctly, this should never abort
@@ -908,6 +909,13 @@ function recvPacket(
         abortTransactionUnless(false)
     }
 
+    // REPLAY PROTECTION: in order to free storage, implementations may choose to 
+    // delete acknowledgements and packet receipts when a channel upgrade is successfully 
+    // completed. In that case, implementations must also make sure that any packet with 
+    // a sequence already used before the channel upgrade is rejected. This is needed to 
+    // prevent replay attacks (see this PR in ibc-go for an example of how this is achieved:
+    // https://github.com/cosmos/ibc-go/pull/5651).
+    
     // all assertions passed (except sequence check), we can alter state
 
     switch channel.order {
