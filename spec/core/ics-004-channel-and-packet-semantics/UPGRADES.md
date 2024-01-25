@@ -549,6 +549,14 @@ function chanUpgradeTry(
   )
 
   existingUpgrade = provableStore.get(channelUpgradePath(portIdentifier, channelIdentifier))
+  if existingUpgrade != null {
+    expectedUpgradeSequence = channel.UpgradeSequence
+  } else {
+    // at the end of the TRY step, the current upgrade sequence will be incremented in the non-crossing
+		// hello case due to calling chanUpgradeInit, we should use this expected upgrade sequence for
+		// sequence mismatch comparison
+		expectedUpgradeSequence = channel.UpgradeSequence + 1
+  }
 
   // NON CROSSING HELLO CASE:
   // if the counterparty sequence is less than the current sequence,
@@ -558,22 +566,16 @@ function chanUpgradeTry(
   // When the next upgrade attempt is initiated, both sides will move to a fresh
   // never-before-seen sequence number
   // CROSSING HELLO CASE:
-  // if the counterparty sequence is less than the current sequence,
+  // if the counterparty sequence is less than or equal to the current sequence,
   // then either the counterparty chain is out-of-sync or the message
-  // is out-of-sync and we write an error receipt with our sequence - 1
+  // is out-of-sync and we write an error receipt with our sequence
   // so that the counterparty can update their sequence as well.
   // This will cause the outdated counterparty to upgrade the sequence
   // and abort their out-of-sync upgrade without aborting our own since
   // the error receipt sequence is lower than ours and higher than the counterparty.
-  if counterpartyUpgradeSequence < channel.upgradeSequence {
-    var errorUpgradeSequence: uint64
-    if existingUpgrade == null {
-      errorUpgradeSequence = channel.upgradeSequence
-    } else {
-      errorUpgradeSequence = channel.upgradeSequence - 1
-    }
+  if counterpartyUpgradeSequence < expectedUpgradeSequence {
     errorReceipt = ErrorReceipt{
-      errorUpgradeSequence,
+      expectedUpgradeSequence - 1,
       "sequence out of sync", // constant string changeable by implementation
     }
     provableStore.set(channelUpgradeErrorPath(portIdentifier, channelIdentifier), errorReceipt)
