@@ -24,7 +24,7 @@ If you have any questions, you can usually find some IBC team members on the [Co
 
 ## Pull Requests
 
-To accommodate review process we suggest that PRs are categorically broken up.
+To accommodate the review process we suggest that PRs are categorically broken up.
 Each PR should address only a single issue and **a single standard**. 
 The PR name should be prefixed by the standard number, 
 e.g., `ICS4: Some improvements` should contain only changes to [ICS 4](../spec/core/ics-004-channel-and-packet-semantics/README.md).
@@ -35,6 +35,7 @@ If fixing an issue requires changes to multiple standards, create multiple PRs a
 All PRs require an approval from at least two members of the [standardisation committee](./STANDARDS_COMMITTEE.md) before merge. 
 The PRs submitted by one of the members of the standardisation committee require an approval from only one other member before merge. 
 When reviewing PRs please use the following review explanations:
+
 - `Approval` through the GH UI means that you understand all the changes proposed in the PR. In addition:
   - You must also think through anything which ought to be included but is not.
   - You must think through any potential security issues or incentive-compatibility flaws introduced by the changes.
@@ -58,4 +59,3 @@ Ensure that you base and target your PR on the `master` branch.
 
 - Ensure all github requirements pass.
 - Squash and merge pull request.
-

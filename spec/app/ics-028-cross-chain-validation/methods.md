@@ -1,11 +1,13 @@
 <!-- omit in toc -->
 # CCV: Technical Specification - Methods
+
 [&uparrow; Back to main document](./README.md)
 
 [&uparrow; Back to technical specification](./technical_specification.md)
 
 <!-- omit in toc -->
 ## Outline
+
 - [General Methods](#general-methods)
   - [BeginBlock and EndBlock](#beginblock-and-endblock)
   - [Packet Relay](#packet-relay)
@@ -17,17 +19,20 @@
   - [Reward Distribution](#reward-distribution)
 
 ## General Methods
+
 [&uparrow; Back to Outline](#outline)
 
 To express the error conditions, the following specification of the sub-protocols uses the exception system of the host state machine, which is exposed through two functions (as defined in [ICS 24](../../core/ics-024-host-requirements)): `abortTransactionUnless` and `abortSystemUnless`.
 
 ### BeginBlock and EndBlock
+
 [&uparrow; Back to Outline](#outline)
 
 The functions `BeginBlock()` and `EndBlock()` (see [Implemented Interfaces](./technical_specification.md#implemented-interfaces)) are split across the CCV sub-protocols.
 
 <!-- omit in toc -->
 #### **[CCV-PCF-BBLOCK.1]**
+
 ```typescript
 // PCF: Provider Chain Function
 // implements the AppModule interface
@@ -36,6 +41,7 @@ function BeginBlock() {
     BeginBlockCCR()
 }
 ```
+
 - **Caller**
   - The ABCI application.
 - **Trigger Event**
@@ -50,6 +56,7 @@ function BeginBlock() {
 
 <!-- omit in toc -->
 #### **[CCV-PCF-EBLOCK.1]**
+
 ```typescript
 // PCF: Provider Chain Function
 // implements the AppModule interface
@@ -62,6 +69,7 @@ function EndBlock(): [ValidatorUpdate] {
   return []   
 }
 ```
+
 - **Caller**
   - The ABCI application.
 - **Trigger Event**
@@ -82,6 +90,7 @@ function EndBlock(): [ValidatorUpdate] {
 
 <!-- omit in toc -->
 #### **[CCV-CCF-BBLOCK.1]**
+
 ```typescript
 // CCF: Consumer Chain Function
 // implements the AppModule interface
@@ -91,6 +100,7 @@ function BeginBlock() {
     BeginBlockCIS()
 }
 ```
+
 - **Caller**
   - The ABCI application.
 - **Trigger Event**
@@ -106,6 +116,7 @@ function BeginBlock() {
 
 <!-- omit in toc -->
 #### **[CCV-CCF-EBLOCK.1]**
+
 ```typescript
 // CCF: Consumer Chain Function
 // implements the AppModule interface
@@ -116,23 +127,26 @@ function EndBlock(): [ValidatorUpdate] {
   return EndBlockVSU()
 }
 ```
+
 - **Caller**
   - The ABCI application.
 - **Trigger Event**
   - An `EndBlock` message is received from the consensus engine; `EndBlock` messages are sent once per block.
 - **Precondition**
-  - True. 
+  - True. x
 - **Postcondition**
-  - `EndBlockRD()` is invoked (see [[CCV-PCF-EBLOCK-RD.1]](#ccv-pcf-eblock-rd1), i.e., it contains the `EndBlock()` logic needed for the Reward Distribution sub-protocol).
+  - `EndBlockRD()` is invoked (see [[CCV-PCF-EBLOCK-RD.1]](#ccv-ccf-eblock-rd1), i.e., it contains the `EndBlock()` logic needed for the Reward Distribution sub-protocol).
   - `EndBlockVSU()` is invoked and the return value is returned to the consensus engine (see [[CCV-CCF-EBLOCK-VSU.1]](#ccv-ccf-eblock-vsu1), i.e., it contains the `EndBlock()` logic needed for the Validator Set Update sub-protocol).
 - **Error Condition**
   - None.
 
 ### Packet Relay
+
 [&uparrow; Back to Outline](#outline)
 
 <!-- omit in toc -->
 #### **[CCV-PCF-RCVP.1]**
+
 ```typescript
 // PCF: Provider Chain Function
 // implements the ModuleCallbacks interface defined in ICS26
@@ -148,6 +162,7 @@ function onRecvPacket(packet: Packet): bytes {
   }    
 }
 ```
+
 - **Caller**
   - The provider IBC routing module.
 - **Trigger Event**
@@ -163,6 +178,7 @@ function onRecvPacket(packet: Packet): bytes {
 
 <!-- omit in toc -->
 #### **[CCV-PCF-ACKP.1]**
+
 ```typescript
 // PCF: Provider Chain Function
 // implements the ModuleCallbacks interface defined in ICS26
@@ -176,6 +192,7 @@ function onAcknowledgePacket(packet: Packet, ack: bytes) {
   }
 }
 ```
+
 - **Caller**
   - The provider IBC routing module.
 - **Trigger Event**
@@ -190,6 +207,7 @@ function onAcknowledgePacket(packet: Packet, ack: bytes) {
 
 <!-- omit in toc -->
 #### **[CCV-PCF-TOP.1]**
+
 ```typescript
 // PCF: Provider Chain Function
 // implements the ModuleCallbacks interface defined in ICS26
@@ -203,6 +221,7 @@ function onTimeoutPacket(packet Packet) {
   }
 }
 ```
+
 - **Caller**
   - The provider IBC routing module.
 - **Trigger Event**
@@ -221,6 +240,7 @@ function onTimeoutPacket(packet Packet) {
 
 <!-- omit in toc -->
 #### **[CCV-CCF-RCVP.1]**
+
 ```typescript
 // CCF: Consumer Chain Function
 // implements the ModuleCallbacks interface defined in ICS26
@@ -234,6 +254,7 @@ function onRecvPacket(packet: Packet): bytes {
   }
 }
 ```
+
 - **Caller**
   - The consumer IBC routing module.
 - **Trigger Event**
@@ -248,6 +269,7 @@ function onRecvPacket(packet: Packet): bytes {
 
 <!-- omit in toc -->
 #### **[CCV-CCF-ACKP.1]**
+
 ```typescript
 // CCF: Consumer Chain Function
 // implements the ModuleCallbacks interface defined in ICS26
@@ -263,6 +285,7 @@ function onAcknowledgePacket(packet: Packet, ack: bytes) {
   }
 }
 ```
+
 - **Caller**
   - The consumer IBC routing module.
 - **Trigger Event**
@@ -278,6 +301,7 @@ function onAcknowledgePacket(packet: Packet, ack: bytes) {
 
 <!-- omit in toc -->
 #### **[CCV-CCF-TOP.1]**
+
 ```typescript
 // CCF: Consumer Chain Function
 // implements the ModuleCallbacks interface defined in ICS26
@@ -293,6 +317,7 @@ function onTimeoutPacket(packet Packet) {
   }
 }
 ```
+
 - **Caller**
   - The consumer IBC routing module.
 - **Trigger Event**
@@ -311,12 +336,14 @@ function onTimeoutPacket(packet Packet) {
 ## Sub-protocols
 
 ### Initialization
+
 [&uparrow; Back to Outline](#outline)
 
 The *initialization* sub-protocol enables a provider chain and a consumer chain to create a CCV channel -- a unique, ordered IBC channel for exchanging packets. As a prerequisite, the initialization sub-protocol MUST create two IBC clients, one on the provider chain to the consumer chain and one on the consumer chain to the provider chain. This is necessary to verify the identity of the two chains (as long as the clients are trusted).
 
 <!-- omit in toc -->
 #### **[CCV-PCF-INITG.1]**
+
 ```typescript
 // PCF: Provider Chain Function
 // implements the AppModule interface
@@ -336,6 +363,7 @@ function InitGenesis(state: ProviderGenesisState): [ValidatorUpdate] {
   return []
 }
 ```
+
 - **Caller**
   - The ABCI application.
 - **Trigger Event**
@@ -351,6 +379,7 @@ function InitGenesis(state: ProviderGenesisState): [ValidatorUpdate] {
 
 <!-- omit in toc -->
 #### **[CCV-PCF-HCAPROP.1]**
+
 ```typescript
 // PCF: Provider Chain Function
 // implements governance proposal Handler 
@@ -359,6 +388,7 @@ function HandleConsumerAdditionProposal(p: ConsumerAdditionProposal) {
     pendingConsumerAdditionProposals.Append(p)
 }
 ```
+
 - **Caller**
   - `EndBlock()` method of Governance module.
 - **Trigger Event**
@@ -372,6 +402,7 @@ function HandleConsumerAdditionProposal(p: ConsumerAdditionProposal) {
 
 <!-- omit in toc -->
 #### **[CCV-PCF-BBLOCK-INIT.1]**
+
 ```typescript
 // PCF: Provider Chain Function
 function BeginBlockInit() {
@@ -385,6 +416,7 @@ function BeginBlockInit() {
   }
 }
 ```
+
 - **Caller**
   - The `BeginBlock()` method.
 - **Trigger Event**
@@ -400,6 +432,7 @@ function BeginBlockInit() {
 
 <!-- omit in toc -->
 #### **[CCV-PCF-CRCLIENT.1]**
+
 ```typescript
 // PCF: Provider Chain Function
 // Utility method
@@ -492,6 +525,7 @@ function CreateConsumerClient(p: ConsumerAdditionProposal) {
   initTimeoutTimestamps[p.chainId] = currentTimestamp().Add(initTimeout)
 }
 ```
+
 - **Caller**
   - Either `HandleConsumerAdditionProposal` (see [CCV-PCF-HCAPROP.1](#ccv-pcf-hcaprop1)) or `BeginBlockInit()` (see [CCV-PCF-BBLOCK-INIT.1](#ccv-pcf-bblock-init1)).
 - **Trigger Event**
@@ -522,16 +556,17 @@ function CreateConsumerClient(p: ConsumerAdditionProposal) {
 
 > **Note:** For the case when the `clientId` field of the `ConsumerAdditionProposal` is not set, creating a client of a remote chain requires a `ClientState` and a `ConsensusState` (for an example, take a look at [ICS 7](../../client/ics-007-tendermint-client)).
 > `ConsensusState` requires setting a validator set of the remote chain. 
-> The provider chain uses the fact that the validator set of the consumer chain is the same as its own validator set. 
-
+> The provider chain uses the fact that the validator set of the consumer chain is the same as its own validator set.
+>
 > **Note:** Bootstrapping the consumer CCV module requires a `ConsumerGenesisState` (see the [CCV Data Structures](./data_structures.md#ccv-data-structures) section). The provider CCV module creates such a `ConsumerGenesisState` when handling a governance proposal `ConsumerAdditionProposal`.
-
+>
 > **Note:** If the channel initialization for a consumer chain exceeds the `initTimeout` period, then the provider chain removes that consumer. 
 > As a result, all further attempts on the consumer side to established the CCV channel will fail. 
-> This means that the consumer chain requires some sort of social consensus to either restart the process of becoming a consumer chain or transitioning back to a sovereign chain. 
+> This means that the consumer chain requires some sort of social consensus to either restart the process of becoming a consumer chain or transitioning back to a sovereign chain.
  
 <!-- omit in toc -->
 #### **[CCV-PCF-COINIT.1]**
+
 ```typescript
 // PCF: Provider Chain Function
 // implements the ModuleCallbacks interface defined in ICS26
@@ -548,6 +583,7 @@ function onChanOpenInit(
     abortTransactionUnless(FALSE)
 }
 ```
+
 - **Caller**
   - The provider IBC routing module.
 - **Trigger Event**
@@ -561,6 +597,7 @@ function onChanOpenInit(
 
 <!-- omit in toc -->
 #### **[CCV-PCF-COTRY.1]**
+
 ```typescript
 // PCF: Provider Chain Function
 // implements the ModuleCallbacks interface defined in ICS26
@@ -614,6 +651,7 @@ function onChanOpenTry(
     }
 }
 ```
+
 - **Caller**
   - The provider IBC routing module.
 - **Trigger Event**
@@ -638,6 +676,7 @@ function onChanOpenTry(
 
 <!-- omit in toc -->
 #### **[CCV-PCF-COACK.1]**
+
 ```typescript
 // PCF: Provider Chain Function
 // implements the ModuleCallbacks interface defined in ICS26
@@ -649,6 +688,7 @@ function onChanOpenAck(
     abortTransactionUnless(FALSE)
 }
 ```
+
 - **Caller**
   - The provider IBC routing module.
 - **Trigger Event**
@@ -662,6 +702,7 @@ function onChanOpenAck(
 
 <!-- omit in toc -->
 #### **[CCV-PCF-COCONFIRM.1]**
+
 ```typescript
 // PCF: Provider Chain Function
 // implements the ModuleCallbacks interface defined in ICS26
@@ -690,6 +731,7 @@ function onChanOpenConfirm(
    initTimeoutTimestamps.Remove(clientState.chainId)
 }
 ```
+
 - **Caller**
   - The provider IBC routing module.
 - **Trigger Event**
@@ -712,6 +754,7 @@ function onChanOpenConfirm(
 
 <!-- omit in toc -->
 #### **[CCV-CCF-INITG.1]**
+
 ```typescript
 // CCF: Consumer Chain Function
 // implements the AppModule interface
@@ -811,6 +854,7 @@ function InitGenesis(gs: ConsumerGenesisState): [ValidatorUpdate] {
   return gs.initialValSet
 }
 ```
+
 - **Caller**
   - The ABCI application.
 - **Trigger Event**
@@ -839,11 +883,12 @@ function InitGenesis(gs: ConsumerGenesisState): [ValidatorUpdate] {
   - The genesis state contains an invalid distribution channel ID.
   - The capability for the port `ConsumerPortId` cannot be claimed.
 
-> **Note**: CCV assumes that all the correct validators in the initial validator set of the consumer chain receive the _same_ consumer chain binary and consumer chain genesis state. 
+> **Note**: CCV assumes that all the correct validators in the initial validator set of the consumer chain receive the *same* consumer chain binary and consumer chain genesis state. 
 > Although the mechanism of disseminating the binary and the genesis state is outside the scope of this specification, a possible approach would entail including this information in the governance proposal on the provider chain.
 
 <!-- omit in toc -->
 #### **[CCV-CCF-COINIT.1]**
+
 ```typescript
 // CCF: Consumer Chain Function
 // implements the ModuleCallbacks interface defined in ICS26
@@ -885,6 +930,7 @@ function onChanOpenInit(
     return ccvVersion
 }
 ```
+
 - **Caller**
   - The consumer IBC routing module.
 - **Trigger Event**
@@ -905,6 +951,7 @@ function onChanOpenInit(
 
 <!-- omit in toc -->
 #### **[CCV-CCF-COTRY.1]**
+
 ```typescript
 // CCF: Consumer Chain Function
 // implements the ModuleCallbacks interface defined in ICS26
@@ -921,6 +968,7 @@ function onChanOpenTry(
     abortTransactionUnless(FALSE)
 }
 ```
+
 - **Caller**
   - The consumer IBC routing module.
 - **Trigger Event**
@@ -934,6 +982,7 @@ function onChanOpenTry(
 
 <!-- omit in toc -->
 #### **[CCV-CCF-COACK.1]**
+
 ```typescript
 // CCF: Consumer Chain Function
 // implements the ModuleCallbacks interface defined in ICS26
@@ -982,6 +1031,7 @@ function onChanOpenAck(
     }
 }
 ```
+
 - **Caller**
   - The consumer IBC routing module.
 - **Trigger Event**
@@ -1004,6 +1054,7 @@ function onChanOpenAck(
 
 <!-- omit in toc -->
 #### **[CCV-CCF-COCONFIRM.1]**
+
 ```typescript
 // CCF: Consumer Chain Function
 // implements the ModuleCallbacks interface defined in ICS26
@@ -1014,6 +1065,7 @@ function onChanOpenConfirm(
     abortTransactionUnless(FALSE)
 }
 ```
+
 - **Caller**
   - The consumer IBC routing module.
 - **Trigger Event**
@@ -1027,6 +1079,7 @@ function onChanOpenConfirm(
 
 <!-- omit in toc -->
 #### **[CCV-CCF-BBLOCK-INIT.1]**
+
 ```typescript
 // CCF: Consumer Chain Function
 function BeginBlockInit() {
@@ -1045,6 +1098,7 @@ function BeginBlockInit() {
   }
 }
 ```
+
 - **Caller**
   - The `BeginBlock()` method.
 - **Trigger Event**
@@ -1058,10 +1112,12 @@ function BeginBlockInit() {
   - None.
 
 ### Consumer Chain Removal
+
 [&uparrow; Back to Outline](#outline)
 
 <!-- omit in toc -->
 #### **[CCV-PCF-HCRPROP.1]**
+
 ```typescript
 // PCF: Provider Chain Function
 // implements governance proposal Handler 
@@ -1070,6 +1126,7 @@ function HandleConsumerRemovalProposal(p: ConsumerRemovalProposal) {
     pendingConsumerRemovalProposals.Append(p)
 }
 ```
+
 - **Caller**
   - `EndBlock()` method of Governance module.
 - **Trigger Event**
@@ -1083,6 +1140,7 @@ function HandleConsumerRemovalProposal(p: ConsumerRemovalProposal) {
 
 <!-- omit in toc -->
 #### **[CCV-PCF-BBLOCK-CCR.1]**
+
 ```typescript
 // PCF: Provider Chain Function
 function BeginBlockCCR() {
@@ -1097,6 +1155,7 @@ function BeginBlockCCR() {
   }
 }
 ```
+
 - **Caller**
   - The `BeginBlock()` method.
 - **Trigger Event**
@@ -1112,6 +1171,7 @@ function BeginBlockCCR() {
 
 <!-- omit in toc -->
 #### **[CCV-PCF-STCC.1]**
+
 ```typescript
 // PCF: Provider Chain Function
 function StopConsumerChain(chainId: string, lockUnbonding: Bool) {
@@ -1152,6 +1212,7 @@ function StopConsumerChain(chainId: string, lockUnbonding: Bool) {
   }
 }
 ```
+
 - **Caller**
   - `HandleConsumerRemovalProposal` (see [CCV-PCF-HCRPROP.1](#ccv-pcf-hcrprop1)) 
     or `BeginBlockCCR()` (see [CCV-PCF-BBLOCK-CCR.1](#ccv-pcf-bblock-ccr1)) 
@@ -1178,9 +1239,9 @@ function StopConsumerChain(chainId: string, lockUnbonding: Bool) {
     - `downtimeSlashRequests[chainId]` is emptied;
     - if `lockUnbonding == false`, then 
       - `chainId` is removed from all outstanding unbonding operations;
-      -  if an outstanding unbonding operation has matured on all consumer chains, 
-        - the matured unbonding operation is added to `maturedUnbondingOps`;
-        - the matured unbonding operation is removed from `unbondingOps`;
+      - if an outstanding unbonding operation has matured on all consumer chains, 
+      - the matured unbonding operation is added to `maturedUnbondingOps`;
+      - the matured unbonding operation is removed from `unbondingOps`;
       - all the entries with `chainId` are removed from the `vscToUnbondingOps` mapping.
 - **Error Condition**
   - None
@@ -1189,15 +1250,16 @@ function StopConsumerChain(chainId: string, lockUnbonding: Bool) {
 > Thus, invoking `StopConsumerChain(chainId, false)` for any `chainId` MAY violate the *Bond-Based Consumer Voting Power* and *Slashable Consumer Misbehavior* properties (see the [System Properties](./system_model_and_properties.md#system-properties) section). 
 > 
 > `StopConsumerChain(chainId, false)` is invoked in two scenarios (see Trigger Event above).
+>
 > - In the first scenario (i.e., a governance proposal to stop the consumer chain with `chainId`), the validators on the provider chain MUST make sure that it is safe to stop the consumer chain. 
 > Since a governance proposal needs a majority of the voting power to pass, the safety of invoking `StopConsumerChain(chainId, false)` is ensured by the *Safe Blockchain* assumption (see the [Assumptions](./system_model_and_properties.md#assumptions) section).
 > 
 > - The second scenario (i.e., a timeout) is only possible if the *Correct Relayer* assumption is violated (see the [Assumptions](./system_model_and_properties.md#assumptions) section), 
 > which is necessary to guarantee both the *Bond-Based Consumer Voting Power* and *Slashable Consumer Misbehavior* properties (see the [Assumptions](./system_model_and_properties.md#correctness-reasoning) section).
 
-
 <!-- omit in toc -->
 #### **[CCV-PCF-EBLOCK-CCR.1]**
+
 ```typescript
 // PCF: Provider Chain Function
 function EndBlockCCR() {
@@ -1222,6 +1284,7 @@ function EndBlockCCR() {
   }
 }
 ```
+
 - **Caller**
   - The `EndBlock()` method.
 - **Trigger Event**
@@ -1242,6 +1305,7 @@ function EndBlockCCR() {
 
 <!-- omit in toc -->
 #### **[CCV-PCF-CCINIT.1]**
+
 ```typescript
 // PCF: Provider Chain Function
 // implements the ModuleCallbacks interface defined in ICS26
@@ -1252,6 +1316,7 @@ function onChanCloseInit(
     abortTransactionUnless(FALSE)
 }
 ```
+
 - **Caller**
   - The provider IBC routing module.
 - **Trigger Event**
@@ -1265,6 +1330,7 @@ function onChanCloseInit(
 
 <!-- omit in toc -->
 #### **[CCV-PCF-CCCONFIRM.1]**
+
 ```typescript
 // PCF: Provider Chain Function
 // implements the ModuleCallbacks interface defined in ICS26
@@ -1274,6 +1340,7 @@ function onChanCloseConfirm(
     // do nothing
 }
 ```
+
 - **Caller**
   - The provider IBC routing module.
 - **Trigger Event**
@@ -1289,6 +1356,7 @@ function onChanCloseConfirm(
 
 <!-- omit in toc -->
 #### **[CCV-CCF-BBLOCK-CCR.1]**
+
 ```typescript
 // CCF: Consumer Chain Function
 function BeginBlockCCR() {
@@ -1304,6 +1372,7 @@ function BeginBlockCCR() {
   } 
 }
 ```
+
 - **Caller**
   - The `BeginBlock()` method.
 - **Trigger Event**
@@ -1320,6 +1389,7 @@ function BeginBlockCCR() {
 
 <!-- omit in toc -->
 #### **[CCV-CCF-CCINIT.1]**
+
 ```typescript
 // CCF: Consumer Chain Function
 // implements the ModuleCallbacks interface defined in ICS26
@@ -1334,6 +1404,7 @@ function onChanCloseInit(
     }
 }
 ```
+
 - **Caller**
   - The consumer IBC routing module.
 - **Trigger Event**
@@ -1348,6 +1419,7 @@ function onChanCloseInit(
 
 <!-- omit in toc -->
 #### **[CCV-CCF-CCCONFIRM.1]**
+
 ```typescript
 // CCF: Consumer Chain Function
 // implements the ModuleCallbacks interface defined in ICS26
@@ -1357,6 +1429,7 @@ function onChanCloseConfirm(
     // do nothing
 }
 ```
+
 - **Caller**
   - The consumer IBC routing module.
 - **Trigger Event**
@@ -1368,17 +1441,18 @@ function onChanCloseConfirm(
 - **Error Condition**
   - None.
 
-
-
 ### Validator Set Update
+
 [&uparrow; Back to Outline](#outline)
 
 The *validator set update* sub-protocol enables the provider chain 
+
 - to update the consumer chain on the voting power granted to validators on the provider chain
 - and to ensure the correct completion of unbonding operations for validators that produce blocks on the consumer chain.
 
 <!-- omit in toc -->
 #### **[CCV-PCF-EBLOCK-VSU.1]**
+
 ```typescript
 // PCF: Provider Chain Function
 function EndBlockVSU() {
@@ -1436,6 +1510,7 @@ function EndBlockVSU() {
   vscId++ 
 }
 ```
+
 - **Caller**
   - The `EndBlock()` method.
 - **Trigger Event**
@@ -1462,6 +1537,7 @@ function EndBlockVSU() {
 
 <!-- omit in toc -->
 #### **[CCV-PCF-ACKVSC.1]**
+
 ```typescript
 // PCF: Provider Chain Function
 function onAcknowledgeVSCPacket(packet: Packet, ack: bytes) {
@@ -1473,6 +1549,7 @@ function onAcknowledgeVSCPacket(packet: Packet, ack: bytes) {
   abortSystemUnless(ack != VSCPacketError)
 }
 ```
+
 - **Caller**
   - The `onAcknowledgePacket()` method.
 - **Trigger Event**
@@ -1486,6 +1563,7 @@ function onAcknowledgeVSCPacket(packet: Packet, ack: bytes) {
 
 <!-- omit in toc -->
 #### **[CCV-PCF-TOVSC.1]**
+
 ```typescript
 // PCF: Provider Chain Function
 function onTimeoutVSCPacket(packet: Packet) {
@@ -1497,6 +1575,7 @@ function onTimeoutVSCPacket(packet: Packet) {
   StopConsumerChain(chainId, lockUnbondingOnTimeout[chainId])
 }
 ```
+
 - **Caller**
   - The `onTimeoutPacket()` method.
 - **Trigger Event**
@@ -1513,6 +1592,7 @@ function onTimeoutVSCPacket(packet: Packet) {
 
 <!-- omit in toc -->
 #### **[CCV-PCF-RCVMAT.1]**
+
 ```typescript
 // PCF: Provider Chain Function
 function onRecvVSCMaturedPacket(packet: Packet): bytes {
@@ -1543,6 +1623,7 @@ function onRecvVSCMaturedPacket(packet: Packet): bytes {
   return VSCMaturedPacketSuccess
 }
 ```
+
 - **Caller**
   - The `onRecvPacket()` method.
 - **Trigger Event**
@@ -1565,6 +1646,7 @@ function onRecvVSCMaturedPacket(packet: Packet): bytes {
 
 <!-- omit in toc -->
 #### **[CCV-PCF-GETUBS.1]**
+
 ```typescript
 // PCF: Provider Chain Function
 // Utility method
@@ -1582,6 +1664,7 @@ function GetUnbondingsFromVSC(
     return ops
 }
 ```
+
 - **Caller**
   - The `onRecvVSCMaturedPacket()` method.
 - **Trigger Event**
@@ -1595,6 +1678,7 @@ function GetUnbondingsFromVSC(
 
 <!-- omit in toc -->
 #### **[CCV-PCF-HOOK-AFUBOPCR.1]**
+
 ```typescript
 // PCF: Provider Chain Function
 // implements a Staking module hook
@@ -1619,6 +1703,7 @@ function AfterUnbondingInitiated(opId: uint64) {
   }
 }
 ```
+
 - **Caller**
   - The Staking module.
 - **Trigger Event**
@@ -1638,6 +1723,7 @@ function AfterUnbondingInitiated(opId: uint64) {
 
 <!-- omit in toc -->
 #### **[CCV-CCF-RCVVSC.1]**
+
 ```typescript
 // CCF: Consumer Chain Function
 function onRecvVSCPacket(packet: Packet): bytes {
@@ -1657,6 +1743,7 @@ function onRecvVSCPacket(packet: Packet): bytes {
   return VSCPacketSuccess
 }
 ```
+
 - **Caller**
   - The `onRecvPacket()` method.
 - **Trigger Event**
@@ -1674,6 +1761,7 @@ function onRecvVSCPacket(packet: Packet): bytes {
 
 <!-- omit in toc -->
 #### **[CCV-CCF-ACKMAT.1]**
+
 ```typescript
 // CCF: Consumer Chain Function
 function onAcknowledgeVSCMaturedPacket(packet: Packet, ack: bytes) {
@@ -1681,6 +1769,7 @@ function onAcknowledgeVSCMaturedPacket(packet: Packet, ack: bytes) {
   abortSystemUnless(ack != VSCMaturedPacketError)
 }
 ```
+
 - **Caller**
   - The `onAcknowledgePacket()` method.
 - **Trigger Event**
@@ -1694,6 +1783,7 @@ function onAcknowledgeVSCMaturedPacket(packet: Packet, ack: bytes) {
 
 <!-- omit in toc -->
 #### **[CCV-CCF-TOMAT.1]**
+
 ```typescript
 // CCF: Consumer Chain Function
 function onTimeoutVSCMaturedPacket(packet Packet) {
@@ -1701,6 +1791,7 @@ function onTimeoutVSCMaturedPacket(packet Packet) {
   // by the IBC handler (since the channel is ORDERED)
 }
 ```
+
 - **Caller**
   - The `onTimeoutPacket()` method.
 - **Trigger Event**
@@ -1716,6 +1807,7 @@ function onTimeoutVSCMaturedPacket(packet Packet) {
 
 <!-- omit in toc -->
 #### **[CCV-CCF-EBLOCK-VSU.1]**
+
 ```typescript
 // CCF: Consumer Chain Function
 function EndBlockVSU(): [ValidatorUpdate] {
@@ -1740,6 +1832,7 @@ function EndBlockVSU(): [ValidatorUpdate] {
   }
 }
 ```
+
 - **Caller**
   - The `EndBlock()` method.
 - **Trigger Event**
@@ -1758,6 +1851,7 @@ function EndBlockVSU(): [ValidatorUpdate] {
 
 <!-- omit in toc -->
 #### **[CCV-CCF-HAREVSC.1]**
+
 ```typescript
 // CCF: Consumer Chain Function
 function HandleReceivedVSCs(): [ValidatorUpdate] {
@@ -1785,6 +1879,7 @@ function HandleReceivedVSCs(): [ValidatorUpdate] {
   return changes.Aggregate()
 }
 ```
+
 - **Caller**
   - The `EndBlock()` method.
 - **Trigger Event**
@@ -1801,9 +1896,9 @@ function HandleReceivedVSCs(): [ValidatorUpdate] {
 - **Error Condition**
   - None.
 
-
 <!-- omit in toc -->
 #### **[CCV-CCF-UPVALS.1]**
+
 ```typescript
 // CCF: Consumer Chain Function
 function UpdateValidatorSet(changes: [ValidatorUpdate]) {
@@ -1834,12 +1929,13 @@ function UpdateValidatorSet(changes: [ValidatorUpdate]) {
   }
 }
 ```
+
 - **Caller**
   - The `EndBlock()` method.
 - **Trigger Event**
   - An `EndBlock` message is received from the consensus engine.
 - **Precondition**
-  - - `preCCV == false`.
+  - `preCCV == false`.
 - **Postcondition**
   - For each validator `update` in `changes`,
     - if the validator is not in the validator set and `update.power > 0`, then 
@@ -1854,6 +1950,7 @@ function UpdateValidatorSet(changes: [ValidatorUpdate]) {
 
 <!-- omit in toc -->
 #### **[CCV-CCF-UMP.1]**
+
 ```typescript
 // CCF: Consumer Chain Function
 function UnbondMaturePackets() {
@@ -1879,6 +1976,7 @@ function UnbondMaturePackets() {
   }
 }
 ```
+
 - **Caller**
   - The `EndBlock()` method.
 - **Trigger Event**
@@ -1895,10 +1993,12 @@ function UnbondMaturePackets() {
   - None.
 
 ### Consumer Initiated Slashing
+
 [&uparrow; Back to Outline](#outline)
 
 <!-- omit in toc -->
 #### **[CCV-PCF-EBLOCK-CIS.1]**
+
 ```typescript
 // PCF: Provider Chain Function
 function EndBlockCIS() {
@@ -1906,6 +2006,7 @@ function EndBlockCIS() {
   VSCtoH[vscId] = getCurrentHeight() + 1
 }
 ```
+
 - **Caller**
   - The `EndBlock()` method.
 - **Trigger Event**
@@ -1919,6 +2020,7 @@ function EndBlockCIS() {
 
 <!-- omit in toc -->
 #### **[CCV-PCF-RCVSLASH.1]**
+
 ```typescript
 // PCF: Provider Chain Function
 function onRecvSlashPacket(packet: Packet): bytes {
@@ -1960,6 +2062,7 @@ function onRecvSlashPacket(packet: Packet): bytes {
   return SlashPacketSuccess
 }
 ```
+
 - **Caller**
   - The `onRecvPacket()` method.
 - **Trigger Event**
@@ -1982,12 +2085,14 @@ function onRecvSlashPacket(packet: Packet): bytes {
 
 <!-- omit in toc -->
 #### **[CCV-CCF-BBLOCK-CIS.1]**
+
 ```typescript
 // CCF: Consumer Chain Function
 function BeginBlockCIS() {
   HtoVSC[getCurrentHeight() + 1] = HtoVSC[getCurrentHeight()]
 }
 ```
+
 - **Caller**
   - The `BeginBlock()` method.
 - **Trigger Event**
@@ -2001,6 +2106,7 @@ function BeginBlockCIS() {
 
 <!-- omit in toc -->
 #### **[CCV-CCF-ACKSLASH.1]**
+
 ```typescript
 // CCF: Consumer Chain Function
 function onAcknowledgeSlashPacket(packet: Packet, ack: bytes) {
@@ -2012,6 +2118,7 @@ function onAcknowledgeSlashPacket(packet: Packet, ack: bytes) {
   abortSystemUnless(ack != SlashPacketError)
 }
 ```
+
 - **Caller**
   - The `onAcknowledgePacket()` method.
 - **Trigger Event**
@@ -2025,6 +2132,7 @@ function onAcknowledgeSlashPacket(packet: Packet, ack: bytes) {
 
 <!-- omit in toc -->
 #### **[CCV-CCF-TOSLASH.1]**
+
 ```typescript
 // CCF: Consumer Chain Function
 function onTimeoutSlashPacket(packet Packet) {
@@ -2032,6 +2140,7 @@ function onTimeoutSlashPacket(packet Packet) {
   // by the IBC handler (since the channel is ORDERED)
 }
 ```
+
 - **Caller**
   - The `onTimeoutPacket()` method.
 - **Trigger Event**
@@ -2047,6 +2156,7 @@ function onTimeoutSlashPacket(packet Packet) {
 
 <!-- omit in toc -->
 #### **[CCV-CCF-SNDSLASH.1]**
+
 ```typescript
 // CCF: Consumer Chain Function
 // Enables consumer initiated slashing
@@ -2092,6 +2202,7 @@ function SendSlashRequest(
     }
 }
 ```
+
 - **Caller**
   - The ABCI application (e.g., the Slashing module).
 - **Trigger Event**
@@ -2116,8 +2227,8 @@ function SendSlashRequest(
 > (for more details, take a look at the [ABCI specification](https://github.com/tendermint/spec/blob/v0.7.1/spec/abci/abci.md#endblock)).
 > 
 > Consequently, the consumer CCV module expects the `infractionHeight` parameter of the `SendSlashRequest()` to be set accordingly.
-
-> **Note**: In the context of single-chain validation, slashing for downtime is an **_atomic operation_**, i.e., once the downtime is detected, the misbehaving validator is slashed and jailed immediately. 
+>
+> **Note**: In the context of single-chain validation, slashing for downtime is an ***atomic operation***, i.e., once the downtime is detected, the misbehaving validator is slashed and jailed immediately. 
 > Consequently, once a validator is punished for downtime, it is removed from the validator set and cannot be punished again for downtime. 
 > Since validators are not automatically added back to the validator set, it entails that the validator is aware of the punishment before it can rejoin and be potentially punished again.
 > 
@@ -2127,6 +2238,7 @@ function SendSlashRequest(
 
 <!-- omit in toc -->
 #### **[CCV-CCF-SNDPESLASH.1]**
+
 ```typescript
 // CCF: Consumer Chain Function
 // Utility method
@@ -2154,6 +2266,7 @@ function SendPendingSlashRequests() {
   pendingSlashRequests.RemoveAll()
 }
 ```
+
 - **Caller**
   - The `onRecvVSCPacket()` method (see [CCV-CCF-RCVVSC.1](#ccv-ccf-rcvvsc1)).
 - **Trigger Event**
@@ -2171,10 +2284,12 @@ function SendPendingSlashRequests() {
 > **Note**: Iterating over pending `SlashRequest`s in reverse order ensures that validators that are down for multiple blocks during channel initialization will be slashed for the latest downtime evidence.
 
 ### Reward Distribution
+
 [&uparrow; Back to Outline](#outline)
 
 <!-- omit in toc -->
 #### **[CCV-CCF-EBLOCK-RD.1]**
+
 ```typescript
 // CCF: Consumer Chain Function
 function EndBlockRD() {
@@ -2183,6 +2298,7 @@ function EndBlockRD() {
   }
 }
 ```
+
 - **Caller**
   - The `EndBlock()` method.
 - **Trigger Event**
@@ -2196,6 +2312,7 @@ function EndBlockRD() {
 
 <!-- omit in toc -->
 #### **[CCV-CCF-DISTRREW.1]**
+
 ```typescript
 // CCF: Consumer Chain Function
 function DistributeRewards() {
@@ -2216,6 +2333,7 @@ function DistributeRewards() {
   lastDistributionTransferHeight = getCurrentHeight()
 }
 ```
+
 - **Caller**
   - The `EndBlockRD()` method.
 - **Trigger Event**

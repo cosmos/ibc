@@ -39,7 +39,6 @@ interface FungibleTokenPacketData {
 
 The acknowledgement data type describes whether the transfer succeeded or failed, and the reason for failure (if any):
 
-
 ```typescript
 interface FungibleTokenPacketAcknowledgement {
   success: boolean

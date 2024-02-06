@@ -51,7 +51,6 @@ interface FungibleTokenPacketData {
 }
 ```
 
-
 As tokens are sent across chains using the ICS 20 protocol, they begin to accrue a record of channels for which they have been transferred across. This information is encoded into the `denom` field. 
 
 The ICS 20 token denominations are represented by the form `{ics20Port}/{ics20Channel}/{denom}`, where `ics20Port` and `ics20Channel` are an ICS 20 port and channel on the current chain for which the funds exist. The prefixed port and channel pair indicate which channel the funds were previously sent through. Implementations are responsible for correctly parsing the IBC trace information from the base denomination. The way the reference ICS 20 implementation in ibc-go handles this is by taking advantage of the fact that it automatically generates channel identifiers with the format `channel-{n}`, where `n` is a integer greater or equal than 0. It can then correctly parse out the IBC trace information from the base denom which may have slashes, but will not have a substring of the form `{transfer-port-name}/channel-{n}`. If this assumption is broken, the trace information will be parsed incorrectly (i.e. part of the base denom will be misinterpreted as trace information). Thus chains must make sure that base denominations do not have the ability to create arbitrary prefixes that can mock the ICS 20 logic.
@@ -93,7 +92,7 @@ The `setup` function must be called exactly once when the module is created (per
 
 ```typescript
 function setup() {
-  capability = routingModule.bindPort("bank", ModuleCallbacks{
+  capability = routingModule.bindPort("transfer", ModuleCallbacks{
     onChanOpenInit,
     onChanOpenTry,
     onChanOpenAck,
@@ -231,7 +230,8 @@ function sendFungibleTokens(
   sourcePort: string,
   sourceChannel: string,
   timeoutHeight: Height,
-  timeoutTimestamp: uint64): uint64 {
+  timeoutTimestamp: uint64, // in unix nanoseconds
+): uint64 {
     prefix = "{sourcePort}/{sourceChannel}/"
     // we are the source if the denomination is not prefixed
     source = denomination.slice(0, len(prefix)) !== prefix
@@ -255,7 +255,7 @@ function sendFungibleTokens(
       sourceChannel,
       timeoutHeight,
       timeoutTimestamp,
-      protobuf.marshal(data) // protobuf-marshalled bytes of packet data
+      json.marshal(data) // json-marshalled bytes of packet data
     )
 
     return sequence
@@ -267,6 +267,11 @@ function sendFungibleTokens(
 ```typescript
 function onRecvPacket(packet: Packet) {
   FungibleTokenPacketData data = packet.data
+  assert(data.denom !== "")
+  assert(data.amount > 0)
+  assert(data.sender !== "")
+  assert(data.receiver !== "")
+
   // construct default acknowledgement of success
   FungibleTokenPacketAcknowledgement ack = FungibleTokenPacketAcknowledgement{true, null}
   prefix = "{packet.sourcePort}/{packet.sourceChannel}/"

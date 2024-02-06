@@ -59,5 +59,3 @@
 \twocolumn
 
 # References
-
-

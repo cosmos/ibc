@@ -42,7 +42,6 @@ The IBC handler interface & IBC relayer module interface are as defined in [ICS-
 - The controller chain must store the account address of any owned interchain accounts registered on host chains.
 - A host chain must have the ability to limit interchain account functionality on its chain as necessary (e.g. a host chain can decide that interchain accounts registered on the host chain cannot take part in staking).
 
-
 ## Technical specification
 
 ### General design 
@@ -185,8 +184,8 @@ This port will be used to create channels between the controller & host chain fo
 2. The controller chain emits an event signaling to open a new channel on this port given a connection. 
 3. A relayer listening for `ChannelOpenInit` events will continue the channel creation handshake.
 4. During the `OnChanOpenTry` callback on the host chain an interchain account will be registered and a mapping of the interchain account address to the owner account address will be stored in state (this is used for authenticating transactions on the host chain at execution time). 
-5. During the `OnChanOpenAck` callback on the controller chain a record of the interchain account address registered on the host chain during `OnChanOpenTry` is set in state with a mapping from portID -> interchain account address. See [metadata negotiation](#Metadata-negotiation) section below for how to implement this.
-6. During the `OnChanOpenAck` & `OnChanOpenConfirm` callbacks on the controller & host chains respectively, the [active-channel](#Active-channels) for this interchain account/owner pair, is set in state.
+5. During the `OnChanOpenAck` callback on the controller chain a record of the interchain account address registered on the host chain during `OnChanOpenTry` is set in state with a mapping from portID -> interchain account address. See [metadata negotiation](#metadata-negotiation) section below for how to implement this.
+6. During the `OnChanOpenAck` & `OnChanOpenConfirm` callbacks on the controller & host chains respectively, the [active-channel](#active-channels) for this interchain account/owner pair, is set in state.
 
 #### Active channels
 
@@ -211,11 +210,11 @@ The controller and host chains must verify that any new channel maintains the sa
 
 #### **Metadata negotiation**
 
-ICS-27 takes advantage of [ICS-04 channel version negotiation](../../core/ics-004-channel-and-packet-semantics/README.md#versioning) to negotiate metadata and channel parameters during the channel handshake. The metadata will contain the encoding format along with the transaction type so that the counterparties can agree on the structure and encoding of the interchain transactions. The metadata sent from the host chain on the TRY step will also contain the interchain account address, so that it can be relayed to the controller chain. At the end of the channel handshake, both the controller and host chains will store a mapping of the controller chain portID to the newly registered interchain account address ([account registration flow](#Register-account-flow)). 
+ICS-27 takes advantage of [ICS-04 channel version negotiation](../../core/ics-004-channel-and-packet-semantics/README.md#versioning) to negotiate metadata and channel parameters during the channel handshake. The metadata will contain the encoding format along with the transaction type so that the counterparties can agree on the structure and encoding of the interchain transactions. The metadata sent from the host chain on the TRY step will also contain the interchain account address, so that it can be relayed to the controller chain. At the end of the channel handshake, both the controller and host chains will store a mapping of the controller chain portID to the newly registered interchain account address ([account registration flow](#register-account-flow)). 
 
-ICS-04 allows for each channel version negotiation to be application-specific. In the case of interchain accounts, the channel version will be a string of a JSON struct containing all the relevant metadata intended to be relayed to the counterparty during the channel handshake step ([see summary below](#Metadata-negotiation-summary)).
+ICS-04 allows for each channel version negotiation to be application-specific. In the case of interchain accounts, the channel version will be a string of a JSON struct containing all the relevant metadata intended to be relayed to the counterparty during the channel handshake step ([see summary below](#metadata-negotiation-summary)).
 
-Combined with the one channel per interchain account approach, this method of metadata negotiation allows us to pass the address of the interchain account back to the controller chain and create a mapping from controller portID -> interchain account address during the `OnChanOpenAck` callback. As outlined in the [controlling flow](#Controlling-flow), a controller chain will need to know the address of a registered interchain account in order to send transactions to the account on the host chain.
+Combined with the one channel per interchain account approach, this method of metadata negotiation allows us to pass the address of the interchain account back to the controller chain and create a mapping from controller portID -> interchain account address during the `OnChanOpenAck` callback. As outlined in the [controlling flow](#controlling-flow), a controller chain will need to know the address of a registered interchain account in order to send transactions to the account on the host chain.
 
 #### **Metadata negotiation summary**
 
@@ -230,6 +229,7 @@ Datagram: ChanOpenInit
 Chain Acted Upon: Controller
 
 Version: 
+
 ```json
 {
   "Version": "ics27-1",
@@ -252,6 +252,7 @@ Datagram: ChanOpenTry
 Chain Acted Upon: Host
 
 Version: 
+
 ```json
 {
   "Version": "ics27-1",
@@ -275,6 +276,7 @@ Datagram: ChanOpenAck
 Chain Acted Upon: Controller
 
 CounterpartyVersion: 
+
 ```json
 {
   "Version": "ics27-1",
@@ -317,6 +319,7 @@ SendTx(ownerAddress, connectionId, portID, data, timeout)
 Messages are authenticated on the host chain by taking the controller side port identifier and calling `GetInterchainAccountAddress(controllerPortId)` to get the expected interchain account address for the current controller port. If the signer of this message does not match the expected account address then authentication will fail.
 
 ### Packet Data
+
 `InterchainAccountPacketData` contains an array of messages that an interchain account can execute and a memo string that is sent to the host chain as well as the packet `type`. ICS-27 version 1 has only one type `EXECUTE_TX`.
 
 ```proto
@@ -347,7 +350,7 @@ Controller chains will wrap `OnAcknowledgementPacket` & `OnTimeoutPacket` to han
 
 ### Port & channel setup
 
-The interchain account module on a host chain must always bind to a port with the id `icahost`. Controller chains will bind to ports dynamically, as specified in the identifier format [section](#identifer-formats).
+The interchain account module on a host chain must always bind to a port with the id `icahost`. Controller chains will bind to ports dynamically, as specified in the identifier format [section](#identifier-formats).
 
 The example below assumes a module is implementing the entire `InterchainAccountModule` interface. The `setup` function must be called exactly once when the module is created (perhaps when the blockchain itself is initialized) to bind to the appropriate port.
 
@@ -360,12 +363,10 @@ function setup() {
     onChanOpenConfirm,
     onChanCloseInit,
     onChanCloseConfirm,
-    onChanUpgradeInit,
-    onChanUpgradeTry,
-    onChanUpgradeAck,
-    onChanUpgradeConfirm,
+    onChanUpgradeInit, // read-only
+    onChanUpgradeTry, // read-only
+    onChanUpgradeAck, // read-only
     onChanUpgradeOpen,
-    onChanUpgradeRestore,
     onRecvPacket,
     onTimeoutPacket,
     onAcknowledgePacket,
@@ -700,16 +701,8 @@ function onChanUpgradeOpen(
 } 
 ```
 
-```typescript
-// Called on Controller and/or Host Chain by Relayer
-function onChanUpgradeRestore(
-  portIdentifier: Identifier,
-  channelIdentifier: Identifier) {
-    // no-op
-}
-```
-
 ### Packet relay
+
 `onRecvPacket` is called by the routing module when a packet addressed to this module has been received.
 
 ```typescript
@@ -816,5 +809,3 @@ August 1, 2023 - Implemented channel upgrades callbacks
 ## Copyright
 
 All content herein is licensed under [Apache 2.0](https://www.apache.org/licenses/LICENSE-2.0).
-
-
