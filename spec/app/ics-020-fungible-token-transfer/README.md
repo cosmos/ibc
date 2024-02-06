@@ -135,7 +135,7 @@ function onChanOpenInit(
   // as the version for this channel
   abortTransactionUnless(version === "ics20-1" || version === "")
   // allocate an escrow address
-  channelEscrowAddresses[channelIdentifier] = newAddress()
+  channelEscrowAddresses[channelIdentifier] = newAddress(portIdentifier, channelIdentifier)
   return "ics20-1", nil
 }
 ```
@@ -154,7 +154,7 @@ function onChanOpenTry(
   // assert that version is "ics20-1"
   abortTransactionUnless(counterpartyVersion === "ics20-1")
   // allocate an escrow address
-  channelEscrowAddresses[channelIdentifier] = newAddress()
+  channelEscrowAddresses[channelIdentifier] = newAddress(portIdentifier, channelIdentifier)
   // return version that this chain will use given the
   // counterparty version
   return "ics20-1", nil
