@@ -447,7 +447,7 @@ function handleChanOpenInit(datagram: ChanOpenInit) {
     datagram.portIdentifier,
     datagram.counterpartyPortIdentifier
   )
-  // SYNCHRONOUS: the following calls happen syncrhonously with the call above
+  // SYNCHRONOUS: the following calls happen synchronously with the call above
   // ASYNCHRONOUS: the module callback will be called at a time later than the channel handler
   // in this case, the channel identifier will be stored with a sentinel value so it is not taken
   // by a new channel handshake and the capability is reserved for the application module.
@@ -664,7 +664,7 @@ function handleChanCloseConfirm(datagram: ChanCloseConfirm) {
     // in this case, the channel identifier will be stored with a sentinel value so it is not taken
     // by a new channel handshake and the capability is reserved for the application module.
     // When the module eventually executes its callback it must call writeChannel so that the channel
-    // can be written into an OPEN state and the handshake can proceed on the counterparty.
+    // can be written into a CLOSED state and the handshake can proceed on the counterparty.
     module = lookupModule(datagram.portIdentifier)
     err = module.onChanCloseConfirm(
       datagram.portIdentifier,
