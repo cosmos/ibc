@@ -1,11 +1,11 @@
 # Default owners for repository
 # 2/n quorum required for merge
 
-*       @mpoke @adityasripal @cwgoes @colin-axner @angbrav
+*       @adityasripal @cwgoes @colin-axner @angbrav
 
 # CODEOWNERS for the CODEOWNER file
 
-/.github/CODEOWNERS @mpoke @adityasripal @cwgoes @colin-axner @angbrav @damiannolan
+/.github/CODEOWNERS @adityasripal @cwgoes @colin-axner @angbrav @damiannolan
 
 # CODEOWNERS for the specs
 
