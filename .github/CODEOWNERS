@@ -1,14 +1,14 @@
 # Default owners for repository
 # 2/n quorum required for merge
 
-*       @mpoke @adityasripal @cwgoes @colin-axner @angbrav
+*       @adityasripal @cwgoes @angbrav @colin-axner @damiannolan @sangier
 
 # CODEOWNERS for the CODEOWNER file
 
-/.github/CODEOWNERS @mpoke @adityasripal @cwgoes @colin-axner @angbrav
+/.github/CODEOWNERS @adityasripal @cwgoes @angbrav 
 
 # CODEOWNERS for the specs
 
-/spec/app @adityasripal @cwgoes @colin-axner @angbrav
+/spec/app @adityasripal @cwgoes @colin-axner @damiannolan @sangier
 
 /spec/app/ics-028-cross-chain-validation @mpoke @adityasripal @cwgoes @angbrav @insumity

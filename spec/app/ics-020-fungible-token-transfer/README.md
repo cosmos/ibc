@@ -88,7 +88,7 @@ The `setup` function must be called exactly once when the module is created (per
 
 ```typescript
 function setup() {
-  capability = routingModule.bindPort("bank", ModuleCallbacks{
+  capability = routingModule.bindPort("transfer", ModuleCallbacks{
     onChanOpenInit,
     onChanOpenTry,
     onChanOpenAck,
@@ -135,7 +135,7 @@ function onChanOpenInit(
   // as the version for this channel
   abortTransactionUnless(version === "ics20-1" || version === "")
   // allocate an escrow address
-  channelEscrowAddresses[channelIdentifier] = newAddress()
+  channelEscrowAddresses[channelIdentifier] = newAddress(portIdentifier, channelIdentifier)
   return "ics20-1", nil
 }
 ```
@@ -154,7 +154,7 @@ function onChanOpenTry(
   // assert that version is "ics20-1"
   abortTransactionUnless(counterpartyVersion === "ics20-1")
   // allocate an escrow address
-  channelEscrowAddresses[channelIdentifier] = newAddress()
+  channelEscrowAddresses[channelIdentifier] = newAddress(portIdentifier, channelIdentifier)
   // return version that this chain will use given the
   // counterparty version
   return "ics20-1", nil
@@ -220,7 +220,8 @@ function sendFungibleTokens(
   sourcePort: string,
   sourceChannel: string,
   timeoutHeight: Height,
-  timeoutTimestamp: uint64): uint64 {
+  timeoutTimestamp: uint64, // in unix nanoseconds
+): uint64 {
     prefix = "{sourcePort}/{sourceChannel}/"
     // we are the source if the denomination is not prefixed
     source = denomination.slice(0, len(prefix)) !== prefix
@@ -256,6 +257,11 @@ function sendFungibleTokens(
 ```typescript
 function onRecvPacket(packet: Packet) {
   FungibleTokenPacketData data = packet.data
+  assert(data.denom !== "")
+  assert(data.amount > 0)
+  assert(data.sender !== "")
+  assert(data.receiver !== "")
+
   // construct default acknowledgement of success
   FungibleTokenPacketAcknowledgement ack = FungibleTokenPacketAcknowledgement{true, null}
   prefix = "{packet.sourcePort}/{packet.sourceChannel}/"

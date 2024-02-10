@@ -55,7 +55,7 @@ state updates are considered final) are used to verify state updates.
 The client protocol should also support third-party introduction.
 For example, if `A`, `B`, and `C` are three state machines, with 
 Alice a module on `A`, Bob a module on `B`, and Carol a module on `C`, such that
-Alice knows both Bob and Carol, but Bob knowns only Alice and not Carol, 
+Alice knows both Bob and Carol, but Bob knows only Alice and not Carol, 
 then Alice can utilise an existing channel to Bob to communicate the canonically-serialisable 
 validity predicate for Carol. Bob can then use this validity predicate to open a connection and channel 
 so that Bob and Carol can talk directly.

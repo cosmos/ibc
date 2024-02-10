@@ -39,7 +39,7 @@ In order to provide the desired ordering, exactly-once delivery, and module perm
 
 `Identifier`, `get`, `set`, `delete`, `getCurrentHeight`, and module-system related primitives are as defined in [ICS 24](../ics-024-host-requirements).
 
-See [upgrades spec](./UPGRADES.md) for definition of `pendingInflightPackets`.
+See [upgrades spec](./UPGRADES.md) for definition of `pendingInflightPackets` and `restoreChannel`.
 
 A *channel* is a pipeline for exactly-once packet delivery between specific modules on separate blockchains, which has at least one end capable of sending packets and one end capable of receiving packets.
 
@@ -587,6 +587,11 @@ function chanCloseConfirm(
       ))
     }
 
+    // if the channel is closing during an upgrade, 
+    // then we can delete all auxiliary upgrade information
+    provableStore.delete(channelUpgradePath(portIdentifier, channelIdentifier))
+    privateStore.delete(counterpartyUpgradePath(portIdentifier, channelIdentifier))
+
     channel.state = CLOSED
     provableStore.set(channelPath(portIdentifier, channelIdentifier), channel)
 }
@@ -812,6 +817,7 @@ The IBC handler performs the following steps in order:
 - Checks that the packet sequence is the next sequence the channel end expects to receive (for ordered and ordered_allow_timeout channels)
 - Checks that the timeout height and timestamp have not yet passed
 - Checks the inclusion proof of packet data commitment in the outgoing chain's state
+- Optionally (in case channel upgrades and deletion of acknowledgements and packet receipts are implemented): reject any packet with a sequence already used before a successful channel upgrade
 - Sets a store path to indicate that the packet has been received (unordered channels only)
 - Increments the packet receive sequence associated with the channel end (ordered and ordered_allow_timeout channels only)
 
@@ -826,7 +832,11 @@ function recvPacket(
 
     channel = provableStore.get(channelPath(packet.destPort, packet.destChannel))
     abortTransactionUnless(channel !== null)
-    abortTransactionUnless(channel.state === OPEN || (channel.state === FLUSHING))
+    abortTransactionUnless(channel.state === OPEN || (channel.state === FLUSHING) || (channel.state === FLUSHCOMPLETE))
+    counterpartyUpgrade = privateStore.get(counterpartyUpgradePath(packet.destPort, packet.destChannel))
+    // defensive check that ensures chain does not process a packet higher than the last packet sent before
+    // counterparty went into FLUSHING mode. If the counterparty is implemented correctly, this should never abort
+    abortTransactionUnless(counterpartyUpgrade.nextSequenceSend == 0 || packet.sequence < counterpartyUpgrade.nextSequenceSend)
     abortTransactionUnless(authenticateCapability(channelCapabilityPath(packet.destPort, packet.destChannel), capability))
     abortTransactionUnless(packet.sourcePort === channel.counterpartyPortIdentifier)
     abortTransactionUnless(packet.sourceChannel === channel.counterpartyChannelIdentifier)
@@ -904,6 +914,13 @@ function recvPacket(
         abortTransactionUnless(false)
     }
 
+    // REPLAY PROTECTION: in order to free storage, implementations may choose to 
+    // delete acknowledgements and packet receipts when a channel upgrade is successfully 
+    // completed. In that case, implementations must also make sure that any packet with 
+    // a sequence already used before the channel upgrade is rejected. This is needed to 
+    // prevent replay attacks (see this PR in ibc-go for an example of how this is achieved:
+    // https://github.com/cosmos/ibc-go/pull/5651).
+    
     // all assertions passed (except sequence check), we can alter state
 
     switch channel.order {
@@ -1287,6 +1304,15 @@ function timeoutPacket(
 
     // only close on strictly ORDERED channels
     if channel.order === ORDERED {
+      // if the channel is ORDERED and a packet is timed out in FLUSHING state then
+      // all upgrade information is deleted and the channel is set to CLOSED.
+
+      if channel.State == FLUSHING {
+        // delete auxiliary upgrade state
+        provableStore.delete(channelUpgradePath(portIdentifier, channelIdentifier))
+        privateStore.delete(counterpartyUpgradePath(portIdentifier, channelIdentifier))
+      }
+
       // ordered channel: close the channel
       channel.state = CLOSED
       provableStore.set(channelPath(packet.sourcePort, packet.sourceChannel), channel)

@@ -20,11 +20,11 @@ This standard document specifies packet data structure, state machine handling l
 
 Users may wish to exchange tokens without transferring tokens away from their native chain. ICS-100 enabled chains can facilitate atomic swaps between users and their tokens located on the different chains. This is useful for exchanges between specific users at specific prices, and opens opportunities for new application designs.
 
-For example, a token exchange would require only one transaction from an user, compared to multiple transactions when using ICS-20.  Additionally, users can minimize trade slippage compared to using a liquidity pool, given there is a willing counter-party.
+For example, a token exchange would require only one transaction from a user, compared to multiple transactions when using ICS-20.  Additionally, users can minimize trade slippage compared to using a liquidity pool, given there is a willing counter-party.
 
 ### Definitions
 
-`Atomic Swap`: An exchange of tokens from separate chains without transfering tokens from one blockchain to another.  The exchange either happens or it doesn't -- there is no other alternative.
+`Atomic Swap`: An exchange of tokens from separate chains without transferring tokens from one blockchain to another.  The exchange either happens or it doesn't -- there is no other alternative.
 
 `Order`: An offer to exchange quantity X of token A for quantity Y of token B. Tokens offered are sent to an escrow account (owned by the module).
 
@@ -32,14 +32,14 @@ For example, a token exchange would require only one transaction from an user, c
 
 `Taker`: The counterparty who takes or responds to an order.
 
-`Maker Chain`: The blockchain where a maker makes or initiaties an order.
+`Maker Chain`: The blockchain where a maker makes or initiates an order.
 
 `Taker Chain`: The blockchain where a taker takes or responds to an order.
 
 ### Desired Properties
 
 - `Permissionless`: no need to whitelist connections, modules, or denominations.
-- `Guarantee of exchange`: no occurence of a user receiving tokens without the equivalent promised exchange.
+- `Guarantee of exchange`: no occurrence of a user receiving tokens without the equivalent promised exchange.
 - `Escrow enabled`: an account owned by the module will hold tokens and facilitate exchange.
 - `Refundable`: tokens are refunded by escrow when a timeout occurs, or when an order is cancelled.
 - `Order cancellation`: orders without takers can be cancelled.
