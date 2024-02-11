@@ -119,7 +119,7 @@ function checkForMisbehaviour(clientMsg: clientMessage) => bool {
 
 ### Update state
 
-Function `updateState` will perform a regular update for the loopback client. The `clientState` will be updated with the lastest height of the local ledger. This function should be called automatically at every height.
+Function `updateState` will perform a regular update for the loopback client. The `clientState` will be updated with the latest height of the local ledger. This function should be called automatically at every height.
 
 ```typescript
 function updateState(clientMsg: clientMessage) {
