@@ -10,7 +10,7 @@ created: 2022-07-27
 modified: 2022-10-07
 ---
 
-<p style="text-align:center;border-style:solid">This specification has been reviewed by the Spec Comittee, but it is not responsible for maintaining it.</p>
+<p style="text-align:center;border-style:solid">This specification has been reviewed by the Spec Committee, but it is not responsible for maintaining it.</p>
 
 ## Synopsis
 
