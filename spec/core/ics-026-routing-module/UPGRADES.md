@@ -6,8 +6,7 @@ This standard document specifies the interfaces and state machine logic that IBC
 
 ### Motivation
 
-As new features get added to IBC applications, chains may wish the take advantage of new application features without abandoning the accumulated state and network effect(s) of an already existing channel. The upgrade protocol proposed would allow applications to renegotiate an existing channel to take advantage of new features without having to create a new channel, thus preserving all existing application state while upgradng to new application logic.
-
+As new features get added to IBC applications, chains may wish the take advantage of new application features without abandoning the accumulated state and network effect(s) of an already existing channel. The upgrade protocol proposed would allow applications to renegotiate an existing channel to take advantage of new features without having to create a new channel, thus preserving all existing application state while upgrading to new application logic.
 
 ### Desired Properties
 
@@ -26,118 +25,80 @@ In order to support channel upgrades, the application must implement the followi
 
 ```typescript
 interface ModuleUpgradeCallbacks {
-    onChanUpgradeInit: onChanUpgradeInit,
-    onChanUpgradeTry: onChanUpgradeTry,
-    onChanUpgradeAck: onChanUpgradeAck,
-    onChanUpgradeConfirm: onChanUpgradeConfirm,
-    onChanUpgradeRestore: onChanUpgradeRestore
+  onChanUpgradeInit: onChanUpgradeInit, // read-only
+  onChanUpgradeTry: onChanUpgradeTry, // read-only
+  onChanUpgradeAck: onChanUpgradeAck, // read-only
+  onChanUpgradeOpen: onChanUpgradeOpen
 }
 ```
 
-#### **OnChanUpgradeInit**
+### **OnChanUpgradeInit**
 
 `onChanUpgradeInit` will verify that the upgrade parameters 
 are valid and perform any custom `UpgradeInit` logic.
 It may return an error if the chosen parameters are invalid 
 in which case the upgrade handshake is aborted.
-The callback is provided both the previous version of the channel and the new proposed version. It may perform the necessary logic and state changes necessary to upgrade the channel from the previous version to the new version. If upgrading the application from the previous version to the new version is not supported, it must return an error.
+The callback is provided the new upgrade parameters. It may perform the necessary checks to ensure that it can support the new channel parameters. If upgrading the application from the previous parameters to the new parameters is not supported, it must return an error.
 
-If an error is returned, then core IBC will revert any changes made by `onChanUpgradeInit` and abort the handshake.
+`onChanUpgradeInit` may return a modified version to be stored in the upgrade. This may occur if the application needs to store some metadata in the version string as part of its channel negotiation.
 
-`onChanUpgradeInit` is also responsible for making sure that the application is recoverable to its pre-upgrade state. The application may either store any new metadata in separate paths, or store the previous metadata under a different path so it can be restored.
+If an error is returned, then core IBC will abort the handshake.
+
+`onChanUpgradeInit` MUST NOT write any state changes as this will be done only once the upgrade is completed and confirmed to succeed on both sides
 
 ```typescript
 function onChanUpgradeInit(
-  order: ChannelOrder,
-  connectionHops: [Identifier],
   portIdentifier: Identifier,
   channelIdentifier: Identifier,
-  counterpartyPortIdentifier: Identifier,
-  counterpartyChannelIdentifier: Identifier,
-  version: string,
-  previousVersion: string) => (version: string, err: Error) {
+  proposedOrdering: ChannelOrder,
+  proposedConnectionHops: [Identifier],
+  proposedVersion: string) => (version: string, err: Error) {
     // defined by the module
-}
+} (version: string)
 ```
 
-#### **OnChanUpgradeTry**
+### **OnChanUpgradeTry**
 
-`onChanUpgradeTry` will verify the upgrade-chosen parameters and perform custom `TRY` logic. 
-If the upgrade-chosen parameters are invalid, the callback must return an error to abort the handshake. 
-If the counterparty-chosen version is not compatible with this modules
-supported versions, the callback must return an error to abort the handshake. 
-If the versions are compatible, the try callback must select the final version
-string and return it to core IBC.
-If upgrading from the previous version to the final new version is not supported, it must return an error.
-`onChanUpgradeTry` may also perform custom initialization logic.
+`onChanUpgradeTry` will verify the upgrade-chosen parameters from the counterparty. 
+If the upgrade-chosen parameters are unsupported by the application, the callback must return an error to abort the handshake. 
+The try callback may return a modified version, in case it needs to add some metadata to the version string.
+This will be stored as the final proposed version of the upgrade by core IBC.
 
-If an error is returned, then core IBC will revert any changes made by `onChanUpgradeTry` and abort the handshake.
-
-`onChanUpgradeTry` is also responsible for making sure that the application is recoverable to its pre-upgrade state. The application may either store any new metadata in separate paths, or store the previous metadata under a different path so it can be restored.
+`onChanUpgradeTry` MUST NOT write any state changes as this will be done only once the upgrade is completed and confirmed to succeed on both sides.
 
 ```typescript
 function onChanUpgradeTry(
-  order: ChannelOrder,
-  connectionHops: [Identifier],
   portIdentifier: Identifier,
   channelIdentifier: Identifier,
-  counterpartyPortIdentifier: Identifier,
-  counterpartyChannelIdentifier: Identifier,
-  previousVersion: string,
-  counterpartyVersion: string) => (version: string, err: Error) {
+  proposedOrdering: ChannelOrder,
+  proposedConnectionHops: [Identifier],
+  proposedVersion: string) => (version: string, err: Error) {
     // defined by the module
-}
+} (version: string)
 ```
 
-#### **OnChanUpgradeAck**
+### **OnChanUpgradeAck**
 
 `onChanUpgradeAck` will error if the counterparty selected version string
-is invalid. If an error is returned by the callback, core IBC will revert any changes made by `onChanUpgradeAck` and abort the handshake.
+is unsupported. If an error is returned by the callback, core IBC will abort the handshake.
 
-The `onChanUpgradeAck` callback may also perform custom ACK logic.
-
-After `onChanUpgradeAck` returns successfully, the application upgrade is complete on this end so any 
-auxilliary data stored for the purposes of recovery is no longer needed and may be deleted.
-
-If the callback returns successfully, the application MUST have its state fully migrated to start processing packet data according to the new application parameters.
+`onChanUpgradeAck` MUST NOT write any state changes as this will be done only once the upgrade is completed and confirmed to succeed on both sides.
 
 ```typescript
 function onChanUpgradeAck(
   portIdentifier: Identifier,
   channelIdentifier: Identifier,
-  counterpartyChannelIdentifier: Identifier, 
-  counterpartyVersion: string) {
-    // defined by the module
-} => Error
-```
-
-#### **OnChanUpgradeConfirm**
-
-`onChanUpgradeConfirm` will perform custom CONFIRM logic. It MUST NOT error since the counterparty has already approved the handshake, and transitioned to using the new upgrade parameters.
-
-After `onChanUpgradeConfirm` returns, the application upgrade is complete so any 
-auxilliary data stored for the purposes of recovery is no longer needed and may be deleted.
-
-The application MUST have its state fully migrated to start processing packet data according to the new application parameters by the time the callback returns.
-
-```typescript
-function onChanUpgradeConfirm(
-  portIdentifier: Identifier,
-  channelIdentifier: Identifier) {
+  counterpartyVersion: string) => Error {
     // defined by the module
 }
 ```
 
-#### **OnChanUpgradeRestore**
+### **OnChanUpgradeOpen**
 
-`onChanUpgradeRestore` will be called on `cancelChannelUpgrade` and `timeoutChannelUpgrade` to restore the application to its pre-upgrade state.
-
-After the upgrade restore callback is returned, the application must have any application metadata back to its pre-upgrade state. Any temporary metadata stored for the purpose of transitioning to the upgraded state may be deleted.
-
-The application MUST have its state fully migrated to start processing packet data according to the original application parameters by the time the callback returns.
+`onChanUpgradeOpen` is called after the upgrade is complete and both sides are guaranteed to move to the new channel parameters. Thus, the application may now perform any state migrations necessary to start supporting packet processing according to the new channel parameters.
 
 ```typescript
-function onChanUpgradeRestore(
+function onChanUpgradeOpen(
   portIdentifier: Identifier,
   channelIdentifier: Identifier) {
     // defined by the module

@@ -39,7 +39,7 @@ In order to provide the desired ordering, exactly-once delivery, and module perm
 
 `Identifier`, `get`, `set`, `delete`, `getCurrentHeight`, and module-system related primitives are as defined in [ICS 24](../ics-024-host-requirements).
 
-See [upgrades spec](./UPGRADES.md) for definition of `pendingInflightPackets`.
+See [upgrades spec](./UPGRADES.md) for definition of `pendingInflightPackets` and `restoreChannel`.
 
 A *channel* is a pipeline for exactly-once packet delivery between specific modules on separate blockchains, which has at least one end capable of sending packets and one end capable of receiving packets.
 
@@ -113,7 +113,6 @@ enum ChannelState {
 
 See the [upgrade spec](./UPGRADES.md) for details on `FLUSHING` and `FLUSHCOMPLETE`.
 
-
 A `Packet`, in the interblockchain communication protocol, is a particular interface defined as follows:
 
 ```typescript
@@ -146,7 +145,7 @@ An `OpaquePacket` is a packet, but cloaked in an obscuring data type by the host
 type OpaquePacket = object
 ```
 
-In order to enable new channel types (e.g. ORDERED_ALLOW_TIMEOUT), the protocol introduces standardized packet receipts that will serve as sentinel values for the receiving chain to expliclity write to its store the outcome of a `recvPacket`.
+In order to enable new channel types (e.g. ORDERED_ALLOW_TIMEOUT), the protocol introduces standardized packet receipts that will serve as sentinel values for the receiving chain to explicitly write to its store the outcome of a `recvPacket`.
 
 ```typescript
 enum PacketReceipt {
@@ -588,6 +587,11 @@ function chanCloseConfirm(
       ))
     }
 
+    // if the channel is closing during an upgrade, 
+    // then we can delete all auxiliary upgrade information
+    provableStore.delete(channelUpgradePath(portIdentifier, channelIdentifier))
+    privateStore.delete(counterpartyUpgradePath(portIdentifier, channelIdentifier))
+
     channel.state = CLOSED
     provableStore.set(channelPath(portIdentifier, channelIdentifier), channel)
 }
@@ -813,6 +817,7 @@ The IBC handler performs the following steps in order:
 - Checks that the packet sequence is the next sequence the channel end expects to receive (for ordered and ordered_allow_timeout channels)
 - Checks that the timeout height and timestamp have not yet passed
 - Checks the inclusion proof of packet data commitment in the outgoing chain's state
+- Optionally (in case channel upgrades and deletion of acknowledgements and packet receipts are implemented): reject any packet with a sequence already used before a successful channel upgrade
 - Sets a store path to indicate that the packet has been received (unordered channels only)
 - Increments the packet receive sequence associated with the channel end (ordered and ordered_allow_timeout channels only)
 
@@ -827,8 +832,11 @@ function recvPacket(
 
     channel = provableStore.get(channelPath(packet.destPort, packet.destChannel))
     abortTransactionUnless(channel !== null)
-    counterpartyLastPacketSent = privateStore.get(channelCounterpartyLastPacketSequencePath(packet.destPort, packet.destChannel)
-    abortTransactionUnless(channel.state === OPEN || (channel.state === FLUSHING && packet.sequence <= counterpartyLastPacketSent))
+    abortTransactionUnless(channel.state === OPEN || (channel.state === FLUSHING) || (channel.state === FLUSHCOMPLETE))
+    counterpartyUpgrade = privateStore.get(counterpartyUpgradePath(packet.destPort, packet.destChannel))
+    // defensive check that ensures chain does not process a packet higher than the last packet sent before
+    // counterparty went into FLUSHING mode. If the counterparty is implemented correctly, this should never abort
+    abortTransactionUnless(counterpartyUpgrade.nextSequenceSend == 0 || packet.sequence < counterpartyUpgrade.nextSequenceSend)
     abortTransactionUnless(authenticateCapability(channelCapabilityPath(packet.destPort, packet.destChannel), capability))
     abortTransactionUnless(packet.sourcePort === channel.counterpartyPortIdentifier)
     abortTransactionUnless(packet.sourceChannel === channel.counterpartyChannelIdentifier)
@@ -895,7 +903,7 @@ function recvPacket(
           nextSequenceRecv = nextSequenceRecv + 1
           provableStore.set(nextSequenceRecvPath(packet.destPort, packet.destChannel), nextSequenceRecv)
           provableStore.set(
-          packetReceiptPath(packet.destPort, packet.destChannel, packet.sequence),
+            packetReceiptPath(packet.destPort, packet.destChannel, packet.sequence),
             TIMEOUT_RECEIPT
           )
         }
@@ -906,6 +914,13 @@ function recvPacket(
         abortTransactionUnless(false)
     }
 
+    // REPLAY PROTECTION: in order to free storage, implementations may choose to 
+    // delete acknowledgements and packet receipts when a channel upgrade is successfully 
+    // completed. In that case, implementations must also make sure that any packet with 
+    // a sequence already used before the channel upgrade is rejected. This is needed to 
+    // prevent replay attacks (see this PR in ibc-go for an example of how this is achieved:
+    // https://github.com/cosmos/ibc-go/pull/5651).
+    
     // all assertions passed (except sequence check), we can alter state
 
     switch channel.order {
@@ -1190,8 +1205,7 @@ function timeoutPacket(
         // ordered channel: check that packet has not been received
         // only allow timeout on next sequence so all sequences before the timed out packet are processed (received/timed out)
         // before this packet times out
-        abortTransactionUnless(nextSequenceRecv == packet.sequence)
-
+        abortTransactionUnless(packet.sequence == nextSequenceRecv)
         // ordered channel: check that the recv sequence is as claimed
         if (channel.connectionHops.length > 1) {
           key = nextSequenceRecvPath(packet.srcPort, packet.srcChannel)
@@ -1239,12 +1253,9 @@ function timeoutPacket(
       // NOTE: For ORDERED_ALLOW_TIMEOUT, the relayer must first attempt the receive on the destination chain
       // before the timeout receipt can be written and subsequently proven on the sender chain in timeoutPacket
       case ORDERED_ALLOW_TIMEOUT:
-        // ordered channel: check that packet has not been received
-        // only allow timeout on next sequence so all sequences before the timed out packet are processed (received/timed out)
-        // before this packet times out
-        abortTransactionUnless(nextSequenceRecv == packet.sequence)
+        abortTransactionUnless(packet.sequence == nextSequenceRecv - 1)
 
-         if (channel.connectionHops.length > 1) {
+        if (channel.connectionHops.length > 1) {
           abortTransactionUnless(connection.verifyMultihopMembership(
               connection,
               proofHeight,
@@ -1293,6 +1304,15 @@ function timeoutPacket(
 
     // only close on strictly ORDERED channels
     if channel.order === ORDERED {
+      // if the channel is ORDERED and a packet is timed out in FLUSHING state then
+      // all upgrade information is deleted and the channel is set to CLOSED.
+
+      if channel.State == FLUSHING {
+        // delete auxiliary upgrade state
+        provableStore.delete(channelUpgradePath(portIdentifier, channelIdentifier))
+        privateStore.delete(counterpartyUpgradePath(portIdentifier, channelIdentifier))
+      }
+
       // ordered channel: close the channel
       channel.state = CLOSED
       provableStore.set(channelPath(packet.sourcePort, packet.sourceChannel), channel)
@@ -1368,50 +1388,77 @@ function timeoutOnClose(
       ))
     }
 
-    if channel.order === ORDERED || channel.order == ORDERED_ALLOW_TIMEOUT {
+    switch channel.order {
+      case ORDERED:
+        // ordered channel: check that packet has not been received
+        abortTransactionUnless(packet.sequence >= nextSequenceRecv)
 
-      // ordered channel: check that packet has not been received
-      abortTransactionUnless(nextSequenceRecv <= packet.sequence)
+        // ordered channel: check that the recv sequence is as claimed
+        if (channel.connectionHops.length > 1) {
+          key = nextSequenceRecvPath(packet.destPort, packet.destChannel)
+          abortTransactionUnless(connection.verifyMultihopMembership(
+            connection,
+            proofHeight,
+            proof,
+            channel.ConnectionHops,
+            key,
+            nextSequenceRecv
+          ))
+        } else {
+          abortTransactionUnless(connection.verifyNextSequenceRecv(
+            proofHeight,
+            proof,
+            packet.destPort,
+            packet.destChannel,
+            nextSequenceRecv
+          ))
+        }
+        break;
 
-      // ordered channel: check that the recv sequence is as claimed
-      if (channel.connectionHops.length > 1) {
-        key = nextSequenceRecvPath(packet.destPort, packet.destChannel)
-        abortTransactionUnless(connection.verifyMultihopMembership(
-          connection,
-          proofHeight,
-          proof,
-          channel.ConnectionHops,
-          key,
-          nextSequenceRecv
-        ))
-      } else {
-        abortTransactionUnless(connection.verifyNextSequenceRecv(
-          proofHeight,
-          proof,
-          packet.destPort,
-          packet.destChannel,
-          nextSequenceRecv
-        ))
-      }
-    } else
-      // unordered channel: verify absence of receipt at packet index
-      if (channel.connectionHops.length > 1) {
-        abortTransactionUnless(connection.verifyMultihopNonMembership(
-          connection,
-          proofHeight,
-          proof,
-          channel.ConnectionHops,
-          key
-        ))
-      } else {
-        abortTransactionUnless(connection.verifyPacketReceiptAbsence(
-          proofHeight,
-          proof,
-          packet.destPort,
-          packet.destChannel,
-          packet.sequence
-        ))
-      }
+      case UNORDERED:
+        // unordered channel: verify absence of receipt at packet index
+        if (channel.connectionHops.length > 1) {
+          abortTransactionUnless(connection.verifyMultihopNonMembership(
+            connection,
+            proofHeight,
+            proof,
+            channel.ConnectionHops,
+            key
+          ))
+        } else {
+          abortTransactionUnless(connection.verifyPacketReceiptAbsence(
+            proofHeight,
+            proof,
+            packet.destPort,
+            packet.destChannel,
+            packet.sequence
+          ))
+        }
+        break;
+
+      case ORDERED_ALLOW_TIMEOUT:
+        // if packet.sequence >= nextSequenceRecv, then the relayer has not attempted
+        // to receive the packet on the destination chain (e.g. because the channel is already closed).
+        // In this situation it is not needed to verify the presence of a timeout receipt.
+        // Otherwise, if packet.sequence < nextSequenceRecv, then the relayer has attempted
+        // to receive the packet on the destination chain, and nextSequenceRecv has been incremented.
+        // In this situation, verify the presence of timeout receipt. 
+        if packet.sequence < nextSequenceRecv {
+          abortTransactionUnless(connection.verifyPacketReceipt(
+            proofHeight,
+            proof,
+            packet.destPort,
+            packet.destChannel,
+            packet.sequence
+            TIMEOUT_RECEIPT,
+          ))
+        }
+        break;
+
+      default:
+        // unsupported channel type
+        abortTransactionUnless(true)
+    }
 
     // all assertions passed, we can alter state
 

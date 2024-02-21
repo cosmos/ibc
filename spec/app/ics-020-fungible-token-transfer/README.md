@@ -128,7 +128,7 @@ The `setup` function must be called exactly once when the module is created (per
 
 ```typescript
 function setup() {
-  capability = routingModule.bindPort("bank", ModuleCallbacks{
+  capability = routingModule.bindPort("transfer", ModuleCallbacks{
     onChanOpenInit,
     onChanOpenTry,
     onChanOpenAck,
@@ -175,7 +175,7 @@ function onChanOpenInit(
   // as the version for this channel
   abortTransactionUnless(version === "ics20-2" || version === "ics20-1" || version === "")
   // allocate an escrow address
-  channelEscrowAddresses[channelIdentifier] = newAddress()
+  channelEscrowAddresses[channelIdentifier] = newAddress(portIdentifier, channelIdentifier)
   if version === "ics20-1" {
     return "ics20-1", nil
   }
@@ -198,7 +198,7 @@ function onChanOpenTry(
   // assert that version is "ics20-1" or "ics20-2" 
   abortTransactionUnless(counterpartyVersion === "ics20-1" || counterpartyVersion === "ics20-2")
   // allocate an escrow address
-  channelEscrowAddresses[channelIdentifier] = newAddress()
+  channelEscrowAddresses[channelIdentifier] = newAddress(portIdentifier, channelIdentifier)
   // return the same version as counterparty version so long as we support it
   return counterpartyVersion, nil
 }
@@ -266,53 +266,54 @@ function sendFungibleTokens(
   sourcePort: string,
   sourceChannel: string,
   timeoutHeight: Height,
-  timeoutTimestamp: uint64): uint64 {
-    for token in tokens {
-      prefix = "{sourcePort}/{sourceChannel}/"
-      // we are the source if the denomination is not prefixed
-      source = token.trace[0] !== prefix
-      onChainDenom = constructOnChainDenom(token.trace, token.denom)
+  timeoutTimestamp: uint64, // in unix nanoseconds
+): uint64 {
+  for token in tokens {
+    prefix = "{sourcePort}/{sourceChannel}/"
+    // we are the source if the denomination is not prefixed
+    source = token.trace[0] !== prefix
+    onChainDenom = constructOnChainDenom(token.trace, token.denom)
       
-      if source {
-        // determine escrow account
-        escrowAccount = channelEscrowAddresses[sourceChannel]
-        // escrow source tokens (assumed to fail if balance insufficient)
-        bank.TransferCoins(sender, escrowAccount, onChainDenom, token.amount)
-      } else {
-        // receiver is source chain, burn vouchers
-        bank.BurnCoins(sender, onChainDenom, token.amount)
-      }
+    if source {
+      // determine escrow account
+      escrowAccount = channelEscrowAddresses[sourceChannel]
+      // escrow source tokens (assumed to fail if balance insufficient)
+      bank.TransferCoins(sender, escrowAccount, onChainDenom, token.amount)
+    } else {
+      // receiver is source chain, burn vouchers
+      bank.BurnCoins(sender, onChainDenom, token.amount)
     }
+  }
 
-    channel = provableStore.get(channelPath(sourcePort, sourceChannel))
-    if channel.version === "ics20-1" {
-      abortTransactionUnless(len(tokens) == 1)
-      data = FungibleTokenPacketData{tokens[0].denom, tokens[0].amount, sender, receiver, memo}
-    } else if channel.version === "ics20-2" {
-      // check if we've already sent metadata for this token on this channel
-      isMetadataSent = getSentMetadataFlag(sourcePort, sourceChannel, onChainDenom)
-      // if it hasn't been sent, then we will set the token metadata in the token
-      // so receiver can store it
-      // otherwise we leave metadata field blank to reduce redundancy
-      if !isMetadataSent {
-        metadata = getMetadata(onChainDenom)
-        token.metadata = metadata
-      }
-      // create FungibleTokenPacket data
-      data = FungibleTokenPacketDataV2{tokens, sender, receiver, memo}
+  channel = provableStore.get(channelPath(sourcePort, sourceChannel))
+  if channel.version === "ics20-1" {
+    abortTransactionUnless(len(tokens) == 1)
+    data = FungibleTokenPacketData{tokens[0].denom, tokens[0].amount, sender, receiver, memo}
+  } else if channel.version === "ics20-2" {
+    // check if we've already sent metadata for this token on this channel
+    isMetadataSent = getSentMetadataFlag(sourcePort, sourceChannel, onChainDenom)
+    // if it hasn't been sent, then we will set the token metadata in the token
+    // so receiver can store it
+    // otherwise we leave metadata field blank to reduce redundancy
+    if !isMetadataSent {
+      metadata = getMetadata(onChainDenom)
+      token.metadata = metadata
     }
+    // create FungibleTokenPacket data
+    data = FungibleTokenPacketDataV2{tokens, sender, receiver, memo}
+  }
 
-    // send packet using the interface defined in ICS4
-    sequence = handler.sendPacket(
-      getCapability("port"),
-      sourcePort,
-      sourceChannel,
-      timeoutHeight,
-      timeoutTimestamp,
-      protobuf.marshal(data) // protobuf-marshalled bytes of packet data
-    )
+  // send packet using the interface defined in ICS4
+  sequence = handler.sendPacket(
+    getCapability("port"),
+    sourcePort,
+    sourceChannel,
+    timeoutHeight,
+    timeoutTimestamp,
+    json.marshal(data) // json-marshalled bytes of packet data
+  )
 
-    return sequence
+  return sequence
 }
 ```
 
@@ -334,10 +335,16 @@ function onRecvPacket(packet: Packet) {
     FungibleTokenPacketDataV2 data = packet.data
     tokens = data.tokens
   }
+
   // construct default acknowledgement of success
   FungibleTokenPacketAcknowledgement ack = FungibleTokenPacketAcknowledgement{true, null}
   prefix = "{packet.sourcePort}/{packet.sourceChannel}/"
   for token in tokens {
+    assert(token.denom !== "")
+    assert(token.amount > 0)
+    assert(token.sender !== "")
+    assert(token.receiver !== "")
+      
     // we are the source if the packets were prefixed by the sending chain
     source = token.trace[0] === prefix
     if source {
