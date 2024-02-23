@@ -55,7 +55,7 @@ A sending chain may be acting as a source or sink zone. When a chain is sending 
 
 The following sequence diagram exemplifies the multi-chain token transfer dynamics. This process encapsulates the intricate steps involved in transferring tokens in a cycle that begins and ends on the same chain, traversing through Chain A, Chain B, and Chain C. The order of operations is meticulously outlined as `A -> B -> C -> A -> C -> B -> A`.
 
-![Transfer Example](SourceAndSinkZones.png)
+![Transfer Example](source-and-sink-zones.png)
 
 The acknowledgement data type describes whether the transfer succeeded or failed, and the reason for failure (if any).
 
