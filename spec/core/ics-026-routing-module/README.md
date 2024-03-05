@@ -671,11 +671,11 @@ function handleChanCloseConfirm(datagram: ChanCloseConfirm) {
       datagram.channelIdentifier
     )
     abortTransactionUnless(err === nil)
-      writeChannel(
-    datagram.portIdentifier,
-    datagram.channelIdentifier,
-    CLOSED,
-  )
+    writeChannel(
+      datagram.portIdentifier,
+      datagram.channelIdentifier,
+      CLOSED,
+    )
 }
 ```
 
