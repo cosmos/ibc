@@ -288,7 +288,7 @@ function sendFungibleTokens(
 function onRecvPacket(packet: Packet) {
   channel = provableStore.get(channelPath(portIdentifier, channelIdentifier))
   if channel.version === "ics20-1" {
-      FungibleTokenPacketData data = packet.data
+      FungibleTokenPacketData data = UnmarshalJSON(packet.data)
       trace, denom = parseICS20V1Denom(data.denom)
       token = Token{
         denom: denom
@@ -297,7 +297,7 @@ function onRecvPacket(packet: Packet) {
       }
       tokens = []Token{token}
   } else if channel.version === "ics20-2" {
-    FungibleTokenPacketDataV2 data = packet.data
+    FungibleTokenPacketDataV2 data = UnmarshalJSON(packet.data)
     tokens = data.tokens
   }
 
@@ -327,7 +327,7 @@ function onRecvPacket(packet: Packet) {
         break
       }
     } else {
-      // since we are receiving to a new sink zone we append the prefix to the trace
+      // since we are receiving to a new sink zone we prepend the prefix to the trace
       prefix = "{packet.destPort}/{packet.destChannel}/"
       newTrace = append([]string{prefix}, token.trace...)
       onChainDenom = constructOnChainDenom(newTrace, token.denom)
@@ -371,7 +371,7 @@ function onTimeoutPacket(packet: Packet) {
 function refundTokens(packet: Packet) {
   channel = provableStore.get(channelPath(portIdentifier, channelIdentifier))
   if channel.version === "ics20-1" {
-      FungibleTokenPacketData data = packet.data
+      FungibleTokenPacketData data = UnmarshalJSON(packet.data)
       trace, denom = parseICS20V1Denom(data.denom)
       token = Token{
         denom: denom
@@ -380,7 +380,7 @@ function refundTokens(packet: Packet) {
       }
       tokens = []Token{token}
   } else if channel.version === "ics20-2" {
-    FungibleTokenPacketDataV2 data = packet.data
+    FungibleTokenPacketDataV2 data = UnmarshalJSON(packet.data)
     tokens = data.tokens
   }  
   prefix = "{packet.sourcePort}/{packet.sourceChannel}/"
