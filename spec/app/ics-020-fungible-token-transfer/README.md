@@ -57,41 +57,15 @@ interface Token {
   denom: string
   trace: []string
   amount: uint64
-  metadata: Metadata
-}
-
-interface Metadata {
-  denomUnits: []DenomUnit
-}
-
-interface DenomUnit {
-  denom: string
-  exponent: uint256
 }
 ```
 
-As tokens are sent across chains using the ICS 20 protocol, they begin to accrue a record of channels for which they have been transferred across. This information is encoded into the `trace` field in the denomination. 
+As tokens are sent across chains using the ICS 20 protocol, they begin to accrue a record of channels for which they have been transferred across. This information is encoded into the `trace` field in the token. 
 
 The ICS 20 token traces are represented by a list of the form `{ics20Port}/{ics20Channel}`, where `ics20Port` and `ics20Channel` are an ICS 20 port and channel on the current chain for which the funds exist. The port and channel pair indicate which channel the funds were previously sent through. Implementations are responsible for correctly parsing the IBC trace information and encoding it into the final on-chain denomination so that the same base denominations sent through different paths are not treated as being fungible.
 
 A sending chain may be acting as a source or sink zone. When a chain is sending tokens across a port and channel which are not equal to the last prefixed port and channel pair, it is acting as a source zone. When tokens are sent from a source zone, the destination port and channel will be prepended to the trace (once the tokens are received) adding another hop to a tokens record. When a chain is sending tokens across a port and channel which are equal to the last prefixed port and channel pair, it is acting as a sink zone. When tokens are sent from a sink zone, the first element of the trace, which was the last port and channel pair added to the trace is removed (once the tokens are received), undoing the last hop in the tokens record. A more complete explanation is [present in the ibc-go implementation](https://github.com/cosmos/ibc-go/blob/457095517b7832c42ecf13571fee1e550fec02d0/modules/apps/transfer/keeper/relay.go#L18-L49).
 
-Implementations may optionally send along metadata with each token describing the denom units for user interfaces. Each denom unit defines a human readable string along with the exponent by which the amount should be displayed. Thus, for example ATOM on the Cosmos Hub may send along the following denom units:
-
-```json
-{
-  {
-    "denom": "uatom",
-    "exponent": 0,
-  },
-  {
-    "denom": "atom",
-    "exponent": 6,
-  }
-}
-```
-
-Thus, a receiver chain may display `1000000uatom` tokens bridged from the Cosmos Hub as either `1000000uatom` or `1atom`. Note, this still requires trust of the sender side information. If user interfaces display the denomination without any trace information then they **must** make a decision to trust a canonical path for that denomination. Otherwise, user interfaces must still somehow display the trace information to the end user.
 
 The acknowledgement data type describes whether the transfer succeeded or failed, and the reason for failure (if any).
 
@@ -290,15 +264,6 @@ function sendFungibleTokens(
     abortTransactionUnless(len(tokens) == 1)
     data = FungibleTokenPacketData{tokens[0].denom, tokens[0].amount, sender, receiver, memo}
   } else if channel.version === "ics20-2" {
-    // check if we've already sent metadata for this token on this channel
-    isMetadataSent = getSentMetadataFlag(sourcePort, sourceChannel, onChainDenom)
-    // if it hasn't been sent, then we will set the token metadata in the token
-    // so receiver can store it
-    // otherwise we leave metadata field blank to reduce redundancy
-    if !isMetadataSent {
-      metadata = getMetadata(onChainDenom)
-      token.metadata = metadata
-    }
     // create FungibleTokenPacket data
     data = FungibleTokenPacketDataV2{tokens, sender, receiver, memo}
   }
@@ -373,12 +338,6 @@ function onRecvPacket(packet: Packet) {
         // break out of for loop on first error
         break
     }
-    // set metadata for the on-chain denomination if token metadata was sent in the packet
-    // it is recommended that metadata is only set for tokens that come in with no trace
-    // i.e. directly from the source chain of the token
-    if !isEmpty(token.metadata) && isEmpty(token.trace) {
-      setMetadata(onChainDenom, token.metadata)
-    }
   }
   return ack
 }
@@ -393,20 +352,6 @@ function onAcknowledgePacket(
   // if the transfer failed, refund the tokens
   if !(acknowledgement.success) {
     refundTokens(packet)
-  } else {
-    channel = provableStore.get(channelPath(sourcePort, sourceChannel))
-    if channel.version === "ics20-2" {
-      // set metadata flag for any metadata we sent in the packet
-      // so we don't need to resend metadata for that token on this channel
-      // in the next sendPacket
-      FungibleTokenPacketDataV2 data = packet.data
-      for token in data.tokens {
-        if !isEmpty(token.metadata) {
-          onChainDenom = constructOnChainDenom(token.trace, token.denom)
-          setMetadataFlag(packet.sourcePort, packet.sourceChannel, onChainDenom)
-        }
-      }
-    }
   }
 }
 ```
@@ -485,14 +430,6 @@ Example:
 ```
 
 Here, the "wasm", "callback", and "router" fields are all intended for separate middlewares that will exclusively read those fields respectively in order to execute their logic. This allows multiple modules to read from the memo. Middleware should take care to reserve a unique key so that they do not accidentally read data intended for a different module. This issue can be avoided by some off-chain registry of keys already in-use in the JSON object.
-
-#### Populating Token Metadata
-
-Chains that maintain metadata about how to display the token denomination may send along `denomunits` with the token in the packet so that receiver chains can store information about the token for display and UX purposes. Receiver chains may store this metadata themselves against their own on-chain denomination for the token. They should replace stale metadata with new metadata coming from the sender chain, and ensure they use the on-chain denomination to avoid different denominations writing over each other's metadata. Receiver chains are recommended to only store metadata coming from source chains, i.e. if the token trace is empty. This ensures that metadata is only stored when the chain of trust for that metadata is as small as possible.
-
-As mentioned above, user interfaces that display the denomination without any trace information **must** make a decision to trust a canonical path for that denomination. Otherwise, user interfaces must still somehow display the trace information to the end user. This is because the metadata contains human-readable information that is not directly verified by the state machine. Thus, a malicious sender chain can fool user interfaces if they choose to send metadata that is the same as some well-known token issued by a different chain. However, given that a certain chain and denomination is trusted; the metadata can make it easier for displays to represent the token without relying on out-of-chain information.
-
-`getMetadata` and `getSentMetadataFlag` are helper functions on the sender chain for version 2 of the transfer protocol. `getMetadata` is an optional function returns the metadata stored on the sender chain for a given denomination. `getSentMetadataFlag` will set a boolean flag when it is confirmed that the metadata for a given token has been received on the receiver chain. This should only be set on a successful acknowledgement so that it doesn't get set when the receiver state machine logic gets reverted. It is used to ensure that metadata is not sent redundantly as packets with the same denomination get sent after the first sent packet.
 
 #### Reasoning
 
