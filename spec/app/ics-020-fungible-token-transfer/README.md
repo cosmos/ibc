@@ -66,6 +66,9 @@ The ICS 20 token traces are represented by a list of the form `{ics20Port}/{ics2
 
 A sending chain may be acting as a source or sink zone. When a chain is sending tokens across a port and channel which are not equal to the last prefixed port and channel pair, it is acting as a source zone. When tokens are sent from a source zone, the destination port and channel will be prepended to the trace (once the tokens are received) adding another hop to a tokens record. When a chain is sending tokens across a port and channel which are equal to the last prefixed port and channel pair, it is acting as a sink zone. When tokens are sent from a sink zone, the first element of the trace, which was the last port and channel pair added to the trace is removed (once the tokens are received), undoing the last hop in the tokens record. A more complete explanation is [present in the ibc-go implementation](https://github.com/cosmos/ibc-go/blob/457095517b7832c42ecf13571fee1e550fec02d0/modules/apps/transfer/keeper/relay.go#L18-L49).
 
+The following sequence diagram exemplifies the multi-chain token transfer dynamics. This process encapsulates the intricate steps involved in transferring tokens in a cycle that begins and ends on the same chain, traversing through Chain A, Chain B, and Chain C. The order of operations is meticulously outlined as `A -> B -> C -> A -> C -> B -> A`.
+
+![Transfer Example](source-and-sink-zones.png)
 
 The acknowledgement data type describes whether the transfer succeeded or failed, and the reason for failure (if any).
 
