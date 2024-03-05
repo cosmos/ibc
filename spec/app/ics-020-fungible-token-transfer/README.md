@@ -260,12 +260,19 @@ function sendFungibleTokens(
   }
 
   channel = provableStore.get(channelPath(sourcePort, sourceChannel))
-  if channel.version === "ics20-1" {
+  // getAppVersion returns the transfer version that is embedded in the channel version
+  // as the channel version may contain additional app or middleware version(s)
+  transferVersion = getAppVersion(channel.version)
+  if transferVersion === "ics20-1" {
     abortTransactionUnless(len(tokens) == 1)
     data = FungibleTokenPacketData{tokens[0].denom, tokens[0].amount, sender, receiver, memo}
-  } else if channel.version === "ics20-2" {
+  } else if transferVersion === "ics20-2" {
     // create FungibleTokenPacket data
     data = FungibleTokenPacketDataV2{tokens, sender, receiver, memo}
+  } else {
+    // should never be reached as transfer version must be negotiated to be either
+    // ics20-1 or ics20-2 during channel handshake
+    abortTransactionUnless(false)
   }
 
   // send packet using the interface defined in ICS4
@@ -287,7 +294,10 @@ function sendFungibleTokens(
 ```typescript
 function onRecvPacket(packet: Packet) {
   channel = provableStore.get(channelPath(portIdentifier, channelIdentifier))
-  if channel.version === "ics20-1" {
+  // getAppVersion returns the transfer version that is embedded in the channel version
+  // as the channel version may contain additional app or middleware version(s)
+  transferVersion = getAppVersion(channel.version)
+  if transferVersion === "ics20-1" {
       FungibleTokenPacketData data = UnmarshalJSON(packet.data)
       trace, denom = parseICS20V1Denom(data.denom)
       token = Token{
@@ -296,9 +306,13 @@ function onRecvPacket(packet: Packet) {
         amount: packet.amount
       }
       tokens = []Token{token}
-  } else if channel.version === "ics20-2" {
+  } else if transferVersion === "ics20-2" {
     FungibleTokenPacketDataV2 data = UnmarshalJSON(packet.data)
     tokens = data.tokens
+  } else {
+    // should never be reached as transfer version must be negotiated to be either
+    // ics20-1 or ics20-2 during channel handshake
+    abortTransactionUnless(false)
   }
 
   // construct default acknowledgement of success
