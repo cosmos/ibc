@@ -150,7 +150,13 @@ function onChanOpenInit(
   abortTransactionUnless(version === "ics20-2" || version === "ics20-1" || version === "")
   // allocate an escrow address
   channelEscrowAddresses[channelIdentifier] = newAddress(portIdentifier, channelIdentifier)
-  if version === "ics20-1" {
+  if version === "" {
+  // default to latest supported version
+   return "ics20-2", nil
+  }
+  // If the version is not empty and is among those supported, we return the version
+  return version, nil 
+}
     return "ics20-1", nil
   }
   // default to latest supported version
