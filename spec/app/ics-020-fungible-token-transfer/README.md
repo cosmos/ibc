@@ -157,11 +157,6 @@ function onChanOpenInit(
   // If the version is not empty and is among those supported, we return the version
   return version, nil 
 }
-    return "ics20-1", nil
-  }
-  // default to latest supported version
-  return "ics20-2", nil
-}
 ```
 
 ```typescript
