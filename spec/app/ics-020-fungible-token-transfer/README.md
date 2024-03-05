@@ -5,10 +5,10 @@ stage: draft
 category: IBC/APP
 requires: 25, 26
 kind: instantiation
-version compatibility: ibc-go v7.0.0
+version compatibility: ibc-go v7.0.0 (ics20-1 supported only)
 author: Christopher Goes <cwgoes@interchain.berlin>
 created: 2019-07-15 
-modified: 2020-02-24
+modified: 2024-03-05
 ---
 
 ## Synopsis
