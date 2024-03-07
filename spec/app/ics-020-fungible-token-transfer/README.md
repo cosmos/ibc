@@ -154,8 +154,8 @@ function onChanOpenInit(
   // allocate an escrow address
   channelEscrowAddresses[channelIdentifier] = newAddress(portIdentifier, channelIdentifier)
   if version === "" {
-  // default to latest supported version
-   return "ics20-2", nil
+    // default to latest supported version
+    return "ics20-2", nil
   }
   // If the version is not empty and is among those supported, we return the version
   return version, nil 
@@ -302,14 +302,14 @@ function onRecvPacket(packet: Packet) {
   // as the channel version may contain additional app or middleware version(s)
   transferVersion = getAppVersion(channel.version)
   if transferVersion === "ics20-1" {
-      FungibleTokenPacketData data = UnmarshalJSON(packet.data)
-      trace, denom = parseICS20V1Denom(data.denom)
-      token = Token{
-        denom: denom
-        trace: trace
-        amount: packet.amount
-      }
-      tokens = []Token{token}
+     FungibleTokenPacketData data = UnmarshalJSON(packet.data)
+     trace, denom = parseICS20V1Denom(data.denom)
+     token = Token{
+       denom: denom
+       trace: trace
+       amount: packet.amount
+     }
+     tokens = []Token{token}
   } else if transferVersion === "ics20-2" {
     FungibleTokenPacketDataV2 data = UnmarshalJSON(packet.data)
     tokens = data.tokens
@@ -400,7 +400,12 @@ function refundTokens(packet: Packet) {
   } else if channel.version === "ics20-2" {
     FungibleTokenPacketDataV2 data = UnmarshalJSON(packet.data)
     tokens = data.tokens
-  }  
+  } else {
+    // should never be reached as transfer version must be negotiated to be either
+    // ics20-1 or ics20-2 during channel handshake
+    abortTransactionUnless(false)
+  }
+
   prefix = "{packet.sourcePort}/{packet.sourceChannel}/"
   for token in tokens {
     // we are the source if the denomination is not prefixed
