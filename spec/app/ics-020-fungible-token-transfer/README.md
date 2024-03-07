@@ -153,7 +153,7 @@ function onChanOpenInit(
   abortTransactionUnless(version === "ics20-2" || version === "ics20-1" || version === "")
   // allocate an escrow address
   channelEscrowAddresses[channelIdentifier] = newAddress(portIdentifier, channelIdentifier)
-  if version === "" {
+  if version == "" {
     // default to latest supported version
     return "ics20-2", nil
   }
@@ -249,7 +249,7 @@ function sendFungibleTokens(
   for token in tokens {
     prefix = "{sourcePort}/{sourceChannel}/"
     // we are the source if the denomination is not prefixed
-    source = token.trace[0] !== prefix
+    source = token.trace[0] != prefix
     onChainDenom = constructOnChainDenom(token.trace, token.denom)
       
     if source {
@@ -267,10 +267,10 @@ function sendFungibleTokens(
   // getAppVersion returns the transfer version that is embedded in the channel version
   // as the channel version may contain additional app or middleware version(s)
   transferVersion = getAppVersion(channel.version)
-  if transferVersion === "ics20-1" {
+  if transferVersion == "ics20-1" {
     abortTransactionUnless(len(tokens) == 1)
     data = FungibleTokenPacketData{tokens[0].denom, tokens[0].amount, sender, receiver, memo}
-  } else if transferVersion === "ics20-2" {
+  } else if transferVersion == "ics20-2" {
     // create FungibleTokenPacket data
     data = FungibleTokenPacketDataV2{tokens, sender, receiver, memo}
   } else {
@@ -301,7 +301,7 @@ function onRecvPacket(packet: Packet) {
   // getAppVersion returns the transfer version that is embedded in the channel version
   // as the channel version may contain additional app or middleware version(s)
   transferVersion = getAppVersion(channel.version)
-  if transferVersion === "ics20-1" {
+  if transferVersion == "ics20-1" {
      FungibleTokenPacketData data = UnmarshalJSON(packet.data)
      trace, denom = parseICS20V1Denom(data.denom)
      token = Token{
@@ -310,7 +310,7 @@ function onRecvPacket(packet: Packet) {
        amount: packet.amount
      }
      tokens = []Token{token}
-  } else if transferVersion === "ics20-2" {
+  } else if transferVersion == "ics20-2" {
     FungibleTokenPacketDataV2 data = UnmarshalJSON(packet.data)
     tokens = data.tokens
   } else {
@@ -329,7 +329,7 @@ function onRecvPacket(packet: Packet) {
     assert(token.receiver !== "")
       
     // we are the source if the packets were prefixed by the sending chain
-    source = token.trace[0] === prefix
+    source = token.trace[0] == prefix
     if source {
       // since we are receiving back to source we remove the prefix from the trace
       onChainTrace = token.trace[1:]
@@ -339,7 +339,7 @@ function onRecvPacket(packet: Packet) {
       escrowAccount = channelEscrowAddresses[packet.destChannel]
       // unescrow tokens to receiver (assumed to fail if balance insufficient)
       err = bank.TransferCoins(escrowAccount, data.receiver, onChainDenom, token.amount)
-      if (err !== nil) {
+      if (err != nil) {
         ack = FungibleTokenPacketAcknowledgement{false, "transfer coins failed"}
         // break out of for loop on first error
         break
@@ -388,7 +388,7 @@ function onTimeoutPacket(packet: Packet) {
 ```typescript
 function refundTokens(packet: Packet) {
   channel = provableStore.get(channelPath(portIdentifier, channelIdentifier))
-  if channel.version === "ics20-1" {
+  if channel.version == "ics20-1" {
       FungibleTokenPacketData data = UnmarshalJSON(packet.data)
       trace, denom = parseICS20V1Denom(data.denom)
       token = Token{
@@ -397,7 +397,7 @@ function refundTokens(packet: Packet) {
         amount: packet.amount
       }
       tokens = []Token{token}
-  } else if channel.version === "ics20-2" {
+  } else if channel.version == "ics20-2" {
     FungibleTokenPacketDataV2 data = UnmarshalJSON(packet.data)
     tokens = data.tokens
   } else {
@@ -409,7 +409,7 @@ function refundTokens(packet: Packet) {
   prefix = "{packet.sourcePort}/{packet.sourceChannel}/"
   for token in tokens {
     // we are the source if the denomination is not prefixed
-    source = token.trace[0] !== prefix
+    source = token.trace[0] != prefix
     onChainDenom = constructOnChainDenom(token.trace, token.denom)
     if source {
       // sender was source chain, unescrow tokens back to sender
