@@ -512,6 +512,8 @@ Nov 11, 2022 - Addition of a memo field
 
 Sep 22, 2023 - Support for multi-token packets
 
+March 5, 2024 - Support for ics20-2
+
 ## Copyright
 
 All content herein is licensed under [Apache 2.0](https://www.apache.org/licenses/LICENSE-2.0).
