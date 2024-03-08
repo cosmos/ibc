@@ -388,16 +388,19 @@ function onTimeoutPacket(packet: Packet) {
 ```typescript
 function refundTokens(packet: Packet) {
   channel = provableStore.get(channelPath(portIdentifier, channelIdentifier))
-  if channel.version == "ics20-1" {
-      FungibleTokenPacketData data = UnmarshalJSON(packet.data)
-      trace, denom = parseICS20V1Denom(data.denom)
-      token = Token{
-        denom: denom
-        trace: trace
-        amount: packet.amount
-      }
-      tokens = []Token{token}
-  } else if channel.version == "ics20-2" {
+  // getAppVersion returns the transfer version that is embedded in the channel version
+  // as the channel version may contain additional app or middleware version(s)
+  transferVersion = getAppVersion(channel.version)
+  if transferVersion == "ics20-1" {
+     FungibleTokenPacketData data = UnmarshalJSON(packet.data)
+     trace, denom = parseICS20V1Denom(data.denom)
+     token = Token{
+       denom: denom
+       trace: trace
+       amount: packet.amount
+     }
+     tokens = []Token{token}
+  } else if transferVersion == "ics20-2" {
     FungibleTokenPacketDataV2 data = UnmarshalJSON(packet.data)
     tokens = data.tokens
   } else {
