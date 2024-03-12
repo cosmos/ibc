@@ -54,7 +54,7 @@ interface FungibleTokenPacketDataV2 {
 }
 
 interface Token {
-  denom: string
+  denom: string // base denomination
   trace: []string
   amount: uint64
 }
