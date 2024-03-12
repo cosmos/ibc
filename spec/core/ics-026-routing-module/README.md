@@ -449,7 +449,7 @@ function handleChanOpenInit(datagram: ChanOpenInit) {
   )
   // SYNCHRONOUS: the following calls happen synchronously with the call above
   // ASYNCHRONOUS: the module callback will be called at a time later than the channel handler
-  // in this case, the channel identifier will be stored with a sentinel value so it is not taken
+  // in this case, the channel identifier will be stored with a sentinel value in the channel path so it is not taken
   // by a new channel handshake and the capability is reserved for the application module.
   // When the module eventually executes its callback it must call writeChannel so that the channel
   // can be written into an INIT state with the right version and the handshake can proceed on the counterparty.
@@ -505,7 +505,7 @@ function handleChanOpenTry(datagram: ChanOpenTry) {
   )
   // SYNCHRONOUS: the following calls happen syncrhonously with the call above
   // ASYNCHRONOUS: the module callback will be called at a time later than the channel handler
-  // in this case, the channel identifier will be stored with a sentinel value so it is not taken
+  // in this case, the channel identifier will be stored with a sentinel value in the channel path so it is not taken
   // by a new channel handshake and the capability is reserved for the application module.
   // When the module eventually executes its callback it must call writeChannel so that the channel
   // can be written into a TRY state with the right version and the handshake can proceed on the counterparty.
@@ -661,8 +661,6 @@ function handleChanCloseConfirm(datagram: ChanCloseConfirm) {
     )
     // SYNCHRONOUS: the following calls happen syncrhonously with the call above
     // ASYNCHRONOUS: the module callback will be called at a time later than the channel handler
-    // in this case, the channel identifier will be stored with a sentinel value so it is not taken
-    // by a new channel handshake and the capability is reserved for the application module.
     // When the module eventually executes its callback it must call writeChannel so that the channel
     // can be written into a CLOSED state and the handshake can proceed on the counterparty.
     module = lookupModule(datagram.portIdentifier)
