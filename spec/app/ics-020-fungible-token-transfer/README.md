@@ -351,10 +351,11 @@ function onRecvPacket(packet: Packet) {
       onChainDenom = constructOnChainDenom(newTrace, token.denom)
       // sender was source, mint vouchers to receiver (assumed to fail if balance insufficient)
       err = bank.MintCoins(data.receiver, onChainDenom, token.amount)
-      if (err !== nil)
+      if (err !== nil) {
         ack = FungibleTokenPacketAcknowledgement{false, "mint coins failed"}
         // break out of for loop on first error
         break
+      }
     }
   }
   return ack
