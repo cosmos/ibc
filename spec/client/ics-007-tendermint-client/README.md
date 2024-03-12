@@ -238,6 +238,31 @@ function verifyHeader(header: Header) {
 }
 ```
 
+### Retrieve Client Status 
+
+Return the Status of the Tendermint client. Status can be either Active, Expired, Unknown or Frozen. 
+
+```typescript
+// Returns the status of a client given its store.
+function Status (client: clientState) {
+  if (client.FrozenHeight !== 0) {
+    return Frozen
+  }
+  // Get latest consensus state from clientStore to check for expiry
+  consState, err := client.latestClientHeight()
+  if err (!== nil) {
+    return Unknown
+  }
+  // Check if Expired
+  let expirationTime := consState.Timestamp + client.TrustingPeriod
+  if (expirationTime <== now){
+    return Expired 
+  }
+
+  return Active
+} 
+```
+
 ### Misbehaviour predicate
 
 Function `checkForMisbehaviour` will check if an update contains evidence of Misbehaviour. If the ClientMessage is a header we check for implicit evidence of misbehaviour by checking if there already exists a conflicting consensus state in the store or if the header breaks time monotonicity.
