@@ -269,7 +269,8 @@ function sendFungibleTokens(
   transferVersion = getAppVersion(channel.version)
   if transferVersion == "ics20-1" {
     abortTransactionUnless(len(tokens) == 1)
-    data = FungibleTokenPacketData{tokens[0].denom, tokens[0].amount, sender, receiver, memo}
+    v1Denom = tokens[0].trace + tokens[0].denom)
+    data = FungibleTokenPacketData{v1Denom, tokens[0].amount, sender, receiver, memo}
   } else if transferVersion == "ics20-2" {
     // create FungibleTokenPacket data
     data = FungibleTokenPacketDataV2{tokens, sender, receiver, memo}
