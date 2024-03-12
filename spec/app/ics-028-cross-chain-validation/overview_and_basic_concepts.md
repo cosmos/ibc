@@ -1,9 +1,11 @@
 <!-- omit in toc -->
 # CCV: Overview and Basic Concepts
+
 [&uparrow; Back to main document](./README.md)
 
 <!-- omit in toc -->
 ## Outline
+
 - [Security Model](#security-model)
 - [Motivation](#motivation)
 - [Definition](#definition)
@@ -17,6 +19,7 @@
   - [Reward Distribution](#reward-distribution)
 
 ## Security Model
+
 [&uparrow; Back to Outline](#outline)
 
 We consider chains that use a proof of stake mechanism based on the model of [weak subjectivity](https://blog.ethereum.org/2014/11/25/proof-stake-learned-love-weak-subjectivity/) 
@@ -46,6 +49,7 @@ A further consequence of CCV is that the tokens are unbonded only after the unbo
 Thus, CCV may delay the unbonding of tokens validators bonded on the provider chain.
 
 ## Motivation
+
 [&uparrow; Back to Outline](#outline)
 
 CCV is a primitive (i.e., a building block) that enables arbitrary shared security models: The security of a chain can be composed of security transferred from multiple provider chains including the chain itself (a consumer chain can be its own provider). As a result, CCV enables chains to borrow security from more established chains (e.g., Cosmos Hub), in order to boost their own security, i.e., increase the cost of attacking their networks. 
@@ -60,6 +64,7 @@ Moreover, CCV enables *hub minimalism*. In a nutshell, hub minimalism entails ke
 > For more details on the planned releases, take a look at the [Interchain Security light paper](https://cosmos.github.io/interchain-security/introduction/overview).
 
 ## Definition
+
 [&uparrow; Back to Outline](#outline)
 
 This section defines the new terms and concepts introduced by CCV.
@@ -70,13 +75,12 @@ This section defines the new terms and concepts introduced by CCV.
 
 > **Note**: In this specification, the validator set of the consumer chain is entirely provided by the provider chain.
 
-Both the provider and the consumer chains are [application-specific blockchains](https://docs.cosmos.network/v0.45/intro/why-app-specific.html), 
+Both the provider and the consumer chains are [application-specific blockchains](https://docs.cosmos.network/main/learn/intro/why-app-specific), 
 i.e., each blockchain's state machine is typically connected to the underlying consensus engine via a *blockchain interface*, such as [ABCI](https://github.com/tendermint/spec/tree/v0.7.1/spec/abci). 
 The blockchain interface MUST enable the state machine to provide to the underlying consensus engine a set of validator updates, i.e., changes in the voting power granted to validators.
 Although this specification is not dependent on ABCI, for ease of presentation, we refer to the state machines as ABCI applications.
 Also, this specification considers a modular paradigm, 
-i.e., the functionality of each ABCI application is separated into multiple modules, like the approach adopted by [Cosmos SDK](https://docs.cosmos.network/v0.45/basics/app-anatomy.html#modules).
-
+i.e., the functionality of each ABCI application is separated into multiple modules, like the approach adopted by [Cosmos SDK](https://docs.cosmos.network/main/learn/beginner/app-anatomy#modules).
 
 - **CCV Module**: The module that implements the CCV protocol. Both the provider and the consumer chains have each their own CCV module. 
 Furthermore, the functionalities provided by the CCV module differ between the provider chain and the consumer chains. 
@@ -92,7 +96,7 @@ Every VSC consists of a batch of validator updates provided to the consensus eng
 
 > **Background**: In the context of single-chain validation, the changes of the validator set are triggered by the *Staking module*, 
 > i.e., a module of the ABCI application that implements the proof of stake mechanism needed by the [security model](#security-model). 
-> For an example, take a look at the [Staking module documentation](https://docs.cosmos.network/v0.45/modules/staking/) of Cosmos SDK.
+> For an example, take a look at the [Staking module documentation](https://docs.cosmos.network/main/build/modules/staking) of Cosmos SDK.
 
 Some of the validator updates can decrease the voting power granted to validators. 
 These decreases may be a consequence of unbonding operations (e.g., unbonding delegations) on the provider chain.
@@ -101,16 +105,18 @@ i.e., the *unbonding period* (denoted as `UnbondingPeriod`) has elapsed on both 
 Thus, a *VSC reaching maturity* on a consumer chain means that all the unbonding operations that resulted in validator updates included in that VSC have matured on the consumer chain.
 
 > **Background**: An *unbonding operation* is any operation of unbonding an amount of the tokens a validator bonded. Note that the bonded tokens correspond to the validator's voting power. We distinguish between three types of unbonding operations:
+>
 > - *undelegation* - a delegator unbonds tokens it previously delegated to a validator;
 > - *redelegation* - a delegator instantly redelegates tokens from a source validator to a different validator (the destination validator);
 > - *validator unbonding* - a validator is removed from the validator set; note that although validator unbondings do not entail unbonding tokens, they behave similarly to other unbonding operations.
 > 
 > Regardless of the type, unbonding operations have two components: 
+>
 > - The *initiation*, e.g., a delegator requests their delegated tokens to be unbonded. The initiation of an operation of unbonding an amount of the tokens a validator bonded results in a change in the voting power of that validator.
 > - The *completion*, e.g., the tokens are actually unbonded and transferred back to the delegator. To complete, unbonding operations must reach *maturity*, i.e., `UnbondingPeriod` must elapse since the operations were initiated. 
 > 
-> For more details, take a look at the [Cosmos SDK documentation](https://docs.cosmos.network/v0.45/modules/staking/).
-
+> For more details, take a look at the [Cosmos SDK documentation](https://docs.cosmos.network/main/build/modules/staking).
+>
 > **Note**: Time periods are measured in terms of the block time, i.e., `currentTimestamp()` (as defined in [ICS 24](../../core/ics-024-host-requirements)). 
 > As a result, a consumer chain MAY start the unbonding period for every VSC that it applies in a block at any point during that block.
 
@@ -118,12 +124,14 @@ Thus, a *VSC reaching maturity* on a consumer chain means that all the unbonding
 
 > **Background**: In the context of single-chain validation, slashing and jailing misbehaving validators is handled by the *Slashing module*, 
 > i.e., a module of the ABCI application that enables the application to discourage misbehaving validators.
-> For an example, take a look at the [Slashing module documentation](https://docs.cosmos.network/v0.45/modules/slashing/) of Cosmos SDK.
+> For an example, take a look at the [Slashing module documentation](https://docs.cosmos.network/main/build/modules/slashing) of Cosmos SDK.
 
 ## Overview
+
 [&uparrow; Back to Outline](#outline)
 
 CCV must handle the following types of operations:
+
 - **Channel Initialization**: Create unique, ordered IBC channels between the provider chain and every consumer chain.
 - **Validator Set Update**: It is a two-part operation, i.e., 
   - update the validator sets of all the consumer chains based on the information obtained from the *provider Staking module* (i.e., the Staking module on the provider chain) on the amount of tokens bonded by validators on the provider chain;
@@ -132,10 +140,11 @@ CCV must handle the following types of operations:
 - **Reward Distribution**: Enable the distribution of block production rewards and transaction fees from the consumer chains to the validators on the provider chain.  
 
 ### Channel Initialization
+
 [&uparrow; Back to Outline](#outline)
 
 The CCV Channel initialization differentiates between chains that start directly as consumer chains and existing chains that transition to consumer chains.
-In both cases, consumer chains are created through governance proposals. For an example of how governance proposals work, take a look at the [Governance module documentation](https://docs.cosmos.network/v0.45/modules/gov/) of Cosmos SDK.
+In both cases, consumer chains are created through governance proposals. For an example of how governance proposals work, take a look at the [Governance module documentation](https://docs.cosmos.network/main/build/modules/gov) of Cosmos SDK.
 
 #### Channel Initialization: New Chains
 
@@ -144,6 +153,7 @@ The following figure shows an overview of the CCV Channel initialization for new
 ![Channel Initialization Overview: New Chain](./figures/ccv-init-overview.png?raw=true)
 
 The channel initialization for new chains consists of three phases:
+
 - **Create clients**: Once the provider CCV module receives a proposal to add a new consumer chain with an empty connection ID, it creates a client of the consumer chain (as defined in [ICS 2](../../core/ics-002-client-semantics)) and a genesis state of the consumer CCV module. 
   Then, the operators of validators in the validator set of the provider chain must each query the provider for the CCV genesis state and start a validator node of the consumer chain. 
   Once the consumer chain starts, the application receives an `InitChain` message from the consensus engine 
@@ -165,7 +175,6 @@ The channel initialization for new chains consists of three phases:
   Also, if a transfer channel ID was not provided in the governance proposal, the consumer CCV module initiates the opening handshake for the token transfer channel required by the Reward Distribution operation (see the [Reward Distribution](#reward-distribution) section).
   - *OnChanOpenConfirm*: On receiving the *FIRST* `ChanOpenConfirm` message, the provider CCV module considers its side of the CCV channel to be established.
 
-
 #### Channel Initialization: Existing Chains
 
 The following figure shows an overview of the CCV Channel initialization for existing chains. 
@@ -173,6 +182,7 @@ The following figure shows an overview of the CCV Channel initialization for exi
 ![Channel Initialization Overview: Existing Chain](./figures/ccv-preccv-init-overview.png?raw=true)
 
 The channel initialization for existing chains consists of three phases:
+
 - **Start consumer CCV module**: Once the provider CCV module receives a proposal to add a new consumer chain with a valid *connection ID*, it creates a genesis state of the consumer CCV module.
   Then, the existing chain must upgrade by adding the consumer CCV module and  initialize it using the CCV genesis state created by the provider.
   Once the consumer CCV module starts, it initiates the channel handshake (as defined in [ICS 4](../../core/ics-004-channel-and-packet-semantics)).
@@ -190,12 +200,9 @@ The channel initialization for existing chains consists of three phases:
 
 - **Transition to consumer chain**: Once the validator set on the existing chain is replace by the initial validator set (from the CCV genesis state created by the provider), the existing chain becomes a consumer chain.
 
-
-
-
 > **Note**: For both new and existing chains, as long as the [assumptions required by CCV](./system_model_and_properties.md#assumptions) hold (e.g., *Correct Relayer*), every governance proposal to spawn a new consumer chain that passes on the provider chain results eventually in a CCV channel being created. 
 > Furthermore, the "*FIRST*" keyword in the above description ensures the uniqueness of the CCV channel, i.e., all subsequent attempts to create another CCV channel to the same consumer chain will fail.
-
+>
 > **Note**: For both new and existing chains, until the CCV channel is established, the initial validator set of the consumer chain cannot be updated (see the [Validator Set Update](#validator-set-update) section) and the validators from this initial set cannot be slashed (see the [Consumer Initiated Slashing](#consumer-initiated-slashing) section).
 > This means that the consumer chain is *not yet secured* by the provider chain.
 > Thus, to reduce the attack surface during channel initialization, the consumer chain SHOULD enable user transactions only after the CCV channel is established (i.e., after receiving the first VSC). 
@@ -204,16 +211,18 @@ The channel initialization for existing chains consists of three phases:
 For a more detailed description of Channel Initialization, take a look at the [technical specification](./methods.md#initialization).
 
 ### Validator Set Update
+
 [&uparrow; Back to Outline](#outline)
 
 In the context of VSCs, the CCV module enables the following functionalities:
-  - On the provider chain, 
-    - **provide** VSCs to the consumer chains, for them to update their validator sets according to the validator set of the provider chain; 
+
+- On the provider chain, 
+  - **provide** VSCs to the consumer chains, for them to update their validator sets according to the validator set of the provider chain; 
       providing VSCs entails sending `VSCPacket`s to all consumer chains;  
-    - **register** VSC maturity notifications from the consumer chain.
-  - On every consumer chain,
-    - **apply** the VSCs provided by the provider chain to the validator set of the consumer chain; 
-    - **notify** the provider chain that the provided VSCs have matured on this consumer chain; 
+  - **register** VSC maturity notifications from the consumer chain.
+- On every consumer chain,
+  - **apply** the VSCs provided by the provider chain to the validator set of the consumer chain; 
+  - **notify** the provider chain that the provided VSCs have matured on this consumer chain; 
       notifying of VSCs maturity entails sending `VSCMaturedPacket`s to the provider chain.
 
 These functionalities are depicted in the following figure that shows an overview of the Validator Set Update operation of CCV. 
@@ -228,12 +237,14 @@ In the context of CCV, the completion MUST require also the unbonding operation 
 Therefore, the provider Staking module needs to be aware of the VSC maturity notifications registered by the provider CCV module.
 
 The ***provider chain*** achieves this through the following approach: 
+
 - The Staking module is notifying the CCV module when any unbonding operation is initiated. 
   As a result, the CCV module maps all the unbonding operations to the corresponding VSCs.  
 - When the CCV module registers maturity notifications for a VSC from all consumer chains, it notifies the Staking module of the maturity of all unbonding operations mapped to this VSC. 
   This enables the Staking module to complete the unbonding operations only when they reach maturity on both the provider chain and on all the consumer chains.
 
 This approach is depicted in the following figure that shows an overview of the interface between the provider CCV module and the provider Staking module in the context of the Validator Set Update operation of CCV: 
+
 - In `Block 1`, two unbonding operations are initiated (i.e., `undelegate-1` and `redelegate-1`) in the provider Staking module. 
   For each operation, the provider Staking module notifies the provider CCV module. 
   As a result, the provider CCV module maps these to operation to `vscId`, which is the ID of the following VSC (i.e., `VSC1`). 
@@ -251,11 +262,13 @@ This approach is depicted in the following figure that shows an overview of the 
 ![Completion of Unbonding Operations](./figures/ccv-unbonding-overview.png?raw=true)
 
 ### Consumer Initiated Slashing
+
 [&uparrow; Back to Outline](#outline)
 
 For the [Security Model](#security-model) to be preserved, misbehaving validators MUST be slashed (and MAY be jailed, i.e., removed from the validator set). 
 A prerequisite to slashing validators is to receive valid evidence of their misbehavior. 
 Thus, when slashing a validator, we distinguish between three events and the heights when they occur:
+
 - `infractionHeight`, the height at which the misbehavior (or infraction) happened;
 - `evidenceHeight`, the height at which the evidence of misbehavior is received;
 - `slashingHeight`, the height at which the validator is slashed (and jailed). 
@@ -305,18 +318,19 @@ The following figure shows an overview of the Consumer Initiated Slashing operat
   i.e., the ID of the VSC that updated the "misbehaving voting power" or `0` if such a VSC does not exist.
 - The provider CCV module receives at (slashing) height `Hp1` the `SlashPacket` with `vscId = HtoVSC[Hc1]`. 
   As a result, it requests the provider Slashing module to slash `V`, but it set the infraction height to `VSCtoH[vscId]`, i.e., 
-    - if `vscId != 0`, the height on the provider chain where the voting power was updated by the VSC with ID `vscId`;
-    - otherwise, the height at which the CCV channel to this consumer chain was established.
+  - if `vscId != 0`, the height on the provider chain where the voting power was updated by the VSC with ID `vscId`;
+  - otherwise, the height at which the CCV channel to this consumer chain was established.
   > **Note**: As a consequence of slashing (and potentially jailing) `V`, the Staking module updates accordingly `V`'s voting power. This update MUST be visible in the next VSC provided to the consumer chains.  
 
 For a more detailed description of Consumer Initiated Slashing, take a look at the [technical specification](./methods.md#consumer-initiated-slashing).
 
 ### Reward Distribution
+
 [&uparrow; Back to Outline](#outline)
 
 In the context of single-chain validation, the *Distribution module*, i.e., a module of the ABCI application, handles the distribution of rewards (i.e., block production rewards and transaction fees) to every validator account based on their total voting power; 
 these rewards are then further distributed to the delegators. 
-For an example, take a look at the [Distribution module documentation](https://docs.cosmos.network/v0.45/modules/distribution/) of Cosmos SDK.
+For an example, take a look at the [Distribution module documentation](https://docs.cosmos.network/main/build/modules/distribution) of Cosmos SDK.
 
 At the beginning of every block, the rewards for the previous block are pooled into a distribution module account. 
 The Reward Distribution operation of CCV enables every consumer chain to transfer a fraction of these rewards to the provider chain. 
@@ -334,5 +348,6 @@ The operation consists of two steps that are depicted in the following figure:
 > **Note**: From the perspective of the distribution module account on the provider chain, the rewards coming from the consumer chains are indistinguishable  from locally collected rewards and thus, are distributed to all the validators and their delegators.
 
 As a prerequisite of this approach, every consumer chain must open a token transfer channel to the provider chain and be made aware of the address of the distribution module account on the provider chain, both of which happen during channel initialization.
+
 - On receiving a `ChanOpenAck` message, the consumer CCV module initiates the opening handshake for the token transfer channel using the same client and connection as for the CCV channel. 
 - On receiving a `ChanOpenTry` message, the provider CCV module adds the address of the distribution module account to the channel version as metadata (as defined in [ICS 4](../../core/ics-004-channel-and-packet-semantics/README.md#definitions)).

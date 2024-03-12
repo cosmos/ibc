@@ -1,14 +1,14 @@
 # Upgrading Connections
 
-### Synopsis
+## Synopsis
 
 This standard document specifies the interfaces and state machine logic that IBC implementations must implement in order to enable existing connections to upgrade after the initial connection handshake.
 
-### Motivation
+## Motivation
 
-As new features get added to IBC, chains may wish the take advantage of new connection features without abandoning the accumulated state and network effect(s) of an already existing connection. The upgrade protocol proposed would allow chains to renegotiate an existing connection to take advantage of new features without having to create a new connection, thus preserving all existing channels that built on top of the connection.
+As new features get added to IBC, chains may wish to take advantage of new connection features without abandoning the accumulated state and network effect(s) of an already existing connection. The upgrade protocol proposed would allow chains to renegotiate an existing connection to take advantage of new features without having to create a new connection, thus preserving all existing channels that built on top of the connection.
 
-### Desired Properties
+## Desired Properties
 
 - Both chains MUST agree to the renegotiated connection parameters.
 - Connection state and logic on both chains SHOULD either be using the old parameters or the new parameters, but MUST NOT be in an in-between state, e.g., it MUST NOT be possible for a chain to write state to an old proof path, while the counterparty expects a new proof path.
@@ -59,12 +59,14 @@ The desired property that the connection upgrade protocol MUST NOT modify the un
 - `state`: The state is specified by the handshake steps of the upgrade protocol.
 
 MAY BE MODIFIED:
+
 - `counterpartyPrefix`: The prefix MAY be modified in the upgrade protocol. The counterparty must accept the new proposed prefix value, or it must return an error during the upgrade handshake.
 - `version`: The version MAY be modified by the upgrade protocol. The same version negotiation that happens in the initial connection handshake can be employed for the upgrade handshake.
 - `delayPeriodTime`: The delay period MAY be modified by the upgrade protocol. The counterparty MUST accept the new proposed value or return an error during the upgrade handshake.
 - `delayPeriodBlocks`: The delay period MAY be modified by the upgrade protocol. The counterparty MUST accept the new proposed value or return an error during the upgrade handshake.
 
 MUST NOT BE MODIFIED:
+
 - `counterpartyConnectionIdentifier`: The counterparty connection identifier CAN NOT be modified by the upgrade protocol.
 - `clientIdentifier`: The client identifier CAN NOT be modified by the upgrade protocol
 - `counterpartyClientIdentifier`: The counterparty client identifier CAN NOT be modified by the upgrade protocol
@@ -359,7 +361,6 @@ function connUpgradeTry(
 
 NOTE: It is up to individual implementations how they will provide access-control to the `ConnUpgradeTry` function. E.g. chain governance, permissioned actor, DAO, etc. A chain may decide to have permissioned **or** permissionless `UpgradeTry`. In the permissioned case, both chains must explicitly consent to the upgrade, in the permissionless case; one chain initiates the upgrade and the other chain agrees to the upgrade by default. In the permissionless case, a relayer may submit the `ConnUpgradeTry` datagram.
 
-
 ```typescript
 function connUpgradeAck(
     identifier: Identifier,
@@ -456,12 +457,12 @@ function cancelConnectionUpgrade(
     abortTransactionUnless(verifyConnectionUpgradeError(currentConnection, proofHeight, proofUpgradeError, errorReceipt))
 
     // cancel upgrade
-    // and restore original conneciton
+    // and restore original connection
     // delete unnecessary state
     originalConnection = privateStore.get(restorePath(identifier))
     provableStore.set(connectionPath(identifier), originalConnection)
 
-    // delete auxilliary upgrade state
+    // delete auxiliary upgrade state
     provableStore.delete(timeoutPath(identifier))
     privateStore.delete(restorePath(identifier))
 }
@@ -503,7 +504,7 @@ function timeoutConnectionUpgrade(
     originalConnection = privateStore.get(restorePath(identifier))
     provableStore.set(connectionPath(identifier), originalConnection)
 
-    // delete auxilliary upgrade state
+    // delete auxiliary upgrade state
     provableStore.delete(timeoutPath(identifier))
     privateStore.delete(restorePath(identifier))
 }
@@ -515,4 +516,4 @@ The TRY chain will receive the timeout parameters chosen by the counterparty on 
 
 ### Migrations
 
-A chain may have to update its internal state to be consistent with the new upgraded connection. In this case, a migration handler should be a part of the chain binary before the upgrade process so that the chain can properly migrate its state once the upgrade is successful. If a migration handler is necessary for a given upgrade but is not available, then th executing chain must reject the upgrade so as not to enter into an invalid state. This state migration will not be verified by the counterparty since it will just assume that if the connection is upgraded to a particular connection version, then the auxilliary state on the counterparty will also be updated to match the specification for the given connection version. The migration must only run once the upgrade has successfully completed and the new connection is `OPEN` (ie. on `ACK` and `CONFIRM`).
+A chain may have to update its internal state to be consistent with the new upgraded connection. In this case, a migration handler should be a part of the chain binary before the upgrade process so that the chain can properly migrate its state once the upgrade is successful. If a migration handler is necessary for a given upgrade but is not available, then th executing chain must reject the upgrade so as not to enter into an invalid state. This state migration will not be verified by the counterparty since it will just assume that if the connection is upgraded to a particular connection version, then the auxiliary state on the counterparty will also be updated to match the specification for the given connection version. The migration must only run once the upgrade has successfully completed and the new connection is `OPEN` (ie. on `ACK` and `CONFIRM`).

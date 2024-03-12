@@ -22,9 +22,9 @@ The current IBC protocol defines messaging in a point-to-point paradigm which al
 
 Associated definitions are as defined in referenced prior standards (where the functions are defined), where appropriate.
 
-`Connection` is as defined in [ICS 3](https://github.com/cosmos/ibc/tree/main/spec/core/ics-003-connection-semantics).
+`Connection` is as defined in [ICS 3](../ics-003-connection-semantics).
 
-`Channel` is as defined in [ICS 4](https://github.com/cosmos/ibc/tree/main/spec/core/ics-004-channel-and-packet-semantics).
+`Channel` is as defined in [ICS 4](../ics-004-channel-and-packet-semantics).
 
 `Channel Path` is defined as the path of connection IDs along which a channel is defined.
 
@@ -32,7 +32,7 @@ Associated definitions are as defined in referenced prior standards (where the f
 
 ### Desired Properties
 
-- IBC channel handshake and message packets should be able to be utilize pre-existing connections to form a logical proof chain to relay messages between unconnected chains.
+- IBC channel handshake and message packets should be able to utilize pre-existing connections to form a logical proof chain to relay messages between unconnected chains.
 - Relaying for a multi-hop IBC channel should NOT require writing additional channel, packet, or timeout state to intermediate hops.
 - The design should strive to minimize the number of required client updates to generate and query multi-hop proofs.
 - Minimal additional required state and changes to core and app IBC specs.
@@ -53,18 +53,18 @@ This multi-hop spec assumes that all proof specs for membership verification for
 
 For both channel handshake and packet messages, additional connection hops are defined in the pre-existing `connectionHops` field. The connections along the channel path must exist in the `OPEN` state to guarantee delivery to the correct recipient. See `Path Forgery Protection` for more information.
 
-See [ICS 4](https://github.com/cosmos/ibc/tree/main/spec/core/ics-004-channel-and-packet-semantics) for multi-hop related spec changes. Multi-hop does not change existing spec behavior for channel handshakes, packet delivery, and timeout handling. However, multi-hop channels require special handling for frozen clients (see `chanCloseFrozen`).
+See [ICS 4](../ics-004-channel-and-packet-semantics) for multi-hop related spec changes. Multi-hop does not change existing spec behavior for channel handshakes, packet delivery, and timeout handling. However, multi-hop channels require special handling for frozen clients (see `chanCloseFrozen`).
 
 In terms of connection topology, a user would be able to determine a viable channel path from sender -> receiver using information from the [chain registry](https://github.com/cosmos/chain-registry). They can also independently verify this information via network queries.
 
 ### Multihop Relaying
 
-Relayers deliver channel handshake and IBC packets as they currently do except that they are required to provide proof of the channel path. Relayers scan packet events for the connectionHops field and determine if the packet is multi-hop by checking the number of hops in the field. If the number of hops is greater than one then the packet is a multi-hop packet and will need extra proof data.
+Relayers deliver channel handshake and IBC packets as they currently do except that they are required to provide proof of the channel path. Relayers scan packet events for the `connectionHops` field and determine if the packet is multi-hop by checking the number of hops in the field. If the number of hops is greater than one then the packet is a multi-hop packet and will need extra proof data.
 
 For each multi-hop channel (detailed proof logic below):
 
 1. Scan source chain for IBC messages to relay.
-2. Read the connectionHops field in from the scanned message to determine the channel path.
+2. Read the `connectionHops` field in from the scanned message to determine the channel path.
 3. Using connection endpoints via chain registry configuration, query for required multi-hop proof heights and update client states along the channel path as necessary (see pseudocode implementation).
 4. Query proof of packet or handshake message commitments on source chain at the proof height used in step 3.
 5. Query for proof of connection, and consensus state for each intermediate connection in the channel path using proof heights determined in step 3.
@@ -73,7 +73,6 @@ For each multi-hop channel (detailed proof logic below):
 Relayers are connection topology aware with configurations sourced from the [chain registry](https://github.com/cosmos/chain-registry).
 
 ### Proof Generation & Verification
-
 
 ![proof_generation.png](proof_generation.png)
 Graphical depiction of proof generation.
@@ -98,7 +97,7 @@ Proof generation pseudocode proof generation for a channel path with `N` chains:
 //
 // Note: 'Chain' is assumed to contain information about the next chain in the channel path
 //
-// GetClientID return the clientID for the next chain in the channel path
+// GetClientID returns the clientID for the next chain in the channel path
 func (Chain) GetClientID() (clientID string)
 // GetConnectionID returns the connectionID corresponding to the next chain in the channel path
 func (Chain) GetConnectionID() (connectionID string)
@@ -120,12 +119,12 @@ type ProofHeights struct {
 // ProofData is a generic proof struct.
 type ProofData struct {
     Key   *MerklePath
-    Value []]byte
+    Value []byte
     Proof []byte
 }
 
-// MultihopProof defines set of proofs to verify a multihop message.
-// Consensus and Connection proofs are ordered from receiving to sending chain but do not including
+// MultihopProof defines a set of proofs to verify a multihop message.
+// Consensus and Connection proofs are ordered from receiving to sending chain but do not include
 // the chain[1] consensus/connection state on chain[0] since it is already known on the receiving chain.
 type MultihopProof struct {
     KeyProof *ProofData            // the key/value proof on the on chain[KeyProofIndex] in the channel path

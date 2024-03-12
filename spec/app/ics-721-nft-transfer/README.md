@@ -14,7 +14,7 @@ modified: 2022-12-15
 
 ## Synopsis
 
-This standard document specifies packet data structure, state machine handling logic, and encoding details for the transfer of non-fungible tokens over an IBC channel between two modules on separate chains. In this document, `class`, `collection` and `contract` are used interchangeably. The state machine logic presented allows for safe multi-chain `classId` handling with permissionless channel opening. This logic constitutes a _non-fungible token transfer bridge module_, interfacing between the IBC routing module and an existing asset tracking module on the host state machine, which could be either a Cosmos-style native module or a smart contract running in a virtual machine.
+This standard document specifies packet data structure, state machine handling logic, and encoding details for the transfer of non-fungible tokens over an IBC channel between two modules on separate chains. In this document, `class`, `collection` and `contract` are used interchangeably. The state machine logic presented allows for safe multi-chain `classId` handling with permissionless channel opening. This logic constitutes a *non-fungible token transfer bridge module*, interfacing between the IBC routing module and an existing asset tracking module on the host state machine, which could be either a Cosmos-style native module or a smart contract running in a virtual machine.
 
 ### Motivation
 
@@ -26,7 +26,7 @@ The IBC handler interface & IBC routing module interface are as defined in [ICS 
 
 ### Desired Properties
 
-- Preservation of non-fungibility (i.e., only one instance of any token is _live_ across all the IBC-connected blockchains).
+- Preservation of non-fungibility (i.e., only one instance of any token is *live* across all the IBC-connected blockchains).
 - Permissionless token transfers, no need to whitelist connections, modules, or `classId`s.
 - Symmetric (all chains implement the same logic, no in-protocol differentiation of hubs & zones).
 - Fault containment: prevents Byzantine-creation of tokens originating on chain `A`, as a result of chain `B`'s Byzantine behavior.
@@ -438,7 +438,7 @@ function onTimeoutPacketClose(packet: Packet) {
 
 This implementation preserves token non-fungibility and redeemability.
 
-- Non-fungibility: Only one instance of any token is _live_ across all the IBC-connected blockchains.
+- Non-fungibility: Only one instance of any token is *live* across all the IBC-connected blockchains.
 - Redeemability: If tokens have been sent to the counterparty chain, they can be redeemed back in the same `classId` & `tokenId` on the source chain.
 
 #### Optional addenda

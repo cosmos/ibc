@@ -49,9 +49,16 @@ An ICS header contains metadata relevant to the ICS.
 See [README.md](../../README.md) for a description of the ICS acceptance stages.
 
 `category` - ICS category, one of the following:
-- `meta` - A standard about the ICS process
+
+- `meta` - A standard about the ICS process.
 - `IBC/TAO` - A standard about an inter-blockchain communication system core transport, authentication, and ordering layer protocol.
 - `IBC/APP` - A standard about an inter-blockchain communication system application layer protocol.
+
+`kind` - ICS kind, one of the following:
+
+- `meta` - A standard about the ICS process.
+- `interface` - A standard about the minimal set of interfaces that must be provided and properties that must be fulfilled by a state machine hosting an implementation of the inter-blockchain communication protocol.
+- `instantiation` - A standard about concrete implementation details that explains how the standard is realized in pseudocode or software components.
 
 `author` - ICS author(s) & contact information (in order of preference: email, GitHub handle, Twitter handle, other contact methods likely to elicit response).
            The first author is the primary "owner" of the ICS and is responsible for advancing it through the standardisation process.
