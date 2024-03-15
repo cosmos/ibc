@@ -455,11 +455,7 @@ function chanOpenAck(
         expected
       ))
     }
-
-    channel.state = OPEN
-    channel.version = counterpartyVersion
-    channel.counterpartyChannelIdentifier = counterpartyChannelIdentifier
-    provableStore.set(channelPath(portIdentifier, channelIdentifier), channel)
+    // write will happen in the handler defined in the ICS26 spec
 }
 ```
 
@@ -506,8 +502,7 @@ function chanOpenConfirm(
       ))
     }
 
-    channel.state = OPEN
-    provableStore.set(channelPath(portIdentifier, channelIdentifier), channel)
+    // write will happen in the handler defined in the ICS26 spec
 }
 ```
 
@@ -587,6 +582,7 @@ function chanCloseConfirm(
       ))
     }
 
+    // write may happen asynchronously in the handler defined in the ICS26 spec
     // if the channel is closing during an upgrade, 
     // then we can delete all auxiliary upgrade information
     provableStore.delete(channelUpgradePath(portIdentifier, channelIdentifier))
