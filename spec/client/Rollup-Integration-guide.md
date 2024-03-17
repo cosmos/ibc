@@ -63,12 +63,12 @@ The updateState for rollups works the same as typical clients, though it is crit
 function updateState(clientMessage: ClientMessage) {
     // marshalling logic omitted
     header = clientMessage.header
-    consensusState = ConsensusState(header.appHash, header.time)
+    consensusState = ConsensusState{header.timestamp, header.appHash}
 
     setConsensusState(clientMessage.clientId, clientMessage.height, consensusState)
 
     // create mapping between consensus state and the current time for fraud proof waiting period
-    setSubmitTime(consensusState, currentTime())
+    setSubmitTime(consensusState, currentTimestamp())
 }
 ```
 
@@ -141,7 +141,7 @@ function updateStateOnMisbehaviour(clientMessage: ClientMessage) {
 }
 ```
 
-### VerifyMembership Methods
+### Membership Verification Methods
 
 The parts of the client that rely on the data availability are encapsulated in verifying new rollup blocks. Thus, once they are already added to the client, they can be used for proof verification without reference to the underlying data availability layer. For optimistic rollups, the consensus state must exist in the client for the full fraud period before it can be used for proof verification.
 
@@ -156,7 +156,7 @@ function verifyMembership(
     proof: CommitmentProof,
     path: CommitmentPath,
     value: bytes
-): error {
+): Error {
     // check conditional clients are still valid
     rollupClient = getClient(clientState.DALayer)
     settlementClient = getClient(clientState.settlementLayer) // may not exist for all rollups
@@ -169,7 +169,7 @@ function verifyMembership(
     submitTime = getSubmitTime(consensusState)
 
     // must ensure fraud proof period has passed
-    assert(submitTime + clientState.fraudPeriod > currentTime())
+    assert(submitTime + clientState.fraudPeriod > currentTimestamp())
 
     assert(proof.verifyMembership(path, value))
 }
@@ -181,7 +181,7 @@ function verifyNonMembership(
     delayPeriodBlocks: uint64, // disabled
     proof: CommitmentProof,
     path: CommitmentPath,
-): error {
+): Error {
     // check conditional clients are still valid
     rollupClient = getClient(clientState.DALayer)
     settlementClient = getClient(clientState.settlementLayer) // may not exist for all rollups
@@ -194,7 +194,7 @@ function verifyNonMembership(
     submitTime = getSubmitTime(consensusState)
 
     // must ensure fraud proof period has passed
-    assert(submitTime + clientState.fraudPeriod > currentTime())
+    assert(submitTime + clientState.fraudPeriod > currentTimestamp())
 
     assert(proof.verifyNonMembership(path))
 }
