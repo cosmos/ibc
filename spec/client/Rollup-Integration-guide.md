@@ -60,7 +60,7 @@ function verifyClientMessage(clientMessage: ClientMessage) {
 The updateState for rollups works the same as typical clients, though it is critical that the optimistic rollup client stores the submit time for when the consensus state was created so that we can verify that the fraud period has passed.
 
 ```typescript
-function updateState(ClientMessage: ClientMessage) {
+function updateState(clientMessage: ClientMessage) {
     // marshalling logic omitted
     header = clientMessage.header
     consensusState = ConsensusState(header.appHash, header.time)
