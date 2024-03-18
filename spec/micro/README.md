@@ -53,3 +53,86 @@ function submitMisbehaviour(
 ): error
 ```
 
+### Router
+
+IBC in its essence is the ability for applications on different blockchains with different security models to communicate with each other through light-client backed security. Thus, IBC needs the light client described above and the IBC applications that define the packet data they wish to send and receive. In addition to these layers, core IBC introduces the connection and channel abstractions to connect these two fundamental layers. Micro IBC intends to compress only the necessary aspects of connection and channel layers to a new router layer but before doing this it is critical to understand what service they currently provide.
+
+Properties of Connection:
+
+- Verifies the validity of the counterparty client
+- Establishes a unique identifier on each side for a shared abstract understanding (the connection)
+- Establishes an agreement on the IBC version and supported features
+- Allows multiple connections to be built against the same client pair
+- Establishes the delay period so this security parameter can be instantiated differently for different connections against the same client pairing.
+- Defines which channel orderings are supported
+
+Properties of Channel:
+
+- Separates applications into dedicated 1-1 communication channels. This prevents applications from writing into each other's channels.
+- Allows applications to come to agreement on the application parameters (version negotiation). Ensures that each side can understand the other's communication and that they are running mutually compatible logic. This version negotiation is a multi-step process that allows the finalized version to differ substantially from the one initially proposed
+- Establishes the ordering of the channel
+- Establishes unique identifiers for the applications on either chain to use to reference each other when sending and receiving packets.
+- The application protocol can be continually upgraded over time by using the upgrade handshake which allows the same channel which may have accumulated state to use new mutually agreed upon application packet data format(s) and associated new logic.
+- Ensures exactly-once delivery of packet flow datagrams (Send, Receive, Acknowledge, Timeout)
+- Ensures valid packet flow (Send => Receive => Acknowledge) XOR (Send => Timeout)
+
+Of these which are the critical properties that micro-IBC must maintain:
+
+Desired Properties of micro-IBC:
+
+##### Authenticating Counterparty Clients
+
+Before application data can flow between chains, we must ensure that the clients are both valid views of the counterparty consensus.
+
+In the router we must then introduce an ability to submit the counterparty client state and consensus state for verification against a client stored in our own chain.
+
+```typescript
+function verifyCounterpartyClient(
+    localClient: Identifer, // this is the client of the counterparty that exists on our own chain
+    remoteClientStoreIdentifier: Identifier, // this is the identifier of the 
+    remoteClient: ClientState, // this is the client on the counterparty chain that purports to be a client of ourselves
+    remoteConsensusState: ConsensusState, // this is the consensus state that is being used for verification of our consensus
+    remoteConsensusHeight: Height, // this is the height of our chain that the remote consensus state is associated with
+    // the proof fields are written in IBC convention,
+    // but implementations in practice will use []byte for proof
+    // and an unsigned integer for the height
+    // as their local client implementation will expect for VerifyMembership
+    proofClient: CommitmentProof,
+    proofConsensus: CommitmentProof,
+    proofHeight: Height,
+) {
+    // validate that the remote client and remote consensus state
+    // are valid for our chain. Note: This requires the ability to introspect our own consensus within this function
+    // e.g. ability to verify that the validator set at the height of the consensus state was in fact the validator set on our chaina that height 
+    validateSelfClient(remoteClient)
+    validateSelfConsensus(remoteConsensusState, remoteConsensusHeight)
+
+    // use the local client to verify that the remote client and remote consensus state are stored as expected under the remoteClientStoreIdentifier with the ICS24 paths we expect.
+    clientPath = append(remoteClientStoreIdentifier, "/clientState")
+    consensusPath = append(remoteClientStoreIdentifier, "/consensusState/{remoteConsensusHeight}")
+    assert(localClient.VerifyMembership(
+        proofHeight,
+        0,
+        0,
+        proofClient,
+        clientPath,
+        proto.marshal(remoteClient),
+    ))
+    assert(localClient.VerifyMembership(
+        proofHeight,
+        0,
+        0,
+        proofConsensus,
+        consensusPath,
+        proto.marshal(remoteConsensusState),
+    )
+}
+```
+
+#### Identification
+
+// TODO store the counterparty ClientStoreIdentifier and ApplicationStoreIdentifier so we know where they are storing client states, and packet commitments
+// A secure, unique connection consists of
+// (ChainA, ClientStoreID, AppStoreID) => (ChainB, ClientStoreID, AppStoreID)
+// where both sides are aware of each others store ID's
+
