@@ -14,6 +14,17 @@ ZK rollups can verify correctness of the header upon submission since the rollup
 
 ```typescript
 function verifyClientMessage(clientMessage: ClientMessage) {
+    switch typeof(clientMsg) {
+    case Header:
+      verifyHeader(clientMsg)
+    case Misbehaviour:
+      // this is completely rollup specific so it is left unspecified here
+      // misbehaviour verification specification for rollups
+      // is instead described completely in checkForMisbehaviour
+  }
+}
+
+function verifyHeader(clientMessage: ClientMessage) {
     clientState = provableStore.get("clients/{clientMessage.clientId}/clientState")
     // note: unmarshalling logic omitted
     // verify the header against the rollups own consensus mechanism if it exists
