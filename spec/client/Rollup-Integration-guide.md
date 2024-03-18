@@ -14,7 +14,7 @@ ZK rollups can verify correctness of the header upon submission since the rollup
 
 ```typescript
 function verifyClientMessage(clientMessage: ClientMessage) {
-    clientState = getClient(clientMessage.clientId)
+    clientState = provableStore.get("clients/{clientMessage.clientId}/clientState")
     // note: unmarshalling logic omitted
     // verify the header against the rollups own consensus mechanism if it exists
     // e.g. verify sequencer signature
@@ -65,7 +65,7 @@ function updateState(clientMessage: ClientMessage) {
     header = clientMessage.header
     consensusState = ConsensusState{header.timestamp, header.appHash}
 
-    setConsensusState(clientMessage.clientId, clientMessage.height, consensusState)
+    provableStore.set("clients/{clientMessage.clientId}/consensusStates/{header.GetHeight()}", consensusState)
 
     // create mapping between consensus state and the current time for fraud proof waiting period
     setSubmitTime(consensusState, currentTimestamp())
@@ -165,13 +165,16 @@ function verifyMembership(
     assert(isActive(rollupClient))
     assert(isActive(settlementClient))
 
-    consensusState = getConsensusState(clientState.clientId, height)
-    submitTime = getSubmitTime(consensusState)
+    consensusState = provableStore.get("clients/{clientState.clientId}/consensusStates/{height}")
+    processedTime = provableStore.set("clients/{clientState.clientId}/processedTimes/{height}")
 
     // must ensure fraud proof period has passed
     assert(submitTime + clientState.fraudPeriod > currentTimestamp())
 
-    assert(proof.verifyMembership(path, value))
+    if !verifyMembership(consensusState.commitmentRoot, proof, path, value) {
+        return error
+    }
+    return nil
 }
 
 function verifyNonMembership(
@@ -190,12 +193,15 @@ function verifyNonMembership(
     assert(isActive(rollupClient))
     assert(isActive(settlementClient))
 
-    consensusState = getConsensusState(clientState.clientId, height)
+    consensusState = provableStore.get("clients/{clientState.clientId}/consensusStates/{height}")
     submitTime = getSubmitTime(consensusState)
 
     // must ensure fraud proof period has passed
     assert(submitTime + clientState.fraudPeriod > currentTimestamp())
 
-    assert(proof.verifyNonMembership(path))
+    if !verifyNonMembership(consensusState.commitmentRoot, proof, path) {
+        return error
+    }
+    return nil
 }
 ```
