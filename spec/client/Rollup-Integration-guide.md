@@ -24,7 +24,9 @@ function verifyClientMessage(clientMessage: ClientMessage) {
     // we must additionally ensure that the header and associated block data is stored in the DA layer
     // the expected path the header and data is stored in
     // is rollup-specific so it is left as an unspecified function
-    // in this document.
+    // in this document. Though the path should reference a unique
+    // namespace for the rollup specified here with the chainID
+    // and a unique height for the rollup
     daClient = getClient(clientState.DALayer)
     verifyMembership(
         daClient,
@@ -32,7 +34,7 @@ function verifyClientMessage(clientMessage: ClientMessage) {
         0,
         0,
         clientMessage.DAHeaderProof,
-        DAHeaderPath(clientState.clientId, clientMessage.height),
+        DAHeaderPath(clientState.chainId, clientMessage.height),
         clientMessage.header)
     verifyMembership(
         daClient,
@@ -40,7 +42,7 @@ function verifyClientMessage(clientMessage: ClientMessage) {
         0,
         0,
         clientMessage.DABlockDataProof,
-        DABlockDataPath(clientState.clientId, clientMessage.height),
+        DABlockDataPath(clientState.chainID, clientMessage.height),
         clientMessage.blockData)
 
     // we must also assert that the blockData is correctly associated with the header
