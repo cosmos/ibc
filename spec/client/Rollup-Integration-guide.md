@@ -31,10 +31,10 @@ function verifyHeader(clientMessage: ClientMessage) {
     // e.g. verify sequencer signature
     verifySignatures(clientMessage.header, clientSequencers)
 
-    // in addition to the rollups own consensus mechanism
-    // we must additionally ensure that the header and associated block data is stored in the DA layer
-    // the expected path the header and data is stored in
-    // is rollup-specific so it is left as an unspecified function
+    // In addition to the rollups own consensus mechanism verification, 
+    // we must ensure that the header and associated block data is stored in the DA layer.
+    // The expected path, the header and data stored are
+    // rollup-specific so it is left as an unspecified function
     // in this document. Though the path should reference a unique
     // namespace for the rollup specified here with the chainID
     // and a unique height for the rollup
