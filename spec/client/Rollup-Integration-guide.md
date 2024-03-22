@@ -2,21 +2,21 @@
 
 ## Context
 
-The following is a guide for rollup frameworks seeking to integrate with IBC. A rollup is a decentralized application that relies on a third-party blockchain for data availability and optionally for settlement. The rollup consensus mechanism differs from sovereign blockchains in important ways. The consensus on the blocks and ordering of the rollup is defined by the order in which they are posted onto a third party ledger, the DA layer. Since this third party ledger is not itself executing transactions and constructing the rollup app state, rollups may additionally have a settlement mechanism. There are two types of rollup architectures: optimistic and ZK. ZK rollups submit a proof that the reported app hash is correctly constructed from the included transactions in the block, thus a rollup block and header can be trusted as legitimate as soon as it is finalized on the DA layer. An optimistic rollup on the other hand, relies on third party watchers, that can post a proof to a settlement layer that the rollup did not post the correct app hash from the posted transactions. This requires the settlement layer to be able to execute the rollup state machine. The DA layer and settlement layer **may** be different blockchains or the same.
+The following is a guide for rollup frameworks seeking to integrate with IBC. A rollup is a decentralized application that relies on a third-party blockchain for data availability (DA) and optionally for settlement. The rollup consensus mechanism differs from sovereign blockchains in important ways. The consensus on the blocks and ordering of the rollup is defined by the order in which they are posted onto a third party ledger, the DA layer. Since this third party ledger is not itself executing transactions and constructing the rollup app state, rollups may additionally have a settlement mechanism. There are two types of rollup architectures: optimistic and ZK. ZK rollups submit a proof that the reported app hash is correctly constructed from the included transactions in the block, thus a rollup block and header can be trusted as legitimate as soon as it is finalized on the DA layer. An optimistic rollup on the other hand, relies on third party watchers, that can post a proof to a settlement layer that the rollup did not post the correct app hash from the posted transactions. This requires the settlement layer to be able to execute the rollup state machine. The DA layer and settlement layer **may** be different blockchains or the same.
 
 This guide is not intended to be a formal specification or Interchain Standard. As the architectures for rollups and their underlying data availability and settlement layers differ vastly: from ZK rollups to optimistic rollups with separate data availability and settlement layers to sovereign rollups; it is impossible to write a fully specified client to encompass all these cases. Thus this guide is intended to highlight the client functions that are most affected by rollup specific features and explain what must be done in each one to take into account the unique properties of rollups. Rollup light client developers should use this document as a starting point when desigining their light clients to ensure they are taking into account rollup-specific logic in the appropriate places.
 
 ### `verifyClientMessage`
 
-In order to verify a new header for the rollup, the rollup client must also be able to verify the header's (and associated block's) inclusion in the DA layer. Thus, the rollup client's update logic **must** have the ability to execute verification of the DA client. After verifying the rollups own consensus mechanism (which itself may be nonexistent for some rollup architectures), it verifies the header and blockdata in the data availability layer. Simply proving inclusion is not enough however, we must ensure that the data we are proving is valid; i.e. the data is not simply included but is included in the way that is expected by the rollup architecure. In the example below, we check that the blockdata hashes to the `txHash` in the header.
+In order to verify a new header for the rollup, the rollup client must also be able to verify the header's (and associated block's) inclusion in the DA layer. Thus, the rollup client's update logic **must** have the ability to execute verification of the DA client. After verifying the rollups own consensus mechanism (which itself may be non-existent for some rollup architectures), it verifies the header and blockdata in the data availability layer. Simply proving inclusion is not enough however, we must ensure that the data we are proving is valid; i.e. the data is not simply included but is included in the way that is expected by the rollup architecure. In the example below, we check that the blockdata hashes to the `txHash` in the header.
 
 ZK rollups can verify correctness of the header upon submission since the rollup client can embed a proving circuit that can verify a ZK proof from the relayer that the submitted header is correct. Optimistic rollups on the other hand cannot immediately trust a header upon submission, as the header may later be proved fraudulent. Thus, the header can be stored but must wait for the fraud period to elapse without any successful challenges to the correctness of the header before it is finalized and used for proof verification.
 
 ```typescript
 function verifyClientMessage(clientMessage: ClientMessage) {
-    switch typeof(clientMsg) {
+  switch typeof(clientMessage) {
     case Header:
-      verifyHeader(clientMsg)
+      verifyHeader(clientMessage)
     case Misbehaviour:
       // this is completely rollup specific so it is left unspecified here
       // misbehaviour verification specification for rollups
@@ -25,46 +25,48 @@ function verifyClientMessage(clientMessage: ClientMessage) {
 }
 
 function verifyHeader(clientMessage: ClientMessage) {
-    clientState = provableStore.get("clients/{clientMessage.clientId}/clientState")
-    // note: unmarshalling logic omitted
-    // verify the header against the rollups own consensus mechanism if it exists
-    // e.g. verify sequencer signature
-    verifySignatures(clientMessage.header, clientSequencers)
+  clientState = provableStore.get("clients/{clientMessage.clientId}/clientState")
+  header = Header(clientMessage)
 
-    // In addition to the rollups own consensus mechanism verification, 
-    // we must ensure that the header and associated block data is stored in the DA layer.
-    // The expected path, the header and data stored are
-    // rollup-specific so it is left as an unspecified function
-    // in this document. Though the path should reference a unique
-    // namespace for the rollup specified here with the chainID
-    // and a unique height for the rollup
-    daClient = getClient(clientState.DALayer)
-    verifyMembership(
-        daClient,
-        clientMessage.DAProofHeight,
-        0,
-        0,
-        clientMessage.DAHeaderProof,
-        DAHeaderPath(clientState.chainId, clientMessage.height),
-        clientMessage.header)
-    verifyMembership(
-        daClient,
-        clientMessage.DAProofHeight,
-        0,
-        0,
-        clientMessage.DABlockDataProof,
-        DABlockDataPath(clientState.chainID, clientMessage.height),
-        clientMessage.blockData)
+  // note: unmarshalling logic omitted
+  // verify the header against the rollups own consensus mechanism if it exists
+  // e.g. verify sequencer signature
+  verifySignatures(header, clientSequencers)
 
-    // we must also assert that the blockData is correctly associated with the header
-    // this is specific to the rollup header and block architecture
-    // the following is merely an example of what might be verified
-    assert(hash(clientMessage.blockData) === clientMessage.header.txHash)
+  // In addition to the rollups own consensus mechanism verification, 
+  // we must ensure that the header and associated block data is stored in the DA layer.
+  // The expected path, the header and data stored are
+  // rollup-specific so it is left as an unspecified function
+  // in this document. Though the path should reference a unique
+  // namespace for the rollup specified here with the chain ID
+  // and a unique height for the rollup
+  daClient = getClient(clientState.DALayer)
+  verifyMembership(
+    daClient,
+    header.DAProofHeight,
+    0,
+    0,
+    header.DAHeaderProof,
+    DAHeaderPath(clientState.chainId, header.height),
+    header)
+  verifyMembership(
+    daClient,
+    header.DAProofHeight,
+    0,
+    0,
+    header.DABlockDataProof,
+    DABlockDataPath(clientState.chainID, header.height),
+    header.blockData)
 
-    // if the rollup is a ZK rollup, then we can verify the correctness immediately.
-    // Otherwise, the correctness of the submitted rollup header is contingent on passing
-    // the fraud period without a valid proof being submitted (see misbehaviour logic)
-    prove(client.ZKProvingCircuit, clientMessage.zkProof)
+  // we must also assert that the block data is correctly associated with the header
+  // this is specific to the rollup header and block architecture
+  // the following is merely an example of what might be verified
+  assert(hash(header.blockData) === header.txHash)
+
+  // if the rollup is a ZK rollup, then we can verify the correctness immediately.
+  // Otherwise, the correctness of the submitted rollup header is contingent on passing
+  // the fraud period without a valid proof being submitted (see misbehaviour logic)
+  prove(client.ZKProvingCircuit, header.zkProof)
 }
 ```
 
@@ -74,14 +76,14 @@ The updateState for rollups works the same as typical clients, though it is crit
 
 ```typescript
 function updateState(clientMessage: ClientMessage) {
-    // marshalling logic omitted
-    header = clientMessage.header
-    consensusState = ConsensusState{header.timestamp, header.appHash}
+  // marshalling logic omitted
+  header = Header(clientMessage)
+  consensusState = ConsensusState{header.timestamp, header.appHash}
 
-    provableStore.set("clients/{clientMessage.clientId}/consensusStates/{header.GetHeight()}", consensusState)
+  provableStore.set("clients/{clientMessage.clientId}/consensusStates/{header.GetHeight()}", consensusState)
 
-    // create mapping between consensus state and the current time for fraud proof waiting period
-    setSubmitTime(consensusState, currentTimestamp())
+  // create mapping between consensus state and the current time for fraud proof waiting period
+  provableStore.set("clients/{clientMessage.clientId}/processedTimes/{header.GetHeight()}", currentTimestamp())
 }
 ```
 
@@ -103,29 +105,28 @@ The optimistic fraud proof verifier should be implemented as a smart contract. S
 // optimistic rollup fraud proof
 // the misbehaviour must be associated with a height on the rollup
 function checkForMisbehaviour(clientMessage: ClientMessage) {
-    // unmarshalling logic ommitted
-    clientId = clientMessage.clientId
-    misbehaviour = clientMessage.misbehaviour
-    client = getClient(clientId)
-    // if the rollup has a settlement layer, we can delegate the fraud proof game to the settlement layer
-    // and simply verify with the settlement client that fraud has been proven for the given misbehaviour
-    // 
-    if client.settlementLayer == nil {
-        // fraud prover here is a contract so the same rollup client implementation may
-        // be initiated with different fraud prover contracts for each
-        // different state machine
-        fraudProverContract = getFraudProver(clientId)
-        fraudProverContract.verifyFraudProof(misbehaviour)
-    } else {
-        // in order to use a settlement client some sentinel value signifying submitted misbehaviour
-        // must be stored at a specific path for the given rollup and height
-        // so that the client can prove that the settlement client did in fact successfully prove misbehaviour
-        // for the given rollup at the given height
-        misbehavingHeight = getHeight(misbehaviour)
-        settlementClient = getClient(clientId.settlementLayer)
-        misbehaviourPath = getMisbehaviourPath(clientId, misbehavingHeight)
-        settlementClient.verifyMembership(misbehaviour.proofHeight, 0, 0, misbehaviour.proof, misbehaviourPath, MISBEHAVIOUR_SUCCESS_VALUE)
-    }
+  // unmarshalling logic ommitted
+  misbehaviour = Misbehaviour(clientMessage)
+  clientId = clientMessage.clientId
+  client = getClient(clientId)
+  // if the rollup has a settlement layer, we can delegate the fraud proof game to the settlement layer
+  // and simply verify with the settlement client that fraud has been proven for the given misbehaviour
+  if client.settlementLayer == nil {
+    // fraud prover here is a contract so the same rollup client implementation may
+    // be initiated with different fraud prover contracts for each
+    // different state machine
+    fraudProverContract = getFraudProver(clientId)
+    fraudProverContract.verifyFraudProof(misbehaviour)
+  } else {
+    // in order to use a settlement client some sentinel value signifying submitted misbehaviour
+    // must be stored at a specific path for the given rollup and height
+    // so that the client can prove that the settlement client did in fact successfully prove misbehaviour
+    // for the given rollup at the given height
+    misbehavingHeight = getHeight(misbehaviour)
+    settlementClient = getClient(clientId.settlementLayer)
+    misbehaviourPath = getMisbehaviourPath(clientId, misbehavingHeight)
+    settlementClient.verifyMembership(misbehaviour.proofHeight, 0, 0, misbehaviour.proof, misbehaviourPath, MISBEHAVIOUR_SUCCESS_VALUE)
+  }
 }
 ```
 
@@ -139,18 +140,18 @@ Thus, `updateStateOnMisbehaviour` can be less strict for rollups and simply remo
 
 ```typescript
 function updateStateOnMisbehaviour(clientMessage: ClientMessage) {
-    // unmarshalling logic ommitted
-    misbehaviour = clientMessage.misbehaviour
-    misbehavingHeight = getHeight(misbehaviour)
+  // unmarshalling logic ommitted
+  misbehaviour = Misbehaviour(clientMessage)
+  misbehavingHeight = getHeight(misbehaviour)
 
-    // delete the fraudulent consensus state
-    deleteConsensusState(clientMessage.clientId, misbehavingHeight)
+  // delete the fraudulent consensus state
+  deleteConsensusState(clientMessage.clientId, misbehavingHeight)
 
-    // its possible for the rollup client to do additional logic here
-    // e.g. verify the next sequencer chosen from settlement layer
-    // however this is highly specific to rollup architectures
-    // and is not necessary for all rollup architectures
-    // so it will not be modelled here.
+  // its possible for the rollup client to do additional logic here
+  // e.g. verify the next sequencer chosen from settlement layer
+  // however this is highly specific to rollup architectures
+  // and is not necessary for all rollup architectures
+  // so it will not be modelled here.
 }
 ```
 
@@ -162,59 +163,59 @@ Since the rollup client is dependent on underlying clients: data availability cl
 
 ```typescript
 function verifyMembership(
-    clientState: ClientState,
-    height: Height,
-    delayPeriodTime: uint64, // disabled
-    delayPeriodBlocks: uint64, // disabled
-    proof: CommitmentProof,
-    path: CommitmentPath,
-    value: bytes
+  clientState: ClientState,
+  height: Height,
+  delayPeriodTime: uint64, // disabled
+  delayPeriodBlocks: uint64, // disabled
+  proof: CommitmentProof,
+  path: CommitmentPath,
+  value: bytes
 ): Error {
-    // check conditional clients are still valid
-    rollupClient = getClient(clientState.DALayer)
-    settlementClient = getClient(clientState.settlementLayer) // may not exist for all rollups
+  // check conditional clients are still valid
+  rollupClient = getClient(clientState.DALayer)
+  settlementClient = getClient(clientState.settlementLayer) // may not exist for all rollups
 
-    assert(isActive(clientState))
-    assert(isActive(rollupClient))
-    assert(isActive(settlementClient))
+  assert(isActive(clientState))
+  assert(isActive(rollupClient))
+  assert(isActive(settlementClient))
 
-    consensusState = provableStore.get("clients/{clientState.clientId}/consensusStates/{height}")
-    processedTime = provableStore.set("clients/{clientState.clientId}/processedTimes/{height}")
+  consensusState = provableStore.get("clients/{clientState.clientId}/consensusStates/{height}")
+  processedTime = provableStore.set("clients/{clientState.clientId}/processedTimes/{height}")
 
-    // must ensure fraud proof period has passed
-    assert(submitTime + clientState.fraudPeriod > currentTimestamp())
+  // must ensure fraud proof period has passed
+  assert(processedTime + clientState.fraudPeriod > currentTimestamp())
 
-    if !verifyMembership(consensusState.commitmentRoot, proof, path, value) {
-        return error
-    }
-    return nil
+  if !verifyMembership(consensusState.commitmentRoot, proof, path, value) {
+    return error
+  }
+  return nil
 }
 
 function verifyNonMembership(
-    clientState: ClientState,
-    height: Height,
-    delayPeriodTime: uint64, // disabled
-    delayPeriodBlocks: uint64, // disabled
-    proof: CommitmentProof,
-    path: CommitmentPath,
+  clientState: ClientState,
+  height: Height,
+  delayPeriodTime: uint64, // disabled
+  delayPeriodBlocks: uint64, // disabled
+  proof: CommitmentProof,
+  path: CommitmentPath,
 ): Error {
-    // check conditional clients are still valid
-    rollupClient = getClient(clientState.DALayer)
-    settlementClient = getClient(clientState.settlementLayer) // may not exist for all rollups
+  // check conditional clients are still valid
+  rollupClient = getClient(clientState.DALayer)
+  settlementClient = getClient(clientState.settlementLayer) // may not exist for all rollups
 
-    assert(isActive(clientState))
-    assert(isActive(rollupClient))
-    assert(isActive(settlementClient))
+  assert(isActive(clientState))
+  assert(isActive(rollupClient))
+  assert(isActive(settlementClient))
 
-    consensusState = provableStore.get("clients/{clientState.clientId}/consensusStates/{height}")
-    submitTime = getSubmitTime(consensusState)
+  consensusState = provableStore.get("clients/{clientState.clientId}/consensusStates/{height}")
+  processedTime = provableStore.set("clients/{clientState.clientId}/processedTimes/{height}")
 
-    // must ensure fraud proof period has passed
-    assert(submitTime + clientState.fraudPeriod > currentTimestamp())
+  // must ensure fraud proof period has passed
+  assert(processedTime + clientState.fraudPeriod > currentTimestamp())
 
-    if !verifyNonMembership(consensusState.commitmentRoot, proof, path) {
-        return error
-    }
-    return nil
+  if !verifyNonMembership(consensusState.commitmentRoot, proof, path) {
+    return error
+  }
+  return nil
 }
 ```
