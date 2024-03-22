@@ -435,15 +435,15 @@ pub struct TimestampAtHeightMsg {
 
 #[cw_serde]
 pub struct VerifyClientMessage {
-	#[schemars(with = "String")]
-	#[serde(with = "Base64", default)]
-	pub client_message: Bytes,
+  #[schemars(with = "String")]
+  #[serde(with = "Base64", default)]
+  pub client_message: Bytes,
 }
 
 pub struct CheckForMisbehaviourMsgRaw {
-	#[schemars(with = "String")]
-	#[serde(with = "Base64", default)]
-	pub client_message: Bytes,
+  #[schemars(with = "String")]
+  #[serde(with = "Base64", default)]
+  pub client_message: Bytes,
 }
 ```
 
@@ -479,41 +479,41 @@ Every Wasm contract must support these sudo messages:
 ```rust
 #[cw_serde]
 pub struct VerifyMembershipMsg {
-	#[schemars(with = "String")]
-	#[serde(with = "Base64", default)]
-	pub proof: Bytes,
-	pub path: MerklePath,
-	#[schemars(with = "String")]
-	#[serde(with = "Base64", default)]
-	pub value: Bytes,
-	pub height: Height,
-	pub delay_block_period: u64,
-	pub delay_time_period: u64,
+  #[schemars(with = "String")]
+  #[serde(with = "Base64", default)]
+  pub proof: Bytes,
+  pub path: MerklePath,
+  #[schemars(with = "String")]
+  #[serde(with = "Base64", default)]
+  pub value: Bytes,
+  pub height: Height,
+  pub delay_block_period: u64,
+  pub delay_time_period: u64,
 }
 
 #[cw_serde]
 pub struct VerifyNonMembershipMsg {
-	#[schemars(with = "String")]
-	#[serde(with = "Base64", default)]
-	pub proof: Bytes,
-	pub path: MerklePath,
-	pub height: Height,
-	pub delay_block_period: u64,
-	pub delay_time_period: u64,
+  #[schemars(with = "String")]
+  #[serde(with = "Base64", default)]
+  pub proof: Bytes,
+  pub path: MerklePath,
+  pub height: Height,
+  pub delay_block_period: u64,
+  pub delay_time_period: u64,
 }
 
 #[cw_serde]
 pub struct UpdateStateOnMisbehaviourMsg {
-	#[schemars(with = "String")]
-	#[serde(with = "Base64", default)]
-	pub client_message: Bytes,
+  #[schemars(with = "String")]
+  #[serde(with = "Base64", default)]
+  pub client_message: Bytes,
 }
 
 #[cw_serde]
 pub struct UpdateStateMsg {
-	#[schemars(with = "String")]
-	#[serde(with = "Base64", default)]
-	pub client_message: Bytes,
+  #[schemars(with = "String")]
+  #[serde(with = "Base64", default)]
+  pub client_message: Bytes,
 }
 
 #[cw_serde]
