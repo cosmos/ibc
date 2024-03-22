@@ -7,7 +7,7 @@ kind: instantiation
 implements: 2
 author: Parth Desai <parth@chorus.one>, Mateusz Kaczanowski <mateusz@chorus.one>, Blas Rodriguez Irizar <blas@composable.finance>, Steve Miskovetz <steve@strange.love>
 created: 2020-10-13
-modified: 2023-07-07
+modified: 2024-03-22
 ---
 
 ## Synopsis
@@ -66,7 +66,7 @@ the Wasm client proxy needs a reference (or a handler) to a Wasm VM. The Wasm cl
 
 ### Gas costs
 
-[]`wasmd`](https://github.com/CosmWasm/wasmd) has thoroughly benchmarked [gas adjustments for CosmWasm](https://github.com/CosmWasm/wasmd/blob/v0.41.0/x/wasm/keeper/gas_register.go#L13-L56) and the same values are being applied in the Wasm VM used in ibc-go's implementation of ICS 8.
+[`wasmd`](https://github.com/CosmWasm/wasmd) has thoroughly benchmarked [gas adjustments for CosmWasm](https://github.com/CosmWasm/wasmd/blob/v0.41.0/x/wasm/keeper/gas_register.go#L13-L56) and the same values are being applied in the Wasm VM used in ibc-go's implementation of ICS 8.
 
 ```typescript
 const (
@@ -80,12 +80,12 @@ const (
 
 ### Client state
 
-The Wasm client state tracks the location of the Wasm bytecode via `codeHash`. Binary data represented by the `data` field is opaque and only interpreted by the Wasm contract.
+The Wasm client state tracks the location of the Wasm bytecode via `checksum`. Binary data represented by the `data` field is opaque and only interpreted by the Wasm contract.
 
 ```typescript
 interface ClientState {
   data: []byte
-  codeHash: []byte
+  checksum: []byte
   latestHeight: Height
 }
 ```
@@ -132,24 +132,26 @@ interface InstantiateMessage {
 ```
 
 ```typescript
-function initialize(
+function initialise(
   identifier: Identifier,
   data: []byte,
-  codeHash: []byte,
+  checksum: []byte,
   consensusState: ConsensusState,
   height: Height
 ): ClientState {
-  payload = InstantiateMessage{consensusState}
+  // bytes of encoded consensus state of base light
+  // client are passed in the message 
+  payload = InstantiateMessage{consensusState.data}
 
   // retrieve client identifier-prefixed store
   clientStore = provableStore.prefixStore("clients/{identifier}")
 
-  // initialize wasm contract for a previously stored contract identified by codeHash
-  initContract(codeHash, clientStore, marshalJSON(payload))
+  // initialize wasm contract for a previously stored contract identified by checksum
+  initContract(checksum, clientStore, marshalJSON(payload))
 
   return ClientState{
     data,
-    codeHash,
+    checksum,
     latestHeight: height
   }
 }
@@ -165,8 +167,6 @@ type QueryMsg =
   | ExportMetadata
   | TimestampAtHeight
   | VerifyClientMessage
-  | VerifyMembership
-  | VerifyNonMembership
   | CheckForMisbehaviour;
 ```
 
@@ -174,6 +174,8 @@ type QueryMsg =
 type SudoMsg =
   | UpdateState
   | UpdateStateOnMisbehaviour
+  | VerifyMembership
+  | VerifyNonMembership
   | VerifyUpgradeAndUpdateState
   | CheckSubstituteAndUpdateState
 ```
@@ -184,13 +186,15 @@ Wasm client validity checking uses underlying Wasm contract. If the provided cli
 
 ```typescript
 interface VerifyClientMessageMsg {
-  clientMessage: ClientMessage
+  clientMessage: bytes
 }
 ```
 
 ```typescript
 function verifyClientMessage(clientMsg: ClientMessage) {
-  payload = verifyClientMessageMsg{clientMsg}
+  // bytes of encoded client message of base light
+  // client are passed in the message 
+  payload = verifyClientMessageMsg{clientMsg.data}
 
   clientState = provableStore.get("clients/{clientMsg.identifier}/clientState")
   // retrieve client identifier-prefixed store
@@ -208,13 +212,15 @@ Function `checkForMisbehaviour` will check if an update contains evidence of mis
 
 ```typescript
 interface CheckForMisbehaviourMsg {
-  clientMessage: ClientMessage
+  clientMessage: bytes
 }
 ```
 
 ```typescript
 function checkForMisbehaviour(clientMsg: ClientMessage): boolean {
-  payload = checkForMisbehaviourMsg{clientMsg}
+  // bytes of encoded client message of base light
+  // client are passed in the message 
+  payload = checkForMisbehaviourMsg{clientMsg.data}
 
   clientState = provableStore.get("clients/{clientMsg.identifier}/clientState")
   // retrieve client identifier-prefixed store
@@ -232,13 +238,15 @@ Function `updateState` will perform a regular update for the Wasm client. It wil
 
 ```typescript
 interface UpdateStateMsg {
-  clientMessage: ClientMessage
+  clientMessage: bytes
 }
 ```
 
 ```typescript
 function updateState(clientMsg: ClientMessage) {
-  payload = UpdateStateMsg{clientMsg}
+  // bytes of encoded client message of base light
+  // client are passed in the message 
+  payload = UpdateStateMsg{clientMsg.data}
 
   clientState = provableStore.get("clients/{clientMsg.identifier}/clientState")
   // retrieve client identifier-prefixed store
@@ -255,13 +263,15 @@ Function `updateStateOnMisbehaviour` will set the frozen height to a non-zero he
 
 ```typescript
 interface UpdateStateOnMisbehaviourMsg {
-  clientMessage: ClientMessage
+  clientMessage: bytes
 }
 ```
 
 ```typescript
 function updateStateOnMisbehaviour(clientMsg: clientMessage) {
-  payload = UpdateStateOnMisbehaviourMsg{clientMsg}
+  // bytes of encoded client message of base light
+  // client are passed in the message 
+  payload = UpdateStateOnMisbehaviourMsg{clientMsg.data}
 
   clientState = provableStore.get("clients/{clientMsg.identifier}/clientState")
   // retrieve client identifier-prefixed store
@@ -299,9 +309,9 @@ If a Wasm light client becomes frozen, a governance proposal can be submitted to
 ```typescript
 function checkSubstituteAndUpdateState(
   subjectClientState: ClientState, 
-  substituteClientState: ClientState
-  subjectClientState: ClientState, 
-  substituteClientState: ClientState
+  substituteClientState: ClientState,
+  subjectClientStore: KVStore, 
+  substituteClientStore: KVStore
 ) {
   // Use the underlying wasm contract to update the subject 
   // client with the state of the substitute. The contract is 
@@ -390,6 +400,7 @@ function verifyNonMembership(
   return result.error
 }
 ```
+
 ### Wasm Contract Interface
 
 #### Interaction between Go and Wasm
@@ -397,7 +408,7 @@ function verifyNonMembership(
 When an instruction needs to be executed in Wasm code, functions are executed using a `wasmvm`.
 This VM is sandboxed, hence isolated from other operations.
 The process requires packaging all the arguments to be executed by a specific function (including
-pointers to `KVStore`s if needed), pointing to a code hash, and a `sdk.GasMeter` to properly account
+pointers to `KVStore`s if needed), pointing to a checksum, and a `sdk.GasMeter` to properly account
 for gas usage during the execution of the function.
 
 #### Contract instantiation
@@ -409,19 +420,8 @@ need such as processed height and/or processed time.
 #### Contract query
 
 Every Wasm contract must support these query messages:
-#### Wasm Client interface
-
-Every Wasm client code need to support ingestion of below messages in order to be used as light client.
 
 ```rust
-#[cw_serde]
-pub struct TimestampAtHeightMsg {
-  pub height: Height,
-}
-
-#[cw_serde]
-pub struct GetLatestHeightsMsg {}
-
 #[cw_serde]
 pub struct StatusMsg {}
 
@@ -429,33 +429,21 @@ pub struct StatusMsg {}
 pub struct ExportMetadataMsg {}
 
 #[cw_serde]
-pub struct MerklePath {
-  pub key_path: Vec<String>,
+pub struct TimestampAtHeightMsg {
+  pub height: Height,
 }
 
 #[cw_serde]
-pub struct VerifyMembershipMsg {
-  #[schemars(with = "String")]
-  #[serde(with = "Base64", default)]
-  pub proof: Bytes,
-  pub path: MerklePath,
-  #[schemars(with = "String")]
-  #[serde(with = "Base64", default)]
-  pub value: Bytes,
-  pub height: Height,
-  pub delay_block_period: u64,
-  pub delay_time_period: u64,
+pub struct VerifyClientMessage {
+	#[schemars(with = "String")]
+	#[serde(with = "Base64", default)]
+	pub client_message: Bytes,
 }
 
-#[cw_serde]
-pub struct VerifyNonMembershipMsg {
-  #[schemars(with = "String")]
-  #[serde(with = "Base64", default)]
-  pub proof: Bytes,
-  pub path: MerklePath,
-  pub height: Height,
-  pub delay_block_period: u64,
-  pub delay_time_period: u64,
+pub struct CheckForMisbehaviourMsgRaw {
+	#[schemars(with = "String")]
+	#[serde(with = "Base64", default)]
+	pub client_message: Bytes,
 }
 ```
 
@@ -484,19 +472,48 @@ pub struct GenesisMetadata {
 }
 ```
 
-#### Contract execute
+#### Contract sudo
 
-Every Wasm contract must support these execute messages:
+Every Wasm contract must support these sudo messages:
 
 ```rust
 #[cw_serde]
+pub struct VerifyMembershipMsg {
+	#[schemars(with = "String")]
+	#[serde(with = "Base64", default)]
+	pub proof: Bytes,
+	pub path: MerklePath,
+	#[schemars(with = "String")]
+	#[serde(with = "Base64", default)]
+	pub value: Bytes,
+	pub height: Height,
+	pub delay_block_period: u64,
+	pub delay_time_period: u64,
+}
+
+#[cw_serde]
+pub struct VerifyNonMembershipMsg {
+	#[schemars(with = "String")]
+	#[serde(with = "Base64", default)]
+	pub proof: Bytes,
+	pub path: MerklePath,
+	pub height: Height,
+	pub delay_block_period: u64,
+	pub delay_time_period: u64,
+}
+
+#[cw_serde]
 pub struct UpdateStateOnMisbehaviourMsg {
-  pub client_message: ClientMessage,
+	#[schemars(with = "String")]
+	#[serde(with = "Base64", default)]
+	pub client_message: Bytes,
 }
 
 #[cw_serde]
 pub struct UpdateStateMsg {
-  pub client_message: ClientMessage,
+	#[schemars(with = "String")]
+	#[serde(with = "Base64", default)]
+	pub client_message: Bytes,
 }
 
 #[cw_serde]
@@ -505,9 +522,12 @@ pub struct CheckSubstituteAndUpdateStateMsg {
 }
 
 #[cw_serde]
+pub struct MigrateClientStoreMsg {}
+
+#[cw_serde]
 pub struct VerifyUpgradeAndUpdateStateMsgRaw {
-  pub upgrade_client_state: WasmClientState<FakeInner, FakeInner, FakeInner>,
-  pub upgrade_consensus_state: WasmConsensusState<FakeInner>,
+  pub upgrade_client_state: Bytes,
+  pub upgrade_consensus_state: Bytes,
   #[schemars(with = "String")]
   #[serde(with = "Base64", default)]
   pub proof_upgrade_client: Vec<u8>,
@@ -517,18 +537,15 @@ pub struct VerifyUpgradeAndUpdateStateMsgRaw {
 }
 ```
 
-The response for execute is as follows:
+The response for sudo is as follows:
 
 ```rust
 #[cw_serde]
 pub struct ContractResult {
-  pub is_valid: bool, // Execute was successful
-  pub error_msg: String, // Error message
-  #[serde(skip_serializing_if = "Option::is_none")]
-  pub data: Option<Vec<u8>>, // Optional data
-  pub found_misbehaviour: bool, 
+	#[serde(skip_serializing_if = "Option::is_none")]
+  // heights set by contract's implementation of updateState
+	pub heights: Option<Vec<Height>>,
 }
-
 ```
 
 ### Properties & Invariants
@@ -554,6 +571,8 @@ Oct 8, 2021 - Final first draft
 Mar 15th, 2022 - Update for 02-client refactor 
 
 Sep 7th, 2023 - Update for changes during implementation
+
+Mar 22th, 2024 - Update for changes after release of ibc-go's 08-wasm module
 
 ## Copyright
 
