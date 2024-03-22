@@ -542,9 +542,9 @@ The response for sudo is as follows:
 ```rust
 #[cw_serde]
 pub struct ContractResult {
-	#[serde(skip_serializing_if = "Option::is_none")]
+  #[serde(skip_serializing_if = "Option::is_none")]
   // heights set by contract's implementation of updateState
-	pub heights: Option<Vec<Height>>,
+  pub heights: Option<Vec<Height>>,
 }
 ```
 
