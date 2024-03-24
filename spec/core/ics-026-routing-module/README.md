@@ -503,7 +503,7 @@ function handleChanOpenTry(datagram: ChanOpenTry) {
     datagram.proofInit,
     datagram.proofHeight
   )
-  // SYNCHRONOUS: the following calls happen syncrhonously with the call above
+  // SYNCHRONOUS: the following calls happen synchronously with the call above
   // ASYNCHRONOUS: the module callback will be called at a time later than the channel handler
   // in this case, the channel identifier will be stored with a sentinel value in the channel path so it is not taken
   // by a new channel handshake and the capability is reserved for the application module.
@@ -554,7 +554,7 @@ function handleChanOpenAck(datagram: ChanOpenAck) {
     datagram.proofTry,
     datagram.proofHeight
   )
-  // SYNCHRONOUS: the following calls happen syncrhonously with the call above
+  // SYNCHRONOUS: the following calls happen synchronously with the call above
   // ASYNCHRONOUS: the module callback will be called at a time later than the channel handler
   // When the module eventually executes its callback it must call writeChannel so that the channel
   // can be written into an OPEN state and the handshake can proceed on the counterparty.
@@ -597,7 +597,7 @@ function handleChanOpenConfirm(datagram: ChanOpenConfirm) {
     datagram.proofAck,
     datagram.proofHeight
   )
-  // SYNCHRONOUS: the following calls happen syncrhonously with the call above
+  // SYNCHRONOUS: the following calls happen synchronously with the call above
   // ASYNCHRONOUS: the module callback will be called at a time later than the channel handler
   // When the module eventually executes its callback it must call writeChannel so that the channel
   // can be written into an OPEN state and the handshake can proceed on the counterparty.
@@ -659,7 +659,7 @@ function handleChanCloseConfirm(datagram: ChanCloseConfirm) {
       datagram.proofInit,
       datagram.proofHeight
     )
-    // SYNCHRONOUS: the following calls happen syncrhonously with the call above
+    // SYNCHRONOUS: the following calls happen synchronously with the call above
     // ASYNCHRONOUS: the module callback will be called at a time later than the channel handler
     // When the module eventually executes its callback it must call writeChannel so that the channel
     // can be written into a CLOSED state and the handshake can proceed on the counterparty.
@@ -816,7 +816,7 @@ Jul 28, 2019 - Major revisions
 
 Aug 25, 2019 - Major revisions
 
-Mar 28, 2023 - Fix order of executing module handlee and application callback
+Mar 28, 2023 - Fix order of executing module handler and application callback
 
 ## Copyright
 
