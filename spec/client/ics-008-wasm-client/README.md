@@ -209,7 +209,6 @@ function verifyClientMessage(clientMsg: ClientMessage) {
 
 Function `checkForMisbehaviour` will check if an update contains evidence of misbehaviour. Wasm client misbehaviour checking determines whether or not two conflicting headers at the same height would have convinced the light client.
 
-
 ```typescript
 interface CheckForMisbehaviourMsg {
   clientMessage: bytes
