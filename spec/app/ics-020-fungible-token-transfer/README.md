@@ -51,6 +51,8 @@ interface FungibleTokenPacketDataV2 {
   sender: string
   receiver: string
   memo: string
+  unwind: boolean
+  forwardingPath: []string
 }
 
 interface Token {
@@ -92,6 +94,7 @@ The fungible token transfer bridge module tracks escrow addresses associated wit
 ```typescript
 interface ModuleState {
   channelEscrowAddresses: Map<Identifier, string>
+  channelForwardingAddresses: Map<Identifier, string>
 }
 ```
 
@@ -241,6 +244,8 @@ function sendFungibleTokens(
   sender: string,
   receiver: string,
   memo: string,
+  unwind: boolean,
+  forwardingPath: []string,
   sourcePort: string,
   sourceChannel: string,
   timeoutHeight: Height,
@@ -269,11 +274,19 @@ function sendFungibleTokens(
   transferVersion = getAppVersion(channel.version)
   if transferVersion == "ics20-1" {
     abortTransactionUnless(len(tokens) == 1)
-    v1Denom = tokens[0].trace + tokens[0].denom)
-    data = FungibleTokenPacketData{v1Denom, tokens[0].amount, sender, receiver, memo}
+    token = tokens[0]
+    // create v1 denom of the form: port1/channel1/port2/channel2/port3/channel3/denom
+    v1Denom = constructOnChainDenom(token.trace, token.denom)
+    // v1 packet data does not support unwind and forwardingPath fields
+    data = FungibleTokenPacketData{v1Denom, token.amount, sender, receiver, memo}
   } else if transferVersion == "ics20-2" {
+    // unwinding and forwarding features disabled for multi-token packets
+    if len(tokens) > 1 {
+      abortTransactionUnless(unwind == false)
+      abortTransactionUnless(forwardingPath == nil)
+    }
     // create FungibleTokenPacket data
-    data = FungibleTokenPacketDataV2{tokens, sender, receiver, memo}
+    data = FungibleTokenPacketDataV2{tokens, sender, receiver, memo, unwind, forwardingPath}
   } else {
     // should never be reached as transfer version must be negotiated to be either
     // ics20-1 or ics20-2 during channel handshake
@@ -302,6 +315,8 @@ function onRecvPacket(packet: Packet) {
   // getAppVersion returns the transfer version that is embedded in the channel version
   // as the channel version may contain additional app or middleware version(s)
   transferVersion = getAppVersion(channel.version)
+  var tokens []Token
+  var receiver string
   if transferVersion == "ics20-1" {
      FungibleTokenPacketData data = UnmarshalJSON(packet.data)
      trace, denom = parseICS20V1Denom(data.denom)
@@ -311,9 +326,22 @@ function onRecvPacket(packet: Packet) {
        amount: packet.amount
      }
      tokens = []Token{token}
+     receiver = packet.receiver
   } else if transferVersion == "ics20-2" {
     FungibleTokenPacketDataV2 data = UnmarshalJSON(packet.data)
     tokens = data.tokens
+    // unwinding and forwarding features disabled for multi-token packets
+    if len(tokens) > 1 {
+      if unwind || forwardingPath != nil {
+        return FungibleTokenPacketAcknowledgement{false, "cannot set unwinding and forwarding fields if more than 1 token sent"}
+      }
+    }
+    // if we need to forward the tokens onward
+    // temporarily send to the channel escrow address of the intended receiver
+    if unwind == true || len(forwardingPath) > 0 {
+      receiver = channelForwardingAddresses[packet.destinationChannel]
+    }
+
   } else {
     // should never be reached as transfer version must be negotiated to be either
     // ics20-1 or ics20-2 during channel handshake
@@ -339,7 +367,7 @@ function onRecvPacket(packet: Packet) {
       // determine escrow account
       escrowAccount = channelEscrowAddresses[packet.destChannel]
       // unescrow tokens to receiver (assumed to fail if balance insufficient)
-      err = bank.TransferCoins(escrowAccount, data.receiver, onChainDenom, token.amount)
+      err = bank.TransferCoins(escrowAccount, receiver, onChainDenom, token.amount)
       if (err != nil) {
         ack = FungibleTokenPacketAcknowledgement{false, "transfer coins failed"}
         // break out of for loop on first error
@@ -351,7 +379,7 @@ function onRecvPacket(packet: Packet) {
       newTrace = append([]string{prefix}, token.trace...)
       onChainDenom = constructOnChainDenom(newTrace, token.denom)
       // sender was source, mint vouchers to receiver (assumed to fail if balance insufficient)
-      err = bank.MintCoins(data.receiver, onChainDenom, token.amount)
+      err = bank.MintCoins(receiver, onChainDenom, token.amount)
       if (err !== nil) {
         ack = FungibleTokenPacketAcknowledgement{false, "mint coins failed"}
         // break out of for loop on first error
@@ -359,6 +387,70 @@ function onRecvPacket(packet: Packet) {
       }
     }
   }
+
+  // if there is an error ack return immediately and do not unwind or forward further
+  if !ack.Success() {
+    return ack
+  }
+
+  // for v2 we will implement the unwinding and forwarding if the receive at this step is successful
+  if unwind == true {
+    // check if we need to continue unwinding by seeing if the trace is more than 1 hop long, since the packet data should have already been unwound by one hop by receiving to this chain
+    token = tokens[0]
+    if len(token.trace) > 1 {
+      nextHop = token.trace
+      nextPort, nextChannel = split(nextHop)
+      unwind = len(token.trace) > 2
+      nextToken = Token{
+        denom: token.denom,
+        trace: token.trace[1:],
+        amount: token.amount,
+      }
+      nextSequence = sendFungibleTokens(
+        []Token{nextToken},
+        receiver, // current receiver is the new sender
+        data.receiver, // retain original destination receiver
+        memo,
+        unwind,
+        forwardingPath,
+        nextPort,
+        nextChannel,
+        Height{},
+        currentTime() + DefaultHopTimeoutPeriod,
+      )
+      // store packet for future sending ack
+      store.set(packetForwardPath(nextPort, nextChannel, nextPacketSequence), packet)
+      // use async ack until we get successful acknowledgement from further down the line.
+      return nil
+    }
+  }
+  // if unwinding is complete, then start forwarding
+  if forwardingPath != nil {
+    nextPort, nextChannel = split(forwardingPath[0])
+    nextTrace = traceFromDenom(onChainDenom)
+    nextToken = Token{
+      denom: token.denom,
+      trace: nextTrace,
+      amount: token.amount,
+    }
+    nextSequence = sendFungibleTokens(
+      tokens: []Token{nextToken},
+      sender: receiver,
+      receiver: data.receiver,
+      memo,
+      false,
+      forwardingPath[1:],
+      nextPort,
+      nextChannel,
+      Height{},
+      currentTime() + DefaultHopTimeoutPeriod,
+    )
+    // store packet for future sending ack
+    store.set(packetForwardPath(nextPort, nextChannel, nextPacketSequence), packet)
+    // use async ack until we get successful acknowledgement from further down the line.
+    return nil
+  }
+
   return ack
 }
 ```
@@ -373,6 +465,30 @@ function onAcknowledgePacket(
   if !(acknowledgement.success) {
     refundTokens(packet)
   }
+
+  // check if the packet was sent is from a previously forwarded packet
+  prevPacket = store.get(packetForwardPath(packet.sourcePort, packet.sourceChannel))
+
+  if prevPacket != nil {
+    if acknowledgement.success {
+      FungibleTokenPacketAcknowledgement ack = FungibleTokenPacketAcknowledgement{true, "forwarded packet succeeded"}
+      handler.writeAcknowledgement(
+        prevPacket,
+        ack,
+      )
+    } else {
+      // the forwarded packet has failed, thus the funds have been refunded to the forwarding address.
+      // we must revert the changes that came from successfully receiving the tokens on our chain
+      // before propogating the error acknowledgement back to original sender chain
+      revertInFlightChanges(packet, prevPacket)
+      // write error acknowledgement
+      FungibleTokenPacketAcknowledgement ack = FungibleTokenPacketAcknowledgement{false, "forwarded packet failed"}
+      handler.writeAcknowledgement(
+        prevPacket,
+        ack,
+      )
+  }
+
 }
 ```
 
@@ -382,6 +498,31 @@ function onAcknowledgePacket(
 function onTimeoutPacket(packet: Packet) {
   // the packet timed-out, so refund the tokens
   refundTokens(packet)
+
+  // check if the packet was sent is from a previously forwarded packet
+  prevPacket = store.get(packetForwardPath(packet.sourcePort, packet.sourceChannel))
+
+  if prevPacket != nil {
+    // the forwarded packet has failed, thus the funds have been refunded to the forwarding address.
+    // we must revert the changes that came from successfully receiving the tokens on our chain
+    // before propogating the error acknowledgement back to original sender chain
+    revertInFlightChanges(packet, prevPacket)
+    // write error acknowledgement
+    FungibleTokenPacketAcknowledgement ack = FungibleTokenPacketAcknowledgement{false, "forwarded packet failed"}
+    handler.writeAcknowledgement(
+      prevPacket,
+      ack,
+    )
+  }
+}
+```
+
+##### Helper functions
+
+```typescript
+function isSource(portId: string, channelId: string, token: Token) {
+  firstTrace = "{portId}/{channelId}"
+  return token.trace[0] == firstTrace
 }
 ```
 
@@ -424,6 +565,45 @@ function refundTokens(packet: Packet) {
       // receiver was source chain, mint vouchers back to sender
       bank.MintCoins(data.sender, onChainDenom, token.amount)
     }
+  }
+}
+```
+
+
+```typescript
+// revertInFlightChanges reverts the receive packet and send packet
+// that occurs in the middle chains during a packet forwarding
+// If an error occurs further down the line, the state changes
+// on this chain must be reverted before sending back the error acknowledgement
+// to ensure atomic packet forwarding
+function revertInFlightChanges(sentPacket: Packet, receivedPacket: Packet) {
+  // the token on our chain is the token in the sentPacket
+  token = sentPacket.tokens[0]
+  // check if the packet we sent out was sending as source or not
+  // in this case we escrowed the outgoing tokens
+  if isSource(sentPacket.sourcePort, sentPacket.sourceChannel, token) {
+    // check if the packet we received was a source token for our chain
+    if isSource(receivedPacket.destinationPort, receivedPacket.desinationChannel, token) {
+      // receive sent tokens from the received escrow to the forward escrow account
+      // so we must send the tokens back from the forward escrow to the original received escrow account
+      forwardEscrow = channelEscrowAddresses[sentPacket.sourceChannel]
+      reverseEscrow = channelEscrowAddresses[packet.destChannel]
+      bank.TransferCoins(forwardEscrow, reverseEscrow, token.denom, token.amount)
+    } else {
+      // receive minted vouchers and sent to the forward escrow account
+      // so we must remove the vouchers from the forward escrow account and burn them
+      bank.BurnCoins(forwardEscrow, token.denom, token.amount)
+    }
+  } else {
+    // in this case we burned the vouchers of the outgoing packets
+    // check if the packet we received was a source token for our chain
+    // in this case, the tokens were unescrowed from the reverse escrow account
+    if isSource(receivedPacket.destinationPort, receivedPacket.desinationChannel, token) {
+      // in this case we must mint the burned vouchers and send them back to the escrow account
+      bank.MintCoins(reverseEscrow, token.denom, token.amount)
+    }
+    // if it wasn't a source token on receive, then we simply had minted vouchers and burned them in the receive.
+    // So no state changes were made, and thus no reversion is necessary
   }
 }
 ```
