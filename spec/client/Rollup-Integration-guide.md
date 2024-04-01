@@ -108,10 +108,11 @@ function checkForMisbehaviour(clientMessage: ClientMessage) {
   // unmarshalling logic ommitted
   misbehaviour = Misbehaviour(clientMessage)
   clientId = clientMessage.clientId
-  client = getClient(clientId)
+  clientState = provableStore.get("clients/{clientMessage.clientId}/clientState")
+
   // if the rollup has a settlement layer, we can delegate the fraud proof game to the settlement layer
   // and simply verify with the settlement client that fraud has been proven for the given misbehaviour
-  if client.settlementLayer == nil {
+  if clientState.settlementLayer == nil {
     // fraud prover here is a contract so the same rollup client implementation may
     // be initiated with different fraud prover contracts for each
     // different state machine
@@ -123,7 +124,7 @@ function checkForMisbehaviour(clientMessage: ClientMessage) {
     // so that the client can prove that the settlement client did in fact successfully prove misbehaviour
     // for the given rollup at the given height
     misbehavingHeight = getHeight(misbehaviour)
-    settlementClient = getClient(clientId.settlementLayer)
+    settlementClient = getClient(clientState.settlementLayer)
     misbehaviourPath = getMisbehaviourPath(clientId, misbehavingHeight)
     settlementClient.verifyMembership(misbehaviour.proofHeight, 0, 0, misbehaviour.proof, misbehaviourPath, MISBEHAVIOUR_SUCCESS_VALUE)
   }
