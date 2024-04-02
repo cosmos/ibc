@@ -173,11 +173,11 @@ function verifyMembership(
   value: bytes
 ): Error {
   // check conditional clients are still valid
-  rollupClient = getClient(clientState.DALayer)
+  daClient = getClient(clientState.DALayer)
   settlementClient = getClient(clientState.settlementLayer) // may not exist for all rollups
 
   assert(isActive(clientState))
-  assert(isActive(rollupClient))
+  assert(isActive(daClient))
   assert(isActive(settlementClient))
 
   consensusState = provableStore.get("clients/{clientState.clientId}/consensusStates/{height}")
@@ -201,11 +201,11 @@ function verifyNonMembership(
   path: CommitmentPath,
 ): Error {
   // check conditional clients are still valid
-  rollupClient = getClient(clientState.DALayer)
+  daClient = getClient(clientState.DALayer)
   settlementClient = getClient(clientState.settlementLayer) // may not exist for all rollups
 
   assert(isActive(clientState))
-  assert(isActive(rollupClient))
+  assert(isActive(daClient))
   assert(isActive(settlementClient))
 
   consensusState = provableStore.get("clients/{clientState.clientId}/consensusStates/{height}")
