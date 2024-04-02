@@ -535,7 +535,6 @@ function refundTokens(packet: Packet) {
 }
 ```
 
-
 ```typescript
 // revertInFlightChanges reverts the receive packet and send packet
 // that occurs in the middle chains during a packet forwarding
