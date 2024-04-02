@@ -31,6 +31,11 @@ function verifyHeader(clientMessage: ClientMessage) {
     // e.g. verify sequencer signature
     verifySignatures(clientMessage.header, clientSequencers)
 
+    // we must assert that the blockData is correctly associated with the header
+    // this is specific to the rollup header and block architecture
+    // the following is merely an example of what might be verified
+    assert(hash(clientMessage.blockData) === clientMessage.header.txHash)
+
     // in addition to the rollups own consensus mechanism
     // we must additionally ensure that the header and associated block data is stored in the DA layer
     // the expected path the header and data is stored in
@@ -42,8 +47,7 @@ function verifyHeader(clientMessage: ClientMessage) {
     verifyMembership(
         daClient,
         clientMessage.DAProofHeight,
-        0,
-        0,
+        0, 0, // delay period enforced by fraud period
         clientMessage.DAHeaderProof,
         DAHeaderPath(clientState.chainId, clientMessage.height),
         clientMessage.header)
@@ -55,11 +59,6 @@ function verifyHeader(clientMessage: ClientMessage) {
         clientMessage.DABlockDataProof,
         DABlockDataPath(clientState.chainID, clientMessage.height),
         clientMessage.blockData)
-
-    // we must also assert that the blockData is correctly associated with the header
-    // this is specific to the rollup header and block architecture
-    // the following is merely an example of what might be verified
-    assert(hash(clientMessage.blockData) === clientMessage.header.txHash)
 
     // if the rollup is a ZK rollup, then we can verify the correctness immediately.
     // Otherwise, the correctness of the submitted rollup header is contingent on passing
@@ -89,7 +88,7 @@ function updateState(clientMessage: ClientMessage) {
 
 Misbehaviour verification has a different purpose for rollup architectures than it does in traditional consensus mechanisms.
 
-Typical consensus mechanisms, like proof-of-stake, are self-reliant on ordering. Thus, we must have mechanisms to detect when the consensus set is violating the ordering rules. For example, in cometBFT, the misbehaviour verification checks that header times are monotonically increasing and that there exists only one valid header for each height.
+Typical consensus mechanisms, like proof-of-stake, are self-reliant on ordering. Thus, we must have mechanisms to detect when the consensus set is violating the ordering rules. For example, in tendermint, the misbehaviour verification checks that header times are monotonically increasing and that there exists only one valid header for each height.
 
 However, with rollups the ordering is derived from the data availability layer. Thus, even if there is a consensus violation in the rollup consensus, it can be resolved by the DA layer and the consensus rules of the rollup. E.g. even if the sequencer signs multiple blocks at the same height, the canonical block is the first block submitted to the DA layer.
 
