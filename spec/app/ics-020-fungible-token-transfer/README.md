@@ -451,7 +451,7 @@ function onRecvPacket(packet: Packet) {
       currentTime() + DefaultHopTimeoutPeriod,
     )
     // store packet for future sending ack
-    store.set(packetForwardPath(nextPort, nextChannel, nextPacketSequence), packet)
+    privateStore.set(packetForwardPath(nextPort, nextChannel, nextPacketSequence), packet)
     // use async ack until we get successful acknowledgement from further down the line.
     return nil
   }
@@ -472,7 +472,7 @@ function onAcknowledgePacket(
   }
 
   // check if the packet that was sent is from a previously forwarded packet
-  prevPacket = store.get(packetForwardPath(packet.sourcePort, packet.sourceChannel))
+  prevPacket = privateStore.get(packetForwardPath(packet.sourcePort, packet.sourceChannel))
 
   if prevPacket != nil {
     if acknowledgement.success {
@@ -505,7 +505,7 @@ function onTimeoutPacket(packet: Packet) {
   refundTokens(packet)
 
   // check if the packet was sent is from a previously forwarded packet
-  prevPacket = store.get(packetForwardPath(packet.sourcePort, packet.sourceChannel))
+  prevPacket = privateStore.get(packetForwardPath(packet.sourcePort, packet.sourceChannel))
 
   if prevPacket != nil {
     // the forwarded packet has failed, thus the funds have been refunded to the forwarding address.
@@ -581,6 +581,8 @@ function refundTokens(packet: Packet) {
 // on this chain must be reverted before sending back the error acknowledgement
 // to ensure atomic packet forwarding
 function revertInFlightChanges(sentPacket: Packet, receivedPacket: Packet) {
+  forwardEscrow = channelEscrowAddresses[sentPacket.sourceChannel]
+  reverseEscrow = channelEscrowAddresses[receivedPacket.destChannel]
   // the token on our chain is the token in the sentPacket
   for token in sentPacket.tokens {
     // check if the packet we sent out was sending as source or not
@@ -590,8 +592,6 @@ function revertInFlightChanges(sentPacket: Packet, receivedPacket: Packet) {
       if isSource(receivedPacket.destinationPort, receivedPacket.desinationChannel, token) {
         // receive sent tokens from the received escrow to the forward escrow account
         // so we must send the tokens back from the forward escrow to the original received escrow account
-        forwardEscrow = channelEscrowAddresses[sentPacket.sourceChannel]
-        reverseEscrow = channelEscrowAddresses[receivedPacket.destChannel]
         bank.TransferCoins(forwardEscrow, reverseEscrow, token.denom, token.amount)
       } else {
         // receive minted vouchers and sent to the forward escrow account
