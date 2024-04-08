@@ -364,6 +364,9 @@ function onRecvPacket(packet: Packet) {
     // if we need to forward the tokens onward
     // overwrite the receiver to temporarily send to the channel escrow address of the intended receiver
     if len(forwardingPath) > 0 {
+      if channelForwardingAddress[packet.destinationChannel] == "" {
+        channelForwardingAddress[packet.destinationChannel] = newAddress()
+      }
       receiver = channelForwardingAddresses[packet.destinationChannel]
       finalReceiver = data.receiver
     } else {
