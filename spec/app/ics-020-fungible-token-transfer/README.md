@@ -35,7 +35,7 @@ The IBC handler interface & IBC routing module interface are as defined in [ICS 
 
 ### Data Structures
 
-Only one packet data type is required: `FungibleTokenPacketData`, which specifies the denomination, amount, sending account, and receiving account or `FungibleTokenPacketDataV2` which specifies multiple tokens being sent between sender and receiver. A v2 supporting chain can optionally convert a v1 packet for channels that are still on version 1.
+Only one packet data type is required: `FungibleTokenPacketData`, which specifies the denomination, amount, sending account, and receiving account or `FungibleTokenPacketDataV2` which specifies multiple tokens being sent between sender and receiver along with a forwarding path that can forward tokens further beyond the initial receiving chain. A v2 supporting chain can optionally convert a v1 packet for channels that are still on version 1.
 
 ```typescript
 interface FungibleTokenPacketData {
@@ -51,13 +51,13 @@ interface FungibleTokenPacketDataV2 {
   sender: string
   receiver: string
   memo: string
-  forwardingPath: []string
+  forwardingPath: []string // a list of portID/channelID pairs determining where the tokens must be forwarded next
 }
 
 interface Token {
   denom: string // base denomination
   trace: []string
-  amount: uint64
+  amount: uint256
 }
 ```
 
@@ -68,6 +68,41 @@ The ICS 20 token traces are represented by a list of the form `{ics20Port}/{ics2
 A sending chain may be acting as a source or sink zone. When a chain is sending tokens across a port and channel which are not equal to the last prefixed port and channel pair, it is acting as a source zone. When tokens are sent from a source zone, the destination port and channel will be prepended to the trace (once the tokens are received) adding another hop to a tokens record. When a chain is sending tokens across a port and channel which are equal to the last prefixed port and channel pair, it is acting as a sink zone. When tokens are sent from a sink zone, the first element of the trace, which was the last port and channel pair added to the trace is removed (once the tokens are received), undoing the last hop in the tokens record. A more complete explanation is [present in the ibc-go implementation](https://github.com/cosmos/ibc-go/blob/457095517b7832c42ecf13571fee1e550fec02d0/modules/apps/transfer/keeper/relay.go#L18-L49).
 
 The following sequence diagram exemplifies the multi-chain token transfer dynamics. This process encapsulates the intricate steps involved in transferring tokens in a cycle that begins and ends on the same chain, traversing through Chain A, Chain B, and Chain C. The order of operations is meticulously outlined as `A -> B -> C -> A -> C -> B -> A`.
+
+The forwarding path in the `v2` packet tells the receiving chain where to send the tokens to next. This must be constructed as a list of portID/channelID pairs with each element concatenated as `portID/channelID`. This allows users to automatically route tokens through the interchain. A common usecase might be to unwind the trace of the tokens back to the original source chain before sending it forward to the final intended destination.
+
+Here are examples of the transfer packet data:
+
+```typescript
+// V1 example of transfer packet data
+FungibleTokenPacketData {
+  denom: "transfer/channel-1/transfer/channel-4/uatom",
+  amount: 500,
+  sender: cosmosexampleaddr1,
+  receiver: cosmosexampleaddr2,
+  memo: "exampleMemo",
+}
+
+// V2 example of transfer packet data
+FungibleTokenPacketDataV2 {
+  tokens: [
+    Token{
+      denom: uatom,
+      amount: 500,
+      trace: ["transfer/channel-1", "transfer/channel-4"],
+    },
+    Token{
+      denom: btc,
+      amount: 7,
+      trace: ["transfer/channel-3"],
+    }
+  ],
+  sender: cosmosexampleaddr1,
+  receiver: cosmosexampleaddr2,
+  memo: "exampleMemo",
+  forwardingPath: ["transfer/channel-7", "transfer/channel-13"],
+}
+```
 
 ![Transfer Example](source-and-sink-zones.png)
 
@@ -311,7 +346,8 @@ function onRecvPacket(packet: Packet) {
   // as the channel version may contain additional app or middleware version(s)
   transferVersion = getAppVersion(channel.version)
   var tokens []Token
-  var receiver string
+  var receiver string // address to send tokens to on this chain
+  var finalReceiver string // final intended address in forwarding case
   if transferVersion == "ics20-1" {
      FungibleTokenPacketData data = UnmarshalJSON(packet.data)
      trace, denom = parseICS20V1Denom(data.denom)
@@ -321,14 +357,16 @@ function onRecvPacket(packet: Packet) {
        amount: packet.amount
      }
      tokens = []Token{token}
-     receiver = packet.receiver
   } else if transferVersion == "ics20-2" {
     FungibleTokenPacketDataV2 data = UnmarshalJSON(packet.data)
     tokens = data.tokens
     // if we need to forward the tokens onward
-    // temporarily send to the channel escrow address of the intended receiver
+    // overwrite the receiver to temporarily send to the channel escrow address of the intended receiver
     if len(forwardingPath) > 0 {
       receiver = channelForwardingAddresses[packet.destinationChannel]
+      finalReceiver = data.receiver
+    } else {
+      receiver = data.receiver
     }
   } else {
     // should never be reached as transfer version must be negotiated to be either
@@ -395,15 +433,15 @@ function onRecvPacket(packet: Packet) {
 
   // if acknowledgement is successful and forwarding path set
   // then start forwarding
-  if forwardingPath != nil {
+  if len(forwardingPath) > 0 {
     nextPort, nextChannel = split(forwardingPath[0], "/")
     // send the tokens we received above to the next port and channel
     // on the forwarding path
     // and reduce the forwardingPath by the first element
-    nextSequence = sendFungibleTokens(
-      tokens: receivedTokens,
-      sender: receiver,
-      receiver: data.receiver,
+    nextPacketSequence = sendFungibleTokens(
+      receivedTokens,
+      receiver, // sender of next packet
+      finalReceiver, // receiver of next packet
       memo,
       forwardingPath[1:],
       nextPort,
