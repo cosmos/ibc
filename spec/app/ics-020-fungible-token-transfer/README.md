@@ -471,7 +471,7 @@ function onAcknowledgePacket(
     refundTokens(packet)
   }
 
-  // check if the packet was sent is from a previously forwarded packet
+  // check if the packet that was sent is from a previously forwarded packet
   prevPacket = store.get(packetForwardPath(packet.sourcePort, packet.sourceChannel))
 
   if prevPacket != nil {
