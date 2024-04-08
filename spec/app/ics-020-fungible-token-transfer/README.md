@@ -357,6 +357,7 @@ function onRecvPacket(packet: Packet) {
        amount: packet.amount
      }
      tokens = []Token{token}
+     receiver = data.receiver
   } else if transferVersion == "ics20-2" {
     FungibleTokenPacketDataV2 data = UnmarshalJSON(packet.data)
     tokens = data.tokens
@@ -573,7 +574,6 @@ function refundTokens(packet: Packet) {
 }
 ```
 
-
 ```typescript
 // revertInFlightChanges reverts the receive packet and send packet
 // that occurs in the middle chains during a packet forwarding
@@ -591,7 +591,7 @@ function revertInFlightChanges(sentPacket: Packet, receivedPacket: Packet) {
         // receive sent tokens from the received escrow to the forward escrow account
         // so we must send the tokens back from the forward escrow to the original received escrow account
         forwardEscrow = channelEscrowAddresses[sentPacket.sourceChannel]
-        reverseEscrow = channelEscrowAddresses[packet.destChannel]
+        reverseEscrow = channelEscrowAddresses[receivedPacket.destChannel]
         bank.TransferCoins(forwardEscrow, reverseEscrow, token.denom, token.amount)
       } else {
         // receive minted vouchers and sent to the forward escrow account
