@@ -164,7 +164,6 @@ The Wasm client proxy performs calls to the Wasm client via the Wasm VM. The cal
 ```typescript
 type QueryMsg =
   | Status 
-  | ExportMetadata
   | TimestampAtHeight
   | VerifyClientMessage
   | CheckForMisbehaviour;
@@ -423,9 +422,6 @@ Every Wasm contract must support these query messages:
 ```rust
 #[cw_serde]
 pub struct StatusMsg {}
-
-#[cw_serde]
-pub struct ExportMetadataMsg {}
 
 #[cw_serde]
 pub struct TimestampAtHeightMsg {
