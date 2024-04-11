@@ -446,7 +446,7 @@ function onRecvPacket(packet: Packet) {
       receivedTokens,
       receiver, // sender of next packet
       finalReceiver, // receiver of next packet
-      memo,
+      "",
       forwardingPath[1:],
       nextPort,
       nextChannel,
