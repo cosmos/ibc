@@ -88,8 +88,8 @@ In the router we must then introduce an ability to submit the counterparty clien
 
 ```typescript
 function verifyCounterpartyClient(
-    localClient: Identifer, // this is the client of the counterparty that exists on our own chain
-    remoteClientStoreIdentifier: Identifier, // this is the identifier of the 
+    localClient: ClientState, // this is the client of the counterparty that exists on our own chain
+    remoteClientStoreIdentifier: CommitmentPath, // this is the identifier of the 
     remoteClient: ClientState, // this is the client on the counterparty chain that purports to be a client of ourselves
     remoteConsensusState: ConsensusState, // this is the consensus state that is being used for verification of our consensus
     remoteConsensusHeight: Height, // this is the height of our chain that the remote consensus state is associated with
@@ -136,3 +136,503 @@ function verifyCounterpartyClient(
 // (ChainA, ClientStoreID, AppStoreID) => (ChainB, ClientStoreID, AppStoreID)
 // where both sides are aware of each others store ID's
 
+// TODO: Make this a 3-step handshake. Each side needs to know the remoteChannelStoreIdentifier and verify the counterparty stored it correctly.
+
+```typescript
+function initializeMultiChannel(
+    localClientIdentifier: Identifier,
+    remoteClientIdentifier: Identifier,
+    remoteClientStoreIdentifier: CommitmentPath,
+    remoteChannelStoreIdentifier: CommitmentPath,
+    remoteClient: ClientState,
+    remoteConsensusState: ConsensusState,
+    remoteConsensusHeight: Height,
+    proofClient: CommitmentProof,
+    proofConsensus: CommitmentProof,
+    proofHeight: Height
+) {
+    localClient = getClient(localClientIdentifier)
+    // first verify the counterparty client is a valid client of our chain
+    assert(localClient.verifyCounterpartyClient(
+        remoteClientIdentifier,
+        remoteClientStoreIdentifier,
+        remoteClient,
+        remoteConsensusState,
+        remoteConsensusHeight,
+        proofConsensus,
+        proofHeight,
+    ))
+
+    channelId = generateIdentifier()
+
+    multiChannel = Channel{
+        state: OPEN,
+        ordering: UNORDERED,
+        counterpartyPortIdentifier: MULTI_IBC_PORT,
+        counterpartyChannelIdentifier: "",
+        connectionHops: [localClientIdentifier],
+        version: MULTI_IBC,
+        upgradeSequence: 0,
+    }
+
+    channelStore = getChannelStore(localChannelStoreIdentifier)
+    set("channelEnds/ports/{MULTI_IBC_PORT}/channels/{channelId}", multiChannel)
+}
+
+function openMultiChannel(
+    localClientIdentifier: Identifier,
+    remoteClientIdentifier: Identifier,
+    remoteClientStoreIdentifier: Identifier,
+    remoteChannelIdentifier: Identifier,
+    remoteChannelStoreIdentifier: Identifier,
+    remoteClient: ClientState,
+    remoteConsensusState: ConsensusState,
+    remoteConsensusHeight: Height,
+    proofClient: CommitmentProof,
+    proofConsensus: CommitmentProof,
+    proofChannel: CommitmentProof,
+    proofHeight: Height
+) {
+    localClient = getClient(localClientIdentifier)
+    // first verify the counterparty client is a valid client of our chain
+    assert(localClient.verifyCounterpartyClient(
+        remoteClientIdentifier,
+        remoteClientStoreIdentifier,
+        remoteClient,
+        remoteConsensusState,
+        remoteConsensusHeight,
+        proofConsensus,
+        proofHeight,
+    ))
+
+    expectedCounterpartyChannel = Channel{
+        OPEN,
+        ordering: UNORDERED,
+        counterpartyPortIdentifier: MULTI_IBC_PORT,
+        counterpartyChannelIdentifier: "",
+        connectionHops: [remoteClientIdentifier],
+        version: MULTI_IBC,
+        upgradeSequence: 0,
+    }
+    channelPath = append(remoteChannelStoreIdentifier, "/channelEnds/ports/{MULTI_IBC_PORT}/channels/{remoteChannelIdentifier}")
+    assert(localClient.VerifyMembership(
+        proofHeight,
+        0,
+        0,
+        proofChannel,
+        channelPath,
+        proto.marshal(expectedCounterpartyChannel,)
+    ))
+
+    channelId = generateIdentifier()
+
+    multiChannel = Channel{
+        state: OPEN,
+        ordering: UNORDERED,
+        counterpartyPortIdentifier: MULTI_IBC_PORT,
+        counterpartyChannelIdentifier: ,
+        connectionHops: [localClientIdentifier],
+        version: MULTI_IBC,
+        upgradeSequence: 0,
+    }
+
+    channelStore = getChannelStore(localChannelStoreIdentifier)
+    set("channelEnds/ports/{MULTI_IBC_PORT}/channels/{channelId}", multiChannel)
+}
+```
+
+### Registering IBC applications on the router
+
+The IBC router contains a mapping from a reserved application port and the supported versions of that application as well as a mapping from channelIdentifiers to channels.
+
+```typescript
+type IBCRouter struct {
+    apps: portID -> [Version]
+    callbacks: portID -> [Callback]
+    channels: channelId -> Channel
+}
+```
+
+### Sending packets on the MultiChannel
+
+
+Sending packets in the multichannel requires you to construct a packet data that contains a map from the application reserved portID to the requested version and opaque packet data.
+
+```typescript
+type MultiPacketData struct {
+    AppData: Map[string]{
+        AppPacketData{
+            Version: string,
+            Data: []byte,
+        }
+    }
+}
+```
+
+The router will check that the channelID exists and it has a `MULTI_PORT_ID`. It will send a verifyMembership of the packet to the underlying client. It will then iterate over the packet data's in the multiPacketData. It will check that each application supports the requested version, and then it will construct a packet that only contains the application packet data and send it to the application. It will collect acknowledgements from each and put it into a multiAcknowledgement.
+
+```typescript
+type MultiAcknowledgment struct {
+    success: bool,
+    AppAcknowledgement: Map[string]Acknowledgement,
+}
+```
+
+This will in turn be unpacked and sent to each application as an individual acknowledgment. However, the total success value must be the same for all apps since the packet receiving logic is atomic.
+
+### Router Methods
+
+```typescript
+function sendPacket(
+  sourceChannel: Identifier,
+  timeoutHeight: Height,
+  timeoutTimestamp: uint64,
+  packetData: MultiPacketData): uint64 {
+    // get provable channel store
+    channelStore = getChannelStore(localChannelStoreIdentifier)
+
+    channel = get(channelPath(MULTI_IBC_PORT, sourceChannel))
+    assert(channel !== null)
+    assert(channel.state === OPEN)
+
+    // get provable client store
+    clientStore = getClientStore(localClientStoreIdentifier)
+    // in this specification, the connection hops fields will house
+    // the underlying client identifier
+    client = get(clientPath(channel.connectionHops[0]))
+    assert(client !== null)
+
+    // disallow packets with a zero timeoutHeight and timeoutTimestamp
+    assert(timeoutHeight !== 0 || timeoutTimestamp !== 0)
+
+    // check that the timeout height hasn't already passed in the local client tracking the receiving chain
+    latestClientHeight = client.latestClientHeight()
+    assert(timeoutHeight === 0 || latestClientHeight < timeoutHeight)
+
+    // increment the send sequence counter
+    sequence = channelStore.get(nextSequenceSendPath(MULTI_IBC_PORT, sourceChannel))
+    channelStore.set(nextSequenceSendPath(MULTI_IBC_PORT, sourceChannel), sequence+1)
+
+    // store commitment to the packet data & packet timeout
+    channelStore.set(
+      packetCommitmentPath(MULTI_IBC_PORT, sourceChannel, sequence),
+      hash(hash(data), timeoutHeight, timeoutTimestamp)
+    )
+
+    // log that a packet can be safely sent
+    emitLogEntry("sendPacket", {
+      sequence: sequence,
+      data: data,
+      timeoutHeight: timeoutHeight,
+      timeoutTimestamp: timeoutTimestamp
+    })
+
+    mulitPacketData.AppData.forEach((port, appData) => {
+        supportedVersions = app[port]
+        // check if router supports the desired port and version
+        if supportedVersions.contains(appData.Version) {
+            // send each individual packet data to application
+            // to do send packet logic. e.g. escrow tokens
+            appData = appData.Data
+            // abort transaction on the first failure in send packet
+            // note this is an additional callback as the flow of execution
+            // differs from traditional IBC
+            assert(callbacks[port].onSendPacket(
+                packet.sourcePort,
+                packet.sourceChannel,
+                sequence,
+                appData,
+                relayer))
+        }
+    })
+
+    return sequence
+}
+```
+
+```typescript
+function recvPacket(
+  packet: OpaquePacket,
+  proof: CommitmentProof,
+  proofHeight: Height,
+  relayer: string): Packet {
+    // get provable channel store
+    channelStore = getChannelStore(localChannelStoreIdentifier)
+
+    channel = get(channelPath(MULTI_IBC_PORT, sourceChannel))
+    assert(channel !== null)
+    assert(channel.state === OPEN)
+
+    assert(packet.sourcePort === channel.counterpartyPortIdentifier)
+    assert(packet.sourceChannel === channel.counterpartyChannelIdentifier)
+
+    // get provable client store
+    clientStore = getClientStore(localClientStoreIdentifier)
+    // in this specification, the connection hops fields will house
+    // the underlying client identifier
+    client = get(clientPath(channel.connectionHops[0]))
+    assert(client !== null)
+
+    packetPath = packetCommitmentPath(packet.sourcePort, packet.sourceChannel, packet.sequence)
+    proofPath = applyPrefix(client.counterpartyChannelStoreIdentifier, packetPath)
+    assert(client.verifyPacketData(
+        proofHeight,
+        0, 0, // zeroed out delay period
+        proof,
+        proofPath,
+        hash(packet.data, packet.timeoutHeight, packet.timeoutTimestamp)
+    ))
+
+    assert(packet.timeoutHeight === 0 || getConsensusHeight() < packet.timeoutHeight)
+    assert(packet.timeoutTimestamp === 0 || currentTimestamp() < packet.timeoutTimestamp)
+
+    // we must set the receipt so it can be verified on the other side
+    // this receipt does not contain any data, since the packet has not yet been processed
+    // it's the sentinel success receipt: []byte{0x01}
+    packetReceipt = channelStore.get(packetReceiptPath(packet.destPort, packet.destChannel, packet.sequence))
+    assert(packetReceipt === null)
+    channelStore.set(
+        packetReceiptPath(packet.destPort, packet.destChannel, packet.sequence),
+        SUCCESSFUL_RECEIPT
+    )
+
+    // log that a packet has been received
+    emitLogEntry("recvPacket", {
+      data: packet.data
+      timeoutHeight: packet.timeoutHeight,
+      timeoutTimestamp: packet.timeoutTimestamp,
+      sequence: packet.sequence,
+      sourcePort: packet.sourcePort,
+      sourceChannel: packet.sourceChannel,
+      destPort: packet.destPort,
+      destChannel: packet.destChannel,
+      order: channel.order,
+      connection: channel.connectionHops[0]
+    })
+
+    multiPacketData = unmarshal(packetData)
+    multiAck = MultiAcknowledgement{true, make(map[string]Acknowledgement)}
+
+    // NEEDS DISCUSSION: Should we break early on first failure?
+    mulitPacketData.AppData.forEach((port, appData) => {
+        supportedVersions = app[port]
+        // check if router supports the desired port and version
+        if supportedVersions.contains(appData.Version) {
+            // create a new packet with just the application data
+            // in the packet data for the desired application
+            appPacket = Packet{
+                sequence: packet.sequence,
+                timeoutHeight: packet.timeoutHeight,
+                timeoutTimestamp: packet.timeoutTimestamp,
+                sourcePort: packet.sourcePort,
+                sourceChannel: packet.sourceChannel,
+                destPort: packet.destPort,
+                destChannel: packet.destChannel,
+                data: appData.Data,
+            }
+            // TODO: Support aysnc acknowledgements
+            appAck = callbacks[port].onRecvPacket(packet, relayer)
+            // success of multiack must be false if even a single app acknowledgement returns false (atomic multipacket behaviour)
+            // and puts the custom acknowledgement in the app acknowledgement map under the port key
+            multiAck = multiAck{
+                success: multiAck.success && appAck.Success(),
+                appAcknowledgement: multiAck.AppAcknowledgement.put(port, appAck.Acknowledgement())
+            }
+        } else {
+            // requested port/version was not supported so we must error
+            multiAck = multiAck{
+                success: false,
+                appAcknowledgement: multiAck
+            }
+        }
+    })
+
+    // write the acknowledgement
+    channelStore.set(
+      packetAcknowledgementPath(packet.destPort, packet.destChannel, packet.sequence),
+      hash(acknowledgement)
+    )
+
+    // log that a packet has been acknowledged
+    emitLogEntry("writeAcknowledgement", {
+      sequence: packet.sequence,
+      timeoutHeight: packet.timeoutHeight,
+      port: packet.destPort,
+      channel: packet.destChannel,
+      timeoutTimestamp: packet.timeoutTimestamp,
+      data: packet.data,
+      acknowledgement
+    })
+}
+```
+
+```typescript
+function acknowledgePacket(
+  packet: OpaquePacket,
+  acknowledgement: bytes,
+  proof: CommitmentProof,
+  proofHeight: Height,
+  relayer: string): Packet {
+    // get provable channel store
+    channelStore = getChannelStore(localChannelStoreIdentifier)
+
+    // check channel is open
+    channel = get(channelPath(MULTI_IBC_PORT, packet.sourceChannel))
+    assert(channel !== null)
+    assert(channel.state === OPEN)
+
+    // verify counterparty information
+    assert(packet.destPort === channel.counterpartyPortIdentifier)
+    assert(packet.destChannel === channel.counterpartyChannelIdentifier)
+
+    client = provableStore.get(connectionPath(channel.connectionHops[0]))
+    assert(client !== null)
+    
+    // verify we sent the packet and haven't cleared it out yet
+    assert(channelStore.get(packetCommitmentPath(packet.sourcePort, packet.sourceChannel, packet.sequence))
+           === hash(packet.data, packet.timeoutHeight, packet.timeoutTimestamp))
+
+    assert(connection.verifyPacketAcknowledgement(
+        proofHeight,
+        proof,
+        packet.destPort,
+        packet.destChannel,
+        packet.sequence,
+        acknowledgement
+      ))
+
+    // all assertions passed, we can alter state
+
+    // delete our commitment so we can't "acknowledge" again
+    provableStore.delete(packetCommitmentPath(packet.sourcePort, packet.sourceChannel, packet.sequence))
+
+    multiPacketData = unmarshal(packet.data)
+
+    ackSuccess = multiAck.success
+    // send each app acknowledgement to relevant port
+    // and override the success value with the multiack success value
+    multiAck.forEach((port, ack) => {
+        supportedVersions = app[port]
+        appData = multiPacketData.AppData[port]
+        // check if router supports the desired port and version
+        if supportedVersions.contains(appData.Version) {
+            // create a new packet with just the application data
+            // in the packet data for the desired application
+            appPacket = Packet{
+                sequence: packet.sequence,
+                timeoutHeight: packet.timeoutHeight,
+                timeoutTimestamp: packet.timeoutTimestamp,
+                sourcePort: packet.sourcePort,
+                sourceChannel: packet.sourceChannel,
+                destPort: packet.destPort,
+                destChannel: packet.destChannel,
+                data: appData.Data,
+            }
+            // construct app acknowledgement with multi-app success value
+            // and individual ack info
+            // NOTE: application MUST support the standard acknowledgement
+            // described in ICS-04
+            var appAck AppAcknowledgement
+            if ackSuccess {
+                // the acknowledgement was a success,
+                // put app info into result
+                appAck = AppAcknowledgement{
+                    result: ack
+                }
+            } else {
+                // the acknowledgement was a failure,
+                // put app info into error.
+                // note it is possible that this application succeeded
+                // and its custom app info included information
+                // of a successfully executed callback
+                // however, we will still put the info in error;
+                // so that the application knows the receive failed
+                // on the other side.
+                // Thus the callback reversion logic must be implementable
+                // given the success boolean as opposed to specific information in the acknowledgement
+                appAck = AppAcknowledgement{
+                    error: ack
+                }
+            }
+            
+            // abort on first error in callbacks
+            // NEEDS DISCUSSION: Should we fail on first acknowledge error
+            // or optimistically try them all and succeed anyway
+            assert(callbacks[port].onAcknowledgePacket(appPacket, appAck, relayer))
+        } else {
+            // should never happen
+            assert(false)
+        }
+    })
+}
+```
+
+```typescript
+function onTimeoutPacket(packet: Packet, relayer: string) {
+    // get provable channel store
+    channelStore = getChannelStore(localChannelStoreIdentifier)
+
+    // check channel is open
+    channel = get(channelPath(MULTI_IBC_PORT, packet.sourceChannel))
+    assert(channel !== null)
+    assert(channel.state === OPEN)
+
+     // verify counterparty information
+    assert(packet.destPort === channel.counterpartyPortIdentifier)
+    assert(packet.destChannel === channel.counterpartyChannelIdentifier)
+
+    client = provableStore.get(connectionPath(channel.connectionHops[0]))
+    assert(client !== null)
+
+    proofTimestamp, err = client.getTimestampAtHeight(connection, proofHeight)
+
+    // check that timeout height or timeout timestamp has passed on the other end
+    abortTransactionUnless(
+      (packet.timeoutHeight > 0 && proofHeight >= packet.timeoutHeight) ||
+      (packet.timeoutTimestamp > 0 && proofTimestamp >= packet.timeoutTimestamp))
+
+    // verify we actually sent this packet, check the store
+    abortTransactionUnless(provableStore.get(packetCommitmentPath(packet.sourcePort, packet.sourceChannel, packet.sequence))
+           === hash(packet.data, packet.timeoutHeight, packet.timeoutTimestamp))
+
+    // all assertions passed, we can alter state
+
+    // delete our commitment so we can't "time out" again
+    provableStore.delete(packetCommitmentPath(packet.sourcePort, packet.sourceChannel, packet.sequence))
+
+    // unordered channel: verify absence of receipt at packet index
+    abortTransactionUnless(connection.verifyPacketReceiptAbsence(
+        proofHeight,
+        proof,
+        packet.destPort,
+        packet.destChannel,
+        packet.sequence
+    ))
+
+    mulitPacketData.AppData.forEach((port, appData) => {
+        supportedVersions = app[port]
+        // check if router supports the desired port and version
+        if supportedVersions.contains(appData.Version) {
+            // create a new packet with just the application data
+            // in the packet data for the desired application
+            appPacket = Packet{
+                sequence: packet.sequence,
+                timeoutHeight: packet.timeoutHeight,
+                timeoutTimestamp: packet.timeoutTimestamp,
+                sourcePort: packet.sourcePort,
+                sourceChannel: packet.sourceChannel,
+                destPort: packet.destPort,
+                destChannel: packet.destChannel,
+                data: appData.Data,
+            }
+            // NEEDS DISCUSSION: Should we fail on first timeout error
+            // or optimistically try them all and succeed anyway
+            assert(callbacks[port].onTimeoutPacket(packet, relayer))
+        } else {
+            // should never happen
+            assert(false)
+        }
+    })
+
+}
+```
