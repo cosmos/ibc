@@ -469,11 +469,6 @@ function onRecvPacket(packet: Packet) {
 function onAcknowledgePacket(
   packet: Packet,
   acknowledgement: bytes) {
-  // if the transfer failed, refund the tokens
-  if !(acknowledgement.success) {
-    refundTokens(packet)
-  }
-
   // check if the packet that was sent is from a previously forwarded packet
   prevPacket = privateStore.get(packetForwardPath(packet.sourcePort, packet.sourceChannel))
 
@@ -495,6 +490,11 @@ function onAcknowledgePacket(
         prevPacket,
         ack,
       )
+  } else {
+    // if the transfer failed, refund the tokens
+    if !(acknowledgement.success) {
+      refundTokens(packet)
+    }
   }
 
 }
