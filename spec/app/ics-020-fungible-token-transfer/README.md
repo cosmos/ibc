@@ -504,9 +504,6 @@ function onAcknowledgePacket(
 
 ```typescript
 function onTimeoutPacket(packet: Packet) {
-  // the packet timed-out, so refund the tokens
-  refundTokens(packet)
-
   // check if the packet was sent is from a previously forwarded packet
   prevPacket = privateStore.get(packetForwardPath(packet.sourcePort, packet.sourceChannel))
 
@@ -521,6 +518,9 @@ function onTimeoutPacket(packet: Packet) {
       prevPacket,
       ack,
     )
+  } else {
+    // the packet timed-out, so refund the tokens
+    refundTokens(packet)
   }
 }
 ```
