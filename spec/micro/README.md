@@ -53,6 +53,11 @@ function submitMisbehaviour(
 ): error
 ```
 
+```
+// TODO: Keep very limited buffer of consensus states
+// Keep ability to migrate client (without necessarily consensus governance)
+```
+
 ### Router
 
 IBC in its essence is the ability for applications on different blockchains with different security models to communicate with each other through light-client backed security. Thus, IBC needs the light client described above and the IBC applications that define the packet data they wish to send and receive. In addition to these layers, core IBC introduces the connection and channel abstractions to connect these two fundamental layers. Micro IBC intends to compress only the necessary aspects of connection and channel layers to a new router layer but before doing this it is critical to understand what service they currently provide.
