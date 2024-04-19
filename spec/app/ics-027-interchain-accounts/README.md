@@ -472,6 +472,12 @@ function onChanOpenTry(
   SetInterchainAccountAddress(counterpartyPortIdentifier, connectionId, address)
 
   cpMetadata = UnmarshalJSON(counterpartyVersion)
+  // it's not mandatory for the controller to fill in the host connection ID, since
+  // it could not be possible for it to know it. ibc-go's implementation of the
+  // controller does fill it in, but an CosmWasm controller implementation would
+  // not be able. For that reason, the host fills in here its own connection ID.
+  cpMetadata.HostConnectionId = connectionId
+
   abortTransactionUnless(cpMetadata.Version === "ics27-1")
   // If encoding or txType requested by initializing chain is not supported by host chain then
   // fail handshake and abort transaction
