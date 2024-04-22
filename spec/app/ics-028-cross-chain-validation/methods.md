@@ -1878,7 +1878,7 @@ function HandleReceivedVSCs(): [ValidatorUpdate] {
   - `preCCV == false`.
 - **Postcondition**
   - For each `data` item in the list `receivedVSCs`,
-    - `data.updates` are appended to `changes`, where `changes` is initialy an empty list of validator updates;
+    - `data.updates` are appended to `changes`, where `changes` is initially an empty list of validator updates;
     - `(data.id, maturityTimestamp)` is added to `maturingVSCs`, where `maturityTimestamp = currentTimestamp() + ConsumerUnbondingPeriod`;
     - for each `valAddr` in the slash acknowledgments received from the provider chain, `outstandingDowntime[valAddr]` is set to false.
   - `receivedVSCs` is emptied.
