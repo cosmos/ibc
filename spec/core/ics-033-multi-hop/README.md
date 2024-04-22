@@ -87,7 +87,7 @@ In the second phase of querying a multi-hop proof, the relayer queries proofs of
 Multi-hop proof query algorithm.
 
 ![proof_verification.png](proof_verification.png)
-Multi-hop proof verfication logic.
+Multi-hop proof verification logic.
 
 Proof generation pseudocode proof generation for a channel path with `N` chains: `C[0] --> C[i] --> C[N]`
 
