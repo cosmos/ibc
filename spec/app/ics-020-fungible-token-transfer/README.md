@@ -51,7 +51,13 @@ interface FungibleTokenPacketDataV2 {
   sender: string
   receiver: string
   memo: string
-  forwardingPath: []string // a list of portID/channelID pairs determining where the tokens must be forwarded next
+  forwardingPath: []ForwardingInfo // a list of forwarding info determining where the tokens must be forwarded next
+}
+
+ForwardingInfo {
+  portID: string,
+  channelId: string,
+  memo: string,
 }
 
 interface Token {
@@ -74,6 +80,7 @@ The forwarding path in the `v2` packet tells the receiving chain where to send t
 Here are examples of the transfer packet data:
 
 ```typescript
+
 // V1 example of transfer packet data
 FungibleTokenPacketData {
   denom: "transfer/channel-1/transfer/channel-4/uatom",
@@ -100,7 +107,7 @@ FungibleTokenPacketDataV2 {
   sender: cosmosexampleaddr1,
   receiver: cosmosexampleaddr2,
   memo: "exampleMemo",
-  forwardingPath: ["transfer/channel-7", "transfer/channel-13"],
+  forwardingPath: [{"transfer", "channel-7", ""}, {"transfer", "channel-13", "swap: {...}"}],
 }
 ```
 
@@ -278,7 +285,7 @@ function sendFungibleTokens(
   sender: string,
   receiver: string,
   memo: string,
-  forwardingPath: []string,
+  forwardingPath: []ForwardingInfo,
   sourcePort: string,
   sourceChannel: string,
   timeoutHeight: Height,
@@ -438,7 +445,6 @@ function onRecvPacket(packet: Packet) {
   // if acknowledgement is successful and forwarding path set
   // then start forwarding
   if len(forwardingPath) > 0 {
-    nextPort, nextChannel = split(forwardingPath[0], "/")
     // send the tokens we received above to the next port and channel
     // on the forwarding path
     // and reduce the forwardingPath by the first element
@@ -446,15 +452,15 @@ function onRecvPacket(packet: Packet) {
       receivedTokens,
       receiver, // sender of next packet
       finalReceiver, // receiver of next packet
-      "",
+      forwardingPath[0].memo,
       forwardingPath[1:],
-      nextPort,
-      nextChannel,
+      forwardingPath[0].portID,
+      forwardingPath[0].channelID,
       Height{},
       currentTime() + DefaultHopTimeoutPeriod,
     )
     // store packet for future sending ack
-    privateStore.set(packetForwardPath(nextPort, nextChannel, nextPacketSequence), packet)
+    privateStore.set(packetForwardPath(forwardingPath[0].portID, forwardingPath[0].channelID, nextPacketSequence), packet)
     // use async ack until we get successful acknowledgement from further down the line.
     return nil
   }
