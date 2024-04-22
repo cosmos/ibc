@@ -144,6 +144,12 @@ function verifyCounterpartyClient(
 // TODO: Make this a 3-step handshake. Each side needs to know the remoteChannelStoreIdentifier and verify the counterparty stored it correctly.
 
 ```typescript
+type Counterparty struct {
+    clientStoreIdentifier: Identifier,
+    channelStoreIdentifier: Identifier,
+    clientIdentifier: Identifer
+}
+
 function initializeMultiChannel(
     localClientIdentifier: Identifier,
     remoteClientIdentifier: Identifier,
@@ -171,7 +177,7 @@ function initializeMultiChannel(
     channelId = generateIdentifier()
 
     multiChannel = Channel{
-        state: OPEN,
+        state: INIT,
         ordering: UNORDERED,
         counterpartyPortIdentifier: MULTI_IBC_PORT,
         counterpartyChannelIdentifier: "",
@@ -182,6 +188,13 @@ function initializeMultiChannel(
 
     channelStore = getChannelStore(localChannelStoreIdentifier)
     set("channelEnds/ports/{MULTI_IBC_PORT}/channels/{channelId}", multiChannel)
+    
+    // TODO: Should we validate and prove this on the other side?
+    privateStore.set(counterpartyPath(), Counterparty{
+        clientStoreIdentifier: remoteClientStoreIdentifier,
+        channelStoreIdentifier: remoteChannelStoreIdentifier,
+        clientIdentifier: remoteClientIdentifier
+    })
 }
 
 function openMultiChannel(
@@ -211,7 +224,7 @@ function openMultiChannel(
     ))
 
     expectedCounterpartyChannel = Channel{
-        OPEN,
+        state: OPEN,
         ordering: UNORDERED,
         counterpartyPortIdentifier: MULTI_IBC_PORT,
         counterpartyChannelIdentifier: "",
@@ -235,14 +248,57 @@ function openMultiChannel(
         state: OPEN,
         ordering: UNORDERED,
         counterpartyPortIdentifier: MULTI_IBC_PORT,
-        counterpartyChannelIdentifier: ,
+        counterpartyChannelIdentifier: remoteChannelIdentifier,
         connectionHops: [localClientIdentifier],
         version: MULTI_IBC,
         upgradeSequence: 0,
     }
 
     channelStore = getChannelStore(localChannelStoreIdentifier)
-    set("channelEnds/ports/{MULTI_IBC_PORT}/channels/{channelId}", multiChannel)
+    channelStore.set("channelEnds/ports/{MULTI_IBC_PORT}/channels/{channelId}", multiChannel)
+
+    privateStore.set(counterpartyPath(), Counterparty{
+        clientStoreIdentifier: remoteClientStoreIdentifier,
+        channelStoreIdentifier: remoteChannelStoreIdentifier,
+        clientIdentifier: remoteClientIdentifier
+    })
+}
+
+function confirmMultiChannel(
+    localChannelIdentifier: Identifier,
+    remoteChannelidentifier: Identifier,
+    proofChannel: CommitmentProof,
+    proofHeight: Height
+) {
+    channel = getChannel(localChannelIdentifier)
+    localClient = getClient(channel.connectionHops[0])
+
+    counterparty = privateStore.get(counterpartyPath())
+
+    expectedCounterpartyChannel = Channel{
+        state: OPEN,
+        ordering: UNORDERED,
+        counterpartyPortIdentifier: MULTI_IBC_PORT,
+        counterpartyChannelIdentifier: localChannelIdentifier,
+        connectionHops: [counterparty.clientIdentifier],
+        version: MULTI_IBC,
+        upgradeSequence: 0,
+    }
+
+    // verify counterparty channel opened under claimed paths
+    proofChannel = append(counterparty.remoteChannelStoreIdentifier, "/channelEnds/ports/{MULTI_IBC_PORT}/channels/{remoteChannelIdentifier}")
+    assert(localClient.VerifyMembership(
+        proofHeight,
+        0,
+        0,
+        proofChannel,
+        channelPath,
+        proto.marshal(expectedCounterpartyChannel,)
+    ))
+
+    channel.counterpartyChannelIdentifier = remoteChannelIdentifier
+    channelStore = getChannelStore(localChannelStoreIdentifier)
+    channelStore.set("channelEnds/ports/{MULTI_IBC_PORT}/channels/{channelId}", channel)
 }
 ```
 
