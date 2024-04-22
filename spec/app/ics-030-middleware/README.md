@@ -69,7 +69,7 @@ Each application stack must reserve its own unique port with core IBC. Thus two 
 ```typescript
 // Middleware implements the ICS26 Module interface
 interface Middleware extends ICS26Module {
-    // middleware has acccess to an underlying application which may be wrapped 
+    // middleware has access to an underlying application which may be wrapped 
     // by more middleware.
     app: ICS26Module
     // middleware has access to ICS4Wrapper which may be core IBC Channel Handler 
