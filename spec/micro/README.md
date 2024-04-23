@@ -150,7 +150,9 @@ type Counterparty struct {
     clientIdentifier: Identifer
 }
 
-function initializeMultiChannel(
+function initializeChannel(
+    portID: Identifier,
+    version: string,
     localClientIdentifier: Identifier,
     remoteClientIdentifier: Identifier,
     remoteClientStoreIdentifier: CommitmentPath,
@@ -162,6 +164,8 @@ function initializeMultiChannel(
     proofConsensus: CommitmentProof,
     proofHeight: Height
 ) {
+    // chain must contain the requested port with the requested version
+    assert(router.apps[portID].contains(version))
     localClient = getClient(localClientIdentifier)
     // first verify the counterparty client is a valid client of our chain
     assert(localClient.verifyCounterpartyClient(
@@ -176,31 +180,34 @@ function initializeMultiChannel(
 
     channelId = generateIdentifier()
 
-    multiChannel = Channel{
+    channel = Channel{
         state: INIT,
         ordering: UNORDERED,
-        counterpartyPortIdentifier: MULTI_IBC_PORT,
+        counterpartyPortIdentifier: portID,
         counterpartyChannelIdentifier: "",
         connectionHops: [localClientIdentifier],
-        version: MULTI_IBC,
+        version: version,
         upgradeSequence: 0,
     }
 
     channelStore = getChannelStore(localChannelStoreIdentifier)
-    set("channelEnds/ports/{MULTI_IBC_PORT}/channels/{channelId}", multiChannel)
+    set("channelEnds/ports/{portID}/channels/{channelId}", channel)
     
     // TODO: Should we validate and prove this on the other side?
-    privateStore.set(counterpartyPath(), Counterparty{
+    privateStore.set(counterpartyPath(channelId), Counterparty{
         clientStoreIdentifier: remoteClientStoreIdentifier,
         channelStoreIdentifier: remoteChannelStoreIdentifier,
         clientIdentifier: remoteClientIdentifier
     })
 }
 
-function openMultiChannel(
+function openChannel(
+    portID: Identifier,
+    version: string,
     localClientIdentifier: Identifier,
     remoteClientIdentifier: Identifier,
     remoteClientStoreIdentifier: Identifier,
+    remotePortIdentifier: Identifier,
     remoteChannelIdentifier: Identifier,
     remoteChannelStoreIdentifier: Identifier,
     remoteClient: ClientState,
@@ -211,6 +218,8 @@ function openMultiChannel(
     proofChannel: CommitmentProof,
     proofHeight: Height
 ) {
+    // chain must contain the requested port with the requested version
+    assert(router.apps[portID].contains(version))
     localClient = getClient(localClientIdentifier)
     // first verify the counterparty client is a valid client of our chain
     assert(localClient.verifyCounterpartyClient(
@@ -226,13 +235,13 @@ function openMultiChannel(
     expectedCounterpartyChannel = Channel{
         state: OPEN,
         ordering: UNORDERED,
-        counterpartyPortIdentifier: MULTI_IBC_PORT,
+        counterpartyPortIdentifier: "",
         counterpartyChannelIdentifier: "",
         connectionHops: [remoteClientIdentifier],
-        version: MULTI_IBC,
+        version: version,
         upgradeSequence: 0,
     }
-    channelPath = append(remoteChannelStoreIdentifier, "/channelEnds/ports/{MULTI_IBC_PORT}/channels/{remoteChannelIdentifier}")
+    channelPath = append(remoteChannelStoreIdentifier, "/channelEnds/ports/{remotePortIdentifier}/channels/{remoteChannelIdentifier}")
     assert(localClient.VerifyMembership(
         proofHeight,
         0,
@@ -244,49 +253,52 @@ function openMultiChannel(
 
     channelId = generateIdentifier()
 
-    multiChannel = Channel{
+    channel = Channel{
         state: OPEN,
         ordering: UNORDERED,
-        counterpartyPortIdentifier: MULTI_IBC_PORT,
+        counterpartyPortIdentifier: remotePortIdentifier,
         counterpartyChannelIdentifier: remoteChannelIdentifier,
         connectionHops: [localClientIdentifier],
-        version: MULTI_IBC,
+        version: version,
         upgradeSequence: 0,
     }
 
     channelStore = getChannelStore(localChannelStoreIdentifier)
-    channelStore.set("channelEnds/ports/{MULTI_IBC_PORT}/channels/{channelId}", multiChannel)
+    channelStore.set("channelEnds/ports/{portId}/channels/{channelId}", channel)
+    channelStore.set(nextSequenceSendPath(sourcePort, sourceChannel), 0)
 
-    privateStore.set(counterpartyPath(), Counterparty{
+    privateStore.set(counterpartyPath(channelId), Counterparty{
         clientStoreIdentifier: remoteClientStoreIdentifier,
         channelStoreIdentifier: remoteChannelStoreIdentifier,
         clientIdentifier: remoteClientIdentifier
     })
 }
 
-function confirmMultiChannel(
-    localChannelIdentifier: Identifier,
+function confirmChannel(
+    portId: Identifier,
+    channelId: Identifier,
+    remotePortIdentifier: Identifier,
     remoteChannelidentifier: Identifier,
     proofChannel: CommitmentProof,
     proofHeight: Height
 ) {
-    channel = getChannel(localChannelIdentifier)
+    channel = getChannel(portId, channelId)
     localClient = getClient(channel.connectionHops[0])
 
-    counterparty = privateStore.get(counterpartyPath())
+    counterparty = privateStore.get(counterpartyPath(channelId))
 
     expectedCounterpartyChannel = Channel{
         state: OPEN,
         ordering: UNORDERED,
-        counterpartyPortIdentifier: MULTI_IBC_PORT,
-        counterpartyChannelIdentifier: localChannelIdentifier,
+        counterpartyPortIdentifier: portId,
+        counterpartyChannelIdentifier: channelId,
         connectionHops: [counterparty.clientIdentifier],
-        version: MULTI_IBC,
+        version: channel.version,
         upgradeSequence: 0,
     }
 
     // verify counterparty channel opened under claimed paths
-    proofChannel = append(counterparty.remoteChannelStoreIdentifier, "/channelEnds/ports/{MULTI_IBC_PORT}/channels/{remoteChannelIdentifier}")
+    proofChannel = append(counterparty.remoteChannelStoreIdentifier, "/channelEnds/ports/{remotePortIdentifier}/channels/{remoteChannelIdentifier}")
     assert(localClient.VerifyMembership(
         proofHeight,
         0,
@@ -298,7 +310,8 @@ function confirmMultiChannel(
 
     channel.counterpartyChannelIdentifier = remoteChannelIdentifier
     channelStore = getChannelStore(localChannelStoreIdentifier)
-    channelStore.set("channelEnds/ports/{MULTI_IBC_PORT}/channels/{channelId}", channel)
+    channelStore.set("channelEnds/ports/{portId}/channels/{channelId}", channel)
+    channelStore.set(nextSequenceSendPath(sourcePort, sourceChannel), 0)
 }
 ```
 
@@ -313,6 +326,125 @@ type IBCRouter struct {
     channels: channelId -> Channel
 }
 ```
+
+### Packet Flow through the Router
+
+```typescript
+function sendPacket(
+    sourcePort: Identifier,
+    sourceChannel: Identifier,
+    timeoutHeight: Height,
+    timeoutTimestamp: uint64,
+    packetData: []byte
+): uint64 {
+    channel = getChannel(sourcePort, sourceChannel)
+
+    // check that the channel must be OPEN to send packets;
+    abortTransactionUnless(channel !== null)
+    abortTransactionUnless(channel.state === OPEN)
+
+    // get provable client store
+    clientStore = getClientStore(localClientStoreIdentifier)
+    // in this specification, the connection hops fields will house
+    // the underlying client identifier
+    client = get(clientPath(channel.connectionHops[0]))
+    assert(client !== null)
+
+    // disallow packets with a zero timeoutHeight and timeoutTimestamp
+    assert(timeoutHeight !== 0 || timeoutTimestamp !== 0)
+
+    // check that the timeout height hasn't already passed in the local client tracking the receiving chain
+    latestClientHeight = client.latestClientHeight()
+    assert(timeoutHeight === 0 || latestClientHeight < timeoutHeight)
+
+    // increment the send sequence counter
+    sequence = channelStore.get(nextSequenceSendPath(sourcePort, sourceChannel))
+    channelStore.set(nextSequenceSendPath(sourcePort, sourceChannel), sequence+1)
+
+    // store commitment to the packet data & packet timeout
+    channelStore.set(
+      packetCommitmentPath(sourcePort, sourceChannel, sequence),
+      hash(hash(data), timeoutHeight, timeoutTimestamp)
+    )
+
+    // log that a packet can be safely sent
+    emitLogEntry("sendPacket", {
+      sequence: sequence,
+      data: data,
+      timeoutHeight: timeoutHeight,
+      timeoutTimestamp: timeoutTimestamp
+    })
+
+}
+
+function recvPacket(
+  packet: OpaquePacket,
+  proof: CommitmentProof,
+  proofHeight: Height,
+  relayer: string): Packet {
+    // get provable channel store
+    channelStore = getChannelStore(localChannelStoreIdentifier)
+
+    channel = get(channelPath(packet.destPort, packet.destChannel))
+    assert(channel !== null)
+    assert(channel.state === OPEN)
+
+    assert(packet.sourcePort === channel.counterpartyPortIdentifier)
+    assert(packet.sourceChannel === channel.counterpartyChannelIdentifier)
+
+    // get provable client store
+    clientStore = getClientStore(localClientStoreIdentifier)
+    // in this specification, the connection hops fields will house
+    // the underlying client identifier
+    client = get(clientPath(channel.connectionHops[0]))
+    assert(client !== null)
+
+    packetPath = packetCommitmentPath(packet.sourcePort, packet.sourceChannel, packet.sequence)
+    proofPath = applyPrefix(client.counterpartyChannelStoreIdentifier, packetPath)
+    assert(client.verifyPacketData(
+        proofHeight,
+        0, 0, // zeroed out delay period
+        proof,
+        proofPath,
+        hash(packet.data, packet.timeoutHeight, packet.timeoutTimestamp)
+    ))
+
+    assert(packet.timeoutHeight === 0 || getConsensusHeight() < packet.timeoutHeight)
+    assert(packet.timeoutTimestamp === 0 || currentTimestamp() < packet.timeoutTimestamp)
+
+    // we must set the receipt so it can be verified on the other side
+    // this receipt does not contain any data, since the packet has not yet been processed
+    // it's the sentinel success receipt: []byte{0x01}
+    packetReceipt = channelStore.get(packetReceiptPath(packet.destPort, packet.destChannel, packet.sequence))
+    assert(packetReceipt === null)
+    channelStore.set(
+        packetReceiptPath(packet.destPort, packet.destChannel, packet.sequence),
+        SUCCESSFUL_RECEIPT
+    )
+
+    // log that a packet has been received
+    emitLogEntry("recvPacket", {
+      data: packet.data
+      timeoutHeight: packet.timeoutHeight,
+      timeoutTimestamp: packet.timeoutTimestamp,
+      sequence: packet.sequence,
+      sourcePort: packet.sourcePort,
+      sourceChannel: packet.sourceChannel,
+      destPort: packet.destPort,
+      destChannel: packet.destChannel,
+      order: channel.order,
+      connection: channel.connectionHops[0]
+    })
+
+    cbs = callbacks[packet.destPort]
+    ack = cbs.OnRecvPacket(packet, relayer)
+    ...
+}
+```
+
+------
+
+IGNORE THE MULTICHANNEL WORK FOR NOW
 
 ### Sending packets on the MultiChannel
 
