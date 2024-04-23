@@ -214,7 +214,7 @@ function extractSourcePortForTakerMsg(path: string) : string{
 
 1. A taker takes an order on the taker chain by triggering `TakeSwap`.  The taker's sell tokens are sent to the escrow address owned by the module.  An order cannot be taken if the current time is later than the `expirationTimestamp`.
 2. An `AtomicSwapPacketData` is relayed to the maker chain where in `onRecvPacket` the escrowed tokens are sent to the taker address on the maker chain.
-3. A packet is subsequently relayed back for acknowledgement. Upon acknowledgement escrowed tokens on the taker chain are sent to to the maker address on the taker chain. A packet timeout or a failure during `onAcknowledgePacket` will result in a refund of the escrowed tokens.
+3. A packet is subsequently relayed back for acknowledgement. Upon acknowledgement escrowed tokens on the taker chain are sent to the maker address on the taker chain. A packet timeout or a failure during `onAcknowledgePacket` will result in a refund of the escrowed tokens.
 
 #### Cancelling a swap
 
