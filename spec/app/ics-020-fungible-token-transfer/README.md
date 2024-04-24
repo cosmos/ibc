@@ -445,6 +445,12 @@ function onRecvPacket(packet: Packet) {
   // if acknowledgement is successful and forwarding path set
   // then start forwarding
   if len(forwardingPath) > 0 {
+    //check that next channel supports token forwarding
+    channel = publicStore.get(forwardingPath[0].portID, forwardingPath[0].channelID)
+    if channel.version != "ics20-2" && len(forwardingPath) > 1 {
+      ack = FungibleTokenPacketAcknowledgement(false, "next hop in path cannot support forwarding onward")
+      return ack
+    }
     // send the tokens we received above to the next port and channel
     // on the forwarding path
     // and reduce the forwardingPath by the first element
