@@ -58,7 +58,7 @@ function submitMisbehaviour(
 // Keep ability to migrate client (without necessarily consensus governance)
 ```
 
-### Router
+### Core IBC Functionality
 
 IBC in its essence is the ability for applications on different blockchains with different security models to communicate with each other through light-client backed security. Thus, IBC needs the light client described above and the IBC applications that define the packet data they wish to send and receive. In addition to these layers, core IBC introduces the connection and channel abstractions to connect these two fundamental layers. Micro IBC intends to compress only the necessary aspects of connection and channel layers to a new router layer but before doing this it is critical to understand what service they currently provide.
 
@@ -81,239 +81,30 @@ Properties of Channel:
 - Ensures exactly-once delivery of packet flow datagrams (Send, Receive, Acknowledge, Timeout)
 - Ensures valid packet flow (Send => Receive => Acknowledge) XOR (Send => Timeout)
 
-Of these which are the critical properties that micro-IBC must maintain:
+### IBC-Lite
 
-Desired Properties of micro-IBC:
+IBC lite will simply provide packet delivery between two chains communicating and identifying each other by on-chain light clients as specified in ICS-02 with application packet data being routed to their specific IBC applications with packet-flow semantics remaining as they were defined in ICS-04.
 
-##### Authenticating Counterparty Clients
-
-Before application data can flow between chains, we must ensure that the clients are both valid views of the counterparty consensus.
-
-In the router we must then introduce an ability to submit the counterparty client state and consensus state for verification against a client stored in our own chain.
+Thus, once two chains have set up clients for each other with specific Identifiers, they can send IBC packets like so.
 
 ```typescript
-function verifyCounterpartyClient(
-    localClient: ClientState, // this is the client of the counterparty that exists on our own chain
-    remoteClientStoreIdentifier: CommitmentPath, // this is the identifier of the 
-    remoteClient: ClientState, // this is the client on the counterparty chain that purports to be a client of ourselves
-    remoteConsensusState: ConsensusState, // this is the consensus state that is being used for verification of our consensus
-    remoteConsensusHeight: Height, // this is the height of our chain that the remote consensus state is associated with
-    // the proof fields are written in IBC convention,
-    // but implementations in practice will use []byte for proof
-    // and an unsigned integer for the height
-    // as their local client implementation will expect for VerifyMembership
-    proofClient: CommitmentProof,
-    proofConsensus: CommitmentProof,
-    proofHeight: Height,
-) {
-    // validate that the remote client and remote consensus state
-    // are valid for our chain. Note: This requires the ability to introspect our own consensus within this function
-    // e.g. ability to verify that the validator set at the height of the consensus state was in fact the validator set on our chaina that height 
-    validateSelfClient(remoteClient)
-    validateSelfConsensus(remoteConsensusState, remoteConsensusHeight)
-
-    // use the local client to verify that the remote client and remote consensus state are stored as expected under the remoteClientStoreIdentifier with the ICS24 paths we expect.
-    clientPath = append(remoteClientStoreIdentifier, "/clientState")
-    consensusPath = append(remoteClientStoreIdentifier, "/consensusState/{remoteConsensusHeight}")
-    assert(localClient.VerifyMembership(
-        proofHeight,
-        0,
-        0,
-        proofClient,
-        clientPath,
-        proto.marshal(remoteClient),
-    ))
-    assert(localClient.VerifyMembership(
-        proofHeight,
-        0,
-        0,
-        proofConsensus,
-        consensusPath,
-        proto.marshal(remoteConsensusState),
-    )
+interface Packet {
+  sequence: uint64
+  timeoutHeight: Height
+  timeoutTimestamp: uint64
+  sourcePort: Identifier // identifier of the application on sender
+  sourceChannel: Identifier // identifier of the client of destination on sender chain
+  destPort: Identifier // identifier of the application on destination
+  destChannel: Identifier // identifier of the client of sender on the destination chain
 }
 ```
 
-#### Identification
+Since the packets are addressed **directly** with the underlying light clients, there are **no** more handshakes necessary. Instead the packet sender must be capable of providing the correct <client, client> pair.
 
-// TODO store the counterparty ClientStoreIdentifier and ApplicationStoreIdentifier so we know where they are storing client states, and packet commitments
-// A secure, unique connection consists of
-// (ChainA, ClientStoreID, AppStoreID) => (ChainB, ClientStoreID, AppStoreID)
-// where both sides are aware of each others store ID's
+Sending a packet with the wrong source client is equivalent to sending a packet with the wrong source channel. Sending a packet with the wrong destination client is a new source of errors, as the connection handshake was intended to connection pairwise clients and verify that they are indeed valid clients of each other.
 
-// TODO: Make this a 3-step handshake. Each side needs to know the remoteChannelStoreIdentifier and verify the counterparty stored it correctly.
+If a user sends a packet with the wrong destination channel, then as we will see it will be impossible for the intended destination to correctly verify the packet thus, the packet will simply time out.
 
-```typescript
-type Counterparty struct {
-    clientStoreIdentifier: Identifier,
-    channelStoreIdentifier: Identifier,
-    clientIdentifier: Identifer
-}
-
-function initializeChannel(
-    portID: Identifier,
-    version: string,
-    localClientIdentifier: Identifier,
-    remoteClientIdentifier: Identifier,
-    remoteClientStoreIdentifier: CommitmentPath,
-    remoteChannelStoreIdentifier: CommitmentPath,
-    remoteClient: ClientState,
-    remoteConsensusState: ConsensusState,
-    remoteConsensusHeight: Height,
-    proofClient: CommitmentProof,
-    proofConsensus: CommitmentProof,
-    proofHeight: Height
-) {
-    // chain must contain the requested port with the requested version
-    assert(router.apps[portID].contains(version))
-    localClient = getClient(localClientIdentifier)
-    // first verify the counterparty client is a valid client of our chain
-    assert(localClient.verifyCounterpartyClient(
-        remoteClientIdentifier,
-        remoteClientStoreIdentifier,
-        remoteClient,
-        remoteConsensusState,
-        remoteConsensusHeight,
-        proofConsensus,
-        proofHeight,
-    ))
-
-    channelId = generateIdentifier()
-
-    channel = Channel{
-        state: INIT,
-        ordering: UNORDERED,
-        counterpartyPortIdentifier: portID,
-        counterpartyChannelIdentifier: "",
-        connectionHops: [localClientIdentifier],
-        version: version,
-        upgradeSequence: 0,
-    }
-
-    channelStore = getChannelStore(localChannelStoreIdentifier)
-    set("channelEnds/ports/{portID}/channels/{channelId}", channel)
-    
-    // TODO: Should we validate and prove this on the other side?
-    privateStore.set(counterpartyPath(channelId), Counterparty{
-        clientStoreIdentifier: remoteClientStoreIdentifier,
-        channelStoreIdentifier: remoteChannelStoreIdentifier,
-        clientIdentifier: remoteClientIdentifier
-    })
-}
-
-function openChannel(
-    portID: Identifier,
-    version: string,
-    localClientIdentifier: Identifier,
-    remoteClientIdentifier: Identifier,
-    remoteClientStoreIdentifier: Identifier,
-    remotePortIdentifier: Identifier,
-    remoteChannelIdentifier: Identifier,
-    remoteChannelStoreIdentifier: Identifier,
-    remoteClient: ClientState,
-    remoteConsensusState: ConsensusState,
-    remoteConsensusHeight: Height,
-    proofClient: CommitmentProof,
-    proofConsensus: CommitmentProof,
-    proofChannel: CommitmentProof,
-    proofHeight: Height
-) {
-    // chain must contain the requested port with the requested version
-    assert(router.apps[portID].contains(version))
-    localClient = getClient(localClientIdentifier)
-    // first verify the counterparty client is a valid client of our chain
-    assert(localClient.verifyCounterpartyClient(
-        remoteClientIdentifier,
-        remoteClientStoreIdentifier,
-        remoteClient,
-        remoteConsensusState,
-        remoteConsensusHeight,
-        proofConsensus,
-        proofHeight,
-    ))
-
-    expectedCounterpartyChannel = Channel{
-        state: OPEN,
-        ordering: UNORDERED,
-        counterpartyPortIdentifier: "",
-        counterpartyChannelIdentifier: "",
-        connectionHops: [remoteClientIdentifier],
-        version: version,
-        upgradeSequence: 0,
-    }
-    channelPath = append(remoteChannelStoreIdentifier, "/channelEnds/ports/{remotePortIdentifier}/channels/{remoteChannelIdentifier}")
-    assert(localClient.VerifyMembership(
-        proofHeight,
-        0,
-        0,
-        proofChannel,
-        channelPath,
-        proto.marshal(expectedCounterpartyChannel,)
-    ))
-
-    channelId = generateIdentifier()
-
-    channel = Channel{
-        state: OPEN,
-        ordering: UNORDERED,
-        counterpartyPortIdentifier: remotePortIdentifier,
-        counterpartyChannelIdentifier: remoteChannelIdentifier,
-        connectionHops: [localClientIdentifier],
-        version: version,
-        upgradeSequence: 0,
-    }
-
-    channelStore = getChannelStore(localChannelStoreIdentifier)
-    channelStore.set("channelEnds/ports/{portId}/channels/{channelId}", channel)
-    channelStore.set(nextSequenceSendPath(sourcePort, sourceChannel), 0)
-
-    privateStore.set(counterpartyPath(channelId), Counterparty{
-        clientStoreIdentifier: remoteClientStoreIdentifier,
-        channelStoreIdentifier: remoteChannelStoreIdentifier,
-        clientIdentifier: remoteClientIdentifier
-    })
-}
-
-function confirmChannel(
-    portId: Identifier,
-    channelId: Identifier,
-    remotePortIdentifier: Identifier,
-    remoteChannelidentifier: Identifier,
-    proofChannel: CommitmentProof,
-    proofHeight: Height
-) {
-    channel = getChannel(portId, channelId)
-    localClient = getClient(channel.connectionHops[0])
-
-    counterparty = privateStore.get(counterpartyPath(channelId))
-
-    expectedCounterpartyChannel = Channel{
-        state: OPEN,
-        ordering: UNORDERED,
-        counterpartyPortIdentifier: portId,
-        counterpartyChannelIdentifier: channelId,
-        connectionHops: [counterparty.clientIdentifier],
-        version: channel.version,
-        upgradeSequence: 0,
-    }
-
-    // verify counterparty channel opened under claimed paths
-    proofChannel = append(counterparty.remoteChannelStoreIdentifier, "/channelEnds/ports/{remotePortIdentifier}/channels/{remoteChannelIdentifier}")
-    assert(localClient.VerifyMembership(
-        proofHeight,
-        0,
-        0,
-        proofChannel,
-        channelPath,
-        proto.marshal(expectedCounterpartyChannel,)
-    ))
-
-    channel.counterpartyChannelIdentifier = remoteChannelIdentifier
-    channelStore = getChannelStore(localChannelStoreIdentifier)
-    channelStore.set("channelEnds/ports/{portId}/channels/{channelId}", channel)
-    channelStore.set(nextSequenceSendPath(sourcePort, sourceChannel), 0)
-}
-```
 
 ### Registering IBC applications on the router
 
@@ -323,7 +114,7 @@ The IBC router contains a mapping from a reserved application port and the suppo
 type IBCRouter struct {
     apps: portID -> [Version]
     callbacks: portID -> [Callback]
-    channels: channelId -> Channel
+    clients: clientId -> Client
 }
 ```
 
@@ -337,17 +128,8 @@ function sendPacket(
     timeoutTimestamp: uint64,
     packetData: []byte
 ): uint64 {
-    channel = getChannel(sourcePort, sourceChannel)
-
-    // check that the channel must be OPEN to send packets;
-    abortTransactionUnless(channel !== null)
-    abortTransactionUnless(channel.state === OPEN)
-
-    // get provable client store
-    clientStore = getClientStore(localClientStoreIdentifier)
-    // in this specification, the connection hops fields will house
-    // the underlying client identifier
-    client = get(clientPath(channel.connectionHops[0]))
+    // in this specification, the source channel will point to the client
+    client = router.get(sourceChannel)
     assert(client !== null)
 
     // disallow packets with a zero timeoutHeight and timeoutTimestamp
@@ -358,14 +140,18 @@ function sendPacket(
     assert(timeoutHeight === 0 || latestClientHeight < timeoutHeight)
 
     // increment the send sequence counter
-    sequence = channelStore.get(nextSequenceSendPath(sourcePort, sourceChannel))
-    channelStore.set(nextSequenceSendPath(sourcePort, sourceChannel), sequence+1)
-
+    // if the sequence doesn't already exist, this call initializes the sequence to 0
+    sequence = privateStore.get(nextSequenceSendPath(sourcePort, sourceChannel))
+    
     // store commitment to the packet data & packet timeout
     channelStore.set(
       packetCommitmentPath(sourcePort, sourceChannel, sequence),
       hash(hash(data), timeoutHeight, timeoutTimestamp)
     )
+
+    // increment the sequence. Thus there are monotonically increasing sequences for packet flow
+    // from sourcePort, sourceChannel pair
+    channelStore.set(nextSequenceSendPath(sourcePort, sourceChannel), sequence+1)
 
     // log that a packet can be safely sent
     emitLogEntry("sendPacket", {
@@ -382,26 +168,17 @@ function recvPacket(
   proof: CommitmentProof,
   proofHeight: Height,
   relayer: string): Packet {
-    // get provable channel store
-    channelStore = getChannelStore(localChannelStoreIdentifier)
-
-    channel = get(channelPath(packet.destPort, packet.destChannel))
-    assert(channel !== null)
-    assert(channel.state === OPEN)
-
-    assert(packet.sourcePort === channel.counterpartyPortIdentifier)
-    assert(packet.sourceChannel === channel.counterpartyChannelIdentifier)
-
-    // get provable client store
-    clientStore = getClientStore(localClientStoreIdentifier)
-    // in this specification, the connection hops fields will house
-    // the underlying client identifier
-    client = get(clientPath(channel.connectionHops[0]))
+    // in this specification, the destination channel specifies
+    // the client that exists on the destination chain tracking
+    // the sender chain
+    client = router.get(packet.destChannel)
     assert(client !== null)
 
     packetPath = packetCommitmentPath(packet.sourcePort, packet.sourceChannel, packet.sequence)
-    proofPath = applyPrefix(client.counterpartyChannelStoreIdentifier, packetPath)
-    assert(client.verifyPacketData(
+    // DISCUSSION NEEDED: Should we have an in-protocol notion of Prefixing the path
+    // or should we make this a concern of the client's VerifyMembership
+    // proofPath = applyPrefix(client.counterpartyChannelStoreIdentifier, packetPath)
+    assert(client.verifyMembership(
         proofHeight,
         0, 0, // zeroed out delay period
         proof,
