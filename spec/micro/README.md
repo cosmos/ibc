@@ -105,6 +105,7 @@ Sending a packet with the wrong source client is equivalent to sending a packet 
 
 If a user sends a packet with the wrong destination channel, then as we will see it will be impossible for the intended destination to correctly verify the packet thus, the packet will simply time out.
 
+<!-- TODO: Analyze security implications of having no connection. In particular, must ensure that packet delivery can only be received correctly by one honest chain. i.e. it should be impossible for an honest chain to accept packet delivery intended for a different chain or to be fooled into thinking packet delivery came from a chain that did not send the packet -->
 
 ### Registering IBC applications on the router
 
