@@ -53,10 +53,8 @@ function submitMisbehaviour(
 ): error
 ```
 
-```
 // TODO: Keep very limited buffer of consensus states
 // Keep ability to migrate client (without necessarily consensus governance)
-```
 
 ### Core IBC Functionality
 
@@ -83,7 +81,15 @@ Properties of Channel:
 
 ### IBC-Lite
 
-IBC lite will simply provide packet delivery between two chains communicating and identifying each other by on-chain light clients as specified in ICS-02 with application packet data being routed to their specific IBC applications with packet-flow semantics remaining as they were defined in ICS-04.
+In core IBC, the connection and channel handshakes serve to validate the clients are valid clients of the counterparty, ensure the IBC version and application versions are mutually compatible, as well as providing unique identifiers for each side to refer to the counterparty.
+
+Since we are removing handshakes in IBC lite, we must move some validation into a different layer (e.g. social consensus, application layer).
+
+The client validation that occurs in the connection handshake will be pushed into the social consensus layer. Thus, the connection will be identified by the (clientID-clientID) pair rather than a single connectionID. Note: that on a chainA, the client on chainA tracking chainB is a unique identifier. However, users may send from chainA on clientA to any number of clients on chainB; some of which may be tracking chainA but others may indeed be pointing to other chains. Sending a packet with an invalid (client-client) pair will be considered user error, and the packet flow is not guaranteed to complete or be safe. Thus, for a given clientA on chainA; the client-client pairs: `(clientA, clientB1), (clientA, clientB2), (clientA, clientB3)` all represent different trust models. IBC applications key on the channelID stored on their chain to determine the trust model of the packet data. For example, ICS-20 transfer will append the destination channel-id when receiving tokens as a sink zone. If the destination channel-id, only contained the destination client-id; this could potentially mix tokens that were coming in from different source clients; thus muddying the security model.
+
+To prevent this, we will append the counterparty client identifier to our own client identifier and use that as the channelID for our side. Thus for two chains: chainA and chainB, with respective clients: clientA and clientB, we will use the channelID: `clientA::clientB` for the channelID on chainA and the channelID: `clientB::clientA` on chainB. The specific separator used is not standardized here, as it is only necessary that a given implementation of IBC-Lite is capable of retrieving its on chain client-id from its own on chain channel-id while also providing a unique channel ID for every (client-client pair). Furthermore, such a separator isn't even necessary if there exists an out-of-band solution to ensure that only one (client-client) pairing for each on-chain client is possible (e.g. on-chain DNS or client registry).
+
+IBC lite will simply provide packet delivery between two chains communicating and identifying each other by on-chain light clients as specified in ICS-02 with application packet data being routed to their specific IBC applications with packet-flow semantics remaining as they were defined in ICS-04. The channelID derived from the clientIDs as mentioned above will tell the IBC router which chain to send the packets to and which chain a received packet came from, while the portID specifies which application on the router the packet should be sent to.
 
 Thus, once two chains have set up clients for each other with specific Identifiers, they can send IBC packets like so.
 
@@ -93,9 +99,9 @@ interface Packet {
   timeoutHeight: Height
   timeoutTimestamp: uint64
   sourcePort: Identifier // identifier of the application on sender
-  sourceChannel: Identifier // identifier of the client of destination on sender chain
+  sourceChannel: Identifier // identifier of the client of destination on sender chain + identifier of client of sender on destination chain
   destPort: Identifier // identifier of the application on destination
-  destChannel: Identifier // identifier of the client of sender on the destination chain
+  destChannel: Identifier // identifier of the client of sender on the destination chain + identifier of client of destination on source chain
 }
 ```
 
@@ -130,7 +136,9 @@ function sendPacket(
     packetData: []byte
 ): uint64 {
     // in this specification, the source channel will point to the client
-    client = router.get(sourceChannel)
+    // implementation detail on how to get source client from source channel
+    clientId = retrieveClientId(sourceChannel)
+    client = router.get(clientId)
     assert(client !== null)
 
     // disallow packets with a zero timeoutHeight and timeoutTimestamp
@@ -169,10 +177,12 @@ function recvPacket(
   proof: CommitmentProof,
   proofHeight: Height,
   relayer: string): Packet {
-    // in this specification, the destination channel specifies
+    // in this specification, the destination channel contains
     // the client that exists on the destination chain tracking
     // the sender chain
-    client = router.get(packet.destChannel)
+    // implementation detail on how to get source client from source channel
+    clientId = retrieveClientId(destChannel)
+    client = router.get(clientId)
     assert(client !== null)
 
     packetPath = packetCommitmentPath(packet.sourcePort, packet.sourceChannel, packet.sequence)
@@ -219,6 +229,34 @@ function recvPacket(
     ...
 }
 ```
+
+### Correctness
+
+Claim: If the clients are setup correctly, then a chain can always verify packet flow messages sent by a valid counterparty.
+
+If the clients are correct, then they can verify any key/value membership proof as well as a key non-membership proof.
+
+All packet flow message (SendPacket, RecvPacket, and TimeoutPacket) are sent with the full packet. The packet contains both sender and receiver identifiers. Thus on packet flow messages sent to the receiver (RecvPacket), we use the receiver identifier in the packet to retrieve our local client and the source identifier to determine which path the sender stored the packet under. We can thus use our retrieved client to verify a key/value membership proof to validate that the packet was sent by the counterparty.
+
+Similarly, for packet flow messages sent to the sender (AcknowledgePacket, TimeoutPacket); the packet is provided again. This time, we use the sender identifier to retrieve the local client and the destination identifier to determine the key path that the receiver must have written to when it received the packet. We can thus use our retrieved client to verify a key/value membership proof to validate that the packet was sent by the counterparty. In the case of timeout, if the packet receipt wasn't written to the receipt path determined by the destination identifier this can be verified by our retrieved client using the key nonmembership proof.
+
+### Soundness
+
+// To do after prototyping and going through some of these examples before writing it down
+
+Claim: If the clients are setup correctly, then a chain cannot mistake a packet flow message intended for a different chain as a valid message from a valid counterparty.
+
+We must note that client identifiers are unique to each chain but are not globally unique. Let us first consider a user that correctly specifies the source and destination identifiers in the packet. 
+
+We wish to ensure that well-formed packets (i.e. packets with correctly setup client ids) cannot have packet flow messages succeed on third-party chains. Ill-formed packets (i.e. packets with invalid client ids) may in some cases complete in invalid states; however we must ensure that any completed state from these packets cannot mix with the state of other valid packets.
+
+We are guaranteed that the source identifier is unique on the source chain, the destination identifier is unique on the destination chain. Additionally, the destination identifier points to a valid client of the source chain, and the source identifier points to a valid client of the destination chain.
+
+Suppose the RecvPacket is sent to a chain other than the one identified by the sourceClient on the source chain. 
+
+In the packet flow messages sent to the receiver (RecvPacket), the packet send is verified using the client on the destination chain (retrieved using destination identifier) with the packet commitment path derived by the source identifier. This verification check can only pass if the chain identified by the destination client committed the packet we received under the source channel identifier. This is only possible if the destination client is pointing to the original source chain, or if it is pointing to a different chain that committed the exact same packet. Pointing to the original source chain would mean we sent the packet to the correct . Since the sender only sends packets intended for the desination chain by setting to a unique source identifier, we can be sure the packet was indeed intended for us. Since our client on the reciver is also correctly pointing to the sender chain, we are verifying the proof against a specific consensus algorithm that we assume to be honest. If the packet is committed to the wrong key path, then we will not accept the packet. Similarly, if the packet is committed by the wrong chain then we will not be able to verify correctly.
+
+
 
 ------
 
