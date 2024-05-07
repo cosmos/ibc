@@ -343,7 +343,7 @@ function sendFungibleTokens(
     sourceChannel,
     timeoutHeight,
     timeoutTimestamp,
-    json.marshal(data) // json-marshalled bytes of packet data
+    MarshalJSON(data) // json-marshalled bytes of packet data
   )
 
   return sequence
@@ -454,7 +454,7 @@ function onRecvPacket(packet: Packet) {
   // then start forwarding
   if len(forwardingPath.hops) > 0 {
     //check that next channel supports token forwarding
-    channel = publicStore.get(forwardingPath.hops[0].portID, forwardingPath.hops[0].channelID)
+    channel = provableStore.get(channelPath(forwardingPath.hops[0].portID, forwardingPath.hops[0].channelID))
     if channel.version != "ics20-2" && len(forwardingPath.hops) > 1 {
       ack = FungibleTokenPacketAcknowledgement(false, "next hop in path cannot support forwarding onward")
       return ack
@@ -527,7 +527,6 @@ function onAcknowledgePacket(
       refundTokens(packet)
     }
   }
-
 }
 ```
 
