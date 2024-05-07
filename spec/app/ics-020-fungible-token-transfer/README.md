@@ -51,13 +51,17 @@ interface FungibleTokenPacketDataV2 {
   sender: string
   receiver: string
   memo: string
-  forwardingPath: []ForwardingInfo // a list of forwarding info determining where the tokens must be forwarded next
+  forwardingPath: ForwardingInfo // a list of forwarding info determining where the tokens must be forwarded next
 }
 
-ForwardingInfo {
+interface ForwardingInfo {
+  hops: []Hop
+  memo: string,
+}
+
+interface Hop {
   portID: string,
   channelId: string,
-  memo: string,
 }
 
 interface Token {
@@ -106,8 +110,8 @@ FungibleTokenPacketDataV2 {
   ],
   sender: cosmosexampleaddr1,
   receiver: cosmosexampleaddr2,
-  memo: "exampleMemo",
-  forwardingPath: [{"transfer", "channel-7", ""}, {"transfer", "channel-13", "swap: {...}"}],
+  memo: "",
+  forwardingPath: {[{"transfer", "channel-7"}, {"transfer", "channel-13"}], , "swap: {...}"}, // provide hops in order and the memo intended for final hop
 }
 ```
 
@@ -285,12 +289,14 @@ function sendFungibleTokens(
   sender: string,
   receiver: string,
   memo: string,
-  forwardingPath: []ForwardingInfo,
+  forwardingPath: ForwardingInfo,
   sourcePort: string,
   sourceChannel: string,
   timeoutHeight: Height,
   timeoutTimestamp: uint64, // in unix nanoseconds
 ): uint64 {
+  // memo and forwardingPath cannot both be non-empty
+  abortTransactionUnless(memo != "" && forwardingPath != nil)
   for token in tokens {
     prefix = "{sourcePort}/{sourceChannel}/"
     // we are the source if the denomination is not prefixed
@@ -370,7 +376,9 @@ function onRecvPacket(packet: Packet) {
     tokens = data.tokens
     // if we need to forward the tokens onward
     // overwrite the receiver to temporarily send to the channel escrow address of the intended receiver
-    if len(forwardingPath) > 0 {
+    if len(forwardingPath.hops) > 0 {
+      // memo must be empty
+      abortTransactionUnless(memo == "")
       if channelForwardingAddress[packet.destinationChannel] == "" {
         channelForwardingAddress[packet.destinationChannel] = newAddress()
       }
@@ -444,12 +452,23 @@ function onRecvPacket(packet: Packet) {
 
   // if acknowledgement is successful and forwarding path set
   // then start forwarding
-  if len(forwardingPath) > 0 {
+  if len(forwardingPath.hops) > 0 {
     //check that next channel supports token forwarding
-    channel = publicStore.get(forwardingPath[0].portID, forwardingPath[0].channelID)
-    if channel.version != "ics20-2" && len(forwardingPath) > 1 {
+    channel = publicStore.get(forwardingPath.hops[0].portID, forwardingPath.hops[0].channelID)
+    if channel.version != "ics20-2" && len(forwardingPath.hops) > 1 {
       ack = FungibleTokenPacketAcknowledgement(false, "next hop in path cannot support forwarding onward")
       return ack
+    }
+    memo = ""
+    nextForwardingPath = ForwardingPath{
+      hops: forwardingPath.hops[1:]
+      memo: forwardingPath.memo
+    }
+    if forwardingPath.hops == 1 {
+      // we're on the last hop, we can set memo and clear
+      // the next forwardingPath
+      memo = forwardingPath.memo
+      nextForwardingPath = nil
     }
     // send the tokens we received above to the next port and channel
     // on the forwarding path
@@ -458,15 +477,15 @@ function onRecvPacket(packet: Packet) {
       receivedTokens,
       receiver, // sender of next packet
       finalReceiver, // receiver of next packet
-      forwardingPath[0].memo,
-      forwardingPath[1:],
-      forwardingPath[0].portID,
-      forwardingPath[0].channelID,
+      memo,
+      nextForwardingPath,
+      forwardingPath.hops[0].portID,
+      forwardingPath.hops[0].channelID,
       Height{},
       currentTime() + DefaultHopTimeoutPeriod,
     )
     // store packet for future sending ack
-    privateStore.set(packetForwardPath(forwardingPath[0].portID, forwardingPath[0].channelID, nextPacketSequence), packet)
+    privateStore.set(packetForwardPath(forwardingPath.hops[0].portID, forwardingPath.hops[0].channelID, nextPacketSequence), packet)
     // use async ack until we get successful acknowledgement from further down the line.
     return nil
   }
