@@ -24,7 +24,7 @@ This guide is not intended to be a formal specification or Interchain Standard. 
 
 ### `verifyClientMessage`
 
-In order to verify a new header for the rollup, the rollup client must also be able to verify the header's (and associated block's) inclusion in the DA layer. Thus, the rollup client's update logic **must** have the ability to invoke verification of the associated DA client. After verifying the rollups own consensus mechanism (which itself may be non-existent for some rollup architectures), it verifies the header and blockdata in the data availability layer. Simply proving inclusion is not enough however, we must ensure that the data we are proving is valid; i.e. the data is not simply included but is included in the way that is expected by the rollup architecure. In the example below, we check that the blockdata hashes to the `txHash` in the header.
+In order to verify a new header for the rollup, the rollup client must also be able to verify the header's (and associated block's) inclusion in the DA layer. Thus, the rollup client's update logic **must** have the ability to invoke verification of the associated DA client. After verifying the rollups own consensus mechanism (which itself may be non-existent for some rollup architectures), it verifies the header and blockdata in the data availability layer. Simply proving inclusion is not enough however, we must ensure that the data we are proving is valid; i.e. the data is not simply included but is included in the way that is expected by the rollup architecture. In the example below, we check that the blockdata hashes to the `txHash` in the header.
 
 ZK rollups can verify correctness of the header upon submission since the rollup client can embed a proving circuit that can verify a ZK proof from the relayer that the submitted header is correct. Optimistic rollups on the other hand cannot immediately trust a header upon submission, as the header may later be proved fraudulent. Thus, the header can be stored but must wait for the fraud period to elapse without any successful challenges to the correctness of the header before it is finalized and used for proof verification.
 
@@ -121,7 +121,7 @@ The optimistic fraud proof verifier, or proving circuit, should be implemented a
 // optimistic rollup fraud proof
 // the misbehaviour must be associated with a height on the rollup
 function checkForMisbehaviour(clientMessage: ClientMessage) {
-  // unmarshalling logic ommitted
+  // unmarshalling logic omitted
   misbehaviour = Misbehaviour(clientMessage)
   clientId = clientMessage.clientId
   clientState = provableStore.get("clients/{clientMessage.clientId}/clientState")
@@ -157,7 +157,7 @@ Thus, `updateStateOnMisbehaviour` can be less strict for rollups and simply remo
 
 ```typescript
 function updateStateOnMisbehaviour(clientMessage: ClientMessage) {
-  // unmarshalling logic ommitted
+  // unmarshalling logic omitted
   misbehaviour = Misbehaviour(clientMessage)
   misbehavingHeight = getHeight(misbehaviour)
 
