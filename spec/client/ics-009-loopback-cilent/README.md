@@ -187,7 +187,7 @@ function verifyNonMembership(
   unprefixedPath = removePrefix(getCommitmentPrefix(), path)
 
   // The complete (not only client identifier-prefixed) store is needed
-  // to  verifiy that a path has not been set to a particular value
+  // to verify that a path has not been set to a particular value
   if provableStore.get(unprefixedPath) !== nil {
     return error
   }

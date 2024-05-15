@@ -232,7 +232,7 @@ function checkForMisbehaviour(clientMsg: ClientMessage): boolean {
 
 ### State update
 
-Function `updateState` will perform a regular update for the Wasm client. It will add a consensus state to the client store. If the header is higher than the lastest height on the `clientState`, then the `clientState` will be updated.
+Function `updateState` will perform a regular update for the Wasm client. It will add a consensus state to the client store. If the header is higher than the latest height on the `clientState`, then the `clientState` will be updated.
 
 ```typescript
 interface UpdateStateMsg {
