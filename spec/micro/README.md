@@ -83,24 +83,35 @@ Properties of Channel:
 
 In core IBC, the connection and channel handshakes serve to validate the clients are valid clients of the counterparty, ensure the IBC version and application versions are mutually compatible, as well as providing unique identifiers for each side to refer to the counterparty.
 
-Since we are removing handshakes in IBC lite, we must have a different way to provide the chain with knowledge of the counterparty identifier. With a client, we can prove any key/value path on the counterparty. However, without knowing which identifier the counterparty uses when it sends messages to us; we cannot differentiate between messages sent from the counterparty to our chain vs messages sent from the counterparty with other chains.
+Since we are removing handshakes in IBC lite, we must have a different way to provide the chain with knowledge of the counterparty. With a client, we can prove any key/value path on the counterparty. However, without knowing which identifier the counterparty uses when it sends messages to us; we cannot differentiate between messages sent from the counterparty to our chain vs messages sent from the counterparty with other chains. Most implementations will not be able to store the ICS-24 paths directly as a key in the global namespace; but will instead write to a reserved, prefixed keyspace so as not to conflict with other application state writes. Thus the counteparty information we must have includes both its identifier for our chain as well as the key prefix under which it will write the provable ICS-24 paths.
 
 Thus, IBC lite will introduce a new message `ProvideCounterparty` that will associate the counterparty client of our chain with our client of the counterparty. Thus, if the `ProvideCounterparty` message is submitted to both sides correctly. Then both sides have mirrored <client,client> pairs that can be treated as channel identifiers. Assuming they are correct, the client on each side is unique and provides an authenticated stream of packet data between the two chains. If the `ProvideCounterparty` message submits the wrong clientID, this can lead to invalid behaviour; but this is equivalent to a relayer submitting an invalid client in place of a correct client for the desired chain. In the simplest case, we can rely on out-of-band social consensus to only send on valid <client, client> pairs that represent a connection between the desired chains of the user; just as we currently rely on out-of-band social consensus that a given clientID and channel built on top of it is the valid, canonical identifier of our desired chain.
 
 ```typescript
+interface Counterparty {
+    channelId: Identifier
+    keyPrefix: CommitmentPrefix
+}
+
 function ProvideCounterparty(
     channelIdentifier: Identifier, // this will be our own client identifier representing our channel to desired chain
     counterpartyChannelIdentifier: Identifier, // this is the counterparty's identifier of our chain
+    counterpartyKeyPrefix: CommitmentPrefix,
     authentication: data, // implementation-specific authentication data
 ) {
     assert(verify(authentication))
 
-    privateStore.set(counterpartyPath(channelIdentifier), counterpartyChannelIdentifier)
+    counterparty = Counterparty{
+        channelId: counterpartyChannelIdentifier,
+        keyPrefix: counterpartyKeyPrefix
+    }
+
+    privateStore.set(counterpartyPath(channelIdentifier), counterparty)
 }
 
 // getCounterparty retrieves the stored counterparty identifier
 // given the channelIdentifier on our chain once it is provided
-function getCounterparty(channelIdentifier: Identifier): Identifier {
+function getCounterparty(channelIdentifier: Identifier): Counterparty {
     return privateStore.get(counterpartyPath(channelIdentifier))
 }
 ```
@@ -139,9 +150,10 @@ The IBC router contains a mapping from a reserved application port and the suppo
 
 ```typescript
 type IBCRouter struct {
-    apps: portID -> [Version]
+    versions: portID -> [Version]
     callbacks: portID -> [Callback]
     clients: clientId -> Client
+    ports: portID -> counterpartyPortID
 }
 ```
 
@@ -151,7 +163,6 @@ type IBCRouter struct {
 function sendPacket(
     sourcePort: Identifier,
     sourceChannel: Identifier,
-    destPort: Identifier,
     timeoutHeight: Height,
     timeoutTimestamp: uint64,
     packetData: []byte
@@ -166,17 +177,6 @@ function sendPacket(
     // check that the timeout height hasn't already passed in the local client tracking the receiving chain
     latestClientHeight = client.latestClientHeight()
     assert(timeoutHeight === 0 || latestClientHeight < timeoutHeight)
-
-    // IBC only commits sourcePort, sourceChannel, sequence in the commitment path
-    // and packet data, and timeout information in the value
-    // For IBC Lite, we can't automatically retrieve the destination port since we don't have an actual stored channel
-    // in order to get around this, if sourcePort and destinationPort are the same we will leave the path as-is.
-    // if the ports are different than we must append the port ids together
-    // so the receiver can verify the requested destination port
-    commitPort = sourcePort
-    if sourcePort != destPort {
-        commitPort = sourcePort + "/" + destPort
-    }
 
     // if the sequence doesn't already exist, this call initializes the sequence to 0
     sequence = channelStore.get(nextSequenceSendPath(commitPort, sourceChannel))
@@ -210,15 +210,15 @@ function recvPacket(
     client = router.clients[packet.destChannel]
     assert(client !== null)
 
+    // assert source channel is destChannel's counterparty channel identifier
     counterparty = getCounterparty(packet.destChannel)
-    assert(packet.sourceChannel == counterparty)
+    assert(packet.sourceChannel == counterparty.channelId)
 
-    srcCommitPort = packet.sourcePort
-    if packet.sourcePort != packet.destPort {
-        srcCommitPort = packet.sourcePort + "/" + packet.destPort
-    }
+    // assert source port is destPort's counterparty port identifier
+    assert(packet.sourcePort == ports[packet.destPort])
 
-    packetPath = packetCommitmentPath(srcCommitPort, packet.sourceChannel, packet.sequence)
+    packetPath = packetCommitmentPath(packet.sourcePort, packet.sourceChannel, packet.sequence)
+    merklePath = applyPrefix(counterparty.keyPrefix, packetPath)
     // DISCUSSION NEEDED: Should we have an in-protocol notion of Prefixing the path
     // or should we make this a concern of the client's VerifyMembership
     // proofPath = applyPrefix(client.counterpartyChannelStoreIdentifier, packetPath)
@@ -226,25 +226,22 @@ function recvPacket(
         proofHeight,
         0, 0, // zeroed out delay period
         proof,
-        packetPath,
+        merklePath,
         hash(packet.data, packet.timeoutHeight, packet.timeoutTimestamp)
     ))
 
     assert(packet.timeoutHeight === 0 || getConsensusHeight() < packet.timeoutHeight)
     assert(packet.timeoutTimestamp === 0 || currentTimestamp() < packet.timeoutTimestamp)
 
-    dstCommitPort = packet.destPort
-    if packet.sourcePort != packet.destPort {
-        dstCommitPort = packet.destPort + "/" + packet.sourcePort
-    }
-    
+  
     // we must set the receipt so it can be verified on the other side
     // this receipt does not contain any data, since the packet has not yet been processed
     // it's the sentinel success receipt: []byte{0x01}
-    packetReceipt = channelStore.get(packetReceiptPath(dstCommitPort, packet.destChannel, packet.sequence))
+    packetReceipt = channelStore.get(packetReceiptPath(packet.destPort, packet.destChannel, packet.sequence))
     assert(packetReceipt === null)
+
     channelStore.set(
-        packetReceiptPath(destCommitPort, packet.destChannel, packet.sequence),
+        packetReceiptPath(packet.destPort, packet.destChannel, packet.sequence),
         SUCCESSFUL_RECEIPT
     )
 
@@ -266,7 +263,9 @@ function recvPacket(
     // IMPORTANT: if the ack is error, then the callback reverts its internal state changes, but the entire tx continues
     ack = cbs.OnRecvPacket(packet, relayer)
     
-    channelStore.set(packetAcknowledgementPath(destCommitPort, packet.destChannel, packet.sequence), ack)
+    if ack != nil {
+        channelStore.set(packetAcknowledgementPath(packet.destPort, packet.destChannel, packet.sequence), ack)
+    }
 }
 
 function acknowledgePacket(
@@ -280,36 +279,31 @@ function acknowledgePacket(
     client = router.clients[packet.sourceChannel]
     assert(client !== null)
 
-    counterparty = getCounterparty(packet.sourceChannel)
-    assert(packet.destChannel == counterparty)
-
-    srcCommitPort = packet.sourcePort
-    if packet.sourcePort != packet.destPort {
-        srcCommitPort = packet.sourcePort + "/" + packet.destPort
-    }
+    // assert dest channel is sourceChannel's counterparty channel identifier
+    counterparty = getCounterparty(packet.destChannel)
+    assert(packet.sourceChannel == counterparty.channelId)
+   
+    // assert dest port is sourcePort's counterparty port identifier
+    assert(packet.destPort == ports[packet.sourcePort])
 
     // verify we sent the packet and haven't cleared it out yet
-    assert(provableStore.get(packetCommitmentPath(srcCommitPort, packet.sourceChannel, packet.sequence))
+    assert(provableStore.get(packetCommitmentPath(packet.sourcePort, packet.sourceChannel, packet.sequence))
            === hash(hash(packet.data), packet.timeoutHeight, packet.timeoutTimestamp))
 
-    destCommitPort = packet.destPort
-    if packet.sourcePort != packet.destPort {
-        destCommitPort = packet.destPort + "/" + packet.sourcePort
-    }
-
-    ackPath = packetAcknowledgementPath(destCommitPort, packet.destChannel)
+    ackPath = packetAcknowledgementPath(packet.destPort, packet.destChannel)
+    merklePath = applyPrefix(counterparty.keyPrefix, ackPath)
     assert(client.verifyMembership(
         proofHeight,
         0, 0,
         proof,
-        ackPath,
+        merklePath,
         hash(acknowledgement)
     ))
 
     cbs = router.callbacks[packet.sourcePort]
     cbs.OnAcknowledgePacket(packet, acknowledgement, relayer)
 
-    channelStore.delete(packetCommitmentPath(srcCommitPort, packet.sourceChannel, packet.sequence))
+    channelStore.delete(packetCommitmentPath(packet.sourcePort, packet.sourceChannel, packet.sequence))
 }
 
 function timeoutPacket(
@@ -322,16 +316,15 @@ function timeoutPacket(
     client = router.clients[packet.sourceChannel]
     assert(client !== null)
 
-    counterparty = getCounterparty(packet.sourceChannel)
-    assert(packet.destChannel == counterparty)
-
-    srcCommitPort = packet.sourcePort
-    if packet.sourcePort != packet.destPort {
-        srcCommitPort = packet.sourcePort + "/" + packet.destPort
-    }
+    // assert dest channel is sourceChannel's counterparty channel identifier
+    counterparty = getCounterparty(packet.destChannel)
+    assert(packet.sourceChannel == counterparty.channelId)
+   
+    // assert dest port is sourcePort's counterparty port identifier
+    assert(packet.destPort == ports[packet.sourcePort])
 
     // verify we sent the packet and haven't cleared it out yet
-    assert(provableStore.get(packetCommitmentPath(srcCommitPort, packet.sourceChannel, packet.sequence))
+    assert(provableStore.get(packetCommitmentPath(packet.sourcePort, packet.sourceChannel, packet.sequence))
            === hash(hash(packet.data), packet.timeoutHeight, packet.timeoutTimestamp))
 
     // get the timestamp from the final consensus state in the channel path
@@ -344,23 +337,19 @@ function timeoutPacket(
       (packet.timeoutHeight > 0 && proofHeight >= packet.timeoutHeight) ||
       (packet.timeoutTimestamp > 0 && proofTimestamp >= packet.timeoutTimestamp))
 
-    destCommitPort = packet.destPort
-    if packet.sourcePort != packet.destPort {
-        destCommitPort = packet.destPort + "/" + packet.sourcePort
-    }
-
-    receiptPath = packetReceiptPath(destCommitPort, packet.destChannel, packet.sequence)
+    receiptPath = packetReceiptPath(packet.destPort, packet.destChannel, packet.sequence)
+    merklePath = applyPrefix(counterparty.keyPrefix, receiptPath)
     assert(client.verifyNonMembership(
         proofHeight
         0, 0,
         proof,
-        receiptPath
+        merklePath
     ))
 
     cbs = router.callbacks[packet.sourcePort]
     cbs.OnTimeoutPacket(packet, relayer)
 
-    channelStore.delete(packetCommitmentPath(srcCommitPort, packet.sourceChannel, packet.sequence))
+    channelStore.delete(packetCommitmentPath(packet.sourcePort, packet.sourceChannel, packet.sequence))
 }
 ```
 
