@@ -547,6 +547,7 @@ function onAcknowledgePacket(
         prevPacket,
         ack,
       )
+    }
   } else {
     // if the transfer failed, refund the tokens
     if !(acknowledgement.success) {
