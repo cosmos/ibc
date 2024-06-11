@@ -647,7 +647,7 @@ function refundTokens(packet: Packet) {
 // on this chain must be reverted before sending back the error acknowledgement
 // to ensure atomic packet forwarding
 function revertInFlightChanges(sentPacket: Packet, receivedPacket: Packet) {
-  forwardingAddress = channelForwardingAddress[receivedPacket.destinationChannel]
+  forwardingAddress = channelForwardingAddress[receivedPacket.destChannel]
   reverseEscrow = channelEscrowAddresses[receivedPacket.destChannel]
 
   // the token on our chain is the token in the sentPacket
