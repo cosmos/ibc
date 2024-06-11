@@ -405,10 +405,10 @@ function onRecvPacket(packet: Packet) {
     if len(data.forwardingPath.hops) > 0 {
       // memo must be empty
       abortTransactionUnless(data.memo == "")
-      if channelForwardingAddress[packet.destinationChannel] == "" {
-        channelForwardingAddress[packet.destinationChannel] = newAddress()
+      if channelForwardingAddress[packet.destChannel] == "" {
+        channelForwardingAddress[packet.destChannel] = newAddress()
       }
-      receiver = channelForwardingAddresses[packet.destinationChannel]
+      receiver = channelForwardingAddresses[packet.destChannel]
       finalReceiver = data.receiver
     } else {
       receiver = data.receiver
