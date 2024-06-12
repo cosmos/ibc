@@ -374,7 +374,7 @@ function openUpgradeHandshake(
 // restoreChannel will restore the channel state to its pre-upgrade state
 // and delete upgrade auxiliary state so that upgrade is aborted.
 // it writes an error receipt to state so counterparty can restore as well.
-// NOTE: this function signature may be modified by implementors to take a custom error
+// NOTE: this function signature may be modified by implementers to take a custom error
 function restoreChannel(
   portIdentifier: Identifier,
   channelIdentifier: Identifier,
