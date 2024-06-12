@@ -20,7 +20,7 @@ This guide is not intended to be a formal specification or Interchain Standard. 
 
 **Optimistic Rollup**: Optimistic rollups post their blocks to a data availability layer and rely on a settlement layer that can adjudicate fraud proofs submitted by rollup observers. Thus, rollup blocks are accepted "optimistically" before correctness can be guaranteed but they are only considered safe and finalized once a fraud window time period has passed without any successful challenge being submitted to the settlement layer.
 
-**ZK Rollup**: A ZK rollup has a Zero-Knowledge circuit that represents its state machine. Thus, a rollup block producer can submit a ZK-SNARK proof that the submitted app hash is indeed the correct result of applying the included transactions in the block. Thus, there is no need for a settlement layer or a fraud window. THe block can be trusted and finalized as soon as the ZK proof is verified.
+**ZK Rollup**: A ZK rollup has a Zero-Knowledge circuit that represents its state machine. Thus, a rollup block producer can submit a ZK-SNARK proof that the submitted app hash is indeed the correct result of applying the included transactions in the block. Thus, there is no need for a settlement layer or a fraud window. The block can be trusted and finalized as soon as the ZK proof is verified.
 
 ### `verifyClientMessage`
 
