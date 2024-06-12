@@ -82,7 +82,7 @@ Relayers supporting localhost packet flow must be adapted to submit messages fro
 
 This would require first checking the underlying connection identifier on any channel-level messages. If the underlying connection identifier is `connection-localhost`, then the relayer must construct the message and send it back to the originating chain. The message MUST be constructed with a sentinel byte for the proof (`[]byte{0x01}`), since the loopback client does not need Merkle proofs of the state of a remote ledger; the proof height in the message may be zero, since it is ignored by the loopback client.
 
-Implementations **may** choose to implement loopback such that the next message in the handshake or packet flow is automatically called without relayer-driven transactions. However, implementors must take care to ensure that automatic message execution does not cause gas consumption issues.
+Implementations **may** choose to implement loopback such that the next message in the handshake or packet flow is automatically called without relayer-driven transactions. However, implementers must take care to ensure that automatic message execution does not cause gas consumption issues.
 
 ### Client initialisation
 
