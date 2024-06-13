@@ -730,7 +730,7 @@ function onRecvPacket(packet Packet) {
   }
 
   // ExecuteTx calls the AuthenticateTx function defined above 
-  result, err = ExecuteTx(ctx, packet.SourcePort, packet.DestinationPort, packet.DestinationChannel, msgs)
+  result, err = ExecuteTx(ctx, packet.sourcePort, packet.destPort, packet.destChannel, msgs)
   if err != nil {
     // NOTE: The error string placed in the acknowledgement must be consistent across all
     // nodes in the network or there will be a fork in the state machine. 

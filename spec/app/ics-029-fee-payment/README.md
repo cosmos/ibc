@@ -131,7 +131,7 @@ The forward relayer addresses are stored under a store path prefix unique to a c
 
 ```typescript
 function relayerAddressForAsyncAckPath(packet: Packet): Path {
-    return "forwardRelayer/{packet.destinationPort}/{packet.destinationChannel}/{packet.sequence}"
+    return "forwardRelayer/{packet.destPort}/{packet.destChannel}/{packet.sequence}"
 }
 ```
 
