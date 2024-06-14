@@ -59,24 +59,34 @@ interface FungibleTokenPacketDataV2 {
 
 interface Forwarding {
   hops: []Hop
-  memo: string,
+  memo: string
 }
 
 interface Hop {
-  portID: string,
-  channelId: string,
+  portId: string
+  channelId: string
 }
 
 interface Token {
-  denom: string // base denomination
-  trace: []string
+  denom: Denom 
   amount: uint256
 }
+
+interface Denom {
+  base: string // base denomination
+  trace: []Trace
+}
+
+interface Trace {
+  portId: string
+  channelId: string
+}
+
 ```
 
 As tokens are sent across chains using the ICS 20 protocol, they begin to accrue a record of channels for which they have been transferred across. This information is encoded into the `trace` field in the token. 
 
-The ICS 20 token traces are represented by a list of the form `{ics20Port}/{ics20Channel}`, where `ics20Port` and `ics20Channel` are an ICS 20 port and channel on the current chain for which the funds exist. The port and channel pair indicate which channel the funds were previously sent through. Implementations are responsible for correctly parsing the IBC trace information and encoding it into the final on-chain denomination so that the same base denominations sent through different paths are not treated as being fungible.
+The ICS 20 token traces are represented by a list of `ics20Port` and `ics20Channel` pairs, which are an ICS 20 port and channel on the current chain for which the funds exist. The port and channel pair indicate which channel the funds were previously sent through. Implementations are responsible for correctly parsing the IBC trace information and encoding it into the final on-chain denomination so that the same base denominations sent through different paths are not treated as being fungible.
 
 A sending chain may be acting as a source or sink zone. When a chain is sending tokens across a port and channel which are not equal to the last prefixed port and channel pair, it is acting as a source zone. When tokens are sent from a source zone, the destination port and channel will be prepended to the trace (once the tokens are received) adding another hop to a tokens record. When a chain is sending tokens across a port and channel which are equal to the last prefixed port and channel pair, it is acting as a sink zone. When tokens are sent from a sink zone, the first element of the trace, which was the last port and channel pair added to the trace is removed (once the tokens are received), undoing the last hop in the tokens record. A more complete explanation is [present in the ibc-go implementation](https://github.com/cosmos/ibc-go/blob/457095517b7832c42ecf13571fee1e550fec02d0/modules/apps/transfer/keeper/relay.go#L18-L49).
 
@@ -103,25 +113,43 @@ FungibleTokenPacketData {
 FungibleTokenPacketDataV2 {
   tokens: [
     Token{
-      denom: uatom,
+      denom: Denom{
+        base: "uatom",
+        trace: [
+          Trace{
+            portId: "transfer",
+            channelId: "channel-1",
+          }, 
+          Trace{
+            portId: "transfer",
+            channelId: "channel-4",
+          }
+        ],
+      },
       amount: 500,
-      trace: ["transfer/channel-1", "transfer/channel-4"],
     },
     Token{
-      denom: btc,
+      denom: Denom{
+        base: "btc",
+        trace: [
+          Trace{
+            portId: "transfer",
+            channelId: "channel-3",
+          }
+        ],
+      },
       amount: 7,
-      trace: ["transfer/channel-3"],
     }
   ],
   sender: cosmosexampleaddr1,
   receiver: cosmosexampleaddr2,
   memo: "",
   forwarding: {
-    [
-      {"transfer", "channel-7"},
-      {"transfer", "channel-13"},
+    hops: [
+      Hop{portId: "transfer", channelId: "channel-7"},
+      Hop{portId: "transfer", channelId: "channel-13"},
     ],  
-    "swap: {...}"
+    memo: "swap: {...}"
   }, // provide hops in order and the memo intended for final hop
 }
 ```
@@ -318,13 +346,10 @@ function sendFungibleTokens(
 ): uint64 {
   // memo and forwarding cannot both be non-empty
   abortTransactionUnless(memo != "" && forwarding != nil)
-  for token in tokens {
-    prefix = "{sourcePort}/{sourceChannel}/"
+  for token in tokens 
+    onChainDenom = constructOnChainDenom(token.trace, token.denom.base)
     // we are the source if the denomination is not prefixed
-    source = token.trace[0] != prefix
-    onChainDenom = constructOnChainDenom(token.trace, token.denom)
-      
-    if source {
+    if isSource(sourcePort, sourceChannel, token) {
       // determine escrow account
       escrowAccount = channelEscrowAddresses[sourceChannel]
       // escrow source tokens (assumed to fail if balance insufficient)
@@ -345,7 +370,7 @@ function sendFungibleTokens(
     // abort if forwarding defined
     abortTransactionUnless(forwarding == nil)
     // create v1 denom of the form: port1/channel1/port2/channel2/port3/channel3/denom
-    v1Denom = constructOnChainDenom(token.trace, token.denom)
+    v1Denom = constructOnChainDenom(token.trace, token.denom.base)
     // v1 packet data does not support forwarding fields
     data = FungibleTokenPacketData{v1Denom, token.amount, sender, receiver, memo}
   } else if transferVersion == "ics20-2" {
@@ -388,10 +413,9 @@ function onRecvPacket(packet: Packet) {
 
   if transferVersion == "ics20-1" {
      FungibleTokenPacketData data = UnmarshalJSON(packet.data)
-     trace, denom = parseICS20V1Denom(data.denom)
+     denom = parseICS20V1Denom(data.denom)
      token = Token{
        denom: denom
-       trace: trace
        amount: data.amount
      }
      tokens = []Token{token}
@@ -428,19 +452,17 @@ function onRecvPacket(packet: Packet) {
   // construct default acknowledgement of success
   FungibleTokenPacketAcknowledgement ack = FungibleTokenPacketAcknowledgement{true, null}
 
-  prefix = "{packet.sourcePort}/{packet.sourceChannel}/"
   receivedTokens = []Token
   for token in tokens {
-    assert(token.denom !== "")
+    assert(token.denom !== nil)
     assert(token.amount > 0)
     
+    var onChainTrace []Trace
     // we are the source if the packets were prefixed by the sending chain
-    source = token.trace[0] == prefix
-    var onChainTrace []string
-    if source {
+    if isSource(packet.sourcePort, packet.sourceChannel, token) {
       // since we are receiving back to source we remove the prefix from the trace
       onChainTrace = token.trace[1:]
-      onChainDenom = constructOnChainDenom(onChainTrace, token.denom)
+      onChainDenom = constructOnChainDenom(onChainTrace, token.denom.base)
       // receiver is source chain: unescrow tokens
       // determine escrow account
       escrowAccount = channelEscrowAddresses[packet.destChannel]
@@ -453,9 +475,9 @@ function onRecvPacket(packet: Packet) {
       }
     } else {
       // since we are receiving to a new sink zone we prepend the prefix to the trace
-      prefix = "{packet.destPort}/{packet.destChannel}/"
-      onChainTrace = append([]string{prefix}, token.trace...)
-      onChainDenom = constructOnChainDenom(onChainTrace, token.denom)
+      prefixTrace = Trace{portId: "{packet.destPort}", channelId: "{packet.destChannel}"}
+      onChainTrace = append([]Trace{prefixTrace}, token.trace...)
+      onChainDenom = constructOnChainDenom(onChainTrace, token.denom.base)
       // sender was source, mint vouchers to receiver (assumed to fail if balance insufficient)
       err = bank.MintCoins(receiver, onChainDenom, token.amount)
       if (err !== nil) {
@@ -467,8 +489,7 @@ function onRecvPacket(packet: Packet) {
 
     // add the received token to the received tokens list
     recvToken = Token{
-      denom: token.denom,
-      trace: onChainTrace,
+      denom: Denom{base: token.denom.base, trace: onChainTrace},
       amount: token.amount,
     }
     receivedTokens = append(receivedTokens, recvToken)
@@ -483,7 +504,7 @@ function onRecvPacket(packet: Packet) {
   // then start forwarding
   if len(forwarding.hops) > 0 {
     //check that next channel supports token forwarding
-    channel = provableStore.get(channelPath(forwarding.hops[0].portID, forwarding.hops[0].channelID))
+    channel = provableStore.get(channelPath(forwarding.hops[0].portId, forwarding.hops[0].channelId))
     if channel.version != "ics20-2" && len(forwarding.hops) > 1 {
       ack = FungibleTokenPacketAcknowledgement(false, "next hop in path cannot support forwarding onward")
       return ack
@@ -508,13 +529,13 @@ function onRecvPacket(packet: Packet) {
       finalReceiver, // receiver of next packet
       memo,
       nextForwarding,
-      forwarding.hops[0].portID,
-      forwarding.hops[0].channelID,
+      forwarding.hops[0].portId,
+      forwarding.hops[0].channelId,
       Height{},
       currentTime() + DefaultHopTimeoutPeriod,
     )
     // store packet for future sending ack
-    privateStore.set(packetForwardPath(forwarding.hops[0].portID, forwarding.hops[0].channelID, packetSequence), packet)
+    privateStore.set(packetForwardPath(forwarding.hops[0].portId, forwarding.hops[0].channelId, packetSequence), packet)
     // use async ack until we get successful acknowledgement from further down the line.
     return nil
   }
@@ -589,8 +610,8 @@ function onTimeoutPacket(packet: Packet) {
 
 ```typescript
 function isSource(portId: string, channelId: string, token: Token) {
-  firstTrace = "{portId}/{channelId}"
-  return token.trace[0] == firstTrace
+  trace = token.trace[0]
+  return "{trace.portId}/{trace.channelId}" == "{portId}/{channelId}"
 }
 ```
 
@@ -604,10 +625,9 @@ function refundTokens(packet: Packet) {
   transferVersion = getAppVersion(channel.version)
   if transferVersion == "ics20-1" {
      FungibleTokenPacketData data = UnmarshalJSON(packet.data)
-     trace, denom = parseICS20V1Denom(data.denom)
+     denom = parseICS20V1Denom(data.denom)
      token = Token{
        denom: denom
-       trace: trace
        amount: data.amount
      }
      tokens = []Token{token}
@@ -620,12 +640,10 @@ function refundTokens(packet: Packet) {
     abortTransactionUnless(false)
   }
 
-  prefix = "{packet.sourcePort}/{packet.sourceChannel}/"
   for token in tokens {
+    onChainDenom = constructOnChainDenom(token.trace, token.denom.base)
     // we are the source if the denomination is not prefixed
-    source = token.trace[0] != prefix
-    onChainDenom = constructOnChainDenom(token.trace, token.denom)
-    if source {
+    if isSource(packet.sourcePort, packet.sourceChannel, token) {
       // sender was source chain, unescrow tokens back to sender
       escrowAccount = channelEscrowAddresses[packet.sourceChannel]
       bank.TransferCoins(escrowAccount, data.sender, onChainDenom, token.amount)
