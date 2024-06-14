@@ -26,7 +26,7 @@ version compatibility: (optional list of compatible implementations' releases)
 ### Definitions
 
 - `Host Chain`: The chain where the permissioned tokens are considered native. The host chain facilitates connections to mirror chains, and ensures the propagation of token specific allowlists and blocklists.
-- `Mirror Chain`: The chain receiving the permissioned tokens and issuing _controlled_ voucher tokens. It is up to the mirror chain to enforce the propagated allowlists and blocklists.
+- `Mirror Chain`: The chain receiving the permissioned tokens and issuing *controlled* voucher tokens. It is up to the mirror chain to enforce the propagated allowlists and blocklists.
 - `Allowlist`: A group of addresses that are allowed to interact with a permissioned token. Any address not on the allowlist is forbidden to interact with the token.
 - `Blocklist`: A group of addresses that aren't allowed to interact with a permissioned token. Any address not on the blocklist is allowed to interact with the token.
 
@@ -64,7 +64,7 @@ interface PermissionPropagationPacketData {
 
 ### Port & channel setup
 
-A ICS 21 Host module must always bind to a port with the id `ics21host`. Mirror Chains will bind to ports dynamically, as specified in the identifier format [section](#identifier-formats).
+An ICS 21 Host module must always bind to a port with the id `ics21host`. Mirror Chains will bind to ports dynamically, as specified in the identifier format [section](#identifier-formats).
 
 The example below assumes a module is implementing the entire `ICS21HostModule` interface. The `setup` function must be called exactly once when the module is created (perhaps when the blockchain itself is initialized) to bind to the appropriate port.
 
@@ -91,6 +91,10 @@ function setup() {
 ```
 
 Once the `setup` function has been called, channels can be created via the IBC routing module.
+
+### Identifier formats
+
+TBD
 
 ### Properties & Invariants
 
