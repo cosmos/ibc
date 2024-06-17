@@ -45,16 +45,21 @@ Double check: - The ordering of transactions sent to an interchain account on a 
 ### Features // Appoggio , will be deleted
 
 1. Configuration 
-1.1 The host chain should accept all message types by default and maintain a blacklist of message types it does not permit
+1.1 The host chain should accept all message types by default and maintain a blacklist of message types it does not permit 
+// Check blacklist on hosting-authenticateTx
+
 2. Registration 
 2.1 The controller of the interchain account must have authority over the account on the host chain to execute messages
 2.2	A registered interchain account can be any account type supported by x/accounts
+
 3. Control
-3.01	The channel type through which a controller sends transactions to the host should be unordered
+3.01	The channel type through which a controller sends transactions to the host should be unordered // Channel setup only Unorderd
+
 3.02	The message execution order should be determined at the packet level	
 3.03	Many controllers can send messages to many host accounts through the same channel	
 3.04	The controller of the interchain account should be able to receive information about the balance of the interchain account in the acknowledgment after a transaction was executed by the host	
 3.05	The user of the controller should be able to receive all the information contained in the acknowledgment without implementing additional middleware on a per-user basis	
+// Mmmm
 3.06	Callbacks on the packet lifecycle should be supported by default	
 3.07	A user can perform module safe queries through a host chain account and return the result in the acknowledgment
 4. Host Execution
@@ -62,8 +67,8 @@ Double check: - The ordering of transactions sent to an interchain account on a 
 4.2 It should be possible for a controller to authorise a host account to execute specific actions on a host chain without needing a packet round trip each time (e.g. auto-compounding)
 5. Performance 
 5.1 The number of packet round trips to register an account, load the account with tokens and execute messages on the account should be minimised. 
-// NOTE In theory we can achieve this by using a list of msgs that are passed to send Tx. This list
-// Can be max of 2 msgs with the first beeing of types `RegisterIcaAccount`, `RecoverIcaAccount` and `ExecuteTx`` and the second being executeTx TODO Define msg control 
+// NOTE In theory we can achieve this by using a list of msgs that are passed to send Tx.
+// TO BE DEFINED if we need to maintain a certain order of msgs for security reasons. 
 
 ## Technical specification
 
@@ -71,8 +76,8 @@ Double check: - The ordering of transactions sent to an interchain account on a 
 
 `InterchainAccountPacketData` contains an array of messages that an interchain account can execute and a memo string that is sent to the host chain as well as the packet `type`. ICS-27 version 1 and 2 have only one type `EXECUTE_TX`. 
 
-// NO : ICS-27 version 2 has the following types `REGISTER_ICA`, `EXECUTE_TX` and `RECOVER_ICA`. // RegisterIca and 
-// RecoverIca should be msgs that are passed in the array of msgs 
+// RegisterIca and 
+// RecoverIca could be msgs that are passed in the array of msgs 
 
 // NOTE Need to inspect how to TODO blacklist mechanisms. Do the controller chain need to know which msg are blacklisted? Probably not. Thus the blacklist couldbe a module state in host chain that can be modified by an ad hoc 
 function 
@@ -104,8 +109,14 @@ message Acknowledgement {
 The interchain account module tracks controlled addresses associated with particular channels in state. Fields of the `ModuleState` are assumed to be in scope.
 
 ```typescript
+//type ChannelIdentifier = string; // 
+//type OwnerAccount = string; // 
+
+// to keep track of the current sequence
+hostSequenceNumber = uint64;  
+
 interface ModuleState {
-  hostAccount: Map<Identifier,[]string> // TODO Define Mapping properly
+  hostAccounts: Map<ChannelIdentifier, Map<OwnerAccount, Map<hostSequenceNumber, []string>>>
 }
 ```
 
@@ -115,17 +126,17 @@ The interchain account module on host chain tracks the blacklist of msgs associa
 
 ```typescript
 interface ModuleState {
-  blackList: Map<Identifier, []type > // TODO Define Mapping properly 
+  blacklistedMsgs: Map<ChannelIdentifier, Map<ownerAccount, []msgType>> // TODO Define Mapping properly 
 }
 ```
 
 ### Sub-protocols
 
-The sub-protocols described herein should be implemented in a "fungible token transfer bridge" module with access to a bank module and to the IBC routing module.
+The sub-protocols described herein should be implemented in a "interchain account" module with access to a bank module and to the IBC routing module. Alternatively, *hosting* and *controlling* should be implemented in separate smart contracts. 
 
 #### Port & channel setup
 
-// TODO : Investigate if do we need a separtion between icahost and icacontroller? 
+// TODO : Investigate if do we need a separtion between icahost and icacontroller? Probably a separation would help to automatically pick the right subprotocol to use (if controlling or hosting). Need to investigate if we could do the same using ica only. 
 
 The `setup` function must be called exactly once when the module is created (perhaps when the blockchain itself is initialised) to bind to the appropriate port (owned by the module).
 
@@ -249,26 +260,23 @@ function onChanCloseConfirm(
 ### General design 
 
 A chain can utilize one or both parts of the interchain accounts protocol (*controlling* and *hosting*). A controller chain that registers accounts on other host chains (that support interchain accounts) does not necessarily have to allow other controller chains to register accounts on its chain, and vice versa. 
+// Here since channel opening is done by entities with permission, the rejection of a ChanOpenInit should be enough.  
 
-This specification defines the general way to register an interchain account and send tx bytes to be executed on behalf of the owner account. The host chain is responsible for deserializing and executing the tx bytes and the controller chain must know how the host chain will handle the tx bytes in advance of sending a packet, thus this must be negotiated during channel creation.
+This specification defines the general way to send tx bytes from a controller chain, on an already established ica-channel, to be executed on behalf of the owner account on the host chain. The actions that can be taken span between interchain account registration, tx execution, and interchain account recovery. The host chain is responsible for deserializing and executing the tx bytes and the controller chain must know how the host chain will handle the tx bytes in advance of sending a packet, thus this must be negotiated during channel creation.
 
 #### Controlling
 
-// Rewrite completely. This should use directly an open channel. Nothing to do with ChannelOpening. 
+// Rewrite completely. This should use directly an opened channel. Nothing to do with ChannelOpening. 
 
 ##### **RegisterInterchainAccount**
 
-`RegisterInterchainAccount` is the entry point to registering an interchain account.
-It generates a new controller portID using the owner account address.
-It will bind to the controller portID and
-call 04-channel `ChanOpenInit`. An error is returned if the controller portID is already in use.
-A `ChannelOpenInit` event is emitted which can be picked up by an offchain process such as a relayer.
-The account will be registered during the `OnChanOpenTry` step on the host chain.
-This function must be called after an `OPEN` connection is already established with the given connection identifier.
-The caller must provide the complete channel version. This MUST include the ICA version with complete metadata and it MAY include 
-versions of other middleware that is wrapping ICA on both sides of the channel. Note this will require contextual information
-on what middleware is enabled on either end of the channel. Thus it is recommended that an ICA-auth application construct the ICA
-version automatically and allow for users to optionally enable additional middleware versioning.
+`RegisterInterchainAccount` is the entry point to registering an interchain account. Inside Cosmos it can be seen as a msg, while for other ecosystem, this can be a tought as a contract function. // CLARIFY SMART CONTRACT THING 
+
+The controller chain will execute a `SendTx` including a `RegisterInterchainAccount` msg. The `RegisterInterchainAccount` Must include the ownerAccount address and the channelIdentifier which is meant to operate on. 
+
+The controller chain maintains a mapping between the tuple, (channelIdentifier, ownerAccount, hostAccountSequence) and the hostAcccount(s). The hostAccountSequence starts at 0 and it is increased linearly as new account get registered. An ownerAccount on the controller chain can manage 1..n hostAccount(s) on the host chain. An hostAccount on the host chain can be managed by 1 and only 1 ownerAccount on the controller chain. 
+
+The host chain Must be able to generate the hostAccount, that will be controlled by the ownerAccount, by using the information provided in the `RegisterInterchainAccount` message and must pass back the generated address inside the ack. Once received the ack, the controller chain must store the hostAccount generated address in the mapping previously described. 
 
 // TODO 
 
@@ -276,53 +284,41 @@ version automatically and allow for users to optionally enable additional middle
 function RegisterInterchainAccount(
   portIdentifier: Identifier,
   channelIdentifier: Identifier,
-  counterpartyPortIdentifier: Identifier,
-  counterpartyChannelIdentifier: Identifier,
-  version: string,
-  owner: string, // THIS MUST BE PROVIDED  
-  // Probably this parameter is not needed here, but could be useful for SendTx 
-  hostSequences: [unit64] // an owner can control multiple host ica. HostSequence gives owner the possiblity to specify
-  // which account they want to do stuff for.  
-  ) returns (error) {
+  counterpartyPortIdentifier: Identifier, // NEEDED? Yes will be used in the registerInterchainAccount of host chain 
+  counterpartyChannelIdentifier: Identifier, // NEEDED? Yes will be used in the registerInterchainAccount of host chain
+  icaOwnerAccount: string
+  ) 
+  returns (error) {
   
   // validate port format
-  abortTransactionUnless(validateControllerPortParams(portIdentifier))
-  // only allow channels to be created on the "icahost" port on the counterparty chain
-  abortTransactionUnless(counterpartyPortIdentifier === "ica-v2")
-
-  // retrieve channel and connection to access connection ID and counterparty connection ID
+  abortTransactionUnless(portIdentifier=="ica") // Eventually icacontroller
+  // retrieve channel 
   channel = provableStore.get(channelPath(portIdentifier, channelIdentifier))
+  // validate that the channel infos
+  abortTransactionUnless(isActive(channel))
+  abortTransactionUnless(channel.counterpartyPortIdentifier == counterpartyPortIdentifier) 
+  abortTransactionUnless(channel.counterpartyChannelIdentifier == counterpartyChannelIdentifier)   
 
-  if version != "" {
-    // validate metadata
-    metadata = UnmarshalJSON(version)
-    abortTransactionUnless(metadata.Version === "ics27-2")
-    // all elements in encoding list and tx type list must be supported
-    abortTransactionUnless(IsSupportedEncoding(metadata.Encoding))
-    abortTransactionUnless(IsSupportedTxType(metadata.TxType))
-    // We don't need connections details. 
-    //abortTransactionUnless(metadata.ControllerConnectionId === connectionId)
-    //abortTransactionUnless(metadata.HostConnectionId === connection.counterpartyConnectionIdentifier)
-  } else {
-    // construct default metadata // NOTE CHANGE METADATA 
-    metadata = {
-      Version: "ics27-1",
-      ControllerConnectionId: connectionId,
-      HostConnectionId: counterpartyConnectionId,
-      // implementation may choose a default encoding and TxType
-      // e.g. DefaultEncoding=protobuf, DefaultTxType=sdk.MultiMsg
-      Encoding: DefaultEncoding,
-      TxType: DefaultTxType,
-    }
-    version = marshalJSON(metadata)
-  }
+  // validate ownerAccount
+  abortTransactionUnlesss(IsValidAddress(icaOwnerAccount))
+
+  // TODO Investigate what to do with metadata. Probably is a problem of channel negotiation 
 }
 ```
+
+/*
+// hostSequences: [unit64]Probably this parameter is not needed here, but could be useful for SendTx 
+  // NO THIS GOES INSIDE THE FUNCTION, IT WILL BE USED AS OPTIONAL PARAMETER WHEN CALLING SEND 
+  // THE THERE WILL BE MESSAGE THAT WILL REQUIRE THIS PARAMETER TO BE SET TX  
+  // an owner can control multiple host ica. HostSequence gives owner the possiblity to specify
+  // which account they want to do stuff for.  
+*/
+
+channelEscrowAddresses[channelIdentifier] = newAddress(portIdentifier, channelIdentifier)
 
 ##### **RecoverInterchainAccount**
 
 // Eventually we should use the proof of the channel closure, to open a new channel that will serve all the accounts. 
-
 
 ```typescript
 function RecoverInterchainAccount(){} // TODO
@@ -334,7 +330,9 @@ function RecoverInterchainAccount(){} // TODO
 
 // THIS MUST BE DIFFERENT. IN THE SENSE THAT IT SHOULD GENERATE A NEW ACCOUNT GIVEN AUTHENTICATED STUFF PASSED BE THE CONTROLLER CHAIN 
 
-`RegisterInterchainAccount` is called on the `OnChanOpenTry` step during the channel creation handshake.
+`RegisterInterchainAccount` is called on the `OnReceive` callback when a InterchainAccountPacket with msg `RegisterInterchainAccount` is relayed to the host chain.
+
+// Complete This. Then Write Send Tx then Write callbacks for full flow. 
 
 ```typescript
 function RegisterInterchainAccount(counterpartyPortId: Identifier, connectionID: Identifier) returns (nil) {
