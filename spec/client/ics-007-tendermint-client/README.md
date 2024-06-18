@@ -292,7 +292,7 @@ function checkForMisbehaviour(clientMsg: clientMessage): boolean {
 
 ### Update state
 
-Function `updateState` will perform a regular update for the Tendermint client. It will add a consensus state to the client store. If the header is higher than the lastest height on the `clientState`, then the `clientState` will be updated.
+Function `updateState` will perform a regular update for the Tendermint client. It will add a consensus state to the client store. If the header is higher than the latest height on the `clientState`, then the `clientState` will be updated.
 
 ```typescript
 function updateState(clientMsg: clientMessage) {
