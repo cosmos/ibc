@@ -335,6 +335,7 @@ function sendFungibleTokens(
     }
   }
 
+  var dataBytes bytes
   channel = provableStore.get(channelPath(sourcePort, sourceChannel))
   // getAppVersion returns the transfer version that is embedded in the channel version
   // as the channel version may contain additional app or middleware version(s)
@@ -348,9 +349,13 @@ function sendFungibleTokens(
     v1Denom = constructOnChainDenom(token.trace, token.denom)
     // v1 packet data does not support forwarding fields
     data = FungibleTokenPacketData{v1Denom, token.amount, sender, receiver, memo}
+    // JSON-marshal packet data into bytes
+    dataBytes = json.marshal(data)
   } else if transferVersion == "ics20-2" {
     // create FungibleTokenPacket data
     data = FungibleTokenPacketDataV2{tokens, sender, receiver, memo, forwarding}
+    // protobuf-marshal packet data into bytes
+    dataBytes = protobuf.marshal(data)
   } else {
     // should never be reached as transfer version must be negotiated to be either
     // ics20-1 or ics20-2 during channel handshake
@@ -364,7 +369,7 @@ function sendFungibleTokens(
     sourceChannel,
     timeoutHeight,
     timeoutTimestamp,
-    MarshalJSON(data) // json-marshalled bytes of packet data
+    dataBytes,
   )
 
   return sequence
@@ -387,7 +392,7 @@ function onRecvPacket(packet: Packet) {
   var finalReceiver string // final intended address in forwarding case
 
   if transferVersion == "ics20-1" {
-     FungibleTokenPacketData data = UnmarshalJSON(packet.data)
+     FungibleTokenPacketData data = json.unmarshal(packet.data)
      trace, denom = parseICS20V1Denom(data.denom)
      token = Token{
        denom: denom
@@ -398,7 +403,7 @@ function onRecvPacket(packet: Packet) {
      sender = data.sender
      receiver = data.receiver
   } else if transferVersion == "ics20-2" {
-    FungibleTokenPacketDataV2 data = UnmarshalJSON(packet.data)
+    FungibleTokenPacketDataV2 data = protobuf.unmarshal(packet.data)
     tokens = data.tokens
     sender = data.sender
 
@@ -609,7 +614,7 @@ function refundTokens(packet: Packet) {
   // as the channel version may contain additional app or middleware version(s)
   transferVersion = getAppVersion(channel.version)
   if transferVersion == "ics20-1" {
-     FungibleTokenPacketData data = UnmarshalJSON(packet.data)
+     FungibleTokenPacketData data = json.unmarshal(packet.data)
      trace, denom = parseICS20V1Denom(data.denom)
      token = Token{
        denom: denom
@@ -618,7 +623,7 @@ function refundTokens(packet: Packet) {
      }
      tokens = []Token{token}
   } else if transferVersion == "ics20-2" {
-    FungibleTokenPacketDataV2 data = UnmarshalJSON(packet.data)
+    FungibleTokenPacketDataV2 data = protobuf.unmarshal(packet.data)
     tokens = data.tokens
   } else {
     // should never be reached as transfer version must be negotiated to be either
