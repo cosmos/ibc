@@ -360,7 +360,7 @@ function sendFungibleTokens(
     // should never be reached as transfer version must be negotiated to be either
     // ics20-1 or ics20-2 during channel handshake
     abortTransactionUnless(false)
-  }  
+  }
 
   // send packet using the interface defined in ICS4
   sequence = handler.sendPacket(
