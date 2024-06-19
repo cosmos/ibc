@@ -51,10 +51,13 @@ interface FungibleTokenPacketDataV2 {
   sender: string
   receiver: string
   memo: string
-  forwardingPath: ForwardingInfo // a struct containing the list of next hops, determining where the tokens must be forwarded next, and the memo for the final hop
+  // a struct containing the list of next hops, 
+  // determining where the tokens must be forwarded next, 
+  // and the memo for the final hop
+  forwarding: Forwarding 
 }
 
-interface ForwardingInfo {
+interface Forwarding {
   hops: []Hop
   memo: string,
 }
@@ -113,7 +116,7 @@ FungibleTokenPacketDataV2 {
   sender: cosmosexampleaddr1,
   receiver: cosmosexampleaddr2,
   memo: "",
-  forwardingPath: {
+  forwarding: {
     [
       {"transfer", "channel-7"},
       {"transfer", "channel-13"},
@@ -307,14 +310,14 @@ function sendFungibleTokens(
   sender: string,
   receiver: string,
   memo: string,
-  forwardingPath: ForwardingInfo,
+  forwarding: Forwarding,
   sourcePort: string,
   sourceChannel: string,
   timeoutHeight: Height,
   timeoutTimestamp: uint64, // in unix nanoseconds
 ): uint64 {
-  // memo and forwardingPath cannot both be non-empty
-  abortTransactionUnless(memo != "" && forwardingPath != nil)
+  // memo and forwarding cannot both be non-empty
+  abortTransactionUnless(memo != "" && forwarding != nil)
   for token in tokens {
     prefix = "{sourcePort}/{sourceChannel}/"
     // we are the source if the denomination is not prefixed
@@ -339,15 +342,15 @@ function sendFungibleTokens(
   if transferVersion == "ics20-1" {
     abortTransactionUnless(len(tokens) == 1)
     token = tokens[0]
-    // abort if forwardingPath defined
-    abortTransactionUnless(forwardingPath == nil)
+    // abort if forwarding defined
+    abortTransactionUnless(forwarding == nil)
     // create v1 denom of the form: port1/channel1/port2/channel2/port3/channel3/denom
     v1Denom = constructOnChainDenom(token.trace, token.denom)
-    // v1 packet data does not support forwardingPath fields
+    // v1 packet data does not support forwarding fields
     data = FungibleTokenPacketData{v1Denom, token.amount, sender, receiver, memo}
   } else if transferVersion == "ics20-2" {
     // create FungibleTokenPacket data
-    data = FungibleTokenPacketDataV2{tokens, sender, receiver, memo, forwardingPath}
+    data = FungibleTokenPacketDataV2{tokens, sender, receiver, memo, forwarding}
   } else {
     // should never be reached as transfer version must be negotiated to be either
     // ics20-1 or ics20-2 during channel handshake
@@ -402,7 +405,7 @@ function onRecvPacket(packet: Packet) {
     // if we need to forward the tokens onward
     // overwrite the receiver to temporarily send to the 
     // channel escrow address of the intended receiver
-    if len(data.forwardingPath.hops) > 0 {
+    if len(data.forwarding.hops) > 0 {
       // memo must be empty
       abortTransactionUnless(data.memo == "")
       if channelForwardingAddress[packet.destChannel] == "" {
@@ -478,40 +481,40 @@ function onRecvPacket(packet: Packet) {
 
   // if acknowledgement is successful and forwarding path set
   // then start forwarding
-  if len(forwardingPath.hops) > 0 {
+  if len(forwarding.hops) > 0 {
     //check that next channel supports token forwarding
-    channel = provableStore.get(channelPath(forwardingPath.hops[0].portID, forwardingPath.hops[0].channelID))
-    if channel.version != "ics20-2" && len(forwardingPath.hops) > 1 {
+    channel = provableStore.get(channelPath(forwarding.hops[0].portID, forwarding.hops[0].channelID))
+    if channel.version != "ics20-2" && len(forwarding.hops) > 1 {
       ack = FungibleTokenPacketAcknowledgement(false, "next hop in path cannot support forwarding onward")
       return ack
     }
     memo = ""
-    nextForwardingPath = ForwardingPath{
-      hops: forwardingPath.hops[1:]
-      memo: forwardingPath.memo
+    nextForwarding = Forwarding{
+      hops: forwarding.hops[1:]
+      memo: forwarding.memo
     }
-    if forwardingPath.hops == 1 {
+    if forwarding.hops == 1 {
       // we're on the last hop, we can set memo and clear
-      // the next forwardingPath
-      memo = forwardingPath.memo
-      nextForwardingPath = nil
+      // the next forwarding
+      memo = forwarding.memo
+      nextForwarding = nil
     }
     // send the tokens we received above to the next port and channel
     // on the forwarding path
-    // and reduce the forwardingPath by the first element
+    // and reduce the forwarding by the first element
     packetSequence = sendFungibleTokens(
       receivedTokens,
       receiver, // sender of next packet
       finalReceiver, // receiver of next packet
       memo,
-      nextForwardingPath,
-      forwardingPath.hops[0].portID,
-      forwardingPath.hops[0].channelID,
+      nextForwarding,
+      forwarding.hops[0].portID,
+      forwarding.hops[0].channelID,
       Height{},
       currentTime() + DefaultHopTimeoutPeriod,
     )
     // store packet for future sending ack
-    privateStore.set(packetForwardPath(forwardingPath.hops[0].portID, forwardingPath.hops[0].channelID, packetSequence), packet)
+    privateStore.set(packetForwardPath(forwarding.hops[0].portID, forwarding.hops[0].channelID, packetSequence), packet)
     // use async ack until we get successful acknowledgement from further down the line.
     return nil
   }
