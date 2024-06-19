@@ -564,6 +564,9 @@ function onAcknowledgePacket(
         ack,
       )
     }
+
+    // delete the forwarded packet that triggered sending this packet
+    privateStore.delete(packetForwardPath(packet.sourcePort, packet.sourceChannel, packet.sequence))
   }
 }
 ```
@@ -592,6 +595,9 @@ function onTimeoutPacket(packet: Packet) {
       prevPacket,
       ack,
     )
+
+    // delete the forwarded packet that triggered sending this packet
+    privateStore.delete(packetForwardPath(packet.sourcePort, packet.sourceChannel, packet.sequence))
   }
 }
 ```
