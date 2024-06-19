@@ -550,6 +550,14 @@ function onRecvPacket(packet: Packet) {
 function onAcknowledgePacket(
   packet: Packet,
   acknowledgement: bytes) {
+  // if the transfer failed, refund the tokens
+  // to the sender account. In case of a packet sent for a
+  // forwarded packet, the sender is the forwarding
+  // address for the destination channel of the forwarded packet.
+  if !(acknowledgement.success) {
+    refundTokens(packet)
+  }
+
   // check if the packet that was sent is from a previously forwarded packet
   prevPacket = privateStore.get(packetForwardPath(packet.sourcePort, packet.sourceChannel, packet.sequence))
 
@@ -572,11 +580,6 @@ function onAcknowledgePacket(
         ack,
       )
     }
-  } else {
-    // if the transfer failed, refund the tokens
-    if !(acknowledgement.success) {
-      refundTokens(packet)
-    }
   }
 }
 ```
@@ -585,6 +588,12 @@ function onAcknowledgePacket(
 
 ```typescript
 function onTimeoutPacket(packet: Packet) {
+  // the packet timed-out, so refund the tokens
+  // to the sender account. In case of a packet sent for a
+  // forwarded packet, the sender is the forwarding
+  // address for the destination channel of the forwarded packet.
+  refundTokens(packet)
+
   // check if the packet sent is from a previously forwarded packet
   prevPacket = privateStore.get(packetForwardPath(packet.sourcePort, packet.sourceChannel, packet.sequence))
 
@@ -599,9 +608,6 @@ function onTimeoutPacket(packet: Packet) {
       prevPacket,
       ack,
     )
-  } else {
-    // the packet timed-out, so refund the tokens
-    refundTokens(packet)
   }
 }
 ```
@@ -656,39 +662,26 @@ function refundTokens(packet: Packet) {
 ```
 
 ```typescript
-// revertInFlightChanges reverts the receive packet and send packet
+// revertInFlightChanges reverts the receive packet
 // that occurs in the middle chains during a packet forwarding
 // If an error occurs further down the line, the state changes
 // on this chain must be reverted before sending back the error acknowledgement
 // to ensure atomic packet forwarding
 function revertInFlightChanges(sentPacket: Packet, receivedPacket: Packet) {
-  forwardEscrow = channelEscrowAddresses[sentPacket.sourceChannel]
+  forwardingAddress = channelForwardingAddress[receivedPacket.destChannel]
   reverseEscrow = channelEscrowAddresses[receivedPacket.destChannel]
+
   // the token on our chain is the token in the sentPacket
   for token in sentPacket.tokens {
-    // check if the packet we sent out was sending as source or not
-    // in this case we escrowed the outgoing tokens
-    if isSource(sentPacket.sourcePort, sentPacket.sourceChannel, token) {
-      // check if the packet we received was a source token for our chain
-      if isSource(receivedPacket.destinationPort, receivedPacket.desinationChannel, token) {
-        // receive sent tokens from the received escrow to the forward escrow account
-        // so we must send the tokens back from the forward escrow to the original received escrow account
-        bank.TransferCoins(forwardEscrow, reverseEscrow, token.denom, token.amount)
-      } else {
-        // receive minted vouchers and sent to the forward escrow account
-        // so we must remove the vouchers from the forward escrow account and burn them
-        bank.BurnCoins(forwardEscrow, token.denom, token.amount)
-      }
+    // check if the packet we received was a source token for our chain
+    if isSource(receivedPacket.destinationPort, receivedPacket.desinationChannel, token) {
+      // receive sent tokens from the received escrow account to the forwarding account
+      // so we must send the tokens back from the forwarding account to the received escrow account
+      bank.TransferCoins(forwardingAddress, reverseEscrow, token.denom, token.amount)
     } else {
-      // in this case we burned the vouchers of the outgoing packets
-      // check if the packet we received was a source token for our chain
-      // in this case, the tokens were unescrowed from the reverse escrow account
-      if isSource(receivedPacket.destinationPort, receivedPacket.desinationChannel, token) {
-        // in this case we must mint the burned vouchers and send them back to the escrow account
-        bank.MintCoins(reverseEscrow, token.denom, token.amount)
-      }
-      // if it wasn't a source token on receive, then we simply had minted vouchers and burned them in the receive.
-      // So no state changes were made, and thus no reversion is necessary
+      // receive minted vouchers and sent to the forwarding account
+      // so we must burn the vouchers from the forwarding account
+      bank.BurnCoins(forwardingAddress, token.denom, token.amount)
     }
   }
 }
