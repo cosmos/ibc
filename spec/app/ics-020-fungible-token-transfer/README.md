@@ -156,7 +156,7 @@ interface ModuleState {
 
 #### Packet forward path
 
-Those `v2` packets that have non-empty forwarding information and should thus be forwarded, must be stored in the private store, so that an acknowledgement can be written for them when  receiving an acknowledgement or timeout for the forwarded packet.
+The `v2` packets that have non-empty forwarding information and should thus be forwarded, must be stored in the private store, so that an acknowledgement can be written for them when receiving an acknowledgement or timeout for the forwarded packet.
 
 ```typescript
 function packetForwardPath(portIdentifier: Identifier, channelIdentifier: Identifier, sequence: uint64): Path {
@@ -590,7 +590,7 @@ function onTimeoutPacket(packet: Packet) {
     // before propogating the error acknowledgement back to original sender chain
     revertInFlightChanges(packet, prevPacket)
     // write error acknowledgement
-    FungibleTokenPacketAcknowledgement ack = FungibleTokenPacketAcknowledgement{false, "forwarded packet failed"}
+    FungibleTokenPacketAcknowledgement ack = FungibleTokenPacketAcknowledgement{false, "forwarded packet timed out"}
     handler.writeAcknowledgement(
       prevPacket,
       ack,
