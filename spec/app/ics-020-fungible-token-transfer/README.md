@@ -341,8 +341,10 @@ function sendFungibleTokens(
   // memo and forwarding cannot both be non-empty
   abortTransactionUnless(memo != "" && forwarding != nil)
   for token in tokens 
-    onChainDenom = constructOnChainDenom(token.trace, token.denom.base)
+    onChainDenom = constructOnChainDenom(token.denom.trace, token.denom.base)
     // we are the source if the denomination is not prefixed
+    // if the token is not prefixed by our channel end's port and channel identifier
+    // then we are sending as a source zone
     if !isTracePrefixed(sourcePort, sourceChannel, token) {
       // determine escrow account
       escrowAccount = channelEscrowAddresses[sourceChannel]
@@ -365,7 +367,7 @@ function sendFungibleTokens(
     // abort if forwarding defined
     abortTransactionUnless(forwarding == nil)
     // create v1 denom of the form: port1/channel1/port2/channel2/port3/channel3/denom
-    v1Denom = constructOnChainDenom(token.trace, token.denom.base)
+    v1Denom = constructOnChainDenom(token.denom.trace, token.denom.base)
     // v1 packet data does not support forwarding fields
     data = FungibleTokenPacketData{v1Denom, token.amount, sender, receiver, memo}
     // JSON-marshal packet data into bytes
@@ -459,6 +461,9 @@ function onRecvPacket(packet: Packet) {
     
     var onChainTrace []Hop
     // we are the source if the packets were prefixed by the sending chain
+    // if the sender send the tokens prefixed with their channel end's identifiers
+    // then we are receiving tokens we previously had sent to the sender
+    // thus, we are receiving the tokens as a source zone
     if isTracePrefixed(packet.sourcePort, packet.sourceChannel, token) {
       // since we are receiving back to source we remove the prefix from the trace
       onChainTrace = token.trace[1:]
@@ -476,7 +481,7 @@ function onRecvPacket(packet: Packet) {
     } else {
       // since we are receiving to a new sink zone we prepend the prefix to the trace
       prefixTrace = Hop{portId: packet.destPort, channelId: packet.destChannel}
-      onChainTrace = append([]Hop{prefixTrace}, token.trace...)
+      onChainTrace = append([]Hop{prefixTrace}, token.denom.trace...)
       onChainDenom = constructOnChainDenom(onChainTrace, token.denom.base)
       // sender was source, mint vouchers to receiver (assumed to fail if balance insufficient)
       err = bank.MintCoins(receiver, onChainDenom, token.amount)
@@ -656,8 +661,10 @@ function refundTokens(packet: Packet) {
   }
 
   for token in tokens {
-    onChainDenom = constructOnChainDenom(token.trace, token.denom.base)
+    onChainDenom = constructOnChainDenom(token.denom.trace, token.denom.base)
     // we are the source if the denomination is not prefixed
+    // Since this is refunding an outgoing packet, we can check if the tokens were originally from the receiver
+    // by checking if the tokens were prefixed by our channel end's identifiers.
     if !isTracePrefixed(packet.sourcePort, packet.sourceChannel, token) {
       // sender was source chain, unescrow tokens back to sender
       escrowAccount = channelEscrowAddresses[packet.sourceChannel]
