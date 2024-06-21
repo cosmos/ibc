@@ -342,8 +342,7 @@ function sendFungibleTokens(
   abortTransactionUnless(memo != "" && forwarding != nil)
   for token in tokens 
     onChainDenom = constructOnChainDenom(token.denom.trace, token.denom.base)
-    // we are the source if the denomination is not prefixed
-    // if the token is not prefixed by our channel end's port and channel identifier
+    // if the token is not prefixed by our channel end's port and channel identifiers
     // then we are sending as a source zone
     if !isTracePrefixed(sourcePort, sourceChannel, token) {
       // determine escrow account
@@ -461,9 +460,10 @@ function onRecvPacket(packet: Packet) {
     
     var onChainTrace []Hop
     // we are the source if the packets were prefixed by the sending chain
-    // if the sender send the tokens prefixed with their channel end's identifiers
-    // then we are receiving tokens we previously had sent to the sender
-    // thus, we are receiving the tokens as a source zone
+    // if the sender sends the tokens prefixed with their channel end's
+    // port and channel identifiers then we are receiving tokens we 
+    // previously had sent to the sender, thus we are receiving the tokens
+    // as a source zone
     if isTracePrefixed(packet.sourcePort, packet.sourceChannel, token) {
       // since we are receiving back to source we remove the prefix from the trace
       onChainTrace = token.trace[1:]
@@ -662,9 +662,9 @@ function refundTokens(packet: Packet) {
 
   for token in tokens {
     onChainDenom = constructOnChainDenom(token.denom.trace, token.denom.base)
-    // we are the source if the denomination is not prefixed
-    // Since this is refunding an outgoing packet, we can check if the tokens were originally from the receiver
-    // by checking if the tokens were prefixed by our channel end's identifiers.
+    // Since this is refunding an outgoing packet, we can check if the tokens 
+    // were originally from the receiver by checking if the tokens were prefixed
+    // by our channel end's identifiers.
     if !isTracePrefixed(packet.sourcePort, packet.sourceChannel, token) {
       // sender was source chain, unescrow tokens back to sender
       escrowAccount = channelEscrowAddresses[packet.sourceChannel]
@@ -689,8 +689,13 @@ function revertInFlightChanges(sentPacket: Packet, receivedPacket: Packet) {
 
   // the token on our chain is the token in the sentPacket
   for token in sentPacket.tokens {
-    // check if the packet we received was a source token for our chain
-    if isTracePrefixed(receivedPacket.destinationPort, receivedPacket.desinationChannel, token) {
+    // we are checking if the tokens that were sent out by our chain in the 
+    // sentPacket were source tokens with respect to the original receivedPacket.
+    // If the tokens in sentPacket were prefixed by our channel end's port and channel
+    // identifiers, then it was a minted voucher and we need to burn it.
+    // Otherwise, it was an original token from our chain and we must give the tokens
+    // back to the escrow account.
+    if !isTracePrefixed(receivedPacket.destinationPort, receivedPacket.desinationChannel, token) {
       // receive sent tokens from the received escrow account to the forwarding account
       // so we must send the tokens back from the forwarding account to the received escrow account
       bank.TransferCoins(forwardingAddress, reverseEscrow, token.denom, token.amount)
