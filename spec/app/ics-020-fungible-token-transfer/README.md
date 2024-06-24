@@ -519,7 +519,7 @@ function onRecvPacket(packet: Packet) {
       hops: forwarding.hops[1:]
       memo: forwarding.memo
     }
-    if forwarding.hops == 1 {
+    if len(forwarding.hops) == 1 {
       // we're on the last hop, we can set memo and clear
       // the next forwarding
       memo = forwarding.memo
