@@ -45,7 +45,7 @@ The IBC handler interface & IBC relayer module interface are as defined in [ICS-
 
 ### General design 
 
-The interchain account protocol defines the relationship and interactions between two types of chains: the controller chain and the host chain. The protocol allows a controller chain to create and manage accounts on a host chain programmatically through IBC transactions, bypassing the need for private key signatures.
+The interchain account protocol defines the relationship and interactions between two chains with different roles: the controller chain and the host chain. The protocol allows a controller chain to create and manage accounts on a host chain programmatically through IBC transactions, bypassing the need for private key signatures.
 
 This specification defines the general way to send tx bytes from a controller chain, on an already established ica-channel, to be executed on behalf of the owner account on the host chain. The host chain is responsible for deserializing and executing the tx bytes and the controller chain must know how the host chain will handle the tx bytes in advance of sending a packet, thus this must be negotiated during channel creation.
 
@@ -65,11 +65,11 @@ For the sake of clarity, we provide first the technical specification of the *ic
 
 #### Routing module callbacks
 
-The routing module callbacks are common at the base of the interchain account protocol. Any of the chain (controlling or hosting) can start a channel creation handshake. 
+The routing module callbacks associated to the channel management are at the base of the interchain account protocol. Any of the chain (controlling or hosting) can start a channel creation handshake. 
 
 ##### Channel lifecycle management
 
-// TODO INCLUDE TX TYPE AND ENCODING CONSIDERATION 
+// TODO INCLUDE TX TYPES AND ENCODING CONSIDERATION that should be negotiated during channel creation handshake 
 
 Both machines `A` and `B` accept new channels from any module on another machine, if and only if:
 
@@ -79,7 +79,6 @@ Both machines `A` and `B` accept new channels from any module on another machine
 ```typescript
 function onChanOpenInit(
   order: ChannelOrder,
-  connectionHops: [Identifier], // Seen this present in ICS20. Really Needed'?
   portIdentifier: Identifier,
   channelIdentifier: Identifier,
   counterpartyPortIdentifier: Identifier,
@@ -87,10 +86,9 @@ function onChanOpenInit(
   version: string) => (version: string, err: Error) {
   // only unordered channels allowed
   abortTransactionUnless(order === UNORDERED)
-  // assert that version is "ica" or "ica-2" or empty
+  // assert that version is "ica" or ""
   // if empty, we return the default transfer version to core IBC
-  // as the version for this channel 
-  //NOTE shall we change ica to ica-1? 
+  // as the version for this channel  
   abortTransactionUnless(version === "ica" || version === "")
 
   if version == "" {
@@ -105,7 +103,6 @@ function onChanOpenInit(
 ```typescript
 function onChanOpenTry(
   order: ChannelOrder,
-  connectionHops: [Identifier], // Seen this present in ICS20. Really Needed'?
   portIdentifier: Identifier,
   channelIdentifier: Identifier,
   counterpartyPortIdentifier: Identifier,
@@ -230,7 +227,7 @@ For the registration message, in the success case the account address generated 
 
 ```typescript
 interface icaRegistrationPacketSuccess { 
-  hostAccounts: [] hostAccount,  
+  hostAccounts: [] string,  
 }
 ```
 
@@ -252,7 +249,7 @@ interface icaPacketError {
 
 ### **icaControlling**
 
-We now specify the things related to the controlling subprotocol. 
+We now define the controlling part of the protocol. 
 
 #### Port & channel setup
 
@@ -283,9 +280,7 @@ function setup() {
 ### Data Structures
 
 ```typescript
-interface icaOwner{
-  address: string
-}
+interface icaOwnerAddress: string
 ```
 
 ### Module State 
@@ -298,7 +293,7 @@ The `nextHostAccountSequenceNumber` starts at 0 and it is increased linearly as 
 interface ModuleState {
   hostAccounts: Map<portId, 
     Map <channelId, 
-    Map <icaOwner.address, 
+    Map <icaOwnerAddress, 
     Map <hostAccount.sequenceNumber,
     hostAccount.address>>>>,
   nextHostAccountSequenceNumber : uint64  
@@ -306,8 +301,6 @@ interface ModuleState {
 ```
 
 #### Utility functions
-
-// TODO These functions have to be adapted in case we will use it 
 
 ```typescript
 
@@ -335,7 +328,7 @@ return address
 }
 
 // Retrieves the interchain account from state.
-function GetInterchainAccountAddress(portId: string, channelId: string,icaOwnerAddress: string, hostAccountSequenceNumber:uint64) returns (string){
+function GetInterchainAccountAddress(portId: string, channelId: string,icaOwnerAddress: string, hostAccountSequenceNumber: uint64) returns (string){
 
 return hostAccounts[portId][channelId][icaOwnerAddress][hostAccountSequenceNumber].hostAccountAddress
 
@@ -344,31 +337,37 @@ return hostAccounts[portId][channelId][icaOwnerAddress][hostAccountSequenceNumbe
 
 ### Interchain Account EntryPoints 
 
-To interact with the interchain account protocol, the user can generate two types of tx, namely `REGISTER_TX` and `EXECUTE_TX`. For each Tx type, we define an icaTxHandler so that we have `icaRegisterTxHandler` and `icaExecuteTxHandler` which serves as the entrypoints for the interchain account module functionalities. 
-Both tx handlers must verify, that the signer is the `icaOwnerAddress` and then on the type of message, they must construct the related kind of packet and call the associated functions. 
+To interact with the interchain account protocol, the user can generate two types of tx, namely `REGISTER_TX` and `EXECUTE_TX`. For each Tx type, we define an icaTxHandler so that we have `icaRegisterTxHandler` and `icaExecuteTxHandler`. The icaTxHandlers serve as the entrypoints for the interchain account module functionalities. 
+Both tx handlers must verify, that the signer is the `icaOwnerAddress` and then, based on the type of message, they must construct the related kind of packet and call the associated functions. 
 
 ```typescript
-function icaRegisterTxHandler(portId: string, channelId: string, icaOwnerAddress: string, hostAccountNumber: unit64)returns (err) {
+function icaRegisterTxHandler(portId: string, channelId: string, icaOwnerAddress: string, hostAccountNumber: unit64)returns (uint64) {
 
-  // Esnure the tx has been dispatched to the correct handler
-  abortTransactionUnless(Tx.type===REGISTER_TX)
+  // Ensure the tx has been dispatched to the correct handler
+  abortTransactionUnless(this.Tx.type===REGISTER_TX)
   // verify Tx Signature:: must be signed by icaOwnerAddress
   abortTransactionUnlesss(IsValidAddress(icaOwnerAddress))
-  abortTransactionUnless(this.Tx.signer===icaOwnerAddress)
+  abortTransactionUnless(this.Tx.signer===icaOwnerAddress) // CHECK PROPER SYNTAX
   // Validate functions parameter.. 
 
-  _,err= sendRegisterTx(portId: string, channelId: string, icaOwnerAddress: string, hostAccountNumber: unit64) 
-  abortTransactionUnless(err!==nil)
-  return err 
-
+  // Should compute and pass in timeout related things or this should be done in sendRegisterTx? 
+  return sequence = sendRegisterTx(portId, channelId, icaOwnerAddress, hostAccountNumber) 
 }
 ```
 
 ```typescript
-function icaExecuteTxHandler(portId: string, channelId: string, icaOwnerAddress: string, hostAccountSequenceNumbers:[] unit64, msgs: []msgs ){
-  // Verify Tx Signature:: must be signed by icaOwnerAddress
-  // validate functions parameters, 
+function icaExecuteTxHandler(portId: string, channelId: string, icaOwnerAddress: string, hostAccountSequenceNumbers:[] unit64, msgs: []msgs, memo:string )returns (uint64){
+  
+  // Ensure the tx has been dispatched to the correct handler
+  abortTransactionUnless(this.Tx.type===EXECUTE_TX)
+  // verify Tx Signature:: must be signed by icaOwnerAddress
+  abortTransactionUnlesss(IsValidAddress(icaOwnerAddress))
+  abortTransactionUnless(this.Tx.signer===icaOwnerAddress)// CHECK PROPER SYNTAX
+  // Validate functions parameter.. 
+
   // call sendExecuteTx 
+  // Should compute and pass in timeout related things or this should be done in sendExecuteTx? 
+  return sequence= sendExecuteTx(portId, channelId, icaOwnerAddress, hostAccountSequenceNumbers, msgs, memo) 
 }
 ```
 
@@ -378,18 +377,14 @@ The sub-protocols described herein must be implemented in a controlling "interch
 
 ##### **RegisterInterchainAccount**
 
-`RegisterInterchainAccount` is the entry point function to register an interchain account. In the case the controller chain wants to register new interchain accounts will send a Tx which type is `REGISTER_TX` including the parameter `hostAccountNumber` that will trigger the `RegisterInterchainAccount` function logic to be executed on the controller chain. The function will be executed using the moduleState `nextHostAccountSequenceNumber` parameter and will initialize the map of `hostAccounts` between the tuple, (portId, channelId, ownerAccount, hostAccountSequence) and the hostAcccount maintained by the controller chain in the moduleState.
+The `RegisterInterchainAccount` function of the controlling part of the interchain account protocol provides the semantics to initialize the interchain account registration. When a user on the controller chain wants to register new interchain accounts, will send a Tx which type is `REGISTER_TX`, including the parameter `hostAccountNumber` to specify the number of accounts to register, that will trigger the `RegisterInterchainAccount` function logic to be executed on the controller chain. The function will be executed taking in input the moduleState `nextHostAccountSequenceNumber` parameter and will initialize the mapping of `hostAccounts` between the tuple key  (portId, channelId, ownerAccount, hostAccountSequence) and the hostAcccountAddress maintained by the controller chain in the moduleState.
 
-//The `RegisterInterchainAccount` Must include the ownerAccount address and the channelIdentifier which is meant to operate on. 
-
-The host chain Must be able to generate and store in state the hostAccount.address, that will be controlled by the ownerAccount, by using the information provided about the hostAccounts passed in the `REGISTER_TX` and must pass back the generated address inside the ack. Once received the ack, the controller chain must store the hostAccount.address generated address in the mapping previously described. 
-
-// TODO 
+The host chain Must be able to generate and store in state the hostAccountAddress, that will be controlled by the icaOwnerAddress by using the information provided about the hostAccounts passed in the `REGISTER_TX` and must pass back the generated address inside the ack. Once received the ack, the controller chain must store the hostAccountAddress generated address in the mapping previously described. 
 
 ```typescript
 function RegisterInterchainAccount(
-  portId: Identifier, // Should be strings instead? 
-  channelId: Identifier,
+  portId: string, 
+  channelId: string,
   icaOwnerAddress: string,
   hostAccountNumber: uint64 // The number of accounts the icaOwnerAddress wants to register within a single tx 
   ) 
@@ -400,7 +395,10 @@ function RegisterInterchainAccount(
     err=InitInterchainAccountAddress(portId, channelId, icaOwnerAddress,  
     nextHostAccountSequenceNumber)
     abortTransactionUnless(err!==nil)
+    // Push into hostSequenceNumber array the used nextHostAccountSequenceNumber
+    // We will return this array to keep track of the used sequence numbers  
     hostSequenceNumbers.push(nextHostAccountSequenceNumber)  
+    // Increment the nextHostAccountSequenceNumber for next iteration 
     nextHostAccountSequenceNumber=nextHostAccountSequenceNumber+1  
   }
 
@@ -408,29 +406,11 @@ function RegisterInterchainAccount(
 }
 ```
 
-##### **AuthenticateTx**
-
-In the contrlling part of the protocol, `AuthenticateTx` is meant to be used to verify that the expected signer of the tx is the actual `icaOwnerAddress`. 
-
-// NOT USED FOR NOW 
-
-```typescript
-function AuthenticateTx(msg Any, icaOwnerAddress string) returns (error) {
-  msgSigner=msg.getSigner() // Verify proper syntax 
-  abortTransactionUnless(msgSigner==icaOwnerAddress)
-}
-```
-
-##### **RecoverInterchainAccount**
-
-// MOVE AT THE END 
-
-Since we are allowing only unordered channels and disallowing channel closure procedures, we don't need a procedure for recovering. Channel cannot be closed or get stucked. 
-
 ### Packet relay
 
 `SendRegisterTx` and `SendExecuteTx` must be called by a transaction handler in the controller chain module which performs appropriate signature checks. In particular the transaction handlers must verify that `icaOwnerAddress` is the actual signer of the tx.
 
+//TODO CLARIFY WAY BETTER THE CONCEPT  
 Thinking about a smart contract system, then the system should verify that the tx the user generate to call the `SendRegisterTx` and `SendExecuteTx` contract function has been signed by the `icaOwnerAddress`.  
 
 `SendRegisterTx` is used by a controller chain to send an IBC packet containing instructions on the number of host accounts to create on a host chain for a given interchain account owner. 
@@ -441,7 +421,7 @@ function SendRegisterTx(
   sourceChannel: string,
   icaOwnerAddress: string,
   hostAccountNumber: uint64, // Account number for which we are requesting the generation 
-  //memo: string,   // Do we want to allow memo to be used in here? 
+  //memo: string,   // Do we want to allow memo to be used in here? Probably we should not 
   
 ) returns (uint64) {
 
@@ -486,27 +466,35 @@ function SendRegisterTx(
 }
 ```
 
-`SendExecuteTx` is used by a controller chain to send an IBC packet containing instructions (messages) and the host accounts on which the tx should be executed on a host chain for a given interchain account owner. 
+`SendExecuteTx` is used by a controller chain to send an IBC packet containing instructions (messages) and the host accounts references that should execute the tx on behalf of the interchain account owner. 
 
 // TODO 
 
 ```typescript
-function SendExecuteTx(){
-  icaPacketData = IcaExecutePacketData{icaOwnerAccount,accounts,msgs,memo}
+function SendExecuteTx( 
+  portId: string,
+  channelId: string,
+  icaOwnerAddress: string,
+  hostAccountSequences: [] uint64,  
+  msgs: []msg, 
+  memo: string)
+  returns (uint64){
   
-  // Retrieve all the hostAccounts on which we want to execute Tx on. 
-  // Note that here we may have hostAccounts previosly registered so that have the hostAccountAddress set, and hostAccounts which address is still empty, since they have just started the registration procedure. 
+  // Verify that the provided hostAccountSequences match with an already registered hostAccountAddress
+  for seq in hostAccountSequences{
+    abortTransactionUnless(GetInterchainAccountAddress(portId,channelId,icaOwnerAddress,seq)!=="", "Interchain Account Not Registered")
+    }
+  
+  // It exist at least one message to be executed 
+  abortTransactionUnless(msgs.isNotEmpty())
 
-  let accounts : [] hostAccount = []
-  
-  for j in 0..nextHostAccountSequenceNumber {
-    accounts.push(GetInterchainAccount(icaOwnerAddress,j))
-  }
+  icaPacketData = IcaExecutePacketData{icaOwnerAddress,hostAccountsSequences,msgs,memo}
+
   // send packet using the interface defined in ICS4
   sequence = handler.sendPacket(
     getCapability("port"),
-    sourcePort,
-    sourceChannel,
+    portId, //sourcePort,
+    channelId, //sourceChannel,
     timeoutHeight,
     timeoutTimestamp,
     protobuf.marshal(icaPacketData) // protobuf-marshalled bytes of packet data
@@ -525,25 +513,24 @@ function onRecvPacket(packet Packet) {
 }
 ```
 
+// CHECK STUFF IN HERE 
 `onAcknowledgePacket` is called by the routing module when a packet sent by this module has been acknowledged.
 
 ```typescript
 // Called on Controller Chain by Relayer
 function onAcknowledgePacket(
   packet: Packet,
-  acknowledgement: bytes
-) {
+  acknowledgement: bytes) {
   data=packet.Data 
   switch packet.type: 
-  case types.REGISTER_TX:
+    case types.REGISTER_TX:
     // TODO CHECK HOW TO USE ACKN BETTER 
-
     //hostAccountAddress=acknowledgement.hostAccountAddress
     let i :uint64 = 0
     // Store addresses under the right sequence number. 
     for address in acknowledgement.hostAccountAddress{
       // Store in hostAccounts module state the address returned in the ack  
-      hostAccounts[packet.destinationPort][packet.destinationChannel][data.icaOwnerAddress][data.hostSequenceNumbers.getElement(i)].hostAccountAddress=address
+      hostAccounts[packet.sourcePort][packet.sourceChannel][data.icaOwnerAddress][data.hostSequenceNumbers.getElement(i)].hostAccountAddress=address
       // Increment the positional number 
       i=i+1 
     }
@@ -600,13 +587,12 @@ interface blacklistedMessages{
 
 ### Module State Host Chain
 
-The interchain account module on host chain tracks the blacklist of msgs associated with particular contoller account in state. Fields of the `ModuleState` are assumed to be in scope.
+The interchain account module on host chain must track the hostAccounts and should track the blacklist of msgs associated with particular contoller account in state. Fields of the `ModuleState` are assumed to be in scope.
 
 // NOTE Need to inspect how to TODO blacklist mechanisms. Do the controller chain need to know which msg are blacklisted? Probably not. Thus the blacklist couldbe a module state in host chain that can be modified by an ad hoc 
 function 
 
 // Should be the blacklist icaOwnerAccounts specific? 
-// Not necessary to maintain the hostAccounts here. 
 
 ```typescript
 interface ModuleState {
@@ -622,30 +608,22 @@ interface ModuleState {
 
 ```typescript
 
-/* NOT USED, COULD BE USED IF WE WANT SEPARATION 
-function GenerateInterchainAccountAddress(portId: string, channelId: string, icaOwnerAddress:string, hostAccountSequenceNumber:uint64) returns (address,error) {
-  // Initialize in module mapping to hostAccount Data 
-  // Address set to empty in intialization. Will be generated by the host chain and returned in the acknowledgment. 
-  hostAccounts[portId][channelId][icaOwnerAddress][hostAccountSequenceNumber].hostAccountAddress=""
-  // Depend on 4.1 hostAccounts[icaOwnerAddress][hostAccountSequenceNumber].TxSequence=0
-
-  return nil 
-}
-
-*/
 // Stores the address of the interchain account in state.
-function SetInterchainAccountAddress(portId: string, channelId: string, icaOwnerAccount: string,  hostAccountSequenceNumber: uint64, address: string) returns (string) {
+function SetInterchainAccountAddress(portId: string, channelId: string, icaOwnerAccount: string,  hostAccountSequenceNumber: uint64) returns (string){
 
+// Generate new address 
+// newAddress MUST generate deterministically the host account address 
+address=newAddress(portId,channelId, icaOwnerAccount, seq)
+// Set in the host chain module state the generated address 
 hostAccounts[portId][channelId][icaOwnerAccount][hostAccountSequenceNumber].hostAccountAddress=address
 
 return address 
 }
 
-// Retrieves the interchain account from state.
-function GetInterchainAccountAddress(icaOwnerAddress: string, hostAccountSequenceNumber:uint64) returns (hostAccount){
+// Retrieves the interchain account from state. // Verify if should be move the protocol base part. 
+function GetInterchainAccountAddress(portId: string, channelId: string, icaOwnerAddress: string, hostAccountSequenceNumber:uint64) returns (string){
 
-return hostAccounts[icaOwnerAddress][hostAccountSequenceNumber]
-
+return hostAccounts[portId][channelId][icaOwnerAddress][hostAccountSequenceNumber].hostAccountAddress
 }
 ```
 
@@ -655,38 +633,31 @@ The sub-protocols described herein must be implemented in a hosting "interchain 
 
 ##### **RegisterInterchainAccount**
 
-`RegisterInterchainAccount` may be called during the `OnReceive` callback when a `MsgRegisterInterchainAccount` is relayed to the host chain and contains the parameter `hostAccountNumber`.
-
-// Complete This. Then Write Send Tx, then Write authenticate Tx, then write callbacks for full flow. 
-
+`RegisterInterchainAccount` may be called during the `OnReceive` callback when a `REGISTER_TX` tx type is relayed to the host chain and contains the parameter `hostAccountNumber`.
+ 
 ```typescript
 function RegisterInterchainAccount(
-  portIdentifier: Identifier,
-  channelIdentifier: Identifier,
-  counterpartyPortId: Identifier, 
-  counterpartyChannelIdentifier: Identifier,
+  portId: string,
+  channelId: string,
+  counterpartyPortId: string, 
+  counterpartyChannelId: string,
   icaOwnerAccount: string,
   usedSequences: []uint64 
-  ) returns ([] string) { // Coudl be a map hostAccounts= map seq -> address 
+  ) {  
 
   // validate port format
-  abortTransactionUnless(portIdentifier=="ica") 
+  abortTransactionUnless(portId=="ica") 
   // retrieve channel 
-  channel = provableStore.get(channelPath(portIdentifier, channelIdentifier))
+  channel = provableStore.get(channelPath(portId, channelId))
   // validate that the channel infos
   abortTransactionUnless(isActive(channel))
-  abortTransactionUnless(channel.counterpartyPortIdentifier == counterpartyPortIdentifier) 
-  abortTransactionUnless(channel.counterpartyChannelIdentifier == counterpartyChannelIdentifier)   
+  abortTransactionUnless(channel.counterpartyPortId == counterpartyPortId) 
+  abortTransactionUnless(channel.counterpartyChannelId == counterpartyChannelId)   
 
-   
-  let hostAccounts : [] string = []  
   for seq in usedSequences{
-    hostAccounts.push(
-      newAddress(channel.counterpartyPortIdentifier, channel.counterpartyChannelIdentifier, icaOwnerAccount, seq))
-    
-    // newAddress MUST generate deterministically the account and should return Map<uint64,address>
+    SetInterchainAccountAddress(portId,channelId,icaOwnerAddress,seq)
   }
-  return hostAccounts
+  
 }
 ```
 
@@ -714,7 +685,9 @@ function ExecuteTx(hostAccount: string, msg Any) returns (resultString, error) {
   
   // Signature has already been validated in the sendTx 
   // Execute the msg for the given hostAccount 
-  return hostAccount.execute(msg) // Review Syntax
+  
+   // Review Syntax
+  return hostAccount.execute(msg), nil  
   // return result of transaction
 }
 ```
@@ -730,64 +703,74 @@ function ExecuteTx(hostAccount: string, msg Any) returns (resultString, error) {
 ```typescript
 // Called on Host Chain by Relayer
 function onRecvPacket(packet Packet) {
-
+  // The host chain can receive two interchain account packet types: REGISTER_TX and EXECUTE_TX
+  // Thus we must handle both cases in the onRecv
   switch packet.type { 
+    case types.REGISTER_TX:
 
-  case types.REGISTER_TX:
+      (icaOwnerAccount,hostAccountSequenceNumbers,err) = types.DeserializeTx(Packet.Data)
 
-    (icaOwnerAccount,hostAccountSequenceNumbers,err) = types.DeserializeTx(Packet.Data)
-
-    if err != nil {
-      return NewErrorAcknowledgement(err)
-    }
-
-    let newAccounts: Map<uint64,address>
-    for seq in hostAccountSequenceNumbers {
-        hostAccounts[packet.DestinationPort][packet.DestinationChannel][icaOwnerAddress][seq].hostAccountAddress=RegisterInterchainAccount(
-        Packet.DestinationPort,Packet.DestinationChannel,Packet.SourcePort,Packet.SourceChannel, icaOwnerAccount,seq)
-        newAccounts[seq].hostAccountAddress=hostAccounts[seq].hostAccountAddress
-      }
-  
-  //icaPacketAcknowledgement = icaExecutePacketSuccess | icaRegistrationPacketSuccess | icaPacketError; 
-  icaPacketAcknowledgement ack = icaRegistrationPacketSuccess{newAccounts}
-  
-  //ack = NewResultAcknowledgement.icaRegistrationPacketSuccess{newAccounts}
-  return ack
-
-  case types.EXECUTE_TX:
-    // TODO - REDO 
-      let resultsData : [] bytes = []
-  // Kind of inefficient - needs more thinking 
-  if (hostAccountNumber!=nil){
-    /* Here we should start from last element. We should ensure the array of hostAccounts is ordered for hostAccountSequenceNumber. If so, if new account have been registered by the same icaOwnerAddress then, since the hostAccountSequenceNumber is incremented sequentially, they should be the latest added elements.   
-    */
-
-
-  // ExecuteTx executes each of the messages contained in the packet.Data 
-  for msg in msgs{
-    // TODO Include check for blacklisted message. In case present in blacklist skip it. No need to abort, no?
-    for account in hostAccount{ 
-      resultData, err = ExecuteTx(account.hostAccountAddress, msg)
       if err != nil {
-      // TODO think about what happens if some msgs get executed and then one msg returns an error. 
-      // Will be everything reverted automatically or shall we think about reversion? 
-      // NOTE: The error string placed in the acknowledgement must be consistent across all
-      // nodes in the network or there will be a fork in the state machine. 
-      return NewErrorAcknowledgement(err)
+        return NewErrorAcknowledgement(err)
       }
-      resultsData.push(resultData)          
-    }
-  }
-  
-  //InterchainAccountPacketAcknowledgement ack = InterchainAccountPacketAcknowledgement{resultData, null}
-  // return acknowledgement containing all the result of the transactions execution on host chain 
-  ack = NewResultAcknowledgement(resultsData,hostAccounts,[]byte{byte(1)})
-  return ack
 
+      // We want to return a map in the ack.  
+      let newAccounts: []string = []
+    
+      for seq in hostAccountSequenceNumbers {
+        RegisterInterchainAccount(Packet.DestinationPort,Packet.DestinationChannel,Packet.SourcePort,Packet.SourceChannel, icaOwnerAccount,seq)
+        // We want to return in the ack only the new generated accounts. So we retrieve them from the module state
+        newAccounts.push(hostAccounts[seq].hostAccountAddress)
+      }
+  
+      //icaPacketAcknowledgement = icaExecutePacketSuccess | icaRegistrationPacketSuccess | icaPacketError; 
+      icaPacketAcknowledgement ack = icaRegisterPacketSuccess{newAccounts}
+      return ack
+
+    case types.EXECUTE_TX:
+
+      (icaOwnerAccount,hostAccountSequenceNumbers,msgs,memo,err) = types.DeserializeTx(Packet.Data)
+    
+      if err != nil {
+        return NewErrorAcknowledgement(err)
+      }
+   
+      // TODO Check Optimizations  
+      let resultsData : [] bytes = []
+      let executingAddress: string = "" 
+      let hostAddressesSet: set(string)
+
+    // Given the hostAccountSequences, retrieve the hostAccountsAddress and place them in a set of address. 
+    for seq in hostAccountSequences{ 
+      temp= getInterchainAccountAddress(icaOwnerAddress,seq)
+      abortTransactionUnless(temp!=="", "Requesting Tx For A Non Registered Account")
+      hostAddressesSet.add(temp)
+      }
+  
+    for msg in msgs{
+      // TODO Include check for blacklisted message.
+      executingAddress = msg.expectedSigner()
+      // Verify that the expectedSigner is in the set of host addresses provided for this IBC tx.
+      abortTransactionUnless(executingAddress.isIn(hostAddressesSet), "Expected Signer Mismatch")
+
+      // ExecuteTx executes each message individually  
+      resultData, err = ExecuteTx(executingAddress, msg)
+      if err != nil {
+        // TODO think about what happens if some msgs get executed and then one msg returns an error. 
+        // Will be everything reverted automatically or shall we think about reversion? 
+        return NewErrorAcknowledgement(err)
+      }
+      resultsData.push(resultData)    
+      // clean executingAddress 
+      executingAddress=""      
+    }
+    
+    InterchainAccountPacketAcknowledgement ack = icaExecutePacketSuccess{resultData}
+    return ack
+  }
   
   default:
     return NewErrorAcknowledgement(ErrUnknownDataType)
-  }
   }
 ```
 
@@ -798,15 +781,36 @@ function onRecvPacket(packet Packet) {
 [imageUrl](https://excalidraw.com/#json=BfGp0ZbDAhO_LWiNmdGGn,Mgw4FrmorzuGjM0alzLMWw
 )
 
-## Example Implementations
+## Considerations
+
+### Interchain Account Recovery
+
+Since we are allowing only unordered channels and disallowing channel closure procedures, we don't need a procedure for recovering. Channel cannot be closed or get stucked. 
+
+### Message Execution Ordering 
+
+The messages that are passed in a interchain account EXECUTE_TX will be executed by the host chain following a FIFO mechanisms.   
 
 // TODO 
+Note that in case we have a chain A and chain B and chain A sends two EXECUTE_TX messages, the order of execution of these messages will be the related to the order of the IBC packets will be relayed by relayers. 
 
-- Implementation of ICS 27 in Go can be found in [ibc-go repository](https://github.com/cosmos/ibc-go).
+So if chain A sends two packet with type EXECUTE_TX 1 and 2, we don't have the guarantee that 1 will be executed first. 
+
+Proposal from penumbra: https://hackmd.io/@hdevalence/r1gZu-lEQ0
+
+### Account balances post execution on host chain 
+
+In the case the controller chain wants to know the account balance after certain msg are executed, it is recommended to add a crosschain-query message in the msg list. So that the 
+
+## Example Implementations
+
+- Implementation of ICS 27v1 in Go can be found in [ibc-go repository](https://github.com/cosmos/ibc-go).
+
+- Implementation of ICS 27v2 in Go COMING SOON. 
 
 ## Future Improvements
 
-// TODO Mention IBC Lite 
+// TODO  
 
 A future version of interchain accounts may be greatly simplified by the introduction of an IBC channel type that is ORDERED but does not close the channel on timeouts, and instead proceeds to accept and receive the next packet. If such a channel type is made available by core IBC, Interchain accounts could require the use of this channel type and remove all logic and state pertaining to "active channels". The metadata format can also be simplified to remove any reference to the underlying connection identifiers.
 
@@ -831,6 +835,8 @@ November 11, 2021 - Update with latest changes from implementation
 December 14, 2021 - Revisions to spec based on audits and maintainer reviews
 
 August 1, 2023 - Implemented channel upgrades callbacks
+
+July 24, 2024 - V2 Draft suggested
     
 ## Copyright
 
