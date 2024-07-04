@@ -249,7 +249,7 @@ enum icaTxTypes {
 
 ##### Interchain Account EntryPoints 
 
-To interact with the interchain account protocol, the user can generate two types of tx, namely `REGISTER_TX` and `EXECUTE_TX`. For each Tx type, we define a icaTxHandler so that we have `icaRegisterTxHandler` and `icaexecuteTxHandler`. Both tx handlers must verify, that the signer is the `icaOwnerAddress` and then, based on the type of Tx, they must call the associated functions that will construct the related kind of packet. 
+To interact with the interchain account protocol, the user can generate two types of tx, namely `REGISTER_TX` and `EXECUTE_TX`. For each Tx type, we define a icaTxHandler so that we have `icaRegisterTxHandler` and `icaExecuteTxHandler`. Both tx handlers must verify, that the signer is the `icaOwnerAddress` and then, based on the type of Tx, they must call the associated functions that will construct the related kind of packet. 
 
 ```typescript
 function icaRegisterTxHandler(portId: string, channelId: string, icaOwnerAddress: string, hostAccountNumber: unit64): uint64 {
@@ -267,7 +267,7 @@ function icaRegisterTxHandler(portId: string, channelId: string, icaOwnerAddress
 ```
 
 ```typescript
-function icaexecuteTxHandler(portId: string, channelId: string, icaOwnerAddress: string, hostAccountIds:[] unit64, msgs: []msgs, memo:string ) : uint64 {
+function icaExecuteTxHandler(portId: string, channelId: string, icaOwnerAddress: string, hostAccountIds:[] unit64, msgs: []msgs, memo:string ) : uint64 {
   
   // Ensure the tx has been dispatched to the correct handler
   abortTransactionUnless(this.Tx.type===EXECUTE_TX)
@@ -276,9 +276,9 @@ function icaexecuteTxHandler(portId: string, channelId: string, icaOwnerAddress:
   abortTransactionUnless(this.Tx.signer===icaOwnerAddress)// CHECK PROPER SYNTAX
   // Validate functions parameter.. 
 
-  // call sendexecuteTx 
-  // Should compute and pass in timeout related things or this should be done in sendexecuteTx? 
-  return sequence= sendexecuteTx(portId, channelId, icaOwnerAddress, hostAccountIds, msgs, memo) 
+  // call sendExecuteTx 
+  // Should compute and pass in timeout related things or this should be done in sendExecuteTx? 
+  return sequence= sendExecuteTx(portId, channelId, icaOwnerAddress, hostAccountIds, msgs, memo) 
 }
 ```
 
@@ -410,10 +410,10 @@ function registerInterchainAccount(
 
 ##### Packet relay
 
-`sendRegisterTx` and `sendexecuteTx` must be called by a transaction handler in the controller chain module which performs appropriate signature checks. In particular the transaction handlers must verify that `icaOwnerAddress` is the actual signer of the tx.
+`sendRegisterTx` and `sendExecuteTx` must be called by a transaction handler in the controller chain module which performs appropriate signature checks. In particular the transaction handlers must verify that `icaOwnerAddress` is the actual signer of the tx.
 
 //TODO CLARIFY WAY BETTER THE CONCEPT  // May be in a different section 
-Thinking about a smart contract system, then the system should verify that the tx the user generate to call the `sendRegisterTx` and `sendexecuteTx` contract function has been signed by the `icaOwnerAddress`.  
+Thinking about a smart contract system, then the system should verify that the tx the user generate to call the `sendRegisterTx` and `sendExecuteTx` contract function has been signed by the `icaOwnerAddress`.  
 
 `sendRegisterTx` is used by a controller chain to send an IBC packet containing instructions on the number of host accounts to create on a host chain for a given interchain account owner. 
 
@@ -468,10 +468,10 @@ function sendRegisterTx(
 }
 ```
 
-`sendexecuteTx` is used by a controller chain to send an IBC packet containing instructions (messages) and the host accounts references that should execute the tx on behalf of the interchain account owner. 
+`sendExecuteTx` is used by a controller chain to send an IBC packet containing instructions (messages) and the host accounts references that should execute the tx on behalf of the interchain account owner. 
 
 ```typescript
-function sendexecuteTx( 
+function sendExecuteTx( 
   portId: string,
   channelId: string,
   icaOwnerAddress: string,
@@ -841,9 +841,9 @@ Precondition: The user on the controller chain has registered an account on the 
 0.2 The user sign Tx2 with the `icaOwnerAddress`
 0.3 The user send Tx2 to the controller state machine. 
 1.1 The controller state machine pass the transaction to the proper icaTxHandler.  
-1.2 The `icaexecuteTxHandler` validate Tx2 and executes signatures checks over the `icaOwnerAddress` verifying this is the signer of Tx2.
-1.3 The `icaexecuteTxHandler` calls `sendexecuteTx`
-2.1 The `sendexecuteTx` verifies that the `hostAccountIds` passed in are actually related to an already registered `hostAccountAddress` and that the messages array is not empty.  
+1.2 The `icaExecuteTxHandler` validate Tx2 and executes signatures checks over the `icaOwnerAddress` verifying this is the signer of Tx2.
+1.3 The `icaExecuteTxHandler` calls `sendExecuteTx`
+2.1 The `sendExecuteTx` verifies that the `hostAccountIds` passed in are actually related to an already registered `hostAccountAddress` and that the messages array is not empty.  
 2.2 The `sendRegisterTx` construct and sends the packet, via ICS-4 wrapper, with `icaExecutePacketData` information (containing the `icaOwnerAddress` and the `hostAccountsIds` and the `msgs`)
 3.1 The relayer relays the packet to the host state machine. 
 4.1 The host state machine dispatch the packet to the proper module handler.  
@@ -863,7 +863,7 @@ Precondition: The user on the controller chain has registered an account on the 
 0.2 The user sign Tx2 with the `icaOwnerAddress`
 0.3 The user send Tx2 to the controller state machine. 
 1.1 The controller state machine pass the transaction to the proper icaTxHandler.  
-1.2 The `icaexecuteTxHandler` validate Tx2 and executes signatures checks over the `icaOwnerAddress` verifying this is the signer of Tx2.
+1.2 The `icaExecuteTxHandler` validate Tx2 and executes signatures checks over the `icaOwnerAddress` verifying this is the signer of Tx2.
 1.3 The `icaExecuteTxHandler` calls `sendExecuteTx`
 2.1 The `sendExecuteTx` verifies that the `hostAccountIds` passed in are actually related to an already registered `hostAccountAddress` and that the messages array is not empty.  
 2.2 The `sendRegisterTx` construct and sends the packet, via ICS-4 wrapper, with `icaExecutePacketData` information (containing the `icaOwnerAddress` and the `hostAccountsIds` and the `msgs`)
