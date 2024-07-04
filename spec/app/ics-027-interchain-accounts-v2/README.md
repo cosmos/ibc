@@ -249,7 +249,7 @@ enum icaTxTypes {
 
 ##### Interchain Account EntryPoints 
 
-To interact with the interchain account protocol, the user can generate two types of tx, namely `REGISTER_TX` and `EXECUTE_TX`. For each Tx type, we define a icaTxHandler so that we have `icaRegisterTxHandler` and `icaExecuteTxHandler`. Both tx handlers must verify, that the signer is the `icaOwnerAddress` and then, based on the type of Tx, they must call the associated functions that will construct the related kind of packet. 
+To interact with the interchain account protocol, the user can generate two types of tx, namely `REGISTER_TX` and `EXECUTE_TX`. For each Tx type, we define a icaTxHandler so that we have `icaRegisterTxHandler` and `icaexecuteTxHandler`. Both tx handlers must verify, that the signer is the `icaOwnerAddress` and then, based on the type of Tx, they must call the associated functions that will construct the related kind of packet. 
 
 ```typescript
 function icaRegisterTxHandler(portId: string, channelId: string, icaOwnerAddress: string, hostAccountNumber: unit64)returns (uint64) {
@@ -267,7 +267,7 @@ function icaRegisterTxHandler(portId: string, channelId: string, icaOwnerAddress
 ```
 
 ```typescript
-function icaExecuteTxHandler(portId: string, channelId: string, icaOwnerAddress: string, hostAccountIds:[] unit64, msgs: []msgs, memo:string )returns (uint64){
+function icaexecuteTxHandler(portId: string, channelId: string, icaOwnerAddress: string, hostAccountIds:[] unit64, msgs: []msgs, memo:string )returns (uint64){
   
   // Ensure the tx has been dispatched to the correct handler
   abortTransactionUnless(this.Tx.type===EXECUTE_TX)
@@ -276,9 +276,9 @@ function icaExecuteTxHandler(portId: string, channelId: string, icaOwnerAddress:
   abortTransactionUnless(this.Tx.signer===icaOwnerAddress)// CHECK PROPER SYNTAX
   // Validate functions parameter.. 
 
-  // call sendExecuteTx 
-  // Should compute and pass in timeout related things or this should be done in sendExecuteTx? 
-  return sequence= sendExecuteTx(portId, channelId, icaOwnerAddress, hostAccountIds, msgs, memo) 
+  // call sendexecuteTx 
+  // Should compute and pass in timeout related things or this should be done in sendexecuteTx? 
+  return sequence= sendexecuteTx(portId, channelId, icaOwnerAddress, hostAccountIds, msgs, memo) 
 }
 ```
 
@@ -346,7 +346,7 @@ function InitInterchainAccountAddress(portId: string, channelId: string, icaOwne
 }
 */
 // Stores the address of the interchain account in state.
-function SetInterchainAccountAddress(portId: string, channelId: string, icaOwnerAccount: string,  hostAccountId: uint64, address: string) returns (string) {
+function setInterchainAccountAddress(portId: string, channelId: string, icaOwnerAccount: string,  hostAccountId: uint64, address: string) returns (string) {
 
 hostAccounts[portId][channelId][icaOwnerAccount][hostAccountId].hostAccountAddress=address
 
@@ -354,7 +354,7 @@ return address
 }
 
 // Retrieves the interchain account address from state.
-function GetInterchainAccountAddress(portId: string, channelId: string,icaOwnerAddress: string, hostAccountId: uint64) returns (string){
+function getInterchainAccountAddress(portId: string, channelId: string,icaOwnerAddress: string, hostAccountId: uint64) returns (string){
 
 return hostAccounts[portId][channelId][icaOwnerAddress][hostAccountId].hostAccountAddress
 
@@ -365,16 +365,16 @@ return hostAccounts[portId][channelId][icaOwnerAddress][hostAccountId].hostAccou
 
 The helper functions described herein must be implemented in a controlling interchain account module. 
 
-###### **RegisterInterchainAccount**
+###### **registerInterchainAccount**
 
 // TODO Rewrite 
 
-When a user on the controller chain wants to register new interchain accounts, he will send a Tx which type is `REGISTER_TX`, including the parameter `hostAccountNumber` to specify the number of accounts to register, that will trigger the `RegisterInterchainAccount` function logic to be executed on the controller chain. The `hostAccountId` pa will be computed or from the list of `unusedHostAccountIDs` or from  `nextHostAccountId` parameter in the moduleState. Thus the function will initialize the mapping of `hostAccounts` between the tuple key  (portId, channelId, ownerAccount, hostAccountId) and the hostAcccountAddress maintained by the controller chain in the moduleState.
+When a user on the controller chain wants to register new interchain accounts, he will send a Tx which type is `REGISTER_TX`, including the parameter `hostAccountNumber` to specify the number of accounts to register, that will trigger the `registerInterchainAccount` function logic to be executed on the controller chain. The `hostAccountId` pa will be computed or from the list of `unusedHostAccountIDs` or from  `nextHostAccountId` parameter in the moduleState. Thus the function will initialize the mapping of `hostAccounts` between the tuple key  (portId, channelId, ownerAccount, hostAccountId) and the hostAcccountAddress maintained by the controller chain in the moduleState.
 
 The host chain Must be able to generate and store in state the hostAccountAddress, that will be controlled by the icaOwnerAddress by using the information provided about the hostAccounts passed in the `REGISTER_TX` and must pass back the generated address inside the ack. Once received the ack, the controller chain must store the hostAccountAddress generated address in the mapping previously described. In the case of error during the registration, the `usedHostAccountIds` will be added to the `unusedHostAccountIDs` array. 
 
 ```typescript
-function RegisterInterchainAccount(
+function registerInterchainAccount(
   portId: string, 
   channelId: string,
   icaOwnerAddress: string,
@@ -410,15 +410,15 @@ function RegisterInterchainAccount(
 
 ##### Packet relay
 
-`SendRegisterTx` and `SendExecuteTx` must be called by a transaction handler in the controller chain module which performs appropriate signature checks. In particular the transaction handlers must verify that `icaOwnerAddress` is the actual signer of the tx.
+`sendRegisterTx` and `sendexecuteTx` must be called by a transaction handler in the controller chain module which performs appropriate signature checks. In particular the transaction handlers must verify that `icaOwnerAddress` is the actual signer of the tx.
 
 //TODO CLARIFY WAY BETTER THE CONCEPT  // May be in a different section 
-Thinking about a smart contract system, then the system should verify that the tx the user generate to call the `SendRegisterTx` and `SendExecuteTx` contract function has been signed by the `icaOwnerAddress`.  
+Thinking about a smart contract system, then the system should verify that the tx the user generate to call the `sendRegisterTx` and `sendexecuteTx` contract function has been signed by the `icaOwnerAddress`.  
 
-`SendRegisterTx` is used by a controller chain to send an IBC packet containing instructions on the number of host accounts to create on a host chain for a given interchain account owner. 
+`sendRegisterTx` is used by a controller chain to send an IBC packet containing instructions on the number of host accounts to create on a host chain for a given interchain account owner. 
 
 ```typescript
-function SendRegisterTx( 
+function sendRegisterTx( 
   sourcePort: string,
   sourceChannel: string,
   icaOwnerAddress: string,
@@ -447,11 +447,11 @@ function SendRegisterTx(
   
   // A single registration message enable the registration of n accounts. 
   // A potential limit of the number of accounts to guarantee a non out-of-gas error is to be discussed
-  usedHostAccountIds,err = RegisterInterchainAccount(sourcePort, sourceChannel, icaOwnerAddress,hostAccountNumber)
+  usedHostAccountIds,err = registerInterchainAccount(sourcePort, sourceChannel, icaOwnerAddress,hostAccountNumber)
   
   abortTransactionUnless(err!=nil)     
   
-  //SendRegisterTx has been called by a transaction handler in the controller chain module which has performed appropriate signature checks for the icaOwnerAddress such that we can assume the tx has already been validated for being originated by the icaOwnerAddress
+  //sendRegisterTx has been called by a transaction handler in the controller chain module which has performed appropriate signature checks for the icaOwnerAddress such that we can assume the tx has already been validated for being originated by the icaOwnerAddress
 
   icaPacketData = icaRegistrationPacketData{icaOwnerAccount,usedHostAccountIds}
   
@@ -468,10 +468,10 @@ function SendRegisterTx(
 }
 ```
 
-`SendExecuteTx` is used by a controller chain to send an IBC packet containing instructions (messages) and the host accounts references that should execute the tx on behalf of the interchain account owner. 
+`sendexecuteTx` is used by a controller chain to send an IBC packet containing instructions (messages) and the host accounts references that should execute the tx on behalf of the interchain account owner. 
 
 ```typescript
-function SendExecuteTx( 
+function sendexecuteTx( 
   portId: string,
   channelId: string,
   icaOwnerAddress: string,
@@ -482,7 +482,7 @@ function SendExecuteTx(
   
   // Verify that the provided hostAccountIds match with an already registered hostAccountAddress
   for seq in hostAccountIds{
-    abortTransactionUnless(GetInterchainAccountAddress(portId,channelId,icaOwnerAddress,seq)!=="", "Interchain Account Not Registered")
+    abortTransactionUnless(getInterchainAccountAddress(portId,channelId,icaOwnerAddress,seq)!=="", "Interchain Account Not Registered")
     }
   
   // It exist at least one message to be executed 
@@ -503,7 +503,7 @@ function SendExecuteTx(
 }
 ```
 
-Note that interchain accounts controller modules should not execute any logic upon packet receipt, i.e. the `OnRecvPacket` callback should not be called, and in case it is called, it should simply return an error acknowledgement:
+Note that interchain accounts controller modules should not execute any logic upon packet receipt, i.e. the `onRecvPacket` callback should not be called, and in case it is called, it should simply return an error acknowledgement:
 
 ```typescript
 // Called on Controller Chain by Relayer
@@ -619,7 +619,7 @@ interface ModuleState {
 
 ```typescript
 // Stores the address of the interchain account in state.
-function SetInterchainAccountAddress(portId: string, channelId: string, icaOwnerAccount: string,  hostAccountId: uint64) returns (string){
+function setInterchainAccountAddress(portId: string, channelId: string, icaOwnerAccount: string,  hostAccountId: uint64) returns (string){
 
 // Generate new address 
 // newAddress MUST generate deterministically the host account address 
@@ -631,7 +631,7 @@ return address
 }
 
 // Retrieves the interchain account from state. // Verify if should be move the protocol base part. 
-function GetInterchainAccountAddress(portId: string, channelId: string, icaOwnerAddress: string, hostAccountId:uint64) returns (string){
+function getInterchainAccountAddress(portId: string, channelId: string, icaOwnerAddress: string, hostAccountId:uint64) returns (string){
 
 return hostAccounts[portId][channelId][icaOwnerAddress][hostAccountId].hostAccountAddress
 }
@@ -641,12 +641,12 @@ return hostAccounts[portId][channelId][icaOwnerAddress][hostAccountId].hostAccou
 
 The helper functions described herein must be implemented in a hosting interchain account module. 
 
-###### **RegisterInterchainAccount**
+###### **registerInterchainAccount**
 
-`RegisterInterchainAccount` may be called during the `OnReceive` callback when a `REGISTER_TX` tx type is relayed to the host chain and contains the parameter `hostAccountNumber`.
+`registerInterchainAccount` may be called during the `OnReceive` callback when a `REGISTER_TX` tx type is relayed to the host chain and contains the parameter `hostAccountNumber`.
  
 ```typescript
-function RegisterInterchainAccount(
+function registerInterchainAccount(
   portId: string,
   channelId: string,
   counterpartyPortId: string, 
@@ -660,23 +660,23 @@ function RegisterInterchainAccount(
   // retrieve channel 
   channel = provableStore.get(channelPath(portId, channelId))
   // validate that the channel infos
-  abortTransactionUnless(isActive(channel))
+  //abortTransactionUnless(isActive(channel))
   abortTransactionUnless(channel.counterpartyPortId == counterpartyPortId) 
   abortTransactionUnless(channel.counterpartyChannelId == counterpartyChannelId)   
 
   for seq in usedSequences{
-    SetInterchainAccountAddress(portId,channelId,icaOwnerAddress,seq)
+    setInterchainAccountAddress(portId,channelId,icaOwnerAddress,seq)
   }
   
 }
 ```
 
-##### **ExecuteTx**
+##### **executeTx**
 
 Executes each message sent by the owner account on the controller chain.
 
 ```typescript
-function ExecuteTx(hostAccount: string, msg Any) returns (resultString, error) {
+function executeTx(hostAccount: string, msg Any) returns (resultString, error) {
   
   // Signature has already been validated in the sendTx 
   // Execute the msg for the given hostAccount 
@@ -717,7 +717,7 @@ function onRecvPacket(packet Packet) {
           return NewErrorAcknowledgement("hostAccountId already used")
           }
         
-        RegisterInterchainAccount(Packet.DestinationPort,Packet.DestinationChannel,Packet.SourcePort,Packet.SourceChannel, icaOwnerAccount,seq)
+        registerInterchainAccount(Packet.DestinationPort,Packet.DestinationChannel,Packet.SourcePort,Packet.SourceChannel, icaOwnerAccount,seq)
         // We want to return in the ack only the new generated accounts. So we retrieve them from the module state
         newAccounts.push(hostAccounts[seq].hostAccountAddress)
       }
@@ -757,8 +757,8 @@ function onRecvPacket(packet Packet) {
           return NewErrorAcknowledgement("Expected Signer Mismatch")
         }
 
-      // ExecuteTx executes each message individually  
-      resultData, err = ExecuteTx(executingAddress, msg)
+      // executeTx executes each message individually  
+      resultData, err = executeTx(executingAddress, msg)
       if err != nil {
         // In case any of the msg in the for loop fails, everything will be reverted by returning the error ack providing atomiticy between msgs of the same ica packet. 
         return NewErrorAcknowledgement(err)
@@ -793,19 +793,19 @@ Precondition: The user on the controller chain has created an account. This acco
 0.3 The user send Tx1 to the controller state machine. 
 1.1 The controller state machine pass the transaction to the proper icaTxHandler.  
 1.2 The `icaRegisterTxHandler` validate Tx1 and executes signatures checks `icaOwnerAddress` is the signer of Tx1 
-1.3 The `icaRegisterTxHandler` calls `SendRegisterTx`
-2.1 The `SendRegisterTx` calls the `RegisterInterchainAccount` controller function. 
-2.2 The `RegisterInterchainAccount` computes the `usedHostAccountsIds`
-2.3 The `SendRegisterTx` construct and sends the packet, via ICS-4 wrapper, with `icaRegisterPacketData` information (containing the `icaOwnerAddress` and the `usedHostAccountsIds`)
+1.3 The `icaRegisterTxHandler` calls `sendRegisterTx`
+2.1 The `sendRegisterTx` calls the `registerInterchainAccount` controller function. 
+2.2 The `registerInterchainAccount` computes the `usedHostAccountsIds`
+2.3 The `sendRegisterTx` construct and sends the packet, via ICS-4 wrapper, with `icaRegisterPacketData` information (containing the `icaOwnerAddress` and the `usedHostAccountsIds`)
 3.1 The relayer relays the packet to the host state machine. 
 4.1 The host state machine dispatch the packet to the proper module handler.  
-4.2 The `OnRecv` callbacks is activated on the host state machine and trigger the `RegisterInterchainAccount` function. 
-4.3 The `RegisterInterchainAccount` function of the host chain verifies that the `usedHostAccountsIds` have not already been used. 
-4.4 The `RegisterInterchainAccount` generates the addresses based on the passed in parameters.
+4.2 The `onRecvPacket` callbacks is activated on the host state machine and trigger the `registerInterchainAccount` function. 
+4.3 The `registerInterchainAccount` function of the host chain verifies that the `usedHostAccountsIds` have not already been used. 
+4.4 The `registerInterchainAccount` generates the addresses based on the passed in parameters.
 4.5 The addresses are stored in the host chain module state. 
-4.6 Upon completition, the `OnRecv` callback write an acknowledgment containing the new generated addresses. 
+4.6 Upon completition, the `onRecvPacket` callback write an acknowledgment containing the new generated addresses. 
 5.1 The relayer relays the acknowledgment packet to the controller state machine.
-6.1 The `OnAck` is activated on the controller state machine 
+6.1 The `onAcknowledgePacket` is activated on the controller state machine 
 6.2 The addresses contained in the acknowledgment are written into the controller chain module state. 
 
 ##### Error Case 
@@ -817,19 +817,19 @@ Precondition: The user on the controller chain has created an account. This acco
 0.3 The user send Tx1 to the controller state machine. 
 1.1 The controller state machine pass the transaction to the proper icaTxHandler.  
 1.2 The `icaRegisterTxHandler` validate Tx1 and executes signatures checks over `icaOwnerAddress` verifying it is the signer of Tx1.  
-1.3 The `icaRegisterTxHandler` calls `SendRegisterTx`
-2.1 The `SendRegisterTx` calls the `RegisterInterchainAccount` controller function. 
-2.2 The `RegisterInterchainAccount` computes the `usedHostAccountsIds`
-2.3 The `SendRegisterTx` construct and sends the packet, via ICS-4 wrapper, with `icaRegisterPacketData` information (containing the `icaOwnerAddress` and the `usedHostAccountsIds`)
+1.3 The `icaRegisterTxHandler` calls `sendRegisterTx`
+2.1 The `sendRegisterTx` calls the `registerInterchainAccount` controller function. 
+2.2 The `registerInterchainAccount` computes the `usedHostAccountsIds`
+2.3 The `sendRegisterTx` construct and sends the packet, via ICS-4 wrapper, with `icaRegisterPacketData` information (containing the `icaOwnerAddress` and the `usedHostAccountsIds`)
 3.1 The relayer relays the packet to the host state machine. 
 4.1 The host state machine dispatch the packet to the proper module handler.  
-4.2 The `OnRecv` callbacks is activated on the host state machine. 
-4.3 The `OnRecv` function trigger an error, thus it returns an error acknowledgment. 
+4.2 The `onRecvPacket` callbacks is activated on the host state machine. 
+4.3 The `onRecvPacket` function trigger an error, thus it returns an error acknowledgment. 
 5.1 The relayer relays the error acknowledgment packet to the controller state machine.
-6.1 The `OnAck` is activated on the controller state machine 
+6.1 The `onAcknowledgePacket` is activated on the controller state machine 
 6.2 The `usedHostAccountsIds` are recovered and stored in the `unusedHostAccountsIds` array. 
 
-Note that `OnTimeout` a similar logic is triggered with the `usedHostAccountsIds` that get recovered and stored in the `unusedHostAccountsIds` array.
+Note that `onTimeout` a similar logic is triggered with the `usedHostAccountsIds` that get recovered and stored in the `unusedHostAccountsIds` array.
 
 #### Controlling Flow 
 
@@ -837,42 +837,42 @@ Note that `OnTimeout` a similar logic is triggered with the `usedHostAccountsIds
 
 Precondition: The user on the controller chain has registered an account on the host chain. The message that will be passed in must use an already registered account address.  
 
-0.1 The user create a `ExecuteTx` Tx2.  
+0.1 The user create a `executeTx` Tx2.  
 0.2 The user sign Tx2 with the `icaOwnerAddress`
 0.3 The user send Tx2 to the controller state machine. 
 1.1 The controller state machine pass the transaction to the proper icaTxHandler.  
-1.2 The `icaExecuteTxHandler` validate Tx2 and executes signatures checks over the `icaOwnerAddress` verifying this is the signer of Tx2.
-1.3 The `icaExecuteTxHandler` calls `SendExecuteTx`
-2.1 The `SendExecuteTx` verifies that the `hostAccountIds` passed in are actually related to an already registered `hostAccountAddress` and that the messages array is not empty.  
-2.2 The `SendRegisterTx` construct and sends the packet, via ICS-4 wrapper, with `icaExecutePacketData` information (containing the `icaOwnerAddress` and the `hostAccountsIds` and the `msgs`)
+1.2 The `icaexecuteTxHandler` validate Tx2 and executes signatures checks over the `icaOwnerAddress` verifying this is the signer of Tx2.
+1.3 The `icaexecuteTxHandler` calls `sendexecuteTx`
+2.1 The `sendexecuteTx` verifies that the `hostAccountIds` passed in are actually related to an already registered `hostAccountAddress` and that the messages array is not empty.  
+2.2 The `sendRegisterTx` construct and sends the packet, via ICS-4 wrapper, with `icaExecutePacketData` information (containing the `icaOwnerAddress` and the `hostAccountsIds` and the `msgs`)
 3.1 The relayer relays the packet to the host state machine. 
 4.1 The host state machine dispatch the packet to the proper module handler.  
-4.2 The `OnRecv` callbacks is activated on the host state machine. 
-4.3 The `OnRecv` construct the addresses set given the `hostAccountIds` (retrieve the address from the module state given the `hostAccountId` key)
-4.4 For every msg contained in the `msgs` array, the `OnRecv` verify that the `msg.expectedSigner` is contained in the addresses set.
+4.2 The `onRecvPacket` callbacks is activated on the host state machine. 
+4.3 The `onRecvPacket` construct the addresses set given the `hostAccountIds` (retrieve the address from the module state given the `hostAccountId` key)
+4.4 For every msg contained in the `msgs` array, the `onRecvPacket` verify that the `msg.expectedSigner` is contained in the addresses set.
 4.5 The msg is executed and the return value are save in the `resultData`. 
 4.6 Once all the msgs are executed, the acknowledgment containing `resultData` is returned. 
 5.1 The relayer relays the acknowledgment packet to the controller state machine.
-6.1 The `OnAck` is activated on the controller state machine triggering a noOp.   
+6.1 The `onAcknowledgePacket` is activated on the controller state machine triggering a noOp.   
 
 ##### Error Case 
 
 Precondition: The user on the controller chain has registered an account on the host chain. The message that will be passed in must use an already registered account address. 
 
-0.1 The user create a `ExecuteTx` Tx2.  
+0.1 The user create a `executeTx` Tx2.  
 0.2 The user sign Tx2 with the `icaOwnerAddress`
 0.3 The user send Tx2 to the controller state machine. 
 1.1 The controller state machine pass the transaction to the proper icaTxHandler.  
-1.2 The `icaExecuteTxHandler` validate Tx2 and executes signatures checks over the `icaOwnerAddress` verifying this is the signer of Tx2.
-1.3 The `icaExecuteTxHandler` calls `SendExecuteTx`
-2.1 The `SendExecuteTx` verifies that the `hostAccountIds` passed in are actually related to an already registered `hostAccountAddress` and that the messages array is not empty.  
-2.2 The `SendRegisterTx` construct and sends the packet, via ICS-4 wrapper, with `icaExecutePacketData` information (containing the `icaOwnerAddress` and the `hostAccountsIds` and the `msgs`)
+1.2 The `icaexecuteTxHandler` validate Tx2 and executes signatures checks over the `icaOwnerAddress` verifying this is the signer of Tx2.
+1.3 The `icaexecuteTxHandler` calls `sendexecuteTx`
+2.1 The `sendexecuteTx` verifies that the `hostAccountIds` passed in are actually related to an already registered `hostAccountAddress` and that the messages array is not empty.  
+2.2 The `sendRegisterTx` construct and sends the packet, via ICS-4 wrapper, with `icaExecutePacketData` information (containing the `icaOwnerAddress` and the `hostAccountsIds` and the `msgs`)
 3.1 The relayer relays the packet to the host state machine. 
 4.1 The host state machine dispatch the packet to the proper module handler.  
-4.2 The `OnRecv` callbacks is activated on the host state machine. 
-4.3 The `OnRecv` function trigger an error, thus it returns an error acknowledgment. 
+4.2 The `onRecvPacket` callbacks is activated on the host state machine. 
+4.3 The `onRecvPacket` function trigger an error, thus it returns an error acknowledgment. 
 5.1 The relayer relays the error acknowledgment packet to the controller state machine.
-6.1 The `OnAck` is activated on the controller state machine triggering a noOp (nothing to revert on controller chain).
+6.1 The `onAcknowledgePacket` is activated on the controller state machine triggering a noOp (nothing to revert on controller chain).
 
 ## Considerations
 
