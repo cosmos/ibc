@@ -1,6 +1,7 @@
 ---
 ics: 27
 title: Interchain Accounts
+version: 1
 stage: Draft
 category: IBC/APP
 requires: 25, 26
