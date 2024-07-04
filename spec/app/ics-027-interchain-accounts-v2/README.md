@@ -676,7 +676,7 @@ function registerInterchainAccount(
 Executes each message sent by the owner account on the controller chain.
 
 ```typescript
-function executeTx(hostAccount: string, msg Any) returns (resultString, error) {
+function executeTx(hostAccount: string, msg Any) : (resultString, error) {
   
   // Signature has already been validated in the sendTx 
   // Execute the msg for the given hostAccount 
@@ -791,20 +791,26 @@ Precondition: The user on the controller chain has created an account. This acco
 0.1 The user create a `registerTx` Tx1.  
 0.2 The user sign Tx1 with the `icaOwnerAddress`
 0.3 The user send Tx1 to the controller state machine. 
+
 1.1 The controller state machine pass the transaction to the proper icaTxHandler.  
 1.2 The `icaRegisterTxHandler` validate Tx1 and executes signatures checks `icaOwnerAddress` is the signer of Tx1 
 1.3 The `icaRegisterTxHandler` calls `sendRegisterTx`
+
 2.1 The `sendRegisterTx` calls the `registerInterchainAccount` controller function. 
 2.2 The `registerInterchainAccount` computes the `usedHostAccountsIds`
 2.3 The `sendRegisterTx` construct and sends the packet, via ICS-4 wrapper, with `icaRegisterPacketData` information (containing the `icaOwnerAddress` and the `usedHostAccountsIds`)
+
 3.1 The relayer relays the packet to the host state machine. 
+
 4.1 The host state machine dispatch the packet to the proper module handler.  
 4.2 The `onRecvPacket` callbacks is activated on the host state machine and trigger the `registerInterchainAccount` function. 
 4.3 The `registerInterchainAccount` function of the host chain verifies that the `usedHostAccountsIds` have not already been used. 
 4.4 The `registerInterchainAccount` generates the addresses based on the passed in parameters.
 4.5 The addresses are stored in the host chain module state. 
 4.6 Upon completition, the `onRecvPacket` callback write an acknowledgment containing the new generated addresses. 
+
 5.1 The relayer relays the acknowledgment packet to the controller state machine.
+
 6.1 The `onAcknowledgePacket` is activated on the controller state machine 
 6.2 The addresses contained in the acknowledgment are written into the controller chain module state. 
 
@@ -815,17 +821,23 @@ Precondition: The user on the controller chain has created an account. This acco
 0.1 The user create a `registerTx` Tx1.  
 0.2 The user sign Tx1 with the `icaOwnerAddress`
 0.3 The user send Tx1 to the controller state machine. 
+
 1.1 The controller state machine pass the transaction to the proper icaTxHandler.  
 1.2 The `icaRegisterTxHandler` validate Tx1 and executes signatures checks over `icaOwnerAddress` verifying it is the signer of Tx1.  
 1.3 The `icaRegisterTxHandler` calls `sendRegisterTx`
+
 2.1 The `sendRegisterTx` calls the `registerInterchainAccount` controller function. 
 2.2 The `registerInterchainAccount` computes the `usedHostAccountsIds`
 2.3 The `sendRegisterTx` construct and sends the packet, via ICS-4 wrapper, with `icaRegisterPacketData` information (containing the `icaOwnerAddress` and the `usedHostAccountsIds`)
+
 3.1 The relayer relays the packet to the host state machine. 
+
 4.1 The host state machine dispatch the packet to the proper module handler.  
 4.2 The `onRecvPacket` callbacks is activated on the host state machine. 
 4.3 The `onRecvPacket` function trigger an error, thus it returns an error acknowledgment. 
+
 5.1 The relayer relays the error acknowledgment packet to the controller state machine.
+
 6.1 The `onAcknowledgePacket` is activated on the controller state machine 
 6.2 The `usedHostAccountsIds` are recovered and stored in the `unusedHostAccountsIds` array. 
 
@@ -840,19 +852,25 @@ Precondition: The user on the controller chain has registered an account on the 
 0.1 The user create a `executeTx` Tx2.  
 0.2 The user sign Tx2 with the `icaOwnerAddress`
 0.3 The user send Tx2 to the controller state machine. 
+
 1.1 The controller state machine pass the transaction to the proper icaTxHandler.  
 1.2 The `icaExecuteTxHandler` validate Tx2 and executes signatures checks over the `icaOwnerAddress` verifying this is the signer of Tx2.
 1.3 The `icaExecuteTxHandler` calls `sendExecuteTx`
+
 2.1 The `sendExecuteTx` verifies that the `hostAccountIds` passed in are actually related to an already registered `hostAccountAddress` and that the messages array is not empty.  
 2.2 The `sendRegisterTx` construct and sends the packet, via ICS-4 wrapper, with `icaExecutePacketData` information (containing the `icaOwnerAddress` and the `hostAccountsIds` and the `msgs`)
+
 3.1 The relayer relays the packet to the host state machine. 
+
 4.1 The host state machine dispatch the packet to the proper module handler.  
 4.2 The `onRecvPacket` callbacks is activated on the host state machine. 
 4.3 The `onRecvPacket` construct the addresses set given the `hostAccountIds` (retrieve the address from the module state given the `hostAccountId` key)
 4.4 For every msg contained in the `msgs` array, the `onRecvPacket` verify that the `msg.expectedSigner` is contained in the addresses set.
 4.5 The msg is executed and the return value are save in the `resultData`. 
 4.6 Once all the msgs are executed, the acknowledgment containing `resultData` is returned. 
+
 5.1 The relayer relays the acknowledgment packet to the controller state machine.
+
 6.1 The `onAcknowledgePacket` is activated on the controller state machine triggering a noOp.   
 
 ##### Error Case 
@@ -862,16 +880,22 @@ Precondition: The user on the controller chain has registered an account on the 
 0.1 The user create a `executeTx` Tx2.  
 0.2 The user sign Tx2 with the `icaOwnerAddress`
 0.3 The user send Tx2 to the controller state machine. 
+
 1.1 The controller state machine pass the transaction to the proper icaTxHandler.  
 1.2 The `icaExecuteTxHandler` validate Tx2 and executes signatures checks over the `icaOwnerAddress` verifying this is the signer of Tx2.
 1.3 The `icaExecuteTxHandler` calls `sendExecuteTx`
+
 2.1 The `sendExecuteTx` verifies that the `hostAccountIds` passed in are actually related to an already registered `hostAccountAddress` and that the messages array is not empty.  
 2.2 The `sendRegisterTx` construct and sends the packet, via ICS-4 wrapper, with `icaExecutePacketData` information (containing the `icaOwnerAddress` and the `hostAccountsIds` and the `msgs`)
+
 3.1 The relayer relays the packet to the host state machine. 
+
 4.1 The host state machine dispatch the packet to the proper module handler.  
 4.2 The `onRecvPacket` callbacks is activated on the host state machine. 
 4.3 The `onRecvPacket` function trigger an error, thus it returns an error acknowledgment. 
+
 5.1 The relayer relays the error acknowledgment packet to the controller state machine.
+
 6.1 The `onAcknowledgePacket` is activated on the controller state machine triggering a noOp (nothing to revert on controller chain).
 
 ## Considerations
