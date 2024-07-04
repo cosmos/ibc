@@ -950,7 +950,7 @@ December 14, 2021 - Revisions to spec based on audits and maintainer reviews
 
 August 1, 2023 - Implemented channel upgrades callbacks
 
-// TODO
+July 4, 2024 - ICS-27 version 2 [Draft](https://github.com/cosmos/ibc/pull/1122) suggested
     
 ## Copyright
 
