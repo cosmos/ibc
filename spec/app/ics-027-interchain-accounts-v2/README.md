@@ -252,7 +252,7 @@ enum icaTxTypes {
 To interact with the interchain account protocol, the user can generate two types of tx, namely `REGISTER_TX` and `EXECUTE_TX`. For each Tx type, we define a icaTxHandler so that we have `icaRegisterTxHandler` and `icaexecuteTxHandler`. Both tx handlers must verify, that the signer is the `icaOwnerAddress` and then, based on the type of Tx, they must call the associated functions that will construct the related kind of packet. 
 
 ```typescript
-function icaRegisterTxHandler(portId: string, channelId: string, icaOwnerAddress: string, hostAccountNumber: unit64)returns (uint64) {
+function icaRegisterTxHandler(portId: string, channelId: string, icaOwnerAddress: string, hostAccountNumber: unit64): uint64 {
 
   // Ensure the tx has been dispatched to the correct handler
   abortTransactionUnless(this.Tx.type===REGISTER_TX)
@@ -267,7 +267,7 @@ function icaRegisterTxHandler(portId: string, channelId: string, icaOwnerAddress
 ```
 
 ```typescript
-function icaexecuteTxHandler(portId: string, channelId: string, icaOwnerAddress: string, hostAccountIds:[] unit64, msgs: []msgs, memo:string )returns (uint64){
+function icaexecuteTxHandler(portId: string, channelId: string, icaOwnerAddress: string, hostAccountIds:[] unit64, msgs: []msgs, memo:string ) : uint64 {
   
   // Ensure the tx has been dispatched to the correct handler
   abortTransactionUnless(this.Tx.type===EXECUTE_TX)
@@ -346,7 +346,7 @@ function InitInterchainAccountAddress(portId: string, channelId: string, icaOwne
 }
 */
 // Stores the address of the interchain account in state.
-function setInterchainAccountAddress(portId: string, channelId: string, icaOwnerAccount: string,  hostAccountId: uint64, address: string) returns (string) {
+function setInterchainAccountAddress(portId: string, channelId: string, icaOwnerAccount: string,  hostAccountId: uint64, address: string) : string {
 
 hostAccounts[portId][channelId][icaOwnerAccount][hostAccountId].hostAccountAddress=address
 
@@ -354,7 +354,7 @@ return address
 }
 
 // Retrieves the interchain account address from state.
-function getInterchainAccountAddress(portId: string, channelId: string,icaOwnerAddress: string, hostAccountId: uint64) returns (string){
+function getInterchainAccountAddress(portId: string, channelId: string,icaOwnerAddress: string, hostAccountId: uint64) : string {
 
 return hostAccounts[portId][channelId][icaOwnerAddress][hostAccountId].hostAccountAddress
 
@@ -380,7 +380,7 @@ function registerInterchainAccount(
   icaOwnerAddress: string,
   hostAccountNumber: uint64 // The number of accounts the icaOwnerAddress wants to register within a single tx 
   ) 
-  returns ([]hostAccountIds,err) {
+  : ([]hostAccountIds,err) {
 
   for i in 0..hostAccountNumber{
     let hostAccountId: uint64 
@@ -425,7 +425,7 @@ function sendRegisterTx(
   hostAccountNumber: uint64, // Account number for which we are requesting the generation 
   //memo: string,   // Do we want to allow memo to be used in here? Probably we should not 
   
-) returns (uint64) {
+) : uint64 {
 
   // Compute
   // timeoutHeight: Height,
@@ -477,8 +477,8 @@ function sendexecuteTx(
   icaOwnerAddress: string,
   hostAccountIds: [] uint64,  // TODO Reason about this. Maybe could use addresses directly  
   msgs: []msg, 
-  memo: string)
-  returns (uint64){
+  memo: string) 
+  : uint64 {
   
   // Verify that the provided hostAccountIds match with an already registered hostAccountAddress
   for seq in hostAccountIds{
@@ -619,7 +619,7 @@ interface ModuleState {
 
 ```typescript
 // Stores the address of the interchain account in state.
-function setInterchainAccountAddress(portId: string, channelId: string, icaOwnerAccount: string,  hostAccountId: uint64) returns (string){
+function setInterchainAccountAddress(portId: string, channelId: string, icaOwnerAccount: string,  hostAccountId: uint64) : string {
 
 // Generate new address 
 // newAddress MUST generate deterministically the host account address 
@@ -631,7 +631,7 @@ return address
 }
 
 // Retrieves the interchain account from state. // Verify if should be move the protocol base part. 
-function getInterchainAccountAddress(portId: string, channelId: string, icaOwnerAddress: string, hostAccountId:uint64) returns (string){
+function getInterchainAccountAddress(portId: string, channelId: string, icaOwnerAddress: string, hostAccountId:uint64) : string {
 
 return hostAccounts[portId][channelId][icaOwnerAddress][hostAccountId].hostAccountAddress
 }
@@ -864,8 +864,8 @@ Precondition: The user on the controller chain has registered an account on the 
 0.3 The user send Tx2 to the controller state machine. 
 1.1 The controller state machine pass the transaction to the proper icaTxHandler.  
 1.2 The `icaexecuteTxHandler` validate Tx2 and executes signatures checks over the `icaOwnerAddress` verifying this is the signer of Tx2.
-1.3 The `icaexecuteTxHandler` calls `sendexecuteTx`
-2.1 The `sendexecuteTx` verifies that the `hostAccountIds` passed in are actually related to an already registered `hostAccountAddress` and that the messages array is not empty.  
+1.3 The `icaExecuteTxHandler` calls `sendExecuteTx`
+2.1 The `sendExecuteTx` verifies that the `hostAccountIds` passed in are actually related to an already registered `hostAccountAddress` and that the messages array is not empty.  
 2.2 The `sendRegisterTx` construct and sends the packet, via ICS-4 wrapper, with `icaExecutePacketData` information (containing the `icaOwnerAddress` and the `hostAccountsIds` and the `msgs`)
 3.1 The relayer relays the packet to the host state machine. 
 4.1 The host state machine dispatch the packet to the proper module handler.  
