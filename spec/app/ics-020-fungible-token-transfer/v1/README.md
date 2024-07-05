@@ -1,6 +1,7 @@
 ---
 ics: 20
 title: Fungible Token Transfer
+version: 1
 stage: draft
 category: IBC/APP
 requires: 25, 26
