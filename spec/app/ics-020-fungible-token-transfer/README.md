@@ -1,12 +1,13 @@
 ---
 ics: 20
 title: Fungible Token Transfer
+version: 2 
 stage: draft
 category: IBC/APP
 requires: 25, 26
 kind: instantiation
 version compatibility: ibc-go v7.0.0 (ics20-1 supported only)
-author: Christopher Goes <cwgoes@interchain.berlin>
+author: Christopher Goes <cwgoes@interchain.berlin>, Aditya Sripal <aditya@interchain.io>,
 created: 2019-07-15 
 modified: 2024-03-05
 ---
@@ -84,7 +85,7 @@ The ICS 20 token traces are represented by a list of `ics20Port` and `ics20Chann
 
 A sending chain may be acting as a source or sink zone. When a chain is sending tokens across a port and channel which are not equal to the last prefixed port and channel pair, it is acting as a source zone. When tokens are sent from a source zone, the destination port and channel will be prepended to the trace (once the tokens are received) adding another hop to a tokens record. When a chain is sending tokens across a port and channel which are equal to the last prefixed port and channel pair, it is acting as a sink zone. When tokens are sent from a sink zone, the first element of the trace, which was the last port and channel pair added to the trace is removed (once the tokens are received), undoing the last hop in the tokens record. A more complete explanation is [present in the ibc-go implementation](https://github.com/cosmos/ibc-go/blob/457095517b7832c42ecf13571fee1e550fec02d0/modules/apps/transfer/keeper/relay.go#L18-L49).
 
-The following sequence diagram exemplifies the multi-chain token transfer dynamics. This process encapsulates the intricate steps involved in transferring tokens in a cycle that begins and ends on the same chain, traversing through Chain A, Chain B, and Chain C. The order of operations is meticulously outlined as `A -> B -> C -> A -> C -> B -> A`.
+The following sequence diagram exemplifies the multi-chain token transfer dynamics. This process encapsulates the steps involved in transferring tokens in a cycle that begins and ends on the same chain, traversing through Chain A, Chain B, and Chain C. The order of operations is outlined as `A -> B -> C -> A -> C -> B -> A`.
 
 ![Transfer Example](source-and-sink-zones.png)
 
@@ -792,9 +793,9 @@ July 27, 2020 - Re-addition of source field
 
 Nov 11, 2022 - Addition of a memo field
 
-Sep 22, 2023 - Support for multi-token packets
+Sep 22, 2023 - Support for multi-token packets - [PR](https://github.com/cosmos/ibc/pull/1020)
 
-March 5, 2024 - Support for ics20-2
+March 5, 2024 - Support for ics20-2 - [PR](https://github.com/cosmos/ibc/pull/1090)
 
 ## Copyright
 
