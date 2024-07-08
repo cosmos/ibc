@@ -138,9 +138,24 @@ interface icaExecutePacketSuccess {
 }
 ```
 
+#### **Metadata negotiation**
+
+The ICS-04 allows for each channel version negotiation to be application-specific. ICS-27 takes advantage of [ICS-04 channel version negotiation](../../core/ics-004-channel-and-packet-semantics/README.md#versioning) to negotiate metadata and channel parameters during the channel handshake. In the case of interchain accounts, the channel version will be a string of a JSON struct containing all the relevant metadata intended to be relayed to the counterparty during the channel handshake steps. The metadata used for the ICS-27 version 2 will contain the encoding format along with the channel version itself.
+
+```typescript
+version: {
+  "Version": "ica", // channel version
+  "Encoding": "requested_encoding_type", // Json, protobuf.. 
+}
+```
+
+// Note. For now, may be ok like this, but eventually, we can make the encoding a channelEnd native parameter.
+
 ### Sub-protocols
 
 #### Routing module callbacks
+
+// TODO Need to split for controlling and hosting. We may enforce that only controlling can init. This is how is done in ics27v1 
 
 The routing module callbacks associated with the channel management are at the base of the interchain account protocol. Any of the chains (controlling or hosting) can start a channel creation handshake. 
 
@@ -163,17 +178,24 @@ function onChanOpenInit(
   version: string) => (version: string, err: Error) {
   // only unordered channels allowed
   abortTransactionUnless(order === UNORDERED)
-  // assert that version is "ica" or ""
-  // if empty, we return the default transfer version to core IBC
-  // as the version for this channel  
-  abortTransactionUnless(version === "ica" || version === "")
 
   if version == "" {
     // default to latest supported version
-    return "ica", nil
+    metadata = {
+      Version: "ica",
+      Encoding: DefaultEncoding, //decide default econding
+    }
+    version = marshalJSON(metadata)
+    return version, nil
+  } else{ 
+    // If the version is not empty and is among those supported, we return the version
+    metadata = UnmarshalJSON(version)
+    // assert that version is "ica" 
+    abortTransactionUnless(matadata.Version === "ica")
+    // assert the choosed encoding is supported.
+    abortTransactionUnless(IsSupportedEncoding(metadata.Encoding))
+    return version, nil 
   }
-  // If the version is not empty and is among those supported, we return the version
-  return version, nil 
 }
 ```
 
@@ -187,9 +209,12 @@ function onChanOpenTry(
   counterpartyVersion: string) => (version: string, err: Error) {
   // only unordered channels allowed
   abortTransactionUnless(order === UNORDERED)
-  // assert that version is "ica" or "ica-2" 
-  abortTransactionUnless(counterpartyVersion === "ica")
-
+  // unmarshal version
+  metadata = UnmarshalJSON(counterpartyVersion)
+  // assert that version is "ica" 
+  abortTransactionUnless(matadata.Version === "ica")
+  // assert the choosed encoding is supported.
+  abortTransactionUnless(IsSupportedEncoding(metadata.Encoding))
   // return the same version as counterparty version so long as we support it
   return counterpartyVersion, nil
 }
@@ -396,7 +421,7 @@ function registerInterchainAccount(
 
 ##### Packet relay
 
-`sendRegisterTx` and `sendExecuteTx` must be called by a transaction handler in the controller chain module which performs appropriate signature checks. In particular, the transaction handlers must verify that `icaOwnerAddress` is the actual signer of the tx.
+`sendRegisterTx` and `sendExecuteTx` must be called by a transaction handler in the controller chain module which performs appropriate signature checks. In particular, the transaction handlers must verify that the `icaOwnerAddress` is the actual signer of the TX.
 
 //TODO CLARIFY WAY BETTER THE CONCEPT  // May be in a different section 
 Thinking about a smart contract system, then the system should verify that the tx the user generates to call the `sendRegisterTx` and `sendExecuteTx` contract function has been signed by the `icaOwnerAddress`.  
@@ -578,13 +603,11 @@ function setup() {
 
 The interchain account module on the host chain must track the `hostAccounts` and should track the blacklist of msgs associated with a particular controller account in the state. Fields of the `ModuleState` are assumed to be in scope.
 
-// Should be the blacklist icaOwnerAccounts specific? 
-
 ```typescript
 interface ModuleState {
   hostAccounts: Map<portId, Map <channelId, Map <icaOwnerAddress, Map<hostAccountId, hostAccount>>>>,
   // Generic msg blacklist. It can be icaOwnerAddress specific, or only portId,channelId specific. 
-  msgBlackList: Map<portId, Map <channelId, Map <icaOwnerAddress, set(msg)>>>,
+  msgBlacklist: Map<portId, Map <channelId, Map <icaOwnerAddress, set(msg)>>>,
    
 }
 ```
@@ -594,9 +617,7 @@ interface ModuleState {
 ```typescript
 // Stores the address of the interchain account in state.
 function setInterchainAccountAddress(portId: string, channelId: string, icaOwnerAccount: string,  hostAccountId: uint64) : string {
-
-// Generate new address 
-// newAddress MUST generate deterministically the host account address 
+// While the setInterchainAccountAddress of the controller chain only stores the passed in addresses, in the hosting subprotocol this function has to generate new addresses deterministically based on the passed-in parameters and then store it in the module state in the hostAccounts map.
 address=newAddress(portId,channelId, icaOwnerAccount, seq)
 // Set in the host chain module state the generated address 
 hostAccounts[portId][channelId][icaOwnerAccount][hostAccountId].hostAccountAddress=address
@@ -905,9 +926,15 @@ In the case the controller chain wants to know the host account balance after ce
 
 Since we are allowing only unordered channels and disallowing channel closure procedures, we don't need a procedure for recovering. The channel cannot be closed or get stuck. 
 
+### MsgBlacklist 
+
+// TODO
+Should be the blacklist icaOwnerAccounts specific? 
+What happens if controller chain registers and funds a hostAccount and then the host chain blacklist the transfers? Are funds lost? 
+
 ## Example Implementations
 
-- Implementation of ICS 27 version 1 in Go can be found in [ibc-go repository](https://github.com/cosmos/ibc-go).
+- Implementation of ICS 27 version 1 in Go can be found in the [ibc-go repository](https://github.com/cosmos/ibc-go).
 
 - Implementation of ICS 27 version 2 in Go COMING SOON. 
 
