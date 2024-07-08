@@ -22,7 +22,7 @@ Users of a set of chains connected over the IBC protocol might wish to utilise a
 
 ### Definitions
 
-The IBC handler interface & IBC routing module interface are as defined in [ICS 25](../../core/ics-025-handler-interface) and [ICS 26](../../core/ics-026-routing-module), respectively.
+The IBC handler interface & IBC routing module interface are as defined in [ICS 25](../../../core/ics-025-handler-interface) and [ICS 26](../../../core/ics-026-routing-module), respectively.
 
 ### Desired Properties
 
