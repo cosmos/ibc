@@ -797,6 +797,8 @@ Sep 22, 2023 - [Support for multi-token packets](https://github.com/cosmos/ibc/p
 
 March 5, 2024 - [Support for path forwarding](https://github.com/cosmos/ibc/pull/1090)
 
+June 18, 2024 - [Support for data protobuf encoding](https://github.com/cosmos/ibc/pull/1118)
+
 ## Copyright
 
 All content herein is licensed under [Apache 2.0](https://www.apache.org/licenses/LICENSE-2.0).
