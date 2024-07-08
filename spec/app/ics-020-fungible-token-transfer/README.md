@@ -793,9 +793,9 @@ July 27, 2020 - Re-addition of source field
 
 Nov 11, 2022 - Addition of a memo field
 
-Sep 22, 2023 - Support for multi-token packets - [PR](https://github.com/cosmos/ibc/pull/1020)
+Sep 22, 2023 - [Support for multi-token packets](https://github.com/cosmos/ibc/pull/1020)
 
-March 5, 2024 - Support for ics20-2 - [PR](https://github.com/cosmos/ibc/pull/1090)
+March 5, 2024 - [Support for path forwarding](https://github.com/cosmos/ibc/pull/1090)
 
 ## Copyright
 
