@@ -151,19 +151,54 @@ version: {
 
 // Note. For now, may be ok like this, but eventually, we can make the encoding a channelEnd native parameter.
 
+### Transaction Types 
+
+The ICS-27 version 2 defines two types of transactions `REGISTER_TX` and `EXECUTE_TX`.
+
+```typescript
+enum icaTxTypes {
+  REGISTER_TX,
+  EXECUTE_TX
+}
+```
+
 ### Sub-protocols
 
-#### Routing module callbacks
+#### **icaControlling**
 
-// TODO Need to split for controlling and hosting. We may enforce that only controlling can init. This is how is done in ics27v1 
+##### Port & channel setup
 
-The routing module callbacks associated with the channel management are at the base of the interchain account protocol. Any of the chains (controlling or hosting) can start a channel creation handshake. 
+The `setup` function must be called exactly once when the module is created (perhaps when the blockchain itself is initialised) to bind to the appropriate port (owned by the module).
 
-##### Channel lifecycle management
+Once the `setup` function has been called, channels can be created through the IBC routing module between instances of the interchain account module on separate chains.
 
-// TODO INCLUDE TX TYPES AND ENCODING CONSIDERATION that should be negotiated during channel creation handshake 
+An administrator (with the permissions to create connections & channels on the host state machine) is responsible for setting up connections to other state machines & creating channels to other instances of this module (or another module supporting this interface) on other chains. This specification defines packet handling semantics only and defines them in such a fashion that the module itself doesn't need to worry about what connections or channels might or might not exist at any point in time.
 
-Both machines `A` and `B` accept new channels from any module on another machine, if and only if:
+```typescript
+function setup() {
+  capability = routingModule.bindPort("icacontroller", ModuleCallbacks{
+    onChanOpenInit,
+    onChanOpenTry,  // Force Abort 
+    onChanOpenAck,
+    onChanOpenConfirm, // Force Abort 
+    onChanCloseInit, // Force Abort
+    onChanCloseConfirm, // Do Nothing
+    // TODO Missing Upgrade Callbacks
+    onRecvPacket, // Force Abort
+    onTimeoutPacket,
+    onAcknowledgePacket,
+  })
+  claimCapability("port", capability)
+}
+```
+
+##### Routing module callbacks
+
+The routing module callbacks associated with the channel management are at the base of the interchain account protocol. By design, only the controller chain can start a channel creation handshake. 
+
+###### Channel lifecycle management
+
+When machine `A`, with the role of controller, starts a new channel handshake, chain `B` with the role of host must accept the new channel if and only if:
 
 - The channel being created is unordered.
 - The version string is `ica` or `""`.  
@@ -207,16 +242,8 @@ function onChanOpenTry(
   counterpartyPortIdentifier: Identifier,
   counterpartyChannelIdentifier: Identifier,
   counterpartyVersion: string) => (version: string, err: Error) {
-  // only unordered channels allowed
-  abortTransactionUnless(order === UNORDERED)
-  // unmarshal version
-  metadata = UnmarshalJSON(counterpartyVersion)
-  // assert that version is "ica" 
-  abortTransactionUnless(matadata.Version === "ica")
-  // assert the choosed encoding is supported.
-  abortTransactionUnless(IsSupportedEncoding(metadata.Encoding))
-  // return the same version as counterparty version so long as we support it
-  return counterpartyVersion, nil
+  // Always Abort 
+  abortTransactionUnless(false, "Invalid channel creation flow: channel handshake must be initiated by controller chain")
 }
 ```
 
@@ -237,8 +264,9 @@ function onChanOpenAck(
 function onChanOpenConfirm(
   portIdentifier: Identifier,
   channelIdentifier: Identifier) {
-  // accept channel confirmations, port has already been validated, version has already been validated
-}
+  // Always abort 
+  abortTransactionUnless(false, "Invalid channel creation flow: channel handshake must be initiated by controller chain")
+  }
 ```
 
 ```typescript
@@ -247,7 +275,7 @@ function onChanCloseInit(
   portIdentifier: Identifier,
   channelIdentifier: Identifier) {
     // always abort transaction
-    abortTransactionUnless(FALSE)
+    abortTransactionUnless(false, "Invalid flow: channel closure is disabled")
 }
 ```
 
@@ -255,22 +283,9 @@ function onChanCloseInit(
 function onChanCloseConfirm(
   portIdentifier: Identifier,
   channelIdentifier: Identifier) {
-  // no action necessary
+  // no action necessary, this cannot be reached. 
 }
 ```
-
-### Transaction Types 
-
-The ICS-27 version 2 defines two types of transactions `REGISTER_TX` and `EXECUTE_TX`.
-
-```typescript
-enum icaTxTypes {
-  REGISTER_TX,
-  EXECUTE_TX
-}
-```
-
-#### **icaControlling**
 
 ##### Interchain Account EntryPoints 
 
@@ -307,32 +322,6 @@ function icaExecuteTxHandler(portId: string, channelId: string, icaOwnerAddress:
 }
 ```
 
-##### Port & channel setup
-
-The `setup` function must be called exactly once when the module is created (perhaps when the blockchain itself is initialised) to bind to the appropriate port (owned by the module).
-
-Once the `setup` function has been called, channels can be created through the IBC routing module between instances of the interchain account module on separate chains.
-
-An administrator (with the permissions to create connections & channels on the host state machine) is responsible for setting up connections to other state machines & creating channels to other instances of this module (or another module supporting this interface) on other chains. This specification defines packet handling semantics only and defines them in such a fashion that the module itself doesn't need to worry about what connections or channels might or might not exist at any point in time.
-
-```typescript
-function setup() {
-  capability = routingModule.bindPort("icacontroller", ModuleCallbacks{
-    onChanOpenInit,
-    onChanOpenTry,
-    onChanOpenAck,
-    onChanOpenConfirm,
-    onChanCloseInit, // Force Abort
-    onChanCloseConfirm, // Do Nothing
-    // TODO Missing Upgrade Callbacks
-    onRecvPacket, // Force Abort
-    onTimeoutPacket,
-    onAcknowledgePacket,
-  })
-  claimCapability("port", capability)
-}
-```
-
 ##### Module State 
 
 The interchain account module keeps track of the controlled `hostAccounts` associated with particular channels in the state. Additionally, track the `nextHostAccountId` and the `unusedHostAccountsIds` array. Fields of the `ModuleState` are assumed to be in scope.
@@ -342,11 +331,11 @@ When the protocol is initiated, the `unusedHostAccountIds` array is empty. So th
 
 ```typescript
 interface ModuleState {
-  hostAccounts: Map<portId, 
-    Map <channelId, 
-    Map <icaOwnerAddress, 
-    Map <hostAccountId,
-    hostAccountAddress>>>>,
+  hostAccounts: Map<portId : string, 
+    Map <channelId: string, 
+    Map <icaOwnerAddress: string, 
+    Map <hostAccountId: uint64,
+    hostAccountAddress: string>>>>,
   nextHostAccountId : uint64,
   unusedHostAccountIds: []uint64  
 }
@@ -584,18 +573,99 @@ Here we define the setup function for the *Hosting* subprotocol.
 ```typescript
 function setup() {
   capability = routingModule.bindPort("icahost", ModuleCallbacks{
-    onChanOpenInit,
+    onChanOpenInit, // Force Abort 
     onChanOpenTry,
-    onChanOpenAck,
-    onChanOpenConfirm,
+    onChanOpenAck, // Force Abort 
+    onChanOpenConfirm, 
     onChanCloseInit, // Force Abort 
     onChanCloseConfirm, // Do nothing
     // TODO Missing Upgrade Callbacks
     onRecvPacket,
-   // onTimeoutPacket,
-   // onAcknowledgePacket,     
+    //onTimeoutPacket, // Force Abort
+    //onAcknowledgePacket, // Force Abort      
   })
   claimCapability("port", capability)
+}
+```
+
+##### Routing module callbacks
+
+The routing module callbacks associated with the channel management are at the base of the interchain account protocol. By design, the host chain can only accept/negotiated a channel creation handshake started by a controller chain. 
+
+###### Channel lifecycle management
+
+When machine `A`, with the role of controller, starts a new channel handshake, chain `B` with the role of host must accept the new channel if and only if:
+
+- The channel being created is unordered.
+- The version string is `ica` or `""`.  
+
+```typescript
+function onChanOpenInit(
+  order: ChannelOrder,
+  portIdentifier: Identifier,
+  channelIdentifier: Identifier,
+  counterpartyPortIdentifier: Identifier,
+  counterpartyChannelIdentifier: Identifier,
+  version: string) => (version: string, err: Error) {
+  // Always Abort 
+  abortTransactionUnless(false, "Invalid channel creation flow: channel handshake must be initiated by controller chain")
+}
+```
+
+```typescript
+function onChanOpenTry(
+  order: ChannelOrder,
+  portIdentifier: Identifier,
+  channelIdentifier: Identifier,
+  counterpartyPortIdentifier: Identifier,
+  counterpartyChannelIdentifier: Identifier,
+  counterpartyVersion: string) => (version: string, err: Error) {
+  
+  abortTransactionUnless(order === UNORDERED)
+  // Unmarshal metada from counterpartyVersion
+  metadata = UnmarshalJSON(counterpartyVersion)
+  // assert that version is "ica" 
+  abortTransactionUnless(matadata.Version === "ica")
+  // assert the choosed encoding is supported.
+  abortTransactionUnless(IsSupportedEncoding(metadata.Encoding))
+  return counterpartyVersion, nil 
+}
+```
+
+```typescript
+function onChanOpenAck(
+  portIdentifier: Identifier,
+  channelIdentifier: Identifier,
+  counterpartyChannelIdentifier: Identifier,
+  counterpartyVersion: string) {
+  // Always Abort 
+  abortTransactionUnless(false, "Invalid channel creation flow: channel handshake must be initiated by controller chain")
+}
+```
+
+```typescript
+function onChanOpenConfirm(
+  portIdentifier: Identifier,
+  channelIdentifier: Identifier) {
+  // accept channel confirmations, port has already been validated, version has already been validated
+}
+```
+
+```typescript
+// Channel closure is disabled.
+function onChanCloseInit(
+  portIdentifier: Identifier,
+  channelIdentifier: Identifier) {
+  // always abort transaction
+  abortTransactionUnless(false, "Invalid flow: channel closure is disabled")
+}
+```
+
+```typescript
+function onChanCloseConfirm(
+  portIdentifier: Identifier,
+  channelIdentifier: Identifier) {
+  // no action necessary
 }
 ```
 
@@ -685,6 +755,7 @@ function executeTx(hostAccount: string, msg Any) : (resultString, error) {
 ##### **msgBlacklist** 
 
 The `addMessageToBlacklist` can be called by the host chain to blacklist certain types of msgs. 
+// Note, the blacklist can be dangerous, check the consideration section. Inspect
 
 ```typescript
 function addMessageToBlacklist(portId: string, channelId: string, icaOwnerAddress: string, msgType: string): error {
@@ -928,9 +999,8 @@ Since we are allowing only unordered channels and disallowing channel closure pr
 
 ### MsgBlacklist 
 
-// TODO
-Should be the blacklist icaOwnerAccounts specific? 
-What happens if controller chain registers and funds a hostAccount and then the host chain blacklist the transfers? Are funds lost? 
+// TODO Should be the blacklist icaOwnerAccounts specific? 
+What happens if the controller chain registers and funds a hostAccount and then the host chain blacklist the transfers? Are funds lost? 
 
 ## Example Implementations
 
@@ -966,7 +1036,7 @@ December 14, 2021 - Revisions to spec based on audits and maintainer reviews
 
 August 1, 2023 - Implemented channel upgrades callbacks
 
-July 4, 2024 - ICS-27 version 2 [Draft](https://github.com/cosmos/ibc/pull/1122) suggested
+July 4, 2024 - [ICS-27 version 2 draft suggested](https://github.com/cosmos/ibc/pull/1122) 
     
 ## Copyright
 
