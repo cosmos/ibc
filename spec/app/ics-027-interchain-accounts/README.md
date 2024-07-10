@@ -38,13 +38,11 @@ The IBC handler interface & IBC relayer module interface are as defined in [ICS-
 - Permissionless: An interchain account may be created by any actor without the approval of a third party (e.g. chain governance). Note: Individual implementations may implement their own permissioning scheme, however, the protocol must not require permissioning from a trusted party to be secure.
 - Fault isolation: A controller chain must not be able to control accounts registered by other controller chains. For example, in the case of a fork attack on a controller chain, only the interchain accounts registered by the forked chain will be vulnerable.
 - The ordering of transactions sent to an interchain account on a host chain must be maintained. Transactions must be executed by an interchain account in the order in which they are sent by the controller chain. 
-- An icaOwnerAccount on the controller chain can manage 1..n hostAccount(s) on the host chain. A hostAccount on the host chain can be managed by 1 and only 1 icaOwnerAccount on the controller chain. 
 - The controller chain must store the account address of any owned interchain accounts registered on host chains. 
 - A host chain must have the ability to limit interchain account functionality on its chain as necessary (e.g. a host chain can decide that interchain accounts registered on the host chain cannot take part in staking). This should be achieved with a blacklist mechanisms. 
+- An icaOwnerAccount on the controller chain can manage 1..n hostAccount(s) on the host chain. A hostAccount on the host chain can be managed by 1 and only 1 icaOwnerAccount on the controller chain. 
 - The controller chain must be able to set up multiple interchain account(s) on the host chain in a single transaction. 
-- Many controller accounts should be able to send messages to many host accounts through the same channel.
-- The number of packet round trips to register an account, load the account with tokens and execute messages on the account should be minimised.  
-- A chain can utilize one or both subprotocols (described below) of the interchain account protocol. A controller chain that registers accounts on other host chains (that support interchain accounts) does not necessarily have to allow other controller chains to register accounts on its chain, and vice versa. 
+- Many controller accounts on the same controller chain should be able to send messages to many host accounts on the same host chain through the same channel.
 
 ### General design 
 
@@ -53,6 +51,8 @@ The interchain account protocol defines the relationship and interactions betwee
 This specification defines the general way to send TX bytes from a controller chain, on an already established ica-channel, to a host chain. The host chain is responsible for deserializing and executing the tx bytes and the controller chain must know how the host chain will handle the tx bytes in advance of sending a packet, thus this must be negotiated during channel creation.
 
 The ICS-27 version 2 is composed of two subprotocols, namely `icaControlling` and `icaHosting`. The *icaControlling* must be implemented on the controlling chain and is responsible for sending IBC packets to register and manage interchain accounts on the host chain. The *icaHosting* must be implemented on the host chain and is responsible for receiving IBC packets to generate addresses and execute transactions on behalf of the controller chain.
+
+A chain can utilize one or both subprotocols of the interchain account protocol. A controller chain that registers accounts on other host chains (that support interchain accounts) does not necessarily have to allow other controller chains to register accounts on its chain, and vice versa. 
 
 ## Technical specification
 
@@ -172,7 +172,7 @@ The `setup` function must be called exactly once when the module is created (per
 
 Once the `setup` function has been called, channels can be created through the IBC routing module between instances of the interchain account module on separate chains.
 
-An administrator (with the permissions to create connections & channels on the host state machine) is responsible for setting up connections to other state machines & creating channels to other instances of this module (or another module supporting this interface) on other chains. This specification defines packet handling semantics only and defines them in such a fashion that the module itself doesn't need to worry about what connections or channels might or might not exist at any point in time.
+An administrator (with the permissions to create connections & channels on the state machine) is responsible for setting up connections to other state machines & creating channels to other instances of this module (or another module supporting this interface) on other chains. This specification defines packet handling semantics only and defines them in such a fashion that the module itself doesn't need to worry about what connections or channels might or might not exist at any point in time.
 
 ```typescript
 function setup() {
@@ -324,9 +324,9 @@ function icaExecuteTxHandler(portId: string, channelId: string, icaOwnerAddress:
 
 ##### Module State 
 
-The interchain account module keeps track of the controlled `hostAccounts` associated with particular channels in the state. Additionally, track the `nextHostAccountId` and the `unusedHostAccountsIds` array. Fields of the `ModuleState` are assumed to be in scope.
+The interchain account module keeps track of the controlled `hostAccounts` associated with particular channels in the state. Additionally, it tracks the `nextHostAccountId` and the `unusedHostAccountsIds` array. Fields of the `ModuleState` are assumed to be in scope.
 
-When the protocol is initiated, the `unusedHostAccountIds` array is empty. So the Ids are initially associated with the `nextHostAccountId` which starts at 0 and is increased linearly as new accounts get registered. When a register message fails, the Ids computed during the sending are recovered and inserted in the `unusedHostAccountIds` array. So in the next register message, the Ids in `unusedHostAccountIds` are the first used to generate the new accounts.  
+When the protocol is initiated, the `unusedHostAccountIds` array is empty. So the Ids are initially associated with the `nextHostAccountId` which starts at 0 and is increased linearly as new accounts get registered. When a register message fails, the Ids computed during the sending are recovered and inserted in the `unusedHostAccountIds` array during the acknowlegment. So in the next register message, the Ids in `unusedHostAccountIds` are the first used to generate the new accounts.  
 // TODO There is space to easily add a delete account mechanism 
 
 ```typescript
@@ -367,11 +367,9 @@ The helper functions described herein must be implemented in a controlling inter
 
 ###### **registerInterchainAccount**
 
-// TODO Rewrite 
+When a user on the controller chain wants to register new interchain accounts, he will send a Tx whose type is `REGISTER_TX`, including the parameter `hostAccountNumber` to specify the number of accounts to register, which will trigger the `registerInterchainAccount` function logic to be executed on the controller chain. The `registerInterchainAccount` function select the `usedHostAccountIds` either from the list of `unusedHostAccountIDs`, if non empty, or from the `nextHostAccountId` parameters in the moduleState. 
 
-When a user on the controller chain wants to register new interchain accounts, he will send a Tx whose type is `REGISTER_TX`, including the parameter `hostAccountNumber` to specify the number of accounts to register, which will trigger the `registerInterchainAccount` function logic to be executed on the controller chain. The `hostAccountId` will be computed from the list of `unusedHostAccountIDs` or `nextHostAccountId` parameters in the moduleState. Thus the function will initialize the mapping of `hostAccounts` between the tuple key  (portId, channelId, ownerAccount, hostAccountId) and the hostAcccountAddress maintained by the controller chain in the moduleState.
-
-The host chain Must be able to generate and store in state the hostAccountAddress, which will be controlled by the icaOwnerAddress by using the information provided about the hostAccounts passed in the `REGISTER_TX` and must pass back the generated address inside the ack. Once received the ack, the controller chain must store the `hostAccountAddress` generated address in the mapping previously described. In the case of an error during the registration, the `usedHostAccountIds` will be added to the `unusedHostAccountIDs` array. 
+The host chain Must be able to generate and store in state the hostAccountAddress, which will be controlled by the icaOwnerAddress by using the information provided about the hostAccounts passed in the `REGISTER_TX` and must pass back the generated address inside the ack. Once received the ack, the controller chain must store the `hostAccountAddress` generated address in its module state. In the case of an error during the registration, the `usedHostAccountIds` will be added to the `unusedHostAccountIDs` array. 
 
 ```typescript
 function registerInterchainAccount(
@@ -449,7 +447,7 @@ function sendRegisterTx(
   // A potential limit of the number of accounts to guarantee a non out-of-gas error is to be discussed
   usedHostAccountIds,err = registerInterchainAccount(sourcePort, sourceChannel, icaOwnerAddress,hostAccountNumber)
   
-  abortTransactionUnless(err!=nil)     
+  abortTransactionUnless(err===nil)     
   
   //sendRegisterTx has been called by a transaction handler in the controller chain module which has performed appropriate signature checks for the icaOwnerAddress such that we can assume the tx has already been validated for being originated by the icaOwnerAddress
 
@@ -488,7 +486,7 @@ function sendExecuteTx(
   // It exist at least one message to be executed 
   abortTransactionUnless(msgs.isNotEmpty())
 
-  icaPacketData = IcaExecutePacketData{icaOwnerAddress,hostAccountsSequences,msgs,memo}
+  icaPacketData = IcaExecutePacketData{icaOwnerAddress,hostAccountsIds,msgs,memo}
 
   // send packet using the interface defined in ICS4
   sequence = handler.sendPacket(
@@ -512,7 +510,6 @@ function onRecvPacket(packet Packet) {
 }
 ```
 
-// CHECK STUFF IN HERE 
 `onAcknowledgePacket` is called by the routing module when a packet sent by this module has been acknowledged.
 
 ```typescript
@@ -687,7 +684,7 @@ interface ModuleState {
 ```typescript
 // Stores the address of the interchain account in state.
 function setInterchainAccountAddress(portId: string, channelId: string, icaOwnerAccount: string,  hostAccountId: uint64) : string {
-// While the setInterchainAccountAddress of the controller chain only stores the passed in addresses, in the hosting subprotocol this function has to generate new addresses deterministically based on the passed-in parameters and then store it in the module state in the hostAccounts map.
+// While the setInterchainAccountAddress of the controller chain only stores the passed in addresses, in the hosting subprotocol this function has to generate new addresses deterministically based on the passed-in parameters and then store them in the module state in the hostAccounts map.
 address=newAddress(portId,channelId, icaOwnerAccount, seq)
 // Set in the host chain module state the generated address 
 hostAccounts[portId][channelId][icaOwnerAccount][hostAccountId].hostAccountAddress=address
@@ -695,7 +692,7 @@ hostAccounts[portId][channelId][icaOwnerAccount][hostAccountId].hostAccountAddre
 return address 
 }
 
-// Retrieves the interchain account from state. // Verify if should be move the protocol base part. 
+// Retrieves the interchain account from state.
 function getInterchainAccountAddress(portId: string, channelId: string, icaOwnerAddress: string, hostAccountId:uint64) : string {
 
 return hostAccounts[portId][channelId][icaOwnerAddress][hostAccountId].hostAccountAddress
@@ -708,7 +705,7 @@ The helper functions described herein must be implemented in a hosting interchai
 
 ###### **registerInterchainAccount**
 
-`registerInterchainAccount` may be called during the `OnReceive` callback when a `REGISTER_TX` tx type is relayed to the host chain and contains the parameter `hostAccountNumber`.
+`registerInterchainAccount` may be called during the `OnReceive` callback when a `REGISTER_TX` tx type is relayed to the host chain and contains the parameter `usedIds`.
  
 ```typescript
 function registerInterchainAccount(
@@ -717,7 +714,7 @@ function registerInterchainAccount(
   counterpartyPortId: string, 
   counterpartyChannelId: string,
   icaOwnerAccount: string,
-  usedSequences: []uint64 
+  usedIds: []uint64 
   ) {  
 
   // validate port format
@@ -729,7 +726,7 @@ function registerInterchainAccount(
   abortTransactionUnless(channel.counterpartyPortId == counterpartyPortId) 
   abortTransactionUnless(channel.counterpartyChannelId == counterpartyChannelId)   
 
-  for seq in usedSequences{
+  for seq in usedIds{
     setInterchainAccountAddress(portId,channelId,icaOwnerAddress,seq)
   }
   
@@ -829,12 +826,12 @@ function onRecvPacket(packet Packet) {
     for msg in msgs{
       // TODO Include check for blacklisted message.
       if(msg.type.isIn(msgBlackList[portId][channelId][icaOwnerAddress])){
-          return NewErrorAcknowledgement("The controller chain is trying to execute a message that has been blacklisted from the host chain.")
+          return NewErrorAcknowledgement("The controller chain is trying to execute a message that has been blacklisted by the host chain.")
         }
 
       executingAddress = msg.expectedSigner()
       // Verify that the expectedSigner is in the set of host addresses constructed for this IBC tx.
-      // Here the idea is that we confirm that the expected signer is part of a set of the hostAccountsAddress set constructed with the hostSequencesIds passed in by the icaOwnerAddress. Is this enough? 
+      // Here the idea is that we confirm that the expected signer is part of a set of the hostAccountsAddress set constructed with the hostAccountIds passed in by the icaOwnerAddress. Is this enough? 
         if(executingAddress.isIn(hostAddressesSet)==false){
           return NewErrorAcknowledgement("Expected Signer Mismatch")
         }
@@ -875,7 +872,7 @@ Precondition: The user on the controller chain has created an account. This acco
 - 0.3 The user sends Tx1 to the controller state machine. 
 
 - 1.1 The controller state machine passes the transaction to the proper icaTxHandler.  
-- 1.2 The `icaRegisterTxHandler` validates Tx1 and executes signature checks `icaOwnerAddress`` is the signer of Tx1 
+- 1.2 The `icaRegisterTxHandler` validates Tx1 and executes signature checks over `icaOwnerAddress` verifying it is the signer of Tx1. 
 - 1.3 The `icaRegisterTxHandler` calls `sendRegisterTx`
 
 - 2.1 The `sendRegisterTx` calls the `registerInterchainAccount` controller function. 
@@ -888,7 +885,8 @@ Precondition: The user on the controller chain has created an account. This acco
 - 4.2 The `onRecvPacket` callback is activated on the host state machine and triggers the `registerInterchainAccount` function. 
 - 4.3 The `registerInterchainAccount` function of the host chain verifies that the `usedHostAccountsIds` have not already been used. 
 - 4.4 The `registerInterchainAccount` generates the addresses based on the passed-in parameters.
-- 4.5 The addresses are stored in the host chain module state. 4.6 Upon completion, the `onRecvPacket` callback writes an acknowledgment containing the newly generated addresses. 
+- 4.5 The addresses are stored in the host chain module state. 
+- 4.6 Upon completion, the `onRecvPacket` callback writes an acknowledgment containing the newly generated addresses. 
 
 - 5.1 The relayer relays the acknowledgment packet to the controller state machine.
 
@@ -939,14 +937,14 @@ Precondition: The user on the controller chain has registered an account on the 
 - 1.3 The `icaExecuteTxHandler` calls `sendExecuteTx`.  
 
 - 2.1 The `sendExecuteTx` verifies that the `hostAccountIds` passed in are actually related to an already registered `hostAccountAddress` and that the messages array is not empty.    
-- 2.2 The `sendRegisterTx` construct and sends the packet, via ICS-4 wrapper, with `icaExecutePacketData` information (containing the `icaOwnerAddress` and the `hostAccountsIds` and the `msgs`).  
+- 2.2 The `sendExecuteTx` constructs and sends the packet, via ICS-4 wrapper, with `icaExecutePacketData` information (containing the `icaOwnerAddress` and the `hostAccountsIds` and the `msgs`).  
 
-- 3.1 The relayer relays the packet to the host state machine.   
+- 3.1 The relayer relays the packet to the host state machine.
 
 - 4.1 The host state machine dispatches the packet to the proper module handler.    
-- 4.2 The `onRecvPacket` callbacks are activated on the host state machine.   
-- 4.3 The `onRecvPacket` constructs the addresses set given the `hostAccountIds` (retrieve the address from the module state given the `hostAccountId` key).  
-- 4.4 For every msg contained in the `msgs` array, the `onRecvPacket` verifies that the `msg.expectedSigner` is contained in the addresses set.  
+- 4.2 The `onRecvPacket` callback is activated on the host state machine.   
+- 4.3 During the `onRecvPacket` the addresses set is constructed given the `hostAccountIds` (retrieve the addresses from the module state given the `hostAccountId` key).  
+- 4.4 For every msg contained in the `msgs` array, the `onRecvPacket` verifies that the `msg.expectedSigner` is contained in constructed the addresses set.  
 - 4.5 The msg is executed and the return values are saved in the `resultData`.   
 - 4.6 Once all the msgs are executed, the acknowledgment containing `resultData` is returned.   
 
@@ -987,7 +985,7 @@ Problem:
 Given chain A and chain B, if chain A sends two IBC packets, each one containing an  `EXECUTE_TX` message, the order of execution of the packets, and so of the messages, is not guaranteed because it depends on the relayer delivery order of the packets themself. 
 
 Solution: 
-The user who needs a certain order of execution for its messages Must place them in the same IBC ica packet. When the messages are placed in the same IBC packet, we can guarantee the atomicity and the order of execution. Indeed if any of the messages fails, everything will be reverted by writing an error acknowledgment, and, additionally, the messages that are passed in an interchain account `EXECUTE_TX`` will be executed by the host chain following a FIFO mechanism. 
+The user who needs a certain order of execution for its messages Must place them in the same IBC ica packet. When the messages are placed in the same IBC packet, we can guarantee the atomicity and the order of execution. Indeed if any of the messages fails, everything will be reverted by writing an error acknowledgment, and, additionally, the messages that are passed in an interchain account `EXECUTE_TX` will be executed by the host chain following a FIFO mechanism. 
 
 ### Account balances post execution on the host chain 
 
