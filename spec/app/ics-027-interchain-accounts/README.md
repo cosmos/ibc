@@ -305,7 +305,7 @@ function onChanCloseConfirm(
 To interact with the interchain account protocol, the user can generate two types of tx, namely `REGISTER_TX` and `EXECUTE_TX`. For each Tx type, we define a icaTxHandler so that we have `icaRegisterTxHandler` and `icaExecuteTxHandler`. Both tx handlers must verify, that the signer is the `icaOwnerAddress` and then, based on the `icaTxType`, they must call the associated functions that will construct the related kind of packet. 
 
 ```typescript
-function icaRegisterTxHandler(portId: string, channelId: string, icaOwnerAddress: string, hostAccountNumber: unit64): uint64 {
+function icaRegisterTxHandler(portId: string, channelId: string, timeoutTimestamp: uint64, icaOwnerAddress: string, hostAccountNumber: unit64): uint64 {
 
   // Ensure the tx has been dispatched to the correct handler
   abortTransactionUnless(this.Tx.type===REGISTER_TX)
@@ -315,12 +315,12 @@ function icaRegisterTxHandler(portId: string, channelId: string, icaOwnerAddress
   // Validate functions parameter.. 
 
   // Should compute and pass in timeout related things or this should be done in sendRegisterTx? 
-  return sequence = sendRegisterTx(portId, channelId, icaOwnerAddress, hostAccountNumber) 
+  return sequence = sendRegisterTx(portId, channelId, timeoutTimestamp, icaOwnerAddress, hostAccountNumber) 
 }
 ```
 
 ```typescript
-function icaExecuteTxHandler(portId: string, channelId: string, icaOwnerAddress: string, hostAccountIds:[] unit64, msgs: []msgs, memo:string ) : uint64 {
+function icaExecuteTxHandler(portId: string, channelId: string, timeoutTimestamp: uint64, icaOwnerAddress: string, hostAccountIds:[] unit64, msgs: []msgs, memo:string ) : uint64 {
   
   // Ensure the tx has been dispatched to the correct handler
   abortTransactionUnless(this.Tx.type===EXECUTE_TX)
@@ -331,7 +331,7 @@ function icaExecuteTxHandler(portId: string, channelId: string, icaOwnerAddress:
 
   // call sendExecuteTx 
   // Should compute and pass in timeout related things or this should be done in sendExecuteTx? 
-  return sequence= sendExecuteTx(portId, channelId, icaOwnerAddress, hostAccountIds, msgs, memo) 
+  return sequence= sendExecuteTx(portId, channelId, timeoutTimestamp, icaOwnerAddress, hostAccountIds, msgs, memo) 
 }
 ```
 
@@ -432,24 +432,21 @@ Thinking about a smart contract system, then the system should verify that the t
 function sendRegisterTx( 
   sourcePort: string,
   sourceChannel: string,
+  tiemoutTimestamp: uint64, // in unix nanoseconds
   icaOwnerAddress: string,
   hostAccountNumber: uint64, // Account number for which we are requesting the generation 
   //memo: string,   // Do we want to allow memo to be used in here? Probably we should not 
   
 ) : uint64 {
-
-  // Compute
-  // timeoutHeight: Height,
-  // timeoutTimestamp: uint64, // in unix nanoseconds
  
   // retrieve channel 
   channel = provableStore.get(channelPath(sourcePort, sourceChannel))
-  abortTransactionUnless(channel.version=="ica")
-  // validate that the channel infos
-  abortTransactionUnless(isActive(channel))
+  metadata=UnmarshalJson(channel.version)
+  abortTransactionUnless(metadata.Version=="ics27-v2")
+  abortTransactionUnless(sourcePort=="ica-controller")
+
   // validate timeoutTimestamp
-  abortTransactionUnless(timeoutTimestamp <= currentTimestamp())
-  // validate Height? 
+  abortTransactionUnless(timeoutTimestamp > currentTimestamp()) 
 
   let err : error = nil
   let usedhostAccountIds : []uint64 = []
@@ -471,10 +468,11 @@ function sendRegisterTx(
     getCapability("port"),
     sourcePort,
     sourceChannel,
-    timeoutHeight,
+    0, // timeoutHeight
     timeoutTimestamp,
     protobuf.marshal(icaPacketData) // protobuf-marshalled bytes of packet data
   )
+  //Emit Event
   return sequence
 }
 ```
@@ -483,17 +481,24 @@ function sendRegisterTx(
 
 ```typescript
 function sendExecuteTx( 
-  portId: string,
-  channelId: string,
+  sourcePort: string,
+  sourceChannel: string,
+  timeoutTimestamp: uint64, // in unix nanoseconds
   icaOwnerAddress: string,
   hostAccountIds: [] uint64,  // TODO Reason about this. Maybe could use addresses directly  
   msgs: []msg, 
   memo: string) 
   : uint64 {
   
+  // retrieve channel 
+  channel = provableStore.get(channelPath(sourcePort, sourceChannel))
+  metadata=UnmarshalJson(channel.version)
+  abortTransactionUnless(metadata.Version=="ics27-v2")
+  abortTransactionUnless(sourcePort=="ica-controller")
+
   // Verify that the provided hostAccountIds match with an already registered hostAccountAddress
   for seq in hostAccountIds{
-    abortTransactionUnless(getInterchainAccountAddress(portId,channelId,icaOwnerAddress,seq)!=="", "Interchain Account Not Registered")
+    abortTransactionUnless(getInterchainAccountAddress(sourcePort, sourceChannel icaOwnerAddress,seq)!=="", "Interchain Account Not Registered")
     }
   
   // It exist at least one message to be executed 
@@ -504,12 +509,13 @@ function sendExecuteTx(
   // send packet using the interface defined in ICS4
   sequence = handler.sendPacket(
     getCapability("port"),
-    portId, //sourcePort,
-    channelId, //sourceChannel,
-    timeoutHeight,
+    sourcePort, 
+    sourceChannel, 
+    0, // timeoutHeight
     timeoutTimestamp,
     protobuf.marshal(icaPacketData) // protobuf-marshalled bytes of packet data
   )
+  //Emit Event
   return sequence
 }
 ```
@@ -543,19 +549,21 @@ function onAcknowledgePacket(
         // Increment the positional number 
         i=i+1 
     }
-    // call underlying app's OnAcknowledgementPacket callback 
-    // see ICS-30 middleware for more information
-    case types.EXECUTE_SUCCESS: 
-    //TODO Verify no op is ok. In theory the user should be able to read the information returned in the ack by reading the state. 
-    // No Op 
-    case types.EXECUTE_ERROR:
-    //TODO Verify no op is ok. In theory no state changes happened on controller chain, so no op required 
-    // No Op 
+    //Emit Event with the addresses generated by the host chain 
+    
     case types.REGISTER_ERROR:
        // In case of registration errors, populate the unusedHostAccountsIds with the ids provided for this registering Tx. The usage of the unusedHostAccountIds serves to deter potential gaps in the sequence of account IDs 
        for id in packet.data.hostAccountIds {
         unusedHostAccountIds.push(id);
       }
+    //Emit Event  
+    case types.EXECUTE_SUCCESS: 
+    //Emit Event with resultsData In theory no state changes happened on controller chain, so no extra op is required 
+    // No Op  
+    case types.EXECUTE_ERROR:
+    //Emit Event. In theory no state changes happened on controller chain, so no extra op is required 
+    // No Op 
+    
   }
 ```
 
@@ -568,7 +576,9 @@ function onTimeoutPacket(packet: Packet) {
         for id in packet.data.hostAccountIds {
         unusedHostAccountIds.push(id);
       }
+      //Emit Event
     case types.EXECUTE:
+    //Emit Event
     // No Op
   }
 }
@@ -769,17 +779,20 @@ function executeTx(hostAccount: string, msg Any) : (resultString, error) {
 ##### **msgBlacklist** 
 
 The `addMessageToBlacklist` can be called by the host chain to blacklist certain types of msgs. 
-// Note, the blacklist can be dangerous, check the consideration section. Inspect
 
 ```typescript
 function addMessageToBlacklist(portId: string, channelId: string, icaOwnerAddress: string, msgType: string): error {
 
+  if(msgType==msgTransfer){
+    return "MsgTransfer cannot be blacklisted"
+  }
+
   if(msgType.isIn(msgBlacklist[portId][channelId][icaOwnerAddress])==false){
-    msgBlacklist[portId][channelId][icaOwnerAddress].add(msgType)
-    return nil
-  } else { 
-    return "Message type already blacklisted"
-    }
+      msgBlacklist[portId][channelId][icaOwnerAddress].add(msgType)
+      return nil
+    } else { 
+      return "Message type already blacklisted"
+      }
 }
 ```
 
@@ -1010,7 +1023,7 @@ The user who needs a certain order of execution for its messages Must place them
 
 ### Account balances post execution on the host chain 
 
-In the case the controller chain wants to know the host account balance after certain msgs are executed, it should include a cross-chain-query message at the bottom of the msg list. 
+In the case the controller chain wants to know the host account balance after certain msgs are executed, it should include a cross-chain-query message at the bottom of the msg list. Then the result can be retrieved from the event emitted in the acknowledgment.
 
 ### Interchain Account Recovery
 
@@ -1018,8 +1031,11 @@ Since we are allowing only unordered channels and disallowing channel closure pr
 
 ### MsgBlacklist 
 
-// TODO Should be the blacklist icaOwnerAccounts specific? 
-What happens if the controller chain registers and funds a hostAccount and then the host chain blacklist the transfers? Are funds lost? 
+Problem: 
+What happens if the controller chain registers and funds a hostAccount and then the host chain blacklist the transfers? Are funds lost?
+
+Solution: 
+Don't allow the host chain to blacklist msgTransfer. This is the only msg that cannot be blacklisted. So that the controller chain can always have the opportunity to recover funds. 
 
 ## Example Implementations
 
