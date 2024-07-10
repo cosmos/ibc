@@ -342,7 +342,7 @@ message Acknowledgement {
 
 ### Custom logic
 
-ICS-27 relies on [ICS-30 middleware architecture](../ics-030-middleware) to provide the option for application developers to apply custom logic on the success or fail of ICS-27 packets. 
+ICS-27 relies on [ICS-30 middleware architecture](../../ics-030-middleware) to provide the option for application developers to apply custom logic on the success or fail of ICS-27 packets. 
 
 Controller chains will wrap `OnAcknowledgementPacket` & `OnTimeoutPacket` to handle the success or fail cases for ICS-27 packets. 
 
