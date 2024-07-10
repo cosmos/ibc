@@ -927,6 +927,54 @@ Precondition: The user on the controller chain has created an account. This acco
 - 6.1 The `onAcknowledgePacket` is activated on the controller state machine 
 - 6.2 The addresses contained in the acknowledgment are written into the controller chain module state. 
 
+// Test mermaid diagram
+
+```mermaid
+sequenceDiagram 
+    participant User
+    participant Controller
+    participant Controller - icaRegisterTxHandler
+    participant Controller - SendRegisterTx
+    participant Controller - registerInterchainAccount
+    participant Controller - onAcknowledgePacket
+    participant Controller - ICS4
+    participant Relayer
+    participant Host
+    participant Host - onReceive
+    participant Host - registerInterchainAccount
+    
+
+    Note over User: Precondition: User has created an account icaOwnerAddress on the controller chain
+
+    User->>User: 0.1 create registerTx Tx1
+    User->>User: 0.2 sign Tx1 with icaOwnerAddress
+    User->>Controller: 0.3 send Tx1 to controller state machine
+
+    Controller->>Controller - icaRegisterTxHandler: 1.1 pass Tx1 to proper icaTxHandler
+    Controller - icaRegisterTxHandler->>Controller - icaRegisterTxHandler: 1.2 validate Tx1 and check signature of icaOwnerAddress
+    Controller - icaRegisterTxHandler->>Controller - SendRegisterTx: 1.3 call sendRegisterTx
+
+    Controller - SendRegisterTx ->>Controller - registerInterchainAccount: 2.1 call registerInterchainAccount
+    Controller - registerInterchainAccount->>Controller - registerInterchainAccount : 2.2 compute usedHostAccountsIds
+    Controller - SendRegisterTx->> Controller - ICS4: 2.3 construct packet and invoke ICS4 wrapper sendPacket
+    Controller - ICS4 ->> Controller - ICS4: 2.4 send packet with icaRegisterPacketData 
+
+    Relayer->>Host: 3.1 relay packet to host state machine
+
+    Host->>Host - onReceive: 4.1 dispatch packet to proper module handler 
+    Host - onReceive->>Host - onReceive: 4.2 verify usedHostAccountsIds
+    Host - onReceive->>Host - registerInterchainAccount : 4.3 calls registerInterchainAccount
+    Host - registerInterchainAccount->> Host - onReceive: 4.4 generate addresses based on parameters
+    Host - onReceive->>Host: 4.5 store addresses in module state
+    Host - onReceive->> Host - onReceive: 4.6 write acknowledgment with new addresses
+
+    Relayer->>Controller: 5.1 relay acknowledgment packet to controller state machine
+
+
+    Controller->>Controller - onAcknowledgePacket: 6.1 activate onAcknowledgePacket
+    Controller - onAcknowledgePacket->>Controller: 6.2 write addresses into module state
+```
+
 ##### Error Case 
 
 Precondition: The user on the controller chain has created an account. This account will be used as the `icaOwnerAddress`.  
