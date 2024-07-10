@@ -27,7 +27,7 @@ ICS-27 Interchain Accounts outlines a cross-chain account management protocol bu
 - `Interchain Account`: An account on a host chain. An interchain account has all the capabilities of a normal account. However, rather than signing transactions with a private key, a controller chain will send IBC packets to the host chain which signals what transactions the interchain account must execute. 
 - `Interchain Account Owner`: An account on the controller chain. Every interchain account on a host chain has a respective owner account on the controller chain. 
 
-The IBC handler interface & IBC relayer module interface are as defined in [ICS-25](../../core/ics-025-handler-interface) and [ICS-26](../../core/ics-026-routing-module), respectively.
+The IBC handler interface & IBC relayer module interface are as defined in [ICS-25](../../../core/ics-025-handler-interface) and [ICS-26](../../../core/ics-026-routing-module), respectively.
 
 ### Desired properties
 
@@ -207,7 +207,7 @@ The controller and host chains must verify that any new channel maintains the sa
 
 #### **Metadata negotiation**
 
-ICS-27 takes advantage of [ICS-04 channel version negotiation](../../core/ics-004-channel-and-packet-semantics/README.md#versioning) to negotiate metadata and channel parameters during the channel handshake. The metadata will contain the encoding format along with the transaction type so that the counterparties can agree on the structure and encoding of the interchain transactions. The metadata sent from the host chain on the TRY step will also contain the interchain account address, so that it can be relayed to the controller chain. At the end of the channel handshake, both the controller and host chains will store a mapping of (controller chain portID, controller/host connectionID) to the newly registered interchain account address ([account registration flow](#register-account-flow)). 
+ICS-27 takes advantage of [ICS-04 channel version negotiation](../../../core/ics-004-channel-and-packet-semantics/README.md#versioning) to negotiate metadata and channel parameters during the channel handshake. The metadata will contain the encoding format along with the transaction type so that the counterparties can agree on the structure and encoding of the interchain transactions. The metadata sent from the host chain on the TRY step will also contain the interchain account address, so that it can be relayed to the controller chain. At the end of the channel handshake, both the controller and host chains will store a mapping of (controller chain portID, controller/host connectionID) to the newly registered interchain account address ([account registration flow](#register-account-flow)). 
 
 ICS-04 allows for each channel version negotiation to be application-specific. In the case of interchain accounts, the channel version will be a string of a JSON struct containing all the relevant metadata intended to be relayed to the counterparty during the channel handshake step ([see summary below](#metadata-negotiation-summary)).
 

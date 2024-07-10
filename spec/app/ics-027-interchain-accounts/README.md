@@ -24,6 +24,13 @@ ICS-27 Interchain Accounts outlines a cross-chain account management protocol bu
 
 The ICS-27 version 2 comes to address the needs of the community and adheres to the requirements defined [here](https://github.com/cosmos/ibc-go/blob/48f69848bb84d9bc396c750eb656f961c7d773ad/docs/requirements/ics27-multiplexed-requirements.md). 
 
+The main differences between the two versions of the ics27 can be outlined as follow:
+
+- In the ics27-v2, the controller and host account registration process does not rely on channel handshakes. The new protocol version requires only a single unordered channel to manage all communications between the distinct chains.
+- For multi message execution, the order and atomiticy of message execution is guaranteed if messages are place in the same ica IBC Tx. 
+- The controller can setup `n` accounts on the host chain, managed by the same `icaOwnerAddress`, within a single IBC Tx. `n` should be constrained to an upper bound. 
+- The controller chain can request the execution of `n` msgs destinated to `m`, with `m <= n`, distinct host accounts within a single IBC Tx.   
+
 ### Definitions 
 
 - `Host Chain`: The chain where the interchain account is registered. The host chain listens for IBC packets from a controller chain which contain instructions (e.g. cosmos SDK messages) that the interchain account will execute.
@@ -830,8 +837,12 @@ function onRecvPacket(packet Packet) {
       if temp=="" {
         return NewErrorAcknowledgement("Requesting Tx For A Non Registered Account")
       }
-      hostAddressesSet.add(temp)
+      // If multplie msgs refer to the same host account and the address has already been stored in the hostAddressSet, we don't need to restore it.
+      if(!temp.isIn(hostAddressesSet)) { 
+        // If not already stored, then store it. 
+        hostAddressesSet.add(temp)
       }
+    }
   
     for msg in msgs{
       // TODO Include check for blacklisted message.
@@ -955,7 +966,7 @@ Precondition: The user on the controller chain has registered an account on the 
 - 4.2 The `onRecvPacket` callback is activated on the host state machine.   
 - 4.3 During the `onRecvPacket` the addresses set is constructed given the `hostAccountIds` (retrieve the addresses from the module state given the `hostAccountId` key).  
 - 4.4 For every msg contained in the `msgs` array, the `onRecvPacket` verifies that the `msg.expectedSigner` is contained in constructed the addresses set.  
-- 4.5 The msg is executed and the return values are saved in the `resultData`.   
+- 4.5 The msg is executed and the return values are saved in the `resultData`. Note that here the msg should be passed to the right module which, considering that the msg is coming from an ica Tx, should skip the signature verification. // NOTE probably the application module should have a dedicated entrypoint for this case.   
 - 4.6 Once all the msgs are executed, the acknowledgment containing `resultData` is returned.   
 
 - 5.1 The relayer relays the acknowledgment packet to the controller state machine.  
