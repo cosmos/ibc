@@ -41,7 +41,6 @@ The IBC handler interface & IBC relayer module interface are as defined in [ICS-
 - The controller chain must store the account address of any owned interchain accounts registered on host chains. 
 - A host chain must have the ability to limit interchain account functionality on its chain as necessary (e.g. a host chain can decide that interchain accounts registered on the host chain cannot take part in staking). This should be achieved with a blacklist mechanisms. 
 - An icaOwnerAccount on the controller chain can manage 1..n hostAccount(s) on the host chain. A hostAccount on the host chain can be managed by 1 and only 1 icaOwnerAccount on the controller chain. 
-- The controller chain must be able to set up multiple interchain account(s) on the host chain in a single transaction. 
 - Many controller accounts on the same controller chain should be able to send messages to many host accounts on the same host chain through the same channel.
 
 ### General design 
@@ -144,7 +143,7 @@ The ICS-04 allows for each channel version negotiation to be application-specifi
 
 ```typescript
 version: {
-  "Version": "ica", // channel version
+  "Version": "ics27-v2", // channel version
   "Encoding": "requested_encoding_type", // Json, protobuf.. 
 }
 ```
@@ -176,7 +175,7 @@ An administrator (with the permissions to create connections & channels on the s
 
 ```typescript
 function setup() {
-  capability = routingModule.bindPort("icacontroller", ModuleCallbacks{
+  capability = routingModule.bindPort("ica-controller", ModuleCallbacks{
     onChanOpenInit,
     onChanOpenTry,  // Force Abort 
     onChanOpenAck,
@@ -200,8 +199,9 @@ The routing module callbacks associated with the channel management are at the b
 
 When machine `A`, with the role of controller, starts a new channel handshake, chain `B` with the role of host must accept the new channel if and only if:
 
-- The channel being created is unordered.
-- The version string is `ica` or `""`.  
+- The channel being created is `UNORDERED`.
+- The counterpartyMetatada.Version string is `ics27-v2`.  
+- The counterpartyPortIdentifier is `ica-controller`.  
 
 ```typescript
 function onChanOpenInit(
@@ -213,11 +213,13 @@ function onChanOpenInit(
   version: string) => (version: string, err: Error) {
   // only unordered channels allowed
   abortTransactionUnless(order === UNORDERED)
+  abortTransactionUnless(portIdentifier === "ica-controller")
+  abortTransactionUnless(counterpartyPortIdentifier === "ica-host")
 
   if version == "" {
     // default to latest supported version
     metadata = {
-      Version: "ica",
+      Version: "ics27-v2",
       Encoding: DefaultEncoding, //decide default econding
     }
     version = marshalJSON(metadata)
@@ -226,7 +228,7 @@ function onChanOpenInit(
     // If the version is not empty and is among those supported, we return the version
     metadata = UnmarshalJSON(version)
     // assert that version is "ica" 
-    abortTransactionUnless(matadata.Version === "ica")
+    abortTransactionUnless(matadata.Version === "ics27-v2")
     // assert the choosed encoding is supported.
     abortTransactionUnless(IsSupportedEncoding(metadata.Encoding))
     return version, nil 
@@ -255,8 +257,12 @@ function onChanOpenAck(
   counterpartyVersion: string) {
   // port has already been validated
   // assert that counterparty selected version is the same as our version
+  counterpartyMetadata = UnmarshalJSON(CounterpartyVersion)
   channel = provableStore.get(channelPath(portIdentifier, channelIdentifier))
-  abortTransactionUnless(counterpartyVersion === channel.version)
+  channelMetadata=UnmarshalJSON(channel.version)
+  abortTransactionUnless(counterpartyMetadata.Version === "ics27-v2")
+  // Check if the econding has been agreed 
+  abortTransactionUnless(counterpartyMetadata.Encoding === channelMetadata.Encoding)
 }
 ```
 
@@ -289,7 +295,7 @@ function onChanCloseConfirm(
 
 ##### Interchain Account EntryPoints 
 
-To interact with the interchain account protocol, the user can generate two types of tx, namely `REGISTER_TX` and `EXECUTE_TX`. For each Tx type, we define a icaTxHandler so that we have `icaRegisterTxHandler` and `icaExecuteTxHandler`. Both tx handlers must verify, that the signer is the `icaOwnerAddress` and then, based on the type of Tx, they must call the associated functions that will construct the related kind of packet. 
+To interact with the interchain account protocol, the user can generate two types of tx, namely `REGISTER_TX` and `EXECUTE_TX`. For each Tx type, we define a icaTxHandler so that we have `icaRegisterTxHandler` and `icaExecuteTxHandler`. Both tx handlers must verify, that the signer is the `icaOwnerAddress` and then, based on the `icaTxType`, they must call the associated functions that will construct the related kind of packet. 
 
 ```typescript
 function icaRegisterTxHandler(portId: string, channelId: string, icaOwnerAddress: string, hostAccountNumber: unit64): uint64 {
@@ -565,11 +571,11 @@ function onTimeoutPacket(packet: Packet) {
 
 ##### Port & channel setup
 
-Here we define the setup function for the *Hosting* subprotocol. 
+Here we define the setup function for the *icaHosting* subprotocol. 
 
 ```typescript
 function setup() {
-  capability = routingModule.bindPort("icahost", ModuleCallbacks{
+  capability = routingModule.bindPort("ica-host", ModuleCallbacks{
     onChanOpenInit, // Force Abort 
     onChanOpenTry,
     onChanOpenAck, // Force Abort 
@@ -587,14 +593,15 @@ function setup() {
 
 ##### Routing module callbacks
 
-The routing module callbacks associated with the channel management are at the base of the interchain account protocol. By design, the host chain can only accept/negotiated a channel creation handshake started by a controller chain. 
+The routing module callbacks associated with the channel management are at the base of the interchain account protocol. By design, the host chain can only accept/negotiate a channel creation handshake started by a controller chain. 
 
 ###### Channel lifecycle management
 
 When machine `A`, with the role of controller, starts a new channel handshake, chain `B` with the role of host must accept the new channel if and only if:
 
-- The channel being created is unordered.
-- The version string is `ica` or `""`.  
+- The channel being created is `UNORDERED`.
+- The counterpartyMetatada.Version string is `ics27-v2`.  
+- The counterpartyPortIdentifier is `ica-controller`.  
 
 ```typescript
 function onChanOpenInit(
@@ -620,11 +627,14 @@ function onChanOpenTry(
   
   abortTransactionUnless(order === UNORDERED)
   // Unmarshal metada from counterpartyVersion
-  metadata = UnmarshalJSON(counterpartyVersion)
-  // assert that version is "ica" 
-  abortTransactionUnless(matadata.Version === "ica")
+  counterpartyMetadata = UnmarshalJSON(counterpartyVersion)
+  
+  abortTransactionUnless(portIdentifier === "ica-host")
+  abortTransactionUnless(counterpartyPortIdentifier === "ica-controller")
+  // assert that version is "ics27-v2" 
+  abortTransactionUnless(counterpartyMetadata.Version === "ics27-v2")
   // assert the choosed encoding is supported.
-  abortTransactionUnless(IsSupportedEncoding(metadata.Encoding))
+  abortTransactionUnless(IsSupportedEncoding(counterpartyMetadata.Encoding))
   return counterpartyVersion, nil 
 }
 ```
