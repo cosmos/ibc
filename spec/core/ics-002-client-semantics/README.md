@@ -346,7 +346,7 @@ enum Status {
   Unknown
   Active
   Expired
-  Froezn
+  Frozen
 }
 ```
 
