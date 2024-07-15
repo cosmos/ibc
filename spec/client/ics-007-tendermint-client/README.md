@@ -238,27 +238,27 @@ function verifyHeader(header: Header) {
 }
 ```
 
-### Retrieve Client Status 
+### Retrieve client status 
 
-Return the Status of the Tendermint client. Status can be either Active, Expired, Unknown or Frozen. 
+Return the Status of the Tendermint client. Status can be either `Active`, `Expired` or `Frozen`.
 
 ```typescript
-// Returns the status of a client given its store.
-function Status (client: clientState) {
-  if (client.FrozenHeight !== 0) {
+// returns the status of a client
+function Status (clientIdentifier: Identifier, clientState: clientState): Status {
+  if (clientState.frozenHeight !== 0) {
     return Frozen
   }
-  // Get latest consensus state from clientStore to check for expiry
-  consState, err := client.latestClientHeight()
-  if err (!== nil) {
-    return Unknown
+  // get consensus state for the latest height
+  height = clientState.latestClientHeight()
+  consensusState = provableStore.get("clients/{clientIdentifier}/consensusStates/{height}")
+  if consensusState == nil {
+    return Expired
   }
-  // Check if Expired
-  let expirationTime := consState.Timestamp + client.TrustingPeriod
-  if (expirationTime <== now){
+  // check if the trusting period has passed since the last update
+  let expirationTime := consensusState.timestamp + clientState.trustingPeriod
+  if (expirationTime <= now){
     return Expired 
   }
-
   return Active
 } 
 ```

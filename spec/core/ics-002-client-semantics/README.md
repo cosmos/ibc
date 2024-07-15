@@ -337,14 +337,23 @@ Once misbehaviour is detected, clients SHOULD be frozen so that no future update
 A permissioned entity such as a chain governance system or trusted multi-signature MAY be allowed
 to intervene to unfreeze a frozen client & provide a new correct ClientMessage which updates the client to a valid state.
 
-#### Retrieve Client Status 
+#### Retrieve client status 
 
-Status is an opaque function defined by a client type to retrieve the current clientState. Status can be either Active, Expired, Unknown or Frozen. 
+Status is an opaque function defined by a client type to retrieve the current clientState. Status can be either `Active`, `Expired`, `Unknown` or `Frozen`.
+
+```typescript
+enum Status {
+  Unknown
+  Active
+  Expired
+  Froezn
+}
+```
 
 The function is defined as:
 
 ```typescript
-type Status = (Client) => Void
+type Status = (Identifier, Client) => Status
 ```
 
 #### `CommitmentProof`

@@ -201,6 +201,28 @@ function verifyClientMessage(clientMsg: ClientMessage) {
 }
 ```
 
+### Retrieve client status 
+
+Return the status of the wasm client. Status can be either `Active`, `Expired`, `Unknown` or `Frozen`.
+
+```typescript
+interface StatusMsg {}
+```
+
+```typescript
+// returns the status of a client
+function Status(clientIdentifier: Identifier, clientState: clientState): Status {
+  payload = StatusMsg{}
+
+  // retrieve client identifier-prefixed store
+  clientStore = provableStore.prefixStore("clients/{clientIdentifier}")
+
+  // use underlying wasm contract to retrieve the status
+  result = callContract(clientStore, clientState, marshalJSON(payload))
+  return Status(result.status)
+} 
+```
+
 ### Misbehaviour predicate
 
 Function `checkForMisbehaviour` will check if an update contains evidence of misbehaviour. Wasm client misbehaviour checking determines whether or not two conflicting headers at the same height would have convinced the light client.
