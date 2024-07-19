@@ -85,9 +85,35 @@ The ICS 20 token traces are represented by a list of `ics20Port` and `ics20Chann
 
 A sending chain may be acting as a source or sink zone. When a chain is sending tokens across a port and channel which are not equal to the last prefixed port and channel pair, it is acting as a source zone. When tokens are sent from a source zone, the destination port and channel will be prepended to the trace (once the tokens are received) adding another hop to a tokens record. When a chain is sending tokens across a port and channel which are equal to the last prefixed port and channel pair, it is acting as a sink zone. When tokens are sent from a sink zone, the first element of the trace, which was the last port and channel pair added to the trace is removed (once the tokens are received), undoing the last hop in the tokens record. A more complete explanation is [present in the ibc-go implementation](https://github.com/cosmos/ibc-go/blob/457095517b7832c42ecf13571fee1e550fec02d0/modules/apps/transfer/keeper/relay.go#L18-L49).
 
-The following sequence diagram exemplifies the multi-chain token transfer dynamics. This process encapsulates the steps involved in transferring tokens in a cycle that begins and ends on the same chain, traversing through Chain A, Chain B, and Chain C. The order of operations is outlined as `A -> B -> C -> A -> C -> B -> A`.
+The following sequence diagram exemplifies the multi-chain token transfer dynamics. This process encapsulates the steps involved in transferring tokens in a cycle that begins and ends on the same chain, traversing through chain A, chain B, and chain C. The order of operations is outlined as `A -> B -> C -> A -> C -> B -> A`.
 
-![Transfer Example](source-and-sink-zones.png)
+```mermaid
+sequenceDiagram
+    Note over chain A,chain B: A is source zone: A -> B
+    chain A->>chain A: Lock (escrow) tokens ("denom")
+    chain A->>chain B: Send transfer packet with tokens ("denom")
+    chain B->>chain B: Mint vouchers ("transfer/ChannelToA/denom")
+    Note over chain B,chain C: B is source zone: B -> C
+    chain B->>chain B: Lock (escrow) vouchers ("transfer/ChannelToA/denom")
+    chain B->>chain C: Send transfer packet with vouchers ("transfer/ChannelToA/denom")
+    chain C->>chain C: Mint vouchers ("transfer/ChannelToB/transfer/ChannelToA/denom")
+    Note over chain A,chain C: C is source zone: C -> A
+    chain C->>chain C: Lock (escrow) vouchers ("transfer/ChannelToB/transfer/ChannelToA/denom")
+    chain C->>chain A: Send transfer packet with vouchers ("transfer/ChannelToB/transfer/ChannelToA/denom")
+    chain A->>chain A: Mint vouchers ("tansfer/ChannelToC/transfer/ChannelToB/transfer/ChannelToA/denom")
+    Note over chain A,chain C: A is sink zone: A -> C
+    chain A->>chain A: Burn vouchers ("transfer/ChannelToC/transfer/ChannelToB/transfer/ChannelToA/denom")
+    chain A->>chain C: Send transfer packet with vouchers ("transfer/ChannelToC/transfer/ChannelToB/transfer/ChannelToA/denom")
+    chain C->>chain C: Unlock (unescrow) vouchers ("transfer/ChannelToB/transfer/ChannelToA/denom")
+    Note over chain B,chain C: C is sink zone: C -> B
+    chain C->>chain C: Burn vouchers ("transfer/ChannelToB/transfer/ChannelToA/denom")
+    chain C->>chain B: Send transfer packet with vouchers ("transfer/ChannelToB/transfer/ChannelToA/denom")
+    chain B->>chain B: Unlock (unescrow) vouchers ("transfer/ChannelToA/denom")
+    Note over chain B,chain A: B is sink zone: B -> A
+    chain B->>chain B: Burn vouchers ("transfer/ChannelToB/transfer/ChannelToA/denom")
+    chain B->>chain A: Send transfer packet with vouchers ("transfer/ChannelToB/transfer/ChannelToA/denom")
+    chain A->>chain A: Unlock (unescrow) vouchers ("transfer/ChannelToA/denom")
+```
 
 The forwarding path in the `v2` packet tells the receiving chain where to send the tokens to next. This must be constructed as a list of portID/channelID pairs with each element concatenated as `portID/channelID`. This allows users to automatically route tokens through the interchain. A common usecase might be to unwind the trace of the tokens back to the original source chain before sending it forward to the final intended destination.
 
@@ -623,6 +649,12 @@ function onTimeoutPacket(packet: Packet) {
   }
 }
 ```
+
+Given three chains and a transfer from chain A to chain C through chain B, the following diagrams summarize the core logic of the protocol regarding the handling of tokens in the middle chain, both for the success case (i.e. tokens received on chain C) and failure case (i.e. tokens cannot be received on chain C and an error acknowledgement is written):
+
+![Forwarding success case](forwarding-3-chains-success.png)
+
+![Forwarding failure case](forwarding-3-chains-failure.png)
 
 ##### Helper functions
 
