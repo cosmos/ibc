@@ -602,7 +602,6 @@ function chanUpgradeTry(
     version: counterpartyUpgrade.fields.version,
   }
 
-
   // current upgrade either doesn't exist (non-crossing hello case),
   // we initialize the upgrade with constructed upgradeFields
   // if it does exist, we are in crossing hellos and must assert
@@ -833,6 +832,16 @@ function chanUpgradeConfirm(
       counterpartyUpgrade
     )
   )
+
+  existingUpgrade = provableStore.get(channelUpgradePath(portIdentifier, channelIdentifier))
+
+	// in the crossing-hello case it is possible that both chains execute the
+	// INIT, TRY and CONFIRM steps without any of them executing ACK, therefore
+	// we also need to check that the upgrades are compatible on this step
+  if (!isCompatibleUpgradeFields(existingUpgrade.fields, counterpartyUpgrade.fields)) {
+    restoreChannel(portIdentifier, channelIdentifier)
+    return
+  }
 
   timeout = counterpartyUpgrade.timeout
   
@@ -1088,3 +1097,17 @@ Note that a channel upgrade handshake may never complete successfully if the in-
 ### Migrations
 
 A chain may have to update its internal state to be consistent with the new upgraded channel. In this case, a migration handler should be a part of the chain binary before the upgrade process so that the chain can properly migrate its state once the upgrade is successful. If a migration handler is necessary for a given upgrade but is not available, then the executing chain must reject the upgrade so as not to enter into an invalid state. This state migration will not be verified by the counterparty since it will just assume that if the channel is upgraded to a particular channel version, then the auxiliary state on the counterparty will also be updated to match the specification for the given channel version. The migration must only run once the upgrade has successfully completed and the new channel is `OPEN` (ie. on `ChanUpgradeConfirm` or `ChanUpgradeOpen`).
+
+## Example Implementations
+
+- Implementation of channel upgrade in Go can be found in [ibc-go repository](https://github.com/cosmos/ibc-go).
+
+## History
+
+Feb 1, 2024 - Spec as implemented in ibc-go
+
+Jul 24, 2024 - [Add upgrade compatibility check in `chanUpgradeConfirm`]()
+
+## Copyright
+
+All content herein is licensed under [Apache 2.0](https://www.apache.org/licenses/LICENSE-2.0).
