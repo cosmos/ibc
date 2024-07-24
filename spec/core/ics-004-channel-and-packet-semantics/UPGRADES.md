@@ -1106,7 +1106,7 @@ A chain may have to update its internal state to be consistent with the new upgr
 
 Feb 1, 2024 - Spec as implemented in ibc-go
 
-Jul 24, 2024 - [Add upgrade compatibility check in `chanUpgradeConfirm`]()
+Jul 24, 2024 - [Add upgrade compatibility check in `chanUpgradeConfirm`](https://github.com/cosmos/ibc/pull/1127)
 
 ## Copyright
 
