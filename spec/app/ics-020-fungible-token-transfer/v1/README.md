@@ -56,7 +56,33 @@ A sending chain may be acting as a source or sink zone. When a chain is sending 
 
 The following sequence diagram exemplifies the multi-chain token transfer dynamics. This process encapsulates the steps involved in transferring tokens in a cycle that begins and ends on the same chain, traversing through Chain A, Chain B, and Chain C. The order of operations is outlined as `A -> B -> C -> A -> C -> B -> A`.
 
-![Transfer Example](source-and-sink-zones.png)
+```mermaid
+sequenceDiagram
+    Note over chain A,chain B: A is source zone: A -> B
+    chain A->>chain A: Lock (escrow) tokens ("denom")
+    chain A->>chain B: Send transfer packet with tokens ("denom")
+    chain B->>chain B: Mint vouchers ("transfer/ChannelToA/denom")
+    Note over chain B,chain C: B is source zone: B -> C
+    chain B->>chain B: Lock (escrow) vouchers ("transfer/ChannelToA/denom")
+    chain B->>chain C: Send transfer packet with vouchers ("transfer/ChannelToA/denom")
+    chain C->>chain C: Mint vouchers ("transfer/ChannelToB/transfer/ChannelToA/denom")
+    Note over chain A,chain C: C is source zone: C -> A
+    chain C->>chain C: Lock (escrow) vouchers ("transfer/ChannelToB/transfer/ChannelToA/denom")
+    chain C->>chain A: Send transfer packet with vouchers ("transfer/ChannelToB/transfer/ChannelToA/denom")
+    chain A->>chain A: Mint vouchers ("tansfer/ChannelToC/transfer/ChannelToB/transfer/ChannelToA/denom")
+    Note over chain A,chain C: A is sink zone: A -> C
+    chain A->>chain A: Burn vouchers ("transfer/ChannelToC/transfer/ChannelToB/transfer/ChannelToA/denom")
+    chain A->>chain C: Send transfer packet with vouchers ("transfer/ChannelToC/transfer/ChannelToB/transfer/ChannelToA/denom")
+    chain C->>chain C: Unlock (unescrow) vouchers ("transfer/ChannelToB/transfer/ChannelToA/denom")
+    Note over chain B,chain C: C is sink zone: C -> B
+    chain C->>chain C: Burn vouchers ("transfer/ChannelToB/transfer/ChannelToA/denom")
+    chain C->>chain B: Send transfer packet with vouchers ("transfer/ChannelToB/transfer/ChannelToA/denom")
+    chain B->>chain B: Unlock (unescrow) vouchers ("transfer/ChannelToA/denom")
+    Note over chain B,chain A: B is sink zone: B -> A
+    chain B->>chain B: Burn vouchers ("transfer/ChannelToB/transfer/ChannelToA/denom")
+    chain B->>chain A: Send transfer packet with vouchers ("transfer/ChannelToB/transfer/ChannelToA/denom")
+    chain A->>chain A: Unlock (unescrow) vouchers ("transfer/ChannelToA/denom")
+```
 
 The acknowledgement data type describes whether the transfer succeeded or failed, and the reason for failure (if any).
 
