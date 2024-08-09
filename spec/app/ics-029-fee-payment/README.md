@@ -247,6 +247,7 @@ The fee middleware's handshake callbacks ensure that both modules agree on compa
 
 ```typescript
 function onChanOpenInit(
+  capability: CapabilityKey,
   order: ChannelOrder,
   connectionHops: [Identifier],
   portIdentifier: Identifier,
@@ -262,6 +263,7 @@ function onChanOpenInit(
         if err != nil {
             // call the underlying applications OnChanOpenInit callback
             return app.onChanOpenInit(
+                capability,
                 order,
                 connectionHops,
                 portIdentifier,
@@ -288,6 +290,7 @@ function onChanOpenInit(
     // if the version string is empty, OnChanOpenInit is expected to return
     // a default version string representing the version(s) it supports
     appVersion, err = app.onChanOpenInit(
+        capability,
         order,
         connectionHops,
         portIdentifier,
@@ -309,6 +312,7 @@ function onChanOpenInit(
 }
 
 function onChanOpenTry(
+  capability: CapabilityKey,
   order: ChannelOrder,
   connectionHops: [Identifier],
   portIdentifier: Identifier,
@@ -323,6 +327,7 @@ function onChanOpenTry(
     if err != nil {
         // call the underlying application's OnChanOpenTry callback
         return app.onChanOpenTry(
+            capability,
             order,
             connectionHops,
             portIdentifier,
@@ -341,6 +346,7 @@ function onChanOpenTry(
 
     // call the underlying application's OnChanOpenTry callback
     appVersion, err = app.onChanOpenTry(
+        capability,
         order,
         connectionHops,
         portIdentifier,

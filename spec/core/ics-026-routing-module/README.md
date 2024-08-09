@@ -454,6 +454,7 @@ function handleChanOpenInit(datagram: ChanOpenInit) {
   // When the module eventually executes its callback it must call writeChannel so that the channel
   // can be written into an INIT state with the right version and the handshake can proceed on the counterparty.
   version, err = module.onChanOpenInit(
+    channelCapability, // pass in channel capability so that module can claim it (if needed)
     datagram.order,
     datagram.connectionHops,
     datagram.portIdentifier,
@@ -510,6 +511,7 @@ function handleChanOpenTry(datagram: ChanOpenTry) {
   // When the module eventually executes its callback it must call writeChannel so that the channel
   // can be written into a TRY state with the right version and the handshake can proceed on the counterparty.
   version, err = module.onChanOpenTry(
+    channelCapability, // pass in channel capability so that module can claim it (if needed)
     datagram.order,
     datagram.connectionHops,
     datagram.portIdentifier,

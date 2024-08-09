@@ -260,8 +260,6 @@ Host state machines MAY also safely ignore the version data or specify an empty 
 
 ### Sub-protocols
 
-> Note: If the host state machine is utilising object capability authentication (see [ICS 005](../ics-005-port-allocation)), all functions utilising ports take an additional capability parameter.
-
 #### Identifier validation
 
 Channels are stored under a unique `(portIdentifier, channelIdentifier)` prefix.
@@ -341,7 +339,6 @@ function chanOpenInit(
 
     // optimistic channel handshakes are allowed
     abortTransactionUnless(connection !== null)
-    abortTransactionUnless(authenticateCapability(portPath(portIdentifier), portCapability))
 
     channelCapability = newCapability(channelCapabilityPath(portIdentifier, channelIdentifier))
     provableStore.set(nextSequenceSendPath(portIdentifier, channelIdentifier), 1)
@@ -367,7 +364,6 @@ function chanOpenTry(
     channelIdentifier = generateIdentifier()
 
     abortTransactionUnless(validateChannelIdentifier(portIdentifier, channelIdentifier))
-    abortTransactionUnless(authenticateCapability(portPath(portIdentifier), portCapability))
 
     connection = provableStore.get(connectionPath(connectionHops[0]))
     abortTransactionUnless(connection !== null)
@@ -425,7 +421,6 @@ function chanOpenAck(
   proofHeight: Height) {
     channel = provableStore.get(channelPath(portIdentifier, channelIdentifier))
     abortTransactionUnless(channel.state === INIT)
-    abortTransactionUnless(authenticateCapability(channelCapabilityPath(portIdentifier, channelIdentifier), capability))
 
     connection = provableStore.get(connectionPath(channel.connectionHops[0]))
     abortTransactionUnless(connection !== null)
@@ -471,7 +466,6 @@ function chanOpenConfirm(
     channel = provableStore.get(channelPath(portIdentifier, channelIdentifier))
     abortTransactionUnless(channel !== null)
     abortTransactionUnless(channel.state === TRYOPEN)
-    abortTransactionUnless(authenticateCapability(channelCapabilityPath(portIdentifier, channelIdentifier), capability))
 
     connection = provableStore.get(connectionPath(channel.connectionHops[0]))
     abortTransactionUnless(connection !== null)
@@ -518,7 +512,6 @@ Any in-flight packets can be timed-out as soon as a channel is closed.
 function chanCloseInit(
   portIdentifier: Identifier,
   channelIdentifier: Identifier) {
-    abortTransactionUnless(authenticateCapability(channelCapabilityPath(portIdentifier, channelIdentifier), capability))
     channel = provableStore.get(channelPath(portIdentifier, channelIdentifier))
     abortTransactionUnless(channel !== null)
     abortTransactionUnless(channel.state !== CLOSED)
@@ -549,7 +542,6 @@ function chanCloseConfirm(
   channelIdentifier: Identifier,
   proofInit: CommitmentProof | MultihopProof,
   proofHeight: Height) {
-    abortTransactionUnless(authenticateCapability(channelCapabilityPath(portIdentifier, channelIdentifier), capability))
     channel = provableStore.get(channelPath(portIdentifier, channelIdentifier))
     abortTransactionUnless(channel !== null)
     abortTransactionUnless(channel.state !== CLOSED)
@@ -833,7 +825,6 @@ function recvPacket(
     // defensive check that ensures chain does not process a packet higher than the last packet sent before
     // counterparty went into FLUSHING mode. If the counterparty is implemented correctly, this should never abort
     abortTransactionUnless(counterpartyUpgrade.nextSequenceSend == 0 || packet.sequence < counterpartyUpgrade.nextSequenceSend)
-    abortTransactionUnless(authenticateCapability(channelCapabilityPath(packet.destPort, packet.destChannel), capability))
     abortTransactionUnless(packet.sourcePort === channel.counterpartyPortIdentifier)
     abortTransactionUnless(packet.sourceChannel === channel.counterpartyChannelIdentifier)
 
@@ -1042,7 +1033,6 @@ function acknowledgePacket(
     channel = provableStore.get(channelPath(packet.sourcePort, packet.sourceChannel))
     abortTransactionUnless(channel !== null)
     abortTransactionUnless(channel.state === OPEN || channel.state === FLUSHING)
-    abortTransactionUnless(authenticateCapability(channelCapabilityPath(packet.sourcePort, packet.sourceChannel), capability))
     abortTransactionUnless(packet.destPort === channel.counterpartyPortIdentifier)
     abortTransactionUnless(packet.destChannel === channel.counterpartyChannelIdentifier)
 
@@ -1168,8 +1158,6 @@ function timeoutPacket(
 
     channel = provableStore.get(channelPath(packet.sourcePort, packet.sourceChannel))
     abortTransactionUnless(channel !== null)
-
-    abortTransactionUnless(authenticateCapability(channelCapabilityPath(packet.sourcePort, packet.sourceChannel), capability))
     abortTransactionUnless(packet.destChannel === channel.counterpartyChannelIdentifier)
 
     connection = provableStore.get(connectionPath(channel.connectionHops[0]))
@@ -1345,7 +1333,6 @@ function timeoutOnClose(
 
     channel = provableStore.get(channelPath(packet.sourcePort, packet.sourceChannel))
     // note: the channel may have been closed
-    abortTransactionUnless(authenticateCapability(channelCapabilityPath(packet.sourcePort, packet.sourceChannel), capability))
     abortTransactionUnless(packet.destChannel === channel.counterpartyChannelIdentifier)
 
     connection = provableStore.get(connectionPath(channel.connectionHops[0]))

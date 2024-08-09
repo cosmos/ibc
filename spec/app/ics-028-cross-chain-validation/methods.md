@@ -571,6 +571,7 @@ function CreateConsumerClient(p: ConsumerAdditionProposal) {
 // PCF: Provider Chain Function
 // implements the ModuleCallbacks interface defined in ICS26
 function onChanOpenInit(
+  capability: CapabilityKey,
   order: ChannelOrder,
   connectionHops: [Identifier],
   portIdentifier: Identifier,
@@ -601,6 +602,7 @@ function onChanOpenInit(
 // PCF: Provider Chain Function
 // implements the ModuleCallbacks interface defined in ICS26
 function onChanOpenTry(
+  capability: CapabilityKey,
   order: ChannelOrder,
   connectionHops: [Identifier],
   portIdentifier: Identifier,
@@ -621,6 +623,9 @@ function onChanOpenTry(
     // assert that the counterpartyVersion matches the expected version
     abortTransactionUnless(counterpartyVersion == ccvVersion)
     
+    // claim channel capability
+    claimCapability(channelCapabilityPath(portIdentifier, channelIdentifier), capability)
+
     // get the client state associated with the underlying client
     channelEnd = provableStore.get("channelEnds/ports/{portIdentifier}/channels/{channelIdentifier}")
     abortTransactionUnless(channelEnd != nil AND len(channelEnd.connectionHops) == 1)
@@ -888,6 +893,7 @@ function InitGenesis(gs: ConsumerGenesisState): [ValidatorUpdate] {
 // CCF: Consumer Chain Function
 // implements the ModuleCallbacks interface defined in ICS26
 function onChanOpenInit(
+  capability: CapabilityKey,
   order: ChannelOrder,
   connectionHops: [Identifier],
   portIdentifier: Identifier,
@@ -910,6 +916,9 @@ function onChanOpenInit(
     // the expected consumer port ID
     abortTransactionUnless(counterpartyPortIdentifier == ProviderPortId)
    
+    // claim channel capability
+    claimCapability(channelCapabilityPath(portIdentifier, channelIdentifier), capability)
+
     // require that the client ID of the client associated 
     // with this channel matches the expected provider client id
     channelEnd = provableStore.get("channelEnds/ports/{portIdentifier}/channels/{channelIdentifier}")
@@ -947,6 +956,7 @@ function onChanOpenInit(
 // CCF: Consumer Chain Function
 // implements the ModuleCallbacks interface defined in ICS26
 function onChanOpenTry(
+  capability: CapabilityKey,
   order: ChannelOrder,
   connectionHops: [Identifier],
   portIdentifier: Identifier,

@@ -36,6 +36,10 @@ For example, a token exchange would require only one transaction from a user, co
 
 `Taker Chain`: The blockchain where a taker takes or responds to an order.
 
+`channelCapabilityPath` is as defined in [ICS 4](../../core/ics-004-channel-and-packet-semantics).
+
+`claimCapability` is as defined in [ICS 5](../../core/ics-005-port-allocation).
+
 ### Desired Properties
 
 - `Permissionless`: no need to whitelist connections, modules, or denominations.
@@ -343,6 +347,7 @@ An fungible token swap module will accept new channels from any module on anothe
 
 ```typescript
 function onChanOpenInit(
+  capability: CapabilityKey,
   order: ChannelOrder,
   connectionHops: [Identifier],
   portIdentifier: Identifier,
@@ -357,6 +362,8 @@ function onChanOpenInit(
   // as the version for this channel
   abortTransactionUnless(version === "ics100-1" || version === "")
   
+  // claim channel capability
+  claimCapability(channelCapabilityPath(portIdentifier, channelIdentifier), capability)
   // allocate an escrow address
   channelEscrowAddresses[channelIdentifier] = newAddress()
   
@@ -366,6 +373,7 @@ function onChanOpenInit(
 
 ```typescript
 function onChanOpenTry(
+  capability: CapabilityKey,
   order: ChannelOrder,
   connectionHops: [Identifier],
   portIdentifier: Identifier,
@@ -378,6 +386,8 @@ function onChanOpenTry(
   // assert that version is "ics100-1"
   abortTransactionUnless(counterpartyVersion === "ics100-1")
   
+  // claim channel capability
+  claimCapability(channelCapabilityPath(portIdentifier, channelIdentifier), capability)
   // allocate an escrow address
   channelEscrowAddresses[channelIdentifier] = newAddress()
   

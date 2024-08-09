@@ -24,6 +24,10 @@ Users of a set of chains connected over the IBC protocol might wish to utilise a
 
 The IBC handler interface & IBC routing module interface are as defined in [ICS 25](../../core/ics-025-handler-interface) and [ICS 26](../../core/ics-026-routing-module), respectively.
 
+`channelCapabilityPath` is as defined in [ICS 4](../../core/ics-004-channel-and-packet-semantics).
+
+`claimCapability` is as defined in [ICS 5](../../core/ics-005-port-allocation).
+
 ### Desired Properties
 
 - Preservation of fungibility (two-way peg).
@@ -256,6 +260,7 @@ Both machines `A` and `B` accept new channels from any module on another machine
 
 ```typescript
 function onChanOpenInit(
+  capability: CapabilityKey,
   order: ChannelOrder,
   connectionHops: [Identifier],
   portIdentifier: Identifier,
@@ -282,6 +287,7 @@ function onChanOpenInit(
 
 ```typescript
 function onChanOpenTry(
+  capability: CapabilityKey,
   order: ChannelOrder,
   connectionHops: [Identifier],
   portIdentifier: Identifier,
