@@ -39,7 +39,7 @@ In order to provide the desired ordering, exactly-once delivery, and module perm
 
 `Identifier`, `get`, `set`, `delete`, `getCurrentHeight`, and module-system related primitives are as defined in [ICS 24](../ics-024-host-requirements).
 
-See [upgrades spec](./UPGRADES.md) for definition of `pendingInflightPackets`.
+See [upgrades spec](./UPGRADES.md) for definition of `pendingInflightPackets` and `restoreChannel`.
 
 A *channel* is a pipeline for exactly-once packet delivery between specific modules on separate blockchains, which has at least one end capable of sending packets and one end capable of receiving packets.
 
@@ -145,7 +145,7 @@ An `OpaquePacket` is a packet, but cloaked in an obscuring data type by the host
 type OpaquePacket = object
 ```
 
-In order to enable new channel types (e.g. ORDERED_ALLOW_TIMEOUT), the protocol introduces standardized packet receipts that will serve as sentinel values for the receiving chain to expliclity write to its store the outcome of a `recvPacket`.
+In order to enable new channel types (e.g. ORDERED_ALLOW_TIMEOUT), the protocol introduces standardized packet receipts that will serve as sentinel values for the receiving chain to explicitly write to its store the outcome of a `recvPacket`.
 
 ```typescript
 enum PacketReceipt {
@@ -450,11 +450,7 @@ function chanOpenAck(
         expected
       ))
     }
-
-    channel.state = OPEN
-    channel.version = counterpartyVersion
-    channel.counterpartyChannelIdentifier = counterpartyChannelIdentifier
-    provableStore.set(channelPath(portIdentifier, channelIdentifier), channel)
+    // write will happen in the handler defined in the ICS26 spec
 }
 ```
 
@@ -500,8 +496,7 @@ function chanOpenConfirm(
       ))
     }
 
-    channel.state = OPEN
-    provableStore.set(channelPath(portIdentifier, channelIdentifier), channel)
+    // write will happen in the handler defined in the ICS26 spec
 }
 ```
 
@@ -578,6 +573,12 @@ function chanCloseConfirm(
         expected
       ))
     }
+
+    // write may happen asynchronously in the handler defined in the ICS26 spec
+    // if the channel is closing during an upgrade, 
+    // then we can delete all auxiliary upgrade information
+    provableStore.delete(channelUpgradePath(portIdentifier, channelIdentifier))
+    privateStore.delete(counterpartyUpgradePath(portIdentifier, channelIdentifier))
 
     channel.state = CLOSED
     provableStore.set(channelPath(portIdentifier, channelIdentifier), channel)
@@ -1287,6 +1288,15 @@ function timeoutPacket(
 
     // only close on strictly ORDERED channels
     if channel.order === ORDERED {
+      // if the channel is ORDERED and a packet is timed out in FLUSHING state then
+      // all upgrade information is deleted and the channel is set to CLOSED.
+
+      if channel.State == FLUSHING {
+        // delete auxiliary upgrade state
+        provableStore.delete(channelUpgradePath(portIdentifier, channelIdentifier))
+        privateStore.delete(counterpartyUpgradePath(portIdentifier, channelIdentifier))
+      }
+
       // ordered channel: close the channel
       channel.state = CLOSED
       provableStore.set(channelPath(packet.sourcePort, packet.sourceChannel), channel)

@@ -233,6 +233,7 @@ Function `updateState` updates the solo machine `ConsensusState` values using th
 ```typescript
 function updateState(clientMessage: ClientMessage) {
   clientState = provableStore.get("clients/{clientMsg.identifier}/clientState")
+  header = Header(clientMessage)
   clientState.consensusState.publicKey = header.newPubKey
   clientState.consensusState.diversifier = header.newDiversifier
   clientState.consensusState.timestamp = header.timestamp

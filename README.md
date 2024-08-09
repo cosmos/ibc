@@ -45,7 +45,7 @@ All standards at or past the "Draft" stage are listed here in order of their ICS
 | --------------------------------------------------------------- | -------------------------- | ----- | --------------- | ------------- |
 | [6](spec/client/ics-006-solo-machine-client/README.md)          | Solo Machine Client        | Candidate | [ibc-go](https://github.com/cosmos/ibc-go/tree/main/modules/light-clients/06-solomachine) | Protocol team |
 | [7](spec/client/ics-007-tendermint-client/README.md)            | Tendermint Client          | Candidate | [ibc-go](https://github.com/cosmos/ibc-go/tree/main/modules/light-clients/07-tendermint), [ibc-rs](https://github.com/cosmos/ibc-rs/tree/main/ibc-clients/ics07-tendermint) | Protocol team |
-| [8](spec/client/ics-008-wasm-client/README.md)                  | Wasm Client                | Draft | | Protocol team / [Composable Finance](https://www.composable.finance) |
+| [8](spec/client/ics-008-wasm-client/README.md)                  | Wasm Client                | Candidate | [ibc-go](https://github.com/cosmos/ibc-go/tree/main/modules/light-clients/08-wasm), [ibc-rs](https://github.com/cosmos/ibc-rs/tree/main/ibc-clients/ics08-wasm) | Protocol team / [Composable Finance](https://www.composable.finance) |
 | [9](spec/client/ics-009-loopback-cilent/README.md)       | Loopback Client            | Draft | [ibc-go](https://github.com/cosmos/ibc-go/tree/main/modules/light-clients/09-localhost) | Protocol team |
 | [10](spec/client/ics-010-grandpa-client/README.md)              | GRANDPA Client             | Draft | | [Octopus Network](https://oct.network) |
 
@@ -57,17 +57,18 @@ All standards at or past the "Draft" stage are listed here in order of their ICS
 
 ### App
 
-| Interchain Standard Number                               | Standard Title          | Stage | Implementations | Maintainer    |
-| -------------------------------------------------------- | ----------------------- | ----- | --------------- | ------------- |
-| [20](spec/app/ics-020-fungible-token-transfer/README.md) | Fungible Token Transfer | Candidate | [ibc-go](https://github.com/cosmos/ibc-go/tree/main/modules/apps/transfer), [ibc-rs](https://github.com/cosmos/ibc-rs/tree/main/ibc-apps/ics20-transfer) | Protocol team |
-| [27](spec/app/ics-027-interchain-accounts/README.md)     | Interchain Accounts     | Candidate | [ibc-go](https://github.com/cosmos/ibc-go/tree/main/modules/apps/27-interchain-accounts) | Protocol team | 
-| [28](spec/app/ics-028-cross-chain-validation/README.md)  | Cross-Chain Validation  | Candidate | [interchain-security](https://github.com/cosmos/interchain-security/tree/main) | Cosmos Hub team |
-| [29](spec/app/ics-029-fee-payment) | General Relayer Incentivization Mechanism | Candidate | [ibc-go](https://github.com/cosmos/ibc-go/tree/main/modules/apps/29-fee) | Protocol team |
-| [30](spec/app/ics-030-middleware) | IBC Application Middleware | N/A | N/A | Protocol team |
-| [31](spec/app/ics-031-crosschain-queries) | Cross-Chain Queries | Draft | N/A | Protocol team |
-| [32](https://github.com/strangelove-ventures/async-icq) | Interchain Queries | Candidate | [async-icq](https://github.com/strangelove-ventures/async-icq) | [Strangelove Ventures](https://strange.love) |
-| [100](spec/app/ics-100-atomic-swap) | Interchain Atomic Swap | Candidate | [ibcswap](https://github.com/ibcswap/ibcswap) | [Side Labs](https://side.one) |
-| [721](spec/app/ics-721-nft-transfer) | Non-Fungible Token Transfer | Candidate | [nft-transfer](https://github.com/bianjieai/nft-transfer) | [IRIS Network](https://www.irisnet.org) |
+| Interchain Standard Number                               | Version | Standard Title          | Stage     | Implementations                                                                                                           | Maintainer         |
+| -------------------------------------------------------- | ------- | ----------------------- | --------- | ------------------------------------------------------------------------------------------------------------------------- | ------------------ |
+| [20](spec/app/ics-020-fungible-token-transfer/README.md) | v2      | Fungible Token Transfer | Candidate | [ibc-go](https://github.com/cosmos/ibc-go/tree/ics20-v2-beta.0/modules/apps/transfer)                                     | Protocol team      |
+| [20](spec/app/ics-020-fungible-token-transfer/v1/README.md) | v1      | Fungible Token Transfer | Candidate | [ibc-go](https://github.com/cosmos/ibc-go/tree/main/modules/apps/transfer), [ibc-rs](https://github.com/cosmos/ibc-rs/tree/main/ibc-apps/ics20-transfer) | Protocol team      |
+| [27](spec/app/ics-027-interchain-accounts/README.md)     | v1      | Interchain Accounts     | Candidate | [ibc-go](https://github.com/cosmos/ibc-go/tree/main/modules/apps/27-interchain-accounts)                                  | Protocol team      | 
+| [28](spec/app/ics-028-cross-chain-validation/README.md)  | v1      | Cross-Chain Validation  | Candidate | [interchain-security](https://github.com/cosmos/interchain-security/tree/main)                                            | Cosmos Hub team    |
+| [29](spec/app/ics-029-fee-payment)                       | v1      | General Relayer Incentivization Mechanism | Candidate | [ibc-go](https://github.com/cosmos/ibc-go/tree/main/modules/apps/29-fee)                                                  | Protocol team      |
+| [30](spec/app/ics-030-middleware)                        | v1      | IBC Application Middleware | N/A      | N/A                                                                                                                       | Protocol team      |
+| [31](spec/app/ics-031-crosschain-queries)                | v1      | Cross-Chain Queries     | Draft     | N/A                                                                                                                       | Protocol team      |
+| [32](https://github.com/strangelove-ventures/async-icq)  | v1      | Interchain Queries      | Candidate | [async-icq](https://github.com/strangelove-ventures/async-icq)                                                            | [Strangelove Ventures](https://strange.love) |
+| [100](spec/app/ics-100-atomic-swap)                      | v1      | Interchain Atomic Swap  | Candidate | [ibcswap](https://github.com/ibcswap/ibcswap)                                                                             | [Side Labs](https://side.one) |
+| [721](spec/app/ics-721-nft-transfer)                     | v1      | Non-Fungible Token Transfer | Candidate | [nft-transfer](https://github.com/bianjieai/nft-transfer)                                                                 | [IRIS Network](https://www.irisnet.org) |
 
 ## Translations
 

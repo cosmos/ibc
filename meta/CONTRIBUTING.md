@@ -39,7 +39,7 @@ When reviewing PRs please use the following review explanations:
 - `Approval` through the GH UI means that you understand all the changes proposed in the PR. In addition:
   - You must also think through anything which ought to be included but is not.
   - You must think through any potential security issues or incentive-compatibility flaws introduced by the changes.
-  - The changes must be consistent with the other IBC standards, especially the [core IBC standards](../README.md#core). 
+  - The changes must be consistent with the other IBC standards, especially the [core IBC standards](../README.md#core-transport). 
   - The modified standard must be consistent with the description from [ICS 1](../spec/ics-001-ics-standard/README.md).
 - If you are only making "surface level" reviews, submit any notes as `Comments` without adding a review.
 

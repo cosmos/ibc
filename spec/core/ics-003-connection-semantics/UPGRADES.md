@@ -443,7 +443,7 @@ A relayer can facilitate this by calling `CancelConnectionUpgrade`:
 
 ```typescript
 function cancelConnectionUpgrade(
-    identifier: Identifer,
+    identifier: Identifier,
     errorReceipt: []byte,
     proofUpgradeError: CommitmentProof,
     proofHeight: Height,

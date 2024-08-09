@@ -10,7 +10,7 @@ created: 2022-07-27
 modified: 2022-10-07
 ---
 
-<p style="text-align:center;border-style:solid">This specification has been reviewed by the Spec Comittee, but it is not responsible for maintaining it.</p>
+<p style="text-align:center;border-style:solid">This specification has been reviewed by the Spec Committee, but it is not responsible for maintaining it.</p>
 
 ## Synopsis
 
@@ -218,7 +218,7 @@ function extractSourcePortForTakerMsg(path: string) : string{
 
 1. A taker takes an order on the taker chain by triggering `TakeSwap`.  The taker's sell tokens are sent to the escrow address owned by the module.  An order cannot be taken if the current time is later than the `expirationTimestamp`.
 2. An `AtomicSwapPacketData` is relayed to the maker chain where in `onRecvPacket` the escrowed tokens are sent to the taker address on the maker chain.
-3. A packet is subsequently relayed back for acknowledgement. Upon acknowledgement escrowed tokens on the taker chain are sent to to the maker address on the taker chain. A packet timeout or a failure during `onAcknowledgePacket` will result in a refund of the escrowed tokens.
+3. A packet is subsequently relayed back for acknowledgement. Upon acknowledgement escrowed tokens on the taker chain are sent to the maker address on the taker chain. A packet timeout or a failure during `onAcknowledgePacket` will result in a refund of the escrowed tokens.
 
 #### Cancelling a swap
 
@@ -239,7 +239,7 @@ function makeSwap(request: MakeSwapMsg, packet: channelTypes.Packet) {
   // locks the sellToken to the escrow account
   const err = bank.sendCoins(request.makerAddress, escrowAddr, request.sellToken.amount, request.sellToken.denom)
   abortTransactionUnless(err === null)
-  // contructs the IBC data packet
+  // constructs the IBC data packet
   const packet = {
     type: SwapMessageType.TYPE_MSG_MAKE_SWAP,
     data: protobuf.encode(request), // encode the request message to protobuf bytes
@@ -461,7 +461,7 @@ function onRecvPacket(packet channeltypes.Packet) {
   
   switch swapPacket.type {
     case TYPE_MSG_MAKE_SWAP:
-      const makeMsg = protobuf.decode(swapPaket.data)
+      const makeMsg = protobuf.decode(swapPacket.data)
         
       // check if buyToken is a valid token on the taker chain, could be either native or ibc token
       const supply = bank.getSupply(makeMsg.buyToken.denom)
@@ -480,7 +480,7 @@ function onRecvPacket(packet channeltypes.Packet) {
       }
       break;
     case TYPE_MSG_TAKE_SWAP:
-      const takeMsg = protobuf.decode(swapPaket.data)
+      const takeMsg = protobuf.decode(swapPacket.data)
       const order = privateStore.get(takeMsg.orderId)
       abortTransactionUnless(order !== null)
       abortTransactionUnless(order.status === Status.SYNC) 
@@ -505,7 +505,7 @@ function onRecvPacket(packet channeltypes.Packet) {
       privateStore.set(takeMsg.orderId, order)
       break;
     case TYPE_MSG_CANCEL_SWAP:
-      const cancelMsg = protobuf.decode(swapPaket.data)
+      const cancelMsg = protobuf.decode(swapPacket.data)
       const order = privateStore.get(cancelMsg.orderId)
       abortTransactionUnless(order !== null)
       abortTransactionUnless(order.status === Status.SYNC || order.status == Status.INITIAL)
@@ -538,12 +538,12 @@ function onAcknowledgePacket(
     refundTokens(packet) 
   } else {
     
-    const swapPaket: AtomicSwapPacketData = protobuf.decode(packet.data)
+    const swapPacket: AtomicSwapPacketData = protobuf.decode(packet.data)
     const escrowAddr = escrowAddress(packet.sourcePort, packet.sourceChannel)
     
-    switch swapPaket.type {
+    switch swapPacket.type {
       case TYPE_MSG_MAKE_SWAP:
-        const makeMsg = protobuf.decode(swapPaket.data)
+        const makeMsg = protobuf.decode(swapPacket.data)
         
         // update order status on the maker chain.
         const order = privateStore.get(generateOrderId(packet))
@@ -552,7 +552,7 @@ function onAcknowledgePacket(
         privateStore.set(order.id, order)
         break;
       case TYPE_MSG_TAKE_SWAP:
-        const takeMsg = protobuf.decode(swapPaket.data)
+        const takeMsg = protobuf.decode(swapPacket.data)
         
         // update order status on the taker chain.
         const order = privateStore.get(takeMsg.orderId)
@@ -567,7 +567,7 @@ function onAcknowledgePacket(
         
         break;
       case TYPE_MSG_CANCEL_SWAP:
-        const cancelMsg = protobuf.decode(swapPaket.data)
+        const cancelMsg = protobuf.decode(swapPacket.data)
         
         // update order status on the maker chain.
         const order = privateStore.get( cancelMsg.orderId )
@@ -605,7 +605,7 @@ function refundTokens(packet: Packet) {
   const escrowAddr = escrowAddress(packet.sourcePort, packet.sourceChannel)
   
   // send tokens from module to message sender
-  switch swapPaket.type {
+  switch swapPacket.type {
     case TYPE_MSG_MAKE_SWAP:
       const msg = protobuf.decode(swapPacket.data)
       bank.sendCoins(escrowAddr, msg.makerAddress, msg.sellToken.amount, msg.sellToken.denom)

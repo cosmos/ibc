@@ -104,7 +104,7 @@ function SendTx(
     activeChannelID, // source channel ID 
     0,
     timeoutTimestamp,
-    protobuf.marshal(icaPacketData) protobuf-marshalled bytes of packet data
+    protobuf.marshal(icaPacketData) // protobuf-marshalled bytes of packet data
   )
 
   return sequence
@@ -184,7 +184,7 @@ This port will be used to create channels between the controller & host chain fo
 2. The controller chain emits an event signaling to open a new channel on this port given a connection. 
 3. A relayer listening for `ChannelOpenInit` events will continue the channel creation handshake.
 4. During the `OnChanOpenTry` callback on the host chain an interchain account will be registered and a mapping of the interchain account address to the owner account address will be stored in state (this is used for authenticating transactions on the host chain at execution time). 
-5. During the `OnChanOpenAck` callback on the controller chain a record of the interchain account address registered on the host chain during `OnChanOpenTry` is set in state with a mapping from portID -> interchain account address. See [metadata negotiation](#metadata-negotiation) section below for how to implement this.
+5. During the `OnChanOpenAck` callback on the controller chain a record of the interchain account address registered on the host chain during `OnChanOpenTry` is set in state with a mapping from (controller portID, controller connectionID) -> interchain account address. See [metadata negotiation](#metadata-negotiation) section below for how to implement this.
 6. During the `OnChanOpenAck` & `OnChanOpenConfirm` callbacks on the controller & host chains respectively, the [active-channel](#active-channels) for this interchain account/owner pair, is set in state.
 
 #### Active channels
@@ -210,11 +210,11 @@ The controller and host chains must verify that any new channel maintains the sa
 
 #### **Metadata negotiation**
 
-ICS-27 takes advantage of [ICS-04 channel version negotiation](../../core/ics-004-channel-and-packet-semantics/README.md#versioning) to negotiate metadata and channel parameters during the channel handshake. The metadata will contain the encoding format along with the transaction type so that the counterparties can agree on the structure and encoding of the interchain transactions. The metadata sent from the host chain on the TRY step will also contain the interchain account address, so that it can be relayed to the controller chain. At the end of the channel handshake, both the controller and host chains will store a mapping of the controller chain portID to the newly registered interchain account address ([account registration flow](#register-account-flow)). 
+ICS-27 takes advantage of [ICS-04 channel version negotiation](../../core/ics-004-channel-and-packet-semantics/README.md#versioning) to negotiate metadata and channel parameters during the channel handshake. The metadata will contain the encoding format along with the transaction type so that the counterparties can agree on the structure and encoding of the interchain transactions. The metadata sent from the host chain on the TRY step will also contain the interchain account address, so that it can be relayed to the controller chain. At the end of the channel handshake, both the controller and host chains will store a mapping of (controller chain portID, controller/host connectionID) to the newly registered interchain account address ([account registration flow](#register-account-flow)). 
 
 ICS-04 allows for each channel version negotiation to be application-specific. In the case of interchain accounts, the channel version will be a string of a JSON struct containing all the relevant metadata intended to be relayed to the counterparty during the channel handshake step ([see summary below](#metadata-negotiation-summary)).
 
-Combined with the one channel per interchain account approach, this method of metadata negotiation allows us to pass the address of the interchain account back to the controller chain and create a mapping from controller portID -> interchain account address during the `OnChanOpenAck` callback. As outlined in the [controlling flow](#controlling-flow), a controller chain will need to know the address of a registered interchain account in order to send transactions to the account on the host chain.
+Combined with the one channel per interchain account approach, this method of metadata negotiation allows us to pass the address of the interchain account back to the controller chain and create a mapping from (controller portID, controller connection ID) -> interchain account address during the `OnChanOpenAck` callback. As outlined in the [controlling flow](#controlling-flow), a controller chain will need to know the address of a registered interchain account in order to send transactions to the account on the host chain.
 
 #### **Metadata negotiation summary**
 
@@ -300,7 +300,8 @@ Once an interchain account is registered on the host chain a controller chain ca
 Cosmos SDK pseudo-code example:
 
 ```golang
-interchainAccountAddress := GetInterchainAccountAddress(portId)
+// connectionId is the identifier for the controller connection
+interchainAccountAddress := GetInterchainAccountAddress(portId, connectionId)
 msg := &banktypes.MsgSend{FromAddress: interchainAccountAddress, ToAddress: ToAddress, Amount: amount}
 icaPacketData = InterchainAccountPacketData{
   Type: types.EXECUTE_TX,
@@ -316,7 +317,7 @@ SendTx(ownerAddress, connectionId, portID, data, timeout)
     
 3. The host chain will then call `AuthenticateTx` and `ExecuteTx` for each message and return an acknowledgment containing a success or error.  
 
-Messages are authenticated on the host chain by taking the controller side port identifier and calling `GetInterchainAccountAddress(controllerPortId)` to get the expected interchain account address for the current controller port. If the signer of this message does not match the expected account address then authentication will fail.
+Messages are authenticated on the host chain by taking the controller side port identifier and calling `GetInterchainAccountAddress(controllerPortId, hostConnectionId)` to get the expected interchain account address for the current controller port and connection identifier. If the signer of this message does not match the expected account address then authentication will fail.
 
 ### Packet Data
 
@@ -380,10 +381,7 @@ Once the `setup` function has been called, channels can be created via the IBC r
 
 ### Channel lifecycle management
 
-An interchain account module will accept new channels from any module on another machine, if and only if:
-
-- The channel being created is ordered.
-- The channel initialization step is being invoked from the controller chain.
+An interchain account module will accept new channels from any module on another machine, if and only if the channel initialization step is being invoked from the controller chain.
 
 ```typescript
 // Called on Controller Chain by InitInterchainAccount
@@ -402,6 +400,11 @@ function onChanOpenInit(
   // only allow channels to be created on the "icahost" port on the counterparty chain
   abortTransactionUnless(counterpartyPortIdentifier === "icahost")
 
+  // retrieve channel and connection to access connection ID and counterparty connection ID
+  channel = provableStore.get(channelPath(portIdentifier, channelIdentifier))
+  connectionId = channel.connectionHops[0]
+  connection = provableStore.get(connectionPath(connectionId))
+
   if version != "" {
     // validate metadata
     metadata = UnmarshalJSON(version)
@@ -409,10 +412,8 @@ function onChanOpenInit(
     // all elements in encoding list and tx type list must be supported
     abortTransactionUnless(IsSupportedEncoding(metadata.Encoding))
     abortTransactionUnless(IsSupportedTxType(metadata.TxType))
-
-    // connectionID and counterpartyConnectionID is retrievable in Channel
     abortTransactionUnless(metadata.ControllerConnectionId === connectionId)
-    abortTransactionUnless(metadata.HostConnectionId === counterpartyConnectionId)
+    abortTransactionUnless(metadata.HostConnectionId === connection.counterpartyConnectionIdentifier)
   } else {
     // construct default metadata
     metadata = {
@@ -466,19 +467,32 @@ function onChanOpenTry(
 ): (version: string, err: Error) {
   // validate port ID
   abortTransactionUnless(portIdentifier === "icahost")
+
+  // retrieve channel and connection to access connection ID and counterparty connection ID
+  channel = provableStore.get(channelPath(portIdentifier, channelIdentifier))
+  connectionId = channel.connectionHops[0]
+  connection = provableStore.get(connectionPath(connectionId))
+
   // create the interchain account with the counterpartyPortIdentifier
   // and the underlying connectionID on the host chain.
-  address = RegisterInterchainAccount(counterpartyPortIdentifier, connectionID)
+  address = RegisterInterchainAccount(counterpartyPortIdentifier, connectionId)
+
+  // state change to keep track of successfully registered interchain account
+  SetInterchainAccountAddress(counterpartyPortIdentifier, connectionId, address)
 
   cpMetadata = UnmarshalJSON(counterpartyVersion)
+  // it's not mandatory for the controller to fill in the host connection ID, since
+  // it could not be possible for it to know it. ibc-go's implementation of the
+  // controller does fill it in, but an CosmWasm controller implementation would
+  // not be able. For that reason, the host fills in here its own connection ID.
+  cpMetadata.HostConnectionId = connectionId
+
   abortTransactionUnless(cpMetadata.Version === "ics27-1")
   // If encoding or txType requested by initializing chain is not supported by host chain then
   // fail handshake and abort transaction
   abortTransactionUnless(IsSupportedEncoding(cpMetadata.Encoding))
   abortTransactionUnless(IsSupportedTxType(cpMetadata.TxType))
-
-  // connectionID and counterpartyConnectionID is retrievable in Channel
-  abortTransactionUnless(cpMetadata.ControllerConnectionId === counterpartyConnectionId)
+  abortTransactionUnless(cpMetadata.ControllerConnectionId === connection.counterpartyConnectionIdentifier)
   abortTransactionUnless(cpMetadata.HostConnectionId === connectionId)
   
   metadata = {
@@ -502,16 +516,21 @@ function onChanOpenAck(
   counterpartyChannelIdentifier,
   counterpartyVersion: string
 ) {
+  // retrieve channel and connection to access connection ID and counterparty connection ID
+  channel = provableStore.get(channelPath(portIdentifier, channelIdentifier))
+  connectionId = channel.connectionHops[0]
+  connection = provableStore.get(connectionPath(connectionId))
+
   // validate counterparty metadata decided by host chain
   metadata = UnmarshalJSON(version)
   abortTransactionUnless(metadata.Version === "ics27-1")
   abortTransactionUnless(IsSupportedEncoding(metadata.Encoding))
   abortTransactionUnless(IsSupportedTxType(metadata.TxType))
   abortTransactionUnless(metadata.ControllerConnectionId === connectionId)
-  abortTransactionUnless(metadata.HostConnectionId === counterpartyConnectionId)
+  abortTransactionUnless(metadata.HostConnectionId === connection.counterpartyConnectionIdentifier)
   
   // state change to keep track of successfully registered interchain account
-  SetInterchainAccountAddress(portID, metadata.Address)
+  SetInterchainAccountAddress(portID, metadata.ControllerConnectionId, metadata.Address)
   // set the active channel for this owner/interchain account pair
   SetActiveChannelID(portIdentifier, metadata.ControllerConnectionId, channelIdentifier)
 }
@@ -600,7 +619,6 @@ function onChanUpgradeInit(
   // the proposed connection hop must not change
   abortTransactionUnless(currentMetadata.ControllerConnectionId === connectionHops[0])
   
-  version = marshalJSON(metadata)
   return version, nil
 }
 ```
@@ -622,6 +640,7 @@ function onChanUpgradeTry(
 
   // upgrade version proposed by counterparty
   abortTransactionUnless(counterpartyVersion !== "")
+  metadata = UnmarshalJSON(counterpartyVersion)
 
   // retrieve the existing channel version.
   // In ibc-go, for example, this is done using the GetAppVersion 
@@ -720,7 +739,7 @@ function onRecvPacket(packet Packet) {
   }
 
   // ExecuteTx calls the AuthenticateTx function defined above 
-  result, err = ExecuteTx(ctx, packet.SourcePort, packet.DestinationPort, packet.DestinationChannel, msgs)
+  result, err = ExecuteTx(ctx, packet.sourcePort, packet.destPort, packet.destChannel, msgs)
   if err != nil {
     // NOTE: The error string placed in the acknowledgement must be consistent across all
     // nodes in the network or there will be a fork in the state machine. 
