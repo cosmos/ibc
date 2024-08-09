@@ -946,7 +946,7 @@ function recvPacket(
           })
         }
 
-        abortTransactionUnless(packetReceipt === null))
+        abortTransactionUnless(packetReceipt === null)
         provableStore.set(
           packetReceiptPath(packet.destPort, packet.destChannel, packet.sequence),
           SUCCESSFUL_RECEIPT
