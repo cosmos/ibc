@@ -571,16 +571,16 @@ function chanUpgradeTry(
   }
 
   // NON CROSSING HELLO CASE:
-  // if the counterparty sequence is less than the current sequence,
+  // if the counterparty sequence is less than or equal to the current sequence,
   // then either the counterparty chain is out-of-sync or the message
   // is out-of-sync and we write an error receipt with our sequence
   // so that the counterparty can abort their attempt and resync with our sequence.
   // When the next upgrade attempt is initiated, both sides will move to a fresh
   // never-before-seen sequence number
   // CROSSING HELLO CASE:
-  // if the counterparty sequence is less than or equal to the current sequence,
+  // if the counterparty sequence is less than the current sequence,
   // then either the counterparty chain is out-of-sync or the message
-  // is out-of-sync and we write an error receipt with our sequence
+  // is out-of-sync and we write an error receipt with our sequence minus one
   // so that the counterparty can update their sequence as well.
   // This will cause the outdated counterparty to upgrade the sequence
   // and abort their out-of-sync upgrade without aborting our own since
