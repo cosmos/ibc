@@ -512,11 +512,16 @@ function connOpenAck(
     connection = provableStore.get(connectionPath(identifier))
     abortTransactionUnless(connection !== null)
     abortTransactionUnless(connection.state === INIT && connection.versions.indexOf(version) !== -1)
-    expectedConsensusState = getConsensusState(consensusHeight, hostConsensusStateProof)
-    abortTransactionUnless(expectedConsensusState !== null)
-    expectedConnectionEnd = ConnectionEnd{TRYOPEN, identifier, getCommitmentPrefix(),
-                             connection.counterpartyClientIdentifier, connection.clientIdentifier,
-                             [version], connection.delayPeriodTime, connection.delayPeriodBlocks}
+    expectedConnectionEnd = ConnectionEnd{
+      TRYOPEN,
+      identifier,
+      getCommitmentPrefix(),
+      connection.counterpartyClientIdentifier,
+      connection.clientIdentifier,
+      [version],
+      connection.delayPeriodTime,
+      connection.delayPeriodBlocks
+    }
     abortTransactionUnless(connection.verifyConnectionState(proofHeight, proofTry, counterpartyIdentifier, expectedConnectionEnd))
     connection.state = OPEN
     connection.versions = [version]
@@ -568,7 +573,7 @@ function queryClientConnections(id: Identifier): Set<Identifier> {
 
 ## Backwards Compatibility
 
-In the latest specification of the connection handshake, `connOpenTry` and `connOpenAck` will no longer validate that the counterparty's clientState and consensusState is a valid client of the executing chain's consensus protocol. Thus, `clientState` and the `clientStateProof` and `consensusStateProof` fields in the `connOpenTry` and `connOpenAck` messages are deprecated and will eventually be removed.
+In the latest specification of the connection handshake, `connOpenTry` and `connOpenAck` will no longer validate that the counterparty's clien state and consensus state is a valid client of the executing chain's consensus protocol. Thus, `clientState`, `proofClient`, `proofConsensus` and `consensusHeight` fields in the `ConnOpenTry` and `ConnOpenACk` datagrams are deprecated and will eventually be removed.
 
 ## Forwards Compatibility
 
@@ -593,7 +598,7 @@ Jul 29, 2019 - Revisions to track connection set associated with client
 
 Jul 27, 2022 - Addition of `ClientState` validation in `connOpenTry` and `connOpenAck`
 
-Jul 23, 2024 - Removal of ClientState and ConsensusState validation in `connOpenTry` and `connOpenAck`. For information on the consequences of these changes see the attached [diagram](./client-validation-removal.png) and [consequences document](./client-validation-removal.md)
+Jul 23, 2024 - Removal of `ClientState` and `ConsensusState` validation in `connOpenTry` and `connOpenAck`. For information on the consequences of these changes see the attached [diagram](./client-validation-removal.png) and [consequences document](./client-validation-removal.md)
 
 ## Copyright
 

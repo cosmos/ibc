@@ -342,15 +342,15 @@ interface ConnOpenTry {
   counterpartyPrefix: CommitmentPrefix
   counterpartyClientIdentifier: Identifier
   clientIdentifier: Identifier
-  clientState: ClientState
+  clientState: ClientState // DEPRECATED
   counterpartyVersions: string[]
   delayPeriodTime: uint64
   delayPeriodBlocks: uint64
   proofInit: CommitmentProof
-  proofClient: CommitmentProof
-  proofConsensus: CommitmentProof
+  proofClient: CommitmentProof // DEPRECATED
+  proofConsensus: CommitmentProof // DEPRECATED
   proofHeight: Height
-  consensusHeight: Height
+  consensusHeight: Height // DEPRECATED
 }
 ```
 
@@ -379,14 +379,14 @@ The `ConnOpenAck` datagram confirms a handshake acceptance by the IBC module on 
 ```typescript
 interface ConnOpenAck {
   identifier: Identifier
-  clientState: ClientState
+  clientState: ClientState // DEPRECATED
   version: string
   counterpartyIdentifier: Identifier
   proofTry: CommitmentProof
-  proofClient: CommitmentProof
-  proofConsensus: CommitmentProof
+  proofClient: CommitmentProof // DEPRECATED
+  proofConsensus: CommitmentProof // DEPRECATED
   proofHeight: Height
-  consensusHeight: Height
+  consensusHeight: Height // DEPRECATED
 }
 ```
 
