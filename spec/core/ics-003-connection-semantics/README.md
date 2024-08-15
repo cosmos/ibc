@@ -598,7 +598,7 @@ Jul 29, 2019 - Revisions to track connection set associated with client
 
 Jul 27, 2022 - Addition of `ClientState` validation in `connOpenTry` and `connOpenAck`
 
-Jul 23, 2024 - Removal of `ClientState` and `ConsensusState` validation in `connOpenTry` and `connOpenAck`. For information on the consequences of these changes see the attached [diagram](./client-validation-removal.png) and [consequences document](./client-validation-removal.md)
+Jul 23, 2024 - [Removal of `ClientState` and `ConsensusState` validation in `connOpenTry` and `connOpenAck`](https://github.com/cosmos/ibc/pull/1128). For information on the consequences of these changes see the attached [diagram](./client-validation-removal.png) and [consequences document](./client-validation-removal.md)
 
 ## Copyright
 
