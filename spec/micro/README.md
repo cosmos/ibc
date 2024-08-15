@@ -81,7 +81,7 @@ Properties of Channel:
 
 ### Identifying Counterparties
 
-In core IBC, the connection and channel handshakes serve to validate the clients are valid clients of the counterparty, ensure the IBC version and application versions are mutually compatible, as well as providing unique identifiers for each side to refer to the counterparty.
+In core IBC, the connection and channel handshakes serve to ensure the validity of counterparty clients, ensure the IBC and application versions are mutually compatible, as well as providing unique identifiers for each side to refer to the counterparty.
 
 Since we are removing handshakes in IBC lite, we must have a different way to provide the chain with knowledge of the counterparty. With a client, we can prove any key/value path on the counterparty. However, without knowing which identifier the counterparty uses when it sends messages to us; we cannot differentiate between messages sent from the counterparty to our chain vs messages sent from the counterparty with other chains. Most implementations will not be able to store the ICS-24 paths directly as a key in the global namespace; but will instead write to a reserved, prefixed keyspace so as not to conflict with other application state writes. Thus the counteparty information we must have includes both its identifier for our chain as well as the key prefix under which it will write the provable ICS-24 paths.
 
