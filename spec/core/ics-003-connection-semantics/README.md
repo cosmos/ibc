@@ -6,10 +6,10 @@ category: IBC/TAO
 kind: instantiation
 requires: 2, 24
 required-by: 4, 25
-version compatibility: ibc-go v7.0.0
+version compatibility: ibc-go v9.0.0
 author: Christopher Goes <cwgoes@tendermint.com>, Juwoon Yun <joon@tendermint.com>
 created: 2019-03-07
-modified: 2019-08-25
+modified: 2024-07-23
 ---
 
 ## Synopsis
@@ -464,25 +464,21 @@ function connOpenTry(
   counterpartyPrefix: CommitmentPrefix,
   counterpartyClientIdentifier: Identifier,
   clientIdentifier: Identifier,
-  clientState: ClientState,
+  clientState: ClientState, // DEPRECATED
   counterpartyVersions: string[],
   delayPeriodTime: uint64,
   delayPeriodBlocks: uint64,
   proofInit: CommitmentProof,
-  proofClient: CommitmentProof,
-  proofConsensus: CommitmentProof,
+  proofClient: CommitmentProof, // DEPRECATED
+  proofConsensus: CommitmentProof, // DEPRECATED
   proofHeight: Height,
   consensusHeight: Height,
-  hostConsensusStateProof?: bytes,
+  hostConsensusStateProof?: bytes, // DEPRECATED
 ) {
     // generate a new identifier
     identifier = generateIdentifier()
 
     abortTransactionUnless(queryClientState(clientIdentifier) !== null)
-    abortTransactionUnless(validateSelfClient(clientState))
-    abortTransactionUnless(consensusHeight < getCurrentHeight())
-    expectedConsensusState = getConsensusState(consensusHeight, hostConsensusStateProof)
-    abortTransactionUnless(expectedConsensusState !== null)
     expectedConnectionEnd = ConnectionEnd{INIT, "", getCommitmentPrefix(), counterpartyClientIdentifier,
                              clientIdentifier, counterpartyVersions, delayPeriodTime, delayPeriodBlocks}
 
@@ -492,10 +488,7 @@ function connOpenTry(
     connection = ConnectionEnd{TRYOPEN, counterpartyConnectionIdentifier, counterpartyPrefix,
                                clientIdentifier, counterpartyClientIdentifier, [version], delayPeriodTime, delayPeriodBlocks}
     abortTransactionUnless(connection.verifyConnectionState(proofHeight, proofInit, counterpartyConnectionIdentifier, expectedConnectionEnd))
-    abortTransactionUnless(connection.verifyClientState(proofHeight, proofClient, clientState))
-    abortTransactionUnless(connection.verifyClientConsensusState(
-      proofHeight, proofConsensus, counterpartyClientIdentifier, consensusHeight, expectedConsensusState))
-
+    
     provableStore.set(connectionPath(identifier), connection)
     addConnectionToClient(clientIdentifier, identifier)
 }
@@ -506,30 +499,30 @@ function connOpenTry(
 ```typescript
 function connOpenAck(
   identifier: Identifier,
-  clientState: ClientState,
+  clientState: ClientState, // DEPRECATED
   version: string,
   counterpartyIdentifier: Identifier,
   proofTry: CommitmentProof,
-  proofClient: CommitmentProof,
-  proofConsensus: CommitmentProof,
+  proofClient: CommitmentProof, // DEPRECATED
+  proofConsensus: CommitmentProof, // DEPRECATED
   proofHeight: Height,
   consensusHeight: Height,
-  hostConsensusStateProof?: bytes,
+  hostConsensusStateProof?: bytes, // DEPRECATED
 ) {
-    abortTransactionUnless(consensusHeight < getCurrentHeight())
-    abortTransactionUnless(validateSelfClient(clientState))
     connection = provableStore.get(connectionPath(identifier))
     abortTransactionUnless(connection !== null)
-    abortTransactionUnless((connection.state === INIT && connection.versions.indexOf(version) !== -1)
-    expectedConsensusState = getConsensusState(consensusHeight, hostConsensusStateProof)
-    abortTransactionUnless(expectedConsensusState !== null)
-    expectedConnectionEnd = ConnectionEnd{TRYOPEN, identifier, getCommitmentPrefix(),
-                             connection.counterpartyClientIdentifier, connection.clientIdentifier,
-                             [version], connection.delayPeriodTime, connection.delayPeriodBlocks}
+    abortTransactionUnless(connection.state === INIT && connection.versions.indexOf(version) !== -1)
+    expectedConnectionEnd = ConnectionEnd{
+      TRYOPEN,
+      identifier,
+      getCommitmentPrefix(),
+      connection.counterpartyClientIdentifier,
+      connection.clientIdentifier,
+      [version],
+      connection.delayPeriodTime,
+      connection.delayPeriodBlocks
+    }
     abortTransactionUnless(connection.verifyConnectionState(proofHeight, proofTry, counterpartyIdentifier, expectedConnectionEnd))
-    abortTransactionUnless(connection.verifyClientState(proofHeight, proofClient, clientState))
-    abortTransactionUnless(connection.verifyClientConsensusState(
-      proofHeight, proofConsensus, connection.counterpartyClientIdentifier, consensusHeight, expectedConsensusState))
     connection.state = OPEN
     connection.versions = [version]
     connection.counterpartyConnectionIdentifier = counterpartyIdentifier
@@ -580,7 +573,7 @@ function queryClientConnections(id: Identifier): Set<Identifier> {
 
 ## Backwards Compatibility
 
-Not applicable.
+In the latest specification of the connection handshake, `connOpenTry` and `connOpenAck` will no longer validate that the counterparty's clien state and consensus state is a valid client of the executing chain's consensus protocol. Thus, `clientState`, `proofClient`, `proofConsensus` and `consensusHeight` fields in the `ConnOpenTry` and `ConnOpenACk` datagrams are deprecated and will eventually be removed.
 
 ## Forwards Compatibility
 
@@ -604,6 +597,8 @@ May 17, 2019 - Draft finalised
 Jul 29, 2019 - Revisions to track connection set associated with client
 
 Jul 27, 2022 - Addition of `ClientState` validation in `connOpenTry` and `connOpenAck`
+
+Jul 23, 2024 - [Removal of `ClientState` and `ConsensusState` validation in `connOpenTry` and `connOpenAck`](https://github.com/cosmos/ibc/pull/1128). For information on the consequences of these changes see the attached [diagram](./client-validation-removal.png) and [consequences document](./client-validation-removal.md)
 
 ## Copyright
 
