@@ -59,7 +59,7 @@ This specification depends on correct instantiation of the [Tendermint consensus
 
 ### Client state
 
-The Tendermint client state tracks the current revision, current validator set, trusting period, unbonding period, latest height, latest timestamp (block time), and a possible frozen height. Additionally, the new parameters delayPeriod and delayPeriodBlocks have been added to support the IBC/TAO V2 specs.   
+The Tendermint client state tracks the current revision, current validator set, trusting period, unbonding period, latest height, latest timestamp (block time), and a possible frozen height. Additionally, the new parameters delayTimePeriod and delayBlockPeriod have been added to support the IBC/TAO V2 specs.   
 
 ```typescript
 interface ClientState {
