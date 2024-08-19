@@ -457,7 +457,7 @@ December 10th, 2019 - Initial version
 
 December 19th, 2019 - Final first draft
 
-August 19th, 2024 - [Support for IBC/TAO V2](TODO: add pr link on opening)
+August 19th, 2024 - [Support for IBC/TAO V2](https://github.com/cosmos/ibc/pull/1137)
 
 ## Copyright
 
