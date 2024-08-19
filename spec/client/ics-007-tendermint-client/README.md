@@ -59,7 +59,7 @@ This specification depends on correct instantiation of the [Tendermint consensus
 
 ### Client state
 
-The Tendermint client state tracks the current revision, current validator set, trusting period, unbonding period, latest height, latest timestamp (block time), and a possible frozen height.
+The Tendermint client state tracks the current revision, current validator set, trusting period, unbonding period, latest height, latest timestamp (block time), and a possible frozen height. Additionally, the new parameters delayPeriod and delayPeriodBlocks have been added to support the IBC/TAO V2 specs.   
 
 ```typescript
 interface ClientState {
@@ -67,6 +67,8 @@ interface ClientState {
   trustLevel: Rational
   trustingPeriod: uint64
   unbondingPeriod: uint64
+  delayPeriod: uint64 // TAOv2 SUPPORT
+  delayPeriodBlocks: uint64 // TAOv2 SUPPORT
   latestHeight: Height
   frozenHeight: Maybe<uint64>
   upgradePath: []string
@@ -452,7 +454,10 @@ Not applicable. Alterations to the client verification algorithm will require a 
 ## History
 
 December 10th, 2019 - Initial version
+
 December 19th, 2019 - Final first draft
+
+August 19th, 2024 - [Support for IBC/TAO V2](TODO: add pr link on opening)
 
 ## Copyright
 
