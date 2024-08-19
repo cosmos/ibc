@@ -13,6 +13,8 @@ created: 2024-08-15
 
 ### Context
 
+Note: This specification is in an experimental phase. The final specification of the v2 of the IBC protocol is being specified in the [v2 folder of the TAO protocol](../core/v2). This document will serve as a placeholder for people to view and comment on as a more formal specification is being discussed and implemented.
+
 The implementation of the entire IBC protocol as it currently stands is a large undertaking. While there exists ready-made implementations like ibc-go this is only deployable on the Cosmos-SDK. Similarly, there exists ibc-rs which is a library for chains to integrate. However, this requires the chain to be implemented in Rust, there still exists some non-trivial work to integrate the ibc-rs library into the target state machine, and certain limitations either in the state machine or in ibc-rs may prevent using the library for the target chain.
 
 Writing an implementation from scratch is a problem many ecosystems face as a major barrier for IBC adoption.
