@@ -67,8 +67,8 @@ interface ClientState {
   trustLevel: Rational
   trustingPeriod: uint64
   unbondingPeriod: uint64
-  delayPeriod: uint64 // TAOv2 SUPPORT
-  delayPeriodBlocks: uint64 // TAOv2 SUPPORT
+  delayPeriod: uint64 // IBC/TAO V2 SUPPORT
+  delayPeriodBlocks: uint64 // IBC/TAO V2 SUPPORT
   latestHeight: Height
   frozenHeight: Maybe<uint64>
   upgradePath: []string
