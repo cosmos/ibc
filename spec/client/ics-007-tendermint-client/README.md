@@ -8,7 +8,7 @@ implements: 2
 version compatibility: ibc-go v7.0.0
 author: Christopher Goes <cwgoes@tendermint.com>
 created: 2019-12-10
-modified: 2019-12-19
+modified: 2024-08-19
 ---
 
 ## Synopsis
