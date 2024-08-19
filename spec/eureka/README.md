@@ -9,7 +9,7 @@ author: Aditya Sripal <aditya@interchain.io>
 created: 2024-08-15
 ---
 
-# IBC Eureka
+## IBC Eureka
 
 ### Context
 
