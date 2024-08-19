@@ -67,8 +67,8 @@ interface ClientState {
   trustLevel: Rational
   trustingPeriod: uint64
   unbondingPeriod: uint64
-  delayPeriod: uint64 // IBC/TAO V2 SUPPORT
-  delayPeriodBlocks: uint64 // IBC/TAO V2 SUPPORT
+  delayTimePeriod: uint64 // IBC/TAO V2 SUPPORT
+  delayBlockPeriod: uint64 // IBC/TAO V2 SUPPORT
   latestHeight: Height
   frozenHeight: Maybe<uint64>
   upgradePath: []string
@@ -390,9 +390,9 @@ function verifyMembership(
   // check that the client is unfrozen or frozen at a higher height
   assert(clientState.frozenHeight === null || clientState.frozenHeight > height)
   // assert that enough time has elapsed
-  assert(currentTimestamp() >= processedTime + clientState.delayPeriodTime)
+  assert(currentTimestamp() >= processedTime + clientState.delayTimePeriod)
   // assert that enough blocks have elapsed
-  assert(currentHeight() >= processedHeight + clientState.delayPeriodBlocks)
+  assert(currentHeight() >= processedHeight + clientState.delayBlockPeriod)
   // fetch the previously verified commitment root & verify membership
   // Implementations may choose how to pass in the identifier
   // ibc-go provides the identifier-prefixed store to this method
@@ -418,9 +418,9 @@ function verifyNonMembership(
   // check that the client is unfrozen or frozen at a higher height
   assert(clientState.frozenHeight === null || clientState.frozenHeight > height)
   // assert that enough time has elapsed
-  assert(currentTimestamp() >= processedTime + clientState.delayPeriodTime)
+  assert(currentTimestamp() >= processedTime + clientState.delayTimePeriod)
   // assert that enough blocks have elapsed
-  assert(currentHeight() >= processedHeight + clientState.delayPeriodBlocks)
+  assert(currentHeight() >= processedHeight + clientState.delayBlockPeriod)
   // fetch the previously verified commitment root & verify membership
   // Implementations may choose how to pass in the identifier
   // ibc-go provides the identifier-prefixed store to this method
