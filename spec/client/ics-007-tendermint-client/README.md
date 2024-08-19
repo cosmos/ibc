@@ -377,8 +377,8 @@ These functions utilise the `proofSpecs` with which the client was initialised.
 function verifyMembership(
   clientState: ClientState,
   height: Height,
-  delayTimePeriod: uint64,
-  delayBlockPeriod: uint64,
+  delayTimePeriod: uint64, // DEPRECATED
+  delayBlockPeriod: uint64, // DEPRECATED
   proof: CommitmentProof,
   path: CommitmentPath,
   value: []byte
@@ -388,9 +388,9 @@ function verifyMembership(
   // check that the client is unfrozen or frozen at a higher height
   assert(clientState.frozenHeight === null || clientState.frozenHeight > height)
   // assert that enough time has elapsed
-  assert(currentTimestamp() >= processedTime + delayPeriodTime)
+  assert(currentTimestamp() >= processedTime + clientState.delayPeriodTime)
   // assert that enough blocks have elapsed
-  assert(currentHeight() >= processedHeight + delayPeriodBlocks)
+  assert(currentHeight() >= processedHeight + clientState.delayPeriodBlocks)
   // fetch the previously verified commitment root & verify membership
   // Implementations may choose how to pass in the identifier
   // ibc-go provides the identifier-prefixed store to this method
@@ -406,8 +406,8 @@ function verifyMembership(
 function verifyNonMembership(
   clientState: ClientState,
   height: Height,
-  delayTimePeriod: uint64,
-  delayBlockPeriod: uint64,
+  delayTimePeriod: uint64, // DEPRECATED
+  delayBlockPeriod: uint64, // DEPRECATED
   proof: CommitmentProof,
   path: CommitmentPath
 ): Error {
@@ -416,9 +416,9 @@ function verifyNonMembership(
   // check that the client is unfrozen or frozen at a higher height
   assert(clientState.frozenHeight === null || clientState.frozenHeight > height)
   // assert that enough time has elapsed
-  assert(currentTimestamp() >= processedTime + delayPeriodTime)
+  assert(currentTimestamp() >= processedTime + clientState.delayPeriodTime)
   // assert that enough blocks have elapsed
-  assert(currentHeight() >= processedHeight + delayPeriodBlocks)
+  assert(currentHeight() >= processedHeight + clientState.delayPeriodBlocks)
   // fetch the previously verified commitment root & verify membership
   // Implementations may choose how to pass in the identifier
   // ibc-go provides the identifier-prefixed store to this method
