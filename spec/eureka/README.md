@@ -1,5 +1,3 @@
-# IBC Eureka
-
 ---
 ics: TBD
 title: IBC Eureka
@@ -10,6 +8,8 @@ version compatibility: ibc-go v10.0.0
 author: Aditya Sripal <aditya@interchain.io>
 created: 2024-08-15
 ---
+
+# IBC Eureka
 
 ### Context
 
@@ -153,7 +153,6 @@ Since the packets are addressed **directly** with the underlying light clients, 
 Sending a packet with the wrong source client is equivalent to sending a packet with the wrong source channel. Sending a packet on a channel with the wrong provided counterparty is a new source of errors, however this is added to the burden of out-of-band social consensus.
 
 If the client and counterparty identifiers are setup correctly, then the correctness and soundness properties of IBC holds. IBC packet flow is guaranteed to succeed. If a user sends a packet with the wrong destination channel, then as we will see it will be impossible for the intended destination to correctly verify the packet thus, the packet will simply time out.
-
 
 ### Registering IBC applications on the router
 
@@ -389,4 +388,3 @@ We are guaranteed that the source identifier is unique on the source chain, the 
 Suppose the RecvPacket is sent to a chain other than the one identified by the sourceClient on the source chain. 
 
 In the packet flow messages sent to the receiver (RecvPacket), the packet send is verified using the client on the destination chain (retrieved using destination identifier) with the packet commitment path derived by the source identifier. This verification check can only pass if the chain identified by the destination client committed the packet we received under the source channel identifier. This is only possible if the destination client is pointing to the original source chain, or if it is pointing to a different chain that committed the exact same packet. Pointing to the original source chain would mean we sent the packet to the correct . Since the sender only sends packets intended for the desination chain by setting to a unique source identifier, we can be sure the packet was indeed intended for us. Since our client on the reciver is also correctly pointing to the sender chain, we are verifying the proof against a specific consensus algorithm that we assume to be honest. If the packet is committed to the wrong key path, then we will not accept the packet. Similarly, if the packet is committed by the wrong chain then we will not be able to verify correctly.
-
