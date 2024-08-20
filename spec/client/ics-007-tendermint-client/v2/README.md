@@ -1,6 +1,7 @@
 ---
 ics: 7
 title: Tendermint Client
+version: 2
 stage: draft
 category: IBC/TAO
 kind: instantiation
@@ -59,7 +60,7 @@ This specification depends on correct instantiation of the [Tendermint consensus
 
 ### Client state
 
-The Tendermint client state tracks the current revision, current validator set, trusting period, unbonding period, latest height, latest timestamp (block time), and a possible frozen height. Additionally, the new parameters delayTimePeriod and delayBlockPeriod have been added to support the IBC/TAO V2 specs.   
+The Tendermint client state tracks the current revision, current validator set, trusting period, unbonding period, delayTimePeriod, delayBlockPeriod, latest height, latest timestamp (block time), and a possible frozen height. 
 
 ```typescript
 interface ClientState {
@@ -67,8 +68,8 @@ interface ClientState {
   trustLevel: Rational
   trustingPeriod: uint64
   unbondingPeriod: uint64
-  delayTimePeriod: uint64 // IBC/TAO V2 SUPPORT
-  delayBlockPeriod: uint64 // IBC/TAO V2 SUPPORT
+  delayTimePeriod: uint64 
+  delayBlockPeriod: uint64 
   latestHeight: Height
   frozenHeight: Maybe<uint64>
   upgradePath: []string
@@ -379,8 +380,6 @@ These functions utilise the `proofSpecs` with which the client was initialised.
 function verifyMembership(
   clientState: ClientState,
   height: Height,
-  delayTimePeriod: uint64, // DEPRECATED
-  delayBlockPeriod: uint64, // DEPRECATED
   proof: CommitmentProof,
   path: CommitmentPath,
   value: []byte
@@ -408,8 +407,6 @@ function verifyMembership(
 function verifyNonMembership(
   clientState: ClientState,
   height: Height,
-  delayTimePeriod: uint64, // DEPRECATED
-  delayBlockPeriod: uint64, // DEPRECATED
   proof: CommitmentProof,
   path: CommitmentPath
 ): Error {
