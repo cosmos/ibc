@@ -90,7 +90,7 @@ and a `privateStore` for storage local to the host, upon which `get`
 
 The `provableStore`:
 
-- MUST write to a key/value store whose data can be externally proved with a vector commitment as defined in [ICS 23](../ics-023-vector-commitments). 
+- MUST write to a key/value store whose data can be externally proved with a vector commitment as defined in [ICS 23](../../ics-023-vector-commitments). 
 - MUST use canonical data structure encodings provided in these specifications as proto3 files
 
 The `privateStore`:
@@ -116,22 +116,22 @@ Parts of the private store MAY safely be used for other purposes as long as the 
 Keys used in the private store MAY safely vary as long as there exists a bipartite mapping between the key formats defined herein and the ones
 actually used in the private store implementation.
 
-Note that the client-related paths listed below reflect the Tendermint client as defined in [ICS 7](../../client/ics-007-tendermint-client) and may vary for other client types.
+Note that the client-related paths listed below reflect the Tendermint client as defined in [ICS 7](../../../client/ics-007-tendermint-client) and may vary for other client types.
 
 | Store          | Path format                                                                    | Value type        | Defined in |
 | -------------- | ------------------------------------------------------------------------------ | ----------------- | ---------------------- |
 | provableStore  | "clients/{identifier}/clientState"                                             | ClientState       | [ICS 2](../ics-002-client-semantics) |
-| provableStore  | "clients/{identifier}/consensusStates/{height}"                                | ConsensusState    | [ICS 7](../../client/ics-007-tendermint-client) |
-| privateStore   | "clients/{identifier}/connections                                              | []Identifier      | [ICS 3](../ics-003-connection-semantics) |
-| provableStore  | "connections/{identifier}"                                                     | ConnectionEnd     | [ICS 3](../ics-003-connection-semantics) |
+| provableStore  | "clients/{identifier}/consensusStates/{height}"                                | ConsensusState    | [ICS 7](../../../client/ics-007-tendermint-client) |
+| privateStore   | "clients/{identifier}/connections                                              | []Identifier      | [ICS 3](../../ics-003-connection-semantics) |
+| provableStore  | "connections/{identifier}"                                                     | ConnectionEnd     | [ICS 3](../../ics-003-connection-semantics) |
 | privateStore   | "ports/{identifier}"                                                           | CapabilityKey     | [ICS 5](../ics-005-port-allocation) |
-| provableStore  | "channelEnds/ports/{identifier}/channels/{identifier}"                         | ChannelEnd        | [ICS 4](../ics-004-channel-and-packet-semantics) |
-| provableStore  | "nextSequenceSend/ports/{identifier}/channels/{identifier}"                    | uint64            | [ICS 4](../ics-004-channel-and-packet-semantics) |
-| provableStore  | "nextSequenceRecv/ports/{identifier}/channels/{identifier}"                    | uint64            | [ICS 4](../ics-004-channel-and-packet-semantics) |
-| provableStore  | "nextSequenceAck/ports/{identifier}/channels/{identifier}"                     | uint64            | [ICS 4](../ics-004-channel-and-packet-semantics) |
-| provableStore  | "commitments/ports/{identifier}/channels/{identifier}/sequences/{sequence}"    | bytes             | [ICS 4](../ics-004-channel-and-packet-semantics) |
-| provableStore  | "receipts/ports/{identifier}/channels/{identifier}/sequences/{sequence}"       | bytes             | [ICS 4](../ics-004-channel-and-packet-semantics) |
-| provableStore  | "acks/ports/{identifier}/channels/{identifier}/sequences/{sequence}"           | bytes             | [ICS 4](../ics-004-channel-and-packet-semantics) |
+| provableStore  | "channelEnds/ports/{identifier}/channels/{identifier}"                         | ChannelEnd        | [ICS 4](../ics-004-packet-semantics) |
+| provableStore  | "nextSequenceSend/ports/{identifier}/channels/{identifier}"                    | uint64            | [ICS 4](../ics-004-packet-semantics) |
+| provableStore  | "nextSequenceRecv/ports/{identifier}/channels/{identifier}"                    | uint64            | [ICS 4](../ics-004-packet-semantics) |
+| provableStore  | "nextSequenceAck/ports/{identifier}/channels/{identifier}"                     | uint64            | [ICS 4](../ics-004-packet-semantics) |
+| provableStore  | "commitments/ports/{identifier}/channels/{identifier}/sequences/{sequence}"    | bytes             | [ICS 4](../ics-004-packet-semantics) |
+| provableStore  | "receipts/ports/{identifier}/channels/{identifier}/sequences/{sequence}"       | bytes             | [ICS 4](../ics-004-packet-semantics) |
+| provableStore  | "acks/ports/{identifier}/channels/{identifier}/sequences/{sequence}"           | bytes             | [ICS 4](../ics-004-packet-semantics) |
 
 ### Module layout
 
@@ -202,7 +202,7 @@ Host state machines MUST provide the ability to validate the `ClientState` of a 
 type validateSelfClient = (counterpartyClientState: ClientState) => boolean
 ```
 
-`validateSelfClient` validates the client parameters for a client of the host chain. For example, below is the implementation for Tendermint hosts, using `ClientState` as defined in [ICS 7](../../client/ics-007-tendermint-client/):
+`validateSelfClient` validates the client parameters for a client of the host chain. For example, below is the implementation for Tendermint hosts, using `ClientState` as defined in [ICS 7](../../../client/ics-007-tendermint-client/):
 
 ```typescript
 function validateSelfClient(counterpartyClientState: ClientState) {

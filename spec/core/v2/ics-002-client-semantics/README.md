@@ -196,7 +196,7 @@ as misbehaviour. Should one occur, a proof should be generated and submitted so 
 and previous state roots invalidated as necessary.
 
 The `ConsensusState` of a chain MUST have a canonical serialisation, so that other chains can check
-that a stored consensus state is equal to another (see [ICS 24]( ../../ics-024-host-requirements) for the keyspace table).
+that a stored consensus state is equal to another (see [ICS 24](../ics-024-host-requirements) for the keyspace table).
 
 ```typescript
 type ConsensusState = bytes
@@ -352,7 +352,7 @@ Internal implementation details may differ (for example, a loopback client could
 - The `delayPeriodBlocks` is passed to the verification functions for packet-related proofs in order to allow packets to specify a period of blocks which must pass after a consensus state is added before it can be used for packet-related verification.
 
 `verifyMembership` is a generic proof verification method which verifies a proof of the existence of a value at a given `CommitmentPath` at the specified height. It MUST return an error if the verification is not successful. 
-The caller is expected to construct the full `CommitmentPath` from a `CommitmentPrefix` and a standardized path (as defined in [ICS 24]( ../../ics-024-host-requirements/README.md#path-space)). If the caller desires a particular delay period to be enforced,
+The caller is expected to construct the full `CommitmentPath` from a `CommitmentPrefix` and a standardized path (as defined in [ICS 24](../ics-024-host-requirements/README.md#path-space)). If the caller desires a particular delay period to be enforced,
 then it can pass in a non-zero `delayPeriodTime` or `delayPeriodBlocks`. If a delay period is not necessary, the caller must pass in 0 for `delayPeriodTime` and `delayPeriodBlocks`,
 and the client will not enforce any delay period for verification.
 
@@ -369,7 +369,7 @@ type verifyMembership = (
 ```
 
 `verifyNonMembership` is a generic proof verification method which verifies a proof of absence of a given `CommitmentPath` at the specified height. It MUST return an error if the verification is not successful. 
-The caller is expected to construct the full `CommitmentPath` from a `CommitmentPrefix` and a standardized path (as defined in [ICS 24]( ../../ics-024-host-requirements/README.md#path-space)). If the caller desires a particular delay period to be enforced,
+The caller is expected to construct the full `CommitmentPath` from a `CommitmentPrefix` and a standardized path (as defined in [ICS 24](../ics-024-host-requirements/README.md#path-space)). If the caller desires a particular delay period to be enforced,
 then it can pass in a non-zero `delayPeriodTime` or `delayPeriodBlocks`. If a delay period is not necessary, the caller must pass in 0 for `delayPeriodTime` and `delayPeriodBlocks`,
 and the client will not enforce any delay period for verification.
 

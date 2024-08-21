@@ -29,15 +29,15 @@ In order to provide the desired ordering, exactly-once delivery, and module perm
 
 ### Definitions
 
-`ConsensusState` is as defined in [ICS 2]( ../../ics-002-client-semantics).
+`ConsensusState` is as defined in [ICS 2](../ics-002-client-semantics).
 
-`Connection` is as defined in [ICS 3]( ../../ics-003-connection-semantics).
+`Connection` is as defined in [ICS 3](../../ics-003-connection-semantics).
 
-`Port` and `authenticateCapability` are as defined in [ICS 5]( ../../ics-005-port-allocation).
+`Port` and `authenticateCapability` are as defined in [ICS 5](../ics-005-port-allocation).
 
 `hash` is a generic collision-resistant hash function, the specifics of which must be agreed on by the modules utilising the channel. `hash` can be defined differently by different chains.
 
-`Identifier`, `get`, `set`, `delete`, `getCurrentHeight`, and module-system related primitives are as defined in [ICS 24]( ../../ics-024-host-requirements).
+`Identifier`, `get`, `set`, `delete`, `getCurrentHeight`, and module-system related primitives are as defined in [ICS 24](../ics-024-host-requirements).
 
 See [upgrades spec](./UPGRADES.md) for definition of `pendingInflightPackets` and `restoreChannel`.
 
@@ -260,7 +260,7 @@ Host state machines MAY also safely ignore the version data or specify an empty 
 
 ### Sub-protocols
 
-> Note: If the host state machine is utilising object capability authentication (see [ICS 005]( ../../ics-005-port-allocation)), all functions utilising ports take an additional capability parameter.
+> Note: If the host state machine is utilising object capability authentication (see [ICS 005](../ics-005-port-allocation)), all functions utilising ports take an additional capability parameter.
 
 #### Identifier validation
 
@@ -313,7 +313,7 @@ function writeChannel(
 }
 ```
 
-See handler functions `handleChanOpenInit` and `handleChanOpenTry` in [Channel lifecycle management]( ../../ics-026-routing-module/README.md#channel-lifecycle-management) for more details.
+See handler functions `handleChanOpenInit` and `handleChanOpenTry` in [Channel lifecycle management](../../ics-026-routing-module/README.md#channel-lifecycle-management) for more details.
 
 The opening channel must provide the identifiers of the local channel identifier, local port, remote port, and remote channel identifier.
 
@@ -716,16 +716,16 @@ The following sequence of steps must occur for a packet to be sent from module *
 The module can interface with the IBC handler through [ICS 25]( ../../ics-025-handler-interface) or [ICS 26]( ../../ics-026-routing-module).
 
 1. Initial client & port setup, in any order
-    1. Client created on *A* for *B* (see [ICS 2]( ../../ics-002-client-semantics))
-    1. Client created on *B* for *A* (see [ICS 2]( ../../ics-002-client-semantics))
-    1. Module *1* binds to a port (see [ICS 5]( ../../ics-005-port-allocation))
-    1. Module *2* binds to a port (see [ICS 5]( ../../ics-005-port-allocation)), which is communicated out-of-band to module *1*
+    1. Client created on *A* for *B* (see [ICS 2](../ics-002-client-semantics))
+    1. Client created on *B* for *A* (see [ICS 2](../ics-002-client-semantics))
+    1. Module *1* binds to a port (see [ICS 5](../ics-005-port-allocation))
+    1. Module *2* binds to a port (see [ICS 5](../ics-005-port-allocation)), which is communicated out-of-band to module *1*
 1. Establishment of a connection & channel, optimistic send, in order
-    1. Connection opening handshake started from *A* to *B* by module *1* (see [ICS 3]( ../../ics-003-connection-semantics))
+    1. Connection opening handshake started from *A* to *B* by module *1* (see [ICS 3](../../ics-003-connection-semantics))
     1. Channel opening handshake started from *1* to *2* using the newly created connection (this ICS)
     1. Packet sent over the newly created channel from *1* to *2* (this ICS)
 1. Successful completion of handshakes (if either handshake fails, the connection/channel can be closed & the packet timed-out)
-    1. Connection opening handshake completes successfully (see [ICS 3]( ../../ics-003-connection-semantics)) (this will require participation of a relayer process)
+    1. Connection opening handshake completes successfully (see [ICS 3](../../ics-003-connection-semantics)) (this will require participation of a relayer process)
     1. Channel opening handshake completes successfully (this ICS) (this will require participation of a relayer process)
 1. Packet confirmation on machine *B*, module *2* (or packet timeout if the timeout height has passed) (this will require participation of a relayer process)
 1. Acknowledgement (possibly) relayed back from module *2* on machine *B* to module *1* on machine *A*
@@ -743,7 +743,7 @@ Calling modules MUST execute application logic atomically in conjunction with ca
 The IBC handler performs the following steps in order:
 
 - Checks that the channel is not closed to send packets
-- Checks that the calling module owns the sending port (see [ICS 5]( ../../ics-005-port-allocation))
+- Checks that the calling module owns the sending port (see [ICS 5](../ics-005-port-allocation))
 - Checks that the timeout height specified has not already passed on the destination chain
 - Increments the send sequence counter associated with the channel
 - Stores a constant-size commitment to the packet data & packet timeout
