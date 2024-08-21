@@ -91,7 +91,7 @@ and a `privateStore` for storage local to the host, upon which `get`
 The `provableStore`:
 
 - MUST write to a key/value store whose data can be externally proved with a vector commitment as defined in [ICS 23](../../ics-023-vector-commitments). 
-- MUST use canonical data structure encodings provided in these specifications
+- MUST use canonical data structure encodings provided in these specifications.
 
 The `privateStore`:
 
@@ -118,15 +118,15 @@ actually used in the private store implementation.
 
 Note that the client-related paths listed below reflect the Tendermint client as defined in [ICS 7](../../../client/ics-007-tendermint-client) and may vary for other client types.
 
-| Store          | Path format                                                                    | Value type        | Defined in |
-| -------------- | ------------------------------------------------------------------------------ | ----------------- | ---------------------- |
-| privateStore  | "clients/{identifier}/clientState"                                             | ClientState       | [ICS 2](../ics-002-client-semantics) |
-| privateStore  | "clients/{identifier}/consensusStates/{height}"                                | ConsensusState    | [ICS 7](../../client/ics-007-tendermint-client) |
-| privateStore | "clients/{identifier}/counterparty"                                             | Counterparty      | [ICS 2](../ics-002-client-semantics)
-| privateStore  | "nextSequenceSend/ports/{identifier}/channels/{identifier}"                    | uint64            | [ICS 4](../ics-004-channel-and-packet-semantics) |
-| provableStore  | "commitments/ports/{identifier}/channels/{identifier}/sequences/{sequence}"    | bytes             | [ICS 4](../ics-004-channel-and-packet-semantics) |
-| provableStore  | "receipts/ports/{identifier}/channels/{identifier}/sequences/{sequence}"       | bytes             | [ICS 4](../ics-004-channel-and-packet-semantics) |
-| provableStore  | "acks/ports/{identifier}/channels/{identifier}/sequences/{sequence}"           | bytes             | [ICS 4](../ics-004-channel-and-packet-semantics) |
+| Store         | Path format                                                                   | Value type        | Defined in |
+| ------------- | ----------------------------------------------------------------------------- | ----------------- | ---------------------- |
+| privateStore  | "clients/{identifier}/clientState"                                            | ClientState       | [ICS 2](../ics-002-client-semantics) |
+| privateStore  | "clients/{identifier}/consensusStates/{height}"                               | ConsensusState    | [ICS 7](../../client/ics-007-tendermint-client) |
+| privateStore  | "clients/{identifier}/counterparty"                                           | Counterparty      | [ICS 2](../ics-002-client-semantics) |
+| privateStore  | "nextSequenceSend/ports/{identifier}/channels/{identifier}"                   | uint64            | [ICS 4](../ics-004-channel-and-packet-semantics) |
+| provableStore | "commitments/ports/{identifier}/channels/{identifier}/sequences/{sequence}"   | bytes             | [ICS 4](../ics-004-channel-and-packet-semantics) |
+| provableStore | "receipts/ports/{identifier}/channels/{identifier}/sequences/{sequence}"      | bytes             | [ICS 4](../ics-004-channel-and-packet-semantics) |
+| provableStore | "acks/ports/{identifier}/channels/{identifier}/sequences/{sequence}"          | bytes             | [ICS 4](../ics-004-channel-and-packet-semantics) |
 
 ### Module layout
 
@@ -140,7 +140,7 @@ Represented spatially, the layout of modules & their included specifications on 
 | +-------------------+       +--------------------+      +----------------------+ |
 | | Module Aardvark   | <-->  | IBC Routing Module |      | IBC Handler Module   | |
 | +-------------------+       |                    |      |                      | |
-|                             | Implements ICS 26. |      | Implements ICS 2, | |
+|                             | Implements ICS 26. |      | Implements ICS 2,    | |
 |                             |                    |      | 4, 5 internally.     | |
 | +-------------------+       |                    |      |                      | |
 | | Module Betazoid   | <-->  |                    | -->  | Exposes interface    | |
