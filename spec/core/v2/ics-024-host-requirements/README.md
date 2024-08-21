@@ -5,16 +5,16 @@ stage: draft
 category: IBC/TAO
 kind: interface
 requires: 23
-required-by: 2, 3, 4, 5, 18
-version compatibility: ibc-go v7.0.0
-author: Christopher Goes <cwgoes@tendermint.com>
-created: 2019-04-16
-modified: 2022-09-14
+required-by: 4
+version compatibility: ibc-go v10.0.0
+author: Aditya Sripal <aditya@interchain.io>
+created: 2024-08-21
+modified: 2024-08-21
 ---
 
 ## Synopsis
 
-This specification defines the minimal set of interfaces which must be provided and properties which must be fulfilled by a state machine hosting an implementation of the interblockchain communication protocol.
+This specification defines the minimal set of interfaces which must be provided and properties which must be fulfilled by a state machine hosting an implementation of the interblockchain communication protocol. IBC relies on a key-value provable store for cross-chain communication. In version 2 of the specification, the expected key-value storage will only be for the keys that are relevant for packet processing.
 
 ### Motivation
 
@@ -36,7 +36,7 @@ The IBC/TAO specifications define the implementations of two modules: the core "
 
 ### Paths, identifiers, separators
 
-An `Identifier` is a bytestring used as a key for an object stored in state, such as a connection, channel, or light client.
+An `Identifier` is a bytestring used as a key for an object stored in state, such as a packet commitment, acknowledgement, or receipt.
 
 Identifiers MUST be non-empty (of positive integer length).
 
@@ -58,9 +58,9 @@ All identifiers, and all strings listed in this specification, must be encoded a
 
 By default, identifiers have the following minimum and maximum lengths in characters:
 
-| Port identifier | Client identifier | Connection identifier | Channel identifier |
-| --------------- | ----------------- | --------------------- | ------------------ |
-| 2 - 128         | 9 - 64            | 10 - 64               | 8 - 64             |
+| Port identifier | Client identifier | Channel identifier |
+| --------------- | ----------------- | ------------------ |
+| 2 - 128         | 9 - 64            | 8 - 64             |
 
 ### Key/value Store
 
@@ -91,7 +91,7 @@ and a `privateStore` for storage local to the host, upon which `get`
 The `provableStore`:
 
 - MUST write to a key/value store whose data can be externally proved with a vector commitment as defined in [ICS 23](../ics-023-vector-commitments). 
-- MUST use canonical data structure encodings provided in these specifications as proto3 files
+- MUST use canonical data structure encodings provided in these specifications
 
 The `privateStore`:
 
@@ -120,15 +120,10 @@ Note that the client-related paths listed below reflect the Tendermint client as
 
 | Store          | Path format                                                                    | Value type        | Defined in |
 | -------------- | ------------------------------------------------------------------------------ | ----------------- | ---------------------- |
-| provableStore  | "clients/{identifier}/clientState"                                             | ClientState       | [ICS 2](../ics-002-client-semantics) |
-| provableStore  | "clients/{identifier}/consensusStates/{height}"                                | ConsensusState    | [ICS 7](../../client/ics-007-tendermint-client) |
-| privateStore   | "clients/{identifier}/connections                                              | []Identifier      | [ICS 3](../ics-003-connection-semantics) |
-| provableStore  | "connections/{identifier}"                                                     | ConnectionEnd     | [ICS 3](../ics-003-connection-semantics) |
-| privateStore   | "ports/{identifier}"                                                           | CapabilityKey     | [ICS 5](../ics-005-port-allocation) |
-| provableStore  | "channelEnds/ports/{identifier}/channels/{identifier}"                         | ChannelEnd        | [ICS 4](../ics-004-channel-and-packet-semantics) |
-| provableStore  | "nextSequenceSend/ports/{identifier}/channels/{identifier}"                    | uint64            | [ICS 4](../ics-004-channel-and-packet-semantics) |
-| provableStore  | "nextSequenceRecv/ports/{identifier}/channels/{identifier}"                    | uint64            | [ICS 4](../ics-004-channel-and-packet-semantics) |
-| provableStore  | "nextSequenceAck/ports/{identifier}/channels/{identifier}"                     | uint64            | [ICS 4](../ics-004-channel-and-packet-semantics) |
+| privateStore  | "clients/{identifier}/clientState"                                             | ClientState       | [ICS 2](../ics-002-client-semantics) |
+| privateStore  | "clients/{identifier}/consensusStates/{height}"                                | ConsensusState    | [ICS 7](../../client/ics-007-tendermint-client) |
+| privateStore | "clients/{identifier}/counterparty"                                             | Counterparty      | [ICS 2](../ics-002-client-semantics)
+| privateStore  | "nextSequenceSend/ports/{identifier}/channels/{identifier}"                    | uint64            | [ICS 4](../ics-004-channel-and-packet-semantics) |
 | provableStore  | "commitments/ports/{identifier}/channels/{identifier}/sequences/{sequence}"    | bytes             | [ICS 4](../ics-004-channel-and-packet-semantics) |
 | provableStore  | "receipts/ports/{identifier}/channels/{identifier}/sequences/{sequence}"       | bytes             | [ICS 4](../ics-004-channel-and-packet-semantics) |
 | provableStore  | "acks/ports/{identifier}/channels/{identifier}/sequences/{sequence}"           | bytes             | [ICS 4](../ics-004-channel-and-packet-semantics) |
@@ -145,7 +140,7 @@ Represented spatially, the layout of modules & their included specifications on 
 | +-------------------+       +--------------------+      +----------------------+ |
 | | Module Aardvark   | <-->  | IBC Routing Module |      | IBC Handler Module   | |
 | +-------------------+       |                    |      |                      | |
-|                             | Implements ICS 26. |      | Implements ICS 2, 3, | |
+|                             | Implements ICS 26. |      | Implements ICS 2, | |
 |                             |                    |      | 4, 5 internally.     | |
 | +-------------------+       |                    |      |                      | |
 | | Module Betazoid   | <-->  |                    | -->  | Exposes interface    | |
@@ -160,132 +155,12 @@ Represented spatially, the layout of modules & their included specifications on 
 
 ### Consensus state introspection
 
-Host state machines MUST provide the ability to introspect their current height, with `getCurrentHeight`:
+Host state machines MUST provide the ability to introspect their current height:
 
 ```typescript
+// this will return the current height of the host state machine
 type getCurrentHeight = () => Height
 ```
-
-Host state machines MUST define a unique `ConsensusState` type fulfilling the requirements of [ICS 2](../ics-002-client-semantics), with a canonical binary serialisation.
-
-Host state machines MUST provide the ability to introspect their own consensus state, with `getConsensusState`:
-
-```typescript
-type getConsensusState = (height: Height, proof?: bytes) => ConsensusState
-```
-
-`getConsensusState` MUST return the consensus state for at least some number `n` of contiguous recent heights, where `n` is constant for the host state machine. Heights older than `n` MAY be safely pruned (causing future calls to fail for those heights).
-
-We provide an optional proof data which comes from the `MsgConnectionOpenAck` or `MsgConnectionOpenTry` for host state machines which are unable to introspect their own `ConsensusState` and must rely on off-chain data.
-<br />
-In this case host state machines MUST maintain a map of `n` block numbers to header hashes where the proof would contain full header which can be hashed and compared with the on-chain record.
-
-Host state machines MUST provide the ability to introspect this stored recent consensus state count `n`, with `getStoredRecentConsensusStateCount`:
-
-```typescript
-type getStoredRecentConsensusStateCount = () => Height
-```
-
-### Client state validation
-
-Host state machines MUST define a unique `ClientState` type fulfilling the requirements of [ICS 2](../ics-002-client-semantics).
-
-Host state machines MUST provide the ability to construct a `ClientState` representation of their own state for the purposes of client state validation, with `getHostClientState`:
-
-```typescript
-type getHostClientState = (height: Height) => ClientState
-```
-
-Host state machines MUST provide the ability to validate the `ClientState` of a light client running on a counterparty chain, with `validateSelfClient`:
-
-```typescript
-type validateSelfClient = (counterpartyClientState: ClientState) => boolean
-```
-
-`validateSelfClient` validates the client parameters for a client of the host chain. For example, below is the implementation for Tendermint hosts, using `ClientState` as defined in [ICS 7](../../client/ics-007-tendermint-client/):
-
-```typescript
-function validateSelfClient(counterpartyClientState: ClientState) {
-  hostClientState = getHostClientState()
-
-  // assert that the counterparty client is not frozen
-  if counterpartyClientState.frozenHeight !== null {
-    return false
-  }
-
-  // assert that the chain ids are the same
-  if counterpartyClientState.chainID !== hostClientState.chainID {
-    return false
-  }
-
-  // assert that the counterparty client is in the same revision as the host chain
-  counterpartyRevisionNumber = parseRevisionNumber(counterpartyClientState.chainID)
-  if counterpartyRevisionNumber !== hostClientState.latestHeight.revisionNumber {
-    return false
-  }
-
-  // assert that the counterparty client has a height less than the host height
-  if counterpartyClientState.latestHeight >= hostClientState.latestHeight {
-    return false
-  }
-
-  // assert that the counterparty client has the same ProofSpec as the host
-  if counterpartyClientState.proofSpecs !== hostClientState.proofSpecs {
-    return false
-  }
-
-  // assert that the trustLevel is within the allowed range. 1/3 is the minimum amount
-  // of trust needed which does not break the security model.
-  if counterpartyClientState.trustLevel < 1/3 || counterpartyClientState.trustLevel > 1 {
-    return false
-  }
-
-  // assert that the unbonding periods are the same
-  if counterpartyClientState.unbondingPeriod != hostClientState.unbondingPeriod {
-    return false
-  }
-
-  // assert that the unbonding period is greater than or equal to the trusting period
-  if counterpartyClientState.unbondingPeriod < counterpartyClientState.trustingPeriod {
-    return false
-  }
-
-  // assert that the upgrade paths are the same
-  hostUpgradePath = applyPrefix(hostClientState.upgradeCommitmentPrefix, hostClientState.upgradeKey)
-  counterpartyUpgradePath = applyPrefix(counterpartyClientState.upgradeCommitmentPrefix, counterpartyClientState.upgradeKey)
-  if counterpartyUpgradePath !== hostUpgradePath {
-    return false
-  }
-  
-  return true
-}
-```
-
-### Commitment path introspection
-
-Host chains MUST provide the ability to inspect their commitment path, with `getCommitmentPrefix`:
-
-```typescript
-type getCommitmentPrefix = () => CommitmentPrefix
-```
-
-The result `CommitmentPrefix` is the prefix used by the host state machine's key-value store.
-With the `CommitmentRoot root` and `CommitmentState state` of the host state machine, the following property MUST be preserved:
-
-```typescript
-if provableStore.get(path) === value {
-  prefixedPath = applyPrefix(getCommitmentPrefix(), path)
-  if value !== nil {
-    proof = createMembershipProof(state, prefixedPath, value)
-    assert(verifyMembership(root, proof, prefixedPath, value))
-  } else {
-    proof = createNonMembershipProof(state, prefixedPath)
-    assert(verifyNonMembership(root, proof, prefixedPath))
-  }
-}
-```
-
-For a host state machine, the return value of `getCommitmentPrefix` MUST be constant.
 
 ### Timestamp access
 
@@ -310,16 +185,6 @@ Host state machines MUST implement permission interaction with the IBC handler s
 This permissioning can be implemented with unique references (object capabilities) for each port (a la the Cosmos SDK), with source authentication (a la Ethereum), or with some other method of access control, in any case enforced by the host state machine. See [ICS 5](../ics-005-port-allocation) for details.
 
 Modules that wish to make use of particular IBC features MAY implement certain handler functions, e.g. to add additional logic to a channel handshake with an associated module on another state machine.
-
-### Datagram submission
-
-Host state machines which implement the routing module MAY define a `submitDatagram` function to submit datagrams<sup>[1](#footnote1)</sup>, which will be included in transactions, directly to the routing module (defined in [ICS 26](../ics-026-routing-module)):
-
-```typescript
-type submitDatagram = (datagram: Datagram) => void
-```
-
-`submitDatagram` allows relayer processes to submit IBC datagrams directly to the routing module on the host state machine. Host state machines MAY require that the relayer process submitting the datagram has an account to pay transaction fees, signs over the datagram in a larger transaction structure, etc — `submitDatagram` MUST define & construct any such packaging required.
 
 ### Exception system
 
@@ -385,27 +250,10 @@ Key/value store functionality and consensus state type are unlikely to change du
 
 ## Example Implementations
 
-- Implementation of ICS 24 in Go can be found in [ibc-go repository](https://github.com/cosmos/ibc-go).
-- Implementation of ICS 24 in Rust can be found in [ibc-rs repository](https://github.com/cosmos/ibc-rs).
-
 ## History
 
-Apr 29, 2019 - Initial draft
-
-May 11, 2019 - Rename "RootOfTrust" to "ConsensusState"
-
-Jun 25, 2019 - Use "ports" instead of module names
-
-Aug 18, 2019 - Revisions to module system, definitions
-
-Jul 05, 2022 - Lower the minimal allowed length of a channel identifier to 8
-
-Jul 27, 2022 - Move `ClientState` to the `provableStore`, and add "Client state validation" section
+Aug 21, 2024 - Initial draft
 
 ## Copyright
 
 All content herein is licensed under [Apache 2.0](https://www.apache.org/licenses/LICENSE-2.0).
-
----
-
-<a id="footnote1">1</a>: A datagram is an opaque bytestring transmitted over some physical network, and handled by the IBC routing module implemented in the ledger's state machine. In some implementations, the datagram may be a field in a ledger-specific transaction or message data structure which also contains other information (e.g. a fee for spam prevention, nonce for replay prevention, type identifier to route to the IBC handler, etc.). All IBC sub-protocols (such as opening a connection, creating a channel, sending a packet) are defined in terms of sets of datagrams and protocols for handling them through the routing module.
