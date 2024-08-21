@@ -90,7 +90,7 @@ and a `privateStore` for storage local to the host, upon which `get`
 
 The `provableStore`:
 
-- MUST write to a key/value store whose data can be externally proved with a vector commitment as defined in [ICS 23](../ics-023-vector-commitments). 
+- MUST write to a key/value store whose data can be externally proved with a vector commitment as defined in [ICS 23](../../ics-023-vector-commitments). 
 - MUST use canonical data structure encodings provided in these specifications
 
 The `privateStore`:
@@ -116,7 +116,7 @@ Parts of the private store MAY safely be used for other purposes as long as the 
 Keys used in the private store MAY safely vary as long as there exists a bipartite mapping between the key formats defined herein and the ones
 actually used in the private store implementation.
 
-Note that the client-related paths listed below reflect the Tendermint client as defined in [ICS 7](../../client/ics-007-tendermint-client) and may vary for other client types.
+Note that the client-related paths listed below reflect the Tendermint client as defined in [ICS 7](../../../client/ics-007-tendermint-client) and may vary for other client types.
 
 | Store          | Path format                                                                    | Value type        | Defined in |
 | -------------- | ------------------------------------------------------------------------------ | ----------------- | ---------------------- |
