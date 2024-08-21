@@ -70,7 +70,7 @@ could be provided as executable WASM functions when the client instance is creat
 
 ### Definitions
 
-- `get`, `set`, `Path`, and `Identifier` are as defined in [ICS 24](../ics-024-host-requirements).
+- `get`, `set`, `Path`, and `Identifier` are as defined in [ICS 24]( ../../ics-024-host-requirements).
 
 - `Consensus` is a state update generating algorithm. It takes the previous state of a state machine together 
   with a set of messages (i.e., state machine transactions) and generates a valid state update of the state machine.
@@ -95,7 +95,7 @@ types may require additional properties.
 - `Height` specifies the order of the state updates of a state machine, e.g., a sequence number. 
   This entails that each state update is mapped to a `Height`.
 
-- `CommitmentRoot` is as defined in [ICS 23](../ics-023-vector-commitments). 
+- `CommitmentRoot` is as defined in [ICS 23]( ../../ics-023-vector-commitments). 
   It provides an efficient way for higher-level protocol abstractions to verify whether
   a particular state transition has occurred on the remote state machine, i.e.,
   it enables proofs of inclusion or non-inclusion of particular values at particular paths 
@@ -149,7 +149,7 @@ This specification outlines what each *client type* must define. A client type i
 of the data structures, initialisation logic, validity predicate, and misbehaviour predicate required
 to operate a light client. State machines implementing the IBC protocol can support any number of client
 types, and each client type can be instantiated with different initial consensus states in order to track
-different consensus instances. In order to establish a connection between two state machines (see [ICS 3](../ics-003-connection-semantics)),
+different consensus instances. In order to establish a connection between two state machines (see [ICS 3]( ../../ics-003-connection-semantics)),
 the state machines must each support the client type corresponding to the other state machine's consensus algorithm.
 
 Specific client types shall be defined in later versions of this specification and a canonical list shall exist in this repository.
@@ -196,7 +196,7 @@ as misbehaviour. Should one occur, a proof should be generated and submitted so 
 and previous state roots invalidated as necessary.
 
 The `ConsensusState` of a chain MUST have a canonical serialisation, so that other chains can check
-that a stored consensus state is equal to another (see [ICS 24](../ics-024-host-requirements) for the keyspace table).
+that a stored consensus state is equal to another (see [ICS 24]( ../../ics-024-host-requirements) for the keyspace table).
 
 ```typescript
 type ConsensusState = bytes
@@ -339,7 +339,7 @@ to intervene to unfreeze a frozen client & provide a new correct ClientMessage w
 
 #### `CommitmentProof`
 
-`CommitmentProof` is an opaque data structure defined by a client type in accordance with [ICS 23](../ics-023-vector-commitments).
+`CommitmentProof` is an opaque data structure defined by a client type in accordance with [ICS 23]( ../../ics-023-vector-commitments).
 It is utilised to verify presence or absence of a particular key/value pair in state
 at a particular finalised height (necessarily associated with a particular commitment root).
 
@@ -352,7 +352,7 @@ Internal implementation details may differ (for example, a loopback client could
 - The `delayPeriodBlocks` is passed to the verification functions for packet-related proofs in order to allow packets to specify a period of blocks which must pass after a consensus state is added before it can be used for packet-related verification.
 
 `verifyMembership` is a generic proof verification method which verifies a proof of the existence of a value at a given `CommitmentPath` at the specified height. It MUST return an error if the verification is not successful. 
-The caller is expected to construct the full `CommitmentPath` from a `CommitmentPrefix` and a standardized path (as defined in [ICS 24](../ics-024-host-requirements/README.md#path-space)). If the caller desires a particular delay period to be enforced,
+The caller is expected to construct the full `CommitmentPath` from a `CommitmentPrefix` and a standardized path (as defined in [ICS 24]( ../../ics-024-host-requirements/README.md#path-space)). If the caller desires a particular delay period to be enforced,
 then it can pass in a non-zero `delayPeriodTime` or `delayPeriodBlocks`. If a delay period is not necessary, the caller must pass in 0 for `delayPeriodTime` and `delayPeriodBlocks`,
 and the client will not enforce any delay period for verification.
 
@@ -369,7 +369,7 @@ type verifyMembership = (
 ```
 
 `verifyNonMembership` is a generic proof verification method which verifies a proof of absence of a given `CommitmentPath` at the specified height. It MUST return an error if the verification is not successful. 
-The caller is expected to construct the full `CommitmentPath` from a `CommitmentPrefix` and a standardized path (as defined in [ICS 24](../ics-024-host-requirements/README.md#path-space)). If the caller desires a particular delay period to be enforced,
+The caller is expected to construct the full `CommitmentPath` from a `CommitmentPrefix` and a standardized path (as defined in [ICS 24]( ../../ics-024-host-requirements/README.md#path-space)). If the caller desires a particular delay period to be enforced,
 then it can pass in a non-zero `delayPeriodTime` or `delayPeriodBlocks`. If a delay period is not necessary, the caller must pass in 0 for `delayPeriodTime` and `delayPeriodBlocks`,
 and the client will not enforce any delay period for verification.
 
@@ -512,8 +512,8 @@ security assumptions of proxy state machine correctness.
 
 ##### Merklized state trees
 
-For clients of state machines with Merklized state trees, these functions can be implemented by calling the [ICS-23](../ics-023-vector-commitments/README.md) `verifyMembership` or `verifyNonMembership` methods, using a verified Merkle
-root stored in the `ClientState`, to verify presence or absence of particular key/value pairs in state at particular heights in accordance with [ICS 23](../ics-023-vector-commitments).
+For clients of state machines with Merklized state trees, these functions can be implemented by calling the [ICS-23]( ../../ics-023-vector-commitments/README.md) `verifyMembership` or `verifyNonMembership` methods, using a verified Merkle
+root stored in the `ClientState`, to verify presence or absence of particular key/value pairs in state at particular heights in accordance with [ICS 23]( ../../ics-023-vector-commitments).
 
 ```typescript
 type verifyMembership = (ClientState, Height, CommitmentProof, Path, Value) => boolean

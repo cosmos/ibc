@@ -33,11 +33,11 @@ port simultaneously. Channels are end-to-end between two ports, each of which mu
 Optionally, the host state machine can elect to expose port binding only to a specially-permissioned module manager,
 by generating a capability key specifically for the ability to bind ports. The module manager
 can then control which ports modules can bind to with a custom rule-set, and transfer ports to modules only when it
-has validated the port name & module. This role can be played by the routing module (see [ICS 26](../ics-026-routing-module)).
+has validated the port name & module. This role can be played by the routing module (see [ICS 26]( ../../ics-026-routing-module)).
 
 ### Definitions
 
-`Identifier`, `get`, `set`, and `delete` are defined as in [ICS 24](../ics-024-host-requirements).
+`Identifier`, `get`, `set`, and `delete` are defined as in [ICS 24]( ../../ics-024-host-requirements).
 
 A *port* is a particular kind of identifier which is used to permission channel opening and usage to modules.
 
