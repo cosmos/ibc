@@ -70,7 +70,7 @@ could be provided as executable WASM functions when the client instance is creat
 
 ### Definitions
 
-- `get`, `set`, `Path`, and `Identifier` are as defined in [ICS 24]( ../../ics-024-host-requirements).
+- `get`, `set`, `Path`, and `Identifier` are as defined in [ICS 24](../ics-024-host-requirements).
 
 - `Consensus` is a state update generating algorithm. It takes the previous state of a state machine together 
   with a set of messages (i.e., state machine transactions) and generates a valid state update of the state machine.
