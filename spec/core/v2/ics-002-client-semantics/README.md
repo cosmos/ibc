@@ -95,7 +95,7 @@ types may require additional properties.
 - `Height` specifies the order of the state updates of a state machine, e.g., a sequence number. 
   This entails that each state update is mapped to a `Height`.
 
-- `CommitmentRoot` is as defined in [ICS 23](../ics-023-vector-commitments). 
+- `CommitmentRoot` is as defined in [ICS 23]( ../../ics-023-vector-commitments). 
   It provides an efficient way for higher-level protocol abstractions to verify whether
   a particular state transition has occurred on the remote state machine, i.e.,
   it enables proofs of inclusion or non-inclusion of particular values at particular paths 
@@ -149,7 +149,7 @@ This specification outlines what each *client type* must define. A client type i
 of the data structures, initialisation logic, validity predicate, and misbehaviour predicate required
 to operate a light client. State machines implementing the IBC protocol can support any number of client
 types, and each client type can be instantiated with different initial consensus states in order to track
-different consensus instances. In order to establish a connection between two state machines (see [ICS 3](../ics-003-connection-semantics)),
+different consensus instances. In order to establish a connection between two state machines (see [ICS 3]( ../../ics-003-connection-semantics)),
 the state machines must each support the client type corresponding to the other state machine's consensus algorithm.
 
 Specific client types shall be defined in later versions of this specification and a canonical list shall exist in this repository.
@@ -339,7 +339,7 @@ to intervene to unfreeze a frozen client & provide a new correct ClientMessage w
 
 #### `CommitmentProof`
 
-`CommitmentProof` is an opaque data structure defined by a client type in accordance with [ICS 23](../ics-023-vector-commitments).
+`CommitmentProof` is an opaque data structure defined by a client type in accordance with [ICS 23]( ../../ics-023-vector-commitments).
 It is utilised to verify presence or absence of a particular key/value pair in state
 at a particular finalised height (necessarily associated with a particular commitment root).
 
@@ -512,8 +512,8 @@ security assumptions of proxy state machine correctness.
 
 ##### Merklized state trees
 
-For clients of state machines with Merklized state trees, these functions can be implemented by calling the [ICS-23](../ics-023-vector-commitments/README.md) `verifyMembership` or `verifyNonMembership` methods, using a verified Merkle
-root stored in the `ClientState`, to verify presence or absence of particular key/value pairs in state at particular heights in accordance with [ICS 23](../ics-023-vector-commitments).
+For clients of state machines with Merklized state trees, these functions can be implemented by calling the [ICS-23]( ../../ics-023-vector-commitments/README.md) `verifyMembership` or `verifyNonMembership` methods, using a verified Merkle
+root stored in the `ClientState`, to verify presence or absence of particular key/value pairs in state at particular heights in accordance with [ICS 23]( ../../ics-023-vector-commitments).
 
 ```typescript
 type verifyMembership = (ClientState, Height, CommitmentProof, Path, Value) => boolean

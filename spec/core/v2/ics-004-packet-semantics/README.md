@@ -31,7 +31,7 @@ In order to provide the desired ordering, exactly-once delivery, and module perm
 
 `ConsensusState` is as defined in [ICS 2](../ics-002-client-semantics).
 
-`Connection` is as defined in [ICS 3](../ics-003-connection-semantics).
+`Connection` is as defined in [ICS 3](../../ics-003-connection-semantics).
 
 `Port` and `authenticateCapability` are as defined in [ICS 5](../ics-005-port-allocation).
 
@@ -39,7 +39,7 @@ In order to provide the desired ordering, exactly-once delivery, and module perm
 
 `Identifier`, `get`, `set`, `delete`, `getCurrentHeight`, and module-system related primitives are as defined in [ICS 24](../ics-024-host-requirements).
 
-See [upgrades spec](./UPGRADES.md) for definition of `pendingInflightPackets` and `restoreChannel`.
+See [upgrades spec](../../ics-004-channel-and-packet-semantics/UPGRADES.md) for definition of `pendingInflightPackets` and `restoreChannel`.
 
 A *channel* is a pipeline for exactly-once packet delivery between specific modules on separate blockchains, which has at least one end capable of sending packets and one end capable of receiving packets.
 
@@ -91,7 +91,7 @@ interface ChannelEnd {
 - The `connectionHops` stores the list of connection identifiers ordered starting from the receiving end towards the sender. `connectionHops[0]` is the connection end on the receiving chain. More than one connection hop indicates a multi-hop channel.
 - The `version` string stores an opaque channel version, which is agreed upon during the handshake. This can determine module-level configuration such as which packet encoding is used for the channel. This version is not used by the core IBC protocol. If the version string contains structured metadata for the application to parse and interpret, then it is considered best practice to encode all metadata in a JSON struct and include the marshalled string in the version field.
 
-See the [upgrade spec](./UPGRADES.md) for details on `upgradeSequence`.
+See the [upgrade spec](../../ics-004-channel-and-packet-semantics/UPGRADES.md) for details on `upgradeSequence`.
 
 Channel ends have a *state*:
 
@@ -111,7 +111,7 @@ enum ChannelState {
 - A channel end in `OPEN` state has completed the handshake and is ready to send and receive packets.
 - A channel end in `CLOSED` state has been closed and can no longer be used to send or receive packets.
 
-See the [upgrade spec](./UPGRADES.md) for details on `FLUSHING` and `FLUSHCOMPLETE`.
+See the [upgrade spec](../../ics-004-channel-and-packet-semantics/UPGRADES.md) for details on `FLUSHING` and `FLUSHCOMPLETE`.
 
 A `Packet`, in the interblockchain communication protocol, is a particular interface defined as follows:
 
@@ -184,7 +184,7 @@ enum PacketReceipt {
 
 The architecture of clients, connections, channels and packets:
 
-![Dataflow Visualisation](dataflow.png)
+![Dataflow Visualisation](../../ics-004-channel-and-packet-semantics/dataflow.png)
 
 ### Preliminaries
 
@@ -275,7 +275,7 @@ If not provided, the default `validateChannelIdentifier` function will always re
 
 #### Channel lifecycle management
 
-![Channel State Machine](channel-state-machine.png)
+![Channel State Machine](../../ics-004-channel-and-packet-semantics/channel-state-machine.png)
 
 | Initiator | Datagram         | Chain acted upon | Prior state (A, B) | Posterior state (A, B) |
 | --------- | ---------------- | ---------------- | ------------------ | ---------------------- |
@@ -313,7 +313,7 @@ function writeChannel(
 }
 ```
 
-See handler functions `handleChanOpenInit` and `handleChanOpenTry` in [Channel lifecycle management](../ics-026-routing-module/README.md#channel-lifecycle-management) for more details.
+See handler functions `handleChanOpenInit` and `handleChanOpenTry` in [Channel lifecycle management](../../ics-026-routing-module/README.md#channel-lifecycle-management) for more details.
 
 The opening channel must provide the identifiers of the local channel identifier, local port, remote port, and remote channel identifier.
 
@@ -707,13 +707,13 @@ function getCounterPartyHops(proof: CommitmentProof | MultihopProof, lastConnect
 
 #### Packet flow & handling
 
-![Packet State Machine](packet-state-machine.png)
+![Packet State Machine](../../ics-004-channel-and-packet-semantics/packet-state-machine.png)
 
 ##### A day in the life of a packet
 
 The following sequence of steps must occur for a packet to be sent from module *1* on machine *A* to module *2* on machine *B*, starting from scratch.
 
-The module can interface with the IBC handler through [ICS 25](../ics-025-handler-interface) or [ICS 26](../ics-026-routing-module).
+The module can interface with the IBC handler through [ICS 25]( ../../ics-025-handler-interface) or [ICS 26]( ../../ics-026-routing-module).
 
 1. Initial client & port setup, in any order
     1. Client created on *A* for *B* (see [ICS 2](../ics-002-client-semantics))
@@ -721,18 +721,18 @@ The module can interface with the IBC handler through [ICS 25](../ics-025-handle
     1. Module *1* binds to a port (see [ICS 5](../ics-005-port-allocation))
     1. Module *2* binds to a port (see [ICS 5](../ics-005-port-allocation)), which is communicated out-of-band to module *1*
 1. Establishment of a connection & channel, optimistic send, in order
-    1. Connection opening handshake started from *A* to *B* by module *1* (see [ICS 3](../ics-003-connection-semantics))
+    1. Connection opening handshake started from *A* to *B* by module *1* (see [ICS 3](../../ics-003-connection-semantics))
     1. Channel opening handshake started from *1* to *2* using the newly created connection (this ICS)
     1. Packet sent over the newly created channel from *1* to *2* (this ICS)
 1. Successful completion of handshakes (if either handshake fails, the connection/channel can be closed & the packet timed-out)
-    1. Connection opening handshake completes successfully (see [ICS 3](../ics-003-connection-semantics)) (this will require participation of a relayer process)
+    1. Connection opening handshake completes successfully (see [ICS 3](../../ics-003-connection-semantics)) (this will require participation of a relayer process)
     1. Channel opening handshake completes successfully (this ICS) (this will require participation of a relayer process)
 1. Packet confirmation on machine *B*, module *2* (or packet timeout if the timeout height has passed) (this will require participation of a relayer process)
 1. Acknowledgement (possibly) relayed back from module *2* on machine *B* to module *1* on machine *A*
 
 Represented spatially, packet transit between two machines can be rendered as follows:
 
-![Packet Transit](packet-transit.png)
+![Packet Transit](../../ics-004-channel-and-packet-semantics/packet-transit.png)
 
 ##### Sending packets
 
