@@ -39,7 +39,7 @@ In order to provide the desired ordering, exactly-once delivery, and module perm
 
 `Identifier`, `get`, `set`, `delete`, `getCurrentHeight`, and module-system related primitives are as defined in [ICS 24](../ics-024-host-requirements).
 
-See [upgrades spec](../../ics-004-packet-semantics/UPGRADES.md) for definition of `pendingInflightPackets` and `restoreChannel`.
+See [upgrades spec](../../ics-004-channel-and-packet-semantics/UPGRADES.md) for definition of `pendingInflightPackets` and `restoreChannel`.
 
 A *channel* is a pipeline for exactly-once packet delivery between specific modules on separate blockchains, which has at least one end capable of sending packets and one end capable of receiving packets.
 
@@ -184,7 +184,7 @@ enum PacketReceipt {
 
 The architecture of clients, connections, channels and packets:
 
-![Dataflow Visualisation](../../ics-004-packet-semantics/dataflow.png)
+![Dataflow Visualisation](../../ics-004-channel-and-packet-semantics/dataflow.png)
 
 ### Preliminaries
 
