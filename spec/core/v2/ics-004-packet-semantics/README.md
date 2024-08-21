@@ -91,7 +91,7 @@ interface ChannelEnd {
 - The `connectionHops` stores the list of connection identifiers ordered starting from the receiving end towards the sender. `connectionHops[0]` is the connection end on the receiving chain. More than one connection hop indicates a multi-hop channel.
 - The `version` string stores an opaque channel version, which is agreed upon during the handshake. This can determine module-level configuration such as which packet encoding is used for the channel. This version is not used by the core IBC protocol. If the version string contains structured metadata for the application to parse and interpret, then it is considered best practice to encode all metadata in a JSON struct and include the marshalled string in the version field.
 
-See the [upgrade spec](./UPGRADES.md) for details on `upgradeSequence`.
+See the [upgrade spec](../../ics-004-channel-and-packet-semantics/UPGRADES.md) for details on `upgradeSequence`.
 
 Channel ends have a *state*:
 
@@ -111,7 +111,7 @@ enum ChannelState {
 - A channel end in `OPEN` state has completed the handshake and is ready to send and receive packets.
 - A channel end in `CLOSED` state has been closed and can no longer be used to send or receive packets.
 
-See the [upgrade spec](./UPGRADES.md) for details on `FLUSHING` and `FLUSHCOMPLETE`.
+See the [upgrade spec](../../ics-004-channel-and-packet-semantics/UPGRADES.md) for details on `FLUSHING` and `FLUSHCOMPLETE`.
 
 A `Packet`, in the interblockchain communication protocol, is a particular interface defined as follows:
 
