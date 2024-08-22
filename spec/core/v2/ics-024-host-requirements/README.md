@@ -91,7 +91,7 @@ and a `privateStore` for storage local to the host, upon which `get`
 The `provableStore`:
 
 - MUST write to a key/value store whose data can be externally proved with a vector commitment as defined in [ICS 23](../../ics-023-vector-commitments). 
-- MUST use canonical data structure encodings provided in these specifications
+- MUST use canonical data structure encodings provided in these specifications.
 
 The `privateStore`:
 
@@ -140,7 +140,7 @@ Represented spatially, the layout of modules & their included specifications on 
 | +-------------------+       +--------------------+      +----------------------+ |
 | | Module Aardvark   | <-->  | IBC Routing Module |      | IBC Handler Module   | |
 | +-------------------+       |                    |      |                      | |
-|                             | Implements ICS 26. |      | Implements ICS 2, | |
+|                             | Implements ICS 26. |      | Implements ICS 2,    | |
 |                             |                    |      | 4, 5 internally.     | |
 | +-------------------+       |                    |      |                      | |
 | | Module Betazoid   | <-->  |                    | -->  | Exposes interface    | |
