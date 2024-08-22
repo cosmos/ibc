@@ -124,9 +124,9 @@ Note that the client-related paths listed below reflect the Tendermint client as
 | privateStore  | "clients/{identifier}/consensusStates/{height}"                                | ConsensusState    | [ICS 7](../../client/ics-007-tendermint-client) |
 | privateStore | "clients/{identifier}/counterparty"                                             | Counterparty      | [ICS 2](../ics-002-client-semantics)
 | privateStore  | "nextSequenceSend/ports/{identifier}/channels/{identifier}"                    | uint64            | [ICS 4](../ics-004-channel-and-packet-semantics) |
-| provableStore  | "commitments/ports/{identifier}/channels/{identifier}/sequences/{sequence}"    | bytes             | [ICS 4](../ics-004-channel-and-packet-semantics) |
-| provableStore  | "receipts/ports/{identifier}/channels/{identifier}/sequences/{sequence}"       | bytes             | [ICS 4](../ics-004-channel-and-packet-semantics) |
-| provableStore  | "acks/ports/{identifier}/channels/{identifier}/sequences/{sequence}"           | bytes             | [ICS 4](../ics-004-channel-and-packet-semantics) |
+| provableStore  | "commitments/ports/{identifier}/channels/{identifier}/sequences/{sequence}"    | bytes             | [ICS 4](../ics-004-packet-semantics) |
+| provableStore  | "receipts/ports/{identifier}/channels/{identifier}/sequences/{sequence}"       | bytes             | [ICS 4](../ics-004-packet-semantics) |
+| provableStore  | "acks/ports/{identifier}/channels/{identifier}/sequences/{sequence}"           | bytes             | [ICS 4](../ics-004-packet-semantics) |
 
 ### Module layout
 
