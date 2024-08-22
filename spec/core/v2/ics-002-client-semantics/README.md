@@ -9,7 +9,7 @@ required-by: 3
 version compatibility: ibc-go v7.0.0
 author: Juwoon Yun <joon@tendermint.com>, Christopher Goes <cwgoes@tendermint.com>, Aditya Sripal <aditya@interchain.io>
 created: 2019-02-25
-modified: 2022-08-04
+modified: 2024-08-22
 ---
 
 ## Synopsis
@@ -348,20 +348,13 @@ at a particular finalised height (necessarily associated with a particular commi
 Client types must define functions to authenticate internal state of the state machine which the client tracks.
 Internal implementation details may differ (for example, a loopback client could simply read directly from the state and require no proofs).
 
-- The `delayPeriodTime` is passed to the verification functions for packet-related proofs in order to allow packets to specify a period of time which must pass after a consensus state is added before it can be used for packet-related verification.
-- The `delayPeriodBlocks` is passed to the verification functions for packet-related proofs in order to allow packets to specify a period of blocks which must pass after a consensus state is added before it can be used for packet-related verification.
-
 `verifyMembership` is a generic proof verification method which verifies a proof of the existence of a value at a given `CommitmentPath` at the specified height. It MUST return an error if the verification is not successful. 
-The caller is expected to construct the full `CommitmentPath` from a `CommitmentPrefix` and a standardized path (as defined in [ICS 24](../ics-024-host-requirements/README.md#path-space)). If the caller desires a particular delay period to be enforced,
-then it can pass in a non-zero `delayPeriodTime` or `delayPeriodBlocks`. If a delay period is not necessary, the caller must pass in 0 for `delayPeriodTime` and `delayPeriodBlocks`,
-and the client will not enforce any delay period for verification.
+The caller is expected to construct the full `CommitmentPath` from a `CommitmentPrefix` and a standardized path (as defined in [ICS 24](../ics-024-host-requirements/README.md#path-space)). 
 
 ```typescript
 type verifyMembership = (
   clientState: ClientState,
   height: Height,
-  delayPeriodTime: uint64,
-  delayPeriodBlocks: uint64,
   proof: CommitmentProof,
   path: CommitmentPath,
   value: bytes)
@@ -369,9 +362,7 @@ type verifyMembership = (
 ```
 
 `verifyNonMembership` is a generic proof verification method which verifies a proof of absence of a given `CommitmentPath` at the specified height. It MUST return an error if the verification is not successful. 
-The caller is expected to construct the full `CommitmentPath` from a `CommitmentPrefix` and a standardized path (as defined in [ICS 24](../ics-024-host-requirements/README.md#path-space)). If the caller desires a particular delay period to be enforced,
-then it can pass in a non-zero `delayPeriodTime` or `delayPeriodBlocks`. If a delay period is not necessary, the caller must pass in 0 for `delayPeriodTime` and `delayPeriodBlocks`,
-and the client will not enforce any delay period for verification.
+The caller is expected to construct the full `CommitmentPath` from a `CommitmentPrefix` and a standardized path (as defined in [ICS 24](../ics-024-host-requirements/README.md#path-space)).
 
 Since the verification method is designed to give complete control to client implementations, clients can support chains that do not provide absence proofs by verifying the existence of a non-empty sentinel `ABSENCE` value. Thus in these special cases, the proof provided will be an ICS-23 Existence proof, and the client will verify that the `ABSENCE` value is stored under the given path for the given height.
 
@@ -379,8 +370,6 @@ Since the verification method is designed to give complete control to client imp
 type verifyNonMembership = (
   clientState: ClientState,
   height: Height,
-  delayPeriodTime: uint64,
-  delayPeriodBlocks: uint64,
   proof: CommitmentProof,
   path: CommitmentPath)
   => Error
