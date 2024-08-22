@@ -343,6 +343,12 @@ to intervene to unfreeze a frozen client & provide a new correct ClientMessage w
 It is utilised to verify presence or absence of a particular key/value pair in state
 at a particular finalised height (necessarily associated with a particular commitment root).
 
+#### `Identifying Counterparties`
+
+A client MUST have the ability to idenfity its counterparty. With a client, we can prove any key/value path on the counterparty. However, without knowing which identifier the counterparty uses when it sends messages to us, we cannot differentiate between messages sent from the counterparty to our chain vs messages sent from the counterparty with other chains. Most implementations will not be able to store the ICS-24 paths directly as a key in the global namespace, but will instead write to a reserved, prefixed keyspace so as not to conflict with other application state writes. Thus the counteparty information we must have includes both its identifier for our chain as well as the key prefix under which it will write the provable ICS-24 paths.
+
+Thus, IBC version 2 introduces a new message `RegisterCounterparty` that will associate the counterparty client of our chain with our client of the counterparty. Thus, if the `RegisterCounterparty` message is submitted to both sides correctly. Then both sides have mirrored <client,client> pairs that can be treated as channel identifiers. Assuming they are correct, the client on each side is unique and provides an authenticated stream of packet data between the two chains. If the `RegisterCounterparty` message submits the wrong clientID, this can lead to invalid behaviour; but this is equivalent to a relayer submitting an invalid client in place of a correct client for the desired chain. In the simplest case, we can rely on out-of-band social consensus to only send on valid <client, client> pairs that represent a connection between the desired chains of the user; just as we currently rely on out-of-band social consensus that a given clientID and channel built on top of it is the valid, canonical identifier of our desired chain.
+
 ### State verification
 
 Client types must define functions to authenticate internal state of the state machine which the client tracks.
@@ -516,6 +522,42 @@ type verifyNonMembership = (ClientState, Height, CommitmentProof, Path) => boole
 
 IBC handlers MUST implement the functions defined below.
 
+#### Counterparty Registration 
+
+```typescript
+interface Counterparty {
+    channelId: Identifier
+    keyPrefix: CommitmentPrefix
+}
+```
+
+```typescript
+function RegisterCounterparty(
+    channelIdentifier: Identifier, // this will be our own client identifier representing our channel to desired chain
+    counterpartyChannelIdentifier: Identifier, // this is the counterparty's identifier of our chain
+    counterpartyKeyPrefix: CommitmentPrefix,
+    authentication: data, // implementation-specific authentication data
+) {
+    assert(verify(authentication))
+
+    counterparty = Counterparty{
+        channelId: counterpartyChannelIdentifier,
+        keyPrefix: counterpartyKeyPrefix
+    }
+
+    privateStore.set(counterpartyPath(channelIdentifier), counterparty)
+}
+
+// getCounterparty retrieves the stored counterparty identifier
+// given the channelIdentifier on our chain once it is provided
+function getCounterparty(channelIdentifier: Identifier): Counterparty {
+    return privateStore.get(counterpartyPath(channelIdentifier))
+}
+```
+
+The `RegisterCounterparty` method allows for authentication data that implementations may verify before storing the provided counterparty identifier. The strongest authentication possible is to have a valid clientState and consensus state of our chain in the authentication along with a proof it was stored at the claimed counterparty identifier.
+A simpler but weaker authentication would simply be to check that the `RegisterCounterparty` message is sent by the same relayer that initialized the client. This would make the client parameters completely initialized by the relayer. Thus, users must verify that the client is pointing to the correct chain and that the counterparty identifier is correct as well before using the lite channel identified by the provided client-client pair.
+
 #### Identifier validation
 
 Clients are stored under a unique `Identifier` prefix.
@@ -645,6 +687,8 @@ Jan 26, 2020 - Addition of query interface
 Jul 27, 2022 - Addition of `verifyClientState` function, and move `ClientState` to the `provableStore`
 
 August 4, 2022 - Changes to ClientState interface and associated handler to align with changes in 02-client-refactor ADR: <https://github.com/cosmos/ibc-go/pull/1871>
+
+August 22, 2024 - Changes for IBC/TAO V2  
 
 ## Copyright
 
