@@ -121,9 +121,9 @@ Note that the client-related paths listed below reflect the Tendermint client as
 | Store          | Path format                                                                    | Value type        | Defined in |
 | -------------- | ------------------------------------------------------------------------------ | ----------------- | ---------------------- |
 | privateStore  | "clients/{identifier}/clientState"                                             | ClientState       | [ICS 2](../ics-002-client-semantics) |
-| privateStore  | "clients/{identifier}/consensusStates/{height}"                                | ConsensusState    | [ICS 7](../../client/ics-007-tendermint-client) |
+| privateStore  | "clients/{identifier}/consensusStates/{height}"                                | ConsensusState    | [ICS 7](../../../client/ics-007-tendermint-client) |
 | privateStore | "clients/{identifier}/counterparty"                                             | Counterparty      | [ICS 2](../ics-002-client-semantics)
-| privateStore  | "nextSequenceSend/ports/{identifier}/channels/{identifier}"                    | uint64            | [ICS 4](../ics-004-channel-and-packet-semantics) |
+| privateStore  | "nextSequenceSend/ports/{identifier}/channels/{identifier}"                    | uint64            | [ICS 4](../ics-004-packet-semantics) |
 | provableStore  | "commitments/ports/{identifier}/channels/{identifier}/sequences/{sequence}"    | bytes             | [ICS 4](../ics-004-packet-semantics) |
 | provableStore  | "receipts/ports/{identifier}/channels/{identifier}/sequences/{sequence}"       | bytes             | [ICS 4](../ics-004-packet-semantics) |
 | provableStore  | "acks/ports/{identifier}/channels/{identifier}/sequences/{sequence}"           | bytes             | [ICS 4](../ics-004-packet-semantics) |
@@ -252,7 +252,7 @@ Key/value store functionality and consensus state type are unlikely to change du
 
 ## History
 
-Aug 21, 2024 - Initial draft
+Aug 21, 2024 - [Initial draft](https://github.com/cosmos/ibc/pull/1144)
 
 ## Copyright
 
