@@ -254,17 +254,6 @@ A `ClientMessage` is an opaque data structure defined by a client type which pro
 type ClientMessage = bytes
 ```
 
-#### `Counterparty`
-
-`Counterparty` is the data structure responsible for maintating the counterparty informations.
-
-```typescript
-interface Counterparty {
-    channelId: Identifier
-    keyPrefix: CommitmentPrefix
-}
-```
-
 ### Store paths
 
 Client state paths are stored under a unique client identifier.
@@ -353,6 +342,17 @@ to intervene to unfreeze a frozen client & provide a new correct ClientMessage w
 `CommitmentProof` is an opaque data structure defined by a client type in accordance with [ICS 23]( ../../ics-023-vector-commitments).
 It is utilised to verify presence or absence of a particular key/value pair in state
 at a particular finalised height (necessarily associated with a particular commitment root).
+
+#### `Counterparty`
+
+`Counterparty` is the data structure responsible for maintating the counterparty informations.
+
+```typescript
+interface Counterparty {
+    channelId: Identifier
+    keyPrefix: CommitmentPrefix
+}
+```
 
 ### State verification
 
