@@ -256,7 +256,7 @@ type ClientMessage = bytes
 
 #### `Counterparty`
 
-`Counterparty` is the data structure responsible for maintating the counterparty informations. A chain will be able to identify and register counterparties chains 
+`Counterparty` is the data structure responsible for maintating the counterparty informations.
 
 ```typescript
 interface Counterparty {
