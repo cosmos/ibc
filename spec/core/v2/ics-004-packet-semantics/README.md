@@ -33,12 +33,22 @@ The interblockchain communication protocol uses a cross-chain message passing mo
 
 - The `state` is the current state of the channel end.
 - NOTE - do we need to keep this as only `unordered`? - The `ordering` field indicates whether the channel is `unordered`, `ordered`, or `ordered_allow_timeout`.
+NOTE - do we need to keep these two? 
 - The `counterpartyPortIdentifier` identifies the port on the counterparty chain which owns the other end of the channel.
 - The `counterpartyClientIdentifier` identifies the client end on the counterparty chain.
 - The `nextSequenceSend`, stored separately, tracks the sequence number for the next packet to be sent.
 - The `nextSequenceRecv`, stored separately, tracks the sequence number for the next packet to be received.
 - The `nextSequenceAck`, stored separately, tracks the sequence number for the next packet to be acknowledged.
 - The `version` string stores an opaque channel version, which is agreed upon during the handshake. This can determine module-level configuration such as which packet encoding is used for the channel. This version is not used by the core IBC protocol. If the version string contains structured metadata for the application to parse and interpret, then it is considered best practice to encode all metadata in a JSON struct and include the marshalled string in the version field.
+
+`Counterparty` is the data structure responsible for maintaining the counterparty information.
+
+```typescript
+interface Counterparty {
+    channelId: Identifier
+    keyPrefix: CommitmentPrefix 
+}
+```
 
 NOTE - Do we want to keep an upgrade spec to specify how to change the client and so on? See the [upgrade spec](../../ics-004-channel-and-packet-semantics/UPGRADES.md) for details on `upgradeSequence`.
 
@@ -190,6 +200,41 @@ Host state machines MAY also safely ignore the version data or specify an empty 
 ### Sub-protocols
 
 > Note: If the host state machine is utilising object capability authentication (see [ICS 005](../ics-005-port-allocation)), all functions utilising ports take an additional capability parameter.
+
+#### Counterparty Idenfitifcation and Registration 
+
+A client MUST have the ability to idenfity its counterparty. With a client, we can prove any key/value path on the counterparty. However, without knowing which identifier the counterparty uses when it sends messages to us, we cannot differentiate between messages sent from the counterparty to our chain vs messages sent from the counterparty with other chains. Most implementations will not be able to store the ICS-24 paths directly as a key in the global namespace, but will instead write to a reserved, prefixed keyspace so as not to conflict with other application state writes. Thus the counteparty information we must have includes both its identifier for our chain as well as the key prefix under which it will write the provable ICS-24 paths.
+
+Thus, IBC version 2 introduces a new message `RegisterCounterparty` that will associate the counterparty client of our chain with our client of the counterparty. Thus, if the `RegisterCounterparty` message is submitted to both sides correctly. Then both sides have mirrored <client,client> pairs that can be treated as channel identifiers. Assuming they are correct, the client on each side is unique and provides an authenticated stream of packet data between the two chains. If the `RegisterCounterparty` message submits the wrong clientID, this can lead to invalid behaviour; but this is equivalent to a relayer submitting an invalid client in place of a correct client for the desired chain. In the simplest case, we can rely on out-of-band social consensus to only send on valid <client, client> pairs that represent a connection between the desired chains of the user; just as we currently rely on out-of-band social consensus that a given clientID and channel built on top of it is the valid, canonical identifier of our desired chain.
+
+```typescript
+function RegisterCounterparty(
+    channelIdentifier: Identifier, // this will be our own client identifier representing our channel to desired chain
+    counterpartyChannelIdentifier: Identifier, // this is the counterparty's identifier of our chain
+    counterpartyKeyPrefix: CommitmentPrefix,
+    authentication: data, // implementation-specific authentication data
+) {
+    assert(verify(authentication))
+
+    counterparty = Counterparty{
+        channelId: counterpartyChannelIdentifier,
+        keyPrefix: counterpartyKeyPrefix
+    }
+
+    privateStore.set(counterpartyPath(channelIdentifier), counterparty)
+}
+```
+
+The `RegisterCounterparty` method allows for authentication data that implementations may verify before storing the provided counterparty identifier. The strongest authentication possible is to have a valid clientState and consensus state of our chain in the authentication along with a proof it was stored at the claimed counterparty identifier.
+A simpler but weaker authentication would simply be to check that the `RegisterCounterparty` message is sent by the same relayer that initialized the client. This would make the client parameters completely initialized by the relayer. Thus, users must verify that the client is pointing to the correct chain and that the counterparty identifier is correct as well before using the lite channel identified by the provided client-client pair.
+
+```typescript
+// getCounterparty retrieves the stored counterparty identifier
+// given the channelIdentifier on our chain once it is provided
+function getCounterparty(channelIdentifier: Identifier): Counterparty {
+    return privateStore.get(counterpartyPath(channelIdentifier))
+}
+```
 
 #### Identifier validation
 
