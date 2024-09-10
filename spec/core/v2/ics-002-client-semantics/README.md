@@ -345,7 +345,7 @@ at a particular finalised height (necessarily associated with a particular commi
 
 #### `Counterparty`
 
-`Counterparty` is the data structure responsible for maintating the counterparty informations.
+`Counterparty` is the data structure responsible for maintaining the counterparty information.
 
 ```typescript
 interface Counterparty {
