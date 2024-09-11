@@ -298,33 +298,30 @@ Represented spatially, packet transit between two machines can be rendered as fo
 
 ##### Sending packets
 
-TODO Adapt description
-
-The `sendPacket` function is called by a module in order to send *data* (in the form of an IBC packet) on a channel end owned by the calling module.
+The `sendPacket` function is called by a module in order to send *data* in the form of an IBC packet. 
 
 Calling modules MUST execute application logic atomically in conjunction with calling `sendPacket`.
 
 The IBC handler performs the following steps in order:
 
-- Checks that the channel is not closed to send packets
-- Checks that the calling module owns the sending port (see [ICS 5](../ics-005-port-allocation))
+- Checks that the underlying clients is properly registered in the IBC router. 
 - Checks that the timeout height specified has not already passed on the destination chain
-- Increments the send sequence counter associated with the channel
 - Stores a constant-size commitment to the packet data & packet timeout
+- Increments the send sequence counter associated with the channel
 - Returns the sequence number of the sent packet
 
 Note that the full packet is not stored in the state of the chain - merely a short hash-commitment to the data & timeout value. The packet data can be calculated from the transaction execution and possibly returned as log output which relayers can index.
 
 ```typescript
 function sendPacket(
-    sourcePort: Identifier,
-    sourceChannel: Identifier,
+    sourceID: Identifier,
+    destID: Identifier,
     timeoutHeight: Height,
     timeoutTimestamp: uint64,
     packetData: []byte
 ): uint64 {
     // in this specification, the source channel is the clientId
-    client = router.clients[packet.sourceChannel]
+    client = router.clients[packet.sourceID]
     assert(client !== null)
 
     // disallow packets with a zero timeoutHeight and timeoutTimestamp
@@ -335,17 +332,17 @@ function sendPacket(
     assert(timeoutHeight === 0 || latestClientHeight < timeoutHeight)
 
     // if the sequence doesn't already exist, this call initializes the sequence to 0
-    sequence = channelStore.get(nextSequenceSendPath(commitPort, sourceChannel))
+    sequence = channelStore.get(nextSequenceSendPath(commitPort, sourceID))
     
     // store commitment to the packet data & packet timeout
     channelStore.set(
-      packetCommitmentPath(commitPort, sourceChannel, sequence),
+      packetCommitmentPath(commitPort, sourceID, sequence),
       hash(hash(data), timeoutHeight, timeoutTimestamp)
     )
 
     // increment the sequence. Thus there are monotonically increasing sequences for packet flow
     // from sourcePort, sourceChannel pair
-    channelStore.set(nextSequenceSendPath(commitPort, sourceChannel), sequence+1)
+    channelStore.set(nextSequenceSendPath(commitPort, sourceID), sequence+1)
 
     // log that a packet can be safely sent
     emitLogEntry("sendPacket", {
