@@ -265,7 +265,9 @@ type IBCRouter struct {
 }
 ```
 
-#### Packet flow & handling
+#### Packet Flow through the Router & handling
+
+TODO : Adapat to new flow
 
 ![Packet State Machine](../../ics-004-channel-and-packet-semantics/packet-state-machine.png)
 
@@ -296,6 +298,8 @@ Represented spatially, packet transit between two machines can be rendered as fo
 
 ##### Sending packets
 
+TODO Adapt description
+
 The `sendPacket` function is called by a module in order to send *data* (in the form of an IBC packet) on a channel end owned by the calling module.
 
 Calling modules MUST execute application logic atomically in conjunction with calling `sendPacket`.
@@ -313,39 +317,35 @@ Note that the full packet is not stored in the state of the chain - merely a sho
 
 ```typescript
 function sendPacket(
-  capability: CapabilityKey,
-  sourcePort: Identifier,
-  sourceChannel: Identifier,
-  timeoutHeight: Height,
-  timeoutTimestamp: uint64,
-  data: bytes): uint64 {
-    channel = provableStore.get(channelPath(sourcePort, sourceChannel))
-
-    // check that the channel must be OPEN to send packets;
-    abortTransactionUnless(channel !== null)
-    abortTransactionUnless(channel.state === OPEN)
-    connection = provableStore.get(connectionPath(channel.connectionHops[0]))
-    abortTransactionUnless(connection !== null)
-
-    // check if the calling module owns the sending port
-    abortTransactionUnless(authenticateCapability(channelCapabilityPath(sourcePort, sourceChannel), capability))
+    sourcePort: Identifier,
+    sourceChannel: Identifier,
+    timeoutHeight: Height,
+    timeoutTimestamp: uint64,
+    packetData: []byte
+): uint64 {
+    // in this specification, the source channel is the clientId
+    client = router.clients[packet.sourceChannel]
+    assert(client !== null)
 
     // disallow packets with a zero timeoutHeight and timeoutTimestamp
-    abortTransactionUnless(timeoutHeight !== 0 || timeoutTimestamp !== 0)
+    assert(timeoutHeight !== 0 || timeoutTimestamp !== 0)
 
     // check that the timeout height hasn't already passed in the local client tracking the receiving chain
-    latestClientHeight = provableStore.get(clientPath(connection.clientIdentifier)).latestClientHeight()
-    abortTransactionUnless(timeoutHeight === 0 || latestClientHeight < timeoutHeight)
+    latestClientHeight = client.latestClientHeight()
+    assert(timeoutHeight === 0 || latestClientHeight < timeoutHeight)
 
-    // increment the send sequence counter
-    sequence = provableStore.get(nextSequenceSendPath(sourcePort, sourceChannel))
-    provableStore.set(nextSequenceSendPath(sourcePort, sourceChannel), sequence+1)
-
+    // if the sequence doesn't already exist, this call initializes the sequence to 0
+    sequence = channelStore.get(nextSequenceSendPath(commitPort, sourceChannel))
+    
     // store commitment to the packet data & packet timeout
-    provableStore.set(
-      packetCommitmentPath(sourcePort, sourceChannel, sequence),
+    channelStore.set(
+      packetCommitmentPath(commitPort, sourceChannel, sequence),
       hash(hash(data), timeoutHeight, timeoutTimestamp)
     )
+
+    // increment the sequence. Thus there are monotonically increasing sequences for packet flow
+    // from sourcePort, sourceChannel pair
+    channelStore.set(nextSequenceSendPath(commitPort, sourceChannel), sequence+1)
 
     // log that a packet can be safely sent
     emitLogEntry("sendPacket", {
@@ -355,12 +355,12 @@ function sendPacket(
       timeoutTimestamp: timeoutTimestamp
     })
 
-    return sequence
 }
 ```
 
 #### Receiving packets
 
+TODO Adapt description 
 The `recvPacket` function is called by a module in order to receive an IBC packet sent on the corresponding channel end on the counterparty chain.
 
 Atomically in conjunction with calling `recvPacket`, calling modules MUST either execute application logic or queue the packet for future execution.
@@ -382,137 +382,47 @@ We pass the address of the `relayer` that signed and submitted the packet to ena
 ```typescript
 function recvPacket(
   packet: OpaquePacket,
-  proof: CommitmentProof | MultihopProof,
+  proof: CommitmentProof,
   proofHeight: Height,
   relayer: string): Packet {
+    // in this specification, the destination channel is the clientId
+    client = router.clients[packet.destChannel]
+    assert(client !== null)
 
-    channel = provableStore.get(channelPath(packet.destPort, packet.destChannel))
-    abortTransactionUnless(channel !== null)
-    abortTransactionUnless(channel.state === OPEN || (channel.state === FLUSHING) || (channel.state === FLUSHCOMPLETE))
-    counterpartyUpgrade = privateStore.get(counterpartyUpgradePath(packet.destPort, packet.destChannel))
-    // defensive check that ensures chain does not process a packet higher than the last packet sent before
-    // counterparty went into FLUSHING mode. If the counterparty is implemented correctly, this should never abort
-    abortTransactionUnless(counterpartyUpgrade.nextSequenceSend == 0 || packet.sequence < counterpartyUpgrade.nextSequenceSend)
-    abortTransactionUnless(authenticateCapability(channelCapabilityPath(packet.destPort, packet.destChannel), capability))
-    abortTransactionUnless(packet.sourcePort === channel.counterpartyPortIdentifier)
-    abortTransactionUnless(packet.sourceChannel === channel.counterpartyChannelIdentifier)
+    // assert source channel is destChannel's counterparty channel identifier
+    counterparty = getCounterparty(packet.destChannel)
+    assert(packet.sourceChannel == counterparty.channelId)
 
-    connection = provableStore.get(connectionPath(channel.connectionHops[0]))
-    abortTransactionUnless(connection !== null)
-    abortTransactionUnless(connection.state === OPEN)
+    // assert source port is destPort's counterparty port identifier
+    assert(packet.sourcePort == ports[packet.destPort])
 
-    if (len(channel.connectionHops) > 1) {
-      key = packetCommitmentPath(packet.GetSourcePort(), packet.GetSourceChannel(), packet.GetSequence())
-      abortTransactionUnless(connection.verifyMultihopMembership(
-        connection,
+    packetPath = packetCommitmentPath(packet.sourcePort, packet.sourceChannel, packet.sequence)
+    merklePath = applyPrefix(counterparty.keyPrefix, packetPath)
+    // DISCUSSION NEEDED: Should we have an in-protocol notion of Prefixing the path
+    // or should we make this a concern of the client's VerifyMembership
+    // proofPath = applyPrefix(client.counterpartyChannelStoreIdentifier, packetPath)
+    assert(client.verifyMembership(
         proofHeight,
+        0, 0, // zeroed out delay period
         proof,
-        channel.ConnectionHops,
-        key,
+        merklePath,
         hash(packet.data, packet.timeoutHeight, packet.timeoutTimestamp)
-      ))
-    } else {
-      abortTransactionUnless(connection.verifyPacketData(
-        proofHeight,
-        proof,
-        packet.sourcePort,
-        packet.sourceChannel,
-        packet.sequence,
-        hash(packet.data, packet.timeoutHeight, packet.timeoutTimestamp)
-      ))
-    }
+    ))
 
-    // do sequence check before any state changes
-    if channel.order == ORDERED || channel.order == ORDERED_ALLOW_TIMEOUT {
-        nextSequenceRecv = provableStore.get(nextSequenceRecvPath(packet.destPort, packet.destChannel))
-        if (packet.sequence < nextSequenceRecv) {
-          // event is emitted even if transaction is aborted
-          emitLogEntry("recvPacket", {
-            data: packet.data
-            timeoutHeight: packet.timeoutHeight,
-            timeoutTimestamp: packet.timeoutTimestamp,
-            sequence: packet.sequence,
-            sourcePort: packet.sourcePort,
-            sourceChannel: packet.sourceChannel,
-            destPort: packet.destPort,
-            destChannel: packet.destChannel,
-            order: channel.order,
-            connection: channel.connectionHops[0]
-          })
-        }
+    assert(packet.timeoutHeight === 0 || getConsensusHeight() < packet.timeoutHeight)
+    assert(packet.timeoutTimestamp === 0 || currentTimestamp() < packet.timeoutTimestamp)
 
-        abortTransactionUnless(packet.sequence === nextSequenceRecv)
-    }
+  
+    // we must set the receipt so it can be verified on the other side
+    // this receipt does not contain any data, since the packet has not yet been processed
+    // it's the sentinel success receipt: []byte{0x01}
+    packetReceipt = channelStore.get(packetReceiptPath(packet.destPort, packet.destChannel, packet.sequence))
+    assert(packetReceipt === null)
 
-    switch channel.order {
-      case ORDERED:
-      case UNORDERED:
-        abortTransactionUnless(packet.timeoutHeight === 0 || getConsensusHeight() < packet.timeoutHeight)
-        abortTransactionUnless(packet.timeoutTimestamp === 0 || currentTimestamp() < packet.timeoutTimestamp)
-        break;
-
-      case ORDERED_ALLOW_TIMEOUT:
-        // for ORDERED_ALLOW_TIMEOUT, we do not abort on timeout
-        // instead increment next sequence recv and write the sentinel timeout value in packet receipt
-        // then return
-        if (getConsensusHeight() >= packet.timeoutHeight && packet.timeoutHeight != 0) || (currentTimestamp() >= packet.timeoutTimestamp && packet.timeoutTimestamp != 0) {
-          nextSequenceRecv = nextSequenceRecv + 1
-          provableStore.set(nextSequenceRecvPath(packet.destPort, packet.destChannel), nextSequenceRecv)
-          provableStore.set(
-            packetReceiptPath(packet.destPort, packet.destChannel, packet.sequence),
-            TIMEOUT_RECEIPT
-          )
-        }
-        return;
-
-      default:
-        // unsupported channel type
-        abortTransactionUnless(false)
-    }
-
-    // REPLAY PROTECTION: in order to free storage, implementations may choose to 
-    // delete acknowledgements and packet receipts when a channel upgrade is successfully 
-    // completed. In that case, implementations must also make sure that any packet with 
-    // a sequence already used before the channel upgrade is rejected. This is needed to 
-    // prevent replay attacks (see this PR in ibc-go for an example of how this is achieved:
-    // https://github.com/cosmos/ibc-go/pull/5651).
-    
-    // all assertions passed (except sequence check), we can alter state
-
-    switch channel.order {
-      case ORDERED:
-      case ORDERED_ALLOW_TIMEOUT:
-        nextSequenceRecv = nextSequenceRecv + 1
-        provableStore.set(nextSequenceRecvPath(packet.destPort, packet.destChannel), nextSequenceRecv)
-        break;
-
-      case UNORDERED:
-        // for unordered channels we must set the receipt so it can be verified on the other side
-        // this receipt does not contain any data, since the packet has not yet been processed
-        // it's the sentinel success receipt: []byte{0x01}
-        packetReceipt = provableStore.get(packetReceiptPath(packet.destPort, packet.destChannel, packet.sequence))
-        if (packetReceipt != null) {
-          emitLogEntry("recvPacket", {
-            data: packet.data
-            timeoutHeight: packet.timeoutHeight,
-            timeoutTimestamp: packet.timeoutTimestamp,
-            sequence: packet.sequence,
-            sourcePort: packet.sourcePort,
-            sourceChannel: packet.sourceChannel,
-            destPort: packet.destPort,
-            destChannel: packet.destChannel,
-            order: channel.order,
-            connection: channel.connectionHops[0]
-          })
-        }
-
-        abortTransactionUnless(packetReceipt === null)
-        provableStore.set(
-          packetReceiptPath(packet.destPort, packet.destChannel, packet.sequence),
-          SUCCESSFUL_RECEIPT
-        )
-      break;
-    }
+    channelStore.set(
+        packetReceiptPath(packet.destPort, packet.destChannel, packet.sequence),
+        SUCCESSFUL_RECEIPT
+    )
 
     // log that a packet has been received
     emitLogEntry("recvPacket", {
@@ -528,12 +438,19 @@ function recvPacket(
       connection: channel.connectionHops[0]
     })
 
-    // return transparent packet
-    return packet
+    cbs = router.callbacks[packet.destPort]
+    // IMPORTANT: if the ack is error, then the callback reverts its internal state changes, but the entire tx continues
+    ack = cbs.OnRecvPacket(packet, relayer)
+    
+    if ack != nil {
+        channelStore.set(packetAcknowledgementPath(packet.destPort, packet.destChannel, packet.sequence), ack)
+    }
 }
 ```
 
 #### Writing acknowledgements
+
+TODO: Define multidata ack, adpat description
 
 The `writeAcknowledgement` function is called by a module in order to write data which resulted from processing an IBC packet that the sending chain can then verify, a sort of "execution receipt" or "RPC call response".
 
@@ -551,35 +468,6 @@ The IBC handler performs the following steps in order:
 - Checks that an acknowledgement for this packet has not yet been written
 - Sets the opaque acknowledgement value at a store path unique to the packet
 
-```typescript
-function writeAcknowledgement(
-  packet: Packet,
-  acknowledgement: bytes) {
-    // acknowledgement must not be empty
-    abortTransactionUnless(len(acknowledgement) !== 0)
-
-    // cannot already have written the acknowledgement
-    abortTransactionUnless(provableStore.get(packetAcknowledgementPath(packet.destPort, packet.destChannel, packet.sequence) === null))
-
-    // write the acknowledgement
-    provableStore.set(
-      packetAcknowledgementPath(packet.destPort, packet.destChannel, packet.sequence),
-      hash(acknowledgement)
-    )
-
-    // log that a packet has been acknowledged
-    emitLogEntry("writeAcknowledgement", {
-      sequence: packet.sequence,
-      timeoutHeight: packet.timeoutHeight,
-      port: packet.destPort,
-      channel: packet.destChannel,
-      timeoutTimestamp: packet.timeoutTimestamp,
-      data: packet.data,
-      acknowledgement
-    })
-}
-```
-
 #### Processing acknowledgements
 
 The `acknowledgePacket` function is called by a module to process the acknowledgement of a packet previously sent by
@@ -590,83 +478,44 @@ Calling modules MAY atomically execute appropriate application acknowledgement-h
 
 We pass the `relayer` address just as in [Receiving packets](#receiving-packets) to allow for possible incentivization here as well.
 
+
 ```typescript
 function acknowledgePacket(
-  packet: OpaquePacket,
-  acknowledgement: bytes,
-  proof: CommitmentProof | MultihopProof,
-  proofHeight: Height,
-  relayer: string): Packet {
+    packet: OpaquePacket,
+    acknowledgement: bytes,
+    proof: CommitmentProof,
+    proofHeight: Height,
+    relayer: string
+) {
+    // in this specification, the source channel is the clientId
+    client = router.clients[packet.sourceChannel]
+    assert(client !== null)
 
-    // abort transaction unless that channel is open, calling module owns the associated port, and the packet fields match
-    channel = provableStore.get(channelPath(packet.sourcePort, packet.sourceChannel))
-    abortTransactionUnless(channel !== null)
-    abortTransactionUnless(channel.state === OPEN || channel.state === FLUSHING)
-    abortTransactionUnless(authenticateCapability(channelCapabilityPath(packet.sourcePort, packet.sourceChannel), capability))
-    abortTransactionUnless(packet.destPort === channel.counterpartyPortIdentifier)
-    abortTransactionUnless(packet.destChannel === channel.counterpartyChannelIdentifier)
-
-    connection = provableStore.get(connectionPath(channel.connectionHops[0]))
-    abortTransactionUnless(connection !== null)
-    abortTransactionUnless(connection.state === OPEN)
+    // assert dest channel is sourceChannel's counterparty channel identifier
+    counterparty = getCounterparty(packet.destChannel)
+    assert(packet.sourceChannel == counterparty.channelId)
+   
+    // assert dest port is sourcePort's counterparty port identifier
+    assert(packet.destPort == ports[packet.sourcePort])
 
     // verify we sent the packet and haven't cleared it out yet
-    abortTransactionUnless(provableStore.get(packetCommitmentPath(packet.sourcePort, packet.sourceChannel, packet.sequence))
-           === hash(packet.data, packet.timeoutHeight, packet.timeoutTimestamp))
+    assert(provableStore.get(packetCommitmentPath(packet.sourcePort, packet.sourceChannel, packet.sequence))
+           === hash(hash(packet.data), packet.timeoutHeight, packet.timeoutTimestamp))
 
-    // abort transaction unless correct acknowledgement on counterparty chain
-    if (len(channel.connectionHops) > 1) {
-      key = packetAcknowledgementPath(packet.GetDestPort(), packet.GetDestChannel(), packet.GetSequence())
-      abortTransactionUnless(connection.verifyMultihopMembership(
-        connection,
+    ackPath = packetAcknowledgementPath(packet.destPort, packet.destChannel)
+    merklePath = applyPrefix(counterparty.keyPrefix, ackPath)
+    assert(client.verifyMembership(
         proofHeight,
+        0, 0,
         proof,
-        channel.ConnectionHops,
-        key,
-        acknowledgement
-      ))
-    } else {
-      abortTransactionUnless(connection.verifyPacketAcknowledgement(
-        proofHeight,
-        proof,
-        packet.destPort,
-        packet.destChannel,
-        packet.sequence,
-        acknowledgement
-      ))
-    }
+        merklePath,
+        hash(acknowledgement)
+    ))
 
-    // abort transaction unless acknowledgement is processed in order
-    if (channel.order === ORDERED || channel.order == ORDERED_ALLOW_TIMEOUT) {
-      nextSequenceAck = provableStore.get(nextSequenceAckPath(packet.sourcePort, packet.sourceChannel))
-      abortTransactionUnless(packet.sequence === nextSequenceAck)
-      nextSequenceAck = nextSequenceAck + 1
-      provableStore.set(nextSequenceAckPath(packet.sourcePort, packet.sourceChannel), nextSequenceAck)
-    }
+    cbs = router.callbacks[packet.sourcePort]
+    cbs.OnAcknowledgePacket(packet, acknowledgement, relayer)
 
-    // all assertions passed, we can alter state
-
-    // delete our commitment so we can't "acknowledge" again
-    provableStore.delete(packetCommitmentPath(packet.sourcePort, packet.sourceChannel, packet.sequence))
-
-    if channel.state == FLUSHING {
-      upgradeTimeout = privateStore.get(counterpartyUpgradeTimeout(portIdentifier, channelIdentifier))
-      if upgradeTimeout != nil {
-        // counterparty-specified timeout must not have exceeded
-        // if it has, then restore the channel and abort upgrade handshake
-        if (upgradeTimeout.timeoutHeight != 0 && currentHeight() >= upgradeTimeout.timeoutHeight) ||
-            (upgradeTimeout.timeoutTimestamp != 0 && currentTimestamp() >= upgradeTimeout.timeoutTimestamp ) {
-                restoreChannel(portIdentifier, channelIdentifier)
-        } else if pendingInflightPackets(portIdentifier, channelIdentifier) == nil {
-          // if this was the last in-flight packet, then move channel state to FLUSHCOMPLETE
-          channel.state = FLUSHCOMPLETE
-          publicStore.set(channelPath(portIdentifier, channelIdentifier), channel)
-        }
-      }
-    }
-
-    // return transparent packet
-    return packet
+    channelStore.delete(packetCommitmentPath(packet.sourcePort, packet.sourceChannel, packet.sequence))
 }
 ```
 
@@ -720,309 +569,49 @@ We pass the `relayer` address just as in [Receiving packets](#receiving-packets)
 
 ```typescript
 function timeoutPacket(
-  packet: OpaquePacket,
-  proof: CommitmentProof | MultihopProof,
-  proofHeight: Height,
-  nextSequenceRecv: Maybe<uint64>,
-  relayer: string): Packet {
+    packet: OpaquePacket,
+    proof: CommitmentProof,
+    proofHeight: Height,
+    relayer: string
+) {
+    // in this specification, the source channel is the clientId
+    client = router.clients[packet.sourceChannel]
+    assert(client !== null)
 
-    channel = provableStore.get(channelPath(packet.sourcePort, packet.sourceChannel))
-    abortTransactionUnless(channel !== null)
+    // assert dest channel is sourceChannel's counterparty channel identifier
+    counterparty = getCounterparty(packet.destChannel)
+    assert(packet.sourceChannel == counterparty.channelId)
+   
+    // assert dest port is sourcePort's counterparty port identifier
+    assert(packet.destPort == ports[packet.sourcePort])
 
-    abortTransactionUnless(authenticateCapability(channelCapabilityPath(packet.sourcePort, packet.sourceChannel), capability))
-    abortTransactionUnless(packet.destChannel === channel.counterpartyChannelIdentifier)
-
-    connection = provableStore.get(connectionPath(channel.connectionHops[0]))
-    abortTransactionUnless(connection !== null)
-
-    // note: the connection may have been closed
-    abortTransactionUnless(packet.destPort === channel.counterpartyPortIdentifier)
+    // verify we sent the packet and haven't cleared it out yet
+    assert(provableStore.get(packetCommitmentPath(packet.sourcePort, packet.sourceChannel, packet.sequence))
+           === hash(hash(packet.data), packet.timeoutHeight, packet.timeoutTimestamp))
 
     // get the timestamp from the final consensus state in the channel path
     var proofTimestamp
-    if (channel.connectionHops.length > 1) {
-      consensusState = abortTransactionUnless(Unmarshal(proof.ConsensusProofs[proof.ConsensusProofs.length-1].Value))
-      proofTimestamp = consensusState.GetTimestamp()
-    } else {
-      proofTimestamp, err = connection.getTimestampAtHeight(connection, proofHeight)
-    }
+    proofTimestamp = client.getTimestampAtHeight(proofHeight)
+    assert(err != nil)
 
     // check that timeout height or timeout timestamp has passed on the other end
-    abortTransactionUnless(
+    asert(
       (packet.timeoutHeight > 0 && proofHeight >= packet.timeoutHeight) ||
       (packet.timeoutTimestamp > 0 && proofTimestamp >= packet.timeoutTimestamp))
 
-    // verify we actually sent this packet, check the store
-    abortTransactionUnless(provableStore.get(packetCommitmentPath(packet.sourcePort, packet.sourceChannel, packet.sequence))
-           === hash(packet.data, packet.timeoutHeight, packet.timeoutTimestamp))
+    receiptPath = packetReceiptPath(packet.destPort, packet.destChannel, packet.sequence)
+    merklePath = applyPrefix(counterparty.keyPrefix, receiptPath)
+    assert(client.verifyNonMembership(
+        proofHeight
+        0, 0,
+        proof,
+        merklePath
+    ))
 
-    switch channel.order {
-      case ORDERED:
-        // ordered channel: check that packet has not been received
-        // only allow timeout on next sequence so all sequences before the timed out packet are processed (received/timed out)
-        // before this packet times out
-        abortTransactionUnless(packet.sequence == nextSequenceRecv)
-        // ordered channel: check that the recv sequence is as claimed
-        if (channel.connectionHops.length > 1) {
-          key = nextSequenceRecvPath(packet.srcPort, packet.srcChannel)
-          abortTransactionUnless(connection.verifyMultihopMembership(
-              connection,
-              proofHeight,
-              proof,
-              channel.ConnectionHops,
-              key,
-              nextSequenceRecv
-          ))
-        } else {
-            abortTransactionUnless(connection.verifyNextSequenceRecv(
-              proofHeight,
-              proof,
-              packet.destPort,
-              packet.destChannel,
-              nextSequenceRecv
-          ))
-        }
-        break;
+    cbs = router.callbacks[packet.sourcePort]
+    cbs.OnTimeoutPacket(packet, relayer)
 
-      case UNORDERED:
-        if (channel.connectionHops.length > 1) {
-          key = packetReceiptPath(packet.srcPort, packet.srcChannel, packet.sequence)
-          abortTransactionUnless(connection.verifyMultihopNonMembership(
-            connection,
-            proofHeight,
-            proof,
-            channel.ConnectionHops,
-            key
-          ))
-        } else {
-          // unordered channel: verify absence of receipt at packet index
-          abortTransactionUnless(connection.verifyPacketReceiptAbsence(
-            proofHeight,
-            proof,
-            packet.destPort,
-            packet.destChannel,
-            packet.sequence
-          ))
-        }
-        break;
-
-      // NOTE: For ORDERED_ALLOW_TIMEOUT, the relayer must first attempt the receive on the destination chain
-      // before the timeout receipt can be written and subsequently proven on the sender chain in timeoutPacket
-      case ORDERED_ALLOW_TIMEOUT:
-        abortTransactionUnless(packet.sequence == nextSequenceRecv - 1)
-
-        if (channel.connectionHops.length > 1) {
-          abortTransactionUnless(connection.verifyMultihopMembership(
-              connection,
-              proofHeight,
-              proof,
-              channel.ConnectionHops,
-              packetReceiptPath(packet.destPort, packet.destChannel, packet.sequence),
-              TIMEOUT_RECEIPT
-          ))
-        } else {
-          abortTransactionUnless(connection.verifyPacketReceipt(
-            proofHeight,
-            proof,
-            packet.destPort,
-            packet.destChannel,
-            packet.sequence
-            TIMEOUT_RECEIPT,
-          ))
-        }
-        break;
-
-      default:
-        // unsupported channel type
-        abortTransactionUnless(true)
-    }
-
-    // all assertions passed, we can alter state
-
-    // delete our commitment
-    provableStore.delete(packetCommitmentPath(packet.sourcePort, packet.sourceChannel, packet.sequence))
-
-    if channel.state == FLUSHING {
-      upgradeTimeout = privateStore.get(counterpartyUpgradeTimeout(portIdentifier, channelIdentifier))
-      if upgradeTimeout != nil {
-        // counterparty-specified timeout must not have exceeded
-        // if it has, then restore the channel and abort upgrade handshake
-        if (upgradeTimeout.timeoutHeight != 0 && currentHeight() >= upgradeTimeout.timeoutHeight) ||
-            (upgradeTimeout.timeoutTimestamp != 0 && currentTimestamp() >= upgradeTimeout.timeoutTimestamp ) {
-                restoreChannel(portIdentifier, channelIdentifier)
-        } else if pendingInflightPackets(portIdentifier, channelIdentifier) == nil {
-          // if this was the last in-flight packet, then move channel state to FLUSHCOMPLETE
-          channel.state = FLUSHCOMPLETE
-          publicStore.set(channelPath(portIdentifier, channelIdentifier), channel)
-        }
-      }
-    }
-
-    // only close on strictly ORDERED channels
-    if channel.order === ORDERED {
-      // if the channel is ORDERED and a packet is timed out in FLUSHING state then
-      // all upgrade information is deleted and the channel is set to CLOSED.
-
-      if channel.State == FLUSHING {
-        // delete auxiliary upgrade state
-        provableStore.delete(channelUpgradePath(portIdentifier, channelIdentifier))
-        privateStore.delete(counterpartyUpgradePath(portIdentifier, channelIdentifier))
-      }
-
-      // ordered channel: close the channel
-      channel.state = CLOSED
-      provableStore.set(channelPath(packet.sourcePort, packet.sourceChannel), channel)
-    }
-    // on ORDERED_ALLOW_TIMEOUT, increment NextSequenceAck so that next packet can be acknowledged after this packet timed out.
-    if channel.order === ORDERED_ALLOW_TIMEOUT {
-      nextSequenceAck = nextSequenceAck + 1
-      provableStore.set(nextSequenceAckPath(packet.srcPort, packet.srcChannel), nextSequenceAck)
-    }
-
-    // return transparent packet
-    return packet
-}
-```
-
-##### Timing-out on close
-
-The `timeoutOnClose` function is called by a module in order to prove that the channel
-to which an unreceived packet was addressed has been closed, so the packet will never be received
-(even if the `timeoutHeight` or `timeoutTimestamp` has not yet been reached).
-
-Calling modules MAY atomically execute appropriate application timeout-handling logic in conjunction with calling `timeoutOnClose`.
-
-We pass the `relayer` address just as in [Receiving packets](#receiving-packets) to allow for possible incentivization here as well.
-
-```typescript
-function timeoutOnClose(
-  packet: Packet,
-  proof: CommitmentProof | MultihopProof,
-  proofClosed: CommitmentProof | MultihopProof,
-  proofHeight: Height,
-  nextSequenceRecv: Maybe<uint64>,
-  relayer: string): Packet {
-
-    channel = provableStore.get(channelPath(packet.sourcePort, packet.sourceChannel))
-    // note: the channel may have been closed
-    abortTransactionUnless(authenticateCapability(channelCapabilityPath(packet.sourcePort, packet.sourceChannel), capability))
-    abortTransactionUnless(packet.destChannel === channel.counterpartyChannelIdentifier)
-
-    connection = provableStore.get(connectionPath(channel.connectionHops[0]))
-    // note: the connection may have been closed
-    abortTransactionUnless(packet.destPort === channel.counterpartyPortIdentifier)
-
-    // verify we actually sent this packet, check the store
-    abortTransactionUnless(provableStore.get(packetCommitmentPath(packet.sourcePort, packet.sourceChannel, packet.sequence))
-           === hash(packet.data, packet.timeoutHeight, packet.timeoutTimestamp))
-
-    // return hops from counterparty's view
-    counterpartyHops = getCounterpartyHops(proof, connection)
-
-    // check that the opposing channel end has closed
-    expected = ChannelEnd{CLOSED, channel.order, channel.portIdentifier,
-                          channel.channelIdentifier, counterpartyHops, channel.version}
-
-    // verify channel is closed
-    if (channel.connectionHops.length > 1) {
-      key = channelPath(counterparty.PortId, counterparty.ChannelId)
-      abortTransactionUnless(connection.VerifyMultihopMembership(
-        connection,
-        proofHeight,
-        proofClosed,
-        channel.ConnectionHops,
-        key,
-        expected
-      ))
-    } else {
-      abortTransactionUnless(connection.verifyChannelState(
-        proofHeight,
-        proofClosed,
-        channel.counterpartyPortIdentifier,
-        channel.counterpartyChannelIdentifier,
-        expected
-      ))
-    }
-
-    switch channel.order {
-      case ORDERED:
-        // ordered channel: check that packet has not been received
-        abortTransactionUnless(packet.sequence >= nextSequenceRecv)
-
-        // ordered channel: check that the recv sequence is as claimed
-        if (channel.connectionHops.length > 1) {
-          key = nextSequenceRecvPath(packet.destPort, packet.destChannel)
-          abortTransactionUnless(connection.verifyMultihopMembership(
-            connection,
-            proofHeight,
-            proof,
-            channel.ConnectionHops,
-            key,
-            nextSequenceRecv
-          ))
-        } else {
-          abortTransactionUnless(connection.verifyNextSequenceRecv(
-            proofHeight,
-            proof,
-            packet.destPort,
-            packet.destChannel,
-            nextSequenceRecv
-          ))
-        }
-        break;
-
-      case UNORDERED:
-        // unordered channel: verify absence of receipt at packet index
-        if (channel.connectionHops.length > 1) {
-          abortTransactionUnless(connection.verifyMultihopNonMembership(
-            connection,
-            proofHeight,
-            proof,
-            channel.ConnectionHops,
-            key
-          ))
-        } else {
-          abortTransactionUnless(connection.verifyPacketReceiptAbsence(
-            proofHeight,
-            proof,
-            packet.destPort,
-            packet.destChannel,
-            packet.sequence
-          ))
-        }
-        break;
-
-      case ORDERED_ALLOW_TIMEOUT:
-        // if packet.sequence >= nextSequenceRecv, then the relayer has not attempted
-        // to receive the packet on the destination chain (e.g. because the channel is already closed).
-        // In this situation it is not needed to verify the presence of a timeout receipt.
-        // Otherwise, if packet.sequence < nextSequenceRecv, then the relayer has attempted
-        // to receive the packet on the destination chain, and nextSequenceRecv has been incremented.
-        // In this situation, verify the presence of timeout receipt. 
-        if packet.sequence < nextSequenceRecv {
-          abortTransactionUnless(connection.verifyPacketReceipt(
-            proofHeight,
-            proof,
-            packet.destPort,
-            packet.destChannel,
-            packet.sequence
-            TIMEOUT_RECEIPT,
-          ))
-        }
-        break;
-
-      default:
-        // unsupported channel type
-        abortTransactionUnless(true)
-    }
-
-    // all assertions passed, we can alter state
-
-    // delete our commitment
-    provableStore.delete(packetCommitmentPath(packet.sourcePort, packet.sourceChannel, packet.sequence))
-
-    // return transparent packet
-    return packet
+    channelStore.delete(packetCommitmentPath(packet.sourcePort, packet.sourceChannel, packet.sequence))
 }
 ```
 
@@ -1031,10 +620,6 @@ function timeoutOnClose(
 Packets must be acknowledged in order to be cleaned-up.
 
 #### Reasoning about race conditions
-
-##### Simultaneous handshake attempts
-
-If two machines simultaneously initiate channel opening handshakes with each other, attempting to use the same identifiers, both will fail and new identifiers must be used.
 
 ##### Identifier allocation
 
@@ -1048,9 +633,9 @@ There is no race condition between a packet timeout and packet confirmation, as 
 
 Verification of cross-chain state prevents man-in-the-middle attacks for both connection handshakes & channel handshakes since all information (source, destination client, channel, etc.) is known by the module which starts the handshake and confirmed prior to handshake completion.
 
-##### Connection / channel closure with in-flight packets
+##### Clients unreachability with in-flight packets
 
-If a connection or channel is closed while packets are in-flight, the packets can no longer be received on the destination chain and can be timed-out on the source chain.
+If a client has been frozen while packets are in-flight, the packets can no longer be received on the destination chain and can be timed-out on the source chain.
 
 #### Querying channels
 
