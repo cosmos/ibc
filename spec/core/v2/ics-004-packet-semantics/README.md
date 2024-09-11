@@ -13,35 +13,27 @@ modified: 2019-08-25
 
 ## Synopsis
 
-The ICS-04 defines the packet data strcuture, the packet-flow semantics and the mechanisms to route packets to their specific IBC applications. 
+The ICS-04 defines the mechanism to bidirectionally set up clients for each pair of communicating chains with specific Identifiers to establish the ground truth for the secure packet delivery, the packet data strcuture including the multi-data packet, the packet-flow semantics, the mechanisms to route the verification to the underlying clients, and how to route packets to their specific IBC applications. 
 
 ### Motivation
 
-The interblockchain communication protocol uses a cross-chain message passing model. IBC *packets* are relayed from one blockchain to the other by external relayer processes. Chain `A` and chain `B` confirm new blocks independently, and packets from one chain to the other may be delayed, censored, or re-ordered arbitrarily. Packets are visible to relayers and can be read from a blockchain by any relayer process and submitted to any other blockchain.
+The interblockchain communication protocol uses a cross-chain message passing model. IBC *packets* are relayed from one blockchain to the other by external relayer processes. Chain `A` and chain `B` confirm new blocks independently, and packets from one chain to the other may be delayed, censored, or re-ordered arbitrarily. Packets are visible to relayers and can be read from a blockchain by any relayer process and submitted to any other blockchain. 
 
 > **Example**: An application may wish to allow a single tokenized asset to be transferred between and held on multiple blockchains while preserving fungibility and conservation of supply. The application can mint asset vouchers on chain `B` when a particular IBC packet is committed to chain `B`, and require outgoing sends of that packet on chain `A` to escrow an equal amount of the asset on chain `A` until the vouchers are later redeemed back to chain `A` with an IBC packet in the reverse direction. This ordering guarantee along with correct application logic can ensure that total supply is preserved across both chains and that any vouchers minted on chain `B` can later be redeemed back to chain `A`.
+
+The IBC version 2 will provide packet delivery between two chains communicating and identifying each other by on-chain light clients as specified in ICS-02.
 
 ### Definitions
 
 `ConsensusState` is as defined in [ICS 2](../ics-002-client-semantics).
-
+// NOTE what about Port and Capabilities? 
 `Port` and `authenticateCapability` are as defined in [ICS 5](../ics-005-port-allocation).
 
 `hash` is a generic collision-resistant hash function, the specifics of which must be agreed on by the modules utilising the channel. `hash` can be defined differently by different chains.
 
 `Identifier`, `get`, `set`, `delete`, `getCurrentHeight`, and module-system related primitives are as defined in [ICS 24](../ics-024-host-requirements).
 
-- The `state` is the current state of the channel end.
-- NOTE - do we need to keep this as only `unordered` for some compatibility reasons? Otherwise being only underored we can delete this, no? - The `ordering` field indicates whether the channel is `unordered`, `ordered`, or `ordered_allow_timeout`.
-NOTE - do we need to keep these two? 
-- The `counterpartyPortIdentifier` identifies the port on the counterparty chain which owns the other end of the channel.
-- The `counterpartyClientIdentifier` identifies the client end on the counterparty chain.
-- The `nextSequenceSend`, stored separately, tracks the sequence number for the next packet to be sent.
-- The `nextSequenceRecv`, stored separately, tracks the sequence number for the next packet to be received.
-- The `nextSequenceAck`, stored separately, tracks the sequence number for the next packet to be acknowledged.
-- The `version` string stores an opaque channel version, which is agreed upon during the handshake. This can determine module-level configuration such as which packet encoding is used for the channel. This version is not used by the core IBC protocol. If the version string contains structured metadata for the application to parse and interpret, then it is considered best practice to encode all metadata in a JSON struct and include the marshalled string in the version field.
-
-`Counterparty` is the data structure responsible for maintaining the counterparty information.
+`Counterparty` is the data structure responsible for maintaining the counterparty information necessary to establish the ground truth for securing the interchain communication.
 
 ```typescript
 interface Counterparty {
@@ -50,7 +42,15 @@ interface Counterparty {
 }
 ```
 
-NOTE - Do we want to keep an upgrade spec to specify how to change the client and so on? See the [upgrade spec](../../ics-004-channel-and-packet-semantics/UPGRADES.md) for details on `upgradeSequence`.
+- The `nextSequenceSend`, stored separately, tracks the sequence number for the next packet to be sent.
+- The `nextSequenceRecv`, stored separately, tracks the sequence number for the next packet to be received.
+- The `nextSequenceAck`, stored separately, tracks the sequence number for the next packet to be acknowledged.
+// Note do we need to keep the version in the end? Should this be just the protocol version?
+- The `version` string stores an opaque channel version, which is agreed upon during the handshake. This can determine module-level configuration such as which packet encoding is used for the channel. This version is not used by the core IBC protocol. If the version string contains structured metadata for the application to parse and interpret, then it is considered best practice to encode all metadata in a JSON struct and include the marshalled string in the version field.
+
+// NOTE - Do we want to keep an upgrade spec to specify how to change the client and so on? Probably unnecessary, just showing here how to do that would be enough. 
+
+See the [upgrade spec](../../ics-004-channel-and-packet-semantics/UPGRADES.md) for details on `upgradeSequence`.
 
 A `Packet`, in the interblockchain communication protocol, is a particular interface defined as follows:
 
@@ -59,24 +59,36 @@ interface Packet {
   sequence: uint64
   timeoutHeight: Height
   timeoutTimestamp: uint64
-  sourcePort: Identifier // identifier of the application on sender
-  sourceChannel: Identifier // identifier of the client of destination on sender chain
-  destPort: Identifier // identifier of the application on destination
-  destChannel: Identifier // identifier of the client of sender on the destination chain
-  data: [] bytes
+  sourceID: Identifier // identifier of the source chain clientID 
+  destID: Identifier // identifier of the sender chain clientID on the destination chain
+  packetData: [] PacketData
 }
 ```
-
-IBC version 2 will provide packet delivery between two chains communicating and identifying each other by on-chain light clients as specified in ICS-02. The channelID derived from the clientIDs will tell the IBC router which chain to send the packets to and which chain a received packet came from, while the portID specifies which application on the router the packet should be sent to.
 
 - The `sequence` number corresponds to the order of sends and receives, where a packet with an earlier sequence number must be sent and received before a packet with a later sequence number.
 - The `timeoutHeight` indicates a consensus height on the destination chain after which the packet will no longer be processed, and will instead count as having timed-out.
 - The `timeoutTimestamp` indicates a timestamp on the destination chain after which the packet will no longer be processed, and will instead count as having timed-out.
-- The `sourcePort` identifies the port on the sending chain.
-- The `sourceChannel` identifies the channel end on the sending chain.
-- The `destPort` identifies the port on the receiving chain.
-- The `destChannel` identifies the channel end on the receiving chain.
-- The `data` is an opaque array of data values which can be defined by the application logic of the associated modules. When multiple values are passed-in the system will handle the packet as a multi-data packet. 
+- The `sourceID` derived from the `clientIDs` will tell the IBC router which chain a received packet came from.
+- The `destID` derived from the `clientIDs` will tell the IBC router which chain to send the packets to. 
+
+The `PacketData` is a particular interface defined as follows:
+
+```typescript
+interface PacketData {
+  sourcePort: Identifier // identifier of the source chain application 
+  destPort: Identifier // identifier of the destination chain application
+  version: string // Maybe not necessary 
+  encoding: string 
+  payload: bytes
+}
+```
+
+- The `sourcePort` identify the source application 
+- The `destPort` derived from the `clientIDs` will tell the IBC router which chain to send the packets to. 
+- The `encoding` to allow the specification of custom data encoding 
+- The `payload` that can be defined by the application logic of the associated modules. 
+
+When the array of packetData, passed-in the packet, is populated with multiple values, the system will handle the packet as a multi-data packet. 
 
 Note that a `Packet` is never directly serialised. Rather it is an intermediary structure used in certain function calls that may need to be created or processed by modules calling the IBC handler.
 
@@ -100,7 +112,8 @@ enum PacketReceipt {
 #### Efficiency
 
 - The speed of packet transmission and confirmation should be limited only by the speed of the underlying chains.
-  Proofs should be batchable where possible.
+- Proofs should be batchable where possible.
+- The system must be able to process the multiple packetData contained in a single IBC packet, to reduce the amount of packet flows. 
 
 #### Exactly-once delivery
 
@@ -113,6 +126,8 @@ enum PacketReceipt {
 - IBC version 2 supports only *unordered* communications, thus, packets may be sent and received in any order. Unordered packets, have individual timeouts specified in terms of the destination chain's height.
 
 #### Permissioning
+
+// NOTE - here what about capabilities and permissions? 
 
 - Channels should be permissioned to one module on each end, determined during the handshake and immutable afterwards (higher-level logic could tokenize channel ownership by tokenising ownership of the port).
   Only the module associated with a channel end should be able to send or receive on it.
@@ -130,6 +145,8 @@ The architecture of clients, connections, channels and packets:
 #### Store paths
 
 Channel structures are stored under a store path prefix unique to a combination of a port identifier and channel identifier:
+
+// NOTE Channel paths and capabilities should be maintained? 
 
 ```typescript
 function channelPath(portIdentifier: Identifier, channelIdentifier: Identifier): Path {
@@ -188,15 +205,6 @@ function packetAcknowledgementPath(portIdentifier: Identifier, channelIdentifier
 }
 ```
 
-### Versioning
-
-During the handshake process, two ends of a channel come to agreement on a version bytestring associated
-with that channel. The contents of this version bytestring are and will remain opaque to the IBC core protocol.
-Host state machines MAY utilise the version data to indicate supported IBC/APP protocols, agree on packet
-encoding formats, or negotiate other channel-related metadata related to custom logic on top of IBC.
-
-Host state machines MAY also safely ignore the version data or specify an empty string.
-
 ### Sub-protocols
 
 > Note: If the host state machine is utilising object capability authentication (see [ICS 005](../ics-005-port-allocation)), all functions utilising ports take an additional capability parameter.
@@ -236,47 +244,24 @@ function getCounterparty(channelIdentifier: Identifier): Counterparty {
 }
 ```
 
-#### Identifier validation
+Thus, once two chains have set up clients for each other with specific Identifiers, they can send IBC packets using the packet interface defined before.
 
-Channels are stored under a unique `(portIdentifier, channelIdentifier)` prefix.
-The validation function `validatePortIdentifier` MAY be provided.
+Since the packets are addressed **directly** with the underlying light clients, there are **no** more handshakes necessary. Instead the packet sender must be capable of providing the correct <client, client> pair.
 
-```typescript
-type validateChannelIdentifier = (portIdentifier: Identifier, channelIdentifier: Identifier) => boolean
-```
+Sending a packet with the wrong source client is equivalent to sending a packet with the wrong source channel. Sending a packet on a channel with the wrong provided counterparty is a new source of errors, however this is added to the burden of out-of-band social consensus.
 
-If not provided, the default `validateChannelIdentifier` function will always return `true`.
+If the client and counterparty identifiers are setup correctly, then the correctness and soundness properties of IBC holds. IBC packet flow is guaranteed to succeed. If a user sends a packet with the wrong destination channel, then as we will see it will be impossible for the intended destination to correctly verify the packet thus, the packet will simply time out.
 
-When the opening handshake is complete, the module which initiates the handshake will own the end of the created channel on the host ledger, and the counterparty module which
-it specifies will own the other end of the created channel on the counterparty chain. Once a channel is created, ownership cannot be changed (although higher-level abstractions
-could be implemented to provide this).
+#### Registering IBC applications on the router
 
-Chains MUST implement a function `generateIdentifier` which chooses an identifier, e.g. by incrementing a counter:
+The IBC router contains a mapping from a reserved application port and the supported versions of that application as well as a mapping from channelIdentifiers to channels.
 
 ```typescript
-type generateIdentifier = () -> Identifier
-```
-
-##### Multihop utility functions
-
-MMM,
- 
-```typescript
-// Return the counterparty connectionHops
-function getCounterPartyHops(proof: CommitmentProof | MultihopProof, lastConnection: ConnectionEnd) string[] {
-
-  let counterpartyHops: string[] = [lastConnection.counterpartyConnectionIdentifier]
-  if typeof(proof) === 'MultihopProof' {
-    for connData in proofs.ConnectionProofs {
-      connectionEnd = abortTransactionUnless(Unmarshal(connData.Value))
-      counterpartyHops.push(connectionEnd.GetCounterparty().GetConnectionID())
-    }
-
-    // reverse the hops so they are ordered from sender --> receiver
-    counterpartyHops = counterpartyHops.reverse()
-  }
-
-  return counterpartyHops
+type IBCRouter struct {
+    versions: portID -> [Version]
+    callbacks: portID -> [Callback]
+    clients: clientId -> Client
+    ports: portID -> counterpartyPortID
 }
 ```
 
@@ -1117,3 +1102,52 @@ Mar 28, 2023 - Add `writeChannel` function to write channel end after executing 
 ## Copyright
 
 All content herein is licensed under [Apache 2.0](https://www.apache.org/licenses/LICENSE-2.0).
+
+
+/* NOTE What to do with this? 
+
+#### Identifier validation
+
+Channels are stored under a unique `(portIdentifier, channelIdentifier)` prefix.
+The validation function `validatePortIdentifier` MAY be provided.
+
+```typescript
+type validateChannelIdentifier = (portIdentifier: Identifier, channelIdentifier: Identifier) => boolean
+```
+
+If not provided, the default `validateChannelIdentifier` function will always return `true`.
+
+When the opening handshake is complete, the module which initiates the handshake will own the end of the created channel on the host ledger, and the counterparty module which
+it specifies will own the other end of the created channel on the counterparty chain. Once a channel is created, ownership cannot be changed (although higher-level abstractions
+could be implemented to provide this).
+
+Chains MUST implement a function `generateIdentifier` which chooses an identifier, e.g. by incrementing a counter:
+
+```typescript
+type generateIdentifier = () -> Identifier
+```
+
+##### Multihop utility functions
+
+MMM,
+ 
+```typescript
+// Return the counterparty connectionHops
+function getCounterPartyHops(proof: CommitmentProof | MultihopProof, lastConnection: ConnectionEnd) string[] {
+
+  let counterpartyHops: string[] = [lastConnection.counterpartyConnectionIdentifier]
+  if typeof(proof) === 'MultihopProof' {
+    for connData in proofs.ConnectionProofs {
+      connectionEnd = abortTransactionUnless(Unmarshal(connData.Value))
+      counterpartyHops.push(connectionEnd.GetCounterparty().GetConnectionID())
+    }
+
+    // reverse the hops so they are ordered from sender --> receiver
+    counterpartyHops = counterpartyHops.reverse()
+  }
+
+  return counterpartyHops
+}
+```
+
+*/
