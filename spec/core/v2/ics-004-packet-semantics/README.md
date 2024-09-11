@@ -13,7 +13,7 @@ modified: 2019-08-25
 
 ## Synopsis
 
-IBC version 2 will simply provide packet delivery between two chains communicating and identifying each other by on-chain light clients as specified in ICS-02 with application packet data being routed to their specific IBC applications with packet-flow semantics as defined in this ICS-04. The clientIDs will tell the IBC router which chain to send the packets to and which chain a received packet came from, while the portID specifies which application on the router the packet should be sent to.
+The ICS-04 defines the packet data strcuture, the packet-flow semantics and the mechanisms to route packets to their specific IBC applications. 
 
 ### Motivation
 
@@ -32,7 +32,7 @@ The interblockchain communication protocol uses a cross-chain message passing mo
 `Identifier`, `get`, `set`, `delete`, `getCurrentHeight`, and module-system related primitives are as defined in [ICS 24](../ics-024-host-requirements).
 
 - The `state` is the current state of the channel end.
-- NOTE - do we need to keep this as only `unordered`? - The `ordering` field indicates whether the channel is `unordered`, `ordered`, or `ordered_allow_timeout`.
+- NOTE - do we need to keep this as only `unordered` for some compatibility reasons? Otherwise being only underored we can delete this, no? - The `ordering` field indicates whether the channel is `unordered`, `ordered`, or `ordered_allow_timeout`.
 NOTE - do we need to keep these two? 
 - The `counterpartyPortIdentifier` identifies the port on the counterparty chain which owns the other end of the channel.
 - The `counterpartyClientIdentifier` identifies the client end on the counterparty chain.
@@ -59,13 +59,15 @@ interface Packet {
   sequence: uint64
   timeoutHeight: Height
   timeoutTimestamp: uint64
-  sourcePort: Identifier
-  sourceChannel: Identifier
-  destPort: Identifier
-  destChannel: Identifier
-  data: bytes
+  sourcePort: Identifier // identifier of the application on sender
+  sourceChannel: Identifier // identifier of the client of destination on sender chain
+  destPort: Identifier // identifier of the application on destination
+  destChannel: Identifier // identifier of the client of sender on the destination chain
+  data: [] bytes
 }
 ```
+
+IBC version 2 will provide packet delivery between two chains communicating and identifying each other by on-chain light clients as specified in ICS-02. The channelID derived from the clientIDs will tell the IBC router which chain to send the packets to and which chain a received packet came from, while the portID specifies which application on the router the packet should be sent to.
 
 - The `sequence` number corresponds to the order of sends and receives, where a packet with an earlier sequence number must be sent and received before a packet with a later sequence number.
 - The `timeoutHeight` indicates a consensus height on the destination chain after which the packet will no longer be processed, and will instead count as having timed-out.
@@ -74,7 +76,7 @@ interface Packet {
 - The `sourceChannel` identifies the channel end on the sending chain.
 - The `destPort` identifies the port on the receiving chain.
 - The `destChannel` identifies the channel end on the receiving chain.
-- The `data` is an opaque value which can be defined by the application logic of the associated modules.
+- The `data` is an opaque array of data values which can be defined by the application logic of the associated modules. When multiple values are passed-in the system will handle the packet as a multi-data packet. 
 
 Note that a `Packet` is never directly serialised. Rather it is an intermediary structure used in certain function calls that may need to be created or processed by modules calling the IBC handler.
 
@@ -84,7 +86,7 @@ An `OpaquePacket` is a packet, but cloaked in an obscuring data type by the host
 type OpaquePacket = object
 ```
 
-In order to enable new channel types (e.g. ORDERED_ALLOW_TIMEOUT), the protocol introduces standardized packet receipts that will serve as sentinel values for the receiving chain to explicitly write to its store the outcome of a `recvPacket`.
+The protocol introduces standardized packet receipts that will serve as sentinel values for the receiving chain to explicitly write to its store the outcome of a `recvPacket`.
 
 ```typescript
 enum PacketReceipt {
@@ -108,9 +110,7 @@ enum PacketReceipt {
 
 #### Ordering
 
-- On *ordered* channels, packets should be sent and received in the same order: if packet *x* is sent before packet *y* by a channel end on chain `A`, packet *x* must be received before packet *y* by the corresponding channel end on chain `B`. If packet *x* is sent before packet *y* by a channel and packet *x* is timed out; then packet *y* and any packet sent after *x* cannot be received.
-- On *ordered_allow_timeout* channels, packets should be sent and received in the same order: if packet *x* is sent before packet *y* by a channel end on chain `A`, packet *x* must be received **or** timed out before packet *y* by the corresponding channel end on chain `B`.
-- On *unordered* channels, packets may be sent and received in any order. Unordered packets, like ordered packets, have individual timeouts specified in terms of the destination chain's height.
+- IBC version 2 supports only *unordered* communications, thus, packets may be sent and received in any order. Unordered packets, have individual timeouts specified in terms of the destination chain's height.
 
 #### Permissioning
 
