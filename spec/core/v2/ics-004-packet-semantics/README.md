@@ -339,20 +339,24 @@ function sendPacket(
     // NOTE - What is the commit port? Should be the sourcePort? If yes, in the packet we should put destPort and destID?
     // if the sequence doesn't already exist, this call initializes the sequence to 0
     //sequence = channelStore.get(nextSequenceSendPath(commitPort, sourceID))
-    sequence = channelStore.get(nextSequenceSendPath(commitPort, sourceID))
+    sequence = channelStore.get(nextSequenceSendPath(sourceID, destID))
     
     // store commitment to the packet data & packet timeout
     channelStore.set(
-      packetCommitmentPath(sourceID, sequence),
+      packetCommitmentPath(sourceID, destID, sequence),
       hash(hash(data), timeoutHeight, timeoutTimestamp)
     )
 
     // increment the sequence. Thus there are monotonically increasing sequences for packet flow
     // from sourcePort, sourceChannel pair
-    channelStore.set(nextSequenceSendPath(commitPort, sourceID), sequence+1)
+    channelStore.set(nextSequenceSendPath(sourceID, destID), sequence+1)
 
     // log that a packet can be safely sent
+    // introducing sourceID and destID can be useful for monitoring - e.g. if one wants to monitor all packets between sourceID and destID emitting this in the event would simplify his life. 
+
     emitLogEntry("sendPacket", {
+      sourceID: Identifier, 
+      destID: Identifier, 
       sequence: sequence,
       data: data,
       timeoutHeight: timeoutHeight,
@@ -364,7 +368,6 @@ function sendPacket(
 
 #### Receiving packets
 
-TODO Adapt description 
 The `recvPacket` function is called by a module in order to receive an IBC packet sent on the corresponding client on the counterparty chain.
 
 Atomically in conjunction with calling `recvPacket`, calling modules MUST either execute application logic or queue the packet for future execution.
