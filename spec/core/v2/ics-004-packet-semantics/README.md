@@ -144,9 +144,16 @@ The architecture of clients, connections, channels and packets:
 
 #### Store paths
 
-Channel structures are stored under a store path prefix unique to a combination of a port identifier and channel identifier:
+// Unnecessary? 
+
+```typescript
+function counterpartyPath(sourceClientID: Identifier, destClientID: Identifier, keyPrefix: CommitmentPrefix): Path {
+    return "counterparty/client/{sourceClientID}/client/{destClientID}/CommitmentPrefix/{keyPrefix}"
+}
+```
 
 /* NOTE Channel paths and capabilities should be maintained for backward compatibility? 
+Channel structures are stored under a store path prefix unique to a combination of a port identifier and channel identifier:
 
 ```typescript
 function channelPath(portIdentifier: Identifier, channelIdentifier: Identifier): Path {
@@ -223,19 +230,19 @@ Thus, IBC version 2 introduces a new message `RegisterCounterparty` that will as
 
 ```typescript
 function RegisterCounterparty(
-    channelIdentifier: Identifier, // this will be our own client identifier representing our channel to desired chain
-    counterpartyChannelIdentifier: Identifier, // this is the counterparty's identifier of our chain
+    clientID: Identifier, // this will be our own client identifier representing our channel to desired chain
+    counterpartyClientID: Identifier, // this is the counterparty's identifier of our chain
     counterpartyKeyPrefix: CommitmentPrefix,
     authentication: data, // implementation-specific authentication data
 ) {
     assert(verify(authentication))
 
     counterparty = Counterparty{
-        channelId: counterpartyChannelIdentifier,
+        channelId: counterpartyClientID,
         keyPrefix: counterpartyKeyPrefix
     }
 
-    privateStore.set(counterpartyPath(channelIdentifier), counterparty)
+    privateStore.set(counterpartyPath(clientID), counterparty)
 }
 ```
 
@@ -245,8 +252,8 @@ A simpler but weaker authentication would simply be to check that the `RegisterC
 ```typescript
 // getCounterparty retrieves the stored counterparty identifier
 // given the channelIdentifier on our chain once it is provided
-function getCounterparty(channelIdentifier: Identifier): Counterparty {
-    return privateStore.get(counterpartyPath(channelIdentifier))
+function getCounterparty(clientID: Identifier): Counterparty {
+    return privateStore.get(counterpartyPath(clientID))
 }
 ```
 
@@ -320,14 +327,14 @@ Note that the full packet is not stored in the state of the chain - merely a sho
 
 ```typescript
 function sendPacket(
-    sourceID: Identifier,
-    destID: Identifier,
+    sourceClientID: Identifier,
+    destClientID: Identifier,
     timeoutHeight: Height,
     timeoutTimestamp: uint64,
     packetData: []byte
 ): uint64 {
     // in this specification, the source channel is the clientId
-    client = router.clients[packet.sourceID]
+    client = router.clients[packet.sourceClientID]
     assert(client !== null)
 
     // disallow packets with a zero timeoutHeight and timeoutTimestamp
@@ -339,17 +346,18 @@ function sendPacket(
     // NOTE - What is the commit port? Should be the sourcePort? If yes, in the packet we should put destPort and destID?
     // if the sequence doesn't already exist, this call initializes the sequence to 0
     //sequence = channelStore.get(nextSequenceSendPath(commitPort, sourceID))
-    sequence = channelStore.get(nextSequenceSendPath(sourceID, destID))
+    sequence = channelStore.get(nextSequenceSendPath(sourceClientID, destClientID))
     
     // store commitment to the packet data & packet timeout
+    // Note do we need to keep the channelStore? Should this be instead the counterParty store or something similar? Do we keep it for backward compatibility?
     channelStore.set(
-      packetCommitmentPath(sourceID, destID, sequence),
+      packetCommitmentPath(sourceClientID, destClientID, sequence),
       hash(hash(data), timeoutHeight, timeoutTimestamp)
     )
 
     // increment the sequence. Thus there are monotonically increasing sequences for packet flow
     // from sourcePort, sourceChannel pair
-    channelStore.set(nextSequenceSendPath(sourceID, destID), sequence+1)
+    channelStore.set(nextSequenceSendPath(sourceClientID, destClientID), sequence+1)
 
     // log that a packet can be safely sent
     // introducing sourceID and destID can be useful for monitoring - e.g. if one wants to monitor all packets between sourceID and destID emitting this in the event would simplify his life. 
@@ -374,13 +382,11 @@ Atomically in conjunction with calling `recvPacket`, calling modules MUST either
 
 The IBC handler performs the following steps in order:
 
-- Checks that the channel & connection are open to receive packets
-- Checks that the calling module owns the receiving port
+- Checks that the clients is properly set in IBC router
 - Checks that the packet metadata matches the channel & connection information
 - Checks that the packet sequence is the next sequence the channel end expects to receive (for ordered and ordered_allow_timeout channels)
 - Checks that the timeout height and timestamp have not yet passed
 - Checks the inclusion proof of packet data commitment in the outgoing chain's state
-- Optionally (in case channel upgrades and deletion of acknowledgements and packet receipts are implemented): reject any packet with a sequence already used before a successful channel upgrade
 - Sets a store path to indicate that the packet has been received (unordered channels only)
 - Increments the packet receive sequence associated with the channel end (ordered and ordered_allow_timeout channels only)
 
@@ -393,17 +399,17 @@ function recvPacket(
   proofHeight: Height,
   relayer: string): Packet {
     // in this specification, the destination channel is the clientId
-    client = router.clients[packet.destChannel]
+    client = router.clients[packet.destClientID]
     assert(client !== null)
 
     // assert source channel is destChannel's counterparty channel identifier
-    counterparty = getCounterparty(packet.destChannel)
-    assert(packet.sourceChannel == counterparty.channelId)
+    counterparty = getCounterparty(packet.sourceClientID)
+    assert(packet.sourceClientID == counterparty.clientId)
 
     // assert source port is destPort's counterparty port identifier
-    assert(packet.sourcePort == ports[packet.destPort])
+    assert(packet.sourcePort == ports[packet.destPort]) // Needed? 
 
-    packetPath = packetCommitmentPath(packet.sourcePort, packet.sourceChannel, packet.sequence)
+    packetPath = packetCommitmentPath(packet.sourceClientID, packet.destClientID, packet.sequence)
     merklePath = applyPrefix(counterparty.keyPrefix, packetPath)
     // DISCUSSION NEEDED: Should we have an in-protocol notion of Prefixing the path
     // or should we make this a concern of the client's VerifyMembership
@@ -423,11 +429,11 @@ function recvPacket(
     // we must set the receipt so it can be verified on the other side
     // this receipt does not contain any data, since the packet has not yet been processed
     // it's the sentinel success receipt: []byte{0x01}
-    packetReceipt = channelStore.get(packetReceiptPath(packet.destPort, packet.destChannel, packet.sequence))
+    packetReceipt = channelStore.get(packetReceiptPath(packet.sourceChannelID, packet.destChannelID, packet.sequence))
     assert(packetReceipt === null)
 
     channelStore.set(
-        packetReceiptPath(packet.destPort, packet.destChannel, packet.sequence),
+        packetReceiptPath(packet.sourceChannelID, packet.destChannelID, packet.sequence),
         SUCCESSFUL_RECEIPT
     )
 
@@ -437,20 +443,17 @@ function recvPacket(
       timeoutHeight: packet.timeoutHeight,
       timeoutTimestamp: packet.timeoutTimestamp,
       sequence: packet.sequence,
-      sourcePort: packet.sourcePort,
-      sourceChannel: packet.sourceChannel,
-      destPort: packet.destPort,
-      destChannel: packet.destChannel,
-      order: channel.order,
-      connection: channel.connectionHops[0]
+      sourceClientID: packet.sourceClientID,
+      destClientID: packet.destClientID,
+      // MMM app= packet.PacketData.destPort?? I mean shall we use the app in somehow here? 
     })
 
-    cbs = router.callbacks[packet.destPort]
+    cbs = router.callbacks[packet.destClientID]
     // IMPORTANT: if the ack is error, then the callback reverts its internal state changes, but the entire tx continues
     ack = cbs.OnRecvPacket(packet, relayer)
     
     if ack != nil {
-        channelStore.set(packetAcknowledgementPath(packet.destPort, packet.destChannel, packet.sequence), ack)
+        channelStore.set(packetAcknowledgementPath(packet.sourceClientID, packet.destClientID, packet.sequence), ack)
     }
 }
 ```
