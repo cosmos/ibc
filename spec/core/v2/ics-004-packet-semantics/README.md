@@ -180,9 +180,13 @@ function nextSequenceAckPath(portIdentifier: Identifier, channelIdentifier: Iden
 
 Constant-size commitments to packet data fields are stored under the packet sequence number:
 
+// Note what about this: https://github.com/cosmos/ibc/issues/1129
+
+// Note - Am I breaking something here? If that's ok, we could change nextSequence* paths too. 
+
 ```typescript
-function packetCommitmentPath(portIdentifier: Identifier, channelIdentifier: Identifier, sequence: uint64): Path {
-    return "commitments/ports/{portIdentifier}/channels/{channelIdentifier}/sequences/{sequence}"
+function packetCommitmentPath(sourceID: Identifier, sequence: uint64): Path {
+    return "commitments/clients/{sourceID}/sequences/{sequence}"
 }
 ```
 
@@ -192,16 +196,16 @@ Packet receipt data are stored under the `packetReceiptPath`. In the case of a s
 Some channel types MAY write a sentinel timeout value `TIMEOUT_RECEIPT` if the packet is received after the specified timeout.
 
 ```typescript
-function packetReceiptPath(portIdentifier: Identifier, channelIdentifier: Identifier, sequence: uint64): Path {
-    return "receipts/ports/{portIdentifier}/channels/{channelIdentifier}/sequences/{sequence}"
+function packetReceiptPath(destID: Identifier, Identifier, sequence: uint64): Path {
+    return "receipts/clients/{destID}/sequences/{sequence}"
 }
 ```
 
 Packet acknowledgement data are stored under the `packetAcknowledgementPath`:
 
 ```typescript
-function packetAcknowledgementPath(portIdentifier: Identifier, channelIdentifier: Identifier, sequence: uint64): Path {
-    return "acks/ports/{portIdentifier}/channels/{channelIdentifier}/sequences/{sequence}"
+function packetAcknowledgementPath(sourceID: Identifier, sequence: uint64): Path {
+    return "acks/clients/{sourceID}/sequences/{sequence}"
 }
 ```
 
@@ -330,7 +334,7 @@ function sendPacket(
     // check that the timeout height hasn't already passed in the local client tracking the receiving chain
     latestClientHeight = client.latestClientHeight()
     assert(timeoutHeight === 0 || latestClientHeight < timeoutHeight)
-
+    // NOTE - What is the commit port? Should be the sourcePort? If yes, in the packet we should put destPort and destID?
     // if the sequence doesn't already exist, this call initializes the sequence to 0
     sequence = channelStore.get(nextSequenceSendPath(commitPort, sourceID))
     
@@ -358,7 +362,7 @@ function sendPacket(
 #### Receiving packets
 
 TODO Adapt description 
-The `recvPacket` function is called by a module in order to receive an IBC packet sent on the corresponding channel end on the counterparty chain.
+The `recvPacket` function is called by a module in order to receive an IBC packet sent on the corresponding client on the counterparty chain.
 
 Atomically in conjunction with calling `recvPacket`, calling modules MUST either execute application logic or queue the packet for future execution.
 
