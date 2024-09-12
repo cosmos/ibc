@@ -146,7 +146,7 @@ The architecture of clients, connections, channels and packets:
 
 Channel structures are stored under a store path prefix unique to a combination of a port identifier and channel identifier:
 
-// NOTE Channel paths and capabilities should be maintained? 
+/* NOTE Channel paths and capabilities should be maintained for backward compatibility? 
 
 ```typescript
 function channelPath(portIdentifier: Identifier, channelIdentifier: Identifier): Path {
@@ -162,31 +162,33 @@ function channelCapabilityPath(portIdentifier: Identifier, channelIdentifier: Id
 }
 ```
 
+*/
+
+// Note what about this: https://github.com/cosmos/ibc/issues/1129
+
+// Note - Am I breaking something here with the approach taken? Is that ok? 
+
 The `nextSequenceSend`, `nextSequenceRecv`, and `nextSequenceAck` unsigned integer counters are stored separately so they can be proved individually:
 
 ```typescript
-function nextSequenceSendPath(portIdentifier: Identifier, channelIdentifier: Identifier): Path {
-    return "nextSequenceSend/ports/{portIdentifier}/channels/{channelIdentifier}"
+function nextSequenceSendPath(sourceID: Identifier, destID: Identifier): Path {
+    return "nextSequenceSend/clients/{sourceID}/clients/{destID}"
 }
 
-function nextSequenceRecvPath(portIdentifier: Identifier, channelIdentifier: Identifier): Path {
-    return "nextSequenceRecv/ports/{portIdentifier}/channels/{channelIdentifier}"
+function nextSequenceRecvPath(sourceID: Identifier,destID: Identifier): Path {
+    return "nextSequenceRecv/clients/{sourceID}/clients/{destID}"
 }
-
-function nextSequenceAckPath(portIdentifier: Identifier, channelIdentifier: Identifier): Path {
-    return "nextSequenceAck/ports/{portIdentifier}/channels/{channelIdentifier}"
+ 
+function nextSequenceAckPath(sourceID: Identifier, destID: Identifier): Path {
+    return "nextSequenceAck/clients/{sourceID}/clients/{destID}"
 }
 ```
 
 Constant-size commitments to packet data fields are stored under the packet sequence number:
 
-// Note what about this: https://github.com/cosmos/ibc/issues/1129
-
-// Note - Am I breaking something here? If that's ok, we could change nextSequence* paths too. 
-
 ```typescript
-function packetCommitmentPath(sourceID: Identifier, sequence: uint64): Path {
-    return "commitments/clients/{sourceID}/sequences/{sequence}"
+function packetCommitmentPath(sourceID: Identifier, destID: Identifier, sequence: uint64): Path {
+    return "commitments/clients/{sourceID}/clients/{destID}/sequences/{sequence}"
 }
 ```
 
@@ -196,16 +198,16 @@ Packet receipt data are stored under the `packetReceiptPath`. In the case of a s
 Some channel types MAY write a sentinel timeout value `TIMEOUT_RECEIPT` if the packet is received after the specified timeout.
 
 ```typescript
-function packetReceiptPath(destID: Identifier, Identifier, sequence: uint64): Path {
-    return "receipts/clients/{destID}/sequences/{sequence}"
+function packetReceiptPath(sourceID: Identifier, destID: Identifier, sequence: uint64): Path {
+    return "receipts/clients/{sourceID}/clients/{destID}/sequences/{sequence}"
 }
 ```
 
 Packet acknowledgement data are stored under the `packetAcknowledgementPath`:
 
 ```typescript
-function packetAcknowledgementPath(sourceID: Identifier, sequence: uint64): Path {
-    return "acks/clients/{sourceID}/sequences/{sequence}"
+function packetAcknowledgementPath(sourceID: Identifier, destID: Identifier, sequence: uint64): Path {
+    return "acks/clients/{sourceID}/clients/{destID}/sequences/{sequence}"
 }
 ```
 
@@ -336,11 +338,12 @@ function sendPacket(
     assert(timeoutHeight === 0 || latestClientHeight < timeoutHeight)
     // NOTE - What is the commit port? Should be the sourcePort? If yes, in the packet we should put destPort and destID?
     // if the sequence doesn't already exist, this call initializes the sequence to 0
+    //sequence = channelStore.get(nextSequenceSendPath(commitPort, sourceID))
     sequence = channelStore.get(nextSequenceSendPath(commitPort, sourceID))
     
     // store commitment to the packet data & packet timeout
     channelStore.set(
-      packetCommitmentPath(commitPort, sourceID, sequence),
+      packetCommitmentPath(sourceID, sequence),
       hash(hash(data), timeoutHeight, timeoutTimestamp)
     )
 
