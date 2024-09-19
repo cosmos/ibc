@@ -90,7 +90,7 @@ and a `privateStore` for storage local to the host, upon which `get`
 
 The `provableStore`:
 
-- MUST write to a key/value store whose data can be externally proved with a vector commitment as defined in [ICS 23](../../ics-023-vector-commitments). 
+- MUST write to a key/value store whose data can be externally proved with a vector commitment that can be proven by an IBC light client as defined in [ICS-002](../ics-002-client-semantics/README.md)
 - MUST use canonical data structure encodings provided in these specifications.
 
 The `privateStore`:
@@ -103,30 +103,61 @@ The `privateStore`:
 >
 > Note: this interface does not necessitate any particular storage backend or backend data layout. State machines may elect to use a storage backend configured in accordance with their needs, as long as the store on top fulfils the specified interface and provides commitment proofs.
 
-### Path-space
+### Provable Path-space
 
-At present, IBC/TAO recommends the following path prefixes for the `provableStore` and `privateStore`.
+IBC/TAO implementations MUST implement the following paths for the `provableStore` in the exact format specified. This is because counterparty IBC/TAO implementations will construct the paths according to this specification and send it to the light client to verify the IBC specified value stored under the IBC specified path.
 
 Future paths may be used in future versions of the protocol, so the entire key-space in the provable store MUST be reserved for the IBC handler.
 
-Keys used in the provable store MAY safely vary on a per-client-type basis as long as there exists a bipartite mapping between the key formats
-defined herein and the ones actually used in the machine's implementation.
 
-Parts of the private store MAY safely be used for other purposes as long as the IBC handler has exclusive access to the specific keys required.
-Keys used in the private store MAY safely vary as long as there exists a bipartite mapping between the key formats defined herein and the ones
-actually used in the private store implementation.
+| Store          | Path format                                                                | Value type        | Defined in |
+| -------------- | -------------------------------------------------------------------------- | ----------------- | ---------------------- |
+| provableStore  | "commitments/channels/{identifier}/sequences/{bigEndianUint64Sequence}"    | bytes             | [ICS 4](../ics-004-packet-semantics) |
+| provableStore  | "receipts/channels/{identifier}/sequences/{bigEndianUint64Sequence}"       | bytes             | [ICS 4](../ics-004-packet-semantics) |
+| provableStore  | "acks/channels/{identifier}/sequences/{bigEndianUint64Sequence}"           | bytes             | [ICS 4](../ics-004-packet-semantics) |
 
-Note that the client-related paths listed below reflect the Tendermint client as defined in [ICS 7](../../../client/ics-007-tendermint-client) and may vary for other client types.
+### Provable Commitments
 
-| Store          | Path format                                                                    | Value type        | Defined in |
-| -------------- | ------------------------------------------------------------------------------ | ----------------- | ---------------------- |
-| privateStore  | "clients/{identifier}/clientState"                                             | ClientState       | [ICS 2](../ics-002-client-semantics) |
-| privateStore  | "clients/{identifier}/consensusStates/{height}"                                | ConsensusState    | [ICS 7](../../../client/ics-007-tendermint-client) |
-| privateStore | "clients/{identifier}/counterparty"                                             | Counterparty      | [ICS 2](../ics-002-client-semantics)
-| privateStore  | "nextSequenceSend/ports/{identifier}/channels/{identifier}"                    | uint64            | [ICS 4](../ics-004-packet-semantics) |
-| provableStore  | "commitments/ports/{identifier}/channels/{identifier}/sequences/{sequence}"    | bytes             | [ICS 4](../ics-004-packet-semantics) |
-| provableStore  | "receipts/ports/{identifier}/channels/{identifier}/sequences/{sequence}"       | bytes             | [ICS 4](../ics-004-packet-semantics) |
-| provableStore  | "acks/ports/{identifier}/channels/{identifier}/sequences/{sequence}"           | bytes             | [ICS 4](../ics-004-packet-semantics) |
+In addition to specifying the paths that are expected across implementations, ICS-24 also standardizes the commitments stored under each standardized path. These commitments will also be constructed and checked by counterparties in order to enable packet flow.
+
+#### Packet Commitment
+
+When sending a packet, all IBC implementations are expected to store a packet commitment under the above specified packet commitment path. When receiving a packet, all IBC implementations will reconstruct the expected packet commitment and verify it was stored under the expected packet commitment path in order to verify the packet before sending it to the application.
+
+IBC standardizes the fields that a packet must have but does not standardize the structure containing them nor their on-chain encoding. Thus, different implementations may house these fields in different structs and encode the struct differently for their internal use so long as they create the same exact commitment when they store the packet under the packet commitment path.
+
+The structure of the packet and commitment of the packet timeout and application data is further specified in ICS4.
+
+```typescript
+// commit packet hashes the destination identifier, the timeout and the data meant to be
+// processed by the destination state machine
+func commitPacket(destIdentifier: bytes, timeoutBytes: bytes, data: bytes): bytes {
+  buffer = sha256.Hash(destIdentifier)
+  buffer = append(buffer, sha256.hash(bigEndian(timeoutBytes)))
+  buffer = append(buffer, sha256.hash(data))
+  return sha256.hash(buffer)
+}
+```
+
+Since the packet commitment is keyed on the source identifier and sequence, with this key and value together; the receiving chain can prove that the sending chain has sent a packet with the given source and destination identifiers at a given sequence with the timeout and application data.
+
+#### Packet Acknowledgement
+
+The acknowledgement will be provided with the packet to the sending chain. Thus we only need to provably associate the acknowledgement with the original packet. This association is already accomplished by the acknowledgment path which contains the destination identifier and the sequence. Thus on the sending chain, we can prove the acknowledgement was indeed sent for the packet we sent. We prove the packet was sent by us by checking that we stored the packet commitment under the packet commitment path. We can retrieve the client from the source identifier and then prove the counterparty stored under the destination identifier and sequence. Thus, we can associate the acknowledgement stored under this path with the unique packet provided. The acknowledgement commitment can therefore simply consist of a hash of the acknowledgment data sent to the state machine.
+
+The creation of `ackData` for a given packet is further specified in ICS4.
+
+```typescript
+func commitAcknowledgment(ackData: bytes): bytes {
+  return sha256.hash(ackData)
+}
+```
+
+#### Packet Receipt
+
+A packet receipt will only tell the sending chain that the counterparty has successfully received the packet. Thus we just need a provable boolean flag uniquely associated with the sent packet. Thus, the receiver chain stores the packet receipt keyed on the destination identifier and the sequence to uniquely identify the packet.
+
+For chains that support nonexistence proofs of their own state, they can simply write a `SENTINEL_RECEIPT_VALUE` under the receipt path. This `SENTINEL_RECEIPT_PATH` can be any non-nil value so it is recommended to write a single byte.
 
 ### Module layout
 
