@@ -114,6 +114,16 @@ enum PacketReceipt {
 }
 ```
 
+The `Acknowledgement` is a particular interface defined as follows: 
+
+```typescript
+interface Acknowledgement {
+    appAcknowledgement: [bytes]
+}
+```
+
+An application may not need to return an acknowledgment. In this case, it may return a sentinel acknowledgement value `SENTINEL_ACKNOWLEDGMENT` which will be the single byte in the byte array: `bytes(0x01)`. In this case, the IBC `acknowledgePacket` handler will still do the core IBC acknowledgment logic but it will not call the application's acknowledgePacket callback.
+
 ### Desired Properties
 
 #### Efficiency
@@ -202,7 +212,7 @@ Constant-size commitments to packet data fields are stored under the packet sequ
 
 ```typescript
 function packetCommitmentPath(sourceID: Identifier, destID: Identifier, sequence: uint64): Path {
-    return "commitments/clients/{sourceID}/clients/{destID}/sequences/{sequence}"
+    return "commitments/channels/{identifier}/sequences/{bigEndianUint64Sequence}"
 }
 ```
 
@@ -213,7 +223,7 @@ Some channel types MAY write a sentinel timeout value `TIMEOUT_RECEIPT` if the p
 
 ```typescript
 function packetReceiptPath(sourceID: Identifier, destID: Identifier, sequence: uint64): Path {
-    return "receipts/clients/{sourceID}/clients/{destID}/sequences/{sequence}"
+    return "receipts/channels/{identifier}/sequences/{bigEndianUint64Sequence}"
 }
 ```
 
@@ -221,7 +231,7 @@ Packet acknowledgement data are stored under the `packetAcknowledgementPath`:
 
 ```typescript
 function packetAcknowledgementPath(sourceID: Identifier, destID: Identifier, sequence: uint64): Path {
-    return "acks/clients/{sourceID}/clients/{destID}/sequences/{sequence}"
+    return "acks/channels/{identifier}/sequences/{bigEndianUint64Sequence}"
 }
 ```
 
