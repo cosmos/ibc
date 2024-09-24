@@ -6,18 +6,51 @@ The IBC packet sends application data from a source chain to a destination chain
 
 ```typescript
 interface Packet {
+    // identifier on the source chain
+    // that source chain uses to address dest chain
+    // this functions as the sending address
     sourceIdentifier: bytes,
+    // identifier on the dest chain
+    // that dest chain uses to address source chain
+    // this functions as the return address
     destIdentifier: bytes,
-    sequence: uint64
+    // the sequence uniquely identifies this packet
+    // in the stream of packets from source to dest chain
+    sequence: uint64,
+    // the timeout is the timestamp in seconds on the destination chain
+    // at which point the packet is no longer valid.
+    // It cannot be received on the destination chain and can
+    // be timed out on the source chain
     timeout: uint64,
+    // the data includes the messages that are intended
+    // to be sent to application(s) on the destination chain
+    // from application(s) on the source chain
+    // IBC core handlers will route the payload to the desired
+    // application using the port identifiers but the rest of the
+    // payload will be processed by the application
     data: [Payload]
 }
 
 interface Payload {
+    // sourcePort identifies the sending application on the source chain
     sourcePort: bytes,
+    // destPort identifies the receiving application on the dest chain
     destPort: bytes,
+    // version identifies the version that sending application
+    // expects destination chain to use in processing the message
+    // if dest chain does not support the version, the payload must
+    // be rejected with an error acknowledgement
     version: string,
+    // encoding allows the sending application to specify which
+    // encoding was used to encode the app data
+    // the receiving applicaton will decode the appData into
+    // the strucure expected given the version provided
+    // if the encoding is not supported, receiving application
+    // must be rejected with an error acknowledgement.
     encoding: Encoding,
+    // appData is the opaque content sent from the source application
+    // to the dest application. It will be decoded and interpreted
+    // as specified by the version and encoding fields
     appData: bytes,
 }
 
@@ -60,6 +93,12 @@ An application may not need to return an acknowledgment. In this case, it may re
 
 ```typescript
 interface Acknowledgement {
+    // Each app in the payload will have an acknowledgment in this list in the same order
+    // that they were received in the payload
+    // If an app does not need to send an acknowledgement, there must be a SENTINEL_ACKNOWLEDGEMENT
+    // in its place
+    // The app acknowledgement must be encoded in the same manner specified in the payload it received
+    // and must be created and processed in the manner expected by the version specified in the payload.
     appAcknowledgement: [bytes]
 }
 ```
