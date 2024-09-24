@@ -56,39 +56,46 @@ A `Packet`, in the interblockchain communication protocol, is a particular inter
 
 ```typescript
 interface Packet {
-  sequence: uint64
-  timeoutHeight: Height
-  timeoutTimestamp: uint64
-  sourceID: Identifier // identifier of the source chain clientID 
-  destID: Identifier // identifier of the sender chain clientID on the destination chain
-  packetData: [] PacketData
+    sourceIdentifier: bytes,
+    destIdentifier: bytes,
+    sequence: uint64
+    timeout: uint64,
+    data: [Payload]
 }
 ```
 
+- The `sourceIdentifier` derived from the `clientIdentifier` will tell the IBC router which chain a received packet came from.
+- The `destIdentifier` derived from the `clientIdentifier` will tell the IBC router which chain to send the packets to. 
 - The `sequence` number corresponds to the order of sends and receives, where a packet with an earlier sequence number must be sent and received before a packet with a later sequence number.
-- The `timeoutHeight` indicates a consensus height on the destination chain after which the packet will no longer be processed, and will instead count as having timed-out.
-- The `timeoutTimestamp` indicates a timestamp on the destination chain after which the packet will no longer be processed, and will instead count as having timed-out.
-- The `sourceID` derived from the `clientIDs` will tell the IBC router which chain a received packet came from.
-- The `destID` derived from the `clientIDs` will tell the IBC router which chain to send the packets to. 
+- The `timeout` indicates the UNIX timestamp in seconds and is encoded in LittleEndian. It must be passed on the destination chain and once elapsed, will no longer allow the packet processing, and will instead generate a time-out.
 
-The `PacketData` is a particular interface defined as follows:
+The `Payload` is a particular interface defined as follows:
 
 ```typescript
-interface PacketData {
-  sourcePort: Identifier // identifier of the source chain application 
-  destPort: Identifier // identifier of the destination chain application
-  version: string // Maybe not necessary 
-  encoding: string 
-  payload: bytes
+interface Payload {
+    sourcePort: bytes,
+    destPort: bytes,
+    version: string,
+    encoding: Encoding,
+    appData: bytes,
+}
+
+enum Encoding {
+  NO_ENCODING_SPECIFIED,
+    PROTO_3,
+    JSON,
+    RLP,
+    BCS,
 }
 ```
 
-- The `sourcePort` identify the source application 
-- The `destPort` derived from the `clientIDs` will tell the IBC router which chain to send the packets to. 
-- The `encoding` to allow the specification of custom data encoding 
-- The `payload` that can be defined by the application logic of the associated modules. 
+- The `sourcePort` identifies the source application.
+- The `destPort` identifies the destination application. 
+- The `version` to specify the application version to be used.  
+- The `encoding` to allow the specification of custom data encoding among those agreed in the `Encoding` enum.   
+- The `appData` that can be defined by the application logic of the associated modules. 
 
-When the array of packetData, passed-in the packet, is populated with multiple values, the system will handle the packet as a multi-data packet. 
+When the array of payloads, passed-in the packet, is populated with multiple values, the system will handle the packet as a multi-data packet. 
 
 Note that a `Packet` is never directly serialised. Rather it is an intermediary structure used in certain function calls that may need to be created or processed by modules calling the IBC handler.
 
@@ -468,7 +475,7 @@ Calling modules MUST execute application logic atomically in conjunction with ca
 
 This is an asynchronous acknowledgement, the contents of which do not need to be determined when the packet is received, only when processing is complete. In the synchronous case, `writeAcknowledgement` can be called in the same transaction (atomically) with `recvPacket`.
 
-Acknowledging packets is not required; however, if an ordered channel uses acknowledgements, either all or no packets must be acknowledged (since the acknowledgements are processed in order). Note that if packets are not acknowledged, packet commitments cannot be deleted on the source chain. Future versions of IBC may include ways for modules to specify whether or not they will be acknowledging packets in order to allow for cleanup.
+Acknowledging packets is not required; however, if packets are not acknowledged, packet commitments cannot be deleted on the source chain. Future versions of IBC may include ways for modules to specify whether or not they will be acknowledging packets in order to allow for cleanup.
 
 `writeAcknowledgement` *does not* check if the packet being acknowledged was actually received, because this would result in proofs being verified twice for acknowledged packets. This aspect of correctness is the responsibility of the calling module.
 The calling module MUST only call `writeAcknowledgement` with a packet previously received from `recvPacket`.
