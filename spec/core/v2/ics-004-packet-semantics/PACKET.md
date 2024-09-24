@@ -38,13 +38,14 @@ In version 2 of the IBC specification, implementations **MAY** support multiple 
 
 Each payload will include its own `Encoding` and `AppVersion` that will be sent to the application to instruct it how to decode and interpret the opaque application data. The application must be able to support the provided `Encoding` and `AppVersion` in order to process the `AppData`. If the receiving application does not support the encoding or app version, then the application **must** return an error to IBC core. If the receiving application does support the provided encoding and app version, then the application must decode the application as specified by the `Encoding` enum and then process the application as expected by the counterparty given the agreed-upon app version. Since the `Encoding` and `AppVersion` are now in each packet they can be changed on a per-packet basis and an application can simultaneously support many encodings and app versions from a counterparty. This is in stark contrast to IBC version 1 where the channel prenegotiated the channel version (which implicitly negotiates the encoding as well); so that changing the app version after channel opening is very difficult.
 
-The packet must be committed to as specified in the ICS24 specification. In order to do this we must first commit the packet data and timeout.
+The packet must be committed to as specified in the ICS24 specification. In order to do this we must first commit the packet data and timeout. The timeout is encoded in LittleEndian format. The packet data which is a list of payloads is encoded first in the canonical CBOR encoding format before being passed to the ICS24 packet commitment function. This ensures that a given packet will always create the exact same commitment by all compliant implementations and two different packets will never create the same commitment by a compliant implementation.
 
 ```typescript
 func commitV2Packet(packet: Packet) {
     timeoutBytes = LittleEndian(timeout)
     // TODO: Decide on canonical encoding scheme
-    appBytes = encoding(payload)
+    // Suggested CBOR
+    appBytes = cbor.encoding(payload)
     ics24.commitPacket(packet.destinationIdentifier, timeoutBytes, appBytes)
 }
 ```
@@ -52,6 +53,10 @@ func commitV2Packet(packet: Packet) {
 ## Acknowledgement V2
 
 The acknowledgement in the version 2 specification is also modified to support multiple payloads in the packet that will each go to separate applications that can write their own acknowledgements. Each acknowledgment will be contained within the final packet acknowledgment in the same order that they were received in the original packet. Thus if a packet contains payloads for modules `A` and `B` in that order; the receiver will write an acknowledgment with the app acknowledgements `A` and `B` in the same order.
+
+The acknowledgement which is itself a list of app acknowledgement bytes must be first encoded with the canonical CBOR encoding format. This ensures that all compliant implementations reach the same acknowledgment commitment and that two different acknowledgements never create the same commitment.
+
+An application may not need to return an acknowledgment. In this case, it may return a sentinel acknowledgement value `SENTINEL_ACKNOWLEDGMENT` which will be the single byte in the byte array: `bytes(0x01)`. In this case, the IBC `acknowledgePacket` handler will still do the core IBC acknowledgment logic but it will not call the application's acknowledgePacket callback.
 
 ```typescript
 interface Acknowledgement {
@@ -64,7 +69,8 @@ All acknowledgements must be committed to and stored under the ICS24 acknowledgm
 ```typescript
 func commitV2Acknowledgment(ack: Acknowledgement) {
     // TODO: Decide on canonical encoding scheme
-    ackBytes = encoding(ack)
+    // Suggested CBOR
+    ackBytes = cbor.encoding(ack)
     ics24.commitAcknowledgment(ackBytes)
 }
 ```
