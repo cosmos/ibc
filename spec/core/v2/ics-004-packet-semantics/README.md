@@ -37,20 +37,23 @@ The IBC version 2 will provide packet delivery between two chains communicating 
 
 ```typescript
 interface Counterparty {
-    channelId: Identifier
+    clientId: bytes 
+    channelId: bytes
     keyPrefix: CommitmentPrefix 
 }
 ```
 
+NOTE: Do we need and want to keep nextSequence* info? To my understanding this should eventually go in the privateStore. That means we don't need to specify the paths later on, correct? 
+
 - The `nextSequenceSend`, stored separately, tracks the sequence number for the next packet to be sent.
 - The `nextSequenceRecv`, stored separately, tracks the sequence number for the next packet to be received.
 - The `nextSequenceAck`, stored separately, tracks the sequence number for the next packet to be acknowledged.
-// Note do we need to keep the version in the end? Should this be just the protocol version?
-- The `version` string stores an opaque channel version, which is agreed upon during the handshake. This can determine module-level configuration such as which packet encoding is used for the channel. This version is not used by the core IBC protocol. If the version string contains structured metadata for the application to parse and interpret, then it is considered best practice to encode all metadata in a JSON struct and include the marshalled string in the version field.
 
 // NOTE - Do we want to keep an upgrade spec to specify how to change the client and so on? Probably unnecessary, just showing here how to do that would be enough. 
 
 See the [upgrade spec](../../ics-004-channel-and-packet-semantics/UPGRADES.md) for details on `upgradeSequence`.
+
+The `Packet` interface is defined in [add ref once merged](ref)
 
 A `Packet`, in the interblockchain communication protocol, is a particular interface defined as follows:
 
@@ -737,29 +740,6 @@ Chains MUST implement a function `generateIdentifier` which chooses an identifie
 
 ```typescript
 type generateIdentifier = () -> Identifier
-```
-
-##### Multihop utility functions
-
-MMM,
- 
-```typescript
-// Return the counterparty connectionHops
-function getCounterPartyHops(proof: CommitmentProof | MultihopProof, lastConnection: ConnectionEnd) string[] {
-
-  let counterpartyHops: string[] = [lastConnection.counterpartyConnectionIdentifier]
-  if typeof(proof) === 'MultihopProof' {
-    for connData in proofs.ConnectionProofs {
-      connectionEnd = abortTransactionUnless(Unmarshal(connData.Value))
-      counterpartyHops.push(connectionEnd.GetCounterparty().GetConnectionID())
-    }
-
-    // reverse the hops so they are ordered from sender --> receiver
-    counterpartyHops = counterpartyHops.reverse()
-  }
-
-  return counterpartyHops
-}
 ```
 
 */
