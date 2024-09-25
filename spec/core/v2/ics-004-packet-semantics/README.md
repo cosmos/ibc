@@ -43,17 +43,15 @@ interface Counterparty {
 }
 ```
 
-NOTE: Do we need and want to keep nextSequence* info? To my understanding this should eventually go in the privateStore. That means we don't need to specify the paths later on, correct? 
+NOTE: Do we need and want to keep nextSequence* info? To my understanding ack and recv are relative to ordered channel and can be safely removed. Then nextSequenceSend should eventually go in the privateStore. That means we don't need to specify the paths later on, correct? 
 
 - The `nextSequenceSend`, stored separately, tracks the sequence number for the next packet to be sent.
-- The `nextSequenceRecv`, stored separately, tracks the sequence number for the next packet to be received.
-- The `nextSequenceAck`, stored separately, tracks the sequence number for the next packet to be acknowledged.
 
 // NOTE - Do we want to keep an upgrade spec to specify how to change the client and so on? Probably unnecessary, just showing here how to do that would be enough. 
 
 See the [upgrade spec](../../ics-004-channel-and-packet-semantics/UPGRADES.md) for details on `upgradeSequence`.
 
-The `Packet` interface is defined in [add ref once merged](ref)
+The `Packet`, `Payload`, `Encoding` and the `Acknowledgement` interfaces are as defined in [add ref once merged](ref). For convenience, following we recall their structures.  
 
 A `Packet`, in the interblockchain communication protocol, is a particular interface defined as follows:
 
@@ -69,7 +67,7 @@ interface Packet {
 
 - The `sourceIdentifier` derived from the `clientIdentifier` will tell the IBC router which chain a received packet came from.
 - The `destIdentifier` derived from the `clientIdentifier` will tell the IBC router which chain to send the packets to. 
-- The `sequence` number corresponds to the order of sends and receives, where a packet with an earlier sequence number must be sent and received before a packet with a later sequence number.
+- The `sequence` number corresponds to the order of sends and receives, where a packet with an earlier sequence number MUST be sent and received (NOTE: not sure about received) before a packet with a later sequence number.
 - The `timeout` indicates the UNIX timestamp in seconds and is encoded in LittleEndian. It must be passed on the destination chain and once elapsed, will no longer allow the packet processing, and will instead generate a time-out.
 
 The `Payload` is a particular interface defined as follows:
@@ -94,9 +92,9 @@ enum Encoding {
 
 - The `sourcePort` identifies the source application.
 - The `destPort` identifies the destination application. 
-- The `version` to specify the application version to be used.  
-- The `encoding` to allow the specification of custom data encoding among those agreed in the `Encoding` enum.   
-- The `appData` that can be defined by the application logic of the associated modules. 
+- The `version` specifies the application version to be used.  
+- The `encoding` allows the specification of custom data encoding among those agreed in the `Encoding` enum.   
+- The `appData` is defined by the application of the associated modules. 
 
 When the array of payloads, passed-in the packet, is populated with multiple values, the system will handle the packet as a multi-data packet. 
 
@@ -125,7 +123,11 @@ interface Acknowledgement {
 }
 ```
 
+- The `appAcknowledgement` is an array of bytes. Each element of the array identifies the source application acknowledgement. 
+
 An application may not need to return an acknowledgment. In this case, it may return a sentinel acknowledgement value `SENTINEL_ACKNOWLEDGMENT` which will be the single byte in the byte array: `bytes(0x01)`. In this case, the IBC `acknowledgePacket` handler will still do the core IBC acknowledgment logic but it will not call the application's acknowledgePacket callback.
+
+E.g. If a packet within 3 payloads intended for 3 different application is sent out, the expectation is that each of the payload is acted upon in the same order as it has been placed in the packet. Likewise, the array of appAcknowledgement is expected to be populated within the same order. 
 
 ### Desired Properties
 
@@ -133,7 +135,7 @@ An application may not need to return an acknowledgment. In this case, it may re
 
 - The speed of packet transmission and confirmation should be limited only by the speed of the underlying chains.
 - Proofs should be batchable where possible.
-- The system must be able to process the multiple packetData contained in a single IBC packet, to reduce the amount of packet flows. 
+- The system MUST be able to process the multiple payloads contained in a single IBC packet, to reduce the amount of packet flows. 
 
 #### Exactly-once delivery
 
@@ -143,7 +145,7 @@ An application may not need to return an acknowledgment. In this case, it may re
 
 #### Ordering
 
-- IBC version 2 supports only *unordered* communications, thus, packets may be sent and received in any order. Unordered packets, have individual timeouts specified in terms of the destination chain's height.
+- IBC version 2 supports only *unordered* communications, thus, packets may be sent and received in any order. Unordered packets, have individual timeouts specified in seconds UNIX timestamp.
 
 #### Permissioning
 
@@ -156,6 +158,7 @@ An application may not need to return an acknowledgment. In this case, it may re
 
 ### Dataflow visualisation
 
+TODO 
 The architecture of clients, connections, channels and packets:
 
 ![Dataflow Visualisation](../../ics-004-channel-and-packet-semantics/dataflow.png)
@@ -164,19 +167,23 @@ The architecture of clients, connections, channels and packets:
 
 #### Store paths
 
-// Unnecessary? 
+NOTE do we stil need this, or we can retrieve the sequence from the commitment path associated with the clientID? 
+
+- The `nextSequenceSend`, stored separately, tracks the sequence number for the next packet to be sent.
 
 ```typescript
-function counterpartyPath(sourceClientID: Identifier, destClientID: Identifier, keyPrefix: CommitmentPrefix): Path {
-    return "counterparty/client/{sourceClientID}/client/{destClientID}/CommitmentPrefix/{keyPrefix}"
+function nextSequenceSendPath(sourceID: bytes, destID: bytes): Path {
+    return "nextSequenceSend/clients/{sourceID}/clients/{destID}"
 }
 ```
 
-/* NOTE Channel paths and capabilities should be maintained for backward compatibility? 
+/* Is all of this Unnecessary? 
+
+NOTE Channel paths and capabilities should be maintained for backward compatibility? 
 Channel structures are stored under a store path prefix unique to a combination of a port identifier and channel identifier:
 
 ```typescript
-function channelPath(portIdentifier: Identifier, channelIdentifier: Identifier): Path {
+function channelPath(portIdentifier: bytes, channelIdentifier: bytes): Path {
     return "channelEnds/ports/{portIdentifier}/channels/{channelIdentifier}"
 }
 ```
@@ -191,50 +198,29 @@ function channelCapabilityPath(portIdentifier: Identifier, channelIdentifier: Id
 
 */
 
-// Note what about this: https://github.com/cosmos/ibc/issues/1129
-
-// Note - Am I breaking something here with the approach taken? Is that ok? 
-
-The `nextSequenceSend`, `nextSequenceRecv`, and `nextSequenceAck` unsigned integer counters are stored separately so they can be proved individually:
-
-```typescript
-function nextSequenceSendPath(sourceID: Identifier, destID: Identifier): Path {
-    return "nextSequenceSend/clients/{sourceID}/clients/{destID}"
-}
-
-function nextSequenceRecvPath(sourceID: Identifier,destID: Identifier): Path {
-    return "nextSequenceRecv/clients/{sourceID}/clients/{destID}"
-}
- 
-function nextSequenceAckPath(sourceID: Identifier, destID: Identifier): Path {
-    return "nextSequenceAck/clients/{sourceID}/clients/{destID}"
-}
-```
-
 Constant-size commitments to packet data fields are stored under the packet sequence number:
 
 ```typescript
-function packetCommitmentPath(sourceID: Identifier, destID: Identifier, sequence: uint64): Path {
-    return "commitments/channels/{identifier}/sequences/{bigEndianUint64Sequence}"
+function packetCommitmentPath(sourceId: bytes, sequence: uint64): Path {
+    return "commitments/channels/{sourceId}/sequences/{sequence}"
 }
 ```
 
 Absence of the path in the store is equivalent to a zero-bit.
 
-Packet receipt data are stored under the `packetReceiptPath`. In the case of a successful receive, the destination chain writes a sentinel success value of `SUCCESSFUL_RECEIPT`.
-Some channel types MAY write a sentinel timeout value `TIMEOUT_RECEIPT` if the packet is received after the specified timeout.
+Packet receipt data are stored under the `packetReceiptPath`. In the case of a successful receive, the destination chain writes a sentinel success value of `SUCCESSFUL_RECEIPT`. While in the case of a timeout, the destination chain MAY (May?Must?Should?Mmm) write a sentinel timeout value `TIMEOUT_RECEIPT` if the packet is received after the specified timeout.
 
 ```typescript
-function packetReceiptPath(sourceID: Identifier, destID: Identifier, sequence: uint64): Path {
-    return "receipts/channels/{identifier}/sequences/{bigEndianUint64Sequence}"
+function packetReceiptPath(sourceId: bytes, sequence: uint64): Path {
+    return "receipts/channels/{sourceId}/sequences/{bigEndianUint64Sequence}"
 }
 ```
 
 Packet acknowledgement data are stored under the `packetAcknowledgementPath`:
 
 ```typescript
-function packetAcknowledgementPath(sourceID: Identifier, destID: Identifier, sequence: uint64): Path {
-    return "acks/channels/{identifier}/sequences/{bigEndianUint64Sequence}"
+function packetAcknowledgementPath(sourceId: bytes, sequence: uint64): Path {
+    return "acks/channels/{sourceId}/sequences/{sequence}"
 }
 ```
 
@@ -250,19 +236,20 @@ Thus, IBC version 2 introduces a new message `RegisterCounterparty` that will as
 
 ```typescript
 function RegisterCounterparty(
-    clientID: Identifier, // this will be our own client identifier representing our channel to desired chain
-    counterpartyClientID: Identifier, // this is the counterparty's identifier of our chain
+    clientID: bytes, // this will be our own client identifier representing our channel to desired chain
+    counterpartyClientId: bytes, // this is the counterparty's identifier of our chain
     counterpartyKeyPrefix: CommitmentPrefix,
     authentication: data, // implementation-specific authentication data
 ) {
     assert(verify(authentication))
 
     counterparty = Counterparty{
-        channelId: counterpartyClientID,
+        clientId: clientId,
+        channelId: counterpartyClientId,
         keyPrefix: counterpartyKeyPrefix
     }
 
-    privateStore.set(counterpartyPath(clientID), counterparty)
+    privateStore.set(Map<clientID, counterparty>)
 }
 ```
 
@@ -272,8 +259,8 @@ A simpler but weaker authentication would simply be to check that the `RegisterC
 ```typescript
 // getCounterparty retrieves the stored counterparty identifier
 // given the channelIdentifier on our chain once it is provided
-function getCounterparty(clientID: Identifier): Counterparty {
-    return privateStore.get(counterpartyPath(clientID))
+function getCounterparty(clientId: bytes): Counterparty {
+    return privateStore.get(clientId) // retrieves from map<clientID,counterparty> the counterparty 
 }
 ```
 
@@ -291,20 +278,22 @@ The IBC router contains a mapping from a reserved application port and the suppo
 
 ```typescript
 type IBCRouter struct {
-    versions: portID -> [Version]
-    callbacks: portID -> [Callback]
+    versions: portId -> [Version]
+    callbacks: portId -> [Callback]
     clients: clientId -> Client
-    ports: portID -> counterpartyPortID
+    ports: portId -> counterpartyPortId
 }
 ```
 
 #### Packet Flow through the Router & handling
 
-TODO : Adapat to new flow
+TODO : Adapt to new flow
 
 ![Packet State Machine](../../ics-004-channel-and-packet-semantics/packet-state-machine.png)
 
 ##### A day in the life of a packet
+
+TODO
 
 The following sequence of steps must occur for a packet to be sent from module *1* on machine *A* to module *2* on machine *B*, starting from scratch.
 
@@ -338,7 +327,7 @@ Calling modules MUST execute application logic atomically in conjunction with ca
 The IBC handler performs the following steps in order:
 
 - Checks that the underlying clients is properly registered in the IBC router. 
-- Checks that the timeout height specified has not already passed on the destination chain
+- Checks that the timeout specified has not already passed on the destination chain
 - Stores a constant-size commitment to the packet data & packet timeout
 - Increments the send sequence counter associated with the channel
 - Returns the sequence number of the sent packet
@@ -347,22 +336,19 @@ Note that the full packet is not stored in the state of the chain - merely a sho
 
 ```typescript
 function sendPacket(
-    sourceClientID: Identifier,
-    destClientID: Identifier,
-    timeoutHeight: Height,
+    sourceClientId: bytes,
+    destClientId: bytes,
     timeoutTimestamp: uint64,
     packetData: []byte
 ): uint64 {
     // in this specification, the source channel is the clientId
-    client = router.clients[packet.sourceClientID]
+    client = router.clients[packet.sourceClientId]
     assert(client !== null)
 
     // disallow packets with a zero timeoutHeight and timeoutTimestamp
-    assert(timeoutHeight !== 0 || timeoutTimestamp !== 0)
-
-    // check that the timeout height hasn't already passed in the local client tracking the receiving chain
-    latestClientHeight = client.latestClientHeight()
-    assert(timeoutHeight === 0 || latestClientHeight < timeoutHeight)
+    assert(timeoutTimestamp !== 0) // Maybe this can be enforced even for unreal timeouts value and not only for 0 
+    assert(currentTimestamp()> timeoutTimestamp) // Mmm
+    
     // NOTE - What is the commit port? Should be the sourcePort? If yes, in the packet we should put destPort and destID?
     // if the sequence doesn't already exist, this call initializes the sequence to 0
     //sequence = channelStore.get(nextSequenceSendPath(commitPort, sourceID))
@@ -371,8 +357,8 @@ function sendPacket(
     // store commitment to the packet data & packet timeout
     // Note do we need to keep the channelStore? Should this be instead the counterParty store or something similar? Do we keep it for backward compatibility?
     channelStore.set(
-      packetCommitmentPath(sourceClientID, destClientID, sequence),
-      hash(hash(data), timeoutHeight, timeoutTimestamp)
+      packetCommitmentPath(sourceClientId sequence),
+      hash(hash(data), timeoutTimestamp)
     )
 
     // increment the sequence. Thus there are monotonically increasing sequences for packet flow
@@ -383,11 +369,10 @@ function sendPacket(
     // introducing sourceID and destID can be useful for monitoring - e.g. if one wants to monitor all packets between sourceID and destID emitting this in the event would simplify his life. 
 
     emitLogEntry("sendPacket", {
-      sourceID: Identifier, 
-      destID: Identifier, 
+      sourceID: sourceClientId, 
+      destID: destClientId, 
       sequence: sequence,
       data: data,
-      timeoutHeight: timeoutHeight,
       timeoutTimestamp: timeoutTimestamp
     })
 
@@ -419,68 +404,65 @@ function recvPacket(
   proofHeight: Height,
   relayer: string): Packet {
     // in this specification, the destination channel is the clientId
-    client = router.clients[packet.destClientID]
+    client = router.clients[packet.destClientId]
     assert(client !== null)
 
     // assert source channel is destChannel's counterparty channel identifier
-    counterparty = getCounterparty(packet.sourceClientID)
-    assert(packet.sourceClientID == counterparty.clientId)
+    counterparty = getCounterparty(packet.sourceClientId)
+    assert(packet.sourceClientId == counterparty.clientId)
 
     // assert source port is destPort's counterparty port identifier
     assert(packet.sourcePort == ports[packet.destPort]) // Needed? 
 
-    packetPath = packetCommitmentPath(packet.sourceClientID, packet.destClientID, packet.sequence)
+    packetPath = packetCommitmentPath(packet.sourceClientId, packet.sequence)
     merklePath = applyPrefix(counterparty.keyPrefix, packetPath)
     // DISCUSSION NEEDED: Should we have an in-protocol notion of Prefixing the path
     // or should we make this a concern of the client's VerifyMembership
     // proofPath = applyPrefix(client.counterpartyChannelStoreIdentifier, packetPath)
     assert(client.verifyMembership(
         proofHeight,
-        0, 0, // zeroed out delay period
         proof,
         merklePath,
-        hash(packet.data, packet.timeoutHeight, packet.timeoutTimestamp)
+        hash(packet.data, packet.timeoutTimestamp)
     ))
 
-    assert(packet.timeoutHeight === 0 || getConsensusHeight() < packet.timeoutHeight)
     assert(packet.timeoutTimestamp === 0 || currentTimestamp() < packet.timeoutTimestamp)
 
   
     // we must set the receipt so it can be verified on the other side
     // this receipt does not contain any data, since the packet has not yet been processed
     // it's the sentinel success receipt: []byte{0x01}
-    packetReceipt = channelStore.get(packetReceiptPath(packet.sourceChannelID, packet.destChannelID, packet.sequence))
+    packetReceipt = channelStore.get(packetReceiptPath(packet.sourceChannelId, packet.sequence))
     assert(packetReceipt === null)
 
     channelStore.set(
-        packetReceiptPath(packet.sourceChannelID, packet.destChannelID, packet.sequence),
+        packetReceiptPath(packet.sourceChannelId, packet.sequence),
         SUCCESSFUL_RECEIPT
     )
 
     // log that a packet has been received
     emitLogEntry("recvPacket", {
       data: packet.data
-      timeoutHeight: packet.timeoutHeight,
       timeoutTimestamp: packet.timeoutTimestamp,
       sequence: packet.sequence,
-      sourceClientID: packet.sourceClientID,
-      destClientID: packet.destClientID,
+      sourceClientId: packet.sourceClientId,
+      destClientId: packet.destClientId,
       // MMM app= packet.PacketData.destPort?? I mean shall we use the app in somehow here? 
     })
 
-    cbs = router.callbacks[packet.destClientID]
+    cbs = router.callbacks[packet.destClientId]
     // IMPORTANT: if the ack is error, then the callback reverts its internal state changes, but the entire tx continues
     ack = cbs.OnRecvPacket(packet, relayer)
     
     if ack != nil {
-        channelStore.set(packetAcknowledgementPath(packet.sourceClientID, packet.destClientID, packet.sequence), ack)
+        channelStore.set(packetAcknowledgementPath(packet.sourceClientID, packet.sequence), ack)
     }
 }
 ```
 
 #### Writing acknowledgements
 
-TODO: Define multidata ack, adpat description
+TODO: All ack related stuff... Define multidata ack, adpat description....
 
 The `writeAcknowledgement` function is called by a module in order to write data which resulted from processing an IBC packet that the sending chain can then verify, a sort of "execution receipt" or "RPC call response".
 
@@ -507,7 +489,6 @@ the calling module on a channel to a counterparty module on the counterparty cha
 Calling modules MAY atomically execute appropriate application acknowledgement-handling logic in conjunction with calling `acknowledgePacket`.
 
 We pass the `relayer` address just as in [Receiving packets](#receiving-packets) to allow for possible incentivization here as well.
-
 
 ```typescript
 function acknowledgePacket(
@@ -574,6 +555,8 @@ for acknowledgements. The first byte of any message with this format will be the
 or `0xb2` (error).
 
 #### Timeouts
+
+TODO
 
 Application semantics may require some timeout: an upper limit to how long the chain will wait for a transaction to be processed before considering it an error. Since the two chains have different local clocks, this is an obvious attack vector for a double spend - an attacker may delay the relay of the receipt or wait to send the packet until right after the timeout - so applications cannot safely implement naive timeout logic themselves.
 
