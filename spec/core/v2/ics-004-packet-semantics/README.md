@@ -297,6 +297,10 @@ TODO
 
 The following sequence of steps must occur for a packet to be sent from module *1* on machine *A* to module *2* on machine *B*, starting from scratch.
 
+![V2 Happy Path Single Payload Sketch](Sketch_1P_Happy_Path.png)
+
+V1 OLD THINGS..
+
 The module can interface with the IBC handler through [ICS 25]( ../../ics-025-handler-interface) or [ICS 26]( ../../ics-026-routing-module).
 
 1. Initial client & port setup, in any order
