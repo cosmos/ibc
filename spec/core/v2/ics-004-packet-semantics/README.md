@@ -163,7 +163,7 @@ The protocol defines the paths `packetCommitmentPath`, `packetRecepitPath` and `
 Thus Constant-size commitments to packet data fields are stored under the packet sequence number:
 
 ```typescript
-function packetCommitmentPath(sourceId: bytes, sequence: uint64): Path {
+function packetCommitmentPath(sourceId: bytes, sequence: BigEndianUint64): Path {
     return "commitments/channels/{sourceId}/sequences/{sequence}"
 }
 ```
@@ -173,7 +173,7 @@ Absence of the path in the store is equivalent to a zero-bit.
 Packet receipt data are stored under the `packetReceiptPath`. In the case of a successful receive, the destination chain writes a sentinel success value of `SUCCESSFUL_RECEIPT`. While in the case of a timeout, the destination chain MAY (May?Must?Should?Mmm) write a sentinel timeout value `TIMEOUT_RECEIPT` if the packet is received after the specified timeout.
 
 ```typescript
-function packetReceiptPath(sourceId: bytes, sequence: uint64): Path {
+function packetReceiptPath(sourceId: bytes, sequence: BigEndianUint64): Path {
     return "receipts/channels/{sourceId}/sequences/{sequence}"
 }
 ```
@@ -181,7 +181,7 @@ function packetReceiptPath(sourceId: bytes, sequence: uint64): Path {
 Packet acknowledgement data are stored under the `packetAcknowledgementPath`:
 
 ```typescript
-function packetAcknowledgementPath(sourceId: bytes, sequence: uint64): Path {
+function packetAcknowledgementPath(sourceId: bytes, sequence: BigEndianUint64): Path {
     return "acks/channels/{sourceId}/sequences/{sequence}"
 }
 ```
@@ -248,10 +248,8 @@ The IBC router contains a mapping from a reserved application port and the suppo
 
 ```typescript
 type IBCRouter struct {
-    versions: portId -> [Version]
     callbacks: portId -> [Callback]
     clients: clientId -> Client
-    ports: portId -> counterpartyPortId
 }
 ```
 
@@ -312,11 +310,9 @@ function sendPacket(
         // IMPORTANT: if the one of the onSendPacket fails, the transaction is aborted and the potential state changes that previosly onSendPacket should apply are automatically reverted.  
         abortUnless(success)
 
-    // store commitment to the packet data & packet timeout
-    provableStore.set(
-      packetCommitmentPath(sourceClientId sequence),
-      hash(hash(data), timeoutTimestamp)
-    )
+
+    // store packet commitment using commit function defined in [packet specification](https://github.com/cosmos/ibc/blob/c7b2e6d5184b5310843719b428923e0c5ee5a026/spec/core/v2/ics-004-packet-semantics/PACKET.md)
+    commitV2Packet(packet) 
 
     // increment the sequence. Thus there are monotonically increasing sequences for packet flow for a given clientId
     privateStore.set(nextSequenceSendPath(sourceClientID), sequence+1)
@@ -386,16 +382,14 @@ function recvPacket(
         hash(packet.data, packet.timeoutTimestamp)
     ))
 
+    multiAck = Acknowledgement {}
     // Executes Application logic ∀ Payload
-    for payload in packet.data
-        // assert source port is destPort's counterparty port identifier
-        port= router.ports[payload.destPort]
-        assert(payload.sourcePort == port)  
+    for payload in packet.data 
         cbs = router.callbacks[payload.destPort]
         ack = cbs.onReceivePacket(payaload.version, payload.encoding, payload.appData)
         // the onReceivePacket returns the ack but does not write it 
         // IMPORTANT: if the ack is error, then the callback reverts its internal state changes, but the entire tx continues
-        multiAck=multiAck.add(ack)
+        multiAck.add(ack)
 
     // we must set the receipt so it can be verified on the other side
     // it's the sentinel success receipt: []byte{0x01}
@@ -440,19 +434,16 @@ The IBC handler performs the following steps in order:
 ```typescript
 function writeAcknowledgement(
   packet: Packet,
-  acknowledgement: [bytes]) {
+  acknowledgement: Acknowledgement) {
     // acknowledgement must not be empty
     abortTransactionUnless(len(acknowledgement) !== 0)
 
     // cannot already have written the acknowledgement
     abortTransactionUnless(provableStore.get(packetAcknowledgementPath(packet.destChannelId, packet.sequence) === null))
 
-    // write the acknowledgement
-    provableStore.set(
-      packetAcknowledgementPath(packet.destClientId, packet.sequence),
-      hash(multiAck)
-    )
-
+    // write the acknowledgement using commit function defined in [packet specification](https://github.com/cosmos/ibc/blob/c7b2e6d5184b5310843719b428923e0c5ee5a026/spec/core/v2/ics-004-packet-semantics/PACKET.md)
+    commitV2Acknowledgment(acknowledgement)
+    
     // log that a packet has been acknowledged
     emitLogEntry("writeAcknowledgement", {
       sequence: packet.sequence,
@@ -460,7 +451,7 @@ function writeAcknowledgement(
       destClientId: packet.destClientId,
       timeoutTimestamp: packet.timeoutTimestamp,
       data: packet.data,
-      multiAck
+      acknowledgement
     })
 }
 ```
@@ -478,7 +469,7 @@ We pass the `relayer` address just as in [Receiving packets](#receiving-packets)
 ```typescript
 function acknowledgePacket(
     packet: OpaquePacket,
-    acknowledgement: [bytes],
+    acknowledgement: Acknowledgement,
     proof: CommitmentProof,
     proofHeight: Height,
     relayer: string
@@ -511,11 +502,11 @@ function acknowledgePacket(
     nAck=0
     for payload in packet.data
         cbs = router.callbacks[payload.sourcePort]
-        success= cbs.OnAcknowledgePacket(packet, acknowledgement[nAck], relayer)
+        success= cbs.OnAcknowledgePacket(packet, acknowledgement.appAcknowledgement[nAck], relayer)
         abortUnless(success)
         nAck++ 
 
-    channelStore.delete(packetCommitmentPath(packet.sourcePort, packet.sourceChannel, packet.sequence))
+    channelStore.delete(packetCommitmentPath(packet.sourceClientId, packet.sequence))
 }
 ```
 
