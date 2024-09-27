@@ -263,13 +263,12 @@ TODO : Adapt to new flow
 
 ##### A day in the life of a packet
 
+TODO Modify Sketch 
+![V2 Happy Path Single Payload Sketch](Sketch_Happy_Path.png)
+
 TODO Write Setup. 
 
 The following sequence of steps must occur for a packet to be sent from module *1* on machine *A* to module *2* on machine *B*, starting from scratch.
-
-TODO Modify Sketch 
-
-![V2 Happy Path Single Payload Sketch](Sketch_1P_Happy_Path.png)
 
 ##### Sending packets
 
@@ -490,7 +489,7 @@ function acknowledgePacket(
 
     // assert dest channel is sourceChannel's counterparty channel identifier
     counterparty = getCounterparty(packet.destClientId)
-    assert(packet.sourceClientId == counterparty.ClientId)
+    assert(packet.sourceClientId == counterparty.clientId)
    
     // assert dest port is sourcePort's counterparty port identifier
     assert(packet.destPort == ports[packet.sourcePort])
@@ -512,7 +511,7 @@ function acknowledgePacket(
     nAck=0
     for payload in packet.data
         cbs = router.callbacks[payload.sourcePort]
-        success.OnAcknowledgePacket(packet, acknowledgement[nAck], relayer)
+        success= cbs.OnAcknowledgePacket(packet, acknowledgement[nAck], relayer)
         abortUnless(success)
         nAck++ 
 
@@ -558,13 +557,7 @@ can no longer be executed and to allow the calling module to safely perform appr
 
 Calling modules MAY atomically execute appropriate application timeout-handling logic in conjunction with calling `timeoutPacket`.
 
-In the case of an ordered channel, `timeoutPacket` checks the `recvSequence` of the receiving channel end and closes the channel if a packet has timed out.
-
 In the case of an unordered channel, `timeoutPacket` checks the absence of the receipt key (which will have been written if the packet was received). Unordered channels are expected to continue in the face of timed-out packets.
-
-If relations are enforced between timeout heights of subsequent packets, safe bulk timeouts of all packets prior to a timed-out packet can be performed. This specification omits details for now.
-
-Since we allow optimistic sending of packets (i.e. sending a packet before a channel opens), we must also allow optimistic timing out of packets. With optimistic sends, the packet may be sent on a channel that eventually opens or a channel that will never open. If the channel does open after the packet has timed out, then the packet will never be received on the counterparty so we can safely timeout optimistically. If the channel never opens, then we MUST timeout optimistically so that any state changes made during the optimistic send by the application can be safely reverted.
 
 We pass the `relayer` address just as in [Receiving packets](#receiving-packets) to allow for possible incentivization here as well.
 
@@ -575,20 +568,19 @@ function timeoutPacket(
     proofHeight: Height,
     relayer: string
 ) {
-    // in this specification, the source channel is the clientId
-    client = router.clients[packet.sourceChannel]
+    client = router.clients[packet.sourceClientId]
     assert(client !== null)
 
     // assert dest channel is sourceChannel's counterparty channel identifier
-    counterparty = getCounterparty(packet.destChannel)
-    assert(packet.sourceChannel == counterparty.channelId)
+    counterparty = getCounterparty(packet.destClientId)
+    assert(packet.sourceClientId == counterparty.channelId)
    
     // assert dest port is sourcePort's counterparty port identifier
     assert(packet.destPort == ports[packet.sourcePort])
 
     // verify we sent the packet and haven't cleared it out yet
-    assert(provableStore.get(packetCommitmentPath(packet.sourcePort, packet.sourceChannel, packet.sequence))
-           === hash(hash(packet.data), packet.timeoutHeight, packet.timeoutTimestamp))
+    assert(provableStore.get(packetCommitmentPath(packet.sourceClientId, packet.sequence))
+           === hash(hash(packet.data), packet.timeoutTimestamp))
 
     // get the timestamp from the final consensus state in the channel path
     var proofTimestamp
@@ -596,23 +588,22 @@ function timeoutPacket(
     assert(err != nil)
 
     // check that timeout height or timeout timestamp has passed on the other end
-    asert(
-      (packet.timeoutHeight > 0 && proofHeight >= packet.timeoutHeight) ||
-      (packet.timeoutTimestamp > 0 && proofTimestamp >= packet.timeoutTimestamp))
+    asert(packet.timeoutTimestamp > 0 && proofTimestamp >= packet.timeoutTimestamp)
 
-    receiptPath = packetReceiptPath(packet.destPort, packet.destChannel, packet.sequence)
+    receiptPath = packetReceiptPath(packet.destClientId, packet.sequence)
     merklePath = applyPrefix(counterparty.keyPrefix, receiptPath)
     assert(client.verifyNonMembership(
         proofHeight
-        0, 0,
         proof,
         merklePath
     ))
 
-    cbs = router.callbacks[packet.sourcePort]
-    cbs.OnTimeoutPacket(packet, relayer)
+    for payload in packet.data
+        cbs = router.callbacks[payload.sourcePort]
+        success=cbs.OnTimeoutPacket(packet, relayer)
+        abortUnless(success)
 
-    channelStore.delete(packetCommitmentPath(packet.sourcePort, packet.sourceChannel, packet.sequence))
+    channelStore.delete(packetCommitmentPath(packet.sourceChannelId, packet.sequence))
 }
 ```
 
@@ -621,6 +612,8 @@ function timeoutPacket(
 Packets must be acknowledged in order to be cleaned-up.
 
 #### Reasoning about race conditions
+
+TODO 
 
 ##### Identifier allocation
 
@@ -638,29 +631,17 @@ Verification of cross-chain state prevents man-in-the-middle attacks for both co
 
 If a client has been frozen while packets are in-flight, the packets can no longer be received on the destination chain and can be timed-out on the source chain.
 
-#### Querying channels
-
-Channels can be queried with `queryChannel`:
-
-```typescript
-function queryChannel(connId: Identifier, chanId: Identifier): ChannelEnd | void {
-    return provableStore.get(channelPath(connId, chanId))
-}
-```
-
 ### Properties & Invariants
 
-- The unique combinations of channel & port identifiers are first-come-first-serve: once a pair has been allocated, only the modules owning the ports in question can send or receive on that channel.
 - Packets are delivered exactly once, assuming that the chains are live within the timeout window, and in case of timeout can be timed-out exactly once on the sending chain.
-- The channel handshake cannot be man-in-the-middle attacked by another module on either blockchain or another blockchain's IBC handler.
 
 ## Backwards Compatibility
 
-Not applicable.
+TODO Mmmm ..Not applicable.
 
 ## Forwards Compatibility
 
-Data structures & encoding can be versioned at the connection or channel level. Channel logic is completely agnostic to packet data formats, which can be changed by the modules any way they like at any time.
+Data structures & encoding can be versioned at the application level. Core logic is completely agnostic to packet.data formats, which can be changed by the application modules any way they like at any time.
 
 ## Example Implementations
 
@@ -688,7 +669,6 @@ Mar 28, 2023 - Add `writeChannel` function to write channel end after executing 
 ## Copyright
 
 All content herein is licensed under [Apache 2.0](https://www.apache.org/licenses/LICENSE-2.0).
-
 
 /* NOTE What to do with this? 
 
