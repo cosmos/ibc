@@ -744,6 +744,7 @@ The IBC handler performs the following steps in order:
 
 - Checks that the channel is not closed to send packets
 - Checks that the calling module owns the sending port (see [ICS 5](../ics-005-port-allocation))
+- Checks that the client is not frozen or expired
 - Checks that the timeout height specified has not already passed on the destination chain
 - Increments the send sequence counter associated with the channel
 - Stores a constant-size commitment to the packet data & packet timeout
@@ -764,8 +765,14 @@ function sendPacket(
     // check that the channel must be OPEN to send packets;
     abortTransactionUnless(channel !== null)
     abortTransactionUnless(channel.state === OPEN)
+
     connection = provableStore.get(connectionPath(channel.connectionHops[0]))
     abortTransactionUnless(connection !== null)
+    
+    clientState = queryClientState(connection.clientIdenfier)
+    abortTransactionUnless(clientState !== null)
+    // Checks that client is Active, abort otherwise. 
+    abortTransactionUnless(Status(clientState) === Active)
 
     // check if the calling module owns the sending port
     abortTransactionUnless(authenticateCapability(channelCapabilityPath(sourcePort, sourceChannel), capability))
