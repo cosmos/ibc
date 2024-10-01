@@ -13,9 +13,14 @@ modified: 2019-08-25
 
 ## Synopsis
 
-The ICS-04 defines the mechanism to bidirectionally set up clients for each pair of communicating chains with specific Identifiers to establish the ground truth for the secure packet delivery, the packet data strcuture including the multi-data packet, the packet-flow semantics, the mechanisms to route the verification to the underlying clients, and how to route packets to their specific IBC applications. 
+TODO 
+
+The ICS-04 requires the ICS-02, the ICS-24 and the packet data strcuture including the multi-data packet as defined in [here](packet-data). 
+It defines the mechanism to register the IBC version 2 protocol channels, pairing up the clients for each pair of communicating chains with specific Identifiers to establish the ground truth for the secure packet delivery, the packet-flow semantics, the mechanisms to route the verification to the underlying clients, and how to route packets to their specific IBC applications. 
 
 ### Motivation
+
+TODO 
 
 The interblockchain communication protocol uses a cross-chain message passing model. IBC *packets* are relayed from one blockchain to the other by external relayer processes. Chain `A` and chain `B` confirm new blocks independently, and packets from one chain to the other may be delayed, censored, or re-ordered arbitrarily. Packets are visible to relayers and can be read from a blockchain by any relayer process and submitted to any other blockchain. 
 
@@ -26,22 +31,30 @@ The IBC version 2 will provide packet delivery between two chains communicating 
 ### Definitions
 
 `ConsensusState` is as defined in [ICS 2](../ics-002-client-semantics).
-// NOTE what about Port and Capabilities? 
-`Port` and `authenticateCapability` are as defined in [ICS 5](../ics-005-port-allocation).
 
 `hash` is a generic collision-resistant hash function, the specifics of which must be agreed on by the modules utilising the channel. `hash` can be defined differently by different chains.
 
 `Identifier`, `get`, `set`, `delete`, `getCurrentHeight`, and module-system related primitives are as defined in [ICS 24](../ics-024-host-requirements).
 
-`Counterparty` is the data structure responsible for maintaining the counterparty information necessary to establish the ground truth for securing the interchain communication.
+The `Channel`, in the IBC version 2 context, represents the chain exit gate. By pairing two exit gates (channels) on distinct chain e.g. `A` and `B`, the ground truth for the packet messages flow's commitments verification get verifiably established and the chains can start to exchange data packets and verify them. Once two channel are paired, the packets can flow in both directions: from `A` to `B` and from `B` to `A`.
+
+All channels provide exactly-once packet delivery, meaning that a packet sent on one end of a channel is delivered no more and no less than once, eventually, to the other end.
+
+A Channel is a data structure responsible for maintaining the counterparty information necessary to establish the ground truth for securing the interchain communication and is defined as: 
 
 ```typescript
-interface Counterparty {
+interface Channel {
     clientId: bytes 
-    channelId: bytes
+    counterpartyChannelId: bytes
     keyPrefix: CommitmentPrefix 
 }
 ```
+
+Where :
+
+- `clientId` is the client id of the counterparty locally stored on our chain. It can be seen as the pointer to our light client of the counterparty chain where the light client is a light representation of the counterparty chain. 
+- `counterpartyChannelId` is the counterparty channel identifier that must be used by the packet. 
+- `keyPrefix` is the key path that the counterparty will use to prove its store packet flow messages.
 
 The `Packet`, `Payload`, `Encoding` and the `Acknowledgement` interfaces are as defined in [packet specification](https://github.com/cosmos/ibc/blob/c7b2e6d5184b5310843719b428923e0c5ee5a026/spec/core/v2/ics-004-packet-semantics/PACKET.md). For convenience, following we recall their structures.  
 
@@ -102,8 +115,8 @@ The protocol introduces standardized packet receipts that will serve as sentinel
 
 ```typescript
 enum PacketReceipt {
-  SUCCESSFUL_RECEIPT,
-  TIMEOUT_RECEIPT,
+  SUCCESSFUL_RECEIPT = bytes(0x01),
+  TIMEOUT_RECEIPT = bytes(0x02),
 }
 ```
 
@@ -141,16 +154,15 @@ E.g. If a packet within 3 payloads intended for 3 different application is sent 
 
 #### Permissioning
 
-// NOTE - here what about capabilities and permissions? 
-
-- Channels should be permissioned to one module on each end, determined during the handshake and immutable afterwards (higher-level logic could tokenize channel ownership by tokenising ownership of the port).
-  Only the module associated with a channel end should be able to send or receive on it.
+- Channels should be permissioned to the application registered on the local router. Thus only the modules registered on the local router, and so associated with the channel, should be able to send or receive on it.
 
 ## Technical Specification
 
 ### Dataflow visualisation
 
-TODO The architecture of clients, connections, channels and packets:
+TODO 
+
+The architecture of clients, connections, channels and packets:
 
 ![Dataflow Visualisation](../../ics-004-channel-and-packet-semantics/dataflow.png)
 
@@ -163,8 +175,8 @@ The protocol defines the paths `packetCommitmentPath`, `packetRecepitPath` and `
 Thus Constant-size commitments to packet data fields are stored under the packet sequence number:
 
 ```typescript
-function packetCommitmentPath(sourceId: bytes, sequence: BigEndianUint64): Path {
-    return "commitments/channels/{sourceId}/sequences/{sequence}"
+function packetCommitmentPath(sourceChannelId: bytes, sequence: BigEndianUint64): Path {
+    return "commitments/channels/{sourceChannelId}/sequences/{sequence}"
 }
 ```
 
@@ -173,8 +185,8 @@ Absence of the path in the store is equivalent to a zero-bit.
 Packet receipt data are stored under the `packetReceiptPath`. In the case of a successful receive, the destination chain writes a sentinel success value of `SUCCESSFUL_RECEIPT`. While in the case of a timeout, the destination chain MAY (May?Must?Should?Mmm) write a sentinel timeout value `TIMEOUT_RECEIPT` if the packet is received after the specified timeout.
 
 ```typescript
-function packetReceiptPath(sourceId: bytes, sequence: BigEndianUint64): Path {
-    return "receipts/channels/{sourceId}/sequences/{sequence}"
+function packetReceiptPath(sourceChannelId: bytes, sequence: BigEndianUint64): Path {
+    return "receipts/channels/{sourceChannelId}/sequences/{sequence}"
 }
 ```
 
@@ -182,74 +194,98 @@ Packet acknowledgement data are stored under the `packetAcknowledgementPath`:
 
 ```typescript
 function packetAcknowledgementPath(sourceId: bytes, sequence: BigEndianUint64): Path {
-    return "acks/channels/{sourceId}/sequences/{sequence}"
+    return "acks/channels/{sourceChannelId}/sequences/{sequence}"
 }
 ```
+
+Additionally, the protocol suggests the privateStore paths for the `nextSequenceSend` and `channelPath` variable. Private paths are meant to be used locally in the chain. Thus their specification can be arbitrary changed by implementors at their will.  
 
 - The `nextSequenceSend` is stored separately in the privateStore and tracks the sequence number for the next packet to be sent for a given source clientId.
 
 ```typescript
-function nextSequenceSendPath(sourceID: bytes): Path {
-    return "nextSequenceSend/clients/{sourceID}
+function nextSequenceSendPath(sourceChannelID: bytes): Path {
+    return "nextSequenceSend/{sourceChannelID}"
+}
+```
+
+- The `channelPath` is stored separately in the privateStore and tracks the channels paired with the other chains.
+
+```typescript
+function channelPath(channelId: Identifier): Path {
+    return "channels/{channelId}"
 }
 ```
 
 ### Sub-protocols
 
-> Note: If the host state machine is utilising object capability authentication (see [ICS 005](../ics-005-port-allocation)), all functions utilising ports take an additional capability parameter.
+The ICS-04 defines the channel registration and the application registration procedures and the packet handlers flow. 
 
-#### Counterparty Idenfitifcation and Registration 
+In oder to send packets using IBC version 2, chain `A` and chain `B` are required to individually register the exact `Channel` pair that will be used by the two communicating chains. Thus, both chain `A` and chain `B` MUST execute:  
 
-A client MUST have the ability to idenfity its counterparty. With a client, we can prove any key/value path on the counterparty. However, without knowing which identifier the counterparty uses when it sends messages to us, we cannot differentiate between messages sent from the counterparty to our chain vs messages sent from the counterparty with other chains. Most implementations will not be able to store the ICS-24 paths directly as a key in the global namespace, but will instead write to a reserved, prefixed keyspace so as not to conflict with other application state writes. Thus the counteparty information we must have includes both its identifier for our chain as well as the key prefix under which it will write the provable ICS-24 paths.
+1. The `channel registration` procedure. 
+2. The `application registration` procedure, where the application used by the local chain are registered on the local chain router.
 
-Thus, IBC version 2 introduces a new message `RegisterCounterparty` that will associate the counterparty client of our chain with our client of the counterparty. Thus, if the `RegisterCounterparty` message is submitted to both sides correctly. Then both sides have mirrored <client,client> pairs that can be treated as channel identifiers. Assuming they are correct, the client on each side is unique and provides an authenticated stream of packet data between the two chains. If the `RegisterCounterparty` message submits the wrong clientID, this can lead to invalid behaviour; but this is equivalent to a relayer submitting an invalid client in place of a correct client for the desired chain. In the simplest case, we can rely on out-of-band social consensus to only send on valid <client, client> pairs that represent a connection between the desired chains of the user; just as we currently rely on out-of-band social consensus that a given clientID and channel built on top of it is the valid, canonical identifier of our desired chain.
+The bidirectional packet stream can be only started after the channel registration and the application registration have been correctly executed individually by both chains. Otherwise, any sent packet cannot be received and will timeout.  
+
+#### Channel pairing and counterparty idenfitifcation  
+
+Each IBC chain MUST have the ability to idenfity its counterparty. With a client, we can prove any key/value path on the counterparty. However, without knowing which identifier the counterparty uses when it sends messages to us, we cannot differentiate between messages sent from the counterparty to our chain vs messages sent from the counterparty with other chains. Most implementations will not be able to store the ICS-24 paths directly as a key in the global namespace, but will instead write to a reserved, prefixed keyspace so as not to conflict with other application state writes. 
+
+To provide the chains a mechanism for the mutual and verifiable identification, the IBC version 2 defines the channel registration procedure to store the counterparty information including both its identifier for our chain and as well as the key prefix under which it will write the provable ICS-24 paths.
+
+Thus, IBC version 2 introduces a new message `RegisterChannel` that will associate the counterparty client of our chain with our client of the counterparty. Thus, if the `RegisterChannel` message is submitted to both sides correctly. Then both sides have mirrored <client,client> pairs that can be treated as channel identifiers. Assuming they are correct, the client on each side is unique and provides an authenticated stream of packet data between the two chains. If the `RegisterChannel` message submits the wrong clientID, this can lead to invalid behaviour; but this is equivalent to a relayer submitting an invalid client in place of a correct client for the desired chain. In the simplest case, we can rely on out-of-band social consensus to only send on valid <client, client> pairs that represent a connection between the desired chains of the user; just as we currently rely on out-of-band social consensus that a given clientID and channel built on top of it is the valid, canonical identifier of our desired chain.
 
 ```typescript
-function RegisterCounterparty(
-    clientID: bytes, // this will be our own client identifier representing our channel to desired chain
-    counterpartyClientId: bytes, // this is the counterparty's identifier of our chain
+function RegisterChannel(
+    clientID: bytes, // In a pure v2 connection this field will represent our actual clientId of the counterparty chain 
+    counterpartyChannelId: bytes, // this is the counterparty's channel identifier
     counterpartyKeyPrefix: CommitmentPrefix,
     authentication: data, // implementation-specific authentication data
 ) {
     assert(verify(authentication))
 
-    counterparty = Counterparty{
+    channel = Channel{
         clientId: clientId,
-        channelId: counterpartyClientId,
+        channelId: counterpartyChannelId,
         keyPrefix: counterpartyKeyPrefix
     }
 
-    privateStore.set(Map<clientID, counterparty>)
+    privateStore.set(channelPath(counterpartyChannelId), channel)
 }
 ```
 
-The `RegisterCounterparty` method allows for authentication data that implementations may verify before storing the provided counterparty identifier. The strongest authentication possible is to have a valid clientState and consensus state of our chain in the authentication along with a proof it was stored at the claimed counterparty identifier.
-A simpler but weaker authentication would simply be to check that the `RegisterCounterparty` message is sent by the same relayer that initialized the client. This would make the client parameters completely initialized by the relayer. Thus, users must verify that the client is pointing to the correct chain and that the counterparty identifier is correct as well before using the lite channel identified by the provided client-client pair.
+The `RegisterChannel` method allows for authentication data that implementations may verify before storing the provided counterparty identifier. The strongest authentication possible is to have a valid clientState and consensus state of our chain in the authentication along with a proof it was stored at the claimed counterparty identifier.
+A simpler but weaker authentication would simply be to check that the `RegisterChannel` message is sent by the same relayer that initialized the client. This would make the client parameters completely initialized by the relayer. Thus, users must verify that the client is pointing to the correct chain and that the counterparty identifier is correct as well before using the lite channel identified by the provided client-client pair.
 
 ```typescript
-// getCounterparty retrieves the stored counterparty identifier
-// given the channelIdentifier on our chain once it is provided
-function getCounterparty(clientId: bytes): Counterparty {
-    return privateStore.get(clientId) // retrieves from map<clientID,counterparty> the counterparty 
+// getChannel retrieves the stored channel given the counterparty channel-id. 
+function getChannel(counterpartyChannelId: bytes): Channel {
+    return privateStore.get(channelPath(counterpartyChannelId)) 
 }
 ```
 
 Thus, once two chains have set up clients for each other with specific Identifiers, they can send IBC packets using the packet interface defined before.
 
-Since the packets are addressed **directly** with the underlying light clients, there are **no** more handshakes necessary. Instead the packet sender must be capable of providing the correct <client, client> pair.
+Since the packets are addressed **directly** with the underlying light clients, there are **no** more handshakes necessary. Instead the packet sender must be capable of providing the correct <channel,channel> pair.
 
 Sending a packet with the wrong source client is equivalent to sending a packet with the wrong source channel. Sending a packet on a channel with the wrong provided counterparty is a new source of errors, however this is added to the burden of out-of-band social consensus.
 
 If the client and counterparty identifiers are setup correctly, then the correctness and soundness properties of IBC holds. IBC packet flow is guaranteed to succeed. If a user sends a packet with the wrong destination channel, then as we will see it will be impossible for the intended destination to correctly verify the packet thus, the packet will simply time out.
 
+Once this is done, then the application registering procedure is required, 
+
+The channel registration 
+
 #### Registering IBC applications on the router
+
+The application registering procedure consist in storing the available callbacks associated within a portID (or application) and the linking it to the underlying client. 
 
 The IBC router contains a mapping from a reserved application port and the supported versions of that application as well as a mapping from channelIdentifiers to channels.
 
 ```typescript
 type IBCRouter struct {
     callbacks: portId -> [Callback]
-    clients: clientId -> Client
+    clients: channelId -> Client
 }
 ```
 
@@ -287,13 +323,13 @@ Note that the full packet is not stored in the state of the chain - merely a sho
 
 ```typescript
 function sendPacket(
-    sourceClientId: bytes,
-    destClientId: bytes,
+    sourceChannelId: bytes,
+    destChannelId: bytes,
     timeoutTimestamp: uint64,
     packet: []byte
 ): uint64 {
-    // in this specification, the source channel is the clientId
-    client = router.clients[packet.sourceClientId]
+
+    client = router.clients[packet.sourceChannelId]
     assert(client !== null)
 
     // disallow packets with a zero timeoutHeight and timeoutTimestamp
@@ -301,28 +337,30 @@ function sendPacket(
     assert(currentTimestamp()> timeoutTimestamp) // Mmm
     
     // if the sequence doesn't already exist, this call initializes the sequence to 0
-    sequence = privateStore.get(nextSequenceSendPath(sourceClientId))
+    sequence = privateStore.get(nextSequenceSendPath(sourceChannelId))
     
     // Executes Application logic ∀ Payload
     for payload in packet.data
         cbs = router.callbacks[payload.sourcePort]
-        success = cbs.onSendPacket(version, encoding, appData)
+        success = cbs.onSendPacket(packet.sourceId,payload)
         // IMPORTANT: if the one of the onSendPacket fails, the transaction is aborted and the potential state changes that previosly onSendPacket should apply are automatically reverted.  
         abortUnless(success)
 
 
     // store packet commitment using commit function defined in [packet specification](https://github.com/cosmos/ibc/blob/c7b2e6d5184b5310843719b428923e0c5ee5a026/spec/core/v2/ics-004-packet-semantics/PACKET.md)
-    commitV2Packet(packet) 
+    commit=commitV2Packet(packet) 
 
+    provableStore.set(packetCommitmentPath(packet.sourcelId, sequence),commit)
+    
     // increment the sequence. Thus there are monotonically increasing sequences for packet flow for a given clientId
-    privateStore.set(nextSequenceSendPath(sourceClientID), sequence+1)
+    privateStore.set(nextSequenceSendPath(sourceChannelId), sequence+1)
 
     // log that a packet can be safely sent
     // NOTE introducing sourceID and destID can be useful for monitoring - e.g. if one wants to monitor all packets between sourceID and destID emitting this in the event would simplify his life. 
 
     emitLogEntry("sendPacket", {
-      sourceID: sourceClientId, 
-      destID: destClientId, 
+      sourceID: sourceChannelId, 
+      destID: destChannelId, 
       sequence: sequence,
       data: data,
       timeoutTimestamp: timeoutTimestamp
@@ -330,6 +368,12 @@ function sendPacket(
 
 }
 ```
+
+TODO: 
+
+- Preconditions
+- Error Conditions
+- Post Conditions 
 
 #### Receiving packets
 
@@ -355,38 +399,42 @@ function recvPacket(
   relayer: string): Packet {
 
     // in this specification, the destination channel is the clientId
-    client = router.clients[packet.destClientId]
+    client = router.clients[packet.destChannelId]
     assert(client !== null)
 
     // assert that our counterparty clientId is the packet.sourceClientId
-    counterparty = getCounterparty(packet.destClientId)
-    assert(packet.sourceClientId == counterparty.clientId)
+    channel = getChannel(packet.destChannelId)
+    assert(packet.sourceId == channel.clientId)
 
     // verify timeout
     assert(packet.timeoutTimestamp === 0 || currentTimestamp() < packet.timeoutTimestamp)
 
     // verify the packet receipt for this packet does not exist already 
-    packetReceipt = provableStore.get(packetReceiptPath(packet.sourceClientId, packet.sequence))
+    packetReceipt = provableStore.get(packetReceiptPath(packet.destId, packet.sequence))
     abortUnless(packetReceipt === null)
 
-    // verify commitment 
-    packetPath = packetCommitmentPath(packet.sourceClientId, packet.sequence)
+    //////// verify commitment 
+    
+    // 1. retrieve keys 
+    packetPath = packetCommitmentPath(packet.destId, packet.sequence)
     merklePath = applyPrefix(counterparty.keyPrefix, packetPath)
-    // DISCUSSION NEEDED: Should we have an in-protocol notion of Prefixing the path
-    // or should we make this a concern of the client's VerifyMembership
-    // proofPath = applyPrefix(client.counterpartyChannelStoreIdentifier, packetPath)
+    
+    // 2. reconstruct commit value based on the passed-in packet  
+    commit = commitV2Packet(packet) 
+    
+    // 3. call client verify memership 
     assert(client.verifyMembership(
+        client.clientState 
         proofHeight,
         proof,
         merklePath,
-        hash(packet.data, packet.timeoutTimestamp)
-    ))
+        commit))
 
     multiAck = Acknowledgement {}
     // Executes Application logic ∀ Payload
     for payload in packet.data 
         cbs = router.callbacks[payload.destPort]
-        ack = cbs.onReceivePacket(payaload.version, payload.encoding, payload.appData)
+        ack = cbs.onReceivePacket(payload)
         // the onReceivePacket returns the ack but does not write it 
         // IMPORTANT: if the ack is error, then the callback reverts its internal state changes, but the entire tx continues
         multiAck.add(ack)
@@ -394,7 +442,7 @@ function recvPacket(
     // we must set the receipt so it can be verified on the other side
     // it's the sentinel success receipt: []byte{0x01}
     provableStore.set(
-        packetReceiptPath(packet.sourceChannelId, packet.sequence),
+        packetReceiptPath(packet.destId, packet.sequence),
         SUCCESSFUL_RECEIPT
     )
 
@@ -408,13 +456,19 @@ function recvPacket(
       data: packet.data
       timeoutTimestamp: packet.timeoutTimestamp,
       sequence: packet.sequence,
-      sourceClientId: packet.sourceClientId,
-      destClientId: packet.destClientId,
+      sourceId: packet.sourceId,
+      destId: packet.destId,
       relayer: relayer 
     })
     
 }
 ```
+
+TODO: 
+
+- Preconditions
+- Error Conditions
+- Post Conditions 
 
 #### Writing acknowledgements
 
@@ -439,11 +493,14 @@ function writeAcknowledgement(
     abortTransactionUnless(len(acknowledgement) !== 0)
 
     // cannot already have written the acknowledgement
-    abortTransactionUnless(provableStore.get(packetAcknowledgementPath(packet.destChannelId, packet.sequence) === null))
+    abortTransactionUnless(provableStore.get(packetAcknowledgementPath(packet.destId, packet.sequence) === null))
 
     // write the acknowledgement using commit function defined in [packet specification](https://github.com/cosmos/ibc/blob/c7b2e6d5184b5310843719b428923e0c5ee5a026/spec/core/v2/ics-004-packet-semantics/PACKET.md)
-    commitV2Acknowledgment(acknowledgement)
+    commit=commitV2Acknowledgment(acknowledgement)
     
+    provableStore.set(
+    packetAcknowledgementPath(packet.destId, packet.sequence),commit)
+
     // log that a packet has been acknowledged
     emitLogEntry("writeAcknowledgement", {
       sequence: packet.sequence,
@@ -455,6 +512,12 @@ function writeAcknowledgement(
     })
 }
 ```
+
+TODO: 
+
+- Preconditions
+- Error Conditions
+- Post Conditions 
 
 #### Processing acknowledgements
 
@@ -475,40 +538,44 @@ function acknowledgePacket(
     relayer: string
 ) {
     // in this specification, the source channel is the clientId
-    client = router.clients[packet.sourceClientId]
+    client = router.clients[packet.sourceId]
     assert(client !== null)
 
     // assert dest channel is sourceChannel's counterparty channel identifier
-    counterparty = getCounterparty(packet.destClientId)
-    assert(packet.sourceClientId == counterparty.clientId)
+    channel = getChannel(packet.destId)
+    assert(packet.sourceId == channel.clientId)
    
-    // assert dest port is sourcePort's counterparty port identifier
-    assert(packet.destPort == ports[packet.sourcePort])
-
     // verify we sent the packet and haven't cleared it out yet
-    assert(provableStore.get(packetCommitmentPath(packet.sourceClientId, packet.sequence))
-           === hash(hash(packet.data), packet.timeoutTimestamp))
+    
+    assert(provableStore.get(packetCommitmentPath(packet.sourceId, packet.sequence)) ===  commitV2Packet(packet))
 
-    ackPath = packetAcknowledgementPath(packet.destClientId, packet.sequence)
+    ackPath = packetAcknowledgementPath(packet.destId, packet.sequence)
     merklePath = applyPrefix(counterparty.keyPrefix, ackPath)
     assert(client.verifyMembership(
+        client.clientState
         proofHeight,
         proof,
         merklePath,
-        hash(acknowledgement)
+        acknowledgement
     ))
 
      // Executes Application logic ∀ Payload
     nAck=0
     for payload in packet.data
         cbs = router.callbacks[payload.sourcePort]
-        success= cbs.OnAcknowledgePacket(packet, acknowledgement.appAcknowledgement[nAck], relayer)
+        success= cbs.OnAcknowledgePacket(payload, acknowledgement.appAcknowledgement[nAck], relayer)
         abortUnless(success)
         nAck++ 
 
-    channelStore.delete(packetCommitmentPath(packet.sourceClientId, packet.sequence))
+    channelStore.delete(packetCommitmentPath(packet.sourceId, packet.sequence))
 }
 ```
+
+TODO: 
+
+- Preconditions
+- Error Conditions
+- Post Conditions 
 
 ##### Acknowledgement Envelope
 
@@ -559,19 +626,19 @@ function timeoutPacket(
     proofHeight: Height,
     relayer: string
 ) {
-    client = router.clients[packet.sourceClientId]
+    client = router.clients[packet.sourceId]
     assert(client !== null)
 
     // assert dest channel is sourceChannel's counterparty channel identifier
-    counterparty = getCounterparty(packet.destClientId)
-    assert(packet.sourceClientId == counterparty.channelId)
+    channel = getChannel(packet.destId)
+    assert(packet.sourceId == channel.channelId)
    
     // assert dest port is sourcePort's counterparty port identifier
     assert(packet.destPort == ports[packet.sourcePort])
 
     // verify we sent the packet and haven't cleared it out yet
-    assert(provableStore.get(packetCommitmentPath(packet.sourceClientId, packet.sequence))
-           === hash(hash(packet.data), packet.timeoutTimestamp))
+    assert(provableStore.get(packetCommitmentPath(packet.sourceId, packet.sequence))
+           === commitV2Packet(packet))
 
     // get the timestamp from the final consensus state in the channel path
     var proofTimestamp
@@ -581,22 +648,29 @@ function timeoutPacket(
     // check that timeout height or timeout timestamp has passed on the other end
     asert(packet.timeoutTimestamp > 0 && proofTimestamp >= packet.timeoutTimestamp)
 
-    receiptPath = packetReceiptPath(packet.destClientId, packet.sequence)
+    receiptPath = packetReceiptPath(packet.destId, packet.sequence)
     merklePath = applyPrefix(counterparty.keyPrefix, receiptPath)
     assert(client.verifyNonMembership(
-        proofHeight
+        client.clientState,
+        proofHeight,
         proof,
         merklePath
     ))
 
     for payload in packet.data
         cbs = router.callbacks[payload.sourcePort]
-        success=cbs.OnTimeoutPacket(packet, relayer)
+        success=cbs.OnTimeoutPacket(payload, relayer)
         abortUnless(success)
 
-    channelStore.delete(packetCommitmentPath(packet.sourceChannelId, packet.sequence))
+    channelStore.delete(packetCommitmentPath(packet.sourceId, packet.sequence))
 }
 ```
+
+TODO: 
+
+- Preconditions
+- Error Conditions
+- Post Conditions 
 
 ##### Cleaning up state
 
@@ -660,28 +734,3 @@ Mar 28, 2023 - Add `writeChannel` function to write channel end after executing 
 ## Copyright
 
 All content herein is licensed under [Apache 2.0](https://www.apache.org/licenses/LICENSE-2.0).
-
-/* NOTE What to do with this? 
-
-#### Identifier validation
-
-Channels are stored under a unique `(portIdentifier, channelIdentifier)` prefix.
-The validation function `validatePortIdentifier` MAY be provided.
-
-```typescript
-type validateChannelIdentifier = (portIdentifier: Identifier, channelIdentifier: Identifier) => boolean
-```
-
-If not provided, the default `validateChannelIdentifier` function will always return `true`.
-
-When the opening handshake is complete, the module which initiates the handshake will own the end of the created channel on the host ledger, and the counterparty module which
-it specifies will own the other end of the created channel on the counterparty chain. Once a channel is created, ownership cannot be changed (although higher-level abstractions
-could be implemented to provide this).
-
-Chains MUST implement a function `generateIdentifier` which chooses an identifier, e.g. by incrementing a counter:
-
-```typescript
-type generateIdentifier = () -> Identifier
-```
-
-*/
