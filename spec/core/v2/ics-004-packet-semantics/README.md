@@ -62,16 +62,16 @@ A `Packet`, in the interblockchain communication protocol, is a particular inter
 
 ```typescript
 interface Packet {
-    sourceIdentifier: bytes,
-    destIdentifier: bytes,
+    sourceId: bytes,
+    destId: bytes,
     sequence: uint64
     timeout: uint64,
     data: [Payload]
 }
 ```
 
-- The `sourceIdentifier` derived from the `clientIdentifier` will tell the IBC router which chain a received packet came from.
-- The `destIdentifier` derived from the `clientIdentifier` will tell the IBC router which chain to send the packets to. 
+- The `sourceId` derived from the `clientIdentifier` will tell the IBC router which chain a received packet came from.
+- The `destId` derived from the `clientIdentifier` will tell the IBC router which chain to send the packets to. 
 - The `sequence` number corresponds to the order of sends and receives, where a packet with an earlier sequence number MUST be sent and received (NOTE: not sure about received) before a packet with a later sequence number.
 - The `timeout` indicates the UNIX timestamp in seconds and is encoded in LittleEndian. It must be passed on the destination chain and once elapsed, will no longer allow the packet processing, and will instead generate a time-out.
 
@@ -175,8 +175,8 @@ The protocol defines the paths `packetCommitmentPath`, `packetRecepitPath` and `
 Thus Constant-size commitments to packet data fields are stored under the packet sequence number:
 
 ```typescript
-function packetCommitmentPath(sourceChannelId: bytes, sequence: BigEndianUint64): Path {
-    return "commitments/channels/{sourceChannelId}/sequences/{sequence}"
+function packetCommitmentPath(sourceId: bytes, sequence: BigEndianUint64): Path {
+    return "commitments/channels/{sourceId}/sequences/{sequence}"
 }
 ```
 
@@ -185,8 +185,8 @@ Absence of the path in the store is equivalent to a zero-bit.
 Packet receipt data are stored under the `packetReceiptPath`. In the case of a successful receive, the destination chain writes a sentinel success value of `SUCCESSFUL_RECEIPT`. While in the case of a timeout, the destination chain MAY (May?Must?Should?Mmm) write a sentinel timeout value `TIMEOUT_RECEIPT` if the packet is received after the specified timeout.
 
 ```typescript
-function packetReceiptPath(sourceChannelId: bytes, sequence: BigEndianUint64): Path {
-    return "receipts/channels/{sourceChannelId}/sequences/{sequence}"
+function packetReceiptPath(sourceId: bytes, sequence: BigEndianUint64): Path {
+    return "receipts/channels/{sourceId}/sequences/{sequence}"
 }
 ```
 
@@ -194,7 +194,7 @@ Packet acknowledgement data are stored under the `packetAcknowledgementPath`:
 
 ```typescript
 function packetAcknowledgementPath(sourceId: bytes, sequence: BigEndianUint64): Path {
-    return "acks/channels/{sourceChannelId}/sequences/{sequence}"
+    return "acks/channels/{sourceId}/sequences/{sequence}"
 }
 ```
 
@@ -203,8 +203,8 @@ Additionally, the protocol suggests the privateStore paths for the `nextSequence
 - The `nextSequenceSend` is stored separately in the privateStore and tracks the sequence number for the next packet to be sent for a given source clientId.
 
 ```typescript
-function nextSequenceSendPath(sourceChannelID: bytes): Path {
-    return "nextSequenceSend/{sourceChannelID}"
+function nextSequenceSendPath(sourceId: bytes): Path {
+    return "nextSequenceSend/{sourceId}"
 }
 ```
 
