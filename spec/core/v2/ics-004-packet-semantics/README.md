@@ -41,15 +41,15 @@ A `channel` is a pipeline for exactly-once packet delivery between specific modu
 ```typescript
 interface Channel {
     clientId: bytes 
-    counterpartyChannelId: bytes
+    counterpartyChannelId: bytes 
     keyPrefix: CommitmentPrefix 
 }
 ```
 
 Where :
 
-- `clientId` is the client id of the counterparty used by our chain. 
-- `counterpartyChannelId` is the counterparty channel identifier that MUST be used by the packet. 
+- `clientId` is the local light client id of the counterparty chain. 
+- `counterpartyChannelId` is the counterparty channel id. 
 - `keyPrefix` is the key path that the counterparty will use to prove its store packet flow messages.
 
 The `Packet`, `Payload`, `Encoding` and the `Acknowledgement` interfaces are as defined in [packet specification](https://github.com/cosmos/ibc/blob/c7b2e6d5184b5310843719b428923e0c5ee5a026/spec/core/v2/ics-004-packet-semantics/PACKET.md). For convenience, following we recall their structures.  
@@ -66,9 +66,9 @@ interface Packet {
 }
 ```
 
-- The `sourceId` derived from the `clientIdentifier` will tell the IBC router which chain a received packet came from.
-- The `destId` derived from the `clientIdentifier` will tell the IBC router which chain to send the packets to. 
-- The `sequence` number corresponds to the order of sends and receives, where a packet with an earlier sequence number MUST be sent and received (NOTE: not sure about received) before a packet with a later sequence number.
+- The `sourceId` is the identifier on the source chain.
+- The `destId` is the identifier on the dest chain. 
+- The `sequence` number corresponds to the order of sent packets.  
 - The `timeout` indicates the UNIX timestamp in seconds and is encoded in LittleEndian. It must be passed on the destination chain and once elapsed, will no longer allow the packet processing, and will instead generate a time-out.
 
 The `Payload` is a particular interface defined as follows:
@@ -141,6 +141,8 @@ type IBCRouter struct {
 
 The IBCRouter struct MUST be set by the application modules during the module setup to carry out the application registration procedure. 
 
+- The `MAX_TIMEOUT_DELTA` is intendend as the max difference between currentTimestamp and timeoutTimestamp that can be given in input. 
+
 ```typescript
 const MAX_TIMEOUT_DELTA = TBD
 ```
@@ -169,19 +171,11 @@ const MAX_TIMEOUT_DELTA = TBD
 
 ## Technical Specification
 
-### Dataflow visualisation
-
-TODO 
-
-The architecture of clients, connections, channels and packets:
-
-![Dataflow Visualisation](../../ics-004-channel-and-packet-semantics/dataflow.png)
-
 ### Preliminaries
 
 #### Store paths
 
-The protocol defines the paths `packetCommitmentPath`, `packetRecepitPath` and `packetAcknowledgementPath` that MUST be used as the referece locations in the provableStore to prove respectilvey the packet commitment, the receipt and the acknowledgment to the counterparty chain. 
+The ICS-04 use the protocol paths, defined in [ICS-24](../ics-024-host-requirements/README.md), `packetCommitmentPath`, `packetRecepitPath` and `packetAcknowledgementPath`. These paths MUST be used as the referece locations in the provableStore to prove respectilvey the packet commitment, the receipt and the acknowledgment to the counterparty chain. 
 
 Thus Constant-size commitments to packet data fields are stored under the packet sequence number:
 
@@ -193,7 +187,7 @@ function packetCommitmentPath(sourceId: bytes, sequence: BigEndianUint64): Path 
 
 Absence of the path in the store is equivalent to a zero-bit.
 
-Packet receipt data are stored under the `packetReceiptPath`. In the case of a successful receive, the destination chain writes a sentinel success value of `SUCCESSFUL_RECEIPT`. While in the case of a timeout, the destination chain MAY (May?Must?Should?Mmm) write a sentinel timeout value `TIMEOUT_RECEIPT` if the packet is received after the specified timeout.
+Packet receipt data are stored under the `packetReceiptPath`. In the case of a successful receive, the destination chain writes a sentinel success value of `SUCCESSFUL_RECEIPT`. While in the case of a timeout, the destination chain MUST write a sentinel timeout value `TIMEOUT_RECEIPT` if the packet is received after the specified timeout.
 
 ```typescript
 function packetReceiptPath(sourceId: bytes, sequence: BigEndianUint64): Path {
@@ -209,7 +203,7 @@ function packetAcknowledgementPath(sourceId: bytes, sequence: BigEndianUint64): 
 }
 ```
 
-Additionally, the protocol suggests the privateStore paths for the `nextSequenceSend` , `channelPath` and `channelCreator` variable. Private paths are meant to be used locally in the chain. Thus their specification can be arbitrary changed by implementors at their will.  
+Additionally, the ICS-04 suggests the privateStore paths for the `nextSequenceSend` , `channelPath` and `channelCreator` variable. Private paths are meant to be used locally in the chain. Thus their specification can be arbitrary changed by implementors at their will.  
 
 - The `nextSequenceSend` is stored separately in the privateStore and tracks the sequence number for the next packet to be sent for a given source clientId.
 
@@ -237,47 +231,58 @@ function creatorPath(channelId: Identifier, creator: address): Path {
 
 ### Sub-protocols
 
-In order to start sending packets using IBC version 2, chain `A` and chain `B` MUST execute the following set of procedures:  
+TODO The architecture of clients, connections, channels and packets:
 
-- Client creation: chain `A` MUST create the `B` light client; `B` MUST create the `A` light client.   
+#### Setup
+
+In order to start sending packets using IBC version 2, chain `A` and chain `B` MUST execute the entire setup following this set of procedures:  
+
 - Application registration: during the application module setup the application MUST be registered on the local IBC router. 
-- Channel creation: both chain `A` and chain `B` MUST create local channels.  
+- Client creation: chain `A` MUST create the `B` light client; `B` MUST create the `A` light client.   
+- Channel creation: both chain `A` and chain `B` MUST create local IBC version 2 channels.  
 - Channel registration: both chain MUST register their counterpartyId in the channel previously created.   
 
-While the `createClient` procedure is defined in [ICS2](../ics-002-client-semantics/README.md) and the application registration MUST be defined in the setup section of the application module and being executed on the module startup, the ICS-04 defines the channel creation and registration procedure. 
+While the application registration MUST be defined in the setup section of the application module and being executed on the module startup and the `createClient` procedure is defined in [ICS2](../ics-002-client-semantics/README.md), the ICS-04 defines the channel creation and registration procedure. 
 
-#### Channel creation 
+##### Channel creation 
 
 ```typescript
 function createChannel(
     clientId: bytes,  
     counterpartyKeyPrefix: CommitmentPrefix) (channelId: bytes){
 
+        // Implementation-Specific Input Validation 
+        // All implementations MUST ensure the inputs value are properly validated and compliant with this specification 
+
+        // Channel Checks
         channelId = generateIdentifier(clientId,counterpartyKeyPrefix) 
         abortTransactionUnless(validateChannelIdentifier(channelId))
-        abortTransactionUnless(privateStore.get(channelPath(channelId)) === null)
+        abortTransactionUnless(getChannel(channelId)) === null)
         
+        // Channel manipulation
         channel = Channel{
             clientId: clientId,
             counterpartyChannelId: "",  // This field it must be a blank field during the creation as it may be not known at the creation time. 
             keyPrefix: counterpartyKeyPrefix
         }
 
+        // Local stores 
         privateStore.set(channelPath(channelId), channel)
         privateStore.set(creatorPath(channelId,msg.signer()), msg.signer())
+        
         return channelId
 }
 ```
 
 Note that the `createClient` message can be coupled and executed in conjunction with a `createChannel` message in a single multiMsgTx. The execution of these messages on both chains are prerequisites for the channel registration procedure described below. 
 
-#### Channel registration and counterparty idenfitifcation  
+##### Channel registration and counterparty idenfitifcation  
 
 Each IBC chain MUST have the ability to idenfity its counterparty. With a client, we can prove any key/value path on the counterparty. However, without knowing which identifier the counterparty uses when it sends messages to us, we cannot differentiate between messages sent from the counterparty to our chain vs messages sent from the counterparty with other chains. Most implementations will not be able to store the ICS-24 paths directly as a key in the global namespace, but will instead write to a reserved, prefixed keyspace so as not to conflict with other application state writes. 
 
 To provide the chains a mechanism for the mutual and verifiable identification, the IBC version 2 defines the channel registration procedure to complement the store of the counterparty information in the channel that will include both its identifier for our chain and as well as the key prefix under which it will write the provable ICS-24 paths.
 
-Thus, IBC version 2 introduces a new message `RegisterChannel` that will store the counterpartyChannelId into the local channel structure. Thus, if the `RegisterChannel` message is submitted to both sides correctly, then both sides have mirrored <channel,channel> pairs that can be treated as channel identifiers. Assuming they are correct, the underlying client on each side is unique and provides an authenticated stream of packet data between the two chains. If the `RegisterChannel` message submits the wrong counterpartyChannelId, this can lead to invalid behaviour; but this is equivalent to a relayer submitting an invalid client in place of a correct client for the desired chain. In the simplest case, we can rely on out-of-band social consensus to only send on valid <channel, channel> pairs that represent a connection between the desired chains of the user; just as we currently rely on out-of-band social consensus that a given clientID and channel built on top of it is the valid, canonical identifier of our desired chain.
+Thus, IBC version 2 introduces a new message `RegisterChannel` that will store the counterpartyChannelId into the local channel structure. Thus, if the `RegisterChannel` message is submitted to both sides correctly, then both sides have mirrored <channel,channel> pairs. Assuming they are correct, the underlying client on each side associated with the channel is unique and provides an authenticated stream of packet data between the two chains. If the `RegisterChannel` message submits the wrong counterpartyChannelId, this can lead to invalid behaviour; but this is equivalent to a relayer submitting an invalid channelId in place of a correct channelId for the desired chain. In the simplest case, we can rely on out-of-band social consensus to only send on valid <channel, channel> pairs that represent a connection between the desired chains of the user; just as we currently rely on out-of-band social consensus that a given clientID and channel built on top of it is the valid, canonical identifier of our desired chain.
 
 ```typescript
 function RegisterChannel(
@@ -286,16 +291,26 @@ function RegisterChannel(
     counterpartyKeyPrefix: CommitmentPrefix,
     authentication: data, // implementation-specific authentication data
 ) {
+    // Implementation-Specific Input Validation 
+    // All implementations MUST ensure the inputs value are properly validated and compliant with this specification
+
+    // custom-authentication 
     assert(verify(authentication))
 
+    // Channel Checks
     channelId=generateIdentifier(clientId,counterpartyKeyPrefix)
     abortTransactionUnless(validatedIdentifier(channelId))
-
     channel=getChannel(channelId)) 
     abortTransactionUnless(channel !== null)
+    abortTransactionUnless(channel.clientId === clientId)
+
+    // Creator Address Checks
     abortTransactionUnless(msg.signer()===getCreator(channelId,msg.signer()))
 
+    // Channel manipulation
     channel.counterpartyChannelId=counterpartyChannelId
+
+    // Local Store
     privateStore.set(channelPath(counterpartyChannelId), channel)
 
 }
@@ -320,7 +335,7 @@ function getCreator(channelId: bytes, msgSigner: address): address {
 
 Thus, once two chains have set up clients, created channel and registered channels for each other with specific Identifiers, they can send IBC packets using the packet interface defined before and the packet handlers that the ICS-04 defines below. 
 
-The packets will be addressed **directly** with the channels that have links to the underlying light clients. Thus there are **no** more handshakes necessary. Instead the packet sender must be capable of providing the correct <channel,channel> pair.
+The packets will be addressed **directly** with the channels that have semantic link to the underlying light clients. Thus there are **no** more handshakes necessary. Instead the packet sender must be capable of providing the correct <channel,channel> pair.
 
 If the setup has been executed correctly, then the correctness and soundness properties of IBC holds. IBC packet flow is guaranteed to succeed. If a user sends a packet with the wrong destination channel, then as we will see it will be impossible for the intended destination to correctly verify the packet thus, the packet will simply time out.
 
@@ -352,13 +367,9 @@ For each function handler, the conditions are defined as follows:
 - `c_2 = ac_2 ∪ er_2 ∪ pc_2` corresponds to `acknowledgePacket`
 - `c_3 = ac_3 ∪ er_3 ∪ pc_3` corresponds to `timeoutPacket`
 
-Thus, the IBC version 2 protocol  adheres to a condition set \(C\), where:
+Thus, each condition set \(c_n\) is tailored to the specific function handler and ensures that the lifecycle of an IBC packet is managed correctly across all stages.
 
-\[
-C = \{c_0 = (ac_0 ∪ er_0 ∪ pc_0), \, c_1 = (ac_1 ∪ er_1 ∪ pc_1), \, c_2 = (ac_2 ∪ er_2 ∪ pc_2), \, c_3 = (ac_3 ∪ er_3 ∪ pc_3)\}
-\]
-
-Each condition set \(c_n\) is tailored to the specific function handler and ensures that the lifecycle of an IBC packet is managed correctly across all stages.
+Any implementation that wants to comply with the specification of the IBC version 2 protocol MUST adheres to the condition set \(C\).
 
 #### Packet Flow  & handling
 
@@ -387,10 +398,10 @@ The Ante-Conditions defines what MUST be accomplished before two chains can star
 
 Both chains `A` and `B` MUST have executed independently:  
 
-- AC.0 = client creation.
-- AC.1 = channel creation.   
-- AC.2 = channel registration. 
-- AC.3 = application registration. 
+- AC.0 = application registration. 
+- AC.1 = client creation.
+- AC.2 = channel creation.   
+- AC.3 = channel registration. 
 
 ###### Error-Conditions 
 
@@ -423,7 +434,7 @@ The Post-Conditions on Success defines which state changes MUST have occurred if
 - PC.4 No packetCommitment has been generated.
 - PC.5 The sequence number bind to sourceId MUST be unchanged. 
 
-The ICS04 provides an example pseudo-code that enforce the conditions sets C so that the following sequence of steps must occur for a packet to be sent from module *1* on machine *A* to module *2* on machine *B*, starting from scratch.
+The ICS04 provides an example pseudo-code that enforce the conditions sets c0 so that the following sequence of steps must occur for a packet to be sent from module *1* on machine *A* to module *2* on machine *B*, starting from scratch.
  
 ```typescript
 function sendPacket(
@@ -474,12 +485,6 @@ function sendPacket(
 
 }
 ```
-
-TODO: 
-
-- Preconditions
-- Error Conditions
-- Post Conditions 
 
 #### Receiving packets
 
@@ -783,7 +788,9 @@ TODO:
 
 Packets must be acknowledged in order to be cleaned-up.
 
-#### A day in the life of a packet
+### Dataflow visualisation: A day in the life of a packet
+
+TODO 
 
 The bidirectional packet stream can be only started after all the procedure above have been succesfully executed, individually, by both chains. Otherwise, any sent packet cannot be received and will timeout.  
 
