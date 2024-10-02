@@ -141,6 +141,10 @@ type IBCRouter struct {
 
 The IBCRouter struct MUST be set by the application modules during the module setup to carry out the application registration procedure. 
 
+```typescript
+const MAX_TIMEOUT_DELTA = TBD
+```
+
 ### Desired Properties
 
 #### Efficiency
@@ -320,26 +324,49 @@ The packets will be addressed **directly** with the channels that have links to 
 
 If the setup has been executed correctly, then the correctness and soundness properties of IBC holds. IBC packet flow is guaranteed to succeed. If a user sends a packet with the wrong destination channel, then as we will see it will be impossible for the intended destination to correctly verify the packet thus, the packet will simply time out.
 
-#### Packet Flow through the Router & handling
+#### Packet Flow Function Handlers 
 
-The bidirectional packet stream can be only started after all the procedure above have been succesfully executed, individually, by both chains. Otherwise, any sent packet cannot be received and will timeout.  
+In the IBC protocol version 2, the packet flow is managed by four key function handlers, each of which is responsible for distinct stages in the packet lifecycle:
+
+- `sendPacket`
+- `receivePacket`
+- `acknowledgePacket`
+- `timeoutPacket`
+
+For each handler, the ICS-04 specification defines a set of conditions that the IBC protocol must adhere to. These conditions ensure the proper execution of the handler by establishing requirements before execution (ante-conditions), possible error states during execution (error-conditions), and expected outcomes after execution (post-conditions).
+
+Let the set of conditions be represented as 
+\[
+C = \{c_0, c_1, c_2, c_3\}
+\]
+where each \(c_n\) corresponds to the conditions for a specific handler. These conditions are composed of:
+
+- **Ante-conditions (Pre-conditions) {ac}**: The state that must be true before the function executes.
+- **Error-conditions {er}**: The states that would result in the function failing.
+- **Post-conditions {pc}**: The required state of the system after successful execution.
+
+For each function handler, the conditions are defined as follows:
+
+- `c_0 = ac_0 ∪ er_0 ∪ pc_0` corresponds to `sendPacket`
+- `c_1 = ac_1 ∪ er_1 ∪ pc_1` corresponds to `receivePacket`
+- `c_2 = ac_2 ∪ er_2 ∪ pc_2` corresponds to `acknowledgePacket`
+- `c_3 = ac_3 ∪ er_3 ∪ pc_3` corresponds to `timeoutPacket`
+
+Thus, the IBC version 2 protocol  adheres to a condition set \(C\), where:
+
+\[
+C = \{c_0 = (ac_0 ∪ er_0 ∪ pc_0), \, c_1 = (ac_1 ∪ er_1 ∪ pc_1), \, c_2 = (ac_2 ∪ er_2 ∪ pc_2), \, c_3 = (ac_3 ∪ er_3 ∪ pc_3)\}
+\]
+
+Each condition set \(c_n\) is tailored to the specific function handler and ensures that the lifecycle of an IBC packet is managed correctly across all stages.
+
+#### Packet Flow  & handling
 
 TODO : Adapt to new flow
 
-![Packet State Machine](../../ics-004-channel-and-packet-semantics/packet-state-machine.png)
-
-##### A day in the life of a packet
-
-TODO Modify Sketch 
-![V2 Happy Path Single Payload Sketch](Sketch_Happy_Path.png)
-
-TODO Write Setup. 
-
-The following sequence of steps must occur for a packet to be sent from module *1* on machine *A* to module *2* on machine *B*, starting from scratch.
-
 ##### Sending packets
 
-The `sendPacket` function is called by the IBC handler when an IBC packet is submitted to the newtwork in order to send *data* in the form of an IBC packet. ∀ `Payload` included in the `packet.data`, which may refer to a different application, the application specific callbacks are retrieved from the the IBC router and the `onSendPacket` is the then triggered on the specified application. The `onSendPacket` executes the application logic. Once all payloads contained in the `packet.data` have been acted upon, the packet commitment is generated and the sequence number specific to the sourceId is incremented. 
+The `sendPacket` function is called by the IBC handler when an IBC packet is submitted to the newtwork in order to send *data* in the form of an IBC packet. ∀ `Payload` included in the `packet.data`, which may refer to a different application, the application specific callbacks are retrieved from the IBC router and the `onSendPacket` is the then triggered on the specified application. The `onSendPacket` executes the application logic. Once all payloads contained in the `packet.data` have been acted upon, the packet commitment is generated and the sequence number bind to the sourceId is incremented. 
 
 The `sendPacket` core function MUST execute the applications logic atomically triggering the `onSendPacket` callback ∀ application contained in the `packet.data` payload.
 
@@ -354,76 +381,69 @@ The IBC handler performs the following steps in order:
 
 Note that the full packet is not stored in the state of the chain - merely a short hash-commitment to the data & timeout value. The packet data can be calculated from the transaction execution and possibly returned as log output which relayers can index.
 
-We first define the `conditions = {C}` set as the union set of `ante-conditions = {AC}` (or pre-conditions), `error-conditions = {EC}` and `post-conditions = {PC}` such that `C={AC U EC U PC}`. 
-
-To adhere to the protocol rules, the sendPacket handler MUST enforce the set C.  
-
 ###### Ante-Conditions 
 
 The Ante-Conditions defines what MUST be accomplished before two chains can start sending IBC v2 packets. 
 
 Both chains `A` and `B` MUST have executed independently:  
 
-- AC.0 = the client creation, 
-- AC.1 = channel creation  
+- AC.0 = client creation.
+- AC.1 = channel creation.   
 - AC.2 = channel registration. 
-- AC.3 = application registration, 
-
-Thus the following checks MUST return true on any end attempting to send a packet: 
-
-```typescript
-// TODO
-// AC.0 
-clientState=queryClientState(clientId)
-clientState!=null; 
-
-channel = getChannel(channelId)
-channel != null;
-channel.clientId == clientId
-
-client=IBCRouter.clients[channelId]
-client==channel.clientId
-```
+- AC.3 = application registration. 
 
 ###### Error-Conditions 
 
 The Error-Conditions defines the set of condition that MUST trigger an error. 
 
-- EC.0 The underlying clients is not properly registered in the IBC router. 
-- EC.1 The timeout specified has already passed on the destination chain
-- EC.2 One of the payload has falied its execution. 
+If `AC` conditions have not been meet, sending an IBC version 2 packet may trigger one of the following errors: 
+
+- EC.0 the underlying clients do not exists
+- EC.1 the channels do not exists 
+- EC.2 the channel is not fully configured 
+- EC.3 the application cannot be resolved on the local router  
+
+While other source of potential errors can be defined as: 
+
+- EC.4 The underlying clients is not properly registered in the IBC router. 
+- EC.5 The timeout specified has already passed on the destination chain
+- EC.6 One of the payload has falied its execution. 
 
 ###### Post-Conditions On Success 
 
 The Post-Conditions on Success defines which state changes MUST have occurred if the `sendPacket` handler has been sucessfully executed.  
 
-- PC.0 The packetCommitment has been generated. 
-- PC.1 All the application contained in the payload have properly terminated the `onSendPacket` callback execution. 
+- PC.0 All the application contained in the payload have properly terminated the `onSendPacket` callback execution. 
+- PC.1 The packetCommitment has been generated. 
+- PC.2 The sequence number bind to sourceId MUST have been incremented by 1. 
 
 ###### Post-Conditions On Error
 
-- PC.2 No packetCommitment has been generated. 
 - PC.3 If one payload fail, then all state changes happened on the sucessfull application execution must be reverted.
+- PC.4 No packetCommitment has been generated.
+- PC.5 The sequence number bind to sourceId MUST be unchanged. 
 
-Then we provide an example pseudo-code that enforce the conditions sets. 
-
+The ICS04 provides an example pseudo-code that enforce the conditions sets C so that the following sequence of steps must occur for a packet to be sent from module *1* on machine *A* to module *2* on machine *B*, starting from scratch.
+ 
 ```typescript
 function sendPacket(
-    sourceChannelId: bytes,
-    destChannelId: bytes,
+   // sourceChannelId: bytes, unnecessary?
+   // destChannelId: bytes, unnecessary?
     timeoutTimestamp: uint64,
     packet: []byte
 ): uint64 {
 
-    client = router.clients[packet.sourceChannelId]
+    // AC.3 
+    client = router.clients[packet.sourceId]
     assert(client !== null)
 
-    // disallow packets with a zero timeoutHeight and timeoutTimestamp
-    assert(timeoutTimestamp !== 0) // Maybe this can be enforced even for unreal timeouts value and not only for 0 
-    assert(currentTimestamp()> timeoutTimestamp) // Mmm
+    // disallow packets with a zero timeoutTimestamp
+    assert(timeoutTimestamp !== 0) 
+    // disallow packet with timeoutTimestamp less than currentTimestamp and timeoutTimestamp value bigger than currentTimestamp + MaxTimeoutDelta 
+    assert(currentTimestamp() < timeoutTimestamp < currentTimestamp() + MAX_TIMEOUT_DELTA) // Mmm
     
     // if the sequence doesn't already exist, this call initializes the sequence to 0
-    sequence = privateStore.get(nextSequenceSendPath(sourceChannelId))
+    sequence = privateStore.get(nextSequenceSendPath(packet.sourceId))
     
     // Executes Application logic ∀ Payload
     for payload in packet.data
@@ -439,14 +459,14 @@ function sendPacket(
     provableStore.set(packetCommitmentPath(packet.sourcelId, sequence),commit)
     
     // increment the sequence. Thus there are monotonically increasing sequences for packet flow for a given clientId
-    privateStore.set(nextSequenceSendPath(sourceChannelId), sequence+1)
+    privateStore.set(nextSequenceSendPath(packet.sourceId), sequence+1)
 
     // log that a packet can be safely sent
     // NOTE introducing sourceID and destID can be useful for monitoring - e.g. if one wants to monitor all packets between sourceID and destID emitting this in the event would simplify his life. 
 
     emitLogEntry("sendPacket", {
-      sourceID: sourceChannelId, 
-      destID: destChannelId, 
+      sourceId: packet.sourceId, 
+      destId: packet.destId, 
       sequence: sequence,
       data: data,
       timeoutTimestamp: timeoutTimestamp
@@ -485,15 +505,16 @@ function recvPacket(
   relayer: string): Packet {
 
     // in this specification, the destination channel is the clientId
-    client = router.clients[packet.destChannelId]
+    client = router.clients[packet.destId]
     assert(client !== null)
 
     // assert that our counterparty clientId is the packet.sourceClientId
-    channel = getChannel(packet.destChannelId)
+    channel = getChannel(packet.destId)
     assert(packet.sourceId == channel.clientId)
 
     // verify timeout
-    assert(packet.timeoutTimestamp === 0 || currentTimestamp() < packet.timeoutTimestamp)
+    assert(packet.timeoutTimestamp === 0)  
+    assert(currentTimestamp() + MAX_TIMEOUT_DELTA < packet.timeoutTimestamp)
 
     // verify the packet receipt for this packet does not exist already 
     packetReceipt = provableStore.get(packetReceiptPath(packet.destId, packet.sequence))
@@ -503,7 +524,7 @@ function recvPacket(
     
     // 1. retrieve keys 
     packetPath = packetCommitmentPath(packet.destId, packet.sequence)
-    merklePath = applyPrefix(counterparty.keyPrefix, packetPath)
+    merklePath = applyPrefix(channel.keyPrefix, packetPath)
     
     // 2. reconstruct commit value based on the passed-in packet  
     commit = commitV2Packet(packet) 
@@ -520,7 +541,7 @@ function recvPacket(
     // Executes Application logic ∀ Payload
     for payload in packet.data 
         cbs = router.callbacks[payload.destPort]
-        ack = cbs.onReceivePacket(payload)
+        ack = cbs.onReceivePacket(packet.destId,payload)
         // the onReceivePacket returns the ack but does not write it 
         // IMPORTANT: if the ack is error, then the callback reverts its internal state changes, but the entire tx continues
         multiAck.add(ack)
@@ -636,7 +657,7 @@ function acknowledgePacket(
     assert(provableStore.get(packetCommitmentPath(packet.sourceId, packet.sequence)) ===  commitV2Packet(packet))
 
     ackPath = packetAcknowledgementPath(packet.destId, packet.sequence)
-    merklePath = applyPrefix(counterparty.keyPrefix, ackPath)
+    merklePath = applyPrefix(channel.keyPrefix, ackPath)
     assert(client.verifyMembership(
         client.clientState
         proofHeight,
@@ -649,7 +670,7 @@ function acknowledgePacket(
     nAck=0
     for payload in packet.data
         cbs = router.callbacks[payload.sourcePort]
-        success= cbs.OnAcknowledgePacket(payload, acknowledgement.appAcknowledgement[nAck], relayer)
+        success= cbs.OnAcknowledgePacket(packet.sourceId,payload, acknowledgement.appAcknowledgement[nAck], relayer)
         abortUnless(success)
         nAck++ 
 
@@ -735,7 +756,7 @@ function timeoutPacket(
     asert(packet.timeoutTimestamp > 0 && proofTimestamp >= packet.timeoutTimestamp)
 
     receiptPath = packetReceiptPath(packet.destId, packet.sequence)
-    merklePath = applyPrefix(counterparty.keyPrefix, receiptPath)
+    merklePath = applyPrefix(channel.keyPrefix, receiptPath)
     assert(client.verifyNonMembership(
         client.clientState,
         proofHeight,
@@ -745,7 +766,7 @@ function timeoutPacket(
 
     for payload in packet.data
         cbs = router.callbacks[payload.sourcePort]
-        success=cbs.OnTimeoutPacket(payload, relayer)
+        success=cbs.OnTimeoutPacket(packet.sourceId,payload, relayer)
         abortUnless(success)
 
     channelStore.delete(packetCommitmentPath(packet.sourceId, packet.sequence))
@@ -761,6 +782,15 @@ TODO:
 ##### Cleaning up state
 
 Packets must be acknowledged in order to be cleaned-up.
+
+#### A day in the life of a packet
+
+The bidirectional packet stream can be only started after all the procedure above have been succesfully executed, individually, by both chains. Otherwise, any sent packet cannot be received and will timeout.  
+
+TODO Write Setup. 
+
+TODO Modify Sketch 
+![V2 Happy Path Single Payload Sketch](Sketch_Happy_Path.png)
 
 #### Reasoning about race conditions
 
