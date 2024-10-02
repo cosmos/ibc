@@ -16,7 +16,7 @@ modified: 2019-08-25
 TODO 
 
 The ICS-04 requires the ICS-02, the ICS-24 and the packet data strcuture including the multi-data packet as defined in [here](packet-data). 
-It defines the mechanism to register the IBC version 2 protocol channels, pairing up the clients for each pair of communicating chains with specific Identifiers to establish the ground truth for the secure packet delivery, the packet-flow semantics, the mechanisms to route the verification to the underlying clients, and how to route packets to their specific IBC applications. 
+It defines the mechanism to create the IBC version 2 protocol channels, to pair two channels on different chains linking them up with the underlying clients to establish the root of trust for the secure packet delivery, the packet-flow semantics, the mechanisms to route the verification to the underlying clients, and how to route packets to their specific IBC applications. 
 
 ### Motivation
 
@@ -36,11 +36,7 @@ The IBC version 2 will provide packet delivery between two chains communicating 
 
 `Identifier`, `get`, `set`, `delete`, `getCurrentHeight`, and module-system related primitives are as defined in [ICS 24](../ics-024-host-requirements).
 
-The `Channel`, in the IBC version 2 context, represents the chain exit gate. By pairing two exit gates (channels) on distinct chain e.g. `A` and `B`, the ground truth for the packet messages flow's commitments verification get verifiably established and the chains can start to exchange data packets and verify them. Once two channel are paired, the packets can flow in both directions: from `A` to `B` and from `B` to `A`.
-
-All channels provide exactly-once packet delivery, meaning that a packet sent on one end of a channel is delivered no more and no less than once, eventually, to the other end.
-
-A Channel is a data structure responsible for maintaining the counterparty information necessary to establish the ground truth for securing the interchain communication and is defined as: 
+A `channel` is a pipeline for exactly-once packet delivery between specific modules which are properly registered on separate blockchains, which has at least one end capable of sending packets and one end capable of receiving packets. All channels provide exactly-once packet delivery, meaning that a packet sent on one end of a channel is delivered no more and no less than once, eventually, to the other end. A `channel` is defined as a data structure responsible for maintaining the counterparty information necessary to establish the root of trust for securing the interchain communication: 
 
 ```typescript
 interface Channel {
@@ -52,8 +48,8 @@ interface Channel {
 
 Where :
 
-- `clientId` is the client id of the counterparty locally stored on our chain. It can be seen as the pointer to our light client of the counterparty chain where the light client is a light representation of the counterparty chain. 
-- `counterpartyChannelId` is the counterparty channel identifier that must be used by the packet. 
+- `clientId` is the client id of the counterparty used by our chain. 
+- `counterpartyChannelId` is the counterparty channel identifier that MUST be used by the packet. 
 - `keyPrefix` is the key path that the counterparty will use to prove its store packet flow messages.
 
 The `Packet`, `Payload`, `Encoding` and the `Acknowledgement` interfaces are as defined in [packet specification](https://github.com/cosmos/ibc/blob/c7b2e6d5184b5310843719b428923e0c5ee5a026/spec/core/v2/ics-004-packet-semantics/PACKET.md). For convenience, following we recall their structures.  
@@ -134,6 +130,17 @@ An application may not need to return an acknowledgment. In this case, it may re
 
 E.g. If a packet within 3 payloads intended for 3 different application is sent out, the expectation is that each of the payload is acted upon in the same order as it has been placed in the packet. Likewise, the array of appAcknowledgement is expected to be populated within the same order. 
 
+- The `IBCRouter` contains a mapping from the application port and the supported callbacks and as well as a mapping from channelId to the underlying client.
+
+```typescript
+type IBCRouter struct {
+    callbacks: portId -> [Callback]
+    clients: channelId -> Client
+}
+```
+
+The IBCRouter struct MUST be set by the application modules during the module setup to carry out the application registration procedure. 
+
 ### Desired Properties
 
 #### Efficiency
@@ -198,7 +205,7 @@ function packetAcknowledgementPath(sourceId: bytes, sequence: BigEndianUint64): 
 }
 ```
 
-Additionally, the protocol suggests the privateStore paths for the `nextSequenceSend` and `channelPath` variable. Private paths are meant to be used locally in the chain. Thus their specification can be arbitrary changed by implementors at their will.  
+Additionally, the protocol suggests the privateStore paths for the `nextSequenceSend` , `channelPath` and `channelCreator` variable. Private paths are meant to be used locally in the chain. Thus their specification can be arbitrary changed by implementors at their will.  
 
 - The `nextSequenceSend` is stored separately in the privateStore and tracks the sequence number for the next packet to be sent for a given source clientId.
 
@@ -216,41 +223,77 @@ function channelPath(channelId: Identifier): Path {
 }
 ```
 
+- The `creatorPath` is stored separately in the privateStore and tracks the channels creator address.
+
+```typescript
+function creatorPath(channelId: Identifier, creator: address): Path {
+    return "channels/{channelId}/creator/{creator}"
+}
+```
+
 ### Sub-protocols
 
-The ICS-04 defines the channel registration and the application registration procedures and the packet handlers flow. 
+In order to start sending packets using IBC version 2, chain `A` and chain `B` MUST execute the following set of procedures:  
 
-In oder to send packets using IBC version 2, chain `A` and chain `B` are required to individually register the exact `Channel` pair that will be used by the two communicating chains. Thus, both chain `A` and chain `B` MUST execute:  
+- Client creation: chain `A` MUST create the `B` light client; `B` MUST create the `A` light client.   
+- Application registration: during the application module setup the application MUST be registered on the local IBC router. 
+- Channel creation: both chain `A` and chain `B` MUST create local channels.  
+- Channel registration: both chain MUST register their counterpartyId in the channel previously created.   
 
-1. The `channel registration` procedure. 
-2. The `application registration` procedure, where the application used by the local chain are registered on the local chain router.
+While the `createClient` procedure is defined in [ICS2](../ics-002-client-semantics/README.md) and the application registration MUST be defined in the setup section of the application module and being executed on the module startup, the ICS-04 defines the channel creation and registration procedure. 
 
-The bidirectional packet stream can be only started after the channel registration and the application registration have been correctly executed individually by both chains. Otherwise, any sent packet cannot be received and will timeout.  
+#### Channel creation 
 
-#### Channel pairing and counterparty idenfitifcation  
+```typescript
+function createChannel(
+    clientId: bytes,  
+    counterpartyKeyPrefix: CommitmentPrefix) (channelId: bytes){
+
+        channelId = generateIdentifier(clientId,counterpartyKeyPrefix) 
+        abortTransactionUnless(validateChannelIdentifier(channelId))
+        abortTransactionUnless(privateStore.get(channelPath(channelId)) === null)
+        
+        channel = Channel{
+            clientId: clientId,
+            counterpartyChannelId: "",  // This field it must be a blank field during the creation as it may be not known at the creation time. 
+            keyPrefix: counterpartyKeyPrefix
+        }
+
+        privateStore.set(channelPath(channelId), channel)
+        privateStore.set(creatorPath(channelId,msg.signer()), msg.signer())
+        return channelId
+}
+```
+
+Note that the `createClient` message can be coupled and executed in conjunction with a `createChannel` message in a single multiMsgTx. The execution of these messages on both chains are prerequisites for the channel registration procedure described below. 
+
+#### Channel registration and counterparty idenfitifcation  
 
 Each IBC chain MUST have the ability to idenfity its counterparty. With a client, we can prove any key/value path on the counterparty. However, without knowing which identifier the counterparty uses when it sends messages to us, we cannot differentiate between messages sent from the counterparty to our chain vs messages sent from the counterparty with other chains. Most implementations will not be able to store the ICS-24 paths directly as a key in the global namespace, but will instead write to a reserved, prefixed keyspace so as not to conflict with other application state writes. 
 
-To provide the chains a mechanism for the mutual and verifiable identification, the IBC version 2 defines the channel registration procedure to store the counterparty information including both its identifier for our chain and as well as the key prefix under which it will write the provable ICS-24 paths.
+To provide the chains a mechanism for the mutual and verifiable identification, the IBC version 2 defines the channel registration procedure to complement the store of the counterparty information in the channel that will include both its identifier for our chain and as well as the key prefix under which it will write the provable ICS-24 paths.
 
-Thus, IBC version 2 introduces a new message `RegisterChannel` that will associate the counterparty client of our chain with our client of the counterparty. Thus, if the `RegisterChannel` message is submitted to both sides correctly. Then both sides have mirrored <client,client> pairs that can be treated as channel identifiers. Assuming they are correct, the client on each side is unique and provides an authenticated stream of packet data between the two chains. If the `RegisterChannel` message submits the wrong clientID, this can lead to invalid behaviour; but this is equivalent to a relayer submitting an invalid client in place of a correct client for the desired chain. In the simplest case, we can rely on out-of-band social consensus to only send on valid <client, client> pairs that represent a connection between the desired chains of the user; just as we currently rely on out-of-band social consensus that a given clientID and channel built on top of it is the valid, canonical identifier of our desired chain.
+Thus, IBC version 2 introduces a new message `RegisterChannel` that will store the counterpartyChannelId into the local channel structure. Thus, if the `RegisterChannel` message is submitted to both sides correctly, then both sides have mirrored <channel,channel> pairs that can be treated as channel identifiers. Assuming they are correct, the underlying client on each side is unique and provides an authenticated stream of packet data between the two chains. If the `RegisterChannel` message submits the wrong counterpartyChannelId, this can lead to invalid behaviour; but this is equivalent to a relayer submitting an invalid client in place of a correct client for the desired chain. In the simplest case, we can rely on out-of-band social consensus to only send on valid <channel, channel> pairs that represent a connection between the desired chains of the user; just as we currently rely on out-of-band social consensus that a given clientID and channel built on top of it is the valid, canonical identifier of our desired chain.
 
 ```typescript
 function RegisterChannel(
-    clientID: bytes, // In a pure v2 connection this field will represent our actual clientId of the counterparty chain 
-    counterpartyChannelId: bytes, // this is the counterparty's channel identifier
+    clientID: bytes, // The clientId of the counterparty chain 
+    counterpartyChannelId: bytes, // the counterparty's channel identifier
     counterpartyKeyPrefix: CommitmentPrefix,
     authentication: data, // implementation-specific authentication data
 ) {
     assert(verify(authentication))
 
-    channel = Channel{
-        clientId: clientId,
-        channelId: counterpartyChannelId,
-        keyPrefix: counterpartyKeyPrefix
-    }
+    channelId=generateIdentifier(clientId,counterpartyKeyPrefix)
+    abortTransactionUnless(validatedIdentifier(channelId))
 
+    channel=getChannel(channelId)) 
+    abortTransactionUnless(channel !== null)
+    abortTransactionUnless(msg.signer()===getCreator(channelId,msg.signer()))
+
+    channel.counterpartyChannelId=counterpartyChannelId
     privateStore.set(channelPath(counterpartyChannelId), channel)
+
 }
 ```
 
@@ -259,37 +302,27 @@ A simpler but weaker authentication would simply be to check that the `RegisterC
 
 ```typescript
 // getChannel retrieves the stored channel given the counterparty channel-id. 
-function getChannel(counterpartyChannelId: bytes): Channel {
-    return privateStore.get(channelPath(counterpartyChannelId)) 
+function getChannel(channelId: bytes): Channel {
+    return privateStore.get(channelPath(channelId)) 
 }
 ```
-
-Thus, once two chains have set up clients for each other with specific Identifiers, they can send IBC packets using the packet interface defined before.
-
-Since the packets are addressed **directly** with the underlying light clients, there are **no** more handshakes necessary. Instead the packet sender must be capable of providing the correct <channel,channel> pair.
-
-Sending a packet with the wrong source client is equivalent to sending a packet with the wrong source channel. Sending a packet on a channel with the wrong provided counterparty is a new source of errors, however this is added to the burden of out-of-band social consensus.
-
-If the client and counterparty identifiers are setup correctly, then the correctness and soundness properties of IBC holds. IBC packet flow is guaranteed to succeed. If a user sends a packet with the wrong destination channel, then as we will see it will be impossible for the intended destination to correctly verify the packet thus, the packet will simply time out.
-
-Once this is done, then the application registering procedure is required, 
-
-The channel registration 
-
-#### Registering IBC applications on the router
-
-The application registering procedure consist in storing the available callbacks associated within a portID (or application) and the linking it to the underlying client. 
-
-The IBC router contains a mapping from a reserved application port and the supported versions of that application as well as a mapping from channelIdentifiers to channels.
 
 ```typescript
-type IBCRouter struct {
-    callbacks: portId -> [Callback]
-    clients: channelId -> Client
+// getChannel retrieves the stored channel given the counterparty channel-id. 
+function getCreator(channelId: bytes, msgSigner: address): address {
+    return privateStore.get(creatorPath(channelId,msgSigner)) 
 }
 ```
 
+Thus, once two chains have set up clients, created channel and registered channels for each other with specific Identifiers, they can send IBC packets using the packet interface defined before and the packet handlers that the ICS-04 defines below. 
+
+The packets will be addressed **directly** with the channels that have links to the underlying light clients. Thus there are **no** more handshakes necessary. Instead the packet sender must be capable of providing the correct <channel,channel> pair.
+
+If the setup has been executed correctly, then the correctness and soundness properties of IBC holds. IBC packet flow is guaranteed to succeed. If a user sends a packet with the wrong destination channel, then as we will see it will be impossible for the intended destination to correctly verify the packet thus, the packet will simply time out.
+
 #### Packet Flow through the Router & handling
+
+The bidirectional packet stream can be only started after all the procedure above have been succesfully executed, individually, by both chains. Otherwise, any sent packet cannot be received and will timeout.  
 
 TODO : Adapt to new flow
 
@@ -306,7 +339,7 @@ The following sequence of steps must occur for a packet to be sent from module *
 
 ##### Sending packets
 
-The `sendPacket` function is called by the IBC handler when an IBC packet is submitted to the newtwork in order to send *data* in the form of an IBC packet. ∀ `Payload` included in the `packet.data`, which may refer to a different application, the application specific callbacks are retrieved from the the IBC router and the `onSendPacket` is the then triggered on the specified application. The `onSendPacket` executes the application logic. Once all payloads contained in the `packet.data` have been acted upon, the packet commitment is generated and the sequence number specific to the sourceClientId is incremented. 
+The `sendPacket` function is called by the IBC handler when an IBC packet is submitted to the newtwork in order to send *data* in the form of an IBC packet. ∀ `Payload` included in the `packet.data`, which may refer to a different application, the application specific callbacks are retrieved from the the IBC router and the `onSendPacket` is the then triggered on the specified application. The `onSendPacket` executes the application logic. Once all payloads contained in the `packet.data` have been acted upon, the packet commitment is generated and the sequence number specific to the sourceId is incremented. 
 
 The `sendPacket` core function MUST execute the applications logic atomically triggering the `onSendPacket` callback ∀ application contained in the `packet.data` payload.
 
@@ -320,6 +353,59 @@ The IBC handler performs the following steps in order:
 - Returns the sequence number of the sent packet
 
 Note that the full packet is not stored in the state of the chain - merely a short hash-commitment to the data & timeout value. The packet data can be calculated from the transaction execution and possibly returned as log output which relayers can index.
+
+We first define the `conditions = {C}` set as the union set of `ante-conditions = {AC}` (or pre-conditions), `error-conditions = {EC}` and `post-conditions = {PC}` such that `C={AC U EC U PC}`. 
+
+To adhere to the protocol rules, the sendPacket handler MUST enforce the set C.  
+
+###### Ante-Conditions 
+
+The Ante-Conditions defines what MUST be accomplished before two chains can start sending IBC v2 packets. 
+
+Both chains `A` and `B` MUST have executed independently:  
+
+- AC.0 = the client creation, 
+- AC.1 = channel creation  
+- AC.2 = channel registration. 
+- AC.3 = application registration, 
+
+Thus the following checks MUST return true on any end attempting to send a packet: 
+
+```typescript
+// TODO
+// AC.0 
+clientState=queryClientState(clientId)
+clientState!=null; 
+
+channel = getChannel(channelId)
+channel != null;
+channel.clientId == clientId
+
+client=IBCRouter.clients[channelId]
+client==channel.clientId
+```
+
+###### Error-Conditions 
+
+The Error-Conditions defines the set of condition that MUST trigger an error. 
+
+- EC.0 The underlying clients is not properly registered in the IBC router. 
+- EC.1 The timeout specified has already passed on the destination chain
+- EC.2 One of the payload has falied its execution. 
+
+###### Post-Conditions On Success 
+
+The Post-Conditions on Success defines which state changes MUST have occurred if the `sendPacket` handler has been sucessfully executed.  
+
+- PC.0 The packetCommitment has been generated. 
+- PC.1 All the application contained in the payload have properly terminated the `onSendPacket` callback execution. 
+
+###### Post-Conditions On Error
+
+- PC.2 No packetCommitment has been generated. 
+- PC.3 If one payload fail, then all state changes happened on the sucessfull application execution must be reverted.
+
+Then we provide an example pseudo-code that enforce the conditions sets. 
 
 ```typescript
 function sendPacket(
