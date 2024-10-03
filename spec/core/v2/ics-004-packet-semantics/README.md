@@ -11,9 +11,17 @@ created: 2019-03-07
 modified: 2019-08-25
 ---
 
-## Synopsis
+TODO : 
 
-TODO 
+- Synopsis
+- Motivation
+- Architectural Sketch 
+- Packet Flow Sketch 
+- Setup :: better explaination/division and Sketch 
+- Race condition reasoning 
+- Improve conditions set and presentation 
+
+## Synopsis 
 
 The ICS-04 requires the ICS-02, the ICS-24 and the packet data strcuture including the multi-data packet as defined in [here](packet-data). 
 It defines the mechanism to create the IBC version 2 protocol channels, to pair two channels on different chains linking them up with the underlying clients to establish the root of trust for the secure packet delivery, the packet-flow semantics, the mechanisms to route the verification to the underlying clients, and how to route packets to their specific IBC applications. 
