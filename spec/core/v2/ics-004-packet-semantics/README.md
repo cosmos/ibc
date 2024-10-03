@@ -15,15 +15,13 @@ TODO :
 
 - Synopsis
 - Motivation
-- Architectural Sketch 
-- Packet Flow Sketch 
-- Setup :: better explaination/division and Sketch 
+- Architectural Sketch  
 - Race condition reasoning 
 - Improve conditions set and presentation 
 
 ## Synopsis 
 
-The ICS-04 requires the ICS-02, the ICS-24 and the packet data strcuture including the multi-data packet as defined in [here](packet-data). 
+The ICS-04 requires the ICS-02, the ICS-24 and the packet data strcuture including the multi-data packet as defined in [here](https://github.com/cosmos/ibc/pull/1149). // Note change with file location when merged 
 It defines the mechanism to create the IBC version 2 protocol channels, to pair two channels on different chains linking them up with the underlying clients to establish the root of trust for the secure packet delivery, the packet-flow semantics, the mechanisms to route the verification to the underlying clients, and how to route packets to their specific IBC applications. 
 
 ### Motivation
@@ -143,7 +141,7 @@ E.g. If a packet within 3 payloads intended for 3 different application is sent 
 ```typescript
 type IBCRouter struct {
     callbacks: portId -> [Callback]
-    clients: channelId -> Client
+    clients: channelId -> Client // Needed? Maybe not anymore
 }
 ```
 
@@ -243,14 +241,34 @@ TODO The architecture of clients, connections, channels and packets:
 
 #### Setup
 
-In order to start sending packets using IBC version 2, chain `A` and chain `B` MUST execute the entire setup following this set of procedures:  
+In order to create the conditions for the IBC version 2 packet stream, chain `A` and chain `B` MUST execute the entire setup following this set of procedures:  
 
-- Application registration: during the application module setup the application MUST be registered on the local IBC router. 
+- Application registration: during the application module setup the application callbacks MUST be registered on the local IBC router. 
 - Client creation: chain `A` MUST create the `B` light client; `B` MUST create the `A` light client.   
 - Channel creation: both chain `A` and chain `B` MUST create local IBC version 2 channels.  
 - Channel registration: both chain MUST register their counterpartyId in the channel previously created.   
 
-While application registration is handled by the application module during initialization, and client creation is governed by [ICS-2](](../ics-002-client-semantics/README.md)), the channel creation and registration procedures are defined by ICS-04 and are detailed below.
+If any of the steps has been missed, this would result in an incorrect setup error during the packet handlers execution. 
+
+Below we provide the setup sequence diagram. 
+Note that as shown in the below setup sequence diagram the `createClient` message (as defined in ICS-02) may be bundled with the `createChannel` message in a single multiMsgTx.
+
+```mermaid
+sequenceDiagram  
+    Participant Chain A
+    Participant Relayer 
+    Participant Chain B
+    Chain A --> Chain A: App callbacks registration on IBC Router
+    Chain B --> Chain B: App callbacks registration on IBC Router
+    Relayer ->> Chain A : createClient(B chain) + createChannel
+    Chain A ->> Relayer : clientId= X , channelId = Y
+    Relayer ->> Chain B : createClient(A chain) + createChannel
+    Chain B ->> Relayer : clientId= Z , channelId = W
+    Relayer ->> Chain A : registerChannel(channelId = W)
+    Relayer ->> Chain B : registerChannel(channelId = Y) 
+```
+
+While the application callbacks registration MUST be handled by the application module during initialization, and client creation is governed by [ICS-2](.ics-002-client-semantics/README.md), the channel creation and registration procedures are defined by ICS-04 and are detailed below.
 
 ##### Channel creation 
 
@@ -295,10 +313,8 @@ To provide the chains a mechanism for the mutual and verifiable identification, 
 Thus, IBC version 2 introduces a new message `registerChannel` that will store the counterpartyChannelId into the local channel structure. Thus, if the `registerChannel` message is submitted to both sides correctly, then both sides have mirrored <channel,channel> pairs. Assuming they are correct, the underlying client on each side associated with the channel is unique and provides an authenticated stream of packet data between the two chains. If the `registerChannel` message submits the wrong counterpartyChannelId, this can lead to invalid behaviour; but this is equivalent to a relayer submitting an invalid channelId in place of a correct channelId for the desired chain. In the simplest case, we can rely on out-of-band social consensus to only send on valid <channel, channel> pairs that represent a connection between the desired chains of the user; just as we currently rely on out-of-band social consensus that a given clientID and channel built on top of it is the valid, canonical identifier of our desired chain.
 
 ```typescript
-function RegisterChannel(
-    clientID: bytes, // The clientId of the counterparty chain 
+function registerChannel(
     counterpartyChannelId: bytes, // the counterparty's channel identifier
-    counterpartyKeyPrefix: CommitmentPrefix,
     authentication: data, // implementation-specific authentication data
 ) {
     // Implementation-Specific Input Validation 
@@ -308,17 +324,19 @@ function RegisterChannel(
     assert(verify(authentication))
 
     // Channel Checks
-    channelId=generateIdentifier(clientId,counterpartyKeyPrefix)
+    channelId=generateIdentifier()
     abortTransactionUnless(validatedIdentifier(channelId))
-    channel=getChannel(channelId)) 
+    channel=getChannel(channelId) 
     abortTransactionUnless(channel !== null)
-    abortTransactionUnless(channel.clientId === clientId)
-
+    
     // Creator Address Checks
     abortTransactionUnless(msg.signer()===getCreator(channelId,msg.signer()))
 
     // Channel manipulation
     channel.counterpartyChannelId=counterpartyChannelId
+
+    // Client registration on the router 
+    router.clients[sourceChannelId]=channel.clientId
 
     // Local Store
     privateStore.set(channelPath(counterpartyChannelId), channel)
@@ -358,13 +376,54 @@ In the IBC protocol version 2, the packet flow is managed by four key function h
 - `acknowledgePacket`
 - `timeoutPacket`
 
-For each handler, the ICS-04 specification defines a set of conditions that the IBC protocol must adhere to. These conditions ensure the proper execution of the handler by establishing requirements before execution (ante-conditions), possible error states during execution (error-conditions), and expected outcomes after execution (post-conditions).
+For each handler, the ICS-04 specification defines a set of conditions that the IBC protocol must adhere to. These conditions ensure the proper execution of the handler by establishing requirements before execution (ante-conditions), possible error states during execution (error-conditions), and expected outcomes after execution (post-conditions). Thus, implementation that wants to comply with the specification of the IBC version 2 protocol MUST adheres to the condition set defined in the specific handler section below.
 
-Thus, implementation that wants to comply with the specification of the IBC version 2 protocol MUST adheres to the condition set defined here. 
+Note that the execution of the four handler above described, upon a unique packet, cannot be combined in any arbitrary order. We provide the two possible example scenarios described with sequence diagrmas. 
 
-#### Packet Flow  & handling
+Scenario execution with acknowledgement `A` to `B` - set of actions: `sendPacket` -> `receivePacket` -> `acknowledgePacket`  
 
-TODO : Adapt to new flow
+```mermaid
+sequenceDiagram
+    participant Chain A
+    participant B Light Client     
+    participant Relayer 
+    participant Chain B
+    participant A Light Client
+    Chain A ->> Chain A : sendPacket
+    Chain A --> Chain A : app execution
+    Chain A --> Chain A : packetCommitment 
+    Relayer ->> Chain B: relayPacket
+    Chain B ->> Chain B: receivePacket
+    Chain B -->> A Light Client: verifyMembership(packetCommitment)
+    Chain B --> Chain B : app execution
+    Chain B --> Chain B: writeAck
+    Chain B --> Chain B: writePacketReceipt
+    Relayer ->> Chain A: relayAck
+    Chain A ->> Chain A : acknowldgePacket
+    Chain A -->> B Light Client: verifyMembership(packetAck)
+    Chain A --> Chain A : app execution
+    Chain A --> Chain A : Delete packetCommitment 
+```
+
+Scenario timeout execution `A` to `B` - set of actions: `sendPacket` -> `timeoutPacket`  
+
+```mermaid
+sequenceDiagram
+    participant Chain A
+    participant B Light Client     
+    participant Relayer 
+    participant Chain B
+    participant A Light Client
+    Chain A ->> Chain A : sendPacket
+    Chain A --> Chain A : app execution
+    Chain A --> Chain A : packetCommitment 
+    Chain A ->> Chain A : TimeoutPacket
+    Chain A -->> B Light Client: verifyNonMembership(PacketReceipt)
+    Chain A --> Chain A : app execution
+    Chain A --> Chain A : Delete packetCommitment 
+```
+
+Given a configuration where we are sending a packet from `A` to `B` then chain `A` can call either, `sendPacket`,`acknowledgePacket` and `timeoutPacket` while chain `B` can only execute the `receivePacket` handler. 
 
 ##### Sending packets
 
@@ -387,12 +446,7 @@ Note that the full packet is not stored in the state of the chain - merely a sho
 
 The Ante-Conditions defines what MUST be accomplished before two chains can start sending IBC v2 packets. 
 
-Both chains `A` and `B` MUST have executed independently the following set of actions: 
-
-- Application registration
-- Client creation
-- Channel creation 
-- channel registration 
+For the `sendPacket` handler, both chains `A` and `B` MUST have executed independently the setup procedure previosuly described. 
 
 ###### Error-Conditions 
 
@@ -530,7 +584,7 @@ The Post-Conditions on Success defines which state changes MUST have occurred if
 
 The Post-Conditions on Error defines the states that Must be unchanged given an error occurred during the `onReceivePacket` handler.   
 
-- If one payload fail, then all state changes happened on the sucessfull `onReceive` application callback execution MUST be reverted.
+- If one payload fail, then all state changes happened on the sucessfull `onReceivePacket` application callback execution MUST be reverted.
 - If timeoutTimestamp has elapsed then no state changes occurred. (Is this true? Shall we write the timeout_sentinel_receipt?)
 - mmmm. 
 
@@ -917,21 +971,7 @@ Data structures & encoding can be versioned at the application level. Core logic
 
 ## History
 
-Jun 5, 2019 - Draft submitted
-
-Jul 4, 2019 - Modifications for unordered channels & acknowledgements
-
-Jul 16, 2019 - Alterations for multi-hop routing future compatibility
-
-Jul 29, 2019 - Revisions to handle timeouts after connection closure
-
-Aug 13, 2019 - Various edits
-
-Aug 25, 2019 - Cleanup
-
-Jan 10, 2022 - Add ORDERED_ALLOW_TIMEOUT channel type and appropriate logic
-
-Mar 28, 2023 - Add `writeChannel` function to write channel end after executing application callback
+Oct X, 2024 - [Draft submitted](https://github.com/cosmos/ibc/pull/1148)
 
 ## Copyright
 
