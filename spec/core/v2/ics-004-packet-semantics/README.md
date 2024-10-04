@@ -13,11 +13,12 @@ modified: 2019-08-25
 
 TODO : 
 
+- Resolve Need discussion
 - Motivation
 - Improve Sketchs  
-- Race condition reasoning 
-- Improve conditions set and presentation 
-- Review Timeout carefully 
+- Improve conditions set / think about more condition an proper presentation 
+- Review Ack and Timeout carefully 
+- FROM Race condition UP to END 
 
 ## Synopsis 
 
@@ -121,7 +122,8 @@ An application may not need to return an acknowledgment. In this case, it may re
 > **Example**: If a packet within 3 payloads intended for 3 different application is sent out, the expectation is that each of the payload is acted upon in the same order as it has been placed in the packet. Likewise, the array of `appAcknowledgement` is expected to be populated within the same order. 
 
 - The `IBCRouter` contains a mapping from the application port and the supported callbacks. 
-// and as well as a mapping from channelId to the underlying client.
+
+// NEED DSICUSSION - and as well as a mapping from channelId to the underlying client.
 
 ```typescript
 type IBCRouter struct {
@@ -135,13 +137,10 @@ The proper registration of the application callbacks in the local `IBCRouter`, i
 - The `MAX_TIMEOUT_DELTA` is intendend as the max difference between currentTimestamp and timeoutTimestamp that can be given in input. 
 
 ```typescript
-const MAX_TIMEOUT_DELTA = TBD
+const MAX_TIMEOUT_DELTA = TBD  // NEED DISCUSSION 
 ```
 
-- The `ante-conditions` define what MUST hold true before an action can occurr in the IBC v2 packet flow. 
-- The `error-conditions` define the set of expected errors. 
-- The `post-conditions on success` defines the expected final state changes on success. 
-- The `post-conditions on error` the expected final state on error
+The ICS-04 specification defines a set of conditions that the IBC protocol must adhere to. These conditions ensure the proper execution of the function handlers by establishing requirements before execution `ante-conditions`, possible error conditions during execution `error-conditions`, expected outcomes after succesful execution `post-conditions-on-success`, and expected outcomes after error execution `post-conditions-on-error`. Thus, implementation that wants to comply with the specification of the IBC version 2 protocol MUST adheres to the specified conditions.
 
 ### Desired Properties
 
@@ -175,6 +174,8 @@ The ICS-04 use the protocol paths, defined in [ICS-24](../ics-024-host-requireme
 
 Thus, Constant-size commitments to packet data fields are stored under the packet sequence number:
 
+// NEED DISCUSSION -- what happens if we use "commitments/{sourceId}/{sequence}" 
+
 ```typescript
 function packetCommitmentPath(sourceId: bytes, sequence: BigEndianUint64): Path {
     return "commitments/channels/{sourceId}/sequences/{sequence}"
@@ -185,7 +186,8 @@ Absence of the path in the store is equivalent to a zero-bit.
 
 Packet receipt data are stored under the `packetReceiptPath`. In the case of a successful receive, the destination chain writes a sentinel success value of `SUCCESSFUL_RECEIPT`. 
 
-//NOTE: Do we want this? Maybe not useful. While in the case of a timeout, the destination chain SHOULD write a sentinel timeout value `TIMEOUT_RECEIPT` if the packet is received after the specified timeout.
+// NEED DISCUSSION: Do we want this? Maybe not useful. 
+// While in the case of a timeout, the destination chain SHOULD write a sentinel timeout value `TIMEOUT_RECEIPT` if the packet is received after the specified timeout.
 
 ```typescript
 function packetReceiptPath(sourceId: bytes, sequence: BigEndianUint64): Path {
@@ -200,6 +202,8 @@ function packetAcknowledgementPath(sourceId: bytes, sequence: BigEndianUint64): 
     return "acks/channels/{sourceId}/sequences/{sequence}"
 }
 ```
+
+// NEED DISCUSSION privatePaths should we use it or instead just declare mappings/variables?
 
 Additionally, the ICS-04 suggests the privateStore paths for the `nextSequenceSend` , `channelPath` and `channelCreator` variable. Private paths are meant to be used locally in the chain. Thus their specification can be arbitrary changed by implementors at their will.  
 
@@ -233,10 +237,12 @@ function creatorPath(channelId: Identifier, creator: address): Path {
 
 To start the secure packet stream between the chains, chain `A` and chain `B` MUST execute the entire setup following this set of procedures:  
 
-- Application registration: during the application module setup the application callbacks MUST be registered on the local IBC router. 
-- Client creation: chain `A` MUST create the `B` light client; `B` MUST create the `A` light client.   
-- Channel creation: both chain `A` and chain `B` MUST create local IBC version 2 channels.  
-- Channel registration: both chain MUST register their counterpartyId in the channel previously created.   
+| **Procedure**               | **Responsible**     | **Outcome**                                                                |
+|-----------------------------|---------------------|-----------------------------------------------------------------------------|
+| **Application Registration** | Application Module  | Registers application callbacks on the IBC router during module setup.       |
+| **Client Creation**          | Relayer   | Both chains create a light client for the counterparty chain.                |
+| **Channel Creation**         | Relayer   | A channel is created and linked to an underlying light client on both chains.           |
+| **Channel Registration**     | Relayer             | Registers the `counterpartyChannelId` on both chains, linking the channels.  |
 
 If any of the steps has been missed, this would result in an incorrect setup error during the packet handlers execution. 
 
@@ -263,8 +269,6 @@ Once the set up is executed the system should be in a similar state:
 ![Setup Final State](setup_final_state.png)
 
 While the application callbacks registration MUST be handled by the application module during initialization, and client creation is governed by [ICS-2](../ics-002-client-semantics/README.md), the channel creation and registration procedures are defined by ICS-04 and are detailed below.
-
-The ICS-04 specification defines a set of conditions that the IBC protocol must adhere to. These conditions ensure the proper execution of the function handlers by establishing requirements before execution (ante-conditions), possible error conditions during execution (error-conditions), and expected outcomes after execution (post-conditions). Thus, implementation that wants to comply with the specification of the IBC version 2 protocol MUST adheres to the specified conditions.
 
 ##### Channel creation 
 
@@ -459,7 +463,7 @@ sequenceDiagram
     Chain A --> Chain A : Delete packetCommitment 
 ```
 
-Given a configuration where we are sending a packet from `A` to `B` then chain `A` can call either, `sendPacket`,`acknowledgePacket` and `timeoutPacket` while chain `B` can only execute the `receivePacket` handler. The `acknowledgePacket` is not a valid action if `receivePacket` has not been executed. `timeoutPacket` is not a valid action if `receivePacket` occurred. 
+Given a configuration where we are sending a packet from `A` to `B` then chain `A` can call either, `sendPacket`,`acknowledgePacket` and `timeoutPacket` while chain `B` can only execute the `receivePacket` handler. The `acknowledgePacket` is not a valid action if `receivePacket` has not been executed. `timeoutPacket` is not a valid action if `receivePacket` occurred. // NEED DISCUSSION
 
 ##### Sending packets
 
@@ -605,7 +609,7 @@ We pass the address of the `relayer` that signed and submitted the packet to ena
 ###### Post-Conditions On Error
 
 - If one payload fail, then all state changes happened on the sucessfull `onReceivePacket` application callback execution MUST be reverted.
-- If timeoutTimestamp has elapsed then no state changes occurred. (Is this true? Shall we write the timeout_sentinel_receipt?)
+- If timeoutTimestamp has elapsed then no state changes occurred. // NEED DISCUSSION (Is this ok? Shall we write the timeout_sentinel_receipt?)
 - mmmm. 
 
 ###### Pseudo-Code 
@@ -621,11 +625,11 @@ function recvPacket(
 
     // Channel and Client Checks
     channel = getChannel(packet.destId)     // if I use packet.dest which is a channelId
-    client = channel.clientId // removed client on router --> client = router.clients[packet.destId] // client = channel.clientId
+    client = channel.clientId // NEED DISCUSSION removed client on router --> client = router.clients[packet.destId] // client = channel.clientId
     assert(client !== null)
     //assert(client.id === channel.clientId) // useful?
     
-    //assert(packet.sourceId == channel.counterpartyChannelId) Unnecessary?
+    //assert(packet.sourceId == channel.counterpartyChannelId) Unnecessary? // NEED DISCUSSION 
 
     // verify timeout
     assert(packet.timeoutTimestamp === 0)  
@@ -689,7 +693,7 @@ function recvPacket(
 
 ##### Writing acknowledgements
 
-NOTE: Currently the system only handles synchronous acks. 
+> NOTE: Currently the system only handles synchronous acks. 
 
 The `writeAcknowledgement` function is called by the IBC handler once all `onRecvPacket` application modules callabacks have been triggered and have returned their specific acknowledgment in order to write data which resulted from processing an IBC packet that the sending chain can then verify. Writing acknowledgement serves as a sort of "execution receipt" or "RPC call response".
 
@@ -770,8 +774,7 @@ The Post-Conditions on Error defines the states that Must be unchanged given an 
 
 The ICS04 provides an example pseudo-code that enforce the above described conditions so that the following sequence of steps must occur for a packet to be acknowledged from module *1* on machine *A* to module *2* on machine *B*.
 
-// What to do with the relayer? Do we want to keep it? 
-// We pass the `relayer` address just as in [Receiving packets](#receiving-packets) to allow for possible incentivization here as well.
+// NEED DISCUSSION:   What to do with the relayer? Do we want to keep it? // We pass the `relayer` address just as in [Receiving packets](#receiving-packets) to allow for possible incentivization here as well.
 
 ```typescript
 function acknowledgePacket(
@@ -930,18 +933,7 @@ function timeoutPacket(
 
 ##### Cleaning up state
 
-Packets must be acknowledged or timed-out in order to be cleaned-up.
-
-### Dataflow visualisation: A day in the life of a packet
-
-TODO 
-
-The bidirectional packet stream can be only started after all the procedure above have been succesfully executed, individually, by both chains. Otherwise, any sent packet cannot be received and will timeout.  
-
-TODO Write Setup. 
-
-TODO Modify Sketch 
-![V2 Happy Path Single Payload Sketch](Sketch_Happy_Path.png)
+Packets MUST be acknowledged or timed-out in order to be cleaned-up.
 
 #### Reasoning about race conditions
 
