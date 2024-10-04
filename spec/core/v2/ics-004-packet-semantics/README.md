@@ -105,7 +105,9 @@ The protocol introduces standardized packet receipts that will serve as sentinel
 ```typescript
 enum PacketReceipt {
   SUCCESSFUL_RECEIPT = byte{0x01},
-  //TIMEOUT_RECEIPT = byte{0x02}, // Should we allow the recivePacket to store a timeout_receipt and do nothing or we just abort the tx? 
+  //TIMEOUT_RECEIPT = byte{0x02}, 
+  // NEED DISCUSSION Should we allow the recivePacket to store a timeout_receipt and do nothing or we just abort the tx? 
+  // This would introduce another packet flow: send - recv - timeout
 }
 ```
 
@@ -127,7 +129,7 @@ An application may not need to return an acknowledgment. In this case, it may re
 
 ```typescript
 type IBCRouter struct {
-    callbacks: portId -> [Callback]
+    callbacks: portId -> [Callback] // Maybe should be callbacks: portId,version -> [Callback] 
     // clients: channelId -> Client // Needed? Maybe not anymore
 }
 ```
