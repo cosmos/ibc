@@ -4,7 +4,7 @@ title: Packet Semantics
 stage: draft
 category: IBC/TAO
 kind: instantiation
-requires: [2](../ics-002-client-semantics/), [24](../ics-024-host-requirements/), [packet-data](https://github.com/cosmos/ibc/pull/1149) 
+requires: 2, 24, packet-data 
 version compatibility: ibc-go v10.0.0
 author: Christopher Goes <cwgoes@tendermint.com>
 created: 2019-03-07
@@ -262,7 +262,7 @@ Once the set up is executed the system should be in a similar state:
 
 ![Setup Final State](setup_final_state.png)
 
-While the application callbacks registration MUST be handled by the application module during initialization, and client creation is governed by [ICS-2](.ics-002-client-semantics/README.md), the channel creation and registration procedures are defined by ICS-04 and are detailed below.
+While the application callbacks registration MUST be handled by the application module during initialization, and client creation is governed by [ICS-2](../ics-002-client-semantics/README.md), the channel creation and registration procedures are defined by ICS-04 and are detailed below.
 
 The ICS-04 specification defines a set of conditions that the IBC protocol must adhere to. These conditions ensure the proper execution of the function handlers by establishing requirements before execution (ante-conditions), possible error conditions during execution (error-conditions), and expected outcomes after execution (post-conditions). Thus, implementation that wants to comply with the specification of the IBC version 2 protocol MUST adheres to the specified conditions.
 
