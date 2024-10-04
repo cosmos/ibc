@@ -4,8 +4,8 @@ title: Packet Semantics
 stage: draft
 category: IBC/TAO
 kind: instantiation
-requires: 2, 24
-version compatibility: ibc-go v7.0.0
+requires: [2](../ics-002-client-semantics/), [24](../ics-024-host-requirements/), [packet-data](https://github.com/cosmos/ibc/pull/1149) 
+version compatibility: ibc-go v10.0.0
 author: Christopher Goes <cwgoes@tendermint.com>
 created: 2019-03-07
 modified: 2019-08-25
@@ -13,16 +13,21 @@ modified: 2019-08-25
 
 TODO : 
 
-- Synopsis
 - Motivation
-- Architectural Sketch  
+- Improve Sketchs  
 - Race condition reasoning 
 - Improve conditions set and presentation 
+- Review Timeout carefully 
 
 ## Synopsis 
 
-The ICS-04 requires the ICS-02, the ICS-24 and the packet data strcuture including the multi-data packet as defined in [here](https://github.com/cosmos/ibc/pull/1149). // Note change with file location when merged 
-It defines the mechanism to create the IBC version 2 protocol channels, to pair two channels on different chains linking them up with the underlying clients to establish the root of trust for the secure packet delivery, the packet-flow semantics, the mechanisms to route the verification to the underlying clients, and how to route packets to their specific IBC applications. 
+This standard defines the channel and packet semantics necessary for state machines implementing the Inter-Blockchain Communication (IBC) protocol, specifically version 2, to enable secure, verifiable, and efficient cross-chain messaging.
+
+It specifies the mechanisms required to establish channels between two state machines (blockchains) where a channel serves as a semantic link between the chains and their counterparty light client representation, ensuring that both chains can process and verify packets exchanged between them.
+
+The standard then details the processes for transmitting, receiving, acknowledging, and timing out data packets. The packet-flow semantics guarantee exactly-once packet delivery between chains, utilizing on-chain light clients for state verification and providing efficient routing of packet data to specific IBC applications.
+
+Additionally, this document defines the ante-conditions, error conditions, and post-conditions for each packet flow handler. By using a well-defined packet interface and clear handling processes, ICS-04 aims to ensure consistency and security without imposing constraints on the internal workings of the state machines involved. Instead, it focuses on the mechanisms to establish the root of trust between two distinct chains, routing, verification, and application-level delivery guarantees required by the IBC protocol. 
 
 ### Motivation
 
@@ -36,56 +41,43 @@ The IBC version 2 will provide packet delivery between two chains communicating 
 
 ### Definitions
 
-`ConsensusState` is as defined in [ICS 2](../ics-002-client-semantics).
+`get`, `set`, `delete`, and module-system related primitives are as defined in [ICS 24](../ics-024-host-requirements).
 
-`hash` is a generic collision-resistant hash function, the specifics of which must be agreed on by the modules utilising the channel. `hash` can be defined differently by different chains.
-
-`Identifier`, `get`, `set`, `delete`, `getCurrentHeight`, and module-system related primitives are as defined in [ICS 24](../ics-024-host-requirements).
-
-A `channel` is a pipeline for exactly-once packet delivery between specific modules which are properly registered on separate blockchains, which has at least one end capable of sending packets and one end capable of receiving packets. All channels provide exactly-once packet delivery, meaning that a packet sent on one end of a channel is delivered no more and no less than once, eventually, to the other end. A `channel` is defined as a data structure responsible for maintaining the counterparty information necessary to establish the root of trust for securing the interchain communication: 
+A `channel` is a data structure that facilitates exactly-once packet delivery between two blockchains acting as a communication pipeline between specific modules registered on separate chains, allowing for secure, verifiable transmission of packets. Channels can be registered to establish a semantic link between two chains and their respective light clients, ensuring that both chains can process and verify the packets exchanged. To establish the root of trust for secure interchain communication with a counterparty chain, each chain MUST register a channel maintaining the necessary counterparty information, such as the channel identifier of the counterparty chain, the light client identifier of the counterparty chain and the path used to store packet flow messages.
 
 ```typescript
 interface Channel {
-    clientId: bytes 
-    counterpartyChannelId: bytes 
-    keyPrefix: CommitmentPrefix 
+    clientId: bytes // local light client id of the counterparty chain. 
+    counterpartyChannelId: bytes // counterparty channel id.  
+    keyPrefix: CommitmentPrefix //  key path that the counterparty will use to prove its store packet flow messages.
 }
 ```
 
-Where :
+The `Packet`, `Payload`, `Encoding` and the `Acknowledgement` interfaces are as defined in [packet specification](https://github.com/cosmos/ibc/blob/c7b2e6d5184b5310843719b428923e0c5ee5a026/spec/core/v2/ics-004-packet-semantics/PACKET.md). 
 
-- `clientId` is the local light client id of the counterparty chain. 
-- `counterpartyChannelId` is the counterparty channel id. 
-- `keyPrefix` is the key path that the counterparty will use to prove its store packet flow messages.
-
-The `Packet`, `Payload`, `Encoding` and the `Acknowledgement` interfaces are as defined in [packet specification](https://github.com/cosmos/ibc/blob/c7b2e6d5184b5310843719b428923e0c5ee5a026/spec/core/v2/ics-004-packet-semantics/PACKET.md). For convenience, following we recall their structures.  
+For convenience, following we recall their structures.  
 
 A `Packet`, in the interblockchain communication protocol, is a particular interface defined as follows:
 
 ```typescript
 interface Packet {
-    sourceId: bytes,
-    destId: bytes,
-    sequence: uint64
-    timeout: uint64,
-    data: [Payload]
+    sourceId: bytes, // identifier on the source chain. 
+    destId: bytes, // identifier on the dest chain.
+    sequence: uint64, // number that corresponds to the order of sent packets.
+    timeout: uint64, // indicates the UNIX timestamp in seconds and is encoded in LittleEndian. It must be passed on the destination chain and once elapsed, will no longer allow the packet processing, and will instead generate a time-out.
+    data: [Payload] // data 
 }
 ```
-
-- The `sourceId` is the identifier on the source chain.
-- The `destId` is the identifier on the dest chain. 
-- The `sequence` number corresponds to the order of sent packets.  
-- The `timeout` indicates the UNIX timestamp in seconds and is encoded in LittleEndian. It must be passed on the destination chain and once elapsed, will no longer allow the packet processing, and will instead generate a time-out.
 
 The `Payload` is a particular interface defined as follows:
 
 ```typescript
 interface Payload {
-    sourcePort: bytes,
-    destPort: bytes,
-    version: string,
-    encoding: Encoding,
-    appData: bytes,
+    sourcePort: bytes, // identifies the source application port
+    destPort: bytes, // identifies the dest application port 
+    version: string, // application version
+    encoding: Encoding, // used encoding - allows the specification of custom data encoding among those agreed in the `Encoding` enum
+    appData: bytes, // app specific data 
 }
 
 enum Encoding {
@@ -96,12 +88,6 @@ enum Encoding {
     BCS,
 }
 ```
-
-- The `sourcePort` identifies the source application.
-- The `destPort` identifies the destination application. 
-- The `version` specifies the application version to be used.  
-- The `encoding` allows the specification of custom data encoding among those agreed in the `Encoding` enum.   
-- The `appData` is defined by the application of the associated modules. 
 
 When the array of payloads, passed-in the packet, is populated with multiple values, the system will handle the packet as a multi-data packet. 
 
@@ -118,7 +104,7 @@ The protocol introduces standardized packet receipts that will serve as sentinel
 ```typescript
 enum PacketReceipt {
   SUCCESSFUL_RECEIPT = byte{0x01},
-  TIMEOUT_RECEIPT = byte{0x02}, 
+  //TIMEOUT_RECEIPT = byte{0x02}, // Should we allow the recivePacket to store a timeout_receipt and do nothing or we just abort the tx? 
 }
 ```
 
@@ -126,17 +112,16 @@ The `Acknowledgement` is a particular interface defined as follows:
 
 ```typescript
 interface Acknowledgement {
-    appAcknowledgement: [bytes]
+    appAcknowledgement: [bytes] // array of bytes. Each element of the array contains an acknowledgement from a specific application  
 }
 ```
 
-- The `appAcknowledgement` is an array of bytes. Each element of the array identifies the source application acknowledgement. 
-
 An application may not need to return an acknowledgment. In this case, it may return a sentinel acknowledgement value `SENTINEL_ACKNOWLEDGMENT` which will be the single byte in the byte array: `bytes(0x01)`. In this case, the IBC `acknowledgePacket` handler will still do the core IBC acknowledgment logic but it will not call the application's acknowledgePacket callback.
 
-E.g. If a packet within 3 payloads intended for 3 different application is sent out, the expectation is that each of the payload is acted upon in the same order as it has been placed in the packet. Likewise, the array of appAcknowledgement is expected to be populated within the same order. 
+> **Example**: If a packet within 3 payloads intended for 3 different application is sent out, the expectation is that each of the payload is acted upon in the same order as it has been placed in the packet. Likewise, the array of `appAcknowledgement` is expected to be populated within the same order. 
 
-- The `IBCRouter` contains a mapping from the application port and the supported callbacks and as well as a mapping from channelId to the underlying client.
+- The `IBCRouter` contains a mapping from the application port and the supported callbacks. 
+// and as well as a mapping from channelId to the underlying client.
 
 ```typescript
 type IBCRouter struct {
@@ -145,7 +130,7 @@ type IBCRouter struct {
 }
 ```
 
-The IBCRouter struct MUST be set by the application modules during the module setup to carry out the application registration procedure. 
+The proper registration of the application callbacks in the local `IBCRouter`, is responsibility of the chain. Without this registration process, the packets cannot be processed by the application.  
 
 - The `MAX_TIMEOUT_DELTA` is intendend as the max difference between currentTimestamp and timeoutTimestamp that can be given in input. 
 
@@ -153,13 +138,18 @@ The IBCRouter struct MUST be set by the application modules during the module se
 const MAX_TIMEOUT_DELTA = TBD
 ```
 
+- The `ante-conditions` define what MUST hold true before an action can occurr in the IBC v2 packet flow. 
+- The `error-conditions` define the set of expected errors. 
+- The `post-conditions on success` defines the expected final state changes on success. 
+- The `post-conditions on error` the expected final state on error
+
 ### Desired Properties
 
 #### Efficiency
 
 - The speed of packet transmission and confirmation should be limited only by the speed of the underlying chains.
 - Proofs should be batchable where possible.
-- The system MUST be able to process the multiple payloads contained in a single IBC packet, to reduce the amount of packet flows. 
+- The system MUST be able to process atomically the multiple payloads contained in a single IBC packet, to reduce the amount of packet flows. 
 
 #### Exactly-once delivery
 
@@ -181,9 +171,9 @@ const MAX_TIMEOUT_DELTA = TBD
 
 #### Store paths
 
-The ICS-04 use the protocol paths, defined in [ICS-24](../ics-024-host-requirements/README.md), `packetCommitmentPath`, `packetRecepitPath` and `packetAcknowledgementPath`. These paths MUST be used as the referece locations in the provableStore to prove respectilvey the packet commitment, the receipt and the acknowledgment to the counterparty chain. 
+The ICS-04 use the protocol paths, defined in [ICS-24](../ics-024-host-requirements/README.md), `packetCommitmentPath`, `packetRecepitPath` and `packetAcknowledgementPath`. The paths MUST be used as the referece locations in the provableStore to prove respectilvey the packet commitment, the receipt and the acknowledgment to the counterparty chain. 
 
-Thus Constant-size commitments to packet data fields are stored under the packet sequence number:
+Thus, Constant-size commitments to packet data fields are stored under the packet sequence number:
 
 ```typescript
 function packetCommitmentPath(sourceId: bytes, sequence: BigEndianUint64): Path {
@@ -193,7 +183,9 @@ function packetCommitmentPath(sourceId: bytes, sequence: BigEndianUint64): Path 
 
 Absence of the path in the store is equivalent to a zero-bit.
 
-Packet receipt data are stored under the `packetReceiptPath`. In the case of a successful receive, the destination chain writes a sentinel success value of `SUCCESSFUL_RECEIPT`. While in the case of a timeout, the destination chain SHOULD write a sentinel timeout value `TIMEOUT_RECEIPT` if the packet is received after the specified timeout.
+Packet receipt data are stored under the `packetReceiptPath`. In the case of a successful receive, the destination chain writes a sentinel success value of `SUCCESSFUL_RECEIPT`. 
+
+//NOTE: Do we want this? Maybe not useful. While in the case of a timeout, the destination chain SHOULD write a sentinel timeout value `TIMEOUT_RECEIPT` if the packet is received after the specified timeout.
 
 ```typescript
 function packetReceiptPath(sourceId: bytes, sequence: BigEndianUint64): Path {
@@ -237,11 +229,9 @@ function creatorPath(channelId: Identifier, creator: address): Path {
 
 ### Sub-protocols
 
-TODO The architecture of clients, connections, channels and packets:
-
 #### Setup
 
-In order to create the conditions for the IBC version 2 packet stream, chain `A` and chain `B` MUST execute the entire setup following this set of procedures:  
+To start the secure packet stream between the chains, chain `A` and chain `B` MUST execute the entire setup following this set of procedures:  
 
 - Application registration: during the application module setup the application callbacks MUST be registered on the local IBC router. 
 - Client creation: chain `A` MUST create the `B` light client; `B` MUST create the `A` light client.   
@@ -274,9 +264,33 @@ Once the set up is executed the system should be in a similar state:
 
 While the application callbacks registration MUST be handled by the application module during initialization, and client creation is governed by [ICS-2](.ics-002-client-semantics/README.md), the channel creation and registration procedures are defined by ICS-04 and are detailed below.
 
+The ICS-04 specification defines a set of conditions that the IBC protocol must adhere to. These conditions ensure the proper execution of the function handlers by establishing requirements before execution (ante-conditions), possible error conditions during execution (error-conditions), and expected outcomes after execution (post-conditions). Thus, implementation that wants to comply with the specification of the IBC version 2 protocol MUST adheres to the specified conditions.
+
 ##### Channel creation 
 
 The channel creation process establishes the communication pathway between two chains. The procedure ensures both chains have a mutually recognized channel, facilitating packet transmission through authenticated streams.
+
+###### Ante-Conditions 
+
+- The clientId provided in input to createChannel MUST exist. 
+
+###### Error-Conditions 
+
+- Incorrect clientId
+- Unexpected keyPrefix format 
+
+###### Post-Conditions On Success 
+
+- A channel is set in store and it's accessible with key channelId. 
+- The creator is set in store and it's accessible with key [channelId,address]. 
+
+###### Post-Conditions On Error
+
+- If one payload fail, then all state changes happened on the sucessfull application execution must be reverted.
+- No packetCommitment has been generated.
+- The sequence number bind to sourceId MUST be unchanged. 
+
+###### Pseudo-Code 
 
 ```typescript
 function createChannel(
@@ -285,6 +299,9 @@ function createChannel(
 
         // Implementation-Specific Input Validation 
         // All implementations MUST ensure the inputs value are properly validated and compliant with this specification 
+        client=getClient(clientId)
+        assert(client!==null)
+        assert(isFormatOk(counterpartyKeyPrefix))
 
         // Channel Checks
         channelId = generateIdentifier() 
@@ -310,11 +327,29 @@ Note that `createClient` message (as defined in ICS-02) may be bundled with the 
 
 ##### Channel registration and counterparty idenfitifcation  
 
-Each IBC chain MUST have the ability to idenfity its counterparty. With a client, we can prove any key/value path on the counterparty. However, without knowing which identifier the counterparty uses when it sends messages to us, we cannot differentiate between messages sent from the counterparty to our chain vs messages sent from the counterparty with other chains. Most implementations will not be able to store the ICS-24 paths directly as a key in the global namespace, but will instead write to a reserved, prefixed keyspace so as not to conflict with other application state writes. 
+Each IBC chain MUST have the ability to idenfity its counterparty to ensure valid communication. While a client can prove any key/value path on the counterparty, knowing which identifier the counterparty uses when it sends messages to us is essential to prevent confusion between messages intended for different chains. 
 
-To provide the chains a mechanism for the mutual and verifiable identification, the IBC version 2 defines the channel registration procedure to complement the store of the counterparty information in the channel that will include both its identifier for our chain and as well as the key prefix under which it will write the provable ICS-24 paths.
+To enable mutual and verifiable identification, IBC version 2 introduces a `registerChannel` procedure. This process stores the `counterpartyChannelId` in the local channel structure, ensuring both chains have mirrored <channel, channel> pairs. With the correct registration, the unique clients on each side provide an authenticated stream of packet data. Social consensus outside the protocol is relied upon to ensure only valid <channel, channel> pairs are used, representing connections between the correct chains. 
 
-Thus, IBC version 2 introduces a new message `registerChannel` that will store the counterpartyChannelId into the local channel structure. Thus, if the `registerChannel` message is submitted to both sides correctly, then both sides have mirrored <channel,channel> pairs. Assuming they are correct, the underlying client on each side associated with the channel is unique and provides an authenticated stream of packet data between the two chains. If the `registerChannel` message submits the wrong counterpartyChannelId, this can lead to invalid behaviour; but this is equivalent to a relayer submitting an invalid channelId in place of a correct channelId for the desired chain. In the simplest case, we can rely on out-of-band social consensus to only send on valid <channel, channel> pairs that represent a connection between the desired chains of the user; just as we currently rely on out-of-band social consensus that a given clientID and channel built on top of it is the valid, canonical identifier of our desired chain.
+###### Ante-Conditions 
+
+- The channelID provided in input MUST properly resolve to a channel. 
+
+###### Error-Conditions 
+
+- Incorrect channelId
+- Authentication Failed 
+
+###### Post-Conditions On Success 
+
+- The channel in store contains the counterpartyChannelId information and it's accessible with key channelId. 
+
+###### Post-Conditions On Error
+
+- On the first call the channel in store contains the counterpartyChannelId as an empty field. 
+- On the second call the channel in store contains the old counterpartyChannelId information. 
+
+###### Pseudo-Code 
 
 ```typescript
 function registerChannel(
@@ -348,8 +383,7 @@ function registerChannel(
 }
 ```
 
-The `registerChannel` method allows for authentication data that implementations may verify before storing the provided counterparty identifier. The strongest authentication possible is to have a valid clientState and consensus state of our chain in the authentication along with a proof it was stored at the claimed counterparty identifier.
-A simpler but weaker authentication would simply be to check that the `registerChannel` message is sent by the same relayer that initialized the client. This would make the client parameters completely initialized by the relayer. Thus, users must verify that the client is pointing to the correct chain and that the counterparty identifier is correct as well before using the lite channel identified by the provided client-client pair.
+The `registerChannel` method allows for authentication data that implementations may verify before storing the provided counterparty identifier. The strongest authentication possible is to have a valid clientState and consensus state of our chain in the authentication along with a proof it was stored at the claimed counterparty identifier. A simpler but weaker authentication would simply be to check that the `registerChannel` message is sent by the same relayer that initialized the client. This would make the client parameters completely initialized by the relayer. Thus, users must verify that the client is pointing to the correct chain and that the counterparty identifier is correct as well before using the <channel,channel> pair.
 
 ```typescript
 // getChannel retrieves the stored channel given the counterparty channel-id. 
@@ -379,8 +413,6 @@ In the IBC protocol version 2, the packet flow is managed by four key function h
 - `receivePacket`
 - `acknowledgePacket`
 - `timeoutPacket`
-
-For each handler, the ICS-04 specification defines a set of conditions that the IBC protocol must adhere to. These conditions ensure the proper execution of the handler by establishing requirements before execution (ante-conditions), possible error states during execution (error-conditions), and expected outcomes after execution (post-conditions). Thus, implementation that wants to comply with the specification of the IBC version 2 protocol MUST adheres to the condition set defined in the specific handler section below.
 
 Note that the execution of the four handler above described, upon a unique packet, cannot be combined in any arbitrary order. We provide the two possible example scenarios described with sequence diagrmas. 
 
@@ -427,7 +459,7 @@ sequenceDiagram
     Chain A --> Chain A : Delete packetCommitment 
 ```
 
-Given a configuration where we are sending a packet from `A` to `B` then chain `A` can call either, `sendPacket`,`acknowledgePacket` and `timeoutPacket` while chain `B` can only execute the `receivePacket` handler. 
+Given a configuration where we are sending a packet from `A` to `B` then chain `A` can call either, `sendPacket`,`acknowledgePacket` and `timeoutPacket` while chain `B` can only execute the `receivePacket` handler. The `acknowledgePacket` is not a valid action if `receivePacket` has not been executed. `timeoutPacket` is not a valid action if `receivePacket` occurred. 
 
 ##### Sending packets
 
@@ -437,7 +469,7 @@ The `sendPacket` core function MUST execute the applications logic atomically tr
 
 The IBC handler performs the following steps in order:
 
-- Checks that the underlying clients is properly registered in the IBC router. 
+- Checks that the underlying clients is valid. 
 - Checks that the timeout specified has not already passed on the destination chain
 - Executes the `onSendPacket` ∀ Payload included in the packet. 
 - Stores a constant-size commitment to the packet data & packet timeout
@@ -448,29 +480,22 @@ Note that the full packet is not stored in the state of the chain - merely a sho
 
 ###### Ante-Conditions 
 
-The Ante-Conditions defines what MUST be accomplished before two chains can start sending IBC v2 packets. 
-
-For the `sendPacket` handler, both chains `A` and `B` MUST have executed independently the setup procedure previosuly described. 
+- Chains `A` and `B` MUST be in a setup final state. 
+- Inputs channelId and timeoutTimestamp are valid. 
 
 ###### Error-Conditions 
 
-The Error-Conditions defines the set of condition that MUST trigger an error. For the `sendPacket` handler we can divide the source of errors in three main categories: 
-
-- Incorrect setup
+- Incorrect setup - includes invalid client and invalid channelId
 - Invalid timeoutTimestamp
 - Unsuccessful payload execution
 
 ###### Post-Conditions On Success 
-
-The Post-Conditions on Success defines which state changes MUST have occurred if the `sendPacket` handler has been sucessfully executed.  
 
 - All the application contained in the payload have properly terminated the `onSendPacket` callback execution. 
 - The packetCommitment has been generated. 
 - The sequence number bind to sourceId MUST have been incremented by 1. 
 
 ###### Post-Conditions On Error
-
-The Post-Conditions on Error defines the states that Must be unchanged given an error occurred during the `sendPacket` handler.   
 
 - If one payload fail, then all state changes happened on the sucessfull application execution must be reverted.
 - No packetCommitment has been generated.
@@ -551,8 +576,7 @@ Atomically in conjunction with calling `recvPacket`, the modules/application ref
 
 The IBC handler performs the following steps in order:
 
-- Checks that the clients is properly set in IBC router
-- Checks that the packet metadata matches the channel & connection information
+- Checks that the clients is valid
 - Checks that the timeout timestamp is not yet passed
 - Checks the inclusion proof of packet data commitment in the outgoing chain's state
 - Sets a store path to indicate that the packet has been received
@@ -562,15 +586,11 @@ We pass the address of the `relayer` that signed and submitted the packet to ena
 
 ###### Ante-Conditions 
 
-Given that chain `A` has sucessfully sent a packet, the ante-conditions defines what MUST be accomplished before chain `B` can properly receive the IBC v2 packets. 
-
 - Chain `A` MUST have stored the packetCommitment under the keyPrefix registered in the chain `B` channelEnd. 
 - TimeoutTimestamp MUST not have elasped yet. 
 - PacketReceipt for the specific keyPrefix and sequence MUST be empty (e.g. receivePacket has not been called yet)
 
 ###### Error-Conditions 
-
-The Error-Conditions defines the set of condition that MUST trigger an error. For the `receivePacket` handler we can divide the source of errors in three main categories: 
 
 - Packet Errors: invalid packetCommitment, packetReceipt already exist
 - Invalid timeoutTimestamp
@@ -578,15 +598,11 @@ The Error-Conditions defines the set of condition that MUST trigger an error. Fo
 
 ###### Post-Conditions On Success 
 
-The Post-Conditions on Success defines which state changes MUST have occurred if the `receivePacket` handler has been sucessfully executed.  
-
 - All the application pointed in the payload have properly terminated the `onReceivePacket` callback execution. 
 - The packetReceipt has been written. 
 - The acknowledgemnet has been written. 
 
 ###### Post-Conditions On Error
-
-The Post-Conditions on Error defines the states that Must be unchanged given an error occurred during the `onReceivePacket` handler.   
 
 - If one payload fail, then all state changes happened on the sucessfull `onReceivePacket` application callback execution MUST be reverted.
 - If timeoutTimestamp has elapsed then no state changes occurred. (Is this true? Shall we write the timeout_sentinel_receipt?)
@@ -673,13 +689,13 @@ function recvPacket(
 
 ##### Writing acknowledgements
 
-NOTE: Currently only process synchronous acks. 
+NOTE: Currently the system only handles synchronous acks. 
 
-The `writeAcknowledgement` function is called by the IBC handler once all `onRecvPacket` application modules callabacks have been triggered and have returned their specific acknowledgment in order to write data which resulted from processing an IBC packet that the sending chain can then verify, a sort of "execution receipt" or "RPC call response".
+The `writeAcknowledgement` function is called by the IBC handler once all `onRecvPacket` application modules callabacks have been triggered and have returned their specific acknowledgment in order to write data which resulted from processing an IBC packet that the sending chain can then verify. Writing acknowledgement serves as a sort of "execution receipt" or "RPC call response".
 
-This is a synchronous acknowledgement, thus `writeAcknowledgement` MUST be called in the same transaction (atomically) with `recvPacket` and and application callback logic execution.
+Since at the day of writing, IBC version 2 only support synchronous acknowledgement, `writeAcknowledgement` MUST be called in the same transaction (atomically) with `recvPacket` and the application callback logic execution.
 
-`writeAcknowledgement` *does not* check if the packet being acknowledged was actually received, because this would result in proofs being verified twice for acknowledged packets. This aspect of correctness is the responsibility of the IBC handler.
+`writeAcknowledgement` is called in a `recvPacket`, thus it *does not* check if the packet being acknowledged was actually received, because this would result in proofs being verified twice for acknowledged packets. This aspect of correctness is the responsibility of the IBC handler.
 
 The IBC handler performs the following steps in order:
 
@@ -716,13 +732,9 @@ function writeAcknowledgement(
 
 ##### Processing acknowledgements
 
-The `acknowledgePacket` function is called by the IBC handler to process the acknowledgement of a packet previously sent by the source chain. 
-
-The `acknowledgePacket` also cleans up the packet commitment, which is no longer necessary since the packet has been received and acted upon.
+The `acknowledgePacket` function is called by the IBC handler to process the acknowledgement of a packet previously sent by the source chain that has been received on the destination chain. The `acknowledgePacket` also cleans up the packet commitment, which is no longer necessary since the packet has been received and acted upon.
 
 The IBC hanlder MUST atomically trigger the callbacks execution of appropriate application acknowledgement-handling logic in conjunction with calling `acknowledgePacket`.
-
-We pass the `relayer` address just as in [Receiving packets](#receiving-packets) to allow for possible incentivization here as well.
 
 ###### Ante-Conditions 
 
@@ -757,6 +769,9 @@ The Post-Conditions on Error defines the states that Must be unchanged given an 
 ###### Pseudo-Code 
 
 The ICS04 provides an example pseudo-code that enforce the above described conditions so that the following sequence of steps must occur for a packet to be acknowledged from module *1* on machine *A* to module *2* on machine *B*.
+
+// What to do with the relayer? Do we want to keep it? 
+// We pass the `relayer` address just as in [Receiving packets](#receiving-packets) to allow for possible incentivization here as well.
 
 ```typescript
 function acknowledgePacket(
@@ -834,7 +849,7 @@ Note that in order to avoid any possible "double-spend" attacks, the timeout alg
 
 ##### Sending end
 
-The `timeoutPacket` function is called by a module which originally attempted to send a packet to a counterparty module,
+The `timeoutPacket` function is called by the IBC hanlder by the chain that attempted to send a packet to a counterparty module,
 where the timeout height or timeout timestamp has passed on the counterparty chain without the packet being committed, to prove that the packet
 can no longer be executed and to allow the calling module to safely perform appropriate state transitions.
 
@@ -845,14 +860,10 @@ We pass the `relayer` address just as in [Receiving packets](#receiving-packets)
 
 ###### Ante-Conditions 
 
-The ante-conditions defines what MUST be accomplished before chain `A` can properly execute the `timeoutPacket` for the IBC v2 packet. 
-
 - PacketReceipt MUST be empty. 
 - PacketCommitment has not been cleared out yet. 
 
 ###### Error-Conditions 
-
-The Error-Conditions defines the set of condition that MUST trigger an error. For the `acknowledgePacket` handler we can divide the source of errors in three main categories: 
 
 - packetCommitment already clreared out
 - PacketReceipt is not empty
@@ -860,14 +871,10 @@ The Error-Conditions defines the set of condition that MUST trigger an error. Fo
 
 ###### Post-Conditions On Success 
 
-The Post-Conditions on Success defines which state changes MUST have occurred if the `timeoutPacket` handler has been sucessfully executed.  
-
 - All the application pointed in the payload have properly terminated the `onTimeoutPacket` callback execution, reverting the state changes occured in the `onSendPacket`. 
 - The packetCommitment has been cleared out. 
 
 ###### Post-Conditions On Error
-
-The Post-Conditions on Error defines the states that Must be unchanged given an error occurred during the `onAcknowledgePacket` handler.   
 
 - If one payload fail, then all state changes happened on the sucessfull `onTimeoutPacket` application callback execution MUST be reverted. Mmm Note that here we may get stucked if one onTimeoutPacket applications always fails. 
 - The packetCommitment has not been cleared out
@@ -923,7 +930,7 @@ function timeoutPacket(
 
 ##### Cleaning up state
 
-Packets must be acknowledged in order to be cleaned-up.
+Packets must be acknowledged or timed-out in order to be cleaned-up.
 
 ### Dataflow visualisation: A day in the life of a packet
 
