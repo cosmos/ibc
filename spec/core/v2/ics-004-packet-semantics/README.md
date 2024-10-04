@@ -117,8 +117,8 @@ The protocol introduces standardized packet receipts that will serve as sentinel
 
 ```typescript
 enum PacketReceipt {
-  SUCCESSFUL_RECEIPT = []byte{0x01},
-  TIMEOUT_RECEIPT = []byte{0x02}, 
+  SUCCESSFUL_RECEIPT = byte{0x01},
+  TIMEOUT_RECEIPT = byte{0x02}, 
 }
 ```
 
@@ -141,7 +141,7 @@ E.g. If a packet within 3 payloads intended for 3 different application is sent 
 ```typescript
 type IBCRouter struct {
     callbacks: portId -> [Callback]
-    clients: channelId -> Client // Needed? Maybe not anymore
+    // clients: channelId -> Client // Needed? Maybe not anymore
 }
 ```
 
@@ -264,9 +264,13 @@ sequenceDiagram
     Chain A ->> Relayer : clientId= X , channelId = Y
     Relayer ->> Chain B : createClient(A chain) + createChannel
     Chain B ->> Relayer : clientId= Z , channelId = W
-    Relayer ->> Chain A : registerChannel(channelId = W)
-    Relayer ->> Chain B : registerChannel(channelId = Y) 
+    Relayer ->> Chain A : registerChannel(channelId = Y, counterpartyChannelId = W)
+    Relayer ->> Chain B : registerChannel(channelId = W, counterpartyChannelId = Y) 
 ```
+
+Once the set up is executed the system should be in a similar state: 
+
+![Setup Final State](setup_final_state.png)
 
 While the application callbacks registration MUST be handled by the application module during initialization, and client creation is governed by [ICS-2](.ics-002-client-semantics/README.md), the channel creation and registration procedures are defined by ICS-04 and are detailed below.
 
@@ -314,6 +318,7 @@ Thus, IBC version 2 introduces a new message `registerChannel` that will store t
 
 ```typescript
 function registerChannel(
+    channelId: bytes, // local chain channel identifier
     counterpartyChannelId: bytes, // the counterparty's channel identifier
     authentication: data, // implementation-specific authentication data
 ) {
@@ -324,7 +329,6 @@ function registerChannel(
     assert(verify(authentication))
 
     // Channel Checks
-    channelId=generateIdentifier()
     abortTransactionUnless(validatedIdentifier(channelId))
     channel=getChannel(channelId) 
     abortTransactionUnless(channel !== null)
@@ -336,10 +340,10 @@ function registerChannel(
     channel.counterpartyChannelId=counterpartyChannelId
 
     // Client registration on the router 
-    router.clients[sourceChannelId]=channel.clientId
+    //router.clients[sourceChannelId]=channel.clientId  // clients on router removed
 
     // Local Store
-    privateStore.set(channelPath(counterpartyChannelId), channel)
+    privateStore.set(channelPath(channelId), channel)
 
 }
 ```
@@ -485,11 +489,11 @@ function sendPacket(
 
     // Setup checks - channel and client 
     channel = getChannel(sourceChannelId)
-    client = router.clients[sourceChannelId]
+    client = channel.clientId // removed client on router --> client = router.clients[sourceChannelId] // can it be client = channel.clientId
     assert(client !== null)
     
     // Evaluate usefulness of this check 
-    assert(client.id === channel.clientId)
+   // assert(client.id === channel.clientId)
     
     // timeoutTimestamp checks
     // disallow packets with a zero timeoutTimestamp
@@ -600,10 +604,10 @@ function recvPacket(
   relayer: string) {
 
     // Channel and Client Checks
-    channel = getChannel(packet.destId)
-    client = router.clients[packet.destId]
+    channel = getChannel(packet.destId)     // if I use packet.dest which is a channelId
+    client = channel.clientId // removed client on router --> client = router.clients[packet.destId] // client = channel.clientId
     assert(client !== null)
-    assert(client.id === channel.clientId)
+    //assert(client.id === channel.clientId) // useful?
     
     //assert(packet.sourceId == channel.counterpartyChannelId) Unnecessary?
 
@@ -765,10 +769,10 @@ function acknowledgePacket(
 
     // Channel and Client Checks
     channel = getChannel(packet.sourceId)
-    client = router.clients[packet.sourceId]
+    client = channel.clientId //client = router.clients[packet.sourceId]
 
     assert(client !== null)
-    assert(client.id === channel.clientId)
+    //assert(client.id === channel.clientId)
     
     //assert(packet.destId == channel.counterpartyChannelId)
    
@@ -879,10 +883,10 @@ function timeoutPacket(
 ) { 
     // Channel and Client Checks
     channel = getChannel(packet.sourceId)
-    client = router.clients[packet.sourceId]
+    client = channel.clientId //client = router.clients[packet.sourceId]
 
     assert(client !== null)
-    assert(client.id === channel.clientId)
+    // assert(client.id === channel.clientId)
     
     //assert(packet.destId == channel.counterpartyChannelId)
 
