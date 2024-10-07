@@ -278,16 +278,12 @@ The channel creation process establishes the communication pathway between two c
 
 ###### Conditions Table  
 
-| Condition Type          | Description                                                                                                                                     |
-|-------------------------|-------------------------------------------------------------------------------------------------------------------------------------------------|
-| **Ante-Conditions**      | - The clientId provided in input to createChannel MUST exist.                                                                                   |
-| **Error-Conditions**     | - Incorrect clientId.                                                                                                                          |
-|                         | - Unexpected keyPrefix format.                                                                                                                 |
-| **Post-Conditions (Success)** | - A channel is set in store and it's accessible with key channelId.                                                                             |
-|                         | - The creator is set in store and it's accessible with key [channelId,address].                                                                 |
-| **Post-Conditions (Error)**   | - If one payload fails, then all state changes happened on the successful application execution must be reverted.                              |
-|                         | - No packetCommitment has been generated.                                                                                                       |
-|                         | - The sequence number bound to sourceId MUST be unchanged.                                                                                      |
+| **Condition Type**            | **Description**                                                                                     |
+|-------------------------------|-----------------------------------------------------------------------------------------------------|
+| **Ante-Conditions**            | - The clientId provided in input to createChannel MUST exist.                                        |
+| **Error-Conditions**           | - Incorrect clientId.<br> - Unexpected keyPrefix format.                                             |
+| **Post-Conditions (Success)**  | - A channel is set in store and it's accessible with key channelId.<br> - The creator is set in store and it's accessible with key [channelId, address]. |
+| **Post-Conditions (Error)**    | - If one payload fails, then all state changes happened on the successful application execution must be reverted.<br> - No packetCommitment has been generated.<br> - The sequence number bound to sourceId MUST be unchanged. |
 
 ###### Pseudo-Code 
 
@@ -332,14 +328,12 @@ To enable mutual and verifiable identification, IBC version 2 introduces a `regi
 
 ###### Conditions Table 
 
-| Condition Type          | Description                                                                                                                                    |
-|-------------------------|------------------------------------------------------------------------------------------------------------------------------------------------|
-| **Ante-Conditions**      | - The channelID provided in input MUST properly resolve to a channel.                                                                         |
-| **Error-Conditions**     | - Incorrect channelId.                                                                                                                        |
-|                         | - Authentication Failed.                                                                                                                      |
-| **Post-Conditions (Success)** | - The channel in store contains the counterpartyChannelId information and it's accessible with key channelId.                                 |
-| **Post-Conditions (Error)**   | - On the first call, the channel in store contains the counterpartyChannelId as an empty field.                                               |
-|                         | - On the second call, the channel in store contains the old counterpartyChannelId information.                                                  |
+| **Condition Type**            | **Description**                                                                                                                 |
+|-------------------------------|---------------------------------------------------------------------------------------------------------------------------------|
+| **Ante-Conditions**            | - The channelID provided in input MUST properly resolve to a channel.                                                           |
+| **Error-Conditions**           | - Incorrect channelId.<br> - Authentication Failed.                                                                              |
+| **Post-Conditions (Success)**  | - The channel in store contains the counterpartyChannelId information and it's accessible with key channelId.                     |
+| **Post-Conditions (Error)**    | - On the first call, the channel in store contains the counterpartyChannelId as an empty field.<br> - On the second call, the channel in store contains the old counterpartyChannelId information. |
  
 ###### Pseudo-Code 
 
@@ -472,19 +466,12 @@ Note that the full packet is not stored in the state of the chain - merely a sho
 
 ###### Conditions Table 
 
-| Condition Type          | Description                                                                                                                                    |
-|-------------------------|------------------------------------------------------------------------------------------------------------------------------------------------|
-| **Ante-Conditions**      | - Chains `A` and `B` MUST be in a setup final state.                                                                                          |
-|                         | - Inputs channelId and timeoutTimestamp are valid.                                                                                            |
-| **Error-Conditions**     | - Incorrect setup (includes invalid client and invalid channelId).                                                                            |
-|                         | - Invalid timeoutTimestamp.                                                                                                                   |
-|                         | - Unsuccessful payload execution.                                                                                                             |
-| **Post-Conditions (Success)** | - All the applications contained in the payload have properly terminated the `onSendPacket` callback execution.                               |
-|                         | - The packetCommitment has been generated.                                                                                                    |
-|                         | - The sequence number bound to sourceId MUST have been incremented by 1.                                                                      |
-| **Post-Conditions (Error)**   | - If one payload fails, then all state changes happened on the successful application execution must be reverted.                            |
-|                         | - No packetCommitment has been generated.                                                                                                     |
-|                         | - The sequence number bound to sourceId MUST be unchanged.                                                                                     |
+| **Condition Type**            | **Description**                                                                                                                 |
+|-------------------------------|---------------------------------------------------------------------------------------------------------------------------------|
+| **Ante-Conditions**            | - Chains `A` and `B` MUST be in a setup final state.<br> - Inputs channelId and timeoutTimestamp are valid.                     |
+| **Error-Conditions**           | - Incorrect setup (includes invalid client and invalid channelId).<br> - Invalid timeoutTimestamp.<br> - Unsuccessful payload execution. |
+| **Post-Conditions (Success)**  | - All the applications contained in the payload have properly terminated the `onSendPacket` callback execution.<br> - The packetCommitment has been generated.<br> - The sequence number bound to sourceId MUST have been incremented by 1. |
+| **Post-Conditions (Error)**    | - If one payload fails, then all state changes happened on the successful application execution must be reverted.<br> - No packetCommitment has been generated.<br> - The sequence number bound to sourceId MUST be unchanged. |
 
 ###### Pseudo-Code 
 
@@ -571,21 +558,13 @@ We pass the address of the `relayer` that signed and submitted the packet to ena
 
 ###### Conditions Table 
 
-| Condition Type          | Description                                                                                                                                         |
-|-------------------------|-----------------------------------------------------------------------------------------------------------------------------------------------------|
-| **Ante-Conditions**      | - Chain `A` MUST have stored the packetCommitment under the keyPrefix registered in the chain `B` channelEnd.                                        |
-|                         | - TimeoutTimestamp MUST not have elapsed yet.                                                                                                       |
-|                         | - PacketReceipt for the specific keyPrefix and sequence MUST be empty (e.g. `receivePacket` has not been called yet).                                |
-| **Error-Conditions**     | - Packet Errors: invalid packetCommitment, packetReceipt already exists.                                                                            |
-|                         | - Invalid timeoutTimestamp.                                                                                                                        |
-|                         | - Unsuccessful payload execution.                                                                                                                  |
-| **Post-Conditions (Success)** | - All the applications pointed in the payload have properly terminated the `onReceivePacket` callback execution.                                  |
-|                         | - The packetReceipt has been written.                                                                                                              |
-|                         | - The acknowledgement has been written.                                                                                                            |
-| **Post-Conditions (Error)**   | - If one payload fails, then all state changes happened on the successful `onReceivePacket` application callback execution MUST be reverted.        |
-|                         | - If timeoutTimestamp has elapsed then no state changes occurred. // NEED DISCUSSION (Is this ok? Shall we write the `timeout_sentinel_receipt`?)    |
-|                         | - mmmm.                                                                                                                                             |
-
+| **Condition Type**            | **Description**                                                                                                                               |
+|-------------------------------|-----------------------------------------------------------------------------------------------------------------------------------------------|
+| **Ante-Conditions**            | - Chain `A` MUST have stored the packetCommitment under the keyPrefix registered in the chain `B` channelEnd.<br> - TimeoutTimestamp MUST not have elapsed yet.<br> - PacketReceipt for the specific keyPrefix and sequence MUST be empty (e.g. `receivePacket` has not been called yet). |
+| **Error-Conditions**           | - Packet Errors: invalid packetCommitment, packetReceipt already exists.<br> - Invalid timeoutTimestamp.<br> - Unsuccessful payload execution. |
+| **Post-Conditions (Success)**  | - All the applications pointed in the payload have properly terminated the `onReceivePacket` callback execution.<br> - The packetReceipt has been written.<br> - The acknowledgement has been written. |
+| **Post-Conditions (Error)**    | - If one payload fails, then all state changes happened on the successful `onReceivePacket` application callback execution MUST be reverted.<br> - If timeoutTimestamp has elapsed then no state changes occurred. // NEED DISCUSSION (Is this ok? Shall we write the `timeout_sentinel_receipt`?) |
+                                                                                                                          
 ###### Pseudo-Code 
 
 The ICS04 provides an example pseudo-code that enforce the above described conditions so that the following sequence of steps must occur for a packet to be received from module *1* on machine *A* to module *2* on machine *B*.
@@ -718,23 +697,13 @@ The IBC hanlder MUST atomically trigger the callbacks execution of appropriate a
 
 Given that at this point of the packet flow, chain `B` has sucessfully received a packet, the ante-conditions defines what MUST be accomplished before chain `A` can properly execute the `acknowledgePacket` for the IBC v2 packet. 
 
-| Condition Type          | Description                                                                                                                                         |
-|-------------------------|-----------------------------------------------------------------------------------------------------------------------------------------------------|
-| **Ante-Conditions**      | Given that at this point of the packet flow, chain `B` has successfully received a packet, the ante-conditions define what MUST be accomplished before chain `A` can properly execute the `acknowledgePacket` for the IBC v2 packet. |
-|                         | - Acknowledgment MUST be set in the `ackPath`.                                                                                                      |
-|                         | - PacketCommitment has not been cleared out yet.                                                                                                    |
-| **Error-Conditions**     | The Error-Conditions define the set of conditions that MUST trigger an error. For the `acknowledgePacket` handler, errors can come from three main categories:   |
-|                         | - PacketCommitment already cleared out.                                                                                                             |
-|                         | - Unset Acknowledgment.                                                                                                                             |
-|                         | - Unsuccessful payload execution.                                                                                                                   |
-| **Post-Conditions (Success)** | The Post-Conditions on Success define which state changes MUST have occurred if the `acknowledgePacket` handler has been successfully executed.         |
-|                         | - All the applications pointed in the payload have properly terminated the `onAcknowledgePacket` callback execution.                                  |
-|                         | - The packetCommitment has been cleared out.                                                                                                        |
-| **Post-Conditions (Error)**   | The Post-Conditions on Error define the states that MUST remain unchanged if an error occurred during the `onAcknowledgePacket` handler.                    |
-|                         | - If one payload fails, then all state changes that happened on the successful `onAcknowledgePacket` application callback execution MUST be reverted. |
-|                         | - The packetCommitment has not been cleared out.                                                                                                    |
-|                         | - mmmm.                                                                                                                                             |
-
+| **Condition Type**            | **Description**                                                                                                                               |
+|-------------------------------|-----------------------------------------------------------------------------------------------------------------------------------------------|
+| **Ante-Conditions**            | Given that at this point of the packet flow, chain `B` has successfully received a packet, the ante-conditions define what MUST be accomplished before chain `A` can properly execute the `acknowledgePacket` for the IBC v2 packet.<br> - Acknowledgment MUST be set in the `ackPath`.<br> - PacketCommitment has not been cleared out yet. |
+| **Error-Conditions**           | The Error-Conditions define the set of conditions that MUST trigger an error. For the `acknowledgePacket` handler, errors can come from three main categories:<br> - PacketCommitment already cleared out.<br> - Unset Acknowledgment.<br> - Unsuccessful payload execution. |
+| **Post-Conditions (Success)**  | The Post-Conditions on Success define which state changes MUST have occurred if the `acknowledgePacket` handler has been successfully executed.<br> - All the applications pointed in the payload have properly terminated the `onAcknowledgePacket` callback execution.<br> - The packetCommitment has been cleared out. |
+| **Post-Conditions (Error)**    | The Post-Conditions on Error define the states that MUST remain unchanged if an error occurred during the `onAcknowledgePacket` handler.<br> - If one payload fails, then all state changes that happened on the successful `onAcknowledgePacket` application callback execution MUST be reverted.<br> - The packetCommitment has not been cleared out.<br> |
+                                                                                                                
 ###### Pseudo-Code 
 
 The ICS04 provides an example pseudo-code that enforce the above described conditions so that the following sequence of steps must occur for a packet to be acknowledged from module *1* on machine *A* to module *2* on machine *B*.
@@ -828,18 +797,12 @@ We pass the `relayer` address just as in [Receiving packets](#receiving-packets)
 
 ###### Conditions Table  
 
-| Condition Type          | Description                                                                                                                                         |
-|-------------------------|-----------------------------------------------------------------------------------------------------------------------------------------------------|
-| **Ante-Conditions**      | - PacketReceipt MUST be empty.                                                                                                                     |
-|                         | - PacketCommitment has not been cleared out yet.                                                                                                    |
-| **Error-Conditions**     | - PacketCommitment already cleared out.                                                                                                             |
-|                         | - PacketReceipt is not empty.                                                                                                                       |
-|                         | - Unsuccessful payload execution.                                                                                                                   |
-| **Post-Conditions (Success)** | - All the applications pointed in the payload have properly terminated the `onTimeoutPacket` callback execution, reverting the state changes occurred in `onSendPacket`.  |
-|                         | - The packetCommitment has been cleared out.                                                                                                        |
-| **Post-Conditions (Error)**   | - If one payload fails, then all state changes that happened on the successful `onTimeoutPacket` application callback execution MUST be reverted.   |
-|                         | - Note that here we may get stuck if one `onTimeoutPacket` application always fails.                                                                 |
-|                         | - The packetCommitment has not been cleared out.                                                                                                    |
+| **Condition Type**            | **Description**                                                                                                                               |
+|-------------------------------|-----------------------------------------------------------------------------------------------------------------------------------------------|
+| **Ante-Conditions**            | - PacketReceipt MUST be empty.<br> - PacketCommitment has not been cleared out yet. |
+| **Error-Conditions**           | - PacketCommitment already cleared out.<br> - PacketReceipt is not empty.<br> - Unsuccessful payload execution. |
+| **Post-Conditions (Success)**  | - All the applications pointed in the payload have properly terminated the `onTimeoutPacket` callback execution, reverting the state changes occurred in `onSendPacket`.<br> - The packetCommitment has been cleared out. |
+| **Post-Conditions (Error)**    | - If one payload fails, then all state changes that happened on the successful `onTimeoutPacket` application callback execution MUST be reverted.<br> - Note that here we may get stuck if one `onTimeoutPacket` application always fails.<br> - The packetCommitment has not been cleared out. |
 
 ###### Pseudo-Code 
 
