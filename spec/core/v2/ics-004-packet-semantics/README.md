@@ -263,8 +263,8 @@ The channel creation process establishes the communication pathway between two c
 ###### Conditions Table  
 
 | **Condition Type**            | **Description**  | **Code Checks** | 
-|-------------------------------|-----------------------------------------------------------------------------------------------------|
-| **ante-conditions**            | - The used clientId exist. `createClient` has been called at least once.                                        |
+|-------------------------------|------------------| ----------------|
+| **ante-conditions**            | - The used clientId exist. `createClient` has been called at least once.| |
 | **error-conditions**           | - Incorrect clientId.<br> - Unexpected keyPrefix format.<br> - Invalid channelId .<br> | - `client==null`.<br> - `isFormatOk(counterpartyKeyPrefix)==False`.<br> - `validatedChannelIdentifier(channelId)==False`.<br> - `getChannel(channelId)!=null`.<br>  |
 | **post-conditions (success)**  | - A channel is set in store and it's accessible with key channelId.<br> - The creator is set in store and it's accessible with key channelId.<br> - nextSequenceSend is initialized.<br> - client is stored in the router | - `storedChannel[channelId]!=null`.<br> - `channelCreator[channelId]!=null`.<br> - `router[channelId]!=null`.<br> - `nextSequenceSend[channelId]==1` |
 | **post-conditions (error)**    | - None of the post-conditions (success) is true.<br>| - `storedChannel[channelId]==null`.<br> - `channelCreator[channelId]==null`.<br> - `router[channelId]==null`.<br> - `nextSequenceSend[channelId]!=1|
