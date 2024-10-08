@@ -62,8 +62,8 @@ A `Packet`, in the interblockchain communication protocol, is a particular inter
 
 ```typescript
 interface Packet {
-    sourceId: bytes, // identifier on the source chain. 
-    destId: bytes, // identifier on the dest chain.
+    sourceChannelId: bytes, // channel identifier on the source chain. 
+    destChannelId: bytes, // channel identifier on the dest chain.
     sequence: uint64, // number that corresponds to the order of sent packets.
     timeout: uint64, // indicates the UNIX timestamp in seconds and is encoded in LittleEndian. It must be passed on the destination chain and once elapsed, will no longer allow the packet processing, and will instead generate a time-out.
     data: [Payload] // data 
@@ -116,6 +116,8 @@ interface Acknowledgement {
 }
 ```
 
+// NEED DISCUSSION, Can we delete the SENTINEL_ACKNOWLEDGMENT?
+
 An application may not need to return an acknowledgment with after processing relevant data. In this case, it is advised to return a sentinel acknowledgement value `SENTINEL_ACKNOWLEDGMENT`, which will be the single byte in the byte array: `bytes(0x01)`. 
 
 Returning this `SENTINEL_ACKNOWLEDGMENT` value allows the sender chain to still call the `acknowledgePacket` handler, e.g. to delete the packet commitment, without triggering the `onAcknowledgePacket` callback.   
@@ -133,7 +135,7 @@ type IBCRouter struct {
 
 The proper registration of the application callbacks in the local `IBCRouter`, is responsibility of the chain. While the registration of the client under the key channelId is part of the setup procedure. Without the execution of registration process, the packets cannot be processed by the application.  
 
-- The `MAX_TIMEOUT_DELTA` is intendend as the max difference between currentTimestamp and timeoutTimestamp that can be given in input. 
+- The `MAX_TIMEOUT_DELTA` is intendend as the max, absolute, difference between currentTimestamp and timeoutTimestamp that can be given in input to `sendPacket`. 
 
 ```typescript
 const MAX_TIMEOUT_DELTA = Implementation specific  // We recommend MAX_TIMEOUT_DELTA = TDB 
@@ -176,8 +178,8 @@ Thus, Constant-size commitments to packet data fields are stored under the packe
 // NEED DISCUSSION -- we could use "commitments/{sourceId}/{sequence}" or "0x01/{sourceId}/{sequence}". For now we keep going with more or less standard paths 
 
 ```typescript
-function packetCommitmentPath(sourceId: bytes, sequence: BigEndianUint64): Path {
-    return "commitments/channels/{sourceId}/sequences/{sequence}"
+function packetCommitmentPath(channelSourceId: bytes, sequence: BigEndianUint64): Path {
+    return "commitments/channels/{channelSourceId}/sequences/{sequence}"
 }
 ```
 
@@ -186,16 +188,16 @@ Absence of the path in the store is equivalent to a zero-bit.
 Packet receipt data are stored under the `packetReceiptPath`. In the case of a successful receive, the destination chain writes a sentinel success value of `SUCCESSFUL_RECEIPT`. 
 
 ```typescript
-function packetReceiptPath(sourceId: bytes, sequence: BigEndianUint64): Path {
-    return "receipts/channels/{sourceId}/sequences/{sequence}"
+function packetReceiptPath(channelDestId: bytes, sequence: BigEndianUint64): Path {
+    return "receipts/channels/{channelDestId}/sequences/{sequence}"
 }
 ```
 
 Packet acknowledgement data are stored under the `packetAcknowledgementPath`:
 
 ```typescript
-function packetAcknowledgementPath(sourceId: bytes, sequence: BigEndianUint64): Path {
-    return "acks/channels/{sourceId}/sequences/{sequence}"
+function packetAcknowledgementPath(channelSourceId: bytes, sequence: BigEndianUint64): Path {
+    return "acks/channels/{channelSourceId}/sequences/{sequence}"
 }
 ```
 
@@ -266,7 +268,7 @@ The channel creation process establishes the communication pathway between two c
 |-------------------------------|------------------| ----------------|
 | **ante-conditions**            | - The used clientId exist. `createClient` has been called at least once.| |
 | **error-conditions**           | - Incorrect clientId.<br> - Unexpected keyPrefix format.<br> - Invalid channelId .<br> | - `client==null`.<br> - `isFormatOk(counterpartyKeyPrefix)==False`.<br> - `validatedChannelId(channelId)==False`.<br> - `getChannel(channelId)!=null`.<br>  |
-| **post-conditions (success)**  | - A channel is set in store and it's accessible with key channelId.<br> - The creator is set in store and it's accessible with key channelId.<br> - nextSequenceSend is initialized.<br> - client is stored in the router | - `storedChannel[channelId]!=null`.<br> - `channelCreator[channelId]!=null`.<br> - `router[channelId]!=null`.<br> - `nextSequenceSend[channelId]==1` |
+| **post-conditions (success)**  | - A channel is set in store and it's accessible with key channelId.<br> - The creator is set in store and it's accessible with key channelId.<br> - nextSequenceSend is initialized.<br> - client is stored in the router.<br> - an event with relevant fields is emitted | - `storedChannel[channelId]!=null`.<br> - `channelCreator[channelId]!=null`.<br> - `router[channelId]!=null`.<br> - `nextSequenceSend[channelId]==1` |
 | **post-conditions (error)**    | - None of the post-conditions (success) is true.<br>| - `storedChannel[channelId]==null`.<br> - `channelCreator[channelId]==null`.<br> - `router[channelId]==null`.<br> - `nextSequenceSend[channelId]!=1`|
 
 ###### Pseudo-Code 
@@ -305,7 +307,7 @@ function createChannel(
         nextSequenceSend[channelId]=1
         
         // Event Emission 
-    emitLogEntry("sendPacket", {
+    emitLogEntry("createChannel", {
       channelId: channelId, 
       channel: channel, 
       creatorAddress: msg.signer(),
@@ -329,7 +331,7 @@ To enable mutual and verifiable identification, IBC version 2 introduces a `regi
 |-------------------------------|-----------------------------------|----------------------------|
 | **Ante-Conditions**            | - The `createChannel` has been called at least once| |
 | **Error-Conditions**           | - Incorrect channelId.<br> - Unregistered client.<br> - Creator authentication failed | - `validatedChannelId(channelId)==False`.<br> - `getChannel(channelId)==null`.<br> - `router[channelId]==null`.<br> - `channelCreator[channelId]!=msg.signer()`.<br> |
-| **Post-Conditions (Success)**  | - The channel in store contains the counterpartyChannelId information and it's accessible with key channelId.                     | - `storedChannel[channelId].counterpartyChannelId!=""`.<br> |
+| **Post-Conditions (Success)**  | - The channel in store contains the counterpartyChannelId information and it's accessible with key channelId.<br> An event with relevant information has been emitted | - `storedChannel[channelId].counterpartyChannelId!=""`.<br> |
 | **Post-Conditions (Error)**    | - On the first call, the channel in store contains the counterpartyChannelId as an empty field.<br> | - `storedChannel[channelId].counterpartyChannelId==""` |
  
 ###### Pseudo-Code 
@@ -363,7 +365,7 @@ function registerChannel(
 
     // log that a packet can be safely sent
     // Event Emission 
-    emitLogEntry("sendPacket", {
+    emitLogEntry("registerChannel", {
       channelId: channelId, 
       channel: channel, 
       creatorAddress: msg.signer(),
@@ -371,18 +373,9 @@ function registerChannel(
 }
 ```
 
-// REWORK THIS 
+The protocol recommended authentication is to check that the `registerChannel` message is sent by the same relayer that initialized the client such that the `msg.signer()==channelCreator[channelId]`. This would make the client and channel parameters completely initialized by the relayer. Thus, users must verify that the client is pointing to the correct chain and that the counterparty identifier is correct as well before using the <channel,channel> pair.
 
-The `registerChannel` method allows for authentication data that implementations may verify before storing the provided counterparty identifier. The strongest authentication possible is to have a valid clientState and consensus state of our chain in the authentication along with a proof it was stored at the claimed counterparty identifier. A simpler but weaker authentication would simply be to check that the `registerChannel` message is sent by the same relayer that initialized the client. This would make the client parameters completely initialized by the relayer. Thus, users must verify that the client is pointing to the correct chain and that the counterparty identifier is correct as well before using the <channel,channel> pair.
-
-    // custom-authentication 
-    assert(verify(authentication))
-
-Thus, once two chains have set up clients, created channel and registered channels for each other with specific Identifiers, they can send IBC packets using the packet interface defined before and the packet handlers that the ICS-04 defines below. 
-
-The packets will be addressed **directly** with the channels that have semantic link to the underlying light clients. Thus there are **no** more handshakes necessary. Instead the packet sender must be capable of providing the correct <channel,channel> pair.
-
-If the setup has been executed correctly, then the correctness and soundness properties of IBC holds. IBC packet flow is guaranteed to succeed. If a user sends a packet with the wrong destination channel, then as we will see it will be impossible for the intended destination to correctly verify the packet thus, the packet will simply time out.
+Thus, once two chains have set up clients, created channel and registered channels for each other with specific Identifiers, they can send IBC packets using the packet interface defined before and the packet handlers that the ICS-04 defines below. The packets will be addressed **directly** with the channels that have semantic link to the underlying light clients. Thus there are **no** more handshakes necessary. Instead the packet sender must be capable of providing the correct <channel,channel> pair. If the setup has been executed correctly, then the correctness and soundness properties of IBC holds. IBC packet flow is guaranteed to succeed. If a user sends a packet with the wrong destination channel, then as we will see it will be impossible for the intended destination to correctly verify the packet thus, the packet will simply time out.
 
 #### Packet Flow Function Handlers 
 
@@ -488,12 +481,12 @@ Note that the full packet is not stored in the state of the chain - merely a sho
 
 ###### Conditions Table 
 
-| **Condition Type**            | **Description**                                                                                                                 |
-|-------------------------------|---------------------------------------------------------------------------------------------------------------------------------|
-| **Ante-Conditions**            | - Chains `A` and `B` MUST be in a setup final state.<br> - Inputs channelId and timeoutTimestamp are valid.                     |
-| **Error-Conditions**           | - Incorrect setup (includes invalid client and invalid channelId).<br> - Invalid timeoutTimestamp.<br> - Unsuccessful payload execution. |
-| **Post-Conditions (Success)**  | - All the applications contained in the payload have properly terminated the `onSendPacket` callback execution.<br> - The packetCommitment has been generated.<br> - The sequence number bound to sourceId MUST have been incremented by 1. |
-| **Post-Conditions (Error)**    | - If one payload fails, then all state changes happened on the successful application execution must be reverted.<br> - No packetCommitment has been generated.<br> - The sequence number bound to sourceId MUST be unchanged. |
+| **Condition Type**            |**Description** | **Code Checks**|
+|-------------------------------|--------------------------------------------------------|------------------------|
+| **Ante-Conditions**            | - Chains `A` and `B` MUST be in a setup final state.<br> |                     |
+| **Error-Conditions**           | - Incorrect setup (includes invalid client and invalid channelId).<br> - Invalid timeoutTimestamp.<br> - Unsuccessful payload execution. | - `getChannel(sourceChannelId)==null`.<br> , -`router[sourceChannelId]==null`.<br> - `timeoutTimestamp==0`.<br> - `timeoutTimestamp < currentTimestamp()`.<br> - `timeoutTimestamp > currentTimestamp() + MAX_TIMEOUT_DELTA`.<br> - `success=onSendPacket(..), success==False`.<br> |
+| **Post-Conditions (Success)**  | - All the applications contained in the payload have properly terminated the `onSendPacket` callback execution.<br> - The packetCommitment has been generated and stored under the right packetCommitmentPath.<br> - The sequence number bound to sourceId MUST have been incremented by 1.<br> | An event with relevant information has been emitted | 
+| **Post-Conditions (Error)**    | - If one payload fails, then all state changes happened on the successful application execution must be reverted.<br> - No packetCommitment has been generated.<br> - The sequence number bound to sourceId MUST be unchanged. | |
 
 ###### Pseudo-Code 
 
@@ -501,13 +494,14 @@ The ICS04 provides an example pseudo-code that enforce the above described condi
  
 ```typescript
 function sendPacket(
-    sourceChannelId: bytes,
+    sourceChannelId: bytes, 
     timeoutTimestamp: uint64,
     payloads: []byte
     ) {
 
     // Setup checks - channel and client 
     channel = getChannel(sourceChannelId)
+    assert(channel !== null)
     client = router.clients[sourceChannelId]
     assert(client !== null)
     
@@ -517,14 +511,20 @@ function sendPacket(
     // disallow packet with timeoutTimestamp less than currentTimestamp and timeoutTimestamp value bigger than currentTimestamp + MaxTimeoutDelta 
     assert(currentTimestamp() < timeoutTimestamp < currentTimestamp() + MAX_TIMEOUT_DELTA) 
     
-    // if the sequence doesn't already exist, this call initializes the sequence to 0
+    //assert(packet.sourceId == channel.counterpartyChannelId) This should be always true, redundant // NEED DISCUSSION 
+
+    // retrieve sequence
     sequence = nextSequenceSend[sourecChannelId]
+    // Check that the Sequence has been correctly initialized before hand. 
+    abortTransactionUnless(sequence!==0) 
     
     // Executes Application logic ∀ Payload
+    // Currently we support only len(payloads)==1 
+    payload=payloads[0]
     cbs = router.callbacks[payload.sourcePort]
     success = cbs.onSendPacket(sourceChannelId,channel.counterpartyChannelId,payload)
-    // IMPORTANT: if the one of the onSendPacket fails, the transaction is aborted and the potential state changes are reverted. This ensure that 
-    // the post conditions on error are always respected.  
+    // IMPORTANT: if the onSendPacket fails, the transaction is aborted and the potential state changes are reverted. 
+    // This ensure that the post conditions on error are always respected. 
     // payload execution check  
     abortUnless(success)
 
@@ -533,7 +533,7 @@ function sendPacket(
             destId: channel.counterpartyChannelId, 
             sequence: sequence,
             timeoutTimestamp: timeoutTimestamp, 
-            payload: payloads
+            payloads: payloads
             }
 
     // store packet commitment using commit function defined in [packet specification](https://github.com/cosmos/ibc/blob/c7b2e6d5184b5310843719b428923e0c5ee5a026/spec/core/v2/ics-004-packet-semantics/PACKET.md)
@@ -549,7 +549,7 @@ function sendPacket(
       sourceId: sourceChannelId, 
       destId: channel.counterpartyChannelId, 
       sequence: sequence,
-      data: data,
+      packet: packet,
       timeoutTimestamp: timeoutTimestamp, 
     })
     
@@ -593,8 +593,8 @@ function recvPacket(
   relayer: string) {
 
     // Channel and Client Checks
-    channel = getChannel(packet.destId)     
-    client = router.clients[packet.destId]  
+    channel = getChannel(packet.channelDestId)     
+    client = router.clients[packet.channelDestId]  
     assert(client !== null)
     
     //assert(packet.sourceId == channel.counterpartyChannelId) This should be always true, redundant // NEED DISCUSSION 
@@ -604,13 +604,13 @@ function recvPacket(
     assert(currentTimestamp() < packet.timeoutTimestamp)
 
     // verify the packet receipt for this packet does not exist already 
-    packetReceipt = provableStore.get(packetReceiptPath(packet.destId, packet.sequence))
+    packetReceipt = provableStore.get(packetReceiptPath(packet.channelDestId, packet.sequence))
     abortUnless(packetReceipt === null)
 
     //////// verify commitment 
     
     // 1. retrieve keys 
-    packetPath = packetCommitmentPath(packet.destId, packet.sequence)
+    packetPath = packetCommitmentPath(packet.channelDestId, packet.sequence)
     merklePath = applyPrefix(channel.keyPrefix, packetPath)
     
     // 2. reconstruct commit value based on the passed-in packet  
@@ -626,8 +626,9 @@ function recvPacket(
 
     
     // Executes Application logic ∀ Payload
+    payload=packet.data[0]
     cbs = router.callbacks[payload.destPort]
-    ack,success = cbs.onReceivePacket(packet.destId,payload)
+    ack,success = cbs.onReceivePacket(packet.channelDestId,payload)
     abortTransactionUnless(success)
     if ack != nil {
         // NOTE: Synchronous ack. 
@@ -640,7 +641,7 @@ function recvPacket(
     // we must set the receipt so it can be verified on the other side
     // it's the sentinel success receipt: []byte{0x01}
     provableStore.set(
-        packetReceiptPath(packet.destId, packet.sequence),
+        packetReceiptPath(packet.channelDestId, packet.sequence),
         SUCCESSFUL_RECEIPT
     )
 
@@ -650,8 +651,8 @@ function recvPacket(
       data: packet.data
       timeoutTimestamp: packet.timeoutTimestamp,
       sequence: packet.sequence,
-      sourceId: packet.sourceId,
-      destId: packet.destId,
+      sourceId: packet.channelSourceId,
+      destId: packet.channelDestId,
       relayer: relayer 
     })
     
@@ -690,20 +691,20 @@ function writeAcknowledgement(
     abortTransactionUnless(len(acknowledgement) !== 0)
 
     // cannot already have written the acknowledgement
-    abortTransactionUnless(provableStore.get(packetAcknowledgementPath(packet.destId, packet.sequence) === null))
+    abortTransactionUnless(provableStore.get(packetAcknowledgementPath(packet.channelDestId, packet.sequence) === null))
 
     // create the acknowledgement coomit using the function defined in [packet specification](https://github.com/cosmos/ibc/blob/c7b2e6d5184b5310843719b428923e0c5ee5a026/spec/core/v2/ics-004-packet-semantics/PACKET.md)
     commit=commitV2Acknowledgment(acknowledgement)
     
     provableStore.set(
-    packetAcknowledgementPath(packet.destId, packet.sequence),commit)
+    packetAcknowledgementPath(packet.channelDestId, packet.sequence),commit)
 
     // log that a packet has been acknowledged
     // Event Emission
     emitLogEntry("writeAcknowledgement", {
       sequence: packet.sequence,
-      sourceId: packet.sourceId,
-      destId: packet.destId,
+      sourceId: packet.channelSourceId,
+      destId: packet.channelDestId,
       timeoutTimestamp: packet.timeoutTimestamp,
       data: packet.data,
       acknowledgement
@@ -744,18 +745,18 @@ function acknowledgePacket(
 ) {
 
     // Channel and Client Checks
-    channel = getChannel(packet.sourceId)
-    client = router.clients[packet.sourceId]
+    channel = getChannel(packet.channelSourceId)
+    client = router.clients[packet.channelSourceId]
 
     assert(client !== null)
     
     //assert(packet.destId == channel.counterpartyChannelId) // Tautology
    
     // verify we sent the packet and haven't cleared it out yet
-    assert(provableStore.get(packetCommitmentPath(packet.sourceId, packet.sequence)) ===  commitV2Packet(packet))
+    assert(provableStore.get(packetCommitmentPath(packet.channelSourceId, packet.sequence)) ===  commitV2Packet(packet))
 
     // verify that the acknowledgement exist at the desired path  
-    ackPath = packetAcknowledgementPath(packet.destId, packet.sequence)
+    ackPath = packetAcknowledgementPath(packet.channelDestId, packet.sequence)
     merklePath = applyPrefix(channel.keyPrefix, ackPath)
     assert(client.verifyMembership(
         client.clientState
@@ -767,18 +768,19 @@ function acknowledgePacket(
      
     if(acknowledgement!= SENTINEL_ACKNOWLEDGEMENT){ // Do we want this? 
         // Executes Application logic ∀ Payload
+        payload=packet.data[0]
         cbs = router.callbacks[payload.sourcePort]
-        success= cbs.OnAcknowledgePacket(packet.sourceId,payload, acknowledgement)
+        success= cbs.OnAcknowledgePacket(packet.channelSourceId,payload, acknowledgement)
         abortUnless(success) 
     }
 
-    channelStore.delete(packetCommitmentPath(packet.sourceId, packet.sequence))
+    channelStore.delete(packetCommitmentPath(packet.channelSourceId, packet.sequence))
     
     // Event Emission // Check fields
     emitLogEntry("acknowledgePacket", {
       sequence: packet.sequence,
-      sourceId: packet.sourceId,
-      destId: packet.destId,
+      sourceId: packet.channelSourceId,
+      destId: packet.channelDestId,
       timeoutTimestamp: packet.timeoutTimestamp,
       data: packet.data,
       acknowledgement
@@ -846,15 +848,15 @@ function timeoutPacket(
     relayer: string
 ) { 
     // Channel and Client Checks
-    channel = getChannel(packet.sourceId)
-    client = router.clients[packet.sourceId]
+    channel = getChannel(packet.channelSourceId)
+    client = router.clients[packet.channelSourceId]
 
     assert(client !== null)
     
     //assert(packet.destId == channel.counterpartyChannelId)
 
     // verify we sent the packet and haven't cleared it out yet
-    assert(provableStore.get(packetCommitmentPath(packet.sourceId, packet.sequence))
+    assert(provableStore.get(packetCommitmentPath(packet.channelSourceId, packet.sequence))
            === commitV2Packet(packet))
 
     // get the timestamp from the final consensus state in the channel path
@@ -866,7 +868,7 @@ function timeoutPacket(
     asert(packet.timeoutTimestamp > 0 && proofTimestamp >= packet.timeoutTimestamp)
 
     // verify there is no packet receipt --> receivePacket has not been called 
-    receiptPath = packetReceiptPath(packet.destId, packet.sequence)
+    receiptPath = packetReceiptPath(packet.channelDestId, packet.sequence)
     merklePath = applyPrefix(channel.keyPrefix, receiptPath)
     assert(client.verifyNonMembership(
         client.clientState,
@@ -875,17 +877,18 @@ function timeoutPacket(
         merklePath
     ))
 
+    payload=packet.data[0]
     cbs = router.callbacks[payload.sourcePort]
-    success=cbs.OnTimeoutPacket(packet.sourceId,payload)
+    success=cbs.OnTimeoutPacket(packet.channelSourceId,payload)
     abortUnless(success)
 
-    channelStore.delete(packetCommitmentPath(packet.sourceId, packet.sequence))
+    channelStore.delete(packetCommitmentPath(packet.channelSourceId, packet.sequence))
     
     // Event Emission // See fields
     emitLogEntry("timeoutPacket", {
       sequence: packet.sequence,
-      sourceId: packet.sourceId,
-      destId: packet.destId,
+      sourceId: packet.channelSourceId,
+      destId: packet.channelDestId,
       timeoutTimestamp: packet.timeoutTimestamp,
       data: packet.data,
       acknowledgement
