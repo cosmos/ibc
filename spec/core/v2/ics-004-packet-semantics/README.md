@@ -262,12 +262,12 @@ The channel creation process establishes the communication pathway between two c
 
 ###### Conditions Table  
 
-| **Condition Type**            | **Description**                                                                                     |
+| **Condition Type**            | **Description**  | **Code Checks** | 
 |-------------------------------|-----------------------------------------------------------------------------------------------------|
-| **Ante-Conditions**            | - The clientId provided in input to createChannel MUST exist.                                        |
-| **Error-Conditions**           | - Incorrect clientId.<br> - Unexpected keyPrefix format.                                             |
-| **Post-Conditions (Success)**  | - A channel is set in store and it's accessible with key channelId.<br> - The creator is set in store and it's accessible with key [channelId, address]. |
-| **Post-Conditions (Error)**    | - If one payload fails, then all state changes happened on the successful application execution must be reverted.<br> - No packetCommitment has been generated.<br> - The sequence number bound to sourceId MUST be unchanged. |
+| **ante-conditions**            | - The used clientId exist. `createClient` has been called at least once.                                        |
+| **error-conditions**           | - Incorrect clientId.<br> - Unexpected keyPrefix format.<br> - Invalid channelId .<br> | - `client==null`.<br> - `isFormatOk(counterpartyKeyPrefix)==False`.<br> - `validatedChannelIdentifier(channelId)==False`.<br> - `getChannel(channelId)!=null`.<br>  |
+| **post-conditions (success)**  | - A channel is set in store and it's accessible with key channelId.<br> - The creator is set in store and it's accessible with key channelId.<br> - nextSequenceSend is initialized.<br> - client is stored in the router | - `storedChannel[channelId]!=null`.<br> - `channelCreator[channelId]!=null`.<br> - `router[channelId]!=null`.<br> - `nextSequenceSend[channelId]==1` |
+| **post-conditions (error)**    | - None of the post-conditions (success) is true.<br>| - `storedChannel[channelId]==null`.<br> - `channelCreator[channelId]==null`.<br> - `router[channelId]==null`.<br> - `nextSequenceSend[channelId]!=1|
 
 ###### Pseudo-Code 
 
@@ -656,6 +656,15 @@ The IBC handler performs the following steps in order:
 
 - Checks that an acknowledgement for this packet has not yet been written
 - Sets the opaque acknowledgement value at a store path unique to the packet
+
+###### Conditions Table 
+
+| **Condition Type**            | **Description**                                                                                                                               |
+|-------------------------------|-----------------------------------------------------------------------------------------------------------------------------------------------|
+| **Ante-Conditions**            | - `receivePacket` has been called on chain `B`.<br> `onReceivePacket` application callback has been executed.|
+| **Error-Conditions**           | - acknowledgement is empty.<br> - The `packetAcknowledgementPath` stores already a value. |
+| **Post-Conditions (Success)**  | - The opaque acknowledgement has been written at `packetAcknowledgementPath`. |
+| **Post-Conditions (Error)**    | - No value is stored at the `packetAcknowledgementPath`. |
 
 ```typescript
 function writeAcknowledgement(
