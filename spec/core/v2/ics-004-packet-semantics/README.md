@@ -265,9 +265,9 @@ The channel creation process establishes the communication pathway between two c
 | **Condition Type**            | **Description**  | **Code Checks** | 
 |-------------------------------|------------------| ----------------|
 | **ante-conditions**            | - The used clientId exist. `createClient` has been called at least once.| |
-| **error-conditions**           | - Incorrect clientId.<br> - Unexpected keyPrefix format.<br> - Invalid channelId .<br> | - `client==null`.<br> - `isFormatOk(counterpartyKeyPrefix)==False`.<br> - `validatedChannelIdentifier(channelId)==False`.<br> - `getChannel(channelId)!=null`.<br>  |
+| **error-conditions**           | - Incorrect clientId.<br> - Unexpected keyPrefix format.<br> - Invalid channelId .<br> | - `client==null`.<br> - `isFormatOk(counterpartyKeyPrefix)==False`.<br> - `validatedChannelId(channelId)==False`.<br> - `getChannel(channelId)!=null`.<br>  |
 | **post-conditions (success)**  | - A channel is set in store and it's accessible with key channelId.<br> - The creator is set in store and it's accessible with key channelId.<br> - nextSequenceSend is initialized.<br> - client is stored in the router | - `storedChannel[channelId]!=null`.<br> - `channelCreator[channelId]!=null`.<br> - `router[channelId]!=null`.<br> - `nextSequenceSend[channelId]==1` |
-| **post-conditions (error)**    | - None of the post-conditions (success) is true.<br>| - `storedChannel[channelId]==null`.<br> - `channelCreator[channelId]==null`.<br> - `router[channelId]==null`.<br> - `nextSequenceSend[channelId]!=1|
+| **post-conditions (error)**    | - None of the post-conditions (success) is true.<br>| - `storedChannel[channelId]==null`.<br> - `channelCreator[channelId]==null`.<br> - `router[channelId]==null`.<br> - `nextSequenceSend[channelId]!=1`|
 
 ###### Pseudo-Code 
 
@@ -304,7 +304,14 @@ function createChannel(
         // Initialise the nextSequenceSend 
         nextSequenceSend[channelId]=1
         
-        return channelId
+        // Event Emission 
+    emitLogEntry("sendPacket", {
+      channelId: channelId, 
+      channel: channel, 
+      creatorAddress: msg.signer(),
+    })
+
+    return channelId
 }
 ```
 
@@ -318,12 +325,12 @@ To enable mutual and verifiable identification, IBC version 2 introduces a `regi
 
 ###### Conditions Table 
 
-| **Condition Type**            | **Description**                                                                                                                 |
-|-------------------------------|---------------------------------------------------------------------------------------------------------------------------------|
-| **Ante-Conditions**            | - The channelID provided in input MUST properly resolve to a channel.                                                           |
-| **Error-Conditions**           | - Incorrect channelId.<br> - Authentication Failed.                                                                              |
-| **Post-Conditions (Success)**  | - The channel in store contains the counterpartyChannelId information and it's accessible with key channelId.                     |
-| **Post-Conditions (Error)**    | - On the first call, the channel in store contains the counterpartyChannelId as an empty field.<br> - On the second call, the channel in store contains the old counterpartyChannelId information. |
+| **Condition Type**            | **Description** | **Code Checks** |
+|-------------------------------|-----------------------------------|----------------------------|
+| **Ante-Conditions**            | - The `createChannel` has been called at least once| |
+| **Error-Conditions**           | - Incorrect channelId.<br> - Unregistered client.<br> - Creator authentication failed | - `validatedChannelId(channelId)==False`.<br> - `getChannel(channelId)==null`.<br> - `router[channelId]==null`.<br> - `channelCreator[channelId]!=msg.signer()`.<br> |
+| **Post-Conditions (Success)**  | - The channel in store contains the counterpartyChannelId information and it's accessible with key channelId.                     | - `storedChannel[channelId].counterpartyChannelId!=""`.<br> |
+| **Post-Conditions (Error)**    | - On the first call, the channel in store contains the counterpartyChannelId as an empty field.<br> | - `storedChannel[channelId].counterpartyChannelId==""` |
  
 ###### Pseudo-Code 
 
@@ -353,6 +360,14 @@ function registerChannel(
 
     // Local Store
     storedChannels[channelId]=channel
+
+    // log that a packet can be safely sent
+    // Event Emission 
+    emitLogEntry("sendPacket", {
+      channelId: channelId, 
+      channel: channel, 
+      creatorAddress: msg.signer(),
+    })
 }
 ```
 
@@ -529,7 +544,7 @@ function sendPacket(
     nextSequenceSend[sourceChannelId]=sequence+1
     
     // log that a packet can be safely sent
-    // Discussion needed: What we need to emit the log? 
+    // Event Emission 
     emitLogEntry("sendPacket", {
       sourceId: sourceChannelId, 
       destId: channel.counterpartyChannelId, 
@@ -630,6 +645,7 @@ function recvPacket(
     )
 
     // log that a packet has been received
+    // Event Emission
     emitLogEntry("recvPacket", {
       data: packet.data
       timeoutTimestamp: packet.timeoutTimestamp,
@@ -683,6 +699,7 @@ function writeAcknowledgement(
     packetAcknowledgementPath(packet.destId, packet.sequence),commit)
 
     // log that a packet has been acknowledged
+    // Event Emission
     emitLogEntry("writeAcknowledgement", {
       sequence: packet.sequence,
       sourceId: packet.sourceId,
@@ -756,6 +773,16 @@ function acknowledgePacket(
     }
 
     channelStore.delete(packetCommitmentPath(packet.sourceId, packet.sequence))
+    
+    // Event Emission // Check fields
+    emitLogEntry("acknowledgePacket", {
+      sequence: packet.sequence,
+      sourceId: packet.sourceId,
+      destId: packet.destId,
+      timeoutTimestamp: packet.timeoutTimestamp,
+      data: packet.data,
+      acknowledgement
+    })
 }
 ```
 
@@ -853,6 +880,16 @@ function timeoutPacket(
     abortUnless(success)
 
     channelStore.delete(packetCommitmentPath(packet.sourceId, packet.sequence))
+    
+    // Event Emission // See fields
+    emitLogEntry("timeoutPacket", {
+      sequence: packet.sequence,
+      sourceId: packet.sourceId,
+      destId: packet.destId,
+      timeoutTimestamp: packet.timeoutTimestamp,
+      data: packet.data,
+      acknowledgement
+    })
 }
 ```
 
