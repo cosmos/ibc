@@ -6,14 +6,16 @@ The IBC packet sends application data from a source chain to a destination chain
 
 ```typescript
 interface Packet {
-    // identifier on the source chain
-    // that source chain uses to address dest chain
-    // this functions as the sending address
-    sourceIdentifier: bytes,
-    // identifier on the dest chain
-    // that dest chain uses to address source chain
-    // this functions as the return address
-    destIdentifier: bytes,
+    // identifier for the channel on source chain
+    // channel must contain identifier of counterparty channel
+    // and the client identifier for the client on source chain
+    // that tracks dest chain
+    sourceChannel: bytes,
+    // identifier for the channel on dest chain
+    // channel must contain identifier of counterparty channel
+    // and the client identifier for the client on dest chain
+    // that tracks source chain
+    destChannel: bytes,
     // the sequence uniquely identifies this packet
     // in the stream of packets from source to dest chain
     sequence: uint64,
@@ -47,19 +49,12 @@ interface Payload {
     // the strucure expected given the version provided
     // if the encoding is not supported, receiving application
     // must be rejected with an error acknowledgement.
-    encoding: Encoding,
+    // the encoding string MUST be in MIME format
+    encoding: string,
     // appData is the opaque content sent from the source application
     // to the dest application. It will be decoded and interpreted
     // as specified by the version and encoding fields
     appData: bytes,
-}
-
-enum Encoding {
-    NO_ENCODING_SPECIFIED,
-    PROTO_3,
-    JSON,
-    RLP,
-    BCS,
 }
 ```
 
