@@ -214,7 +214,7 @@ type nextSequenceSend : channelId -> BigEndianUint64
 type channelCreator : channelId -> address 
 type storedChannels : channelId -> Channel
 
-function getChannel(channelId: bytes) Channel {
+function getChannel(channelId: bytes): Channel {
     return storedChannels[channelId]
 }
 ```
@@ -227,15 +227,17 @@ To start the secure packet stream between the chains, chain `A` and chain `B` MU
 
 | **Procedure**               | **Responsible**     | **Outcome**                                                                |
 |-----------------------------|---------------------|-----------------------------------------------------------------------------|
-| **Client Creation**          | Relayer   | Both chains create a light client for the counterparty chain.                |
 | **Channel Creation**         | Relayer   | A channel is created and linked to an underlying light client on both chains.           |
 | **Channel Registration**     | Relayer             | Registers the `counterpartyChannelId` on both chains, linking the channels.  |
 
-> **Note** The setup procedure is a prerequisite for starting the packet stream. If any of the steps has been missed, this would result in an incorrect setup error during the packet handlers execution. 
+> **Note** The relayer is required to execute `createClient` (as defined in ICS-02) before calling `createChannel`, since the `clientId` input parameter MUST be known. The `createClient` message (as defined in ICS-02) may be bundled with the `createChannel` message in a single multiMsgTx. The setup procedure is a prerequisite for starting the packet stream. If any of the steps has been missed, this would result in an incorrect setup error during the packet handlers execution. 
 
-Below we provide the setup sequence diagram. Note that, as shown in the sequence diagram, the `createClient` message (as defined in ICS-02) may be bundled with the `createChannel` message in a single multiMsgTx.
+Below we provide the setup sequence diagram. 
 
 ```mermaid
+---
+title: Setup with `createClient` and `createChannel` bundle together.  
+---
 sequenceDiagram  
     Participant Chain A
     Participant Relayer 
@@ -248,11 +250,29 @@ sequenceDiagram
     Relayer ->> Chain B : registerChannel(channelId = W, counterpartyChannelId = Y) 
 ```
 
+```mermaid
+---
+title: Setup with light client previously created.  
+---
+sequenceDiagram
+    Participant B LightClient - clientId=x  
+    Participant Chain A
+    Participant Relayer 
+    Participant Chain B
+    Participant A LightClient - clientId=z   
+    Relayer ->> Chain A : createChannel(B LightClient)
+    Chain A ->> Relayer : clientId= x , channelId = y
+    Relayer ->> Chain B : createChannel ()
+    Chain B ->> Relayer : clientId= z , channelId = w
+    Relayer ->> Chain A : registerChannel(channelId = y, counterpartyChannelId = w)
+    Relayer ->> Chain B : registerChannel(channelId = w, counterpartyChannelId = y) 
+```
+
 Once the set up is executed the system should be in a similar state: 
 
 ![Setup Final State](setup_final_state.png)
 
-While the application callbacks registration MUST be handled by the application module during initialization, and client creation is governed by [ICS-2](../ics-002-client-semantics/README.md), the channel creation and registration procedures are defined by ICS-04 and are detailed below.
+While the client creation is defined by [ICS-2](../ics-002-client-semantics/README.md), the channel creation and registration procedures are defined by ICS-04 and are detailed below.
 
 ##### Channel creation 
 
@@ -310,8 +330,6 @@ function createChannel(
     return channelId
 }
 ```
-
-Note that `createClient` message (as defined in ICS-02) may be bundled with the `createChannel` message in a single multiMsgTx. Successful execution of these messages on both chains is a prerequisite for the channel registration procedure, described below.
 
 ##### Channel registration and counterparty idenfitifcation  
 
