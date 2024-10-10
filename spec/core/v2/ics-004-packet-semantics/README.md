@@ -23,7 +23,7 @@ TODO :
 
 This standard defines the channel and packet semantics necessary for state machines implementing the Inter-Blockchain Communication (IBC) protocol  version 2 to enable secure, verifiable, and efficient cross-chain messaging.
 
-It specifies the mechanisms to create channels and register them between two distinct state machines (blockchains) where a channel serves as a semantic link between the chains and their counterparty light client representation, ensuring that both chains can process and verify packets exchanged between them.
+It specifies the mechanisms to create channels and register them between two distinct state machines (blockchains) where the channels have a semantic link between the chains and their counterparty light client representation, ensuring that both chains can process and verify packets exchanged between them.
 
 The standard then details the processes for transmitting, receiving, acknowledging, and timing out data packets. The packet-flow semantics guarantee exactly-once packet delivery between chains, utilizing on-chain light clients for state verification and providing efficient routing of packet data to specific IBC applications.
 
@@ -33,7 +33,7 @@ The motivation for this specification is to formalize the semantics for both pac
 
 This specification focuses on defining the mechanisms for creating channels, securely registering them between chains, and ensuring that packets sent across these channels are processed consistently and verifiably. By utilizing on-chain light clients for state verification, it enables chains to exchange data without requiring synchronous communication, ensuring that all packets are delivered exactly once, even in the presence of network delays or reordering.
 
-To standardize both channel creation and packet flow semantics, this document also defines the pre-conditions, error conditions, and post-conditions for each defined function handler. By using a well-defined packet interface and clear handling processes, ICS-04 aims to ensure consistency and security across distinct implementations of the protocol ensuring reliability and security and tries not to impose constraints on the internal workings of the state machines.  
+To standardize both channel creation, registration and packet flow semantics, this document also defines the pre-conditions, error conditions, and post-conditions for each defined function handler. By using a well-defined packet interface and clear handling processes, ICS-04 aims to ensure consistency and security across distinct implementations of the protocol ensuring reliability and security and tries not to impose constraints on the internal workings of the state machines.  
 
 ### Definitions
 
@@ -111,19 +111,17 @@ interface Acknowledgement {
 }
 ```
 
-// NEED DISCUSSION, Can we delete the SENTINEL_ACKNOWLEDGMENT?
-
 An application may not need to return an acknowledgment with after processing relevant data. In this case, it is advised to return a sentinel acknowledgement value `SENTINEL_ACKNOWLEDGMENT`, which will be the single byte in the byte array: `bytes(0x01)`. 
 
 When the receiver chain returns this `SENTINEL_ACKNOWLEDGMENT` it allows the sender chain to still call the `acknowledgePacket` handler, e.g. to delete the packet commitment, without triggering the `onAcknowledgePacket` callback.   
 
 > **Example**: In the multi-data packet world, if a packet within 3 payloads intended for 3 different application is sent out, the expectation is that each payload is processed in the same order in which it was placed in the packet. Similarly, the `appAcknowledgement` array is expected to be populated within the same order. 
 
-- The `IBCRouter` contains a mapping from the application `portId` and the supported callbacks and as well as a mapping from `channelId` to the underlying client.
+- The `IBCRouter` contains a mapping from the application `portId` and the supported callbacks and as well as a mapping from `clientlId` to the underlying client.
 
 ```typescript
 type IBCRouter struct {
-    callbacks: (portId,version) -> [Callback] // The double key (portId,version) clearly separate the appVxCallbacks from appVyCallbacks simplifying the routing to app process   
+    callbacks: portId -> [Callback] 
     clients: clientId -> Client // The IBCRouter stores the client under the clientId key
 }
 ```
@@ -173,7 +171,7 @@ Additionally the ICS-04 specification defines a set of conditions that the imple
 
 The ICS-04 use the protocol paths, defined in [ICS-24](../ics-024-host-requirements/README.md), `packetCommitmentPath`, `packetRecepitPath` and `packetAcknowledgementPath`. The paths MUST be used as the referece locations in the provableStore to prove respectilvey the packet commitment, the receipt and the acknowledgment to the counterparty chain. 
 
-Thus, Constant-size commitments to packet data fields are stored under the packet sequence number:
+Thus, constant-size commitments to packet data fields are stored under the packet sequence number:
 
 // NEED DISCUSSION -- we could use "commitments/{sourceId}/{sequence}" or "0x01/{sourceId}/{sequence}". For now we keep going with more or less standard paths 
 
@@ -223,22 +221,22 @@ function getChannel(channelId: bytes): Channel {
 
 #### Setup
 
-In order to ensure valid communication, each IBC chain MUST be able to identify its counterparty. While a client can prove any key/value path on the counterparty, knowing which identifier the counterparty uses when it sends messages to us is essential to prevent confusion between messages intended for different chains. IBC classic was granting the chains this ability by enforcing handshakes for the creation of connections and channels. IBC version 2 simplifies the process by eliminating the need for any handshakes. Instead it provides a two or three step procedure that requires minimal coordination between the executing chains. Indeed the only information that MUST be shared among chains is the `channelId` pointing to the counterparty, information that can be obtained by social consensus outside the protocol. Thus, to achieve mutual and verifiable identification, IBC version 2 introduces the `createChannel` and `registerChannel` procedures. The setup process ensures that both chains recognize and agree on a mutually identified channel that will facilitate packet transmission.
+In order to ensure valid communication, each IBC chain MUST be able to identify its counterparty. While a client can prove any key/value path on the counterparty, knowing which identifier the counterparty uses when it sends messages to us is essential to prevent confusion between messages intended for different chains. Thus, to achieve mutual and verifiable identification, IBC version 2 introduces the `createChannel` and `registerChannel` procedures. Below the ICS-04 defines the setup process that ensures that both chains recognize and agree on a mutually identified channel that will facilitate packet transmission.
 
-Thus, to start the secure packet stream between the chains, chain `A` and chain `B` MUST execute the setup following this set of procedures:  
+To start the secure packet stream between the chains, chain `A` and chain `B` MUST execute the setup following this set of procedures:  
 
 | **Procedure**               | **Responsible**     | **Outcome**                                                                |
 |-----------------------------|---------------------|-----------------------------------------------------------------------------|
 | **Channel Creation**         | Relayer   | A channel is created and linked to an underlying light client on both chains.           |
 | **Channel Registration**     | Relayer             | Registers the `counterpartyChannelId` on both chains, linking the channels.  |
 
-> **Note:** The relayer is required to execute `createClient` (as defined in ICS-02) before calling `createChannel`, since the `clientId` input parameter MUST be known. The `createClient` message (as defined in ICS-02) may be bundled with the `createChannel` message in a single multiMsgTx. The setup procedure is a prerequisite for starting the packet stream. If any of the steps has been missed, this would result in an incorrect setup error during the packet handlers execution. 
+> **Note:** The relayer is required to execute `createClient` (as defined in ICS-02) before calling `createChannel`, since the `clientId` input parameter MUST be known. The `createClient` message (as defined in ICS-02) may be bundled with the `createChannel` message in a single multiMsgTx. The setup procedure is a prerequisite for starting the packet stream. If any of the steps has been missed, this would trigger an error during the packet handlers execution. 
 
 Below we provide the setup sequence diagrams. 
 
 ```mermaid
 ---
-title: Two Step Setup Procedure :: createClient and createChannel are bundled together.  
+title: Two Step Setup Procedure, createClient and createChannel are bundled together.  
 ---
 sequenceDiagram  
     Participant Chain A
@@ -254,7 +252,7 @@ sequenceDiagram
 
 ```mermaid
 ---
-title: Three Step Setup Procedure :: createClient has been previosly executed.   
+title: Three Step Setup Procedure, createClient has been previosly executed.   
 ---
 sequenceDiagram
     Participant B Light Client as B Light Client with clientId=x  
@@ -306,7 +304,7 @@ function createChannel(
 
         // Channel Checks
         channelId = generateIdentifier() 
-        abortTransactionUnless(validateChannelIdentifier(channelId))
+        abortTransactionUnless(validateIdentifier(channelId))
         abortTransactionUnless(getChannel(channelId)) === null)
         
         // Channel manipulation
@@ -540,8 +538,8 @@ function sendPacket(
     // Executes Application logic ∀ Payload
     // Currently we support only len(payloads)==1 
     payload=payloads[0]
-    cbs = router.callbacks[payload.sourcePort,payload.version]
-    success = cbs.onSendPacket(sourceChannelId,channel.counterpartyChannelId,payload)
+    cbs = router.callbacks[payload.sourcePort]
+    success = cbs.onSendPacket(sourceChannelId,channel.counterpartyChannelId,payload) // Note that payload includes the version. The application is required to inspect the version to route the data to the proper callback
     // IMPORTANT: if the onSendPacket fails, the transaction is aborted and the potential state changes are reverted. 
     // This ensure that the post conditions on error are always respected. 
     // payload execution check  
@@ -611,7 +609,7 @@ function recvPacket(
   packet: OpaquePacket,
   proof: CommitmentProof,
   proofHeight: Height,
-  relayer: string // Need discussion 
+  relayer: string  
   ) {
 
     // Channel and Client Checks
@@ -650,8 +648,8 @@ function recvPacket(
     
     // Executes Application logic ∀ Payload
     payload=packet.data[0]
-    cbs = router.callbacks[payload.destPort,payload.version]
-    ack,success = cbs.onReceivePacket(packet.channelDestId,payload)
+    cbs = router.callbacks[payload.destPort]
+    ack,success = cbs.onReceivePacket(packet.channelDestId,payload,relayer) // Note that payload includes the version. The application is required to inspect the version to route the data to the proper callback
     abortTransactionUnless(success)
     if ack != nil {
         // NOTE: Synchronous ack. 
@@ -792,8 +790,8 @@ function acknowledgePacket(
     if(acknowledgement!= SENTINEL_ACKNOWLEDGEMENT){ // Do we want this? 
         // Executes Application logic ∀ Payload
         payload=packet.data[0]
-        cbs = router.callbacks[payload.sourcePort,payload.version]
-        success= cbs.OnAcknowledgePacket(packet.channelSourceId,payload, acknowledgement)
+        cbs = router.callbacks[payload.sourcePort]
+        success= cbs.OnAcknowledgePacket(packet.channelSourceId,payload,acknowledgement, relayer) // Note that payload includes the version. The application is required to inspect the version to route the data to the proper callback
         abortUnless(success) 
     }
 
@@ -891,7 +889,7 @@ function timeoutPacket(
     asert(packet.timeoutTimestamp > 0 && proofTimestamp >= packet.timeoutTimestamp)
 
     // verify there is no packet receipt --> receivePacket has not been called 
-    receiptPath = packetReceiptPath(packet.channelDestId, packet.sequence)
+    receiptPath = packetReceiptPath(packet.channelDestId, packet.sequence,relayer)
     merklePath = applyPrefix(channel.keyPrefix, receiptPath)
     assert(client.verifyNonMembership(
         client.clientState,
@@ -901,11 +899,11 @@ function timeoutPacket(
     ))
 
     payload=packet.data[0]
-    cbs = router.callbacks[payload.sourcePort,payload.version]
-    success=cbs.OnTimeoutPacket(packet.channelSourceId,payload)
+    cbs = router.callbacks[payload.sourcePort]
+    success=cbs.OnTimeoutPacket(packet.channelSourceId,payload) // Note that payload includes the version. The application is required to inspect the version to route the data to the proper callback
     abortUnless(success)
 
-    channelStore.delete(packetCommitmentPath(packet.channelSourceId, packet.sequence))
+    channelStore.delete(packetCommitmentPath(packet.channelSourceId, packet.sequence, relayer))
     
     // Event Emission // See fields
     emitLogEntry("timeoutPacket", {
