@@ -243,27 +243,27 @@ sequenceDiagram
     Participant Relayer 
     Participant Chain B
     Relayer ->> Chain A : createClient(B chain) + createChannel
-    Chain A ->> Relayer : clientId= X , channelId = Y
+    Chain A ->> Relayer : clientId= x , channelId = y
     Relayer ->> Chain B : createClient(A chain) + createChannel
-    Chain B ->> Relayer : clientId= Z , channelId = W
-    Relayer ->> Chain A : registerChannel(channelId = Y, counterpartyChannelId = W)
-    Relayer ->> Chain B : registerChannel(channelId = W, counterpartyChannelId = Y) 
+    Chain B ->> Relayer : clientId= z , channelId = w
+    Relayer ->> Chain A : registerChannel(channelId = y, counterpartyChannelId = w)
+    Relayer ->> Chain B : registerChannel(channelId = w, counterpartyChannelId = y) 
 ```
 
 ```mermaid
 ---
-title: Setup with light client previously created.  
+title: Setup with light clients previously created.  
 ---
 sequenceDiagram
-    Participant B LightClient - clientId=x  
+    Participant B LightClient(clientId=x)  
     Participant Chain A
     Participant Relayer 
     Participant Chain B
-    Participant A LightClient - clientId=z   
-    Relayer ->> Chain A : createChannel(B LightClient)
-    Chain A ->> Relayer : clientId= x , channelId = y
-    Relayer ->> Chain B : createChannel ()
-    Chain B ->> Relayer : clientId= z , channelId = w
+    Participant A LightClient(clientId=z)   
+    Relayer ->> Chain A : createChannel(x)
+    Chain A ->> Relayer : channelId = y
+    Relayer ->> Chain B : createChannel(z)
+    Chain B ->> Relayer : channelId = w
     Relayer ->> Chain A : registerChannel(channelId = y, counterpartyChannelId = w)
     Relayer ->> Chain B : registerChannel(channelId = w, counterpartyChannelId = y) 
 ```
