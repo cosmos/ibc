@@ -238,7 +238,7 @@ Below we provide the setup sequence diagrams.
 
 ```mermaid
 ---
-title: Two Step Setup Procedure :: `createClient` and `createChannel` are bundled together.  
+title: Two Step Setup Procedure :: createClient and createChannel are bundled together.  
 ---
 sequenceDiagram  
     Participant Chain A
@@ -254,7 +254,7 @@ sequenceDiagram
 
 ```mermaid
 ---
-title: Three Step Setup Procedure :: `createClient` has been previosly executed.   
+title: Three Step Setup Procedure :: createClient has been previosly executed.   
 ---
 sequenceDiagram
     Participant B Light Client as B Light Client with clientId=x  
@@ -503,10 +503,10 @@ Note that the full packet is not stored in the state of the chain - merely a sho
 
 | **Condition Type**            |**Description** | **Code Checks**|
 |-------------------------------|--------------------------------------------------------|------------------------|
-| **pre-conditions**            | - Chains `A` and `B` MUST be in a setup final state.<br> |                     |
-| **Error-Conditions**           | - Incorrect setup (includes invalid client and invalid channelId).<br> - Invalid timeoutTimestamp.<br> - Unsuccessful payload execution. | - `getChannel(sourceChannelId)==null`.<br> , -`router[sourceChannelId]==null`.<br> - `timeoutTimestamp==0`.<br> - `timeoutTimestamp < currentTimestamp()`.<br> - `timeoutTimestamp > currentTimestamp() + MAX_TIMEOUT_DELTA`.<br> - `success=onSendPacket(..), success==False`.<br> |
-| **Post-Conditions (Success)**  | - All the applications contained in the payload have properly terminated the `onSendPacket` callback execution.<br> - The packetCommitment has been generated and stored under the right packetCommitmentPath.<br> - The sequence number bound to sourceId MUST has been incremented by 1.<br> | An event with relevant information has been emitted | 
-| **Post-Conditions (Error)**    | - If one payload fails, then all state changes happened on the successful application execution must be reverted.<br> - No packetCommitment has been generated.<br> - The sequence number bound to sourceId MUST be unchanged. | |
+| **pre-conditions**            | - Chains `A` and `B` are assumed to be in a setup final state.<br> |                     |
+| **Error-Conditions**           | - Invalid clientId.<br> - Invalid channelId.<br> - Invalid timeoutTimestamp.<br> - Unsuccessful payload execution. | - `getChannel(sourceChannelId)==null`.<br> , -`router[sourceChannelId]==null`.<br> - `timeoutTimestamp==0`.<br> - `timeoutTimestamp < currentTimestamp()`.<br> - `timeoutTimestamp > currentTimestamp() + MAX_TIMEOUT_DELTA`.<br> - `onSendPacket(..)==False`.<br> |
+| **Post-Conditions (Success)**  | - All the applications contained in the payload have properly terminated the `onSendPacket` callback execution and applied state changes.<br> - The packetCommitment has been generated and stored under the right packetCommitmentPath.<br> - The sequence number bound to sourceId MUST has been incremented by 1.<br> | - `onSendPacket(..)==True; app.State(beforeSendPacket)!=app.State(afterSendPacket)` - `commitment=commitV2Packet(packet), provableStore.get(packetCommitmentPath(sourceChannelId, sequence))==commitment`.<br> - `nextSequenceSend[sourecChannelId]+1==SendPacket(..)`.<br> - An event with relevant information has been emitted | 
+| **Post-Conditions (Error)**    | - If one payload fails, then all state changes happened on the successful application execution must be reverted.<br> - No packetCommitment has been generated.<br> - The sequence number bound to `sourceId` MUST be unchanged. | - `app.State(beforeSendPacket)=app.State(afterSendPacket)`.<br> - `commitment=commitV2Packet(packet), provableStore.get(packetCommitmentPath(sourceChannelId, sequence))==commitment`.<br> - `nextSequenceSend[sourecChannelId]==SendPacket(..)` |
 
 ###### Pseudo-Code 
 
@@ -597,10 +597,10 @@ We pass the address of the `relayer` that signed and submitted the packet to ena
 
 | **Condition Type**            | **Description** | **Code Checks** |
 |-------------------------------|-----------------------------------------------|-----------------------------------------------|
-| **pre-conditions**            | - Chain `A` MUST have stored the packetCommitment under the keyPrefix registered in the chain `B` channelEnd.<br> - TimeoutTimestamp MUST not have elapsed yet on the receiving chain.<br> - PacketReceipt for the specific keyPrefix and sequence MUST be empty (e.g. `receivePacket` has not been called yet). | |
-| **Error-Conditions**           | - Packet Errors: invalid packetCommitment, packetReceipt already exists.<br> - Invalid timeoutTimestamp.<br> - Unsuccessful payload execution. | |
-| **Post-Conditions (Success)**  | - All the applications pointed in the payload have properly terminated the `onReceivePacket` callback execution.<br> - The packetReceipt has been written.<br> - The acknowledgement has been written. | |
-| **Post-Conditions (Error)**    | - If one payload fails, then all state changes happened on the successful `onReceivePacket` application callback execution MUST be reverted.<br> - If timeoutTimestamp has elapsed then no state changes occurred. // NEED DISCUSSION (Is this ok? Shall we write the `timeout_sentinel_receipt`?) | |
+| **pre-conditions**            | - Chain `A` MUST have stored a verifiable the packetCommitment.<br> - TimeoutTimestamp MUST not have elapsed yet on the receiving chain.<br> - PacketReceipt for the specific keyPrefix and sequence MUST be empty (implies `receivePacket` has not been called yet). | |
+| **Error-Conditions**           | - Packet Errors: invalid packetCommitment, packetReceipt already exists.<br> - Invalid timeoutTimestamp.<br> - Unsuccessful payload execution. | - `verifyMembership(packetCommitment)==false`.<br> - `provableStore.get(packetReceiptPath(packet.channelDestId, packet.sequence))!=null`.<br> - `timeoutTimestamp === 0`.<br> - `currentTimestamp() < packet.timeoutTimestamp)`.<br> - `onReceivePacket(..)==False` |
+| **Post-Conditions (Success)**  | - All the applications pointed in the payload have properly terminated the `onReceivePacket` callback execution.<br> - The packetReceipt has been written.<br> - The acknowledgement has been written. | - `onReceivePacket(..)==True; app.State(beforeReceivePacket)!=app.State(afterSendPacket)`.<br> - `provableStore.get(packetReceiptPath(packet.channelDestId, packet.sequence))!=null`.<br>  |
+| **Post-Conditions (Error)**    | - If one payload fails, then all state changes happened on the successful application execution must be reverted.<br> - packetReceipt is not written.<br> | - `app.State(beforeReceivePacket)==app.State(afterReceivePacket)`.<br> - `provableStore.get(packetReceiptPath(packet.channelDestId, packet.sequence))==null` |
                                                                                                                           
 ###### Pseudo-Code 
 
