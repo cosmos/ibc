@@ -230,7 +230,7 @@ To start the secure packet stream between the chains, chain `A` and chain `B` MU
 | **Channel Creation**         | Relayer   | A channel is created and linked to an underlying light client on both chains.           |
 | **Channel Registration**     | Relayer             | Registers the `counterpartyChannelId` on both chains, linking the channels.  |
 
-> **Note:** The relayer is required to execute `createClient` (as defined in ICS-02) before calling `createChannel`, since the `clientId` input parameter MUST be known. The `createClient` message (as defined in ICS-02) may be bundled with the `createChannel` message in a single multiMsgTx. The setup procedure is a prerequisite for starting the packet stream. If any of the steps has been missed, this would trigger an error during the packet handlers execution. 
+> **Note:** The relayer is required to execute `createClient` (as defined in ICS-02) before calling `createChannel`, since the `clientId` input parameter MUST be known. The `createClient` message may be bundled with the `createChannel` message in a single multiMsgTx. The setup procedure is a prerequisite for starting the packet stream. If any of the steps has been missed, this would trigger an error during the packet handlers execution. 
 
 Below we provide the setup sequence diagrams. 
 
@@ -272,7 +272,7 @@ When the two or three step setup has been executed, the system should end up in 
 
 ![Setup Final State](setup_final_state.png)
 
-Once two chains have set up clients, created channel and registered channels for each other with specific identifiers, they can send IBC packets using the packet interface defined before and the packet handlers that the ICS-04 defines below. The packets will be addressed **directly** with the channels that have semantic link to the underlying counterparty light clients. Thus there are **no** more handshakes necessary. Instead the packet sender must be capable of providing the correct <channel,channel> pair. If the setup has been executed correctly, then the correctness and soundness properties of IBC holds and the IBC packet flow is guaranteed to succeed. If a user sends a packet with the wrong destination channel it will be impossible for the intended destination to correctly verify the packet, and the packet will simply time out.
+Once two chains have set up clients, created channel and registered channels for each other with specific identifiers, they can send IBC packets using the packet interface defined before and the packet handlers that the ICS-04 defines below. The packets will be addressed **directly** with the channels that have semantic link to the underlying counterparty light clients. Thus there are **no** more handshakes necessary. Instead the packet sender must be capable of providing the correct **<channel,channel>** pair. If the setup has been executed correctly, then the correctness and soundness properties of IBC holds and the IBC packet flow is guaranteed to succeed. If a user sends a packet with the wrong destination channel it will be impossible for the intended destination to correctly verify the packet, and the packet will simply time out.
 
 While the above mentioned `createClient` procedure is defined by [ICS-2](../ics-002-client-semantics/README.md), the ICS-04 defines below the `createChannel` and `registerChannel` procedures.
 
@@ -287,7 +287,7 @@ The channel creation process enables the creation of the two channels that can b
 | **pre-conditions**            | - `createClient` has been called at least once| |
 | **error-conditions**           | 1. Invalid `clientId`<br> 2. `Invalid channelId`<br> 3. Unexpected keyPrefix format | 1. `client==null`<br> 2.1 `validateId(channelId)==False`<br> 2.2 `getChannel(channelId)!=null`<br> 3. `isFormatOk(KeyPrefix)==False`<br> |
 | **post-conditions (success)**  | 1. A channel is set in store<br> 2. The creator is set in store<br> 3. `nextSequenceSend` is initialized<br> 4. Event with relevant fields is emitted | 1. `storedChannel[channelId]!=null`<br> 2. `channelCreator[channelId]!=null` <br> 3. `nextSequenceSend[channelId]==1`<br> 4. checkEventEmission |
-| **post-conditions (error)**    | - None of the post-conditions (success) is true<br>| 1. `storedChannel[channelId]==null`<br> 2. `channelCreator[channelId]==null`<br> 3. `nextSequenceSend[channelId]!=1`<br> 4.`router[channelId]==null` |
+| **post-conditions (error)**    | - None of the post-conditions (success) is true<br>| 1. `storedChannel[channelId]==null`<br> 2. `channelCreator[channelId]==null`<br> 3. `nextSequenceSend[channelId]!=1`<br> |
 
 ###### Pseudo-Code 
 
@@ -509,10 +509,10 @@ Note that the full packet is not stored in the state of the chain - merely a sho
 
 | **Condition Type**            |**Description** | **Code Checks**|
 |-------------------------------|--------------------------------------------------------|------------------------|
-| **pre-conditions**            | - Chains `A` and `B` are assumed to be in a setup final state<br> |                     |
+| **pre-conditions**            | - Sender and receiver chains are assumed to be in a setup final state<br> |                     |
 | **Error-Conditions**           | 1. Invalid `clientId`<br> 2. Invalid `channelId`<br> 3. Invalid `timeoutTimestamp`<br> 4. Unsuccessful payload execution. | 1. `router.clients[channel.clientId]==null`<br> 2. `getChannel(sourceChannelId)==null`<br> 3.1 `timeoutTimestamp==0`<br> 3.2 `timeoutTimestamp < currentTimestamp()`<br> 3.3 `timeoutTimestamp > currentTimestamp() + MAX_TIMEOUT_DELTA`<br> 4. `onSendPacket(..)==False`<br> |
-| **Post-Conditions (Success)**  | 1. `onSendPacket` is executed and the application state is modified<br> 2. The `packetCommitment` is generated and stored under the expected `packetCommitmentPath`<br> 3. The sequence number bound to `sourceId` is incremented by 1<br> 4. Event with relevant information is emitted | 1. `onSendPacket(..)==True; app.State(beforeSendPacket)!=app.State(afterSendPacket)`<br> 2. `commitment=commitV2Packet(packet), provableStore.get(packetCommitmentPath(sourceChannelId, sequence))==commitment`<br> 3. `nextSequenceSend[sourecChannelId]+1==SendPacket(..)`<br> 4. CheckEventEmission | 
-| **Post-Conditions (Error)**    | 1. if `onSendPacket` fails the application state is unchanged<br> 2. No `packetCommitment` has been generated<br> 3. The sequence number bound to `sourceId` is unchanged. | 1. `app.State(beforeSendPacket)=app.State(afterSendPacket)`<br> 2. `commitment=commitV2Packet(packet), provableStore.get(packetCommitmentPath(sourceChannelId, sequence))==commitment`<br> 3. `nextSequenceSend[sourecChannelId]==nextSequenceSend(beforeSendPacket)` |
+| **Post-Conditions (Success)**  | 1. `onSendPacket` is executed and the application state is modified<br> 2. The `packetCommitment` is generated and stored under the expected `packetCommitmentPath`<br> 3. The sequence number bound to `sourceId` is incremented by 1<br> 4. Event with relevant information is emitted | 1. `onSendPacket(..)==True; app.State(beforeSendPacket)!=app.State(afterSendPacket)`<br> 2. `commitment=commitV2Packet(packet), provableStore.get(packetCommitmentPath(sourceChannelId, sequence))==commitment`<br> 3. `nextSequenceSend(beforeSendPacket[sourecChannelId])+1==SendPacket(..)`<br> 4. CheckEventEmission | 
+| **Post-Conditions (Error)**    | 1. if `onSendPacket` fails the application state is unchanged<br> 2. No `packetCommitment` has been generated<br> 3. The sequence number bound to `sourceId` is unchanged. | 1. `app.State(beforeSendPacket)==app.State(afterSendPacket)`<br> 2. `commitment=commitV2Packet(packet), provableStore.get(packetCommitmentPath(sourceChannelId, sequence))==commitment`<br> 3. `nextSequenceSend[sourecChannelId]==nextSequenceSend(beforeSendPacket)` |
 
 ###### Pseudo-Code 
 
@@ -603,9 +603,9 @@ We pass the address of the `relayer` that signed and submitted the packet to ena
 
 | **Condition Type**            | **Description** | **Code Checks** |
 |-------------------------------|-----------------------------------------------|-----------------------------------------------|
-| **pre-conditions**            | - Chain `A` has stored a verifiable `packetCommitment`<br> - `TimeoutTimestamp` is not elapsed on the receiving chain<br> - `PacketReceipt` for the specific keyPrefix and sequence MUST be empty (implies `receivePacket` has not been called yet). | |
-| **Error-Conditions**           | 1. Packet Errors: invalid packetCommitment, packetReceipt already exists<br> 2. Invalid timeoutTimestamp<br> 3. Unsuccessful payload execution. | 1.1 `verifyMembership(packetCommitment)==false`<br> 1.2 `provableStore.get(packetReceiptPath(packet.channelDestId, packet.sequence))!=null`<br> 3. `timeoutTimestamp === 0`<br> 3.1 `currentTimestamp() < packet.timeoutTimestamp)`<br> 4. `onReceivePacket(..)==False` |
-| **Post-Conditions (Success)**  | 1. `onReceivePacket` is executed and the application state is modified<br> 2. The `packetReceipt` is written<br>  | 1. `onReceivePacket(..)==True; app.State(beforeReceivePacket)!=app.State(afterSendPacket)`<br> 2. `provableStore.get(packetReceiptPath(packet.channelDestId, packet.sequence))!=null`<br>  |
+| **pre-conditions**            | - The sender chain has stored a verifiable `packetCommitment`<br> - `TimeoutTimestamp` is not elapsed on the receiving chain<br> - `PacketReceipt` for the specific keyPrefix and sequence MUST be empty (implies `receivePacket` has not been called yet). | |
+| **Error-Conditions**           | 1. invalid `packetCommitment`, 2.`packetReceipt` already exists<br> 3. Invalid timeoutTimestamp<br> 4. Unsuccessful payload execution. | 1.1 `verifyMembership(packetCommitment)==false`<br> 1.2 `provableStore.get(packetReceiptPath(packet.channelDestId, packet.sequence))!=null`<br> 3. `timeoutTimestamp === 0`<br> 3.1 `currentTimestamp() < packet.timeoutTimestamp)`<br> 4. `onReceivePacket(..)==False` |
+| **Post-Conditions (Success)**  | 1. `onReceivePacket` is executed and the application state is modified<br> 2. The `packetReceipt` is written<br>  | 1. `onReceivePacket(..)==True; app.State(beforeReceivePacket)!=app.State(afterReceivePacket)`<br> 2. `provableStore.get(packetReceiptPath(packet.channelDestId, packet.sequence))!=null`<br>  |
 | **Post-Conditions (Error)**    | 1. if `onReceivePacket` fails the application state is unchanged<br> 2. `packetReceipt is not written`<br> | 1. `app.State(beforeReceivePacket)==app.State(afterReceivePacket)`<br> 2. `provableStore.get(packetReceiptPath(packet.channelDestId, packet.sequence))==null` |
                                                                                                                           
 ###### Pseudo-Code 
@@ -707,9 +707,9 @@ The IBC handler performs the following steps in order:
 
 | **Condition Type**            | **Description** | **Code Checks** |
 |-------------------------------|------------|------------|
-| **pre-conditions**            | - `receivePacket` has been called on chain `B`<br> - `onReceivePacket` application callback has been executed<br> - `writeAcknowledgement` has not been called yet | |
+| **pre-conditions**            | - `receivePacket` has been called on receiver chain<br> - `onReceivePacket` application callback has been executed<br> - `writeAcknowledgement` has not been called yet | |
 | **Error-Conditions**           | 1. acknowledgement is empty<br> 2. The `packetAcknowledgementPath` stores already a value. | 1. `len(acknowledgement) === 0`<br> 2. `provableStore.get(packetAcknowledgementPath(packet.channelDestId, packet.sequence) !== null` |
-| **Post-Conditions (Success)**  | 1. The opaque acknowledgement has been written at `packetAcknowledgementPath` | 1. `provableStore.get(packetAcknowledgementPath(packet.channelDestId, packet.sequence) !== null` |
+| **Post-Conditions (Success)**  | 1. opaque acknowledgement has been written at `packetAcknowledgementPath` | 1. `provableStore.get(packetAcknowledgementPath(packet.channelDestId, packet.sequence) !== null` |
 | **Post-Conditions (Error)**    | 1. No value is stored at the `packetAcknowledgementPath`. | 1. `provableStore.get(packetAcknowledgementPath(packet.channelDestId, packet.sequence) === null` |
 
 ```typescript
@@ -753,10 +753,10 @@ Given that at this point of the packet flow, chain `B` has sucessfully received 
 
 | **Condition Type** | **Description** | **Code Checks** |
 |-------------------------------|---------------------------------|---------------------------------|
-| **pre-conditions**            | - chain `B` has successfully received a packet and has written the acknowledgment<br> - `packetCommitment` has not been cleared out yet. ||
+| **pre-conditions**            | - receiver chain has successfully received a packet and has written the acknowledgment<br> - `packetCommitment` has not been cleared out yet. ||
 | **Error-Conditions**           | 1. `packetCommitment` already cleared out<br> 2. Unset Acknowledgment<br> 3. Unsuccessful payload execution. | 1. `provableStore.get(packetCommitmentPath(packet.channelSourceId, packet.sequence)) ===  null`<br> 2. `verifyMembership(packetacknowledgementPath,...,) ==  False`<br> 3. `onAcknowledgePacket(packet.channelSourceId,payload, acknowledgement) == False` | 
-| **Post-Conditions (Success)**  | 1. `onAcknowledgePacket` is executed and the application state is modified<br> 2. The `packetCommitment` has been cleared out. | 1. `onAcknowledgePacket(..)==True; app.State(beforeReceivePacket)!=app.State(afterSendPacket)`<br> 2. `provableStore.get(packetCommitmentPath(packet.channelSourceId, packet.sequence)) === null` |
-| **Post-Conditions (Error)**    | 1. If `onAcknowledgePacket` fails the application state is unchanged<br> 2. The `packetCommitment` has not been cleared out<br> 3. The acknowledgement is stil in store | 1. `onAcknowledgePacket(..)==False; app.State(beforeReceivePacket)==app.State(afterSendPacket)`<br> 2. `provableStore.get(packetCommitmentPath(packet.channelSourceId, packet.sequence)) ===  commitV2Packet(packet)` 3. `verifyMembership(packetAcknowledgementPath,...,) ==  True`|
+| **Post-Conditions (Success)**  | 1. `onAcknowledgePacket` is executed and the application state is modified<br> 2. `packetCommitment` has been cleared out. | 1. `onAcknowledgePacket(..)==True; app.State(beforeAcknowledgePacket)!=app.State(afterAcknowledgePacket)`<br> 2. `provableStore.get(packetCommitmentPath(packet.channelSourceId, packet.sequence)) === null` |
+| **Post-Conditions (Error)**    | 1. If `onAcknowledgePacket` fails the application state is unchanged<br> 2. `packetCommitment` has not been cleared out<br> 3. acknowledgement is stil in store | 1. `onAcknowledgePacket(..)==False; app.State(beforeAcknowledgePacket)==app.State(afterAcknowledgePacket)`<br> 2. `provableStore.get(packetCommitmentPath(packet.channelSourceId, packet.sequence)) ===  commitV2Packet(packet)` 3. `verifyMembership(packetAcknowledgementPath,...,) ==  True`|
 
 ###### Pseudo-Code 
 
@@ -861,9 +861,9 @@ We pass the `relayer` address just as in [Receiving packets](#receiving-packets)
 | **Condition Type**            | **Description**| **Code Checks**|
 |-------------------------------|--------------------|--------------------|
 | **pre-conditions**            | - `packetReceipt` is empty<br> - `packetCommitment` has not been cleared out yet | |
-| **Error-Conditions**           | 1. `packetCommitment` already cleared out<br> 2. `packetReceipt` is not empty<br> 3. Unsuccessful payload execution 4. `timeoutTimestamp` not elapsed on the receiving chain| 1. `provableStore.get(packetCommitmentPath(packet.channelSourceId, packet.sequence)) ===  null`<br> 2. `provableStore.get(packetReceiptPath(packet.channelDestId, packet.sequence))!=null`<br> 3. `onTimeoutPacket(packet.channelSourceId,payload) == False`<br> 4.1 `packet.timeoutTimestamp > 0` <br> 4.2 `proofTimestamp = client.getTimestampAtHeight(proofHeight); proofTimestamp >= packet.timeoutTimestamp` |
+| **Error-Conditions**           | 1. `packetCommitment` already cleared out<br> 2. `packetReceipt` is not empty<br> 3. Unsuccessful payload execution<br> 4. `timeoutTimestamp` not elapsed on the receiving chain| 1. `provableStore.get(packetCommitmentPath(packet.channelSourceId, packet.sequence)) ===  null`<br> 2. `provableStore.get(packetReceiptPath(packet.channelDestId, packet.sequence))!=null`<br> 3. `onTimeoutPacket(packet.channelSourceId,payload) == False`<br> 4.1 `packet.timeoutTimestamp > 0` <br> 4.2 `proofTimestamp = client.getTimestampAtHeight(proofHeight); proofTimestamp >= packet.timeoutTimestamp` |
 | **Post-Conditions (Success)**  | 1. `onTimeoutPacket` is executed and the application state is modified <br> 2. `packetCommitment` has been cleared out <br> 3. `packetReceipt` is empty | 1. `onTimeoutPacket(..)==True; app.State(beforeTimeoutPacket)!=app.State(afterTimeoutPacket)`<br> 2. `provableStore.get(packetCommitmentPath(packet.channelSourceId, packet.sequence)) === null`<br> 3. `provableStore.get(packetReceiptPath(packet.channelDestId, packet.sequence))==null`<br> |
-| **Post-Conditions (Error)**    | 1. If `onTimeoutPacket` fails and the application state is unchanged <br> 2. `packetCommitment` is not cleared out | 1. `onTimeoutPacket(..)==True; app.State(beforTimeoutPacket)!=app.State(afterTimeoutPacket)`<br> 2. `provableStore.get(packetCommitmentPath(packet.channelSourceId, packet.sequence)) === null` | 
+| **Post-Conditions (Error)**    | 1. If `onTimeoutPacket` fails and the application state is unchanged <br> 2. `packetCommitment` is not cleared out | 1. `onTimeoutPacket(..)==True; app.State(beforeTimeoutPacket)!=app.State(afterTimeoutPacket)`<br> 2. `provableStore.get(packetCommitmentPath(packet.channelSourceId, packet.sequence)) === null` | 
 
 ###### Pseudo-Code 
 
@@ -946,11 +946,11 @@ If a client has been frozen while packets are in-flight, the packets can no long
 
 ## Backwards Compatibility
 
-TODO Mmmm ..Not applicable.
+Not applicable.
 
 ## Forwards Compatibility
 
-Future updates to this specification will enable the IBC protocol version 2 to process multiple payloads within a single IBC packet atomically, reducing the number of packet flows. 
+Future updates of this specification will enable the atomic processing of multiple payloads within a single IBC packet, reducing the number of packet flows. 
 
 ## Example Implementations
 
