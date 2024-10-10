@@ -230,7 +230,12 @@ To start the secure packet stream between the chains, chain `A` and chain `B` MU
 | **Channel Creation**         | Relayer   | A channel is created and linked to an underlying light client on both chains.           |
 | **Channel Registration**     | Relayer             | Registers the `counterpartyChannelId` on both chains, linking the channels.  |
 
-> **Note:** The relayer is required to execute `createClient` (as defined in ICS-02) before calling `createChannel`, since the `clientId` input parameter MUST be known. The `createClient` message may be bundled with the `createChannel` message in a single multiMsgTx. The setup procedure is a prerequisite for starting the packet stream. If any of the steps has been missed, this would trigger an error during the packet handlers execution. 
+The relayer is required to execute `createClient` (as defined in ICS-02) before calling `createChannel`, since the `clientId` input parameter MUST be known at execution time. Eventually, the `createClient` message can be bundled with the `createChannel` message in a single multiMsgTx. 
+
+Calling indipendently `createClient`, `createChannel` and `registerChannel` result in a three step setup process.
+Bundling `createClient` and `createChannel` into a single operation simplifies this process and reduces the number of interactions required between the relayer and the chains to two.
+
+The setup procedure is a prerequisite for starting the packet stream. If any of the steps has been missed, this would trigger an error during the packet handlers execution. 
 
 Below we provide the setup sequence diagrams. 
 
@@ -397,7 +402,17 @@ In the IBC protocol version 2, the packet flow is managed by four key function h
 - `acknowledgePacket`
 - `timeoutPacket`
 
-Note that the execution of the four handler above described, upon a unique packet, cannot be combined in any arbitrary order. We provide the three possible example scenarios described with sequence diagrmas. 
+Note that the execution of the four handlers, upon a unique packet, cannot be combined in any arbitrary order. 
+
+Given a scenario where we are sending a packet from `A` to `B` the protocol follows the following rules:  
+
+- Chain `A` can call either {`sendPacket`,`acknowledgePacket`,`timeoutPacket`}
+- Chain `B` can call only {`receivePacket`} 
+- Chain `B` can only execute the `receivePacket` if `sendPacket` has been executed by chain `A` 
+- Chain `A` can only execute `timeoutPacket` if `sendPacket` has been executed by chain `A` and `receivePacket` has not been executed by chain `B`.
+- Chain `A` can only execute `acknowledgePacket` if `sendPacket` has been executed by chain `A` and `receivePacket` has been executed by chain `B`. 
+
+Below we provide the three possible example scenarios described with sequence diagrmas. 
 
 ---
 
@@ -410,20 +425,27 @@ sequenceDiagram
     participant Relayer 
     participant Chain B
     participant A Light Client
+    Note over Chain A: start send packet execution
     Chain A ->> Chain A : sendPacket
     Chain A --> Chain A : app execution
     Chain A --> Chain A : packetCommitment 
+    Note over Chain A: end send packet execution
     Relayer ->> Chain B: relayPacket
+    Note over Chain B: start receive packet execution
     Chain B ->> Chain B: receivePacket
     Chain B -->> A Light Client: verifyMembership(packetCommitment)
     Chain B --> Chain B : app execution
     Chain B --> Chain B: writeAck
     Chain B --> Chain B: writePacketReceipt
+    Note over Chain B: end receive packet execution
     Relayer ->> Chain A: relayAck
+    Note over Chain A: start acknowldge packet execution
     Chain A ->> Chain A : acknowldgePacket
     Chain A -->> B Light Client: verifyMembership(packetAck)
     Chain A --> Chain A : app execution
-    Chain A --> Chain A : Delete packetCommitment 
+    Chain A --> Chain A : Delete packetCommitment
+    Note over Chain A: end acknowldge packet execution
+     
 ```
 
 ---
@@ -439,21 +461,29 @@ sequenceDiagram
     participant Relayer 
     participant Chain B
     participant A Light Client
+    Note over Chain A: start send packet execution
     Chain A ->> Chain A : sendPacket
     Chain A --> Chain A : app execution
-    Chain A --> Chain A : packetCommitment 
+    Chain A --> Chain A : packetCommitment
+    Note over Chain A: end send packet execution 
     Relayer ->> Chain B: relayPacket
+    Note over Chain B: start receive packet execution
     Chain B ->> Chain B: receivePacket
     Chain B -->> A Light Client: verifyMembership(packetCommitment)
     Chain B --> Chain B : app execution
     Chain B --> Chain B: writePacketReceipt
+    Note over Chain B: end receive packet execution
+    Note over Chain B: start async ack writing
     Chain B --> Chain B : app execution - async ack processing
     Chain B --> Chain B: writeAck
+    Note over Chain B: end async ack writing
     Relayer ->> Chain A: relayAck
+    Note over Chain A: start acknowldge packet execution
     Chain A ->> Chain A : acknowldgePacket
     Chain A -->> B Light Client: verifyMembership(packetAck)
     Chain A --> Chain A : app execution
-    Chain A --> Chain A : Delete packetCommitment 
+    Chain A --> Chain A : Delete packetCommitment
+    Note over Chain A: end acknowldge packet execution 
 ```
 
 ---
@@ -467,24 +497,19 @@ sequenceDiagram
     participant Relayer 
     participant Chain B
     participant A Light Client
+    Note over Chain A: start send packet execution
     Chain A ->> Chain A : sendPacket
     Chain A --> Chain A : app execution
     Chain A --> Chain A : packetCommitment 
+    Note over Chain B: start send packet execution
+    Note over Chain A: start timeout packet execution
     Chain A ->> Chain A : TimeoutPacket
     Chain A -->> B Light Client: verifyNonMembership(PacketReceipt)
     Chain A --> Chain A : app execution
-    Chain A --> Chain A : Delete packetCommitment 
+    Chain A --> Chain A : Delete packetCommitment
+    Note over Chain A: end timeout packet execution
+     
 ```
-
----
-
-Given a scenario where we are sending a packet from `A` to `B`:  
-
-- Chain `A` can call either {`sendPacket`,`acknowledgePacket`,`timeoutPacket`}
-- Chain `B` can call only {`receivePacket`} 
-- Chain `B` can only execute the `receivePacket` if `sendPacket` has been executed by chain `A` 
-- Chain `A` can only execute `timeoutPacket` if `sendPacket` has been executed by chain `A` and `receivePacket` has not been executed by chain `B`.
-- Chain `A` can only execute `acknowledgePacket` if `sendPacket` has been executed by chain `A` and `receivePacket` has been executed by chain `B`. 
 
 ##### Sending packets
 
