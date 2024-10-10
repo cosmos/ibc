@@ -284,10 +284,10 @@ The channel creation process enables the creation of the two channels that can b
 
 | **Condition Type**            | **Description**  | **Code Checks** | 
 |-------------------------------|------------------| ----------------|
-| **pre-conditions**            | - The used clientId exist. `createClient` has been called at least once.| |
-| **error-conditions**           | - Incorrect clientId.<br> - Unexpected keyPrefix format.<br> - Invalid channelId .<br> | - `client==null`.<br> - `isFormatOk(counterpartyKeyPrefix)==False`.<br> - `validatedChannelId(channelId)==False`.<br> - `getChannel(channelId)!=null`.<br>  |
-| **post-conditions (success)**  | - A channel is set in store and it's accessible with key channelId.<br> - The creator is set in store and it's accessible with key channelId.<br> - nextSequenceSend is initialized.<br> - client is stored in the router.<br> - an event with relevant fields is emitted | - `storedChannel[channelId]!=null`.<br> - `channelCreator[channelId]!=null`.<br> - `router[channelId]!=null`.<br> - `nextSequenceSend[channelId]==1` |
-| **post-conditions (error)**    | - None of the post-conditions (success) is true.<br>| - `storedChannel[channelId]==null`.<br> - `channelCreator[channelId]==null`.<br> - `router[channelId]==null`.<br> - `nextSequenceSend[channelId]!=1`|
+| **pre-conditions**            | - `createClient` has been called at least once.| |
+| **error-conditions**           | 1. Invalid `clientId`.<br> 2. Unexpected keyPrefix format.<br> 3. Invalid channelId .<br> | 1. `client==null`.<br> 2. `isFormatOk(counterpartyKeyPrefix)==False`.<br> 3. `validatedChannelId(channelId)==False`.<br> - `getChannel(channelId)!=null`.<br>  |
+| **post-conditions (success)**  | 1. A channel is set in store and it's accessible with key `channelId`.<br> 2. The creator is set in store and it's accessible with key `channelId`.<br> 3. `nextSequenceSend` is initialized.<br> - client is stored in the router.<br> - an event with relevant fields is emitted | 1. `storedChannel[channelId]!=null`.<br> 2. `channelCreator[channelId]!=null`.<br> 3. `nextSequenceSend[channelId]==1`.<br> 4. `router[channelId]!=null`  |
+| **post-conditions (error)**    | - None of the post-conditions (success) is true.<br>| 1. `storedChannel[channelId]==null`.<br> 2. `channelCreator[channelId]==null`.<br> 3. `nextSequenceSend[channelId]!=1`.<br> 4.`router[channelId]==null` |
 
 ###### Pseudo-Code 
 
@@ -475,8 +475,13 @@ sequenceDiagram
 
 ---
 
-Given a configuration where we are sending a packet from `A` to `B` then chain `A` can call either, `sendPacket`,`acknowledgePacket` or `timeoutPacket` while chain `B` can only execute the `receivePacket` handler. 
-The `acknowledgePacket` is not a valid action if `receivePacket` has not been executed. `timeoutPacket` is not a valid action if `receivePacket` occurred.
+Given a scenario where we are sending a packet from `A` to `B`:  
+
+- Chain `A` can call either {`sendPacket`,`acknowledgePacket`,`timeoutPacket`}
+- Chain `B` can call only {`receivePacket`} 
+- Chain `B` can only execute the `receivePacket` if `sendPacket` has been executed by chain `A` 
+- Chain `A` can only execute `timeoutPacket` if `sendPacket` has been executed by chain `A` and `receivePacket` has not been executed by chain `B`.
+- Chain `A` can only execute `acknowledgePacket` if `sendPacket` has been executed by chain `A` and `receivePacket` has been executed by chain `B`. 
 
 ##### Sending packets
 
@@ -502,8 +507,8 @@ Note that the full packet is not stored in the state of the chain - merely a sho
 | **Condition Type**            |**Description** | **Code Checks**|
 |-------------------------------|--------------------------------------------------------|------------------------|
 | **pre-conditions**            | - Chains `A` and `B` are assumed to be in a setup final state.<br> |                     |
-| **Error-Conditions**           | - Invalid clientId.<br> - Invalid channelId.<br> - Invalid timeoutTimestamp.<br> - Unsuccessful payload execution. | - `getChannel(sourceChannelId)==null`.<br> , -`router[sourceChannelId]==null`.<br> - `timeoutTimestamp==0`.<br> - `timeoutTimestamp < currentTimestamp()`.<br> - `timeoutTimestamp > currentTimestamp() + MAX_TIMEOUT_DELTA`.<br> - `onSendPacket(..)==False`.<br> |
-| **Post-Conditions (Success)**  | - All the applications contained in the payload have properly terminated the `onSendPacket` callback execution and applied state changes.<br> - The packetCommitment has been generated and stored under the right packetCommitmentPath.<br> - The sequence number bound to sourceId MUST has been incremented by 1.<br> | - `onSendPacket(..)==True; app.State(beforeSendPacket)!=app.State(afterSendPacket)` - `commitment=commitV2Packet(packet), provableStore.get(packetCommitmentPath(sourceChannelId, sequence))==commitment`.<br> - `nextSequenceSend[sourecChannelId]+1==SendPacket(..)`.<br> - An event with relevant information has been emitted | 
+| **Error-Conditions**           | - Invalid clientId.<br> - Invalid channelId.<br> - Invalid timeoutTimestamp.<br> - Unsuccessful payload execution. | - `getChannel(sourceChannelId)==null`.<br> -`router[sourceChannelId]==null`.<br> - `timeoutTimestamp==0`.<br> - `timeoutTimestamp < currentTimestamp()`.<br> - `timeoutTimestamp > currentTimestamp() + MAX_TIMEOUT_DELTA`.<br> - `onSendPacket(..)==False`.<br> |
+| **Post-Conditions (Success)**  | - All the applications contained in the payload have properly terminated the `onSendPacket` callback execution and applied state changes.<br> - The packetCommitment has been generated and stored under the right packetCommitmentPath.<br> - The sequence number bound to sourceId MUST has been incremented by 1.<br> - An event with relevant information has been emitted | - `onSendPacket(..)==True; app.State(beforeSendPacket)!=app.State(afterSendPacket)`.<br> - `commitment=commitV2Packet(packet), provableStore.get(packetCommitmentPath(sourceChannelId, sequence))==commitment`.<br> - `nextSequenceSend[sourecChannelId]+1==SendPacket(..)`.<br> - An event with relevant information has been emitted | 
 | **Post-Conditions (Error)**    | - If one payload fails, then all state changes happened on the successful application execution must be reverted.<br> - No packetCommitment has been generated.<br> - The sequence number bound to `sourceId` MUST be unchanged. | - `app.State(beforeSendPacket)=app.State(afterSendPacket)`.<br> - `commitment=commitV2Packet(packet), provableStore.get(packetCommitmentPath(sourceChannelId, sequence))==commitment`.<br> - `nextSequenceSend[sourecChannelId]==SendPacket(..)` |
 
 ###### Pseudo-Code 
@@ -770,8 +775,6 @@ function acknowledgePacket(
     assert(channel !== null)
     client = router.clients[channel.clientId]
     assert(client !== null)
-    
-    //assert(packet.destId == channel.counterpartyChannelId) // Tautology
    
     // verify we sent the packet and haven't cleared it out yet
     assert(provableStore.get(packetCommitmentPath(packet.channelSourceId, packet.sequence)) ===  commitV2Packet(packet))
@@ -787,7 +790,7 @@ function acknowledgePacket(
         acknowledgement
     ))
      
-    if(acknowledgement!= SENTINEL_ACKNOWLEDGEMENT){ // Do we want this? 
+    if(acknowledgement!= SENTINEL_ACKNOWLEDGEMENT){ 
         // Executes Application logic ∀ Payload
         payload=packet.data[0]
         cbs = router.callbacks[payload.sourcePort]
