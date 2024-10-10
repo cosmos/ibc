@@ -285,8 +285,8 @@ The channel creation process enables the creation of the two channels that can b
 | **Condition Type**            | **Description**  | **Code Checks** | 
 |-------------------------------|------------------| ----------------|
 | **pre-conditions**            | - `createClient` has been called at least once.| |
-| **error-conditions**           | 1. Invalid `clientId`.<br> 2. Unexpected keyPrefix format.<br> 3. Invalid channelId .<br> | 1. `client==null`.<br> 2. `isFormatOk(counterpartyKeyPrefix)==False`.<br> 3. `validatedChannelId(channelId)==False`.<br> - `getChannel(channelId)!=null`.<br>  |
-| **post-conditions (success)**  | 1. A channel is set in store and it's accessible with key `channelId`.<br> 2. The creator is set in store and it's accessible with key `channelId`.<br> 3. `nextSequenceSend` is initialized.<br> - client is stored in the router.<br> - an event with relevant fields is emitted | 1. `storedChannel[channelId]!=null`.<br> 2. `channelCreator[channelId]!=null`.<br> 3. `nextSequenceSend[channelId]==1`.<br> 4. `router[channelId]!=null`  |
+| **error-conditions**           | 1. Invalid `clientId`.<br> 2. `Invalid channelId`.<br> 3. Unexpected keyPrefix format  | 1. `client==null`.<br> 2.1 `validateId(channelId)==False`.<br> 2.2 `getChannel(channelId)!=null`.<br> 3. `isFormatOk(KeyPrefix)==False`.<br> |
+| **post-conditions (success)**  | 1. A channel is set in store and it's accessible with key `channelId`.<br> 2. The creator is set in store and it's accessible with key `channelId`.<br> 3. `nextSequenceSend` is initialized.<br> - an event with relevant fields is emitted | 1. `storedChannel[channelId]!=null`.<br> 2. `channelCreator[channelId]!=null`.<br> 3. `nextSequenceSend[channelId]==1`.<br> 4. `router[channelId]!=null`  |
 | **post-conditions (error)**    | - None of the post-conditions (success) is true.<br>| 1. `storedChannel[channelId]==null`.<br> 2. `channelCreator[channelId]==null`.<br> 3. `nextSequenceSend[channelId]!=1`.<br> 4.`router[channelId]==null` |
 
 ###### Pseudo-Code 
@@ -344,9 +344,9 @@ This process stores the `counterpartyChannelId` in the local channel structure, 
 | **Condition Type**            | **Description** | **Code Checks** |
 |-------------------------------|-----------------------------------|----------------------------|
 | **pre-conditions**            | - The `createChannel` has been called at least once| |
-| **error-conditions**           | - Incorrect channelId.<br> - Creator authentication failed | - `validatedChannelId(channelId)==False`.<br> - `getChannel(channelId)==null`.<br> - `channelCreator[channelId]!=msg.signer()`.<br> |
-| **post-conditions (success)**  | - The channel in store contains the counterpartyChannelId information and it's accessible with key channelId.<br> An event with relevant information has been emitted | - `storedChannel[channelId].counterpartyChannelId!=""`.<br> |
-| **post-conditions (error)**    | - On the first call, the channel in store contains the counterpartyChannelId as an empty field.<br> | - `storedChannel[channelId].counterpartyChannelId==""` |
+| **error-conditions**           | 1. Invalid `channelId`.<br> 2. Creator authentication failed | 1.1 `validateId(channelId)==False`.<br> 1.2 `getChannel(channelId)==null`.<br> 2. `channelCreator[channelId]!=msg.signer()`.<br> |
+| **post-conditions (success)**  | 1. The channel in store contains the `counterpartyChannelId` information and it's accessible with key `channelId`.<br> 2. An event with relevant information has been emitted | 1. `storedChannel[channelId].counterpartyChannelId!=null`.<br> |
+| **post-conditions (error)**    | 1. On the first call, the channel in store contains the `counterpartyChannelId` as an empty field.<br> | 1. `storedChannel[channelId].counterpartyChannelId==null` |
  
 ###### Pseudo-Code 
 
@@ -354,7 +354,6 @@ This process stores the `counterpartyChannelId` in the local channel structure, 
 function registerChannel(
     channelId: bytes, // local chain channel identifier
     counterpartyChannelId: bytes, // the counterparty's channel identifier
-    authentication: data, // implementation-specific authentication data
 ) {
     // Implementation-Specific Input Validation 
     // All implementations MUST ensure the inputs value are properly validated and compliant with this specification
@@ -368,6 +367,10 @@ function registerChannel(
     abortTransactionUnless(msg.signer()===channelCreator[channelId])
 
     // Channel manipulation
+    /* NEED DISCUSSION : Do we want to allow multiple call to this function? 
+     If not than we have to impose the check 
+     abortTransactionUnless(channel.counterpartyChannelId===null)
+     */  
     channel.counterpartyChannelId=counterpartyChannelId
 
     // Local Store
