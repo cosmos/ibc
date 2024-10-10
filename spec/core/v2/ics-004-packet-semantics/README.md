@@ -255,11 +255,11 @@ sequenceDiagram
 title: Setup with light clients previously created.  
 ---
 sequenceDiagram
-    Participant B Light Client with clientId=x  
+    Participant B Light Client as B Light Client with clientId=x  
     Participant Chain A
     Participant Relayer 
     Participant Chain B
-    Participant A Light Client with clientId=z   
+    Participant A Light Client as A Light Client with clientId=z   
     Relayer ->> Chain A : createChannel(x)
     Chain A ->> Relayer : channelId = y
     Relayer ->> Chain B : createChannel(z)
