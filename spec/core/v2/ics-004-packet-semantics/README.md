@@ -131,7 +131,7 @@ type IBCRouter struct {
 The registration of the application callbacks in the local `IBCRouter`, is responsibility of the chain modules. 
 The registration of the client in the local `IBCRouter` is responsibility of the ICS-02 initialise client procedure. 
 
-> **Note** The proper configuration of the IBCRouter is a prerequisite for starting the stream of packets.  
+> **Note:** The proper configuration of the IBCRouter is a prerequisite for starting the stream of packets.  
 
 - The `MAX_TIMEOUT_DELTA` is intendend as the max, absolute, difference between currentTimestamp and timeoutTimestamp that can be given in input to `sendPacket`. 
 
@@ -223,20 +223,22 @@ function getChannel(channelId: bytes): Channel {
 
 #### Setup
 
-To start the secure packet stream between the chains, chain `A` and chain `B` MUST execute the setup following this set of procedures:  
+In order to ensure valid communication, each IBC chain MUST be able to identify its counterparty. While a client can prove any key/value path on the counterparty, knowing which identifier the counterparty uses when it sends messages to us is essential to prevent confusion between messages intended for different chains. IBC classic was granting the chains this ability by enforcing handshakes for the creation of connections and channels. IBC version 2 simplifies the process by eliminating the need for any handshakes. Instead it provides a two or three step procedure that requires minimal coordination between the executing chains. Indeed the only information that MUST be shared among chains is the `channelId` pointing to the counterparty, information that can be obtained by social consensus outside the protocol. Thus, to achieve mutual and verifiable identification, IBC version 2 introduces the `createChannel` and `registerChannel` procedures. The setup process ensures that both chains recognize and agree on a mutually identified channel that will facilitate packet transmission.
+
+Thus, to start the secure packet stream between the chains, chain `A` and chain `B` MUST execute the setup following this set of procedures:  
 
 | **Procedure**               | **Responsible**     | **Outcome**                                                                |
 |-----------------------------|---------------------|-----------------------------------------------------------------------------|
 | **Channel Creation**         | Relayer   | A channel is created and linked to an underlying light client on both chains.           |
 | **Channel Registration**     | Relayer             | Registers the `counterpartyChannelId` on both chains, linking the channels.  |
 
-> **Note** The relayer is required to execute `createClient` (as defined in ICS-02) before calling `createChannel`, since the `clientId` input parameter MUST be known. The `createClient` message (as defined in ICS-02) may be bundled with the `createChannel` message in a single multiMsgTx. The setup procedure is a prerequisite for starting the packet stream. If any of the steps has been missed, this would result in an incorrect setup error during the packet handlers execution. 
+> **Note:** The relayer is required to execute `createClient` (as defined in ICS-02) before calling `createChannel`, since the `clientId` input parameter MUST be known. The `createClient` message (as defined in ICS-02) may be bundled with the `createChannel` message in a single multiMsgTx. The setup procedure is a prerequisite for starting the packet stream. If any of the steps has been missed, this would result in an incorrect setup error during the packet handlers execution. 
 
 Below we provide the setup sequence diagrams. 
 
 ```mermaid
 ---
-title: Setup with `createClient` and `createChannel` bundle together.  
+title: Two Step Setup Procedure :: `createClient` and `createChannel` are bundled together.  
 ---
 sequenceDiagram  
     Participant Chain A
@@ -252,7 +254,7 @@ sequenceDiagram
 
 ```mermaid
 ---
-title: Setup with light clients previously created.  
+title: Three Step Setup Procedure :: `createClient` has been previosly executed.   
 ---
 sequenceDiagram
     Participant B Light Client as B Light Client with clientId=x  
@@ -268,15 +270,17 @@ sequenceDiagram
     Relayer ->> Chain B : registerChannel(channelId = w, counterpartyChannelId = y) 
 ```
 
-Once the set up is executed the system should be in a similar state: 
+When the two or three step setup has been executed, the system should end up in a similar state: 
 
 ![Setup Final State](setup_final_state.png)
 
-While the client creation is defined by [ICS-2](../ics-002-client-semantics/README.md), the channel creation and registration procedures are defined by ICS-04 and are detailed below.
+Once two chains have set up clients, created channel and registered channels for each other with specific identifiers, they can send IBC packets using the packet interface defined before and the packet handlers that the ICS-04 defines below. The packets will be addressed **directly** with the channels that have semantic link to the underlying counterparty light clients. Thus there are **no** more handshakes necessary. Instead the packet sender must be capable of providing the correct <channel,channel> pair. If the setup has been executed correctly, then the correctness and soundness properties of IBC holds and the IBC packet flow is guaranteed to succeed. If a user sends a packet with the wrong destination channel it will be impossible for the intended destination to correctly verify the packet, and the packet will simply time out.
+
+While the above mentioned `createClient` procedure is defined by [ICS-2](../ics-002-client-semantics/README.md), the ICS-04 defines below the `createChannel` and `registerChannel` procedures.
 
 ##### Channel creation 
 
-The channel creation process enables the creation of the two channel ends that can be linked to establishes the communication pathway between two chains. 
+The channel creation process enables the creation of the two channels that can be linked to establishes the communication pathway between two chains. 
 
 ###### Conditions Table  
 
@@ -333,9 +337,7 @@ function createChannel(
 
 ##### Channel registration and counterparty idenfitifcation  
 
-Each IBC chain MUST have the ability to idenfity its counterparty to ensure valid communication. While a client can prove any key/value path on the counterparty, knowing which identifier the counterparty uses when it sends messages to us is essential to prevent confusion between messages intended for different chains. 
-
-To enable mutual and verifiable identification, IBC version 2 introduces a `registerChannel` procedure. The channel registration procedure ensures both chains have a mutually recognized channel that facilitates the packet transmission.
+IBC version 2 introduces a `registerChannel` procedure. The channel registration procedure ensures both chains have a mutually recognized channel that facilitates the packet transmission.
 
 This process stores the `counterpartyChannelId` in the local channel structure, ensuring both chains have mirrored <channel, channel> pairs. With the correct registration, the unique clients on each side provide an authenticated stream of packet data. Social consensus outside the protocol is relied upon to ensure only valid <channel, channel> pairs are used, representing connections between the correct chains. 
 
@@ -384,8 +386,6 @@ function registerChannel(
 ```
 
 The protocol uses as an authentication mechanisms checking that the `registerChannel` message is sent by the same relayer that initialized the client such that the `msg.signer()==channelCreator[channelId]`. This would make the client and channel parameters completely initialized by the relayer. Thus, users must verify that the client is pointing to the correct chain and that the counterparty identifier is correct as well before using the <channel,channel> pair.
-
-Thus, once two chains have set up clients, created channel and registered channels for each other with specific Identifiers, they can send IBC packets using the packet interface defined before and the packet handlers that the ICS-04 defines below. The packets will be addressed **directly** with the channels that have semantic link to the underlying light clients. Thus there are **no** more handshakes necessary. Instead the packet sender must be capable of providing the correct <channel,channel> pair. If the setup has been executed correctly, then the correctness and soundness properties of IBC holds and the IBC packet flow is guaranteed to succeed. If a user sends a packet with the wrong destination channel, then as we will see it will be impossible for the intended destination to correctly verify the packet, thus, the packet will simply time out.
 
 #### Packet Flow Function Handlers 
 
@@ -684,7 +684,7 @@ function recvPacket(
 
 ##### Writing acknowledgements
 
-> NOTE: The system handles synchronous and asynchronous acknowledgement logic. 
+> **Note:** The system handles synchronous and asynchronous acknowledgement logic. 
 
 The `writeAcknowledgement` function can be called either synchronously by the IBC handler during the `receivePacket` execution or it can be called asynchronously by an application callback. 
 
