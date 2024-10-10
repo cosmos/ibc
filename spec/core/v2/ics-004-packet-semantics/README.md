@@ -232,7 +232,7 @@ To start the secure packet stream between the chains, chain `A` and chain `B` MU
 
 > **Note** The relayer is required to execute `createClient` (as defined in ICS-02) before calling `createChannel`, since the `clientId` input parameter MUST be known. The `createClient` message (as defined in ICS-02) may be bundled with the `createChannel` message in a single multiMsgTx. The setup procedure is a prerequisite for starting the packet stream. If any of the steps has been missed, this would result in an incorrect setup error during the packet handlers execution. 
 
-Below we provide the setup sequence diagram. 
+Below we provide the setup sequence diagrams. 
 
 ```mermaid
 ---
@@ -255,11 +255,11 @@ sequenceDiagram
 title: Setup with light clients previously created.  
 ---
 sequenceDiagram
-    Participant B LightClient(clientId=x)  
+    Participant B Light Client with clientId=x  
     Participant Chain A
     Participant Relayer 
     Participant Chain B
-    Participant A LightClient(clientId=z)   
+    Participant A Light Client with clientId=z   
     Relayer ->> Chain A : createChannel(x)
     Chain A ->> Relayer : channelId = y
     Relayer ->> Chain B : createChannel(z)
