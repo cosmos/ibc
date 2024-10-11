@@ -96,7 +96,7 @@ func commitV2Packet(packet: Packet) {
 
 The acknowledgement in the version 2 specification is also modified to support multiple payloads in the packet that will each go to separate applications that can write their own acknowledgements. Each acknowledgment will be contained within the final packet acknowledgment in the same order that they were received in the original packet. Thus if a packet contains payloads for modules `A` and `B` in that order; the receiver will write an acknowledgment with the app acknowledgements `A` and `B` in the same order.
 
-The acknowledgement which is itself a list of app acknowledgement bytes must be first encoded with the canonical CBOR encoding format. This ensures that all compliant implementations reach the same acknowledgment commitment and that two different acknowledgements never create the same commitment.
+The acknowledgement which is itself a list of app acknowledgement bytes must be committed to by hashing each individual acknowledgement and concatenating them together. This ensures that all compliant implementations reach the same acknowledgment commitment and that two different acknowledgements never create the same commitment.
 
 An application may not need to return an acknowledgment. In this case, it may return a sentinel acknowledgement value `SENTINEL_ACKNOWLEDGMENT` which will be the single byte in the byte array: `bytes(0x01)`. In this case, the IBC `acknowledgePacket` handler will still do the core IBC acknowledgment logic but it will not call the application's acknowledgePacket callback.
 
@@ -116,10 +116,11 @@ All acknowledgements must be committed to and stored under the ICS24 acknowledgm
 
 ```typescript
 func commitV2Acknowledgment(ack: Acknowledgement) {
-    // TODO: Decide on canonical encoding scheme
-    // Suggested CBOR
-    ackBytes = cbor.encoding(ack)
-    ics24.commitAcknowledgment(ackBytes)
+    var ackCommitment: bytes
+    for appAck in ack.appAcknowledgement {
+        ackCommitment = append(ackCommitment, sha256.Hash(appAck))
+    }
+    return ackCommitment
 }
 ```
 
