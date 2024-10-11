@@ -291,8 +291,8 @@ Pre-conditions:
 | **Condition Type**            | **Description**  | **Code Checks** | 
 |-------------------------------|------------------| ----------------|
 | **error-conditions**           | 1. Invalid `clientId`<br> 2. `Invalid channelId`<br> 3. Unexpected keyPrefix format | 1. `client==null`<br> 2.1 `validateId(channelId)==False`<br> 2.2 `getChannel(channelId)!=null`<br> 3. `isFormatOk(KeyPrefix)==False`<br> |
-| **post-conditions (success)**  | 1. A channel is set in store<br> 2. The creator is set in store<br> 3. `nextSequenceSend` is initialized<br> 4. Event with relevant fields is emitted | 1. `storedChannel[channelId]!=null`<br> 2. `channelCreator[channelId]!=null` <br> 3. `nextSequenceSend[channelId]==1`<br> 4. checkEventEmission |
-| **post-conditions (error)**    | - None of the post-conditions (success) is true<br>| 1. `storedChannel[channelId]==null`<br> 2. `channelCreator[channelId]==null`<br> 3. `nextSequenceSend[channelId]!=1`<br> |
+| **post-conditions (success)**  | 1. A channel is set in store<br> 2. The creator is set in store<br> 3. `nextSequenceSend` is initialized<br> 4. Event with relevant fields is emitted | 1. `storedChannel[channelId]!=null`<br> 2. `channelCreator[channelId]!=null` <br> 3. `nextSequenceSend[channelId]==1`<br> 4. Check Event Emission |
+| **post-conditions (error)**    | None of the post-conditions (success) is true<br>| 1. `storedChannel[channelId]==null`<br> 2. `channelCreator[channelId]==null`<br> 3. `nextSequenceSend[channelId]!=1`<br> 4. No Event is Emitted<br> |
 
 ###### Pseudo-Code 
 
@@ -353,8 +353,8 @@ Pre-conditions:
 | **Condition Type**            | **Description** | **Code Checks** |
 |-------------------------------|-----------------------------------|----------------------------|
 | **error-conditions**           | 1. Invalid `channelId`<br> 2. Creator authentication failed | 1.1 `validateId(channelId)==False`<br> 1.2 `getChannel(channelId)==null`<br> 2. `channelCreator[channelId]!=msg.signer()`<br> |
-| **post-conditions (success)**  | 1. The channel in store contains the `counterpartyChannelId` information<br> 2. An event with relevant information has been emitted | 1. `storedChannel[channelId].counterpartyChannelId!=null`<br> |
-| **post-conditions (error)**    | 1. On the first call, the channel in store contains the `counterpartyChannelId` as an empty field<br> | 1. `storedChannel[channelId].counterpartyChannelId==null` |
+| **post-conditions (success)**  | 1. The channel in store contains the `counterpartyChannelId` information<br> 2. An event with relevant information has been emitted | 1. `storedChannel[channelId].counterpartyChannelId!=null`<br> 2. Check Event Emission |
+| **post-conditions (error)**    | 1. On the first call, the channel in store contains the `counterpartyChannelId` as an empty field<br> | 1. `storedChannel[channelId].counterpartyChannelId==null`<br> 2. No Event is Emitted<br>|
  
 ###### Pseudo-Code 
 
@@ -542,8 +542,8 @@ Pre-conditions:
 | **Condition Type**            |**Description** | **Code Checks**|
 |-------------------------------|--------------------------------------------------------|------------------------|
 | **Error-Conditions**           | 1. Invalid `clientId`<br> 2. Invalid `channelId`<br> 3. Invalid `timeoutTimestamp`<br> 4. Unsuccessful payload execution. | 1. `router.clients[channel.clientId]==null`<br> 2. `getChannel(sourceChannelId)==null`<br> 3.1 `timeoutTimestamp==0`<br> 3.2 `timeoutTimestamp < currentTimestamp()`<br> 3.3 `timeoutTimestamp > currentTimestamp() + MAX_TIMEOUT_DELTA`<br> 4. `onSendPacket(..)==False`<br> |
-| **Post-Conditions (Success)**  | 1. `onSendPacket` is executed and the application state is modified<br> 2. The `packetCommitment` is generated and stored under the expected `packetCommitmentPath`<br> 3. The sequence number bound to `sourceId` is incremented by 1<br> 4. Event with relevant information is emitted | 1. `onSendPacket(..)==True; app.State(beforeSendPacket)!=app.State(afterSendPacket)`<br> 2. `commitment=commitV2Packet(packet), provableStore.get(packetCommitmentPath(sourceChannelId, sequence))==commitment`<br> 3. `nextSequenceSend(beforeSendPacket[sourecChannelId])+1==SendPacket(..)`<br> 4. CheckEventEmission | 
-| **Post-Conditions (Error)**    | 1. if `onSendPacket` fails the application state is unchanged<br> 2. No `packetCommitment` has been generated<br> 3. The sequence number bound to `sourceId` is unchanged. | 1. `app.State(beforeSendPacket)==app.State(afterSendPacket)`<br> 2. `commitment=commitV2Packet(packet), provableStore.get(packetCommitmentPath(sourceChannelId, sequence))==commitment`<br> 3. `nextSequenceSend[sourecChannelId]==nextSequenceSend(beforeSendPacket)` |
+| **Post-Conditions (Success)**  | 1. `onSendPacket` is executed and the application state is modified<br> 2. The `packetCommitment` is generated and stored under the expected `packetCommitmentPath`<br> 3. The sequence number bound to `sourceId` is incremented by 1<br> 4. Event with relevant information is emitted | 1. `onSendPacket(..)==True; app.State(beforeSendPacket)!=app.State(afterSendPacket)`<br> 2. `commitment=commitV2Packet(packet), provableStore.get(packetCommitmentPath(sourceChannelId, sequence))==commitment`<br> 3. `nextSequenceSend(beforeSendPacket[sourecChannelId])+1==SendPacket(..)`<br> 4. Check Event Emission | 
+| **Post-Conditions (Error)**    | 1. if `onSendPacket` fails the application state is unchanged<br> 2. No `packetCommitment` has been generated<br> 3. The sequence number bound to `sourceId` is unchanged <br> 4. No Event Emission | 1. `app.State(beforeSendPacket)==app.State(afterSendPacket)`<br> 2. `commitment=commitV2Packet(packet), provableStore.get(packetCommitmentPath(sourceChannelId, sequence))==commitment`<br> 3. `nextSequenceSend[sourecChannelId]==nextSequenceSend(beforeSendPacket)` <br> 4. Check No Event is Emitted<br>|
 
 ###### Pseudo-Code 
 
@@ -641,8 +641,8 @@ Pre-conditions:
 | **Condition Type**            | **Description** | **Code Checks** |
 |-------------------------------|-----------------------------------------------|-----------------------------------------------|
 | **Error-Conditions**           | 1. invalid `packetCommitment`, 2.`packetReceipt` already exists<br> 3. Invalid timeoutTimestamp<br> 4. Unsuccessful payload execution. | 1.1 `verifyMembership(packetCommitment)==false`<br> 1.2 `provableStore.get(packetReceiptPath(packet.channelDestId, packet.sequence))!=null`<br> 3. `timeoutTimestamp === 0`<br> 3.1 `currentTimestamp() < packet.timeoutTimestamp)`<br> 4. `onReceivePacket(..)==False` |
-| **Post-Conditions (Success)**  | 1. `onReceivePacket` is executed and the application state is modified<br> 2. The `packetReceipt` is written<br>  | 1. `onReceivePacket(..)==True; app.State(beforeReceivePacket)!=app.State(afterReceivePacket)`<br> 2. `provableStore.get(packetReceiptPath(packet.channelDestId, packet.sequence))!=null`<br>  |
-| **Post-Conditions (Error)**    | 1. if `onReceivePacket` fails the application state is unchanged<br> 2. `packetReceipt is not written`<br> | 1. `app.State(beforeReceivePacket)==app.State(afterReceivePacket)`<br> 2. `provableStore.get(packetReceiptPath(packet.channelDestId, packet.sequence))==null` |
+| **Post-Conditions (Success)**  | 1. `onReceivePacket` is executed and the application state is modified<br> 2. The `packetReceipt` is written<br> 3. Event is Emitted<br>  | 1. `onReceivePacket(..)==True; app.State(beforeReceivePacket)!=app.State(afterReceivePacket)`<br> 2. `provableStore.get(packetReceiptPath(packet.channelDestId, packet.sequence))!=null`<br> 3. Check Event Emission<br> |
+| **Post-Conditions (Error)**    | 1. if `onReceivePacket` fails the application state is unchanged<br> 2. `packetReceipt is not written`<br> <br> 3. No Event Emission<br> | 1. `app.State(beforeReceivePacket)==app.State(afterReceivePacket)`<br> 2. `provableStore.get(packetReceiptPath(packet.channelDestId, packet.sequence))==null` <br> 3. Check No Event is Emitted<br> |
                                                                                                                           
 ###### Pseudo-Code 
 
@@ -748,8 +748,8 @@ Pre-conditions:
 | **Condition Type**            | **Description** | **Code Checks** |
 |-------------------------------|------------|------------|
 | **Error-Conditions**           | 1. acknowledgement is empty<br> 2. The `packetAcknowledgementPath` stores already a value. | 1. `len(acknowledgement) === 0`<br> 2. `provableStore.get(packetAcknowledgementPath(packet.channelDestId, packet.sequence) !== null` |
-| **Post-Conditions (Success)**  | 1. opaque acknowledgement has been written at `packetAcknowledgementPath` | 1. `provableStore.get(packetAcknowledgementPath(packet.channelDestId, packet.sequence) !== null` |
-| **Post-Conditions (Error)**    | 1. No value is stored at the `packetAcknowledgementPath`. | 1. `provableStore.get(packetAcknowledgementPath(packet.channelDestId, packet.sequence) === null` |
+| **Post-Conditions (Success)**  | 1. opaque acknowledgement has been written at `packetAcknowledgementPath` <br> 2. Event is Emitted<br> | 1. `provableStore.get(packetAcknowledgementPath(packet.channelDestId, packet.sequence) !== null` <br> 2. Check Event Emission<br> |
+| **Post-Conditions (Error)**    | 1. No value is stored at the `packetAcknowledgementPath`. <br> 2. No Event is Emitted<br> | 1. `provableStore.get(packetAcknowledgementPath(packet.channelDestId, packet.sequence) === null`<br> 2. Check No Event is Emitted<br> |
 
 ###### Pseudo-Code 
 
@@ -801,8 +801,8 @@ Pre-conditions:
 | **Condition Type** | **Description** | **Code Checks** |
 |-------------------------------|---------------------------------|---------------------------------|
 | **Error-Conditions**           | 1. `packetCommitment` already cleared out<br> 2. Unset Acknowledgment<br> 3. Unsuccessful payload execution. | 1. `provableStore.get(packetCommitmentPath(packet.channelSourceId, packet.sequence)) ===  null`<br> 2. `verifyMembership(packetacknowledgementPath,...,) ==  False`<br> 3. `onAcknowledgePacket(packet.channelSourceId,payload, acknowledgement) == False` | 
-| **Post-Conditions (Success)**  | 1. `onAcknowledgePacket` is executed and the application state is modified<br> 2. `packetCommitment` has been cleared out. | 1. `onAcknowledgePacket(..)==True; app.State(beforeAcknowledgePacket)!=app.State(afterAcknowledgePacket)`<br> 2. `provableStore.get(packetCommitmentPath(packet.channelSourceId, packet.sequence)) === null` |
-| **Post-Conditions (Error)**    | 1. If `onAcknowledgePacket` fails the application state is unchanged<br> 2. `packetCommitment` has not been cleared out<br> 3. acknowledgement is stil in store | 1. `onAcknowledgePacket(..)==False; app.State(beforeAcknowledgePacket)==app.State(afterAcknowledgePacket)`<br> 2. `provableStore.get(packetCommitmentPath(packet.channelSourceId, packet.sequence)) ===  commitV2Packet(packet)` 3. `verifyMembership(packetAcknowledgementPath,...,) ==  True`|
+| **Post-Conditions (Success)**  | 1. `onAcknowledgePacket` is executed and the application state is modified<br> 2. `packetCommitment` has been cleared out <br> 4. Event is Emission<br> | 1. `onAcknowledgePacket(..)==True; app.State(beforeAcknowledgePacket)!=app.State(afterAcknowledgePacket)`<br> 2. `provableStore.get(packetCommitmentPath(packet.channelSourceId, packet.sequence)) === null`, <br> 4. Check Event is Emitted<br> |
+| **Post-Conditions (Error)**    | 1. If `onAcknowledgePacket` fails the application state is unchanged<br> 2. `packetCommitment` has not been cleared out<br> 3. acknowledgement is stil in store <br> 4. No Event Emission<br> | 1. `onAcknowledgePacket(..)==False; app.State(beforeAcknowledgePacket)==app.State(afterAcknowledgePacket)`<br> 2. `provableStore.get(packetCommitmentPath(packet.channelSourceId, packet.sequence)) ===  commitV2Packet(packet)` 3. `verifyMembership(packetAcknowledgementPath,...,) ==  True` <br> 4. Check No Event is Emitted<br>|
 
 ###### Pseudo-Code 
 
@@ -913,8 +913,8 @@ Pre-conditions:
 | **Condition Type**            | **Description**| **Code Checks**|
 |-------------------------------|--------------------|--------------------|
 | **Error-Conditions**           | 1. `packetCommitment` already cleared out<br> 2. `packetReceipt` is not empty<br> 3. Unsuccessful payload execution<br> 4. `timeoutTimestamp` not elapsed on the receiving chain| 1. `provableStore.get(packetCommitmentPath(packet.channelSourceId, packet.sequence)) ===  null`<br> 2. `provableStore.get(packetReceiptPath(packet.channelDestId, packet.sequence))!=null`<br> 3. `onTimeoutPacket(packet.channelSourceId,payload) == False`<br> 4.1 `packet.timeoutTimestamp > 0` <br> 4.2 `proofTimestamp = client.getTimestampAtHeight(proofHeight); proofTimestamp >= packet.timeoutTimestamp` |
-| **Post-Conditions (Success)**  | 1. `onTimeoutPacket` is executed and the application state is modified <br> 2. `packetCommitment` has been cleared out <br> 3. `packetReceipt` is empty | 1. `onTimeoutPacket(..)==True; app.State(beforeTimeoutPacket)!=app.State(afterTimeoutPacket)`<br> 2. `provableStore.get(packetCommitmentPath(packet.channelSourceId, packet.sequence)) === null`<br> 3. `provableStore.get(packetReceiptPath(packet.channelDestId, packet.sequence))==null`<br> |
-| **Post-Conditions (Error)**    | 1. If `onTimeoutPacket` fails and the application state is unchanged <br> 2. `packetCommitment` is not cleared out | 1. `onTimeoutPacket(..)==True; app.State(beforeTimeoutPacket)!=app.State(afterTimeoutPacket)`<br> 2. `provableStore.get(packetCommitmentPath(packet.channelSourceId, packet.sequence)) === null` | 
+| **Post-Conditions (Success)**  | 1. `onTimeoutPacket` is executed and the application state is modified <br> 2. `packetCommitment` has been cleared out <br> 3. `packetReceipt` is empty <br> 4. Event is Emitted<br> | 1. `onTimeoutPacket(..)==True; app.State(beforeTimeoutPacket)!=app.State(afterTimeoutPacket)`<br> 2. `provableStore.get(packetCommitmentPath(packet.channelSourceId, packet.sequence)) === null`<br> 3. `provableStore.get(packetReceiptPath(packet.channelDestId, packet.sequence))==null`<br> 4. Check Event is Emitted<br> |
+| **Post-Conditions (Error)**    | 1. If `onTimeoutPacket` fails and the application state is unchanged <br> 2. `packetCommitment` is not cleared out <br> 3. No Event Emission<br> | 1. `onTimeoutPacket(..)==True; app.State(beforeTimeoutPacket)!=app.State(afterTimeoutPacket)`<br> 2. `provableStore.get(packetCommitmentPath(packet.channelSourceId, packet.sequence)) === null` <br> 3. Check No Event is Emitted<br>| 
 
 ###### Pseudo-Code 
 
