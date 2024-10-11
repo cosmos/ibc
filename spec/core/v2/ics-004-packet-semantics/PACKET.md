@@ -66,15 +66,29 @@ In version 2 of the IBC specification, implementations **MAY** support multiple 
 
 Each payload will include its own `Encoding` and `AppVersion` that will be sent to the application to instruct it how to decode and interpret the opaque application data. The application must be able to support the provided `Encoding` and `AppVersion` in order to process the `AppData`. If the receiving application does not support the encoding or app version, then the application **must** return an error to IBC core. If the receiving application does support the provided encoding and app version, then the application must decode the application as specified by the `Encoding` enum and then process the application as expected by the counterparty given the agreed-upon app version. Since the `Encoding` and `AppVersion` are now in each packet they can be changed on a per-packet basis and an application can simultaneously support many encodings and app versions from a counterparty. This is in stark contrast to IBC version 1 where the channel prenegotiated the channel version (which implicitly negotiates the encoding as well); so that changing the app version after channel opening is very difficult.
 
-The packet must be committed to as specified in the ICS24 specification. In order to do this we must first commit the packet data and timeout. The timeout is encoded in LittleEndian format. The packet data which is a list of payloads is encoded first in the canonical CBOR encoding format before being passed to the ICS24 packet commitment function. This ensures that a given packet will always create the exact same commitment by all compliant implementations and two different packets will never create the same commitment by a compliant implementation.
+The packet must be committed to as specified in the ICS24 specification. In order to do this we must first commit the packet data and timeout. The timeout is encoded in LittleEndian format. The packet data which is a list of payloads is committed to by hashing each individual field of the payload and successively concatenating them together. This ensures a standard unambigious commitment for a given packet. Thus a given packet will always create the exact same commitment by all compliant implementations and two different packets will never create the same commitment by a compliant implementation.
 
 ```typescript
+// commitPayload hashes all the fields of the packet data to create a standard size
+// preimage before committing it in the packet.
+func commitPayload(payload: Payload): bytes {
+    buffer = sha256.Hash(payload.sourcePort)
+    buffer = append(sha256.Hash(payload.destPort))
+    buffer = append(sha256.Hash(payload.version))
+    buffer = append(sha256.Hash(payload.encoding))
+    buffer = append(sha256.Hash(payload.appData))
+}
+
 func commitV2Packet(packet: Packet) {
     timeoutBytes = LittleEndian(timeout)
-    // TODO: Decide on canonical encoding scheme
-    // Suggested CBOR
-    appBytes = cbor.encoding(payload)
-    ics24.commitPacket(packet.destinationIdentifier, timeoutBytes, appBytes)
+    var appBytes: bytes
+    for p in packet.payload {
+        appBytes = append(appBytes, commitPayload(p))
+    }
+    buffer = sha256.Hash(destIdentifier)
+    buffer = append(buffer, sha256.hash(bigEndian(timeoutBytes)))
+    buffer = append(buffer, sha256.hash(data))
+    return sha256.Hash(buffer)
 }
 ```
 
