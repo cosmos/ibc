@@ -354,7 +354,7 @@ Pre-conditions:
 |-------------------------------|-----------------------------------|----------------------------|
 | **error-conditions**           | 1. Invalid `channelId`<br> 2. Creator authentication failed | 1.1 `validateId(channelId)==False`<br> 1.2 `getChannel(channelId)==null`<br> 2. `channelCreator[channelId]!=msg.signer()`<br> |
 | **post-conditions (success)**  | 1. The channel in store contains the `counterpartyChannelId` information<br> 2. An event with relevant information has been emitted | 1. `storedChannel[channelId].counterpartyChannelId!=null`<br> 2. Check Event Emission |
-| **post-conditions (error)**    | 1. On the first call, the channel in store contains the `counterpartyChannelId` as an empty field<br> | 1. `storedChannel[channelId].counterpartyChannelId==null`<br> 2. No Event is Emitted<br>|
+| **post-conditions (error)**    | 1. On the first call, the channel in store contains the `counterpartyChannelId` as an empty field<br> 2. No Event is Emitted<br> | 1. `storedChannel[channelId].counterpartyChannelId==null`<br> 2. Check No Event is Emitted<br>|
  
 ###### Pseudo-Code 
 
@@ -662,8 +662,6 @@ function recvPacket(
     client = router.clients[channel.clientId]  
     assert(client !== null)
     
-    //assert(packet.sourceId == channel.counterpartyChannelId) This should be always true, redundant // NEED DISCUSSION 
-
     // verify timeout
     assert(packet.timeoutTimestamp === 0)  
     assert(currentTimestamp() < packet.timeoutTimestamp)
