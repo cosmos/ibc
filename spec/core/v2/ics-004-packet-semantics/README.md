@@ -1,6 +1,6 @@
 ---
 ics: 4
-title: Packet Semantics
+title: Channel and Packet Semantics
 stage: draft
 category: IBC/TAO
 kind: instantiation
@@ -111,9 +111,11 @@ interface Acknowledgement {
 }
 ```
 
-An application may not need to return an acknowledgment with after processing relevant data. In this case, it is advised to return a sentinel acknowledgement value `SENTINEL_ACKNOWLEDGMENT`, which will be the single byte in the byte array: `bytes(0x01)`. 
+An application may not need to return an acknowledgment after processing relevant data. In this case, implementors may decide to return a sentinel acknowledgement value `SENTINEL_ACKNOWLEDGMENT`, which will be the single byte in the byte array: `bytes(0x01)`. 
 
-When the receiver chain returns this `SENTINEL_ACKNOWLEDGMENT` it allows the sender chain to still call the `acknowledgePacket` handler, e.g. to delete the packet commitment, without triggering the `onAcknowledgePacket` callback.   
+If the receiver chain returns the `SENTINEL_ACKNOWLEDGMENT`, the sender chain will execute the `acknowledgePacket` handler without triggering the `onAcknowledgePacket` callback.  
+
+As we will see later, the presence in the provable store of the acknowledgement is a prerequisite for executing the `acknowledgePacket` handler. If the receiver chain does not write the acknowledgement, will be impossible for the sender chain to execute `acknowledgePacket` to delete the packet commitment. 
 
 > **Example**: In the multi-data packet world, if a packet within 3 payloads intended for 3 different application is sent out, the expectation is that each payload is processed in the same order in which it was placed in the packet. Similarly, the `appAcknowledgement` array is expected to be populated within the same order. 
 
@@ -129,15 +131,15 @@ type IBCRouter struct {
 The registration of the application callbacks in the local `IBCRouter`, is responsibility of the chain modules. 
 The registration of the client in the local `IBCRouter` is responsibility of the ICS-02 initialise client procedure. 
 
-> **Note:** The proper configuration of the IBCRouter is a prerequisite for starting the stream of packets.  
+> **Note:** The proper configuration of the `IBCRouter` is a prerequisite for starting the stream of packets.  
 
-- The `MAX_TIMEOUT_DELTA` is intendend as the max, absolute, difference between currentTimestamp and timeoutTimestamp that can be given in input to `sendPacket`. 
+- The `MAX_TIMEOUT_DELTA` is intendend as the max, absolute, difference between `currentTimestamp` and `timeoutTimestamp` that can be given in input to `sendPacket`. 
 
 ```typescript
 const MAX_TIMEOUT_DELTA = Implementation specific  // We recommend MAX_TIMEOUT_DELTA = TDB 
 ```
 
-Additionally the ICS-04 specification defines a set of conditions that the implementations of the IBC protocol version 2 MUST adhere to. These conditions ensure the proper execution of the function handlers by establishing requirements before execution `pre-conditions`, the conditions that MUST trigger errors during execution `error-conditions`, expected outcomes after succesful execution `post-conditions-on-success`, and expected outcomes after error execution `post-conditions-on-error`.
+Additionally, the ICS-04 specification defines a set of conditions that the implementations of the IBC protocol version 2 MUST adhere to. These conditions ensure the proper execution of the function handlers by establishing requirements before execution `pre-conditions`, the conditions that MUST trigger errors during execution `error-conditions`, expected outcomes after succesful execution `post-conditions-on-success`, and expected outcomes after error execution `post-conditions-on-error`.
 
 ### Desired Properties
 
@@ -172,8 +174,6 @@ Additionally the ICS-04 specification defines a set of conditions that the imple
 The ICS-04 use the protocol paths, defined in [ICS-24](../ics-024-host-requirements/README.md), `packetCommitmentPath`, `packetRecepitPath` and `packetAcknowledgementPath`. The paths MUST be used as the referece locations in the provableStore to prove respectilvey the packet commitment, the receipt and the acknowledgment to the counterparty chain. 
 
 Thus, constant-size commitments to packet data fields are stored under the packet sequence number:
-
-// NEED DISCUSSION -- we could use "commitments/{sourceId}/{sequence}" or "0x01/{sourceId}/{sequence}". For now we keep going with more or less standard paths 
 
 ```typescript
 function packetCommitmentPath(channelSourceId: bytes, sequence: BigEndianUint64): Path {
@@ -225,19 +225,17 @@ In order to ensure valid communication, each IBC chain MUST be able to identify 
 
 To start the secure packet stream between the chains, chain `A` and chain `B` MUST execute the setup following this set of procedures:  
 
-| **Procedure**               | **Responsible**     | **Outcome**                                                                |
+| **Procedure**               | **Responsible**     | **Outcome**                                                                 |
 |-----------------------------|---------------------|-----------------------------------------------------------------------------|
-| **Channel Creation**         | Relayer   | A channel is created and linked to an underlying light client on both chains.           |
-| **Channel Registration**     | Relayer             | Registers the `counterpartyChannelId` on both chains, linking the channels.  |
+| **Channel Creation**         | Relayer            | A channel is created and linked to an underlying light client on both chains|
+| **Channel Registration**     | Relayer            | Registers the `counterpartyChannelId` on both chains, linking the channels  |
 
-The relayer is required to execute `createClient` (as defined in ICS-02) before calling `createChannel`, since the `clientId` input parameter MUST be known at execution time. Eventually, the `createClient` message can be bundled with the `createChannel` message in a single multiMsgTx. 
+The relayer is required to execute `createClient` (as defined in ICS-02) before calling `createChannel`, since the `clientId`, input parameter for `createChannel`, MUST be known at execution time. Eventually, the `createClient` message can be bundled with the `createChannel` message in a single multiMsgTx. 
 
 Calling indipendently `createClient`, `createChannel` and `registerChannel` result in a three step setup process.
 Bundling `createClient` and `createChannel` into a single operation simplifies this process and reduces the number of interactions required between the relayer and the chains to two.
 
-The setup procedure is a prerequisite for starting the packet stream. If any of the steps has been missed, this would trigger an error during the packet handlers execution. 
-
-Below we provide the setup sequence diagrams. 
+The setup procedure is a prerequisite for starting the packet stream. If any of the steps has been missed, this would trigger an error during the packet handlers execution. Below we provide the setup sequence diagrams. 
 
 ```mermaid
 ---
@@ -273,7 +271,7 @@ sequenceDiagram
     Relayer ->> Chain B : registerChannel(channelId = w, counterpartyChannelId = y) 
 ```
 
-When the two or three step setup has been executed, the system should end up in a similar state: 
+After completing the two- or three-step setup, the system should end up in a similar state. 
 
 ![Setup Final State](setup_final_state.png)
 
@@ -287,9 +285,12 @@ The channel creation process enables the creation of the two channels that can b
 
 ###### Conditions Table  
 
+Pre-conditions: 
+
+- `createClient` has been previously executed such that the `clientId` that will be provided in input to `createChannel` exist and it's valid. 
+
 | **Condition Type**            | **Description**  | **Code Checks** | 
 |-------------------------------|------------------| ----------------|
-| **pre-conditions**            | - `createClient` has been called at least once| |
 | **error-conditions**           | 1. Invalid `clientId`<br> 2. `Invalid channelId`<br> 3. Unexpected keyPrefix format | 1. `client==null`<br> 2.1 `validateId(channelId)==False`<br> 2.2 `getChannel(channelId)!=null`<br> 3. `isFormatOk(KeyPrefix)==False`<br> |
 | **post-conditions (success)**  | 1. A channel is set in store<br> 2. The creator is set in store<br> 3. `nextSequenceSend` is initialized<br> 4. Event with relevant fields is emitted | 1. `storedChannel[channelId]!=null`<br> 2. `channelCreator[channelId]!=null` <br> 3. `nextSequenceSend[channelId]==1`<br> 4. checkEventEmission |
 | **post-conditions (error)**    | - None of the post-conditions (success) is true<br>| 1. `storedChannel[channelId]==null`<br> 2. `channelCreator[channelId]==null`<br> 3. `nextSequenceSend[channelId]!=1`<br> |
@@ -344,11 +345,14 @@ IBC version 2 introduces a `registerChannel` procedure. The channel registration
 
 This process stores the `counterpartyChannelId` in the local channel structure, ensuring both chains have mirrored <channel, channel> pairs. With the correct registration, the unique clients on each side provide an authenticated stream of packet data. Social consensus outside the protocol is relied upon to ensure only valid <channel, channel> pairs are used, representing connections between the correct chains. 
 
+Pre-conditions:
+
+- The `createChannel` has been previously executed such that the `channelId` that will be provided in input to `registerChannel` exist and it's valid.
+
 ###### Conditions Table 
 
 | **Condition Type**            | **Description** | **Code Checks** |
 |-------------------------------|-----------------------------------|----------------------------|
-| **pre-conditions**            | - The `createChannel` has been called at least once| |
 | **error-conditions**           | 1. Invalid `channelId`<br> 2. Creator authentication failed | 1.1 `validateId(channelId)==False`<br> 1.2 `getChannel(channelId)==null`<br> 2. `channelCreator[channelId]!=msg.signer()`<br> |
 | **post-conditions (success)**  | 1. The channel in store contains the `counterpartyChannelId` information<br> 2. An event with relevant information has been emitted | 1. `storedChannel[channelId].counterpartyChannelId!=null`<br> |
 | **post-conditions (error)**    | 1. On the first call, the channel in store contains the `counterpartyChannelId` as an empty field<br> | 1. `storedChannel[channelId].counterpartyChannelId==null` |
@@ -404,19 +408,19 @@ In the IBC protocol version 2, the packet flow is managed by four key function h
 
 Note that the execution of the four handlers, upon a unique packet, cannot be combined in any arbitrary order. 
 
-Given a scenario where we are sending a packet from `A` to `B` the protocol follows the following rules:  
+Given a scenario where we are sending a packet from a sender chain `A` to a receiver chain `B` the protocol follows the following rules:  
 
-- Chain `A` can call either {`sendPacket`,`acknowledgePacket`,`timeoutPacket`}
-- Chain `B` can call only {`receivePacket`} 
-- Chain `B` can only execute the `receivePacket` if `sendPacket` has been executed by chain `A` 
-- Chain `A` can only execute `timeoutPacket` if `sendPacket` has been executed by chain `A` and `receivePacket` has not been executed by chain `B`.
-- Chain `A` can only execute `acknowledgePacket` if `sendPacket` has been executed by chain `A` and `receivePacket` has been executed by chain `B`. 
+- Sender `A` can call either {`sendPacket`,`acknowledgePacket`,`timeoutPacket`}
+- Receiver `B` can call only {`receivePacket`} 
+- Receiver `B` can only execute the `receivePacket` if `sendPacket` has been executed by sender `A` 
+- Sender `A` can only execute `timeoutPacket` if `sendPacket` has been executed by sender `A` and `receivePacket` has not been executed by receiver `B`.
+- Sender `A` can only execute `acknowledgePacket` if `sendPacket` has been executed by sender `A` and `receivePacket` has been executed by receiver `B`. 
 
 Below we provide the three possible example scenarios described with sequence diagrmas. 
 
 ---
 
-Scenario execution with synchronous acknowledgement `A` to `B` - set of actions: `sendPacket` -> `receivePacket` -> `acknowledgePacket`  
+Scenario execution with synchronous acknowledgement `A` to `B` - set of actions: `A.sendPacket` -> `B.receivePacket` -> `A.acknowledgePacket`  
 
 ```mermaid
 sequenceDiagram
@@ -435,7 +439,9 @@ sequenceDiagram
     Chain B ->> Chain B: receivePacket
     Chain B -->> A Light Client: verifyMembership(packetCommitment)
     Chain B --> Chain B : app execution
+    Note over Chain B: start sync ack writing
     Chain B --> Chain B: writeAck
+    Note over Chain B: end async ack writing
     Chain B --> Chain B: writePacketReceipt
     Note over Chain B: end receive packet execution
     Relayer ->> Chain A: relayAck
@@ -450,9 +456,9 @@ sequenceDiagram
 
 ---
 
-Scenario execution with asynchronous acknowledgement `A` to `B` - set of actions: `sendPacket` -> `receivePacket` -> `acknowledgePacket`  
+Scenario execution with asynchronous acknowledgement `A` to `B` - set of actions: `A.sendPacket` -> `B.receivePacket` -> `A.acknowledgePacket`  
 
-Note that the key difference with the synchronous scenario is that the receivePacket writes only the packetReceipt and not the acknowledgement. The acknowledgement is instead written asynchronously for effect of the application callback call to the core function `writeAcknowledgement`, call that happens after the `receivePacket` execution.  
+Note that the key difference with the synchronous scenario is that the `writeAcknowledgement` function is called after that `receivePacket` completes its execution.   
 
 ```mermaid
 sequenceDiagram
@@ -488,7 +494,7 @@ sequenceDiagram
 
 ---
 
-Scenario timeout execution `A` to `B` - set of actions: `sendPacket` -> `timeoutPacket`  
+Scenario timeout execution `A` to `B` - set of actions: `A.sendPacket` -> `A.timeoutPacket`  
 
 ```mermaid
 sequenceDiagram
@@ -501,7 +507,6 @@ sequenceDiagram
     Chain A ->> Chain A : sendPacket
     Chain A --> Chain A : app execution
     Chain A --> Chain A : packetCommitment 
-    Note over Chain B: start send packet execution
     Note over Chain A: start timeout packet execution
     Chain A ->> Chain A : TimeoutPacket
     Chain A -->> B Light Client: verifyNonMembership(PacketReceipt)
@@ -512,8 +517,6 @@ sequenceDiagram
 ```
 
 ##### Sending packets
-
->**Note** Prerequisites: The `IBCRouter`s and the `channel`s have been properly configured on both chains.
 
 The `sendPacket` function is called by the IBC handler when an IBC packet is submitted to the newtwork in order to send *data* in the form of an IBC packet. ∀ `Payload` included in the `packet.data`, which may refer to a different application, the application specific callbacks are retrieved from the IBC router and the `onSendPacket` is the then triggered on the specified application. The `onSendPacket` executes the application logic. Once all payloads contained in the `packet.data` have been acted upon, the packet commitment is generated and the sequence number bound to the `channelSourceId` is incremented. 
 
@@ -530,11 +533,15 @@ The IBC handler performs the following steps in order:
 
 Note that the full packet is not stored in the state of the chain - merely a short hash-commitment to the data & timeout value. The packet data can be calculated from the transaction execution and possibly returned as log output which relayers can index.
 
-###### Conditions Table 
+###### Execution requirements and outcomes  
+
+Pre-conditions: 
+
+- The `IBCRouters` and the `channels` have been properly configured on both chains.
+- Sender and receiver chains are assumed to be in a setup final state
 
 | **Condition Type**            |**Description** | **Code Checks**|
 |-------------------------------|--------------------------------------------------------|------------------------|
-| **pre-conditions**            | - Sender and receiver chains are assumed to be in a setup final state<br> |                     |
 | **Error-Conditions**           | 1. Invalid `clientId`<br> 2. Invalid `channelId`<br> 3. Invalid `timeoutTimestamp`<br> 4. Unsuccessful payload execution. | 1. `router.clients[channel.clientId]==null`<br> 2. `getChannel(sourceChannelId)==null`<br> 3.1 `timeoutTimestamp==0`<br> 3.2 `timeoutTimestamp < currentTimestamp()`<br> 3.3 `timeoutTimestamp > currentTimestamp() + MAX_TIMEOUT_DELTA`<br> 4. `onSendPacket(..)==False`<br> |
 | **Post-Conditions (Success)**  | 1. `onSendPacket` is executed and the application state is modified<br> 2. The `packetCommitment` is generated and stored under the expected `packetCommitmentPath`<br> 3. The sequence number bound to `sourceId` is incremented by 1<br> 4. Event with relevant information is emitted | 1. `onSendPacket(..)==True; app.State(beforeSendPacket)!=app.State(afterSendPacket)`<br> 2. `commitment=commitV2Packet(packet), provableStore.get(packetCommitmentPath(sourceChannelId, sequence))==commitment`<br> 3. `nextSequenceSend(beforeSendPacket[sourecChannelId])+1==SendPacket(..)`<br> 4. CheckEventEmission | 
 | **Post-Conditions (Error)**    | 1. if `onSendPacket` fails the application state is unchanged<br> 2. No `packetCommitment` has been generated<br> 3. The sequence number bound to `sourceId` is unchanged. | 1. `app.State(beforeSendPacket)==app.State(afterSendPacket)`<br> 2. `commitment=commitV2Packet(packet), provableStore.get(packetCommitmentPath(sourceChannelId, sequence))==commitment`<br> 3. `nextSequenceSend[sourecChannelId]==nextSequenceSend(beforeSendPacket)` |
@@ -624,11 +631,16 @@ The IBC handler performs the following steps in order:
 
 We pass the address of the `relayer` that signed and submitted the packet to enable a module to optionally provide some rewards. This provides a foundation for fee payment, but can be used for other techniques as well (like calculating a leaderboard).
 
-###### Conditions Table 
+###### Execution requirements and outcomes  
+
+Pre-conditions: 
+
+- The sender chain has executed `sendPacket` --> stored a verifiable `packetCommitment` 
+- `TimeoutTimestamp` is not elapsed on the receiving chain
+- `PacketReceipt` for the specific keyPrefix and sequence MUST be empty --> receiver chain has not executed `receivePacket`
 
 | **Condition Type**            | **Description** | **Code Checks** |
 |-------------------------------|-----------------------------------------------|-----------------------------------------------|
-| **pre-conditions**            | - The sender chain has stored a verifiable `packetCommitment`<br> - `TimeoutTimestamp` is not elapsed on the receiving chain<br> - `PacketReceipt` for the specific keyPrefix and sequence MUST be empty (implies `receivePacket` has not been called yet). | |
 | **Error-Conditions**           | 1. invalid `packetCommitment`, 2.`packetReceipt` already exists<br> 3. Invalid timeoutTimestamp<br> 4. Unsuccessful payload execution. | 1.1 `verifyMembership(packetCommitment)==false`<br> 1.2 `provableStore.get(packetReceiptPath(packet.channelDestId, packet.sequence))!=null`<br> 3. `timeoutTimestamp === 0`<br> 3.1 `currentTimestamp() < packet.timeoutTimestamp)`<br> 4. `onReceivePacket(..)==False` |
 | **Post-Conditions (Success)**  | 1. `onReceivePacket` is executed and the application state is modified<br> 2. The `packetReceipt` is written<br>  | 1. `onReceivePacket(..)==True; app.State(beforeReceivePacket)!=app.State(afterReceivePacket)`<br> 2. `provableStore.get(packetReceiptPath(packet.channelDestId, packet.sequence))!=null`<br>  |
 | **Post-Conditions (Error)**    | 1. if `onReceivePacket` fails the application state is unchanged<br> 2. `packetReceipt is not written`<br> | 1. `app.State(beforeReceivePacket)==app.State(afterReceivePacket)`<br> 2. `provableStore.get(packetReceiptPath(packet.channelDestId, packet.sequence))==null` |
@@ -715,24 +727,27 @@ function recvPacket(
 
 ##### Writing acknowledgements
 
-> **Note:** The system handles synchronous and asynchronous acknowledgement logic. 
+> **Note:** The system handles synchronous and asynchronous acknowledgement logic. Writing acknowledgements ensures that application modules callabacks have been triggered and have returned their specific acknowledgment in order to write data which resulted from processing an IBC packet that the sending chain can then verify. Writing acknowledgement serves as a sort of "execution receipt" or "RPC call response".
 
-The `writeAcknowledgement` function can be called either synchronously by the IBC handler during the `receivePacket` execution or it can be called asynchronously by an application callback. 
+The `writeAcknowledgement` function can be activated either synchronously by the IBC handler during the `receivePacket` execution or it can be activated asynchronously by an application callback after the `receivePacket` execution. 
 
-Writing acknowledgements ensures that application modules callabacks have been triggered and have returned their specific acknowledgment in order to write data which resulted from processing an IBC packet that the sending chain can then verify. Writing acknowledgement serves as a sort of "execution receipt" or "RPC call response".
-
-`writeAcknowledgement` can be called either in a `receivePacket`, or after the `receivePacket` execution in a later on application callback. Given that the `receivePacket` logic is always execute before the `writeAcknowledgement` it *does not* check if the packet being acknowledged was actually received, because this would result in proofs being verified twice for acknowledged packets. This aspect of correctness is the responsibility of the IBC handler.
+Given that the `receivePacket` logic is expected to be executed before the `writeAcknowledgement` is activated, `writeAcknowledgement` *does not* check if the packet being acknowledged was actually received, because this would result in proofs being verified twice for acknowledged packets. This aspect of correctness is the responsibility of the IBC handler.
 
 The IBC handler performs the following steps in order:
 
 - Checks that an acknowledgement for this packet has not yet been written
 - Sets the opaque acknowledgement value at a store path unique to the packet
 
-###### Conditions Table 
+###### Execution requirements and outcomes 
+
+Pre-conditions: 
+
+- `receivePacket` has been called by receiver chain
+- `onReceivePacket` application callback has been executed on the receiver chain 
+- `writeAcknowledgement` has not been executed yet 
 
 | **Condition Type**            | **Description** | **Code Checks** |
 |-------------------------------|------------|------------|
-| **pre-conditions**            | - `receivePacket` has been called on receiver chain<br> - `onReceivePacket` application callback has been executed<br> - `writeAcknowledgement` has not been called yet | |
 | **Error-Conditions**           | 1. acknowledgement is empty<br> 2. The `packetAcknowledgementPath` stores already a value. | 1. `len(acknowledgement) === 0`<br> 2. `provableStore.get(packetAcknowledgementPath(packet.channelDestId, packet.sequence) !== null` |
 | **Post-Conditions (Success)**  | 1. opaque acknowledgement has been written at `packetAcknowledgementPath` | 1. `provableStore.get(packetAcknowledgementPath(packet.channelDestId, packet.sequence) !== null` |
 | **Post-Conditions (Error)**    | 1. No value is stored at the `packetAcknowledgementPath`. | 1. `provableStore.get(packetAcknowledgementPath(packet.channelDestId, packet.sequence) === null` |
@@ -768,17 +783,20 @@ function writeAcknowledgement(
 
 ##### Processing acknowledgements
 
-The `acknowledgePacket` function is called by the IBC handler to process the acknowledgement of a packet previously sent by the source chain that has been received on the destination chain. The `acknowledgePacket` also cleans up the packet commitment, which is no longer necessary since the packet has been received and acted upon.
+The `acknowledgePacket` function is called by the IBC handler to process the acknowledgement of a packet previously sent by the sender chain that has been received on the receiver chain. The `acknowledgePacket` also cleans up the packet commitment, which is no longer necessary since the packet has been received and acted upon.
 
 The IBC hanlder MUST atomically trigger the callbacks execution of appropriate application acknowledgement-handling logic in conjunction with calling `acknowledgePacket`.
 
-###### Conditions Table  
+###### Execution requirements and outcomes  
 
-Given that at this point of the packet flow, chain `B` has sucessfully received a packet, the pre-conditions defines what MUST be accomplished before chain `A` can properly execute the `acknowledgePacket` for the IBC v2 packet. 
+Pre-conditions: 
+
+- Sender chain has sent a packet. 
+- Receiver chain has successfully received a packet and has written the acknowledgment --> `packetReceipt` and `acknowledgment` have been written in the provable store. Note that if the `acknowledgment` is written, this implies that `receivePacket` has been executed, thus there is no need to verify the presence of the `packetReceipt`.  
+- Sender chain has not cleared out the `packetCommitment`  
 
 | **Condition Type** | **Description** | **Code Checks** |
 |-------------------------------|---------------------------------|---------------------------------|
-| **pre-conditions**            | - receiver chain has successfully received a packet and has written the acknowledgment<br> - `packetCommitment` has not been cleared out yet. ||
 | **Error-Conditions**           | 1. `packetCommitment` already cleared out<br> 2. Unset Acknowledgment<br> 3. Unsuccessful payload execution. | 1. `provableStore.get(packetCommitmentPath(packet.channelSourceId, packet.sequence)) ===  null`<br> 2. `verifyMembership(packetacknowledgementPath,...,) ==  False`<br> 3. `onAcknowledgePacket(packet.channelSourceId,payload, acknowledgement) == False` | 
 | **Post-Conditions (Success)**  | 1. `onAcknowledgePacket` is executed and the application state is modified<br> 2. `packetCommitment` has been cleared out. | 1. `onAcknowledgePacket(..)==True; app.State(beforeAcknowledgePacket)!=app.State(afterAcknowledgePacket)`<br> 2. `provableStore.get(packetCommitmentPath(packet.channelSourceId, packet.sequence)) === null` |
 | **Post-Conditions (Error)**    | 1. If `onAcknowledgePacket` fails the application state is unchanged<br> 2. `packetCommitment` has not been cleared out<br> 3. acknowledgement is stil in store | 1. `onAcknowledgePacket(..)==False; app.State(beforeAcknowledgePacket)==app.State(afterAcknowledgePacket)`<br> 2. `provableStore.get(packetCommitmentPath(packet.channelSourceId, packet.sequence)) ===  commitV2Packet(packet)` 3. `verifyMembership(packetAcknowledgementPath,...,) ==  True`|
@@ -787,7 +805,7 @@ Given that at this point of the packet flow, chain `B` has sucessfully received 
 
 The ICS04 provides an example pseudo-code that enforce the above described conditions so that the following sequence of steps must occur for a packet to be acknowledged from module *1* on machine *A* to module *2* on machine *B*.
 
-// NEED DISCUSSION:   What to do with the relayer? Do we want to keep it? // We pass the `relayer` address just as in [Receiving packets](#receiving-packets) to allow for possible incentivization here as well.
+>**Note:** We pass the `relayer` address just as in [Receiving packets](#receiving-packets) to allow for possible incentivization here as well.
 
 ```typescript
 function acknowledgePacket(
@@ -881,11 +899,17 @@ Calling modules MAY atomically execute appropriate application timeout-handling 
 The `timeoutPacket` checks the absence of the receipt key (which will have been written if the packet was received). 
 We pass the `relayer` address just as in [Receiving packets](#receiving-packets) to allow for possible incentivization here as well.
 
-###### Conditions Table  
+###### Execution requirements and outcomes  
+
+Pre-conditions: 
+
+- Sender chain has sent a packet
+- Receiver chain has not called `receivePacket` --> `packetReceipt` is empty  
+- `packetCommitment` has not been cleared out yet
+- `timeoutTimestamp` is elapsed on the receiver chain 
 
 | **Condition Type**            | **Description**| **Code Checks**|
 |-------------------------------|--------------------|--------------------|
-| **pre-conditions**            | - `packetReceipt` is empty<br> - `packetCommitment` has not been cleared out yet | |
 | **Error-Conditions**           | 1. `packetCommitment` already cleared out<br> 2. `packetReceipt` is not empty<br> 3. Unsuccessful payload execution<br> 4. `timeoutTimestamp` not elapsed on the receiving chain| 1. `provableStore.get(packetCommitmentPath(packet.channelSourceId, packet.sequence)) ===  null`<br> 2. `provableStore.get(packetReceiptPath(packet.channelDestId, packet.sequence))!=null`<br> 3. `onTimeoutPacket(packet.channelSourceId,payload) == False`<br> 4.1 `packet.timeoutTimestamp > 0` <br> 4.2 `proofTimestamp = client.getTimestampAtHeight(proofHeight); proofTimestamp >= packet.timeoutTimestamp` |
 | **Post-Conditions (Success)**  | 1. `onTimeoutPacket` is executed and the application state is modified <br> 2. `packetCommitment` has been cleared out <br> 3. `packetReceipt` is empty | 1. `onTimeoutPacket(..)==True; app.State(beforeTimeoutPacket)!=app.State(afterTimeoutPacket)`<br> 2. `provableStore.get(packetCommitmentPath(packet.channelSourceId, packet.sequence)) === null`<br> 3. `provableStore.get(packetReceiptPath(packet.channelDestId, packet.sequence))==null`<br> |
 | **Post-Conditions (Error)**    | 1. If `onTimeoutPacket` fails and the application state is unchanged <br> 2. `packetCommitment` is not cleared out | 1. `onTimeoutPacket(..)==True; app.State(beforeTimeoutPacket)!=app.State(afterTimeoutPacket)`<br> 2. `provableStore.get(packetCommitmentPath(packet.channelSourceId, packet.sequence)) === null` | 
@@ -965,7 +989,7 @@ There is no race condition between a packet timeout and packet confirmation, as 
 
 If a client has been frozen while packets are in-flight, the packets can no longer be received on the destination chain and can be timed-out on the source chain.
 
-### Properties & Invariants
+### Properties 
 
 - Packets are delivered exactly once, assuming that the chains are live within the timeout window, and in case of timeout can be timed-out exactly once on the sending chain.
 
@@ -979,8 +1003,8 @@ Future updates of this specification will enable the atomic processing of multip
 
 ## Example Implementations
 
-- Implementation of ICS 04 in Go can be found in [ibc-go repository](https://github.com/cosmos/ibc-go).
-- Implementation of ICS 04 in Rust can be found in [ibc-rs repository](https://github.com/cosmos/ibc-rs).
+- Implementation of ICS 04 version 2 in Go can be found in [ibc-go repository](https://github.com/cosmos/ibc-go).
+- Implementation of ICS 04 version 2 in Rust can be found in [ibc-rs repository](https://github.com/cosmos/ibc-rs).
 
 ## History
 
