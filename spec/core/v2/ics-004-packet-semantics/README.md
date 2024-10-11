@@ -6,15 +6,14 @@ category: IBC/TAO
 kind: instantiation
 requires: 2, 24, packet-data 
 version compatibility: ibc-go v10.0.0
-author: Christopher Goes <cwgoes@tendermint.com>
+author: Stefano Angieri <stefano@interchain.io>, Aditya Sripal <aditya@interchain.io>
 created: 2019-03-07
 modified: 2019-08-25
 ---
 
 TODO : 
 
-- Resolve Need discussion
-- Improve Sketchs  
+- Rename file 
 - Improve conditions set / think about more condition an proper presentation 
 - Review Ack and Timeout carefully 
 - FROM Race condition UP to END 
@@ -283,7 +282,7 @@ While the above mentioned `createClient` procedure is defined by [ICS-2](../ics-
 
 The channel creation process enables the creation of the two channels that can be linked to establishes the communication pathway between two chains. 
 
-###### Conditions Table  
+###### Execution requirements and outcomes   
 
 Pre-conditions: 
 
@@ -349,7 +348,7 @@ Pre-conditions:
 
 - The `createChannel` has been previously executed such that the `channelId` that will be provided in input to `registerChannel` exist and it's valid.
 
-###### Conditions Table 
+###### Execution requirements and outcomes  
 
 | **Condition Type**            | **Description** | **Code Checks** |
 |-------------------------------|-----------------------------------|----------------------------|
@@ -414,9 +413,9 @@ Given a scenario where we are sending a packet from a sender chain `A` to a rece
 - Receiver `B` can call only {`receivePacket`} 
 - Receiver `B` can only execute the `receivePacket` if `sendPacket` has been executed by sender `A` 
 - Sender `A` can only execute `timeoutPacket` if `sendPacket` has been executed by sender `A` and `receivePacket` has not been executed by receiver `B`.
-- Sender `A` can only execute `acknowledgePacket` if `sendPacket` has been executed by sender `A` and `receivePacket` has been executed by receiver `B`. 
+- Sender `A` can only execute `acknowledgePacket` if `sendPacket` has been executed by sender `A`, `receivePacket` has been executed by receiver `B`, `writeAcknowledgePacket` has been executed by receiver `B`. 
 
-Below we provide the three possible example scenarios described with sequence diagrmas. 
+Below we provide the three possible example scenarios described with sequence diagrams. 
 
 ---
 
@@ -629,7 +628,7 @@ The IBC handler performs the following steps in order:
 - Sets a store path to indicate that the packet has been received
 - If the flows supports synchronous acknowledgement, it writes the acknowledgement into the receiver provableStore. 
 
-We pass the address of the `relayer` that signed and submitted the packet to enable a module to optionally provide some rewards. This provides a foundation for fee payment, but can be used for other techniques as well (like calculating a leaderboard).
+>**Note:** We pass the address of the `relayer` that signed and submitted the packet to enable a module to optionally provide some rewards. This provides a foundation for fee payment, but can be used for other techniques as well (like calculating a leaderboard).
 
 ###### Execution requirements and outcomes  
 
@@ -751,6 +750,10 @@ Pre-conditions:
 | **Error-Conditions**           | 1. acknowledgement is empty<br> 2. The `packetAcknowledgementPath` stores already a value. | 1. `len(acknowledgement) === 0`<br> 2. `provableStore.get(packetAcknowledgementPath(packet.channelDestId, packet.sequence) !== null` |
 | **Post-Conditions (Success)**  | 1. opaque acknowledgement has been written at `packetAcknowledgementPath` | 1. `provableStore.get(packetAcknowledgementPath(packet.channelDestId, packet.sequence) !== null` |
 | **Post-Conditions (Error)**    | 1. No value is stored at the `packetAcknowledgementPath`. | 1. `provableStore.get(packetAcknowledgementPath(packet.channelDestId, packet.sequence) === null` |
+
+###### Pseudo-Code 
+
+The ICS-04 provides an example pseudo-code that enforce the above described conditions so that the following sequence of steps SHOULD occur when the receiver chain writes the acknowledgement in its provable store.
 
 ```typescript
 function writeAcknowledgement(
@@ -891,13 +894,12 @@ Note that in order to avoid any possible "double-spend" attacks, the timeout alg
 ##### Sending end
 
 The `timeoutPacket` function is called by the IBC hanlder by the chain that attempted to send a packet to a counterparty module,
-where the timeout height or timeout timestamp has passed on the counterparty chain without the packet being committed, to prove that the packet
+where the timeout timestamp has passed on the counterparty chain without the packet being committed, to prove that the packet
 can no longer be executed and to allow the calling module to safely perform appropriate state transitions.
 
 Calling modules MAY atomically execute appropriate application timeout-handling logic in conjunction with calling `timeoutPacket`.
 
 The `timeoutPacket` checks the absence of the receipt key (which will have been written if the packet was received). 
-We pass the `relayer` address just as in [Receiving packets](#receiving-packets) to allow for possible incentivization here as well.
 
 ###### Execution requirements and outcomes  
 
@@ -915,6 +917,10 @@ Pre-conditions:
 | **Post-Conditions (Error)**    | 1. If `onTimeoutPacket` fails and the application state is unchanged <br> 2. `packetCommitment` is not cleared out | 1. `onTimeoutPacket(..)==True; app.State(beforeTimeoutPacket)!=app.State(afterTimeoutPacket)`<br> 2. `provableStore.get(packetCommitmentPath(packet.channelSourceId, packet.sequence)) === null` | 
 
 ###### Pseudo-Code 
+
+The ICS-04 provides an example pseudo-code that enforce the above described conditions so that the following sequence of steps MUST occur for a packet to be timed-out by the sender chain.
+
+>**Note:** We pass the `relayer` address just as in [Receiving packets](#receiving-packets) to allow for possible incentivization here as well.
 
 ```typescript
 function timeoutPacket(
@@ -977,21 +983,40 @@ Packets MUST be acknowledged or timed-out in order to be cleaned-up.
 
 TODO 
 
-##### Identifier allocation
-
-There is an unavoidable race condition on identifier allocation on the destination chain. Modules would be well-advised to utilise pseudo-random, non-valuable identifiers. Managing to claim the identifier that another module wishes to use, however, while annoying, cannot man-in-the-middle a handshake since the receiving module must already own the port to which the handshake was targeted.
-
 ##### Timeouts / packet confirmation
 
 There is no race condition between a packet timeout and packet confirmation, as the packet will either have passed the timeout height prior to receipt or not.
 
 ##### Clients unreachability with in-flight packets
 
-If a client has been frozen while packets are in-flight, the packets can no longer be received on the destination chain and can be timed-out on the source chain.
+If the source client pointed in the destination chain channel has been frozen while packets are in-flight, the packets can no longer be received on the destination chain and can be timed-out on the source chain.
 
 ### Properties 
 
-- Packets are delivered exactly once, assuming that the chains are live within the timeout window, and in case of timeout can be timed-out exactly once on the sending chain.
+#### Correctness
+
+Claim: If clients and channels are setup correctly, then a chain can always verify packet flow messages sent by a valid counterparty.
+
+If the clients are properly registered in the channels, then they allow the verification of any key/value membership proof as well as a key non-membership proof.
+
+All packet flow message (SendPacket, RecvPacket, and TimeoutPacket) are sent with the full packet. The packet contains both sender and receiver channels identifiers. Thus on packet flow messages sent to the receiver (RecvPacket), we use the receiver channel identifier in the packet to retrieve our local client and the path the sender stored the packet under. We can thus use our retrieved client to verify a key/value membership proof to validate that the packet was sent by the counterparty.
+
+Similarly, for packet flow messages sent to the sender (AcknowledgePacket, TimeoutPacket); the packet is provided again. This time, we use the sender channel identifier to retrieve the local client and the key path that the receiver must have written to when it received the packet. We can thus use our retrieved client to verify a key/value membership proof to validate that the packet was sent by the counterparty. In the case of timeout, if the packet receipt wasn't written to the receipt path determined by the destination identifier this can be verified by our retrieved client using the key nonmembership proof.
+
+#### Soundness
+
+Claim: If the clients and channels are setup correctly, then a chain cannot mistake a packet flow message intended for a different chain as a valid message from a valid counterparty.
+
+We must note that client and channel identifiers are unique to each chain but are not globally unique. Let us first consider a user that correctly specifies the source and destination channel identifiers in the packet.
+
+We wish to ensure that well-formed packets (i.e. packets with correctly setup channels ids) cannot have packet flow messages succeed on third-party chains. Ill-formed packets (i.e. packets with invalid channel ids) may in some cases complete in invalid states; however we must ensure that any completed state from these packets cannot mix with the state of other valid packets.
+
+We are guaranteed that the source channel identifier is unique on the source chain, the destination channel identifier is unique on the destination chain. Additionally, the destination channel identifier points to a valid client of the source chain, and the source channel identifier points to a valid client of the destination chain.
+
+Suppose the RecvPacket is sent to a chain other than the one identified by the the clientId on the source chain.
+
+In the packet flow messages sent to the receiver (RecvPacket), the packet send is verified using the client and the packet commitment path on the destination chain (retrieved using destination channel identifier) which are linked to the source chain. 
+This verification check can only pass if the chain identified by the client stored in the destination channel committed the packet we received under the counterparty keyPrefix path specified in the channel. This is only possible if the destination client is pointing to the original source chain, or if it is pointing to a different chain that committed the exact same packet. Pointing to the original source chain would mean we sent the packet to the correct chain. Since the sender only sends packets intended for the desination chain by setting to a unique source identifier, we can be sure the packet was indeed intended for us. Since our client on the receiver is also correctly pointing to the sender chain, we are verifying the proof against a specific consensus algorithm that we assume to be honest. If the packet is committed to the wrong key path, then we will not accept the packet. Similarly, if the packet is committed by the wrong chain then we will not be able to verify correctly.
 
 ## Backwards Compatibility
 
