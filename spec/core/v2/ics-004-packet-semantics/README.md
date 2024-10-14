@@ -16,7 +16,6 @@ TODO :
 - Rename file 
 - Improve conditions set / think about more condition an proper presentation 
 - Review Ack and Timeout carefully 
-- FROM Race condition UP to END 
 
 ## Synopsis 
 
@@ -158,7 +157,7 @@ Additionally, the ICS-04 specification defines a set of conditions that the impl
 
 #### Permissioning
 
-- Channels should be permissioned to the application registered on the local router. Thus only the modules registered on the local router, and so associated with the channel, should be able to send or receive on it.
+- Channels should be permissioned to the application registered on the local router. Thus only the modules registered on the local router should be able to send or receive on it.
 
 #### Fungibility conservation 
 
@@ -929,8 +928,9 @@ function timeoutPacket(
 ) { 
     // Channel and Client Checks
     channel = getChannel(packet.channelSourceId)
-    client = router.clients[channel.clientId]
+    assert(client !== null)
 
+    client = router.clients[channel.clientId]
     assert(client !== null)
     
     // verify we sent the packet and haven't cleared it out yet
@@ -945,7 +945,7 @@ function timeoutPacket(
     asert(packet.timeoutTimestamp > 0 && proofTimestamp >= packet.timeoutTimestamp)
 
     // verify there is no packet receipt --> receivePacket has not been called 
-    receiptPath = packetReceiptPath(packet.channelDestId, packet.sequence,relayer)
+    receiptPath = packetReceiptPath(packet.channelDestId, packet.sequence)
     merklePath = applyPrefix(channel.keyPrefix, receiptPath)
     assert(client.verifyNonMembership(
         client.clientState,
@@ -959,7 +959,7 @@ function timeoutPacket(
     success=cbs.OnTimeoutPacket(packet.channelSourceId,payload) // Note that payload includes the version. The application is required to inspect the version to route the data to the proper callback
     abortUnless(success)
 
-    channelStore.delete(packetCommitmentPath(packet.channelSourceId, packet.sequence, relayer))
+    channelStore.delete(packetCommitmentPath(packet.channelSourceId, packet.sequence))
     
     // Event Emission // See fields
     emitLogEntry("timeoutPacket", {
@@ -978,8 +978,6 @@ function timeoutPacket(
 Packets MUST be acknowledged or timed-out in order to be cleaned-up. 
 
 #### Reasoning about race conditions
-
-TODO 
 
 ##### Timeouts / packet confirmation
 
