@@ -28,7 +28,7 @@ The standard then details the processes for transmitting, receiving, acknowledgi
 
 ### Motivation
 
-The motivation for this specification is to formalize the semantics for both packet handling and channel creation and registration in the IBC version 2 protocol. These are fundamental components for enabling reliable, secure, and verifiable communication between independent blockchains. The document focuses on the mechanisms to establish the root of trust for starting the communication between two distinct chains, routing, verification, and application-level delivery guarantees required by the IBC protocol. 
+The motivation for this specification is to formalize the semantics for both packet handling and channel creation and registration in the IBC version 2 protocol. These are fundamental components for enabling reliable, secure, and verifiable communication between independent blockchains. 
 
 This specification focuses on defining the mechanisms for creating channels, securely registering them between chains, and ensuring that packets sent across these channels are processed consistently and verifiably. By utilizing on-chain light clients for state verification, it enables chains to exchange data without requiring synchronous communication, ensuring that all packets are delivered exactly once, even in the presence of network delays or reordering.
 
@@ -162,7 +162,7 @@ Additionally, the ICS-04 specification defines a set of conditions that the impl
 
 #### Fungibility conservation 
 
-> **Example**: An application may wish to allow a single tokenized asset to be transferred between and held on multiple blockchains while preserving fungibility and conservation of supply. The application can mint asset vouchers on chain `B` when a particular IBC packet is committed to chain `B`, and require outgoing sends of that packet on chain `A` to escrow an equal amount of the asset on chain `A` until the vouchers are later redeemed back to chain `A` with an IBC packet in the reverse direction. This ordering guarantee along with correct application logic can ensure that total supply is preserved across both chains and that any vouchers minted on chain `B` can later be redeemed back to chain `A`.
+An application may wish to allow a single tokenized asset to be transferred between and held on multiple blockchains while preserving fungibility and conservation of supply. The application can mint asset vouchers on chain `B` when a particular IBC packet is committed to chain `B`, and require outgoing sends of that packet on chain `A` to escrow an equal amount of the asset on chain `A` until the vouchers are later redeemed back to chain `A` with an IBC packet in the reverse direction. This ordering guarantee along with correct application logic can ensure that total supply is preserved across both chains and that any vouchers minted on chain `B` can later be redeemed back to chain `A`.
 
 ## Technical Specification
 
@@ -342,7 +342,7 @@ function createChannel(
 
 IBC version 2 introduces a `registerChannel` procedure. The channel registration procedure ensures both chains have a mutually recognized channel that facilitates the packet transmission.
 
-This process stores the `counterpartyChannelId` in the local channel structure, ensuring both chains have mirrored <channel, channel> pairs. With the correct registration, the unique clients on each side provide an authenticated stream of packet data. Social consensus outside the protocol is relied upon to ensure only valid <channel, channel> pairs are used, representing connections between the correct chains. 
+This process stores the `counterpartyChannelId` in the local channel structure, ensuring both chains have mirrored **<channel, channel>** pairs. With the correct registration, the unique clients on each side provide an authenticated stream of packet data. Social consensus outside the protocol is relied upon to ensure only valid **<channel, channel>** pairs are used, representing connections between the correct chains. 
 
 Pre-conditions:
 
@@ -517,7 +517,7 @@ sequenceDiagram
 
 ##### Sending packets
 
-The `sendPacket` function is called by the IBC handler when an IBC packet is submitted to the newtwork in order to send *data* in the form of an IBC packet. ∀ `Payload` included in the `packet.data`, which may refer to a different application, the application specific callbacks are retrieved from the IBC router and the `onSendPacket` is the then triggered on the specified application. The `onSendPacket` executes the application logic. Once all payloads contained in the `packet.data` have been acted upon, the packet commitment is generated and the sequence number bound to the `channelSourceId` is incremented. 
+The `sendPacket` function is called by the IBC handler when an IBC packet is submitted to the newtwork in order to send *data* in the form of an IBC packet. The `sendPacket` function executes the IBC core logic and atomically triggers the application logic execution via the activation of the `onSendPacket` callback. Indeed ∀ `Payload` included in the `packet.data`, which refers to a specific application, the callbacks are retrieved from the IBC router and the `onSendPacket` is the then triggered on the application specified in the `payload` content. Once all payloads contained in the `packet.data` have been processed, the packet commitment is generated and the sequence number bound to the `channelSourceId` is incremented. 
 
 The `sendPacket` core function MUST execute the applications logic atomically triggering the `onSendPacket` callback ∀ application contained in the `packet.data` payload.
 
@@ -613,7 +613,7 @@ function sendPacket(
     return sequence
 }
 ```
-
+ 
 ##### Receiving packets
 
 The `recvPacket` function is called by the IBC handler in order to receive an IBC packet sent on the corresponding client on the counterparty chain.
@@ -627,8 +627,6 @@ The IBC handler performs the following steps in order:
 - Checks the inclusion proof of packet data commitment in the sender chain's state
 - Sets a store path to indicate that the packet has been received
 - If the flows supports synchronous acknowledgement, it writes the acknowledgement into the receiver provableStore. 
-
->**Note:** We pass the address of the `relayer` that signed and submitted the packet to enable a module to optionally provide some rewards. This provides a foundation for fee payment, but can be used for other techniques as well (like calculating a leaderboard).
 
 ###### Execution requirements and outcomes  
 
@@ -647,7 +645,9 @@ Pre-conditions:
 ###### Pseudo-Code 
 
 The ICS-04 provides an example pseudo-code that enforce the above described conditions so that the following sequence of steps SHOULD occur for a packet to be received from module *1* on machine *A* to module *2* on machine *B*.
- 
+
+>**Note:** We pass the address of the `relayer` that signed and submitted the packet to enable a module to optionally provide some rewards. This provides a foundation for fee payment, but can be used for other techniques as well (like calculating a leaderboard).
+
 ```typescript
 function recvPacket(
   packet: OpaquePacket,
