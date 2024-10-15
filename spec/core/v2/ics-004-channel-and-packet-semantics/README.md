@@ -7,15 +7,9 @@ kind: instantiation
 requires: 2, 24, packet-data 
 version compatibility: ibc-go v10.0.0
 author: Stefano Angieri <stefano@interchain.io>, Aditya Sripal <aditya@interchain.io>
-created: 2019-03-07
-modified: 2019-08-25
+created: 2024-10-15
+modified: 2024-10-15
 ---
-
-TODO : 
-
-- Rename file 
-- Improve conditions set / think about more condition an proper presentation 
-- Review Ack and Timeout carefully 
 
 ## Synopsis 
 
@@ -113,7 +107,7 @@ An application may not need to return an acknowledgment after processing relevan
 
 If the receiver chain returns the `SENTINEL_ACKNOWLEDGMENT`, the sender chain will execute the `acknowledgePacket` handler without triggering the `onAcknowledgePacket` callback.  
 
-As we will see later, the presence in the provable store of the acknowledgement is a prerequisite for executing the `acknowledgePacket` handler. If the receiver chain does not write the acknowledgement, will be impossible for the sender chain to execute `acknowledgePacket` to delete the packet commitment. 
+As we will see later, the presence in the provable store of the acknowledgement is a prerequisite for executing the `acknowledgePacket` handler. If the receiver chain does not write the acknowledgement, will be impossible for the sender chain to execute `acknowledgePacket` and delete the packet commitment. 
 
 > **Example**: In the multi-data packet world, if a packet within 3 payloads intended for 3 different application is sent out, the expectation is that each payload is processed in the same order in which it was placed in the packet. Similarly, the `appAcknowledgement` array is expected to be populated within the same order. 
 
@@ -134,7 +128,7 @@ The registration of the client in the local `IBCRouter` is responsibility of the
 - The `MAX_TIMEOUT_DELTA` is intendend as the max, absolute, difference between `currentTimestamp` and `timeoutTimestamp` that can be given in input to `sendPacket`. 
 
 ```typescript
-const MAX_TIMEOUT_DELTA = Implementation specific  // We recommend MAX_TIMEOUT_DELTA = TDB 
+const MAX_TIMEOUT_DELTA = Implementation specific  // We recommend MAX_TIMEOUT_DELTA = 24h  
 ```
 
 Additionally, the ICS-04 specification defines a set of conditions that the implementations of the IBC protocol version 2 MUST adhere to. These conditions ensure the proper execution of the function handlers by establishing requirements before execution `pre-conditions`, the conditions that MUST trigger errors during execution `error-conditions`, expected outcomes after succesful execution `post-conditions-on-success`, and expected outcomes after error execution `post-conditions-on-error`.
@@ -374,10 +368,6 @@ function registerChannel(
     abortTransactionUnless(msg.signer()===channelCreator[channelId])
 
     // Channel manipulation
-    /* NEED DISCUSSION : Do we want to allow multiple call to this function? 
-     If not than we have to impose the check 
-     abortTransactionUnless(channel.counterpartyChannelId===null)
-     */  
     channel.counterpartyChannelId=counterpartyChannelId
 
     // Local Store
@@ -1029,7 +1019,7 @@ Future updates of this specification will enable the atomic processing of multip
 
 ## History
 
-Oct X, 2024 - [Draft submitted](https://github.com/cosmos/ibc/pull/1148)
+Oct 15, 2024 - [Draft submitted](https://github.com/cosmos/ibc/pull/1148)
 
 ## Copyright
 
