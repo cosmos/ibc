@@ -53,7 +53,7 @@ interface Packet {
     destChannelId: bytes, // channel identifier on the dest chain.
     sequence: uint64, // number that corresponds to the order of sent packets.
     timeout: uint64, // indicates the UNIX timestamp in seconds and is encoded in LittleEndian. It must be passed on the destination chain and once elapsed, will no longer allow the packet processing, and will instead generate a time-out.
-    data: [Payload] // data 
+    data: Payload[] // data 
 }
 ```
 
@@ -81,12 +81,6 @@ Note that a `Packet` is never directly serialised. Rather it is an intermediary 
 
 When the array of payloads, passed-in the packet, is populated with multiple values, the system will handle the packet as a multi-data packet. The multi-data packet handling logic is out of the scope of the current version of this spec. 
 
-An `OpaquePacket` is a packet, but cloaked in an obscuring data type by the host state machine, such that a module cannot act upon it other than to pass it to the IBC handler. The IBC handler can cast a `Packet` to an `OpaquePacket` and vice versa.
-
-```typescript
-type OpaquePacket = object
-```
-
 The protocol introduces standardized packet receipts that will serve as sentinel values for the receiving chain to explicitly write to its store the outcome of a `receivePacket`.
 
 ```typescript
@@ -99,7 +93,7 @@ The `Acknowledgement` is a particular interface defined as follows:
 
 ```typescript
 interface Acknowledgement {
-    appAcknowledgement: [bytes] // array of bytes. Each element of the array contains an acknowledgement from a specific application  
+    appAcknowledgement: byte[][] // array of an array of bytes. Each element of the array contains an acknowledgement from a specific application  
 }
 ```
 
@@ -115,7 +109,7 @@ As we will see later, the presence in the provable store of the acknowledgement 
 
 ```typescript
 type IBCRouter struct {
-    callbacks: portId -> [Callback] 
+    callbacks: portId -> Callback[] 
     clients: clientId -> Client // The IBCRouter stores the client under the clientId key
 }
 ```
@@ -398,10 +392,9 @@ Note that the execution of the four handlers, upon a unique packet, cannot be co
 
 Given a scenario where we are sending a packet from a sender chain `A` to a receiver chain `B` the protocol follows the following rules:  
 
-- Sender `A` can call either {`sendPacket`,`acknowledgePacket`,`timeoutPacket`}
-- Receiver `B` can call only {`receivePacket`} 
+- Sender `A` can only call `sendPacket` to start the packet flow. 
 - Receiver `B` can only execute the `receivePacket` if `sendPacket` has been executed by sender `A` 
-- Sender `A` can only execute `timeoutPacket` if `sendPacket` has been executed by sender `A` and `receivePacket` has not been executed by receiver `B`.
+- Sender `A` can only execute `timeoutPacket` if Sender `A` has previously executed `sendPacket` and `receivePacket` has not been executed by receiver `B`.
 - Sender `A` can only execute `acknowledgePacket` if `sendPacket` has been executed by sender `A`, `receivePacket` has been executed by receiver `B`, `writeAcknowledgePacket` has been executed by receiver `B`. 
 
 Below we provide the three possible example scenarios described with sequence diagrams. 
@@ -542,7 +535,7 @@ The ICS04 provides an example pseudo-code that enforce the above described condi
 function sendPacket(
     sourceChannelId: bytes, 
     timeoutTimestamp: uint64,
-    payloads: []byte
+    payloads: Payload[] 
     ) : BigEndianUint64 {
 
     // Setup checks - channel and client 
@@ -550,6 +543,8 @@ function sendPacket(
     assert(channel !== null)
     client = router.clients[channel.clientId]
     assert(client !== null)
+    
+     //assert(packet.sourceId == channel.counterpartyChannelId) This should be always true, redundant // NEED DISCUSSION 
     
     // timeoutTimestamp checks
     // disallow packets with a zero timeoutTimestamp
@@ -627,10 +622,10 @@ Pre-conditions:
 
 | **Condition Type**            | **Description** | **Code Checks** |
 |-------------------------------|-----------------------------------------------|-----------------------------------------------|
-| **Error-Conditions**           | 1. invalid `packetCommitment`, 2.`packetReceipt` already exists<br> 3. Invalid timeoutTimestamp<br> 4. Unsuccessful payload execution. | 1.1 `verifyMembership(packetCommitment)==false`<br> 1.2 `provableStore.get(packetReceiptPath(packet.channelDestId, packet.sequence))!=null`<br> 3. `timeoutTimestamp === 0`<br> 3.1 `currentTimestamp() < packet.timeoutTimestamp)`<br> 4. `onReceivePacket(..)==False` |
+| **Error-Conditions**           | 1. invalid `packetCommitment`, 2.`packetReceipt` already exists<br> 3. Invalid timeoutTimestamp<br> 4. Unsuccessful payload execution.<br> 5. Unexpected counterparty channel id | 1.1 `verifyMembership(packetCommitment)==false`<br> 1.2 `provableStore.get(packetReceiptPath(packet.channelDestId, packet.sequence))!=null`<br> 3. `timeoutTimestamp === 0`<br> 3.1 `currentTimestamp() < packet.timeoutTimestamp)`<br> 4. `onReceivePacket(..)==False` <br> 5. `packet.sourceChannelId != channel.counterpartyChannelId` |
 | **Post-Conditions (Success)**  | 1. `onReceivePacket` is executed and the application state is modified<br> 2. The `packetReceipt` is written<br> 3. Event is Emitted<br>  | 1. `onReceivePacket(..)==True; app.State(beforeReceivePacket)!=app.State(afterReceivePacket)`<br> 2. `provableStore.get(packetReceiptPath(packet.channelDestId, packet.sequence))!=null`<br> 3. Check Event Emission<br> |
 | **Post-Conditions (Error)**    | 1. if `onReceivePacket` fails the application state is unchanged<br> 2. `packetReceipt is not written`<br> <br> 3. No Event Emission<br> | 1. `app.State(beforeReceivePacket)==app.State(afterReceivePacket)`<br> 2. `provableStore.get(packetReceiptPath(packet.channelDestId, packet.sequence))==null` <br> 3. Check No Event is Emitted<br> |
-                                                                                                                          
+               
 ###### Pseudo-Code 
 
 The ICS-04 provides an example pseudo-code that enforce the above described conditions so that the following sequence of steps SHOULD occur for a packet to be received from module *1* on machine *A* to module *2* on machine *B*.
@@ -639,7 +634,7 @@ The ICS-04 provides an example pseudo-code that enforce the above described cond
 
 ```typescript
 function recvPacket(
-  packet: OpaquePacket,
+  packet: Packet,
   proof: CommitmentProof,
   proofHeight: Height,
   relayer: string  
@@ -650,6 +645,9 @@ function recvPacket(
     assert(channel !== null)
     client = router.clients[channel.clientId]  
     assert(client !== null)
+
+    // Check that counterparty channel id is as expected
+    assert(packet.sourceChannelId == channel.counterpartyChannelId) 
     
     // verify timeout
     assert(packet.timeoutTimestamp === 0)  
@@ -680,7 +678,7 @@ function recvPacket(
     // Executes Application logic ∀ Payload
     payload=packet.data[0]
     cbs = router.callbacks[payload.destPort]
-    ack,success = cbs.onReceivePacket(packet.channelDestId,payload,relayer) // Note that payload includes the version. The application is required to inspect the version to route the data to the proper callback
+    ack,success = cbs.onReceivePacket(packet.channelDestId,payload,relayer,packet.sequence) // Note that payload includes the version. The application is required to inspect the version to route the data to the proper callback
     abortTransactionUnless(success)
     if ack != nil {
         // NOTE: Synchronous ack. 
@@ -787,7 +785,7 @@ Pre-conditions:
 
 | **Condition Type** | **Description** | **Code Checks** |
 |-------------------------------|---------------------------------|---------------------------------|
-| **Error-Conditions**           | 1. `packetCommitment` already cleared out<br> 2. Unset Acknowledgment<br> 3. Unsuccessful payload execution. | 1. `provableStore.get(packetCommitmentPath(packet.channelSourceId, packet.sequence)) ===  null`<br> 2. `verifyMembership(packetacknowledgementPath,...,) ==  False`<br> 3. `onAcknowledgePacket(packet.channelSourceId,payload, acknowledgement) == False` | 
+| **Error-Conditions**           | 1. `packetCommitment` already cleared out<br> 2. Unset Acknowledgment<br> 3. Unsuccessful payload execution. <br> 4. Unexpected counterparty channel id | 1. `provableStore.get(packetCommitmentPath(packet.channelSourceId, packet.sequence)) ===  null`<br> 2. `verifyMembership(packetacknowledgementPath,...,) ==  False`<br> 3. `onAcknowledgePacket(packet.channelSourceId,payload, acknowledgement) == False` <br> 4. `packet.sourceChannelId != channel.counterpartyChannelId` | 
 | **Post-Conditions (Success)**  | 1. `onAcknowledgePacket` is executed and the application state is modified<br> 2. `packetCommitment` has been cleared out <br> 4. Event is Emission<br> | 1. `onAcknowledgePacket(..)==True; app.State(beforeAcknowledgePacket)!=app.State(afterAcknowledgePacket)`<br> 2. `provableStore.get(packetCommitmentPath(packet.channelSourceId, packet.sequence)) === null`, <br> 4. Check Event is Emitted<br> |
 | **Post-Conditions (Error)**    | 1. If `onAcknowledgePacket` fails the application state is unchanged<br> 2. `packetCommitment` has not been cleared out<br> 3. acknowledgement is stil in store <br> 4. No Event Emission<br> | 1. `onAcknowledgePacket(..)==False; app.State(beforeAcknowledgePacket)==app.State(afterAcknowledgePacket)`<br> 2. `provableStore.get(packetCommitmentPath(packet.channelSourceId, packet.sequence)) ===  commitV2Packet(packet)` 3. `verifyMembership(packetAcknowledgementPath,...,) ==  True` <br> 4. Check No Event is Emitted<br>|
 
@@ -799,7 +797,7 @@ The ICS04 provides an example pseudo-code that enforce the above described condi
 
 ```typescript
 function acknowledgePacket(
-    packet: OpaquePacket,
+    packet: Packet,
     acknowledgement: Acknowledgement,
     proof: CommitmentProof,
     proofHeight: Height,
@@ -811,7 +809,10 @@ function acknowledgePacket(
     assert(channel !== null)
     client = router.clients[channel.clientId]
     assert(client !== null)
-   
+
+    // Check that counterparty channel id is as expected
+    assert(packet.sourceChannelId == channel.counterpartyChannelId)
+
     // verify we sent the packet and haven't cleared it out yet
     assert(provableStore.get(packetCommitmentPath(packet.channelSourceId, packet.sequence)) ===  commitV2Packet(packet))
 
@@ -830,7 +831,7 @@ function acknowledgePacket(
         // Executes Application logic ∀ Payload
         payload=packet.data[0]
         cbs = router.callbacks[payload.sourcePort]
-        success= cbs.OnAcknowledgePacket(packet.channelSourceId,payload,acknowledgement, relayer) // Note that payload includes the version. The application is required to inspect the version to route the data to the proper callback
+        success= cbs.OnAcknowledgePacket(packet.channelSourceId,payload,packet.sequence,acknowledgement, relayer) // Note that payload includes the version. The application is required to inspect the version to route the data to the proper callback
         abortUnless(success) 
     }
 
@@ -899,7 +900,7 @@ Pre-conditions:
 
 | **Condition Type**            | **Description**| **Code Checks**|
 |-------------------------------|--------------------|--------------------|
-| **Error-Conditions**           | 1. `packetCommitment` already cleared out<br> 2. `packetReceipt` is not empty<br> 3. Unsuccessful payload execution<br> 4. `timeoutTimestamp` not elapsed on the receiving chain| 1. `provableStore.get(packetCommitmentPath(packet.channelSourceId, packet.sequence)) ===  null`<br> 2. `provableStore.get(packetReceiptPath(packet.channelDestId, packet.sequence))!=null`<br> 3. `onTimeoutPacket(packet.channelSourceId,payload) == False`<br> 4.1 `packet.timeoutTimestamp > 0` <br> 4.2 `proofTimestamp = client.getTimestampAtHeight(proofHeight); proofTimestamp >= packet.timeoutTimestamp` |
+| **Error-Conditions**           | 1. `packetCommitment` already cleared out<br> 2. `packetReceipt` is not empty<br> 3. Unsuccessful payload execution<br> 4. `timeoutTimestamp` not elapsed on the receiving chain <br> 5. Unexpected counterparty channel id| 1. `provableStore.get(packetCommitmentPath(packet.channelSourceId, packet.sequence)) ===  null`<br> 2. `provableStore.get(packetReceiptPath(packet.channelDestId, packet.sequence))!=null`<br> 3. `onTimeoutPacket(packet.channelSourceId,payload) == False`<br> 4.1 `packet.timeoutTimestamp > 0` <br> 4.2 `proofTimestamp = client.getTimestampAtHeight(proofHeight); proofTimestamp >= packet.timeoutTimestamp` <br> 5. `packet.sourceChannelId != channel.counterpartyChannelId` |
 | **Post-Conditions (Success)**  | 1. `onTimeoutPacket` is executed and the application state is modified <br> 2. `packetCommitment` has been cleared out <br> 3. `packetReceipt` is empty <br> 4. Event is Emitted<br> | 1. `onTimeoutPacket(..)==True; app.State(beforeTimeoutPacket)!=app.State(afterTimeoutPacket)`<br> 2. `provableStore.get(packetCommitmentPath(packet.channelSourceId, packet.sequence)) === null`<br> 3. `provableStore.get(packetReceiptPath(packet.channelDestId, packet.sequence))==null`<br> 4. Check Event is Emitted<br> |
 | **Post-Conditions (Error)**    | 1. If `onTimeoutPacket` fails and the application state is unchanged <br> 2. `packetCommitment` is not cleared out <br> 3. No Event Emission<br> | 1. `onTimeoutPacket(..)==True; app.State(beforeTimeoutPacket)!=app.State(afterTimeoutPacket)`<br> 2. `provableStore.get(packetCommitmentPath(packet.channelSourceId, packet.sequence)) === null` <br> 3. Check No Event is Emitted<br>| 
 
@@ -911,7 +912,7 @@ The ICS-04 provides an example pseudo-code that enforce the above described cond
 
 ```typescript
 function timeoutPacket(
-    packet: OpaquePacket,
+    packet: Packet,
     proof: CommitmentProof,
     proofHeight: Height,
     relayer: string
@@ -923,6 +924,9 @@ function timeoutPacket(
     client = router.clients[channel.clientId]
     assert(client !== null)
     
+    // Check that counterparty channel id is as expected
+    assert(packet.sourceChannelId == channel.counterpartyChannelId)
+
     // verify we sent the packet and haven't cleared it out yet
     assert(provableStore.get(packetCommitmentPath(packet.channelSourceId, packet.sequence))
            === commitV2Packet(packet))
@@ -946,7 +950,7 @@ function timeoutPacket(
 
     payload=packet.data[0]
     cbs = router.callbacks[payload.sourcePort]
-    success=cbs.OnTimeoutPacket(packet.channelSourceId,payload) // Note that payload includes the version. The application is required to inspect the version to route the data to the proper callback
+    success=cbs.OnTimeoutPacket(packet.channelSourceId,payload,packet.sequence) // Note that payload includes the version. The application is required to inspect the version to route the data to the proper callback
     abortUnless(success)
 
     channelStore.delete(packetCommitmentPath(packet.channelSourceId, packet.sequence))
