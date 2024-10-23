@@ -544,8 +544,6 @@ function sendPacket(
     client = router.clients[channel.clientId]
     assert(client !== null)
     
-     //assert(packet.sourceId == channel.counterpartyChannelId) This should be always true, redundant // NEED DISCUSSION 
-    
     // timeoutTimestamp checks
     // disallow packets with a zero timeoutTimestamp
     assert(timeoutTimestamp !== 0) 
