@@ -13,11 +13,11 @@ modified: 2024-10-15
 
 ## Synopsis 
 
-This standard defines the channel and packet semantics necessary for state machines implementing the Inter-Blockchain Communication (IBC) protocol  version 2 to enable secure, verifiable, and efficient cross-chain messaging.
+This standard defines the channel and packet semantics necessary for state machines implementing the Inter-Blockchain Communication (IBC) protocol version 2 to enable secure, verifiable, and efficient cross-chain messaging.
 
 It specifies the mechanisms to create channels and register them between two distinct state machines (blockchains) where the channels have a semantic link between the chains and their counterparty light client representation, ensuring that both chains can process and verify packets exchanged between them.
 
-The standard then details the processes for transmitting, receiving, acknowledging, and timing out data packets. The packet-flow semantics guarantee exactly-once packet delivery between chains, utilizing on-chain light clients for state verification and providing efficient routing of packet data to specific IBC applications.
+The standard then details the processes for sending, receiving, acknowledging, and timing out data packets. The packet-flow semantics guarantee exactly-once packet delivery between chains, utilizing on-chain light clients for state verification and providing efficient routing of packet data to specific IBC applications.
 
 ### Motivation
 
@@ -515,7 +515,7 @@ The IBC handler performs the following steps in order:
 - Checks that the underlying clients is valid. 
 - Checks that the timeout specified has not already passed on the destination chain
 - Executes the `onSendPacket` ∀ Payload included in the packet. 
-- Stores a constant-size commitment to the packet data & packet timeout
+- Stores a constant-size commitment of the packet
 - Increments the send sequence counter associated with the channel
 - Returns the sequence number of the sent packet
 
@@ -932,7 +932,7 @@ function timeoutPacket(
     assert(err != nil)
 
     // check that timeout height or timeout timestamp has passed on the other end
-    asert(packet.timeoutTimestamp > 0 && proofTimestamp >= packet.timeoutTimestamp)
+    assert(packet.timeoutTimestamp > 0 && proofTimestamp >= packet.timeoutTimestamp)
 
     // verify there is no packet receipt --> receivePacket has not been called 
     receiptPath = packetReceiptPath(packet.channelDestId, packet.sequence)
