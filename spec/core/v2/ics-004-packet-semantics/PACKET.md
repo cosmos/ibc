@@ -80,14 +80,14 @@ func commitPayload(payload: Payload): bytes {
 }
 
 func commitV2Packet(packet: Packet) {
-    timeoutBytes = LittleEndian(timeout)
+    timeoutBytes = LittleEndian(packet.timeout)
     var appBytes: bytes
     for p in packet.payload {
         appBytes = append(appBytes, commitPayload(p))
     }
-    buffer = sha256.Hash(destIdentifier)
-    buffer = append(buffer, sha256.hash(bigEndian(timeoutBytes)))
-    buffer = append(buffer, sha256.hash(data))
+    buffer = sha256.Hash(packet.destChannel)
+    buffer = append(buffer, sha256.hash(timeoutBytes))
+    buffer = append(buffer, sha256.hash(appBytes))
     return sha256.Hash(buffer)
 }
 ```
