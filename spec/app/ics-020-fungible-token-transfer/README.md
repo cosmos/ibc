@@ -208,8 +208,8 @@ interface ModuleState {
 The `v2` packets that have non-empty forwarding information and should thus be forwarded, must be stored in the private store, so that an acknowledgement can be written for them when receiving an acknowledgement or timeout for the forwarded packet.
 
 ```typescript
-function packetForwardPath(portIdentifier: Identifier, channelIdentifier: Identifier, sequence: uint64): Path {
-  return "forwardedPackets/ports/{portIdentifier}/channels/{channelIdentifier}/sequences/{sequence}"
+function packetForwardPath(channelIdentifier: Identifier, sequence: bigEndianUint64): Path {
+  return "{channelIdentifier}0x4{bigEndianUint64Sequence}"
 }
 ```
 
@@ -217,33 +217,23 @@ function packetForwardPath(portIdentifier: Identifier, channelIdentifier: Identi
 
 The sub-protocols described herein should be implemented in a "fungible token transfer bridge" module with access to a bank module and to the IBC routing module.
 
-#### Port & channel setup
+#### Application callback setup
 
-The `setup` function must be called exactly once when the module is created (perhaps when the blockchain itself is initialised) to bind to the appropriate port and create an escrow address (owned by the module).
+The `setup` function must be called exactly once when the module is created (perhaps when the blockchain itself is initialised) to register the application callbacks in the IBC router.
 
 ```typescript
 function setup() {
-  capability = routingModule.bindPort("transfer", ModuleCallbacks{
-    onChanOpenInit,
-    onChanOpenTry,
-    onChanOpenAck,
-    onChanOpenConfirm,
-    onChanCloseInit,
-    onChanCloseConfirm,
+// REWRITE SETUP FUNCTION SUCH THAT IT REGISTER THE MODULE CALLBACKS IN THE PROPER PLACE
+çroutingModule.bindPort("transfer", ModuleCallbacks{
+    onSendPacket,
     onRecvPacket,
-    onTimeoutPacket,
     onAcknowledgePacket,
-    onTimeoutPacketClose
+    onTimeoutPacket
   })
-  claimCapability("port", capability)
 }
 ```
 
-Once the `setup` function has been called, channels can be created through the IBC routing module between instances of the fungible token transfer module on separate chains.
-
-An administrator (with the permissions to create connections & channels on the host state machine) is responsible for setting up connections to other state machines & creating channels
-to other instances of this module (or another module supporting this interface) on other chains. This specification defines packet handling semantics only, and defines them in such a fashion
-that the module itself doesn't need to worry about what connections or channels might or might not exist at any point in time.
+Once the `setup` function has been called, the application callbacks are registered and accessible in the IBC router.  
 
 #### Routing module callbacks
 
@@ -254,91 +244,9 @@ Both machines `A` and `B` accept new channels from any module on another machine
 - The channel being created is unordered.
 - The version string is `ics20-1` or `ics20-2`.
 
-```typescript
-function onChanOpenInit(
-  order: ChannelOrder,
-  connectionHops: [Identifier],
-  portIdentifier: Identifier,
-  channelIdentifier: Identifier,
-  counterpartyPortIdentifier: Identifier,
-  counterpartyChannelIdentifier: Identifier,
-  version: string) => (version: string, err: Error) {
-  // only unordered channels allowed
-  abortTransactionUnless(order === UNORDERED)
-  // assert that version is "ics20-1" or "ics20-2" or empty
-  // if empty, we return the default transfer version to core IBC
-  // as the version for this channel
-  abortTransactionUnless(version === "ics20-2" || version === "ics20-1" || version === "")
-  // allocate an escrow address
-  channelEscrowAddresses[channelIdentifier] = newAddress(portIdentifier, channelIdentifier)
-  if version == "" {
-    // default to latest supported version
-    return "ics20-2", nil
-  }
-  // If the version is not empty and is among those supported, we return the version
-  return version, nil 
-}
-```
-
-```typescript
-function onChanOpenTry(
-  order: ChannelOrder,
-  connectionHops: [Identifier],
-  portIdentifier: Identifier,
-  channelIdentifier: Identifier,
-  counterpartyPortIdentifier: Identifier,
-  counterpartyChannelIdentifier: Identifier,
-  counterpartyVersion: string) => (version: string, err: Error) {
-  // only unordered channels allowed
-  abortTransactionUnless(order === UNORDERED)
-  // assert that version is "ics20-1" or "ics20-2" 
-  abortTransactionUnless(counterpartyVersion === "ics20-1" || counterpartyVersion === "ics20-2")
-  // allocate an escrow address
-  channelEscrowAddresses[channelIdentifier] = newAddress(portIdentifier, channelIdentifier)
-  // return the same version as counterparty version so long as we support it
-  return counterpartyVersion, nil
-}
-```
-
-```typescript
-function onChanOpenAck(
-  portIdentifier: Identifier,
-  channelIdentifier: Identifier,
-  counterpartyChannelIdentifier: Identifier,
-  counterpartyVersion: string) {
-  // port has already been validated
-  // assert that counterparty selected version is the same as our version
-  channel = provableStore.get(channelPath(portIdentifier, channelIdentifier))
-  abortTransactionUnless(counterpartyVersion === channel.version)
-}
-```
-
-```typescript
-function onChanOpenConfirm(
-  portIdentifier: Identifier,
-  channelIdentifier: Identifier) {
-  // accept channel confirmations, port has already been validated, version has already been validated
-}
-```
-
-```typescript
-function onChanCloseInit(
-  portIdentifier: Identifier,
-  channelIdentifier: Identifier) {
-    // always abort transaction
-    abortTransactionUnless(FALSE)
-}
-```
-
-```typescript
-function onChanCloseConfirm(
-  portIdentifier: Identifier,
-  channelIdentifier: Identifier) {
-  // no action necessary
-}
-```
-
 ##### Packet relay
+
+This specification defines packet handling semantics.
 
 In plain English, between chains `A` and `B`:
 
@@ -351,95 +259,104 @@ In plain English, between chains `A` and `B`:
 
 Note: `constructOnChainDenom` is a helper function that will construct the local on-chain denomination for the bridged token. It **must** encode the trace and base denomination to ensure that tokens coming over different paths are not treated as fungible. The original trace and denomination must be retrievable by the state machine so that they can be passed in their original forms when constructing a new IBC path for the bridged token. The ibc-go implementation handles this by creating a local denomination: `hash(trace+base_denom)`.
 
-`sendFungibleTokens` must be called by a transaction handler in the module which performs appropriate signature checks, specific to the account owner on the host state machine.
+`onSendFungibleTokens` must be called by a transaction handler in the module which performs appropriate signature checks, specific to the account owner on the host state machine.
 
 ```typescript
-function sendFungibleTokens(
-  tokens: []Token,
-  sender: string,
-  receiver: string,
-  memo: string,
-  forwarding: Forwarding,
-  sourcePort: string,
-  sourceChannel: string,
-  timeoutHeight: Height,
-  timeoutTimestamp: uint64, // in unix nanoseconds
-): uint64 {
+function onSendFungibleTokens(
+  sourceChannnelId: bytes,
+  // counterpartyChannelId:bytes, // Probably Unnecessary 
+  payload: Payload
+  ): bool {
+  
+  // the decode function must check the payload.encoding is among those supported 
+  success,appData=decode(payload.encoding,payload.appData)
+  abortTransactionUnless(success)
   // memo and forwarding cannot both be non-empty
-  abortTransactionUnless(memo != "" && forwarding != nil)
-  for token in tokens 
+  abortTransactionUnless(appData.memo != "" && appData.forwarding != nil)
+  for token in appData.tokens 
     onChainDenom = constructOnChainDenom(token.denom.trace, token.denom.base)
     // if the token is not prefixed by our channel end's port and channel identifiers
     // then we are sending as a source zone
-    if !isTracePrefixed(sourcePort, sourceChannel, token) {
+    if !isTracePrefixed("transfer", sourceChannelId, token) {
       // determine escrow account
-      escrowAccount = channelEscrowAddresses[sourceChannel]
+      escrowAccount = channelEscrowAddresses[sourceChannelId]
       // escrow source tokens (assumed to fail if balance insufficient)
-      bank.TransferCoins(sender, escrowAccount, onChainDenom, token.amount)
+      bank.TransferCoins(appData.sender, escrowAccount, onChainDenom, token.amount)
     } else {
       // receiver is source chain, burn vouchers
-      bank.BurnCoins(sender, onChainDenom, token.amount)
+      bank.BurnCoins(appData.sender, onChainDenom, token.amount)
     }
   }
 
   var dataBytes bytes
-  channel = provableStore.get(channelPath(sourcePort, sourceChannel))
-  // getAppVersion returns the transfer version that is embedded in the channel version
-  // as the channel version may contain additional app or middleware version(s)
-  transferVersion = getAppVersion(channel.version)
+  transferVersion = payload.version
   if transferVersion == "ics20-1" {
-    abortTransactionUnless(len(tokens) == 1)
-    token = tokens[0]
+    abortTransactionUnless(len(appData.tokens) == 1)
+    token = appData.tokens[0]
     // abort if forwarding defined
-    abortTransactionUnless(forwarding == nil)
+    abortTransactionUnless(appData.forwarding == nil)
     // create v1 denom of the form: port1/channel1/port2/channel2/port3/channel3/denom
     v1Denom = constructOnChainDenom(token.denom.trace, token.denom.base)
     // v1 packet data does not support forwarding fields
-    data = FungibleTokenPacketData{v1Denom, token.amount, sender, receiver, memo}
-    // JSON-marshal packet data into bytes
-    dataBytes = json.marshal(data)
+    data = FungibleTokenPacketData{v1Denom, token.amount, appData.sender, appData.receiver,appData.memo}
+    // specific econding packet data marshalling into bytes
+    dataBytes = payload.encoding.marshal(appData)
   } else if transferVersion == "ics20-2" {
     // create FungibleTokenPacket data
-    data = FungibleTokenPacketDataV2{tokens, sender, receiver, memo, forwarding}
-    // protobuf-marshal packet data into bytes
-    dataBytes = protobuf.marshal(data)
+    data = FungibleTokenPacketDataV2{tokens, appData.sender, appData.receiver, appData.memo, appData.forwarding}
+    // specific econding packet data marshalling into bytes
+    dataBytes = payload.encoding.marshal(appData)
   } else {
-    // should never be reached as transfer version must be negotiated to be either
-    // ics20-1 or ics20-2 during channel handshake
+   // Unsupported transfer version
     abortTransactionUnless(false)
   }
-
-  // send packet using the interface defined in ICS4
-  sequence = handler.sendPacket(
-    getCapability("port"),
-    sourcePort,
-    sourceChannel,
-    timeoutHeight,
-    timeoutTimestamp,
-    dataBytes,
-  )
-
-  return sequence
+  return true
 }
 ```
+
+
+// Need to allign with the other 
+interface Packet {
+    sourceChannelId: bytes, // channel identifier on the source chain. 
+    destChannelId: bytes, // channel identifier on the dest chain.
+    sequence: uint64, // number that corresponds to the order of sent packets.
+    timeout: uint64, // indicates the UNIX timestamp in seconds and is encoded in LittleEndian. It must be passed on the destination chain and once elapsed, will no longer allow the packet processing, and will instead generate a time-out.
+    data: Payload[] // data 
+}
+The Payload is a particular interface defined as follows:
+
+interface Payload {
+    sourcePort: bytes, // identifies the source application port
+    destPort: bytes, // identifies the dest application port 
+    version: string, // application version
+    encoding: Encoding, // used encoding - allows the specification of custom data encoding among those agreed in the `Encoding` enum
+    appData: bytes, // app specific data 
+}
+
+enum Encoding {
+  NO_ENCODING_SPECIFIED,
+    PROTO_3,
+    JSON,
+    RLP,
+    BCS,
+}
 
 `onRecvPacket` is called by the routing module when a packet addressed to this module has been received.
 
 Note: Function `parseICS20V1Denom` is a helper function that will take the full IBC denomination and extract the base denomination (i.e. native denomination in the chain of origin) and the trace information (if any) for the received token.
 
+packet.channelDestId,payload,relayer,packet.sequence
+
 ```typescript
 function onRecvPacket(packet: Packet) {
-  channel = provableStore.get(channelPath(portIdentifier, channelIdentifier))
-  // getAppVersion returns the transfer version that is embedded in the channel version
-  // as the channel version may contain additional app or middleware version(s)
-  transferVersion = getAppVersion(channel.version)
+  transferVersion = packet.payload.version
   var tokens []Token
   var sender string
   var receiver string // address to send tokens to on this chain
   var finalReceiver string // final intended address in forwarding case
 
   if transferVersion == "ics20-1" {
-     FungibleTokenPacketData data = json.unmarshal(packet.data)
+     FungibleTokenPacketData data = packet.payload.encoding.unmarshal(packet.payload.appData)
      // convert full denom string to denom struct with base denom and trace
      denom = parseICS20V1Denom(data.denom)
      token = Token{
@@ -450,7 +367,7 @@ function onRecvPacket(packet: Packet) {
      sender = data.sender
      receiver = data.receiver
   } else if transferVersion == "ics20-2" {
-    FungibleTokenPacketDataV2 data = protobuf.unmarshal(packet.data)
+    FungibleTokenPacketDataV2 data = packet.payload.encoding.unmarshal(packet.payload.encoding.appData)
     tokens = data.tokens
     sender = data.sender
 
@@ -460,10 +377,10 @@ function onRecvPacket(packet: Packet) {
     if len(data.forwarding.hops) > 0 {
       // memo must be empty
       abortTransactionUnless(data.memo == "")
-      if channelForwardingAddress[packet.destChannel] == "" {
-        channelForwardingAddress[packet.destChannel] = newAddress()
+      if channelForwardingAddress[packet.destChannelId] == "" {
+        channelForwardingAddress[packet.destChannelId] = newAddress()
       }
-      receiver = channelForwardingAddresses[packet.destChannel]
+      receiver = channelForwardingAddresses[packet.destChannelId]
       finalReceiver = data.receiver
     } else {
       receiver = data.receiver
@@ -491,13 +408,13 @@ function onRecvPacket(packet: Packet) {
     // port and channel identifiers then we are receiving tokens we 
     // previously had sent to the sender, thus we are receiving the tokens
     // as a source zone
-    if isTracePrefixed(packet.sourcePort, packet.sourceChannel, token) {
+    if isTracePrefixed(packet.payload.sourcePort, packet.sourceChannelId, token) {
       // since we are receiving back to source we remove the prefix from the trace
       onChainTrace = token.trace[1:]
       onChainDenom = constructOnChainDenom(onChainTrace, token.denom.base)
       // receiver is source chain: unescrow tokens
       // determine escrow account
-      escrowAccount = channelEscrowAddresses[packet.destChannel]
+      escrowAccount = channelEscrowAddresses[packet.destChannelId]
       // unescrow tokens to receiver (assumed to fail if balance insufficient)
       err = bank.TransferCoins(escrowAccount, receiver, onChainDenom, token.amount)
       if (err != nil) {
@@ -507,7 +424,7 @@ function onRecvPacket(packet: Packet) {
       }
     } else {
       // since we are receiving to a new sink zone we prepend the prefix to the trace
-      prefixTrace = Hop{portId: packet.destPort, channelId: packet.destChannel}
+      prefixTrace = Hop{portId: packet.payload.destPort, channelId: packet.destChannelId}
       onChainTrace = append([]Hop{prefixTrace}, token.denom.trace...)
       onChainDenom = constructOnChainDenom(onChainTrace, token.denom.base)
       // sender was source, mint vouchers to receiver (assumed to fail if balance insufficient)
@@ -555,6 +472,7 @@ function onRecvPacket(packet: Packet) {
     // send the tokens we received above to the next port and channel
     // on the forwarding path
     // and reduce the forwarding by the first element
+    // Here we must call the core sendPacket providing the correct Payload --> Need to construct the payload 
     packetSequence = sendFungibleTokens(
       receivedTokens,
       receiver, // sender of next packet
@@ -591,7 +509,7 @@ function onAcknowledgePacket(
   }
 
   // check if the packet that was sent is from a previously forwarded packet
-  prevPacket = privateStore.get(packetForwardPath(packet.sourcePort, packet.sourceChannel, packet.sequence))
+  prevPacket = privateStore.get(packetForwardPath(packet.sourceChannelId, packet.sequence))
 
   if prevPacket != nil {
     if acknowledgement.success {
@@ -614,7 +532,7 @@ function onAcknowledgePacket(
     }
 
     // delete the forwarded packet that triggered sending this packet
-    privateStore.delete(packetForwardPath(packet.sourcePort, packet.sourceChannel, packet.sequence))
+    privateStore.delete(packetForwardPath(packet.sourceChannelId, packet.sequence))
   }
 }
 ```
@@ -630,7 +548,7 @@ function onTimeoutPacket(packet: Packet) {
   refundTokens(packet)
 
   // check if the packet sent is from a previously forwarded packet
-  prevPacket = privateStore.get(packetForwardPath(packet.sourcePort, packet.sourceChannel, packet.sequence))
+  prevPacket = privateStore.get(packetForwardPath(packet.sourceChannelId, packet.sequence))
 
   if prevPacket != nil {
     // the forwarded packet has failed, thus the funds have been refunded to the forwarding address.
@@ -645,7 +563,7 @@ function onTimeoutPacket(packet: Packet) {
     )
 
     // delete the forwarded packet that triggered sending this packet
-    privateStore.delete(packetForwardPath(packet.sourcePort, packet.sourceChannel, packet.sequence))
+    privateStore.delete(packetForwardPath(packet.sourceChannelId, packet.sequence))
   }
 }
 ```
@@ -717,8 +635,8 @@ function refundTokens(packet: Packet) {
 // on this chain must be reverted before sending back the error acknowledgement
 // to ensure atomic packet forwarding
 function revertInFlightChanges(sentPacket: Packet, receivedPacket: Packet) {
-  forwardingAddress = channelForwardingAddress[receivedPacket.destChannel]
-  reverseEscrow = channelEscrowAddresses[receivedPacket.destChannel]
+  forwardingAddress = channelForwardingAddress[receivedPacket.destChannelId]
+  reverseEscrow = channelEscrowAddresses[receivedPacket.destChannelId]
 
   // the token on our chain is the token in the sentPacket
   for token in sentPacket.tokens {
@@ -738,12 +656,6 @@ function revertInFlightChanges(sentPacket: Packet, receivedPacket: Packet) {
       bank.BurnCoins(forwardingAddress, token.denom, token.amount)
     }
   }
-}
-```
-
-```typescript
-function onTimeoutPacketClose(packet: Packet) {
-  // can't happen, only unordered channels allowed
 }
 ```
 
@@ -799,10 +711,7 @@ Not applicable.
 
 ## Forwards Compatibility
 
-This initial standard uses version "ics20-1" in the channel handshake.
-
-A future version of this standard could use a different version in the channel handshake,
-and safely alter the packet data format & packet handler semantics.
+Not applicable.
 
 ## Example Implementations
 
