@@ -258,8 +258,7 @@ Note: `constructOnChainDenom` is a helper function that will construct the local
 
 ```typescript
 function onSendFungibleTokens(
-  sourceChannnelId: bytes,
-  // counterpartyChannelId:bytes, // Probably Unnecessary 
+  sourceChannnelId: bytes, 
   payload: Payload
   ): bool {
   
@@ -314,15 +313,18 @@ function onSendFungibleTokens(
 Note: Function `parseICS20V1Denom` is a helper function that will take the full IBC denomination and extract the base denomination (i.e. native denomination in the chain of origin) and the trace information (if any) for the received token.
 
 ```typescript
-function onRecvPacket(packet: Packet) {
-  transferVersion = packet.payload.version
+function onRecvPacket(
+  packet: Packet, 
+  payload: Payload
+  ): (bytes, bool) {
+  transferVersion = payload.version
   var tokens []Token
   var sender string
   var receiver string // address to send tokens to on this chain
   var finalReceiver string // final intended address in forwarding case
 
   if transferVersion == "ics20-1" {
-     FungibleTokenPacketData data = packet.payload.encoding.unmarshal(packet.payload.appData)
+     FungibleTokenPacketData data = payload.encoding.unmarshal(payload.appData)
      // convert full denom string to denom struct with base denom and trace
      denom = parseICS20V1Denom(data.denom)
      token = Token{
@@ -333,7 +335,7 @@ function onRecvPacket(packet: Packet) {
      sender = data.sender
      receiver = data.receiver
   } else if transferVersion == "ics20-2" {
-    FungibleTokenPacketDataV2 data = packet.payload.encoding.unmarshal(packet.payload.appData)
+    FungibleTokenPacketDataV2 data = payload.encoding.unmarshal(payload.appData)
     tokens = data.tokens
     sender = data.sender
 
@@ -374,7 +376,7 @@ function onRecvPacket(packet: Packet) {
     // port and channel identifiers then we are receiving tokens we 
     // previously had sent to the sender, thus we are receiving the tokens
     // as a source zone
-    if isTracePrefixed(packet.payload.sourcePort, packet.sourceChannelId, token) {
+    if isTracePrefixed(payload.sourcePort, packet.sourceChannelId, token) {
       // since we are receiving back to source we remove the prefix from the trace
       onChainTrace = token.trace[1:]
       onChainDenom = constructOnChainDenom(onChainTrace, token.denom.base)
@@ -390,7 +392,7 @@ function onRecvPacket(packet: Packet) {
       }
     } else {
       // since we are receiving to a new sink zone we prepend the prefix to the trace
-      prefixTrace = Hop{portId: packet.payload.destPort, channelId: packet.destChannelId}
+      prefixTrace = Hop{portId: payload.destPort, channelId: packet.destChannelId}
       onChainTrace = append([]Hop{prefixTrace}, token.denom.trace...)
       onChainDenom = constructOnChainDenom(onChainTrace, token.denom.base)
       // sender was source, mint vouchers to receiver (assumed to fail if balance insufficient)
@@ -412,7 +414,7 @@ function onRecvPacket(packet: Packet) {
 
   // if there is an error ack return immediately and do not forward further
   if !ack.Success() {
-    return ack
+    return ack, true
   }
 
   // if acknowledgement is successful and forwarding path set
@@ -434,10 +436,10 @@ function onRecvPacket(packet: Packet) {
     // on the forwarding path
     // and reduce the forwarding by the first element
   
-  // Here we must call the core sendPacket providing the correct Payload --> Need to construct the payload 
+  // Here we must call the core sendPacket providing the correct forwardingPayload --> Need to construct the payload 
   //construct payload 
 
-  ForwardingPayload= FungibleTokenPacketDataV2 {
+  forwardingPayload= FungibleTokenPacketDataV2 {
     tokens: receivedTokens,
     sender: receiver
     receiver: finalReceiver
@@ -448,18 +450,18 @@ function onRecvPacket(packet: Packet) {
     forwarding: nextForwarding 
   }
   
-  packetSequence=ics04.sendPacket(
+  packetSequence=handler.sendPacket(
       forwarding.hops[0].channelId,
       currentTime() + DefaultHopTimeoutPeriod,
-      ForwardingPayload
+      forwardingPayload
     )
     // store packet for future sending ack
     privateStore.set(packetForwardPath(forwarding.hops[0].channelId, packetSequence), packet)
     // use async ack until we get successful acknowledgement from further down the line.
-    return nil
+    return nil, true
   }
 
-  return ack
+  return ack,true
 }
 ```
 
@@ -468,13 +470,15 @@ function onRecvPacket(packet: Packet) {
 ```typescript
 function onAcknowledgePacket(
   packet: Packet,
-  acknowledgement: bytes) {
+  payload: Payload, 
+  acknowledgement: bytes
+  ): bool {
   // if the transfer failed, refund the tokens
   // to the sender account. In case of a packet sent for a
   // forwarded packet, the sender is the forwarding
   // address for the destination channel of the forwarded packet.
   if !(acknowledgement.success) {
-    refundTokens(packet)
+    refundTokens(packet, payload)
   }
 
   // check if the packet that was sent is from a previously forwarded packet
@@ -491,7 +495,7 @@ function onAcknowledgePacket(
       // the forwarded packet has failed, thus the funds have been refunded to the forwarding address.
       // we must revert the changes that came from successfully receiving the tokens on our chain
       // before propogating the error acknowledgement back to original sender chain
-      revertInFlightChanges(packet, prevPacket)
+      revertInFlightChanges(packet, prevPacket, payload)
       // write error acknowledgement
       FungibleTokenPacketAcknowledgement ack = FungibleTokenPacketAcknowledgement{false, "forwarded packet failed"}
       handler.writeAcknowledgement(
@@ -503,18 +507,23 @@ function onAcknowledgePacket(
     // delete the forwarded packet that triggered sending this packet
     privateStore.delete(packetForwardPath(packet.sourceChannelId, packet.sequence))
   }
+
+  return true
 }
 ```
 
 `onTimeoutPacket` is called by the routing module when a packet sent by this module has timed-out (such that it will not be received on the destination chain).
 
 ```typescript
-function onTimeoutPacket(packet: Packet) {
+function onTimeoutPacket(
+  packet: Packet,
+  payload: Payload
+  ): bool {
   // the packet timed-out, so refund the tokens
   // to the sender account. In case of a packet sent for a
   // forwarded packet, the sender is the forwarding
   // address for the destination channel of the forwarded packet.
-  refundTokens(packet)
+  refundTokens(packet,payload)
 
   // check if the packet sent is from a previously forwarded packet
   prevPacket = privateStore.get(packetForwardPath(packet.sourceChannelId, packet.sequence))
@@ -523,7 +532,7 @@ function onTimeoutPacket(packet: Packet) {
     // the forwarded packet has failed, thus the funds have been refunded to the forwarding address.
     // we must revert the changes that came from successfully receiving the tokens on our chain
     // before propogating the error acknowledgement back to original sender chain
-    revertInFlightChanges(packet, prevPacket)
+    revertInFlightChanges(packet, prevPacket, payload)
     // write error acknowledgement
     FungibleTokenPacketAcknowledgement ack = FungibleTokenPacketAcknowledgement{false, "forwarded packet timed out"}
     handler.writeAcknowledgement(
@@ -557,12 +566,15 @@ function isTracePrefixed(portId: string, channelId: string, token: Token) boolea
 `refundTokens` is called by both `onAcknowledgePacket`, on failure, and `onTimeoutPacket`, to refund escrowed tokens to the original sender.
 
 ```typescript
-function refundTokens(packet: Packet) {
+function refundTokens(
+  packet: Packet,
+  payload: Payload
+  ) {
   
   // retrieve version from payload 
-  transferVersion = packet.payload.version
+  transferVersion = payload.version
   if transferVersion == "ics20-1" {
-     FungibleTokenPacketData data = packet.payload.encoding.unmarshal(packet.payload.appData)
+     FungibleTokenPacketData data = payload.encoding.unmarshal(payload.appData)
      // convert full denom string to denom struct with base denom and trace
      denom = parseICS20V1Denom(data.denom)
      token = Token{
@@ -571,7 +583,7 @@ function refundTokens(packet: Packet) {
      }
      tokens = []Token{token}
   } else if transferVersion == "ics20-2" {
-    FungibleTokenPacketDataV2 data = packet.payload.encoding.unmarshal(packet.payload.appData)
+    FungibleTokenPacketDataV2 data = payload.encoding.unmarshal(payload.appData)
     tokens = data.tokens
   } else {
     // Unsupported version
@@ -583,7 +595,7 @@ function refundTokens(packet: Packet) {
     // Since this is refunding an outgoing packet, we can check if the tokens 
     // were originally from the receiver by checking if the tokens were prefixed
     // by our channel end's identifiers.
-    if !isTracePrefixed(packet.payload.sourcePortId, packet.sourceChannelId, token) {
+    if !isTracePrefixed(payload.sourcePortId, packet.sourceChannelId, token) {
       // sender was source chain, unescrow tokens back to sender
       escrowAccount = channelEscrowAddresses[packet.sourceChannelId]
       bank.TransferCoins(escrowAccount, data.sender, onChainDenom, token.amount)
@@ -601,19 +613,24 @@ function refundTokens(packet: Packet) {
 // If an error occurs further down the line, the state changes
 // on this chain must be reverted before sending back the error acknowledgement
 // to ensure atomic packet forwarding
-function revertInFlightChanges(sentPacket: Packet, receivedPacket: Packet) {
+function revertInFlightChanges(
+  sentPacket: Packet, 
+  receivedPacket: Packet,
+  sentPayload: Payload,
+  receivedPayload: Payload
+  ) {
   forwardingAddress = channelForwardingAddress[receivedPacket.destChannelId]
   reverseEscrow = channelEscrowAddresses[receivedPacket.destChannelId]
 
   // the token on our chain is the token in the sentPacket
-  for token in sentPacket.payload.appData.tokens {
+  for token in payload.appData.tokens {
     // we are checking if the tokens that were sent out by our chain in the 
     // sentPacket were source tokens with respect to the original receivedPacket.
     // If the tokens in sentPacket were prefixed by our channel end's port and channel
     // identifiers, then it was a minted voucher and we need to burn it.
     // Otherwise, it was an original token from our chain and we must give the tokens
     // back to the escrow account.
-    if !isTracePrefixed(receivedPacket.payload.destinationPort, receivedPacket.desinationChannelId, token) {
+    if !isTracePrefixed(receivedPayload.destinationPort, receivedPacket.destChannelId, token) {
       // receive sent tokens from the received escrow account to the forwarding account
       // so we must send the tokens back from the forwarding account to the received escrow account
       bank.TransferCoins(forwardingAddress, reverseEscrow, token.denom, token.amount)
