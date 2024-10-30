@@ -558,12 +558,11 @@ function isTracePrefixed(portId: string, channelId: string, token: Token) boolea
 
 ```typescript
 function refundTokens(packet: Packet) {
-  channel = provableStore.get(channelPath(portIdentifier, channelIdentifier))
-  // getAppVersion returns the transfer version that is embedded in the channel version
-  // as the channel version may contain additional app or middleware version(s)
-  transferVersion = getAppVersion(channel.version)
+  
+  // retrieve version from payload 
+  transferVersion = packet.payload.version
   if transferVersion == "ics20-1" {
-     FungibleTokenPacketData data = json.unmarshal(packet.data)
+     FungibleTokenPacketData data = packet.payload.encoding.unmarshal(packet.payload.appData)
      // convert full denom string to denom struct with base denom and trace
      denom = parseICS20V1Denom(data.denom)
      token = Token{
@@ -572,11 +571,10 @@ function refundTokens(packet: Packet) {
      }
      tokens = []Token{token}
   } else if transferVersion == "ics20-2" {
-    FungibleTokenPacketDataV2 data = protobuf.unmarshal(packet.data)
+    FungibleTokenPacketDataV2 data = packet.payload.encoding.unmarshal(packet.payload.appData)
     tokens = data.tokens
   } else {
-    // should never be reached as transfer version must be negotiated to be either
-    // ics20-1 or ics20-2 during channel handshake
+    // Unsupported version
     abortTransactionUnless(false)
   }
 
@@ -585,9 +583,9 @@ function refundTokens(packet: Packet) {
     // Since this is refunding an outgoing packet, we can check if the tokens 
     // were originally from the receiver by checking if the tokens were prefixed
     // by our channel end's identifiers.
-    if !isTracePrefixed(packet.sourcePort, packet.sourceChannel, token) {
+    if !isTracePrefixed(packet.payload.sourcePortId, packet.sourceChannelId, token) {
       // sender was source chain, unescrow tokens back to sender
-      escrowAccount = channelEscrowAddresses[packet.sourceChannel]
+      escrowAccount = channelEscrowAddresses[packet.sourceChannelId]
       bank.TransferCoins(escrowAccount, data.sender, onChainDenom, token.amount)
     } else {
       // receiver was source chain, mint vouchers back to sender
@@ -608,14 +606,14 @@ function revertInFlightChanges(sentPacket: Packet, receivedPacket: Packet) {
   reverseEscrow = channelEscrowAddresses[receivedPacket.destChannelId]
 
   // the token on our chain is the token in the sentPacket
-  for token in sentPacket.tokens {
+  for token in sentPacket.payload.appData.tokens {
     // we are checking if the tokens that were sent out by our chain in the 
     // sentPacket were source tokens with respect to the original receivedPacket.
     // If the tokens in sentPacket were prefixed by our channel end's port and channel
     // identifiers, then it was a minted voucher and we need to burn it.
     // Otherwise, it was an original token from our chain and we must give the tokens
     // back to the escrow account.
-    if !isTracePrefixed(receivedPacket.destinationPort, receivedPacket.desinationChannel, token) {
+    if !isTracePrefixed(receivedPacket.payload.destinationPort, receivedPacket.desinationChannelId, token) {
       // receive sent tokens from the received escrow account to the forwarding account
       // so we must send the tokens back from the forwarding account to the received escrow account
       bank.TransferCoins(forwardingAddress, reverseEscrow, token.denom, token.amount)
