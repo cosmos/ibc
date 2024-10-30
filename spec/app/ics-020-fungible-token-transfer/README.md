@@ -208,7 +208,7 @@ interface ModuleState {
 The `v2` packets that have non-empty forwarding information and should thus be forwarded, must be stored in the private store, so that an acknowledgement can be written for them when receiving an acknowledgement or timeout for the forwarded packet.
 
 ```typescript
-function packetForwardPath(channelIdentifier: Identifier, sequence: bigEndianUint64): Path {
+function packetForwardPath(channelIdentifier: bytes, sequence: bigEndianUint64): Path {
   return "{channelIdentifier}0x4{bigEndianUint64Sequence}"
 }
 ```
@@ -237,16 +237,11 @@ Once the `setup` function has been called, the application callbacks are registe
 
 #### Routing module callbacks
 
-##### Channel lifecycle management
-
-Both machines `A` and `B` accept new channels from any module on another machine, if and only if:
-
-- The channel being created is unordered.
-- The version string is `ics20-1` or `ics20-2`.
-
 ##### Packet relay
 
 This specification defines packet handling semantics.
+
+Both machines `A` and `B` accept new packet from any module on another machine, if and only if the version string is `ics20-1` or `ics20-2`.
 
 In plain English, between chains `A` and `B`:
 
@@ -314,38 +309,9 @@ function onSendFungibleTokens(
 }
 ```
 
-
-// Need to allign with the other 
-interface Packet {
-    sourceChannelId: bytes, // channel identifier on the source chain. 
-    destChannelId: bytes, // channel identifier on the dest chain.
-    sequence: uint64, // number that corresponds to the order of sent packets.
-    timeout: uint64, // indicates the UNIX timestamp in seconds and is encoded in LittleEndian. It must be passed on the destination chain and once elapsed, will no longer allow the packet processing, and will instead generate a time-out.
-    data: Payload[] // data 
-}
-The Payload is a particular interface defined as follows:
-
-interface Payload {
-    sourcePort: bytes, // identifies the source application port
-    destPort: bytes, // identifies the dest application port 
-    version: string, // application version
-    encoding: Encoding, // used encoding - allows the specification of custom data encoding among those agreed in the `Encoding` enum
-    appData: bytes, // app specific data 
-}
-
-enum Encoding {
-  NO_ENCODING_SPECIFIED,
-    PROTO_3,
-    JSON,
-    RLP,
-    BCS,
-}
-
 `onRecvPacket` is called by the routing module when a packet addressed to this module has been received.
 
 Note: Function `parseICS20V1Denom` is a helper function that will take the full IBC denomination and extract the base denomination (i.e. native denomination in the chain of origin) and the trace information (if any) for the received token.
-
-packet.channelDestId,payload,relayer,packet.sequence
 
 ```typescript
 function onRecvPacket(packet: Packet) {
@@ -367,7 +333,7 @@ function onRecvPacket(packet: Packet) {
      sender = data.sender
      receiver = data.receiver
   } else if transferVersion == "ics20-2" {
-    FungibleTokenPacketDataV2 data = packet.payload.encoding.unmarshal(packet.payload.encoding.appData)
+    FungibleTokenPacketDataV2 data = packet.payload.encoding.unmarshal(packet.payload.appData)
     tokens = data.tokens
     sender = data.sender
 
@@ -451,41 +417,44 @@ function onRecvPacket(packet: Packet) {
 
   // if acknowledgement is successful and forwarding path set
   // then start forwarding
-  if len(forwarding.hops) > 0 {
-    //check that next channel supports token forwarding
-    channel = provableStore.get(channelPath(forwarding.hops[0].portId, forwarding.hops[0].channelId))
-    if channel.version != "ics20-2" && len(forwarding.hops) > 1 {
-      ack = FungibleTokenPacketAcknowledgement(false, "next hop in path cannot support forwarding onward")
-      return ack
-    }
+  if len(data.forwarding.hops) > 0 {
+    
     memo = ""
     nextForwarding = Forwarding{
-      hops: forwarding.hops[1:]
-      memo: forwarding.memo
+      hops: data.forwarding.hops[1:]
+      memo: data.forwarding.memo
     }
-    if len(forwarding.hops) == 1 {
+    if len(data.forwarding.hops) == 1 {
       // we're on the last hop, we can set memo and clear
       // the next forwarding
-      memo = forwarding.memo
+      memo = data.forwarding.memo
       nextForwarding = nil
     }
     // send the tokens we received above to the next port and channel
     // on the forwarding path
     // and reduce the forwarding by the first element
-    // Here we must call the core sendPacket providing the correct Payload --> Need to construct the payload 
-    packetSequence = sendFungibleTokens(
-      receivedTokens,
-      receiver, // sender of next packet
-      finalReceiver, // receiver of next packet
-      memo,
-      nextForwarding,
-      forwarding.hops[0].portId,
+  
+  // Here we must call the core sendPacket providing the correct Payload --> Need to construct the payload 
+  //construct payload 
+
+  ForwardingPayload= FungibleTokenPacketDataV2 {
+    tokens: receivedTokens,
+    sender: receiver
+    receiver: finalReceiver
+    memo: memo, 
+    // a struct containing the list of next hops, 
+    // determining where the tokens must be forwarded next, 
+    // and the memo for the final hop
+    forwarding: nextForwarding 
+  }
+  
+  packetSequence=ics04.sendPacket(
       forwarding.hops[0].channelId,
-      Height{},
       currentTime() + DefaultHopTimeoutPeriod,
+      ForwardingPayload
     )
     // store packet for future sending ack
-    privateStore.set(packetForwardPath(forwarding.hops[0].portId, forwarding.hops[0].channelId, packetSequence), packet)
+    privateStore.set(packetForwardPath(forwarding.hops[0].channelId, packetSequence), packet)
     // use async ack until we get successful acknowledgement from further down the line.
     return nil
   }
