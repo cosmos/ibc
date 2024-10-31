@@ -192,14 +192,20 @@ Additionally, the ICS-04 defines the following variables:  `nextSequenceSend` , 
 - The `nextSequenceSend`  tracks the sequence number for the next packet to be sent for a given source channelId.
 - The `channelCreator` tracks the channels creator address given the channelId.
 - The `storedChannels` tracks the channels paired with the other chains.
+- The `storedPacket` tracks the full packet for asynchronous ack management. 
 
 ```typescript
 type nextSequenceSend : channelId -> BigEndianUint64 
 type channelCreator : channelId -> address 
 type storedChannels : channelId -> Channel
+type storedPacket : (channelId,bigEndianUint64) -> Packet // channelId,sequence --> Packet 
 
 function getChannel(channelId: bytes): Channel {
     return storedChannels[channelId]
+}
+
+function getPacket(channelId: bytes, sequence: bigEndianUint64): Packet {
+    return storedPacket[channelId,sequence]
 }
 ```
 
@@ -536,7 +542,7 @@ function sendPacket(
     sourceChannelId: bytes, 
     timeoutTimestamp: uint64,
     payloads: Payload[] 
-    ) : BigEndianUint64 {
+    ) : bigEndianUint64 {
 
     // Setup checks - channel and client 
     channel = getChannel(sourceChannelId)
@@ -560,7 +566,7 @@ function sendPacket(
     // Currently we support only len(payloads)==1 
     payload=payloads[0]
     cbs = router.callbacks[payload.sourcePort]
-    success = cbs.onSendPacket(sourceChannelId,channel.counterpartyChannelId,payload) // Note that payload includes the version. The application is required to inspect the version to route the data to the proper callback
+    success = cbs.onSendPacket(sourceChannelId,payload) // Note that payload includes the version. The application is required to inspect the version to route the data to the proper callback
     // IMPORTANT: if the onSendPacket fails, the transaction is aborted and the potential state changes are reverted. 
     // This ensure that the post conditions on error are always respected. 
     // payload execution check  
@@ -680,11 +686,21 @@ function recvPacket(
     abortTransactionUnless(success)
     if ack != nil {
         // NOTE: Synchronous ack. 
-        writeAcknowledgement(packet, ack)
-    }
+        writeAcknowledgement(packet.channelDestId,packet.sequence,ack)
+        // In case of Synchronous ack we emit the event here as we have all the necessary information, while writeAcknowledgement can only retrieve this in case of asynchronous ack. 
+        emitLogEntry("writeAcknowledgement", {
+            sequence: packet.sequence,
+            sourceId: packet.channelSourceId,
+            destId: packet.channelDestId,
+            timeoutTimestamp: packet.timeoutTimestamp,
+            data: packet.data,
+            ack
+        })
+    }else {
     // NOTE No ack || Asynchronous ack. 
-    //else: ack is nil and won't be written || ack is nil and will be written asynchronously 
-
+    // ack is nil and will be written asynchronously, so we store the full packet in the private store
+        storedPacket[packet.channelDestId,packet.sequence]=packet
+    }
     // Provable Stores 
     // we must set the receipt so it can be verified on the other side
     // it's the sentinel success receipt: []byte{0x01}
@@ -740,30 +756,35 @@ The ICS-04 provides an example pseudo-code that enforce the above described cond
 
 ```typescript
 function writeAcknowledgement(
-  packet: Packet,
+  destChannelId: bytes,
+  sequence: bigEndianUint64, 
   acknowledgement: Acknowledgement) {
     // acknowledgement must not be empty
     abortTransactionUnless(len(acknowledgement) !== 0)
 
     // cannot already have written the acknowledgement
-    abortTransactionUnless(provableStore.get(packetAcknowledgementPath(packet.channelDestId, packet.sequence) === null))
+    abortTransactionUnless(provableStore.get(packetAcknowledgementPath(destChannelId, sequence) === null))
     
     // create the acknowledgement coomit using the function defined in [packet specification](https://github.com/cosmos/ibc/blob/c7b2e6d5184b5310843719b428923e0c5ee5a026/spec/core/v2/ics-004-packet-semantics/PACKET.md)
     commit=commitV2Acknowledgment(acknowledgement)
     
     provableStore.set(
-    packetAcknowledgementPath(packet.channelDestId, packet.sequence),commit)
+    packetAcknowledgementPath(destChannelId, sequence),commit)
 
     // log that a packet has been acknowledged
-    // Event Emission
-    emitLogEntry("writeAcknowledgement", {
-      sequence: packet.sequence,
-      sourceId: packet.channelSourceId,
-      destId: packet.channelDestId,
-      timeoutTimestamp: packet.timeoutTimestamp,
-      data: packet.data,
-      acknowledgement
-    })
+    // Event Emission 
+    // Note that the event should be emitted by this function only in the asynchrounous ack case. Otherwise the event is emitted during the onReceive 
+    packet=getPacket(destChannelId,sequence)
+    if(packet!=nil){
+        emitLogEntry("writeAcknowledgement", {
+        sequence: packet.sequence,
+        sourceId: packet.channelSourceId,
+        destId: packet.channelDestId,
+        timeoutTimestamp: packet.timeoutTimestamp,
+        data: packet.data,
+        acknowledgement
+        })
+    }
 }
 ```
 
