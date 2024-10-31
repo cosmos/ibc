@@ -784,6 +784,8 @@ function writeAcknowledgement(
         data: packet.data,
         acknowledgement
         })
+        // delete the packet from state 
+        storedPacket[destChannelId,sequence]=nil 
     }
 }
 ```
