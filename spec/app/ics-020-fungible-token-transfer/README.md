@@ -567,10 +567,9 @@ function isTracePrefixed(portId: string, channelId: string, token: Token) boolea
 
 ```typescript
 function refundTokens(
-  packet: Packet,
+  packet: Packet, // The packet here is not necessary, only need to pass the sourceChannelId
   payload: Payload
   ) {
-  
   // retrieve version from payload 
   transferVersion = payload.version
   if transferVersion == "ics20-1" {
@@ -614,9 +613,9 @@ function refundTokens(
 // on this chain must be reverted before sending back the error acknowledgement
 // to ensure atomic packet forwarding
 function revertInFlightChanges(
-  sentPacket: Packet, 
+  sentPacket: Packet,  // Not Necessary
   receivedPacket: Packet,
-  sentPayload: Payload,
+  sentPayload: Payload, // Not Necessary 
   receivedPayload: Payload
   ) {
   forwardingAddress = channelForwardingAddress[receivedPacket.destChannelId]
