@@ -276,24 +276,14 @@ function onSendFungibleTokens(
     }
   }
 
-  var dataBytes bytes
   transferVersion = payload.version
   if transferVersion == "ics20-1" {
     abortTransactionUnless(len(appData.tokens) == 1)
     token = appData.tokens[0]
     // abort if forwarding defined
     abortTransactionUnless(appData.forwarding == nil)
-    // create v1 denom of the form: port1/channel1/port2/channel2/port3/channel3/denom
-    v1Denom = constructOnChainDenom(token.denom.trace, token.denom.base)
-    // v1 packet data does not support forwarding fields
-    data = FungibleTokenPacketData{v1Denom, token.amount, appData.sender, appData.receiver,appData.memo}
-    // specific econding packet data marshalling into bytes
-    dataBytes = payload.encoding.marshal(appData)
   } else if transferVersion == "ics20-2" {
-    // create FungibleTokenPacket data
-    data = FungibleTokenPacketDataV2{tokens, appData.sender, appData.receiver, appData.memo, appData.forwarding}
-    // specific econding packet data marshalling into bytes
-    dataBytes = payload.encoding.marshal(appData)
+    // No-Op
   } else {
    // Unsupported transfer version
     abortTransactionUnless(false)
