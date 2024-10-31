@@ -9,7 +9,7 @@ kind: instantiation
 version compatibility:
 author: Christopher Goes <cwgoes@interchain.berlin>, Aditya Sripal <aditya@interchain.io>
 created: 2019-07-15 
-modified: 2024-03-05
+modified: 2024-10-31
 ---
 
 ## Synopsis
@@ -223,13 +223,7 @@ The `setup` function must be called exactly once when the module is created (per
 
 ```typescript
 function setup() {
-// REWRITE SETUP FUNCTION SUCH THAT IT REGISTER THE MODULE CALLBACKS IN THE PROPER PLACE
-çroutingModule.bindPort("transfer", ModuleCallbacks{
-    onSendPacket,
-    onRecvPacket,
-    onAcknowledgePacket,
-    onTimeoutPacket
-  })
+  IBCRouter.callbacks["transfer"]=[onSendPacket,onRecvPacket,onAcknowledgePacket,onTimeoutPacket]
 }
 ```
 
@@ -258,7 +252,7 @@ Note: `constructOnChainDenom` is a helper function that will construct the local
 
 ```typescript
 function onSendFungibleTokens(
-  sourceChannnelId: bytes, 
+  sourceChannelId: bytes, 
   payload: Payload
   ): bool {
   
@@ -271,7 +265,7 @@ function onSendFungibleTokens(
     onChainDenom = constructOnChainDenom(token.denom.trace, token.denom.base)
     // if the token is not prefixed by our channel end's port and channel identifiers
     // then we are sending as a source zone
-    if !isTracePrefixed("transfer", sourceChannelId, token) {
+    if !isTracePrefixed(payload.sourcePort, sourceChannelId, token) {
       // determine escrow account
       escrowAccount = channelEscrowAddresses[sourceChannelId]
       // escrow source tokens (assumed to fail if balance insufficient)
@@ -728,6 +722,8 @@ Sep 22, 2023 - [Support for multi-token packets](https://github.com/cosmos/ibc/p
 March 5, 2024 - [Support for path forwarding](https://github.com/cosmos/ibc/pull/1090)
 
 June 18, 2024 - [Support for data protobuf encoding](https://github.com/cosmos/ibc/pull/1118)
+
+Oct 31, 2024 - [Support for IBC TAO v2](https://github.com/cosmos/ibc/pull/1157)
 
 ## Copyright
 
