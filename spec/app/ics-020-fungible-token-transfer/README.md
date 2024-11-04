@@ -456,7 +456,7 @@ function onRecvPacket(
 function onAcknowledgePacket(
   sourceChannelId: bytes,
   destChannelId: bytes, 
-  sequence: bigEndianUint64,
+  sequence: uint64,
   payload: Payload, 
   acknowledgement: bytes
   ): bool {
@@ -507,7 +507,7 @@ function onAcknowledgePacket(
 function onTimeoutPacket(
   sourceChannelId: bytes,
   destChannelId: bytes,
-  sequence: bigEndianUint64,
+  sequence: uint64,
   payload: Payload
   ): bool {
   // the packet timed-out, so refund the tokens
