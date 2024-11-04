@@ -279,7 +279,6 @@ function onSendFungibleTokens(
   transferVersion = payload.version
   if transferVersion == "ics20-1" {
     abortTransactionUnless(len(appData.tokens) == 1)
-    token = appData.tokens[0]
     // abort if forwarding defined
     abortTransactionUnless(appData.forwarding == nil)
   } else if transferVersion == "ics20-2" {
@@ -300,7 +299,7 @@ Note: Function `parseICS20V1Denom` is a helper function that will take the full 
 function onRecvPacket(
   destChannelId: bytes,
   sourceChannelId: bytes,
-  sequence: bigEndianUint64, 
+  sequence: uint64, 
   payload: Payload,
   ): (bytes, bool) {
   transferVersion = payload.version
@@ -310,7 +309,7 @@ function onRecvPacket(
   var finalReceiver string // final intended address in forwarding case
 
   if transferVersion == "ics20-1" {
-     FungibleTokenPacketData data = payload.encoding.unmarshal(payload.appData)
+     FungibleTokenPacketData data = unmarshal(payload.encoding, payload.version, payload.appData)
      // convert full denom string to denom struct with base denom and trace
      denom = parseICS20V1Denom(data.denom)
      token = Token{
