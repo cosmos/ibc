@@ -131,6 +131,19 @@ that the module itself doesn't need to worry about what connections or channels 
 
 #### Routing module callbacks
 
+##### Utility functions
+
+```typescript
+function unmarshal(encoding: Encoding, version: string, appData: bytes): bytes{
+  if (version == "ics20-v1"){
+     FungibleTokenPacketData data = decode(encoding,appData)
+     return data;
+  } else{
+    return nil 
+  } 
+}
+```
+
 ##### Packet relay
 
 This specification defines packet handling semantics.
@@ -148,21 +161,15 @@ In plain English, between chains `A` and `B`:
 
 `onSendFungibleTokens` must be called by a transaction handler in the module which performs appropriate signature checks, specific to the account owner on the host state machine.
 
-  denom: string
-  amount: uint256
-  sender: string
-  receiver: string
-  memo: string
-
 ```typescript
 function onSendFungibleTokens(
   sourceChannelId:bytes,
-  payload: Payload
+  payload: Payload, 
+  relayer: address 
   ): bool {
 
-    // the decode function must check the payload.encoding is among those supported 
-    success,appData=decode(payload.encoding,payload.appData)
-    abortTransactionUnless(success)
+    appData=unmarshal(payload.encoding,payload.version,payload.appData)
+    abortTransactionUnless(appData!=nil)
 
     prefix = "{payload.sourcePort}/{sourceChannelId}/"
     // we are the source if the denomination is not prefixed
@@ -187,12 +194,13 @@ function onSendFungibleTokens(
 function onRecvPacket(
   destChannelId: bytes,
   sourceChannelId: bytes,
-  sequence: bigEndianUint64, 
+  sequence: uint64, 
   payload: Payload,
+  relayer: address
 ): (bytes,bool) {
 
-  success,appData=decode(payload.encoding,payload.appData)
-  abortTransactionUnless(success)
+  appData=unmarshal(payload.encoding,payload.version,payload.appData)
+  abortTransactionUnless(appData!=nil)
 
   assert(appData.denom !== "")
   assert(appData.amount > 0)
@@ -229,10 +237,11 @@ function onRecvPacket(
 ```typescript
 function onAcknowledgePacket(
   sourceChannelId: bytes,
-  destChannelId: bytes, // Can be nullable
-  sequence: bigEndianUint64, // Can be nullable
+  destChannelId: bytes, // This parameter won't be used. It's provided in input for adherence with ics04
+  sequence: uint64, // This parameter won't be used. It's provided in input for adherence with ics04
   payload: Payload, 
-  acknowledgement: bytes
+  acknowledgement: bytes, 
+  relayer: address
   ): bool {
   // if the transfer failed, refund the tokens
   if (!acknowledgement.success){
@@ -247,9 +256,10 @@ function onAcknowledgePacket(
 ```typescript
 function onTimeoutPacket(
   sourceChannelId: bytes,
-  destChannelId: bytes, // Can be nullable
-  sequence: bigEndianUint64, // Can be nullable
-  payload: Payload
+  destChannelId: bytes, // This parameter won't be used. It's provided in input for adherence with ics04 
+  sequence: uint64, // This parameter won't be used. It's provided in input for adherence with ics04
+  payload: Payload, 
+  relayer: address
   ): bool {
   // the packet timed-out, so refund the tokens
   refundTokens(sourceChannelId,payload)
@@ -263,10 +273,10 @@ function onTimeoutPacket(
 function refundTokens(
   sourceChannelId: bytes,
   payload: Payload
-  ): bool {
+  ){
 
-  success,appData=decode(payload.encoding,payload.appData)
-  abortTransactionUnless(success)
+  appData=unmarshal(payload.encoding,payload.version,payload.appData)
+  abortTransactionUnless(appData!=nil)
 
   prefix = "{payload.sourcePort}/{sourceChannelId}/"
   // we are the source if the denomination is not prefixed

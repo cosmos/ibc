@@ -205,7 +205,7 @@ interface ModuleState {
 
 #### Packet forward path
 
-The `v2` packets that have non-empty forwarding information and should thus be forwarded, must be stored in the private store, so that an acknowledgement can be written for them when receiving an acknowledgement or timeout for the forwarded packet.
+For the `v2` packets that have non-empty forwarding information and should thus be forwarded, the `sequence` , `destChannelId` and `destPort` must be stored in the private store, so that an acknowledgement can be written for them when receiving an acknowledgement or timeout for the forwarded packet.
 
 ```typescript
 function packetForwardPath(channelIdentifier: bytes, sequence: bigEndianUint64): Path {
@@ -236,10 +236,10 @@ Once the `setup` function has been called, the application callbacks are registe
 ```typescript
 function unmarshal(encoding: Encoding, version: string, appData: bytes): bytes{
   if (version == "ics20-v1"){
-     FungibleTokenPacketData data = unmarshal(encoding,appData)
+     FungibleTokenPacketData data = decode(encoding,appData)
   } 
   if (version == "ics20-v2"){
-     FungibleTokenPacketDataV2 data = unmarshal(encoding,appData)
+     FungibleTokenPacketDataV2 data = decode(encoding,appData)
   }
   if (version != "ics20-v1" && version!= "ics20-v2"){
       return nil 
@@ -270,7 +270,8 @@ Note: `constructOnChainDenom` is a helper function that will construct the local
 ```typescript
 function onSendFungibleTokens(
   sourceChannelId: bytes, 
-  payload: Payload
+  payload: Payload,
+  relayer: address
   ): bool {
   
   // the unmarshal function must check the payload.encoding is among those supported 
@@ -320,6 +321,7 @@ function onRecvPacket(
   sourceChannelId: bytes,
   sequence: uint64, 
   payload: Payload,
+  relayer: address
   ): (bytes, bool) {
   transferVersion = payload.version
   var tokens []Token
@@ -476,7 +478,8 @@ function onAcknowledgePacket(
   destChannelId: bytes, 
   sequence: uint64,
   payload: Payload, 
-  acknowledgement: bytes
+  acknowledgement: bytes, 
+  relayer: address
   ): bool {
   // if the transfer failed, refund the tokens
   // to the sender account. In case of a packet sent for a
@@ -526,7 +529,8 @@ function onTimeoutPacket(
   sourceChannelId: bytes,
   destChannelId: bytes,
   sequence: uint64,
-  payload: Payload
+  payload: Payload, 
+  relayer: address
   ): bool {
   // the packet timed-out, so refund the tokens
   // to the sender account. In case of a packet sent for a
