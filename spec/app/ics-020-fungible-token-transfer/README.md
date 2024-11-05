@@ -459,7 +459,7 @@ function onRecvPacket(
       forwardingPayload
     )
     // store packet for future sending ack
-    privateStore.set(packetForwardPath(forwarding.hops[0].channelId, packetSequence), sequence)
+    privateStore.set(packetForwardPath(forwarding.hops[0].channelId, packetSequence), sequence, destChannelId)
     // use async ack until we get successful acknowledgement from further down the line.
     return nil, true
   }
@@ -487,13 +487,13 @@ function onAcknowledgePacket(
   }
 
   // check if the packet that was sent is from a previously forwarded packet
-  prevPacketSeq = privateStore.get(packetForwardPath(sourceChannelId, sequence))
+  prevPacketSeq,prevPacketDestChannelId = privateStore.get(packetForwardPath(sourceChannelId, sequence))
 
   if prevPacketSeq != nil {
     if acknowledgement.success {
       FungibleTokenPacketAcknowledgement ack = FungibleTokenPacketAcknowledgement{true, "forwarded packet succeeded"}
       handler.writeAcknowledgement(
-        destChannelId,
+        prevPacketDestChannelId,
         prevPacketSeq,
         ack,
       )
@@ -505,13 +505,13 @@ function onAcknowledgePacket(
       // write error acknowledgement
       FungibleTokenPacketAcknowledgement ack = FungibleTokenPacketAcknowledgement{false, "forwarded packet failed"}
       handler.writeAcknowledgement(
-        destChannelId,
+        prevPacketDestChannelId,
         prevPacketSeq,
         ack,
       )
     }
 
-    // delete the forwarded packet that triggered sending this packet
+    // delete the forwarded packet info that triggered sending this packet
     privateStore.delete(packetForwardPath(sourceChannelId, sequence))
   }
 
@@ -535,7 +535,7 @@ function onTimeoutPacket(
   refundTokens(sourceChannelId,payload)
 
   // check if the packet sent is from a previously forwarded packet
-  prevPacketSeq = privateStore.get(packetForwardPath(sourceChannelId, sequence))
+  prevPacketSeq,prevPacketDestChannelId = privateStore.get(packetForwardPath(sourceChannelId, sequence))
 
   if prevPacketSeq != nil {
     // the forwarded packet has failed, thus the funds have been refunded to the forwarding address.
@@ -545,6 +545,7 @@ function onTimeoutPacket(
     // write error acknowledgement
     FungibleTokenPacketAcknowledgement ack = FungibleTokenPacketAcknowledgement{false, "forwarded packet timed out"}
     handler.writeAcknowledgement(
+      prevPacketDestChannelId
       prevPacket,
       ack,
     )
