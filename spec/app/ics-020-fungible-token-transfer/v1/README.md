@@ -164,8 +164,7 @@ In plain English, between chains `A` and `B`:
 ```typescript
 function onSendFungibleTokens(
   sourceChannelId:bytes,
-  payload: Payload, 
-  relayer: address 
+  payload: Payload
   ): bool {
 
     appData=unmarshal(payload.encoding,payload.version,payload.appData)

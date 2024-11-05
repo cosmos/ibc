@@ -270,8 +270,7 @@ Note: `constructOnChainDenom` is a helper function that will construct the local
 ```typescript
 function onSendFungibleTokens(
   sourceChannelId: bytes, 
-  payload: Payload,
-  relayer: address
+  payload: Payload
   ): bool {
   
   // the unmarshal function must check the payload.encoding is among those supported 
