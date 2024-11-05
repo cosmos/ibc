@@ -195,16 +195,16 @@ Additionally, the ICS-04 defines the following variables:  `nextSequenceSend` , 
 - The `storedPacket` tracks the full packet for asynchronous ack management. 
 
 ```typescript
-type nextSequenceSend : channelId -> BigEndianUint64 
+type nextSequenceSend : channelId -> uint64 
 type channelCreator : channelId -> address 
 type storedChannels : channelId -> Channel
-type storedPacket : (channelId,bigEndianUint64) -> Packet // channelId,sequence --> Packet 
+type storedPacket : (channelId,uint64) -> Packet // channelId,sequence --> Packet 
 
 function getChannel(channelId: bytes): Channel {
     return storedChannels[channelId]
 }
 
-function getPacket(channelId: bytes, sequence: bigEndianUint64): Packet {
+function getPacket(channelId: bytes, sequence: uint64): Packet {
     return storedPacket[channelId,sequence]
 }
 ```
@@ -234,33 +234,35 @@ The setup procedure is a prerequisite for starting the packet stream. If any of 
 title: Two Step Setup Procedure, createClient and createChannel are bundled together.  
 ---
 sequenceDiagram  
-    Participant Chain A
+    Participant IBCModule on Chain A
     Participant Relayer 
-    Participant Chain B
-    Relayer ->> Chain A : createClient(B chain) + createChannel
-    Chain A ->> Relayer : clientId= x , channelId = y
-    Relayer ->> Chain B : createClient(A chain) + createChannel
-    Chain B ->> Relayer : clientId= z , channelId = w
-    Relayer ->> Chain A : registerCounterparty(channelId = y, counterpartyChannelId = w)
-    Relayer ->> Chain B : registerCounterparty(channelId = w, counterpartyChannelId = y) 
+    Participant IBCModule on Chain B
+    Relayer ->> IBCModule on Chain A : createClient(B chain) + createChannel
+    IBCModule on Chain A ->> Relayer : clientId= x , channelId = y
+    Relayer ->> IBCModule on Chain B : createClient(A chain) + createChannel
+    IBCModule on Chain B ->> Relayer : clientId= z , channelId = w
+    Relayer ->> IBCModule on Chain A : registerCounterparty(channelId = y, counterpartyChannelId = w)
+    Relayer ->> IBCModule on Chain B : registerCounterparty(channelId = w, counterpartyChannelId = y) 
 ```
-
+    
 ```mermaid
 ---
 title: Three Step Setup Procedure, createClient has been previosly executed.   
 ---
 sequenceDiagram
     Participant B Light Client as B Light Client with clientId=x  
-    Participant Chain A
+    Participant IBCModule on Chain A
     Participant Relayer 
-    Participant Chain B
-    Participant A Light Client as A Light Client with clientId=z   
-    Relayer ->> Chain A : createChannel(x)
-    Chain A ->> Relayer : channelId = y
-    Relayer ->> Chain B : createChannel(z)
-    Chain B ->> Relayer : channelId = w
-    Relayer ->> Chain A : registerCounterparty(channelId = y, counterpartyChannelId = w)
-    Relayer ->> Chain B : registerCounterparty(channelId = w, counterpartyChannelId = y) 
+    Participant IBCModule on Chain B
+    Participant A Light Client as A Light Client with clientId=z
+    Note over IBCModule on Chain A, B Light Client: Chain A State
+    Note over IBCModule on Chain B, A Light Client: Chain B State   
+    Relayer ->> IBCModule on Chain A : createChannel(x)
+    IBCModule on Chain A ->> Relayer : channelId = y
+    Relayer ->> IBCModule on Chain B : createChannel(z)
+    IBCModule on Chain B ->> Relayer : channelId = w
+    Relayer ->> IBCModule on Chain A : registerCounterparty(channelId = y, counterpartyChannelId = w)
+    Relayer ->> IBCModule on Chain B : registerCounterparty(channelId = w, counterpartyChannelId = y) 
 ```
 
 After completing the two- or three-step setup, the system should end up in a similar state. 
@@ -412,32 +414,34 @@ Scenario execution with synchronous acknowledgement `A` to `B` - set of actions:
 ```mermaid
 sequenceDiagram
     participant B Light Client 
-    participant Chain A    
+    participant IBCModule on Chain A    
     participant Relayer 
-    participant Chain B
+    participant IBCModule on Chain B
     participant A Light Client
-    Note over Chain A: start send packet execution
-    Chain A ->> Chain A : sendPacket
-    Chain A --> Chain A : app execution
-    Chain A --> Chain A : packetCommitment 
-    Note over Chain A: end send packet execution
-    Relayer ->> Chain B: relayPacket
-    Note over Chain B: start receive packet execution
-    Chain B ->> Chain B: receivePacket
-    Chain B -->> A Light Client: verifyMembership(packetCommitment)
-    Chain B --> Chain B : app execution
-    Note over Chain B: start sync ack writing
-    Chain B --> Chain B: writeAck
-    Note over Chain B: end async ack writing
-    Chain B --> Chain B: writePacketReceipt
-    Note over Chain B: end receive packet execution
-    Relayer ->> Chain A: relayAck
-    Note over Chain A: start acknowldge packet execution
-    Chain A ->> Chain A : acknowldgePacket
-    Chain A -->> B Light Client: verifyMembership(packetAck)
-    Chain A --> Chain A : app execution
-    Chain A --> Chain A : Delete packetCommitment
-    Note over Chain A: end acknowldge packet execution
+    Note over IBCModule on Chain A, B Light Client: Chain A State
+    Note over IBCModule on Chain B, A Light Client: Chain B State
+    Note over IBCModule on Chain A: start send packet execution
+    IBCModule on Chain A ->> IBCModule on Chain A : sendPacket
+    IBCModule on Chain A --> IBCModule on Chain A : app execution
+    IBCModule on Chain A --> IBCModule on Chain A : packetCommitment 
+    Note over IBCModule on Chain A: end send packet execution
+    Relayer ->> IBCModule on Chain B: relayPacket
+    Note over IBCModule on Chain B: start receive packet execution
+    IBCModule on Chain B ->> IBCModule on Chain B: receivePacket
+    IBCModule on Chain B -->> A Light Client: verifyMembership(packetCommitment)
+    IBCModule on Chain B --> IBCModule on Chain B : app execution
+    Note over IBCModule on Chain B: start sync ack writing
+    IBCModule on Chain B --> IBCModule on Chain B: writeAck
+    Note over IBCModule on Chain B: end async ack writing
+    IBCModule on Chain B --> IBCModule on Chain B: writePacketReceipt
+    Note over IBCModule on Chain B: end receive packet execution
+    Relayer ->> IBCModule on Chain A: relayAck
+    Note over IBCModule on Chain A: start acknowldge packet execution
+    IBCModule on Chain A ->> IBCModule on Chain A : acknowldgePacket
+    IBCModule on Chain A -->> IBCModule on B Light Client: verifyMembership(packetAck)
+    IBCModule on Chain A --> IBCModule on Chain A : app execution
+    IBCModule on Chain A --> IBCModule on Chain A : Delete packetCommitment
+    Note over IBCModule on Chain A: end acknowldge packet execution
      
 ```
 
@@ -450,33 +454,35 @@ Note that the key difference with the synchronous scenario is that the `writeAck
 ```mermaid
 sequenceDiagram
     participant B Light Client 
-    participant Chain A    
+    participant IBCModule on Chain A    
     participant Relayer 
-    participant Chain B
+    participant IBCModule on Chain B
     participant A Light Client
-    Note over Chain A: start send packet execution
-    Chain A ->> Chain A : sendPacket
-    Chain A --> Chain A : app execution
-    Chain A --> Chain A : packetCommitment
-    Note over Chain A: end send packet execution 
-    Relayer ->> Chain B: relayPacket
-    Note over Chain B: start receive packet execution
-    Chain B ->> Chain B: receivePacket
-    Chain B -->> A Light Client: verifyMembership(packetCommitment)
-    Chain B --> Chain B : app execution
-    Chain B --> Chain B: writePacketReceipt
-    Note over Chain B: end receive packet execution
-    Note over Chain B: start async ack writing
-    Chain B --> Chain B : app execution - async ack processing
-    Chain B --> Chain B: writeAck
-    Note over Chain B: end async ack writing
-    Relayer ->> Chain A: relayAck
-    Note over Chain A: start acknowldge packet execution
-    Chain A ->> Chain A : acknowldgePacket
-    Chain A -->> B Light Client: verifyMembership(packetAck)
-    Chain A --> Chain A : app execution
-    Chain A --> Chain A : Delete packetCommitment
-    Note over Chain A: end acknowldge packet execution 
+    Note over IBCModule on Chain A, B Light Client: Chain A State
+    Note over IBCModule on Chain B, A Light Client: Chain B State
+    Note over IBCModule on Chain A: start send packet execution
+    IBCModule on Chain A ->> IBCModule on Chain A : sendPacket
+    IBCModule on Chain A --> IBCModule on Chain A : app execution
+    IBCModule on Chain A --> IBCModule on Chain A : packetCommitment
+    Note over IBCModule on Chain A: end send packet execution 
+    Relayer ->> IBCModule on Chain B: relayPacket
+    Note over IBCModule on Chain B: start receive packet execution
+    IBCModule on Chain B ->> IBCModule on Chain B: receivePacket
+    IBCModule on Chain B -->> A Light Client: verifyMembership(packetCommitment)
+    IBCModule on Chain B --> IBCModule on Chain B : app execution
+    IBCModule on Chain B --> IBCModule on Chain B: writePacketReceipt
+    Note over IBCModule on Chain B: end receive packet execution
+    Note over IBCModule on Chain B: start async ack writing
+    IBCModule on Chain B --> IBCModule on Chain B : app execution - async ack processing
+    IBCModule on Chain B --> IBCModule on Chain B: writeAck
+    Note over IBCModule on Chain B: end async ack writing
+    Relayer ->> IBCModule on Chain A: relayAck
+    Note over IBCModule on Chain A: start acknowldge packet execution
+    IBCModule on Chain A ->> IBCModule on Chain A : acknowldgePacket
+    IBCModule on Chain A -->> B Light Client: verifyMembership(packetAck)
+    IBCModule on Chain A --> IBCModule on Chain A : app execution
+    IBCModule on Chain A --> IBCModule on Chain A : Delete packetCommitment
+    Note over IBCModule on Chain A: end acknowldge packet execution 
 ```
 
 ---
@@ -486,20 +492,22 @@ Scenario timeout execution `A` to `B` - set of actions: `A.sendPacket` -> `A.tim
 ```mermaid
 sequenceDiagram
     participant B Light Client     
-    participant Chain A
+    participant IBCModule on Chain A
     participant Relayer 
-    participant Chain B
+    participant IBCModule on Chain B
     participant A Light Client
-    Note over Chain A: start send packet execution
-    Chain A ->> Chain A : sendPacket
-    Chain A --> Chain A : app execution
-    Chain A --> Chain A : packetCommitment 
-    Note over Chain A: start timeout packet execution
-    Chain A ->> Chain A : TimeoutPacket
-    Chain A -->> B Light Client: verifyNonMembership(PacketReceipt)
-    Chain A --> Chain A : app execution
-    Chain A --> Chain A : Delete packetCommitment
-    Note over Chain A: end timeout packet execution
+    Note over IBCModule on Chain A, B Light Client: Chain A State
+    Note over IBCModule on Chain B, A Light Client: Chain B State
+    Note over IBCModule on Chain A: start send packet execution
+    IBCModule on Chain A ->> IBCModule on Chain A : sendPacket
+    IBCModule on Chain A --> IBCModule on Chain A : app execution
+    IBCModule on Chain A --> IBCModule on Chain A : packetCommitment 
+    Note over IBCModule on Chain A: start timeout packet execution
+    IBCModule on Chain A ->> IBCModule on Chain A : TimeoutPacket
+    IBCModule on Chain A -->> B Light Client: verifyNonMembership(PacketReceipt)
+    IBCModule on Chain A --> IBCModule on Chain A : app execution
+    IBCModule on Chain A --> IBCModule on Chain A : Delete packetCommitment
+    Note over IBCModule on Chain A: end timeout packet execution
      
 ```
 
@@ -541,8 +549,9 @@ The ICS04 provides an example pseudo-code that enforce the above described condi
 function sendPacket(
     sourceChannelId: bytes, 
     timeoutTimestamp: uint64,
-    payloads: Payload[] 
-    ) : bigEndianUint64 {
+    payloads: Payload[], 
+    relayer: address 
+    ) : uint64 {
 
     // Setup checks - channel and client 
     channel = getChannel(sourceChannelId)
@@ -566,7 +575,7 @@ function sendPacket(
     // Currently we support only len(payloads)==1 
     payload=payloads[0]
     cbs = router.callbacks[payload.sourcePort]
-    success = cbs.onSendPacket(sourceChannelId,payload) // Note that payload includes the version. The application is required to inspect the version to route the data to the proper callback
+    success = cbs.onSendPacket(sourceChannelId,payload,relayer) // Note that payload includes the version. The application is required to inspect the version to route the data to the proper callback
     // IMPORTANT: if the onSendPacket fails, the transaction is aborted and the potential state changes are reverted. 
     // This ensure that the post conditions on error are always respected. 
     // payload execution check  
@@ -757,7 +766,7 @@ The ICS-04 provides an example pseudo-code that enforce the above described cond
 ```typescript
 function writeAcknowledgement(
   destChannelId: bytes,
-  sequence: bigEndianUint64, 
+  sequence: uint64, 
   acknowledgement: Acknowledgement) {
     // acknowledgement must not be empty
     abortTransactionUnless(len(acknowledgement) !== 0)
