@@ -458,8 +458,8 @@ function onRecvPacket(
       currentTime() + DefaultHopTimeoutPeriod,
       forwardingPayload
     )
-    // store packet for future sending ack
-    privateStore.set(packetForwardPath(forwarding.hops[0].channelId, packetSequence), sequence, destChannelId)
+    // store previous packet sequence and destChannelId for future sending ack
+    privateStore.set(packetForwardPath(forwarding.hops[0].channelId, packetSequence), sequence, destChannelId, payload.destPort)
     // use async ack until we get successful acknowledgement from further down the line.
     return nil, true
   }
@@ -487,7 +487,7 @@ function onAcknowledgePacket(
   }
 
   // check if the packet that was sent is from a previously forwarded packet
-  prevPacketSeq,prevPacketDestChannelId = privateStore.get(packetForwardPath(sourceChannelId, sequence))
+  prevPacketSeq,prevPacketDestChannelId, prevPacketDestPort = privateStore.get(packetForwardPath(sourceChannelId, sequence))
 
   if prevPacketSeq != nil {
     if acknowledgement.success {
@@ -501,7 +501,7 @@ function onAcknowledgePacket(
       // the forwarded packet has failed, thus the funds have been refunded to the forwarding address.
       // we must revert the changes that came from successfully receiving the tokens on our chain
       // before propogating the error acknowledgement back to original sender chain
-      revertInFlightChanges(destChannelId, payload)
+      revertInFlightChanges(destChannelId,payload,prevPacketDestChannelId,prevPacketDestPort)
       // write error acknowledgement
       FungibleTokenPacketAcknowledgement ack = FungibleTokenPacketAcknowledgement{false, "forwarded packet failed"}
       handler.writeAcknowledgement(
@@ -535,13 +535,13 @@ function onTimeoutPacket(
   refundTokens(sourceChannelId,payload)
 
   // check if the packet sent is from a previously forwarded packet
-  prevPacketSeq,prevPacketDestChannelId = privateStore.get(packetForwardPath(sourceChannelId, sequence))
+  prevPacketSeq,prevPacketDestChannelId, prevPacketDestPort = privateStore.get(packetForwardPath(sourceChannelId, sequence))
 
   if prevPacketSeq != nil {
     // the forwarded packet has failed, thus the funds have been refunded to the forwarding address.
     // we must revert the changes that came from successfully receiving the tokens on our chain
     // before propogating the error acknowledgement back to original sender chain
-    revertInFlightChanges(destChannelId, payload)
+    revertInFlightChanges(destChannelId, payload, prevPacketDestChannelId,prevPacketDestPort)
     // write error acknowledgement
     FungibleTokenPacketAcknowledgement ack = FungibleTokenPacketAcknowledgement{false, "forwarded packet timed out"}
     handler.writeAcknowledgement(
@@ -583,7 +583,7 @@ function refundTokens(
   // retrieve version from payload 
   transferVersion = payload.version
   if transferVersion == "ics20-1" {
-     FungibleTokenPacketData data = payload.encoding.unmarshal(payload.appData)
+     data = unmarshal(payload.encoding,payload.version,payload.appData)
      // convert full denom string to denom struct with base denom and trace
      denom = parseICS20V1Denom(data.denom)
      token = Token{
@@ -592,8 +592,8 @@ function refundTokens(
      }
      tokens = []Token{token}
   } else if transferVersion == "ics20-2" {
-    FungibleTokenPacketDataV2 data = payload.encoding.unmarshal(payload.appData)
-    tokens = data.tokens
+     data = unmarshal(payload.encoding,payload.version,payload.appData)
+     tokens = data.tokens
   } else {
     // Unsupported version
     abortTransactionUnless(false)
@@ -623,21 +623,25 @@ function refundTokens(
 // on this chain must be reverted before sending back the error acknowledgement
 // to ensure atomic packet forwarding
 function revertInFlightChanges(
-  destChannelId: bytes,  
-  payload: Payload
+  sentPacketDestChannelId: bytes,  
+  sentPacketPayload: Payload,
+  receivedPacketDestChannelId: bytes, 
+  receivedPacketDestPort: bytes,
   ) {
-  forwardingAddress = channelForwardingAddress[destChannelId]
-  reverseEscrow = channelEscrowAddresses[destChannelId]
+  forwardingAddress = channelForwardingAddress[receivedPacketDestChannelId]
+  reverseEscrow = channelEscrowAddresses[receivedPacketDestChannelId]
+
+  data=unmarshal(sentPacketPayload.encoding,sentPacketPayload.version,sentPacketPayload.appData)
 
   // the token on our chain is the token in the sentPacket
-  for token in payload.appData.tokens {
+  for token in data.tokens {
     // we are checking if the tokens that were sent out by our chain in the 
     // sentPacket were source tokens with respect to the original receivedPacket.
     // If the tokens in sentPacket were prefixed by our channel end's port and channel
     // identifiers, then it was a minted voucher and we need to burn it.
     // Otherwise, it was an original token from our chain and we must give the tokens
     // back to the escrow account.
-    if !isTracePrefixed(payload.destPort, destChannelId, token) {
+    if !isTracePrefixed(receivedPacketDestPort, receivedPacketDestChannelId, token) {
       // receive sent tokens from the received escrow account to the forwarding account
       // so we must send the tokens back from the forwarding account to the received escrow account
       bank.TransferCoins(forwardingAddress, reverseEscrow, token.denom, token.amount)
