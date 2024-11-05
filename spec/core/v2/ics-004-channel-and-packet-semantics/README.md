@@ -438,7 +438,7 @@ sequenceDiagram
     Relayer ->> IBCModule on Chain A: relayAck
     Note over IBCModule on Chain A: start acknowldge packet execution
     IBCModule on Chain A ->> IBCModule on Chain A : acknowldgePacket
-    IBCModule on Chain A -->> IBCModule on B Light Client: verifyMembership(packetAck)
+    IBCModule on Chain A -->> B Light Client: verifyMembership(packetAck)
     IBCModule on Chain A --> IBCModule on Chain A : app execution
     IBCModule on Chain A --> IBCModule on Chain A : Delete packetCommitment
     Note over IBCModule on Chain A: end acknowldge packet execution
@@ -579,7 +579,7 @@ function sendPacket(
     // IMPORTANT: if the onSendPacket fails, the transaction is aborted and the potential state changes are reverted. 
     // This ensure that the post conditions on error are always respected. 
     // payload execution check  
-    abortUnless(success)
+    abortTransactionUnless(success)
 
     // Construct the packet
     packet = Packet {
