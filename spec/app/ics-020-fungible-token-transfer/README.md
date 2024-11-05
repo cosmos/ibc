@@ -231,6 +231,23 @@ Once the `setup` function has been called, the application callbacks are registe
 
 #### Routing module callbacks
 
+##### Utility functions
+
+```typescript
+function unmarshal(encoding: Encoding, version: string, appData: bytes): bytes{
+  if (version == "ics20-v1"){
+     FungibleTokenPacketData data = unmarshal(encoding,appData)
+  } 
+  if (version == "ics20-v2"){
+     FungibleTokenPacketDataV2 data = unmarshal(encoding,appData)
+  }
+  if (version != "ics20-v1" && version!= "ics20-v2"){
+      return nil 
+  } 
+  return data; 
+}
+```
+
 ##### Packet relay
 
 This specification defines packet handling semantics.
@@ -256,9 +273,22 @@ function onSendFungibleTokens(
   payload: Payload
   ): bool {
   
-  // the decode function must check the payload.encoding is among those supported 
-  success,appData=decode(payload.encoding,payload.appData)
-  abortTransactionUnless(success)
+  // the unmarshal function must check the payload.encoding is among those supported 
+  appData=unmarshal(payload.encoding, payload.version, payload.appData)
+  abortTransactionUnless(appData!=nil)
+  
+  transferVersion = payload.version
+  if transferVersion == "ics20-1" {
+    abortTransactionUnless(len(appData.tokens) == 1)
+    // abort if forwarding defined
+    abortTransactionUnless(appData.forwarding == nil)
+  } else if transferVersion == "ics20-2" {
+    // No-Op
+  } else {
+   // Unsupported transfer version
+    abortTransactionUnless(false)
+  }
+
   // memo and forwarding cannot both be non-empty
   abortTransactionUnless(appData.memo != "" && appData.forwarding != nil)
   for token in appData.tokens 
@@ -276,17 +306,6 @@ function onSendFungibleTokens(
     }
   }
 
-  transferVersion = payload.version
-  if transferVersion == "ics20-1" {
-    abortTransactionUnless(len(appData.tokens) == 1)
-    // abort if forwarding defined
-    abortTransactionUnless(appData.forwarding == nil)
-  } else if transferVersion == "ics20-2" {
-    // No-Op
-  } else {
-   // Unsupported transfer version
-    abortTransactionUnless(false)
-  }
   return true
 }
 ```
@@ -309,27 +328,27 @@ function onRecvPacket(
   var finalReceiver string // final intended address in forwarding case
 
   if transferVersion == "ics20-1" {
-     FungibleTokenPacketData data = unmarshal(payload.encoding, payload.version, payload.appData)
+    data = unmarshal(payload.encoding, payload.version, payload.appData)
      // convert full denom string to denom struct with base denom and trace
-     denom = parseICS20V1Denom(data.denom)
-     token = Token{
-       denom: denom
-       amount: data.amount
-     }
-     tokens = []Token{token}
-     sender = data.sender
-     receiver = data.receiver
-  } else if transferVersion == "ics20-2" {
-    FungibleTokenPacketDataV2 data = payload.encoding.unmarshal(payload.appData)
-    tokens = data.tokens
+    denom = parseICS20V1Denom(data.denom)
+    token = Token{
+      denom: denom
+      amount: data.amount
+    }
+    tokens = []Token{token}
     sender = data.sender
+    receiver = data.receiver
+  } else if transferVersion == "ics20-2" {
+      data = unmarshal(payload.encoding, payload.version, payload.appData)
+      tokens = data.tokens
+      sender = data.sender
 
-    // if we need to forward the tokens onward
-    // overwrite the receiver to temporarily send to the 
-    // channel escrow address of the intended receiver
-    if len(data.forwarding.hops) > 0 {
-      // memo must be empty
-      abortTransactionUnless(data.memo == "")
+      // if we need to forward the tokens onward
+      // overwrite the receiver to temporarily send to the 
+      // channel escrow address of the intended receiver
+      if len(data.forwarding.hops) > 0 {
+        // memo must be empty
+        abortTransactionUnless(data.memo == "")
       if channelForwardingAddress[destChannelId] == "" {
         channelForwardingAddress[destChannelId] = newAddress()
       }
@@ -339,8 +358,7 @@ function onRecvPacket(
       receiver = data.receiver
     }
   } else {
-    // should never be reached as transfer version must be negotiated
-    // to be either ics20-1 or ics20-2 during channel handshake
+    // should never be reached as transfer version must be either ics20-1 or ics20-2 during channel handshake
     abortTransactionUnless(false)
   }
 
