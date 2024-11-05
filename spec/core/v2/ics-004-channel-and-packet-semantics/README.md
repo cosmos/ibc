@@ -549,8 +549,7 @@ The ICS04 provides an example pseudo-code that enforce the above described condi
 function sendPacket(
     sourceChannelId: bytes, 
     timeoutTimestamp: uint64,
-    payloads: Payload[], 
-    relayer: address 
+    payloads: Payload[] 
     ) : uint64 {
 
     // Setup checks - channel and client 
@@ -575,7 +574,7 @@ function sendPacket(
     // Currently we support only len(payloads)==1 
     payload=payloads[0]
     cbs = router.callbacks[payload.sourcePort]
-    success = cbs.onSendPacket(sourceChannelId,payload,relayer) // Note that payload includes the version. The application is required to inspect the version to route the data to the proper callback
+    success = cbs.onSendPacket(sourceChannelId,payload) // Note that payload includes the version. The application is required to inspect the version to route the data to the proper callback
     // IMPORTANT: if the onSendPacket fails, the transaction is aborted and the potential state changes are reverted. 
     // This ensure that the post conditions on error are always respected. 
     // payload execution check  
