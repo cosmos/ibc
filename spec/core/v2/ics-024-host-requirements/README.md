@@ -110,11 +110,11 @@ IBC/TAO implementations MUST implement the following paths for the `provableStor
 Future paths may be used in future versions of the protocol, so the entire key-space in the provable store MUST be reserved for the IBC handler.
 
 
-| Store          | Path format                                                                | Value type        | Defined in |
-| -------------- | -------------------------------------------------------------------------- | ----------------- | ---------------------- |
-| provableStore  | "commitments/channels/{identifier}/sequences/{bigEndianUint64Sequence}"    | bytes             | [ICS 4](../ics-004-packet-semantics) |
-| provableStore  | "receipts/channels/{identifier}/sequences/{bigEndianUint64Sequence}"       | bytes             | [ICS 4](../ics-004-packet-semantics) |
-| provableStore  | "acks/channels/{identifier}/sequences/{bigEndianUint64Sequence}"           | bytes             | [ICS 4](../ics-004-packet-semantics) |
+| Value                      | Path format                                       | Value type | Defined in                           |
+| -------------------------- | ------------------------------------------------- | ---------- | ------------------------------------ |
+| Packet Commitment          | {channelIdentifier}|0x1|{bigEndianUint64Sequence} | bytes      | [ICS 4](../ics-004-channel-and-packet-semantics) |
+| Packet Receipt             | {channelIdentifier}|0x2|{bigEndianUint64Sequence} | bytes      | [ICS 4](../ics-004-channel-and-packet-semantics) |
+| Acknowledgement Commitment | {channelIdentifier}|0x3|{bigEndianUint64Sequence} | bytes      | [ICS 4](../ics-004-channel-and-packet-semantics) |
 
 ### Provable Commitments
 

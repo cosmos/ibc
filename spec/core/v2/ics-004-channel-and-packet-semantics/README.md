@@ -163,7 +163,7 @@ Thus, constant-size commitments to packet data fields are stored under the packe
 
 ```typescript
 function packetCommitmentPath(channelSourceId: bytes, sequence: BigEndianUint64): Path {
-    return "commitments/channels/{channelSourceId}/sequences/{sequence}"
+    return "{channelSourceId}|0x1|{bigEndianUint64Sequence}"
 }
 ```
 
@@ -173,7 +173,7 @@ Packet receipt data are stored under the `packetReceiptPath`. In the case of a s
 
 ```typescript
 function packetReceiptPath(channelDestId: bytes, sequence: BigEndianUint64): Path {
-    return "receipts/channels/{channelDestId}/sequences/{sequence}"
+    return "{channelDestId}|0x2|{bigEndianUint64Sequence}"
 }
 ```
 
@@ -181,7 +181,7 @@ Packet acknowledgement data are stored under the `packetAcknowledgementPath`:
 
 ```typescript
 function packetAcknowledgementPath(channelSourceId: bytes, sequence: BigEndianUint64): Path {
-    return "acks/channels/{channelSourceId}/sequences/{sequence}"
+    return "{channelSourceId}|0x3|{bigEndianUint64Sequence}"
 }
 ```
 
