@@ -112,9 +112,9 @@ Future paths may be used in future versions of the protocol, so the entire key-s
 
 | Value                      | Path format                                       | Value type | Defined in                           |
 | -------------------------- | ------------------------------------------------- | ---------- | ------------------------------------ |
-| Packet Commitment          | {channelIdentifier}|0x1|{bigEndianUint64Sequence} | bytes      | [ICS 4](../ics-004-packet-semantics) |
-| Packet Receipt             | {channelIdentifier}|0x2|{bigEndianUint64Sequence} | bytes      | [ICS 4](../ics-004-packet-semantics) |
-| Acknowledgement Commitment | {channelIdentifier}|0x3|{bigEndianUint64Sequence} | bytes      | [ICS 4](../ics-004-packet-semantics) |
+| Packet Commitment          | {channelIdentifier}|0x1|{bigEndianUint64Sequence} | bytes      | [ICS 4](../ics-004-channel-and-packet-semantics) |
+| Packet Receipt             | {channelIdentifier}|0x2|{bigEndianUint64Sequence} | bytes      | [ICS 4](../ics-004-channel-and-packet-semantics) |
+| Acknowledgement Commitment | {channelIdentifier}|0x3|{bigEndianUint64Sequence} | bytes      | [ICS 4](../ics-004-channel-and-packet-semantics) |
 
 ### Provable Commitments
 
