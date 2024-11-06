@@ -491,7 +491,7 @@ function onAcknowledgePacket(
   // check if the packet that was sent is from a previously forwarded packet
   prevPacketSeq,prevPacketDestChannelId, prevPacketDestPort = privateStore.get(packetForwardPath(sourceChannelId, sequence))
 
-  if prevPacketSeq != nil {
+  if prevPacketSeq != 0 {
     if acknowledgement.success {
       FungibleTokenPacketAcknowledgement ack = FungibleTokenPacketAcknowledgement{true, "forwarded packet succeeded"}
       handler.writeAcknowledgement(
@@ -549,7 +549,7 @@ function onTimeoutPacket(
     FungibleTokenPacketAcknowledgement ack = FungibleTokenPacketAcknowledgement{false, "forwarded packet timed out"}
     handler.writeAcknowledgement(
       prevPacketDestChannelId
-      prevPacket,
+      prevPacketSeq,
       ack,
     )
 
