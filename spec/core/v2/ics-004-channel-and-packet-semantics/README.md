@@ -634,7 +634,7 @@ Pre-conditions:
 
 | **Condition Type**            | **Description** | **Code Checks** |
 |-------------------------------|-----------------------------------------------|-----------------------------------------------|
-| **Error-Conditions**           | 1. invalid `packetCommitment`, 2.`packetReceipt` already exists<br> 3. Invalid timeoutTimestamp<br> 4. Unsuccessful payload execution.<br> 5. Unexpected counterparty channel id | 1.1 `verifyMembership(packetCommitment)==false`<br> 1.2 `provableStore.get(packetReceiptPath(packet.channelDestId, packet.sequence))!=null`<br> 3. `timeoutTimestamp === 0`<br> 3.1 `currentTimestamp() < packet.timeoutTimestamp)`<br> 4. `onReceivePacket(..)==False` <br> 5. `packet.sourceChannelId != channel.counterpartyChannelId` |
+| **Error-Conditions**           | 1. invalid `packetCommitment`, 2.`packetReceipt` already exists<br> 3. Invalid timeoutTimestamp<br> 4. Unsuccessful payload execution.<br> 5. Unexpected counterparty channel id | 1.1 `verifyMembership(packetCommitment)==false`<br> 1.2 `provableStore.get(packetReceiptPath(packet.channelDestId, packet.sequence))!=null`<br> 3. `timeoutTimestamp === 0`<br> 3.1 `currentTimestamp() > packet.timeoutTimestamp`<br> 4. `onReceivePacket(..)==False` <br> 5. `packet.sourceChannelId != channel.counterpartyChannelId` |
 | **Post-Conditions (Success)**  | 1. `onReceivePacket` is executed and the application state is modified<br> 2. The `packetReceipt` is written<br> 3. Event is Emitted<br>  | 1. `onReceivePacket(..)==True; app.State(beforeReceivePacket)!=app.State(afterReceivePacket)`<br> 2. `provableStore.get(packetReceiptPath(packet.channelDestId, packet.sequence))!=null`<br> 3. Check Event Emission<br> |
 | **Post-Conditions (Error)**    | 1. if `onReceivePacket` fails the application state is unchanged<br> 2. `packetReceipt is not written`<br> <br> 3. No Event Emission<br> | 1. `app.State(beforeReceivePacket)==app.State(afterReceivePacket)`<br> 2. `provableStore.get(packetReceiptPath(packet.channelDestId, packet.sequence))==null` <br> 3. Check No Event is Emitted<br> |
                
@@ -662,7 +662,7 @@ function recvPacket(
     assert(packet.sourceChannelId == channel.counterpartyChannelId) 
     
     // verify timeout
-    assert(packet.timeoutTimestamp === 0)  
+    assert(packet.timeoutTimestamp !== 0)  
     assert(currentTimestamp() < packet.timeoutTimestamp)
 
     // verify the packet receipt for this packet does not exist already 
@@ -931,7 +931,7 @@ Pre-conditions:
 |-------------------------------|--------------------|--------------------|
 | **Error-Conditions**           | 1. `packetCommitment` already cleared out<br> 2. `packetReceipt` is not empty<br> 3. Unsuccessful payload execution<br> 4. `timeoutTimestamp` not elapsed on the receiving chain <br> 5. Unexpected counterparty channel id| 1. `provableStore.get(packetCommitmentPath(packet.channelSourceId, packet.sequence)) ===  null`<br> 2. `provableStore.get(packetReceiptPath(packet.channelDestId, packet.sequence))!=null`<br> 3. `onTimeoutPacket(packet.channelSourceId,payload) == False`<br> 4.1 `packet.timeoutTimestamp > 0` <br> 4.2 `proofTimestamp = client.getTimestampAtHeight(proofHeight); proofTimestamp >= packet.timeoutTimestamp` <br> 5. `packet.sourceChannelId != channel.counterpartyChannelId` |
 | **Post-Conditions (Success)**  | 1. `onTimeoutPacket` is executed and the application state is modified <br> 2. `packetCommitment` has been cleared out <br> 3. `packetReceipt` is empty <br> 4. Event is Emitted<br> | 1. `onTimeoutPacket(..)==True; app.State(beforeTimeoutPacket)!=app.State(afterTimeoutPacket)`<br> 2. `provableStore.get(packetCommitmentPath(packet.channelSourceId, packet.sequence)) === null`<br> 3. `provableStore.get(packetReceiptPath(packet.channelDestId, packet.sequence))==null`<br> 4. Check Event is Emitted<br> |
-| **Post-Conditions (Error)**    | 1. If `onTimeoutPacket` fails and the application state is unchanged <br> 2. `packetCommitment` is not cleared out <br> 3. No Event Emission<br> | 1. `onTimeoutPacket(..)==True; app.State(beforeTimeoutPacket)!=app.State(afterTimeoutPacket)`<br> 2. `provableStore.get(packetCommitmentPath(packet.channelSourceId, packet.sequence)) === null` <br> 3. Check No Event is Emitted<br>| 
+| **Post-Conditions (Error)**    | 1. If `onTimeoutPacket` fails and the application state is unchanged <br> 2. `packetCommitment` is not cleared out <br> 3. No Event Emission<br> | 1. `onTimeoutPacket(..)==False; app.State(beforeTimeoutPacket)==app.State(afterTimeoutPacket)`<br> 2. `provableStore.get(packetCommitmentPath(packet.channelSourceId, packet.sequence)) === null` <br> 3. Check No Event is Emitted<br>| 
 
 ###### Pseudo-Code 
 
