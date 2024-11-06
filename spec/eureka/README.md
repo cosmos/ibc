@@ -191,17 +191,17 @@ function sendPacket(
     assert(timeoutHeight === 0 || latestClientHeight < timeoutHeight)
 
     // if the sequence doesn't already exist, this call initializes the sequence to 0
-    sequence = channelStore.get(nextSequenceSendPath(commitPort, sourceChannel))
+    sequence = channelStore.get(nextSequenceSendPath(sourcePort, sourceChannel))
     
     // store commitment to the packet data & packet timeout
     channelStore.set(
-      packetCommitmentPath(commitPort, sourceChannel, sequence),
+      packetCommitmentPath(sourcePort, sourceChannel, sequence),
       hash(hash(data), timeoutHeight, timeoutTimestamp)
     )
 
     // increment the sequence. Thus there are monotonically increasing sequences for packet flow
     // from sourcePort, sourceChannel pair
-    channelStore.set(nextSequenceSendPath(commitPort, sourceChannel), sequence+1)
+    channelStore.set(nextSequenceSendPath(sourcePort, sourceChannel), sequence+1)
 
     // log that a packet can be safely sent
     emitLogEntry("sendPacket", {
