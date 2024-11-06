@@ -77,8 +77,14 @@ func commitPayload(payload: Payload): bytes {
     buffer = append(sha256.Hash(payload.version))
     buffer = append(sha256.Hash(payload.encoding))
     buffer = append(sha256.Hash(payload.appData))
+    return sha256.Hash(buffer)
 }
 
+// commitV2Packet commits to all fields in the packet
+// by hashing each individual field and then hashing these fields together
+// Note: SourceChannel and the sequence are omitted since they will be included in the key
+// Every other field of the packet is committed to in the packet which will be stored in the
+// packet commitment value
 func commitV2Packet(packet: Packet) {
     timeoutBytes = LittleEndian(packet.timeout)
     var appBytes: bytes
@@ -96,7 +102,7 @@ func commitV2Packet(packet: Packet) {
 
 The acknowledgement in the version 2 specification is also modified to support multiple payloads in the packet that will each go to separate applications that can write their own acknowledgements. Each acknowledgment will be contained within the final packet acknowledgment in the same order that they were received in the original packet. Thus if a packet contains payloads for modules `A` and `B` in that order; the receiver will write an acknowledgment with the app acknowledgements `A` and `B` in the same order.
 
-The acknowledgement which is itself a list of app acknowledgement bytes must be committed to by hashing each individual acknowledgement and concatenating them together. This ensures that all compliant implementations reach the same acknowledgment commitment and that two different acknowledgements never create the same commitment.
+The acknowledgement which is itself a list of app acknowledgement bytes must be committed to by hashing each individual acknowledgement and concatenating them together and hashing the result. This ensures that all compliant implementations reach the same acknowledgment commitment and that two different acknowledgements never create the same commitment.
 
 An application may not need to return an acknowledgment. In this case, it may return a sentinel acknowledgement value `SENTINEL_ACKNOWLEDGMENT` which will be the single byte in the byte array: `bytes(0x01)`. In this case, the IBC `acknowledgePacket` handler will still do the core IBC acknowledgment logic but it will not call the application's acknowledgePacket callback.
 
@@ -116,11 +122,11 @@ All acknowledgements must be committed to and stored under the ICS24 acknowledgm
 
 ```typescript
 func commitV2Acknowledgment(ack: Acknowledgement) {
-    var ackCommitment: bytes
+    var buttfer: bytes
     for appAck in ack.appAcknowledgement {
-        ackCommitment = append(ackCommitment, sha256.Hash(appAck))
+        buffer = append(buffer, sha256.Hash(appAck))
     }
-    return ackCommitment
+    return sha256.Hash(ackCommitment)
 }
 ```
 
