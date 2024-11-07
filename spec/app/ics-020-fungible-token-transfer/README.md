@@ -70,6 +70,7 @@ interface Denom {
 
 interface Forwarding {
   hops: []Hop
+  timeoutTimestamp: uint64 
   memo: string
 }
 
@@ -426,8 +427,10 @@ function onRecvPacket(
   if len(data.forwarding.hops) > 0 {
     
     memo = ""
+    originalTimeoutTimestamp = data.forwarding.timeoutTimestamp
     nextForwarding = Forwarding{
       hops: data.forwarding.hops[1:]
+      timeoutTimestamp: originalTimeoutTimestamp // pass the original timestamp value 
       memo: data.forwarding.memo
     }
     if len(data.forwarding.hops) == 1 {
@@ -456,7 +459,7 @@ function onRecvPacket(
   
   packetSequence=handler.sendPacket(
       forwarding.hops[0].channelId,
-      currentTime() + DefaultHopTimeoutPeriod,
+      originalTimeoutTimestamp,
       forwardingPayload
     )
     // store previous packet sequence and destChannelId for future sending ack
