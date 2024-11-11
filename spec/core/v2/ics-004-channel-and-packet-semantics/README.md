@@ -596,15 +596,33 @@ function sendPacket(
     // increment the sequence. Thus there are monotonically increasing sequences for packet flow for a given clientId
     nextSequenceSend[sourceChannelId]=sequence+1
     
-    // log that a packet can be safely sent
-    // Event Emission 
-    emitLogEntry("sendPacket", {
+    // Event Emission for send packet
+    emitLogEntry("send_packet", {
       sourceId: sourceChannelId, 
-      destId: channel.counterpartyChannelId, 
-      sequence: sequence,
-      packet: packet,
-      timeoutTimestamp: timeoutTimestamp, 
+      destId: channel.counterpartyChannelId,
+      sequence: sequence, // value is string in decimal format
+      timeoutTimestamp: timeoutTimestamp, // value is string in decimal format
+      payloadLength: len(payloads), // value is string in decimal format
+      // include first payload data in events if there is only one payload
+      version: payload[0].version,
+      encoding: payload[0].encoding,
+      data: toHex(payload[0].appData) // emit app bytes as string in hex format
     })
+
+    // for multi payload cases, we will emit each payload as a separate event
+    // these will include the packet identifier so they can be indexed and
+    // reconstructed by relayers
+    for i, payload in payloads {
+        emitLongEntry("send_payload", {
+            sourceId: sourceChannelId, 
+            destId: channel.counterpartyChannelId,
+            sequence: sequence, // value is string in decimal format
+            payloadSequence: i, // value is string in payload format
+            version: payload.version,
+            encoding: payload.encoding,
+            data: toHex(payload.appData) // emit app bytes as string in hex format
+        })
+    }
     
     return sequence
 }
@@ -690,19 +708,25 @@ function recvPacket(
     // Executes Application logic ∀ Payload
     payload=packet.data[0]
     cbs = router.callbacks[payload.destPort]
-    ack,success = cbs.onReceivePacket(packet.channelDestId,packet.channelSourceId,packet.sequence,payload,relayer) // Note that payload includes the version. The application is required to inspect the version to route the data to the proper callback
+    acknowledgement,success = cbs.onReceivePacket(packet.channelDestId,packet.channelSourceId,packet.sequence,payload,relayer) // Note that payload includes the version. The application is required to inspect the version to route the data to the proper callback
+    // construct acknowlegement event by concatenating each app acknowledgment together with a "/" delimiter
+    ackString = ""
+    for i, ack in acknowledgment {
+        ackString = ackString + toHex(ack)
+        if i !== len(acknowledgement) - 1 {
+            ackString = ackString + "/"
+        } 
+    }
     abortTransactionUnless(success)
     if ack != nil {
         // NOTE: Synchronous ack. 
         writeAcknowledgement(packet.channelDestId,packet.sequence,ack)
         // In case of Synchronous ack we emit the event here as we have all the necessary information, while writeAcknowledgement can only retrieve this in case of asynchronous ack. 
-        emitLogEntry("writeAcknowledgement", {
-            sequence: packet.sequence,
+        emitLogEntry("write_acknowledgement", {
+            sequence: packet.sequence, // value is string in decimal format
             sourceId: packet.channelSourceId,
             destId: packet.channelDestId,
-            timeoutTimestamp: packet.timeoutTimestamp,
-            data: packet.data,
-            ack
+            acknowledgement: ackString,
         })
     }else {
     // NOTE No ack || Asynchronous ack. 
@@ -717,16 +741,33 @@ function recvPacket(
         SUCCESSFUL_RECEIPT
     )
 
-    // log that a packet has been received
-    // Event Emission
-    emitLogEntry("recvPacket", {
-      data: packet.data
-      timeoutTimestamp: packet.timeoutTimestamp,
-      sequence: packet.sequence,
-      sourceId: packet.channelSourceId,
-      destId: packet.channelDestId,
-      relayer: relayer 
+    // Event Emission for receive packet
+    emitLogEntry("recv_packet", {
+      sourceId: sourceChannelId, 
+      destId: channel.counterpartyChannelId,
+      sequence: sequence, // value is string in decimal format
+      timeoutTimestamp: timeoutTimestamp, // value is string in decimal format
+      payloadLength: len(payloads), // value is string in decimal format
+      // include first payload data in events if there is only one payload
+      version: payload[0].version,
+      encoding: payload[0].encoding,
+      data: toHex(payload[0].appData) // emit app bytes as string in hex format
     })
+
+    // for multi payload cases, we will emit each payload as a separate event
+    // these will include the packet identifier so they can be indexed and
+    // reconstructed by relayers
+    for i, payload in payloads {
+        emitLongEntry("recv_payload", {
+            sourceId: sourceChannelId, 
+            destId: channel.counterpartyChannelId,
+            sequence: sequence, // value is string in decimal format
+            payloadSequence: i, // value is string in payload format
+            version: payload.version,
+            encoding: payload.encoding,
+            data: toHex(payload.appData) // emit app bytes as string in hex format
+        })
+    }
     
 }
 ```
@@ -784,14 +825,49 @@ function writeAcknowledgement(
     // Note that the event should be emitted by this function only in the asynchrounous ack case. Otherwise the event is emitted during the onReceive 
     packet=getPacket(destChannelId,sequence)
     if(packet!=nil){
-        emitLogEntry("writeAcknowledgement", {
-        sequence: packet.sequence,
+        // construct acknowlegement event by concatenating each app acknowledgment together with a "/" delimiter
+        ackString = ""
+        for i, ack in acknowledgment {
+            ackString = ackString + toHex(ack)
+            if i !== len(acknowledgement) - 1 {
+                ackString = ackString + "/"
+            } 
+        }
+        emitLogEntry("write_acknowledgement", {
+        sequence: packet.sequence, // value is string in decimal format
         sourceId: packet.channelSourceId,
         destId: packet.channelDestId,
-        timeoutTimestamp: packet.timeoutTimestamp,
-        data: packet.data,
-        acknowledgement
+        acknowledgement: ackString,
         })
+
+        // Event Emission for receive packet. emit again so relayer can reconstruct the packet
+        emitLogEntry("recv_packet", {
+        sourceId: sourceChannelId, 
+        destId: channel.counterpartyChannelId,
+        sequence: sequence, // value is string in decimal format
+        timeoutTimestamp: timeoutTimestamp, // value is string in decimal format
+        payloadLength: len(payloads), // value is string in decimal format
+        // include first payload data in events if there is only one payload
+        version: payload[0].version,
+        encoding: payload[0].encoding,
+        data: toHex(payload[0].appData) // emit app bytes as string in hex format
+        })
+
+        // for multi payload cases, we will emit each payload as a separate event
+        // these will include the packet identifier so they can be indexed and
+        // reconstructed by relayers
+        for i, payload in payloads {
+            emitLongEntry("recv_payload", {
+                sourceId: sourceChannelId, 
+                destId: channel.counterpartyChannelId,
+                sequence: sequence, // value is string in decimal format
+                payloadSequence: i, // value is string in payload format
+                version: payload.version,
+                encoding: payload.encoding,
+                data: toHex(payload.appData) // emit app bytes as string in hex format
+            })
+        }
+        
         // delete the packet from state 
         storedPacket[destChannelId,sequence]=nil 
     }
@@ -865,15 +941,22 @@ function acknowledgePacket(
     }
 
     channelStore.delete(packetCommitmentPath(packet.channelSourceId, packet.sequence))
+
+    // construct acknowlegement event by concatenating each app acknowledgment together with a "/" delimiter
+    ackString = ""
+    for i, ack in acknowledgment {
+        ackString = ackString + toHex(ack)
+        if i !== len(acknowledgement) - 1 {
+            ackString = ackString + "/"
+        } 
+    }
     
     // Event Emission // Check fields
     emitLogEntry("acknowledgePacket", {
-      sequence: packet.sequence,
+      sequence: packet.sequence, // value is string in decimal format
       sourceId: packet.channelSourceId,
       destId: packet.channelDestId,
-      timeoutTimestamp: packet.timeoutTimestamp,
-      data: packet.data,
-      acknowledgement
+      acknowledgement: ackString,
     })
 }
 ```
@@ -984,14 +1067,11 @@ function timeoutPacket(
 
     channelStore.delete(packetCommitmentPath(packet.channelSourceId, packet.sequence))
     
-    // Event Emission // See fields
+    // Event Emission for timeout packet
     emitLogEntry("timeoutPacket", {
-      sequence: packet.sequence,
+      sequence: packet.sequence, // value is string in decimal format
       sourceId: packet.channelSourceId,
       destId: packet.channelDestId,
-      timeoutTimestamp: packet.timeoutTimestamp,
-      data: packet.data,
-      acknowledgement
     })
 }
 ```
