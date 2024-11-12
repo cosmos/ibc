@@ -378,7 +378,8 @@ function registerCounterparty(
     // log that a packet can be safely sent
     // Event Emission 
     emitLogEntry("registerCounterparty", {
-      channelId: channelId, 
+      channelId: channelId,
+      clientId: channel.clientId
       counterpartyChannelid: counterpartyChannelId,
     })
 }
