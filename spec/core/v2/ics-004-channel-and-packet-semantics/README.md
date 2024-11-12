@@ -325,7 +325,7 @@ function createChannel(
         // Event Emission 
     emitLogEntry("createChannel", {
       channelId: channelId, 
-      channel: channel, 
+      clientId: clientId, 
       creatorAddress: msg.signer(),
     })
 
@@ -379,8 +379,7 @@ function registerCounterparty(
     // Event Emission 
     emitLogEntry("registerCounterparty", {
       channelId: channelId, 
-      channel: channel, 
-      creatorAddress: msg.signer(),
+      counterpartyChannelid: counterpartyChannelId,
     })
 }
 ```
