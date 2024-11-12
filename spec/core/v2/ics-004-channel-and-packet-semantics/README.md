@@ -323,7 +323,7 @@ function createChannel(
         nextSequenceSend[channelId]=1
         
         // Event Emission 
-    emitLogEntry("createChannel", {
+    emitEvents("createChannel", {
       channelId: channelId, 
       clientId: clientId, 
       creatorAddress: msg.signer(),
@@ -377,7 +377,7 @@ function registerCounterparty(
 
     // log that a packet can be safely sent
     // Event Emission 
-    emitLogEntry("registerCounterparty", {
+    emitEvents("registerCounterparty", {
       channelId: channelId,
       clientId: channel.clientId
       counterpartyChannelid: counterpartyChannelId,
@@ -597,7 +597,7 @@ function sendPacket(
     nextSequenceSend[sourceChannelId]=sequence+1
     
     // Event Emission for send packet
-    emitLogEntry("send_packet", {
+    emitEvents("send_packet", {
       sourceId: sourceChannelId, 
       destId: channel.counterpartyChannelId,
       sequence: sequence, // value is string in decimal format
@@ -722,7 +722,7 @@ function recvPacket(
         // NOTE: Synchronous ack. 
         writeAcknowledgement(packet.channelDestId,packet.sequence,ack)
         // In case of Synchronous ack we emit the event here as we have all the necessary information, while writeAcknowledgement can only retrieve this in case of asynchronous ack. 
-        emitLogEntry("write_acknowledgement", {
+        emitEvents("write_acknowledgement", {
             sequence: packet.sequence, // value is string in decimal format
             sourceId: packet.channelSourceId,
             destId: packet.channelDestId,
@@ -742,7 +742,7 @@ function recvPacket(
     )
 
     // Event Emission for receive packet
-    emitLogEntry("recv_packet", {
+    emitEvents("recv_packet", {
       sourceId: sourceChannelId, 
       destId: channel.counterpartyChannelId,
       sequence: sequence, // value is string in decimal format
@@ -833,7 +833,7 @@ function writeAcknowledgement(
                 ackString = ackString + "/"
             } 
         }
-        emitLogEntry("write_acknowledgement", {
+        emitEvents("write_acknowledgement", {
         sequence: packet.sequence, // value is string in decimal format
         sourceId: packet.channelSourceId,
         destId: packet.channelDestId,
@@ -841,7 +841,7 @@ function writeAcknowledgement(
         })
 
         // Event Emission for receive packet. emit again so relayer can reconstruct the packet
-        emitLogEntry("recv_packet", {
+        emitEvents("recv_packet", {
         sourceId: sourceChannelId, 
         destId: channel.counterpartyChannelId,
         sequence: sequence, // value is string in decimal format
@@ -952,7 +952,7 @@ function acknowledgePacket(
     }
     
     // Event Emission // Check fields
-    emitLogEntry("acknowledgePacket", {
+    emitEvents("acknowledgePacket", {
       sequence: packet.sequence, // value is string in decimal format
       sourceId: packet.channelSourceId,
       destId: packet.channelDestId,
@@ -1068,7 +1068,7 @@ function timeoutPacket(
     channelStore.delete(packetCommitmentPath(packet.channelSourceId, packet.sequence))
     
     // Event Emission for timeout packet
-    emitLogEntry("timeoutPacket", {
+    emitEvents("timeoutPacket", {
       sequence: packet.sequence, // value is string in decimal format
       sourceId: packet.channelSourceId,
       destId: packet.channelDestId,
