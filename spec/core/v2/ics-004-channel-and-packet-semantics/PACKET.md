@@ -125,7 +125,7 @@ All acknowledgements must be committed to and stored under the ICS24 acknowledgm
 
 ```typescript
 // commitV2Acknowledgement hashes each app acknowledgment and hashes them together
-// the final preimage is then prepended with the byte 0x02 in order to clearly define the protocol version
+// the final preimage will be prepended with the byte 0x02 before hashing in order to clearly define the protocol version
 // and allow for future upgradability
 func commitV2Acknowledgment(ack: Acknowledgement) {
     var buffer: bytes
