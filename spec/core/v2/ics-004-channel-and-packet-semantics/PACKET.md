@@ -136,4 +136,3 @@ func commitV2Acknowledgment(ack: Acknowledgement) {
     return sha256.Hash(buffer)
 }
 ```
-

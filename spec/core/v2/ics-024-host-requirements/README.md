@@ -109,7 +109,6 @@ IBC/TAO implementations MUST implement the following paths for the `provableStor
 
 Future paths may be used in future versions of the protocol, so the entire key-space in the provable store MUST be reserved for the IBC handler.
 
-
 | Value                      | Path format                                       | Value type | Defined in                           |
 | -------------------------- | ------------------------------------------------- | ---------- | ------------------------------------ |
 | Packet Commitment          | {channelIdentifier}|0x1|{bigEndianUint64Sequence} | bytes      | [ICS 4](../ics-004-channel-and-packet-semantics) |
