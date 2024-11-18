@@ -85,7 +85,7 @@ func commitPayload(payload: Payload): bytes {
 // Note: SourceChannel and the sequence are omitted since they will be included in the key
 // Every other field of the packet is committed to in the packet which will be stored in the
 // packet commitment value
-// The final hash will be prepended by the byte 0x02 in order to clearly define the protocol version
+// The final preimage will be prepended by the byte 0x02 before hashing in order to clearly define the protocol version
 // and allow for future upgradability
 func commitV2Packet(packet: Packet) {
     timeoutBytes = LittleEndian(packet.timeout)
@@ -96,7 +96,8 @@ func commitV2Packet(packet: Packet) {
     buffer = sha256.Hash(packet.destChannel)
     buffer = append(buffer, sha256.hash(timeoutBytes))
     buffer = append(buffer, sha256.hash(appBytes))
-    return append([]byte{0x02}, sha256.Hash(buffer))
+    buffer = append([]byte{0x02}, buffer)
+    return sha256.Hash(buffer)
 }
 ```
 
@@ -123,11 +124,15 @@ interface Acknowledgement {
 All acknowledgements must be committed to and stored under the ICS24 acknowledgment path.
 
 ```typescript
+// commitV2Acknowledgement hashes each app acknowledgment and hashes them together
+// the final preimage will be prepended with the byte 0x02 before hashing in order to clearly define the protocol version
+// and allow for future upgradability
 func commitV2Acknowledgment(ack: Acknowledgement) {
     var buffer: bytes
     for appAck in ack.appAcknowledgement {
         buffer = append(buffer, sha256.Hash(appAck))
     }
-    return append([]byte{0x02}, sha256.Hash(buffer))
+    buffer = append([]byte{0x02}, buffer)
+    return sha256.Hash(buffer)
 }
 ```
