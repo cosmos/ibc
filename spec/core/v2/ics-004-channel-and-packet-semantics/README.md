@@ -162,8 +162,8 @@ The ICS-04 use the protocol paths, defined in [ICS-24](../ics-024-host-requireme
 Thus, constant-size commitments to packet data fields are stored under the packet sequence number:
 
 ```typescript
-function packetCommitmentPath(channelSourceId: bytes, sequence: BigEndianUint64): Path {
-    return "{channelSourceId}|0x1|{bigEndianUint64Sequence}"
+function packetCommitmentPath(sourceChannel: bytes, sequence: BigEndianUint64): Path {
+    return "{sourceChannel}|0x1|{bigEndianUint64Sequence}"
 }
 ```
 
@@ -172,16 +172,16 @@ Absence of the path in the store is equivalent to a zero-bit.
 Packet receipt data are stored under the `packetReceiptPath`. In the case of a successful receive, the destination chain writes a sentinel success value of `SUCCESSFUL_RECEIPT`. 
 
 ```typescript
-function packetReceiptPath(channelDestId: bytes, sequence: BigEndianUint64): Path {
-    return "{channelDestId}|0x2|{bigEndianUint64Sequence}"
+function packetReceiptPath(destChannel: bytes, sequence: BigEndianUint64): Path {
+    return "{destChannel}|0x2|{bigEndianUint64Sequence}"
 }
 ```
 
 Packet acknowledgement data are stored under the `packetAcknowledgementPath`:
 
 ```typescript
-function packetAcknowledgementPath(channelSourceId: bytes, sequence: BigEndianUint64): Path {
-    return "{channelSourceId}|0x3|{bigEndianUint64Sequence}"
+function packetAcknowledgementPath(sourceChannel: bytes, sequence: BigEndianUint64): Path {
+    return "{sourceChannel}|0x3|{bigEndianUint64Sequence}"
 }
 ```
 
@@ -296,33 +296,33 @@ function createChannel(
     clientId: bytes,  
     counterpartyKeyPrefix: CommitmentPrefix): bytes {
 
-        // Implementation-Specific Input Validation 
-        // All implementations MUST ensure the inputs value are properly validated and compliant with this specification 
-        client=getClient(clientId)
-        assert(client!==null)
-        assert(isFormatOk(counterpartyKeyPrefix))
+    // Implementation-Specific Input Validation 
+    // All implementations MUST ensure the inputs value are properly validated and compliant with this specification 
+    client=getClient(clientId)
+    assert(client!==null)
+    assert(isFormatOk(counterpartyKeyPrefix))
 
-        // Channel Checks
-        channelId = generateIdentifier() 
-        abortTransactionUnless(validateIdentifier(channelId))
-        abortTransactionUnless(getChannel(channelId)) === null)
-        
-        // Channel manipulation
-        channel = Channel{
-            clientId: clientId,
-            counterpartyChannelId: "",  // This field it must be a blank field during the creation as it may be not known at the creation time. 
-            keyPrefix: counterpartyKeyPrefix
-        }
+    // Channel Checks
+    channelId = generateIdentifier() 
+    abortTransactionUnless(validateIdentifier(channelId))
+    abortTransactionUnless(getChannel(channelId)) === null)
+    
+    // Channel manipulation
+    channel = Channel{
+        clientId: clientId,
+        counterpartyChannelId: "",  // This field it must be a blank field during the creation as it may be not known at the creation time. 
+        keyPrefix: counterpartyKeyPrefix
+    }
 
-        // Local stores 
-        // Store channel info 
-        storedChannels[channelId]=channel
-        // Store creator address info 
-        channelCreator[channelId]=msg.signer()
-        // Initialise the nextSequenceSend 
-        nextSequenceSend[channelId]=1
-        
-        // Event Emission 
+    // Local stores 
+    // Store channel info 
+    storedChannels[channelId]=channel
+    // Store creator address info 
+    channelCreator[channelId]=msg.signer()
+    // Initialise the nextSequenceSend 
+    nextSequenceSend[channelId]=1
+    
+    // Event Emission 
     emitEvents("createChannel", {
       channelId: channelId, 
       clientId: clientId, 
@@ -513,7 +513,7 @@ sequenceDiagram
 
 ##### Sending packets
 
-The `sendPacket` function is called by the IBC handler when an IBC packet is submitted to the newtwork in order to send *data* in the form of an IBC packet. The `sendPacket` function executes the IBC core logic and atomically triggers the application logic execution via the activation of the `onSendPacket` callback. Indeed ∀ `Payload` included in the `packet.data`, which refers to a specific application, the callbacks are retrieved from the IBC router and the `onSendPacket` is the then triggered on the application specified in the `payload` content. Once all payloads contained in the `packet.data` have been processed, the packet commitment is generated and the sequence number bound to the `channelSourceId` is incremented. 
+The `sendPacket` function is called by the IBC handler when an IBC packet is submitted to the newtwork in order to send *data* in the form of an IBC packet. The `sendPacket` function executes the IBC core logic and atomically triggers the application logic execution via the activation of the `onSendPacket` callback. Indeed ∀ `Payload` included in the `packet.data`, which refers to a specific application, the callbacks are retrieved from the IBC router and the `onSendPacket` is the then triggered on the application specified in the `payload` content. Once all payloads contained in the `packet.data` have been processed, the packet commitment is generated and the sequence number bound to the `sourceChannel` is incremented. 
 
 The `sendPacket` core function MUST execute the applications logic atomically triggering the `onSendPacket` callback ∀ application contained in the `packet.data` payload.
 
@@ -564,7 +564,6 @@ function sendPacket(
     // disallow packet with timeoutTimestamp less than currentTimestamp and timeoutTimestamp value bigger than currentTimestamp + MaxTimeoutDelta 
     assert(currentTimestamp() < timeoutTimestamp < currentTimestamp() + MAX_TIMEOUT_DELTA) 
     
-    
     // retrieve sequence
     sequence = nextSequenceSend[sourecChannelId]
     // Check that the Sequence has been correctly initialized before hand. 
@@ -582,12 +581,12 @@ function sendPacket(
 
     // Construct the packet
     packet = Packet {
-            sourceId: sourceChannelId,
-            destId: channel.counterpartyChannelId, 
-            sequence: sequence,
-            timeoutTimestamp: timeoutTimestamp, 
-            payloads: payloads
-            }
+        sourceChannel: sourceChannelId,
+        destChannel: channel.counterpartyChannelId, 
+        sequence: sequence,
+        timeoutTimestamp: timeoutTimestamp, 
+        payloads: payloads
+    }
 
     // store packet commitment using commit function defined in [packet specification](https://github.com/cosmos/ibc/blob/c7b2e6d5184b5310843719b428923e0c5ee5a026/spec/core/v2/ics-004-packet-semantics/PACKET.md)
     commitment=commitV2Packet(packet) 
@@ -598,8 +597,8 @@ function sendPacket(
     
     // Event Emission for send packet
     emitEvents("send_packet", {
-      sourceId: sourceChannelId, 
-      destId: channel.counterpartyChannelId,
+      sourceChannel: sourceChannelId, 
+      destChannel: channel.counterpartyChannelId,
       sequence: sequence, // value is string in decimal format
       timeoutTimestamp: timeoutTimestamp, // value is string in decimal format
       payloadLength: len(payloads), // value is string in decimal format
@@ -614,8 +613,8 @@ function sendPacket(
     // reconstructed by relayers
     for i, payload in payloads {
         emitLongEntry("send_payload", {
-            sourceId: sourceChannelId, 
-            destId: channel.counterpartyChannelId,
+            sourceChannel: sourceChannelId, 
+            destChannel: channel.counterpartyChannelId,
             sequence: sequence, // value is string in decimal format
             payloadSequence: i, // value is string in payload format
             version: payload.version,
@@ -652,9 +651,9 @@ Pre-conditions:
 
 | **Condition Type**            | **Description** | **Code Checks** |
 |-------------------------------|-----------------------------------------------|-----------------------------------------------|
-| **Error-Conditions**           | 1. invalid `packetCommitment`, 2.`packetReceipt` already exists<br> 3. Invalid timeoutTimestamp<br> 4. Unsuccessful payload execution.<br> 5. Unexpected counterparty channel id | 1.1 `verifyMembership(packetCommitment)==false`<br> 1.2 `provableStore.get(packetReceiptPath(packet.channelDestId, packet.sequence))!=null`<br> 3. `timeoutTimestamp === 0`<br> 3.1 `currentTimestamp() > packet.timeoutTimestamp`<br> 4. `onReceivePacket(..)==False` <br> 5. `packet.sourceChannelId != channel.counterpartyChannelId` |
-| **Post-Conditions (Success)**  | 1. `onReceivePacket` is executed and the application state is modified<br> 2. The `packetReceipt` is written<br> 3. Event is Emitted<br>  | 1. `onReceivePacket(..)==True; app.State(beforeReceivePacket)!=app.State(afterReceivePacket)`<br> 2. `provableStore.get(packetReceiptPath(packet.channelDestId, packet.sequence))!=null`<br> 3. Check Event Emission<br> |
-| **Post-Conditions (Error)**    | 1. if `onReceivePacket` fails the application state is unchanged<br> 2. `packetReceipt is not written`<br> <br> 3. No Event Emission<br> | 1. `app.State(beforeReceivePacket)==app.State(afterReceivePacket)`<br> 2. `provableStore.get(packetReceiptPath(packet.channelDestId, packet.sequence))==null` <br> 3. Check No Event is Emitted<br> |
+| **Error-Conditions**           | 1. invalid `packetCommitment`, 2.`packetReceipt` already exists<br> 3. Invalid timeoutTimestamp<br> 4. Unsuccessful payload execution.<br> 5. Unexpected counterparty channel id | 1.1 `verifyMembership(packetCommitment)==false`<br> 1.2 `provableStore.get(packetReceiptPath(packet.destChannel, packet.sequence))!=null`<br> 3. `timeoutTimestamp === 0`<br> 3.1 `currentTimestamp() > packet.timeoutTimestamp`<br> 4. `onReceivePacket(..)==False` <br> 5. `packet.sourceChannelId != channel.counterpartyChannelId` |
+| **Post-Conditions (Success)**  | 1. `onReceivePacket` is executed and the application state is modified<br> 2. The `packetReceipt` is written<br> 3. Event is Emitted<br>  | 1. `onReceivePacket(..)==True; app.State(beforeReceivePacket)!=app.State(afterReceivePacket)`<br> 2. `provableStore.get(packetReceiptPath(packet.destChannel, packet.sequence))!=null`<br> 3. Check Event Emission<br> |
+| **Post-Conditions (Error)**    | 1. if `onReceivePacket` fails the application state is unchanged<br> 2. `packetReceipt is not written`<br> <br> 3. No Event Emission<br> | 1. `app.State(beforeReceivePacket)==app.State(afterReceivePacket)`<br> 2. `provableStore.get(packetReceiptPath(packet.destChannel, packet.sequence))==null` <br> 3. Check No Event is Emitted<br> |
                
 ###### Pseudo-Code 
 
@@ -671,7 +670,7 @@ function recvPacket(
   ) {
 
     // Channel and Client Checks
-    channel = getChannel(packet.channelDestId)     
+    channel = getChannel(packet.destChannel)     
     assert(channel !== null)
     client = router.clients[channel.clientId]  
     assert(client !== null)
@@ -684,13 +683,13 @@ function recvPacket(
     assert(currentTimestamp() < packet.timeoutTimestamp)
 
     // verify the packet receipt for this packet does not exist already 
-    packetReceipt = provableStore.get(packetReceiptPath(packet.channelDestId, packet.sequence))
+    packetReceipt = provableStore.get(packetReceiptPath(packet.destChannel, packet.sequence))
     abortTransactionUnless(packetReceipt === null)
 
     //////// verify commitment 
     
     // 1. retrieve keys 
-    packetPath = packetCommitmentPath(packet.channelDestId, packet.sequence)
+    packetPath = packetCommitmentPath(packet.destChannel, packet.sequence)
     merklePath = applyPrefix(channel.keyPrefix, packetPath)
     
     // 2. reconstruct commit value based on the passed-in packet  
@@ -704,47 +703,42 @@ function recvPacket(
         merklePath,
         commit))
 
-    
     // Executes Application logic ∀ Payload
     payload=packet.data[0]
     cbs = router.callbacks[payload.destPort]
-    acknowledgement,success = cbs.onReceivePacket(packet.channelDestId,packet.channelSourceId,packet.sequence,payload,relayer) // Note that payload includes the version. The application is required to inspect the version to route the data to the proper callback
-    // construct acknowlegement event by concatenating each app acknowledgment together with a "/" delimiter
-    ackString = ""
-    for i, ack in acknowledgment {
-        ackString = ackString + toHex(ack)
-        if i !== len(acknowledgement) - 1 {
-            ackString = ackString + "/"
-        } 
-    }
+    acknowledgement,success = cbs.onReceivePacket(packet.destChannel,packet.sourceChannel,packet.sequence,payload,relayer) // Note that payload includes the version. The application is required to inspect the version to route the data to the proper callback
     abortTransactionUnless(success)
     if ack != nil {
         // NOTE: Synchronous ack. 
-        writeAcknowledgement(packet.channelDestId,packet.sequence,ack)
-        // In case of Synchronous ack we emit the event here as we have all the necessary information, while writeAcknowledgement can only retrieve this in case of asynchronous ack. 
-        emitEvents("write_acknowledgement", {
-            sequence: packet.sequence, // value is string in decimal format
-            sourceId: packet.channelSourceId,
-            destId: packet.channelDestId,
-            acknowledgement: ackString,
-        })
+        writeAcknowledgement(packet.destChannel,packet.sequence,ack)
+        // emit an acknowledgement event for each app acknowledgement in the acknowledgement
+        for i, ack in acknowledgment {
+            // In case of Synchronous ack we emit the event here as we have all the necessary information, while writeAcknowledgement can only retrieve this in case of asynchronous ack. 
+            emitEvents("write_acknowledgement", {
+                sourceChannel: packet.sourceChannel,
+                destChannel: packet.destChannel,
+                sequence: packet.sequence, // value is string in decimal format
+                payloadSequence: i, // value is string in decimal format
+                acknowledgement: toHex(ack),
+            })
+        }
     }else {
     // NOTE No ack || Asynchronous ack. 
     // ack is nil and will be written asynchronously, so we store the full packet in the private store
-        storedPacket[packet.channelDestId,packet.sequence]=packet
+        storedPacket[packet.destChannel,packet.sequence]=packet
     }
     // Provable Stores 
     // we must set the receipt so it can be verified on the other side
     // it's the sentinel success receipt: []byte{0x01}
     provableStore.set(
-        packetReceiptPath(packet.channelDestId, packet.sequence),
+        packetReceiptPath(packet.destChannel, packet.sequence),
         SUCCESSFUL_RECEIPT
     )
 
     // Event Emission for receive packet
     emitEvents("recv_packet", {
-      sourceId: sourceChannelId, 
-      destId: channel.counterpartyChannelId,
+      sourceChannel: sourceChannelId, 
+      destChannel: channel.counterpartyChannelId,
       sequence: sequence, // value is string in decimal format
       timeoutTimestamp: timeoutTimestamp, // value is string in decimal format
       payloadLength: len(payloads), // value is string in decimal format
@@ -759,10 +753,10 @@ function recvPacket(
     // reconstructed by relayers
     for i, payload in payloads {
         emitLongEntry("recv_payload", {
-            sourceId: sourceChannelId, 
-            destId: channel.counterpartyChannelId,
+            sourceChannel: sourceChannelId, 
+            destChannel: channel.counterpartyChannelId,
             sequence: sequence, // value is string in decimal format
-            payloadSequence: i, // value is string in payload format
+            payloadSequence: i, // value is string in decimal format
             version: payload.version,
             encoding: payload.encoding,
             data: toHex(payload.appData) // emit app bytes as string in hex format
@@ -795,9 +789,9 @@ Pre-conditions:
 
 | **Condition Type**            | **Description** | **Code Checks** |
 |-------------------------------|------------|------------|
-| **Error-Conditions**           | 1. acknowledgement is empty<br> 2. The `packetAcknowledgementPath` stores already a value. | 1. `len(acknowledgement) === 0`<br> 2. `provableStore.get(packetAcknowledgementPath(packet.channelDestId, packet.sequence) !== null` |
-| **Post-Conditions (Success)**  | 1. opaque acknowledgement has been written at `packetAcknowledgementPath` <br> 2. Event is Emitted<br> | 1. `provableStore.get(packetAcknowledgementPath(packet.channelDestId, packet.sequence) !== null` <br> 2. Check Event Emission<br> |
-| **Post-Conditions (Error)**    | 1. No value is stored at the `packetAcknowledgementPath`. <br> 2. No Event is Emitted<br> | 1. `provableStore.get(packetAcknowledgementPath(packet.channelDestId, packet.sequence) === null`<br> 2. Check No Event is Emitted<br> |
+| **Error-Conditions**           | 1. acknowledgement is empty<br> 2. The `packetAcknowledgementPath` stores already a value. | 1. `len(acknowledgement) === 0`<br> 2. `provableStore.get(packetAcknowledgementPath(packet.destChannel, packet.sequence) !== null` |
+| **Post-Conditions (Success)**  | 1. opaque acknowledgement has been written at `packetAcknowledgementPath` <br> 2. Event is Emitted<br> | 1. `provableStore.get(packetAcknowledgementPath(packet.destChannel, packet.sequence) !== null` <br> 2. Check Event Emission<br> |
+| **Post-Conditions (Error)**    | 1. No value is stored at the `packetAcknowledgementPath`. <br> 2. No Event is Emitted<br> | 1. `provableStore.get(packetAcknowledgementPath(packet.destChannel, packet.sequence) === null`<br> 2. Check No Event is Emitted<br> |
 
 ###### Pseudo-Code 
 
@@ -825,32 +819,28 @@ function writeAcknowledgement(
     // Note that the event should be emitted by this function only in the asynchrounous ack case. Otherwise the event is emitted during the onReceive 
     packet=getPacket(destChannelId,sequence)
     if(packet!=nil){
-        // construct acknowlegement event by concatenating each app acknowledgment together with a "/" delimiter
-        ackString = ""
+        // emit an acknowledgement event for each app acknowledgement in the acknowledgement
         for i, ack in acknowledgment {
-            ackString = ackString + toHex(ack)
-            if i !== len(acknowledgement) - 1 {
-                ackString = ackString + "/"
-            } 
+            emitEvents("write_acknowledgement", {
+                sourceChannel: packet.sourceChannel,
+                destChannel: packet.destChannel,
+                sequence: packet.sequence, // value is string in decimal format
+                payloadSequence: i, // value is string in decimal format
+                acknowledgement: toHex(ack),
+            })
         }
-        emitEvents("write_acknowledgement", {
-        sequence: packet.sequence, // value is string in decimal format
-        sourceId: packet.channelSourceId,
-        destId: packet.channelDestId,
-        acknowledgement: ackString,
-        })
 
         // Event Emission for receive packet. emit again so relayer can reconstruct the packet
         emitEvents("recv_packet", {
-        sourceId: sourceChannelId, 
-        destId: channel.counterpartyChannelId,
-        sequence: sequence, // value is string in decimal format
-        timeoutTimestamp: timeoutTimestamp, // value is string in decimal format
-        payloadLength: len(payloads), // value is string in decimal format
-        // include first payload data in events if there is only one payload
-        version: payload[0].version,
-        encoding: payload[0].encoding,
-        data: toHex(payload[0].appData) // emit app bytes as string in hex format
+            sourceChannel: sourceChannelId, 
+            destChannel: channel.counterpartyChannelId,
+            sequence: sequence, // value is string in decimal format
+            timeoutTimestamp: timeoutTimestamp, // value is string in decimal format
+            payloadLength: len(payloads), // value is string in decimal format
+            // include first payload data in events if there is only one payload
+            version: payload[0].version,
+            encoding: payload[0].encoding,
+            data: toHex(payload[0].appData) // emit app bytes as string in hex format
         })
 
         // for multi payload cases, we will emit each payload as a separate event
@@ -858,8 +848,8 @@ function writeAcknowledgement(
         // reconstructed by relayers
         for i, payload in payloads {
             emitLongEntry("recv_payload", {
-                sourceId: sourceChannelId, 
-                destId: channel.counterpartyChannelId,
+                sourceChannel: sourceChannelId, 
+                destChannel: channel.counterpartyChannelId,
                 sequence: sequence, // value is string in decimal format
                 payloadSequence: i, // value is string in payload format
                 version: payload.version,
@@ -890,9 +880,9 @@ Pre-conditions:
 
 | **Condition Type** | **Description** | **Code Checks** |
 |-------------------------------|---------------------------------|---------------------------------|
-| **Error-Conditions**           | 1. `packetCommitment` already cleared out<br> 2. Unset Acknowledgment<br> 3. Unsuccessful payload execution. <br> 4. Unexpected counterparty channel id | 1. `provableStore.get(packetCommitmentPath(packet.channelSourceId, packet.sequence)) ===  null`<br> 2. `verifyMembership(packetacknowledgementPath,...,) ==  False`<br> 3. `onAcknowledgePacket(packet.channelSourceId,payload, acknowledgement) == False` <br> 4. `packet.sourceChannelId != channel.counterpartyChannelId` | 
-| **Post-Conditions (Success)**  | 1. `onAcknowledgePacket` is executed and the application state is modified<br> 2. `packetCommitment` has been cleared out <br> 4. Event is Emission<br> | 1. `onAcknowledgePacket(..)==True; app.State(beforeAcknowledgePacket)!=app.State(afterAcknowledgePacket)`<br> 2. `provableStore.get(packetCommitmentPath(packet.channelSourceId, packet.sequence)) === null`, <br> 4. Check Event is Emitted<br> |
-| **Post-Conditions (Error)**    | 1. If `onAcknowledgePacket` fails the application state is unchanged<br> 2. `packetCommitment` has not been cleared out<br> 3. acknowledgement is stil in store <br> 4. No Event Emission<br> | 1. `onAcknowledgePacket(..)==False; app.State(beforeAcknowledgePacket)==app.State(afterAcknowledgePacket)`<br> 2. `provableStore.get(packetCommitmentPath(packet.channelSourceId, packet.sequence)) ===  commitV2Packet(packet)` 3. `verifyMembership(packetAcknowledgementPath,...,) ==  True` <br> 4. Check No Event is Emitted<br>|
+| **Error-Conditions**           | 1. `packetCommitment` already cleared out<br> 2. Unset Acknowledgment<br> 3. Unsuccessful payload execution. <br> 4. Unexpected counterparty channel id | 1. `provableStore.get(packetCommitmentPath(packet.sourceChannel, packet.sequence)) ===  null`<br> 2. `verifyMembership(packetacknowledgementPath,...,) ==  False`<br> 3. `onAcknowledgePacket(packet.sourceChannel,payload, acknowledgement) == False` <br> 4. `packet.sourceChannelId != channel.counterpartyChannelId` | 
+| **Post-Conditions (Success)**  | 1. `onAcknowledgePacket` is executed and the application state is modified<br> 2. `packetCommitment` has been cleared out <br> 4. Event is Emission<br> | 1. `onAcknowledgePacket(..)==True; app.State(beforeAcknowledgePacket)!=app.State(afterAcknowledgePacket)`<br> 2. `provableStore.get(packetCommitmentPath(packet.sourceChannel, packet.sequence)) === null`, <br> 4. Check Event is Emitted<br> |
+| **Post-Conditions (Error)**    | 1. If `onAcknowledgePacket` fails the application state is unchanged<br> 2. `packetCommitment` has not been cleared out<br> 3. acknowledgement is stil in store <br> 4. No Event Emission<br> | 1. `onAcknowledgePacket(..)==False; app.State(beforeAcknowledgePacket)==app.State(afterAcknowledgePacket)`<br> 2. `provableStore.get(packetCommitmentPath(packet.sourceChannel, packet.sequence)) ===  commitV2Packet(packet)` 3. `verifyMembership(packetAcknowledgementPath,...,) ==  True` <br> 4. Check No Event is Emitted<br>|
 
 ###### Pseudo-Code 
 
@@ -910,7 +900,7 @@ function acknowledgePacket(
 ) {
 
     // Channel and Client Checks
-    channel = getChannel(packet.channelSourceId)
+    channel = getChannel(packet.sourceChannel)
     assert(channel !== null)
     client = router.clients[channel.clientId]
     assert(client !== null)
@@ -919,10 +909,10 @@ function acknowledgePacket(
     assert(packet.sourceChannelId == channel.counterpartyChannelId)
 
     // verify we sent the packet and haven't cleared it out yet
-    assert(provableStore.get(packetCommitmentPath(packet.channelSourceId, packet.sequence)) ===  commitV2Packet(packet))
+    assert(provableStore.get(packetCommitmentPath(packet.sourceChannel, packet.sequence)) ===  commitV2Packet(packet))
 
     // verify that the acknowledgement exist at the desired path  
-    ackPath = packetAcknowledgementPath(packet.channelDestId, packet.sequence)
+    ackPath = packetAcknowledgementPath(packet.destChannel, packet.sequence)
     merklePath = applyPrefix(channel.keyPrefix, ackPath)
     assert(client.verifyMembership(
         client.clientState
@@ -936,28 +926,23 @@ function acknowledgePacket(
         // Executes Application logic ∀ Payload
         payload=packet.data[0]
         cbs = router.callbacks[payload.sourcePort]
-        success= cbs.OnAcknowledgePacket(packet.channelSourceId,packet.channelDestId,packet.sequence,payload,acknowledgement, relayer) // Note that payload includes the version. The application is required to inspect the version to route the data to the proper callback
+        success= cbs.OnAcknowledgePacket(packet.sourceChannel,packet.destChannel,packet.sequence,payload,acknowledgement, relayer) // Note that payload includes the version. The application is required to inspect the version to route the data to the proper callback
         abortUnless(success) 
     }
 
-    channelStore.delete(packetCommitmentPath(packet.channelSourceId, packet.sequence))
+    channelStore.delete(packetCommitmentPath(packet.sourceChannel, packet.sequence))
 
-    // construct acknowlegement event by concatenating each app acknowledgment together with a "/" delimiter
-    ackString = ""
+    // emit an acknowledgement event for each app acknowledgement in the acknowledgement
     for i, ack in acknowledgment {
-        ackString = ackString + toHex(ack)
-        if i !== len(acknowledgement) - 1 {
-            ackString = ackString + "/"
-        } 
+        emitEvents("acknowledgePacket", {
+            sourceChannel: packet.sourceChannel,
+            destChannel: packet.destChannel,
+            sequence: packet.sequence, // value is string in decimal format
+            payloadSequence: i // value is string in decimal format
+            acknowledgement: toHex(ack),
+        }) 
     }
     
-    // Event Emission // Check fields
-    emitEvents("acknowledgePacket", {
-      sequence: packet.sequence, // value is string in decimal format
-      sourceId: packet.channelSourceId,
-      destId: packet.channelDestId,
-      acknowledgement: ackString,
-    })
 }
 ```
 
@@ -1012,9 +997,9 @@ Pre-conditions:
 
 | **Condition Type**            | **Description**| **Code Checks**|
 |-------------------------------|--------------------|--------------------|
-| **Error-Conditions**           | 1. `packetCommitment` already cleared out<br> 2. `packetReceipt` is not empty<br> 3. Unsuccessful payload execution<br> 4. `timeoutTimestamp` not elapsed on the receiving chain <br> 5. Unexpected counterparty channel id| 1. `provableStore.get(packetCommitmentPath(packet.channelSourceId, packet.sequence)) ===  null`<br> 2. `provableStore.get(packetReceiptPath(packet.channelDestId, packet.sequence))!=null`<br> 3. `onTimeoutPacket(packet.channelSourceId,payload) == False`<br> 4.1 `packet.timeoutTimestamp > 0` <br> 4.2 `proofTimestamp = client.getTimestampAtHeight(proofHeight); proofTimestamp >= packet.timeoutTimestamp` <br> 5. `packet.sourceChannelId != channel.counterpartyChannelId` |
-| **Post-Conditions (Success)**  | 1. `onTimeoutPacket` is executed and the application state is modified <br> 2. `packetCommitment` has been cleared out <br> 3. `packetReceipt` is empty <br> 4. Event is Emitted<br> | 1. `onTimeoutPacket(..)==True; app.State(beforeTimeoutPacket)!=app.State(afterTimeoutPacket)`<br> 2. `provableStore.get(packetCommitmentPath(packet.channelSourceId, packet.sequence)) === null`<br> 3. `provableStore.get(packetReceiptPath(packet.channelDestId, packet.sequence))==null`<br> 4. Check Event is Emitted<br> |
-| **Post-Conditions (Error)**    | 1. If `onTimeoutPacket` fails and the application state is unchanged <br> 2. `packetCommitment` is not cleared out <br> 3. No Event Emission<br> | 1. `onTimeoutPacket(..)==False; app.State(beforeTimeoutPacket)==app.State(afterTimeoutPacket)`<br> 2. `provableStore.get(packetCommitmentPath(packet.channelSourceId, packet.sequence)) === null` <br> 3. Check No Event is Emitted<br>| 
+| **Error-Conditions**           | 1. `packetCommitment` already cleared out<br> 2. `packetReceipt` is not empty<br> 3. Unsuccessful payload execution<br> 4. `timeoutTimestamp` not elapsed on the receiving chain <br> 5. Unexpected counterparty channel id| 1. `provableStore.get(packetCommitmentPath(packet.sourceChannel, packet.sequence)) ===  null`<br> 2. `provableStore.get(packetReceiptPath(packet.destChannel, packet.sequence))!=null`<br> 3. `onTimeoutPacket(packet.sourceChannel,payload) == False`<br> 4.1 `packet.timeoutTimestamp > 0` <br> 4.2 `proofTimestamp = client.getTimestampAtHeight(proofHeight); proofTimestamp >= packet.timeoutTimestamp` <br> 5. `packet.sourceChannelId != channel.counterpartyChannelId` |
+| **Post-Conditions (Success)**  | 1. `onTimeoutPacket` is executed and the application state is modified <br> 2. `packetCommitment` has been cleared out <br> 3. `packetReceipt` is empty <br> 4. Event is Emitted<br> | 1. `onTimeoutPacket(..)==True; app.State(beforeTimeoutPacket)!=app.State(afterTimeoutPacket)`<br> 2. `provableStore.get(packetCommitmentPath(packet.sourceChannel, packet.sequence)) === null`<br> 3. `provableStore.get(packetReceiptPath(packet.destChannel, packet.sequence))==null`<br> 4. Check Event is Emitted<br> |
+| **Post-Conditions (Error)**    | 1. If `onTimeoutPacket` fails and the application state is unchanged <br> 2. `packetCommitment` is not cleared out <br> 3. No Event Emission<br> | 1. `onTimeoutPacket(..)==False; app.State(beforeTimeoutPacket)==app.State(afterTimeoutPacket)`<br> 2. `provableStore.get(packetCommitmentPath(packet.sourceChannel, packet.sequence)) === null` <br> 3. Check No Event is Emitted<br>| 
 
 ###### Pseudo-Code 
 
@@ -1030,7 +1015,7 @@ function timeoutPacket(
     relayer: string
 ) { 
     // Channel and Client Checks
-    channel = getChannel(packet.channelSourceId)
+    channel = getChannel(packet.sourceChannel)
     assert(client !== null)
 
     client = router.clients[channel.clientId]
@@ -1040,7 +1025,7 @@ function timeoutPacket(
     assert(packet.sourceChannelId == channel.counterpartyChannelId)
 
     // verify we sent the packet and haven't cleared it out yet
-    assert(provableStore.get(packetCommitmentPath(packet.channelSourceId, packet.sequence))
+    assert(provableStore.get(packetCommitmentPath(packet.sourceChannel, packet.sequence))
            === commitV2Packet(packet))
 
     // get the timestamp from the final consensus state in the channel path
@@ -1051,7 +1036,7 @@ function timeoutPacket(
     assert(packet.timeoutTimestamp > 0 && proofTimestamp >= packet.timeoutTimestamp)
 
     // verify there is no packet receipt --> receivePacket has not been called 
-    receiptPath = packetReceiptPath(packet.channelDestId, packet.sequence)
+    receiptPath = packetReceiptPath(packet.destChannel, packet.sequence)
     merklePath = applyPrefix(channel.keyPrefix, receiptPath)
     assert(client.verifyNonMembership(
         client.clientState,
@@ -1062,16 +1047,16 @@ function timeoutPacket(
 
     payload=packet.data[0]
     cbs = router.callbacks[payload.sourcePort]
-    success=cbs.OnTimeoutPacket(packet.channelSourceId,packet.channelDestId,packet.sequence,payload,relayer) // Note that payload includes the version. The application is required to inspect the version to route the data to the proper callback
+    success=cbs.OnTimeoutPacket(packet.sourceChannel,packet.destChannel,packet.sequence,payload,relayer) // Note that payload includes the version. The application is required to inspect the version to route the data to the proper callback
     abortUnless(success)
 
-    channelStore.delete(packetCommitmentPath(packet.channelSourceId, packet.sequence))
+    channelStore.delete(packetCommitmentPath(packet.sourceChannel, packet.sequence))
     
     // Event Emission for timeout packet
     emitEvents("timeoutPacket", {
       sequence: packet.sequence, // value is string in decimal format
-      sourceId: packet.channelSourceId,
-      destId: packet.channelDestId,
+      sourceChannel: packet.sourceChannel,
+      destChannel: packet.destChannel,
     })
 }
 ```
