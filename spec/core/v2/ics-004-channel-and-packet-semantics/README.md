@@ -612,7 +612,7 @@ function sendPacket(
     // these will include the packet identifier so they can be indexed and
     // reconstructed by relayers
     for i, payload in payloads {
-        emitLongEntry("send_payload", {
+        emitEvents("send_payload", {
             sourceChannel: sourceChannelId, 
             destChannel: channel.counterpartyChannelId,
             sequence: sequence, // value is string in decimal format
@@ -752,7 +752,7 @@ function recvPacket(
     // these will include the packet identifier so they can be indexed and
     // reconstructed by relayers
     for i, payload in payloads {
-        emitLongEntry("recv_payload", {
+        emitEvents("recv_payload", {
             sourceChannel: sourceChannelId, 
             destChannel: channel.counterpartyChannelId,
             sequence: sequence, // value is string in decimal format
@@ -847,7 +847,7 @@ function writeAcknowledgement(
         // these will include the packet identifier so they can be indexed and
         // reconstructed by relayers
         for i, payload in payloads {
-            emitLongEntry("recv_payload", {
+            emitEvents("recv_payload", {
                 sourceChannel: sourceChannelId, 
                 destChannel: channel.counterpartyChannelId,
                 sequence: sequence, // value is string in decimal format
