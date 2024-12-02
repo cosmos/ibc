@@ -674,11 +674,8 @@ function recvPacket(
     if ack != nil {
         // NOTE: Synchronous ack. 
         writeAcknowledgement(packet.destChannel,packet.sequence,ack)
-    } else {
-        // NOTE No ack || Asynchronous ack. 
-        // ack is nil and will be written asynchronously, so we store the full packet in the private store
-        storedPacket[packet.destChannel,packet.sequence]=packet
     }
+    
     // Provable Stores 
     // we must set the receipt so it can be verified on the other side
     // it's the sentinel success receipt: []byte{0x01}
@@ -740,34 +737,13 @@ function writeAcknowledgement(
     // create the acknowledgement coomit using the function defined in [packet specification](https://github.com/cosmos/ibc/blob/c7b2e6d5184b5310843719b428923e0c5ee5a026/spec/core/v2/ics-004-packet-semantics/PACKET.md)
     commit=commitV2Acknowledgment(acknowledgement)
     
-    provableStore.set(
-    packetAcknowledgementPath(destChannelId, sequence),commit)
-
-    // log that a packet has been acknowledged
-    // Event Emission 
-    // Note that the event should be emitted by this function only in the asynchrounous ack case. Otherwise the event is emitted during the onReceive 
-    packet=getPacket(destChannelId,sequence)
-    if(packet!=nil){
-        // emit an acknowledgement event for each app acknowledgement in the acknowledgement
-        for i, ack in acknowledgment {
-            emitEvents("write_acknowledgement", {
-                sourceChannel: packet.sourceChannel,
-                destChannel: packet.destChannel,
-                sequence: packet.sequence, // value is string in decimal format
-                payloadSequence: i, // value is string in decimal format
-                acknowledgement: toHex(ack),
-            })
-        }
-        
-        // delete the packet from state 
-        storedPacket[destChannelId,sequence]=nil 
-    }
+    provableStore.set(packetAcknowledgementPath(destChannelId, sequence),commit)
 }
 ```
 
 ###### WriteAcknowledgement Events
 
-The WriteAcknowledgement handler must emit the original received packet associated with the acknowledgement and the acknowledgement in events itself. Since the protocol only stores the hash of the packet and acknowledgment in state, the entire preimage (ie the packet and acknowledgement) must be emitted in events so it can be reconstructed by the relayer. Note: In the case of asynchronous acknowledgements; the original received packet must be stored temporarily so that it can be emitted on WriteAcknowledgement events.
+The WriteAcknowledgement handler must emit the original received packet associated with the acknowledgement and the acknowledgement in events itself. Since the protocol only stores the hash of the packet and acknowledgment in state, the entire preimage (ie the packet and acknowledgement) must be emitted in events so it can be reconstructed by the relayer. Note: In the case of asynchronous acknowledgements; the original received packet must be stored temporarily so that it can be emitted on WriteAcknowledgement events. The event **should** also emit the `destinationChannel` and `sequence` separately in order to allow for easy event filtering by relayers that want to focus on relaying for a single channel.
 
 In the case, an implementor does not have access to an event system; the implementor must then store the entire packet and acknowledgment in state so it can be retreived by a relayer.
 
@@ -838,18 +814,6 @@ function acknowledgePacket(
     }
 
     channelStore.delete(packetCommitmentPath(packet.sourceChannel, packet.sequence))
-
-    // emit an acknowledgement event for each app acknowledgement in the acknowledgement
-    for i, ack in acknowledgment {
-        emitEvents("acknowledgePacket", {
-            sourceChannel: packet.sourceChannel,
-            destChannel: packet.destChannel,
-            sequence: packet.sequence, // value is string in decimal format
-            payloadSequence: i // value is string in decimal format
-            acknowledgement: toHex(ack),
-        }) 
-    }
-    
 }
 ```
 
@@ -958,13 +922,6 @@ function timeoutPacket(
     abortUnless(success)
 
     channelStore.delete(packetCommitmentPath(packet.sourceChannel, packet.sequence))
-    
-    // Event Emission for timeout packet
-    emitEvents("timeoutPacket", {
-      sequence: packet.sequence, // value is string in decimal format
-      sourceChannel: packet.sourceChannel,
-      destChannel: packet.destChannel,
-    })
 }
 ```
 
