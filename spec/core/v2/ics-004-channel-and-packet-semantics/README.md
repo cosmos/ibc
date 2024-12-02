@@ -321,13 +321,6 @@ function createChannel(
     channelCreator[channelId]=msg.signer()
     // Initialise the nextSequenceSend 
     nextSequenceSend[channelId]=1
-    
-    // Event Emission 
-    emitEvents("createChannel", {
-      channelId: channelId, 
-      clientId: clientId, 
-      creatorAddress: msg.signer(),
-    })
 
     return channelId
 }
@@ -374,14 +367,6 @@ function registerCounterparty(
 
     // Local Store
     storedChannels[channelId]=channel
-
-    // log that a packet can be safely sent
-    // Event Emission 
-    emitEvents("registerCounterparty", {
-      channelId: channelId,
-      clientId: channel.clientId
-      counterpartyChannelid: counterpartyChannelId,
-    })
 }
 ```
 
@@ -595,37 +580,15 @@ function sendPacket(
     // increment the sequence. Thus there are monotonically increasing sequences for packet flow for a given clientId
     nextSequenceSend[sourceChannelId]=sequence+1
     
-    // Event Emission for send packet
-    emitEvents("send_packet", {
-      sourceChannel: sourceChannelId, 
-      destChannel: channel.counterpartyChannelId,
-      sequence: sequence, // value is string in decimal format
-      timeoutTimestamp: timeoutTimestamp, // value is string in decimal format
-      payloadLength: len(payloads), // value is string in decimal format
-      // include first payload data in events if there is only one payload
-      version: payload[0].version,
-      encoding: payload[0].encoding,
-      data: toHex(payload[0].appData) // emit app bytes as string in hex format
-    })
-
-    // for multi payload cases, we will emit each payload as a separate event
-    // these will include the packet identifier so they can be indexed and
-    // reconstructed by relayers
-    for i, payload in payloads {
-        emitEvents("send_payload", {
-            sourceChannel: sourceChannelId, 
-            destChannel: channel.counterpartyChannelId,
-            sequence: sequence, // value is string in decimal format
-            payloadSequence: i, // value is string in payload format
-            version: payload.version,
-            encoding: payload.encoding,
-            data: toHex(payload.appData) // emit app bytes as string in hex format
-        })
-    }
-    
     return sequence
 }
 ```
+
+###### Send Packet Events
+
+The SendPacket handler **must** emit events that include the entire packet. Thus every packet field must be emitted in events, either in individual key/value pairs or the packet can be encoded and emitted as a single event. Since the protocol only stores the packet commitment hash in state, the entire preimage (ie the packet) must be emitted in events so it can be reconstructed by the relayer. The event **should** also emit the `sourceChannel` and `sequence` separately in order to allow for easy event filtering by relayers that want to focus on relaying for a single channel.
+
+In the case, an implementor does not have access to an event system; the implementor must then store the entire packet in state so it can be retreived by a relayer.
  
 ##### Receiving packets
 
@@ -711,20 +674,9 @@ function recvPacket(
     if ack != nil {
         // NOTE: Synchronous ack. 
         writeAcknowledgement(packet.destChannel,packet.sequence,ack)
-        // emit an acknowledgement event for each app acknowledgement in the acknowledgement
-        for i, ack in acknowledgment {
-            // In case of Synchronous ack we emit the event here as we have all the necessary information, while writeAcknowledgement can only retrieve this in case of asynchronous ack. 
-            emitEvents("write_acknowledgement", {
-                sourceChannel: packet.sourceChannel,
-                destChannel: packet.destChannel,
-                sequence: packet.sequence, // value is string in decimal format
-                payloadSequence: i, // value is string in decimal format
-                acknowledgement: toHex(ack),
-            })
-        }
-    }else {
-    // NOTE No ack || Asynchronous ack. 
-    // ack is nil and will be written asynchronously, so we store the full packet in the private store
+    } else {
+        // NOTE No ack || Asynchronous ack. 
+        // ack is nil and will be written asynchronously, so we store the full packet in the private store
         storedPacket[packet.destChannel,packet.sequence]=packet
     }
     // Provable Stores 
@@ -734,37 +686,14 @@ function recvPacket(
         packetReceiptPath(packet.destChannel, packet.sequence),
         SUCCESSFUL_RECEIPT
     )
-
-    // Event Emission for receive packet
-    emitEvents("recv_packet", {
-      sourceChannel: sourceChannelId, 
-      destChannel: channel.counterpartyChannelId,
-      sequence: sequence, // value is string in decimal format
-      timeoutTimestamp: timeoutTimestamp, // value is string in decimal format
-      payloadLength: len(payloads), // value is string in decimal format
-      // include first payload data in events if there is only one payload
-      version: payload[0].version,
-      encoding: payload[0].encoding,
-      data: toHex(payload[0].appData) // emit app bytes as string in hex format
-    })
-
-    // for multi payload cases, we will emit each payload as a separate event
-    // these will include the packet identifier so they can be indexed and
-    // reconstructed by relayers
-    for i, payload in payloads {
-        emitEvents("recv_payload", {
-            sourceChannel: sourceChannelId, 
-            destChannel: channel.counterpartyChannelId,
-            sequence: sequence, // value is string in decimal format
-            payloadSequence: i, // value is string in decimal format
-            version: payload.version,
-            encoding: payload.encoding,
-            data: toHex(payload.appData) // emit app bytes as string in hex format
-        })
-    }
-    
 }
 ```
+
+###### Receive Packet Events
+
+The ReceivePacket handler **must** emit events that include the entire packet and the entire acknowledgement. Thus every packet field must be emitted in events, either in individual key/value pairs or the packet can be encoded and emitted as a single event. Furthermore, the acknowledgment must be encoded and emitted as an event. Since the protocol only stores the hash of the packet and acknowledgment in state, the entire preimage (ie the packet and acknowledgement) must be emitted in events so it can be reconstructed by the relayer. The event **should** also emit the `destinationChannel` and `sequence` separately in order to allow for easy event filtering by relayers that want to focus on relaying for a single channel.
+
+In the case, an implementor does not have access to an event system; the implementor must then store the entire packet and acknowledgment in state so it can be retreived by a relayer.
 
 ##### Writing acknowledgements
 
@@ -829,40 +758,18 @@ function writeAcknowledgement(
                 acknowledgement: toHex(ack),
             })
         }
-
-        // Event Emission for receive packet. emit again so relayer can reconstruct the packet
-        emitEvents("recv_packet", {
-            sourceChannel: sourceChannelId, 
-            destChannel: channel.counterpartyChannelId,
-            sequence: sequence, // value is string in decimal format
-            timeoutTimestamp: timeoutTimestamp, // value is string in decimal format
-            payloadLength: len(payloads), // value is string in decimal format
-            // include first payload data in events if there is only one payload
-            version: payload[0].version,
-            encoding: payload[0].encoding,
-            data: toHex(payload[0].appData) // emit app bytes as string in hex format
-        })
-
-        // for multi payload cases, we will emit each payload as a separate event
-        // these will include the packet identifier so they can be indexed and
-        // reconstructed by relayers
-        for i, payload in payloads {
-            emitEvents("recv_payload", {
-                sourceChannel: sourceChannelId, 
-                destChannel: channel.counterpartyChannelId,
-                sequence: sequence, // value is string in decimal format
-                payloadSequence: i, // value is string in payload format
-                version: payload.version,
-                encoding: payload.encoding,
-                data: toHex(payload.appData) // emit app bytes as string in hex format
-            })
-        }
         
         // delete the packet from state 
         storedPacket[destChannelId,sequence]=nil 
     }
 }
 ```
+
+###### WriteAcknowledgement Events
+
+The WriteAcknowledgement handler must emit the original received packet associated with the acknowledgement and the acknowledgement in events itself. Since the protocol only stores the hash of the packet and acknowledgment in state, the entire preimage (ie the packet and acknowledgement) must be emitted in events so it can be reconstructed by the relayer. Note: In the case of asynchronous acknowledgements; the original received packet must be stored temporarily so that it can be emitted on WriteAcknowledgement events.
+
+In the case, an implementor does not have access to an event system; the implementor must then store the entire packet and acknowledgment in state so it can be retreived by a relayer.
 
 ##### Processing acknowledgements
 
