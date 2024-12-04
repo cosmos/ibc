@@ -742,7 +742,7 @@ Calling modules MUST execute application logic atomically in conjunction with ca
 
 The IBC handler performs the following steps in order:
 
-- Checks that the channel is not closed to send packets
+- Checks that the channel is opened to send packets
 - Checks that the calling module owns the sending port (see [ICS 5](../ics-005-port-allocation))
 - Checks that the timeout height specified has not already passed on the destination chain
 - Increments the send sequence counter associated with the channel
@@ -1154,8 +1154,6 @@ In the case of an unordered channel, `timeoutPacket` checks the absence of the r
 
 If relations are enforced between timeout heights of subsequent packets, safe bulk timeouts of all packets prior to a timed-out packet can be performed. This specification omits details for now.
 
-Since we allow optimistic sending of packets (i.e. sending a packet before a channel opens), we must also allow optimistic timing out of packets. With optimistic sends, the packet may be sent on a channel that eventually opens or a channel that will never open. If the channel does open after the packet has timed out, then the packet will never be received on the counterparty so we can safely timeout optimistically. If the channel never opens, then we MUST timeout optimistically so that any state changes made during the optimistic send by the application can be safely reverted.
-
 We pass the `relayer` address just as in [Receiving packets](#receiving-packets) to allow for possible incentivization here as well.
 
 ```typescript
@@ -1538,6 +1536,8 @@ Aug 25, 2019 - Cleanup
 Jan 10, 2022 - Add ORDERED_ALLOW_TIMEOUT channel type and appropriate logic
 
 Mar 28, 2023 - Add `writeChannel` function to write channel end after executing application callback
+
+Dec 4, 2024 - Remove the description for optimistic packet sending
 
 ## Copyright
 
