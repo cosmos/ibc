@@ -1537,6 +1537,8 @@ Jan 10, 2022 - Add ORDERED_ALLOW_TIMEOUT channel type and appropriate logic
 
 Mar 28, 2023 - Add `writeChannel` function to write channel end after executing application callback
 
+Dec 4, 2024 - Remove the description for optimistic packet sending
+
 ## Copyright
 
 All content herein is licensed under [Apache 2.0](https://www.apache.org/licenses/LICENSE-2.0).
