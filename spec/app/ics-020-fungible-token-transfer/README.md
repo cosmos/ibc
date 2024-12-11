@@ -728,7 +728,7 @@ function revertInFlightChanges(sentPacket: Packet, receivedPacket: Packet) {
     // identifiers, then it was a minted voucher and we need to burn it.
     // Otherwise, it was an original token from our chain and we must give the tokens
     // back to the escrow account.
-    if !isTracePrefixed(receivedPacket.destinationPort, receivedPacket.desinationChannel, token) {
+    if !isTracePrefixed(receivedPacket.destinationPort, receivedPacket.destinationChannel, token) {
       // receive sent tokens from the received escrow account to the forwarding account
       // so we must send the tokens back from the forwarding account to the received escrow account
       bank.TransferCoins(forwardingAddress, reverseEscrow, token.denom, token.amount)
