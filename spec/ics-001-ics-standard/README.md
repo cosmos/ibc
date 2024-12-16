@@ -11,7 +11,7 @@ modified: 2019-08-25
 
 ## What is an ICS?
 
-An inter-chain standard (ICS) is a design document describing a particular protocol,
+An interchain standard (ICS) is a design document describing a particular protocol,
 standard, or feature expected to be of use to the Cosmos ecosystem.
 An ICS should list the desired properties of the standard, explain the design rationale, and
 provide a concise but comprehensive technical specification. The primary ICS author
@@ -19,15 +19,15 @@ is responsible for pushing the proposal through the standardisation process, sol
 input and support from the community, and communicating with relevant stakeholders to
 ensure (social) consensus.
 
-The inter-chain standardisation process should be the primary vehicle for proposing
+The interchain standardisation process should be the primary vehicle for proposing
 ecosystem-wide protocols, changes, and features, and ICS documents should persist after
 consensus as a record of design decisions and an information repository for future implementers.
 
-Inter-chain standards should *not* be used for proposing changes to a particular blockchain
+Interchain standards should *not* be used for proposing changes to a particular blockchain
 (such as the Cosmos Hub), specifying implementation particulars (such as language-specific data structures),
 or debating governance proposals on existing Cosmos blockchains (although it is possible
 that individual blockchains in the Cosmos ecosystem may utilise their governance processes
-to approve or reject inter-chain standards).
+to approve or reject interchain standards).
 
 ## Components
 
