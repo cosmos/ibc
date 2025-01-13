@@ -249,7 +249,7 @@ For any prefix `prefix` and any path `path` not set in the commitment `acc`, for
 Probability(verifyMembership(root, proof, applyPrefix(prefix, path), value) === true) negligible in k
 ```
 
-To ensure the commitment proofs are *sound*, the commitment must be lexographically ordered to ensure that non-existence proofs of the key `b` may be proven by showing the existence of key `a` and key `c` in addition to proving that these two keys are neightbors in the commitment. 
+To ensure the commitment proofs are *sound*, the commitment must be lexicographically ordered to ensure that non-existence proofs of the key `b` may be proven by showing the existence of key `a` and key `c` in addition to proving that these two keys are neighbors in the commitment. 
 
 #### Position binding
 
