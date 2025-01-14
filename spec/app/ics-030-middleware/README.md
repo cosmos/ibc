@@ -255,7 +255,7 @@ function onChanOpenConfirm(
 }
 ```
 
-NOTE: Middleware that does not need to negotiate with a counterparty middleware on the remote stack will not implement the version unmarshaling and negotiation, and will simply perform its own custom logic on the callbacks without relying on the counterparty behaving similarly.
+NOTE: Middleware that does not need to negotiate with a counterparty middleware on the remote stack will not implement the version unmarshalling and negotiation, and will simply perform its own custom logic on the callbacks without relying on the counterparty behaving similarly.
 
 #### Packet Callbacks
 
