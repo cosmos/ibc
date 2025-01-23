@@ -513,7 +513,9 @@ pub struct UpdateStateMsg {
 
 #[cw_serde]
 pub struct CheckSubstituteAndUpdateStateMsg {
-  substitute_client_msg: Vec<u8>,
+  #[schemars(with = "String")]
+  #[serde(with = "Base64", default)]
+  pub substitute_client_msg: Vec<u8>,
 }
 
 #[cw_serde]
