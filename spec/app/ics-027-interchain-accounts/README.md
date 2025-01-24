@@ -327,7 +327,7 @@ message InterchainAccountPacketData  {
 }
 ```
 
-The acknowledgment packet structure is defined as in [ics4](https://github.com/cosmos/ibc-go/blob/main/proto/ibc/core/channel/v1/channel.proto#L135-L148). If an error occurs on the host chain the acknowledgment contains the error message.
+The acknowledgment packet structure is defined as in [ics4](https://github.com/cosmos/ibc-go/blob/main/proto/ibc/core/channel/v1/channel.proto#L165-L171). If an error occurs on the host chain the acknowledgment contains the error message.
 
 ```proto
 message Acknowledgement {
