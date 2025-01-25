@@ -772,7 +772,7 @@ function InitGenesis(gs: ConsumerGenesisState): [ValidatorUpdate] {
     abortSystemUnless(gs.initialValSet == gs.providerConsensusState.validatorSet)
   }
   if gs.transferChannelId != "" {
-      // - if transferChannelId is provided, it must the ID
+      // - if transferChannelId is provided, it must be the ID
       //   of a channel connected to the "transfer" port
       channelEnd = provableStore.get("channelEnds/ports/transfer/channels/{gs.transferChannelId}")
       abortSystemUnless(channelEnd != nil)
@@ -1186,7 +1186,7 @@ function StopConsumerChain(chainId: string, lockUnbonding: Bool) {
   vscSendTimestamps.Remove((chainId, *))
 
   if !lockUnbonding {
-    // remove chainId form all outstanding unbonding operations
+    // remove chainId from all outstanding unbonding operations
     foreach id IN vscToUnbondingOps[(chainId, _)] {
       unbondingOps[id].unbondingChainIds.Remove(chainId)
       // if the unbonding operation has unbonded on all consumer chains

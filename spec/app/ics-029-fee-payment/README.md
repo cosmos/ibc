@@ -227,7 +227,7 @@ In this way, custom fee-handling logic can be hooked up to the IBC packet flow l
 
 #### Fee Protocol Negotiation
 
-The fee middleware will negotiate its fee protocol version with the counterparty module by including its own version next to the application version. The channel version will be a string of a JSON struct containing the fee middleware version and the application version. The application version may as well be a JSON-encoded string, possibly including further middleware and app versions, if the application stack consists of multiple milddlewares wrapping a base application.
+The fee middleware will negotiate its fee protocol version with the counterparty module by including its own version next to the application version. The channel version will be a string of a JSON struct containing the fee middleware version and the application version. The application version may as well be a JSON-encoded string, possibly including further middleware and app versions, if the application stack consists of multiple middlewares wrapping a base application.
 
 Channel Version: 
 
