@@ -604,7 +604,7 @@ function onChanUpgradeInit(
 
   // at the moment it is not supported to perform upgrades that
   // change the connection ID of the controller or host chains.
-  // therefore these connection IDs much remain the same as before.
+  // therefore these connection IDs must remain the same as before.
   abortTransactionUnless(currentMetadata.ControllerConnectionId === metadata.ControllerConnectionId)
   abortTransactionUnless(currentMetadata.HostConnectionId === metadata.HostConnectionId)
   // the proposed connection hop must not change
@@ -653,7 +653,7 @@ function onChanUpgradeTry(
 
   // at the moment it is not supported to perform upgrades that
   // change the connection ID of the controller or host chains.
-  // therefore these connection IDs much remain the same as before.
+  // therefore these connection IDs must remain the same as before.
   abortTransactionUnless(currentMetadata.ControllerConnectionId === metadata.ControllerConnectionId)
   abortTransactionUnless(currentMetadata.HostConnectionId === metadata.HostConnectionId)
   // the proposed connection hop must not change
@@ -694,7 +694,7 @@ function onChanUpgradeAck(
 
   // at the moment it is not supported to perform upgrades that
   // change the connection ID of the controller or host chains.
-  // therefore these connection IDs much remain the same as before.
+  // therefore these connection IDs must remain the same as before.
   abortTransactionUnless(currentMetadata.ControllerConnectionId === metadata.ControllerConnectionId)
   abortTransactionUnless(currentMetadata.HostConnectionId === metadata.HostConnectionId)
 

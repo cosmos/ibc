@@ -603,7 +603,7 @@ function onAcknowledgePacket(
     } else {
       // the forwarded packet has failed, thus the funds have been refunded to the forwarding address.
       // we must revert the changes that came from successfully receiving the tokens on our chain
-      // before propogating the error acknowledgement back to original sender chain
+      // before propagating the error acknowledgement back to original sender chain
       revertInFlightChanges(packet, prevPacket)
       // write error acknowledgement
       FungibleTokenPacketAcknowledgement ack = FungibleTokenPacketAcknowledgement{false, "forwarded packet failed"}
@@ -635,7 +635,7 @@ function onTimeoutPacket(packet: Packet) {
   if prevPacket != nil {
     // the forwarded packet has failed, thus the funds have been refunded to the forwarding address.
     // we must revert the changes that came from successfully receiving the tokens on our chain
-    // before propogating the error acknowledgement back to original sender chain
+    // before propagating the error acknowledgement back to original sender chain
     revertInFlightChanges(packet, prevPacket)
     // write error acknowledgement
     FungibleTokenPacketAcknowledgement ack = FungibleTokenPacketAcknowledgement{false, "forwarded packet timed out"}

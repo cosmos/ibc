@@ -116,7 +116,7 @@ If one or both of the ledgers halt, packets may be delivered no more than once, 
 
 #### Ordering
 
-On ordered channels, packets are be sent and received in the same order: if packet `x` is sent before packet `y` by a channel end on ledger A, packet `x` will be received before packet `y` by the corresponding channel end on ledger B.
+On ordered channels, packets are sent and received in the same order: if packet `x` is sent before packet `y` by a channel end on ledger A, packet `x` will be received before packet `y` by the corresponding channel end on ledger B.
 
 On unordered channels, packets may be sent and received in any order. Unordered packets, like ordered packets, have individual timeouts specified in terms of the destination ledger's height or timestamp.
 
