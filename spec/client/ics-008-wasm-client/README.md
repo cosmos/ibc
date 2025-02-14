@@ -26,7 +26,7 @@ Requiring all counterparties to add statically new client implementations to the
 
 Once the IBC network broadly adopts dynamically upgradable clients, a chain may upgrade its consensus algorithm whenever it wishes, and relayers may upgrade the client code of all counterparty chains without requiring the counterparty chains to perform an upgrade themselves. This prevents a dependency on counterparty chains when considering upgrading one's consensus algorithm.
 
-Another reason why this interface is beneficial is that it removes the dependency between Light clients and the Go programming language. Using Wasm as a compilation target, light clients can be written in any programming language whose toolchain includes Wasm as a compilation target. Examples of these are Go, Rust, C, and C++.
+Another reason why this interface is beneficial is that it removes the dependency between Light clients and the Go programming language. Using Wasm as a compilation target, light clients can be written in any programming language whose toolchain includes Wasm as a compilation target. Examples include Go, Rust, C, and C++.
 
 ### Definitions
 
@@ -266,7 +266,7 @@ interface UpdateStateOnMisbehaviourMsg {
 ```
 
 ```typescript
-function updateStateOnMisbehaviour(clientMsg: clientMessage) {
+function updateStateOnMisbehaviour(clientMsg: ClientMessage) {
   // bytes of encoded client message of base light
   // client are passed in the message 
   payload = UpdateStateOnMisbehaviourMsg{clientMsg.data}
@@ -567,7 +567,7 @@ Mar 15th, 2022 - Update for 02-client refactor
 
 Sep 7th, 2023 - Update for changes during implementation
 
-Mar 22th, 2024 - Update for changes after release of ibc-go's 08-wasm module
+Mar 22nd, 2024 - Update for changes after release of ibc-go's 08-wasm module
 
 ## Copyright
 
