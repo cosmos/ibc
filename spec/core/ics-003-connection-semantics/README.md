@@ -573,7 +573,7 @@ function queryClientConnections(id: Identifier): Set<Identifier> {
 
 ## Backwards Compatibility
 
-In the latest specification of the connection handshake, `connOpenTry` and `connOpenAck` will no longer validate that the counterparty's clien state and consensus state is a valid client of the executing chain's consensus protocol. Thus, `clientState`, `proofClient`, `proofConsensus` and `consensusHeight` fields in the `ConnOpenTry` and `ConnOpenACk` datagrams are deprecated and will eventually be removed.
+In the latest specification of the connection handshake, `connOpenTry` and `connOpenAck` will no longer validate that the counterparty's client state and consensus state is a valid client of the executing chain's consensus protocol. Thus, `clientState`, `proofClient`, `proofConsensus` and `consensusHeight` fields in the `ConnOpenTry` and `ConnOpenACk` datagrams are deprecated and will eventually be removed.
 
 ## Forwards Compatibility
 
