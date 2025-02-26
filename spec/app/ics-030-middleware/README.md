@@ -48,7 +48,7 @@ In order to function as IBC Middleware, a module must implement the IBC applicat
 
 When nesting an application, the module must make sure that it is in the middle of communication between core IBC and the application in both directions. Developers should do this by registering the top-level module directly with the IBC router (not any nested applications). The nested applications in turn, must be given access only to the middleware's `WriteAcknowledgement` and `SendPacket` rather than to the core IBC handlers directly.
 
-Additionally, the middleware must take care to ensure that the application logic can execute its own version negotiation without interference from the nesting middleware. In order to do this, the middleware will format the version in a JSON-encoded string containing the middleware version and the application version (and potentially also other custom parameter fields). The application version may as well be a JSON-encoded string, possibly including further middleware and app versions, if the application stack consists of multiple milddlewares wrapping a base application.  The format of the version string is as follows:
+Additionally, the middleware must take care to ensure that the application logic can execute its own version negotiation without interference from the nesting middleware. In order to do this, the middleware will format the version in a JSON-encoded string containing the middleware version and the application version (and potentially also other custom parameter fields). The application version may as well be a JSON-encoded string, possibly including further middleware and app versions, if the application stack consists of multiple middlewares wrapping a base application.  The format of the version string is as follows:
 
 ```json
 {
@@ -157,7 +157,7 @@ function onChanOpenInit(
         appVersion: appVersion,
     }
 
-    return MarshallJSON(metadata), nil
+    return MarshalJSON(metadata), nil
 }
 
 function onChanOpenTry(
