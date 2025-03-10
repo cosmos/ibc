@@ -1,6 +1,6 @@
 ---
 ics: TBD
-title: IBC Eureka
+title: IBC v2
 stage: EXPERIMENTAL
 category: IBC/TAO
 kind: interface
@@ -9,7 +9,7 @@ author: Aditya Sripal <aditya@interchain.io>
 created: 2024-08-15
 ---
 
-## IBC Eureka
+## IBC v2
 
 ### Context
 
@@ -21,7 +21,7 @@ Writing an implementation from scratch is a problem many ecosystems face as a ma
 
 The goal of this document is to serve as the simplest IBC specification that will allow new ecosystems to implement a protocol that can communicate with fully implemented IBC chains using the same security assumptions. It will also explain the motivations of the original design choices of the IBC protocol and how the new ibc architecture rethinks these design choices while still retaining the desired properties of IBC.
 
-The IBC eureka protocol must have the same security properties as IBC, and must be completely compatible with IBC applications. It may not have the full flexibility offered by standard IBC.
+The IBC v2 protocol must have the same security properties as IBC, and must be completely compatible with IBC applications. It may not have the full flexibility offered by standard IBC.
 
 ### Desired Properties
 
@@ -71,7 +71,7 @@ function submitMisbehaviour(
 
 ### Core IBC Functionality
 
-IBC in its essence is the ability for applications on different blockchains with different security models to communicate with each other through light-client backed security. Thus, IBC needs the light client described above and the IBC applications that define the packet data they wish to send and receive. In addition to these layers, core IBC introduces the connection and channel abstractions to connect these two fundamental layers. IBC Eureka intends to compress only the necessary aspects of connection and channel layers to a new router layer but before doing this it is critical to understand what service they currently provide.
+IBC in its essence is the ability for applications on different blockchains with different security models to communicate with each other through light-client backed security. Thus, IBC needs the light client described above and the IBC applications that define the packet data they wish to send and receive. In addition to these layers, core IBC introduces the connection and channel abstractions to connect these two fundamental layers. IBC v2 intends to compress only the necessary aspects of connection and channel layers to a new router layer but before doing this it is critical to understand what service they currently provide.
 
 Properties of Connection:
 
