@@ -107,15 +107,15 @@ interface Counterparty {
 }
 
 function ProvideCounterparty(
-    channelIdentifier: Identifier, // this will be our own client identifier representing our channel to desired chain
-    counterpartyChannelIdentifier: Identifier, // this is the counterparty's identifier of our chain
+    clientIdentifier: Identifier, // this will be our own client identifier representing our channel to desired chain
+    counterpartyClientIdentifier: Identifier, // this is the counterparty's identifier of our chain
     counterpartyKeyPrefix: CommitmentPrefix,
     authentication: data, // implementation-specific authentication data
 ) {
     assert(verify(authentication))
 
     counterparty = Counterparty{
-        channelId: counterpartyChannelIdentifier,
+        clientId: counterpartyClientIdentifier,
         keyPrefix: counterpartyKeyPrefix
     }
 
@@ -123,9 +123,9 @@ function ProvideCounterparty(
 }
 
 // getCounterparty retrieves the stored counterparty identifier
-// given the channelIdentifier on our chain once it is provided
-function getCounterparty(channelIdentifier: Identifier): Counterparty {
-    return privateStore.get(counterpartyPath(channelIdentifier))
+// given the clientIdentifier on our chain once it is provided
+function getCounterparty(clientIdentifier: Identifier): Counterparty {
+    return privateStore.get(counterpartyPath(clientIdentifier))
 }
 ```
 
