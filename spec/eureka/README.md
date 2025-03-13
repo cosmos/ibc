@@ -66,8 +66,11 @@ function submitMisbehaviour(
 ): error
 ```
 
-// TODO: Keep very limited buffer of consensus states
-// Keep ability to migrate client (without necessarily consensus governance)
+// Maintain a limited buffer of the N most recent consensus states
+// where N is a configurable parameter (default: 100).
+// This allows for efficient storage while maintaining
+// enough history for security checks and client migrations.
+// Older consensus states should be pruned automatically.
 
 ### Core IBC Functionality
 
