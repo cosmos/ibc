@@ -426,58 +426,6 @@ type queryConsensusState = (
 ) => ConsensusState
 ```
 
-#### Proof construction
-
-Each client type SHOULD define functions to allow relayers to construct the proofs required by the client's state verification algorithms. These may take different forms depending on the client type.
-For example, Tendermint client proofs may be returned along with key-value data from store queries, and solo client proofs may need to be constructed interactively on the solo state machine in question (since the user will need to sign the message).
-These functions may constitute external queries over RPC to a full node as well as local computation or verification.
-
-```typescript
-type queryAndProveClientConsensusState = (
-  clientIdentifier: Identifier,
-  height: Height,
-  prefix: CommitmentPrefix,
-  consensusStateHeight: Height) => ConsensusState, Proof
-
-type queryAndProveConnectionState = (
-  connectionIdentifier: Identifier,
-  height: Height,
-  prefix: CommitmentPrefix) => ConnectionEnd, Proof
-
-type queryAndProveChannelState = (
-  portIdentifier: Identifier,
-  channelIdentifier: Identifier,
-  height: Height,
-  prefix: CommitmentPrefix) => ChannelEnd, Proof
-
-type queryAndProvePacketData = (
-  portIdentifier: Identifier,
-  channelIdentifier: Identifier,
-  height: Height,
-  prefix: CommitmentPrefix,
-  sequence: uint64) => []byte, Proof
-
-type queryAndProvePacketAcknowledgement = (
-  portIdentifier: Identifier,
-  channelIdentifier: Identifier,
-  height: Height,
-  prefix: CommitmentPrefix,
-  sequence: uint64) => []byte, Proof
-
-type queryAndProvePacketAcknowledgementAbsence = (
-  portIdentifier: Identifier,
-  channelIdentifier: Identifier,
-  height: Height,
-  prefix: CommitmentPrefix,
-  sequence: uint64) => Proof
-
-type queryAndProveNextSequenceRecv = (
-  portIdentifier: Identifier,
-  channelIdentifier: Identifier,
-  height: Height,
-  prefix: CommitmentPrefix) => uint64, Proof
-```
-
 #### Implementation strategies
 
 ##### Loopback
