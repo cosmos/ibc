@@ -542,11 +542,23 @@ logical correctness.
 Calling `createClient` with the client state and initial consensus state creates a new client.
 
 ```typescript
-function createClient(clientState: clientState, consensusState: ConsensusState) {
+function createClient(clientState: clientState, consensusState: ConsensusState): identifier {
   // implementations may define a identifier generation function
   identifier = generateClientIdentifier()
-  abortTransactionUnless(provableStore.get(clientStatePath(identifier)) === null)
+  abortTransactionUnless(privateStore.get(clientStatePath(identifier)) === null)
   initialise(identifier, clientState, consensusState)
+  return Identifier
+}
+```
+
+#### RegisterCounterparty
+
+IBC version 2 introduces a `registerCounterparty` procedure. Calling `registerCounterparty` with the clientId will register the counterparty clientId 
+that the counterparty will use to write packet messages intended for our chain. All ICS24 provable paths to our chain will be keyed on the counterparty clientId, so each client must be aware of the counterparty's identifier in order to construct the path for key verification and ensure there is an authenticated stream of packet data between the clients that do not get written to by other clients.
+
+```typescript
+function registerCounterparty(clientId: identifier, counterpartyId: identifier) {
+
 }
 ```
 
