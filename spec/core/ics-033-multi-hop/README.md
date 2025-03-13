@@ -110,6 +110,10 @@ func (Chain) QueryStateAtHeight(key string, height int64) (value []byte, proof [
 // UpdateClient updates the client state corresponding to the next chain in the channel path
 func (*Chain) UpdateClient()
 
+// UpdateClientToHeight updates the client state corresponding to the next chain in the channel path
+// to a specific height rather than the latest height
+func (*Chain) UpdateClientToHeight(height exported.Height)
+
 // ProofHeights contains multi-hop proof query height data.
 type ProofHeights struct {
     proofHeight     exported.Height // query the proof at this height
@@ -204,12 +208,16 @@ func calcProofHeights(
 
     // if no suitable consensusHeight then update client and use latest chain height/client height
     //
-    // TODO: It could be more efficient to update the client with the missing block height
-    // rather than the latest block height since it would be less likely to need client updates
-    // on subsequent chains.
     if height.proofHeight == nil {
-        abortTransactionUnless(chain.UpdateClient())
-        height.proofHeight = chain.GetLatestHeight()
+        // Update the client with the specific missing block height if available,
+        // otherwise fall back to updating with the latest block height
+        if consensusHeight != nil {
+            abortTransactionUnless(chain.UpdateClientToHeight(consensusHeight))
+            height.proofHeight = consensusHeight
+        } else {
+            abortTransactionUnless(chain.UpdateClient())
+            height.proofHeight = chain.GetLatestHeight()
+        }
         height.consensusHeight = chain.GetClientStateHeight(chains[chainIdx+1])
     }
 
