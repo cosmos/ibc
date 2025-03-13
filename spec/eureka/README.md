@@ -57,7 +57,7 @@ function updateClient(
     header: bytes,
 ): error
 
-// once a client has been created, relayers can submit misbehaviour that proves the counterparty chain
+// once a client has been created, relayers can submit misbehaviour that proves the counterparty chain violated the trust model.
 // The light client must verify the misbehaviour using the trust model of the consensus mechanism
 // and execute some custom logic such as freezing the client from accepting future updates and proof verification.
 function submitMisbehaviour(
@@ -107,15 +107,15 @@ interface Counterparty {
 }
 
 function ProvideCounterparty(
-    channelIdentifier: Identifier, // this will be our own client identifier representing our channel to desired chain
-    counterpartyChannelIdentifier: Identifier, // this is the counterparty's identifier of our chain
+    clientIdentifier: Identifier, // this will be our own client identifier representing our channel to desired chain
+    counterpartyClientIdentifier: Identifier, // this is the counterparty's identifier of our chain
     counterpartyKeyPrefix: CommitmentPrefix,
     authentication: data, // implementation-specific authentication data
 ) {
     assert(verify(authentication))
 
     counterparty = Counterparty{
-        channelId: counterpartyChannelIdentifier,
+        clientId: counterpartyClientIdentifier,
         keyPrefix: counterpartyKeyPrefix
     }
 
@@ -123,9 +123,9 @@ function ProvideCounterparty(
 }
 
 // getCounterparty retrieves the stored counterparty identifier
-// given the channelIdentifier on our chain once it is provided
-function getCounterparty(channelIdentifier: Identifier): Counterparty {
-    return privateStore.get(counterpartyPath(channelIdentifier))
+// given the clientIdentifier on our chain once it is provided
+function getCounterparty(clientIdentifier: Identifier): Counterparty {
+    return privateStore.get(counterpartyPath(clientIdentifier))
 }
 ```
 
@@ -192,7 +192,7 @@ function sendPacket(
 
     // if the sequence doesn't already exist, this call initializes the sequence to 0
     sequence = channelStore.get(nextSequenceSendPath(sourcePort, sourceChannel))
-    
+
     // store commitment to the packet data & packet timeout
     channelStore.set(
       packetCommitmentPath(sourcePort, sourceChannel, sequence),
@@ -245,7 +245,7 @@ function recvPacket(
     assert(packet.timeoutHeight === 0 || getConsensusHeight() < packet.timeoutHeight)
     assert(packet.timeoutTimestamp === 0 || currentTimestamp() < packet.timeoutTimestamp)
 
-  
+
     // we must set the receipt so it can be verified on the other side
     // this receipt does not contain any data, since the packet has not yet been processed
     // it's the sentinel success receipt: []byte{0x01}
@@ -274,7 +274,7 @@ function recvPacket(
     cbs = router.callbacks[packet.destPort]
     // IMPORTANT: if the ack is error, then the callback reverts its internal state changes, but the entire tx continues
     ack = cbs.OnRecvPacket(packet, relayer)
-    
+
     if ack != nil {
         channelStore.set(packetAcknowledgementPath(packet.destPort, packet.destChannel, packet.sequence), ack)
     }
@@ -294,7 +294,7 @@ function acknowledgePacket(
     // assert dest channel is sourceChannel's counterparty channel identifier
     counterparty = getCounterparty(packet.destChannel)
     assert(packet.sourceChannel == counterparty.channelId)
-   
+
     // assert dest port is sourcePort's counterparty port identifier
     assert(packet.destPort == ports[packet.sourcePort])
 
@@ -331,7 +331,7 @@ function timeoutPacket(
     // assert dest channel is sourceChannel's counterparty channel identifier
     counterparty = getCounterparty(packet.destChannel)
     assert(packet.sourceChannel == counterparty.channelId)
-   
+
     // assert dest port is sourcePort's counterparty port identifier
     assert(packet.destPort == ports[packet.sourcePort])
 
@@ -381,12 +381,12 @@ Similarly, for packet flow messages sent to the sender (AcknowledgePacket, Timeo
 
 Claim: If the clients are setup correctly, then a chain cannot mistake a packet flow message intended for a different chain as a valid message from a valid counterparty.
 
-We must note that client identifiers are unique to each chain but are not globally unique. Let us first consider a user that correctly specifies the source and destination identifiers in the packet. 
+We must note that client identifiers are unique to each chain but are not globally unique. Let us first consider a user that correctly specifies the source and destination identifiers in the packet.
 
 We wish to ensure that well-formed packets (i.e. packets with correctly setup client ids) cannot have packet flow messages succeed on third-party chains. Ill-formed packets (i.e. packets with invalid client ids) may in some cases complete in invalid states; however we must ensure that any completed state from these packets cannot mix with the state of other valid packets.
 
 We are guaranteed that the source identifier is unique on the source chain, the destination identifier is unique on the destination chain. Additionally, the destination identifier points to a valid client of the source chain, and the source identifier points to a valid client of the destination chain.
 
-Suppose the RecvPacket is sent to a chain other than the one identified by the sourceClient on the source chain. 
+Suppose the RecvPacket is sent to a chain other than the one identified by the sourceClient on the source chain.
 
 In the packet flow messages sent to the receiver (RecvPacket), the packet send is verified using the client on the destination chain (retrieved using destination identifier) with the packet commitment path derived by the source identifier. This verification check can only pass if the chain identified by the destination client committed the packet we received under the source channel identifier. This is only possible if the destination client is pointing to the original source chain, or if it is pointing to a different chain that committed the exact same packet. Pointing to the original source chain would mean we sent the packet to the correct . Since the sender only sends packets intended for the destination chain by setting to a unique source identifier, we can be sure the packet was indeed intended for us. Since our client on the receiver is also correctly pointing to the sender chain, we are verifying the proof against a specific consensus algorithm that we assume to be honest. If the packet is committed to the wrong key path, then we will not accept the packet. Similarly, if the packet is committed by the wrong chain then we will not be able to verify correctly.
