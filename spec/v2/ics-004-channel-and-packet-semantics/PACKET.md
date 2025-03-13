@@ -136,3 +136,9 @@ func commitV2Acknowledgment(ack: Acknowledgement) {
     return sha256.Hash(buffer)
 }
 ```
+
+## Packet Receipt V2
+
+A packet receipt will only tell the sending chain that the counterparty has successfully received the packet. Thus we just need a provable boolean flag uniquely associated with the sent packet. Thus, the receiver chain stores the packet receipt keyed on the destination identifier and the sequence to uniquely identify the packet.
+
+For chains that support nonexistence proofs of their own state, they can simply write a `SENTINEL_RECEIPT_VALUE` under the receipt path. This `SENTINEL_RECEIPT_PATH` can be any non-nil value so it is recommended to write a single byte.
