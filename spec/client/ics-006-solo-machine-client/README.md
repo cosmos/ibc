@@ -212,6 +212,20 @@ function verifyMisbehaviour(misbehaviour: Misbehaviour) {
 }
 ```
 
+### Retrieve client status 
+
+Return the status of the solo machine client. Status can be either `Active` or `Frozen`.
+
+```typescript
+// returns the status of a client
+function Status (clientIdentifier: Identifier, clientState: clientState): Status {
+  if clientState.frozen == true
+    return Frozen
+  }
+  return Active
+} 
+```
+
 ### Misbehaviour predicate
 
 Since misbehaviour is checked in `verifyClientMessage`, if the client message is of type `Misbehaviour` then we return true:
